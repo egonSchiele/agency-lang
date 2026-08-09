@@ -10,8 +10,24 @@ export const PRESETS: Record<string, string> = {
   monthly: "0 9 1 * *",
 };
 
+// `--every hour` reads better than `--every hourly`, so each preset also
+// accepts its singular noun. Aliases normalize to the canonical name before
+// lookup, storage, and display.
+const PRESET_ALIASES: Record<string, string> = {
+  hour: "hourly",
+  day: "daily",
+  weekday: "weekdays",
+  weekend: "weekends",
+  week: "weekly",
+  month: "monthly",
+};
+
+export function canonicalPreset(preset: string): string {
+  return PRESET_ALIASES[preset] ?? preset;
+}
+
 export function presetToCron(preset: string): string {
-  const cron = PRESETS[preset];
+  const cron = PRESETS[canonicalPreset(preset)];
   if (!cron) {
     throw new Error(
       `Unknown preset "${preset}". Valid presets: ${Object.keys(PRESETS).join(", ")}`,
@@ -58,7 +74,8 @@ export function resolveCron(opts: {
   cron?: string;
 }): { cron: string; preset: string } {
   if (opts.every) {
-    return { cron: presetToCron(opts.every), preset: opts.every };
+    const preset = canonicalPreset(opts.every);
+    return { cron: presetToCron(preset), preset };
   }
   if (opts.cron) {
     if (!validateCron(opts.cron)) {

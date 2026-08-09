@@ -58,10 +58,17 @@ report success on a failed request.
 `add` wants the agent on the server before scheduling it. The policy is
 resolved as a `DeployMode`:
 
-- default (`if-missing`): list the project's sources via
-  `projectClient.pullSource()` and deploy only when `<fileName>.agency` is
-  absent (exact basename match);
-- `--redeploy` (`always`): deploy without checking;
+- default (`if-missing`) is **error-driven**: try the create, and only when
+  the server answers exactly `Agent '<fileName>' not found` deploy and retry
+  the create once. There is deliberately NO presence pre-check via the source
+  route — that was the first implementation and it broke in practice: the
+  route fails the whole project when ANY file (even an unrelated legacy row
+  with no stored source) is unavailable, and it downloads every file's
+  contents just to test one name. The exact-message match matters: a broader
+  match would deploy in response to unrelated failures, and an
+  `Unknown node "x" in <file>` answer (file present, target missing) must
+  surface as-is, not trigger an upload;
+- `--redeploy` (`always`): deploy before the first create attempt;
 - `--no-deploy` (`never`): never deploy; the server's
   `Agent '<file>' not found` failure is surfaced with a deploy hint.
   Commander delivers this flag as `deploy: false` (defaulting to `true`), so

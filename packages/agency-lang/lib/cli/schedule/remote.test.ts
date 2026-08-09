@@ -8,7 +8,6 @@ import {
   editRemote,
 } from "./remote.js";
 import { ScheduleRequestError } from "../statelog/schedulesClient.js";
-import { ProjectRequestError } from "../statelog/projectClient.js";
 import type { RemoteSchedule } from "../statelog/schedulesClient.js";
 import type { RemoteCommandContext } from "../remote/commands/util.js";
 import { color } from "@/utils/termcolors.js";
@@ -46,15 +45,6 @@ const runDeployMock = vi.fn();
 vi.mock("../remote/commands/deploy.js", () => ({
   runDeploy: (...deployArgs: unknown[]) => runDeployMock(...deployArgs),
 }));
-
-const pullSourceMock = vi.fn();
-vi.mock("../statelog/projectClient.js", async (importOriginal) => {
-  const original = await importOriginal<typeof import("../statelog/projectClient.js")>();
-  return {
-    ...original,
-    createProjectClient: () => ({ pullSource: (...a: unknown[]) => pullSourceMock(...a) }),
-  };
-});
 
 const KEY_ENV = "SCHEDULE_REMOTE_TEST_KEY";
 
@@ -117,10 +107,7 @@ afterEach(() => {
   deleteMock.mockReset();
   clientFactoryMock.mockClear();
   runDeployMock.mockReset();
-  pullSourceMock.mockReset();
 });
-
-const sources = (names: string[]) => names.map((name) => ({ name, contents: "" }));
 
 describe("resolveScheduleAdd", () => {
   it("resolves a node target with a preset cadence", () => {
@@ -327,41 +314,32 @@ describe("addRemote", () => {
 });
 
 describe("addRemote deployment policy", () => {
-  it("skips deployment when the agent's source is already on the server", async () => {
-    pullSourceMock.mockResolvedValue(sources(["other.agency", "daily.agency"]));
+  const agentNotFound = () => new ScheduleRequestError("Agent 'daily' not found", 200);
+
+  it("creates directly, with no deploy, when the agent is on the server", async () => {
     createMock.mockResolvedValue(returnedSchedule);
     await addRemote("agents/daily.agency", baseOptions, context);
     expect(runDeployMock).not.toHaveBeenCalled();
     expect(createMock).toHaveBeenCalledTimes(1);
   });
 
-  it("matches server sources by exact basename only", async () => {
-    pullSourceMock.mockResolvedValue(
-      sources(["dailyx.agency", "notdaily.agency", "daily.agency.bak"]),
-    );
+  it("deploys and retries once, in order, when the server says the agent is missing", async () => {
+    createMock.mockRejectedValueOnce(agentNotFound()).mockResolvedValueOnce(returnedSchedule);
     runDeployMock.mockResolvedValue("deployed");
-    createMock.mockResolvedValue(returnedSchedule);
     await addRemote("agents/daily.agency", baseOptions, context);
+    expect(createMock).toHaveBeenCalledTimes(2);
     expect(runDeployMock).toHaveBeenCalledTimes(1);
-    expect(createMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("deploys then creates, in that order, when the source is missing", async () => {
-    pullSourceMock.mockResolvedValue(sources([]));
-    runDeployMock.mockResolvedValue("deployed");
-    createMock.mockResolvedValue(returnedSchedule);
-    await addRemote("agents/daily.agency", baseOptions, context);
-    const pullOrder = pullSourceMock.mock.invocationCallOrder[0]!;
+    const firstCreate = createMock.mock.invocationCallOrder[0]!;
     const deployOrder = runDeployMock.mock.invocationCallOrder[0]!;
-    const createOrder = createMock.mock.invocationCallOrder[0]!;
-    expect(pullOrder).toBeLessThan(deployOrder);
-    expect(deployOrder).toBeLessThan(createOrder);
+    const retryCreate = createMock.mock.invocationCallOrder[1]!;
+    expect(firstCreate).toBeLessThan(deployOrder);
+    expect(deployOrder).toBeLessThan(retryCreate);
+    expect(logSpy).toHaveBeenCalledTimes(1);
   });
 
   it("passes the resolved target and the same context to runDeploy", async () => {
-    pullSourceMock.mockResolvedValue(sources([]));
+    createMock.mockRejectedValueOnce(agentNotFound()).mockResolvedValueOnce(returnedSchedule);
     runDeployMock.mockResolvedValue("deployed");
-    createMock.mockResolvedValue(returnedSchedule);
     await addRemote("agents/daily.agency", baseOptions, context);
     expect(runDeployMock).toHaveBeenCalledWith(
       "agents/daily.agency",
@@ -370,66 +348,80 @@ describe("addRemote deployment policy", () => {
     );
   });
 
-  it("redeploy always deploys without checking server sources", async () => {
+  it("redeploy deploys before the first create attempt", async () => {
     runDeployMock.mockResolvedValue("deployed");
     createMock.mockResolvedValue(returnedSchedule);
     await addRemote("agents/daily.agency", { ...baseOptions, redeploy: true }, context);
-    expect(pullSourceMock).not.toHaveBeenCalled();
     expect(runDeployMock).toHaveBeenCalledTimes(1);
     expect(createMock).toHaveBeenCalledTimes(1);
+    expect(runDeployMock.mock.invocationCallOrder[0]!).toBeLessThan(
+      createMock.mock.invocationCallOrder[0]!,
+    );
   });
 
-  it("no-deploy neither pulls source nor deploys", async () => {
-    createMock.mockResolvedValue(returnedSchedule);
-    await addRemote("agents/daily.agency", { ...baseOptions, deploy: false }, context);
-    expect(pullSourceMock).not.toHaveBeenCalled();
+  it("no-deploy never deploys, even when the agent is missing", async () => {
+    createMock.mockRejectedValue(agentNotFound());
+    await expect(
+      addRemote("agents/daily.agency", { ...baseOptions, deploy: false }, context),
+    ).rejects.toThrow("exit:1");
     expect(runDeployMock).not.toHaveBeenCalled();
-    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(errorOutput()).toContain("without --no-deploy");
   });
 
   it.each([["aborted"], ["preview"]])(
-    "a %s deploy outcome creates no schedule",
+    "a %s deploy outcome does not retry the create",
     async (outcome) => {
-      pullSourceMock.mockResolvedValue(sources([]));
+      createMock.mockRejectedValue(agentNotFound());
       runDeployMock.mockResolvedValue(outcome);
       await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow(
         "exit:1",
       );
       expect(errorOutput()).toContain("Deploy did not complete");
-      expect(createMock).not.toHaveBeenCalled();
+      expect(createMock).toHaveBeenCalledTimes(1);
       expect(logSpy).not.toHaveBeenCalled();
     },
   );
 
-  it("a deploy that exits creates no schedule", async () => {
-    pullSourceMock.mockResolvedValue(sources([]));
+  it("a deploy that exits does not retry the create", async () => {
+    createMock.mockRejectedValue(agentNotFound());
     runDeployMock.mockRejectedValue(new Error("exit:1"));
     await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow(
       "exit:1",
     );
-    expect(createMock).not.toHaveBeenCalled();
-  });
-
-  it("a source-listing failure deploys nothing and creates nothing", async () => {
-    pullSourceMock.mockRejectedValue(new ProjectRequestError("project 'proj' not found"));
-    await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow(
-      "exit:1",
-    );
-    expect(errorOutput()).toContain("project 'proj' not found");
-    expect(runDeployMock).not.toHaveBeenCalled();
-    expect(createMock).not.toHaveBeenCalled();
-  });
-
-  it("a create failure after a deploy surfaces once and is not retried", async () => {
-    pullSourceMock.mockResolvedValue(sources([]));
-    runDeployMock.mockResolvedValue("deployed");
-    createMock.mockRejectedValue(new ScheduleRequestError("cap reached", 200));
-    await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow(
-      "exit:1",
-    );
     expect(createMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("an unknown-target failure deploys nothing (the file exists; the node does not)", async () => {
+    createMock.mockRejectedValue(
+      new ScheduleRequestError('Unknown node "refresh" in daily', 200),
+    );
+    await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow(
+      "exit:1",
+    );
+    expect(runDeployMock).not.toHaveBeenCalled();
+    expect(errorOutput()).toContain('Unknown node "refresh" in daily');
+  });
+
+  it("a not-found message for a DIFFERENT agent does not trigger a deploy", async () => {
+    createMock.mockRejectedValue(new ScheduleRequestError("Agent 'other' not found", 200));
+    await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow(
+      "exit:1",
+    );
+    expect(runDeployMock).not.toHaveBeenCalled();
+  });
+
+  it("a retry failure after a deploy surfaces once with no further retry", async () => {
+    createMock
+      .mockRejectedValueOnce(agentNotFound())
+      .mockRejectedValueOnce(new ScheduleRequestError("cap reached", 200));
+    runDeployMock.mockResolvedValue("deployed");
+    await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow(
+      "exit:1",
+    );
+    expect(createMock).toHaveBeenCalledTimes(2);
     expect(runDeployMock).toHaveBeenCalledTimes(1);
     expect(errorOutput()).toContain("cap reached");
+    expect(logSpy).not.toHaveBeenCalled();
   });
 });
 

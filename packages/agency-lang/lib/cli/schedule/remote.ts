@@ -23,7 +23,6 @@ import type {
   RemoteSchedule,
   ScheduleTarget,
 } from "../statelog/schedulesClient.js";
-import { createProjectClient, ProjectRequestError } from "../statelog/projectClient.js";
 
 export type DeployMode = "if-missing" | "always" | "never";
 
@@ -113,21 +112,40 @@ export async function addRemote(
     fail(errorMessage(error));
   }
   const target = resolveProjectTarget(context, options);
-  await ensureDeployed(file, resolved.input.fileName, resolved.deployMode, target, context);
   const client = createSchedulesClient(target.origin, target.projectSlug, target.apiKey);
+  if (resolved.deployMode === "always") {
+    await deployForSchedule(file, target, context);
+  }
 
+  // "if-missing" is error-driven: try the create, and only the server's own
+  // "this agent is not deployed" answer triggers a deploy and ONE retry. A
+  // presence pre-check via the source route was tried first and reverted — it
+  // fails the whole project when ANY file (even an unrelated legacy one) has
+  // no stored source, and costs an extra request that downloads every file.
   let schedule;
   try {
     schedule = await client.create(resolved.input);
   } catch (error) {
-    // Point back at THIS command, not `agency remote deploy` — the standalone
-    // deploy resolves its target differently (no binding, no --host/--project
-    // carry-over) and could upload somewhere other than where this schedule
-    // request was aimed.
-    failScheduleRequest(error, {
-      missingAgent:
-        "Rerun this command without --no-deploy to deploy it first (or pass --redeploy).",
-    });
+    if (
+      resolved.deployMode === "if-missing" &&
+      isAgentNotFound(error, resolved.input.fileName)
+    ) {
+      await deployForSchedule(file, target, context);
+      try {
+        schedule = await client.create(resolved.input);
+      } catch (retryError) {
+        failScheduleRequest(retryError);
+      }
+    } else {
+      // Point back at THIS command, not `agency remote deploy` — the standalone
+      // deploy resolves its target differently (no binding, no --host/--project
+      // carry-over) and could upload somewhere other than where this schedule
+      // request was aimed.
+      failScheduleRequest(error, {
+        missingAgent:
+          "Rerun this command without --no-deploy to deploy it first (or pass --redeploy).",
+      });
+    }
   }
   const { input } = resolved;
   console.log(
@@ -135,24 +153,22 @@ export async function addRemote(
   );
 }
 
-/** Enforce the deploy policy before creating a schedule. Returns only when the
- *  agent is on the server or the policy says to trust the server's own
- *  validation ("never"). The deploy runs against the SAME resolved target as
- *  the schedule request — never re-derived from config — so the schedule can't
- *  point at a different project than the upload. */
-async function ensureDeployed(
+/** Exactly the schedules route's missing-file answer for THIS agent — a
+ *  broader match could deploy in response to an unrelated failure. */
+function isAgentNotFound(error: unknown, fileName: string): boolean {
+  return (
+    error instanceof ScheduleRequestError && error.message === `Agent '${fileName}' not found`
+  );
+}
+
+/** Deploy against the SAME resolved target as the schedule request — never
+ *  re-derived from config — so the schedule can't point at a different project
+ *  than the upload. Only a real upload lets scheduling continue. */
+async function deployForSchedule(
   file: string,
-  fileName: string,
-  mode: DeployMode,
   target: ProjectTarget,
   context: RemoteCommandContext,
 ): Promise<void> {
-  if (mode === "never") {
-    return;
-  }
-  if (mode === "if-missing" && (await sourceExists(target, fileName))) {
-    return;
-  }
   const outcome = await runDeploy(
     file,
     { host: target.origin, project: target.projectSlug, apiKeyEnv: target.apiKeyEnvName },
@@ -161,20 +177,6 @@ async function ensureDeployed(
   if (outcome !== "deployed") {
     fail("Deploy did not complete, so the schedule was not created.");
   }
-}
-
-async function sourceExists(target: ProjectTarget, fileName: string): Promise<boolean> {
-  const client = createProjectClient(target.origin, target.projectSlug, target.apiKey);
-  let files;
-  try {
-    files = await client.pullSource();
-  } catch (error) {
-    if (error instanceof ProjectRequestError) {
-      fail(error.message);
-    }
-    throw error;
-  }
-  return files.some((source) => source.name === `${fileName}.agency`);
 }
 
 /** Exit with the server's message, adding guidance for the two failures a user

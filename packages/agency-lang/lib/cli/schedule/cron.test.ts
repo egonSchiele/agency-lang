@@ -18,6 +18,28 @@ describe("presetToCron", () => {
   it("throws on unknown preset", () => {
     expect(() => presetToCron("biweekly")).toThrow("Unknown preset");
   });
+
+  it.each([
+    ["hour", "hourly"],
+    ["day", "daily"],
+    ["weekday", "weekdays"],
+    ["weekend", "weekends"],
+    ["week", "weekly"],
+    ["month", "monthly"],
+  ])("accepts the singular form %s as %s", (alias, canonical) => {
+    expect(presetToCron(alias)).toBe(presetToCron(canonical));
+  });
+});
+
+describe("resolveCron preset aliases", () => {
+  it("normalizes a singular alias to the canonical preset name", () => {
+    expect(resolveCron({ every: "hour" })).toEqual({ cron: "0 * * * *", preset: "hourly" });
+    expect(resolveCron({ every: "weekend" })).toEqual({ cron: "0 9 * * 0,6", preset: "weekends" });
+  });
+
+  it("still rejects a word that is neither preset nor alias", () => {
+    expect(() => resolveCron({ every: "fortnight" })).toThrow("Unknown preset");
+  });
 });
 
 describe("validateCron", () => {

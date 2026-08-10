@@ -21,7 +21,7 @@ description: "GDELT — worldwide news coverage"
   ### Usage
 
   ```ts
-  import { gdeltNews } from "std::data/finance/gdelt"
+  import { gdeltNews } from "std::data/news/gdelt"
 
   node main() {
     const articles = gdeltNews("Federal Reserve interest rate decision", 10, "1w") catch []
@@ -49,7 +49,7 @@ export type NewsArticle = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/gdelt.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/news/gdelt.agency#L34))
 
 ## Effects
 
@@ -61,7 +61,7 @@ effect std::gdelt {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/gdelt.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/news/gdelt.agency#L31))
 
 ## Functions
 
@@ -96,4 +96,4 @@ Search worldwide online news coverage for a query via GDELT DOC 2.0. Returns rec
 
 **Throws:** `std::gdelt`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/gdelt.agency#L82))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/news/gdelt.agency#L82))

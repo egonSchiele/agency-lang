@@ -350,13 +350,13 @@ export default defineConfig({
               collapsed: true,
               items: [
                 { text: "data/connector", link: "/stdlib/data/connector" },
-                { text: "data/finance/gdelt", link: "/stdlib/data/finance/gdelt" },
                 { text: "data/finance/fred", link: "/stdlib/data/finance/fred" },
                 { text: "data/finance/edgar", link: "/stdlib/data/finance/edgar" },
                 {
                   text: "data/finance/dbnomics",
                   link: "/stdlib/data/finance/dbnomics",
                 },
+                { text: "data/news/gdelt", link: "/stdlib/data/news/gdelt" },
                 {
                   text: "data/people/littlesis",
                   link: "/stdlib/data/people/littlesis",

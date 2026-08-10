@@ -47,9 +47,10 @@ export effectSet Network = <std::http::fetch, std::http::fetchJSON, std::http::f
 /** Amazon S3 access: reading and writing objects, creating buckets, and minting presigned download URLs. Presigning is deliberately NOT in Network — it sends nothing; it mints a bearer capability locally. */
 export effectSet AwsS3 = <std::aws::s3::get, std::aws::s3::getBinary, std::aws::s3::put, std::aws::s3::putBinary, std::aws::s3::createBucket, std::aws::s3::presignGet>
 
-/** The std::data/finance connectors (news + macro + filings). Each also raises
-    std::http::fetchJSON, which is covered by the broader Network set. */
-export effectSet DataFinance = <std::gdelt, std::fred, std::edgar, std::dbnomics>
+/** The std::data/finance connectors (macro + filings). Each also raises
+    std::http::fetchJSON, which is covered by the broader Network set. GDELT
+    (news) lives in std::data/news and is not part of this set. */
+export effectSet DataFinance = <std::fred, std::edgar, std::dbnomics>
 
 /** Sending messages to people: email, SMS, and iMessage. */
 export effectSet Messaging = <std::sendEmail, std::sendSms, std::sendIMessage>

@@ -1,4 +1,4 @@
-import { tBuildObs, tBuildSeries, tToFredMissing, tToFredNum, tParseObs, tParseObsSparse, tParseInfo, tParseObsNull, tParseInfoNull, tInfoEmpty, tObsMissing, tObsFetchError, tNoKey, callFred, hasInterrupts, approve, reject, respondToInterrupts } from "./agent.js";
+import { tBuildObs, tBuildSeries, tToFredMissing, tToFredNum, tParseObs, tParseObsSparse, tParseInfo, tParseObsNull, tParseInfoNull, tInfoEmpty, tObsMissing, tObsFetchError, tNoKey, callFred, callFredPropagateFetch, hasInterrupts, approve, reject, respondToInterrupts } from "./agent.js";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const unwrap = (r) => (r && typeof r === "object" && "data" in r ? r.data : r);
@@ -22,8 +22,9 @@ if (JSON.stringify(iv.data).includes(SENTINEL_KEY)) throw new Error("FRED api_ke
 if (JSON.stringify(Object.keys(iv.data)) !== JSON.stringify(["seriesId"])) throw new Error("unexpected FRED interrupt payload keys: " + JSON.stringify(Object.keys(iv.data)));
 const rejected = await respondToInterrupts(fredInt.data, [reject()]);
 if (hasInterrupts(rejected.data)) throw new Error("rejecting std::fred should short-circuit before any fetch");
-// Not preapproved: approving std::fred resumes into the fetch -> std::http::fetchJSON. Stop here (no network).
-const fredI2 = await respondToInterrupts((await callFred("UNRATE")).data, [approve()]);
+// The verb approves the fetch at its call site; propagate() in the wrapper beats that
+// approve, surfacing std::http::fetchJSON here. Never approved -> no network.
+const fredI2 = await respondToInterrupts((await callFredPropagateFetch("UNRATE")).data, [approve()]);
 if (!hasInterrupts(fredI2.data)) throw new Error("expected std::http::fetchJSON after approving std::fred");
 if (fredI2.data[0].effect !== "std::http::fetchJSON") throw new Error("wrong second FRED effect: " + fredI2.data[0].effect);
 

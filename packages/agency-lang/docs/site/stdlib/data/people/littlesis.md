@@ -12,7 +12,7 @@ description: "LittleSis — people, organizations, and the ties between them"
   ownership/investment, donations). Use this connector when the question is about *entities and
   the edges between them* (who worked where, who funds whom, who sits on which board), as opposed
   to macro numbers (`std::data/finance/fred`), company filings (`std::data/finance/edgar`), or
-  news (`std::data/finance/gdelt`).
+  news (`std::data/news/gdelt`).
 
   No API key required (the API is rate-limited; HTTP 503 means "Rate Limit Exceeded").
 

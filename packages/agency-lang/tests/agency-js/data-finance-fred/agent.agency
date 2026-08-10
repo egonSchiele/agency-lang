@@ -80,3 +80,15 @@ node tNoKey(): string {
 node callFred(id: string): any {
   return fredSeries(id)
 }
+
+// Propagate beats the verb's call-site approve, so the fetch interrupt
+// surfaces to the harness instead of running — keeping the test offline.
+node callFredPropagateFetch(id: string): any {
+  handle {
+    return fredSeries(id)
+  } with (intr) {
+    if (intr.effect == "std::http::fetchJSON") {
+      return propagate()
+    }
+  }
+}

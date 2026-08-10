@@ -14,7 +14,7 @@ import { webTools, communicationTools, SAVE_DRAFT_HINT } from "std::agents/lib/t
 import { dbnomicsSeries } from "std::data/finance/dbnomics"
 import { edgarFilings, edgarFilingsByCik } from "std::data/finance/edgar"
 import { fredSeries, fredSeriesInfo } from "std::data/finance/fred"
-import { gdeltNews } from "std::data/finance/gdelt"
+import { gdeltNews } from "std::data/news/gdelt"
 import {
   littlesisSearch,
   littlesisEntity,

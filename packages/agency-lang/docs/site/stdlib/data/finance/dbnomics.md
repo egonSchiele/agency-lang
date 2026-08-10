@@ -12,7 +12,7 @@ description: "DBnomics — world macroeconomic time-series"
   through one keyless API. Use this connector for *non-U.S.* or cross-country data, or a
   provider FRED does not carry. Each series is addressed by a `provider / dataset / series`
   code triple (browse db.nomics.world to find codes). For U.S. macro prefer
-  `std::data/finance/fred`; for news use `std::data/finance/gdelt`.
+  `std::data/finance/fred`; for news use `std::data/news/gdelt`.
 
   Returns a series as a list of `{ period, value }` observations (period like "2025-01"; a
   missing value is null). No API key required.

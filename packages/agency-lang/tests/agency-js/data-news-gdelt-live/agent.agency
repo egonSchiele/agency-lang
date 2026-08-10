@@ -1,4 +1,4 @@
-import { gdeltNews } from "std::data/finance/gdelt"
+import { gdeltNews } from "std::data/news/gdelt"
 
 node liveGdelt(): number {
   handle {

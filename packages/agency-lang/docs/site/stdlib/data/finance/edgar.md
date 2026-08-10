@@ -11,7 +11,7 @@ description: "SEC EDGAR — U.S. company filings"
   [EDGAR APIs](https://www.sec.gov/search-filings/edgar-application-programming-interfaces).
   Use this connector for *authoritative, mandated* facts about one company — its 10-K
   (annual), 10-Q (quarterly), 8-K (material event), and Form 4 (insider trade) filings — the
-  slow-moving ground truth. For news or rumor about a company use `std::data/finance/gdelt`;
+  slow-moving ground truth. For news or rumor about a company use `std::data/news/gdelt`;
   for economic numbers use fred/dbnomics.
 
   Returns a list of filings with form type, filing/report dates, and a direct URL to the

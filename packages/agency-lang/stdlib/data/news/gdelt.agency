@@ -17,7 +17,7 @@ import { connectorFetch } from "std::data/connector"
   ### Usage
 
   ```ts
-  import { gdeltNews } from "std::data/finance/gdelt"
+  import { gdeltNews } from "std::data/news/gdelt"
 
   node main() {
     const articles = gdeltNews("Federal Reserve interest rate decision", 10, "1w") catch []

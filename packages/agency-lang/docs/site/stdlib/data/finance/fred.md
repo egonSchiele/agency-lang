@@ -12,7 +12,7 @@ description: "FRED — U.S. macroeconomic time-series"
   unemployment, GDP, and ~800k other series, each addressed by its `series_id`
   (e.g. `UNRATE`, `CPIAUCSL`, `FEDFUNDS`). This is the curated gold standard for *U.S.*
   macro; for non-U.S. or cross-country data use `std::data/finance/dbnomics`; for news use
-  `std::data/finance/gdelt`.
+  `std::data/news/gdelt`.
 
   Returns a series as a list of `{ date, value }` observations (a missing value is `null`),
   oldest-first, plus a `fredSeriesInfo` call for a series' title/display-units/frequency/coverage.

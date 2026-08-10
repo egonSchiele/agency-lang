@@ -43,3 +43,15 @@ node tFinalizeFetchError(): string {
 node callDbnomics(): any {
   return dbnomicsSeries("BLS", "cu", "CUUR0000SA0")
 }
+
+// Propagate beats the verb's call-site approve, so the fetch interrupt
+// surfaces to the harness instead of running — keeping the test offline.
+node callDbnomicsPropagateFetch(): any {
+  handle {
+    return dbnomicsSeries("BLS", "cu", "CUUR0000SA0")
+  } with (intr) {
+    if (intr.effect == "std::http::fetchJSON") {
+      return propagate()
+    }
+  }
+}

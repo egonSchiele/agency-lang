@@ -77,4 +77,36 @@ describe("llm() multimodal first-arg typing", () => {
       ).length,
     ).toBeGreaterThan(0);
   });
+
+  it("accepts an audio() attachment in an llm() array", () => {
+    expect(
+      errorsFrom(
+        `import { audio } from "std::thread"\nnode main() { let r: string = llm(["hi", audio("a.mp3")])\n print(r) }`,
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("accepts audio() alongside image()/file() on userMessage()", () => {
+    expect(
+      errorsFrom(
+        `import { userMessage, image, audio } from "std::thread"\nnode main() { userMessage(["hi", image("x"), audio("a.mp3")]) }`,
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("rejects audio() passed to attachToReply() (image/file only)", () => {
+    expect(
+      errorsFrom(
+        `import { attachToReply, audio } from "std::thread"\nnode main() { attachToReply(audio("a.mp3")) }`,
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("still accepts image() on attachToReply()", () => {
+    expect(
+      errorsFrom(
+        `import { attachToReply, image } from "std::thread"\nnode main() { attachToReply(image("x")) }`,
+      ),
+    ).toHaveLength(0);
+  });
 });

@@ -176,6 +176,11 @@ export type FileAttachment = {
   source: AttachmentSource;
   filename?: string;
 };
+export type AudioAttachment = {
+  type: "audio";
+  source: AttachmentSource;
+  filename?: string;
+};
 
 export function classifySource(
   source: string,
@@ -188,7 +193,7 @@ export function classifySource(
     const idx = source.indexOf(marker);
     if (idx === -1) {
       throw new Error(
-        "image()/file(): a data: URI must be base64-encoded (data:<mime>;base64,<data>)",
+        "attachment source: a data: URI must be base64-encoded (data:<mime>;base64,<data>)",
       );
     }
     const uriMime = source.slice("data:".length, idx);
@@ -198,7 +203,7 @@ export function classifySource(
   if (base64) {
     if (!mimeType) {
       throw new Error(
-        "image()/file(): base64 sources require an explicit mimeType",
+        "attachment source: base64 sources require an explicit mimeType",
       );
     }
     return { kind: "base64", base64: source, mimeType };
@@ -241,6 +246,22 @@ export function _fileAttachment(
   return name
     ? { type: "file", source: src, filename: name }
     : { type: "file", source: src };
+}
+
+export function _audioAttachment(
+  source: string,
+  filename: string,
+  mimeType: string,
+  base64: boolean,
+): AudioAttachment {
+  const src = classifySource(source, mimeType, base64);
+  let name = filename;
+  if (!name && (src.kind === "path" || src.kind === "url")) {
+    name = basename(source);
+  }
+  return name
+    ? { type: "audio", source: src, filename: name }
+    : { type: "audio", source: src };
 }
 
 /** Backs `std::thread.attachToReply`. Queues an attachment on the CALLING

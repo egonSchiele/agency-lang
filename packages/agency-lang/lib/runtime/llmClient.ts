@@ -74,6 +74,35 @@ export type ImageGenResult = smoltalk.ImageGenResult;
 export type ImageInput = smoltalk.ImageInput;
 export type ImageRef = smoltalk.ImageRef;
 
+// The single audio (speech-to-text / text-to-speech) type surface. Result and
+// input types are re-exported unchanged from smoltalk; the *request* configs are
+// DERIVED aliases (not raw re-exports) so Agency owns which fields are required.
+//
+// The `.agency` signatures (stdlib/speech.agency) resolve model/voice/format to
+// non-empty values before dispatch, so those become REQUIRED here — a client can
+// never fall back to its own defaults (see plan §8). Cancellation travels as a
+// separate `signal` argument on the methods below, never inside the config, so
+// there is exactly one authoritative cancellation channel.
+export type TranscriptionResult = smoltalk.TranscriptionResult;
+export type SpeechResult = smoltalk.SpeechResult;
+/** A source for audio bytes: a local path, a URL, or inline bytes/base64. */
+export type AudioInput = smoltalk.BlobRef;
+
+export type TranscribeConfig = Omit<
+  smoltalk.TranscribeOptions,
+  "model" | "abortSignal"
+> & {
+  model: string;
+};
+export type SpeakConfig = Omit<
+  smoltalk.SpeakOptions,
+  "model" | "voice" | "format" | "abortSignal"
+> & {
+  model: string;
+  voice: string;
+  format: NonNullable<smoltalk.SpeakOptions["format"]>;
+};
+
 /**
  * Provider-neutral view of an error thrown by an `LLMClient`. Lets agency's
  * retry classifier decide policy without importing any provider SDK. The
@@ -138,6 +167,24 @@ export type LLMClient = {
     input: ImageInput,
     config?: Partial<ImageConfig>,
   ): Promise<Result<ImageGenResult>>;
+  /** Speech-to-text. Optional — clients that don't support it omit the method;
+   *  the std::speech wrapper throws a clear "unsupported client" error. `config`
+   *  is COMPLETE (model required — see TranscribeConfig); the client must not
+   *  inject its own defaults. `signal` is the sole cancellation channel: once
+   *  dispatch starts, an abort must reject promptly with `signal.reason` (a
+   *  resolved failure Result means a non-cancellation failure). */
+  transcribe?(
+    source: AudioInput,
+    config: TranscribeConfig,
+    signal: AbortSignal,
+  ): Promise<Result<TranscriptionResult>>;
+  /** Text-to-speech. Optional — same contract as `transcribe`: complete config
+   *  (model/voice/format required), `signal` the sole cancellation channel. */
+  speak?(
+    text: string,
+    config: SpeakConfig,
+    signal: AbortSignal,
+  ): Promise<Result<SpeechResult>>;
   /** Translate an error this client threw into provider-neutral fields for
    *  agency's retry classifier. Optional — agency falls back to `{ message }`
    *  when omitted, which still works (message-pattern matching) but loses
@@ -175,6 +222,42 @@ export class SmoltalkClient implements LLMClient {
       model: DEFAULT_IMAGE_MODEL,
       ...config,
     } as ImageConfig);
+  }
+
+  // Thin adapter: pass the complete config through (the wrapper already resolved
+  // every required field — see plan §8) with the branch abort signal as smoltalk's
+  // `abortSignal`. No defaults, no routing policy here.
+  //
+  // smoltalk never throws for audio: on cancellation it resolves a distinguishable
+  // `failure("Request was aborted")`. The `LLMClient` contract (plan §5) is instead
+  // "cancellation REJECTS with the branch reason; a resolved failure means a
+  // non-cancellation failure" — so on a FAILURE result `rejectIfAborted` converts
+  // an aborted outcome into a rejection carrying `signal.reason` (detected by our
+  // OWN signal, not by string-matching smoltalk's message). We only do this when
+  // the result FAILED: a request that raced to a real success before a late abort
+  // keeps its success + real cost, rather than being discarded as a cancellation.
+  // meteredDispatch then records exactly one unresolved attempt for the rejection.
+  async transcribe(
+    source: AudioInput,
+    config: TranscribeConfig,
+    signal: AbortSignal,
+  ): Promise<Result<TranscriptionResult>> {
+    const result = await smoltalk.transcribe(source, {
+      ...config,
+      abortSignal: signal,
+    });
+    if (!result.success) rejectIfAborted(signal);
+    return result;
+  }
+
+  async speak(
+    text: string,
+    config: SpeakConfig,
+    signal: AbortSignal,
+  ): Promise<Result<SpeechResult>> {
+    const result = await smoltalk.speak(text, { ...config, abortSignal: signal });
+    if (!result.success) rejectIfAborted(signal);
+    return result;
   }
 
   normalizeError(err: unknown): NormalizedLLMError {
@@ -216,6 +299,21 @@ export class SmoltalkClient implements LLMClient {
     return normalized;
   }
 
+}
+
+/** If the branch signal has aborted, throw its reason UNCHANGED so cancellation
+ *  surfaces as the runtime's abort cause rather than smoltalk's resolved
+ *  `failure("Request was aborted")`. Identity is preserved — `abort()` accepts
+ *  strings/objects/null and that can matter to race/cancellation handling — and
+ *  a reason is synthesized ONLY when genuinely `undefined` (an explicit `null`
+ *  is a valid reason and is preserved). See the adapters. */
+function rejectIfAborted(signal: AbortSignal): void {
+  if (signal.aborted) {
+    if (signal.reason !== undefined) {
+      throw signal.reason;
+    }
+    throw new Error("Request was aborted");
+  }
 }
 
 /** Convert agency's PromptConfig into smoltalk's SmolConfig.

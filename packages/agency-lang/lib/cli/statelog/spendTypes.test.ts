@@ -69,6 +69,12 @@ describe("projectSpendSchema", () => {
     expect(projectSpendSchema.parse({ ...valid, breakdownTruncated: true }).breakdownTruncated).toBe(true);
   });
 
+  it("accepts the new transcription and speech kinds, still rejects an unknown kind", () => {
+    expect(projectSpendSchema.parse({ ...valid, breakdown: [{ model: "whisper-1", kind: "transcription", cost: usd, tokens: tok }] }).breakdown[0].kind).toBe("transcription");
+    expect(projectSpendSchema.parse({ ...valid, breakdown: [{ model: "tts-1", kind: "speech", cost: usd, tokens: tok }] }).breakdown[0].kind).toBe("speech");
+    expect(() => projectSpendSchema.parse({ ...valid, breakdown: [{ model: "x", kind: "telepathy", cost: usd, tokens: tok }] })).toThrow();
+  });
+
   it("rejects extra fields and a mismatched model sentinel", () => {
     expect(() => projectSpendSchema.parse({ ...valid, surprise: 1 })).toThrow();
     // manual rows must use model "" and provider rows a non-empty model.

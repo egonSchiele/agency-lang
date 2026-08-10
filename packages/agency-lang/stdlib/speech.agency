@@ -1,39 +1,70 @@
-// `_speak`, `_record`, `_transcribe` read ctx/stack from
-// AsyncLocalStorage (see `lib/runtime/asyncContext.ts`) so each one
-// tears down its in-flight work on abort: the `say` subprocess gets
-// SIGTERM, the `rec` subprocess gets SIGTERM and stdin is restored,
-// and the Whisper upload fetch is cancelled. The corresponding
-// deprecated `__internal_*` exports are still present for the
-// migration window.
+// `_say`, `_record` read ctx/stack from AsyncLocalStorage (see
+// `lib/runtime/asyncContext.ts`) so each one tears down its in-flight
+// work on abort: the `say` subprocess gets SIGTERM, and the `rec`
+// subprocess gets SIGTERM with stdin restored.
+//
+// `_transcribe` and `_synthesizeSpeech` are CLOUD calls that route
+// through the active LLM client (like `std::image`), so they inherit
+// Agency's cost accounting, spend guards, and statelog. `_validateSpeakArgs`
+// / `_validateTranscribeArgs` validate the closed-set arguments BEFORE the
+// approval interrupt, so an invalid call never prompts and never dispatches.
 import {
-  _speak,
+  _say,
   _record,
   _transcribe,
+  _synthesizeSpeech,
+  _validateSpeakArgs,
+  _validateTranscribeArgs,
 } from "agency-lang/stdlib-lib/speech.js"
 
-/** @module Speak text aloud, record from the microphone, and transcribe audio
-to text.
+/** @module Speak text aloud locally, synthesize and transcribe speech in the
+cloud, and record from the microphone.
 
   ```ts
-  import { record, transcribe, speak } from "std::speech"
+  import { record, transcribe, speak, say } from "std::speech"
 
   node main() {
     const audio = record()
     const text = transcribe(audio)
-    speak("You said: ${text}")
+    say("You said: ${text}")             // local playback
+    const mp3 = speak("Cloud voice: ${text}")  // cloud TTS -> file path
   }
   ```
 */
 
-effect std::speak { textLength: number }
+// Local playback (macOS `say`). Distinct capability + effect from cloud TTS.
+effect std::say { textLength: number }
 effect std::record {}
-effect std::transcribe { filepath: string }
+// Cloud speech-to-text. The destination is the active cloud speech provider,
+// which a custom LLM client may route anywhere — the payload states the
+// REQUESTED provider (may be "" for automatic) and configured model, not a
+// resolved destination.
+effect std::transcribe {
+  requestedProvider: string,
+  configuredModel: string,
+  filepath: string,
+}
+// Cloud text-to-speech. A DISTINCT effect from local `std::say`: approving one
+// never authorizes the other.
+effect std::synthesizeSpeech {
+  requestedProvider: string,
+  configuredModel: string,
+  textLength: number,
+}
 
 /** Ctrl-C, a race loss, or a time-guard abort stops in-progress speech
 playback. */
-export def speak(text: string, voice: string = "", rate: number = 0, outputFile: string = "", allowedPaths: string[] = []) {
+export def say(
+  text: string,
+  voice: string = "",
+  rate: number = 0,
+  outputFile: string = "",
+  allowedPaths: string[] = [],
+) {
   """
-  Speak text aloud using text-to-speech.
+  Speak text aloud locally using the operating system's text-to-speech
+  (macOS only). For cloud text-to-speech that returns an audio file, use
+  `speak()` instead.
 
   @param text - The text to speak
   @param voice - Voice name to use
@@ -41,11 +72,11 @@ export def speak(text: string, voice: string = "", rate: number = 0, outputFile:
   @param outputFile - When set, save the audio to this file instead of playing it
   @param allowedPaths - Only allow saving under these path prefixes
   """
-  return interrupt std::speak("Are you sure you want to use text-to-speech?", {
+  return interrupt std::say("Allow local text-to-speech playback?", {
     textLength: text.length
   })
 
-  _speak(text, voice, rate, outputFile, allowedPaths)
+  _say(text, voice, rate, outputFile, allowedPaths)
 }
 
 /**
@@ -71,19 +102,106 @@ export def record(outputFile: string = "", silenceTimeout: number = 2000, allowe
   return _record(outputFile, silenceTimeout, allowedPaths)
 }
 
-/** An in-flight Whisper upload tears down on Ctrl-C, race-loser, or time-guard
-abort. */
-export def transcribe(filepath: string, language: string = "", allowedPaths: string[] = []): string {
+/** A cloud transcription request tears down on Ctrl-C, race-loser, or
+time-guard abort. Cost, spend guards, and statelog apply. */
+export def transcribe(
+  filepath: string,
+  language: string = "",
+  allowedPaths: string[] = [],
+  model: string = "whisper-1",
+  provider: string = "",
+  prompt: string = "",
+  timestampGranularity: string = "",
+  apiKey: string = "",
+): string {
   """
-  Transcribe an audio file to text using OpenAI's Whisper API.
+  Transcribe an audio file to text using a cloud speech provider (OpenAI
+  Whisper by default). Returns the transcript text; throws on failure.
 
   @param filepath - Path to the audio file
   @param language - Language code (e.g. "en") for better accuracy
   @param allowedPaths - Only allow reading audio files under these path prefixes
+  @param model - Transcription model (default "whisper-1")
+  @param provider - Override the provider (normally derived from the model name)
+  @param prompt - Optional text to bias decoding (names, jargon)
+  @param timestampGranularity - "segment" or "word" to request timestamps
+  @param apiKey - Override the API key
   """
-  return interrupt std::transcribe("Are you sure you want to send this audio file to the OpenAI Whisper API for transcription?", {
-    filepath: filepath
+  if (model == "") {
+    throw("transcribe model cannot be empty")
+  }
+  _validateTranscribeArgs(timestampGranularity)
+
+  return interrupt std::transcribe("Send this audio to the active cloud speech provider?", {
+    requestedProvider: provider,
+    configuredModel: model,
+    filepath: filepath,
   })
 
-  return _transcribe(filepath, language, allowedPaths)
+  return _transcribe(
+    filepath,
+    language,
+    allowedPaths,
+    model,
+    provider,
+    prompt,
+    timestampGranularity,
+    apiKey,
+  )
+}
+
+/** A cloud synthesis request tears down on Ctrl-C, race-loser, or time-guard
+abort; a cancelled request never writes its output file. Cost, spend guards,
+and statelog apply. */
+export def speak(
+  text: string,
+  outputFile: string = "",
+  voice: string = "alloy",
+  model: string = "tts-1",
+  provider: string = "",
+  format: string = "mp3",
+  speed: number = 1,
+  allowedPaths: string[] = [],
+  apiKey: string = "",
+): string {
+  """
+  Synthesize speech from text using a cloud text-to-speech provider (OpenAI
+  by default), writing the audio to a file and returning its path. For local
+  playback through the speakers, use `say()` instead.
+
+  @param text - The text to synthesize
+  @param outputFile - Where to write the audio (auto-generated temp file if empty). Never overwrites an existing file.
+  @param voice - Voice name (default "alloy")
+  @param model - Speech model (default "tts-1")
+  @param provider - Override the provider (normally derived from the model name)
+  @param format - Output audio format: mp3 (default), opus, aac, flac, wav, or pcm
+  @param speed - Speaking speed (0.25 to 4.0)
+  @param allowedPaths - Only allow writing a non-empty outputFile under these path prefixes
+  @param apiKey - Override the API key
+  """
+  if (model == "") {
+    throw("speak model cannot be empty")
+  }
+  if (voice == "") {
+    throw("speak voice cannot be empty")
+  }
+  _validateSpeakArgs(format, speed)
+
+  return interrupt std::synthesizeSpeech("Send this text to the active cloud speech provider?", {
+    requestedProvider: provider,
+    configuredModel: model,
+    textLength: text.length,
+  })
+
+  return _synthesizeSpeech(
+    text,
+    outputFile,
+    voice,
+    model,
+    provider,
+    format,
+    speed,
+    allowedPaths,
+    apiKey,
+  )
 }

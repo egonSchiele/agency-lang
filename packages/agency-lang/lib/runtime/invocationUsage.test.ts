@@ -46,6 +46,43 @@ describe("normalizeObservation — provider cost", () => {
   });
 });
 
+describe("normalizeObservation — audio (transcription/speech) kinds", () => {
+  it("prices a transcription with usage like any provider kind", () => {
+    const d = normalizeObservation({ type: "provider", kind: "transcription", reportedModel: "whisper-1", cost: { totalCost: 0.006, currency: "USD" } as any, tokens: { totalTokens: 7 } as any });
+    expect(d.unknownCostCallCount).toBe(0);
+    expect(d.cost.totalCost).toBe(0.006);
+    expect(d.entry).toMatchObject({ kind: "transcription", model: "whisper-1" });
+    expect(d.tokens.totalTokens).toBe(7);
+  });
+  it("prices a cost-only speech observation (no tokens) as a valid entry", () => {
+    const d = normalizeObservation({ type: "provider", kind: "speech", configuredModel: "tts-1", cost: { totalCost: 0.015, currency: "USD" } as any });
+    expect(d.unknownCostCallCount).toBe(0);
+    expect(d.cost.totalCost).toBe(0.015);
+    expect(d.entry).toMatchObject({ kind: "speech", model: "tts-1" });
+    expect(d.tokens.totalTokens).toBe(0);
+    expect(d.attributionLost).toBe(false);
+  });
+  it("authoritative totalTokens already includes audio tokens — used verbatim, no separate buckets", () => {
+    const d = normalizeObservation({ type: "provider", kind: "completion", reportedModel: "gpt-audio-1.5", tokens: { inputTokens: 50, outputTokens: 10, inputAudioTokens: 40, outputAudioTokens: 5, totalTokens: 60 } as any });
+    expect(d.tokens.totalTokens).toBe(60);
+    // Audio buckets never leak into the normalized breakdown.
+    expect(d.tokens).not.toHaveProperty("inputAudioTokens");
+    expect(d.tokens).not.toHaveProperty("outputAudioTokens");
+    expect(d.attributionLost).toBe(false);
+  });
+  it("absent total with audio counters uses max(text-sum, audio-sum) as the lower bound and degrades", () => {
+    // text-sum = 5, audio-sum = 44 → max = 44
+    const d = normalizeObservation({ type: "provider", kind: "completion", reportedModel: "gpt-audio-1.5", tokens: { inputTokens: 3, outputTokens: 2, inputAudioTokens: 40, outputAudioTokens: 4 } as any });
+    expect(d.tokens.totalTokens).toBe(44);
+    expect(d.attributionLost).toBe(true);
+  });
+  it("malformed total with audio counters still lower-bounds via audio-sum", () => {
+    const d = normalizeObservation({ type: "provider", kind: "completion", reportedModel: "gpt-audio-1.5", tokens: { inputTokens: 1, outputTokens: 1, inputAudioTokens: 20, outputAudioTokens: 20, totalTokens: Number.NaN } as any });
+    expect(d.tokens.totalTokens).toBe(40);
+    expect(d.attributionLost).toBe(true);
+  });
+});
+
 describe("normalizeObservation — tokens & model", () => {
   it("uses the provider totalTokens verbatim (cached-image not double-counted)", () => {
     const d = normalizeObservation({ type: "provider", kind: "image", reportedModel: "img", tokens: { inputTokens: 100, outputTokens: 0, cachedInputTokens: 30, totalTokens: 100 } as any });

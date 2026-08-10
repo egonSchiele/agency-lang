@@ -10,17 +10,18 @@ node rejectedWriteIsFailure(): boolean {
   return isFailure(result)
 }
 
-// The presign interrupt must carry the full payload — including
-// expiresInSeconds, so a handler can judge how long the minted link lives.
+// The presign interrupt must carry the full payload — including expiresIn
+// (milliseconds; 60s is the unit literal for 60000), so a handler can judge
+// how long the minted link lives.
 node presignInterruptCarriesFullPayload(): boolean {
   handle {
-    const result = s3PresignGet("abc", "img.png", 60)
+    const result = s3PresignGet("abc", "img.png", 60s)
     if (isFailure(result)) {
-      return result.error.includes("std::aws::s3::presignGet|abc|img.png|60|")
+      return result.error.includes("std::aws::s3::presignGet|abc|img.png|60000|")
     }
     return false
   } with (intr) {
-    return reject("${intr.effect}|${intr.data.bucket}|${intr.data.key}|${intr.data.expiresInSeconds}|${intr.data.region}")
+    return reject("${intr.effect}|${intr.data.bucket}|${intr.data.key}|${intr.data.expiresIn}|${intr.data.region}")
   }
 }
 

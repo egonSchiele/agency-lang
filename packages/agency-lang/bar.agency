@@ -39,7 +39,10 @@ def generateCategoryImage(category: NewsCategory): Result<string> {
     failure(error) => failure(error)
     success(image) => {
       const s3Key = "news-cartoon-${category.category.toLowerCase().replace(" ", "-")}.png"
-      const putResult = s3PutBinary(BUCKET, s3Key, image.base64)
+      // image.base64 already IS the PNG bytes, base64-encoded — s3PutBinary
+      // decodes it before uploading. The Content-Type is what makes a browser
+      // render the object as an image instead of downloading it.
+      const putResult = s3PutBinary(BUCKET, s3Key, image.base64, region: REGION, contentType: image.mimeType)
       if (putResult is failure(putError)) {
         return failure(putError)
       }
@@ -90,7 +93,10 @@ def sendEmail(subject: string, content: string) {
 node main() {
   const createResult = createBucket(bucket: BUCKET, region: REGION) with approve
   if (createResult is failure(createError)) {
-    return failure(createError)
+    // Re-runs hit an already-owned bucket; only a real failure should stop us.
+    if (!createResult.error.includes("BucketAlreadyOwnedByYou")) {
+      return failure(createError)
+    }
   }
 
   const prompt = """
@@ -111,7 +117,8 @@ node main() {
     # Today's News - ${today()}
     ${([renderCategoryToMarkdown(category) for category in news.categories]).join("\n\n")}
     """
-    const html = parse(markdown) |> renderForHtml
+    // parse returns a ParseResult record; renderForHtml wants its blocks array.
+    const html = parse(markdown).blocks |> renderForHtml
     const sendResult = sendEmail("Today's News - ${today()}", html catch markdown)
     return sendResult
   } with approve

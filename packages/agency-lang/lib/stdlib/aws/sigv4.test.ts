@@ -57,7 +57,7 @@ describe("presignRequest", () => {
       ...base,
       method: "GET",
       target: createAwsRequestTarget("https://examplebucket.s3.amazonaws.com", "/test.txt"),
-      expiresInSeconds: 86400,
+      expiresIn: 86400000, // 1 day in ms; AWS's vector signs X-Amz-Expires=86400 seconds
     });
     expect(url).toBe(
       "https://examplebucket.s3.amazonaws.com/test.txt" +
@@ -76,11 +76,22 @@ describe("presignRequest", () => {
       method: "GET",
       target: createAwsRequestTarget("https://b.s3.us-east-1.amazonaws.com", "/k"),
       sessionToken: "TOKEN",
-      expiresInSeconds: 3600,
+      expiresIn: 3600000,
     });
     expect(url).toContain(
       "&X-Amz-Security-Token=TOKEN&X-Amz-SignedHeaders=host&X-Amz-Signature=",
     );
+  });
+
+  it("rounds a sub-second millisecond remainder UP to whole seconds", () => {
+    // X-Amz-Expires must be an integer; 1500ms must sign as 2s, never 1.5 or 1.
+    const url = presignRequest({
+      ...base,
+      method: "GET",
+      target: createAwsRequestTarget("https://b.s3.us-east-1.amazonaws.com", "/k"),
+      expiresIn: 1500,
+    });
+    expect(url).toContain("&X-Amz-Expires=2&");
   });
 
   // The AWS vector's key is the trivial `test.txt`; this case pins the
@@ -96,7 +107,7 @@ describe("presignRequest", () => {
         "/a%20b/%25%E9%9B%AA//c",
       ),
       sessionToken: "AB+/= x",
-      expiresInSeconds: 3600,
+      expiresIn: 3600000,
     });
     const [prefix, signature] = url.split("&X-Amz-Signature=");
     expect(prefix).toBe(

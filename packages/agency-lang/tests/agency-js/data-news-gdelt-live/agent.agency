@@ -8,6 +8,9 @@ node liveGdelt(): number {
     if (data.effect == "std::gdelt") {
       return approve()
     }
+    if (data.effect == "std::http::fetchJSON") {
+      return approve()
+    }
     return reject()
   }
 }

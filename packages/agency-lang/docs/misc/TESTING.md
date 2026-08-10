@@ -489,6 +489,10 @@ AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run test:agency-js
 
 ### On push to main only
 
+**GitHub stdlib smoke test** — runs the `@agency-lang/github` package's agency tests with a real GitHub token.
+
+**Main-only CLI command integration tests** — installs `agency-lang` from the same `npm pack` tarball used by the PR integration suite in a fresh temp project and exercises finite, non-interactive CLI commands that are broader than the PR smoke suite. Runs only on `push` to `main`, Node 22.
+
 ### Weekly live API tests
 
 Tests against real third-party APIs run on a weekly cron
@@ -509,10 +513,6 @@ Two tiers:
   - `sms.agency` — sends via Twilio test credentials (no real SMS sent)
   - `browser.agency` — visits example.com via Browser Use API
   - `tavily.agency` / `brave.agency` — live web searches
-
-**GitHub stdlib smoke test** — runs the `@agency-lang/github` package's agency tests with a real GitHub token.
-
-**Main-only CLI command integration tests** — installs `agency-lang` from the same `npm pack` tarball used by the PR integration suite in a fresh temp project and exercises finite, non-interactive CLI commands that are broader than the PR smoke suite. Runs only on `push` to `main`, Node 22.
 
 Covered commands:
 - `compile`

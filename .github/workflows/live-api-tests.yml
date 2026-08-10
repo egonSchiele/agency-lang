@@ -121,6 +121,18 @@ jobs:
           BROWSER_OUTCOME: ${{ steps.browser.outcome }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # If a prerequisite (checkout/install/make) failed, the API steps
+          # never ran and their outcomes are "skipped" — that must not read
+          # as green, or an open tracking issue would be closed by a build
+          # break. Leave the issue untouched and let the workflow's own
+          # failure stand.
+          for o in "$CONNECTORS_OUTCOME" "$TAVILY_OUTCOME" "$BRAVE_OUTCOME" "$EMAIL_OUTCOME" "$SMS_OUTCOME" "$BROWSER_OUTCOME"; do
+            if [ "$o" != "success" ] && [ "$o" != "failure" ]; then
+              echo "::warning::API steps did not run (outcome: $o); leaving the tracking issue untouched"
+              exit 0
+            fi
+          done
+
           title="Live API tests failing"
           fails=""
           [ "$CONNECTORS_OUTCOME" = "failure" ] && fails="$fails- connector shape checks: $CONNECTORS_FAILED"$'\n'

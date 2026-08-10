@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import { describe, it, expect } from "vitest";
-import { signRequest } from "../sigv4.js";
+import { signRequest } from "./sigv4.js";
 
 const base = {
   region: "us-east-1",

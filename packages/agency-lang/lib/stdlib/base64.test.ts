@@ -1,4 +1,4 @@
-import { decodeBase64Strict } from "../base64.js";
+import { decodeBase64Strict } from "./base64.js";
 
 describe("decodeBase64Strict", () => {
   it("decodes valid base64", () => {

@@ -13,7 +13,7 @@ import {
   resolveUrl,
   runHttp,
 } from "./http.js";
-import { AWS_OBJECT_BYTE_LIMIT } from "./objectBytes.js";
+import { AWS_OBJECT_BYTE_LIMIT } from "../constants.js";
 
 function makeMockCtx(): RuntimeContext<any> {
   return new RuntimeContext({

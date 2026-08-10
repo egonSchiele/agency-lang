@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { RuntimeContext } from "../../../runtime/state/context.js";
-import { ThreadStore } from "../../../runtime/state/threadStore.js";
-import { runInTestContext, getRuntimeContext } from "../../../runtime/asyncContext.js";
-import { AWS_OBJECT_BYTE_LIMIT } from "../../objectBytes.js";
+import { RuntimeContext } from "../../runtime/state/context.js";
+import { ThreadStore } from "../../runtime/state/threadStore.js";
+import { runInTestContext, getRuntimeContext } from "../../runtime/asyncContext.js";
+import { AWS_OBJECT_BYTE_LIMIT } from "../../constants.js";
 import {
   _s3Get,
   _s3GetBinary,
   _s3Put,
   _s3PutBinary,
   _createBucket,
-} from "../s3.js";
+} from "./s3.js";
 
 function makeCtx() {
   return new RuntimeContext({

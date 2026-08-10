@@ -1,4 +1,4 @@
-import { awsUriEncode } from "../uri.js";
+import { awsUriEncode } from "./uri.js";
 
 describe("awsUriEncode", () => {
   it("keeps path slashes, encodes space/percent/unicode once (encodeSlash false)", () => {

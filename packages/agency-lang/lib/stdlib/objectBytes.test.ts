@@ -1,4 +1,5 @@
-import { AWS_OBJECT_BYTE_LIMIT, objectSizeFailure } from "../objectBytes.js";
+import { objectSizeFailure } from "./objectBytes.js";
+import { AWS_OBJECT_BYTE_LIMIT } from "../constants.js";
 
 describe("objectSizeFailure", () => {
   it("passes an object exactly at the limit", () => {

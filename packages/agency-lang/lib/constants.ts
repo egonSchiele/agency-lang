@@ -79,3 +79,11 @@ export const EXIT_CODE_BUDGET_EXCEEDED = 3;
  * pattern reported "Function '__objectRest' is not defined".
  */
 export const OBJECT_REST_FN = "__objectRest";
+
+/**
+ * Hard cap on the bytes of a single AWS S3 object body, in both directions:
+ * downloads are read up to this limit and uploads are checked against it before
+ * signing. It bounds the in-memory payload, so it is a fixed safety limit, not a
+ * user-tunable option. (A 10 MiB binary object is ~13.3 MiB of base64.)
+ */
+export const AWS_OBJECT_BYTE_LIMIT = 10 * 1024 * 1024;

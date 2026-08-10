@@ -1,15 +1,15 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { RuntimeContext } from "../../../runtime/state/context.js";
-import { ThreadStore } from "../../../runtime/state/threadStore.js";
-import { runInTestContext } from "../../../runtime/asyncContext.js";
+import { RuntimeContext } from "../../runtime/state/context.js";
+import { ThreadStore } from "../../runtime/state/threadStore.js";
+import { runInTestContext } from "../../runtime/asyncContext.js";
 import {
   createAwsRequestTarget,
   sendAwsRequest,
   type AwsRequest,
   type AwsRequestTarget,
-} from "../client.js";
-import type { AwsPartition } from "../endpoints.js";
-import type { AwsCredentials } from "../credentials.js";
+} from "./client.js";
+import type { AwsPartition } from "./endpoints.js";
+import type { AwsCredentials } from "./credentials.js";
 
 function makeCtx() {
   return new RuntimeContext({

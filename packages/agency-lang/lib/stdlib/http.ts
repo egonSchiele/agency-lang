@@ -8,7 +8,7 @@ import { failure, type ResultFailure } from "../runtime/result.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
-import { AWS_OBJECT_BYTE_LIMIT } from "./objectBytes.js";
+import { AWS_OBJECT_BYTE_LIMIT } from "../constants.js";
 
 // Cancellation is best-effort cleanup; a cancel error must never replace the
 // primary abort or size-cap error we are about to throw.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseS3Error, s3ErrorToFailure } from "../errors.js";
+import { parseS3Error, s3ErrorToFailure } from "./errors.js";
 
 describe("parseS3Error", () => {
   it("extracts Code and Message", () => {

@@ -1,4 +1,4 @@
-import { fetchJSON } from "std::http"
+import { connectorFetch } from "std::data/connector"
 
 /** @module
   ## GDELT — worldwide news coverage
@@ -40,8 +40,8 @@ export type NewsArticle = {
   seenDate: string
 }
 
-// Fetch config. We call fetchJSON directly (not a preapproved partial), so the caller sees
-// both the std::gdelt interrupt (semantic "search GDELT?") and the std::http::fetchJSON
+// Fetch config. The std::gdelt interrupt gates the call; the connector approves the
+// underlying fetch at the call site (an outer handler can still reject the std::http::fetchJSON
 // interrupt (concrete "fetch this URL?") and can gate either. The baseUrl ends at ".../doc"
 // (not ".../doc/doc") because resolveUrl inserts a "/" before the path, and buildGdeltPath
 // returns a path beginning "doc?..." (see resolveUrl in lib/stdlib/http.ts).
@@ -93,6 +93,6 @@ export def gdeltNews(query: string, maxRecords: number = 25, timespan: string = 
   return interrupt std::gdelt("Search GDELT news for this query?", { query: query })
   // Bind the fetch to its own statement so the std::http::fetchJSON interrupt fires at
   // statement level (resumable) rather than inside a match scrutinee or call argument.
-  const result = fetchJSON(baseUrl: GDELT_BASE, path: buildGdeltPath(query, maxRecords, timespan), allowedDomains: GDELT_DOMAINS)
+  const result = connectorFetch(GDELT_BASE, GDELT_DOMAINS, buildGdeltPath(query, maxRecords, timespan)) with approve
   return gdeltFinalize(result)
 }

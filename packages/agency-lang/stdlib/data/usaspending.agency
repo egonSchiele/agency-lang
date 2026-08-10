@@ -1,4 +1,4 @@
-import { fetchJSON, HttpMethod } from "std::http"
+import { connectorFetch } from "std::data/connector"
 import { keys } from "std::object"
 
 /** @module
@@ -213,20 +213,6 @@ def awardDetailFinalize(fetchResult: any): Result<AwardDetail> {
   }
 }
 
-/** Fetch a USASpending path (GET or POST) and return the parsed-JSON Result. Raises
-    std::http::fetchJSON but approves it internally, so a plain caller sees only the connector's own
-    std::usaspending prompt while an OUTER fetch handler still receives (and can reject/propagate) the
-    fetch — the POST search surfaces with method "POST" for policy gating. Private. */
-def usaspendingFetch(path: string, method: HttpMethod, body: Record<string, any> | string | null): Result raises <std::http::fetchJSON> {
-  handle {
-    return fetchJSON(baseUrl: USA_BASE, path: path, allowedDomains: USA_DOMAINS, method: method, body: body)
-  } with (data) {
-    if (data.effect == "std::http::fetchJSON") {
-      return approve()
-    }
-  }
-}
-
 export def usaspendingAwards(recipient: string = "", agency: string = "", awardType: string = "contracts", startDate: string = "", endDate: string = "", limit: number = 20): Result<Award[]> raises <std::usaspending, std::http::fetchJSON> {
   """
   Search U.S. federal awards. Returns each award's id, recipient, amount, awarding agency, dates, and
@@ -246,7 +232,7 @@ export def usaspendingAwards(recipient: string = "", agency: string = "", awardT
   const codes = codesResult.value
   return interrupt std::usaspending("Search USASpending federal awards?", { op: "awards", query: recipient })
   const body = buildAwardsBody(codes, recipient, agency, startDate, endDate, limit)
-  const result = usaspendingFetch("/api/v2/search/spending_by_award/", "POST", body)
+  const result = connectorFetch(USA_BASE, USA_DOMAINS, "/api/v2/search/spending_by_award/", method: "POST", body: body) with approve
   return awardsFinalize(result)
 }
 
@@ -259,6 +245,6 @@ export def usaspendingAward(awardId: string): Result<AwardDetail> raises <std::u
   @param awardId - The award id: the generatedId from a search, or the numeric internalId as a string
   """
   return interrupt std::usaspending("Fetch this USASpending award?", { op: "award", query: awardId })
-  const result = usaspendingFetch(buildAwardPath(awardId), "GET", null)
+  const result = connectorFetch(USA_BASE, USA_DOMAINS, buildAwardPath(awardId)) with approve
   return awardDetailFinalize(result)
 }

@@ -1,4 +1,4 @@
-import { fetchJSON } from "std::http"
+import { connectorFetch } from "std::data/connector"
 import { env } from "std::system"
 import { mapValues, values } from "std::object"
 
@@ -214,20 +214,6 @@ def queryFinalize(fetchResult: any): Result<Record<string, string>[]> {
   }
 }
 
-/** Fetch a Wikidata path (either host) with the User-Agent header, returning the parsed-JSON Result.
-    Raises std::http::fetchJSON but approves it internally, so a plain caller sees only the connector's
-    own std::wikidata prompt while any OUTER fetch handler still receives (and can reject or propagate)
-    the fetch. allowedDomains is enforced inside fetchJSON regardless. Private. */
-def wikidataFetch(base: string, domains: string[], path: string): Result raises <std::http::fetchJSON> {
-  handle {
-    return fetchJSON(baseUrl: base, path: path, headers: WD_HEADERS, allowedDomains: domains)
-  } with (data) {
-    if (data.effect == "std::http::fetchJSON") {
-      return approve()
-    }
-  }
-}
-
 export def wikidataSearch(name: string, limit: number = 5): Result<Entity[]> raises <std::wikidata, std::http::fetchJSON> {
   """
   Search Wikidata for entities by name. Returns matches with QID, label, description, and URL. The
@@ -238,7 +224,7 @@ export def wikidataSearch(name: string, limit: number = 5): Result<Entity[]> rai
   @param limit - Maximum number of matches to return (default 5)
   """
   return interrupt std::wikidata("Search Wikidata for this name?", { op: "search", query: name })
-  const result = wikidataFetch(WD_BASE, WD_DOMAINS, buildSearchPath(name, limit))
+  const result = connectorFetch(WD_BASE, WD_DOMAINS, buildSearchPath(name, limit), headers: WD_HEADERS) with approve
   return searchFinalize(result)
 }
 
@@ -251,7 +237,7 @@ export def wikidataEntity(qid: string): Result<EntityDetail> raises <std::wikida
   @param qid - The Wikidata entity id, e.g. "Q42"
   """
   return interrupt std::wikidata("Fetch this Wikidata entity?", { op: "entity", query: qid })
-  const result = wikidataFetch(WD_BASE, WD_DOMAINS, buildEntityPath(qid))
+  const result = connectorFetch(WD_BASE, WD_DOMAINS, buildEntityPath(qid), headers: WD_HEADERS) with approve
   return entityFinalize(result, qid)
 }
 
@@ -264,6 +250,6 @@ export def wikidataQuery(sparql: string): Result<Record<string, string>[]> raise
   @param sparql - The SPARQL query text
   """
   return interrupt std::wikidata("Run this SPARQL query against Wikidata?", { op: "query", query: sparql })
-  const result = wikidataFetch(WDQS_BASE, WDQS_DOMAINS, buildQueryPath(sparql))
+  const result = connectorFetch(WDQS_BASE, WDQS_DOMAINS, buildQueryPath(sparql), headers: WD_HEADERS) with approve
   return queryFinalize(result)
 }

@@ -25,6 +25,9 @@ connectorFetch(
   base: string,
   domains: string[],
   path: string,
+  headers: Record<string, any> = {},
+  method: HttpMethod = "GET",
+  body: Record<string, any> | string | null = null,
 ): Result raises <std::http::fetchJSON>
 ```
 
@@ -44,6 +47,9 @@ Fetch a connector API path and return the parsed-JSON Result. Raises the
 | base | `string` |  |
 | domains | `string[]` |  |
 | path | `string` |  |
+| headers | `Record<string, any>` | {} |
+| method | [HttpMethod](../http.md#httpmethod) | "GET" |
+| body | `Record<string, any> \| string \| null` | null |
 
 **Returns:** `Result`
 
@@ -68,7 +74,7 @@ Shared failure message for a failed connector fetch. Pure.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L37))
 
 ### shapeError
 
@@ -90,7 +96,7 @@ Failure message for a response body that failed wire-shape validation.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L44))
 
 ### clampLimit
 
@@ -109,7 +115,7 @@ Clamp n into [0, cap]. Pure.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L49))
 
 ### dateStrToEpochMs
 
@@ -130,4 +136,4 @@ Convert an ISO 8601 datetime string to epoch milliseconds. Returns 0 when
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L63))

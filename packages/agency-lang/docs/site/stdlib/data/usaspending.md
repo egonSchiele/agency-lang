@@ -145,7 +145,7 @@ Search U.S. federal awards. Returns each award's id, recipient, amount, awarding
 
 **Throws:** `std::usaspending`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L230))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L216))
 
 ### usaspendingAward
 
@@ -171,4 +171,4 @@ Fetch full detail for one federal award. Returns amount, recipient and UEI, awar
 
 **Throws:** `std::usaspending`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L253))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L239))

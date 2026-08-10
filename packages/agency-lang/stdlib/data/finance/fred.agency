@@ -1,4 +1,4 @@
-import { fetchJSON } from "std::http"
+import { connectorFetch } from "std::data/connector"
 import { env } from "std::system"
 
 /** @module
@@ -68,7 +68,8 @@ export type FredSeriesInfo = {
   notes: string
 }
 
-// Not preapproved: callers see both std::fred and the std::http::fetchJSON interrupt.
+// The std::fred interrupt gates the call; the fetch is approved at the call site
+// (an outer handler can still reject std::http::fetchJSON).
 const FRED_BASE = "https://api.stlouisfed.org/fred/"
 const FRED_DOMAINS = ["api.stlouisfed.org"]
 
@@ -194,7 +195,7 @@ export def fredSeries(seriesId: string, observationStart: string = "", observati
   const path = buildFredObservationsPath(seriesId, apiKey, observationStart, observationEnd, frequency ?? "", units ?? "", limit)
   // Bind the fetch to its own statement so the std::http::fetchJSON interrupt fires at
   // statement level (resumable), not inside a call argument.
-  const result = fetchJSON(baseUrl: FRED_BASE, path: path, allowedDomains: FRED_DOMAINS)
+  const result = connectorFetch(FRED_BASE, FRED_DOMAINS, path) with approve
   return fredObservationsFinalize(seriesId, result)
 }
 
@@ -211,6 +212,6 @@ export def fredSeriesInfo(seriesId: string): Result<FredSeriesInfo> raises <std:
   }
   return interrupt std::fred("Fetch this FRED series metadata?", { seriesId: seriesId })
   const path = buildFredSeriesPath(seriesId, apiKey)
-  const result = fetchJSON(baseUrl: FRED_BASE, path: path, allowedDomains: FRED_DOMAINS)
+  const result = connectorFetch(FRED_BASE, FRED_DOMAINS, path) with approve
   return fredInfoFinalize(result)
 }

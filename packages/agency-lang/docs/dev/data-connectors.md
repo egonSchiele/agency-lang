@@ -182,10 +182,14 @@ template. Four kinds of tests, all using nodes that call the verbs:
   `intr.data` fields, so only ADD fields, never rename or remove them.
 - Any stdlib `.agency` change requires `make`.
 
-## Porting an old connector to the core
+## History
 
-hackernews, yc, and wikidata predate the core and carry their own copies of
-the fetch wrapper and error formatter. To port one: replace `<x>Fetch` with
-`connectorFetch`, `<x>Error` with `connectorError("<Source>", err)`, and
-`capLimit` with `clampLimit`; behavior is identical, so no test changes are
-expected beyond adding the tests the connector never had.
+Every connector in `stdlib/data/` goes through `connectorFetch`. The
+connectors that predate the core (hackernews, yc, wikidata, littlesis,
+usaspending) were ported off their private copies of the fetch wrapper, and
+the finance connectors (gdelt, fred, dbnomics, edgar), which used to raise a
+second `std::http::fetchJSON` prompt on every call, now approve the fetch at
+the call site like everyone else — the connector's own effect is the single
+user-facing gate. Connectors with a source-specific failure hint (yc,
+wikidata, littlesis, usaspending) keep their own error formatter instead of
+`connectorError`; that hint is information, not plumbing.

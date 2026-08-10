@@ -130,7 +130,7 @@ Search LittleSis for people and organizations by name. Returns matching entities
 
 **Throws:** `std::littlesis`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L252))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L238))
 
 ### littlesisEntity
 
@@ -155,7 +155,7 @@ Fetch one LittleSis entity by its numeric id (from littlesisSearch). Returns the
 
 **Throws:** `std::littlesis`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L268))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L254))
 
 ### littlesisRelationships
 
@@ -187,7 +187,7 @@ List an entity's relationships (typed edges) by its id. Each edge carries the tw
 
 **Throws:** `std::littlesis`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L280))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L266))
 
 ### littlesisConnections
 
@@ -216,4 +216,4 @@ List the entities connected to an entity (neighbors, by name), optionally filter
 
 **Throws:** `std::littlesis`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L304))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/people/littlesis.agency#L290))

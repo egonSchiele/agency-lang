@@ -349,6 +349,7 @@ export default defineConfig({
               text: "data",
               collapsed: true,
               items: [
+                { text: "data/connector", link: "/stdlib/data/connector" },
                 { text: "data/finance/gdelt", link: "/stdlib/data/finance/gdelt" },
                 { text: "data/finance/fred", link: "/stdlib/data/finance/fred" },
                 { text: "data/finance/edgar", link: "/stdlib/data/finance/edgar" },
@@ -359,6 +360,10 @@ export default defineConfig({
                 {
                   text: "data/people/littlesis",
                   link: "/stdlib/data/people/littlesis",
+                },
+                {
+                  text: "data/social/bluesky",
+                  link: "/stdlib/data/social/bluesky",
                 },
                 {
                   text: "data/tech/yc",

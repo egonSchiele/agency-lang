@@ -1,0 +1,244 @@
+import { connectorFetch, connectorError, clampLimit, dateStrToEpochMs } from "std::data/connector"
+import { format } from "std::date"
+
+/** @module
+  ## Bluesky — keyword search, author feeds, and profiles
+
+  Read [Bluesky](https://bsky.app) via its public AppView API. No API key or
+  account is required. Use this connector to search posts by keyword
+  (`bskySearch`), read an account's recent posts (`bskyAuthorFeed`), or look
+  up a profile (`bskyProfile`).
+
+  Every post comes back with a `url` field holding its human-facing bsky.app
+  link, so results can go straight into an email or report. Post timestamps
+  are epoch milliseconds, so they compare directly against `now()` from
+  `std::date`.
+
+  ### Usage
+
+  ```ts
+  import { bskySearch, bskyAuthorFeed } from "std::data/social/bluesky"
+  import { now } from "std::date"
+
+  node main() {
+    // Posts mentioning a topic in the last day.
+    const recent = bskySearch("agency lang", since: now() - 1d) catch []
+    for (p in recent) {
+      print("${p.author}: ${p.text}")
+      print("  ${p.url}")
+    }
+  }
+  ```
+
+  ### Shaping the tools for an agent
+
+  Like any Agency function, these verbs can be narrowed with partial
+  application before handing them to an LLM:
+
+  ```ts
+  const searchRecent = bskySearch.partial(sort: "latest", limit: 10)
+  const news = llm("what are people saying about agency-lang?", tools: [searchRecent])
+  ```
+*/
+
+effect std::bluesky { op: string, query: string, since: number, limit: number }
+
+static const BSKY_BASE = "https://public.api.bsky.app/xrpc"
+static const BSKY_DOMAINS = ["public.api.bsky.app"]
+
+/** Result ordering for `bskySearch`. */
+export type BskySort = "latest" | "top"
+
+/** A Bluesky post. `createdAt` is epoch milliseconds (0 when the source
+    timestamp was malformed). `url` is the human-facing bsky.app link,
+    constructed from the post's at:// uri. */
+export type Post = {
+  uri: string;
+  url: string;
+  author: string;
+  authorName: string;
+  text: string;
+  createdAt: number;
+  replyCount: number;
+  repostCount: number;
+  likeCount: number;
+  quoteCount: number
+}
+
+/** A Bluesky account profile. */
+export type Profile = {
+  did: string;
+  handle: string;
+  displayName: string;
+  description: string;
+  followersCount: number;
+  followsCount: number;
+  postsCount: number
+}
+
+/** Build the bsky.app web link for a post. The identifier is the author's
+    handle unless it is missing or "handle.invalid" (Bluesky's sentinel for an
+    unresolvable handle), in which case the did. Returns "" when the uri is
+    not a post uri. Pure/total. */
+def buildPostUrl(uri: string, did: string, handle: string): string {
+  // at://<did>/app.bsky.feed.post/<rkey> splits into exactly 5 parts.
+  const parts = uri.split("/")
+  if (parts.length != 5 || parts[3] != "app.bsky.feed.post") {
+    return ""
+  }
+  let who = handle
+  if (who == "" || who == "handle.invalid") {
+    who = did
+  }
+  if (who == "") {
+    return ""
+  }
+  return "https://bsky.app/profile/${who}/post/${parts[4]}"
+}
+
+/** Reshape an API postView into a Post. The post text and creation time live
+    inside the API's untyped `record` field. Pure/total. */
+def parsePost(raw: any): Post {
+  const r: any = raw ?? {}
+  const author: any = r.author ?? {}
+  const record: any = r.record ?? {}
+  const handle = author.handle ?? ""
+  return {
+    uri: r.uri ?? "",
+    url: buildPostUrl(r.uri ?? "", author.did ?? "", handle),
+    author: handle,
+    authorName: author.displayName ?? "",
+    text: record.text ?? "",
+    createdAt: dateStrToEpochMs(record.createdAt ?? ""),
+    replyCount: r.replyCount ?? 0,
+    repostCount: r.repostCount ?? 0,
+    likeCount: r.likeCount ?? 0,
+    quoteCount: r.quoteCount ?? 0
+  }
+}
+
+/** Reshape a list of API postViews into Post[]. Pure/total. */
+def parsePosts(raw: any[]): Post[] {
+  return map(raw) as p {
+    return parsePost(p)
+  }
+}
+
+/** Reshape an API profileViewDetailed into a Profile. Pure/total. */
+def parseProfile(raw: any): Profile {
+  const r: any = raw ?? {}
+  return {
+    did: r.did ?? "",
+    handle: r.handle ?? "",
+    displayName: r.displayName ?? "",
+    description: r.description ?? "",
+    followersCount: r.followersCount ?? 0,
+    followsCount: r.followsCount ?? 0,
+    postsCount: r.postsCount ?? 0
+  }
+}
+
+/** Build the searchPosts path (limit already clamped). A since of 0 means no
+    time filter; otherwise it is formatted as UTC ISO 8601. Pure. */
+def buildSearchPath(query: string, sort: string, since: number, limit: number): string {
+  const base = "/app.bsky.feed.searchPosts?q=${encodeURIComponent(query)}&sort=${sort}&limit=${limit}"
+  if (since <= 0) {
+    return base
+  }
+  return "${base}&since=${encodeURIComponent(format(since, "UTC"))}"
+}
+
+/** Build the getAuthorFeed path (limit already clamped). Pure. */
+def buildAuthorFeedPath(handle: string, limit: number): string {
+  return "/app.bsky.feed.getAuthorFeed?actor=${encodeURIComponent(handle)}&limit=${limit}"
+}
+
+/** Build the getProfile path. Pure. */
+def buildProfilePath(handle: string): string {
+  return "/app.bsky.actor.getProfile?actor=${encodeURIComponent(handle)}"
+}
+
+/** Turn a searchPosts fetch Result into a Post[] Result. Pure. */
+def searchFinalize(fetchResult: any): Result<Post[]> {
+  return match (fetchResult) {
+    success(body) => {
+      const b: any = body ?? {}
+      return success(parsePosts(b.posts ?? []))
+    }
+    failure(err) => failure(connectorError("Bluesky", err))
+  }
+}
+
+/** Turn a getAuthorFeed fetch Result into a Post[] Result. Each feed item
+    wraps its post as `.post`; reposts appear as their original posts. Pure. */
+def feedFinalize(fetchResult: any): Result<Post[]> {
+  return match (fetchResult) {
+    success(body) => {
+      const b: any = body ?? {}
+      const items: any[] = b.feed ?? []
+      const posts = map(items) as item {
+        const i: any = item ?? {}
+        return i.post ?? {}
+      }
+      return success(parsePosts(posts))
+    }
+    failure(err) => failure(connectorError("Bluesky", err))
+  }
+}
+
+/** Turn a getProfile fetch Result into a Profile Result; a null body →
+    failure. Pure. */
+def profileFinalize(fetchResult: any): Result<Profile> {
+  return match (fetchResult) {
+    success(body) => {
+      const b: any = body ?? null
+      if (b == null) {
+        return failure("Bluesky returned no profile")
+      }
+      return success(parseProfile(b))
+    }
+    failure(err) => failure(connectorError("Bluesky", err))
+  }
+}
+
+export idempotent def bskySearch(query: string, sort: BskySort = "latest", since: number = 0, limit: number = 25): Result<Post[]> raises <std::bluesky, std::http::fetchJSON> {
+  """
+  Search Bluesky posts by keyword. Returns matching posts with author, text,
+  engagement counts, and a bsky.app link.
+
+  @param query - The search keywords
+  @param sort - Result ordering
+  @param since - Only include posts created at or after this instant, as epoch milliseconds (0 means no time filter)
+  @param limit - Maximum results (capped at 100)
+  """
+  const n = clampLimit(limit, 100)
+  return interrupt std::bluesky("Search Bluesky for this query?", { op: "search", query: query, since: since, limit: n })
+  const result = connectorFetch(BSKY_BASE, BSKY_DOMAINS, buildSearchPath(query, sort, since, n))
+  return searchFinalize(result)
+}
+
+export idempotent def bskyAuthorFeed(handle: string, limit: number = 30): Result<Post[]> raises <std::bluesky, std::http::fetchJSON> {
+  """
+  Fetch a Bluesky account's recent posts, newest first. Returns posts with
+  text, engagement counts, and a bsky.app link.
+
+  @param handle - The account's handle (like "user.bsky.social") or did
+  @param limit - Maximum posts (capped at 100)
+  """
+  const n = clampLimit(limit, 100)
+  return interrupt std::bluesky("Fetch this Bluesky account's recent posts?", { op: "authorFeed", query: handle, since: 0, limit: n })
+  const result = connectorFetch(BSKY_BASE, BSKY_DOMAINS, buildAuthorFeedPath(handle, n))
+  return feedFinalize(result)
+}
+
+export idempotent def bskyProfile(handle: string): Result<Profile> raises <std::bluesky, std::http::fetchJSON> {
+  """
+  Fetch a Bluesky account's public profile: display name, description, and
+  follower, follow, and post counts. An unknown handle returns a failure.
+
+  @param handle - The account's handle (like "user.bsky.social") or did
+  """
+  return interrupt std::bluesky("Fetch this Bluesky profile?", { op: "profile", query: handle, since: 0, limit: 0 })
+  const result = connectorFetch(BSKY_BASE, BSKY_DOMAINS, buildProfilePath(handle))
+  return profileFinalize(result)
+}

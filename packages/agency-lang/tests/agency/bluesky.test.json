@@ -1,0 +1,169 @@
+{
+  "sourceFile": "bluesky.agency",
+  "fetchMocks": [],
+  "tests": [
+    {
+      "nodeName": "searchInterruptCarriesFullPayload",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "searchReshapesPosts",
+      "input": "",
+      "expectedOutput": "[\"https://bsky.app/profile/alice.bsky.social/post/3k1|alice.bsky.social|Alice|agency is neat|2000|3|1\",\"https://bsky.app/profile/did:plc:bbb/post/3k2|handle.invalid||minimal|0|0|0\",\"|x||no url|0|0|0\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "fetchMocks": [
+        {
+          "url": "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts*",
+          "return": {
+            "posts": [
+              {
+                "uri": "at://did:plc:aaa/app.bsky.feed.post/3k1",
+                "cid": "c1",
+                "author": {
+                  "did": "did:plc:aaa",
+                  "handle": "alice.bsky.social",
+                  "displayName": "Alice"
+                },
+                "record": {
+                  "text": "agency is neat",
+                  "createdAt": "1970-01-01T00:00:02.000Z"
+                },
+                "replyCount": 1,
+                "repostCount": 2,
+                "likeCount": 3,
+                "quoteCount": 4
+              },
+              {
+                "uri": "at://did:plc:bbb/app.bsky.feed.post/3k2",
+                "author": {
+                  "did": "did:plc:bbb",
+                  "handle": "handle.invalid"
+                },
+                "record": {
+                  "text": "minimal"
+                }
+              },
+              {
+                "uri": "weird",
+                "author": {
+                  "handle": "x"
+                },
+                "record": {
+                  "text": "no url",
+                  "createdAt": "garbage"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "searchSendsSinceParam",
+      "input": "",
+      "expectedOutput": "[\"with-since\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "fetchMocks": [
+        {
+          "urlPattern": "since=",
+          "return": { "posts": [{ "record": { "text": "with-since" } }] }
+        },
+        {
+          "url": "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts*",
+          "return": { "posts": [{ "record": { "text": "no-since" } }] }
+        }
+      ]
+    },
+    {
+      "nodeName": "searchOmitsSinceByDefault",
+      "input": "",
+      "expectedOutput": "[\"no-since\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "fetchMocks": [
+        {
+          "urlPattern": "since=",
+          "return": { "posts": [{ "record": { "text": "with-since" } }] }
+        },
+        {
+          "url": "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts*",
+          "return": { "posts": [{ "record": { "text": "no-since" } }] }
+        }
+      ]
+    },
+    {
+      "nodeName": "authorFeedUnwrapsPosts",
+      "input": "",
+      "expectedOutput": "[\"alice.bsky.social|first\",\"alice.bsky.social|second\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "fetchMocks": [
+        {
+          "url": "https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed*",
+          "return": {
+            "feed": [
+              {
+                "post": {
+                  "uri": "at://did:plc:aaa/app.bsky.feed.post/1",
+                  "author": { "did": "did:plc:aaa", "handle": "alice.bsky.social" },
+                  "record": { "text": "first" }
+                }
+              },
+              {
+                "post": {
+                  "uri": "at://did:plc:aaa/app.bsky.feed.post/2",
+                  "author": { "did": "did:plc:aaa", "handle": "alice.bsky.social" },
+                  "record": { "text": "second" }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "profileReshapes",
+      "input": "",
+      "expectedOutput": "\"alice.bsky.social|Alice|10|42\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "fetchMocks": [
+        {
+          "url": "https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile*",
+          "return": {
+            "did": "did:plc:aaa",
+            "handle": "alice.bsky.social",
+            "displayName": "Alice",
+            "description": "hi",
+            "followersCount": 10,
+            "followsCount": 5,
+            "postsCount": 42
+          }
+        }
+      ]
+    }
+  ]
+}

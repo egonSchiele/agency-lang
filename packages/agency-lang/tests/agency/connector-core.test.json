@@ -1,0 +1,26 @@
+{
+  "sourceFile": "connector-core.agency",
+  "fetchMocks": [],
+  "tests": [
+    {
+      "nodeName": "coreHelpers",
+      "input": "",
+      "expectedOutput": "[1000,0,0,100,0,7]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "outerHandlerStillSeesFetch",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -30,9 +30,15 @@ content  := text | CDATA | comment | processing-instruction | element
 
 Key rules, all tested in `lib/stdlib/xml/grammar.test.ts`:
 
-- Exactly one root element. Declarations only at the start; at most one
-  DOCTYPE, before the root, quote-aware, with internal subsets (`[...]`)
-  rejected. CDATA only inside elements. Comments cannot contain `--`.
+- Exactly one root element. The XML declaration is parsed strictly (quoted
+  `version` first, then optional `encoding`/`standalone`, in order) and only
+  at the very start. At most one DOCTYPE, before the root, in exactly three
+  forms (name only, `SYSTEM` + literal, `PUBLIC` + two literals); internal
+  subsets (`[...]`) rejected. PIs need a valid target name and `xml` is
+  reserved case-insensitively. CDATA only inside elements. Comments cannot
+  contain `--`. Skipped constructs are not exempt from character rules: one
+  whole-source raw-character pass runs before the grammar, so controls and
+  unpaired surrogates fail even inside comments, PIs, and DOCTYPEs.
 - Names are ASCII (`[:A-Za-z_][:A-Za-z0-9_.-]*`). Namespaces are never
   resolved: `media:thumbnail` is a literal tag name, `xmlns` is a literal
   attribute. All three captured feed fixtures (Reddit Atom, NPR RSS 2.0,

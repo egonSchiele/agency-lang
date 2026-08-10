@@ -489,15 +489,30 @@ AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run test:agency-js
 
 ### On push to main only
 
-**Credential-based stdlib tests** (`tests/integration/stdlib-sandbox/credential/run.mjs`) — tests that require API keys, gated by the `ci-credentials` GitHub Environment. Never run on PRs (secrets not available to forks).
-
-- `email.agency` — sends via Resend sandbox (no real email delivered)
-- `sms.agency` — sends via Twilio test credentials (no real SMS sent)
-- `browser.agency` — visits example.com via Browser Use API
-
 **GitHub stdlib smoke test** — runs the `@agency-lang/github` package's agency tests with a real GitHub token.
 
 **Main-only CLI command integration tests** — installs `agency-lang` from the same `npm pack` tarball used by the PR integration suite in a fresh temp project and exercises finite, non-interactive CLI commands that are broader than the PR smoke suite. Runs only on `push` to `main`, Node 22.
+
+### Weekly live API tests
+
+Tests against real third-party APIs run on a weekly cron
+(`.github/workflows/live-api-tests.yml`), not on pushes — they spend real
+quota and test other people's uptime, not our code. A failure files or
+updates a single "Live API tests failing" issue; the issue closes when the
+run is green again. Trigger the workflow manually (workflow_dispatch) when
+debugging a connector.
+
+Two tiers:
+
+- **Keyless connector shape checks** — the `tests/agency-js/data-*-live`
+  suites, run with `AGENCY_LIVE_TESTS=1`. One real call per connector; when
+  the gate is unset (every other CI run) they pass vacuously.
+- **Credential-based stdlib tests** (`tests/integration/stdlib-sandbox/credential/`),
+  gated by the `ci-credentials` GitHub Environment:
+  - `email.agency` — sends via Resend sandbox (no real email delivered)
+  - `sms.agency` — sends via Twilio test credentials (no real SMS sent)
+  - `browser.agency` — visits example.com via Browser Use API
+  - `tavily.agency` / `brave.agency` — live web searches
 
 Covered commands:
 - `compile`

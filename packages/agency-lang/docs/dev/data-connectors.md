@@ -239,8 +239,10 @@ Two patterns to know:
   the interrupt surfaces to the harness, which never approves it. See
   `callGdeltPropagateFetch` in `tests/agency-js/data-news-gdelt/`.
 - **The live tier.** Each connector has a `*-live/` sibling gated on
-  `AGENCY_LIVE_TESTS` (skipped by default, so CI never hits the network).
-  Run it manually once to confirm the connector matches the real API.
+  `AGENCY_LIVE_TESTS` (a vacuous pass by default, so ordinary CI never hits
+  the network). The weekly `live-api-tests.yml` workflow runs them all with
+  the gate set and files a tracking issue on failure — every connector
+  should ship one so shape drift gets noticed within a week.
 
 ## Updating an existing connector
 

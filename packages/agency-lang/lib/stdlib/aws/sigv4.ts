@@ -132,7 +132,7 @@ export type PresignInput = {
   accessKeyId: string;
   secretAccessKey: string;
   sessionToken?: string;
-  expiresInSeconds: number;
+  expiresIn: number;
   /** Override "now"; used only to reproduce AWS's published test vectors. */
   date?: Date;
 };
@@ -155,7 +155,7 @@ export function presignRequest(input: PresignInput): string {
     ["X-Amz-Algorithm", "AWS4-HMAC-SHA256"],
     ["X-Amz-Credential", `${input.accessKeyId}/${credentialScope}`],
     ["X-Amz-Date", amzDate],
-    ["X-Amz-Expires", String(input.expiresInSeconds)],
+    ["X-Amz-Expires", String(input.expiresIn / 1000)], // ms to seconds
     ["X-Amz-SignedHeaders", "host"],
   ];
   if (input.sessionToken) {

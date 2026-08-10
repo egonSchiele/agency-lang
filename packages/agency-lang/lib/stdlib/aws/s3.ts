@@ -23,7 +23,7 @@ import { s3ErrorToFailure } from "./errors.js";
 const BINARY_MARKER = "[binary output truncated]";
 // A presigned URL is a bearer credential; it must never land in a trace.
 const PRESIGN_MARKER = "[presigned S3 URL redacted]";
-const MAX_PRESIGN_SECONDS = 604800; // 7 days, the SigV4 maximum
+const MAX_PRESIGN_MS = 1000 * 60 * 60 * 24 * 7; // 7 days, the SigV4 maximum
 
 export type GetTextOperation = {
   readonly kind: "getText";
@@ -62,7 +62,7 @@ export type PresignGetOperation = {
   readonly kind: "presignGet";
   readonly bucket: string;
   readonly key: string;
-  readonly expiresInSeconds: number;
+  readonly expiresIn: number;
 };
 
 export type S3Operation =
@@ -116,16 +116,16 @@ function keyFailure(key: string): ResultFailure | null {
 
 // No silent clamping: a caller who asked for 30 days must get an error, not a
 // 7-day link.
-function expiresFailure(expiresInSeconds: number): ResultFailure | null {
+function expiresFailure(expiresIn: number): ResultFailure | null {
   if (
-    !Number.isInteger(expiresInSeconds) ||
-    expiresInSeconds < 1 ||
-    expiresInSeconds > MAX_PRESIGN_SECONDS
+    !Number.isInteger(expiresIn) ||
+    expiresIn < 1 ||
+    expiresIn > MAX_PRESIGN_MS
   ) {
     return failure({
       message:
-        `Invalid expiresInSeconds ${String(expiresInSeconds)}: must be ` +
-        `an integer between 1 and ${MAX_PRESIGN_SECONDS} (7 days).`,
+        `Invalid expiresIn ${String(expiresIn)}: must be ` +
+        `an integer between 1 and ${MAX_PRESIGN_MS} (7 days).`,
     });
   }
   return null;
@@ -254,7 +254,7 @@ export async function runS3Operation(
         partition.region === "us-east-1"
           ? ""
           : `<CreateBucketConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">` +
-            `<LocationConstraint>${partition.region}</LocationConstraint></CreateBucketConfiguration>`;
+          `<LocationConstraint>${partition.region}</LocationConstraint></CreateBucketConfiguration>`;
       const response = await sendAwsRequest(partition, credentials, {
         target,
         method: "PUT",
@@ -271,7 +271,7 @@ export async function runS3Operation(
     case "presignGet": {
       const keyError = keyFailure(operation.key);
       if (keyError) return keyError;
-      const expiryError = expiresFailure(operation.expiresInSeconds);
+      const expiryError = expiresFailure(operation.expiresIn);
       if (expiryError) return expiryError;
       const target = createObjectTarget(partition, bucket, operation.key);
       // Presigning never calls sendAwsRequest, so the final hostname defense
@@ -286,7 +286,7 @@ export async function runS3Operation(
         accessKeyId: credentials.accessKeyId,
         secretAccessKey: credentials.secretAccessKey,
         sessionToken: credentials.sessionToken,
-        expiresInSeconds: operation.expiresInSeconds,
+        expiresIn: operation.expiresIn,
       });
       const { globals } = getRuntimeContext();
       globals.markRedacted(url, PRESIGN_MARKER);
@@ -334,10 +334,10 @@ export function _s3PutBinary(
 export function _s3PresignGet(
   bucket: string,
   key: string,
-  expiresInSeconds: number,
+  expiresIn: number,
   region: string,
 ): Promise<S3OperationResult> {
-  return runS3Operation(region, { kind: "presignGet", bucket, key, expiresInSeconds });
+  return runS3Operation(region, { kind: "presignGet", bucket, key, expiresIn });
 }
 
 export function _createBucket(

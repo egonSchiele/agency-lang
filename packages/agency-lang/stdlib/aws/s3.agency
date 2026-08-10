@@ -34,57 +34,57 @@ import {
   _s3PutBinary,
   _createBucket,
   _s3PresignGet,
-} from "agency-lang/stdlib-lib/aws/s3.js"
+ } from "agency-lang/stdlib-lib/aws/s3.js"
 
 effect std::aws::s3::get {
-  bucket: string,
-  key: string,
-  region: string,
+  bucket: string;
+  key: string;
+  region: string
 }
 
 effect std::aws::s3::getBinary {
-  bucket: string,
-  key: string,
-  region: string,
+  bucket: string;
+  key: string;
+  region: string
 }
 
 effect std::aws::s3::put {
-  bucket: string,
-  key: string,
-  region: string,
+  bucket: string;
+  key: string;
+  region: string
 }
 
 effect std::aws::s3::putBinary {
-  bucket: string,
-  key: string,
-  region: string,
+  bucket: string;
+  key: string;
+  region: string
 }
 
 effect std::aws::s3::createBucket {
-  bucket: string,
-  region: string,
+  bucket: string;
+  region: string
 }
 
 effect std::aws::s3::presignGet {
-  bucket: string,
-  key: string,
-  expiresInSeconds: number,
-  region: string,
+  bucket: string;
+  key: string;
+  expiresIn: number;
+  region: string
 }
 
 /** The result of a successful `s3Put` / `s3PutBinary`. */
 export type S3PutResult = {
-  bucket: string,
-  key: string,
-  url: string,
-  etag: string,
+  bucket: string;
+  key: string;
+  url: string;
+  etag: string
 }
 
 /** The result of a successful `createBucket`. */
 export type S3CreateBucketResult = {
-  bucket: string,
-  region: string,
-  location: string,
+  bucket: string;
+  region: string;
+  location: string
 }
 
 export def s3Get(
@@ -99,14 +99,11 @@ export def s3Get(
   @param key - The object key (path within the bucket)
   @param region - AWS region; defaults to AWS_REGION, then us-east-1
   """
-  return interrupt std::aws::s3::get(
-    "Allow reading the object '${key}' from S3 bucket '${bucket}'?",
-    {
-      bucket: bucket,
-      key: key,
-      region: region,
-    },
-  )
+  return interrupt std::aws::s3::get("Allow reading the object '${key}' from S3 bucket '${bucket}'?", {
+    bucket: bucket,
+    key: key,
+    region: region
+  })
   return try _s3Get(bucket, key, region)
 }
 
@@ -122,14 +119,11 @@ export def s3GetBinary(
   @param key - The object key (path within the bucket)
   @param region - AWS region; defaults to AWS_REGION, then us-east-1
   """
-  return interrupt std::aws::s3::getBinary(
-    "Allow reading the binary object '${key}' from S3 bucket '${bucket}'?",
-    {
-      bucket: bucket,
-      key: key,
-      region: region,
-    },
-  )
+  return interrupt std::aws::s3::getBinary("Allow reading the binary object '${key}' from S3 bucket '${bucket}'?", {
+    bucket: bucket,
+    key: key,
+    region: region
+  })
   return try _s3GetBinary(bucket, key, region)
 }
 
@@ -149,14 +143,11 @@ export def s3Put(
   @param region - AWS region; defaults to AWS_REGION, then us-east-1
   @param contentType - The Content-Type for the object
   """
-  return interrupt std::aws::s3::put(
-    "Allow writing the object '${key}' to S3 bucket '${bucket}'?",
-    {
-      bucket: bucket,
-      key: key,
-      region: region,
-    },
-  )
+  return interrupt std::aws::s3::put("Allow writing the object '${key}' to S3 bucket '${bucket}'?", {
+    bucket: bucket,
+    key: key,
+    region: region
+  })
   destructive {
     return try _s3Put(bucket, key, content, region, contentType)
   }
@@ -178,14 +169,11 @@ export def s3PutBinary(
   @param region - AWS region; defaults to AWS_REGION, then us-east-1
   @param contentType - The Content-Type for the object
   """
-  return interrupt std::aws::s3::putBinary(
-    "Allow writing the binary object '${key}' to S3 bucket '${bucket}'?",
-    {
-      bucket: bucket,
-      key: key,
-      region: region,
-    },
-  )
+  return interrupt std::aws::s3::putBinary("Allow writing the binary object '${key}' to S3 bucket '${bucket}'?", {
+    bucket: bucket,
+    key: key,
+    region: region
+  })
   destructive {
     return try _s3PutBinary(bucket, key, base64, region, contentType)
   }
@@ -194,7 +182,7 @@ export def s3PutBinary(
 export def s3PresignGet(
   bucket: string,
   key: string,
-  expiresInSeconds: number = 3600,
+  expiresIn: number = 1h,
   region: string = "",
 ): Result<string> {
   """
@@ -206,19 +194,16 @@ export def s3PresignGet(
 
   @param bucket - The S3 bucket name
   @param key - The object key (path within the bucket)
-  @param expiresInSeconds - How long the URL works, 1 to 604800 (7 days); default one hour
+  @param expiresIn - How long the URL works for, in milliseconds, 1 to 604800000 (7 days); default one hour
   @param region - AWS region; defaults to AWS_REGION, then us-east-1
   """
-  return interrupt std::aws::s3::presignGet(
-    "Allow creating a download link for '${key}' in S3 bucket '${bucket}', usable by anyone for ${expiresInSeconds} seconds?",
-    {
-      bucket: bucket,
-      key: key,
-      expiresInSeconds: expiresInSeconds,
-      region: region,
-    },
-  )
-  return try _s3PresignGet(bucket, key, expiresInSeconds, region)
+  raise std::aws::s3::presignGet("Allow creating a download link for '${key}' in S3 bucket '${bucket}', usable by anyone for ${expiresIn}ms?", {
+    bucket: bucket,
+    key: key,
+    expiresIn: expiresIn,
+    region: region
+  })
+  return try _s3PresignGet(bucket, key, expiresIn, region)
 }
 
 export def createBucket(
@@ -231,13 +216,10 @@ export def createBucket(
   @param bucket - The globally-unique bucket name to create
   @param region - AWS region; defaults to AWS_REGION, then us-east-1
   """
-  return interrupt std::aws::s3::createBucket(
-    "Allow creating the S3 bucket '${bucket}'?",
-    {
-      bucket: bucket,
-      region: region,
-    },
-  )
+  return interrupt std::aws::s3::createBucket("Allow creating the S3 bucket '${bucket}'?", {
+    bucket: bucket,
+    region: region
+  })
   destructive {
     return try _createBucket(bucket, region)
   }

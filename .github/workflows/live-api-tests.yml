@@ -1,0 +1,141 @@
+# Weekly live checks against the third-party APIs the stdlib wraps. These
+# deliberately do NOT run on pushes: they spend real quota (BrowserUse, Tavily,
+# Brave, Resend, Twilio) and they test other people's uptime and wire formats,
+# not our code — so a failure files/updates a tracking issue instead of
+# blocking anyone's merge. Every API step is continue-on-error so one broken
+# API never hides another's result.
+#
+# Trigger it manually (workflow_dispatch) when debugging a connector.
+name: Live API tests (weekly)
+
+on:
+  schedule:
+    - cron: "0 14 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  live:
+    # Forks have neither the secrets nor a reason to burn quota.
+    if: github.repository == 'egonSchiele/agency-lang'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ci-credentials
+    env:
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+      TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+      TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
+      BROWSER_USE_API_KEY: ${{ secrets.BROWSER_USE_API_KEY }}
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+      BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install
+      - run: make
+        working-directory: packages/agency-lang
+
+      # Tier 1: keyless connector shape checks. Free — no credits. Each
+      # data-*-live suite makes one real call; the connectors' own reshaping
+      # (and, for Bluesky, wire-type validation) does the asserting.
+      - name: Connector shape checks (keyless)
+        id: connectors
+        continue-on-error: true
+        working-directory: packages/agency-lang
+        env:
+          AGENCY_LIVE_TESTS: "1"
+        run: |
+          failed=""
+          for d in tests/agency-js/data-*-live; do
+            echo "== $d"
+            node ./dist/scripts/agency.js test js "$d" || failed="$failed ${d##*/}"
+          done
+          echo "failed=${failed# }" >> "$GITHUB_OUTPUT"
+          [ -z "$failed" ]
+
+      # Tier 2: credentialed APIs. One step per API so the tracking issue can
+      # name exactly what broke.
+      - name: Tavily search
+        id: tavily
+        continue-on-error: true
+        working-directory: packages/agency-lang
+        run: node ./dist/scripts/agency.js test tests/integration/stdlib-sandbox/credential/tavily.agency
+
+      - name: Brave search
+        id: brave
+        continue-on-error: true
+        working-directory: packages/agency-lang
+        run: |
+          if [ -z "$BRAVE_API_KEY" ]; then
+            echo "BRAVE_API_KEY secret not configured; skipping"
+            exit 0
+          fi
+          node ./dist/scripts/agency.js test tests/integration/stdlib-sandbox/credential/brave.agency
+
+      - name: Email (Resend)
+        id: email
+        continue-on-error: true
+        working-directory: packages/agency-lang
+        run: node ./dist/scripts/agency.js test tests/integration/stdlib-sandbox/credential/email.agency
+
+      - name: SMS (Twilio)
+        id: sms
+        continue-on-error: true
+        working-directory: packages/agency-lang
+        run: node ./dist/scripts/agency.js test tests/integration/stdlib-sandbox/credential/sms.agency
+
+      - name: Browser (BrowserUse)
+        id: browser
+        continue-on-error: true
+        working-directory: packages/agency-lang
+        run: node ./dist/scripts/agency.js test tests/integration/stdlib-sandbox/credential/browser.agency
+
+      # A red cron nobody sees is worthless: collect the outcomes into one
+      # tracking issue (created when something fails, commented on repeat
+      # failures, closed when everything is green again).
+      - name: File or update the tracking issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONNECTORS_OUTCOME: ${{ steps.connectors.outcome }}
+          CONNECTORS_FAILED: ${{ steps.connectors.outputs.failed }}
+          TAVILY_OUTCOME: ${{ steps.tavily.outcome }}
+          BRAVE_OUTCOME: ${{ steps.brave.outcome }}
+          EMAIL_OUTCOME: ${{ steps.email.outcome }}
+          SMS_OUTCOME: ${{ steps.sms.outcome }}
+          BROWSER_OUTCOME: ${{ steps.browser.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Live API tests failing"
+          fails=""
+          [ "$CONNECTORS_OUTCOME" = "failure" ] && fails="$fails- connector shape checks: $CONNECTORS_FAILED"$'\n'
+          [ "$TAVILY_OUTCOME" = "failure" ] && fails="$fails- Tavily search"$'\n'
+          [ "$BRAVE_OUTCOME" = "failure" ] && fails="$fails- Brave search"$'\n'
+          [ "$EMAIL_OUTCOME" = "failure" ] && fails="$fails- email (Resend)"$'\n'
+          [ "$SMS_OUTCOME" = "failure" ] && fails="$fails- SMS (Twilio)"$'\n'
+          [ "$BROWSER_OUTCOME" = "failure" ] && fails="$fails- browser (BrowserUse)"$'\n'
+
+          existing=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number // empty')
+
+          if [ -n "$fails" ]; then
+            body="The weekly live API run on $(date -u +%F) failed for:"$'\n\n'"$fails"$'\n'"Run: $RUN_URL"
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --body "$body"
+            else
+              gh issue create --title "$title" --body "$body"
+            fi
+          elif [ -n "$existing" ]; then
+            gh issue close "$existing" --comment "The weekly live API run is green again: $RUN_URL"
+          fi

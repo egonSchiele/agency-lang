@@ -465,7 +465,11 @@ jobs:
         title: Standard Library Coverage
 
   integration-credentials:
-    # Only run on push to main or daily cron — never on PRs (secrets not available to forks).
+    # Only run on push to main — never on PRs (secrets not available to forks).
+    # The third-party credential stdlib tests (tavily, brave, email, sms,
+    # browser) moved to the weekly live-api-tests.yml cron so merges stop
+    # burning external API quota; this job keeps only the statelog remote
+    # test, which exercises our own infrastructure.
     if: >
       (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
@@ -496,9 +500,6 @@ jobs:
           cache: pnpm
       - run: pnpm install
       - run: make
-      - name: Credential stdlib tests
-        working-directory: packages/agency-lang
-        run: node tests/integration/stdlib-sandbox/credential/run.mjs
       - name: Remote CLI integration test (real statelog upload)
         working-directory: packages/agency-lang
         run: node tests/integration/remote/test.mjs

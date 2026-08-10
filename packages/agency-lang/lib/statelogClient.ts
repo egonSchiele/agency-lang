@@ -114,6 +114,19 @@ export type TokenCost = {
   totalCost?: number;
 };
 
+/** Keep only the declared `TokenUsage` fields — drops any extra runtime field a
+ *  provider tacks on (e.g. audio-token counters) so it can't be serialized into
+ *  a sink through an echoed `completion.usage`. */
+function conformTokenUsage(usage: Record<string, unknown>): TokenUsage {
+  return {
+    inputTokens: usage.inputTokens as number | undefined,
+    outputTokens: usage.outputTokens as number | undefined,
+    cachedInputTokens: usage.cachedInputTokens as number | undefined,
+    cacheCreationInputTokens: usage.cacheCreationInputTokens as number | undefined,
+    totalTokens: usage.totalTokens as number | undefined,
+  };
+}
+
 // === Client ===
 
 // Shared empty stack returned by `snapshotStack()` when the client is
@@ -584,7 +597,15 @@ export class StatelogClient {
     await this.post({
       type: "promptCompletion",
       messages,
-      completion,
+      // The echoed completion carries its own `usage`; conform it to statelog's
+      // declared TokenUsage shape so a provider's extra runtime fields (e.g. the
+      // audio-token counters) never ride along into a sink through this nested
+      // path. Callers also pass a projected top-level `usage` with the correct
+      // total; this is the field-hygiene backstop for the nested copy.
+      completion:
+        completion && typeof completion === "object" && completion.usage
+          ? { ...completion, usage: conformTokenUsage(completion.usage) }
+          : completion,
       model,
       timeTaken,
       tools,
@@ -680,6 +701,79 @@ export class StatelogClient {
       model,
       timeTaken,
       usage,
+      cost,
+    });
+  }
+
+  /**
+   * Emit a `transcription` (speech-to-text) leaf event. Mirrors
+   * `imageGeneration`. `textPreview` is a short slice of the TRANSCRIPT so a
+   * transcript-with-PII never lands in a remote sink; the input audio bytes are
+   * NEVER logged. Callers must pass a projected `usage`/`cost` (5-field token
+   * shape, no audio fields, no `raw`/`pcm`) — see the speech runtime helper.
+   */
+  async transcription({
+    textPreview,
+    model,
+    durationSeconds,
+    timeTaken,
+    usage,
+    cost,
+  }: {
+    /** First ~200 chars of the transcript, for human-readable tracing. */
+    textPreview: string;
+    /** Transcription model name (e.g. "whisper-1"). */
+    model?: string;
+    /** Audio length in seconds, when the provider reports it. */
+    durationSeconds?: number;
+    /** Wall-clock latency in ms (caller measures via `performance.now`). */
+    timeTaken?: number;
+    usage?: TokenUsage;
+    cost?: TokenCost;
+  }): Promise<void> {
+    await this.post({
+      type: "transcription",
+      textPreview,
+      model,
+      durationSeconds,
+      timeTaken,
+      usage,
+      cost,
+    });
+  }
+
+  /**
+   * Emit a `speechSynthesis` (text-to-speech) leaf event. `textPreview` is a
+   * short slice of the INPUT text; the synthesized audio bytes are NEVER logged.
+   * Callers pass a projected `cost` (no `raw`/`pcm`/audio bytes).
+   */
+  async speechSynthesis({
+    textPreview,
+    model,
+    voice,
+    format,
+    timeTaken,
+    cost,
+  }: {
+    /** First ~200 chars of the input text, for human-readable tracing. */
+    textPreview: string;
+    /** Speech model name (e.g. "tts-1"). */
+    model?: string;
+    /** Voice name (e.g. "alloy"). */
+    voice?: string;
+    /** Output audio format (e.g. "mp3"). */
+    format?: string;
+    /** Wall-clock latency in ms (caller measures via `performance.now`). */
+    timeTaken?: number;
+    cost?: TokenCost;
+  }): Promise<void> {
+    await this.post({
+      type: "speechSynthesis",
+      textPreview,
+      model,
+      voice,
+      format,
+      timeTaken,
       cost,
     });
   }

@@ -149,16 +149,24 @@ const llmNamedOptions: Record<string, VariableType> = Object.assign(
 );
 
 /** `llm()`'s first argument: a plain string, or an array mixing text strings
- *  and `image()` / `file()` attachments.
+ *  and `image()` / `file()` / `audio()` attachments.
  *
- *  The attachment element references the `Attachment` type alias defined in
- *  `stdlib/thread.agency` (the single source of truth) rather than restating
- *  its shape here — it resolves against the type-alias table the same way any
- *  user type does. `image()` / `file()` return `Attachment`, so a call like
- *  `llm(["hi", image("x")])` type-checks; `llm([42])` does not. */
+ *  The attachment element is a union of the two thread.agency alias NAMES that
+ *  the attachment builders return: `image()` / `file()` return `Attachment`,
+ *  `audio()` returns `MessageAttachment`. Both are listed by name (not restated
+ *  structurally) because, at an `llm()` call site, the user file usually has not
+ *  imported these aliases, so the checker compares them as unresolved aliases by
+ *  NAME (assignability.ts §"Two unresolved type alias references"). A single
+ *  alias here would reject whichever builder returns the other name. So a call
+ *  like `llm(["hi", image("x")])` or `llm(["hi", audio("a.mp3")])` type-checks;
+ *  `llm([42])` does not. (The narrower `Attachment` — image/file only — still
+ *  gates `attachToReply`.) */
 const attachmentRef: VariableType = {
-  type: "typeAliasVariable",
-  aliasName: "Attachment",
+  type: "unionType",
+  types: [
+    { type: "typeAliasVariable", aliasName: "Attachment" },
+    { type: "typeAliasVariable", aliasName: "MessageAttachment" },
+  ],
 };
 
 const llmContent: VariableType = {

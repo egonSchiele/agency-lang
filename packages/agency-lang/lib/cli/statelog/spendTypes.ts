@@ -43,7 +43,14 @@ export const tokenBreakdownSchema = z
   .strict();
 export type TokenBreakdown = z.infer<typeof tokenBreakdownSchema>;
 
-export const usageKindSchema = z.enum(["completion", "embedding", "image", "manual"]);
+export const usageKindSchema = z.enum([
+  "completion",
+  "embedding",
+  "image",
+  "transcription",
+  "speech",
+  "manual",
+]);
 export type UsageKind = z.infer<typeof usageKindSchema>;
 
 /** One `(model, kind)` attribution row. The model sentinel `""` marks manual

@@ -27,6 +27,7 @@ import retrievalTemplate from "../../templates/prompts/memory/retrieval.js";
 import type { LLMClient } from "../llmClient.js";
 import { agencyStore, getRuntimeContext } from "../asyncContext.js";
 import { recordUsage, meteredDispatch } from "../recordPaidUsage.js";
+import { projectProviderTokenUsage } from "../invocationUsage.js";
 import type { ProviderUsageKind, UsageObservation } from "../invocationUsage.js";
 import { isGuardExceededError } from "../guard.js";
 
@@ -289,13 +290,17 @@ export class MemoryManager {
         throw new Error(`memory llm text call failed: ${result.error}`);
       }
       try {
+        const projectedUsage = projectProviderTokenUsage(
+          result.value.usage,
+          "completion",
+        ).usage;
         await this.statelogClient?.promptCompletion({
           messages: [smoltalk.userMessage(prompt)],
-          completion: result.value,
+          completion: { ...result.value, usage: projectedUsage },
           model,
           timeTaken,
           tools: [],
-          usage: result.value.usage,
+          usage: projectedUsage,
           cost: result.value.cost,
           stream: false,
         });

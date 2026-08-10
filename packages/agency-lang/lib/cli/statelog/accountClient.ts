@@ -6,7 +6,8 @@
 // schema, or a `success:false` body — surfaces as an AccountRequestError.
 
 import { z } from "zod";
-import { readJsonBody } from "./jsonBody.js";
+import { statelogRequest } from "./statelogRequest.js";
+import type { StatelogFailure } from "./statelogRequest.js";
 import {
   accountSpendRowSchema,
   toSpendQuery,
@@ -117,62 +118,56 @@ function accountRouteUrl(origin: string, route: AccountRoute, query: Record<stri
 }
 
 export function createAccountClient(origin: string, apiKey: string): AccountClient {
+  function toAccountError(
+    failure: StatelogFailure,
+    unsupportedRouteMessage: string | undefined,
+  ): AccountRequestError {
+    switch (failure.kind) {
+      case "unreachable":
+        return new AccountRequestError(`could not reach ${origin} (${failure.cause})`);
+      case "http":
+        if (failure.status === 403 && failure.serverError === ACCOUNT_SCOPE_ERROR) {
+          return new AccountScopeError(ACCOUNT_SCOPE_ERROR);
+        }
+        // A 404 on a route the caller flagged host-optional means the host
+        // predates it — before the generic server-error branch, so a `{error}`
+        // 404 body does not mask it (account routes have no project-not-found
+        // case).
+        if (failure.status === 404 && unsupportedRouteMessage !== undefined) {
+          return new AccountRequestError(unsupportedRouteMessage);
+        }
+        if (failure.serverError !== undefined) {
+          return new AccountRequestError(failure.serverError);
+        }
+        if (failure.status === 401) {
+          return new AccountRequestError("not authenticated (HTTP 401)");
+        }
+        return new AccountRequestError(`statelog request failed (HTTP ${failure.status})`);
+      case "non-json":
+        return new AccountRequestError(failure.diagnostic);
+      case "bad-envelope":
+        return new AccountRequestError("unexpected account response shape");
+      case "envelope-error":
+        return new AccountRequestError(failure.serverError ?? "account request failed");
+    }
+  }
+
   async function request(
     method: "GET" | "POST",
     route: AccountRoute,
     options: AccountRequestOptions = {},
   ): Promise<unknown> {
-    const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}` };
-    const init: RequestInit = { method, headers };
-    if (method === "POST") {
-      headers["Content-Type"] = "application/json";
-      init.body = JSON.stringify(options.body ?? {});
+    const result = await statelogRequest({
+      method,
+      url: accountRouteUrl(origin, route, options.query),
+      apiKey,
+      // POST has always serialized `{}` for an absent body; GET sends none.
+      body: method === "POST" ? (options.body ?? {}) : undefined,
+    });
+    if (!result.ok) {
+      throw toAccountError(result.failure, options.unsupportedRouteMessage);
     }
-
-    const url = accountRouteUrl(origin, route, options.query);
-    let response: Response;
-    try {
-      response = await fetch(url, init);
-    } catch (error) {
-      throw new AccountRequestError(`could not reach ${origin} (${message(error)})`);
-    }
-
-    const parsed = await readJsonBody(response, { method, url });
-
-    // Non-2xx first: auth middleware returns a bare `{ error }`, not an envelope.
-    if (!response.ok) {
-      const serverError = parsed.ok ? asObject(parsed.value)?.error : undefined;
-      if (response.status === 403 && serverError === ACCOUNT_SCOPE_ERROR) {
-        throw new AccountScopeError(ACCOUNT_SCOPE_ERROR);
-      }
-      // A 404 on a route the caller flagged host-optional means the host predates
-      // it — before the generic server-error branch, so a `{error}` 404 body does
-      // not mask it (account routes have no project-not-found case).
-      if (response.status === 404 && options.unsupportedRouteMessage !== undefined) {
-        throw new AccountRequestError(options.unsupportedRouteMessage);
-      }
-      if (typeof serverError === "string") {
-        throw new AccountRequestError(serverError);
-      }
-      if (response.status === 401) {
-        throw new AccountRequestError("not authenticated (HTTP 401)");
-      }
-      throw new AccountRequestError(`statelog request failed (HTTP ${response.status})`);
-    }
-
-    if (!parsed.ok) {
-      throw new AccountRequestError(parsed.error);
-    }
-    const envelope = asObject(parsed.value);
-    if (!envelope || typeof envelope.success !== "boolean") {
-      throw new AccountRequestError("unexpected account response shape");
-    }
-    if (!envelope.success) {
-      throw new AccountRequestError(
-        typeof envelope.error === "string" ? envelope.error : "account request failed",
-      );
-    }
-    return envelope.value;
+    return result.value;
   }
 
   async function listProjectsRaw(): Promise<RawProject[]> {
@@ -308,8 +303,4 @@ function asArray(value: unknown, label: string): unknown[] {
     throw new AccountRequestError(`${label} must be an array`);
   }
   return value;
-}
-
-function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

@@ -2,6 +2,13 @@ import { describe, it, expect } from "vitest";
 import { agencyStore } from "./asyncContext.js";
 import { DeterministicClient } from "./deterministicClient.js";
 import type { PromptConfig } from "./llmClient.js";
+import {
+  DETERMINISTIC_SPEECH_BYTES,
+  DETERMINISTIC_SPEECH_COST,
+  DETERMINISTIC_TRANSCRIBE_COST,
+  DETERMINISTIC_TRANSCRIPT,
+} from "../constants.js";
+import { AgencyCancelledError } from "./errors.js";
 
 const baseConfig: PromptConfig = {
   messages: [],
@@ -233,5 +240,55 @@ describe("DeterministicClient scoped mocks", () => {
     await expect(
       inModule("agents/constructor.agency", () => client.text(baseConfig)),
     ).rejects.toThrow(/no llmMocks queue/);
+  });
+
+  describe("audio (transcribe / speak)", () => {
+    const neverAbort = new AbortController().signal;
+
+    it("transcribe returns the fixed transcript + fixed cost, no invented model field", async () => {
+      const client = new DeterministicClient([]);
+      const r = await client.transcribe({ kind: "path", path: "a.wav" }, { model: "whisper-1" }, neverAbort);
+      expect(r.success).toBe(true);
+      if (r.success) {
+        expect(r.value.text).toBe(DETERMINISTIC_TRANSCRIPT);
+        expect(r.value.cost?.totalCost).toBe(DETERMINISTIC_TRANSCRIBE_COST);
+        expect(r.value).not.toHaveProperty("model");
+      }
+    });
+
+    it("speak returns the fixed bytes + a MIME matching the requested format", async () => {
+      const client = new DeterministicClient([]);
+      const r = await client.speak("hi", { model: "tts-1", voice: "alloy", format: "mp3" }, neverAbort);
+      expect(r.success).toBe(true);
+      if (r.success) {
+        expect(Array.from(r.value.audio)).toEqual([...DETERMINISTIC_SPEECH_BYTES]);
+        expect(r.value.mimeType).toBe("audio/mpeg");
+        expect(r.value.cost?.totalCost).toBe(DETERMINISTIC_SPEECH_COST);
+      }
+    });
+
+    it("rejects a pre-aborted signal at the default ZERO delay (entry check), with the exact reason", async () => {
+      const client = new DeterministicClient([]); // no delay configured
+      const controller = new AbortController();
+      const reason = new AgencyCancelledError("already gone");
+      controller.abort(reason);
+      await expect(
+        client.transcribe({ kind: "path", path: "a.wav" }, { model: "whisper-1" }, controller.signal),
+      ).rejects.toBe(reason);
+      await expect(
+        client.speak("hi", { model: "tts-1", voice: "alloy", format: "mp3" }, controller.signal),
+      ).rejects.toBe(reason);
+    });
+
+    it("honors a mid-request abort via the configured delay, rejecting with the reason", async () => {
+      const client = new DeterministicClient([], { transcriptionDelayMs: 10_000, speechDelayMs: 10_000 });
+      const controller = new AbortController();
+      const reason = new AgencyCancelledError("time guard");
+      const trPromise = client.transcribe({ kind: "path", path: "a.wav" }, { model: "whisper-1" }, controller.signal);
+      const spPromise = client.speak("hi", { model: "tts-1", voice: "alloy", format: "mp3" }, controller.signal);
+      controller.abort(reason);
+      await expect(trPromise).rejects.toBe(reason);
+      await expect(spPromise).rejects.toBe(reason);
+    });
   });
 });

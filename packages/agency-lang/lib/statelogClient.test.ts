@@ -117,6 +117,37 @@ describe("StatelogClient", () => {
     });
   });
 
+  describe("promptCompletion audio-token hygiene", () => {
+    it("strips audio-token fields from the echoed completion.usage in the serialized payload", async () => {
+      const file = newLogFile("prompt-audio");
+      const client = fileClient(file);
+      await client.promptCompletion({
+        messages: [],
+        // A provider completion whose nested usage carries audio counters.
+        completion: {
+          output: "hi",
+          model: "gpt-audio-1.5",
+          usage: {
+            inputTokens: 3,
+            outputTokens: 2,
+            inputAudioTokens: 40,
+            outputAudioTokens: 4,
+            totalTokens: 60,
+          },
+        },
+        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 60 },
+      });
+      const raw = fs.readFileSync(file, "utf-8");
+      // The audio counters must not appear ANYWHERE in the serialized event —
+      // neither top-level nor through the nested completion.usage.
+      expect(raw).not.toContain("inputAudioTokens");
+      expect(raw).not.toContain("outputAudioTokens");
+      const [event] = readEvents(file);
+      expect(event.data.completion.usage.totalTokens).toBe(60);
+      expect(event.data.completion.usage).not.toHaveProperty("inputAudioTokens");
+    });
+  });
+
   describe("error events", () => {
     it("records an llmError with the request's tool list", async () => {
       const file = newLogFile("llm-error-tools");

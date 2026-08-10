@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   recordUsage,
+  recordCompletionUsage,
   recordUnresolvedAttempt,
   recordNormalizedUsageDelta,
   meteredDispatch,
@@ -84,6 +85,36 @@ describe("recordUsage (provider + manual observations)", () => {
     recordUsage(ctx, b, { type: "provider", kind: "completion", reportedModel: "opus", cost: { totalCost: 0.1, currency: "USD" } as any });
     recordUsage(ctx, b, { type: "provider", kind: "completion", reportedModel: "sonnet", cost: { totalCost: 0.2, currency: "USD" } as any });
     expect(ctx.invocationUsage.snapshot().usage.entries.map((e) => e.model)).toEqual(["opus", "sonnet"]);
+  });
+});
+
+describe("recordCompletionUsage — audio-token projection consistency", () => {
+  it("branch total matches the meter total for an audio completion with no authoritative totalTokens", () => {
+    // {text-sum 5, audio-sum 44} with no totalTokens → projected total 44.
+    // Before the single projection, the meter recorded 44 while the branch added 0.
+    const ctx = makeCtx();
+    const branch = new StateStack();
+    recordCompletionUsage(
+      ctx,
+      branch,
+      {
+        model: "gpt-audio-1.5",
+        cost: { totalCost: 0.01, currency: "USD" } as any,
+        usage: {
+          inputTokens: 3,
+          outputTokens: 2,
+          inputAudioTokens: 40,
+          outputAudioTokens: 4,
+        } as any,
+      },
+      "gpt-audio-1.5",
+    );
+    const { usage } = ctx.invocationUsage.snapshot();
+    expect(usage.tokens.totalTokens).toBe(44); // meter
+    expect(branch.localTokens).toBe(44); // branch total agrees
+    // Audio-token fields never surface in the normalized breakdown.
+    expect(usage.tokens).not.toHaveProperty("inputAudioTokens");
+    expect(usage.tokens).not.toHaveProperty("outputAudioTokens");
   });
 });
 

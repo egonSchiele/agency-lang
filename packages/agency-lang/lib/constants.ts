@@ -28,6 +28,39 @@ export const DEFAULT_IMAGE_MODEL = "gpt-image-1";
 export const DETERMINISTIC_IMAGE_COST = 0.04;
 
 /**
+ * Default cloud speech-to-text model. Provider is auto-resolved from the name by
+ * smoltalk (whisper-1 → openai). Used when `std::speech.transcribe` sets no model.
+ * The public `.agency` signature is the single owner of this default; this
+ * constant exists only so callers into the runtime helper have one named value.
+ */
+export const DEFAULT_TRANSCRIBE_MODEL = "whisper-1";
+
+/**
+ * Default cloud text-to-speech model + voice. Provider auto-resolves from the
+ * model name (tts-1 → openai). Used when `std::speech.speak` sets no model/voice.
+ * As with the transcribe default, the public `.agency` signature owns these; the
+ * constants just name the value in one place.
+ */
+export const DEFAULT_SPEECH_MODEL = "tts-1";
+export const DEFAULT_SPEECH_VOICE = "alloy";
+
+/**
+ * Fixed values the DeterministicClient reports for transcribe()/speak(), so
+ * tests can assert cost accrual / guard trips / byte round-trips without a real
+ * provider. Mirrors DETERMINISTIC_IMAGE_COST.
+ */
+export const DETERMINISTIC_TRANSCRIPT = "deterministic transcript";
+export const DETERMINISTIC_TRANSCRIBE_COST = 0.006;
+export const DETERMINISTIC_SPEECH_COST = 0.015;
+
+/** Recognizable fixed audio bytes ("AGENCY") the DeterministicClient returns
+ *  from speak(), so a test can assert the exact bytes round-trip to the output
+ *  file. */
+export const DETERMINISTIC_SPEECH_BYTES: readonly number[] = [
+  0x41, 0x47, 0x45, 0x4e, 0x43, 0x59,
+];
+
+/**
  * Default token threshold for triggering memory compaction when the
  * caller does not set `memory.compaction.threshold` in agency.json.
  * Compaction is expensive (LLM call) — this default keeps it from

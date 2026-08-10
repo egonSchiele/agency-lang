@@ -31,6 +31,7 @@ import {
   _assistantMessage,
   _imageAttachment,
   _fileAttachment,
+  _audioAttachment,
   _attachToReply,
   _getCost,
   _getTokens,
@@ -57,9 +58,23 @@ export type AttachmentSource =
   | { kind: "url", url: string, mimeType?: string }
   | { kind: "base64", base64: string, mimeType: string }
 
+// The NARROW union `attachToReply` accepts. The reply pipeline
+// (lib/runtime/replyAttachments.ts) only handles image and file parts, so audio
+// is deliberately excluded here — passing audio() to attachToReply is a type
+// error, on purpose.
 export type Attachment =
   | { type: "image", source: AttachmentSource }
   | { type: "file", source: AttachmentSource, filename?: string }
+
+// The WIDER union usable in ordinary user messages (userMessage / llm). Audio is
+// only supported in-message, not as a tool reply attachment. The image/file arms
+// are inlined (not `| Attachment`) because the typechecker resolves a union of
+// object arms, not a union that nests another alias. Kept structurally
+// compatible with `_imageAttachment`/`_fileAttachment`/`_audioAttachment`.
+export type MessageAttachment =
+  | { type: "image", source: AttachmentSource }
+  | { type: "file", source: AttachmentSource, filename?: string }
+  | { type: "audio", source: AttachmentSource, filename?: string }
 
 export def systemMessage(msg: string, label: string = "") {
   """
@@ -73,7 +88,7 @@ export def systemMessage(msg: string, label: string = "") {
   _systemMessage(msg, label)
 }
 
-export def userMessage(msg: string | (string | Attachment)[], label: string = "") {
+export def userMessage(msg: string | (string | MessageAttachment)[], label: string = "") {
   """
   Add a user message to the current thread's message history. Use this
   to seed the conversation with prior user context that wasn't actually
@@ -137,6 +152,25 @@ export def file(
   @param base64 - When true, treat `source` as raw base64 data.
   """
   return _fileAttachment(source, filename, mimeType, base64)
+}
+
+export def audio(
+  source: string,
+  filename: string = "",
+  mimeType: string = "",
+  base64: boolean = false,
+): MessageAttachment {
+  """
+  Build an audio attachment for a multimodal llm() call. Only usable in
+  ordinary messages (llm() / userMessage()), not attachToReply(). Currently
+  supported only by models that accept audio input (e.g. gpt-audio-1.5).
+
+  @param source - A local path, an http(s) URL, a data: URI, or raw base64 (with base64: true)
+  @param filename - Name shown to the model; defaults to the source basename.
+  @param mimeType - Explicit MIME type; overrides inference. Required for raw base64.
+  @param base64 - When true, treat `source` as raw base64 data.
+  """
+  return _audioAttachment(source, filename, mimeType, base64)
 }
 
 export def attachToReply(attachment: Attachment) {

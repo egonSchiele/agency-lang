@@ -18,6 +18,7 @@ import type { StateStack } from "./state/stateStack.js";
 import type { GraphState } from "./types.js";
 import {
   normalizeObservation,
+  projectProviderTokenUsage,
   type NormalizedDelta,
   type ProviderUsageKind,
   type UsageObservation,
@@ -79,7 +80,10 @@ export function recordCompletionUsage(
     cost: completion.cost,
     tokens: completion.usage,
   });
-  stack.localTokens += completion.usage?.totalTokens ?? 0;
+  // Use the SAME projected total the meter recorded, so the branch total that
+  // getTokens() reports never disagrees with the meter for an audio completion
+  // whose raw `totalTokens` was absent (see projectProviderTokenUsage).
+  stack.localTokens += projectProviderTokenUsage(completion.usage, "completion").usage.totalTokens;
 }
 
 /** Record one UNRESOLVED provider attempt: a request that was dispatched to the

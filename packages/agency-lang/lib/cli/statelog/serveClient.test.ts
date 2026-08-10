@@ -139,3 +139,65 @@ describe("createServeClient", () => {
     await expect(client().fetchManifest()).rejects.toBeInstanceOf(ServeRequestError);
   });
 });
+
+// Characterization: serve's wire quirks — Content-Type on every call including
+// bodyless GETs, and `{}` for an undefined POST body — pinned before the
+// transport-core refactor (removing either would be a wire change).
+describe("serveClient wire characterization", () => {
+  function captureFetch(json: unknown): ReturnType<typeof vi.spyOn> {
+    return vi.spyOn(globalThis, "fetch").mockImplementation((async (url: unknown) => ({
+      ok: true,
+      status: 200,
+      url: String(url),
+      text: async () => JSON.stringify(json),
+    })) as unknown as typeof fetch);
+  }
+
+  it("GET /list sends Authorization AND Content-Type with no body", async () => {
+    const spy = captureFetch({ nodes: [], functions: [] });
+    await client().fetchManifest();
+    const [, init] = spy.mock.calls[0]! as [unknown, RequestInit];
+    expect(init.method).toBe("GET");
+    expect(init.headers).toEqual({
+      Authorization: "Bearer key",
+      "Content-Type": "application/json",
+    });
+    expect(init.body).toBeUndefined();
+  });
+
+  it("invokeNode POSTs the exact serialized args body", async () => {
+    const spy = captureFetch({ success: true, value: 42 });
+    await client().invokeNode("main", { message: "hi" });
+    const [, init] = spy.mock.calls[0]! as [unknown, RequestInit];
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe(JSON.stringify({ message: "hi" }));
+  });
+
+  it("a POST given undefined args preserves the {} fallback", async () => {
+    const spy = captureFetch({ success: true, value: 42 });
+    // The public signature requires args; the wire fallback still exists for
+    // any looser caller, so exercise it past the type.
+    await client().invokeNode("main", undefined as unknown as Record<string, unknown>);
+    const [, init] = spy.mock.calls[0]! as [unknown, RequestInit];
+    expect(init.body).toBe("{}");
+  });
+
+  it("an unserializable body maps to serve's could-not-reach error, not a native throw", async () => {
+    // On main, serve serialized the body INSIDE its fetch try, so a BigInt or
+    // circular body surfaced as ServeRequestError("could not reach …"). Pinned
+    // so the transport core preserves that mapping for serve specifically.
+    captureFetch({ success: true, value: 42 });
+    await expect(
+      client().invokeNode("main", { n: 1n } as unknown as Record<string, unknown>),
+    ).rejects.toThrow(/could not reach https:\/\/statelog\.example\/.*BigInt/);
+  });
+
+  it("a rejected fetch names the full URL in the unreachable message", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((async () => {
+      throw new Error("ECONNREFUSED");
+    }) as unknown as typeof fetch);
+    await expect(client().fetchManifest()).rejects.toThrow(
+      /could not reach https:\/\/statelog\.example\/serve\/u\/p\/agent\.agency\/list \(ECONNREFUSED\)/,
+    );
+  });
+});

@@ -124,7 +124,7 @@ function expiresFailure(expiresInSeconds: number): ResultFailure | null {
   ) {
     return failure({
       message:
-        `Invalid expiresInSeconds ${JSON.stringify(expiresInSeconds)}: must be ` +
+        `Invalid expiresInSeconds ${String(expiresInSeconds)}: must be ` +
         `an integer between 1 and ${MAX_PRESIGN_SECONDS} (7 days).`,
     });
   }

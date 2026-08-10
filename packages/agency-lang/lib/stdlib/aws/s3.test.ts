@@ -4,6 +4,8 @@ import { ThreadStore } from "../../runtime/state/threadStore.js";
 import { runInTestContext, getRuntimeContext } from "../../runtime/asyncContext.js";
 import { AWS_OBJECT_BYTE_LIMIT } from "../../constants.js";
 import { type ResultFailure } from "../../runtime/result.js";
+import { safeStatelogValue } from "../../runtime/runner.js";
+import { makeRedactReplacer } from "../../runtime/redactForStatelog.js";
 import {
   _s3Get,
   _s3GetBinary,
@@ -237,6 +239,26 @@ describe("S3 presigned URLs", () => {
       const url = await _s3PresignGet("my-bucket", "k", 3600, "us-east-1");
       const { globals } = getRuntimeContext();
       expect(globals.redactionReplacement(url)).toBe("[presigned S3 URL redacted]");
+    }));
+
+  // The motivating use case interpolates the URL into an email body. That
+  // composed string is a new value with no tag, so containment scrubbing —
+  // not exact-match redaction — is what keeps the bearer URL out of traces.
+  it("scrubs the URL out of composed strings at both statelog composition points", () =>
+    withCtx(async () => {
+      const url = (await _s3PresignGet("my-bucket", "k", 3600, "us-east-1")) as string;
+      const email = `Good morning! Today's image: ${url} — enjoy.`;
+      const { globals } = getRuntimeContext();
+
+      const posted = JSON.parse(JSON.stringify({ email }, makeRedactReplacer(globals)));
+      expect(posted.email).toBe(
+        "Good morning! Today's image: [presigned S3 URL redacted] — enjoy.",
+      );
+
+      const safe = safeStatelogValue(email);
+      expect(safe).toBe(
+        "Good morning! Today's image: [presigned S3 URL redacted] — enjoy.",
+      );
     }));
 
   it.each([0, -5, 1.5, NaN, 604801])(

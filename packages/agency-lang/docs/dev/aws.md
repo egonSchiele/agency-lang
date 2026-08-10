@@ -132,8 +132,15 @@ The parts that are easy to get wrong:
   replay is harmless and there is no `destructive { }` region.
 - **The URL is a bearer credential and is redacted from statelog** with the
   marker `[presigned S3 URL redacted]` (same `markRedacted` machinery as
-  binary downloads). The runtime value is untouched — Agency code can still
-  email the link; it just never lands in a trace.
+  binary downloads). Because the motivating path interpolates the URL into a
+  larger string (an email body), exact-match redaction is not enough: both
+  statelog composition points also scrub redacted strings **by containment**
+  (`GlobalStore.redactContainedStrings`), so `"Download: ${url}"` logs the
+  marker, not the signature. The runtime value is untouched — Agency code can
+  still email the link; it just never lands in a trace.
+- **`std::aws::s3::presignGet` is in the `AwsS3` effect set but deliberately
+  NOT in `Network`** — it sends nothing; it mints a bearer capability locally,
+  and `Network`'s contract is "talks to the outside world."
 - **Expiry is validated, never clamped:** an integer in `[1, 604800]` (7 days,
   the SigV4 maximum) or a coded failure. With temporary credentials
   (`AWS_SESSION_TOKEN`), AWS kills the URL when the session ends regardless.
@@ -154,7 +161,10 @@ Binary output is kept out of state logs by the existing redaction table, extende
 carry a custom marker: `globals.markRedacted(value, label?)` and
 `globals.redactionReplacement(value)` drive **both** statelog composition points
 (the `JSON.stringify` replacer and `runner.ts`'s `safeStatelogValue`), so a custom
-label cannot leak through an equality check. `_s3GetBinary` marks its returned
+label cannot leak through an equality check. Both points also scrub redacted
+strings **by containment** (`globals.redactContainedStrings`): a redacted string
+interpolated into a larger string is a new, untagged value, and without the
+containment pass it would log verbatim. `_s3GetBinary` marks its returned
 base64 with `"[binary output truncated]"`. `std::tag`'s `redact(value, label?)`
 exposes the same to Agency.
 

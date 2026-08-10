@@ -84,7 +84,7 @@ export function hostOutsidePartitionFailure(
   const hostname = new URL(wireUrl).hostname;
   if (!hostUnderSuffix(hostname, partition.dnsSuffix)) {
     return failure({
-      message: `Refusing to sign: ${wireUrl} is not under ${partition.dnsSuffix}.`,
+      message: `Refusing ${wireUrl}: hostname is not under ${partition.dnsSuffix}.`,
     });
   }
   return null;

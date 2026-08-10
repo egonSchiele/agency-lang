@@ -79,13 +79,36 @@ describe("makeRedactReplacer", () => {
     expect(roundtrip({ a: "x", b: "y" }, gs)).toEqual({ a: "x", b: "y" });
   });
 
-  it("redacts whole values only — an embedded substring is NOT scrubbed (v1)", () => {
+  // The v1 whole-values-only boundary was deliberately widened: a redacted
+  // string interpolated into a larger string (an email body carrying a
+  // presigned URL) is scrubbed by containment.
+  it("scrubs a redacted string embedded in a larger string", () => {
     const gs = new GlobalStore();
     gs.markRedacted("sk-secret");
     const body = { url: "https://api.com?key=sk-secret" };
-    // Locks the documented v1 boundary; must be updated deliberately if
-    // substring redaction is ever added.
-    expect(roundtrip(body, gs)).toEqual(body);
+    expect(roundtrip(body, gs)).toEqual({ url: "https://api.com?key=[REDACTED]" });
+  });
+
+  it("scrubs every occurrence, keeping the custom label", () => {
+    const gs = new GlobalStore();
+    gs.markRedacted("https://b.s3.amazonaws.com/k?X-Amz-Signature=abc", "[link redacted]");
+    const body = {
+      email:
+        "Download: https://b.s3.amazonaws.com/k?X-Amz-Signature=abc " +
+        "(again: https://b.s3.amazonaws.com/k?X-Amz-Signature=abc)",
+    };
+    expect(roundtrip(body, gs)).toEqual({
+      email: "Download: [link redacted] (again: [link redacted])",
+    });
+  });
+
+  it("scrubs a longer secret before a shorter one contained in it", () => {
+    const gs = new GlobalStore();
+    gs.markRedacted("token", "[short]");
+    gs.markRedacted("token-extended", "[long]");
+    expect(roundtrip({ note: "use token-extended here" }, gs)).toEqual({
+      note: "use [long] here",
+    });
   });
 
   it("redacts nothing when the store has no tags", () => {

@@ -88,7 +88,10 @@ end-of-run to drain in-flight POSTs before the process exits.
 `post()` is the single redaction chokepoint. Redaction is a `JSON.stringify`
 replacer (`makeRedactReplacer`, `lib/runtime/redactForStatelog.ts`) applied to
 the **`data` payload only**, so it can never blank out envelope infra fields
-(`format_version`, `trace_id`, span ids). The pass is skipped entirely when the
+(`format_version`, `trace_id`, span ids). The replacer matches whole tagged
+values and also scrubs redacted strings **contained inside** larger strings
+(`GlobalStore.redactContainedStrings`) — a tagged string interpolated into a
+new string would otherwise log verbatim. The pass is skipped entirely when the
 caller's `GlobalStore.hasAnyTags()` is false — the common case is byte-identical
 to no redaction. Events posted outside an AsyncLocalStorage frame (e.g.
 `agentEnd`, resume-path finalization) fall back to the execution's top-level

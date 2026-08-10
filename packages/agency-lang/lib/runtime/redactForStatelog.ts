@@ -35,6 +35,13 @@ export function makeRedactReplacer(
     // key, where this[""] === value anyway.)
     const raw = key === "" ? value : (this as Record<string, unknown>)[key];
     const replacement = globals.redactionReplacement(raw);
-    return replacement !== undefined ? replacement : value;
+    if (replacement !== undefined) return replacement;
+    // A redacted string interpolated into a larger string is a new, untagged
+    // value; scrub it by containment or the secret logs verbatim.
+    if (typeof raw === "string") {
+      const scrubbed = globals.redactContainedStrings(raw);
+      if (scrubbed !== undefined) return scrubbed;
+    }
+    return value;
   };
 }

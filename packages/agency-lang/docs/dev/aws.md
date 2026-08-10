@@ -105,7 +105,7 @@ create-bucket returns the `Location` header.
 
 ## Presigned URLs (`s3PresignGet`)
 
-`s3PresignGet(bucket, key, expiresInSeconds, region)` mints a time-limited
+`s3PresignGet(bucket, key, expiresIn, region)` mints a time-limited
 download URL for a private object: the query-string variant of SigV4
 (`presignRequest` in `sigv4.ts`), where the signature rides in the query, only
 `host` is signed, and the payload hash is the literal `UNSIGNED-PAYLOAD`. No
@@ -127,7 +127,7 @@ The parts that are easy to get wrong:
   mock to prove the call happens.
 - **Interrupt-gated but not `destructive`.** Minting a URL anyone can use is a
   capability grant, so it interrupts like everything else here — and uniquely,
-  its payload carries `expiresInSeconds`, because a handler judging a share
+  its payload carries `expiresIn`, because a handler judging a share
   link needs to know how long it lives. Nothing remote changes, so checkpoint
   replay is harmless and there is no `destructive { }` region.
 - **The URL is a bearer credential and is redacted from statelog** with the
@@ -141,9 +141,13 @@ The parts that are easy to get wrong:
 - **`std::aws::s3::presignGet` is in the `AwsS3` effect set but deliberately
   NOT in `Network`** — it sends nothing; it mints a bearer capability locally,
   and `Network`'s contract is "talks to the outside world."
-- **Expiry is validated, never clamped:** an integer in `[1, 604800]` (7 days,
-  the SigV4 maximum) or a coded failure. With temporary credentials
-  (`AWS_SESSION_TOKEN`), AWS kills the URL when the session ends regardless.
+- **Expiry is milliseconds in, whole seconds out.** `expiresIn` is
+  milliseconds (so Agency unit literals like `1h` and `7d` work directly),
+  validated as an integer in `[1, 604800000]` (7 days, the SigV4 maximum) with
+  no silent clamping. Signing converts to whole seconds with `Math.ceil` —
+  `X-Amz-Expires` must be an integer, and rounding up never shortens the
+  requested lifetime. With temporary credentials (`AWS_SESSION_TOKEN`), AWS
+  kills the URL when the session ends regardless.
 
 The correctness anchor is AWS's published presigned-GET vector
 (`sigv4.test.ts` reproduces the full documented URL byte-for-byte); a separate

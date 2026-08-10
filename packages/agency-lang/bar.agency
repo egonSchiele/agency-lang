@@ -1,3 +1,135 @@
+import { s3PutBinary, s3PresignGet, createBucket } from "std::aws/s3"
+import { hnStories, Story } from "std::data/tech/hackernews"
+import { today } from "std::date"
+import { generateImage } from "std::image"
+import { parse, renderForHtml } from "std::markdown"
+import { sendWithResend } from "std::messaging/email"
+
+static const categories = ["World", "United States", "Minnesota", "San Francisco", "Technology"]
+static const BUCKET = "agency-news-email"
+static const REGION = "us-west-2"
+
+static const MAX_IMAGES = 10
+
+let imagesCreated = 0
+
+type NewsItem = {
+  headline: string;
+  summary: string
+}
+
+type NewsCategory = {
+  category: string;
+  items: NewsItem[]
+}
+
+type NewsResponse = {
+  date: string;
+  categories: NewsCategory[]
+}
+
+def log(message: string) {
+  print("[${today()}] ${message}")
+}
+
+def generateCategoryImage(category: NewsCategory): Result<string> {
+  if (imagesCreated >= MAX_IMAGES) {
+    return failure("Image generation limit of ${MAX_IMAGES} reached.")
+  }
+  imagesCreated += 1
+  log("\t\tGenerating image for category '${category.category}'...")
+  const prompt = """
+  I am going to email some news headlines for the category '${category.category}'. Please generate an appropriate cartoon for the category '${category.category}' and the headlines '${([item.headline for item in category.items]).join(', ')}'.
+  The image should be relevant to the top headlines in this category, generated as a classic pen and ink news cartoon, featuring some witty or slapstick humor, with beautiful linework and ink washes.
+  """
+  const imageResult = generateImage(prompt, size: "256x256", quality: "medium")
+  return match(imageResult) {
+    failure(error) => failure(error)
+    success(image) => {
+      const s3Key = "news-cartoon-${category.category.toLowerCase().replace(" ", "-")}.png"
+      // image.base64 already IS the PNG bytes, base64-encoded — s3PutBinary
+      // decodes it before uploading. The Content-Type is what makes a browser
+      // render the object as an image instead of downloading it.
+      const putResult = s3PutBinary(
+        BUCKET,
+        s3Key,
+        image.base64,
+        region: REGION,
+        contentType: image.mimeType,
+      )
+      if (putResult is failure(putError)) {
+        return failure(putError)
+      }
+      const url = s3PresignGet(BUCKET, s3Key, expiresIn: 1d, region: REGION)
+      return match(url) {
+        failure(urlError) => failure(urlError)
+        success(unwrappedUrl) => success(unwrappedUrl)
+      }
+    }
+  }
+}
+
+def renderItemToMarkdown(item: NewsItem): string {
+  return `- **${item.headline}**: ${item.summary}`
+}
+
+def renderCategoryToMarkdown(category: NewsCategory): string {
+  log("\tRendering category '${category.category}' to markdown...")
+  const _imageUrl = generateCategoryImage(category)
+  const imageUrl = match(_imageUrl) {
+    failure(error) => "[Image generation failed: ${error}]"
+    success(url) => `![${category.category} cartoon](${url})`
+  }
+  return """
+  ### ${category.category}
+  ${imageUrl}
+  ${([renderItemToMarkdown(item) for item in category.items]).join("\n")}
+  """
+}
+
+def getTodaysHackerNewsStories(): Story[] {
+  """
+  Fetches the top 10 stories from Hacker News for today.
+  """
+  const front = hnStories("top", 10) catch []
+  return front
+}
+
+def sendEmail(subject: string, content: string) {
+  log("Sending email with subject '${subject}'...")
+  const result = sendWithResend(
+    from: "adit@adit.io",
+    to: "adit@adit.io",
+    subject: subject,
+    html: content,
+  )
+  return result
+}
+
 node main() {
-  print(range(3, 6))
+  const prompt = """
+  Please fetch the latest news for today, ${today()}, for the following categories:
+  ${categories.join(", ")}.
+  For each category, provide the top 3 headlines along with a summary for each.
+  """
+  handle {
+    log("Fetching today's news...")
+    const news: NewsResponse = llm(
+      prompt,
+      model: "gpt-5.6-luna",
+      provider: "openai-responses",
+      hostedTools: ["web_search"]
+      //tools: [getTodaysHackerNewsStories.preapprove()],
+    )
+
+    const markdown = """
+    # Today's News - ${today()}
+    ${([renderCategoryToMarkdown(category) for category in news.categories]).join("\n\n")}
+    """
+    // parse returns a ParseResult record; renderForHtml wants its blocks array.
+    const html = parse(markdown).blocks |> renderForHtml
+    const sendResult = sendEmail("Today's News - ${today()}", html catch markdown)
+    printJSON(sendResult)
+    return sendResult
+  } with approve
 }

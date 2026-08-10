@@ -20,6 +20,27 @@ Returns base64 you can persist with `writeBinary()` or send onward with
   }
   ```
 
+## Types
+
+### GeneratedImage
+
+```ts
+export type GeneratedImage = {
+  base64: string;
+  mimeType: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L21))
+
+### ImageQuality
+
+```ts
+export type ImageQuality = "low" | "medium" | "high" | "auto"
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L26))
+
 ## Functions
 
 ### generateImage
@@ -30,11 +51,11 @@ generateImage(
   model: string = "",
   provider: string = "",
   size: string = "",
-  quality: string = "",
+  quality: ImageQuality = "auto",
   images: string[] = [],
   apiKey: string = "",
   baseUrl: string = "",
-): Result
+): Result<GeneratedImage>
 ```
 
 Generate an image from a text prompt using a hosted provider, optionally
@@ -58,11 +79,11 @@ Generate an image from a text prompt using a hosted provider, optionally
 | model | `string` | "" |
 | provider | `string` | "" |
 | size | `string` | "" |
-| quality | `string` | "" |
+| quality | [ImageQuality](#imagequality) | "auto" |
 | images | `string[]` | [] |
 | apiKey | `string` | "" |
 | baseUrl | `string` | "" |
 
-**Returns:** `Result`
+**Returns:** `Result<GeneratedImage>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L21))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L28))

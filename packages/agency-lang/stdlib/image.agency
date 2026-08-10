@@ -18,16 +18,23 @@ Returns base64 you can persist with `writeBinary()` or send onward with
   ```
 */
 
+export type GeneratedImage = {
+  base64: string;
+  mimeType: string
+}
+
+export type ImageQuality = "low" | "medium" | "high" | "auto"
+
 export def generateImage(
   prompt: string,
   model: string = "",
   provider: string = "",
   size: string = "",
-  quality: string = "",
+  quality: ImageQuality = "auto",
   images: string[] = [],
   apiKey: string = "",
   baseUrl: string = "",
-): Result {
+): Result<GeneratedImage> {
   """
   Generate an image from a text prompt using a hosted provider, optionally
   editing input images. Returns a Result whose success value is
@@ -42,5 +49,14 @@ export def generateImage(
   @param apiKey - Override the API key
   @param baseUrl - Base URL for openai-compat / litellm providers
   """
-  return _generateImage(prompt, model, provider, size, quality, images, apiKey, baseUrl)
+  return _generateImage(
+    prompt,
+    model,
+    provider,
+    size,
+    quality,
+    images,
+    apiKey,
+    baseUrl,
+  )
 }

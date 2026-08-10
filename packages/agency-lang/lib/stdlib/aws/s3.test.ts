@@ -227,7 +227,7 @@ describe("S3 presigned URLs", () => {
   it("computes the URL locally, with all query parameters and no fetch", () =>
     withCtx(async () => {
       const spy = mockFetch();
-      const url = (await _s3PresignGet("my-bucket", "a/b.txt", 3600, "us-east-1")) as string;
+      const url = (await _s3PresignGet("my-bucket", "a/b.txt", 3600000, "us-east-1")) as string;
       expect(url).toMatch(
         /^https:\/\/my-bucket\.s3\.us-east-1\.amazonaws\.com\/a\/b\.txt\?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKID%2F\d{8}%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=\d{8}T\d{6}Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=[0-9a-f]{64}$/,
       );
@@ -236,7 +236,7 @@ describe("S3 presigned URLs", () => {
 
   it("marks the returned URL redacted with the presign label", () =>
     withCtx(async () => {
-      const url = await _s3PresignGet("my-bucket", "k", 3600, "us-east-1");
+      const url = await _s3PresignGet("my-bucket", "k", 3600000, "us-east-1");
       const { globals } = getRuntimeContext();
       expect(globals.redactionReplacement(url)).toBe("[presigned S3 URL redacted]");
     }));
@@ -246,7 +246,7 @@ describe("S3 presigned URLs", () => {
   // not exact-match redaction — is what keeps the bearer URL out of traces.
   it("scrubs the URL out of composed strings at both statelog composition points", () =>
     withCtx(async () => {
-      const url = (await _s3PresignGet("my-bucket", "k", 3600, "us-east-1")) as string;
+      const url = (await _s3PresignGet("my-bucket", "k", 3600000, "us-east-1")) as string;
       const email = `Good morning! Today's image: ${url} — enjoy.`;
       const { globals } = getRuntimeContext();
 
@@ -261,8 +261,8 @@ describe("S3 presigned URLs", () => {
       );
     }));
 
-  it.each([0, -5, 1.5, NaN, 604801])(
-    "rejects expiresInSeconds=%s without producing a URL",
+  it.each([0, -5, 1.5, NaN, 604800001])(
+    "rejects expiresIn=%s ms without producing a URL",
     (expires) =>
       withCtx(async () => {
         const result = await _s3PresignGet("my-bucket", "k", expires, "us-east-1");
@@ -270,33 +270,37 @@ describe("S3 presigned URLs", () => {
       }),
   );
 
-  it.each([1, 604800])("accepts the boundary expiry %s", (expires) =>
+  // Boundary ms values and the seconds they sign as (sub-second rounds up).
+  it.each([
+    [1, 1],
+    [604800000, 604800],
+  ])("accepts the boundary expiry %s ms, signing %s seconds", (expiresMs, seconds) =>
     withCtx(async () => {
-      const result = await _s3PresignGet("my-bucket", "k", expires, "us-east-1");
+      const result = await _s3PresignGet("my-bucket", "k", expiresMs, "us-east-1");
       expect(typeof result).toBe("string");
-      expect(result).toContain(`X-Amz-Expires=${expires}&`);
+      expect(result).toContain(`X-Amz-Expires=${seconds}&`);
     }));
 
   it("signs the session token into the query when present", () =>
     withCtx(async () => {
       process.env.AWS_SESSION_TOKEN = "TOK";
-      const url = (await _s3PresignGet("my-bucket", "k", 3600, "us-east-1")) as string;
+      const url = (await _s3PresignGet("my-bucket", "k", 3600000, "us-east-1")) as string;
       expect(url).toContain("&X-Amz-Security-Token=TOK&");
     }));
 
   it("presigns a dotted bucket path-style", () =>
     withCtx(async () => {
-      const url = (await _s3PresignGet("data.exports", "k", 3600, "eu-west-1")) as string;
+      const url = (await _s3PresignGet("data.exports", "k", 3600000, "eu-west-1")) as string;
       expect(url.startsWith("https://s3.eu-west-1.amazonaws.com/data.exports/k?")).toBe(true);
     }));
 
   it("shares the pipeline's region precedence and key rejection", () =>
     withCtx(async () => {
       process.env.AWS_REGION = "eu-west-1";
-      const url = (await _s3PresignGet("my-bucket", "k", 3600, "")) as string;
+      const url = (await _s3PresignGet("my-bucket", "k", 3600000, "")) as string;
       expect(url.startsWith("https://my-bucket.s3.eu-west-1.amazonaws.com/")).toBe(true);
 
-      const rejected = await _s3PresignGet("my-bucket", "a/../b", 3600, "us-east-1");
+      const rejected = await _s3PresignGet("my-bucket", "a/../b", 3600000, "us-east-1");
       expect("error" in (rejected as object)).toBe(true);
     }));
 
@@ -304,7 +308,7 @@ describe("S3 presigned URLs", () => {
     withCtx(async () => {
       const refusal = { error: { message: "blocked by host check" } } as ResultFailure;
       hostCheck.override = refusal;
-      const result = await _s3PresignGet("my-bucket", "k", 3600, "us-east-1");
+      const result = await _s3PresignGet("my-bucket", "k", 3600000, "us-east-1");
       expect(result).toBe(refusal);
     }));
 });

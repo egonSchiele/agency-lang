@@ -5,9 +5,13 @@ import { generateImage } from "std::image"
 import { parse, renderForHtml } from "std::markdown"
 import { sendWithResend } from "std::messaging/email"
 
-static const categories = ["World"] //, "United States", "Minnesota", "San Francisco", "Technology"]
+static const categories = ["World", "United States", "Minnesota", "San Francisco", "Technology"]
 static const BUCKET = "agency-news-email"
 static const REGION = "us-west-2"
+
+static const MAX_IMAGES = 10
+
+let imagesCreated = 0
 
 type NewsItem = {
   headline: string;
@@ -29,12 +33,16 @@ def log(message: string) {
 }
 
 def generateCategoryImage(category: NewsCategory): Result<string> {
+  if (imagesCreated >= MAX_IMAGES) {
+    return failure("Image generation limit of ${MAX_IMAGES} reached.")
+  }
+  imagesCreated += 1
   log("\t\tGenerating image for category '${category.category}'...")
   const prompt = """
   I am going to email some news headlines for the category '${category.category}'. Please generate an appropriate cartoon for the category '${category.category}' and the headlines '${([item.headline for item in category.items]).join(', ')}'.
   The image should be relevant to the top headlines in this category, generated as a classic pen and ink news cartoon, featuring some witty or slapstick humor, with beautiful linework and ink washes.
   """
-  const imageResult = generateImage(prompt, size: "1024x1024", quality: "medium")
+  const imageResult = generateImage(prompt, size: "256x256", quality: "medium")
   return match(imageResult) {
     failure(error) => failure(error)
     success(image) => {
@@ -108,9 +116,10 @@ node main() {
     log("Fetching today's news...")
     const news: NewsResponse = llm(
       prompt,
+      model: "gpt-5.6-luna",
       provider: "openai-responses",
-      hostedTools: ["web_search"],
-      tools: [getTodaysHackerNewsStories.preapprove()],
+      hostedTools: ["web_search"]
+      //tools: [getTodaysHackerNewsStories.preapprove()],
     )
 
     const markdown = """

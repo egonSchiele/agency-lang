@@ -1,3 +1,12 @@
+## Aug 10 2026 — v0.14.0
+
+### Standard Library
+- **`std::aws/s3`** — S3 object access (get, put, list, createBucket, binary upload/download). No AWS SDK dependency, requests are signed with SigV4.
+- **Speech** — `transcribe` (speech-to-text) and `speak` (text-to-speech) routed through the LLM client + audio attachments in chat.
+
+### CLI / Hosting
+- **`agency schedule --backend remote`** — create, list, edit, and remove hosted schedules on statelog.
+
 ## Aug 6 2026 — v0.13.4
 - Per-invocation config overrides
 - Commander fork, fixes to command-line flags

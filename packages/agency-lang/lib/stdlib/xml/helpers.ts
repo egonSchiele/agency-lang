@@ -40,15 +40,23 @@ function collectAll(node: XmlElement, tag: string, out: XmlElement[]): void {
 export function xmlText(node: XmlNode | null): string {
   if (node === null) return "";
   if (node.kind === "text") return node.text;
-  let out = "";
+  const parts: string[] = [];
+  collectText(node, parts);
+  return parts.join("");
+}
+
+function collectText(node: XmlElement, parts: string[]): void {
   for (const child of node.children) {
-    out += xmlText(child);
+    if (child.kind === "text") {
+      parts.push(child.text);
+    } else {
+      collectText(child, parts);
+    }
   }
-  return out;
 }
 
 /** Attribute value, or null when the attribute (or the node) is missing. */
 export function xmlAttr(node: XmlElement | null, name: string): string | null {
   if (node === null) return null;
-  return Object.prototype.hasOwnProperty.call(node.attrs, name) ? node.attrs[name] : null;
+  return Object.hasOwn(node.attrs, name) ? node.attrs[name] : null;
 }

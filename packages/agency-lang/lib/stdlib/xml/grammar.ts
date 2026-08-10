@@ -157,12 +157,17 @@ class DocumentParse {
 
   // document := BOM? XMLDecl? Misc* Doctype? Misc* element Misc* EOF
   parseDocument(): ParserResult<XmlDocument> {
+    // One raw-character pass over the whole normalized source, so forbidden
+    // controls and unpaired surrogates are rejected even inside skipped
+    // constructs (comments, PIs, declarations, DOCTYPEs).
+    const raw = validateChars(this.source, 0);
+    if (!raw.ok) return this.fail(raw.message, raw.offset);
     let i = 0;
     if (this.at(0) === 0xfeff) i = 1;
     if (this.startsWith("<?xml", i) && isWs(this.at(i + 5))) {
-      const end = this.source.indexOf("?>", i);
-      if (end === -1) return this.fail("unterminated XML declaration", i);
-      i = end + 2;
+      const decl = this.parseXmlDecl(i);
+      if (!decl.result.success) return decl.result as ParserResult<XmlDocument>;
+      i = decl.end;
     }
     let sawDoctype = false;
     let root: XmlElement | null = null;
@@ -174,9 +179,6 @@ class DocumentParse {
         if (!misc.result.success) return misc.result as ParserResult<XmlDocument>;
         i = misc.end;
         continue;
-      }
-      if (this.startsWith("<?xml", i) && (isWs(this.at(i + 5)) || this.at(i + 5) === 0x3f)) {
-        return this.fail("the XML declaration may appear only once, at the very beginning of the document", i);
       }
       if (this.startsWith("<!DOCTYPE", i)) {
         if (root !== null) return this.fail("a DOCTYPE must appear before the root element", i);
@@ -209,22 +211,102 @@ class DocumentParse {
     return success({ root }, "");
   }
 
-  // Comment or PI at `i`, or null if `i` starts neither. The XML
-  // declaration is handled by the caller and rejected here.
+  // Comment or PI at `i`, or null if `i` starts neither.
   private tryMisc(i: number): { result: ParserResult<null>; end: number } | null {
     if (this.startsWith("<!--", i)) {
       const c = this.parseComment(i);
       return { result: c.result, end: c.end };
     }
     if (this.startsWith("<?", i)) {
-      if (this.startsWith("<?xml", i) && (isWs(this.at(i + 5)) || this.at(i + 5) === 0x3f)) {
-        return null; // misplaced declaration; caller produces the message
-      }
-      const end = this.source.indexOf("?>", i + 2);
-      if (end === -1) return { result: this.fail("unterminated processing instruction", i), end: i };
-      return { result: success(null, ""), end: end + 2 };
+      const p = this.parsePi(i);
+      return { result: p.result, end: p.end };
     }
     return null;
+  }
+
+  // The XML declaration at the document start: `<?xml` S version-info
+  // (S encoding-decl)? (S standalone-decl)? S? `?>`, each pseudo-attribute
+  // a quoted value, in that order.
+  private parseXmlDecl(i: number): { result: ParserResult<null>; end: number } {
+    const PSEUDO = ["version", "encoding", "standalone"];
+    let nextAllowed = 0;
+    let sawVersion = false;
+    let j = i + 5;
+    for (;;) {
+      const wsStart = j;
+      j = this.skipWs(j);
+      if (this.startsWith("?>", j)) {
+        if (!sawVersion) {
+          return { result: this.fail("malformed XML declaration: `version` is required", i), end: i };
+        }
+        return { result: success(null, ""), end: j + 2 };
+      }
+      if (this.at(j) === -1) {
+        return { result: this.fail("unterminated XML declaration", i), end: i };
+      }
+      if (j === wsStart) {
+        return { result: this.fail("malformed XML declaration: expected whitespace or `?>`", j), end: i };
+      }
+      const nm = this.readName(j);
+      if (nm === null) {
+        return { result: this.fail("malformed XML declaration: expected `version`, `encoding`, or `standalone`", j), end: i };
+      }
+      const idx = PSEUDO.indexOf(nm.name);
+      if (idx === -1 || idx < nextAllowed) {
+        return { result: this.fail(`malformed XML declaration: unexpected \`${nm.name}\``, j), end: i };
+      }
+      nextAllowed = idx + 1;
+      if (nm.name === "version") sawVersion = true;
+      j = this.skipWs(nm.end);
+      if (this.at(j) !== EQ) {
+        return { result: this.fail(`malformed XML declaration: expected \`=\` after \`${nm.name}\``, j), end: i };
+      }
+      j = this.skipWs(j + 1);
+      const q = this.readQuoted(j, "XML declaration");
+      if (!q.result.success) return { result: q.result, end: i };
+      j = q.end;
+    }
+  }
+
+  // A processing instruction: `<?` Name (S data)? `?>`. The target `xml`
+  // (any case) is reserved — a real declaration is handled positionally by
+  // parseDocument, so reaching it here means it is misplaced or malformed.
+  private parsePi(i: number): { result: ParserResult<null>; end: number } {
+    const nm = this.readName(i + 2);
+    if (nm === null) {
+      return { result: this.fail("processing instruction needs a target name after `<?`", i + 2), end: i };
+    }
+    if (nm.name.toLowerCase() === "xml") {
+      return {
+        result: this.fail(
+          "the `xml` processing-instruction target is reserved: the XML declaration may appear only once, at the very beginning of the document",
+          i,
+        ),
+        end: i,
+      };
+    }
+    const j = nm.end;
+    if (!this.startsWith("?>", j) && !isWs(this.at(j))) {
+      return { result: this.fail(`malformed processing instruction: expected whitespace or \`?>\` after \`${nm.name}\``, j), end: i };
+    }
+    const end = this.source.indexOf("?>", j);
+    if (end === -1) {
+      return { result: this.fail("unterminated processing instruction", i), end: i };
+    }
+    return { result: success(null, ""), end: end + 2 };
+  }
+
+  // A quoted literal at `i`; `where` names the construct for messages.
+  private readQuoted(i: number, where: string): { result: ParserResult<null>; end: number } {
+    const q = this.at(i);
+    if (q !== QUOT && q !== APOS) {
+      return { result: this.fail(`malformed ${where}: expected a quoted value`, i), end: i };
+    }
+    const close = this.source.indexOf(String.fromCharCode(q), i + 1);
+    if (close === -1) {
+      return { result: this.fail(`unterminated quoted string in ${where}`, i), end: i };
+    }
+    return { result: success(null, ""), end: close + 1 };
   }
 
   private parseComment(i: number): { result: ParserResult<null>; end: number } {
@@ -237,28 +319,48 @@ class DocumentParse {
     return { result: success(null, ""), end: dd + 3 };
   }
 
+  // `<!DOCTYPE` S Name (S (`SYSTEM` S literal | `PUBLIC` S literal S
+  // literal))? S? `>`. Quoted literals may contain `[` and `>`; an unquoted
+  // `[` starts an internal subset, which is unsupported. External
+  // identifiers are skipped syntactically, never fetched.
   private parseDoctype(i: number): { result: ParserResult<null>; end: number } {
-    // Quote-aware scan: quoted strings may contain `[` and `>`; an unquoted
-    // `[` starts an internal subset, which is unsupported.
     let j = i + 9;
-    let quote = -1;
-    while (j < this.source.length) {
-      const c = this.at(j);
-      if (quote !== -1) {
-        if (c === quote) quote = -1;
-      } else if (c === QUOT || c === APOS) {
-        quote = c;
-      } else if (c === 0x5b /* [ */) {
-        return { result: this.fail("DTD internal subsets are not supported", j), end: i };
-      } else if (c === GT) {
-        return { result: success(null, ""), end: j + 1 };
-      }
-      j++;
+    if (!isWs(this.at(j))) {
+      return { result: this.fail("malformed DOCTYPE: expected whitespace after `<!DOCTYPE`", j), end: i };
     }
-    return {
-      result: this.fail(quote !== -1 ? "unterminated quoted string in DOCTYPE" : "unterminated DOCTYPE declaration", i),
-      end: i,
-    };
+    j = this.skipWs(j);
+    const nm = this.readName(j);
+    if (nm === null) {
+      return {
+        result: this.at(j) === -1
+          ? this.fail("unterminated DOCTYPE declaration", i)
+          : this.fail("malformed DOCTYPE: expected a root element name", j),
+        end: i,
+      };
+    }
+    j = this.skipWs(nm.end);
+    const literals = this.startsWith("SYSTEM", j) && isWs(this.at(j + 6)) ? 1 : this.startsWith("PUBLIC", j) && isWs(this.at(j + 6)) ? 2 : 0;
+    if (literals > 0) {
+      j = this.skipWs(j + 6);
+      for (let n = 0; n < literals; n++) {
+        j = this.skipWs(j);
+        const q = this.readQuoted(j, "DOCTYPE");
+        if (!q.result.success) return { result: q.result, end: i };
+        j = q.end;
+      }
+      j = this.skipWs(j);
+    }
+    const c = this.at(j);
+    if (c === 0x5b /* [ */) {
+      return { result: this.fail("DTD internal subsets are not supported", j), end: i };
+    }
+    if (c === GT) {
+      return { result: success(null, ""), end: j + 1 };
+    }
+    if (c === -1) {
+      return { result: this.fail("unterminated DOCTYPE declaration", i), end: i };
+    }
+    return { result: this.fail("malformed DOCTYPE: expected `>`", j), end: i };
   }
 
   // Element at `i` (caller guarantees '<' + name start).
@@ -383,15 +485,9 @@ class DocumentParse {
           return { result: this.fail("a DOCTYPE must appear before the root element", j), end: i };
         }
         if (this.startsWith("<?", j)) {
-          const misc = this.tryMisc(j);
-          if (misc === null) {
-            return {
-              result: this.fail("the XML declaration may appear only once, at the very beginning of the document", j),
-              end: i,
-            };
-          }
-          if (!misc.result.success) return { result: misc.result as ParserResult<XmlElement>, end: i };
-          j = misc.end;
+          const pi = this.parsePi(j);
+          if (!pi.result.success) return { result: pi.result as ParserResult<XmlElement>, end: i };
+          j = pi.end;
           continue;
         }
         if (isNameStart(this.at(j + 1))) {
@@ -468,7 +564,7 @@ class DocumentParse {
     if (!decoded.ok) {
       return { result: this.fail(decoded.message, decoded.offset), end: i };
     }
-    if (Object.prototype.hasOwnProperty.call(attrs, nm.name)) {
+    if (Object.hasOwn(attrs, nm.name)) {
       return { result: this.fail(`duplicate attribute "${nm.name}" in <${tag}>`, i), end: i };
     }
     const res = this.reserve("attributes", i);

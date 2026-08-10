@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runNested, str } from "tarsec";
+import { committedFailure, getErrorMessage, getParseState, runNested, str } from "tarsec";
 import { parseXml } from "./grammar.js";
 import { MAX_DEPTH, MAX_INPUT_BYTES, MAX_TREE_ENTRIES, type XmlDocument, type XmlElement } from "./types.js";
 
@@ -118,7 +118,46 @@ describe("prolog, DOCTYPE, comments, PIs", () => {
   });
 
   it("rejects an unterminated DOCTYPE quoted string", () => {
-    expectFail(`<!DOCTYPE r "oops><r/>`, "unterminated quoted string in DOCTYPE");
+    expectFail(`<!DOCTYPE r SYSTEM "oops><r/>`, "unterminated quoted string in DOCTYPE");
+  });
+
+  it("rejects malformed DOCTYPEs (strict subset, not an arbitrary blob)", () => {
+    expectFail("<!DOCTYPE><r/>", "malformed DOCTYPE: expected whitespace after `<!DOCTYPE`");
+    expectFail("<!DOCTYPEfoo><r/>", "malformed DOCTYPE: expected whitespace after `<!DOCTYPE`");
+    expectFail("<!DOCTYPE ><r/>", "malformed DOCTYPE: expected a root element name");
+    expectFail("<!DOCTYPE arbitrary garbage><r/>", "malformed DOCTYPE: expected `>`", 1, 21);
+    expectFail(`<!DOCTYPE r "oops"><r/>`, "malformed DOCTYPE: expected `>`");
+    expectFail(`<!DOCTYPE r PUBLIC "only-one"><r/>`, "malformed DOCTYPE: expected a quoted value");
+  });
+
+  it("accepts the three supported DOCTYPE forms", () => {
+    expect(doc("<!DOCTYPE r><r/>")).toEqual({ root: el("r") });
+    expect(doc(`<!DOCTYPE r SYSTEM "r.dtd"><r/>`)).toEqual({ root: el("r") });
+    expect(doc(`<!DOCTYPE r PUBLIC "-//x//EN" "r.dtd"><r/>`)).toEqual({ root: el("r") });
+  });
+
+  it("rejects malformed XML declarations (terminated but bogus)", () => {
+    expectFail("<?xml bogus?><r/>", "malformed XML declaration: unexpected `bogus`", 1, 7);
+    expectFail(`<?xml version="1.0?><r/>`, "unterminated quoted string in XML declaration");
+    expectFail(`<?xml encoding="UTF-8"?><r/>`, "malformed XML declaration: `version` is required");
+    expectFail(`<?xml standalone="yes" version="1.0"?><r/>`, "malformed XML declaration: unexpected `version`");
+    expectFail(`<?xml version=1.0?><r/>`, "malformed XML declaration: expected a quoted value");
+  });
+
+  it("accepts a full declaration with all three pseudo-attributes", () => {
+    expect(doc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><r/>`)).toEqual({ root: el("r") });
+  });
+
+  it("rejects PIs without a valid target and the reserved xml target", () => {
+    expectFail("<??><r/>", "processing instruction needs a target name", 1, 3);
+    expectFail("<r><?1bad?></r>", "processing instruction needs a target name");
+    expectFail("<?XML?><r/>", "reserved");
+    expectFail("<r><?p!x?></r>", "malformed processing instruction: expected whitespace or `?>`");
+  });
+
+  it("accepts a data-less PI and PI data containing markup-ish characters", () => {
+    expect(doc("<r><?pi?></r>")).toEqual({ root: el("r") });
+    expect(doc("<r><?pi a<b>&x?></r>")).toEqual({ root: el("r") });
   });
 
   it("keeps <?xml-stylesheet?> a processing instruction", () => {
@@ -279,6 +318,32 @@ describe("newline normalization", () => {
   });
 });
 
+describe("forbidden raw characters in skipped constructs", () => {
+  // The whole-source validation pass: controls and unpaired surrogates are
+  // rejected even inside constructs that produce no nodes.
+  const BS = String.fromCharCode(8);
+
+  it("rejects a control character inside a comment", () => {
+    expectFail(`<r><!-- a${BS}b --></r>`, "U+0008", 1, 10);
+  });
+
+  it("rejects a control character inside PI data", () => {
+    expectFail(`<r><?pi a${BS}b?></r>`, "U+0008");
+  });
+
+  it("rejects a control character inside the XML declaration", () => {
+    expectFail(`<?xml version="1.${BS}"?><r/>`, "U+0008");
+  });
+
+  it("rejects a control character inside a DOCTYPE literal", () => {
+    expectFail(`<!DOCTYPE r SYSTEM "a${BS}b"><r/>`, "U+0008");
+  });
+
+  it("rejects an unpaired surrogate inside a comment", () => {
+    expectFail("<r><!-- x\uD800y --></r>", "unpaired surrogate");
+  });
+});
+
 describe("forbidden raw characters", () => {
   it("rejects NUL and controls in text with position", () => {
     expectFail("<a>x\u0000y</a>", "U+0000", 1, 5);
@@ -301,7 +366,7 @@ describe("unterminated constructs", () => {
     expectFail("<r><?pi data", "unterminated processing instruction");
     expectFail("<!-- never ends", "unterminated comment");
     expectFail("<r><![CDATA[ never ends", "unterminated CDATA section");
-    expectFail("<!DOCTYPE r never ends", "unterminated DOCTYPE");
+    expectFail("<!DOCTYPE r", "unterminated DOCTYPE");
     expectFail("<r x='never", "unterminated attribute value");
     expectFail("<r", "unclosed <r> tag");
   });
@@ -373,12 +438,16 @@ describe("limits", () => {
     expect(parseXml(input).ok).toBe(true);
   });
 
-  it("text coalescing does not reserve extra entries", () => {
-    // 1 root + 1 text node built from many coalesced contributions; with a
-    // budget of 2 remaining this only passes if merging is free.
-    const contributions = "<r>" + "a<!-- c -->".repeat(50) + "</r>";
-    const d = doc(contributions);
-    expect(d.root.children).toEqual([{ kind: "text", text: "a".repeat(50) }]);
+  it("text coalescing is free in the entry budget, proven at the budget edge", () => {
+    // 1 root + (cap - 2) empty siblings = cap - 1 entries. The first text
+    // contribution takes the final slot; the comment/PI-separated merges
+    // after it must consume none, or this document exceeds the cap and the
+    // parse fails.
+    const input = "<r>" + "<a/>".repeat(MAX_TREE_ENTRIES - 2) + "x<!-- c -->y<?p q?>z" + "</r>";
+    const d = doc(input);
+    const last = d.root.children[d.root.children.length - 1];
+    expect(last).toEqual({ kind: "text", text: "xyz" });
+    expect(d.root.children.length).toBe(MAX_TREE_ENTRIES - 1);
   });
 
   it("a valid parse succeeds after a budget failure", () => {
@@ -393,7 +462,8 @@ describe("hostile inputs return failures, never throw", () => {
     expectFail("<r><![CDATA[" + "x".repeat(500_000), "unterminated CDATA");
     expectFail(`<r x="` + "x".repeat(500_000), "unterminated attribute value");
     expectFail("<!DOCTYPE " + "x".repeat(500_000), "unterminated DOCTYPE");
-    expectFail("<?" + "x".repeat(500_000), "unterminated processing instruction");
+    expectFail("<?" + "x".repeat(500_000), "processing instruction");
+    expectFail("<?pi " + "x".repeat(500_000), "unterminated processing instruction");
     expectFail("<r>&#" + "9".repeat(500_000), "malformed character reference");
   });
 
@@ -438,5 +508,28 @@ describe("nested tarsec state", () => {
     expect(result.success).toBe(true);
     const failing = runNested((input: string) => str("NOPE")(input), "BEGIN");
     expect(failing.success).toBe(false);
+  });
+
+  it("inner failures do not leak into the outer committed/rightmost state", () => {
+    const outer = (input: string) => {
+      const pre = str("BEGIN ")(input);
+      if (!pre.success) return pre;
+      const inner = parseXml("<x>oops");
+      expect(inner.ok).toBe(false);
+      // The inner parse's committed failure must not survive into the
+      // outer state after runNested restores it.
+      expect(getParseState().committedFailure).toBe(null);
+      // A deliberate outer failure must format in OUTER coordinates with
+      // no trace of the inner XML error.
+      getParseState().committedFailure = committedFailure("outer boom", pre.rest);
+      const msg = getErrorMessage();
+      expect(msg).toContain("outer boom");
+      expect(msg).toContain("Line 1, col 7");
+      expect(msg).not.toContain("unclosed <x>");
+      getParseState().committedFailure = null;
+      return str("END")(pre.rest);
+    };
+    const result = runNested(outer, "BEGIN END");
+    expect(result.success).toBe(true);
   });
 });

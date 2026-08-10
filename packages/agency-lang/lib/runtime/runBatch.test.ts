@@ -7,6 +7,8 @@ import { runBatch } from "./runBatch.js";
 import { GlobalStore } from "./state/globalStore.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
+import { RuntimeContext } from "./state/context.js";
+import { safeStatelogValue } from "./runner.js";
 
 /** Build a synthetic Checkpoint-ish object (only the fields runBatch reads
  *  matter for these tests). */
@@ -822,5 +824,76 @@ describe("runBatch — durable object-tag flag propagation", () => {
       ),
     );
     expect((ctx.globals as GlobalStore).hasDurableObjectTagFlag()).toBe(false);
+  });
+});
+
+describe("runBatch — branch primitive redaction propagation (fork/race)", () => {
+  function makeRealCtx(): RuntimeContext<any> {
+    return new RuntimeContext({
+      statelogConfig: {
+        host: "https://example.com",
+        apiKey: "test-api-key",
+        projectId: "test-project",
+        debugMode: false,
+      },
+      smoltalkDefaults: {},
+      dirname: process.cwd(),
+    });
+  }
+
+  it("a primitive redacted inside a branch is redacted in the parent's statelog value (small + oversized)", async () => {
+    const real = makeRealCtx();
+    const execCtx = await real.createExecutionContext({ runId: "redact-fork" });
+    const { ctx } = makeCtx(); // stub for checkpoints; value branches never checkpoint
+    const { parentStack, parentFrame } = makeParent();
+    const marker = "[binary output truncated]";
+    const small = "AAAAsmall-branch-blob";
+    const big = "B".repeat(4101); // exceeds the fork telemetry truncation cap
+    const captured: Record<number, unknown> = {};
+
+    await runInTestContext(
+      execCtx,
+      execCtx.stateStack,
+      new ThreadStore(),
+      async () => {
+        await runBatch<string>({
+          ctx,
+          parentStack,
+          parentFrame,
+          checkpointLocation: cpLoc,
+          mode: "all",
+          shareGlobals: false, // default isolation: branch globals are discarded at join
+          children: [
+            {
+              key: "c0",
+              invoke: async () => {
+                getRuntimeContext().globals.markRedacted(small, marker);
+                return small;
+              },
+            },
+            {
+              key: "c1",
+              invoke: async () => {
+                getRuntimeContext().globals.markRedacted(big, marker);
+                return big;
+              },
+            },
+          ],
+          hooks: {
+            // Mirror runner.ts's forkBranchEnd: serialize the branch value on the
+            // parent side, where redaction must still fire.
+            onBranchEnd: (_key, branchIndex, _outcome, _time, value) => {
+              captured[branchIndex] = safeStatelogValue(value);
+            },
+          },
+        });
+      },
+    );
+
+    expect(captured[0]).toBe(marker);
+    expect(captured[1]).toBe(marker); // redacted BEFORE the >4000-char truncation path
+    const serialized = JSON.stringify(captured);
+    expect(serialized).not.toContain("small-branch-blob");
+    expect(serialized).not.toContain("BBBB");
   });
 });

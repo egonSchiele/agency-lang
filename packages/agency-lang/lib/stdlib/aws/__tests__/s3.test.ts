@@ -115,6 +115,40 @@ describe("S3 key safety", () => {
       "https://my-bucket.s3.us-east-1.amazonaws.com/b",
     );
   });
+
+  // An empty key changes the operation: GET / lists the bucket, PUT / is
+  // CreateBucket. All four object helpers must reject it before any request.
+  it("s3Get rejects an empty key before fetching", () =>
+    withCtx(async () => {
+      const spy = mockFetch();
+      const result = await _s3Get("abc", "", "us-east-1");
+      expect("error" in (result as object)).toBe(true);
+      expect(spy).not.toHaveBeenCalled();
+    }));
+
+  it("s3GetBinary rejects an empty key before fetching", () =>
+    withCtx(async () => {
+      const spy = mockFetch();
+      const result = await _s3GetBinary("abc", "", "us-east-1");
+      expect("error" in (result as object)).toBe(true);
+      expect(spy).not.toHaveBeenCalled();
+    }));
+
+  it("s3Put rejects an empty key before fetching", () =>
+    withCtx(async () => {
+      const spy = mockFetch();
+      const result = await _s3Put("abc", "", "hi", "us-east-1", "text/plain");
+      expect("error" in (result as object)).toBe(true);
+      expect(spy).not.toHaveBeenCalled();
+    }));
+
+  it("s3PutBinary rejects an empty key before fetching", () =>
+    withCtx(async () => {
+      const spy = mockFetch();
+      const result = await _s3PutBinary("abc", "", "aGk=", "us-east-1", "application/octet-stream");
+      expect("error" in (result as object)).toBe(true);
+      expect(spy).not.toHaveBeenCalled();
+    }));
 });
 
 describe("S3 binary codecs and redaction", () => {

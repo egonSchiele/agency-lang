@@ -51,9 +51,13 @@ export async function readBodyBytesCapped(
   const onAbort = () => {
     cancelReaderBestEffort(reader);
   };
-  signal.throwIfAborted();
-  signal.addEventListener("abort", onAbort, { once: true });
+  // Install the cancel path (or cancel now if already aborted) BEFORE the abort
+  // check, so an already-aborted signal still cancels the stream and reaches the
+  // `finally` that releases the reader lock.
+  if (signal.aborted) onAbort();
+  else signal.addEventListener("abort", onAbort, { once: true });
   try {
+    signal.throwIfAborted();
     while (true) {
       const { done, value } = await reader.read();
       // Check before handling `done`: a cancel from onAbort resolves the pending

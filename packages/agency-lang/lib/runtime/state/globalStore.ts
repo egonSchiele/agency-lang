@@ -196,6 +196,29 @@ export class GlobalStore {
   }
 
   /**
+   * Copy every *primitive* redaction marker from this store into `target`. Used
+   * at fork/race join: a primitive redacted inside a branch (e.g. binary output)
+   * lives only in the branch's cloned store and cannot ride back on the returned
+   * value the way a durable object tag does, so without this the parent would
+   * serialize the branch's returned value for statelog without the tag. Only
+   * redaction metadata moves — never program state — so global isolation is
+   * unaffected (redaction can only hide values from logs, never change what the
+   * program computes).
+   */
+  copyPrimitiveRedactionsInto(target: GlobalStore): void {
+    const map = this.get(GlobalStore.INTERNAL_MODULE, GlobalStore.VALUE_TAGS_KEY);
+    if (!(map instanceof Map)) return;
+    for (const [value, tags] of map as Map<unknown, Record<string, unknown>>) {
+      const tag = tags[GlobalStore.REDACT_TAG];
+      if (tag === true) {
+        target.markRedacted(value);
+      } else if (typeof tag === "string") {
+        target.markRedacted(value, tag);
+      }
+    }
+  }
+
+  /**
    * Cheap "are there any tags at all?" check so statelog can skip installing
    * a redaction replacer entirely when nothing is tagged (the common case).
    * Three signals: the in-memory WeakMap bit (branch-local tags; resets on

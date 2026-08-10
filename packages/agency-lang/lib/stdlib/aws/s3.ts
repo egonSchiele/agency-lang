@@ -83,6 +83,14 @@ export type S3OperationResult =
 // `fetch` normalizes those away, so the signed path and the fetched path would
 // diverge. Reject them before endpoint construction.
 function keyFailure(key: string): ResultFailure | null {
+  // An empty key changes the operation entirely: GET / lists the bucket and
+  // PUT / creates the bucket (which for an already-owned us-east-1 bucket can
+  // return 200 and reset ACLs) — under an object-read/write approval. Reject it.
+  if (key.length === 0) {
+    return failure({
+      message: "Invalid S3 key: an empty key is not allowed for an object operation.",
+    });
+  }
   for (const segment of key.split("/")) {
     if (segment === "." || segment === "..") {
       return failure({

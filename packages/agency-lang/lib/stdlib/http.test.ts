@@ -280,6 +280,28 @@ describe("readBodyBytesCapped", () => {
     await expect(integratedRead).rejects.toBeInstanceOf(AgencyCancelledError);
   });
 
+  it("cancels the stream and releases the lock when the signal is already aborted", async () => {
+    let cancelled = false;
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        start(streamController) {
+          streamController.enqueue(new Uint8Array([1, 2]));
+        },
+        cancel() {
+          cancelled = true;
+        },
+      }),
+    );
+    const abortController = new AbortController();
+    abortController.abort();
+    await expect(
+      readBodyBytesCapped(response, "https://example.com/pre-aborted", abortController.signal),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(cancelled).toBe(true);
+    // The lock was released in `finally`; a second getReader must not throw.
+    expect(() => response.body!.getReader()).not.toThrow();
+  });
+
   it("rejects a body one byte over the cap", async () => {
     const response = new Response(
       new ReadableStream<Uint8Array>({

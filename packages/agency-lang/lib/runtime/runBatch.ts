@@ -508,6 +508,14 @@ function runInBranchAlsFrame<T>(
         if (!shareGlobals && branchGlobals.hasDurableObjectTagFlag()) {
           parent.globals.setDurableObjectTagFlag();
         }
+        // Durable object tags travel back on the returned value by reference,
+        // but a PRIMITIVE redaction (e.g. binary output marked in the branch)
+        // lives only in the discarded cloned store. Copy those into the parent
+        // so its forkBranchEnd serialization still redacts the branch's returned
+        // value. Redaction is log-only metadata, so isolation is unaffected.
+        if (!shareGlobals) {
+          branchGlobals.copyPrimitiveRedactionsInto(parent.globals);
+        }
       }
     },
   );

@@ -64,11 +64,26 @@ effect std::aws::s3::createBucket {
   region: string,
 }
 
+/** The result of a successful `s3Put` / `s3PutBinary`. */
+export type S3PutResult = {
+  bucket: string,
+  key: string,
+  url: string,
+  etag: string,
+}
+
+/** The result of a successful `createBucket`. */
+export type S3CreateBucketResult = {
+  bucket: string,
+  region: string,
+  location: string,
+}
+
 export def s3Get(
   bucket: string,
   key: string,
   region: string = "",
-): Result {
+): Result<string> {
   """
   Download an S3 object as UTF-8 text. Complete `.` and `..` key segments are rejected.
 
@@ -91,7 +106,7 @@ export def s3GetBinary(
   bucket: string,
   key: string,
   region: string = "",
-): Result {
+): Result<string> {
   """
   Download an S3 object as base64, not readable text. Complete `.` and `..` key segments are rejected.
 
@@ -116,7 +131,7 @@ export def s3Put(
   content: string,
   region: string = "",
   contentType: string = "text/plain",
-): Result {
+): Result<S3PutResult> {
   """
   Upload UTF-8 text to S3. Returns the bucket, key, URL, and ETag. Complete `.` and `..` key segments are rejected.
 
@@ -145,7 +160,7 @@ export def s3PutBinary(
   base64: string,
   region: string = "",
   contentType: string = "application/octet-stream",
-): Result {
+): Result<S3PutResult> {
   """
   Upload strict base64-decoded binary to S3. Returns the bucket, key, URL, and ETag. Complete `.` and `..` key segments are rejected.
 
@@ -171,7 +186,7 @@ export def s3PutBinary(
 export def createBucket(
   bucket: string,
   region: string = "",
-): Result {
+): Result<S3CreateBucketResult> {
   """
   Create an S3 bucket and return its bucket, region, and location.
 

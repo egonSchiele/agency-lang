@@ -849,6 +849,7 @@ describe("runBatch — branch primitive redaction propagation (fork/race)", () =
     const marker = "[binary output truncated]";
     const small = "AAAAsmall-branch-blob";
     const big = "B".repeat(4101); // exceeds the fork telemetry truncation cap
+    const defaultSecret = "CCCCdefault-marker-secret"; // default [REDACTED], no custom label
     const captured: Record<number, unknown> = {};
 
     await runInTestContext(
@@ -878,6 +879,15 @@ describe("runBatch — branch primitive redaction propagation (fork/race)", () =
                 return big;
               },
             },
+            {
+              key: "c2",
+              invoke: async () => {
+                // DEFAULT redaction (no custom label): the gap is not specific
+                // to custom markers — a plain [REDACTED] primitive leaks too.
+                getRuntimeContext().globals.markRedacted(defaultSecret);
+                return defaultSecret;
+              },
+            },
           ],
           hooks: {
             // Mirror runner.ts's forkBranchEnd: serialize the branch value on the
@@ -892,8 +902,10 @@ describe("runBatch — branch primitive redaction propagation (fork/race)", () =
 
     expect(captured[0]).toBe(marker);
     expect(captured[1]).toBe(marker); // redacted BEFORE the >4000-char truncation path
+    expect(captured[2]).toBe("[REDACTED]"); // default marker leaks too without the fix
     const serialized = JSON.stringify(captured);
     expect(serialized).not.toContain("small-branch-blob");
     expect(serialized).not.toContain("BBBB");
+    expect(serialized).not.toContain("default-marker-secret");
   });
 });

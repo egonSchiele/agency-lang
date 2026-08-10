@@ -1,4 +1,4 @@
-import { fetchJSON } from "std::http"
+import { fetchJSON, HttpMethod } from "std::http"
 import { parse } from "std::date"
 
 /** @module
@@ -22,8 +22,15 @@ import { parse } from "std::date"
     one connector-level prompt. The call-site approval is a vote, not a
     bypass: an outer handler still receives the fetch interrupt and its
     reject wins. allowedDomains is enforced inside fetchJSON. */
-export def connectorFetch(base: string, domains: string[], path: string): Result raises <std::http::fetchJSON> {
-  return fetchJSON(baseUrl: base, path: path, allowedDomains: domains)
+export def connectorFetch(
+  base: string,
+  domains: string[],
+  path: string,
+  headers: Record<string, any> = {},
+  method: HttpMethod = "GET",
+  body: Record<string, any> | string | null = null,
+): Result raises <std::http::fetchJSON> {
+  return fetchJSON(baseUrl: base, path: path, headers: headers, allowedDomains: domains, method: method, body: body)
 }
 
 /** Shared failure message for a failed connector fetch. Pure. */

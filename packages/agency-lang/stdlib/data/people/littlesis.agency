@@ -1,4 +1,4 @@
-import { fetchJSON } from "std::http"
+import { connectorFetch } from "std::data/connector"
 
 /** @module
   ## LittleSis — people, organizations, and the ties between them
@@ -8,7 +8,7 @@ import { fetchJSON } from "std::http"
   ownership/investment, donations). Use this connector when the question is about *entities and
   the edges between them* (who worked where, who funds whom, who sits on which board), as opposed
   to macro numbers (`std::data/finance/fred`), company filings (`std::data/finance/edgar`), or
-  news (`std::data/finance/gdelt`).
+  news (`std::data/news/gdelt`).
 
   No API key required (the API is rate-limited; HTTP 503 means "Rate Limit Exceeded").
 
@@ -204,20 +204,6 @@ def littlesisError(err: any): string {
   return "LittleSis request failed (the API may be rate-limited; HTTP 503 = Rate Limit Exceeded): ${err}"
 }
 
-/** Fetch a LittleSis path and return the parsed-JSON Result. Raises std::http::fetchJSON but
-    approves it internally, so a plain caller sees only the connector's own std::littlesis prompt,
-    while any OUTER fetch handler still receives (and can reject or propagate) the fetch — those
-    beat this approve(). allowedDomains is enforced inside fetchJSON regardless. Private. */
-def littlesisFetch(path: string): Result raises <std::http::fetchJSON> {
-  handle {
-    return fetchJSON(baseUrl: LITTLESIS_BASE, path: path, allowedDomains: LITTLESIS_DOMAINS)
-  } with (data) {
-    if (data.effect == "std::http::fetchJSON") {
-      return approve()
-    }
-  }
-}
-
 /** Turn a fetchJSON Result into an entity-list Result. Used by BOTH search and connections
     (identical shape). Pure — testable with mock Results. */
 def entityListFinalize(fetchResult: any): Result<Entity[]> {
@@ -261,7 +247,7 @@ export def littlesisSearch(name: string, page: number = 1): Result<Entity[]> rai
   return interrupt std::littlesis("Search LittleSis for this name?", { op: "search", query: name })
   // Bind the fetch to its own statement so the std::http::fetchJSON interrupt fires at statement
   // level (resumable / gateable by outer handlers) rather than inside a call argument.
-  const result = littlesisFetch(buildSearchPath(name, page))
+  const result = connectorFetch(LITTLESIS_BASE, LITTLESIS_DOMAINS, buildSearchPath(name, page)) with approve
   return entityListFinalize(result)
 }
 
@@ -273,7 +259,7 @@ export def littlesisEntity(id: number): Result<Entity> raises <std::littlesis, s
   @param id - The LittleSis entity id
   """
   return interrupt std::littlesis("Fetch this LittleSis entity?", { op: "entity", query: "${id}" })
-  const result = littlesisFetch(buildEntityPath(id))
+  const result = connectorFetch(LITTLESIS_BASE, LITTLESIS_DOMAINS, buildEntityPath(id)) with approve
   return entityFinalize(result)
 }
 
@@ -297,7 +283,7 @@ export def littlesisRelationships(id: number, category: string = "", sort: strin
   }
   const filter = filterResult.value
   return interrupt std::littlesis("Fetch relationships for this LittleSis entity?", { op: "relationships", query: "${id}" })
-  const result = littlesisFetch(buildRelationshipsPath(id, filter, sort))
+  const result = connectorFetch(LITTLESIS_BASE, LITTLESIS_DOMAINS, buildRelationshipsPath(id, filter, sort)) with approve
   return relationshipsFinalize(result)
 }
 
@@ -317,6 +303,6 @@ export def littlesisConnections(id: number, category: string = ""): Result<Entit
   }
   const filter = filterResult.value
   return interrupt std::littlesis("Fetch connections for this LittleSis entity?", { op: "connections", query: "${id}" })
-  const result = littlesisFetch(buildConnectionsPath(id, filter))
+  const result = connectorFetch(LITTLESIS_BASE, LITTLESIS_DOMAINS, buildConnectionsPath(id, filter)) with approve
   return entityListFinalize(result)
 }

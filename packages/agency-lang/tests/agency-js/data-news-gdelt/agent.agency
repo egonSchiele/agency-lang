@@ -1,4 +1,4 @@
-import test { buildGdeltPath, parseGdelt, gdeltFinalize, gdeltNews } from "std::data/finance/gdelt"
+import test { buildGdeltPath, parseGdelt, gdeltFinalize, gdeltNews } from "std::data/news/gdelt"
 
 node tBuild(query: string, maxRecords: number, timespan: string): string {
   return buildGdeltPath(query, maxRecords, timespan)
@@ -34,4 +34,16 @@ node tFinalizeFetchError(): string {
 
 node callGdelt(query: string): any {
   return gdeltNews(query)
+}
+
+// Propagate beats the verb's call-site approve, so the fetch interrupt
+// surfaces to the harness instead of running — keeping the test offline.
+node callGdeltPropagateFetch(query: string): any {
+  handle {
+    return gdeltNews(query)
+  } with (intr) {
+    if (intr.effect == "std::http::fetchJSON") {
+      return propagate()
+    }
+  }
 }

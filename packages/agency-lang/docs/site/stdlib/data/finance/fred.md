@@ -12,7 +12,7 @@ description: "FRED — U.S. macroeconomic time-series"
   unemployment, GDP, and ~800k other series, each addressed by its `series_id`
   (e.g. `UNRATE`, `CPIAUCSL`, `FEDFUNDS`). This is the curated gold standard for *U.S.*
   macro; for non-U.S. or cross-country data use `std::data/finance/dbnomics`; for news use
-  `std::data/finance/gdelt`.
+  `std::data/news/gdelt`.
 
   Returns a series as a list of `{ date, value }` observations (a missing value is `null`),
   oldest-first, plus a `fredSeriesInfo` call for a series' title/display-units/frequency/coverage.
@@ -112,7 +112,7 @@ export type FredUnits =
   | "log"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L76))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L77))
 
 ### FredFrequency
 
@@ -139,7 +139,7 @@ export type FredFrequency =
   | "wesun"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L80))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L81))
 
 ## Effects
 
@@ -196,7 +196,7 @@ Fetch a U.S. macroeconomic time-series from FRED by its series id (e.g. "UNRATE"
 
 **Throws:** `std::fred`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L174))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L175))
 
 ### fredSeriesInfo
 
@@ -221,4 +221,4 @@ Fetch metadata about a FRED series by its id: its human title, display units, fr
 
 **Throws:** `std::fred`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L201))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L202))

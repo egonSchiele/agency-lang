@@ -1,4 +1,4 @@
-import { tBuild, tParse, tParseSparse, tParseNull, tFinalizeEmptyList, tFinalizeMissingArticles, tFinalizeFetchError, callGdelt, hasInterrupts, approve, reject, respondToInterrupts } from "./agent.js";
+import { tBuild, tParse, tParseSparse, tParseNull, tFinalizeEmptyList, tFinalizeMissingArticles, tFinalizeFetchError, callGdelt, callGdeltPropagateFetch, hasInterrupts, approve, reject, respondToInterrupts } from "./agent.js";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const unwrap = (r) => r?.data ?? r;
@@ -16,10 +16,11 @@ if (iv.data.query !== "S&P 500 rate cut") throw new Error("wrong payload query: 
 const rejected = await respondToInterrupts(i1.data, [reject()]);
 if (hasInterrupts(rejected.data)) throw new Error("rejecting std::gdelt should short-circuit before any fetch");
 
-// (B) Not preapproved: approving std::gdelt resumes into the fetch, which raises its own
-// std::http::fetchJSON interrupt (proving both effects are raised and resumption works).
-// We stop at this second interrupt — never approving it — so no network call is made.
-const i2 = await respondToInterrupts((await callGdelt("q")).data, [approve()]);
+// (B) The verb approves the fetch at its call site, but that approve is only a vote: a
+// handler that propagate()s std::http::fetchJSON beats it, surfacing the fetch interrupt
+// here (proving the effect still escapes and resumption works). We never approve it, so
+// no network call is made.
+const i2 = await respondToInterrupts((await callGdeltPropagateFetch("q")).data, [approve()]);
 if (!hasInterrupts(i2.data)) throw new Error("expected std::http::fetchJSON after approving std::gdelt");
 if (i2.data[0].effect !== "std::http::fetchJSON") throw new Error("wrong second effect: " + i2.data[0].effect);
 

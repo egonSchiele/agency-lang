@@ -1,4 +1,4 @@
-import { fetchJSON } from "std::http"
+import { connectorFetch } from "std::data/connector"
 import { env } from "std::system"
 
 /** @module
@@ -9,7 +9,7 @@ import { env } from "std::system"
   [EDGAR APIs](https://www.sec.gov/search-filings/edgar-application-programming-interfaces).
   Use this connector for *authoritative, mandated* facts about one company — its 10-K
   (annual), 10-Q (quarterly), 8-K (material event), and Form 4 (insider trade) filings — the
-  slow-moving ground truth. For news or rumor about a company use `std::data/finance/gdelt`;
+  slow-moving ground truth. For news or rumor about a company use `std::data/news/gdelt`;
   for economic numbers use fred/dbnomics.
 
   Returns a list of filings with form type, filing/report dates, and a direct URL to the
@@ -49,8 +49,9 @@ const CIK_WIDTH = 10
 // module init, so setting SEC_USER_AGENT after the process starts has no effect.
 const secUserAgent = env("SEC_USER_AGENT") ?? "agency-lang admin@agency-lang.com"
 
-// Per-host fetch config. Not preapproved: callers see both std::edgar and the
-// std::http::fetchJSON interrupt(s). The ticker map lives on www.sec.gov; submissions on
+// Per-host fetch config. The std::edgar interrupt gates the call; each fetch is approved
+// at its call site (an outer handler can still reject the std::http::fetchJSON
+// interrupt(s)). The ticker map lives on www.sec.gov; submissions on
 // data.sec.gov.
 const SEC_HEADERS = { "User-Agent": secUserAgent }
 const SEC_TICKER_BASE = "https://www.sec.gov/"
@@ -143,7 +144,7 @@ export def edgarFilingsByCik(cik: string, formType: string = "", limit: number =
   return interrupt std::edgar("Fetch SEC filings for this company?", { company: cik })
   const path = buildSubmissionsPath(cik10)
   // Bind the fetch to its own statement so std::http::fetchJSON fires at statement level.
-  const result = fetchJSON(baseUrl: SEC_DATA_BASE, path: path, headers: SEC_HEADERS, allowedDomains: SEC_DATA_DOMAINS)
+  const result = connectorFetch(SEC_DATA_BASE, SEC_DATA_DOMAINS, path, headers: SEC_HEADERS) with approve
   return edgarSubmissionsFinalize(cik10, formType, limit, result)
 }
 
@@ -162,12 +163,12 @@ export def edgarFilings(ticker: string, formType: string = "", limit: number = 2
   return interrupt std::edgar("Fetch SEC filings for this company?", { company: ticker })
   // We bind each fetch to its own statement (never a match scrutinee or call argument) so
   // the std::http::fetchJSON interrupts fire at statement level and resume reliably.
-  const tickersResult = fetchJSON(baseUrl: SEC_TICKER_BASE, path: "files/company_tickers.json", headers: SEC_HEADERS, allowedDomains: SEC_TICKER_DOMAINS)
+  const tickersResult = connectorFetch(SEC_TICKER_BASE, SEC_TICKER_DOMAINS, "files/company_tickers.json", headers: SEC_HEADERS) with approve
   const tickerMap = tickersResult catch {}
   const cik10 = parseTickerMap(tickerMap, ticker)
   if (cik10 == "") {
     return failure("EDGAR: no company found for ticker '${ticker}' (or the ticker lookup failed)")
   }
-  const subResult = fetchJSON(baseUrl: SEC_DATA_BASE, path: buildSubmissionsPath(cik10), headers: SEC_HEADERS, allowedDomains: SEC_DATA_DOMAINS)
+  const subResult = connectorFetch(SEC_DATA_BASE, SEC_DATA_DOMAINS, buildSubmissionsPath(cik10), headers: SEC_HEADERS) with approve
   return edgarSubmissionsFinalize(cik10, formType, limit, subResult)
 }

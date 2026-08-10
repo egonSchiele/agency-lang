@@ -1,4 +1,4 @@
-import { fetchJSON } from "std::http"
+import { connectorFetch, connectorError, clampLimit } from "std::data/connector"
 
 /** @module
   ## Hacker News — front page, items, users, and search
@@ -96,17 +96,6 @@ def parseSort(sort: string): Result<string> {
   return success(HN_SORT_ENDPOINTS[idx])
 }
 
-/** Clamp n into [0, cap]. Pure. */
-def capLimit(n: number, cap: number): number {
-  if (n > cap) {
-    return cap
-  }
-  if (n < 0) {
-    return 0
-  }
-  return n
-}
-
 /** The first n ids (n clamped to ≥ 0; slice naturally clamps the high end). Pure/total. */
 def takeFirst(ids: number[], n: number): number[] {
   if (n <= 0) {
@@ -134,7 +123,7 @@ def buildUserPath(username: string): string {
 def buildSearchPath(endpoint: string, query: string, tags: string, limit: number): string {
   const q = encodeURIComponent(query)
   const t = encodeURIComponent(tags)
-  const n = capLimit(limit, 50)
+  const n = clampLimit(limit, 50)
   return "/${endpoint}?query=${q}&tags=${t}&hitsPerPage=${n}"
 }
 
@@ -203,11 +192,6 @@ def parseAlgoliaHits(raw: any): Story[] {
   }
 }
 
-/** Shared failure message for a failed HN fetch. Pure. */
-def hnError(err: any): string {
-  return "Hacker News request failed (the API may be rate-limited): ${err.message ?? err}"
-}
-
 /** Turn a fetch Result into an Item Result; a null body (unknown id) → failure. Pure. */
 def itemFinalize(fetchResult: any): Result<Item> {
   return match (fetchResult) {
@@ -218,7 +202,7 @@ def itemFinalize(fetchResult: any): Result<Item> {
       }
       return success(parseItem(b))
     }
-    failure(err) => failure(hnError(err))
+    failure(err) => failure(connectorError("Hacker News", err))
   }
 }
 
@@ -232,7 +216,7 @@ def userFinalize(fetchResult: any): Result<User> {
       }
       return success(parseUser(b))
     }
-    failure(err) => failure(hnError(err))
+    failure(err) => failure(connectorError("Hacker News", err))
   }
 }
 
@@ -240,21 +224,7 @@ def userFinalize(fetchResult: any): Result<User> {
 def searchFinalize(fetchResult: any): Result<Story[]> {
   return match (fetchResult) {
     success(body) => success(parseAlgoliaHits(body))
-    failure(err) => failure(hnError(err))
-  }
-}
-
-/** Fetch an HN path (Firebase or Algolia) and return the parsed-JSON Result. Raises
-    std::http::fetchJSON but approves it internally, so a plain caller sees only the connector's own
-    std::hackernews prompt while any OUTER fetch handler still receives (and can reject or propagate)
-    the fetch. allowedDomains is enforced inside fetchJSON regardless. Private. */
-def hnFetch(base: string, domains: string[], path: string): Result raises <std::http::fetchJSON> {
-  handle {
-    return fetchJSON(baseUrl: base, path: path, allowedDomains: domains)
-  } with (data) {
-    if (data.effect == "std::http::fetchJSON") {
-      return approve()
-    }
+    failure(err) => failure(connectorError("Hacker News", err))
   }
 }
 
@@ -263,7 +233,7 @@ def hnFetch(base: string, domains: string[], path: string): Result raises <std::
 def hydrateStories(ids: number[], limit: number): Story[] raises <std::http::fetchJSON> {
   let stories: Story[] = []
   for (id in takeFirst(ids, limit)) {
-    const itemResult = hnFetch(HN_BASE, HN_DOMAINS, buildItemPath(id))
+    const itemResult = connectorFetch(HN_BASE, HN_DOMAINS, buildItemPath(id)) with approve
     if (itemResult is success(body)) {
       stories.push(parseStory(body))
     }
@@ -276,7 +246,7 @@ def hydrateStories(ids: number[], limit: number): Story[] raises <std::http::fet
 def storiesFromFetch(idsResult: any, limit: number): Result<Story[]> raises <std::http::fetchJSON> {
   return match (idsResult) {
     success(body) => success(hydrateStories(body ?? [], limit))
-    failure(err) => failure(hnError(err))
+    failure(err) => failure(connectorError("Hacker News", err))
   }
 }
 
@@ -295,8 +265,8 @@ export def hnStories(list: string = "top", limit: number = 30): Result<Story[]> 
   }
   const file = listResult.value
   return interrupt std::hackernews("Fetch this Hacker News story list?", { op: "stories", query: list })
-  const idsResult = hnFetch(HN_BASE, HN_DOMAINS, buildStoryListPath(file))
-  return storiesFromFetch(idsResult, capLimit(limit, 100))
+  const idsResult = connectorFetch(HN_BASE, HN_DOMAINS, buildStoryListPath(file)) with approve
+  return storiesFromFetch(idsResult, clampLimit(limit, 100))
 }
 
 export def hnItem(id: number): Result<Item> raises <std::hackernews, std::http::fetchJSON> {
@@ -307,7 +277,7 @@ export def hnItem(id: number): Result<Item> raises <std::hackernews, std::http::
   @param id - The Hacker News item id
   """
   return interrupt std::hackernews("Fetch this Hacker News item?", { op: "item", query: "${id}" })
-  const result = hnFetch(HN_BASE, HN_DOMAINS, buildItemPath(id))
+  const result = connectorFetch(HN_BASE, HN_DOMAINS, buildItemPath(id)) with approve
   return itemFinalize(result)
 }
 
@@ -319,7 +289,7 @@ export def hnUser(username: string): Result<User> raises <std::hackernews, std::
   @param username - The Hacker News username (case-sensitive)
   """
   return interrupt std::hackernews("Fetch this Hacker News user?", { op: "user", query: username })
-  const result = hnFetch(HN_BASE, HN_DOMAINS, buildUserPath(username))
+  const result = connectorFetch(HN_BASE, HN_DOMAINS, buildUserPath(username)) with approve
   return userFinalize(result)
 }
 
@@ -339,6 +309,6 @@ export def hnSearch(query: string, sort: string = "relevance", tags: string = "s
   }
   const endpoint = sortResult.value
   return interrupt std::hackernews("Search Hacker News for this query?", { op: "search", query: query })
-  const result = hnFetch(HN_ALGOLIA_BASE, HN_ALGOLIA_DOMAINS, buildSearchPath(endpoint, query, tags, limit))
+  const result = connectorFetch(HN_ALGOLIA_BASE, HN_ALGOLIA_DOMAINS, buildSearchPath(endpoint, query, tags, limit)) with approve
   return searchFinalize(result)
 }

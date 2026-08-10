@@ -11,7 +11,7 @@ description: "SEC EDGAR — U.S. company filings"
   [EDGAR APIs](https://www.sec.gov/search-filings/edgar-application-programming-interfaces).
   Use this connector for *authoritative, mandated* facts about one company — its 10-K
   (annual), 10-Q (quarterly), 8-K (material event), and Form 4 (insider trade) filings — the
-  slow-moving ground truth. For news or rumor about a company use `std::data/finance/gdelt`;
+  slow-moving ground truth. For news or rumor about a company use `std::data/news/gdelt`;
   for economic numbers use fred/dbnomics.
 
   Returns a list of filings with form type, filing/report dates, and a direct URL to the
@@ -96,7 +96,7 @@ List recent SEC filings for a company by its CIK (Central Index Key). Returns fi
 
 **Throws:** `std::edgar`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L133))
 
 ### edgarFilings
 
@@ -130,4 +130,4 @@ List recent SEC filings for a U.S.-listed company by its ticker symbol (e.g. "AA
 
 **Throws:** `std::edgar`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L150))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L151))

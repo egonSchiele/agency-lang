@@ -1,4 +1,4 @@
-import { fetchJSON } from "std::http"
+import { connectorFetch } from "std::data/connector"
 
 /** @module
   ## DBnomics — world macroeconomic time-series
@@ -8,7 +8,7 @@ import { fetchJSON } from "std::http"
   through one keyless API. Use this connector for *non-U.S.* or cross-country data, or a
   provider FRED does not carry. Each series is addressed by a `provider / dataset / series`
   code triple (browse db.nomics.world to find codes). For U.S. macro prefer
-  `std::data/finance/fred`; for news use `std::data/finance/gdelt`.
+  `std::data/finance/fred`; for news use `std::data/news/gdelt`.
 
   Returns a series as a list of `{ period, value }` observations (period like "2025-01"; a
   missing value is null). No API key required.
@@ -43,7 +43,8 @@ export type DbnomicsSeries = {
   observations: DbnomicsObservation[]
 }
 
-// Not preapproved: callers see both std::dbnomics and the std::http::fetchJSON interrupt.
+// The std::dbnomics interrupt gates the call; the fetch is approved at the call site
+// (an outer handler can still reject std::http::fetchJSON).
 const DBNOMICS_BASE = "https://api.db.nomics.world/v22/"
 const DBNOMICS_DOMAINS = ["api.db.nomics.world"]
 
@@ -110,6 +111,6 @@ export def dbnomicsSeries(provider: string, dataset: string, series: string): Re
   })
   const path = buildDbnomicsPath(provider, dataset, series)
   // Bind the fetch to its own statement so std::http::fetchJSON fires at statement level.
-  const result = fetchJSON(baseUrl: DBNOMICS_BASE, path: path, allowedDomains: DBNOMICS_DOMAINS)
+  const result = connectorFetch(DBNOMICS_BASE, DBNOMICS_DOMAINS, path) with approve
   return dbnomicsFinalize(result)
 }

@@ -1,4 +1,5 @@
-import test { parseStoryList, parseSort, capLimit, takeFirst, buildStoryListPath, buildItemPath, buildUserPath, buildSearchPath, parseStory, parseItem, parseUser, parseAlgoliaHits, itemFinalize, userFinalize, searchFinalize, hnError, hnStories, hnItem, hnSearch } from "std::data/tech/hackernews"
+import test { parseStoryList, parseSort, takeFirst, buildStoryListPath, buildItemPath, buildUserPath, buildSearchPath, parseStory, parseItem, parseUser, parseAlgoliaHits, itemFinalize, userFinalize, searchFinalize, hnStories, hnItem, hnSearch } from "std::data/tech/hackernews"
+import { clampLimit, connectorError } from "std::data/connector"
 import { Network } from "std::capabilities"
 
 // --- pure-function wrappers ---
@@ -20,7 +21,7 @@ node tParseSort(sort: string): any {
 }
 
 node tCapLimit(n: number, cap: number): number {
-  return capLimit(n, cap)
+  return clampLimit(n, cap)
 }
 
 node tTakeFirst(ids: number[], n: number): any {
@@ -80,7 +81,7 @@ node tSearchFinalizeErr(): string {
 }
 
 node tError(): string {
-  return hnError("boom")
+  return connectorError("Hacker News", "boom")
 }
 
 // --- gating / capability ---

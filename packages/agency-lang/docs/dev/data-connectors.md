@@ -112,8 +112,34 @@ order:
    }
    ```
 
+## Make the Agency surface ergonomic — adapt, don't mirror
+
+The Agency surface should read well to a human and an LLM, even where that
+means it no longer matches the raw API 1:1. Convert at the connector
+boundary; keep the wire format internal.
+
+- **Numbers that encode meaning become strings.** LittleSis relationship
+  categories are `category_id` integers 1..12 on the wire; the connector
+  exposes friendly strings (`"ownership"`, `"donation"`) and maps them
+  internally.
+- **Magic "absent" values (`""`, `-1`, `0`) become `null`, a clean default,
+  or a tagged union.** littlesis's `CategoryFilter`
+  (`{ type: "all" } | { type: "category", id: number }`) is the reference:
+  invalid input is a `failure`, "no filter" and "specific" are explicit
+  states, and `match`/`is` force every state to be handled.
+- **Flat, named records, not raw envelopes.** Reshape
+  `{ data: [{ attributes: {...} }] }` into a flat record with named fields.
+- **Encode API quirks in the docstring, not the signature.**
+
+The goal: a user should never need the upstream API docs to use the
+connector correctly.
+
 ## Conventions
 
+- **Module constants are `static const`.** Base URL, allowed domains, and
+  lookup tables are read-only and shared across runs. A plain `const` is a
+  global (reinitialized every run, not exportable); `static const`
+  initializes once and is deeply immutable — exactly what config wants.
 - **Read verbs are `idempotent`.** A connector read is always safe to re-run,
   and the marker tells the model so. (Older docs mention a `safe` keyword;
   it was removed and `idempotent` replaced it.)
@@ -129,8 +155,16 @@ order:
 - **Limits are clamped, not rejected.** Also pass the clamped value in the
   effect payload, so a handler judges the real request.
 - **Register the effect** in the `Network` effect set in
-  `stdlib/capabilities.agency`. If the connector belongs to a family with
-  its own set (like `DataFinance`), add it there too.
+  `stdlib/capabilities.agency` — only the semantic effect;
+  `std::http::fetchJSON` is already there. If the connector belongs to a
+  family with its own set (like `DataFinance`), add it there too. A cheap
+  regression guard: a test node that `raises <Network>` and calls the
+  connector fails to compile if the effect is missing from the set.
+- **Consider exporting a ready-made policy.** If the connector has natural
+  allow/deny defaults, an exported `static const POLICY: Policy`
+  (`std::policy`) saves users a hand-written handler, and can gate
+  per-operation (via the payload's `op`), per-domain, or per-method
+  (the fetch payload carries `{ baseUrl, path, method }`).
 - **Docstrings are tool descriptions.** Active voice, every parameter as
   `@param name - description` (bound parameters strip from the description
   when a user calls `.partial()`), no parameter talk outside the `@param`
@@ -140,11 +174,30 @@ order:
   source doc comments; never hand-edit those pages. Link the new page in
   `docs/site/.vitepress/config.mts` (the data section is alphabetical).
 
+## Runtime gotchas (compile-clean ≠ runtime-correct)
+
+Two things compile without error but break at runtime; only tests catch
+them.
+
+1. **Bind the interrupt-raising call to its own statement.** An
+   interrupt-raising call nested in an argument or `match` scrutinee does
+   not resume/gate at statement level. Write
+   `const r = connectorFetch(...) with approve` then `return finalize(r)`
+   — never `return finalize(connectorFetch(...) with approve)`.
+2. **Do `Result`-consuming work before `return interrupt`.** A `match` or
+   `.value` over a typed `Result` placed after a `return interrupt`
+   statement fails to narrow. Validate and unwrap before the interrupt
+   (also better UX: bad input fails fast without prompting), and put
+   post-fetch matching in a separate helper taking `any` (the `*Finalize`
+   shape).
+
 ## Testing a connector
 
-Connector tests are agency execution tests in `tests/agency/`. No LLM calls,
-no network. `tests/agency/bluesky.agency` + `bluesky.test.json` is the
-template. Four kinds of tests, all using nodes that call the verbs:
+Two test styles exist; both run offline with no LLM.
+
+**Agency execution tests** (`tests/agency/`): the bluesky template
+(`tests/agency/bluesky.agency` + `bluesky.test.json`). Four kinds of tests,
+all using nodes that call the verbs:
 
 1. **Payload test.** A handler rejects the connector effect with a string
    composed from `intr.data`, and the node asserts the failure contains the
@@ -173,6 +226,22 @@ template. Four kinds of tests, all using nodes that call the verbs:
    interrupt is visible outside the verb's call-site `with approve` and the
    reject wins.
 
+**Agency-js tests** (`tests/agency-js/data-*/`): the older connectors'
+style — an `agent.agency` of node wrappers, a `test.js` of assertions, a
+`fixture.json`, and captured `sample-*.json` API responses (prefer a real
+captured body over a hand-authored one; a wrong field path otherwise ships
+green). `import test { ... }` imports private defs for direct testing.
+Two patterns to know:
+
+- **Surfacing the fetch offline.** To prove the fetch effect escapes with
+  the right URL without any network, a wrapper node `propagate()`s
+  `std::http::fetchJSON` — propagate beats the verb's call-site approve, so
+  the interrupt surfaces to the harness, which never approves it. See
+  `callGdeltPropagateFetch` in `tests/agency-js/data-news-gdelt/`.
+- **The live tier.** Each connector has a `*-live/` sibling gated on
+  `AGENCY_LIVE_TESTS` (skipped by default, so CI never hits the network).
+  Run it manually once to confirm the connector matches the real API.
+
 ## Updating an existing connector
 
 - Adding a verb: follow the skeleton in item 9, reuse the module's existing
@@ -182,10 +251,26 @@ template. Four kinds of tests, all using nodes that call the verbs:
   `intr.data` fields, so only ADD fields, never rename or remove them.
 - Any stdlib `.agency` change requires `make`.
 
-## Porting an old connector to the core
+## Checklist
 
-hackernews, yc, and wikidata predate the core and carry their own copies of
-the fetch wrapper and error formatter. To port one: replace `<x>Fetch` with
-`connectorFetch`, `<x>Error` with `connectorError("<Source>", err)`, and
-`capLimit` with `clampLimit`; behavior is identical, so no test changes are
-expected beyond adding the tests the connector never had.
+- [ ] `static const` for base URL, allowed domains, lookup tables
+- [ ] `effect std::<name>` with `op` + `query` + whatever handlers judge; no secrets in the payload
+- [ ] Ergonomic types at the boundary (strings/tagged unions, not raw API sentinels)
+- [ ] Wire types; finalizers validate with `!` and fail via `shapeError`
+- [ ] Pure builders (`encodeURIComponent` everything) / reshapes / typed finalizers; source-specific hint in the error message if there is one
+- [ ] Verbs: validate → interrupt → `connectorFetch(...) with approve` on its own statement → finalize; `idempotent`; times in epoch ms
+- [ ] Effect registered in `Network` (+ family set if any)
+- [ ] Tests: payload, mocked reshapes, shape-drift; consider a `*-live/` tier
+- [ ] `make`; nav entry in `docs/site/.vitepress/config.mts`
+
+## History
+
+Every connector in `stdlib/data/` goes through `connectorFetch`. The
+connectors that predate the core (hackernews, yc, wikidata, littlesis,
+usaspending) were ported off their private copies of the fetch wrapper, and
+the finance connectors (gdelt, fred, dbnomics, edgar), which used to raise a
+second `std::http::fetchJSON` prompt on every call, now approve the fetch at
+the call site like everyone else — the connector's own effect is the single
+user-facing gate. Connectors with a source-specific failure hint (yc,
+wikidata, littlesis, usaspending) keep their own error formatter instead of
+`connectorError`; that hint is information, not plumbing.

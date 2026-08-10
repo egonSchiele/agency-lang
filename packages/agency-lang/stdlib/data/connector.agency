@@ -34,6 +34,13 @@ export def connectorError(source: string, err: any): string {
   return "${source} request failed (the API may be rate-limited): ${err.message ?? err}"
 }
 
+/** Failure message for a response body that failed wire-shape validation.
+    The embedded Zod issues name each mismatched path and what was expected
+    there, so API drift is diagnosable from the message alone. Pure. */
+export def shapeError(source: string, endpoint: string, err: any): string {
+  return "${source} ${endpoint} response did not match the expected shape (the API may have changed): ${err.message ?? err}"
+}
+
 /** Clamp n into [0, cap]. Pure. */
 export def clampLimit(n: number, cap: number): number {
   if (n > cap) {

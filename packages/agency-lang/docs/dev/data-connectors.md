@@ -25,7 +25,12 @@ Import it; never call `fetchJSON` directly from a connector.
   rejects, the reject wins and no request is sent.
   `tests/agency/connector-core.agency` pins this, including the fact that it
   works with the `handle` block in an imported module.
-- `connectorError(source, err)` builds the standard failure message.
+- `connectorError(source, err)` builds the standard failure message for a
+  failed fetch.
+- `shapeError(source, endpoint, err)` builds the failure message for a
+  response that failed wire-shape validation. The validation error it embeds
+  is Zod's issue list, which names each mismatched path and what was expected
+  there, so the message alone is enough to diagnose API drift.
 - `clampLimit(n, cap)` clamps a limit into `[0, cap]`. Connectors clamp
   out-of-range limits instead of rejecting them.
 - `dateStrToEpochMs(iso)` converts an ISO 8601 string to epoch milliseconds,
@@ -65,17 +70,28 @@ order:
 4. **Exported types** for what the verbs return. Keep them flat and
    email-friendly: the Bluesky `Post` flattens the author to two string
    fields and carries a ready-made `url`.
-5. **Pure reshape functions** turning raw API JSON into those types. Reshapes
-   must be total: read every field with `?? default`, so a malformed response
-   produces a well-typed record instead of a crash. Timestamps go through
-   `dateStrToEpochMs`.
-6. **Pure path builders**, one per endpoint, with `encodeURIComponent` on
+5. **Wire types**: private types declaring the fields the connector reads
+   from each API response (`WirePost`, `WireSearchBody`, ...). Load-bearing
+   fields are required; fields whose absence is a normal API state (counts,
+   display names) are optional (`likeCount?: number`). Each finalizer
+   validates the response body against its wire type with the bang syntax
+   (`const validated: WireSearchBody! = body`), so drift on a load-bearing
+   field fails loudly with the mismatched paths in the error, instead of
+   silently reshaping to defaults. Validation strips unmodeled fields and
+   surfaces a missing optional as `null`, so `?? default` still applies
+   downstream. This is the only place `any` should appear: the raw body at
+   the validation boundary.
+6. **Pure reshape functions** turning *validated* wire values into the
+   exported types. Optional wire fields default here (`?? 0`, `?? ""`);
+   timestamps go through `dateStrToEpochMs`.
+7. **Pure path builders**, one per endpoint, with `encodeURIComponent` on
    every interpolated value.
-7. **Pure finalizers** turning the fetch `Result` into the verb's typed
-   `Result` (match on success/failure, reshape on success, `connectorError`
-   on failure). These take `any` and live as separate functions so match
-   narrowing works after `return interrupt`.
-8. **Exported verbs**, each with the same skeleton:
+8. **Pure finalizers** turning the fetch `Result` into the verb's typed
+   `Result`: match on the fetch, validate the body, reshape on success,
+   `connectorError` on a failed fetch, `shapeError` on a failed validation.
+   These take `any` and live as separate functions so match narrowing works
+   after `return interrupt`.
+9. **Exported verbs**, each with the same skeleton:
 
    ```
    export idempotent def bskySearch(query: string, sort: BskySort = "latest", since: number = 0, limit: number = 25): Result<Post[]> raises <std::bluesky, std::http::fetchJSON> {
@@ -124,7 +140,7 @@ order:
 
 Connector tests are agency execution tests in `tests/agency/`. No LLM calls,
 no network. `tests/agency/bluesky.agency` + `bluesky.test.json` is the
-template. Three kinds of tests, all using nodes that call the verbs:
+template. Four kinds of tests, all using nodes that call the verbs:
 
 1. **Payload test.** A handler rejects the connector effect with a string
    composed from `intr.data`, and the node asserts the failure contains the
@@ -140,14 +156,21 @@ template. Three kinds of tests, all using nodes that call the verbs:
    verb requested. Two ordered mocks make a parameter-presence test: a
    specific `urlPattern` mock first, a catch-all second, and the returned
    text tells you which one answered (see `searchSendsSinceParam`).
-3. **The handler contract** is pinned once, in
+   Mock bodies must satisfy the wire types: include every required field
+   even in minimal fixtures.
+3. **Shape-drift test.** A mock returns a body missing a load-bearing field;
+   the node asserts the failure names the connector, the endpoint, and the
+   mismatched path with what was expected (see
+   `searchShapeDriftFailsLoudly`). This pins the loud-failure contract that
+   makes every production run a drift canary.
+4. **The handler contract** is pinned once, in
    `tests/agency/connector-core.agency`, not per connector: an outer handler
    approves the connector effect but rejects the fetch, proving the fetch
    interrupt is visible outside the module and the reject wins.
 
 ## Updating an existing connector
 
-- Adding a verb: follow the skeleton in item 8, reuse the module's existing
+- Adding a verb: follow the skeleton in item 9, reuse the module's existing
   effect, and extend the payload only with fields a handler needs. Add a
   payload test and a mocked reshape test for the new verb.
 - Changing the payload: existing handlers match on `intr.effect` and read

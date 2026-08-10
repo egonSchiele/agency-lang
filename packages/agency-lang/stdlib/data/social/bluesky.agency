@@ -1,4 +1,4 @@
-import { connectorFetch, connectorError, clampLimit, dateStrToEpochMs } from "std::data/connector"
+import { connectorFetch, connectorError, shapeError, clampLimit, dateStrToEpochMs } from "std::data/connector"
 import { format } from "std::date"
 
 /** @module
@@ -96,45 +96,84 @@ def buildPostUrl(uri: string, did: string, handle: string): string {
   return "https://bsky.app/profile/${who}/post/${parts[4]}"
 }
 
-/** Reshape an API postView into a Post. The post text and creation time live
-    inside the API's untyped `record` field. Pure/total. */
-def parsePost(raw: any): Post {
-  const r: any = raw ?? {}
-  const author: any = r.author ?? {}
-  const record: any = r.record ?? {}
-  const handle = author.handle ?? ""
+// Wire types: the fields the connector reads from API responses. Each
+// finalizer validates the body against one of these before reshaping, so API
+// drift on a load-bearing field fails loudly (with the mismatched paths in
+// the error) instead of silently reshaping to defaults. Optional fields are
+// the ones whose absence is a normal API state; unmodeled fields are
+// stripped by validation.
+
+type WireAuthor = {
+  did: string;
+  handle: string;
+  displayName?: string
+}
+
+type WireRecord = {
+  text: string;
+  createdAt?: string
+}
+
+type WirePost = {
+  uri: string;
+  author: WireAuthor;
+  record: WireRecord;
+  replyCount?: number;
+  repostCount?: number;
+  likeCount?: number;
+  quoteCount?: number
+}
+
+type WireSearchBody = { posts: WirePost[] }
+
+type WireFeedItem = { post: WirePost }
+
+type WireFeedBody = { feed: WireFeedItem[] }
+
+type WireProfile = {
+  did: string;
+  handle: string;
+  displayName?: string;
+  description?: string;
+  followersCount?: number;
+  followsCount?: number;
+  postsCount?: number
+}
+
+/** Reshape a validated wire post into a Post. Optional wire fields default
+    here. Pure/total. */
+def parsePost(p: WirePost): Post {
   return {
-    uri: r.uri ?? "",
-    url: buildPostUrl(r.uri ?? "", author.did ?? "", handle),
-    author: handle,
-    authorName: author.displayName ?? "",
-    text: record.text ?? "",
-    createdAt: dateStrToEpochMs(record.createdAt ?? ""),
-    replyCount: r.replyCount ?? 0,
-    repostCount: r.repostCount ?? 0,
-    likeCount: r.likeCount ?? 0,
-    quoteCount: r.quoteCount ?? 0
+    uri: p.uri,
+    url: buildPostUrl(p.uri, p.author.did, p.author.handle),
+    author: p.author.handle,
+    authorName: p.author.displayName ?? "",
+    text: p.record.text,
+    createdAt: dateStrToEpochMs(p.record.createdAt ?? ""),
+    replyCount: p.replyCount ?? 0,
+    repostCount: p.repostCount ?? 0,
+    likeCount: p.likeCount ?? 0,
+    quoteCount: p.quoteCount ?? 0
   }
 }
 
-/** Reshape a list of API postViews into Post[]. Pure/total. */
-def parsePosts(raw: any[]): Post[] {
-  return map(raw) as p {
+/** Reshape validated wire posts into Post[]. Pure/total. */
+def parsePosts(posts: WirePost[]): Post[] {
+  return map(posts) as p {
     return parsePost(p)
   }
 }
 
-/** Reshape an API profileViewDetailed into a Profile. Pure/total. */
-def parseProfile(raw: any): Profile {
-  const r: any = raw ?? {}
+/** Reshape a validated wire profile into a Profile. Pure/total. */
+def parseProfile(p: WireProfile): Profile {
   return {
-    did: r.did ?? "",
-    handle: r.handle ?? "",
-    displayName: r.displayName ?? "",
-    description: r.description ?? "",
-    followersCount: r.followersCount ?? 0,
-    followsCount: r.followsCount ?? 0,
-    postsCount: r.postsCount ?? 0
+    did: p.did,
+    handle: p.handle,
+    displayName: p.displayName ?? "",
+    description: p.description ?? "",
+    followersCount: p.followersCount ?? 0,
+    followsCount: p.followsCount ?? 0,
+    postsCount: p.postsCount ?? 0
   }
 }
 
@@ -158,44 +197,52 @@ def buildProfilePath(handle: string): string {
   return "/app.bsky.actor.getProfile?actor=${encodeURIComponent(handle)}"
 }
 
-/** Turn a searchPosts fetch Result into a Post[] Result. Pure. */
+/** Turn a searchPosts fetch Result into a Post[] Result, validating the body
+    shape first. Pure. */
 def searchFinalize(fetchResult: any): Result<Post[]> {
   return match (fetchResult) {
     success(body) => {
-      const b: any = body ?? {}
-      return success(parsePosts(b.posts ?? []))
+      const validated: WireSearchBody! = body
+      return match (validated) {
+        success(b) => success(parsePosts(b.posts))
+        failure(err) => failure(shapeError("Bluesky", "searchPosts", err))
+      }
     }
     failure(err) => failure(connectorError("Bluesky", err))
   }
 }
 
-/** Turn a getAuthorFeed fetch Result into a Post[] Result. Each feed item
-    wraps its post as `.post`; reposts appear as their original posts. Pure. */
+/** Turn a getAuthorFeed fetch Result into a Post[] Result, validating the
+    body shape first. Each feed item wraps its post as `.post`; reposts appear
+    as their original posts. Pure. */
 def feedFinalize(fetchResult: any): Result<Post[]> {
   return match (fetchResult) {
     success(body) => {
-      const b: any = body ?? {}
-      const items: any[] = b.feed ?? []
-      const posts = map(items) as item {
-        const i: any = item ?? {}
-        return i.post ?? {}
+      const validated: WireFeedBody! = body
+      return match (validated) {
+        success(b) => {
+          const posts = map(b.feed) as item {
+            return item.post
+          }
+          return success(parsePosts(posts))
+        }
+        failure(err) => failure(shapeError("Bluesky", "getAuthorFeed", err))
       }
-      return success(parsePosts(posts))
     }
     failure(err) => failure(connectorError("Bluesky", err))
   }
 }
 
-/** Turn a getProfile fetch Result into a Profile Result; a null body →
-    failure. Pure. */
+/** Turn a getProfile fetch Result into a Profile Result, validating the body
+    shape first (a null or empty body fails validation). Pure. */
 def profileFinalize(fetchResult: any): Result<Profile> {
   return match (fetchResult) {
     success(body) => {
-      const b: any = body ?? null
-      if (b == null) {
-        return failure("Bluesky returned no profile")
+      const validated: WireProfile! = body
+      return match (validated) {
+        success(p) => success(parseProfile(p))
+        failure(err) => failure(shapeError("Bluesky", "getProfile", err))
       }
-      return success(parseProfile(b))
     }
     failure(err) => failure(connectorError("Bluesky", err))
   }

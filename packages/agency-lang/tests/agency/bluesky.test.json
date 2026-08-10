@@ -56,6 +56,7 @@
               {
                 "uri": "weird",
                 "author": {
+                  "did": "did:plc:ccc",
                   "handle": "x"
                 },
                 "record": {
@@ -80,11 +81,11 @@
       "fetchMocks": [
         {
           "urlPattern": "since=",
-          "return": { "posts": [{ "record": { "text": "with-since" } }] }
+          "return": { "posts": [{ "uri": "at://did:plc:x/app.bsky.feed.post/1", "author": { "did": "did:plc:x", "handle": "h.bsky.social" }, "record": { "text": "with-since" } }] }
         },
         {
           "url": "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts*",
-          "return": { "posts": [{ "record": { "text": "no-since" } }] }
+          "return": { "posts": [{ "uri": "at://did:plc:x/app.bsky.feed.post/2", "author": { "did": "did:plc:x", "handle": "h.bsky.social" }, "record": { "text": "no-since" } }] }
         }
       ]
     },
@@ -100,11 +101,27 @@
       "fetchMocks": [
         {
           "urlPattern": "since=",
-          "return": { "posts": [{ "record": { "text": "with-since" } }] }
+          "return": { "posts": [{ "uri": "at://did:plc:x/app.bsky.feed.post/1", "author": { "did": "did:plc:x", "handle": "h.bsky.social" }, "record": { "text": "with-since" } }] }
         },
         {
           "url": "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts*",
-          "return": { "posts": [{ "record": { "text": "no-since" } }] }
+          "return": { "posts": [{ "uri": "at://did:plc:x/app.bsky.feed.post/2", "author": { "did": "did:plc:x", "handle": "h.bsky.social" }, "record": { "text": "no-since" } }] }
+        }
+      ]
+    },
+    {
+      "nodeName": "searchShapeDriftFailsLoudly",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "fetchMocks": [
+        {
+          "url": "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts*",
+          "return": { "records": [] }
         }
       ]
     },

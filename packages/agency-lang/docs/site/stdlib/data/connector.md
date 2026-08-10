@@ -67,6 +67,28 @@ Shared failure message for a failed connector fetch. Pure.
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L33))
 
+### shapeError
+
+```ts
+shapeError(source: string, endpoint: string, err: any): string
+```
+
+Failure message for a response body that failed wire-shape validation.
+    The embedded Zod issues name each mismatched path and what was expected
+    there, so API drift is diagnosable from the message alone. Pure.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| source | `string` |  |
+| endpoint | `string` |  |
+| err | `any` |  |
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L40))
+
 ### clampLimit
 
 ```ts
@@ -84,7 +106,7 @@ Clamp n into [0, cap]. Pure.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L45))
 
 ### dateStrToEpochMs
 
@@ -105,4 +127,4 @@ Convert an ISO 8601 datetime string to epoch milliseconds. Returns 0 when
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L59))

@@ -48,6 +48,19 @@ node searchOmitsSinceByDefault(): any {
   } with approve
 }
 
+// A response missing a load-bearing field must fail loudly, naming the
+// connector, the endpoint, and the mismatched path with what was expected.
+node searchShapeDriftFailsLoudly(): boolean {
+  handle {
+    const result = bskySearch("agency")
+    if (isFailure(result)) {
+      const e = result.error
+      return e.includes("Bluesky searchPosts response did not match the expected shape") && e.includes("posts") && e.includes("expected")
+    }
+    return false
+  } with approve
+}
+
 // getAuthorFeed wraps each post as feed[].post; the connector unwraps them.
 node authorFeedUnwrapsPosts(): any {
   handle {

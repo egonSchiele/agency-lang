@@ -1,0 +1,62 @@
+import { parseXml, xmlFind, xmlFindAll, xmlText, xmlAttr, XmlNode } from "std::xml"
+
+// std::xml boundary tests: these prove the Agency-visible types and the
+// bridge (recursive union, Result, error text), not the grammar — the
+// grammar is covered by the TS tests in lib/stdlib/xml/.
+
+const SAMPLE = "<feed><entry a=\"\"><title>First &amp; Best</title><link href=\"https://x/1\"/></entry><entry><title>Second</title></entry></feed>"
+
+def countNodes(node: XmlNode): number {
+  return match (node) {
+    { kind: "text" } => {
+      return 1
+    }
+    { kind: "element" } => {
+      let total = 1
+      for (child in node.children) {
+        total = total + countNodes(child)
+      }
+      return total
+    }
+  }
+}
+
+node helpers(): Record<string, any> {
+  const doc = parseXml(SAMPLE) catch null
+  if (doc == null) {
+    return { error: "sample did not parse" }
+  }
+  const entries = xmlFindAll(doc.root, "entry")
+  const first = entries[0] ?? null
+  return {
+    firstTitle: xmlText(xmlFind(first, "title")),
+    href: xmlAttr(xmlFind(first, "link"), "href"),
+    emptyAttr: xmlAttr(first, "a"),
+    missingAttr: xmlAttr(first, "b"),
+    entryCount: entries.length,
+  }
+}
+
+node recursiveWalk(): number {
+  const doc = parseXml("<r>a<b>c</b><c/></r>") catch null
+  if (doc == null) {
+    return -1
+  }
+  return countNodes(doc.root)
+}
+
+node errorText(): string {
+  const result = parseXml("<oops")
+  if (isFailure(result)) {
+    return result.error
+  }
+  return "unexpected success"
+}
+
+node catchFallback(): string {
+  const doc = parseXml("<oops") catch null
+  if (doc == null) {
+    return "fell-back"
+  }
+  return "unexpected"
+}

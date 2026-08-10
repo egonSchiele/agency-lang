@@ -446,6 +446,7 @@ export default defineConfig({
               ],
             },
             { text: "wikipedia", link: "/stdlib/wikipedia" },
+            { text: "xml", link: "/stdlib/xml" },
           ],
         },
       ],

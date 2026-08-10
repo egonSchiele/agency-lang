@@ -1,0 +1,48 @@
+{
+  "tests": [
+    {
+      "nodeName": "helpers",
+      "description": "parseXml + all four helpers through std::xml, including present-but-empty vs missing attributes",
+      "input": "",
+      "expectedOutput": "{\"firstTitle\":\"First & Best\",\"href\":\"https://x/1\",\"emptyAttr\":\"\",\"missingAttr\":null,\"entryCount\":2}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "recursiveWalk",
+      "description": "the recursive XmlNode union compiles and executes: match on kind, walk children recursively",
+      "input": "",
+      "expectedOutput": "5",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "errorText",
+      "description": "the bridge preserves the positioned core message with no Error: prefix (exact match proves both)",
+      "input": "",
+      "expectedOutput": "\"Line 1, col 6: unclosed <oops> tag (expected `>` or `/>`)\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "catchFallback",
+      "description": "catch gives language-level fallback ergonomics on a parse failure",
+      "input": "",
+      "expectedOutput": "\"fell-back\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

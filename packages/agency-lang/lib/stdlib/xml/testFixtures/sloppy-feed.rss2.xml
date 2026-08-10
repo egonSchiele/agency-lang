@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Sloppy Local News &amp; Events</title>
+    <link>https://example.com/feed?page=1&limit=10</link>
+    <description>A deliberately sloppy feed: bare ampersands in URLs & text, the way real feeds ship them.</description>
+    <item>
+      <title>Roads & bridges levy passes</title>
+      <link>https://example.com/news/roads?id=42&ref=rss&utm_source=feed</link>
+      <pubDate>Mon, 10 Aug 2026 08:00:00 -0500</pubDate>
+      <description>Voters approved the roads & bridges levy 60/40.</description>
+    </item>
+    <item>
+      <title>Fish &amp; chips fundraiser</title>
+      <link>https://example.com/events?a=1&b=2&c=3</link>
+      <pubDate>Sun, 09 Aug 2026 12:30:00 -0500</pubDate>
+      <description>Tickets: adults $12 & kids $5.</description>
+    </item>
+  </channel>
+</rss>

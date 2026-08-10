@@ -1,0 +1,123 @@
+import { _parseXml, _xmlFind, _xmlFindAll, _xmlText, _xmlAttr } from "agency-lang/stdlib-lib/xml.js"
+
+/** @module
+  Parse XML into a tree of plain objects and pull values out of it. Built for
+  feed-like documents (RSS, Atom, sitemaps, API responses), not for XML
+  conformance validation.
+
+  `parseXml` returns a `Result<XmlDocument>`: a failure carries a message with
+  line and column, so a bad document tells you what went wrong and where. The
+  helpers (`xmlFind`, `xmlFindAll`, `xmlText`, `xmlAttr`) cover most needs
+  without walking the tree by hand:
+
+  ```ts
+  import { parseXml, xmlFindAll, xmlFind, xmlText, xmlAttr } from "std::xml"
+
+  node main() {
+    const doc = parseXml("<feed><entry><title>Hi</title><link href='https://a'/></entry></feed>") catch null
+    if (doc == null) {
+      return
+    }
+    for (entry in xmlFindAll(doc.root, "entry")) {
+      print(xmlText(xmlFind(entry, "title")))
+      print(xmlAttr(xmlFind(entry, "link"), "href"))
+    }
+  }
+  ```
+
+  Scope and limitations:
+  - Namespaces are not resolved. A name like `media:thumbnail` is matched as
+    that literal string, and `xmlns` attributes are ordinary attributes.
+  - DTDs are not supported: a DOCTYPE without an internal subset is skipped;
+    custom entity definitions are a parse failure.
+  - The five predefined entities (`&amp;` `&lt;` `&gt;` `&quot;` `&apos;`)
+    and numeric character references are decoded. A bare `&` that starts no
+    valid reference is kept as a literal ampersand, because real-world feeds
+    ship unescaped ampersands in URLs; every other malformed construct fails
+    loudly with a position.
+  - Fixed safety limits: input up to 10 MiB (UTF-8 bytes), element nesting up
+    to 256 deep, and up to 250,000 tree entries (elements + attributes + text
+    nodes). Documents beyond these fail to parse.
+  - Whitespace is preserved: whitespace-only text nodes are kept and text is
+    never trimmed. CRLF and lone CR newlines are normalized to LF.
+*/
+
+/** A run of character data. Adjacent text, decoded references, and CDATA
+  content are coalesced into one node. */
+export type XmlText = {
+  kind: "text";
+  text: string
+}
+
+/** An element: literal tag name (namespace prefixes included), attributes,
+  and children in document order. */
+export type XmlElement = {
+  kind: "element";
+  tag: string;
+  attrs: Record<string, string>;
+  children: XmlNode[]
+}
+
+/** A tree node: match on `kind` to tell elements from text. */
+export type XmlNode = XmlElement | XmlText
+
+/** A parsed document. The root is always an element. */
+export type XmlDocument = {
+  root: XmlElement
+}
+
+export idempotent def parseXml(xml: string): Result<XmlDocument> {
+  """
+  Parse an XML string into a document tree. Fails with a line/column message
+  on malformed input, so use catch or match to handle bad documents.
+
+  @param xml - The XML source text
+  """
+  return try _parseXml(xml)
+}
+
+export idempotent def xmlFind(node: XmlNode | null, tag: string): XmlElement | null {
+  """
+  Find the first descendant element with the given tag (depth-first, document
+  order), or null if there is none. Accepts null so lookups chain without
+  null checks.
+
+  @param node - The node to search under (the node itself is not a candidate)
+  @param tag - The literal tag name to find, including any namespace prefix
+  """
+  return _xmlFind(node, tag)
+}
+
+export idempotent def xmlFindAll(node: XmlNode | null, tag: string): XmlElement[] {
+  """
+  Find every descendant element with the given tag, in document order.
+  Returns an empty list when the node is null or nothing matches.
+
+  @param node - The node to search under (the node itself is not a candidate)
+  @param tag - The literal tag name to find, including any namespace prefix
+  """
+  return _xmlFindAll(node, tag)
+}
+
+export idempotent def xmlText(node: XmlNode | null): string {
+  """
+  The text content of a node and all of its descendants, concatenated in
+  document order. Returns an empty string for null, so it composes directly
+  with xmlFind. Text is never trimmed.
+
+  @param node - The node to read text from
+  """
+  return _xmlText(node)
+}
+
+export idempotent def xmlAttr(node: XmlElement | null, name: string): string | null {
+  """
+  Read an attribute value from an element. Returns null when the attribute
+  is missing or the element is null, and an empty string when the attribute
+  is present but empty.
+
+  @param node - The element to read from
+  @param name - The literal attribute name, including any namespace prefix
+  """
+  return _xmlAttr(node, name)
+}

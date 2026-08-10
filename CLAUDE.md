@@ -132,6 +132,7 @@ Pipeline and architecture:
 - `docs/dev/pkg-imports.md` — Importing Agency code from npm packages using `pkg::` prefix
 - `docs/dev/trace.md` — Execution traces capturing checkpoints at every step
 - `docs/dev/binop-parser.md` — Binary expression parser using precedence climbing
+- `docs/dev/xml-parser.md` — The `std::xml` feed-oriented XML parser: the documented subset and its one recovery rule (bare ampersands), the runNested/committed-failure contract, the measured depth/entry limits, the lineColOf hot-path trap, fixture hygiene (no feed tokens), and the code-unit predicate gotcha
 - `docs/dev/locations.md` — How `loc.line` / `loc.col` / parse-mode template offset interact
 - `docs/dev/validation-annotations.md` — `@validate(...)` and `@jsonSchema(...)` internals: tag merging, `__agency_descriptor` contract, descriptor tree, runtime walker
 - `docs/dev/async-context.md` — `agencyStore` AsyncLocalStorage frame and `getRuntimeContext()` pattern for stdlib TS helpers

@@ -3,13 +3,30 @@ import { RuntimeContext } from "../../runtime/state/context.js";
 import { ThreadStore } from "../../runtime/state/threadStore.js";
 import { runInTestContext, getRuntimeContext } from "../../runtime/asyncContext.js";
 import { AWS_OBJECT_BYTE_LIMIT } from "../../constants.js";
+import { type ResultFailure } from "../../runtime/result.js";
 import {
   _s3Get,
   _s3GetBinary,
   _s3Put,
   _s3PutBinary,
   _createBucket,
+  _s3PresignGet,
 } from "./s3.js";
+
+// The presign path bypasses sendAwsRequest, so nothing structural forces it
+// through the final hostname defense. This partial mock lets one test inject a
+// refusal and prove the executor consults the check; with no override set,
+// every other test sees the real behavior.
+const hostCheck = vi.hoisted(() => ({ override: null as ResultFailure | null }));
+vi.mock("./client.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./client.js")>();
+  return {
+    ...actual,
+    hostOutsidePartitionFailure: (
+      ...args: Parameters<typeof actual.hostOutsidePartitionFailure>
+    ) => hostCheck.override ?? actual.hostOutsidePartitionFailure(...args),
+  };
+});
 
 function makeCtx() {
   return new RuntimeContext({
@@ -40,6 +57,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   process.env = ORIGINAL_ENV;
+  hostCheck.override = null;
   vi.restoreAllMocks();
 });
 
@@ -200,6 +218,72 @@ describe("S3 upload size cap", () => {
       const result = await _s3PutBinary("abc", "k", oversized, "us-east-1", "application/octet-stream");
       expect("error" in (result as object)).toBe(true);
       expect(spy).not.toHaveBeenCalled();
+    }));
+});
+
+describe("S3 presigned URLs", () => {
+  it("computes the URL locally, with all query parameters and no fetch", () =>
+    withCtx(async () => {
+      const spy = mockFetch();
+      const url = (await _s3PresignGet("my-bucket", "a/b.txt", 3600, "us-east-1")) as string;
+      expect(url).toMatch(
+        /^https:\/\/my-bucket\.s3\.us-east-1\.amazonaws\.com\/a\/b\.txt\?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKID%2F\d{8}%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=\d{8}T\d{6}Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=[0-9a-f]{64}$/,
+      );
+      expect(spy).not.toHaveBeenCalled();
+    }));
+
+  it("marks the returned URL redacted with the presign label", () =>
+    withCtx(async () => {
+      const url = await _s3PresignGet("my-bucket", "k", 3600, "us-east-1");
+      const { globals } = getRuntimeContext();
+      expect(globals.redactionReplacement(url)).toBe("[presigned S3 URL redacted]");
+    }));
+
+  it.each([0, -5, 1.5, NaN, 604801])(
+    "rejects expiresInSeconds=%s without producing a URL",
+    (expires) =>
+      withCtx(async () => {
+        const result = await _s3PresignGet("my-bucket", "k", expires, "us-east-1");
+        expect("error" in (result as object)).toBe(true);
+      }),
+  );
+
+  it.each([1, 604800])("accepts the boundary expiry %s", (expires) =>
+    withCtx(async () => {
+      const result = await _s3PresignGet("my-bucket", "k", expires, "us-east-1");
+      expect(typeof result).toBe("string");
+      expect(result).toContain(`X-Amz-Expires=${expires}&`);
+    }));
+
+  it("signs the session token into the query when present", () =>
+    withCtx(async () => {
+      process.env.AWS_SESSION_TOKEN = "TOK";
+      const url = (await _s3PresignGet("my-bucket", "k", 3600, "us-east-1")) as string;
+      expect(url).toContain("&X-Amz-Security-Token=TOK&");
+    }));
+
+  it("presigns a dotted bucket path-style", () =>
+    withCtx(async () => {
+      const url = (await _s3PresignGet("data.exports", "k", 3600, "eu-west-1")) as string;
+      expect(url.startsWith("https://s3.eu-west-1.amazonaws.com/data.exports/k?")).toBe(true);
+    }));
+
+  it("shares the pipeline's region precedence and key rejection", () =>
+    withCtx(async () => {
+      process.env.AWS_REGION = "eu-west-1";
+      const url = (await _s3PresignGet("my-bucket", "k", 3600, "")) as string;
+      expect(url.startsWith("https://my-bucket.s3.eu-west-1.amazonaws.com/")).toBe(true);
+
+      const rejected = await _s3PresignGet("my-bucket", "a/../b", 3600, "us-east-1");
+      expect("error" in (rejected as object)).toBe(true);
+    }));
+
+  it("consults the final hostname defense before producing a URL", () =>
+    withCtx(async () => {
+      const refusal = { error: { message: "blocked by host check" } } as ResultFailure;
+      hostCheck.override = refusal;
+      const result = await _s3PresignGet("my-bucket", "k", 3600, "us-east-1");
+      expect(result).toBe(refusal);
     }));
 });
 

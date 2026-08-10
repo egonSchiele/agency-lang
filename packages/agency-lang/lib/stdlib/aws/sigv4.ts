@@ -1,11 +1,15 @@
 import { createHash, createHmac } from "crypto";
+import { awsUriEncode } from "./uri.js";
+import { type AwsRequestTarget } from "./client.js";
 
 /**
  * AWS Signature Version 4 signing, using only Node's built-in crypto. The caller
  * supplies the canonical URI verbatim (already `awsUriEncode`d by the endpoint
  * builder) so the path that is signed is exactly the path that is fetched — no
- * re-derivation through URL normalization. V1 signs an empty canonical query
- * because the request target does not expose query input.
+ * re-derivation through URL normalization. Header signing (`signRequest`) signs
+ * an empty canonical query because the request target carries no query;
+ * presigning (`presignRequest`) builds its canonical query once and emits that
+ * same string in the returned URL.
  *
  * Scope: plain SigV4 only (no SigV4a).
  */
@@ -117,4 +121,82 @@ export function signRequest(input: SignInput): Record<string, string> {
     `SignedHeaders=${signedHeaders}, Signature=${signature}`;
 
   return { ...headers, Authorization: authorization };
+}
+
+export type PresignInput = {
+  method: string;
+  /** The atomic target; the wire URL is derived as origin + canonicalUri. */
+  target: AwsRequestTarget;
+  region: string;
+  service: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  sessionToken?: string;
+  expiresInSeconds: number;
+  /** Override "now"; used only to reproduce AWS's published test vectors. */
+  date?: Date;
+};
+
+/**
+ * Presign a request: the query-string variant of SigV4. Only `host` is signed
+ * and the payload hash is the literal UNSIGNED-PAYLOAD, so anyone holding the
+ * returned URL can send the request until the expiry. The canonical query that
+ * is signed is byte-for-byte the query emitted in the URL (plus the trailing
+ * X-Amz-Signature).
+ */
+export function presignRequest(input: PresignInput): string {
+  const now = input.date ?? new Date();
+  const { amzDate, dateStamp } = amzDates(now);
+  const wireUrl = input.target.origin + input.target.canonicalUri;
+  const host = new URL(input.target.origin).host;
+
+  const credentialScope = `${dateStamp}/${input.region}/${input.service}/aws4_request`;
+  const params: [string, string][] = [
+    ["X-Amz-Algorithm", "AWS4-HMAC-SHA256"],
+    ["X-Amz-Credential", `${input.accessKeyId}/${credentialScope}`],
+    ["X-Amz-Date", amzDate],
+    ["X-Amz-Expires", String(input.expiresInSeconds)],
+    ["X-Amz-SignedHeaders", "host"],
+  ];
+  if (input.sessionToken) {
+    params.push(["X-Amz-Security-Token", input.sessionToken]);
+  }
+  const canonicalQuery = params
+    .map(([name, value]) => [awsUriEncode(name, true), awsUriEncode(value, true)])
+    // Code-unit comparison, deliberately not localeCompare: the sort order is
+    // part of the signature and must not vary by locale.
+    .sort(([a], [b]) => {
+      if (a === b) {
+        return 0;
+      }
+      return a < b ? -1 : 1;
+    })
+    .map(([name, value]) => `${name}=${value}`)
+    .join("&");
+
+  const canonicalRequest = [
+    input.method,
+    input.target.canonicalUri,
+    canonicalQuery,
+    `host:${host}\n`,
+    "host",
+    "UNSIGNED-PAYLOAD",
+  ].join("\n");
+
+  const stringToSign = [
+    "AWS4-HMAC-SHA256",
+    amzDate,
+    credentialScope,
+    sha256Hex(canonicalRequest),
+  ].join("\n");
+
+  const signingKey = deriveSigningKey(
+    input.secretAccessKey,
+    dateStamp,
+    input.region,
+    input.service,
+  );
+  const signature = hmac(signingKey, stringToSign).toString("hex");
+
+  return `${wireUrl}?${canonicalQuery}&X-Amz-Signature=${signature}`;
 }

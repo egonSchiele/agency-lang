@@ -33,6 +33,7 @@ import {
   _s3Put,
   _s3PutBinary,
   _createBucket,
+  _s3PresignGet,
 } from "agency-lang/stdlib-lib/aws/s3.js"
 
 effect std::aws::s3::get {
@@ -61,6 +62,13 @@ effect std::aws::s3::putBinary {
 
 effect std::aws::s3::createBucket {
   bucket: string,
+  region: string,
+}
+
+effect std::aws::s3::presignGet {
+  bucket: string,
+  key: string,
+  expiresInSeconds: number,
   region: string,
 }
 
@@ -181,6 +189,36 @@ export def s3PutBinary(
   destructive {
     return try _s3PutBinary(bucket, key, base64, region, contentType)
   }
+}
+
+export def s3PresignGet(
+  bucket: string,
+  key: string,
+  expiresInSeconds: number = 3600,
+  region: string = "",
+): Result<string> {
+  """
+  Create a presigned download URL for a private S3 object. Anyone holding the
+  URL can download that object until it expires, so treat the URL like the
+  object's contents. The URL is computed locally; no request is sent. With
+  temporary credentials (AWS_SESSION_TOKEN), the URL stops working when the
+  session expires, whatever expiry was requested.
+
+  @param bucket - The S3 bucket name
+  @param key - The object key (path within the bucket)
+  @param expiresInSeconds - How long the URL works, 1 to 604800 (7 days); default one hour
+  @param region - AWS region; defaults to AWS_REGION, then us-east-1
+  """
+  return interrupt std::aws::s3::presignGet(
+    "Allow creating a download link for '${key}' in S3 bucket '${bucket}', usable by anyone for ${expiresInSeconds} seconds?",
+    {
+      bucket: bucket,
+      key: key,
+      expiresInSeconds: expiresInSeconds,
+      region: region,
+    },
+  )
+  return try _s3PresignGet(bucket, key, expiresInSeconds, region)
 }
 
 export def createBucket(

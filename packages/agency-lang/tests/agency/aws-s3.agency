@@ -1,4 +1,4 @@
-import { s3Put } from "std::aws/s3"
+import { s3Put, s3PresignGet } from "std::aws/s3"
 
 node rejectedWriteIsFailure(): boolean {
   const result = s3Put(
@@ -8,6 +8,20 @@ node rejectedWriteIsFailure(): boolean {
     "us-east-1",
   )
   return isFailure(result)
+}
+
+// The presign interrupt must carry the full payload — including
+// expiresInSeconds, so a handler can judge how long the minted link lives.
+node presignInterruptCarriesFullPayload(): boolean {
+  handle {
+    const result = s3PresignGet("abc", "img.png", 60)
+    if (isFailure(result)) {
+      return result.error.includes("std::aws::s3::presignGet|abc|img.png|60|")
+    }
+    return false
+  } with (intr) {
+    return reject("${intr.effect}|${intr.data.bucket}|${intr.data.key}|${intr.data.expiresInSeconds}|${intr.data.region}")
+  }
 }
 
 node approvedWriteTracksDestructive(): any {

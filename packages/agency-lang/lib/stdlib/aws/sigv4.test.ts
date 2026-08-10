@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { describe, it, expect } from "vitest";
-import { signRequest } from "./sigv4.js";
+import { presignRequest, signRequest } from "./sigv4.js";
+import { createAwsRequestTarget } from "./client.js";
 
 const base = {
   region: "us-east-1",
@@ -47,5 +48,66 @@ describe("signRequest", () => {
     });
     expect(headers["x-amz-security-token"]).toBe("TOKEN");
     expect(headers.Authorization).toContain("x-amz-security-token");
+  });
+});
+
+describe("presignRequest", () => {
+  it("reproduces AWS's published presigned-GET test-vector URL exactly", () => {
+    const url = presignRequest({
+      ...base,
+      method: "GET",
+      target: createAwsRequestTarget("https://examplebucket.s3.amazonaws.com", "/test.txt"),
+      expiresInSeconds: 86400,
+    });
+    expect(url).toBe(
+      "https://examplebucket.s3.amazonaws.com/test.txt" +
+        "?X-Amz-Algorithm=AWS4-HMAC-SHA256" +
+        "&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20130524%2Fus-east-1%2Fs3%2Faws4_request" +
+        "&X-Amz-Date=20130524T000000Z" +
+        "&X-Amz-Expires=86400" +
+        "&X-Amz-SignedHeaders=host" +
+        "&X-Amz-Signature=aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404",
+    );
+  });
+
+  it("signs the session token in the query, sorted before X-Amz-SignedHeaders", () => {
+    const url = presignRequest({
+      ...base,
+      method: "GET",
+      target: createAwsRequestTarget("https://b.s3.us-east-1.amazonaws.com", "/k"),
+      sessionToken: "TOKEN",
+      expiresInSeconds: 3600,
+    });
+    expect(url).toContain(
+      "&X-Amz-Security-Token=TOKEN&X-Amz-SignedHeaders=host&X-Amz-Signature=",
+    );
+  });
+
+  // The AWS vector's key is the trivial `test.txt`; this case pins the
+  // one-encoding contract — the emitted path and query are byte-for-byte the
+  // strings that were signed, with no second encoding or normalization.
+  it("emits hostile key and token characters exactly as signed", () => {
+    const url = presignRequest({
+      ...base,
+      method: "GET",
+      // key "a b/%雪//c", encoded once by the endpoint builder's convention
+      target: createAwsRequestTarget(
+        "https://examplebucket.s3.amazonaws.com",
+        "/a%20b/%25%E9%9B%AA//c",
+      ),
+      sessionToken: "AB+/= x",
+      expiresInSeconds: 3600,
+    });
+    const [prefix, signature] = url.split("&X-Amz-Signature=");
+    expect(prefix).toBe(
+      "https://examplebucket.s3.amazonaws.com/a%20b/%25%E9%9B%AA//c" +
+        "?X-Amz-Algorithm=AWS4-HMAC-SHA256" +
+        "&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20130524%2Fus-east-1%2Fs3%2Faws4_request" +
+        "&X-Amz-Date=20130524T000000Z" +
+        "&X-Amz-Expires=3600" +
+        "&X-Amz-Security-Token=AB%2B%2F%3D%20x" +
+        "&X-Amz-SignedHeaders=host",
+    );
+    expect(signature).toMatch(/^[0-9a-f]{64}$/);
   });
 });

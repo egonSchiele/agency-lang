@@ -13,12 +13,17 @@ import {
 import {
   createAwsRequestTarget,
   sendAwsRequest,
+  hostOutsidePartitionFailure,
   type AwsRequestTarget,
   type AwsResponse,
 } from "./client.js";
+import { presignRequest } from "./sigv4.js";
 import { s3ErrorToFailure } from "./errors.js";
 
 const BINARY_MARKER = "[binary output truncated]";
+// A presigned URL is a bearer credential; it must never land in a trace.
+const PRESIGN_MARKER = "[presigned S3 URL redacted]";
+const MAX_PRESIGN_SECONDS = 604800; // 7 days, the SigV4 maximum
 
 export type GetTextOperation = {
   readonly kind: "getText";
@@ -53,12 +58,20 @@ export type CreateBucketOperation = {
   readonly bucket: string;
 };
 
+export type PresignGetOperation = {
+  readonly kind: "presignGet";
+  readonly bucket: string;
+  readonly key: string;
+  readonly expiresInSeconds: number;
+};
+
 export type S3Operation =
   | GetTextOperation
   | GetBinaryOperation
   | PutTextOperation
   | PutBinaryOperation
-  | CreateBucketOperation;
+  | CreateBucketOperation
+  | PresignGetOperation;
 
 export type S3PutResult = {
   readonly bucket: string;
@@ -97,6 +110,23 @@ function keyFailure(key: string): ResultFailure | null {
         message: `Invalid S3 key ${JSON.stringify(key)}: "." and ".." segments are not allowed.`,
       });
     }
+  }
+  return null;
+}
+
+// No silent clamping: a caller who asked for 30 days must get an error, not a
+// 7-day link.
+function expiresFailure(expiresInSeconds: number): ResultFailure | null {
+  if (
+    !Number.isInteger(expiresInSeconds) ||
+    expiresInSeconds < 1 ||
+    expiresInSeconds > MAX_PRESIGN_SECONDS
+  ) {
+    return failure({
+      message:
+        `Invalid expiresInSeconds ${JSON.stringify(expiresInSeconds)}: must be ` +
+        `an integer between 1 and ${MAX_PRESIGN_SECONDS} (7 days).`,
+    });
   }
   return null;
 }
@@ -238,6 +268,30 @@ export async function runS3Operation(
       const location = response.headers.get("location") ?? `/${bucket.name}`;
       return { bucket: bucket.name, region: partition.region, location };
     }
+    case "presignGet": {
+      const keyError = keyFailure(operation.key);
+      if (keyError) return keyError;
+      const expiryError = expiresFailure(operation.expiresInSeconds);
+      if (expiryError) return expiryError;
+      const target = createObjectTarget(partition, bucket, operation.key);
+      // Presigning never calls sendAwsRequest, so the final hostname defense
+      // must run here explicitly.
+      const hostError = hostOutsidePartitionFailure(target, partition);
+      if (hostError) return hostError;
+      const url = presignRequest({
+        method: "GET",
+        target,
+        region: partition.region,
+        service: "s3",
+        accessKeyId: credentials.accessKeyId,
+        secretAccessKey: credentials.secretAccessKey,
+        sessionToken: credentials.sessionToken,
+        expiresInSeconds: operation.expiresInSeconds,
+      });
+      const { globals } = getRuntimeContext();
+      globals.markRedacted(url, PRESIGN_MARKER);
+      return url;
+    }
   }
 }
 
@@ -275,6 +329,15 @@ export function _s3PutBinary(
   contentType: string,
 ): Promise<S3OperationResult> {
   return runS3Operation(region, { kind: "putBinary", bucket, key, base64, contentType });
+}
+
+export function _s3PresignGet(
+  bucket: string,
+  key: string,
+  expiresInSeconds: number,
+  region: string,
+): Promise<S3OperationResult> {
+  return runS3Operation(region, { kind: "presignGet", bucket, key, expiresInSeconds });
 }
 
 export function _createBucket(

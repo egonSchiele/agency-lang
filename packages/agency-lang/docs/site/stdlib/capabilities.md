@@ -86,21 +86,23 @@ Anything that talks to the outside world over the network.
 
 ```ts
 /** Anything that talks to the outside world over the network. */
-export effectSet Network = <std::http::fetch, std::http::fetchJSON, std::http::fetchMarkdown, std::search, std::tavilySearch, std::weather, std::browserUse, std::wikipedia::article, std::wikipedia::search, std::wikipedia::summary, std::gdelt, std::fred, std::dbnomics, std::edgar, std::littlesis, std::yc, std::hackernews, std::wikidata, std::usaspending, std::aws::s3::get, std::aws::s3::getBinary, std::aws::s3::put, std::aws::s3::putBinary, std::aws::s3::createBucket>
+export effectSet Network = <std::http::fetch, std::http::fetchJSON, std::http::fetchMarkdown, std::search, std::tavilySearch, std::weather, std::browserUse, std::wikipedia::article, std::wikipedia::search, std::wikipedia::summary, std::gdelt, std::fred, std::dbnomics, std::edgar, std::littlesis, std::yc, std::hackernews, std::wikidata, std::usaspending, std::aws::s3::get, std::aws::s3::getBinary, std::aws::s3::put, std::aws::s3::putBinary, std::aws::s3::createBucket, std::aws::s3::presignGet>
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L45))
 
 ### AwsS3
 
-Amazon S3 access: reading and writing objects (text and binary) and creating buckets.
+Amazon S3 access: reading and writing objects (text and binary), creating
+    buckets, and minting presigned download URLs.
 
 ```ts
-/** Amazon S3 access: reading and writing objects (text and binary) and creating buckets. */
-export effectSet AwsS3 = <std::aws::s3::get, std::aws::s3::getBinary, std::aws::s3::put, std::aws::s3::putBinary, std::aws::s3::createBucket>
+/** Amazon S3 access: reading and writing objects (text and binary), creating
+    buckets, and minting presigned download URLs. */
+export effectSet AwsS3 = <std::aws::s3::get, std::aws::s3::getBinary, std::aws::s3::put, std::aws::s3::putBinary, std::aws::s3::createBucket, std::aws::s3::presignGet>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L49))
 
 ### DataFinance
 
@@ -113,7 +115,7 @@ The std::data/finance connectors (news + macro + filings). Each also raises
 export effectSet DataFinance = <std::gdelt, std::fred, std::edgar, std::dbnomics>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L53))
 
 ### Messaging
 
@@ -124,7 +126,7 @@ Sending messages to people: email, SMS, and iMessage.
 export effectSet Messaging = <std::sendEmail, std::sendSms, std::sendIMessage>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L56))
 
 ### Secrets
 
@@ -135,7 +137,7 @@ Reading and writing credentials in the system keyring.
 export effectSet Secrets = <std::getSecret, std::setSecret, std::deleteSecret>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L59))
 
 ### Auth
 
@@ -146,7 +148,7 @@ OAuth-style authorization flows: granting, fetching, and revoking access.
 export effectSet Auth = <std::authorize, std::getAccessToken, std::revokeAuth>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L62))
 
 ### Calendar
 
@@ -157,7 +159,7 @@ Calendar access: listing and mutating events (incl. calendar authorization).
 export effectSet Calendar = <std::listEvents, std::createEvent, std::updateEvent, std::deleteEvent, std::authorizeCalendar>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L64))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L65))
 
 ### Memory
 
@@ -168,7 +170,7 @@ Agent long-term memory: recall, remember, forget, and enable/disable.
 export effectSet Memory = <std::memory::recall, std::memory::remember, std::memory::forget, std::memory::enableMemory, std::memory::disableMemory>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L67))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L68))
 
 ### NotesRead
 
@@ -179,7 +181,7 @@ Read-only Notes access: reading, searching, and listing.
 export effectSet NotesRead = <std::notes::read, std::notes::search, std::notes::list>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L71))
 
 ### NotesWrite
 
@@ -190,7 +192,7 @@ Notes mutation: creating, appending, and deleting.
 export effectSet NotesWrite = <std::notes::create, std::notes::append, std::notes::delete>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L74))
 
 ### Notes
 
@@ -201,4 +203,4 @@ All Notes access, reads and writes.
 export effectSet Notes = <NotesRead, NotesWrite>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L76))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L77))

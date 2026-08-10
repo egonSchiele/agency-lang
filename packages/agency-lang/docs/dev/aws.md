@@ -28,7 +28,9 @@ declarative call over a sealed imperative body.
   (argument → `AWS_REGION` → `us-east-1`).
 - `lib/stdlib/aws/endpoints.ts` — `resolveAwsPartition` (bounded policy, below),
   and `validateBucket` producing a `ValidatedBucket` with its addressing style.
-- `lib/stdlib/aws/sigv4.ts` — `signRequest`, taking the canonical URI verbatim.
+- `lib/stdlib/aws/sigv4.ts` — `signRequest` (header signing, canonical URI
+  passed verbatim) and `presignRequest` (query-string signing, consuming the
+  atomic target).
 - `lib/stdlib/aws/client.ts` — the atomic `AwsRequestTarget`, its constructor, and
   `sendAwsRequest`.
 - `lib/stdlib/aws/errors.ts` — S3 error-XML → coded failure.
@@ -48,12 +50,12 @@ The slash names a file; the colons name an effect. Both are intentional.
 ## The declarative executor
 
 `runS3Operation(region, operation)` owns the entire imperative pipeline for all
-five operations in one `switch`: credential/partition/bucket resolution, key
+operations in one `switch`: credential/partition/bucket resolution, key
 checks, target construction, text/base64 codecs, the upload cap, transport, non-2xx
-mapping, binary redaction, and result shaping. The five extern helpers
-(`_s3Get`, `_s3GetBinary`, `_s3Put`, `_s3PutBinary`, `_createBucket`) are one-call
-adapters. Adding a sixth operation is a new variant plus a new `case` — no plumbing
-is copied.
+mapping, binary redaction, and result shaping. The extern helpers
+(`_s3Get`, `_s3GetBinary`, `_s3Put`, `_s3PutBinary`, `_createBucket`,
+`_s3PresignGet`) are one-call adapters. Adding an operation is a new variant plus
+a new `case` — no plumbing is copied.
 
 ## Untrusted input: region, bucket, key
 
@@ -100,6 +102,46 @@ uploads on the decoded/encoded bytes before signing. A 10 MiB binary object is
 ~13.3 MiB of base64. Binary is base64 in and out (matching `readBinary`/
 `writeBinary`), strictly validated. Put results return the response `ETag`;
 create-bucket returns the `Location` header.
+
+## Presigned URLs (`s3PresignGet`)
+
+`s3PresignGet(bucket, key, expiresInSeconds, region)` mints a time-limited
+download URL for a private object: the query-string variant of SigV4
+(`presignRequest` in `sigv4.ts`), where the signature rides in the query, only
+`host` is signed, and the payload hash is the literal `UNSIGNED-PAYLOAD`. No
+request is sent — the URL is pure local crypto.
+
+The parts that are easy to get wrong:
+
+- **The one-encoding contract extends to the query.** `presignRequest` builds
+  its canonical query once and the returned URL is exactly
+  `origin + canonicalUri + "?" + canonicalQuery + "&X-Amz-Signature=" + sig` —
+  nothing decodes, re-encodes, or reorders between signing and emission.
+- **`presignRequest` consumes the atomic `AwsRequestTarget`** (a type-only
+  import from `client.ts`), never an independently supplied wire/signing pair.
+  `AwsRequestTarget` itself stays query-free.
+- **The final-hostname defense is NOT inherited.** It lives in
+  `hostOutsidePartitionFailure` (`client.ts`), which `sendAwsRequest` calls —
+  and presigning bypasses `sendAwsRequest`, so the `presignGet` executor case
+  calls the helper explicitly. `s3.test.ts` injects a refusal through a partial
+  mock to prove the call happens.
+- **Interrupt-gated but not `destructive`.** Minting a URL anyone can use is a
+  capability grant, so it interrupts like everything else here — and uniquely,
+  its payload carries `expiresInSeconds`, because a handler judging a share
+  link needs to know how long it lives. Nothing remote changes, so checkpoint
+  replay is harmless and there is no `destructive { }` region.
+- **The URL is a bearer credential and is redacted from statelog** with the
+  marker `[presigned S3 URL redacted]` (same `markRedacted` machinery as
+  binary downloads). The runtime value is untouched — Agency code can still
+  email the link; it just never lands in a trace.
+- **Expiry is validated, never clamped:** an integer in `[1, 604800]` (7 days,
+  the SigV4 maximum) or a coded failure. With temporary credentials
+  (`AWS_SESSION_TOKEN`), AWS kills the URL when the session ends regardless.
+
+The correctness anchor is AWS's published presigned-GET vector
+(`sigv4.test.ts` reproduces the full documented URL byte-for-byte); a separate
+hostile-input case pins the encoding contract with a key and session token full
+of characters that must be encoded exactly once.
 
 ## Interrupts, destructive, and statelog redaction
 

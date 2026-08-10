@@ -18,6 +18,16 @@
       ]
     },
     {
+      "nodeName": "presignInterruptCarriesFullPayload",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "approvedWriteTracksDestructive",
       "input": "",
       "expectedOutput": "[false,true]",

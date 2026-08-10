@@ -42,7 +42,13 @@ def generateCategoryImage(category: NewsCategory): Result<string> {
       // image.base64 already IS the PNG bytes, base64-encoded — s3PutBinary
       // decodes it before uploading. The Content-Type is what makes a browser
       // render the object as an image instead of downloading it.
-      const putResult = s3PutBinary(BUCKET, s3Key, image.base64, region: REGION, contentType: image.mimeType)
+      const putResult = s3PutBinary(
+        BUCKET,
+        s3Key,
+        image.base64,
+        region: REGION,
+        contentType: image.mimeType,
+      )
       if (putResult is failure(putError)) {
         return failure(putError)
       }
@@ -82,23 +88,17 @@ def getTodaysHackerNewsStories(): Story[] {
 }
 
 def sendEmail(subject: string, content: string) {
+  log("Sending email with subject '${subject}'...")
   const result = sendWithResend(
     from: "adit@adit.io",
     to: "adit@adit.io",
     subject: subject,
-    text: content,
+    html: content,
   )
+  return result
 }
 
 node main() {
-  const createResult = createBucket(bucket: BUCKET, region: REGION) with approve
-  if (createResult is failure(createError)) {
-    // Re-runs hit an already-owned bucket; only a real failure should stop us.
-    if (!createResult.error.includes("BucketAlreadyOwnedByYou")) {
-      return failure(createError)
-    }
-  }
-
   const prompt = """
   Please fetch the latest news for today, ${today()}, for the following categories:
   ${categories.join(", ")}.
@@ -120,6 +120,7 @@ node main() {
     // parse returns a ParseResult record; renderForHtml wants its blocks array.
     const html = parse(markdown).blocks |> renderForHtml
     const sendResult = sendEmail("Today's News - ${today()}", html catch markdown)
+    printJSON(sendResult)
     return sendResult
   } with approve
 }

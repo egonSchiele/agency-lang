@@ -1,6 +1,10 @@
 **/dist/*
 **/node_modules/*
 .*
+# Re-include .github: the broad dot-rule above would otherwise silently
+# swallow new workflow files (tracked ones only survive because tracking
+# overrides ignore).
+!.github/
 # Explicit (also matched by the .* rule above): the incremental-build
 # scratch dir — tsc buildinfo now, Stage A manifest later. Kept explicit
 # so the intent survives if the broad dot-rule is ever narrowed.

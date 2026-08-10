@@ -96,17 +96,21 @@ Return all tags on a value as an object, or an empty object if none. The
 ### redact
 
 ```ts
-redact(value: any): any
+redact(value: any, label: string = ""): any
 ```
 
-Mark a value so it is replaced with "[REDACTED]" in state logs. Shorthand
-  for tag(value, "redact", true). Returns the value's current tags.
+Mark a value so state logs show a marker instead of its real content.
+  With no `label` the marker is "[REDACTED]"; pass `label` to customize it.
+  Returns the value's current tags.
+  @param value - The value to redact in state logs
+  @param label - Custom marker text (optional; defaults to "[REDACTED]")
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | value | `any` |  |
+| label | `string` | "" |
 
 **Returns:** `any`
 
@@ -129,7 +133,7 @@ Remove a single tag from a value. Returns the value's remaining tags.
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L58))
 
 ### removeAllTags
 
@@ -147,4 +151,4 @@ Remove all tags from a value. Returns an empty object.
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/tag.agency#L63))

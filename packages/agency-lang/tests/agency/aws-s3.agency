@@ -1,0 +1,24 @@
+import { s3Put } from "std::aws/s3"
+
+node rejectedWriteIsFailure(): boolean {
+  const result = s3Put(
+    "abc",
+    "offline.txt",
+    "must-not-be-sent",
+    "us-east-1",
+  )
+  return isFailure(result)
+}
+
+node approvedWriteTracksDestructive(): any {
+  const result = s3Put(
+    "abc",
+    "offline.txt",
+    "must-not-be-sent",
+    "us-east-1",
+  )
+  if (isFailure(result)) {
+    return [result.neverStarted, result.destructiveRan]
+  }
+  return [false, false]
+}

@@ -336,6 +336,11 @@ export default defineConfig({
                 { text: "auth/oauth", link: "/stdlib/auth/oauth" },
               ],
             },
+            {
+              text: "aws",
+              collapsed: true,
+              items: [{ text: "aws/s3", link: "/stdlib/aws/s3" }],
+            },
             { text: "calendar", link: "/stdlib/calendar" },
             { text: "capabilities", link: "/stdlib/capabilities" },
             { text: "clipboard", link: "/stdlib/clipboard" },

@@ -2,6 +2,7 @@ import * as readline from "readline";
 import process from "process";
 import { readFile, writeFile, appendFile } from "fs/promises";
 import { classifyIterable } from "../utils/iteration.js";
+import { decodeBase64Strict } from "./base64.js";
 import { existsSync } from "fs";
 import { execFile } from "child_process";
 import { promisify } from "util";
@@ -263,16 +264,14 @@ export async function _writeBinary(
   base64: string,
   mode: WriteMode = "overwrite",
 ): Promise<boolean> {
-  // `Buffer.from(x, "base64")` silently drops invalid characters and truncates
-  // at bad padding, so it would write corrupted bytes rather than fail. Validate
-  // first and throw a clear error (whitespace is allowed and ignored).
-  const normalized = base64.replace(/\s+/g, "");
-  if (normalized.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)) {
-    throw new Error(
-      "writeBinary: `base64` is not valid base64-encoded data (expected standard base64 from generateImage()/readBinary()).",
-    );
+  let bytes: Uint8Array;
+  try {
+    bytes = decodeBase64Strict(base64);
+  } catch (e) {
+    // Add the operation context to the shared decoder's message.
+    throw new Error(`writeBinary: ${(e as Error).message}`);
   }
-  return _writeBytes(dir, filename, Buffer.from(normalized, "base64"), mode);
+  return _writeBytes(dir, filename, Buffer.from(bytes), mode);
 }
 
 export async function _readBinary(dir: string, filename: string): Promise<string> {

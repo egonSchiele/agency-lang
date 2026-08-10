@@ -7,7 +7,6 @@ import { RestoreSignal, readCause } from "./errors.js";
 import { HaltSignal } from "./haltSignal.js";
 import { invokeCallbacks } from "./hooks.js";
 import { hasInterrupts } from "./interrupts.js";
-import { makeRedactReplacer, REDACTED } from "./redactForStatelog.js";
 import { __pipeBind } from "./result.js";
 import { nativeTypeReplacer, nativeTypeReviver } from "./revivers/index.js";
 import { runBatch } from "./runBatch.js";
@@ -75,14 +74,18 @@ const FORK_VALUE_CHAR_CAP = 4000;
 export function safeStatelogValue(value: unknown): unknown {
   if (value === undefined) return undefined;
   const globals = __globals();
-  const redact =
-    globals && globals.hasAnyTags() ? makeRedactReplacer(globals) : null;
+  // Fast path: only consult the redaction table when something is tagged.
+  const hasTags = globals !== undefined && globals.hasAnyTags();
   const replacer = function (
     this: unknown,
     key: string,
     val: unknown,
   ): unknown {
-    if (redact && redact.call(this, key, val) === REDACTED) return REDACTED;
+    if (hasTags && globals) {
+      const raw = key === "" ? val : (this as Record<string, unknown>)[key];
+      const replacement = globals.redactionReplacement(raw);
+      if (replacement !== undefined) return replacement;
+    }
     return nativeTypeReplacer.call(this, key, val);
   };
   let json: string | undefined;

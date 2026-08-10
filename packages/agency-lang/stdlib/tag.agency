@@ -45,10 +45,14 @@ export def getTags(value: any): any {
   return _getTags(value)
 }
 
-export def redact(value: any): any {
-  """Mark a value so it is replaced with "[REDACTED]" in state logs. Shorthand
-  for tag(value, "redact", true). Returns the value's current tags."""
-  return _redact(value)
+export def redact(value: any, label: string = ""): any {
+  """Mark a value so state logs show a marker instead of its real content.
+  With no `label` the marker is "[REDACTED]"; pass `label` to customize it.
+  Returns the value's current tags.
+  @param value - The value to redact in state logs
+  @param label - Custom marker text (optional; defaults to "[REDACTED]")"""
+  const replacement = if label == "" then null else label
+  return _redact(value, replacement)
 }
 
 export def removeTag(value: any, key: string): any {

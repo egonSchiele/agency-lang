@@ -42,9 +42,12 @@ export function _getTags(value: unknown): Record<string, unknown> {
 }
 
 /** Mark a value for statelog redaction and return its current tags. */
-export function _redact(value: unknown): Record<string, unknown> {
+export function _redact(
+  value: unknown,
+  label?: string | null,
+): Record<string, unknown> {
   const { globals } = getRuntimeContext();
-  globals.markRedacted(value);
+  globals.markRedacted(value, label ?? undefined);
   return tagsCopy(globals, value);
 }
 

@@ -72,6 +72,25 @@ function hostUnderSuffix(hostname: string, dnsSuffix: string): boolean {
 }
 
 /**
+ * The final hostname defense: the target's derived wire URL must sit under the
+ * resolved partition suffix. Presigning bypasses `sendAwsRequest`, so it must
+ * call this itself — the check is NOT inherited from transport.
+ */
+export function hostOutsidePartitionFailure(
+  target: AwsRequestTarget,
+  partition: AwsPartition,
+): ResultFailure | null {
+  const wireUrl = `${target.origin}${target.canonicalUri}`;
+  const hostname = new URL(wireUrl).hostname;
+  if (!hostUnderSuffix(hostname, partition.dnsSuffix)) {
+    return failure({
+      message: `Refusing ${wireUrl}: hostname is not under ${partition.dnsSuffix}.`,
+    });
+  }
+  return null;
+}
+
+/**
  * Sign and send one AWS request. Derives the single wire URL from the target,
  * validates its hostname against the partition suffix before signing or
  * fetching, and returns metadata + body bytes for every received HTTP response
@@ -84,12 +103,8 @@ export async function sendAwsRequest(
   request: AwsRequest,
 ): Promise<AwsResponse | ResultFailure> {
   const wireUrl = `${request.target.origin}${request.target.canonicalUri}`;
-  const hostname = new URL(wireUrl).hostname;
-  if (!hostUnderSuffix(hostname, partition.dnsSuffix)) {
-    return failure({
-      message: `Refusing to send: ${wireUrl} is not under ${partition.dnsSuffix}.`,
-    });
-  }
+  const hostError = hostOutsidePartitionFailure(request.target, partition);
+  if (hostError) return hostError;
 
   const { ctx, stack } = getRuntimeContext();
   const signal = ctx.getAbortSignal(stack);

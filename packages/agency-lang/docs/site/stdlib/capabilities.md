@@ -93,11 +93,11 @@ export effectSet Network = <std::http::fetch, std::http::fetchJSON, std::http::f
 
 ### AwsS3
 
-Amazon S3 access: reading and writing objects (text and binary) and creating buckets.
+Amazon S3 access: reading and writing objects, creating buckets, and minting presigned download URLs. Presigning is deliberately NOT in Network — it sends nothing; it mints a bearer capability locally.
 
 ```ts
-/** Amazon S3 access: reading and writing objects (text and binary) and creating buckets. */
-export effectSet AwsS3 = <std::aws::s3::get, std::aws::s3::getBinary, std::aws::s3::put, std::aws::s3::putBinary, std::aws::s3::createBucket>
+/** Amazon S3 access: reading and writing objects, creating buckets, and minting presigned download URLs. Presigning is deliberately NOT in Network — it sends nothing; it mints a bearer capability locally. */
+export effectSet AwsS3 = <std::aws::s3::get, std::aws::s3::getBinary, std::aws::s3::put, std::aws::s3::putBinary, std::aws::s3::createBucket, std::aws::s3::presignGet>
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L48))

@@ -185,14 +185,48 @@ export class GlobalStore {
   /**
    * The marker string to substitute for a redacted value in state logs — the
    * custom label if one was given, otherwise the default — or `undefined` when
-   * the value is not redacted. Sole *reader* of the redact tag; both statelog
-   * serialization paths call this rather than comparing against one constant.
+   * the value is not redacted. The redact tag is read only here and in
+   * `redactContainedStrings`; both statelog serialization paths call these
+   * rather than comparing against one constant.
    */
   redactionReplacement(value: unknown): string | undefined {
     const tag = this.getTagsFor(value)?.[GlobalStore.REDACT_TAG];
     if (tag === true) return REDACTED;
     if (typeof tag === "string") return tag;
     return undefined;
+  }
+
+  /**
+   * Scrub redacted string values that appear INSIDE a larger string — an email
+   * body interpolating a presigned URL, a prompt embedding redacted base64.
+   * Exact-match redaction cannot see composition: the composed string is a new
+   * value with no tag, so without this both statelog paths would log the
+   * secret verbatim. Longer secrets are replaced first so a secret containing
+   * another secret cannot partially survive. Returns the scrubbed text, or
+   * `undefined` when the text contains no redacted string.
+   */
+  redactContainedStrings(text: string): string | undefined {
+    const map = this.get(GlobalStore.INTERNAL_MODULE, GlobalStore.VALUE_TAGS_KEY);
+    if (!(map instanceof Map)) return undefined;
+    const secrets: [string, string][] = [];
+    for (const [key, record] of map) {
+      if (typeof key !== "string" || key.length === 0) continue;
+      const tag = (record as Record<string, unknown>)[GlobalStore.REDACT_TAG];
+      if (tag !== true && typeof tag !== "string") continue;
+      secrets.push([key, tag === true ? REDACTED : tag]);
+    }
+    secrets.sort(([a], [b]) => b.length - a.length);
+    let out = text;
+    let changed = false;
+    for (const [secret, marker] of secrets) {
+      if (out.includes(secret)) {
+        // split/join, not replaceAll: the marker must be inserted literally
+        // even if it ever contains replacement-pattern characters like `$`.
+        out = out.split(secret).join(marker);
+        changed = true;
+      }
+    }
+    return changed ? out : undefined;
   }
 
   /**

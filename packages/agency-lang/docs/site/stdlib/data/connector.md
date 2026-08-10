@@ -28,11 +28,14 @@ connectorFetch(
 ): Result raises <std::http::fetchJSON>
 ```
 
-Fetch a connector API path and return the parsed-JSON Result. Approves the
-    inner std::http::fetchJSON interrupt so a plain caller sees only the
-    connector's own effect prompt. An OUTER fetch handler still receives the
-    fetch interrupt and can reject or propagate it (a reject always wins over
-    this approve). allowedDomains is enforced inside fetchJSON regardless.
+Fetch a connector API path and return the parsed-JSON Result. Raises the
+    same std::http::fetchJSON interrupt as fetchJSON itself, so calling this
+    directly is fully gated — nothing is pre-approved. Connector verbs approve
+    it at the call site (`connectorFetch(...) with approve`), AFTER raising
+    their own connector effect; that is what makes a connector call surface as
+    one connector-level prompt. The call-site approval is a vote, not a
+    bypass: an outer handler still receives the fetch interrupt and its
+    reject wins. allowedDomains is enforced inside fetchJSON.
 
 **Parameters:**
 
@@ -46,7 +49,7 @@ Fetch a connector API path and return the parsed-JSON Result. Approves the
 
 **Throws:** `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L25))
 
 ### connectorError
 
@@ -65,7 +68,7 @@ Shared failure message for a failed connector fetch. Pure.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L30))
 
 ### shapeError
 
@@ -87,7 +90,7 @@ Failure message for a response body that failed wire-shape validation.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L37))
 
 ### clampLimit
 
@@ -106,7 +109,7 @@ Clamp n into [0, cap]. Pure.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L42))
 
 ### dateStrToEpochMs
 
@@ -127,4 +130,4 @@ Convert an ISO 8601 datetime string to epoch milliseconds. Returns 0 when
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L56))

@@ -180,7 +180,7 @@ def parseProfile(p: WireProfile): Profile {
 /** Build the searchPosts path (limit already clamped). A since of 0 means no
     time filter; otherwise it is formatted as UTC ISO 8601. Pure. */
 def buildSearchPath(query: string, sort: string, since: number, limit: number): string {
-  const base = "/app.bsky.feed.searchPosts?q=${encodeURIComponent(query)}&sort=${sort}&limit=${limit}"
+  const base = "/app.bsky.feed.searchPosts?q=${encodeURIComponent(query)}&sort=${encodeURIComponent(sort)}&limit=${limit}"
   if (since <= 0) {
     return base
   }
@@ -260,7 +260,7 @@ export idempotent def bskySearch(query: string, sort: BskySort = "latest", since
   """
   const n = clampLimit(limit, 100)
   return interrupt std::bluesky("Search Bluesky for this query?", { op: "search", query: query, since: since, limit: n })
-  const result = connectorFetch(BSKY_BASE, BSKY_DOMAINS, buildSearchPath(query, sort, since, n))
+  const result = connectorFetch(BSKY_BASE, BSKY_DOMAINS, buildSearchPath(query, sort, since, n)) with approve
   return searchFinalize(result)
 }
 
@@ -274,7 +274,7 @@ export idempotent def bskyAuthorFeed(handle: string, limit: number = 30): Result
   """
   const n = clampLimit(limit, 100)
   return interrupt std::bluesky("Fetch this Bluesky account's recent posts?", { op: "authorFeed", query: handle, since: 0, limit: n })
-  const result = connectorFetch(BSKY_BASE, BSKY_DOMAINS, buildAuthorFeedPath(handle, n))
+  const result = connectorFetch(BSKY_BASE, BSKY_DOMAINS, buildAuthorFeedPath(handle, n)) with approve
   return feedFinalize(result)
 }
 
@@ -286,6 +286,6 @@ export idempotent def bskyProfile(handle: string): Result<Profile> raises <std::
   @param handle - The account's handle (like "user.bsky.social") or did
   """
   return interrupt std::bluesky("Fetch this Bluesky profile?", { op: "profile", query: handle, since: 0, limit: 0 })
-  const result = connectorFetch(BSKY_BASE, BSKY_DOMAINS, buildProfilePath(handle))
+  const result = connectorFetch(BSKY_BASE, BSKY_DOMAINS, buildProfilePath(handle)) with approve
   return profileFinalize(result)
 }

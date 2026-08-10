@@ -14,19 +14,16 @@ import { parse } from "std::date"
   See `docs/dev/data-connectors.md` for the full guide to writing a connector.
 */
 
-/** Fetch a connector API path and return the parsed-JSON Result. Approves the
-    inner std::http::fetchJSON interrupt so a plain caller sees only the
-    connector's own effect prompt. An OUTER fetch handler still receives the
-    fetch interrupt and can reject or propagate it (a reject always wins over
-    this approve). allowedDomains is enforced inside fetchJSON regardless. */
+/** Fetch a connector API path and return the parsed-JSON Result. Raises the
+    same std::http::fetchJSON interrupt as fetchJSON itself, so calling this
+    directly is fully gated — nothing is pre-approved. Connector verbs approve
+    it at the call site (`connectorFetch(...) with approve`), AFTER raising
+    their own connector effect; that is what makes a connector call surface as
+    one connector-level prompt. The call-site approval is a vote, not a
+    bypass: an outer handler still receives the fetch interrupt and its
+    reject wins. allowedDomains is enforced inside fetchJSON. */
 export def connectorFetch(base: string, domains: string[], path: string): Result raises <std::http::fetchJSON> {
-  handle {
-    return fetchJSON(baseUrl: base, path: path, allowedDomains: domains)
-  } with (data) {
-    if (data.effect == "std::http::fetchJSON") {
-      return approve()
-    }
-  }
+  return fetchJSON(baseUrl: base, path: path, allowedDomains: domains)
 }
 
 /** Shared failure message for a failed connector fetch. Pure. */

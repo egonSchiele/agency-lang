@@ -13,6 +13,21 @@
       ]
     },
     {
+      "nodeName": "directConnectorFetchIsGated",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "reject"
+        }
+      ]
+    },
+    {
       "nodeName": "outerHandlerStillSeesFetch",
       "input": "",
       "expectedOutput": "true",

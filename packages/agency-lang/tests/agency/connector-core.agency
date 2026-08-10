@@ -1,4 +1,4 @@
-import { clampLimit, dateStrToEpochMs } from "std::data/connector"
+import { connectorFetch, clampLimit, dateStrToEpochMs } from "std::data/connector"
 import { bskySearch } from "std::data/social/bluesky"
 
 node coreHelpers(): any {
@@ -12,10 +12,19 @@ node coreHelpers(): any {
   ]
 }
 
-// The gate for the shared core: connectorFetch lives in an imported module
-// and approves std::http::fetchJSON internally. That approve must stay a
-// vote, not a bypass — this OUTER handler must still receive the fetch
-// interrupt, and its reject must win, so no request is ever sent.
+// connectorFetch pre-approves nothing: a direct call raises the fetch
+// interrupt like fetchJSON itself, so the test-level rejection reaches it
+// and no request is sent.
+node directConnectorFetchIsGated(): boolean {
+  const result = connectorFetch("https://example.com", ["example.com"], "/x")
+  return isFailure(result)
+}
+
+// The gate for the shared core: connector verbs approve connectorFetch's
+// std::http::fetchJSON interrupt at the call site (`with approve`). That
+// approve must stay a vote, not a bypass — this OUTER handler must still
+// receive the fetch interrupt, and its reject must win, so no request is
+// ever sent.
 node outerHandlerStillSeesFetch(): boolean {
   handle {
     const result = bskySearch("agency")

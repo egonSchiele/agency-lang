@@ -17,14 +17,18 @@ updating.
 Import it; never call `fetchJSON` directly from a connector.
 
 - `connectorFetch(base, domains, path)` fetches a path and returns the
-  parsed-JSON `Result`. It wraps the call in a `handle` block that approves
-  the inner `std::http::fetchJSON` interrupt. That approval is what makes a
-  connector call surface as ONE prompt ("Search Bluesky for this query?")
-  instead of a raw HTTP prompt per request. The approval is a vote, not a
-  bypass: an outer handler still receives the fetch interrupt, and if it
-  rejects, the reject wins and no request is sent.
-  `tests/agency/connector-core.agency` pins this, including the fact that it
-  works with the `handle` block in an imported module.
+  parsed-JSON `Result`. It pre-approves nothing: calling it directly raises
+  the same `std::http::fetchJSON` interrupt as `fetchJSON`, so the helper is
+  safe to have exported. Connector verbs approve it at the call site —
+  `connectorFetch(...) with approve` — after raising their own connector
+  effect. That call-site approval is what makes a connector call surface as
+  ONE prompt ("Search Bluesky for this query?") instead of a raw HTTP prompt
+  per request, and it is a vote, not a bypass: an outer handler still
+  receives the fetch interrupt, and if it rejects, the reject wins and no
+  request is sent. `tests/agency/connector-core.agency` pins this. Never
+  write a connector verb that calls `connectorFetch` without having raised
+  the connector's effect first — the `with approve` is only legitimate
+  because the connector-level interrupt already gated the call.
 - `connectorError(source, err)` builds the standard failure message for a
   failed fetch.
 - `shapeError(source, endpoint, err)` builds the failure message for a
@@ -103,7 +107,7 @@ order:
      """
      const n = clampLimit(limit, 100)
      return interrupt std::bluesky("Search Bluesky for this query?", { op: "search", query: query, since: since, limit: n })
-     const result = connectorFetch(BSKY_BASE, BSKY_DOMAINS, buildSearchPath(query, sort, since, n))
+     const result = connectorFetch(BSKY_BASE, BSKY_DOMAINS, buildSearchPath(query, sort, since, n)) with approve
      return searchFinalize(result)
    }
    ```
@@ -166,7 +170,8 @@ template. Four kinds of tests, all using nodes that call the verbs:
 4. **The handler contract** is pinned once, in
    `tests/agency/connector-core.agency`, not per connector: an outer handler
    approves the connector effect but rejects the fetch, proving the fetch
-   interrupt is visible outside the module and the reject wins.
+   interrupt is visible outside the verb's call-site `with approve` and the
+   reject wins.
 
 ## Updating an existing connector
 

@@ -1,0 +1,291 @@
+import { connectorFetch, connectorError, shapeError, clampLimit, dateStrToEpochMs } from "std::data/connector"
+import { format } from "std::date"
+
+/** @module
+  ## Bluesky — keyword search, author feeds, and profiles
+
+  Read [Bluesky](https://bsky.app) via its public AppView API. No API key or
+  account is required. Use this connector to search posts by keyword
+  (`bskySearch`), read an account's recent posts (`bskyAuthorFeed`), or look
+  up a profile (`bskyProfile`).
+
+  Every post comes back with a `url` field holding its human-facing bsky.app
+  link, so results can go straight into an email or report. Post timestamps
+  are epoch milliseconds, so they compare directly against `now()` from
+  `std::date`.
+
+  ### Usage
+
+  ```ts
+  import { bskySearch, bskyAuthorFeed } from "std::data/social/bluesky"
+  import { now } from "std::date"
+
+  node main() {
+    // Posts mentioning a topic in the last day.
+    const recent = bskySearch("agency lang", since: now() - 1d) catch []
+    for (p in recent) {
+      print("${p.author}: ${p.text}")
+      print("  ${p.url}")
+    }
+  }
+  ```
+
+  ### Shaping the tools for an agent
+
+  Like any Agency function, these verbs can be narrowed with partial
+  application before handing them to an LLM:
+
+  ```ts
+  const searchRecent = bskySearch.partial(sort: "latest", limit: 10)
+  const news = llm("what are people saying about agency-lang?", tools: [searchRecent])
+  ```
+*/
+
+effect std::bluesky { op: string, query: string, since: number, limit: number }
+
+static const BSKY_BASE = "https://public.api.bsky.app/xrpc"
+static const BSKY_DOMAINS = ["public.api.bsky.app"]
+
+/** Result ordering for `bskySearch`. */
+export type BskySort = "latest" | "top"
+
+/** A Bluesky post. `createdAt` is epoch milliseconds (0 when the source
+    timestamp was malformed). `url` is the human-facing bsky.app link,
+    constructed from the post's at:// uri. */
+export type Post = {
+  uri: string;
+  url: string;
+  author: string;
+  authorName: string;
+  text: string;
+  createdAt: number;
+  replyCount: number;
+  repostCount: number;
+  likeCount: number;
+  quoteCount: number
+}
+
+/** A Bluesky account profile. */
+export type Profile = {
+  did: string;
+  handle: string;
+  displayName: string;
+  description: string;
+  followersCount: number;
+  followsCount: number;
+  postsCount: number
+}
+
+/** Build the bsky.app web link for a post. The identifier is the author's
+    handle unless it is missing or "handle.invalid" (Bluesky's sentinel for an
+    unresolvable handle), in which case the did. Returns "" when the uri is
+    not a post uri. Pure/total. */
+def buildPostUrl(uri: string, did: string, handle: string): string {
+  // at://<did>/app.bsky.feed.post/<rkey> splits into exactly 5 parts.
+  const parts = uri.split("/")
+  if (parts.length != 5 || parts[3] != "app.bsky.feed.post") {
+    return ""
+  }
+  let who = handle
+  if (who == "" || who == "handle.invalid") {
+    who = did
+  }
+  if (who == "") {
+    return ""
+  }
+  return "https://bsky.app/profile/${who}/post/${parts[4]}"
+}
+
+// Wire types: the fields the connector reads from API responses. Each
+// finalizer validates the body against one of these before reshaping, so API
+// drift on a load-bearing field fails loudly (with the mismatched paths in
+// the error) instead of silently reshaping to defaults. Optional fields are
+// the ones whose absence is a normal API state; unmodeled fields are
+// stripped by validation.
+
+type WireAuthor = {
+  did: string;
+  handle: string;
+  displayName?: string
+}
+
+type WireRecord = {
+  text: string;
+  createdAt?: string
+}
+
+type WirePost = {
+  uri: string;
+  author: WireAuthor;
+  record: WireRecord;
+  replyCount?: number;
+  repostCount?: number;
+  likeCount?: number;
+  quoteCount?: number
+}
+
+type WireSearchBody = { posts: WirePost[] }
+
+type WireFeedItem = { post: WirePost }
+
+type WireFeedBody = { feed: WireFeedItem[] }
+
+type WireProfile = {
+  did: string;
+  handle: string;
+  displayName?: string;
+  description?: string;
+  followersCount?: number;
+  followsCount?: number;
+  postsCount?: number
+}
+
+/** Reshape a validated wire post into a Post. Optional wire fields default
+    here. Pure/total. */
+def parsePost(p: WirePost): Post {
+  return {
+    uri: p.uri,
+    url: buildPostUrl(p.uri, p.author.did, p.author.handle),
+    author: p.author.handle,
+    authorName: p.author.displayName ?? "",
+    text: p.record.text,
+    createdAt: dateStrToEpochMs(p.record.createdAt ?? ""),
+    replyCount: p.replyCount ?? 0,
+    repostCount: p.repostCount ?? 0,
+    likeCount: p.likeCount ?? 0,
+    quoteCount: p.quoteCount ?? 0
+  }
+}
+
+/** Reshape validated wire posts into Post[]. Pure/total. */
+def parsePosts(posts: WirePost[]): Post[] {
+  return map(posts) as p {
+    return parsePost(p)
+  }
+}
+
+/** Reshape a validated wire profile into a Profile. Pure/total. */
+def parseProfile(p: WireProfile): Profile {
+  return {
+    did: p.did,
+    handle: p.handle,
+    displayName: p.displayName ?? "",
+    description: p.description ?? "",
+    followersCount: p.followersCount ?? 0,
+    followsCount: p.followsCount ?? 0,
+    postsCount: p.postsCount ?? 0
+  }
+}
+
+/** Build the searchPosts path (limit already clamped). A since of 0 means no
+    time filter; otherwise it is formatted as UTC ISO 8601. Pure. */
+def buildSearchPath(query: string, sort: string, since: number, limit: number): string {
+  const base = "/app.bsky.feed.searchPosts?q=${encodeURIComponent(query)}&sort=${encodeURIComponent(sort)}&limit=${limit}"
+  if (since <= 0) {
+    return base
+  }
+  return "${base}&since=${encodeURIComponent(format(since, "UTC"))}"
+}
+
+/** Build the getAuthorFeed path (limit already clamped). Pure. */
+def buildAuthorFeedPath(handle: string, limit: number): string {
+  return "/app.bsky.feed.getAuthorFeed?actor=${encodeURIComponent(handle)}&limit=${limit}"
+}
+
+/** Build the getProfile path. Pure. */
+def buildProfilePath(handle: string): string {
+  return "/app.bsky.actor.getProfile?actor=${encodeURIComponent(handle)}"
+}
+
+/** Turn a searchPosts fetch Result into a Post[] Result, validating the body
+    shape first. Pure. */
+def searchFinalize(fetchResult: any): Result<Post[]> {
+  return match (fetchResult) {
+    success(body) => {
+      const validated: WireSearchBody! = body
+      return match (validated) {
+        success(b) => success(parsePosts(b.posts))
+        failure(err) => failure(shapeError("Bluesky", "searchPosts", err))
+      }
+    }
+    failure(err) => failure(connectorError("Bluesky", err))
+  }
+}
+
+/** Turn a getAuthorFeed fetch Result into a Post[] Result, validating the
+    body shape first. Each feed item wraps its post as `.post`; reposts appear
+    as their original posts. Pure. */
+def feedFinalize(fetchResult: any): Result<Post[]> {
+  return match (fetchResult) {
+    success(body) => {
+      const validated: WireFeedBody! = body
+      return match (validated) {
+        success(b) => {
+          const posts = map(b.feed) as item {
+            return item.post
+          }
+          return success(parsePosts(posts))
+        }
+        failure(err) => failure(shapeError("Bluesky", "getAuthorFeed", err))
+      }
+    }
+    failure(err) => failure(connectorError("Bluesky", err))
+  }
+}
+
+/** Turn a getProfile fetch Result into a Profile Result, validating the body
+    shape first (a null or empty body fails validation). Pure. */
+def profileFinalize(fetchResult: any): Result<Profile> {
+  return match (fetchResult) {
+    success(body) => {
+      const validated: WireProfile! = body
+      return match (validated) {
+        success(p) => success(parseProfile(p))
+        failure(err) => failure(shapeError("Bluesky", "getProfile", err))
+      }
+    }
+    failure(err) => failure(connectorError("Bluesky", err))
+  }
+}
+
+export idempotent def bskySearch(query: string, sort: BskySort = "latest", since: number = 0, limit: number = 25): Result<Post[]> raises <std::bluesky, std::http::fetchJSON> {
+  """
+  Search Bluesky posts by keyword. Returns matching posts with author, text,
+  engagement counts, and a bsky.app link.
+
+  @param query - The search keywords
+  @param sort - Result ordering
+  @param since - Only include posts created at or after this instant, as epoch milliseconds (0 means no time filter)
+  @param limit - Maximum results (capped at 100)
+  """
+  const n = clampLimit(limit, 100)
+  return interrupt std::bluesky("Search Bluesky for this query?", { op: "search", query: query, since: since, limit: n })
+  const result = connectorFetch(BSKY_BASE, BSKY_DOMAINS, buildSearchPath(query, sort, since, n)) with approve
+  return searchFinalize(result)
+}
+
+export idempotent def bskyAuthorFeed(handle: string, limit: number = 30): Result<Post[]> raises <std::bluesky, std::http::fetchJSON> {
+  """
+  Fetch a Bluesky account's recent posts, newest first. Returns posts with
+  text, engagement counts, and a bsky.app link.
+
+  @param handle - The account's handle (like "user.bsky.social") or did
+  @param limit - Maximum posts (capped at 100)
+  """
+  const n = clampLimit(limit, 100)
+  return interrupt std::bluesky("Fetch this Bluesky account's recent posts?", { op: "authorFeed", query: handle, since: 0, limit: n })
+  const result = connectorFetch(BSKY_BASE, BSKY_DOMAINS, buildAuthorFeedPath(handle, n)) with approve
+  return feedFinalize(result)
+}
+
+export idempotent def bskyProfile(handle: string): Result<Profile> raises <std::bluesky, std::http::fetchJSON> {
+  """
+  Fetch a Bluesky account's public profile: display name, description, and
+  follower, follow, and post counts. An unknown handle returns a failure.
+
+  @param handle - The account's handle (like "user.bsky.social") or did
+  """
+  return interrupt std::bluesky("Fetch this Bluesky profile?", { op: "profile", query: handle, since: 0, limit: 0 })
+  const result = connectorFetch(BSKY_BASE, BSKY_DOMAINS, buildProfilePath(handle)) with approve
+  return profileFinalize(result)
+}

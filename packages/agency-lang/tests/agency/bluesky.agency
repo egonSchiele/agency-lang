@@ -1,0 +1,82 @@
+import { bskySearch, bskyAuthorFeed, bskyProfile } from "std::data/social/bluesky"
+
+// The search interrupt must carry the full payload — since (epoch ms) and the
+// clamped limit — so a handler can judge the time window and result volume.
+node searchInterruptCarriesFullPayload(): boolean {
+  handle {
+    const result = bskySearch("agency lang", since: 1500, limit: 500)
+    if (isFailure(result)) {
+      return result.error.includes("std::bluesky|search|agency lang|1500|100")
+    }
+    return false
+  } with (intr) {
+    return reject("${intr.effect}|${intr.data.op}|${intr.data.query}|${intr.data.since}|${intr.data.limit}")
+  }
+}
+
+// Mocked searchPosts response covering the reshape edge cases: full post,
+// handle.invalid falling back to the did in the url, missing counts
+// defaulting to 0, and a non-post uri producing an empty url.
+node searchReshapesPosts(): any {
+  handle {
+    const posts = bskySearch("agency", limit: 3) catch []
+    return map(posts) as p {
+      return "${p.url}|${p.author}|${p.authorName}|${p.text}|${p.createdAt}|${p.likeCount}|${p.replyCount}"
+    }
+  } with approve
+}
+
+// The since= mock is more specific and listed first; hitting it proves the
+// since parameter was included in the request URL.
+node searchSendsSinceParam(): any {
+  handle {
+    const posts = bskySearch("agency", since: 1000) catch []
+    return map(posts) as p {
+      return p.text
+    }
+  } with approve
+}
+
+// With since unset the request must NOT carry a since parameter, so the
+// catch-all mock answers instead of the since= one.
+node searchOmitsSinceByDefault(): any {
+  handle {
+    const posts = bskySearch("agency") catch []
+    return map(posts) as p {
+      return p.text
+    }
+  } with approve
+}
+
+// A response missing a load-bearing field must fail loudly, naming the
+// connector, the endpoint, and the mismatched path with what was expected.
+node searchShapeDriftFailsLoudly(): boolean {
+  handle {
+    const result = bskySearch("agency")
+    if (isFailure(result)) {
+      const e = result.error
+      return e.includes("Bluesky searchPosts response did not match the expected shape") && e.includes("posts") && e.includes("expected")
+    }
+    return false
+  } with approve
+}
+
+// getAuthorFeed wraps each post as feed[].post; the connector unwraps them.
+node authorFeedUnwrapsPosts(): any {
+  handle {
+    const posts = bskyAuthorFeed("alice.bsky.social", limit: 2) catch []
+    return map(posts) as p {
+      return "${p.author}|${p.text}"
+    }
+  } with approve
+}
+
+node profileReshapes(): any {
+  handle {
+    const result = bskyProfile("alice.bsky.social")
+    if (result is success(profile)) {
+      return "${profile.handle}|${profile.displayName}|${profile.followersCount}|${profile.postsCount}"
+    }
+    return "failure"
+  } with approve
+}

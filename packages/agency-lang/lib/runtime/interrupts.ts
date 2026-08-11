@@ -23,6 +23,7 @@ import { applyOverrides } from "./rewind.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 import { RuntimeContext } from "./state/context.js";
 import { loadProviderModules } from "./providerModules.js";
+import { ensureConfiguredLocalProvider } from "./localProvider.js";
 import { installRunPolicyHandler } from "./runPolicyHandler.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
@@ -800,6 +801,7 @@ async function respondToInterruptsCore(
     // is process-global, not part of serialized checkpoint state), so re-register
     // before resuming. Idempotent in-process via loadProviderModules' guard.
     await loadProviderModules(execCtx);
+    await ensureConfiguredLocalProvider(execCtx);
     // This is the first restore on this execCtx — record it as such.
     execCtx._restoreCount++;
     execCtx.statelogClient.checkpointRestored({

@@ -1,13 +1,16 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { createRequire } from "node:module";
-import { execFileSync } from "node:child_process";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { findFileUp } from "../importPaths.js";
-import { loadProviderModuleByPath } from "../runtime/providerModules.js";
+import {
+  loadLocalProvider,
+  loadLocalProviderDetailed,
+  resolveSmoltalkLlamaCppEntry,
+} from "../runtime/localProvider.js";
+import { __ctx } from "../runtime/asyncContext.js";
 import { ttyColor } from "../utils/termcolors.js";
 
 /** What a model is FOR — a single axis, orthogonal to size (size is conveyed
@@ -773,72 +776,6 @@ export async function _refreshCatalog(
   };
 }
 
-// Cached so we don't shell out repeatedly per process.
-let cachedGlobalRoots: string[] | null = null;
-
-/** Discover global `node_modules` roots reported by `npm` and `pnpm`, in that
- *  order. Each entry is the directory printed by `<tool> root -g` (which is
- *  itself a `node_modules` dir, e.g. `/opt/homebrew/lib/node_modules` for
- *  Homebrew npm, `~/Library/pnpm/global/5/node_modules` for pnpm). Failures
- *  (tool not installed, exit non-zero, dir missing) are silently skipped. */
-export function globalNodeModulesRoots(): string[] {
-  if (cachedGlobalRoots !== null) {
-    return cachedGlobalRoots;
-  }
-  const roots: string[] = [];
-  for (const cmd of ["npm", "pnpm"]) {
-    try {
-      const out = execFileSync(cmd, ["root", "-g"], {
-        encoding: "utf-8",
-        stdio: ["ignore", "pipe", "ignore"],
-      }).trim();
-      if (out && fs.existsSync(out) && !roots.includes(out)) {
-        roots.push(out);
-      }
-    } catch {
-      /* tool not installed or failed — skip */
-    }
-  }
-  cachedGlobalRoots = roots;
-  return roots;
-}
-
-/** Try to resolve `smoltalk-llama-cpp` from the given global `node_modules`
- *  roots. Each `root` is itself a `node_modules` directory (the convention
- *  `npm root -g` / `pnpm root -g` uses). Node's resolver looks for
- *  `<parent>/node_modules/<pkg>` for each parent dir it walks up, so the
- *  createRequire base must live in the root's PARENT directory — from
- *  `<root>/../_resolver.js` it correctly finds `<root>/smoltalk-llama-cpp/...`.
- *  Exported for unit-testing with a controllable list of roots. */
-export function resolveSmoltalkLlamaCppFromRoots(roots: string[]): string | null {
-  for (const root of roots) {
-    try {
-      const req = createRequire(path.join(root, "..", "_resolver.js"));
-      return req.resolve("smoltalk-llama-cpp");
-    } catch {
-      /* not in this root — try the next */
-    }
-  }
-  return null;
-}
-
-/** Resolve `smoltalk-llama-cpp` to the absolute path of its main entry,
- *  searching:
- *   1. The local `require` paths walking up from this file (covers in-workspace
- *      `pnpm add` and a user-project install).
- *   2. Each global `node_modules` root reported by `npm root -g` / `pnpm root -g`
- *      (covers `npm i -g` and `pnpm add -g` — the documented install methods).
- *
- *  Returns `null` if the package isn't reachable from any of those. */
-export function resolveSmoltalkLlamaCppEntry(): string | null {
-  try {
-    return createRequire(import.meta.url).resolve("smoltalk-llama-cpp");
-  } catch {
-    /* not local — try global install roots */
-  }
-  return resolveSmoltalkLlamaCppFromRoots(globalNodeModulesRoots());
-}
-
 /** True if smoltalk-llama-cpp is reachable from the local require paths OR
  *  from a global node_modules root (npm or pnpm). */
 export function _localModelsSupported(): boolean {
@@ -858,39 +795,6 @@ export function hasLocalModelSupport(): boolean {
   return _localModelsSupported();
 }
 
-/** Expose the resolved `smoltalk-llama-cpp` entry path to the bundled
- *  `llama-cpp.mjs` via the AGENCY_SMOLTALK_LLAMA_CPP_PATH env var, so that
- *  the bundled module can dynamically import it even when the package lives
- *  in a global `node_modules` that isn't on this file's resolution path.
- *  Idempotent. */
-function exposeResolvedLlamaCppPath(): void {
-  if (process.env.AGENCY_SMOLTALK_LLAMA_CPP_PATH) {
-    return;
-  }
-  const entry = resolveSmoltalkLlamaCppEntry();
-  if (entry !== null) {
-    process.env.AGENCY_SMOLTALK_LLAMA_CPP_PATH = entry;
-  }
-}
-
-type LlamaBundle = {
-  resolveModel?: (uriOrPath: string, cacheDir: string) => Promise<string>;
-};
-
-/** Absolute fs path of the bundled llama-cpp provider module. Tests/advanced
- *  callers can override via AGENCY_LLAMA_PROVIDER_MODULE (also an fs path).
- *  The override is normalized to an absolute path so `_downloadModel`'s
- *  `pathToFileURL(...)` call works even when callers pass a relative path
- *  (which `loadProviderModuleByPath` would itself happily resolve, but the
- *  download path bypasses that helper). */
-function bundledLlamaModule(): string {
-  const override = process.env.AGENCY_LLAMA_PROVIDER_MODULE;
-  if (override !== undefined && override !== "") {
-    return path.isAbsolute(override) ? override : path.resolve(process.cwd(), override);
-  }
-  return fileURLToPath(new URL("./providers/llama-cpp.mjs", import.meta.url));
-}
-
 /** Guard the install-required commands. If the user set
  *  AGENCY_LLAMA_PROVIDER_MODULE they're supplying a provider module directly,
  *  so skip the smoltalk-llama-cpp resolve check. */
@@ -903,11 +807,18 @@ function requireSupport(): void {
   }
 }
 
-/** Register the llama-cpp provider into agency's own smoltalk. */
+/** Register the llama-cpp provider into agency's own smoltalk. When called
+ *  from inside a run (the agent's --local path), emit the `localModelLoaded`
+ *  statelog event saying where the provider package came from; the plain CLI
+ *  has no runtime frame, so `__ctx()` is undefined there and nothing is
+ *  emitted. */
 export async function _registerLocalProvider(): Promise<void> {
   requireSupport();
-  exposeResolvedLlamaCppPath();
-  await loadProviderModuleByPath(bundledLlamaModule());
+  const { choice } = await loadLocalProviderDetailed();
+  void __ctx()?.statelogClient.localModelLoaded({
+    entryPath: choice.entryPath,
+    entrySource: choice.source,
+  });
 }
 
 /** Stream-hash a file's SHA-256 (hex), never buffering the whole file. The
@@ -992,20 +903,9 @@ export function snapshotFreshness(dir: string): FreshnessProbe {
 /** Resolve a name/uri/path to a local .gguf path, downloading if needed. */
 export async function _downloadModel(value: string, cacheDir: string = ""): Promise<string> {
   requireSupport();
-  exposeResolvedLlamaCppPath();
   const target = _resolveModelName(value);
   const dir = resolveCacheDir(cacheDir);
-  const fsPath = bundledLlamaModule();
-  let mod: LlamaBundle;
-  try {
-    // eslint-disable-next-line no-restricted-syntax -- on-demand load of the optional provider module
-    mod = (await import(pathToFileURL(fsPath).href)) as LlamaBundle;
-  } catch (err) {
-    throw new Error(`Failed to load the local-model provider: ${(err as Error).message}`);
-  }
-  if (typeof mod.resolveModel !== "function") {
-    throw new Error(`Local-model provider module must export resolveModel().`);
-  }
+  const mod = await loadLocalProvider();
   // Snapshot freshness BEFORE resolving so we verify the bytes only once, right
   // after a real download (a cache hit is skipped — the file can't change on
   // disk between runs).

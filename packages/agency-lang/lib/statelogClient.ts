@@ -779,6 +779,35 @@ export class StatelogClient {
   }
 
   /**
+   * Emit a `localModelLoaded` leaf event: which local model the run is
+   * pinned to and where the llama-cpp provider package was resolved from.
+   * `entrySource` is the chooseEntryPath decision — "override"
+   * (AGENCY_LLAMA_PROVIDER_MODULE), "local" (bare import from the local
+   * require paths), or "global" (a global npm/pnpm install root). Emitted
+   * once per process at bootstrap when the baked config names the llama-cpp
+   * provider, and when agency code registers a local model explicitly.
+   */
+  async localModelLoaded({
+    model,
+    entryPath,
+    entrySource,
+  }: {
+    /** The .gguf path (or model name) calls are pinned to, when known. */
+    model?: string;
+    /** Resolved entry file of the provider package, when not a bare import. */
+    entryPath?: string;
+    /** How the provider package was found (see chooseEntryPath). */
+    entrySource: string;
+  }): Promise<void> {
+    await this.post({
+      type: "localModelLoaded",
+      model,
+      entryPath,
+      entrySource,
+    });
+  }
+
+  /**
    * Memory umbrella-span marker events.
    *
    * Why these exist: the logs viewer infers span types from EVENT

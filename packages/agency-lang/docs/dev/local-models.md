@@ -4,10 +4,45 @@ How `agency`'s local-model support is wired, end to end.
 
 ## Provider
 
-Local inference runs through `smoltalk`'s `llama-cpp` provider, registered on
-demand from the bundled `lib/stdlib/providers/llama-cpp.mjs` (which wraps
-`node-llama-cpp`). Registration is lazy (`_registerLocalProvider`); nothing
-loads `node-llama-cpp` until a local model is actually used.
+Local inference runs through `smoltalk`'s `llama-cpp` provider. Since
+smoltalk 0.11, smoltalk itself owns loading it: smoltalk-llama-cpp is
+smoltalk's *optional peer dependency*, and smoltalk's `loadLlamaCpp()`
+imports the package, validates its shape, and registers the provider —
+re-registering from its cached module whenever the name is absent, so a
+later `unregisterProvider` is undone by the next load call. `text()` calls
+with `provider: "llama-cpp"` auto-load it.
+
+Agency's half is `lib/runtime/localProvider.ts`, which owns finding the
+package in layouts smoltalk cannot see:
+
+- `loadLocalProvider()` calls smoltalk's `loadLlamaCpp`, picking the entry
+  path via the pure `chooseEntryPath`: the `AGENCY_LLAMA_PROVIDER_MODULE`
+  override first, then nothing when the package resolves locally (smoltalk
+  bare-imports it), then the global npm/pnpm roots probe
+  (`resolveSmoltalkLlamaCppFromRoots`) for `npm i -g` installs.
+- `ensureConfiguredLocalProvider(execCtx)` runs at both bootstrap sites
+  (`runtime/node.ts` fresh runs, `runtime/interrupts.ts` resumes) right
+  after `loadProviderModules`: when the baked config's
+  `smoltalkDefaults.provider` is `llama-cpp`, it pre-loads the provider so
+  a compiled child process works even for global installs.
+
+`AGENCY_LLAMA_PROVIDER_MODULE` is the test/advanced escape hatch: an entry
+path to a *plugin-shaped* module — one exporting a `LlamaCPP` class and
+`resolveModel(uriOrPath, cacheDir)`, the same shape smoltalk validates on
+the real package. (Before smoltalk 0.11 it pointed at a `register()`-shaped
+wrapper; the bundled `lib/stdlib/providers/llama-cpp.mjs` wrapper, the
+`AGENCY_SMOLTALK_LLAMA_CPP_PATH` relay, and the path-splitting
+`llamaModelConfig.ts` are all gone — `LlamaCPP` itself accepts a `.gguf`
+path as the model now.)
+
+Registration is lazy either way; nothing loads `node-llama-cpp` until a
+local model is actually used.
+
+Observability: loading emits a `localModelLoaded` statelog event carrying
+the pinned model and the `chooseEntryPath` decision (override / local /
+global) — from the bootstrap hook on the run path, and from
+`_registerLocalProvider` via `__ctx()` on the agent path (the plain CLI has
+no runtime frame, so it emits nothing).
 
 ## Name resolution
 

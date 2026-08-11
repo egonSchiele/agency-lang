@@ -144,6 +144,11 @@ start+end mergeable).
 
 Embeddings & images: `embedCompletion`, `imageGeneration`.
 
+Local models: `localModelLoaded` — the pinned model plus where the llama-cpp
+provider package was resolved from (`entrySource`: override / local / global).
+Emitted at bootstrap when config names the provider, and from
+`registerLocalModel` inside a run.
+
 Memory: `memoryRemember`, `memoryRecall`, `memoryForget`, `memoryCompaction`.
 
 Interrupts: `interruptThrown`, `handlerDecision`, `interruptResolved`.

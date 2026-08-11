@@ -70,6 +70,14 @@ export function resolveSmoltalkLlamaCppEntry(): string | null {
   return localEntry() ?? resolveSmoltalkLlamaCppFromRoots(globalNodeModulesRoots());
 }
 
+/** The chooseEntryPath decision: what to hand smoltalk, and how the package
+ *  was found (for the `localModelLoaded` statelog event). `entryPath` is
+ *  undefined for a bare import — sources "local" and "none". */
+export type LlamaCppEntryChoice = {
+  entryPath: string | undefined;
+  source: "override" | "local" | "global" | "none";
+};
+
 /** What to hand smoltalk's loadLlamaCpp: an explicit entry path, or
  *  undefined for a bare import. Pure — the probes come in as values/thunks so
  *  tests pin each branch. Precedence:
@@ -85,36 +93,70 @@ export function chooseEntryPath(args: {
   cwd: string;
   localEntry: string | null;
   globalEntry: () => string | null;
-}): string | undefined {
+}): LlamaCppEntryChoice {
   if (args.override !== undefined && args.override !== "") {
-    return path.isAbsolute(args.override)
+    const abs = path.isAbsolute(args.override)
       ? args.override
       : path.resolve(args.cwd, args.override);
+    return { entryPath: abs, source: "override" };
   }
-  if (args.localEntry !== null) return undefined;
-  return args.globalEntry() ?? undefined;
+  if (args.localEntry !== null) return { entryPath: undefined, source: "local" };
+  const globalPath = args.globalEntry();
+  if (globalPath !== null) return { entryPath: globalPath, source: "global" };
+  return { entryPath: undefined, source: "none" };
 }
+
+/** The one field of StatelogClient this module needs. Structural so the
+ *  runtime bootstrap can pass its client without this file importing the
+ *  statelog module. */
+type LocalModelEventSink = {
+  localModelLoaded(args: {
+    model?: string;
+    entryPath?: string;
+    entrySource: string;
+  }): Promise<void>;
+};
 
 /** Bootstrap hook: when the baked/overridden config routes calls to the
  *  llama-cpp provider, load it eagerly with the probe-assisted entry path.
  *  smoltalk auto-loads on text() for resolvable installs; this covers the
- *  global-CLI + global-plugin layout its bare import cannot see. */
+ *  global-CLI + global-plugin layout its bare import cannot see. Emits a
+ *  `localModelLoaded` statelog event naming the pinned model and where the
+ *  provider package came from. */
 export async function ensureConfiguredLocalProvider(execCtx: {
-  smoltalkDefaults?: { provider?: string };
+  smoltalkDefaults?: { provider?: string; model?: string };
+  statelogClient?: LocalModelEventSink;
 }): Promise<void> {
   if (execCtx.smoltalkDefaults?.provider !== "llama-cpp") return;
-  await loadLocalProvider();
+  const { choice } = await loadLocalProviderDetailed();
+  void execCtx.statelogClient?.localModelLoaded({
+    model: execCtx.smoltalkDefaults?.model,
+    entryPath: choice.entryPath,
+    entrySource: choice.source,
+  });
+}
+
+/** Like loadLocalProvider, also returning HOW the package was found, for
+ *  callers that emit the `localModelLoaded` event. */
+export async function loadLocalProviderDetailed(): Promise<{
+  module: LlamaCppModule;
+  choice: LlamaCppEntryChoice;
+}> {
+  const choice = chooseEntryPath({
+    override: process.env.AGENCY_LLAMA_PROVIDER_MODULE,
+    cwd: process.cwd(),
+    localEntry: localEntry(),
+    globalEntry: () => resolveSmoltalkLlamaCppFromRoots(globalNodeModulesRoots()),
+  });
+  const module = await loadLlamaCpp(
+    choice.entryPath === undefined ? undefined : { entryPath: choice.entryPath },
+  );
+  return { module, choice };
 }
 
 /** Load smoltalk's optional llama-cpp provider, resolving the package for
  *  layouts smoltalk cannot see on its own (see chooseEntryPath). Caching,
  *  idempotency, and registration live in smoltalk's loader, not here. */
 export async function loadLocalProvider(): Promise<LlamaCppModule> {
-  const entry = chooseEntryPath({
-    override: process.env.AGENCY_LLAMA_PROVIDER_MODULE,
-    cwd: process.cwd(),
-    localEntry: localEntry(),
-    globalEntry: () => resolveSmoltalkLlamaCppFromRoots(globalNodeModulesRoots()),
-  });
-  return await loadLlamaCpp(entry === undefined ? undefined : { entryPath: entry });
+  return (await loadLocalProviderDetailed()).module;
 }

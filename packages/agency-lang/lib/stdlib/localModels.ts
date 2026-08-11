@@ -5,7 +5,12 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { findFileUp } from "../importPaths.js";
-import { loadLocalProvider, resolveSmoltalkLlamaCppEntry } from "../runtime/localProvider.js";
+import {
+  loadLocalProvider,
+  loadLocalProviderDetailed,
+  resolveSmoltalkLlamaCppEntry,
+} from "../runtime/localProvider.js";
+import { __ctx } from "../runtime/asyncContext.js";
 import { ttyColor } from "../utils/termcolors.js";
 
 /** What a model is FOR — a single axis, orthogonal to size (size is conveyed
@@ -802,10 +807,18 @@ function requireSupport(): void {
   }
 }
 
-/** Register the llama-cpp provider into agency's own smoltalk. */
+/** Register the llama-cpp provider into agency's own smoltalk. When called
+ *  from inside a run (the agent's --local path), emit the `localModelLoaded`
+ *  statelog event saying where the provider package came from; the plain CLI
+ *  has no runtime frame, so `__ctx()` is undefined there and nothing is
+ *  emitted. */
 export async function _registerLocalProvider(): Promise<void> {
   requireSupport();
-  await loadLocalProvider();
+  const { choice } = await loadLocalProviderDetailed();
+  void __ctx()?.statelogClient.localModelLoaded({
+    entryPath: choice.entryPath,
+    entrySource: choice.source,
+  });
 }
 
 /** Stream-hash a file's SHA-256 (hex), never buffering the whole file. The

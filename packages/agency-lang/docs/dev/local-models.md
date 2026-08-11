@@ -38,6 +38,12 @@ path as the model now.)
 Registration is lazy either way; nothing loads `node-llama-cpp` until a
 local model is actually used.
 
+Observability: loading emits a `localModelLoaded` statelog event carrying
+the pinned model and the `chooseEntryPath` decision (override / local /
+global) — from the bootstrap hook on the run path, and from
+`_registerLocalProvider` via `__ctx()` on the agent path (the plain CLI has
+no runtime frame, so it emits nothing).
+
 ## Name resolution
 
 `_resolveModelName(value)` maps a value to a model URI/path:

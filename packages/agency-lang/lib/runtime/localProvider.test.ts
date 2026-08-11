@@ -57,7 +57,7 @@ describe("chooseEntryPath", () => {
         localEntry: "/l/e.js",
         globalEntry: () => "/g/e.js",
       }),
-    ).toBe("/abs/fake.mjs");
+    ).toEqual({ entryPath: "/abs/fake.mjs", source: "override" });
     expect(
       chooseEntryPath({
         override: "rel/fake.mjs",
@@ -65,10 +65,10 @@ describe("chooseEntryPath", () => {
         localEntry: null,
         globalEntry: () => null,
       }),
-    ).toBe(path.resolve("/w", "rel/fake.mjs"));
+    ).toEqual({ entryPath: path.resolve("/w", "rel/fake.mjs"), source: "override" });
   });
 
-  it("locally resolvable → undefined (smoltalk bare import owns it) and the global probe is not run", () => {
+  it("locally resolvable → bare import (no entryPath) and the global probe is not run", () => {
     expect(
       chooseEntryPath({
         override: undefined,
@@ -78,7 +78,7 @@ describe("chooseEntryPath", () => {
           throw new Error("must not probe global roots");
         },
       }),
-    ).toBeUndefined();
+    ).toEqual({ entryPath: undefined, source: "local" });
   });
 
   it("global-only install → the probed path", () => {
@@ -89,10 +89,10 @@ describe("chooseEntryPath", () => {
         localEntry: null,
         globalEntry: () => "/g/e.js",
       }),
-    ).toBe("/g/e.js");
+    ).toEqual({ entryPath: "/g/e.js", source: "global" });
   });
 
-  it("nothing found → undefined (smoltalk raises its install hint)", () => {
+  it("nothing found → bare import (smoltalk raises its install hint)", () => {
     expect(
       chooseEntryPath({
         override: undefined,
@@ -100,7 +100,7 @@ describe("chooseEntryPath", () => {
         localEntry: null,
         globalEntry: () => null,
       }),
-    ).toBeUndefined();
+    ).toEqual({ entryPath: undefined, source: "none" });
   });
 });
 
@@ -143,6 +143,40 @@ describe("ensureConfiguredLocalProvider", () => {
       messages: [],
     });
     expect(client.constructor.name).toBe("LlamaCPP");
+  });
+
+  it("emits localModelLoaded with the pinned model and entry source", async () => {
+    const fakePath = writeFakePlugin();
+    process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakePath;
+    const events: object[] = [];
+    await ensureConfiguredLocalProvider({
+      smoltalkDefaults: { provider: "llama-cpp", model: "/models/pinned.gguf" },
+      statelogClient: {
+        async localModelLoaded(args) {
+          events.push(args);
+        },
+      },
+    });
+    expect(events).toEqual([
+      {
+        model: "/models/pinned.gguf",
+        entryPath: fakePath,
+        entrySource: "override",
+      },
+    ]);
+  });
+
+  it("does not emit when the config does not name llama-cpp", async () => {
+    const events: object[] = [];
+    await ensureConfiguredLocalProvider({
+      smoltalkDefaults: { provider: "openai" },
+      statelogClient: {
+        async localModelLoaded(args) {
+          events.push(args);
+        },
+      },
+    });
+    expect(events).toEqual([]);
   });
 });
 

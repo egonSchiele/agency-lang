@@ -172,6 +172,7 @@ export default defineConfig({
           collapsed: true,
           items: [
             { text: "VSCode Extension", link: "/guide/vscode-extension" },
+            { text: "Using Local Models", link: "/guide/using-local-models" },
             {
               text: "Agency vs TypeScript",
               link: "/guide/agency-vs-typescript",

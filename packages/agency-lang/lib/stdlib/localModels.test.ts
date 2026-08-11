@@ -13,7 +13,6 @@ import {
   _removeModel,
   _localModelsSupported,
   resolveAliasConfigPath,
-  resolveSmoltalkLlamaCppFromRoots,
   formatModelCatalog,
   resolveCatalogUrl,
   parseCatalog,
@@ -160,45 +159,8 @@ describe("support check", () => {
   });
 });
 
-// Helper: each global `node_modules` root must literally be a directory
-// named `node_modules` (the convention `npm root -g` / `pnpm root -g` uses
-// — `/opt/homebrew/lib/node_modules`, `~/Library/pnpm/global/5/node_modules`).
-// The resolver walks UP from `<root>/..` looking for a `node_modules` sibling,
-// which is the root itself.
-function makeFakeGlobalRoot(parent: string, name: string): string {
-  const root = path.join(parent, name, "node_modules");
-  fs.mkdirSync(root, { recursive: true });
-  return root;
-}
-
-function plantFakePackage(root: string, packageName: string): string {
-  const pkgDir = path.join(root, packageName);
-  fs.mkdirSync(pkgDir, { recursive: true });
-  fs.writeFileSync(
-    path.join(pkgDir, "package.json"),
-    JSON.stringify({ name: packageName, version: "0.0.0", main: "index.js" }),
-  );
-  fs.writeFileSync(path.join(pkgDir, "index.js"), "module.exports = {};");
-  return path.join(pkgDir, "index.js");
-}
-
-describe("resolveSmoltalkLlamaCppFromRoots (global-install discovery)", () => {
-  it("finds the package in a synthetic global node_modules root", () => {
-    const root = makeFakeGlobalRoot(dir, "fake-global");
-    const entry = plantFakePackage(root, "smoltalk-llama-cpp");
-    expect(resolveSmoltalkLlamaCppFromRoots([root])).toBe(entry);
-  });
-  it("returns null when no root contains the package", () => {
-    const empty = makeFakeGlobalRoot(dir, "empty-global");
-    expect(resolveSmoltalkLlamaCppFromRoots([empty])).toBeNull();
-  });
-  it("tries roots in order and returns the first hit", () => {
-    const rootA = makeFakeGlobalRoot(dir, "g-a");
-    const rootB = makeFakeGlobalRoot(dir, "g-b");
-    const entryB = plantFakePackage(rootB, "smoltalk-llama-cpp");
-    expect(resolveSmoltalkLlamaCppFromRoots([rootA, rootB])).toBe(entryB);
-  });
-});
+// The global-install discovery tests moved to lib/runtime/localProvider.test.ts
+// with the probe functions themselves.
 
 import { _registerLocalProvider, _downloadModel, _registerLocalModel } from "./localModels.js";
 import * as smoltalkPkg from "smoltalk";

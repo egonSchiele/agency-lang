@@ -1,13 +1,12 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { createRequire } from "node:module";
-import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { findFileUp } from "../importPaths.js";
 import { loadProviderModuleByPath } from "../runtime/providerModules.js";
+import { resolveSmoltalkLlamaCppEntry } from "../runtime/localProvider.js";
 import { ttyColor } from "../utils/termcolors.js";
 
 /** What a model is FOR — a single axis, orthogonal to size (size is conveyed
@@ -771,72 +770,6 @@ export async function _refreshCatalog(
     skipped,
     modelCount: Object.keys(models).length,
   };
-}
-
-// Cached so we don't shell out repeatedly per process.
-let cachedGlobalRoots: string[] | null = null;
-
-/** Discover global `node_modules` roots reported by `npm` and `pnpm`, in that
- *  order. Each entry is the directory printed by `<tool> root -g` (which is
- *  itself a `node_modules` dir, e.g. `/opt/homebrew/lib/node_modules` for
- *  Homebrew npm, `~/Library/pnpm/global/5/node_modules` for pnpm). Failures
- *  (tool not installed, exit non-zero, dir missing) are silently skipped. */
-export function globalNodeModulesRoots(): string[] {
-  if (cachedGlobalRoots !== null) {
-    return cachedGlobalRoots;
-  }
-  const roots: string[] = [];
-  for (const cmd of ["npm", "pnpm"]) {
-    try {
-      const out = execFileSync(cmd, ["root", "-g"], {
-        encoding: "utf-8",
-        stdio: ["ignore", "pipe", "ignore"],
-      }).trim();
-      if (out && fs.existsSync(out) && !roots.includes(out)) {
-        roots.push(out);
-      }
-    } catch {
-      /* tool not installed or failed — skip */
-    }
-  }
-  cachedGlobalRoots = roots;
-  return roots;
-}
-
-/** Try to resolve `smoltalk-llama-cpp` from the given global `node_modules`
- *  roots. Each `root` is itself a `node_modules` directory (the convention
- *  `npm root -g` / `pnpm root -g` uses). Node's resolver looks for
- *  `<parent>/node_modules/<pkg>` for each parent dir it walks up, so the
- *  createRequire base must live in the root's PARENT directory — from
- *  `<root>/../_resolver.js` it correctly finds `<root>/smoltalk-llama-cpp/...`.
- *  Exported for unit-testing with a controllable list of roots. */
-export function resolveSmoltalkLlamaCppFromRoots(roots: string[]): string | null {
-  for (const root of roots) {
-    try {
-      const req = createRequire(path.join(root, "..", "_resolver.js"));
-      return req.resolve("smoltalk-llama-cpp");
-    } catch {
-      /* not in this root — try the next */
-    }
-  }
-  return null;
-}
-
-/** Resolve `smoltalk-llama-cpp` to the absolute path of its main entry,
- *  searching:
- *   1. The local `require` paths walking up from this file (covers in-workspace
- *      `pnpm add` and a user-project install).
- *   2. Each global `node_modules` root reported by `npm root -g` / `pnpm root -g`
- *      (covers `npm i -g` and `pnpm add -g` — the documented install methods).
- *
- *  Returns `null` if the package isn't reachable from any of those. */
-export function resolveSmoltalkLlamaCppEntry(): string | null {
-  try {
-    return createRequire(import.meta.url).resolve("smoltalk-llama-cpp");
-  } catch {
-    /* not local — try global install roots */
-  }
-  return resolveSmoltalkLlamaCppFromRoots(globalNodeModulesRoots());
 }
 
 /** True if smoltalk-llama-cpp is reachable from the local require paths OR

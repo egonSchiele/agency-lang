@@ -63,30 +63,49 @@ function formatCodePoint(cp: number): string {
  * offsets are absolute in that source.
  */
 export function decodeReferences(run: string, baseOffset: number): DecodeOutcome {
-  let out = "";
-  let i = 0;
   const n = run.length;
+  // Chunked copy: scan with charCodeAt, slice whole segments only at
+  // reference boundaries, and hand back the input string untouched when
+  // nothing decoded. Per-character string building was ~6x slower.
+  let out = "";
+  let segStart = 0;
+  let decoded = false;
+  let i = 0;
   while (i < n) {
     const c = run.charCodeAt(i);
-    if (c === AMP) {
-      const ref = decodeOneReference(run, i);
-      if (ref.kind === "decoded") {
-        out += ref.text;
-        i = ref.next;
-        continue;
-      }
-      if (ref.kind === "failure") {
-        return { ok: false, message: ref.message, offset: baseOffset + i };
-      }
-      out += "&";
+    // Fast path: everything from ' (0x27) up to the surrogate range is a
+    // plain legal character (& is 0x26, so it falls through).
+    if (c >= 0x27 && c < 0xd800) {
       i++;
       continue;
     }
-    // Raw character validation. Combine surrogate pairs to a code point.
+    if (c === AMP) {
+      const ref = decodeOneReference(run, i);
+      if (ref.kind === "failure") {
+        return { ok: false, message: ref.message, offset: baseOffset + i };
+      }
+      if (ref.kind === "decoded") {
+        out += run.slice(segStart, i) + ref.text;
+        segStart = ref.next;
+        i = ref.next;
+        decoded = true;
+        continue;
+      }
+      i++; // literal ampersand: keep it in the current segment
+      continue;
+    }
+    if ((c >= 0x20 && c < 0xd800) || c === 0x9 || c === 0xa || c === 0xd) {
+      i++;
+      continue;
+    }
+    if (c >= 0xe000 && c <= 0xfffd) {
+      i++;
+      continue;
+    }
+    // Surrogates: a proper pair is legal, anything unpaired is not.
     if (c >= 0xd800 && c <= 0xdbff) {
       const c2 = i + 1 < n ? run.charCodeAt(i + 1) : -1;
       if (c2 >= 0xdc00 && c2 <= 0xdfff) {
-        out += run[i] + run[i + 1];
         i += 2;
         continue;
       }
@@ -95,17 +114,14 @@ export function decodeReferences(run: string, baseOffset: number): DecodeOutcome
     if (c >= 0xdc00 && c <= 0xdfff) {
       return { ok: false, message: "unpaired surrogate is not a legal XML character", offset: baseOffset + i };
     }
-    if (!isXmlChar(c)) {
-      return {
-        ok: false,
-        message: `forbidden character ${formatCodePoint(c)} is not a legal XML character`,
-        offset: baseOffset + i,
-      };
-    }
-    out += run[i];
-    i++;
+    return {
+      ok: false,
+      message: `forbidden character ${formatCodePoint(c)} is not a legal XML character`,
+      offset: baseOffset + i,
+    };
   }
-  return { ok: true, text: out };
+  if (!decoded) return { ok: true, text: run };
+  return { ok: true, text: out + run.slice(segStart) };
 }
 
 /**
@@ -117,6 +133,15 @@ export function validateChars(run: string, baseOffset: number): DecodeOutcome {
   const n = run.length;
   while (i < n) {
     const c = run.charCodeAt(i);
+    // Fast path: space up to the surrogate range, plus tab/LF/CR.
+    if ((c >= 0x20 && c < 0xd800) || c === 0x9 || c === 0xa || c === 0xd) {
+      i++;
+      continue;
+    }
+    if (c >= 0xe000 && c <= 0xfffd) {
+      i++;
+      continue;
+    }
     if (c >= 0xd800 && c <= 0xdbff) {
       const c2 = i + 1 < n ? run.charCodeAt(i + 1) : -1;
       if (c2 >= 0xdc00 && c2 <= 0xdfff) {

@@ -10,8 +10,9 @@
 // import in TS. So the dynamic import is quarantined in this plain .mjs, which
 // the Makefile copies into dist alongside the TS output and which lint does not
 // cover. lib/stdlib/mcp.ts imports THIS module statically (it is always
-// present) and never imports the package directly. Same pattern as
-// lib/stdlib/providers/llama-cpp.mjs.
+// present) and never imports the package directly. (llama-cpp used the same
+// pattern until smoltalk 0.11 absorbed that loader — see
+// lib/runtime/localProvider.ts.)
 //
 // # How load() resolves the package
 //

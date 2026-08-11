@@ -79,9 +79,7 @@ build:
 	mkdir -p dist/lib/cli/runShim
 	rm -f dist/lib/cli/runShim/*.mjs
 	cp lib/cli/runShim/*.mjs dist/lib/cli/runShim/
-	mkdir -p dist/lib/stdlib/providers
-	rm -f dist/lib/stdlib/providers/*.mjs
-	cp lib/stdlib/providers/*.mjs dist/lib/stdlib/providers/
+	rm -rf dist/lib/stdlib/providers
 	cp lib/stdlib/mcpBridge.mjs dist/lib/stdlib/mcpBridge.mjs
 
 # Full reset: compiled TS, incremental scratch state, and the gitignored

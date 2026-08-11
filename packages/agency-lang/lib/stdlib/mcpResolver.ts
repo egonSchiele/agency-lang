@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import * as path from "path";
-import { globalNodeModulesRoots } from "./localModels.js";
+import { globalNodeModulesRoots } from "../runtime/localProvider.js";
 
 const PKG = "@agency-lang/mcp";
 
@@ -9,7 +9,7 @@ const PKG = "@agency-lang/mcp";
  *  then local require paths, then each global node_modules root (npm i -g /
  *  pnpm add -g). Null if not reachable. Resolution only — never imports the
  *  package (that is the bridge's job). The override mirrors llama-cpp's
- *  AGENCY_SMOLTALK_LLAMA_CPP_PATH escape hatch; agency-lang does not depend on
+ *  AGENCY_LLAMA_PROVIDER_MODULE escape hatch; agency-lang does not depend on
  *  the package, so it is NOT resolvable from a monorepo checkout without it. */
 export function resolveMcpEntry(): string | null {
   const override = process.env.AGENCY_MCP_PATH;

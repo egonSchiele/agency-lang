@@ -15,6 +15,7 @@ import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { __initAllRegistered, __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
 import { loadProviderModules } from "./providerModules.js";
+import { ensureConfiguredLocalProvider } from "./localProvider.js";
 import { resolveTraceFilePath } from "./trace/traceWriter.js";
 import { getSubprocessRunInfo } from "./subprocessRunInfo.js";
 import { resolveInvocation, type InvocationOptions } from "./invocationOptions.js";
@@ -182,6 +183,7 @@ async function initFreshExecCtx(
   // Process-global + idempotent (see loadProviderModules), so it is safe and
   // cheap to call on every fresh run.
   await loadProviderModules(execCtx);
+  await ensureConfiguredLocalProvider(execCtx);
   await runInBootstrapFrame(execCtx, () => __initAllRegistered(execCtx));
   if (initializeGlobals) {
     await runInBootstrapFrame(execCtx, () => initializeGlobals(execCtx));

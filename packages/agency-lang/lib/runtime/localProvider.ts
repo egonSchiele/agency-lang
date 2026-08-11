@@ -95,6 +95,17 @@ export function chooseEntryPath(args: {
   return args.globalEntry() ?? undefined;
 }
 
+/** Bootstrap hook: when the baked/overridden config routes calls to the
+ *  llama-cpp provider, load it eagerly with the probe-assisted entry path.
+ *  smoltalk auto-loads on text() for resolvable installs; this covers the
+ *  global-CLI + global-plugin layout its bare import cannot see. */
+export async function ensureConfiguredLocalProvider(execCtx: {
+  smoltalkDefaults?: { provider?: string };
+}): Promise<void> {
+  if (execCtx.smoltalkDefaults?.provider !== "llama-cpp") return;
+  await loadLocalProvider();
+}
+
 /** Load smoltalk's optional llama-cpp provider, resolving the package for
  *  layouts smoltalk cannot see on its own (see chooseEntryPath). Caching,
  *  idempotency, and registration live in smoltalk's loader, not here. */

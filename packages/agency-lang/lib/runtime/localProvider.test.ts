@@ -7,6 +7,7 @@ import * as smoltalkPkg from "smoltalk";
 import {
   loadLocalProvider,
   chooseEntryPath,
+  ensureConfiguredLocalProvider,
   resolveSmoltalkLlamaCppFromRoots,
 } from "./localProvider.js";
 
@@ -121,6 +122,27 @@ describe("loadLocalProvider", () => {
     process.env.AGENCY_LLAMA_PROVIDER_MODULE = path.relative(process.cwd(), abs);
     const mod = await loadLocalProvider();
     expect(typeof mod.resolveModel).toBe("function");
+  });
+});
+
+// Env/registry/fake-file cleanup comes from the file-level afterEach above.
+describe("ensureConfiguredLocalProvider", () => {
+  it("is a no-op when the config does not name llama-cpp", async () => {
+    // No env override, no package: would throw if it tried to load.
+    await ensureConfiguredLocalProvider({ smoltalkDefaults: { provider: "openai" } });
+    await ensureConfiguredLocalProvider({ smoltalkDefaults: {} });
+    await ensureConfiguredLocalProvider({});
+  });
+
+  it("loads the provider when the config names llama-cpp", async () => {
+    process.env.AGENCY_LLAMA_PROVIDER_MODULE = writeFakePlugin();
+    await ensureConfiguredLocalProvider({ smoltalkDefaults: { provider: "llama-cpp" } });
+    const client = smoltalkPkg.getClient({
+      model: "m",
+      provider: "llama-cpp",
+      messages: [],
+    });
+    expect(client.constructor.name).toBe("LlamaCPP");
   });
 });
 

@@ -1,12 +1,11 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { findFileUp } from "../importPaths.js";
-import { loadProviderModuleByPath } from "../runtime/providerModules.js";
-import { resolveSmoltalkLlamaCppEntry } from "../runtime/localProvider.js";
+import { loadLocalProvider, resolveSmoltalkLlamaCppEntry } from "../runtime/localProvider.js";
 import { ttyColor } from "../utils/termcolors.js";
 
 /** What a model is FOR — a single axis, orthogonal to size (size is conveyed
@@ -791,39 +790,6 @@ export function hasLocalModelSupport(): boolean {
   return _localModelsSupported();
 }
 
-/** Expose the resolved `smoltalk-llama-cpp` entry path to the bundled
- *  `llama-cpp.mjs` via the AGENCY_SMOLTALK_LLAMA_CPP_PATH env var, so that
- *  the bundled module can dynamically import it even when the package lives
- *  in a global `node_modules` that isn't on this file's resolution path.
- *  Idempotent. */
-function exposeResolvedLlamaCppPath(): void {
-  if (process.env.AGENCY_SMOLTALK_LLAMA_CPP_PATH) {
-    return;
-  }
-  const entry = resolveSmoltalkLlamaCppEntry();
-  if (entry !== null) {
-    process.env.AGENCY_SMOLTALK_LLAMA_CPP_PATH = entry;
-  }
-}
-
-type LlamaBundle = {
-  resolveModel?: (uriOrPath: string, cacheDir: string) => Promise<string>;
-};
-
-/** Absolute fs path of the bundled llama-cpp provider module. Tests/advanced
- *  callers can override via AGENCY_LLAMA_PROVIDER_MODULE (also an fs path).
- *  The override is normalized to an absolute path so `_downloadModel`'s
- *  `pathToFileURL(...)` call works even when callers pass a relative path
- *  (which `loadProviderModuleByPath` would itself happily resolve, but the
- *  download path bypasses that helper). */
-function bundledLlamaModule(): string {
-  const override = process.env.AGENCY_LLAMA_PROVIDER_MODULE;
-  if (override !== undefined && override !== "") {
-    return path.isAbsolute(override) ? override : path.resolve(process.cwd(), override);
-  }
-  return fileURLToPath(new URL("./providers/llama-cpp.mjs", import.meta.url));
-}
-
 /** Guard the install-required commands. If the user set
  *  AGENCY_LLAMA_PROVIDER_MODULE they're supplying a provider module directly,
  *  so skip the smoltalk-llama-cpp resolve check. */
@@ -839,8 +805,7 @@ function requireSupport(): void {
 /** Register the llama-cpp provider into agency's own smoltalk. */
 export async function _registerLocalProvider(): Promise<void> {
   requireSupport();
-  exposeResolvedLlamaCppPath();
-  await loadProviderModuleByPath(bundledLlamaModule());
+  await loadLocalProvider();
 }
 
 /** Stream-hash a file's SHA-256 (hex), never buffering the whole file. The
@@ -925,20 +890,9 @@ export function snapshotFreshness(dir: string): FreshnessProbe {
 /** Resolve a name/uri/path to a local .gguf path, downloading if needed. */
 export async function _downloadModel(value: string, cacheDir: string = ""): Promise<string> {
   requireSupport();
-  exposeResolvedLlamaCppPath();
   const target = _resolveModelName(value);
   const dir = resolveCacheDir(cacheDir);
-  const fsPath = bundledLlamaModule();
-  let mod: LlamaBundle;
-  try {
-    // eslint-disable-next-line no-restricted-syntax -- on-demand load of the optional provider module
-    mod = (await import(pathToFileURL(fsPath).href)) as LlamaBundle;
-  } catch (err) {
-    throw new Error(`Failed to load the local-model provider: ${(err as Error).message}`);
-  }
-  if (typeof mod.resolveModel !== "function") {
-    throw new Error(`Local-model provider module must export resolveModel().`);
-  }
+  const mod = await loadLocalProvider();
   // Snapshot freshness BEFORE resolving so we verify the bytes only once, right
   // after a real download (a cache hit is skipped — the file can't change on
   // disk between runs).

@@ -163,6 +163,7 @@ describe("support check", () => {
 // with the probe functions themselves.
 
 import { _registerLocalProvider, _downloadModel, _registerLocalModel } from "./localModels.js";
+import { readDownloadManifest } from "./localModelManifest.js";
 import * as smoltalkPkg from "smoltalk";
 
 describe("provider register + download (fake plugin module)", () => {
@@ -198,11 +199,12 @@ describe("provider register + download (fake plugin module)", () => {
     await _registerLocalProvider();
     expect(smoltalkPkg.getClient({ model: "m", provider: "llama-cpp" }).constructor.name).toBe("LlamaCPP");
   });
-  it("downloads (resolves) a uri to a real path", async () => {
+  it("downloads (resolves) a uri to a real path and records it in the manifest", async () => {
     process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
     const out = await _downloadModel("hf:org/repo:Q4", dir); // raw uri → no pin
     expect(out).toBe(path.join(dir, "model.gguf"));
     expect(fs.existsSync(out)).toBe(true);
+    expect(readDownloadManifest(dir)).toEqual({ "hf:org/repo:Q4": "model.gguf" });
   });
   it("registerLocalModel registers and returns the resolved path", async () => {
     process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();

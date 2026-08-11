@@ -11,6 +11,7 @@ import {
   resolveSmoltalkLlamaCppEntry,
 } from "../runtime/localProvider.js";
 import { __ctx } from "../runtime/asyncContext.js";
+import { recordDownload } from "./localModelManifest.js";
 import { ttyColor } from "../utils/termcolors.js";
 
 /** What a model is FOR — a single axis, orthogonal to size (size is conveyed
@@ -197,6 +198,13 @@ export function defaultCacheDir(): string {
 /** Treat empty string as "caller wants the default cache dir". */
 function resolveCacheDir(cacheDir: string): string {
   return cacheDir === "" ? defaultCacheDir() : cacheDir;
+}
+
+/** The resolved models cache dir (AGENCY_MODELS_DIR env → agency.json
+ *  client.modelsDir → ~/.agency-agent/models). Exported so `agency local
+ *  list` can name where downloads land. */
+export function _modelsCacheDir(cacheDir: string = ""): string {
+  return resolveCacheDir(cacheDir);
 }
 
 function isGgufPath(v: string): boolean {
@@ -915,6 +923,9 @@ export async function _downloadModel(value: string, cacheDir: string = ""): Prom
   if (expected !== undefined && wasFresh(resolved)) {
     await verifyModelFile(resolved, expected, value);
   }
+  // Record-after-verify: an invalid-hash file throws above and is never
+  // written into the manifest.
+  recordDownload(dir, target, path.basename(resolved));
   return resolved;
 }
 

@@ -1,17 +1,22 @@
+import prompts from "prompts";
 import {
   _resolveModelName,
   _downloadModel,
   _listDownloadedModels,
   _listModelNames,
+  _modelsCacheDir,
   _aliasModel,
   _unaliasModel,
   _removeModel,
   hasLocalModelSupport,
   formatGB,
   formatModelCatalog,
+  formatLocalList,
   _refreshCatalog,
+  type ModelNameEntry,
   type RefreshResult,
 } from "../stdlib/localModels.js";
+import { readDownloadManifest } from "../stdlib/localModelManifest.js";
 import { ttyColor } from "../utils/termcolors.js";
 
 /** Install-gate for I/O commands. Honors the AGENCY_LLAMA_PROVIDER_MODULE
@@ -48,27 +53,78 @@ export function aliasRemove(name: string, file?: string): string {
   return inspected;
 }
 
+/** Deliberately ungated: browsing the catalog needs no provider package
+ *  (only download/remove do), and the pre-install experience — see what is
+ *  available, then get told what to install — is the point. */
 export function runList(): void {
-  gate();
-  const models = _listDownloadedModels();
-  if (models.length === 0) {
-    console.log("No models downloaded.");
-    return;
-  }
-  for (const m of models) {
-    console.log(`${m.name}\t${formatGB(m.sizeBytes)}`);
-  }
-  const total = models.reduce((sum, m) => sum + m.sizeBytes, 0);
-  console.log(`Total: ${formatGB(total)}`);
+  const dir = _modelsCacheDir();
+  console.log(
+    formatLocalList({
+      dir,
+      entries: _listModelNames(),
+      manifest: readDownloadManifest(dir),
+      files: _listDownloadedModels(),
+    }),
+  );
 }
 
-export async function runDownload(value: string): Promise<void> {
+export const CUSTOM_CHOICE = "__custom__";
+
+/** Picker rows for the no-argument `agency local download`. Metadata-less
+ *  aliases get a bare name; the trailing choice lets the user type an hf: URI
+ *  or .gguf path. */
+export function downloadChoices(
+  entries: ModelNameEntry[],
+): { title: string; value: string }[] {
+  const rows = entries.map((e) => ({
+    title:
+      e.params !== undefined && e.sizeBytes !== undefined
+        ? `${e.name}  (${e.params}, ${formatGB(e.sizeBytes)})`
+        : e.name,
+    value: e.name,
+  }));
+  return [...rows, { title: "custom (hf: URI or .gguf path)…", value: CUSTOM_CHOICE }];
+}
+
+export async function runDownload(value?: string): Promise<void> {
   gate();
+  let picked = value;
+  if (picked === undefined) {
+    // Prompting needs BOTH ends of the terminal: a TTY stdout to draw on and
+    // a TTY stdin to read from (`agency local download < /dev/null` from a
+    // terminal has a TTY stdout but nothing to read).
+    if (process.stdin.isTTY !== true || process.stdout.isTTY !== true) {
+      // A script that reaches this point asked for a download and did not
+      // get one — print what is available and fail.
+      console.log(formatModelCatalog());
+      console.error("Pass a model: agency local download <name>");
+      process.exit(1);
+    }
+    const answer = await prompts({
+      type: "select",
+      name: "model",
+      message: "Which model do you want to download?",
+      choices: downloadChoices(_listModelNames()),
+    });
+    // Cancellation can surface as a missing key or as null — treat both as
+    // "exit 0, nothing downloaded".
+    if (answer.model == null) return;
+    picked = answer.model as string;
+    if (picked === CUSTOM_CHOICE) {
+      const custom = await prompts({
+        type: "text",
+        name: "value",
+        message: "hf: URI or .gguf path:",
+      });
+      if (custom.value == null || custom.value === "") return;
+      picked = custom.value as string;
+    }
+  }
   // Show the source it resolved to (the hf: URI for a name/alias) and the
   // local path it landed at. For a .gguf-path input the two are the same, so
   // the source line is skipped.
-  const source = _resolveModelName(value);
-  const modelPath = await _downloadModel(value);
+  const source = _resolveModelName(picked);
+  const modelPath = await _downloadModel(picked);
   if (source !== modelPath) {
     console.log(`source: ${source}`);
   }

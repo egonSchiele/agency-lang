@@ -18,6 +18,7 @@ import {
 } from "@/cli/installLocation.js";
 import { pack } from "@/cli/pack.js";
 import { resolveModelFlag } from "@/cli/modelFlag.js";
+import { resolveLocalRunFlag } from "@/cli/localFlag.js";
 import { warnMisplacedAgencyFlags } from "@/cli/commandLine.js";
 import { runLink } from "@/cli/remote/commands/link.js";
 import { runDeploy } from "@/cli/remote/commands/deploy.js";
@@ -145,6 +146,7 @@ type RunOptions = Omit<CliFlags, "trace"> & {
   interactive?: boolean;
   maxCost?: string;
   maxTime?: string;
+  local?: string;
 };
 
 // commander option parsers. Match the WHOLE string against digits so
@@ -239,7 +241,24 @@ export function createProgram(deps: CliDependencies = {}): Command {
     return { config: getConfig(), configPath };
   }
 
-  function runWithOptions(input: string, options: RunOptions, nodeArgs: string[] = []) {
+  async function runWithOptions(input: string, options: RunOptions, nodeArgs: string[] = []) {
+    if (options.local !== undefined && options.model !== undefined) {
+      console.error(
+        "Error: Pass either --model (hosted) or --local (local), not both.",
+      );
+      process.exit(2);
+    }
+    if (options.local !== undefined) {
+      // Resolve + download in the parent, before compiling, so progress and
+      // SHA-256 verification happen in the terminal; the result rides the
+      // ordinary --model pathway (applyCliFlags) into baked config.
+      try {
+        options = { ...options, model: await resolveLocalRunFlag(options.local) };
+      } catch (e) {
+        console.error(`Error: ${(e as Error).message}`);
+        process.exit(1);
+      }
+    }
     // applyCliFlags takes one field: a path, or `true` for the default path.
     // The CLI splits that across two flags so neither swallows the filename.
     const config = applyCliFlags(
@@ -395,6 +414,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
         (value: string) => resolveModelFlag(value),
       )
       .option(
+        "--local <model>",
+        "Run every LLM call on a local model: a curated name, an alias, an hf: URI, or a .gguf path (see: agency local list)",
+      )
+      .option(
         "--policy <name|path>",
         "Interrupt policy: a built-in (recommended|minimal|with-writes|approve-all) or a policy JSON file",
       )
@@ -434,7 +457,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
         "Arguments after the filename go to the program; read them with std::args",
       ),
   ).action(
-    (input: string, nodeArgs: string[], options: RunOptions, command: Command) => {
+    async (input: string, nodeArgs: string[], options: RunOptions, command: Command) => {
       const warning = warnMisplacedAgencyFlags(command, input);
       if (warning !== undefined) console.warn(warning);
       if (
@@ -446,7 +469,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
         // be; the diagnostic suggests near-miss command names.
         command.unknownFallbackOperand(input);
       }
-      runWithOptions(input, options, nodeArgs);
+      await runWithOptions(input, options, nodeArgs);
     },
   );
 
@@ -734,9 +757,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "Output trace file path (default: <input>.trace)",
     )
     .option("--resume <statefile>", "Resume execution from a saved state file")
-    .action((input: string, options: { output?: string; resume?: string }) => {
+    .action(async (input: string, options: { output?: string; resume?: string }) => {
       const traceFile = options.output || input.replace(/\.agency$/, ".trace");
-      runWithOptions(input, { traceFile, resume: options.resume });
+      await runWithOptions(input, { traceFile, resume: options.resume });
     });
 
   traceCmd
@@ -1566,9 +1589,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
     );
 
   const localCmd = program.command("local").description("Manage and run local models");
-  localCmd.command("list").description("List downloaded models").action(localList);
-  localCmd.command("download").description("Download a model (curated name, alias, or hf: URI)")
-    .argument("<value>").action(localDownload);
+  localCmd.command("list").description("List local models: the full catalog, with downloaded models marked").action(localList);
+  localCmd.command("download").description("Download a model (curated name, alias, or hf: URI); no argument opens a picker")
+    .argument("[value]").action(localDownload);
   localCmd.command("remove").description("Delete a downloaded model").argument("<name>")
     .action(localRemove);
   localCmd.command("resolve").description("Show what a name/alias resolves to").argument("<value>")

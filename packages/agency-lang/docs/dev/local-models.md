@@ -44,6 +44,52 @@ global) — from the bootstrap hook on the run path, and from
 `_registerLocalProvider` via `__ctx()` on the agent path (the plain CLI has
 no runtime frame, so it emits nothing).
 
+## `agency run --local`
+
+`--local <model>` on `agency run` (and the `agency <file>` shorthand) pins the
+whole run to a local model. The value's domain is `_resolveModelName`'s:
+curated name, alias, `hf:` URI, or `.gguf` path. `--local` with `--model` is
+an error (exit 2), checked before any other work. The value is required — an
+optional-valued flag would swallow the input filename, the same commander
+behavior that split `--trace` in two.
+
+Flow: `runWithOptions` calls `resolveLocalRunFlag` (`lib/cli/localFlag.ts`)
+in the PARENT CLI, so download progress and SHA-256 verification happen in
+the terminal before the program starts. The result —
+`{ model: <absolute .gguf path>, explicitProvider: "llama-cpp" }` — is folded
+into the ordinary `CliFlags.model` slot, so `applyCliFlags` stays the single
+owner of flag→config meaning. The path is absolutized because `LlamaCPP`
+rejects a bare separator-less filename (ambiguous with a model name), which
+is what `--local model.gguf` would otherwise arrive as. The child process
+picks the provider up from baked config via the bootstrap hook above.
+End-to-end coverage: `lib/cli/runLocal.spawn.test.ts` (fake plugin, no
+network).
+
+## The downloads manifest
+
+`downloads.json` in the models cache dir maps a resolved model URI to the
+`.gguf` basename node-llama-cpp stored it under
+(`lib/stdlib/localModelManifest.ts`). `_downloadModel` records after
+verification succeeds (an invalid-hash file is never recorded); writes go
+through temp-file + rename so an interrupted write keeps the previous valid
+manifest. It is display metadata only: resolution, downloading, and
+verification never read it, so a corrupt or deleted manifest can mislabel
+the `agency local list` view and nothing else. Concurrent downloaders race
+whole-file (last writer wins) — accepted for display metadata.
+
+## The `agency local` CLI surface
+
+- `list` (`runList` → `formatLocalList`) is UNGATED — browsing needs no
+  provider package. First line names the resolved models directory; catalog
+  rows get a `✓` + on-disk size when the manifest maps their target URI to a
+  file that still exists; files no catalog row claims (raw-URI downloads,
+  pre-manifest downloads) appear under `OTHER FILES`.
+- `download` with no argument opens a `prompts` picker over
+  `downloadChoices(_listModelNames())`, with a trailing custom choice for an
+  `hf:` URI / `.gguf` path. Non-TTY prints the catalog plus a
+  `Pass a model:` hint and exits 1. Cancel exits 0. `download`/`remove` keep
+  the install gate.
+
 ## Name resolution
 
 `_resolveModelName(value)` maps a value to a model URI/path:

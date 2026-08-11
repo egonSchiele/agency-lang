@@ -2,7 +2,16 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { aliasAdd, aliasList, aliasRemove, formatRefreshOutput } from "./local.js";
+import {
+  aliasAdd,
+  aliasList,
+  aliasRemove,
+  formatRefreshOutput,
+  runList,
+  runDownload,
+  downloadChoices,
+  CUSTOM_CHOICE,
+} from "./local.js";
 
 let dir: string;
 let aliasFile: string;
@@ -30,6 +39,81 @@ describe("agency local CLI helpers", () => {
     } finally {
       log.mockRestore();
     }
+  });
+});
+
+describe("runList", () => {
+  it("is ungated: prints the catalog view with no local-model support", () => {
+    // The old runList exited 1 without the provider package; this pins the
+    // spec's "browsing needs no package". Deterministic in CI (plugin never
+    // installed) and still green on dev machines: the new code never
+    // consults support at all.
+    delete process.env.AGENCY_LLAMA_PROVIDER_MODULE;
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("exit called");
+    }) as never);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      runList();
+      expect(exitSpy).not.toHaveBeenCalled();
+      expect(String(logSpy.mock.calls[0][0])).toMatch(/^Models directory: /);
+    } finally {
+      exitSpy.mockRestore();
+      logSpy.mockRestore();
+    }
+  });
+});
+
+describe("downloadChoices", () => {
+  it("labels entries with params and size and appends the custom option", () => {
+    const choices = downloadChoices([
+      { name: "tiny", target: "hf:o/t:Q4", source: "curated", params: "135M", sizeBytes: 100_000_000 },
+      { name: "plain-alias", target: "hf:x/y:Q4", source: "alias" },
+    ]);
+    expect(choices[0]).toEqual({ title: "tiny  (135M, 0.10 GB)", value: "tiny" });
+    expect(choices[1]).toEqual({ title: "plain-alias", value: "plain-alias" });
+    expect(choices[choices.length - 1].value).toBe(CUSTOM_CHOICE);
+  });
+});
+
+describe("runDownload without a value, non-interactive", () => {
+  /** Run runDownload(undefined) with the given TTY shape; expect the
+   *  non-interactive path: catalog + hint + exit 1. */
+  async function expectNonInteractive(stdinTTY: boolean, stdoutTTY: boolean) {
+    // Any non-empty override satisfies the gate; nothing is imported before
+    // the TTY check, so the file need not exist.
+    process.env.AGENCY_LLAMA_PROVIDER_MODULE = "/nonexistent/fake.mjs";
+    const savedIn = process.stdin.isTTY;
+    const savedOut = process.stdout.isTTY;
+    Object.defineProperty(process.stdin, "isTTY", { value: stdinTTY, configurable: true });
+    Object.defineProperty(process.stdout, "isTTY", { value: stdoutTTY, configurable: true });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit:${code}`);
+    }) as never);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await expect(runDownload(undefined)).rejects.toThrow("exit:1");
+      expect(logSpy).toHaveBeenCalled(); // the catalog table
+      expect(
+        errSpy.mock.calls.some((c) => String(c[0]).includes("agency local download <name>")),
+      ).toBe(true);
+    } finally {
+      Object.defineProperty(process.stdin, "isTTY", { value: savedIn, configurable: true });
+      Object.defineProperty(process.stdout, "isTTY", { value: savedOut, configurable: true });
+      exitSpy.mockRestore();
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      delete process.env.AGENCY_LLAMA_PROVIDER_MODULE;
+    }
+  }
+
+  it("non-TTY stdout: prints the catalog and the hint, exits 1", async () => {
+    await expectNonInteractive(false, false);
+  });
+
+  it("TTY stdout but piped stdin (download < /dev/null from a terminal): same non-interactive path", async () => {
+    await expectNonInteractive(false, true);
   });
 });
 

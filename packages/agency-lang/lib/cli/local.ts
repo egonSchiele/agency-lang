@@ -3,15 +3,17 @@ import {
   _downloadModel,
   _listDownloadedModels,
   _listModelNames,
+  _modelsCacheDir,
   _aliasModel,
   _unaliasModel,
   _removeModel,
   hasLocalModelSupport,
-  formatGB,
   formatModelCatalog,
+  formatLocalList,
   _refreshCatalog,
   type RefreshResult,
 } from "../stdlib/localModels.js";
+import { readDownloadManifest } from "../stdlib/localModelManifest.js";
 import { ttyColor } from "../utils/termcolors.js";
 
 /** Install-gate for I/O commands. Honors the AGENCY_LLAMA_PROVIDER_MODULE
@@ -48,18 +50,19 @@ export function aliasRemove(name: string, file?: string): string {
   return inspected;
 }
 
+/** Deliberately ungated: browsing the catalog needs no provider package
+ *  (only download/remove do), and the pre-install experience — see what is
+ *  available, then get told what to install — is the point. */
 export function runList(): void {
-  gate();
-  const models = _listDownloadedModels();
-  if (models.length === 0) {
-    console.log("No models downloaded.");
-    return;
-  }
-  for (const m of models) {
-    console.log(`${m.name}\t${formatGB(m.sizeBytes)}`);
-  }
-  const total = models.reduce((sum, m) => sum + m.sizeBytes, 0);
-  console.log(`Total: ${formatGB(total)}`);
+  const dir = _modelsCacheDir();
+  console.log(
+    formatLocalList({
+      dir,
+      entries: _listModelNames(),
+      manifest: readDownloadManifest(dir),
+      files: _listDownloadedModels(),
+    }),
+  );
 }
 
 export async function runDownload(value: string): Promise<void> {

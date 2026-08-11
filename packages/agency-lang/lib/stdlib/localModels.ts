@@ -958,6 +958,70 @@ function colWidth(header: string, values: string[]): number {
   return Math.max(header.length, ...values.map((v) => v.length));
 }
 
+/** The `agency local list` view: every usable model (curated + aliases) with
+ *  a downloaded marker, then cache-dir files no catalog entry claims. A row
+ *  is "downloaded" when the manifest maps its target URI to a file that still
+ *  exists in the cache dir; its SIZE column then shows the on-disk size
+ *  rather than the catalog estimate. Compact and operational — `alias list`
+ *  keeps the verbose per-model catalog with descriptions. Returns the block
+ *  with no trailing newline (the caller's `console.log` adds exactly one). */
+export function formatLocalList(args: {
+  dir: string;
+  entries: ModelNameEntry[];
+  manifest: Record<string, string>;
+  files: { name: string; path: string; sizeBytes: number }[];
+}): string {
+  const byName = Object.fromEntries(args.files.map((f) => [f.name, f]));
+  const rows = args.entries.map((e) => {
+    const manifestFile = args.manifest[e.target];
+    const file = manifestFile === undefined ? undefined : byName[manifestFile];
+    return {
+      mark: file !== undefined ? "✓" : "",
+      name: e.name,
+      params: e.params ?? "",
+      size:
+        file !== undefined
+          ? formatGB(file.sizeBytes)
+          : e.sizeBytes !== undefined
+            ? formatGB(e.sizeBytes)
+            : "",
+      ctx: e.contextWindow !== undefined ? formatCtx(e.contextWindow) : "",
+      license: e.license ?? "",
+    };
+  });
+  // Only files claimed by a CATALOG row are excluded from OTHER FILES. The
+  // manifest also records raw-URI downloads, which have no row here — their
+  // files must stay visible.
+  const claimedFiles: string[] = args.entries
+    .map((e) => args.manifest[e.target])
+    .filter((f): f is string => f !== undefined);
+  const others = args.files.filter((f) => !claimedFiles.includes(f.name));
+  const headers = ["", "NAME", "PARAMS", "SIZE", "CONTEXT", "LICENSE"];
+  const cols = [
+    colWidth(headers[0], rows.map((r) => r.mark)),
+    colWidth(headers[1], rows.map((r) => r.name)),
+    colWidth(headers[2], rows.map((r) => r.params)),
+    colWidth(headers[3], rows.map((r) => r.size)),
+    colWidth(headers[4], rows.map((r) => r.ctx)),
+    colWidth(headers[5], rows.map((r) => r.license)),
+  ];
+  const render = (cells: string[]) =>
+    cells.map((c, i) => c.padEnd(cols[i])).join("  ").trimEnd();
+  const lines = [
+    `Models directory: ${args.dir}`,
+    "",
+    render(headers),
+    ...rows.map((r) => render([r.mark, r.name, r.params, r.size, r.ctx, r.license])),
+  ];
+  if (others.length > 0) {
+    lines.push("", "OTHER FILES");
+    for (const f of others) lines.push(`  ${f.name}  ${formatGB(f.sizeBytes)}`);
+  }
+  const total = args.files.reduce((sum, f) => sum + f.sizeBytes, 0);
+  lines.push("", `Total downloaded: ${formatGB(total)}`);
+  return lines.join("\n");
+}
+
 /** Render the usable-model list as an aligned table: a header row plus one
  *  fact row per curated model (params, category, size, context window,
  *  license), the description on a dimmed line below, a blank line between

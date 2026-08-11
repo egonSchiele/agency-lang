@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { aliasAdd, aliasList, aliasRemove, formatRefreshOutput } from "./local.js";
+import { aliasAdd, aliasList, aliasRemove, formatRefreshOutput, runList } from "./local.js";
 
 let dir: string;
 let aliasFile: string;
@@ -29,6 +29,28 @@ describe("agency local CLI helpers", () => {
         .toBeUndefined();
     } finally {
       log.mockRestore();
+    }
+  });
+});
+
+describe("runList", () => {
+  it("is ungated: prints the catalog view with no local-model support", () => {
+    // The old runList exited 1 without the provider package; this pins the
+    // spec's "browsing needs no package". Deterministic in CI (plugin never
+    // installed) and still green on dev machines: the new code never
+    // consults support at all.
+    delete process.env.AGENCY_LLAMA_PROVIDER_MODULE;
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("exit called");
+    }) as never);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      runList();
+      expect(exitSpy).not.toHaveBeenCalled();
+      expect(String(logSpy.mock.calls[0][0])).toMatch(/^Models directory: /);
+    } finally {
+      exitSpy.mockRestore();
+      logSpy.mockRestore();
     }
   });
 });

@@ -14,6 +14,8 @@ import {
   _localModelsSupported,
   resolveAliasConfigPath,
   formatModelCatalog,
+  formatLocalList,
+  type ModelNameEntry,
   resolveCatalogUrl,
   parseCatalog,
   _refreshCatalog,
@@ -258,6 +260,70 @@ describe("provider register + download (fake plugin module)", () => {
     } finally {
       process.chdir(cwd);
     }
+  });
+});
+
+describe("formatLocalList", () => {
+  const entries: ModelNameEntry[] = [
+    {
+      name: "tiny",
+      target: "hf:o/tiny:Q4",
+      source: "curated",
+      params: "135M",
+      sizeBytes: 100_000_000,
+      contextWindow: 8192,
+      license: "apache-2.0",
+    },
+    {
+      name: "mid",
+      target: "hf:o/mid:Q4",
+      source: "curated",
+      params: "2B",
+      sizeBytes: 1_200_000_000,
+      contextWindow: 131072,
+      license: "apache-2.0",
+    },
+  ];
+
+  it("marks manifest-and-file-backed entries as downloaded; first line names the dir", () => {
+    const out = formatLocalList({
+      dir: "/home/u/.agency-agent/models",
+      entries,
+      manifest: { "hf:o/tiny:Q4": "tiny.Q4.gguf" },
+      files: [{ name: "tiny.Q4.gguf", path: "/x/tiny.Q4.gguf", sizeBytes: 99_000_000 }],
+    });
+    const lines = out.split("\n");
+    expect(lines[0]).toBe("Models directory: /home/u/.agency-agent/models");
+    const tinyLine = lines.find((l) => l.includes("tiny"));
+    const midLine = lines.find((l) => l.includes("mid"));
+    expect(tinyLine).toContain("✓");
+    expect(midLine).not.toContain("✓");
+    expect(out).toContain("Total downloaded: 0.10 GB");
+    expect(out).not.toContain("OTHER FILES");
+  });
+
+  it("stale manifest entry (file gone) is not marked; unmatched files land in OTHER FILES", () => {
+    const out = formatLocalList({
+      dir: "/d",
+      entries,
+      manifest: { "hf:o/tiny:Q4": "gone.gguf" },
+      files: [{ name: "mystery.gguf", path: "/d/mystery.gguf", sizeBytes: 2_100_000_000 }],
+    });
+    expect(out.split("\n").find((l) => l.includes("tiny"))).not.toContain("✓");
+    expect(out).toContain("OTHER FILES");
+    expect(out).toContain("mystery.gguf");
+    expect(out).toContain("2.10 GB");
+  });
+
+  it("raw-URI downloads (in the manifest but not the catalog) stay visible in OTHER FILES", () => {
+    const out = formatLocalList({
+      dir: "/d",
+      entries,
+      manifest: { "hf:raw/repo:Q4": "raw.gguf" },
+      files: [{ name: "raw.gguf", path: "/d/raw.gguf", sizeBytes: 500_000_000 }],
+    });
+    expect(out).toContain("OTHER FILES");
+    expect(out).toContain("raw.gguf");
   });
 });
 

@@ -1589,7 +1589,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     );
 
   const localCmd = program.command("local").description("Manage and run local models");
-  localCmd.command("list").description("List downloaded models").action(localList);
+  localCmd.command("list").description("List local models: the full catalog, with downloaded models marked").action(localList);
   localCmd.command("download").description("Download a model (curated name, alias, or hf: URI)")
     .argument("<value>").action(localDownload);
   localCmd.command("remove").description("Delete a downloaded model").argument("<name>")

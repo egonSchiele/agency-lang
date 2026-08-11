@@ -59,4 +59,35 @@ describe("download manifest", () => {
       expect(fs.readdirSync(nested)).toEqual([MANIFEST_FILE]);
     });
   });
+
+  it("recordDownload never throws: a failed write warns instead of failing the download", () => {
+    withDir((dir) => {
+      // Make the "dir" a plain file so mkdirSync/writeFileSync fail.
+      const blocked = path.join(dir, "not-a-dir");
+      fs.writeFileSync(blocked, "occupied");
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        expect(() => recordDownload(blocked, "hf:a/b:Q", "b.gguf")).not.toThrow();
+        expect(warnSpy).toHaveBeenCalled();
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+  });
+
+  it("keys named like Object.prototype members are plain data (null-proto read)", () => {
+    withDir((dir) => {
+      // Raw string: in an object LITERAL `__proto__:` is prototype-setter
+      // syntax and would never reach the JSON.
+      fs.writeFileSync(
+        path.join(dir, MANIFEST_FILE),
+        '{"__proto__":"evil.gguf","toString":"t.gguf","normal":"n.gguf"}',
+      );
+      const manifest = readDownloadManifest(dir);
+      expect(manifest["toString"]).toBe("t.gguf");
+      expect(manifest["normal"]).toBe("n.gguf");
+      expect(manifest["__proto__"]).toBe("evil.gguf"); // own key, plain data
+      expect(({} as Record<string, unknown>)["__proto__"]).not.toBe("evil.gguf");
+    });
+  });
 });

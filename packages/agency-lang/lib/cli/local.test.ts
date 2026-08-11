@@ -76,13 +76,17 @@ describe("downloadChoices", () => {
   });
 });
 
-describe("runDownload without a value, non-TTY", () => {
-  it("prints the catalog and the hint, exits 1", async () => {
+describe("runDownload without a value, non-interactive", () => {
+  /** Run runDownload(undefined) with the given TTY shape; expect the
+   *  non-interactive path: catalog + hint + exit 1. */
+  async function expectNonInteractive(stdinTTY: boolean, stdoutTTY: boolean) {
     // Any non-empty override satisfies the gate; nothing is imported before
     // the TTY check, so the file need not exist.
     process.env.AGENCY_LLAMA_PROVIDER_MODULE = "/nonexistent/fake.mjs";
-    const savedIsTTY = process.stdout.isTTY;
-    Object.defineProperty(process.stdout, "isTTY", { value: false, configurable: true });
+    const savedIn = process.stdin.isTTY;
+    const savedOut = process.stdout.isTTY;
+    Object.defineProperty(process.stdin, "isTTY", { value: stdinTTY, configurable: true });
+    Object.defineProperty(process.stdout, "isTTY", { value: stdoutTTY, configurable: true });
     const exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
       throw new Error(`exit:${code}`);
     }) as never);
@@ -95,12 +99,21 @@ describe("runDownload without a value, non-TTY", () => {
         errSpy.mock.calls.some((c) => String(c[0]).includes("agency local download <name>")),
       ).toBe(true);
     } finally {
-      Object.defineProperty(process.stdout, "isTTY", { value: savedIsTTY, configurable: true });
+      Object.defineProperty(process.stdin, "isTTY", { value: savedIn, configurable: true });
+      Object.defineProperty(process.stdout, "isTTY", { value: savedOut, configurable: true });
       exitSpy.mockRestore();
       logSpy.mockRestore();
       errSpy.mockRestore();
       delete process.env.AGENCY_LLAMA_PROVIDER_MODULE;
     }
+  }
+
+  it("non-TTY stdout: prints the catalog and the hint, exits 1", async () => {
+    await expectNonInteractive(false, false);
+  });
+
+  it("TTY stdout but piped stdin (download < /dev/null from a terminal): same non-interactive path", async () => {
+    await expectNonInteractive(false, true);
   });
 });
 

@@ -90,7 +90,10 @@ export async function runDownload(value?: string): Promise<void> {
   gate();
   let picked = value;
   if (picked === undefined) {
-    if (!process.stdout.isTTY) {
+    // Prompting needs BOTH ends of the terminal: a TTY stdout to draw on and
+    // a TTY stdin to read from (`agency local download < /dev/null` from a
+    // terminal has a TTY stdout but nothing to read).
+    if (process.stdin.isTTY !== true || process.stdout.isTTY !== true) {
       // A script that reaches this point asked for a download and did not
       // get one — print what is available and fail.
       console.log(formatModelCatalog());
@@ -103,7 +106,9 @@ export async function runDownload(value?: string): Promise<void> {
       message: "Which model do you want to download?",
       choices: downloadChoices(_listModelNames()),
     });
-    if (answer.model === undefined) return; // cancelled — exit 0, nothing downloaded
+    // Cancellation can surface as a missing key or as null — treat both as
+    // "exit 0, nothing downloaded".
+    if (answer.model == null) return;
     picked = answer.model as string;
     if (picked === CUSTOM_CHOICE) {
       const custom = await prompts({
@@ -111,7 +116,7 @@ export async function runDownload(value?: string): Promise<void> {
         name: "value",
         message: "hf: URI or .gguf path:",
       });
-      if (custom.value === undefined || custom.value === "") return;
+      if (custom.value == null || custom.value === "") return;
       picked = custom.value as string;
     }
   }

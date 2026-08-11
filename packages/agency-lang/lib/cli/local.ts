@@ -1,3 +1,4 @@
+import prompts from "prompts";
 import {
   _resolveModelName,
   _downloadModel,
@@ -8,9 +9,11 @@ import {
   _unaliasModel,
   _removeModel,
   hasLocalModelSupport,
+  formatGB,
   formatModelCatalog,
   formatLocalList,
   _refreshCatalog,
+  type ModelNameEntry,
   type RefreshResult,
 } from "../stdlib/localModels.js";
 import { readDownloadManifest } from "../stdlib/localModelManifest.js";
@@ -65,13 +68,58 @@ export function runList(): void {
   );
 }
 
-export async function runDownload(value: string): Promise<void> {
+export const CUSTOM_CHOICE = "__custom__";
+
+/** Picker rows for the no-argument `agency local download`. Metadata-less
+ *  aliases get a bare name; the trailing choice lets the user type an hf: URI
+ *  or .gguf path. */
+export function downloadChoices(
+  entries: ModelNameEntry[],
+): { title: string; value: string }[] {
+  const rows = entries.map((e) => ({
+    title:
+      e.params !== undefined && e.sizeBytes !== undefined
+        ? `${e.name}  (${e.params}, ${formatGB(e.sizeBytes)})`
+        : e.name,
+    value: e.name,
+  }));
+  return [...rows, { title: "custom (hf: URI or .gguf path)…", value: CUSTOM_CHOICE }];
+}
+
+export async function runDownload(value?: string): Promise<void> {
   gate();
+  let picked = value;
+  if (picked === undefined) {
+    if (!process.stdout.isTTY) {
+      // A script that reaches this point asked for a download and did not
+      // get one — print what is available and fail.
+      console.log(formatModelCatalog());
+      console.error("Pass a model: agency local download <name>");
+      process.exit(1);
+    }
+    const answer = await prompts({
+      type: "select",
+      name: "model",
+      message: "Which model do you want to download?",
+      choices: downloadChoices(_listModelNames()),
+    });
+    if (answer.model === undefined) return; // cancelled — exit 0, nothing downloaded
+    picked = answer.model as string;
+    if (picked === CUSTOM_CHOICE) {
+      const custom = await prompts({
+        type: "text",
+        name: "value",
+        message: "hf: URI or .gguf path:",
+      });
+      if (custom.value === undefined || custom.value === "") return;
+      picked = custom.value as string;
+    }
+  }
   // Show the source it resolved to (the hf: URI for a name/alias) and the
   // local path it landed at. For a .gguf-path input the two are the same, so
   // the source line is skipped.
-  const source = _resolveModelName(value);
-  const modelPath = await _downloadModel(value);
+  const source = _resolveModelName(picked);
+  const modelPath = await _downloadModel(picked);
   if (source !== modelPath) {
     console.log(`source: ${source}`);
   }

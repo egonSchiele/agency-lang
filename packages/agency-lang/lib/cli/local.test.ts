@@ -2,7 +2,16 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { aliasAdd, aliasList, aliasRemove, formatRefreshOutput, runList } from "./local.js";
+import {
+  aliasAdd,
+  aliasList,
+  aliasRemove,
+  formatRefreshOutput,
+  runList,
+  runDownload,
+  downloadChoices,
+  CUSTOM_CHOICE,
+} from "./local.js";
 
 let dir: string;
 let aliasFile: string;
@@ -51,6 +60,46 @@ describe("runList", () => {
     } finally {
       exitSpy.mockRestore();
       logSpy.mockRestore();
+    }
+  });
+});
+
+describe("downloadChoices", () => {
+  it("labels entries with params and size and appends the custom option", () => {
+    const choices = downloadChoices([
+      { name: "tiny", target: "hf:o/t:Q4", source: "curated", params: "135M", sizeBytes: 100_000_000 },
+      { name: "plain-alias", target: "hf:x/y:Q4", source: "alias" },
+    ]);
+    expect(choices[0]).toEqual({ title: "tiny  (135M, 0.10 GB)", value: "tiny" });
+    expect(choices[1]).toEqual({ title: "plain-alias", value: "plain-alias" });
+    expect(choices[choices.length - 1].value).toBe(CUSTOM_CHOICE);
+  });
+});
+
+describe("runDownload without a value, non-TTY", () => {
+  it("prints the catalog and the hint, exits 1", async () => {
+    // Any non-empty override satisfies the gate; nothing is imported before
+    // the TTY check, so the file need not exist.
+    process.env.AGENCY_LLAMA_PROVIDER_MODULE = "/nonexistent/fake.mjs";
+    const savedIsTTY = process.stdout.isTTY;
+    Object.defineProperty(process.stdout, "isTTY", { value: false, configurable: true });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit:${code}`);
+    }) as never);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await expect(runDownload(undefined)).rejects.toThrow("exit:1");
+      expect(logSpy).toHaveBeenCalled(); // the catalog table
+      expect(
+        errSpy.mock.calls.some((c) => String(c[0]).includes("agency local download <name>")),
+      ).toBe(true);
+    } finally {
+      Object.defineProperty(process.stdout, "isTTY", { value: savedIsTTY, configurable: true });
+      exitSpy.mockRestore();
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      delete process.env.AGENCY_LLAMA_PROVIDER_MODULE;
     }
   });
 });

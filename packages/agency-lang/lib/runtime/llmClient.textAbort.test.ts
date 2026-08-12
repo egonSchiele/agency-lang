@@ -78,6 +78,27 @@ describe("SmoltalkClient.text — cancellation rejects", () => {
     expect(r.success).toBe(true);
   });
 
+  it("keeps an aborted success that carries only hosted tool results", async () => {
+    // Hosted tools (e.g. web_search) run provider-side; their results can be
+    // the only content on an otherwise output-less completion. That is real,
+    // paid-for content — not an empty shell to discard as a cancellation.
+    const controller = new AbortController();
+    vi.mocked(smoltalk.text).mockImplementation((async () => {
+      const result = {
+        success: true,
+        value: {
+          output: null,
+          toolCalls: [],
+          hostedToolResults: [{ type: "web_search", queries: ["q"] }],
+        },
+      };
+      controller.abort(new AgencyCancelledError("late"));
+      return result;
+    }) as any);
+    const r = await client.text(configWith(controller.signal));
+    expect(r.success).toBe(true);
+  });
+
   it("passes a NON-abort failure Result through unchanged (does not throw)", async () => {
     vi.mocked(smoltalk.text).mockResolvedValue({
       success: false,

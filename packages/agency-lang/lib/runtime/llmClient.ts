@@ -334,10 +334,15 @@ export class SmoltalkClient implements LLMClient {
 }
 
 /** True when an LLM result carries nothing a caller could use — no visible
- *  output and no tool calls. Only consulted when deciding whether an aborted
- *  call's resolved "success" is really a cancellation (see text/textStream). */
+ *  output, no tool calls, and no hosted-tool results. Only consulted when
+ *  deciding whether an aborted call's resolved "success" is really a
+ *  cancellation (see text/textStream). */
 function isEmptyPromptResult(result: PromptResult): boolean {
-  return !result.output && (result.toolCalls?.length ?? 0) === 0;
+  return (
+    !result.output &&
+    (result.toolCalls?.length ?? 0) === 0 &&
+    (result.hostedToolResults?.length ?? 0) === 0
+  );
 }
 
 /** If the branch signal has aborted, throw its reason UNCHANGED so cancellation

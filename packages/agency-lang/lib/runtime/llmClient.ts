@@ -193,12 +193,44 @@ export type LLMClient = {
 };
 
 export class SmoltalkClient implements LLMClient {
+  // Cancellation on the text paths follows the same contract as transcribe/
+  // speak below: an aborted call REJECTS with the branch reason, so the retry
+  // classifier sees the runtime's abort cause (e.g. callTimeout → retryable)
+  // instead of a resolved failure/success it would record as a completion.
+  //
+  // Two aborted shapes must convert, detected by our OWN signal:
+  //  - a resolved failure (smoltalk's `failure("Request was aborted")`);
+  //  - a resolved success carrying NO content — smoltalk-llama-cpp sets
+  //    `stopOnAbortSignal`, so node-llama-cpp resolves an aborted generation
+  //    with the partial response, and a response that never left its thinking
+  //    segment drains to `output: null`. Recording that as a success writes a
+  //    null assistant turn into thread history and defeats the timeout retry.
+  // A success that carries real output or tool calls keeps its success + cost
+  // even when the signal aborted a tick later (the late-abort race).
   async text(config: PromptConfig): Promise<Result<PromptResult>> {
-    return smoltalk.text({ ...toSmolConfig(config), stream: false });
+    const result = await smoltalk.text({ ...toSmolConfig(config), stream: false });
+    if (!result.success || isEmptyPromptResult(result.value)) {
+      rejectIfAborted(config.abortSignal);
+    }
+    return result;
   }
 
   async *textStream(config: PromptConfig): AsyncGenerator<StreamChunk> {
-    yield* smoltalk.text({ ...toSmolConfig(config), stream: true });
+    for await (const chunk of smoltalk.text({
+      ...toSmolConfig(config),
+      stream: true,
+    })) {
+      // Same policy as text(): an error chunk or an empty final result on an
+      // aborted call surfaces as the cancellation, not as a normal chunk.
+      if (
+        chunk.type === "error" ||
+        chunk.type === "timeout" ||
+        (chunk.type === "done" && isEmptyPromptResult(chunk.result))
+      ) {
+        rejectIfAborted(config.abortSignal);
+      }
+      yield chunk;
+    }
   }
 
   async embed(
@@ -301,14 +333,21 @@ export class SmoltalkClient implements LLMClient {
 
 }
 
+/** True when an LLM result carries nothing a caller could use — no visible
+ *  output and no tool calls. Only consulted when deciding whether an aborted
+ *  call's resolved "success" is really a cancellation (see text/textStream). */
+function isEmptyPromptResult(result: PromptResult): boolean {
+  return !result.output && (result.toolCalls?.length ?? 0) === 0;
+}
+
 /** If the branch signal has aborted, throw its reason UNCHANGED so cancellation
  *  surfaces as the runtime's abort cause rather than smoltalk's resolved
  *  `failure("Request was aborted")`. Identity is preserved — `abort()` accepts
  *  strings/objects/null and that can matter to race/cancellation handling — and
  *  a reason is synthesized ONLY when genuinely `undefined` (an explicit `null`
  *  is a valid reason and is preserved). See the adapters. */
-function rejectIfAborted(signal: AbortSignal): void {
-  if (signal.aborted) {
+function rejectIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
     if (signal.reason !== undefined) {
       throw signal.reason;
     }

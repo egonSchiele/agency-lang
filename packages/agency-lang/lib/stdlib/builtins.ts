@@ -105,13 +105,39 @@ function inputImpl(
       reject(new AgencyCancelledError("input cancelled"));
     };
     signal.addEventListener("abort", onAbort, { once: true });
-    rl.question(prompt, (answer: string) => {
-      signal.removeEventListener("abort", onAbort);
-      rl.close();
-      resolve(answer);
-    });
+    const ask = () => {
+      const askedAt = Date.now();
+      rl.question(prompt, (answer: string) => {
+        // A blank line that lands faster than a human could react to the
+        // prompt was buffered while the program was busy — an Enter pressed
+        // to check on a slow run, not an answer — and would otherwise become
+        // an accidental (empty) submission. Discard it and re-ask; the next
+        // buffered line (real type-ahead) is delivered normally. Deliberate
+        // blank answers arrive after human-scale delay and are kept. Only
+        // interactive stdin is filtered: piped input legitimately arrives
+        // instantly. Real wall clock on purpose — this measures I/O latency,
+        // and fake-clock tests use inputOverride, never this path.
+        if (
+          answer === "" &&
+          process.stdin.isTTY &&
+          Date.now() - askedAt < BUFFERED_BLANK_LINE_MS
+        ) {
+          ask();
+          return;
+        }
+        signal.removeEventListener("abort", onAbort);
+        rl.close();
+        resolve(answer);
+      });
+    };
+    ask();
   }).finally(resumeGuards);
 }
+
+/** A blank line answered within this window of the prompt attaching cannot be
+ *  a human reacting to the prompt (buffered lines arrive in ~1ms; human
+ *  reaction to a newly-visible prompt is 150ms+). */
+const BUFFERED_BLANK_LINE_MS = 25;
 
 /** Deprecated context-injected wrapper kept in place during the ALS
  *  migration so the registry/codegen path keeps working until the

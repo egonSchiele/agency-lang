@@ -1,3 +1,17 @@
+## Aug 12 2026 — v0.15.0
+
+### Standard Library
+- **`std::data/social/bluesky`** — search posts (`bskySearch`), read an account's posts (`bskyAuthorFeed`), and look up profiles (`bskyProfile`). No API key or account needed.
+- **Breaking** — GDELT moved from `std::data/finance/gdelt` to `std::data/news/gdelt`.
+
+### CLI
+- **`agency run --local <model>`** — run a program with a local model.
+- **`agency local list`** — local model catalog.
+- **`agency local download`** now opens an interactive picker if no name was specified.
+
+### Local models
+- The `llama-cpp` provider is now loaded by smoltalk itself, so Agency's wrapper is now gone.
+
 ## Aug 10 2026 — v0.14.0
 
 ### Standard Library

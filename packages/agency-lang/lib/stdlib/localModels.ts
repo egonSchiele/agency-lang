@@ -1212,6 +1212,7 @@ export function formatLocalList(args: {
             : "",
       ctx: e.contextWindow !== undefined ? formatCtx(e.contextWindow) : "",
       license: e.license ?? "",
+      category: e.category ?? "",
       description: e.description ?? "",
     };
   });
@@ -1222,7 +1223,15 @@ export function formatLocalList(args: {
     .map((e) => args.manifest[e.target])
     .filter((f): f is string => f !== undefined);
   const others = args.files.filter((f) => !claimedFiles.includes(f.name));
-  const headers = ["", "NAME", "PARAMS", "SIZE", "CONTEXT", "LICENSE"];
+  const headers = [
+    "",
+    "NAME",
+    "PARAMS",
+    "SIZE",
+    "CONTEXT",
+    "CATEGORY",
+    "LICENSE",
+  ];
   const cols = [
     colWidth(
       headers[0],
@@ -1246,6 +1255,10 @@ export function formatLocalList(args: {
     ),
     colWidth(
       headers[5],
+      rows.map((r) => r.category),
+    ),
+    colWidth(
+      headers[6],
       rows.map((r) => r.license),
     ),
   ];
@@ -1262,7 +1275,9 @@ export function formatLocalList(args: {
     // Blank line *between* models, not after the last one, so the sections
     // below (which push their own leading "") aren't double-spaced.
     if (args.long === true && i > 0) lines.push("");
-    lines.push(render([r.mark, r.name, r.params, r.size, r.ctx, r.license]));
+    lines.push(
+      render([r.mark, r.name, r.params, r.size, r.ctx, r.category, r.license]),
+    );
     if (args.long === true && r.description !== "") {
       lines.push(ttyColor.dim(`${descIndent}${r.description}`));
     }

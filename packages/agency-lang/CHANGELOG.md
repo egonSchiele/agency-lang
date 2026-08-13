@@ -1,3 +1,13 @@
+## Aug 13 2026 — v0.15.1
+
+### Local models
+- reject aborted text() calls
+- bail early on empty prompts, they cause local models to spiral
+- update local model catalog
+- Add `agency local list -l`
+- lib/config.ts now understands the model data produced by `agency local refresh`
+
+
 ## Aug 12 2026 — v0.15.0
 
 ### Standard Library

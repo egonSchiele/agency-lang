@@ -108,8 +108,8 @@ export interface AgencyConfig {
   eval?: {
     runsDir?: string;
     optimizeRunsDir?: string;
-    graders?: string;                              // path to a TS grading module
-    sourceCacheRoot?: string;                      // git-source clone cache override
+    graders?: string; // path to a TS grading module
+    sourceCacheRoot?: string; // git-source clone cache override
 
     /** Where the human-label dataset lives. Outside runsDir on purpose: runs
      *  are disposable and the labels must outlive them. A relative path
@@ -119,14 +119,14 @@ export interface AgencyConfig {
     /** Per-run resource limits for the agent subprocess. Unset fields keep the
      *  built-in defaults (lib/eval/run/subprocess.ts). */
     limits?: {
-      wallClockSec?: number;                       // max seconds per agent run (default 60)
-      maxCostUsd?: number;                         // max LLM spend per agent run (default 50)
+      wallClockSec?: number; // max seconds per agent run (default 60)
+      maxCostUsd?: number; // max LLM spend per agent run (default 50)
     };
 
     optimize?: {
       goal?: string;
-      graders?: string;                              // path to a TS grading module
-      optimizer?: string;                            // built-in name or path to a TS/JS optimizer module
+      graders?: string; // path to a TS grading module
+      optimizer?: string; // built-in name or path to a TS/JS optimizer module
       validation?: { inputs?: string; split?: number };
     };
   };
@@ -437,7 +437,7 @@ export const ModelAliasSchema = z.union([
       description: z.string().optional(),
       sha256: z.string().optional(),
     })
-    .passthrough(),
+    .loose(),
 ]);
 
 /** A `client.modelAliases` value: a bare URI or the rich object form. */
@@ -484,16 +484,24 @@ export const AgencyConfigSchema = z
         // Positive int only: the value feeds setTimeout (×1000), where 0 and
         // negatives don't mean "no limit" — they fire immediately and fail
         // every run with a wall_clock limit error.
-        limits: z.object({
-          wallClockSec: z.number().int().positive(),
-          maxCostUsd: z.number().positive(),
-        }).partial().optional(),
+        limits: z
+          .object({
+            wallClockSec: z.number().int().positive(),
+            maxCostUsd: z.number().positive(),
+          })
+          .partial()
+          .optional(),
         optimize: z
           .object({
             goal: z.string().optional(),
             graders: z.string().optional(),
             optimizer: z.string().optional(),
-            validation: z.object({ inputs: z.string().optional(), split: z.number().optional() }).optional(),
+            validation: z
+              .object({
+                inputs: z.string().optional(),
+                split: z.number().optional(),
+              })
+              .optional(),
           })
           .partial()
           .optional(),
@@ -567,7 +575,10 @@ export const AgencyConfigSchema = z
       .object({
         maxCost: z
           .number()
-          .refine((n) => Number.isFinite(n), "budget.maxCost must be a finite number"),
+          .refine(
+            (n) => Number.isFinite(n),
+            "budget.maxCost must be a finite number",
+          ),
         maxTime: z.string(),
       })
       .partial(),
@@ -602,22 +613,18 @@ export const AgencyConfigSchema = z
     memory: z.object({
       dir: z.string(),
       model: z.string().optional(),
-      autoExtract: z
-        .object({ interval: z.number().optional() })
-        .optional(),
+      autoExtract: z.object({ interval: z.number().optional() }).optional(),
       compaction: z
         .object({
           trigger: z.enum(["token", "messages"]).optional(),
           threshold: z.number().optional(),
         })
         .optional(),
-      embeddings: z
-        .object({ model: z.string().optional() })
-        .optional(),
+      embeddings: z.object({ model: z.string().optional() }).optional(),
     }),
   })
   .partial()
-  .passthrough();
+  .loose();
 
 /**
  * Load agency.json at the given path without calling process.exit.
@@ -801,7 +808,10 @@ export function applyCliFlags(
     next.maxToolCallRounds = flags.maxToolCallRounds;
   }
   if (flags.maxToolResultChars !== undefined) {
-    next.client = { ...next.client, maxToolResultChars: flags.maxToolResultChars };
+    next.client = {
+      ...next.client,
+      maxToolResultChars: flags.maxToolResultChars,
+    };
   }
   if (flags.model !== undefined) {
     // A bare model drops an inherited provider so smoltalk can infer one from
@@ -903,7 +913,10 @@ export function redactConfigSecrets(config: AgencyConfig): AgencyConfig {
     clone.log.apiKey = mask(clone.log.apiKey);
   }
   redactKeyMap(clone.client?.apiKey as Record<string, unknown> | undefined);
-  if (clone.client?.statelog && typeof clone.client.statelog.apiKey === "string") {
+  if (
+    clone.client?.statelog &&
+    typeof clone.client.statelog.apiKey === "string"
+  ) {
     clone.client.statelog.apiKey = mask(clone.client.statelog.apiKey);
   }
   return clone;

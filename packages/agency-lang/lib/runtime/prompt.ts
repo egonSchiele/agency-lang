@@ -743,14 +743,6 @@ async function _runPrompt({
       });
       throw new AgencyCancelledError(undefined, cause);
     }
-    // The success-path `promptCompletion` event below is the only place the
-    // request payload (messages + tools) is logged, and it never runs when
-    // the dispatch throws — so a provider rejection (e.g. a 400 over the
-    // tool list) otherwise leaves no record of what was sent. Emit an
-    // `llmError` carrying the tool list so the failed request is
-    // diagnosable, then rethrow the ORIGINAL error unchanged. The emit is
-    // best-effort: a statelog failure (e.g. a JSON.stringify error inside
-    // post()) must not mask the real LLM/transport error, so swallow it.
     try {
       await ctx.statelogClient.error({
         errorType: "llmError",
@@ -763,10 +755,6 @@ async function _runPrompt({
     throw err;
   }
 
-  // Capture endTime AFTER the response has been fully received. The
-  // request Promise is created above but only awaited inside the
-  // stream/non-stream branches; sampling earlier would only measure
-  // request setup, not the actual round-trip time.
   const endTime = performance.now();
 
   const modelName = resolveCompletionModel(
@@ -774,9 +762,6 @@ async function _runPrompt({
     clientConfig.model,
   );
 
-  // Project raw provider usage into the closed shape ONCE, so statelog, the
-  // global stats, the branch total, and the invocation meter all see the same
-  // total and none serialize an audio-token field (see projectProviderTokenUsage).
   const projectedUsage = projectProviderTokenUsage(
     completion.usage,
     "completion",
@@ -817,34 +802,7 @@ async function _runPrompt({
     model: modelName,
   });
 
-  // Per-branch accumulator: adds to the active stack so std::thread's
-  // getCost()/getTokens() can report per-branch totals; complementary
-  // to the global __tokenStats above. Then bill every active guard
-  // for this call's cost and enforce limits. Shared parent guards see
-  // descendants' spend in real time; mid-fork trips fire on the next
-  // enforceGuards() call. See docs/superpowers/specs/2026-05-20-thread-
-  // builtins-and-stdlib-design.md.
   recordCompletionUsage(ctx, targetStack, completion, clientConfig.model);
-  // NOTE: no post-charge enforceGuards here anymore. A trip caused by
-  // THIS charge is raised resumably at the caller's next guard gate
-  // (round.N.guardGate / guardGate.final in runPrompt) — the paid work
-  // already happened, and nothing else paid runs before that gate, so
-  // raising there loses nothing and gains the pause point. Throwing
-  // here would make every cost trip non-resumable. The pre-call gate
-  // above still throws as a backstop against spend that slipped in
-  // between a guard gate and this request (e.g. memory-recall charges).
-
-  // Memory layer: auto-extraction and compaction run whenever a
-  // MemoryManager is attached (resolved decision #6) — UNLESS a guard is
-  // already over budget. The hooks can spend (LLM text + embeddings via
-  // addCost), and the trip from this call's charge has not been raised
-  // yet (that happens at the next guard gate); running paid supervisory
-  // work in that window would either spend past the budget or turn the
-  // resumable trip into addCost's non-resumable throw. Skipping is safe:
-  // the hooks are best-effort and run again on the next healthy turn.
-  // Tool-call results have not been pushed yet, so we operate on the
-  // current message slice. Compaction is a best-effort hint — failures
-  // never break the LLM call.
   const memoryManager = targetStack.anyGuardOverBudget()
     ? null
     : ctx.getActiveMemoryManager();
@@ -863,16 +821,7 @@ async function _runPrompt({
         messages.setMessages([...head, summary, ...tail]);
       }
     } catch (err) {
-      // Cost / time guard trips are NOT best-effort failures — they
-      // signal the surrounding `withCostGuard` / `withTimeGuard` has
-      // been exceeded and the agent should stop. Re-throw so the
-      // signal reaches the user's scope instead of being silently
-      // logged here.
       if (isGuardExceededError(err)) throw err;
-      // The memory hook is best-effort: a failure here must never
-      // break the LLM call. Logged at `warn` so users see the failure
-      // by default; the manager already emitted finer-grained debug
-      // lines and a statelog `error` event if applicable.
       createLogger(ctx.logLevel).warn(
         `[memory] post-turn hook failed: ${(err as Error).message}`,
       );

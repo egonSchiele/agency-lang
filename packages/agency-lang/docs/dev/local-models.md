@@ -98,6 +98,15 @@ whole-file (last writer wins) — accepted for display metadata.
 2. An alias in `client.modelAliases` (nearest `agency.json`) wins next — a
    value is either a bare URI string or an object
    `{ uri, …metadata, source?, sha256? }`.
+
+   **Both forms must validate against `ModelAliasSchema` in `lib/config.ts`.**
+   That schema is a separate copy of the same contract as `AliasObject` here,
+   and the two have drifted before: the object form was added for
+   `agency local refresh` while `config.ts` still required a plain string, so a
+   refresh wrote a config that the next `agency run` refused to load. If you add
+   a field to `AliasObject`, add it there too —
+   `lib/config.modelAliases.test.ts` round-trips a fully-populated entry to
+   catch exactly this.
 3. Otherwise a curated short name in `CURATED_LOCAL_MODELS`.
 
 `_listModelNames` merges curated + aliases (alias wins on a name clash) for the

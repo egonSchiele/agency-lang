@@ -18,10 +18,10 @@ import { ttyColor } from "../utils/termcolors.js";
  *  by `params` / `sizeBytes`). Lets the CLI group + filter without parsing the
  *  description. */
 export type ModelCategory =
-  | "general"     // general-purpose chat / instruct
-  | "coding"      // SWE-tuned specialists
-  | "reasoning"   // chain-of-thought / R1-style distills
-  | "embedding";  // returns vectors, not text
+  | "general" // general-purpose chat / instruct
+  | "coding" // SWE-tuned specialists
+  | "reasoning" // chain-of-thought / R1-style distills
+  | "embedding"; // returns vectors, not text
 
 export type ModelInfo = {
   /** Hugging Face URI passed to `node-llama-cpp`'s `resolveModelFile`. */
@@ -39,7 +39,14 @@ export type ModelInfo = {
   /** License identifier (SPDX-ish). Curated entries are permissive only
    *  (apache-2.0 / mit); restrictively-licensed models (older Gemma's custom
    *  terms, llama) are intentionally excluded. Gemma 4 ships under apache-2.0,
-   *  so it qualifies; Gemma 1–3 did not. */
+   *  so it qualifies; Gemma 1–3 did not.
+   *
+   *  This must be the license the model itself DECLARES, never one inferred
+   *  from its base model. Apache-2.0 is permissive, not copyleft — its §4 lets
+   *  a derivative work carry different terms — so a fine-tune of an
+   *  apache-2.0 base is not thereby apache-2.0. A model whose card declares no
+   *  license (the Dolphin 3.0 Mistral fine-tunes, for one) does not belong
+   *  here at all; add it locally with `agency local alias add` instead. */
   license: string;
   /** Pinned content SHA-256 (hex) of the resolved single-file GGUF, used to
    *  verify the download. Absent for sharded models (see issue #348). */
@@ -52,128 +59,261 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
   // ── General ─────────────────────────────────────────────────────────────
   "smollm2-135m": {
     uri: "hf:unsloth/SmolLM2-135M-Instruct-GGUF:Q4_K_M",
+    params: "135M",
+    sizeBytes: 105000000,
+    category: "general",
+    contextWindow: 8192,
+    license: "apache-2.0",
+    description:
+      "Smallest practical chat model. Used by the Agency integration tests, runs anywhere.",
     sha256: "ed5fa30c487b282ec156c29062f1222e5c20875a944ac98289dbd242e947f747",
-    params: "135M", sizeBytes: 105_000_000, category: "general",
-    contextWindow: 8192, license: "apache-2.0",
-    description: "Smallest practical chat model; used by our integration tests, runs anywhere.",
   },
   "qwen3.5-0.8b": {
     uri: "hf:unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M",
+    params: "0.8B",
+    sizeBytes: 500000000,
+    category: "general",
+    contextWindow: 131072,
+    license: "apache-2.0",
+    description:
+      "Tiny model from Alibaba's current generation. Good edge-device default.",
     sha256: "bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517",
-    params: "0.8B", sizeBytes: 500_000_000, category: "general",
-    contextWindow: 131072, license: "apache-2.0",
-    description: "Tiny model from Alibaba's current generation; good edge-device default.",
   },
   "qwen3.5-2b": {
     uri: "hf:unsloth/Qwen3.5-2B-GGUF:Q4_K_M",
+    params: "2B",
+    sizeBytes: 1280000000,
+    category: "general",
+    contextWindow: 131072,
+    license: "apache-2.0",
+    description:
+      "Most popular modern small general model. Runs on CPU comfortably.",
     sha256: "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
-    params: "2B", sizeBytes: 1_280_000_000, category: "general",
-    contextWindow: 131072, license: "apache-2.0",
-    description: "Most popular modern small general model; runs on CPU comfortably.",
   },
   "qwen3.5-4b": {
     uri: "hf:unsloth/Qwen3.5-4B-GGUF:Q4_K_M",
-    sha256: "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
-    params: "4B", sizeBytes: 2_400_000_000, category: "general",
-    contextWindow: 131072, license: "apache-2.0",
+    params: "4B",
+    sizeBytes: 2400000000,
+    category: "general",
+    contextWindow: 131072,
+    license: "apache-2.0",
     description: "Strong multilingual small general workhorse from Alibaba.",
+    sha256: "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+  },
+  "gemma-4-e2b": {
+    uri: "hf:unsloth/gemma-4-E2B-it-GGUF:Q4_K_M",
+    params: "2B (E2B)",
+    sizeBytes: 3110000000,
+    category: "general",
+    contextWindow: 131072,
+    license: "apache-2.0",
+    description: "Smallest Gemma 4 for phones and thin laptops.",
+    sha256: "740185b21d22ceb83a11c3aa62ad5842ef32c70f6096d756bbee85a1e4ec34b8",
   },
   "gemma-4-e4b": {
     uri: "hf:unsloth/gemma-4-E4B-it-GGUF:Q4_K_M",
-    sha256: "519b9793ed6ce0ff530f1b7c96e848e08e49e7af4d57bb97f76215963a54146d",
-    params: "4B (E4B)", sizeBytes: 4_980_000_000, category: "general",
-    contextWindow: 131072, license: "apache-2.0",
-    description: "Google's compact Gemma 4 (4.5B effective); ~5 GB, laptop-friendly multimodal model.",
+    params: "4B (E4B)",
+    sizeBytes: 4980000000,
+    category: "general",
+    contextWindow: 131072,
+    license: "apache-2.0",
+    description:
+      "Google's compact Gemma 4 (4.5B effective). ~5 GB, laptop-friendly multimodal model.",
+    sha256: "85a896a047553e842f25297ee5b031d64ff30147d9c4af17b1e4b394cd1fab87",
+  },
+  "granite-4.1-8b": {
+    uri: "hf:unsloth/granite-4.1-8b-GGUF:Q4_K_M",
+    params: "8B",
+    sizeBytes: 5350000000,
+    category: "general",
+    contextWindow: 131072,
+    license: "apache-2.0",
+    description:
+      "IBM's enterprise-tuned 8B. Built for retrieval, tool use, and long documents.",
+    sha256: "0f45c1af986e9900bb3b6ba46a25937e1bb80426935bc242d88c9ca90e9f5c88",
   },
   "qwen3.5-9b": {
     uri: "hf:unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
+    params: "9B",
+    sizeBytes: 5500000000,
+    category: "general",
+    contextWindow: 131072,
+    license: "apache-2.0",
+    description: "Modern medium general model with strong tool use.",
     sha256: "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
-    params: "9B", sizeBytes: 5_500_000_000, category: "general",
-    contextWindow: 131072, license: "apache-2.0",
-    description: "Modern medium general model with strong tool use; 128K context.",
   },
   "gemma-4-12b": {
     uri: "hf:unsloth/gemma-4-12b-it-GGUF:Q4_K_M",
-    sha256: "43fec98c5102b1c446b4ddd0a9439f1db3a2e1f2e0b8cd143ce1ea619a9403d6",
-    params: "12B", sizeBytes: 7_120_000_000, category: "general",
-    contextWindow: 262144, license: "apache-2.0",
-    description: "Google's mid-size Gemma 4 dense model; strong multilingual multimodal use, 256K context.",
+    params: "12B",
+    sizeBytes: 7120000000,
+    category: "general",
+    contextWindow: 262144,
+    license: "apache-2.0",
+    description:
+      "Google's mid-size Gemma 4 dense model. Strong multilingual multimodal use.",
+    sha256: "0a270ec9fe6b34f4a0d33992b6135117b484ebc4766ab76b51d4ae8c457e4c42",
   },
   "gpt-oss-20b": {
     uri: "hf:unsloth/gpt-oss-20b-GGUF:Q4_K_M",
+    params: "20B",
+    sizeBytes: 12000000000,
+    category: "general",
+    contextWindow: 131072,
+    license: "apache-2.0",
+    description:
+      "OpenAI's open-weights release. Balanced general model for ~16 GB machines.",
     sha256: "c27536640e410032865dc68781d80a08b98f8db5e93575919af8ccc0568aeb4f",
-    params: "20B", sizeBytes: 12_000_000_000, category: "general",
-    contextWindow: 131072, license: "apache-2.0",
-    description: "OpenAI's open-weights release; balanced general model for ~16 GB machines.",
   },
   "mistral-small-3.1": {
     uri: "hf:unsloth/Mistral-Small-3.1-24B-Instruct-2503-GGUF:Q4_K_M",
+    params: "24B",
+    sizeBytes: 14000000000,
+    category: "general",
+    contextWindow: 131072,
+    license: "apache-2.0",
+    description:
+      "Mistral's general 24B base model (also Devstral's foundation). Broad utility.",
     sha256: "6d670773c3908584349d41a5048d1472226b593c881fd394e8ac196c802e81e2",
-    params: "24B", sizeBytes: 14_000_000_000, category: "general",
-    contextWindow: 131072, license: "apache-2.0",
-    description: "Mistral's general 24B base model (also Devstral's foundation); broad utility.",
+  },
+  "mistral-small-3.2": {
+    uri: "hf:unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF:Q4_K_M",
+    params: "24B",
+    sizeBytes: 14333000000,
+    category: "general",
+    contextWindow: 131072,
+    license: "apache-2.0",
+    description:
+      "Drop-in upgrade over 3.1. Better instruction following, far fewer runaway generations.",
+    sha256: "a3cc56310807ed0d145eaf9f018ccda9ae7ad8edb41ec870aa2454b0d4700b3c",
   },
   "qwen3.5-27b": {
     uri: "hf:unsloth/Qwen3.5-27B-GGUF:Q4_K_M",
+    params: "27B",
+    sizeBytes: 16000000000,
+    category: "general",
+    contextWindow: 131072,
+    license: "apache-2.0",
+    description:
+      "Modern dense general 27B. The practical ceiling for most workstations.",
     sha256: "84b5f7f112156d63836a01a69dc3f11a6ba63b10a23b8ca7a7efaf52d5a2d806",
-    params: "27B", sizeBytes: 16_000_000_000, category: "general",
-    contextWindow: 131072, license: "apache-2.0",
-    description: "Modern dense general 27B; the practical ceiling for most workstations.",
   },
   "gemma-4-26b-a4b": {
     uri: "hf:unsloth/gemma-4-26B-A4B-it-GGUF:Q4_K_M",
-    sha256: "34c746b1d50ab813e29cd46c4796e3f43c741901a582f93a67b55b9fc9687b35",
-    params: "26B (A4B)", sizeBytes: 16_900_000_000, category: "general",
-    contextWindow: 262144, license: "apache-2.0",
-    description: "Google's Gemma 4 MoE (3.8B active); fast yet capable multimodal model, 256K context.",
+    params: "26B (A4B)",
+    sizeBytes: 16900000000,
+    category: "general",
+    contextWindow: 262144,
+    license: "apache-2.0",
+    description:
+      "Google's Gemma 4 MoE (3.8B active). Fast yet capable multimodal model.",
+    sha256: "f2c28b3dc4776931ac6f879e11f203dec637ea0f14267a86ec8f6165f63f293f",
   },
   "gemma-4-31b": {
     uri: "hf:unsloth/gemma-4-31B-it-GGUF:Q4_K_M",
-    sha256: "9fdf3dc8b0384830b4402d151388c140bd8eb2abf8d60588d8224231198254a1",
-    params: "31B", sizeBytes: 18_300_000_000, category: "general",
-    contextWindow: 262144, license: "apache-2.0",
-    description: "Largest dense Gemma 4; top Gemma quality for high-RAM workstations, 256K context.",
+    params: "31B",
+    sizeBytes: 18300000000,
+    category: "general",
+    contextWindow: 262144,
+    license: "apache-2.0",
+    description:
+      "Largest dense Gemma 4. Top Gemma quality for high-RAM workstations.",
+    sha256: "38bd64c852c4b460434cc7162fa9bdcf242faf86502581a754cb72956bb17f84",
   },
-
-  // ── Reasoning ───────────────────────────────────────────────────────────
+  "qwen3.5-35b-a3b": {
+    uri: "hf:unsloth/Qwen3.5-35B-A3B-GGUF:Q4_K_M",
+    params: "35B (A3B)",
+    sizeBytes: 22016000000,
+    category: "general",
+    contextWindow: 262144,
+    license: "apache-2.0",
+    description:
+      "Qwen's general MoE (3B active). 27B-class quality at 9B speed, needs ~32 GB RAM.",
+    sha256: "3b46d1066bc91cc2d613e3bc22ce691dd77e6f0d33c9060690d24ce6de494375",
+  },
   "deepseek-r1-distill-llama-8b": {
     uri: "hf:unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M",
+    params: "8B",
+    sizeBytes: 4920000000,
+    category: "reasoning",
+    contextWindow: 131072,
+    license: "mit",
+    description:
+      "Chain-of-thought distill into Llama-8B. Best small reasoning model.",
     sha256: "0addb1339a82385bcd973186cd80d18dcc71885d45eabd899781a118d03827d9",
-    params: "8B", sizeBytes: 4_920_000_000, category: "reasoning",
-    contextWindow: 131072, license: "mit",
-    description: "Chain-of-thought distill into Llama-8B; best small reasoning model.",
+  },
+  "deepseek-r1-0528-qwen3-8b": {
+    uri: "hf:unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF:Q4_K_M",
+    params: "8B",
+    sizeBytes: 5030000000,
+    category: "reasoning",
+    contextWindow: 131072,
+    license: "mit",
+    description:
+      "DeepSeek's newer R1 distill onto Qwen3-8B. Supersedes the Llama-8B distill.",
+    sha256: "a86349a4180c4e6bb43f874c29c404fa2be3f90b15509bd6d86f697dba724ec1",
   },
   "phi-4-reasoning": {
     uri: "hf:unsloth/Phi-4-reasoning-GGUF:Q4_K_M",
+    params: "14B",
+    sizeBytes: 9050000000,
+    category: "reasoning",
+    contextWindow: 32768,
+    license: "mit",
+    description:
+      "Microsoft's reasoning-tuned 14B. Competitive with much larger models on math/logic.",
     sha256: "960d3870b218f91116c55bf81dc313e6cdbce31b1047bb2bc8bc7ea47899b032",
-    params: "14B", sizeBytes: 9_050_000_000, category: "reasoning",
-    contextWindow: 32768, license: "mit",
-    description: "Microsoft's reasoning-tuned 14B; competitive with much larger models on math/logic.",
   },
-
-  // ── Coding ──────────────────────────────────────────────────────────────
+  "magistral-small-2509": {
+    uri: "hf:unsloth/Magistral-Small-2509-GGUF:Q4_K_M",
+    params: "24B",
+    sizeBytes: 14333000000,
+    category: "reasoning",
+    contextWindow: 131072,
+    license: "apache-2.0",
+    description:
+      "Mistral's reasoning model. The strongest chain-of-thought that still fits ~16 GB.",
+    sha256: "6d3e5f2a83ed9d64bd3382fb03be2f6e0bc7596a9de16e107bf22f959891945b",
+  },
   "devstral-small-2507": {
     uri: "hf:mistralai/Devstral-Small-2507_gguf:Q4_K_M",
+    params: "24B",
+    sizeBytes: 14300000000,
+    category: "coding",
+    contextWindow: 131072,
+    license: "apache-2.0",
+    description: "Mistral's official coding-agent GGUF.",
     sha256: "1bcc2b1b7b7ea3168ba2dbe782432c464f2240598bd193930122c41b117c1796",
-    params: "24B", sizeBytes: 14_300_000_000, category: "coding",
-    contextWindow: 131072, license: "apache-2.0",
-    description: "Mistral's official coding-agent GGUF; #1 open-source on SWE-Bench at release.",
+  },
+  "devstral-small-2-24b": {
+    uri: "hf:unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_M",
+    params: "24B",
+    sizeBytes: 14334000000,
+    category: "coding",
+    contextWindow: 393216,
+    license: "apache-2.0",
+    description:
+      "Mistral's current coding agent. Supersedes 2507 and reads 384K tokens at once.",
+    sha256: "d14ba9edee1bb4c4996a726deb81e49ae81800a3216f0774634238c380aee496",
   },
   "qwen3-coder-30b-a3b": {
     uri: "hf:unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M",
+    params: "30B (A3B)",
+    sizeBytes: 19000000000,
+    category: "coding",
+    contextWindow: 262144,
+    license: "apache-2.0",
+    description: "Qwen's MoE coder (3.3B active). Strong agentic coding model.",
     sha256: "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad",
-    params: "30B (A3B)", sizeBytes: 19_000_000_000, category: "coding",
-    contextWindow: 262144, license: "apache-2.0",
-    description: "Qwen's MoE coder (3.3B active); strong agentic coding + 256K context.",
   },
-
-  // ── Embedding ───────────────────────────────────────────────────────────
   "nomic-embed-text": {
     uri: "hf:nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M",
+    params: "137M",
+    sizeBytes: 89000000,
+    category: "embedding",
+    contextWindow: 8192,
+    license: "apache-2.0",
+    description: "Returns 768-dim embeddings. Pair with a chat model for RAG.",
     sha256: "d4e388894e09cf3816e8b0896d81d265b55e7a9fff9ab03fe8bf4ef5e11295ac",
-    params: "137M", sizeBytes: 89_000_000, category: "embedding",
-    contextWindow: 8192, license: "apache-2.0",
-    description: "Returns 768-dim embeddings; pair with a chat model for RAG.",
   },
 };
 
@@ -230,8 +370,13 @@ function isCatalogUri(v: string): boolean {
 /** The agency.json that owns aliases: nearest `agency.json` walking up from
  *  `startDir` (cwd by default); falls back to `~/agency.json` when none is
  *  found. Exported so the CLI can echo it on every write. */
-export function resolveAliasConfigPath(startDir: string = process.cwd()): string {
-  return findFileUp(startDir, "agency.json") ?? path.join(os.homedir(), "agency.json");
+export function resolveAliasConfigPath(
+  startDir: string = process.cwd(),
+): string {
+  return (
+    findFileUp(startDir, "agency.json") ??
+    path.join(os.homedir(), "agency.json")
+  );
 }
 
 /** Treat empty string as "caller wants resolveAliasConfigPath()". */
@@ -297,7 +442,9 @@ export function aliasUri(value: AliasValue): string {
   return typeof value === "string" ? value : value.uri;
 }
 
-export function readModelAliases(file: string = ""): Record<string, AliasValue> {
+export function readModelAliases(
+  file: string = "",
+): Record<string, AliasValue> {
   const cfg = readJson(resolveAliasFile(file));
   return (cfg.client?.modelAliases ?? {}) as Record<string, AliasValue>;
 }
@@ -326,7 +473,10 @@ export function _resolveModelName(value: string, file: string = ""): string {
   const curated = CURATED_LOCAL_MODELS[value];
   const mapped = aliasTarget ?? curated?.uri;
   if (!mapped) {
-    const names = [...Object.keys(CURATED_LOCAL_MODELS), ...Object.keys(aliases)].join(", ");
+    const names = [
+      ...Object.keys(CURATED_LOCAL_MODELS),
+      ...Object.keys(aliases),
+    ].join(", ");
     throw new Error(
       `Unknown local model "${value}". Known names: ${names || "(none)"}; ` +
         `or pass a .gguf path or an "hf:" URI.`,
@@ -337,7 +487,13 @@ export function _resolveModelName(value: string, file: string = ""): string {
 
 type EntryMeta = Pick<
   ModelNameEntry,
-  "params" | "sizeBytes" | "category" | "description" | "contextWindow" | "license" | "sha256"
+  | "params"
+  | "sizeBytes"
+  | "category"
+  | "description"
+  | "contextWindow"
+  | "license"
+  | "sha256"
 >;
 
 /** Project the optional display-metadata fields off any source shape
@@ -359,26 +515,37 @@ function metaFrom(src: string | Partial<EntryMeta>): EntryMeta {
 }
 
 export function _listModelNames(file: string = ""): ModelNameEntry[] {
-  const curatedEntries: ModelNameEntry[] = Object.entries(CURATED_LOCAL_MODELS).map(
-    ([name, info]) => ({ name, target: info.uri, source: "curated", ...metaFrom(info) }),
-  );
-  const aliasEntries: ModelNameEntry[] = Object.entries(readModelAliases(file)).map(
-    ([name, value]) => ({
-      name,
-      target: aliasUri(value),
-      source: "alias",
-      ...metaFrom(value),
-    }),
-  );
+  const curatedEntries: ModelNameEntry[] = Object.entries(
+    CURATED_LOCAL_MODELS,
+  ).map(([name, info]) => ({
+    name,
+    target: info.uri,
+    source: "curated",
+    ...metaFrom(info),
+  }));
+  const aliasEntries: ModelNameEntry[] = Object.entries(
+    readModelAliases(file),
+  ).map(([name, value]) => ({
+    name,
+    target: aliasUri(value),
+    source: "alias",
+    ...metaFrom(value),
+  }));
   // Alias wins on name collision: the alias entry overwrites the curated one
   // in the object literal because it comes later. `Object.values` then yields
   // exactly one entry per name.
   return Object.values(
-    Object.fromEntries([...curatedEntries, ...aliasEntries].map((e) => [e.name, e])),
+    Object.fromEntries(
+      [...curatedEntries, ...aliasEntries].map((e) => [e.name, e]),
+    ),
   );
 }
 
-export function _aliasModel(name: string, uri: string, file: string = ""): string {
+export function _aliasModel(
+  name: string,
+  uri: string,
+  file: string = "",
+): string {
   const resolved = resolveAliasFile(file);
   writeJson(resolved, withAlias(readJson(resolved), name, uri));
   return resolved;
@@ -452,15 +619,25 @@ export type CatalogModel = {
 };
 
 /** Resolve the catalog URL: explicit arg → env → config → built-in default. */
-export function resolveCatalogUrl(explicit: string = "", file: string = ""): string {
+export function resolveCatalogUrl(
+  explicit: string = "",
+  file: string = "",
+): string {
   if (explicit !== "") return explicit;
-  if (process.env.AGENCY_MODEL_CATALOG_URL) return process.env.AGENCY_MODEL_CATALOG_URL;
+  if (process.env.AGENCY_MODEL_CATALOG_URL)
+    return process.env.AGENCY_MODEL_CATALOG_URL;
   const configured = readJson(resolveAliasFile(file)).client?.modelCatalogUrl;
-  if (typeof configured === "string" && configured.length > 0) return configured;
+  if (typeof configured === "string" && configured.length > 0)
+    return configured;
   return DEFAULT_CATALOG_URL;
 }
 
-const CATALOG_CATEGORIES = ["general", "coding", "reasoning", "embedding"] as const;
+const CATALOG_CATEGORIES = [
+  "general",
+  "coding",
+  "reasoning",
+  "embedding",
+] as const;
 
 /** Bound on how long the default fetcher will wait for the remote catalog
  *  before aborting. Long enough to tolerate slow CI mirrors; short enough
@@ -477,7 +654,9 @@ const CATALOG_MAX_BYTES = 5_000_000;
 // is dropped rather than failing the whole entry (lenient metadata); a
 // missing/insecure `uri` fails the entry (it's then skipped + warned).
 const CatalogModelSchema = z.object({
-  uri: z.string().refine(isCatalogUri, "uri must be an hf:/https: URI or a .gguf path"),
+  uri: z
+    .string()
+    .refine(isCatalogUri, "uri must be an hf:/https: URI or a .gguf path"),
   params: z.string().optional().catch(undefined),
   sizeBytes: z.number().optional().catch(undefined),
   category: z.enum(CATALOG_CATEGORIES).optional().catch(undefined),
@@ -504,7 +683,9 @@ const CatalogTopSchema = z.object({
 /** Strip keys whose value is `undefined` so the resulting object is JSON-clean
  *  (no `"params": undefined` after `JSON.stringify`) and in canonical order. */
 function compact<T extends Record<string, unknown>>(o: T): Partial<T> {
-  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
+  return Object.fromEntries(
+    Object.entries(o).filter(([, v]) => v !== undefined),
+  ) as Partial<T>;
 }
 
 /** Parse + validate the catalog JSON. Throws on blob-level problems (bad JSON,
@@ -536,32 +717,34 @@ export function parseCatalog(text: string): Record<string, CatalogModel> {
   }
   // Validate each entry independently; a bad entry is skipped + warned, not
   // fatal. Rebuild a canonical-order `CatalogModel` from the validated data.
-  const entries: ([string, CatalogModel] | null)[] = Object.entries(top.data.models).map(
-    ([name, entry]) => {
-      const parsed = CatalogModelSchema.safeParse(entry);
-      if (!parsed.success) {
-        console.warn(
-          `[catalog] skipping "${name}": ${parsed.error.issues[0]?.message ?? "invalid entry"}`,
-        );
-        return null;
-      }
-      const d = parsed.data;
-      const model: CatalogModel = {
-        uri: d.uri,
-        ...compact({
-          params: d.params,
-          sizeBytes: d.sizeBytes,
-          category: d.category,
-          contextWindow: d.contextWindow,
-          license: d.license,
-          description: d.description,
-          sha256: d.sha256,
-        }),
-      };
-      return [name, model];
-    },
+  const entries: ([string, CatalogModel] | null)[] = Object.entries(
+    top.data.models,
+  ).map(([name, entry]) => {
+    const parsed = CatalogModelSchema.safeParse(entry);
+    if (!parsed.success) {
+      console.warn(
+        `[catalog] skipping "${name}": ${parsed.error.issues[0]?.message ?? "invalid entry"}`,
+      );
+      return null;
+    }
+    const d = parsed.data;
+    const model: CatalogModel = {
+      uri: d.uri,
+      ...compact({
+        params: d.params,
+        sizeBytes: d.sizeBytes,
+        category: d.category,
+        contextWindow: d.contextWindow,
+        license: d.license,
+        description: d.description,
+        sha256: d.sha256,
+      }),
+    };
+    return [name, model];
+  });
+  return Object.fromEntries(
+    entries.filter((e): e is [string, CatalogModel] => e !== null),
   );
-  return Object.fromEntries(entries.filter((e): e is [string, CatalogModel] => e !== null));
 }
 
 /** If `url` names a local file (a `file://` URL or a plain filesystem path —
@@ -570,7 +753,8 @@ export function parseCatalog(text: string): Record<string, CatalogModel> {
  *  makes the merge logic integration-testable without a network round-trip. */
 function catalogLocalPath(url: string): string | null {
   if (url.startsWith("file://")) return fileURLToPath(url);
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(url) || url.startsWith("hf:")) return null;
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(url) || url.startsWith("hf:"))
+    return null;
   return url;
 }
 
@@ -578,7 +762,9 @@ function catalogLocalPath(url: string): string | null {
 function readCatalogFile(path: string): string {
   const size = fs.statSync(path).size;
   if (size > CATALOG_MAX_BYTES) {
-    throw new Error(`catalog file too large (${size} bytes; cap ${CATALOG_MAX_BYTES} bytes)`);
+    throw new Error(
+      `catalog file too large (${size} bytes; cap ${CATALOG_MAX_BYTES} bytes)`,
+    );
   }
   return fs.readFileSync(path, "utf-8");
 }
@@ -587,7 +773,11 @@ function readCatalogFile(path: string): string {
  *  large/malicious body can't be fully buffered first. Mirrors the capped
  *  reader in `lib/stdlib/http.ts`; counts raw bytes (`byteLength`), not
  *  UTF-16 code units. */
-async function readBodyCapped(res: Response, url: string, maxBytes: number): Promise<string> {
+async function readBodyCapped(
+  res: Response,
+  url: string,
+  maxBytes: number,
+): Promise<string> {
   if (!res.body) return "";
   const reader = res.body.getReader();
   const decoder = new TextDecoder("utf-8");
@@ -691,12 +881,17 @@ function classifyEntry(
   // model named like a prototype member (`toString`, `__proto__`, …) must not
   // be treated as a collision with — or a previous value from — an inherited
   // property the user never set.
-  const has = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);
+  const has = (o: object, k: string): boolean =>
+    Object.prototype.hasOwnProperty.call(o, k);
   if (has(userAliases, name)) {
     return {
       kind: "skipped",
       name,
-      entry: { name, keptUri: aliasUri(userAliases[name]), remoteUri: model.uri },
+      entry: {
+        name,
+        keptUri: aliasUri(userAliases[name]),
+        remoteUri: model.uri,
+      },
     };
   }
   const value: AliasObject = { ...model, source: "remote" };
@@ -712,7 +907,8 @@ function classifyEntry(
 
 /** Predicate factory for declarative filtering by `Classification.kind`. */
 function isKind<K extends Classification["kind"]>(k: K) {
-  return (c: Classification): c is Extract<Classification, { kind: K }> => c.kind === k;
+  return (c: Classification): c is Extract<Classification, { kind: K }> =>
+    c.kind === k;
 }
 
 /** Fetch + validate the catalog, then rewrite the `source:"remote"` aliases in
@@ -720,7 +916,11 @@ function isKind<K extends Classification["kind"]>(k: K) {
  *  collisions (the remote entry is skipped). Throws (leaving the file
  *  untouched) on fetch/parse/validation failure. */
 export async function _refreshCatalog(
-  opts: { url?: string; fetcher?: (url: string) => Promise<string>; file?: string } = {},
+  opts: {
+    url?: string;
+    fetcher?: (url: string) => Promise<string>;
+    file?: string;
+  } = {},
 ): Promise<RefreshResult> {
   const file = resolveAliasFile(opts.file ?? "");
   const url = resolveCatalogUrl(opts.url ?? "", file);
@@ -739,18 +939,21 @@ export async function _refreshCatalog(
 
   // Partition existing aliases by who manages them.
   const userAliases: Record<string, AliasValue> = Object.fromEntries(
-    Object.entries(existing).filter(([, v]) => !(typeof v === "object" && v.source === "remote")),
+    Object.entries(existing).filter(
+      ([, v]) => !(typeof v === "object" && v.source === "remote"),
+    ),
   );
   const oldManaged: Record<string, AliasObject> = Object.fromEntries(
     Object.entries(existing).filter(
-      (e): e is [string, AliasObject] => typeof e[1] === "object" && e[1].source === "remote",
+      (e): e is [string, AliasObject] =>
+        typeof e[1] === "object" && e[1].source === "remote",
     ),
   );
 
   // The entire merge policy: classify each catalog entry once. Everything
   // downstream is a filter/project on this array.
-  const classifications: Classification[] = Object.entries(models).map(([name, model]) =>
-    classifyEntry(name, model, userAliases, oldManaged),
+  const classifications: Classification[] = Object.entries(models).map(
+    ([name, model]) => classifyEntry(name, model, userAliases, oldManaged),
   );
 
   const namesIn = <K extends Classification["kind"]>(k: K): string[] =>
@@ -764,9 +967,14 @@ export async function _refreshCatalog(
   // What ends up in `client.modelAliases`: user aliases (untouched) plus
   // every non-skipped classification's value.
   const writtenManaged: Record<string, AliasValue> = Object.fromEntries(
-    classifications.filter((c) => c.kind !== "skipped").map((c) => [c.name, (c as { value: AliasObject }).value]),
+    classifications
+      .filter((c) => c.kind !== "skipped")
+      .map((c) => [c.name, (c as { value: AliasObject }).value]),
   );
-  const next: Record<string, AliasValue> = { ...userAliases, ...writtenManaged };
+  const next: Record<string, AliasValue> = {
+    ...userAliases,
+    ...writtenManaged,
+  };
 
   const surviving = [...added, ...updated, ...unchanged];
   const removed = Object.keys(oldManaged).filter((n) => !surviving.includes(n));
@@ -811,7 +1019,9 @@ function requireSupport(): void {
     return;
   }
   if (!_localModelsSupported()) {
-    throw new Error("Local models need smoltalk-llama-cpp — run: npm i -g smoltalk-llama-cpp");
+    throw new Error(
+      "Local models need smoltalk-llama-cpp — run: npm i -g smoltalk-llama-cpp",
+    );
   }
 }
 
@@ -869,7 +1079,10 @@ export async function verifyModelFile(
     fs.renameSync(filePath, quarantine);
   } catch (err) {
     moved = false;
-    console.warn(`Could not move "${filePath}" to "${quarantine}" after SHA-256 mismatch:`, err);
+    console.warn(
+      `Could not move "${filePath}" to "${quarantine}" after SHA-256 mismatch:`,
+      err,
+    );
   }
   throw new Error(
     `SHA-256 verification failed for "${name}": expected ${expected}, got ${actual}. ` +
@@ -884,7 +1097,10 @@ export async function verifyModelFile(
  *  model). An alias entry governs the name entirely — a user alias shadowing a
  *  curated name must NOT borrow the curated hash, but a user MAY opt in by
  *  setting their own `sha256` on the alias object. */
-export function pinnedSha256(value: string, file: string = ""): string | undefined {
+export function pinnedSha256(
+  value: string,
+  file: string = "",
+): string | undefined {
   if (isGgufPath(value) || isModelUri(value)) return undefined;
   const aliases = readModelAliases(file);
   if (Object.hasOwn(aliases, value)) {
@@ -909,7 +1125,10 @@ export function snapshotFreshness(dir: string): FreshnessProbe {
 }
 
 /** Resolve a name/uri/path to a local .gguf path, downloading if needed. */
-export async function _downloadModel(value: string, cacheDir: string = ""): Promise<string> {
+export async function _downloadModel(
+  value: string,
+  cacheDir: string = "",
+): Promise<string> {
   requireSupport();
   const target = _resolveModelName(value);
   const dir = resolveCacheDir(cacheDir);
@@ -930,7 +1149,10 @@ export async function _downloadModel(value: string, cacheDir: string = ""): Prom
 }
 
 /** Convenience: register the provider + ensure the model is downloaded. */
-export async function _registerLocalModel(value: string, cacheDir: string = ""): Promise<string> {
+export async function _registerLocalModel(
+  value: string,
+  cacheDir: string = "",
+): Promise<string> {
   await _registerLocalProvider();
   return await _downloadModel(value, cacheDir);
 }
@@ -962,14 +1184,17 @@ function colWidth(header: string, values: string[]): number {
  *  a downloaded marker, then cache-dir files no catalog entry claims. A row
  *  is "downloaded" when the manifest maps its target URI to a file that still
  *  exists in the cache dir; its SIZE column then shows the on-disk size
- *  rather than the catalog estimate. Compact and operational — `alias list`
- *  keeps the verbose per-model catalog with descriptions. Returns the block
- *  with no trailing newline (the caller's `console.log` adds exactly one). */
+ *  rather than the catalog estimate. Compact and operational by default;
+ *  `long` (the `-l` flag) adds each model's description on its own dimmed
+ *  line, with a blank line between models so the descriptions stay readable.
+ *  Returns the block with no trailing newline (the caller's `console.log`
+ *  adds exactly one). */
 export function formatLocalList(args: {
   dir: string;
   entries: ModelNameEntry[];
   manifest: Record<string, string>;
   files: { name: string; path: string; sizeBytes: number }[];
+  long?: boolean;
 }): string {
   const byName = Object.fromEntries(args.files.map((f) => [f.name, f]));
   const rows = args.entries.map((e) => {
@@ -987,6 +1212,8 @@ export function formatLocalList(args: {
             : "",
       ctx: e.contextWindow !== undefined ? formatCtx(e.contextWindow) : "",
       license: e.license ?? "",
+      category: e.category ?? "",
+      description: e.description ?? "",
     };
   });
   // Only files claimed by a CATALOG row are excluded from OTHER FILES. The
@@ -996,23 +1223,65 @@ export function formatLocalList(args: {
     .map((e) => args.manifest[e.target])
     .filter((f): f is string => f !== undefined);
   const others = args.files.filter((f) => !claimedFiles.includes(f.name));
-  const headers = ["", "NAME", "PARAMS", "SIZE", "CONTEXT", "LICENSE"];
+  const headers = [
+    "",
+    "NAME",
+    "PARAMS",
+    "SIZE",
+    "CONTEXT",
+    "CATEGORY",
+    "LICENSE",
+  ];
   const cols = [
-    colWidth(headers[0], rows.map((r) => r.mark)),
-    colWidth(headers[1], rows.map((r) => r.name)),
-    colWidth(headers[2], rows.map((r) => r.params)),
-    colWidth(headers[3], rows.map((r) => r.size)),
-    colWidth(headers[4], rows.map((r) => r.ctx)),
-    colWidth(headers[5], rows.map((r) => r.license)),
+    colWidth(
+      headers[0],
+      rows.map((r) => r.mark),
+    ),
+    colWidth(
+      headers[1],
+      rows.map((r) => r.name),
+    ),
+    colWidth(
+      headers[2],
+      rows.map((r) => r.params),
+    ),
+    colWidth(
+      headers[3],
+      rows.map((r) => r.size),
+    ),
+    colWidth(
+      headers[4],
+      rows.map((r) => r.ctx),
+    ),
+    colWidth(
+      headers[5],
+      rows.map((r) => r.category),
+    ),
+    colWidth(
+      headers[6],
+      rows.map((r) => r.license),
+    ),
   ];
   const render = (cells: string[]) =>
-    cells.map((c, i) => c.padEnd(cols[i])).join("  ").trimEnd();
-  const lines = [
-    `Models directory: ${args.dir}`,
-    "",
-    render(headers),
-    ...rows.map((r) => render([r.mark, r.name, r.params, r.size, r.ctx, r.license])),
-  ];
+    cells
+      .map((c, i) => c.padEnd(cols[i]))
+      .join("  ")
+      .trimEnd();
+  // Indent descriptions two past where NAME starts (mark column + its
+  // separator), so they read as nested under the model they describe.
+  const descIndent = " ".repeat(cols[0] + 2 + 2);
+  const lines = [`Models directory: ${args.dir}`, "", render(headers)];
+  rows.forEach((r, i) => {
+    // Blank line *between* models, not after the last one, so the sections
+    // below (which push their own leading "") aren't double-spaced.
+    if (args.long === true && i > 0) lines.push("");
+    lines.push(
+      render([r.mark, r.name, r.params, r.size, r.ctx, r.category, r.license]),
+    );
+    if (args.long === true && r.description !== "") {
+      lines.push(ttyColor.dim(`${descIndent}${r.description}`));
+    }
+  });
   if (others.length > 0) {
     lines.push("", "OTHER FILES");
     for (const f of others) lines.push(`  ${f.name}  ${formatGB(f.sizeBytes)}`);
@@ -1054,11 +1323,26 @@ export function formatModelCatalog(): string {
     // Computed widths so columns fit the actual data (names range from ~10
     // to ~28 chars). SIZE and CTX are numeric, so they right-align.
     const w = {
-      name: colWidth("NAME", rows.map((r) => r.name)),
-      params: colWidth("PARAMS", rows.map((r) => r.params)),
-      category: colWidth("CATEGORY", rows.map((r) => r.category)),
-      size: colWidth("SIZE", rows.map((r) => r.size)),
-      ctx: colWidth("CTX", rows.map((r) => r.ctx)),
+      name: colWidth(
+        "NAME",
+        rows.map((r) => r.name),
+      ),
+      params: colWidth(
+        "PARAMS",
+        rows.map((r) => r.params),
+      ),
+      category: colWidth(
+        "CATEGORY",
+        rows.map((r) => r.category),
+      ),
+      size: colWidth(
+        "SIZE",
+        rows.map((r) => r.size),
+      ),
+      ctx: colWidth(
+        "CTX",
+        rows.map((r) => r.ctx),
+      ),
     };
     const row = (
       name: string,
@@ -1073,7 +1357,11 @@ export function formatModelCatalog(): string {
       )}  ${size.padStart(w.size)}  ${ctx.padStart(w.ctx)}  ${license}`;
 
     // LICENSE is the last column, so it needs no trailing pad.
-    lines.push(ttyColor.bold(row("NAME", "PARAMS", "CATEGORY", "SIZE", "CTX", "LICENSE")));
+    lines.push(
+      ttyColor.bold(
+        row("NAME", "PARAMS", "CATEGORY", "SIZE", "CTX", "LICENSE"),
+      ),
+    );
     rows.forEach((r, i) => {
       // Blank line *between* models, not after the last one, so the joined
       // string has no trailing newline (console.log adds exactly one).

@@ -56,7 +56,7 @@ export function aliasRemove(name: string, file?: string): string {
 /** Deliberately ungated: browsing the catalog needs no provider package
  *  (only download/remove do), and the pre-install experience — see what is
  *  available, then get told what to install — is the point. */
-export function runList(): void {
+export function runList(long: boolean = false): void {
   const dir = _modelsCacheDir();
   console.log(
     formatLocalList({
@@ -64,6 +64,7 @@ export function runList(): void {
       entries: _listModelNames(),
       manifest: readDownloadManifest(dir),
       files: _listDownloadedModels(),
+      long,
     }),
   );
 }

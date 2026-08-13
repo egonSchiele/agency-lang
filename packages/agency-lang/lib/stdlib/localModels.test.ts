@@ -282,6 +282,7 @@ describe("formatLocalList", () => {
       sizeBytes: 1_200_000_000,
       contextWindow: 131072,
       license: "apache-2.0",
+      description: "A middling model.",
     },
   ];
 
@@ -324,6 +325,39 @@ describe("formatLocalList", () => {
     });
     expect(out).toContain("OTHER FILES");
     expect(out).toContain("raw.gguf");
+  });
+
+  it("omits descriptions by default", () => {
+    const out = formatLocalList({ dir: "/d", entries, manifest: {}, files: [] });
+    expect(out).not.toContain("A middling model.");
+  });
+
+  it("long mode puts the description on its own line below its model", () => {
+    const out = formatLocalList({ dir: "/d", entries, manifest: {}, files: [], long: true });
+    const lines = out.split("\n");
+    const midAt = lines.findIndex((l) => l.includes("mid"));
+    expect(lines[midAt + 1]).toContain("A middling model.");
+    // The description gets a line to itself, not a table column.
+    expect(lines[midAt]).not.toContain("A middling model.");
+    // Blank line BETWEEN models: "tiny" has no description, so the blank
+    // before "mid" is the separator, not a leftover from a description line.
+    expect(lines[midAt - 1]).toBe("");
+  });
+
+  it("long mode does not double-space the section that follows the table", () => {
+    const out = formatLocalList({
+      dir: "/d",
+      entries,
+      manifest: {},
+      files: [{ name: "raw.gguf", path: "/d/raw.gguf", sizeBytes: 500_000_000 }],
+      long: true,
+    });
+    const lines = out.split("\n");
+    const othersAt = lines.indexOf("OTHER FILES");
+    expect(othersAt).toBeGreaterThan(0);
+    // Exactly one blank line separates the last model from OTHER FILES.
+    expect(lines[othersAt - 1]).toBe("");
+    expect(lines[othersAt - 2]).not.toBe("");
   });
 });
 

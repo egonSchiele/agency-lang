@@ -78,12 +78,26 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     contextWindow: 131072, license: "apache-2.0",
     description: "Strong multilingual small general workhorse from Alibaba.",
   },
+  "gemma-4-e2b": {
+    uri: "hf:unsloth/gemma-4-E2B-it-GGUF:Q4_K_M",
+    sha256: "740185b21d22ceb83a11c3aa62ad5842ef32c70f6096d756bbee85a1e4ec34b8",
+    params: "2B (E2B)", sizeBytes: 3_110_000_000, category: "general",
+    contextWindow: 131072, license: "apache-2.0",
+    description: "Smallest Gemma 4; ~3 GB multimodal model for phones and thin laptops.",
+  },
   "gemma-4-e4b": {
     uri: "hf:unsloth/gemma-4-E4B-it-GGUF:Q4_K_M",
-    sha256: "519b9793ed6ce0ff530f1b7c96e848e08e49e7af4d57bb97f76215963a54146d",
+    sha256: "85a896a047553e842f25297ee5b031d64ff30147d9c4af17b1e4b394cd1fab87",
     params: "4B (E4B)", sizeBytes: 4_980_000_000, category: "general",
     contextWindow: 131072, license: "apache-2.0",
     description: "Google's compact Gemma 4 (4.5B effective); ~5 GB, laptop-friendly multimodal model.",
+  },
+  "granite-4.1-8b": {
+    uri: "hf:unsloth/granite-4.1-8b-GGUF:Q4_K_M",
+    sha256: "0f45c1af986e9900bb3b6ba46a25937e1bb80426935bc242d88c9ca90e9f5c88",
+    params: "8B", sizeBytes: 5_350_000_000, category: "general",
+    contextWindow: 131072, license: "apache-2.0",
+    description: "IBM's enterprise-tuned 8B; built for retrieval, tool use, and long documents.",
   },
   "qwen3.5-9b": {
     uri: "hf:unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
@@ -94,7 +108,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
   },
   "gemma-4-12b": {
     uri: "hf:unsloth/gemma-4-12b-it-GGUF:Q4_K_M",
-    sha256: "43fec98c5102b1c446b4ddd0a9439f1db3a2e1f2e0b8cd143ce1ea619a9403d6",
+    sha256: "0a270ec9fe6b34f4a0d33992b6135117b484ebc4766ab76b51d4ae8c457e4c42",
     params: "12B", sizeBytes: 7_120_000_000, category: "general",
     contextWindow: 262144, license: "apache-2.0",
     description: "Google's mid-size Gemma 4 dense model; strong multilingual multimodal use, 256K context.",
@@ -113,6 +127,20 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     contextWindow: 131072, license: "apache-2.0",
     description: "Mistral's general 24B base model (also Devstral's foundation); broad utility.",
   },
+  "mistral-small-3.2": {
+    uri: "hf:unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF:Q4_K_M",
+    sha256: "a3cc56310807ed0d145eaf9f018ccda9ae7ad8edb41ec870aa2454b0d4700b3c",
+    params: "24B", sizeBytes: 14_333_000_000, category: "general",
+    contextWindow: 131072, license: "apache-2.0",
+    description: "Drop-in upgrade over 3.1: better instruction following, far fewer runaway generations.",
+  },
+  "dolphin-3.0-mistral-24b": {
+    uri: "hf:bartowski/cognitivecomputations_Dolphin3.0-Mistral-24B-GGUF:Q4_K_M",
+    sha256: "6f193bbf98628140194df257c7466e2c6f80a7ef70a6ebae26c53b2f2ef21994",
+    params: "24B", sizeBytes: 14_333_000_000, category: "general",
+    contextWindow: 32768, license: "apache-2.0",
+    description: "Steerable Mistral-24B fine-tune with no built-in refusals; you own the system prompt.",
+  },
   "qwen3.5-27b": {
     uri: "hf:unsloth/Qwen3.5-27B-GGUF:Q4_K_M",
     sha256: "84b5f7f112156d63836a01a69dc3f11a6ba63b10a23b8ca7a7efaf52d5a2d806",
@@ -122,17 +150,25 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
   },
   "gemma-4-26b-a4b": {
     uri: "hf:unsloth/gemma-4-26B-A4B-it-GGUF:Q4_K_M",
-    sha256: "34c746b1d50ab813e29cd46c4796e3f43c741901a582f93a67b55b9fc9687b35",
+    sha256: "f2c28b3dc4776931ac6f879e11f203dec637ea0f14267a86ec8f6165f63f293f",
     params: "26B (A4B)", sizeBytes: 16_900_000_000, category: "general",
     contextWindow: 262144, license: "apache-2.0",
     description: "Google's Gemma 4 MoE (3.8B active); fast yet capable multimodal model, 256K context.",
   },
   "gemma-4-31b": {
     uri: "hf:unsloth/gemma-4-31B-it-GGUF:Q4_K_M",
-    sha256: "9fdf3dc8b0384830b4402d151388c140bd8eb2abf8d60588d8224231198254a1",
+    sha256: "38bd64c852c4b460434cc7162fa9bdcf242faf86502581a754cb72956bb17f84",
     params: "31B", sizeBytes: 18_300_000_000, category: "general",
     contextWindow: 262144, license: "apache-2.0",
     description: "Largest dense Gemma 4; top Gemma quality for high-RAM workstations, 256K context.",
+  },
+
+  "qwen3.5-35b-a3b": {
+    uri: "hf:unsloth/Qwen3.5-35B-A3B-GGUF:Q4_K_M",
+    sha256: "3b46d1066bc91cc2d613e3bc22ce691dd77e6f0d33c9060690d24ce6de494375",
+    params: "35B (A3B)", sizeBytes: 22_016_000_000, category: "general",
+    contextWindow: 262144, license: "apache-2.0",
+    description: "Qwen's general MoE (3B active); 27B-class quality at 9B speed, needs ~32 GB RAM.",
   },
 
   // ── Reasoning ───────────────────────────────────────────────────────────
@@ -143,12 +179,27 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     contextWindow: 131072, license: "mit",
     description: "Chain-of-thought distill into Llama-8B; best small reasoning model.",
   },
+  "deepseek-r1-0528-qwen3-8b": {
+    uri: "hf:unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF:Q4_K_M",
+    sha256: "a86349a4180c4e6bb43f874c29c404fa2be3f90b15509bd6d86f697dba724ec1",
+    params: "8B", sizeBytes: 5_030_000_000, category: "reasoning",
+    contextWindow: 131072, license: "mit",
+    description: "DeepSeek's newer R1 distill onto Qwen3-8B; supersedes the Llama-8B distill.",
+  },
   "phi-4-reasoning": {
     uri: "hf:unsloth/Phi-4-reasoning-GGUF:Q4_K_M",
     sha256: "960d3870b218f91116c55bf81dc313e6cdbce31b1047bb2bc8bc7ea47899b032",
     params: "14B", sizeBytes: 9_050_000_000, category: "reasoning",
     contextWindow: 32768, license: "mit",
     description: "Microsoft's reasoning-tuned 14B; competitive with much larger models on math/logic.",
+  },
+
+  "magistral-small-2509": {
+    uri: "hf:unsloth/Magistral-Small-2509-GGUF:Q4_K_M",
+    sha256: "6d3e5f2a83ed9d64bd3382fb03be2f6e0bc7596a9de16e107bf22f959891945b",
+    params: "24B", sizeBytes: 14_333_000_000, category: "reasoning",
+    contextWindow: 131072, license: "apache-2.0",
+    description: "Mistral's reasoning model; the strongest chain-of-thought that still fits ~16 GB.",
   },
 
   // ── Coding ──────────────────────────────────────────────────────────────
@@ -158,6 +209,13 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     params: "24B", sizeBytes: 14_300_000_000, category: "coding",
     contextWindow: 131072, license: "apache-2.0",
     description: "Mistral's official coding-agent GGUF; #1 open-source on SWE-Bench at release.",
+  },
+  "devstral-small-2-24b": {
+    uri: "hf:unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_M",
+    sha256: "d14ba9edee1bb4c4996a726deb81e49ae81800a3216f0774634238c380aee496",
+    params: "24B", sizeBytes: 14_334_000_000, category: "coding",
+    contextWindow: 393216, license: "apache-2.0",
+    description: "Mistral's current coding agent; supersedes 2507 and reads 384K tokens at once.",
   },
   "qwen3-coder-30b-a3b": {
     uri: "hf:unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M",
@@ -962,14 +1020,17 @@ function colWidth(header: string, values: string[]): number {
  *  a downloaded marker, then cache-dir files no catalog entry claims. A row
  *  is "downloaded" when the manifest maps its target URI to a file that still
  *  exists in the cache dir; its SIZE column then shows the on-disk size
- *  rather than the catalog estimate. Compact and operational — `alias list`
- *  keeps the verbose per-model catalog with descriptions. Returns the block
- *  with no trailing newline (the caller's `console.log` adds exactly one). */
+ *  rather than the catalog estimate. Compact and operational by default;
+ *  `long` (the `-l` flag) adds each model's description on its own dimmed
+ *  line, with a blank line between models so the descriptions stay readable.
+ *  Returns the block with no trailing newline (the caller's `console.log`
+ *  adds exactly one). */
 export function formatLocalList(args: {
   dir: string;
   entries: ModelNameEntry[];
   manifest: Record<string, string>;
   files: { name: string; path: string; sizeBytes: number }[];
+  long?: boolean;
 }): string {
   const byName = Object.fromEntries(args.files.map((f) => [f.name, f]));
   const rows = args.entries.map((e) => {
@@ -987,6 +1048,7 @@ export function formatLocalList(args: {
             : "",
       ctx: e.contextWindow !== undefined ? formatCtx(e.contextWindow) : "",
       license: e.license ?? "",
+      description: e.description ?? "",
     };
   });
   // Only files claimed by a CATALOG row are excluded from OTHER FILES. The
@@ -1007,12 +1069,19 @@ export function formatLocalList(args: {
   ];
   const render = (cells: string[]) =>
     cells.map((c, i) => c.padEnd(cols[i])).join("  ").trimEnd();
-  const lines = [
-    `Models directory: ${args.dir}`,
-    "",
-    render(headers),
-    ...rows.map((r) => render([r.mark, r.name, r.params, r.size, r.ctx, r.license])),
-  ];
+  // Indent descriptions two past where NAME starts (mark column + its
+  // separator), so they read as nested under the model they describe.
+  const descIndent = " ".repeat(cols[0] + 2 + 2);
+  const lines = [`Models directory: ${args.dir}`, "", render(headers)];
+  rows.forEach((r, i) => {
+    // Blank line *between* models, not after the last one, so the sections
+    // below (which push their own leading "") aren't double-spaced.
+    if (args.long === true && i > 0) lines.push("");
+    lines.push(render([r.mark, r.name, r.params, r.size, r.ctx, r.license]));
+    if (args.long === true && r.description !== "") {
+      lines.push(ttyColor.dim(`${descIndent}${r.description}`));
+    }
+  });
   if (others.length > 0) {
     lines.push("", "OTHER FILES");
     for (const f of others) lines.push(`  ${f.name}  ${formatGB(f.sizeBytes)}`);

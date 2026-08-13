@@ -41,6 +41,16 @@
       "description": "Strong multilingual small general workhorse from Alibaba.",
       "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4"
     },
+    "gemma-4-e2b": {
+      "uri": "hf:unsloth/gemma-4-E2B-it-GGUF:Q4_K_M",
+      "params": "2B (E2B)",
+      "sizeBytes": 3110000000,
+      "category": "general",
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "Smallest Gemma 4; ~3 GB multimodal model for phones and thin laptops.",
+      "sha256": "740185b21d22ceb83a11c3aa62ad5842ef32c70f6096d756bbee85a1e4ec34b8"
+    },
     "gemma-4-e4b": {
       "uri": "hf:unsloth/gemma-4-E4B-it-GGUF:Q4_K_M",
       "params": "4B (E4B)",
@@ -49,7 +59,17 @@
       "contextWindow": 131072,
       "license": "apache-2.0",
       "description": "Google's compact Gemma 4 (4.5B effective); ~5 GB, laptop-friendly multimodal model.",
-      "sha256": "519b9793ed6ce0ff530f1b7c96e848e08e49e7af4d57bb97f76215963a54146d"
+      "sha256": "85a896a047553e842f25297ee5b031d64ff30147d9c4af17b1e4b394cd1fab87"
+    },
+    "granite-4.1-8b": {
+      "uri": "hf:unsloth/granite-4.1-8b-GGUF:Q4_K_M",
+      "params": "8B",
+      "sizeBytes": 5350000000,
+      "category": "general",
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "IBM's enterprise-tuned 8B; built for retrieval, tool use, and long documents.",
+      "sha256": "0f45c1af986e9900bb3b6ba46a25937e1bb80426935bc242d88c9ca90e9f5c88"
     },
     "qwen3.5-9b": {
       "uri": "hf:unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
@@ -69,7 +89,7 @@
       "contextWindow": 262144,
       "license": "apache-2.0",
       "description": "Google's mid-size Gemma 4 dense model; strong multilingual multimodal use, 256K context.",
-      "sha256": "43fec98c5102b1c446b4ddd0a9439f1db3a2e1f2e0b8cd143ce1ea619a9403d6"
+      "sha256": "0a270ec9fe6b34f4a0d33992b6135117b484ebc4766ab76b51d4ae8c457e4c42"
     },
     "gpt-oss-20b": {
       "uri": "hf:unsloth/gpt-oss-20b-GGUF:Q4_K_M",
@@ -91,6 +111,26 @@
       "description": "Mistral's general 24B base model (also Devstral's foundation); broad utility.",
       "sha256": "6d670773c3908584349d41a5048d1472226b593c881fd394e8ac196c802e81e2"
     },
+    "mistral-small-3.2": {
+      "uri": "hf:unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF:Q4_K_M",
+      "params": "24B",
+      "sizeBytes": 14333000000,
+      "category": "general",
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "Drop-in upgrade over 3.1: better instruction following, far fewer runaway generations.",
+      "sha256": "a3cc56310807ed0d145eaf9f018ccda9ae7ad8edb41ec870aa2454b0d4700b3c"
+    },
+    "dolphin-3.0-mistral-24b": {
+      "uri": "hf:bartowski/cognitivecomputations_Dolphin3.0-Mistral-24B-GGUF:Q4_K_M",
+      "params": "24B",
+      "sizeBytes": 14333000000,
+      "category": "general",
+      "contextWindow": 32768,
+      "license": "apache-2.0",
+      "description": "Steerable Mistral-24B fine-tune with no built-in refusals; you own the system prompt.",
+      "sha256": "6f193bbf98628140194df257c7466e2c6f80a7ef70a6ebae26c53b2f2ef21994"
+    },
     "qwen3.5-27b": {
       "uri": "hf:unsloth/Qwen3.5-27B-GGUF:Q4_K_M",
       "params": "27B",
@@ -109,7 +149,7 @@
       "contextWindow": 262144,
       "license": "apache-2.0",
       "description": "Google's Gemma 4 MoE (3.8B active); fast yet capable multimodal model, 256K context.",
-      "sha256": "34c746b1d50ab813e29cd46c4796e3f43c741901a582f93a67b55b9fc9687b35"
+      "sha256": "f2c28b3dc4776931ac6f879e11f203dec637ea0f14267a86ec8f6165f63f293f"
     },
     "gemma-4-31b": {
       "uri": "hf:unsloth/gemma-4-31B-it-GGUF:Q4_K_M",
@@ -119,7 +159,17 @@
       "contextWindow": 262144,
       "license": "apache-2.0",
       "description": "Largest dense Gemma 4; top Gemma quality for high-RAM workstations, 256K context.",
-      "sha256": "9fdf3dc8b0384830b4402d151388c140bd8eb2abf8d60588d8224231198254a1"
+      "sha256": "38bd64c852c4b460434cc7162fa9bdcf242faf86502581a754cb72956bb17f84"
+    },
+    "qwen3.5-35b-a3b": {
+      "uri": "hf:unsloth/Qwen3.5-35B-A3B-GGUF:Q4_K_M",
+      "params": "35B (A3B)",
+      "sizeBytes": 22016000000,
+      "category": "general",
+      "contextWindow": 262144,
+      "license": "apache-2.0",
+      "description": "Qwen's general MoE (3B active); 27B-class quality at 9B speed, needs ~32 GB RAM.",
+      "sha256": "3b46d1066bc91cc2d613e3bc22ce691dd77e6f0d33c9060690d24ce6de494375"
     },
     "deepseek-r1-distill-llama-8b": {
       "uri": "hf:unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M",
@@ -131,6 +181,16 @@
       "description": "Chain-of-thought distill into Llama-8B; best small reasoning model.",
       "sha256": "0addb1339a82385bcd973186cd80d18dcc71885d45eabd899781a118d03827d9"
     },
+    "deepseek-r1-0528-qwen3-8b": {
+      "uri": "hf:unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF:Q4_K_M",
+      "params": "8B",
+      "sizeBytes": 5030000000,
+      "category": "reasoning",
+      "contextWindow": 131072,
+      "license": "mit",
+      "description": "DeepSeek's newer R1 distill onto Qwen3-8B; supersedes the Llama-8B distill.",
+      "sha256": "a86349a4180c4e6bb43f874c29c404fa2be3f90b15509bd6d86f697dba724ec1"
+    },
     "phi-4-reasoning": {
       "uri": "hf:unsloth/Phi-4-reasoning-GGUF:Q4_K_M",
       "params": "14B",
@@ -141,6 +201,16 @@
       "description": "Microsoft's reasoning-tuned 14B; competitive with much larger models on math/logic.",
       "sha256": "960d3870b218f91116c55bf81dc313e6cdbce31b1047bb2bc8bc7ea47899b032"
     },
+    "magistral-small-2509": {
+      "uri": "hf:unsloth/Magistral-Small-2509-GGUF:Q4_K_M",
+      "params": "24B",
+      "sizeBytes": 14333000000,
+      "category": "reasoning",
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "description": "Mistral's reasoning model; the strongest chain-of-thought that still fits ~16 GB.",
+      "sha256": "6d3e5f2a83ed9d64bd3382fb03be2f6e0bc7596a9de16e107bf22f959891945b"
+    },
     "devstral-small-2507": {
       "uri": "hf:mistralai/Devstral-Small-2507_gguf:Q4_K_M",
       "params": "24B",
@@ -150,6 +220,16 @@
       "license": "apache-2.0",
       "description": "Mistral's official coding-agent GGUF; #1 open-source on SWE-Bench at release.",
       "sha256": "1bcc2b1b7b7ea3168ba2dbe782432c464f2240598bd193930122c41b117c1796"
+    },
+    "devstral-small-2-24b": {
+      "uri": "hf:unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_M",
+      "params": "24B",
+      "sizeBytes": 14334000000,
+      "category": "coding",
+      "contextWindow": 393216,
+      "license": "apache-2.0",
+      "description": "Mistral's current coding agent; supersedes 2507 and reads 384K tokens at once.",
+      "sha256": "d14ba9edee1bb4c4996a726deb81e49ae81800a3216f0774634238c380aee496"
     },
     "qwen3-coder-30b-a3b": {
       "uri": "hf:unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M",

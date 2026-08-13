@@ -180,11 +180,13 @@ export interface AgencyConfig {
      * the `AGENCY_PROVIDER_MODULES` env var at runtime.
      */
     providerModules: string[];
-    /** Short name → Hugging Face URI aliases for local models, used by
-     *  `std::agency/local` and the `agency local` CLI. Read and written at
-     *  runtime (not compile-time baked) so `agency local alias` edits take
-     *  effect on the next run. */
-    modelAliases: Record<string, string>;
+    /** Short name → local-model alias, used by `std::agency/local` and the
+     *  `agency local` CLI. A value is either a bare Hugging Face URI or an
+     *  object carrying that URI plus display metadata (what `agency local
+     *  refresh` writes) — see `ModelAliasSchema`. Read and written at runtime
+     *  (not compile-time baked) so `agency local alias` edits take effect on
+     *  the next run. */
+    modelAliases: Record<string, ModelAlias>;
     /** Directory downloaded local models are cached in. Overridden by the
      *  `AGENCY_MODELS_DIR` env var; defaults to `~/.agency-agent/models`. Read
      *  at runtime by `std::agency/local` and the `agency local` CLI. */
@@ -408,6 +410,39 @@ export interface AgencyConfig {
 
 // --- Zod schema for runtime validation of agency.json ---
 
+/** One `client.modelAliases` value. Two forms are on disk:
+ *
+ *  - a bare URI string, the shape `agency local alias add` writes; and
+ *  - an object carrying the URI plus display metadata, the shape
+ *    `agency local refresh` writes for catalog-managed entries (tagged
+ *    `source: "remote"` so a refresh can tell its own entries from yours).
+ *
+ *  Both must validate here or a refresh leaves agency.json unloadable. The
+ *  object mirrors `AliasObject` in `lib/stdlib/localModels.ts`, which is the
+ *  type side of the same contract; `lib/config.modelAliases.test.ts` round-trips
+ *  a fully-populated entry so the two cannot drift apart. Unknown metadata keys
+ *  are allowed through so an older agency can load a config written by a newer
+ *  one (forward compatibility) rather than erroring on a field it lacks. */
+export const ModelAliasSchema = z.union([
+  z.string(),
+  z
+    .object({
+      uri: z.string(),
+      source: z.literal("remote").optional(),
+      params: z.string().optional(),
+      sizeBytes: z.number().optional(),
+      category: z.string().optional(),
+      contextWindow: z.number().optional(),
+      license: z.string().optional(),
+      description: z.string().optional(),
+      sha256: z.string().optional(),
+    })
+    .passthrough(),
+]);
+
+/** A `client.modelAliases` value: a bare URI or the rich object form. */
+export type ModelAlias = z.infer<typeof ModelAliasSchema>;
+
 export const AgencyConfigSchema = z
   .object({
     verbose: z.boolean(),
@@ -492,7 +527,7 @@ export const AgencyConfigSchema = z
         maxToolResultChars: z.number(),
         maxToolSchemaChars: z.number(),
         providerModules: z.array(z.string()),
-        modelAliases: z.record(z.string(), z.string()),
+        modelAliases: z.record(z.string(), ModelAliasSchema),
         modelsDir: z.string(),
         statelog: z
           .object({

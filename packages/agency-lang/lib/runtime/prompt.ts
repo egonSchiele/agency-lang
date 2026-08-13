@@ -20,12 +20,22 @@ import {
   runGateAndFeedback,
   type BoundaryContext,
 } from "./turnBoundary.js";
-import { AgencyCancelledError, isAbortError, makeAbortCause, readCause } from "./errors.js";
+import {
+  AgencyCancelledError,
+  isAbortError,
+  makeAbortCause,
+  readCause,
+} from "./errors.js";
 import { recordCompletionUsage, meteredDispatch } from "./recordPaidUsage.js";
 import { projectProviderTokenUsage } from "./invocationUsage.js";
 import { resolveCompletionModel } from "./modelIdentity.js";
 import { abortableSleep } from "../stdlib/abortable.js";
-import { decideRetry, decideValidationRetry, enrichSchemaLimitationError, resolveRetryPolicy } from "./llmRetry.js";
+import {
+  decideRetry,
+  decideValidationRetry,
+  enrichSchemaLimitationError,
+  resolveRetryPolicy,
+} from "./llmRetry.js";
 import type { RetryPolicy, RetryConfig, LLMRetryReason } from "./llmRetry.js";
 import type { NormalizedLLMError } from "./llmClient.js";
 import {
@@ -47,8 +57,16 @@ import {
 } from "./intrinsicTools.js";
 import type { RunBatchResult } from "./runBatch.js";
 import { warnOnOversizedToolSchemas } from "./toolSchemaSize.js";
-import { GuardTripRetry, raiseGuardTripsUntilClear } from "./guardTripInterrupt.js";
-import { failure, isFailure, isSuccess, markDestructiveWork } from "./result.js";
+import {
+  GuardTripRetry,
+  raiseGuardTripsUntilClear,
+} from "./guardTripInterrupt.js";
+import {
+  failure,
+  isFailure,
+  isSuccess,
+  markDestructiveWork,
+} from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { LlmDefaults } from "../stdlib/llm.js";
@@ -97,7 +115,9 @@ export function promptText(p: string | UserContentInput): string {
 export function redactMessagesForLog(
   messages: MessageThread,
 ): smoltalk.MessageJSON[] {
-  return redactAttachments(messages.toJSON().messages) as smoltalk.MessageJSON[];
+  return redactAttachments(
+    messages.toJSON().messages,
+  ) as smoltalk.MessageJSON[];
 }
 
 /** A thread's redacted messages for statelog, each carrying its debug
@@ -450,7 +470,9 @@ async function runWithRetry<T>(
   // Defensive: the loop body always either returns or throws above. Reaching
   // here means `decideRetry` repeatedly returned `retry` past `maxAttempts`,
   // which would be a programming error.
-  throw new Error(`runWithRetry exceeded ${maxAttempts} attempts without resolving`);
+  throw new Error(
+    `runWithRetry exceeded ${maxAttempts} attempts without resolving`,
+  );
 }
 
 /**
@@ -468,8 +490,15 @@ async function dispatchWithRetry(args: {
   parentSignal: AbortSignal | undefined;
   stateStack?: StateStack;
 }): Promise<{ completion: PromptResult; toolCalls: ToolCallJSON[] }> {
-  const { ctx, promptConfig, prompt, stream, retryPolicy, parentSignal, stateStack } =
-    args;
+  const {
+    ctx,
+    promptConfig,
+    prompt,
+    stream,
+    retryPolicy,
+    parentSignal,
+    stateStack,
+  } = args;
 
   const normalizeError = (err: unknown): NormalizedLLMError => {
     if (ctx.llmClient.normalizeError) {
@@ -499,7 +528,10 @@ async function dispatchWithRetry(args: {
       meteredDispatch(ctx, targetStack, "completion", () =>
         dispatchLLMRequest({
           ctx,
-          promptConfig: { ...promptConfig, abortSignal: signal } as PromptConfig,
+          promptConfig: {
+            ...promptConfig,
+            abortSignal: signal,
+          } as PromptConfig,
           prompt,
           stream,
           stateStack,
@@ -511,7 +543,6 @@ async function dispatchWithRetry(args: {
     normalizeError,
   );
 }
-
 
 /** Test-only surface for the pure tool-result-cap helpers. Not part of
  *  the supported runtime API. */
@@ -661,7 +692,14 @@ async function _runPrompt({
     metadata: clientConfig,
   } as any;
 
-  emitPromptStart({ ctx, messages, tools, responseFormat, clientConfig, callLabel });
+  emitPromptStart({
+    ctx,
+    messages,
+    tools,
+    responseFormat,
+    clientConfig,
+    callLabel,
+  });
 
   let completion: PromptResult;
   let toolCalls: ToolCallJSON[];
@@ -731,12 +769,18 @@ async function _runPrompt({
   // request setup, not the actual round-trip time.
   const endTime = performance.now();
 
-  const modelName = resolveCompletionModel(completion.model, clientConfig.model);
+  const modelName = resolveCompletionModel(
+    completion.model,
+    clientConfig.model,
+  );
 
   // Project raw provider usage into the closed shape ONCE, so statelog, the
   // global stats, the branch total, and the invocation meter all see the same
   // total and none serialize an audio-token field (see projectProviderTokenUsage).
-  const projectedUsage = projectProviderTokenUsage(completion.usage, "completion").usage;
+  const projectedUsage = projectProviderTokenUsage(
+    completion.usage,
+    "completion",
+  ).usage;
 
   ctx.statelogClient.promptCompletion({
     messages: withMessageLabels(messages),
@@ -749,7 +793,8 @@ async function _runPrompt({
     responseFormat,
     usage: projectedUsage,
     cost: completion.cost,
-    finishReason: (completion as any).finishReason ?? (completion as any).finish_reason,
+    finishReason:
+      (completion as any).finishReason ?? (completion as any).finish_reason,
     stream,
     threadId: __threads()?.activeId() ?? null,
   });
@@ -890,6 +935,29 @@ export async function runPrompt(args: {
     checkpointInfo,
   } = args;
 
+  // bail early on empty strings
+  // they cause local models to spiral
+  if (
+    prompt === undefined ||
+    prompt === null ||
+    (typeof prompt === "string" && prompt.trim() === "")
+  ) {
+    return "";
+  }
+
+  if (Array.isArray(prompt) && prompt.length === 0) {
+    return "";
+  }
+
+  if (
+    Array.isArray(prompt) &&
+    prompt.length === 1 &&
+    typeof prompt[0] === "string" &&
+    prompt[0].trim() === ""
+  ) {
+    return "";
+  }
+
   // ctx + stack come from the active ALS frame — the codegen used to
   // pass them explicitly as `ctx` / `stateStack` keys on `args`, but
   // post-ALS migration every Agency execution path runs inside an
@@ -955,8 +1023,10 @@ export async function runPrompt(args: {
     .filter((fn) => fn.toolDefinition)
     .map(
       (fn) =>
-        findIntrinsic(fn)?.buildDefinition({ draftSchema: args.draftSchema, fn }) ??
-        fn.toolDefinition!,
+        findIntrinsic(fn)?.buildDefinition({
+          draftSchema: args.draftSchema,
+          fn,
+        }) ?? fn.toolDefinition!,
     );
   // Pre-flight: reject duplicate tool names before they reach the provider,
   // where they surface as an opaque 400 with no request payload in the
@@ -1004,14 +1074,14 @@ export async function runPrompt(args: {
   // Known limitation: when a direct TS caller passes `args.retryConfig`,
   // only the fields that caller sets apply (same as retries/timeout/backoff
   // have always behaved on that path).
-  const perCallRetry: RetryConfig =
-    args.retryConfig ?? {
-      retries: ccRetries,
-      timeout: ccTimeout,
-      backoff: ccBackoff,
-      validationRetries: ccValidationRetries,
-    };
-  const branchRetryDefaults = (stateStack?.other?.llmDefaults as RetryConfig | undefined) ?? {};
+  const perCallRetry: RetryConfig = args.retryConfig ?? {
+    retries: ccRetries,
+    timeout: ccTimeout,
+    backoff: ccBackoff,
+    validationRetries: ccValidationRetries,
+  };
+  const branchRetryDefaults =
+    (stateStack?.other?.llmDefaults as RetryConfig | undefined) ?? {};
   const retryPolicy = resolveRetryPolicy(perCallRetry, branchRetryDefaults);
 
   // Run-wide LLM defaults set at runtime via `std::llm`
@@ -1030,7 +1100,8 @@ export async function runPrompt(args: {
   // maxToolCallRounds precedence: a branch default (setLlmOptions) overrides the
   // baked per-call value (agency.json → codegen literal, default 10). Kept out
   // of stackSmolDefaults above — it isn't a smoltalk config field.
-  const effectiveMaxToolCallRounds = stackMaxToolCallRounds ?? maxToolCallRounds;
+  const effectiveMaxToolCallRounds =
+    stackMaxToolCallRounds ?? maxToolCallRounds;
   const clientConfig = ctx.getSmoltalkConfig({
     ...stackSmolDefaults,
     ...restClientConfig,
@@ -1252,8 +1323,7 @@ export async function runPrompt(args: {
           const injectedIndex = messages
             .getMessages()
             .findLastIndex(
-              (m) =>
-                m.role === "system" && m.content === injectedFactsContent,
+              (m) => m.role === "system" && m.content === injectedFactsContent,
             );
           if (injectedIndex !== -1) {
             // removeAt, not setMessages: this edits ONE message out of
@@ -1283,11 +1353,11 @@ export async function runPrompt(args: {
     }): Promise<{
       toolResult: any;
       invokeOutcome:
-      | "success"
-      | "failed"
-      | "rejected"
-      | "interrupted"
-      | "crashed";
+        | "success"
+        | "failed"
+        | "rejected"
+        | "interrupted"
+        | "crashed";
       interrupts?: any[];
     }> => {
       const { handler, toolCall, namedArgs, branchKey, branchStack } = args;
@@ -1327,9 +1397,9 @@ export async function runPrompt(args: {
           });
         toolResult = parentFrame
           ? await agencyStore.run(
-            { ...parentFrame, threads: freshThreads },
-            invokeAsTool,
-          )
+              { ...parentFrame, threads: freshThreads },
+              invokeAsTool,
+            )
           : await invokeAsTool();
       } catch (error: unknown) {
         // A cancellation (user pressed Esc, race-loser, timeout) is not a
@@ -1349,9 +1419,7 @@ export async function runPrompt(args: {
         // STAYS callable (the old remove-on-crash policy is abolished): a
         // pre-execution tag (argument binding failed → body never ran) maps
         // to the neverStarted tier; any other crash is neutral.
-        console.error(
-          `Tool call "${handler.name}" crashed: ${errorMessage}`,
-        );
+        console.error(`Tool call "${handler.name}" crashed: ${errorMessage}`);
         const preExecution = !!(error as { preExecution?: boolean })
           ?.preExecution;
         toolResult = failure(errorMessage, { neverStarted: preExecution });
@@ -1581,7 +1649,10 @@ export async function runPrompt(args: {
         // An all-intrinsic round has nothing to dispatch: keep the
         // empty values result instead of running runBatch over zero
         // children.
-        let parallelResult: RunBatchResult<void> = { kind: "values", values: [] };
+        let parallelResult: RunBatchResult<void> = {
+          kind: "values",
+          values: [],
+        };
         if (dispatchCalls.length > 0) {
           parallelResult = await pr.parallel(
             `round.${round}.tools`,
@@ -1643,7 +1714,6 @@ export async function runPrompt(args: {
                 );
                 return;
               }
-
 
               // Gated start (strategy B): if the tool is already in
               // removedTools (either from a prior round or from an earlier
@@ -1848,26 +1918,29 @@ export async function runPrompt(args: {
         // span stays open across rounds (one span per llm() call), so we
         // do NOT close/reopen it here — this round's promptCompletion
         // nests under the same span as the first round's.
-        await requestStepWithTripRetry(`round.${round}.nextLlmCall`, async () => {
-          const nextResult = await _runPrompt({
-            ctx,
-            messages,
-            tools: tools || [],
-            prompt,
-            responseFormat,
-            clientConfig,
-            stateStack,
-            retryPolicy,
-            callLabel,
-          });
-          messages = nextResult.messages;
-          toolCalls = nextResult.toolCalls;
-          // Increment the round counter only after a successful LLM round,
-          // so resume after a tool-batch interrupt re-enters the SAME round.
-          self.toolCallRound = round + 1;
-          self.messagesJSON = snapshotThread();
-          self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
-        });
+        await requestStepWithTripRetry(
+          `round.${round}.nextLlmCall`,
+          async () => {
+            const nextResult = await _runPrompt({
+              ctx,
+              messages,
+              tools: tools || [],
+              prompt,
+              responseFormat,
+              clientConfig,
+              stateStack,
+              retryPolicy,
+              callLabel,
+            });
+            messages = nextResult.messages;
+            toolCalls = nextResult.toolCalls;
+            // Increment the round counter only after a successful LLM round,
+            // so resume after a tool-batch interrupt re-enters the SAME round.
+            self.toolCallRound = round + 1;
+            self.messagesJSON = snapshotThread();
+            self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
+          },
+        );
       }
       // Tool calls are drained. No schema means nothing to validate; the
       // plain-content return after the finally handles it — but first,
@@ -1949,27 +2022,30 @@ export async function runPrompt(args: {
         `validation.${validationAttempt}.guardFeedback`,
         boundaryCtx(),
       );
-      await requestStepWithTripRetry(`validation.${validationAttempt}.llmCall`, async () => {
-        const nextResult = await _runPrompt({
-          ctx,
-          messages,
-          tools: tools || [],
-          prompt,
-          responseFormat,
-          clientConfig,
-          stateStack,
-          retryPolicy,
-          callLabel,
-        });
-        messages = nextResult.messages;
-        toolCalls = nextResult.toolCalls;
-        // Advance ONLY here, like nextLlmCall advances toolCallRound: a
-        // bailout before this step completes leaves the counter unchanged,
-        // so resume re-enters the SAME attempt with the same step keys.
-        self.validationAttempt = validationAttempt + 1;
-        self.messagesJSON = snapshotThread();
-        self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
-      });
+      await requestStepWithTripRetry(
+        `validation.${validationAttempt}.llmCall`,
+        async () => {
+          const nextResult = await _runPrompt({
+            ctx,
+            messages,
+            tools: tools || [],
+            prompt,
+            responseFormat,
+            clientConfig,
+            stateStack,
+            retryPolicy,
+            callLabel,
+          });
+          messages = nextResult.messages;
+          toolCalls = nextResult.toolCalls;
+          // Advance ONLY here, like nextLlmCall advances toolCallRound: a
+          // bailout before this step completes leaves the counter unchanged,
+          // so resume re-enters the SAME attempt with the same step keys.
+          self.validationAttempt = validationAttempt + 1;
+          self.messagesJSON = snapshotThread();
+          self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
+        },
+      );
       // Loop: the retry response may itself contain tool calls; the inner
       // loop drains them before validation runs again.
     }

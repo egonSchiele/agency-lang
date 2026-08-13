@@ -39,7 +39,14 @@ export type ModelInfo = {
   /** License identifier (SPDX-ish). Curated entries are permissive only
    *  (apache-2.0 / mit); restrictively-licensed models (older Gemma's custom
    *  terms, llama) are intentionally excluded. Gemma 4 ships under apache-2.0,
-   *  so it qualifies; Gemma 1–3 did not. */
+   *  so it qualifies; Gemma 1–3 did not.
+   *
+   *  This must be the license the model itself DECLARES, never one inferred
+   *  from its base model. Apache-2.0 is permissive, not copyleft — its §4 lets
+   *  a derivative work carry different terms — so a fine-tune of an
+   *  apache-2.0 base is not thereby apache-2.0. A model whose card declares no
+   *  license (the Dolphin 3.0 Mistral fine-tunes, for one) does not belong
+   *  here at all; add it locally with `agency local alias add` instead. */
   license: string;
   /** Pinned content SHA-256 (hex) of the resolved single-file GGUF, used to
    *  verify the download. Absent for sharded models (see issue #348). */
@@ -133,13 +140,6 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     params: "24B", sizeBytes: 14_333_000_000, category: "general",
     contextWindow: 131072, license: "apache-2.0",
     description: "Drop-in upgrade over 3.1: better instruction following, far fewer runaway generations.",
-  },
-  "dolphin-3.0-mistral-24b": {
-    uri: "hf:bartowski/cognitivecomputations_Dolphin3.0-Mistral-24B-GGUF:Q4_K_M",
-    sha256: "6f193bbf98628140194df257c7466e2c6f80a7ef70a6ebae26c53b2f2ef21994",
-    params: "24B", sizeBytes: 14_333_000_000, category: "general",
-    contextWindow: 32768, license: "apache-2.0",
-    description: "Steerable Mistral-24B fine-tune with no built-in refusals; you own the system prompt.",
   },
   "qwen3.5-27b": {
     uri: "hf:unsloth/Qwen3.5-27B-GGUF:Q4_K_M",

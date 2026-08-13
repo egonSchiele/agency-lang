@@ -121,16 +121,6 @@
       "description": "Drop-in upgrade over 3.1: better instruction following, far fewer runaway generations.",
       "sha256": "a3cc56310807ed0d145eaf9f018ccda9ae7ad8edb41ec870aa2454b0d4700b3c"
     },
-    "dolphin-3.0-mistral-24b": {
-      "uri": "hf:bartowski/cognitivecomputations_Dolphin3.0-Mistral-24B-GGUF:Q4_K_M",
-      "params": "24B",
-      "sizeBytes": 14333000000,
-      "category": "general",
-      "contextWindow": 32768,
-      "license": "apache-2.0",
-      "description": "Steerable Mistral-24B fine-tune with no built-in refusals; you own the system prompt.",
-      "sha256": "6f193bbf98628140194df257c7466e2c6f80a7ef70a6ebae26c53b2f2ef21994"
-    },
     "qwen3.5-27b": {
       "uri": "hf:unsloth/Qwen3.5-27B-GGUF:Q4_K_M",
       "params": "27B",

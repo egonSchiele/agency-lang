@@ -1,124 +1,142 @@
 import { grep, glob } from "std::shell"
 import { exit } from "std::system"
-import { pkgDir, repoRoot, stamp, openPr, openPrExists, ensureDir } from "./pr.agency"
+import { edit } from "std::fs"
+import { pkgDir, repoRoot, stamp, pushBranch, ensureDir, truncationNote, handleScheduledInterrupt } from "./branch.agency"
 
 /** @module
-  Weekly maintenance agent: flag out-of-date information in `docs/dev/`.
+  Weekly maintenance agent: fix out-of-date information in `docs/dev/`.
 
-  It reviews each developer doc under `docs/dev/` against the current codebase
-  and opens a PR containing a single findings report (it does NOT edit the docs
-  themselves — a human decides what to change). Each doc is reviewed in its own
-  fresh thread so the reviews stay independent and the context stays small.
+  It reviews each developer doc under `docs/dev/` against the current codebase,
+  FIXES what it finds, and pushes a branch containing both the edits and a
+  report explaining them. Each doc is reviewed in its own fresh thread so the
+  reviews stay independent and the context stays small.
 
   Cost scales linearly with the number of docs: every `docs/dev/*.md` file gets
   its own tool-using LLM thread seeded with that doc's full contents (~60 files
-  today, so ~60 threads per weekly run). That is intentional — thoroughness
-  over cost for a once-a-week job — but worth knowing before adding many docs.
+  today, so ~60 threads per weekly run). The guard caps a runaway week at
+  $3.00 / 25 minutes, and a truncated run says so in its report header.
 
   Security posture: runs non-interactively on GitHub Actions with a least-
-  privilege `GITHUB_TOKEN`. The LLM is handed ONLY read-only tools (`read`,
-  `grep`) so a prompt-injection buried in a doc cannot escalate to writing files,
-  running shell commands, or making network calls — the agent itself (not the
-  model) performs every git action. The runner has no on-disk secrets (its
-  tokens live in env vars). The report is model-generated text, so a prompt-
-  injection could plant misleading findings in it; the human PR review is the
-  mitigation. See `pr.agency`.
+  privilege `GITHUB_TOKEN` (`contents: write` only). The model gets `read`,
+  `grep`, and `edit` — but never `exec`. File edits land in the diff a human
+  reviews before merging; shell commands would not, and the runner's token
+  sits in its environment. A handler additionally rejects any edit under
+  `.github/`, because opening a pull request runs that branch's workflows with
+  repository secrets before the review finishes — the one edit that acts
+  before the review gate closes. See `branch.agency`.
 */
 
 node main() {
-  const root = repoRoot()
-  const pkg = pkgDir()
-  const devDir = "${pkg}/docs/dev"
+  handle {
+    const root = repoRoot()
+    const pkg = pkgDir()
+    const devDir = "${pkg}/docs/dev"
 
-  // List the docs with the typed `glob` tool (not a raw `ls`/`find`).
-  const listResult = glob("*.md", dir: devDir) with approve
-  let files: string[] = []
-  if (listResult is success(names)) {
-    files = names
-  } else {
-    print("Failed to list docs/dev. Aborting.")
-    exit(1) with approve
-  }
-
-  // Skip early (before any LLM spend) if last week's PR is still open.
-  const branchPrefix = "chore/docs-freshness-"
-  if (openPrExists(root, branchPrefix)) {
-    print("An open docs-freshness PR already exists; skipping this run.")
-    return
-  }
-
-  const rubric = """You are auditing ONE developer documentation file for a programming language called Agency, checking whether it is out of date relative to the CURRENT source code in this repository. Use the read and grep tools to verify the doc's specific claims: file paths it cites, function/type/flag names, command invocations, and described behavior. Report ONLY concrete staleness: a cited path or symbol that no longer exists, a renamed flag/command, a documented behavior that the code contradicts, or a described feature that was removed. Ignore prose style and subjective wording. If the doc appears accurate and current, reply with exactly the text NO ISSUES and nothing else. Otherwise reply with a short markdown bullet list; each bullet names the stale claim and what the code actually shows now (cite file:line)."""
-
-  let sections: string[] = []
-  let idx = 0
-  for (rel in files) {
-    const readResult = read(rel, devDir) with approve
-    let content = ""
-    if (readResult is success(text)) {
-      content = text
+    // List the docs with the typed `glob` tool (not a raw `ls`/`find`).
+    const listResult = glob("*.md", dir: devDir) with approve
+    let files: string[] = []
+    if (listResult is success(names)) {
+      files = names
     } else {
-      print("Failed to read ${rel}. Aborting.")
+      print("Failed to list docs/dev. Aborting.")
       exit(1) with approve
     }
 
-    const prompt = """${rubric}
+    const branch = "chore/docs-freshness"
+
+    const rubric = """You are auditing ONE developer documentation file for a programming language called Agency, checking whether it is out of date relative to the CURRENT source code in this repository. Use the read and grep tools to verify the doc's specific claims: file paths it cites, function/type/flag names, command invocations, and described behavior. Report ONLY concrete staleness: a cited path or symbol that no longer exists, a renamed flag/command, a documented behavior that the code contradicts, or a described feature that was removed. Ignore prose style and subjective wording. If the doc appears accurate and current, reply with exactly the text NO ISSUES and nothing else. Otherwise use the edit tool to FIX each stale claim in the doc, then reply with a short markdown bullet list describing what you changed and why; each bullet names the stale claim, the correction, and the code you verified it against (cite file:line). Keep each edit's oldText as small as possible while still matching uniquely. Do not rewrite prose you were not asked to fix."""
+
+    let sections: string[] = []
+    let processed = 0
+    const budget = guard(label: "docs-review", cost: $3.00, time: 25m) {
+      let idx = 0
+      for (rel in files) {
+        const readResult = read(rel, devDir) with approve
+        let content = ""
+        if (readResult is success(text)) {
+          content = text
+        } else {
+          print("Failed to read ${rel}. Aborting.")
+          exit(1) with approve
+        }
+
+        const prompt = """${rubric}
 
 Doc path (relative to packages/agency-lang): docs/dev/${rel}
 Search code with grep/read using paths relative to the repository root.
 
 Doc contents:
 ${content}"""
-    let finding = ""
-    thread(session: "docrev-${idx}") {
-      finding = llm(prompt, tools: [read, grep]) with approve
+        let finding = ""
+        thread(session: "docrev-${idx}") {
+          finding = llm(prompt, tools: [read, grep, edit]) with approve
+        }
+        // The rubric asks for EXACTLY `NO ISSUES`; an exact match (not a
+        // substring check) means a reply that merely mentions the phrase
+        // alongside real findings is still treated as a finding.
+        if (finding.trim() != "NO ISSUES") {
+          sections.push("## docs/dev/${rel}\n\n${finding}")
+        }
+        processed += 1
+        idx += 1
+        // `processed` is a separate counter, NOT sections.length: sections only
+        // grows when a doc HAS a problem, so a run that reviewed 40 docs and
+        // found 3 issues would otherwise report "3 of 60".
+        saveDraft({ processed: processed, sections: sections })
+      }
+      return { processed: processed, sections: sections }
     }
-    // The rubric asks for EXACTLY `NO ISSUES`; an exact match (not a substring
-    // check) means a reply that merely mentions the phrase alongside real
-    // findings is still treated as a finding.
-    if (finding.trim() != "NO ISSUES") {
-      sections.push("## docs/dev/${rel}\n\n${finding}")
+
+    if (budget is success(result)) {
+      processed = result.processed
+      sections = result.sections
+    } else {
+      // A failure here means the guard tripped before the FIRST saveDraft —
+      // no doc completed, nothing to salvage. Exit loudly (red workflow)
+      // rather than falling through with processed = 0, which the report
+      // below would present as a clean "nothing found" run.
+      print("Budget tripped before any doc completed; nothing to salvage.")
+      exit(1) with approve
     }
-    idx += 1
-  }
 
-  if (sections.length == 0) {
-    print("Reviewed ${files.length} docs under docs/dev/; none appear out of date. Nothing to do.")
-    return
-  }
+    // Only a COMPLETE clean run skips the push — a truncated run must fall
+    // through so its partial work still lands, with the banner.
+    if (sections.length == 0 && processed >= files.length) {
+      print("Reviewed ${files.length} docs under docs/dev/; none appear out of date. Nothing to do.")
+      return
+    }
 
-  const joined = sections.join("\n\n")
-  const report = """# docs/dev freshness review
+    const joined = sections.join("\n\n")
+    const banner = truncationNote(processed, files.length, "docs")
+    const report = """# docs/dev freshness review
 
-Automated weekly audit of `docs/dev/` against the current codebase. Each item below is a suspected out-of-date claim for a human to confirm and fix. The findings are model-generated text and have NOT been applied to the docs.
+Automated weekly audit of `docs/dev/` against the current codebase, run at ${stamp()} UTC. The edits on this branch have ALREADY been applied; each item below explains one of them.
 
+${banner}
 ${joined}
 """
 
-  const reportDir = "${devDir}/_reports"
-  ensureDir(reportDir)
-  const writeResult = write("docs-freshness.md", report, dir: reportDir) with approve
-  if (writeResult is failure(err)) {
-    print("Failed to write the report: ${err}. Aborting.")
-    exit(1) with approve
-  }
+    const reportDir = "${devDir}/_reports"
+    ensureDir(reportDir)
+    const writeResult = write("docs-freshness.md", report, dir: reportDir) with approve
+    if (writeResult is failure(err)) {
+      print("Failed to write the report: ${err}. Aborting.")
+      exit(1) with approve
+    }
 
-  const branch = "${branchPrefix}${stamp()}"
-  const body = """Automated: weekly audit of `docs/dev/` for out-of-date information.
-
-This PR adds/updates `docs/dev/_reports/docs-freshness.md` with suspected stale claims. It does NOT edit the docs themselves. Please confirm each finding and make the real fixes as you see fit.
-
-Opened by the weekly `docs-review` scheduled agent."""
-  const url = openPr(
-    root,
-    branch,
-    ["packages/agency-lang/docs/dev/_reports/docs-freshness.md"],
-    "chore(docs): weekly docs/dev freshness report",
-    "Weekly docs/dev freshness report",
-    body,
-  )
-  if (url == "") {
-    print("No changes to commit; no PR opened.")
-  } else {
-    print("Opened PR: ${url}")
-  }
+    // The whole docs/dev directory, not just the report: the agent edits docs
+    // in place, so those edits must be staged too. Still a narrow path, never
+    // `git add -A`.
+    const url = pushBranch(
+      root,
+      branch,
+      ["packages/agency-lang/docs/dev"],
+      "chore(docs): weekly docs/dev freshness fixes",
+    )
+    if (url == "") {
+      print("No changes to push.")
+    } else {
+      print("Pushed ${branch}. Open a PR: ${url}")
+    }
+  } with handleScheduledInterrupt
 }

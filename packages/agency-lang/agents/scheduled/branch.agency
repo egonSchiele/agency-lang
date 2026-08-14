@@ -1,3 +1,7 @@
+import { exec } from "std::shell"
+import { mkdir } from "std::fs"
+import { exit, env } from "std::system"
+
 /** @module
   Shared helpers for the scheduled maintenance agents in this directory.
 
@@ -21,6 +25,147 @@
 */
 
 export static const BOT_NAME = "agency-scheduler[bot]"
+
+/**
+  Run a shell command and abort loudly if it fails.
+
+  `std::shell`'s `exec` does NOT throw on a non-zero exit — it resolves with
+  `{stdout, stderr, exitCode}`. Left unchecked, a failed `git push` would let
+  the agent march on and report success. So every git call goes through here:
+  on a non-zero exit we print the command and its stderr, then `exit(1)` to
+  fail the workflow. Only use this for commands whose non-zero exit genuinely
+  means failure (not, say, `git diff --quiet`, whose exit code is a signal,
+  not an error).
+*/
+def run(command: string, args: string[], cwd: string) {
+  const result = exec(command, args, cwd: cwd) with approve
+  if (result.exitCode != 0) {
+    const joined = args.join(" ")
+    print("Command failed (exit ${result.exitCode}): ${command} ${joined}")
+    print(result.stderr)
+    exit(1) with approve
+  }
+  return result
+}
+
+/** Absolute path to the git repo root of the checkout. */
+export def repoRoot(): string {
+  """Return the absolute path to the root of the checked-out git repository."""
+  const rootResult = run("git", ["rev-parse", "--show-toplevel"], "")
+  return rootResult.stdout.trim()
+}
+
+/** Absolute path to the agency-lang package inside the checkout. */
+export def pkgDir(): string {
+  """Return the absolute path to `packages/agency-lang` inside the checkout."""
+  return "${repoRoot()}/packages/agency-lang"
+}
+
+/** A UTC timestamp suffix suitable for report headers, e.g. `20260713-141500`. */
+export def stamp(): string {
+  """Return a UTC timestamp like `20260713-141500` for use in report headers."""
+  const stampResult = run("date", ["-u", "+%Y%m%d-%H%M%S"], "")
+  return stampResult.stdout.trim()
+}
+
+/** Create a directory (and parents), aborting loudly on failure. */
+export def ensureDir(dir: string) {
+  """Create `dir` and any missing parents, aborting the run if it cannot be created."""
+  const mkdirResult = mkdir(dir) with approve
+  if (mkdirResult is failure(err)) {
+    print("Failed to create directory ${dir}: ${err}")
+    exit(1) with approve
+  }
+}
+
+/**
+  Author of the remote branch's tip commit, or "" when the branch does not
+  exist remotely. A failed fetch means "no such branch", which is the normal
+  first-run case — so it must NOT go through `run()`, which aborts on failure.
+
+  Known conflation: a transient network/auth failure also returns "", which
+  arms a force-push. The window is tolerable — the push moments later needs
+  the same network and credentials working, and destroying work additionally
+  requires a human tip to exist at that exact moment. If this ever needs
+  closing, `git ls-remote --heads origin <branch>` distinguishes "absent"
+  from "unreachable" cheaply.
+*/
+export def remoteTipAuthor(root: string, branch: string): string {
+  """
+  Return the author name of a remote branch's tip commit, or "" if the branch does not exist.
+
+  @param root - Absolute path to the repo root
+  @param branch - Branch name on origin
+  """
+  const fetched = exec("git", ["-C", root, "fetch", "origin", branch], cwd: "") with approve
+  if (fetched.exitCode != 0) {
+    return ""
+  }
+  const author = exec("git", ["-C", root, "log", "-1", "--format=%an", "FETCH_HEAD"], cwd: "") with approve
+  if (author.exitCode != 0) {
+    return ""
+  }
+  return author.stdout.trim()
+}
+
+/**
+  Commit the given files onto the agent's fixed branch and force-push it.
+  Returns the compare URL a human clicks to open a PR, or "" when there was
+  nothing to commit or the push was skipped to protect human commits.
+
+  Only the files in `paths` are staged (never `git add -A`) so a stray build
+  artifact the runner produced cannot leak into the branch.
+*/
+export def pushBranch(
+  root: string,
+  branch: string,
+  paths: string[],
+  commitMsg: string,
+): string {
+  """
+  Commit specific files onto a fixed branch and force-push; returns the compare URL, or "" if nothing changed or the push was skipped.
+
+  @param root - Absolute path to the repo root
+  @param branch - The agent's fixed branch name
+  @param paths - Repo-root-relative paths to stage and commit
+  @param commitMsg - Commit message
+  """
+  const tipAuthor = remoteTipAuthor(root, branch)
+  if (!shouldForcePush(tipAuthor)) {
+    print("Branch ${branch} has commits by ${tipAuthor}; refusing to force-push over them. Merge or delete it to re-arm this agent.")
+    return ""
+  }
+
+  run("git", ["-C", root, "config", "user.name", BOT_NAME], "")
+  run("git", ["-C", root, "config", "user.email", "agency-scheduler@users.noreply.github.com"], "")
+  // -B, not -b: the branch is fixed, so it may already exist locally.
+  run("git", ["-C", root, "checkout", "-B", branch], "")
+
+  const addArgs = ["-C", root, "add"]
+  for (path in paths) {
+    addArgs.push(path)
+  }
+  run("git", addArgs, "")
+
+  // `git diff --cached --quiet` exits 0 when the index is empty and 1 when
+  // there are staged changes. A non-zero exit here is EXPECTED, not a failure,
+  // so it must NOT go through run(). An empty index means the generated output
+  // already matches main — skip cleanly rather than pushing an empty commit.
+  const staged = exec("git", ["-C", root, "diff", "--cached", "--quiet"], cwd: "") with approve
+  if (staged.exitCode == 0) {
+    print("No changes to commit; nothing to push.")
+    return ""
+  }
+
+  run("git", ["-C", root, "commit", "-m", commitMsg], "")
+  run("git", ["-C", root, "push", "--force", "origin", branch], "")
+
+  const repo = env("GITHUB_REPOSITORY")
+  if (repo == null) {
+    return ""
+  }
+  return compareUrl(repo, branch)
+}
 
 /** The "open a PR from this branch" link a human clicks after a run. */
 export def compareUrl(repo: string, branch: string): string {

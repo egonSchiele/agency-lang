@@ -1,7 +1,11 @@
-// Pure-logic tests for the scheduled stdlib-docs-links agent's helpers.
-// No LLM calls: stripFences and extractLinks are deterministic string
-// functions, so each node self-checks and returns "ok" on success.
+// Pure-logic tests for the scheduled agents' helpers.
+// No LLM calls: each node self-checks and returns "ok" on success, or
+// "bad:<value>" naming what it saw instead. The handler and guard-trip
+// nodes exercise interrupt-level behavior with raised effects and a fake
+// clock, still without any LLM.
+import test { _advanceTime } from "std::date"
 import { stripFences, extractLinks } from "../../agents/scheduled/stdlib-docs-links.agency"
+import { compareUrl, isGithubPath, shouldForcePush, truncationNote, handleScheduledInterrupt } from "../../agents/scheduled/branch.agency"
 
 node stripPlain() {
   const got = stripFences("hello world")
@@ -41,4 +45,134 @@ node extractNoLinks() {
   const links = extractLinks("no links here\njust text")
   if (links.length == 0) { return "ok" }
   return "bad:${links.length}"
+}
+
+// ---- branch.agency pure helpers ----
+
+node compareUrlBuilds() {
+  const got = compareUrl("egonSchiele/agency-lang", "chore/docs-freshness")
+  if (got == "https://github.com/egonSchiele/agency-lang/compare/chore/docs-freshness?expand=1") { return "ok" }
+  return "bad:${got}"
+}
+
+node compareUrlEmptyRepo() {
+  // GITHUB_REPOSITORY is unset outside Actions; callers must get "" not a broken URL.
+  const got = compareUrl("", "chore/docs-freshness")
+  if (got == "") { return "ok" }
+  return "bad:${got}"
+}
+
+node githubPathDirect() {
+  const got = isGithubPath(".github/workflows", "ci.yml")
+  if (got) { return "ok" }
+  return "bad:false"
+}
+
+node githubPathTraversal() {
+  // The whole reason this is a substring test: traversal must not slip past.
+  const got = isGithubPath("packages/agency-lang/docs/dev", "../../../../.github/workflows/ci.yml")
+  if (got) { return "ok" }
+  return "bad:false"
+}
+
+node githubPathAllowsDocs() {
+  const got = isGithubPath("packages/agency-lang/docs/dev", "interrupts.md")
+  if (!got) { return "ok" }
+  return "bad:true"
+}
+
+node forcePushWhenBotTip() {
+  const got = shouldForcePush("agency-scheduler[bot]")
+  if (got) { return "ok" }
+  return "bad:false"
+}
+
+node forcePushWhenNoRemoteBranch() {
+  // "" means the branch does not exist on the remote yet.
+  const got = shouldForcePush("")
+  if (got) { return "ok" }
+  return "bad:false"
+}
+
+node noForcePushOverHuman() {
+  const got = shouldForcePush("Aditya Bhargava")
+  if (!got) { return "ok" }
+  return "bad:true"
+}
+
+node truncationNoteWhenShort() {
+  const got = truncationNote(41, 60, "docs")
+  if (got.includes("41 of 60 docs")) { return "ok" }
+  return "bad:${got}"
+}
+
+node truncationNoteWhenComplete() {
+  const got = truncationNote(60, 60, "docs")
+  if (got == "") { return "ok" }
+  return "bad:${got}"
+}
+
+// ---- handler wiring: the interrupt-level behavior, not just the predicate ----
+// User code can raise a std:: effect directly (see tests/agency/raiseStatement.agency),
+// so these exercise handleScheduledInterrupt end to end with no LLM and no real files.
+
+def fakeEdit(dir: string, filename: string): string {
+  raise std::edit("apply?", { dir: dir, filename: filename, edits: [], before: "", after: "" })
+  return "applied"
+}
+
+node handlerRejectsGithubEdit() {
+  handle {
+    const r = fakeEdit(".github/workflows", "ci.yml")
+    if (isFailure(r)) { return "ok" }
+    return "bad:${r}"
+  } with handleScheduledInterrupt
+}
+
+node handlerRejectsTraversalEdit() {
+  handle {
+    const r = fakeEdit("packages/agency-lang/docs/dev", "../../../../.github/workflows/ci.yml")
+    if (isFailure(r)) { return "ok" }
+    return "bad:${r}"
+  } with handleScheduledInterrupt
+}
+
+node handlerApprovesDocsEdit() {
+  handle {
+    const r = fakeEdit("packages/agency-lang/docs/dev", "interrupts.md")
+    if (r == "applied") { return "ok" }
+    return "bad:${r}"
+  } with handleScheduledInterrupt
+}
+
+// ---- guard trips under the shared handler (fakeClock tests) ----
+// CI runs `agency run` with no policy flag, so an unadjudicated trip would
+// exit non-zero with no salvage. These prove the handler's reject() converts
+// a trip into success(draft) when a draft was saved, and a plain failure
+// when none was — the two paths the agents rely on.
+
+node guardTripSalvagesDraft() {
+  handle {
+    const r = guard(label: "salvage", time: 100ms) {
+      saveDraft("partial")
+      _advanceTime(200)
+      return "finished"
+    }
+    if (r is success(v)) {
+      if (v == "partial") { return "ok" }
+      return "bad:completed:${v}"
+    }
+    return "bad:failure"
+  } with handleScheduledInterrupt
+}
+
+node guardTripWithoutDraftFails() {
+  handle {
+    const r = guard(label: "no-draft", time: 100ms) {
+      _advanceTime(200)
+      return "finished"
+    }
+    if (isFailure(r)) { return "ok" }
+    return "bad:${r.value}"
+  } with handleScheduledInterrupt
 }

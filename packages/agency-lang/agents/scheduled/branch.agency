@@ -1,0 +1,116 @@
+/** @module
+  Shared helpers for the scheduled maintenance agents in this directory.
+
+  These agents run non-interactively on GitHub Actions (see the generated
+  `.github/workflows/*.yml`), so every effectful call is discharged with
+  `with approve`. Safety comes from the workflow, not from in-agent prompting:
+  a least-privilege `GITHUB_TOKEN` (`contents: write` only — these agents do
+  not open pull requests), triggers that take no attacker-controlled input
+  (`schedule` + `workflow_dispatch` only), and the fact that every change lands
+  on a branch a human reviews before merging.
+
+  Failures are loud on purpose. `run()` aborts the whole process with a
+  non-zero exit code the moment any shell command fails, so a broken run shows
+  up as a red workflow instead of a green one that quietly did nothing.
+
+  On force-pushing: `CLAUDE.md` says never to force push. That rule protects
+  shared history. Each agent owns one branch whose entire content it
+  regenerates every run, and `pushBranch` refuses to push when the remote tip
+  is not the bot's own commit — so a force-push can overwrite the agent's
+  previous output but never a human's work.
+*/
+
+export static const BOT_NAME = "agency-scheduler[bot]"
+
+/** The "open a PR from this branch" link a human clicks after a run. */
+export def compareUrl(repo: string, branch: string): string {
+  """
+  Build the GitHub compare URL for a pushed branch. Returns "" when repo is empty.
+
+  @param repo - owner/name, as GitHub Actions sets GITHUB_REPOSITORY
+  @param branch - the branch that was pushed
+  """
+  if (repo == "") { return "" }
+  return "https://github.com/${repo}/compare/${branch}?expand=1"
+}
+
+/** True when an edit target lies under `.github/`, including via `../`. */
+export def isGithubPath(dir: string, filename: string): boolean {
+  """
+  Report whether a std::edit target lands under .github/.
+
+  A substring test rather than a path resolution: the `.github/` segment is
+  present whether the model writes the path directly or reaches it by
+  traversal, so no joining or `..` collapsing is needed. It can only
+  over-reject, which fails closed.
+
+  @param dir - The std::edit payload's dir
+  @param filename - The std::edit payload's filename
+  """
+  const target = "${dir}/${filename}"
+  return target.includes(".github/")
+}
+
+/** True when force-pushing the agent's branch cannot destroy human work. */
+export def shouldForcePush(tipAuthor: string): boolean {
+  """
+  Decide whether to force-push, given the author of the remote branch tip.
+
+  "" means the branch does not exist remotely yet. Any author other than the
+  bot means a human has pushed to it, so the run must leave it alone.
+
+  @param tipAuthor - Author name of the remote branch's tip commit, or ""
+  """
+  return tipAuthor == "" || tipAuthor == BOT_NAME
+}
+
+/** A report banner naming how much of the work a tripped budget cut short. */
+export def truncationNote(processed: number, total: number, label: string): string {
+  """
+  Build a warning banner when a run processed fewer items than it found. Returns "" for a complete run.
+
+  Without this, a run cut short by its budget produces a short report that is
+  indistinguishable from a clean bill of health.
+
+  @param processed - How many items the run actually got through
+  @param total - How many items it found to do
+  @param label - Plural noun for the items, e.g. "docs"
+  """
+  if (processed >= total) { return "" }
+  return "> **Truncated:** reviewed ${processed} of ${total} ${label} before the budget tripped. The rest were not examined.\n"
+}
+
+/**
+  The shared handler every scheduled agent wraps its node body in, via
+  `handle { ... } with handleScheduledInterrupt`. (A node definition cannot
+  take a trailing `with` clause — the handler must attach to a handle block.)
+
+  Two decisions live here:
+
+  - `std::edit` under `.github/` is rejected: opening a PR runs that branch's
+    workflows with repository secrets BEFORE the review finishes, so it is the
+    one edit that acts before the review gate closes. All other edits are
+    approved — they land in the diff a human reviews.
+  - `std::guard` trips are rejected. CI runs `agency run` with no policy flag,
+    so an unadjudicated trip would surface unhandled and kill the process with
+    no salvage. reject() routes the trip into the salvage pipeline instead:
+    the guard returns success(draft) when the block saved one, and the plain
+    failure otherwise. Rejecting (not approving) is deliberate — approving
+    would grant more budget and defeat the cap.
+
+  Everything else passes: effectful calls in the agents discharge themselves
+  with `with approve` at the call site.
+*/
+export def handleScheduledInterrupt(i) {
+  if (i.effect == "std::edit") {
+    if (isGithubPath(i.data.dir, i.data.filename)) {
+      print("Rejected edit under .github/: ${i.data.dir}/${i.data.filename}")
+      return reject()
+    }
+    return approve()
+  }
+  if (i.effect == "std::guard") {
+    return reject()
+  }
+  return pass()
+}

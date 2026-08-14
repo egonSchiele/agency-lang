@@ -4,7 +4,7 @@
 
 **Goal:** Change the three scheduled maintenance agents to push a branch instead of opening a pull request, apply their fixes instead of only reporting them, and run inside a cost and time budget.
 
-**Architecture:** `pr.agency` is renamed `branch.agency`; its `openPr` becomes `pushBranch`, which force-pushes one fixed branch per agent and returns a GitHub compare URL. `docs-review` and `constants-review` gain the `edit` tool from `std::fs`, with a handler that rejects any edit under `.github/`. Every agent wraps its LLM phase — not its git phase — in a `guard`. All decision logic is extracted into pure exported functions so it can be tested without LLM calls.
+**Architecture:** `pr.agency` is renamed `branch.agency`; its `openPr` becomes `pushBranch`, which force-pushes one fixed branch per agent and returns a GitHub compare URL. `docs-review` and `constants-review` gain the `edit` tool from `std::fs`. One shared handler, `handleScheduledInterrupt` in `branch.agency`, rejects any edit under `.github/` AND rejects `std::guard` trips (which routes them into the salvage pipeline instead of killing the run). Every agent wraps its **entire node body** in `handle { ... } with handleScheduledInterrupt` — a node definition cannot take a trailing `with` clause, so the handler must attach to a `handle` block. Every agent wraps its LLM phase — not its git phase — in a `guard`. All decision logic is extracted into pure exported functions so it can be tested without LLM calls.
 
 **Tech Stack:** Agency language, `std::fs` (`edit`, `write`, `mkdir`), `std::shell` (`exec`, `grep`, `glob`), `std::system` (`env`, `exit`), GitHub Actions, TypeScript (for the pinned-action generator).
 
@@ -21,6 +21,9 @@
 - Guard values: `docs-review` and `constants-review` `cost: $3.00`, `stdlib-docs-links` `cost: $0.50`; all three `time: 25m` against the workflows' unchanged `timeout-minutes: 30`.
 - No agent gets the `exec` tool.
 - Commit messages and PR bodies must be written to a file and passed with `-F`, never inline on the command line (apostrophes break it).
+- **Every agent must adjudicate `std::guard` itself.** CI runs the agents via run-agency-action, whose `scripts/run.sh` executes plain `agency run <file>` with no `--policy`/`--approve`/`--reject` flag. Without a policy mechanism, a surfaced interrupt hits `reportUnhandledInterrupts` and the process exits non-zero (`lib/runtime/cliInterruptResolution.ts`) — no salvage, nothing pushed. So each agent's own handler must `reject()` `std::guard` trips; rejection converts a trip into `success(draft)` when the block saved a draft, or the plain failure otherwise (proven by `tests/agency/guards/trip-visibility.agency`, node `draftPreview`).
+- **Handler placement:** nodes do NOT support `node main() { ... } with (i) { ... }` — the node parser ends at the closing brace. Handlers attach to `handle { ... } with ...` blocks (or call sites). Any "wrap the node in a handler" step means: make the node body a single `handle { ... } with handleScheduledInterrupt` block.
+- Every new test node in `tests/agency/scheduled-helpers.agency` needs a matching entry in `tests/agency/scheduled-helpers.test.json`, or it will silently never run.
 
 ---
 
@@ -31,9 +34,9 @@ The three scheduled workflows pin `2a3030d` (v1.0.2), which fails in ~14 seconds
 **Files:**
 - Modify: `lib/cli/schedule/backends/pinnedActions.ts:15-18`
 - Modify: `makefile:168`
-- Modify: `.github/workflows/docs-review.yml:21`
-- Modify: `.github/workflows/constants-review.yml:21`
-- Modify: `.github/workflows/stdlib-docs-links.yml:21`
+- Modify: `.github/workflows/docs-review.yml:20`
+- Modify: `.github/workflows/constants-review.yml:20`
+- Modify: `.github/workflows/stdlib-docs-links.yml:20`
 - Regenerate: `lib/cli/schedule/backends/__snapshots__/*.yml`
 
 **Interfaces:**
@@ -138,13 +141,15 @@ Extract every decision this redesign introduces into pure functions first, so ea
   - `isGithubPath(dir: string, filename: string): boolean`
   - `shouldForcePush(tipAuthor: string): boolean`
   - `truncationNote(processed: number, total: number, label: string): string`
+  - `handleScheduledInterrupt(i)` — the shared handler: rejects `std::edit` under `.github/`, approves other `std::edit`, rejects `std::guard` (routing trips into salvage), passes everything else
 
 - [ ] **Step 1: Write the failing tests**
 
-Append to `tests/agency/scheduled-helpers.agency`, and add the import at the top of the file alongside the existing `stdlib-docs-links.agency` import:
+Append to `tests/agency/scheduled-helpers.agency`, and add the imports at the top of the file alongside the existing `stdlib-docs-links.agency` import:
 
 ```ts
-import { compareUrl, isGithubPath, shouldForcePush, truncationNote } from "../../agents/scheduled/branch.agency"
+import test { _advanceTime } from "std::date"
+import { compareUrl, isGithubPath, shouldForcePush, truncationNote, handleScheduledInterrupt } from "../../agents/scheduled/branch.agency"
 
 node compareUrlBuilds() {
   const got = compareUrl("egonSchiele/agency-lang", "chore/docs-freshness")
@@ -208,7 +213,74 @@ node truncationNoteWhenComplete() {
   if (got == "") { return "ok" }
   return "bad:${got}"
 }
+
+// ---- handler wiring: the interrupt-level behavior, not just the predicate ----
+// User code can raise a std:: effect directly (see tests/agency/raiseStatement.agency),
+// so these exercise handleScheduledInterrupt end to end with no LLM and no real files.
+
+def fakeEdit(dir: string, filename: string): string {
+  raise std::edit("apply?", { dir: dir, filename: filename, edits: [], before: "", after: "" })
+  return "applied"
+}
+
+node handlerRejectsGithubEdit() {
+  handle {
+    const r = fakeEdit(".github/workflows", "ci.yml")
+    if (isFailure(r)) { return "ok" }
+    return "bad:${r}"
+  } with handleScheduledInterrupt
+}
+
+node handlerRejectsTraversalEdit() {
+  handle {
+    const r = fakeEdit("packages/agency-lang/docs/dev", "../../../../.github/workflows/ci.yml")
+    if (isFailure(r)) { return "ok" }
+    return "bad:${r}"
+  } with handleScheduledInterrupt
+}
+
+node handlerApprovesDocsEdit() {
+  handle {
+    const r = fakeEdit("packages/agency-lang/docs/dev", "interrupts.md")
+    if (r == "applied") { return "ok" }
+    return "bad:${r}"
+  } with handleScheduledInterrupt
+}
+
+// ---- guard trips under the shared handler (fakeClock tests) ----
+// CI runs `agency run` with no policy flag, so an unadjudicated trip would
+// exit non-zero with no salvage. These prove the handler's reject() converts
+// a trip into success(draft) when a draft was saved, and a plain failure
+// when none was — the two paths the agents rely on.
+
+node guardTripSalvagesDraft() {
+  handle {
+    const r = guard(label: "salvage", time: 100ms) {
+      saveDraft("partial")
+      _advanceTime(200)
+      return "finished"
+    }
+    if (r is success(v)) {
+      if (v == "partial") { return "ok" }
+      return "bad:completed:${v}"
+    }
+    return "bad:failure"
+  } with handleScheduledInterrupt
+}
+
+node guardTripWithoutDraftFails() {
+  handle {
+    const r = guard(label: "no-draft", time: 100ms) {
+      _advanceTime(200)
+      return "finished"
+    }
+    if (isFailure(r)) { return "ok" }
+    return "bad:${r.value}"
+  } with handleScheduledInterrupt
+}
 ```
+
+Then add one entry per new node to `tests/agency/scheduled-helpers.test.json` (nodes without an entry silently never run). Every entry follows the existing shape with `"expectedOutput": "\"ok\""`; the two guard-trip nodes additionally need `"fakeClock": true` (see `tests/agency/guards/fake-clock-trip.test.json` for the format — `_advanceTime` refuses to run without it).
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -304,6 +376,41 @@ export def truncationNote(processed: number, total: number, label: string): stri
   if (processed >= total) { return "" }
   return "> **Truncated:** reviewed ${processed} of ${total} ${label} before the budget tripped. The rest were not examined.\n"
 }
+
+/**
+  The shared handler every scheduled agent wraps its node body in, via
+  `handle { ... } with handleScheduledInterrupt`. (A node definition cannot
+  take a trailing `with` clause — the handler must attach to a handle block.)
+
+  Two decisions live here:
+
+  - `std::edit` under `.github/` is rejected: opening a PR runs that branch's
+    workflows with repository secrets BEFORE the review finishes, so it is the
+    one edit that acts before the review gate closes. All other edits are
+    approved — they land in the diff a human reviews.
+  - `std::guard` trips are rejected. CI runs `agency run` with no policy flag,
+    so an unadjudicated trip would surface unhandled and kill the process with
+    no salvage. reject() routes the trip into the salvage pipeline instead:
+    the guard returns success(draft) when the block saved one, and the plain
+    failure otherwise. Rejecting (not approving) is deliberate — approving
+    would grant more budget and defeat the cap.
+
+  Everything else passes: effectful calls in the agents discharge themselves
+  with `with approve` at the call site.
+*/
+export def handleScheduledInterrupt(i) {
+  if (i.effect == "std::edit") {
+    if (isGithubPath(i.data.dir, i.data.filename)) {
+      print("Rejected edit under .github/: ${i.data.dir}/${i.data.filename}")
+      return reject()
+    }
+    return approve()
+  }
+  if (i.effect == "std::guard") {
+    return reject()
+  }
+  return pass()
+}
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -317,18 +424,25 @@ Expected: PASS, all nodes return `ok`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add agents/scheduled/branch.agency tests/agency/scheduled-helpers.agency
+git add agents/scheduled/branch.agency tests/agency/scheduled-helpers.agency tests/agency/scheduled-helpers.test.json
 git commit -F - <<'EOF'
-feat(scheduled): pure helpers for branch-based agent output
+feat(scheduled): pure helpers + shared handler for branch-based agent output
 
-Four decisions this redesign introduces, extracted as pure functions so each
-is testable without git or an LLM:
+The decisions this redesign introduces, extracted so each is testable without
+git or an LLM:
 
 - compareUrl: the "open a PR from this branch" link, replacing the PR URL
 - isGithubPath: substring test for .github/, which catches traversal spellings
   without path resolution and can only over-reject
 - shouldForcePush: force-push only over the bot's own tip, never over a human's
 - truncationNote: a banner so a budget-truncated run cannot read as clean
+- handleScheduledInterrupt: the one handler every agent wraps its node body
+  in. Rejects .github/ edits, and rejects std::guard trips — CI runs with no
+  policy flag, so an unadjudicated trip would kill the run with no salvage;
+  reject() converts it to success(draft) / failure via the salvage pipeline.
+
+The handler is tested at the interrupt level (raise std::edit under the
+handler; guard trips under a fake clock), not just via the predicate.
 
 Task 3 wires these to git.
 EOF
@@ -371,6 +485,13 @@ Append to `agents/scheduled/branch.agency`:
   Author of the remote branch's tip commit, or "" when the branch does not
   exist remotely. A failed fetch means "no such branch", which is the normal
   first-run case — so it must NOT go through `run()`, which aborts on failure.
+
+  Known conflation: a transient network/auth failure also returns "", which
+  arms a force-push. The window is tolerable — the push moments later needs
+  the same network and credentials working, and destroying work additionally
+  requires a human tip to exist at that exact moment. If this ever needs
+  closing, `git ls-remote --heads origin <branch>` distinguishes "absent"
+  from "unreachable" cheaply.
 */
 export def remoteTipAuthor(root: string, branch: string): string {
   """
@@ -515,10 +636,16 @@ The only agent that loops, so the only one where a partial run and its progress 
 Replace the import line:
 
 ```ts
-import { pkgDir, repoRoot, stamp, pushBranch, ensureDir, isGithubPath, truncationNote } from "./branch.agency"
+import { pkgDir, repoRoot, stamp, pushBranch, ensureDir, truncationNote, handleScheduledInterrupt } from "./branch.agency"
 ```
 
-Add `edit` to the `std::fs` imports. In the `@module` block, replace the two sentences describing report-only behavior and read-only tools with:
+There is no `std::fs` import in this file today (`read`/`write` are builtins), so add a **new** import line:
+
+```ts
+import { edit } from "std::fs"
+```
+
+In the `@module` block, replace the two sentences describing report-only behavior and read-only tools with:
 
 ```
   It reviews each developer doc under `docs/dev/` against the current codebase,
@@ -553,6 +680,8 @@ Replace with:
 ```ts
   const branch = "chore/docs-freshness"
 ```
+
+Also delete the later `const branch = "${branchPrefix}${stamp()}"` line (currently `docs-review.agency:105`) — `branch` is now declared once, up top. Leaving it is a duplicate-declaration error.
 
 - [ ] **Step 3: Change the rubric to ask for fixes**
 
@@ -611,29 +740,42 @@ ${content}"""
   if (budget is success(result)) {
     processed = result.processed
     sections = result.sections
+  } else {
+    // A failure here means the guard tripped before the FIRST saveDraft —
+    // no doc completed, nothing to salvage. Exit loudly (red workflow)
+    // rather than falling through with processed = 0, which the report
+    // below would present as a clean "nothing found" run.
+    print("Budget tripped before any doc completed; nothing to salvage.")
+    exit(1) with approve
   }
 ```
 
-- [ ] **Step 5: Add the .github/ handler**
+- [ ] **Step 5: Wrap the node body in the shared handler**
 
-Wrap the `node main()` body so the whole run is covered. The handler goes at the end of the node:
+A node definition cannot take a trailing `with` clause (`graphNodeParser` ends at the closing brace), so the handler attaches to a `handle` block instead: make the ENTIRE `node main()` body a single block —
 
 ```ts
-} with (i) {
-  if (i.effect == "std::edit") {
-    if (isGithubPath(i.data.dir, i.data.filename)) {
-      print("Rejected edit under .github/: ${i.data.dir}/${i.data.filename}")
-      return reject()
-    }
-    return approve()
-  }
-  return pass()
+node main() {
+  handle {
+    // ...the whole existing body, unchanged...
+  } with handleScheduledInterrupt
 }
 ```
 
+`handleScheduledInterrupt` (from `branch.agency`, Task 2) rejects `.github/` edits, rejects `std::guard` trips so a tripped budget salvages instead of killing the CI run, and passes everything else. Rejection wins over the call-site `with approve` on the `llm(...)` call because every handler in the chain gets a say and any reject vetoes (see `docs/site/guide/handlers.md`, "Handlers vs try/catch"). The handle block must enclose the `guard(...)` for the handler to be eligible to adjudicate its trip.
+
 - [ ] **Step 6: Add the truncation banner and push the branch**
 
-Replace the report construction and `openPr` call with:
+Replace the `if (sections.length == 0)` early return with one that only fires for a COMPLETE clean run — a truncated run must fall through so its partial work still pushes with the banner:
+
+```ts
+  if (sections.length == 0 && processed >= files.length) {
+    print("Reviewed ${files.length} docs under docs/dev/; none appear out of date. Nothing to do.")
+    return
+  }
+```
+
+Then replace the report construction and `openPr` call with:
 
 ```ts
   const joined = sections.join("\n\n")
@@ -702,7 +844,10 @@ before the review gate closes.
 Budgeted at $3.00 / 25m against the workflow's 30m timeout, with five minutes
 of headroom so the guard fires before the runner kills the job. saveDraft
 carries an explicit `processed` counter so a truncated run still pushes its
-partial work AND says how much it skipped.
+partial work AND says how much it skipped. The node body is wrapped in
+handle { } with handleScheduledInterrupt, which also rejects std::guard
+trips — CI passes no policy flag, so an unadjudicated trip would kill the
+run with no salvage.
 EOF
 ```
 
@@ -722,10 +867,16 @@ Same shape as Task 4 minus the loop: this agent makes a single LLM call, so ther
 - [ ] **Step 1: Update imports, module doc, and branch name**
 
 ```ts
-import { pkgDir, repoRoot, stamp, pushBranch, ensureDir, isGithubPath } from "./branch.agency"
+import { pkgDir, repoRoot, stamp, pushBranch, ensureDir, handleScheduledInterrupt } from "./branch.agency"
 ```
 
-Add `edit` to the `std::fs` imports. In the `@module` block, replace "It opens a PR containing a findings report; it does NOT move any constants itself — a human decides." with:
+There is no `std::fs` import in this file today (`read`/`write` are builtins), so add a **new** import line:
+
+```ts
+import { edit } from "std::fs"
+```
+
+In the `@module` block, replace "It opens a PR containing a findings report; it does NOT move any constants itself — a human decides." with:
 
 ```
   It moves the constants it finds and pushes a branch containing both the
@@ -763,12 +914,14 @@ Replace with:
   const branch = "chore/constants-review"
 ```
 
+Also delete the later `const branch = "${branchPrefix}${stamp()}"` line (currently `constants-review.agency:79`) — `branch` is now declared once, up top. Leaving it is a duplicate-declaration error.
+
 - [ ] **Step 2: Change the rubric to ask for the move**
 
 Replace the rubric's final sentence — "For each candidate report a markdown bullet… reply with exactly the text NO ISSUES and nothing else." — with:
 
 ```
-For each candidate: use the edit tool to add the constant to lib/constants.ts and update every call site to import it from there, then report a markdown bullet giving the literal value, every file:line you changed, and a one-line reason it belongs there. Keep each edit's oldText as small as possible while still matching uniquely. If you find nothing worth moving, change nothing and reply with exactly the text NO ISSUES and nothing else.
+For each candidate: use the edit tool to add the constant to lib/constants.ts and update every call site to import it from there, then report a markdown bullet giving the literal value, every file:line you changed, and a one-line reason it belongs there. Keep each edit's oldText as small as possible while still matching uniquely. Only edit files under packages/agency-lang/lib — the branch stages nothing outside it, so an edit elsewhere would be silently dropped from the commit and leave the branch inconsistent. If a call site lies outside lib, do not move that constant; report it as a candidate for a human instead. If you find nothing worth moving, change nothing and reply with exactly the text NO ISSUES and nothing else.
 ```
 
 - [ ] **Step 3: Wrap the single LLM call in a guard**
@@ -803,22 +956,9 @@ with:
   }
 ```
 
-- [ ] **Step 4: Add the same .github/ handler**
+- [ ] **Step 4: Wrap the node body in the shared handler**
 
-Add to the end of `node main()`:
-
-```ts
-} with (i) {
-  if (i.effect == "std::edit") {
-    if (isGithubPath(i.data.dir, i.data.filename)) {
-      print("Rejected edit under .github/: ${i.data.dir}/${i.data.filename}")
-      return reject()
-    }
-    return approve()
-  }
-  return pass()
-}
-```
+Exactly as in docs-review Task 4 Step 5: a node cannot take a trailing `with` clause, so make the ENTIRE `node main()` body a single `handle { ... } with handleScheduledInterrupt` block. This provides both the `.github/` edit rejection and the `std::guard` trip rejection (a rejected trip here has no draft, so the guard returns the failure the `else` branch in Step 3 expects — instead of the run dying on an unhandled interrupt).
 
 - [ ] **Step 5: Update the report and push the branch**
 
@@ -888,7 +1028,7 @@ Already applies its own fix behind a deterministic guard and gives the model no 
 - [ ] **Step 1: Update the import and branch name**
 
 ```ts
-import { pkgDir, repoRoot, stamp, pushBranch } from "./branch.agency"
+import { pkgDir, repoRoot, stamp, pushBranch, handleScheduledInterrupt } from "./branch.agency"
 ```
 
 Delete the skip guard at lines 137-142:
@@ -937,7 +1077,7 @@ Keep the `: string` annotation on the inner binding — the LLM's output type co
 
 The very next line, `const newConfig = stripFences(raw)`, is unchanged, and so is the entire fail-closed link check below it. Do NOT touch that check — the four conditions it enforces (structure preserved, no link dropped, every requested link added, no unexpected link introduced) are what make this agent safe to auto-apply.
 
-No handler is needed: the model gets no tools here, so there is no `std::edit` interrupt to intercept.
+A handler IS still needed — not for `std::edit` (the model gets no tools here), but for the `std::guard` trip this step introduces: CI passes no policy flag, so an unadjudicated trip would kill the run on an unhandled interrupt instead of reaching the "nothing to push" branch above. Wrap the ENTIRE `node main()` body in `handle { ... } with handleScheduledInterrupt` (a node cannot take a trailing `with` clause; the handle block must enclose the guard).
 
 - [ ] **Step 3: Replace openPr with pushBranch**
 
@@ -950,7 +1090,7 @@ No handler is needed: the model gets no tools here, so there is no `std::edit` i
   }
 ```
 
-Delete the now-unused `title` and `body` variables that were only passed to `openPr`.
+Delete the now-unused `title` and `body` variables that were only passed to `openPr`, and `const bulletList = missing.join("\n- ")` (currently `stdlib-docs-links.agency:196`), which only fed `body`.
 
 - [ ] **Step 4: Verify it parses and the helper tests still pass**
 
@@ -973,8 +1113,10 @@ This agent already applied its own fix behind a deterministic fail-closed link
 check, so only the output shape and the budget change. The link check is
 untouched — it is what makes auto-applying safe here.
 
-No .github/ handler: the model gets no tools, so there is no std::edit
-interrupt to intercept.
+The node body is wrapped in handle { } with handleScheduledInterrupt — not
+for std::edit (the model gets no tools), but so a std::guard trip is rejected
+into a clean failure instead of killing the run: CI passes no policy flag,
+and an unadjudicated interrupt exits non-zero with no salvage.
 EOF
 ```
 
@@ -1158,6 +1300,8 @@ Expected: the run succeeds and prints "Branch chore/docs-freshness has commits b
 
 **Do not run the full test suite locally.** It is slow and expensive. Run the specific Agency test named in each task and let CI do the rest.
 
-**Two things in this plan are the actual safety controls.** The `.github/` check in `isGithubPath` is what stands between a bad edit and code that runs before a human finishes reviewing. `shouldForcePush` is what stands between a scheduled run and someone's unpushed work. Both are pure functions with direct tests in Task 2 — if you change either, the tests must change with intent, not to make them pass.
+**Three things in this plan are the actual safety controls.** The `.github/` check in `isGithubPath` is what stands between a bad edit and code that runs before a human finishes reviewing. `shouldForcePush` is what stands between a scheduled run and someone's unpushed work. And the `std::guard` rejection in `handleScheduledInterrupt` is what stands between a tripped budget and a dead CI run that pushed nothing — CI passes no policy flag, so nothing else will adjudicate the trip. All three have direct tests in Task 2 — if you change any of them, the tests must change with intent, not to make them pass.
+
+**Handler syntax, once more.** `node main() { ... } with (i) { ... }` does not parse — nodes take no trailing `with` clause. Every handler in this plan is a `handle { ... } with handleScheduledInterrupt` block wrapping the whole node body, and the handle block must enclose the `guard(...)` or the handler is not eligible to adjudicate its trip.
 
 **One thing the tests do not cover, deliberately.** The spec asks that a truncated run report *files reviewed*, not *findings*. `truncationNote` is unit-tested, but the correctness of `processed` itself is structural: it is incremented once per loop iteration, outside the `if` that appends to `sections`. Testing that would mean running the agent's loop, which needs LLM calls. If you restructure that loop, re-read the comment above `saveDraft` in Task 4 — moving `processed += 1` inside the `if` would silently reintroduce exactly the bug the counter exists to prevent, and nothing would fail.

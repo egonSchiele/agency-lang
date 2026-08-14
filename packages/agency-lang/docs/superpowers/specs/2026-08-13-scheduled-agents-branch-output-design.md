@@ -85,40 +85,45 @@ edit runs. If any edit fails, nothing is written."* A hallucinated or ambiguous
 replacement is rejected atomically. No hand-rolled verification is needed, and
 writing one would duplicate stdlib behavior.
 
-**A handler scopes each agent to its own directory.** Handlers are the
-language's safety mechanism, so the scope check belongs in one:
+**A handler denies edits under `.github/`.** Handlers are the language's safety
+mechanism, so the check belongs in one:
 
 ```ts
 } with (i) {
   if (i.effect == "std::edit") {
-    if (isInside(i.data.dir, i.data.filename, devDir)) { return approve() }
-    print("Rejected edit outside ${devDir}: ${i.data.filename}")
-    return reject()
+    const target = "${i.data.dir}/${i.data.filename}"
+    if (target.includes(".github/")) {
+      print("Rejected edit under .github/: ${target}")
+      return reject()
+    }
+    return approve()
   }
   return pass()
 }
 ```
 
-A confused run cannot wander into `lib/` or `.github/`. Because `std::edit`
-carries `before` and `after` in its payload, the same handler records a diff of
-every applied change for the report at no extra cost.
+**Why only `.github/`, and not a general directory scope.** Nearly every wrong
+edit is inert until someone merges it: a confused run that rewrites things in
+`lib/` produces a branch full of unrelated changes, a human sees it, deletes the
+branch, and nothing is lost. The human review gate covers that completely.
 
-`isInside` is a new helper in `branch.agency`, and it must get two details right
-or the control does not hold:
+`.github/workflows/` is the exception, and the reason is timing rather than
+severity. The intended flow is *push branch → open pull request → review →
+merge*, and opening a pull request runs `pull_request`-triggered workflows **as
+defined on the branch**, with repository secrets, before the review finishes. A
+workflow edit therefore executes inside the window the review gate is supposed
+to cover. Every other bad edit waits for merge.
 
-- **Join before comparing.** The `std::edit` payload carries `dir` and
-  `filename` separately and the file is `dir/filename`. Checking `dir` alone
-  lets a `filename` of `../../lib/config.ts` escape. Join them, then resolve the
-  result to an absolute path (`git rev-parse --show-toplevel` gives the root to
-  resolve against), so `..` segments are collapsed before the check.
-- **Compare against the directory plus a trailing separator**, not a bare
-  prefix. A plain `startsWith("docs/dev")` also accepts `docs/dev-scratch`.
-  Comparing against `docs/dev/` — or requiring exact equality with the directory
-  itself — closes that.
+So this check is not "the model might misbehave" — it is "one directory runs
+code before the gate closes." Scoping each agent to its own directory would also
+contain ordinary mistakes, but it needs path joining, `..` resolution, and
+prefix-vs-separator care, all of which can be silently wrong. A substring test
+for `.github/` needs none of that: it matches a traversal spelling like
+`../../.github/workflows/ci.yml` just as well as a direct one, because the
+segment appears either way. It can only ever over-reject, which fails closed.
 
-Both are ordinary path-prefix mistakes, and this handler is the control that
-replaces the previously withheld write tools, so the tests below cover them
-explicitly.
+Because `std::edit` carries `before` and `after` in its payload, the same
+handler records a diff of every applied change for the report at no extra cost.
 
 **No `exec` for any agent.** This is the one capability withheld, and for a
 reason that survives the argument above: the runner holds a `GITHUB_TOKEN` with
@@ -157,28 +162,47 @@ no report. Guarding the expensive nondeterministic part and leaving the cheap
 deterministic part outside caps spend without risking a torn result.
 
 **`saveDraft` makes a trip non-destructive.** Without it a tripped guard discards
-everything, so a 25-minute, $3 run that trips pushes nothing:
+everything, so a 25-minute, $3 run that trips pushes nothing. The draft must
+carry an explicit `processed` counter, not just the findings:
 
 ```ts
 const result = guard(label: "docs-review", cost: $3.00, time: 25m) {
   let sections: string[] = []
+  let processed = 0
   for (rel in files) {
     // ... review one doc, apply edits ...
-    sections.push(finding)
-    saveDraft(sections)
+    if (finding.trim() != "NO ISSUES") { sections.push(finding) }
+    processed += 1
+    saveDraft({ processed: processed, sections: sections })
   }
-  return sections
+  return { processed: processed, sections: sections }
 }
 ```
 
 A trip now returns `success` carrying the last draft, so the branch still gets
 however many files the run completed.
 
+**Counting findings is not counting files.** `sections` only grows when a
+document *has* a problem, so using its length as the progress measure reports a
+run that reviewed 40 files and found 3 problems as "3 of 60" — misleading in the
+opposite direction from the failure it is meant to catch. `processed` is
+incremented once per iteration regardless of outcome, which is why it has to be
+a separate counter carried in the draft.
+
 **Truncation must be visible.** Because `saveDraft` turns a trip into a success,
 the returned value alone cannot distinguish a complete run from a truncated one.
-The agent compares the number of files processed against the number found and
-writes the result into the report header — *"reviewed 41 of 60 docs before the
-25m budget tripped"* — so a short report never reads as a clean bill of health.
+The agent compares `processed` against `files.length` and writes the result into
+the report header — *"reviewed 41 of 60 docs before the 25m budget tripped"* —
+so a short report never reads as a clean bill of health.
+
+This matters more than one run's honesty. A budget that trips at document 41
+trips at roughly document 41 every week, because each run walks the same list in
+the same order. Documents 42 onward would then never be reviewed while every
+branch looked like a normal week's work. Labeling is the cheap first step: it
+reveals whether the shortfall is persistent. If it is, the follow-ups are to
+raise the budget or rotate the starting offset each run so coverage moves. Both
+are deliberately out of scope here — there is no point building rotation before
+knowing the trip is real.
 
 Guards also bound the cost consequence of dropping the skip guard in §1:
 `docs-review` is capped at $3.00 per week, roughly $156 a year worst case.
@@ -210,12 +234,14 @@ Bumping is a separate change with its own documented procedure in
 - **`branch.agency` unit coverage** for `pushBranch`: force-push proceeds on a
   bot-authored tip, skips on a human-authored tip, and returns a well-formed
   compare URL.
-- **Path-scope handler** (`isInside`): an edit inside the agent's directory is
-  approved; one outside is rejected and reported. This is the control that
-  replaces the withheld write tools, so it needs direct tests for both ways it
-  can silently fail — a `filename` containing `../` that escapes the directory,
-  and a sibling directory sharing a name prefix (`docs/dev-scratch` against
-  `docs/dev`).
+- **`.github/` denial handler**: an edit under `docs/dev/` is approved; an edit
+  naming `.github/workflows/ci.yml` is rejected and reported, both when written
+  directly and when reached by traversal from the agent's own directory
+  (`../../.github/workflows/ci.yml`). This is the one control standing between a
+  bad edit and code that runs before review, so both spellings get a test.
+- **Progress counter**: a run that reviews several files and finds problems in
+  only some of them reports the number of *files reviewed*, not the number of
+  findings. This is the specific mistake the counter exists to avoid.
 - **Truncation reporting**: a guard trip yields a branch whose report states how
   many files were processed out of how many found.
 - **No LLM calls required.** All of the above are deterministic and belong in

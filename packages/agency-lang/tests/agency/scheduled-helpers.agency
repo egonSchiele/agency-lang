@@ -5,7 +5,7 @@
 // clock, still without any LLM.
 import test { _advanceTime } from "std::date"
 import { stripFences, extractLinks } from "../../agents/scheduled/stdlib-docs-links.agency"
-import { compareUrl, isGithubPath, shouldForcePush, truncationNote, handleScheduledInterrupt } from "../../agents/scheduled/branch.agency"
+import { compareUrl, isGithubPath, shouldForcePush, truncationNote, chunk, handleScheduledInterrupt } from "../../agents/scheduled/branch.agency"
 
 node stripPlain() {
   const got = stripFences("hello world")
@@ -81,6 +81,10 @@ node githubPathAllowsDocs() {
   return "bad:true"
 }
 
+// shouldForcePush is a PURE decision function: it looks at an author string
+// and returns a boolean. Nothing in these nodes touches git — no fetch, no
+// push — so a failing test can only ever print "bad:...", never move a branch.
+
 node forcePushWhenBotTip() {
   const got = shouldForcePush("agency-scheduler[bot]")
   if (got) { return "ok" }
@@ -112,6 +116,36 @@ node truncationNoteWhenComplete() {
   return "bad:${got}"
 }
 
+node chunkSplitsWithRemainder() {
+  const got = chunk(["a", "b", "c", "d", "e"], 2)
+  if (got.length != 3) { return "bad:len:${got.length}" }
+  if (got[0].join(",") != "a,b") { return "bad:0:${got[0].join(",")}" }
+  if (got[1].join(",") != "c,d") { return "bad:1:${got[1].join(",")}" }
+  if (got[2].join(",") != "e") { return "bad:2:${got[2].join(",")}" }
+  return "ok"
+}
+
+node chunkExactMultiple() {
+  const got = chunk(["a", "b", "c", "d"], 2)
+  if (got.length != 2) { return "bad:len:${got.length}" }
+  if (got[1].join(",") != "c,d") { return "bad:1:${got[1].join(",")}" }
+  return "ok"
+}
+
+node chunkEmptyList() {
+  const got = chunk([], 4)
+  if (got.length == 0) { return "ok" }
+  return "bad:${got.length}"
+}
+
+node chunkSizeBelowOne() {
+  // A size below 1 must not loop forever or drop items; it clamps to 1.
+  const got = chunk(["a", "b"], 0)
+  if (got.length != 2) { return "bad:len:${got.length}" }
+  if (got[0].join(",") != "a") { return "bad:0:${got[0].join(",")}" }
+  return "ok"
+}
+
 // ---- handler wiring: the interrupt-level behavior, not just the predicate ----
 // User code can raise a std:: effect directly (see tests/agency/raiseStatement.agency),
 // so these exercise handleScheduledInterrupt end to end with no LLM and no real files.
@@ -141,6 +175,22 @@ node handlerApprovesDocsEdit() {
   handle {
     const r = fakeEdit("packages/agency-lang/docs/dev", "interrupts.md")
     if (r == "applied") { return "ok" }
+    return "bad:${r}"
+  } with handleScheduledInterrupt
+}
+
+// The agents' own git operations go through std::git tools, whose
+// std::git::* effects the handler approves as a family (the model never
+// holds git tools, so this can only ever approve deterministic agent code).
+def fakeGitCommit(): string {
+  raise std::git::commit("commit?", { cwd: "/tmp/nowhere", message: "msg" })
+  return "committed"
+}
+
+node handlerApprovesGitFamily() {
+  handle {
+    const r = fakeGitCommit()
+    if (r == "committed") { return "ok" }
     return "bad:${r}"
   } with handleScheduledInterrupt
 }

@@ -1,7 +1,7 @@
 import { grep, glob } from "std::shell"
 import { exit } from "std::system"
 import { edit } from "std::fs"
-import { pkgDir, repoRoot, stamp, pushBranch, ensureDir, truncationNote, handleScheduledInterrupt } from "./branch.agency"
+import { pkgDir, repoRoot, stamp, pushBranch, ensureDir, truncationNote, chunk, handleScheduledInterrupt } from "./branch.agency"
 
 /** @module
   Weekly maintenance agent: fix out-of-date information in `docs/dev/`.
@@ -13,8 +13,9 @@ import { pkgDir, repoRoot, stamp, pushBranch, ensureDir, truncationNote, handleS
 
   Cost scales linearly with the number of docs: every `docs/dev/*.md` file gets
   its own tool-using LLM thread seeded with that doc's full contents (~60 files
-  today, so ~60 threads per weekly run). The guard caps a runaway week at
-  $3.00 / 25 minutes, and a truncated run says so in its report header.
+  today, so ~60 threads per weekly run, forked four at a time). The guard caps
+  a runaway week at $3.00 / 25 minutes, and a truncated run says so in its
+  report header.
 
   Security posture: runs non-interactively on GitHub Actions with a least-
   privilege `GITHUB_TOKEN` (`contents: write` only). The model gets `read`,
@@ -39,49 +40,65 @@ node main() {
       files = names
     } else {
       print("Failed to list docs/dev. Aborting.")
-      exit(1) with approve
+      exit(1)
     }
 
     const branch = "chore/docs-freshness"
 
     const rubric = """You are auditing ONE developer documentation file for a programming language called Agency, checking whether it is out of date relative to the CURRENT source code in this repository. Use the read and grep tools to verify the doc's specific claims: file paths it cites, function/type/flag names, command invocations, and described behavior. Report ONLY concrete staleness: a cited path or symbol that no longer exists, a renamed flag/command, a documented behavior that the code contradicts, or a described feature that was removed. Ignore prose style and subjective wording. If the doc appears accurate and current, reply with exactly the text NO ISSUES and nothing else. Otherwise use the edit tool to FIX each stale claim in the doc, then reply with a short markdown bullet list describing what you changed and why; each bullet names the stale claim, the correction, and the code you verified it against (cite file:line). Keep each edit's oldText as small as possible while still matching uniquely. Do not rewrite prose you were not asked to fix."""
 
+    // Reviews run POOL_SIZE at a time: `chunk` splits the docs into waves and
+    // each wave is forked, so at most POOL_SIZE LLM threads run concurrently.
+    const POOL_SIZE = 4
+    const waves = chunk(files, POOL_SIZE)
+
     let sections: string[] = []
     let processed = 0
     const budget = guard(label: "docs-review", cost: $3.00, time: 25m) {
-      let idx = 0
-      for (rel in files) {
-        const readResult = read(rel, devDir) with approve
-        let content = ""
-        if (readResult is success(text)) {
-          content = text
-        } else {
-          print("Failed to read ${rel}. Aborting.")
-          exit(1) with approve
-        }
+      for (wave in waves) {
+        // Each branch reviews one doc and returns its report section, or ""
+        // for a clean doc. Results come back by RETURN VALUE, not shared
+        // mutation: a branch's saveDraft lands on the branch's own stack
+        // where the parent guard cannot see it, so all draft-keeping happens
+        // here at the wave join. Salvage granularity is therefore per-wave.
+        const results = fork(wave) as rel {
+          const readResult = read(rel, devDir) with approve
+          let content = ""
+          if (readResult is success(text)) {
+            content = text
+          } else {
+            print("Failed to read ${rel}. Aborting.")
+            exit(1)
+          }
 
-        const prompt = """${rubric}
+          const prompt = """${rubric}
 
 Doc path (relative to packages/agency-lang): docs/dev/${rel}
 Search code with grep/read using paths relative to the repository root.
 
 Doc contents:
 ${content}"""
-        let finding = ""
-        thread(session: "docrev-${idx}") {
-          finding = llm(prompt, tools: [read, grep, edit]) with approve
+          let finding = ""
+          thread(session: "docrev-${rel}") {
+            finding = llm(prompt, tools: [read, grep, edit]) with approve
+          }
+          // The rubric asks for EXACTLY `NO ISSUES`; an exact match (not a
+          // substring check) means a reply that merely mentions the phrase
+          // alongside real findings is still treated as a finding.
+          if (finding.trim() != "NO ISSUES") {
+            return "## docs/dev/${rel}\n\n${finding}"
+          }
+          return ""
         }
-        // The rubric asks for EXACTLY `NO ISSUES`; an exact match (not a
-        // substring check) means a reply that merely mentions the phrase
-        // alongside real findings is still treated as a finding.
-        if (finding.trim() != "NO ISSUES") {
-          sections.push("## docs/dev/${rel}\n\n${finding}")
+        for (section in results) {
+          if (section != "") {
+            sections.push(section)
+          }
         }
-        processed += 1
-        idx += 1
-        // `processed` is a separate counter, NOT sections.length: sections only
+        // `processed` counts files reviewed, NOT findings: sections only
         // grows when a doc HAS a problem, so a run that reviewed 40 docs and
         // found 3 issues would otherwise report "3 of 60".
+        processed += wave.length
         saveDraft({ processed: processed, sections: sections })
       }
       return { processed: processed, sections: sections }
@@ -96,7 +113,7 @@ ${content}"""
       // rather than falling through with processed = 0, which the report
       // below would present as a clean "nothing found" run.
       print("Budget tripped before any doc completed; nothing to salvage.")
-      exit(1) with approve
+      exit(1)
     }
 
     // Only a COMPLETE clean run skips the push — a truncated run must fall
@@ -121,7 +138,7 @@ ${joined}
     const writeResult = write("docs-freshness.md", report, dir: reportDir) with approve
     if (writeResult is failure(err)) {
       print("Failed to write the report: ${err}. Aborting.")
-      exit(1) with approve
+      exit(1)
     }
 
     // The whole docs/dev directory, not just the report: the agent edits docs
@@ -134,7 +151,7 @@ ${joined}
       "chore(docs): weekly docs/dev freshness fixes",
     )
     if (url == "") {
-      print("No changes to push.")
+      print("Nothing pushed; the log above says why (no changes, or a protected branch).")
     } else {
       print("Pushed ${branch}. Open a PR: ${url}")
     }

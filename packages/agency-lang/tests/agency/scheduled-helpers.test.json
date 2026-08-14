@@ -97,6 +97,36 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "chunkSplitsWithRemainder",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "chunkExactMultiple",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "chunkEmptyList",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "chunkSizeBelowOne",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "handlerApprovesGitFamily",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "handlerRejectsGithubEdit",
       "input": "",
       "expectedOutput": "\"ok\"",

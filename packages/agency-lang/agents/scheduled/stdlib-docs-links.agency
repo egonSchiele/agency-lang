@@ -1,6 +1,6 @@
 import { glob } from "std::shell"
-import { exit } from "std::system"
-import { pkgDir, repoRoot, stamp, pushBranch, handleScheduledInterrupt } from "./branch.agency"
+import { exit, setEnv } from "std::system"
+import { pkgDir, repoRoot, pushBranch, run, handleScheduledInterrupt } from "./branch.agency"
 
 /** @module
   Daily maintenance agent: keep the VitePress sidebar in sync with the
@@ -96,16 +96,17 @@ node main() {
     let config = ""
     if (cfgResult is success(cfgText)) {
       config = cfgText
-    } else {
-      print("Failed to read config.mts. Aborting.")
-      exit(1) with approve
+    }
+    if (cfgResult is failure(readErr)) {
+      print("Failed to read config.mts: ${readErr}. Aborting.")
+      exit(1)
     }
 
     // The links the sidebar actually declares today.
     const oldLinks = extractLinks(config)
     if (oldLinks.length == 0) {
       print("Guard failed: found no `link:` entries in config.mts (quote-format change?). Aborting.")
-      exit(1) with approve
+      exit(1)
     }
 
     // Every generated stdlib doc, as the sidebar slug it should be linked by.
@@ -115,9 +116,10 @@ node main() {
       for (docPath in paths) {
         genSlugs.push(toSlug(docPath))
       }
-    } else {
-      print("Failed to list generated stdlib docs. Aborting.")
-      exit(1) with approve
+    }
+    if (genResult is failure(globErr)) {
+      print("Failed to list generated stdlib docs: ${globErr}. Aborting.")
+      exit(1)
     }
 
     // Missing = a generated doc with no actual sidebar link.
@@ -168,19 +170,19 @@ ${config}"""
     // Any violation aborts loudly before writing or pushing.
     if (!newConfig.includes("defineConfig") || !newConfig.includes("sidebar")) {
       print("Guard failed: the rewrite lost its `defineConfig`/`sidebar` structure. Aborting.")
-      exit(1) with approve
+      exit(1)
     }
     const newLinks = extractLinks(newConfig)
     for (link in oldLinks) {
       if (!contains(newLinks, link)) {
         print("Guard failed: existing link ${link} was dropped by the rewrite. Aborting.")
-        exit(1) with approve
+        exit(1)
       }
     }
     for (slug in missing) {
       if (!contains(newLinks, slug)) {
         print("Guard failed: expected new link ${slug} is not present in the rewrite. Aborting.")
-        exit(1) with approve
+        exit(1)
       }
     }
     for (link in newLinks) {
@@ -188,7 +190,7 @@ ${config}"""
       const wasRequested = contains(missing, link)
       if (!wasPresent && !wasRequested) {
         print("Guard failed: the rewrite introduced an unexpected link ${link}. Aborting.")
-        exit(1) with approve
+        exit(1)
       }
     }
 
@@ -196,14 +198,25 @@ ${config}"""
     const writeResult = write("config.mts", newConfig, dir: vitepressDir) with approve
     if (writeResult is failure(err)) {
       print("Failed to write config.mts: ${err}. Aborting.")
-      exit(1) with approve
+      exit(1)
     }
+
+    // Prove the site still builds with the rewritten config before pushing.
+    // The link check above catches semantic damage; this catches syntactic
+    // damage (a config.mts that VitePress cannot even load). The runner
+    // starts without workspace deps — the action only npm-installs — so
+    // install first. corepack ships with Node and reads the pinned pnpm
+    // version from the root package.json's packageManager field; the env var
+    // stops it from prompting before downloading that pnpm.
+    setEnv("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0") with approve
+    run("corepack", ["pnpm", "install", "--frozen-lockfile"], root)
+    run("corepack", ["pnpm", "run", "build"], "${pkg}/docs/site")
 
     const commitMsg = "chore(docs): link ${missing.length} unlinked stdlib doc(s) in the sidebar"
     const paths = ["packages/agency-lang/docs/site/.vitepress/config.mts"]
     const url = pushBranch(root, branch, paths, commitMsg)
     if (url == "") {
-      print("No changes to push.")
+      print("Nothing pushed; the log above says why (no changes, or a protected branch).")
     } else {
       print("Pushed ${branch}. Open a PR: ${url}")
     }

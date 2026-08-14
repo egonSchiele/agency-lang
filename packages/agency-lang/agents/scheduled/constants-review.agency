@@ -37,7 +37,7 @@ node main() {
       consts = text
     } else {
       print("Failed to read lib/constants.ts. Aborting.")
-      exit(1) with approve
+      exit(1)
     }
 
     const branch = "chore/constants-review"
@@ -86,7 +86,7 @@ ${finding}
     const writeResult = write("constants-review.md", report, dir: reportDir) with approve
     if (writeResult is failure(err)) {
       print("Failed to write the report: ${err}. Aborting.")
-      exit(1) with approve
+      exit(1)
     }
 
     const url = pushBranch(
@@ -96,7 +96,7 @@ ${finding}
       "chore: centralize magic constants into lib/constants.ts",
     )
     if (url == "") {
-      print("No changes to push.")
+      print("Nothing pushed; the log above says why (no changes, or a protected branch).")
     } else {
       print("Pushed ${branch}. Open a PR: ${url}")
     }

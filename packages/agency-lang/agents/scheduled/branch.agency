@@ -1,6 +1,8 @@
 import { exec } from "std::shell"
 import { mkdir } from "std::fs"
 import { exit, env } from "std::system"
+import { now, format } from "std::date"
+import { gitLog, gitAdd, gitCommit, gitDiff } from "std::git"
 
 /** @module
   Shared helpers for the scheduled maintenance agents in this directory.
@@ -37,13 +39,20 @@ export static const BOT_NAME = "agency-scheduler[bot]"
   means failure (not, say, `git diff --quiet`, whose exit code is a signal,
   not an error).
 */
-def run(command: string, args: string[], cwd: string) {
+export def run(command: string, args: string[], cwd: string) {
+  """
+  Run a shell command, printing stderr and exiting non-zero if it fails.
+
+  @param command - The executable to run
+  @param args - Arguments, passed without shell interpretation
+  @param cwd - Working directory ("" for the process cwd)
+  """
   const result = exec(command, args, cwd: cwd) with approve
   if (result.exitCode != 0) {
     const joined = args.join(" ")
     print("Command failed (exit ${result.exitCode}): ${command} ${joined}")
     print(result.stderr)
-    exit(1) with approve
+    exit(1)
   }
   return result
 }
@@ -61,11 +70,10 @@ export def pkgDir(): string {
   return "${repoRoot()}/packages/agency-lang"
 }
 
-/** A UTC timestamp suffix suitable for report headers, e.g. `20260713-141500`. */
+/** A UTC timestamp for report headers, e.g. `2026-08-14T03:12:00.123+00:00`. */
 export def stamp(): string {
-  """Return a UTC timestamp like `20260713-141500` for use in report headers."""
-  const stampResult = run("date", ["-u", "+%Y%m%d-%H%M%S"], "")
-  return stampResult.stdout.trim()
+  """Return the current UTC time as an ISO 8601 string, for report headers."""
+  return format(now(), "UTC")
 }
 
 /** Create a directory (and parents), aborting loudly on failure. */
@@ -74,7 +82,7 @@ export def ensureDir(dir: string) {
   const mkdirResult = mkdir(dir) with approve
   if (mkdirResult is failure(err)) {
     print("Failed to create directory ${dir}: ${err}")
-    exit(1) with approve
+    exit(1)
   }
 }
 
@@ -97,15 +105,18 @@ export def remoteTipAuthor(root: string, branch: string): string {
   @param root - Absolute path to the repo root
   @param branch - Branch name on origin
   """
+  // `git fetch` has no std::git equivalent, so it stays on exec.
   const fetched = exec("git", ["-C", root, "fetch", "origin", branch], cwd: "") with approve
   if (fetched.exitCode != 0) {
     return ""
   }
-  const author = exec("git", ["-C", root, "log", "-1", "--format=%an", "FETCH_HEAD"], cwd: "") with approve
-  if (author.exitCode != 0) {
-    return ""
+  const tip = try gitLog(n: 1, ref: "FETCH_HEAD", cwd: root)
+  if (tip is success(log)) {
+    if (log.commits.length > 0) {
+      return log.commits[0].author
+    }
   }
-  return author.stdout.trim()
+  return ""
 }
 
 /**
@@ -136,28 +147,43 @@ export def pushBranch(
     return ""
   }
 
+  // `git config` and `checkout -B` (create-or-reset) have no std::git
+  // equivalent (gitSwitch's create fails on an existing branch), so both
+  // stay on exec. Everything std::git does cover goes through its typed
+  // tools, whose std::git::* effects the shared handler approves as a family.
   run("git", ["-C", root, "config", "user.name", BOT_NAME], "")
   run("git", ["-C", root, "config", "user.email", "agency-scheduler@users.noreply.github.com"], "")
-  // -B, not -b: the branch is fixed, so it may already exist locally.
   run("git", ["-C", root, "checkout", "-B", branch], "")
 
-  const addArgs = ["-C", root, "add"]
-  for (path in paths) {
-    addArgs.push(path)
-  }
-  run("git", addArgs, "")
-
-  // `git diff --cached --quiet` exits 0 when the index is empty and 1 when
-  // there are staged changes. A non-zero exit here is EXPECTED, not a failure,
-  // so it must NOT go through run(). An empty index means the generated output
-  // already matches main — skip cleanly rather than pushing an empty commit.
-  const staged = exec("git", ["-C", root, "diff", "--cached", "--quiet"], cwd: "") with approve
-  if (staged.exitCode == 0) {
-    print("No changes to commit; nothing to push.")
-    return ""
+  const added = try gitAdd(paths: paths, cwd: root)
+  if (added is failure(addErr)) {
+    print("Failed to stage ${paths.join(", ")}: ${addErr}")
+    exit(1)
   }
 
-  run("git", ["-C", root, "commit", "-m", commitMsg], "")
+  // An empty staged diff means the generated output already matches main —
+  // skip cleanly rather than pushing an empty commit. gitDiff fails loudly on
+  // a real git error, so an error can never be mistaken for "no changes"
+  // (the ambiguity `git diff --cached --quiet` exit codes had).
+  const staged = try gitDiff(staged: true, cwd: root)
+  if (staged is failure(diffErr)) {
+    print("Failed to inspect the staged changes: ${diffErr}")
+    exit(1)
+  }
+  if (staged is success(diff)) {
+    if (diff.files.length == 0) {
+      print("No changes to commit; nothing to push.")
+      return ""
+    }
+  }
+
+  const committed = try gitCommit(commitMsg, cwd: root)
+  if (committed is failure(commitErr)) {
+    print("Failed to commit: ${commitErr}")
+    exit(1)
+  }
+
+  // `git push` has no std::git equivalent, so it stays on exec.
   run("git", ["-C", root, "push", "--force", "origin", branch], "")
 
   const repo = env("GITHUB_REPOSITORY")
@@ -225,12 +251,42 @@ export def truncationNote(processed: number, total: number, label: string): stri
   return "> **Truncated:** reviewed ${processed} of ${total} ${label} before the budget tripped. The rest were not examined.\n"
 }
 
+/** Split a list into consecutive chunks of at most `size` items. */
+export def chunk(items: string[], size: number): string[][] {
+  """
+  Split a list into consecutive chunks of at most `size` items. The last chunk
+  may be shorter. A size below 1 is treated as 1.
+
+  Used as a simple concurrency pool: `fork` one chunk at a time, so at most
+  `size` branches run concurrently and the parent regains control (to update
+  counters and saveDraft) at every chunk boundary.
+
+  @param items - The list to split
+  @param size - Maximum items per chunk
+  """
+  let capped = size
+  if (capped < 1) { capped = 1 }
+  let out: string[][] = []
+  let current: string[] = []
+  for (item in items) {
+    current.push(item)
+    if (current.length >= capped) {
+      out.push(current)
+      current = []
+    }
+  }
+  if (current.length > 0) {
+    out.push(current)
+  }
+  return out
+}
+
 /**
   The shared handler every scheduled agent wraps its node body in, via
   `handle { ... } with handleScheduledInterrupt`. (A node definition cannot
   take a trailing `with` clause — the handler must attach to a handle block.)
 
-  Two decisions live here:
+  The decisions that live here:
 
   - `std::edit` under `.github/` is rejected: opening a PR runs that branch's
     workflows with repository secrets BEFORE the review finishes, so it is the
@@ -242,9 +298,15 @@ export def truncationNote(processed: number, total: number, label: string): stri
     the guard returns success(draft) when the block saved one, and the plain
     failure otherwise. Rejecting (not approving) is deliberate — approving
     would grant more budget and defeat the cap.
+  - The `std::git::*` family (the `Git` effect set in `std::git`) is approved
+    wholesale: these are the agents' own deterministic git operations, never
+    reachable by the model (it holds no git tools).
+  - `std::exit` is approved, so agent code can call `exit(1)` bare — without
+    a handler an exit interrupt would surface unhandled (still non-zero, but
+    with a confusing "unhandled interrupt" message instead of a clean exit).
 
-  Everything else passes: effectful calls in the agents discharge themselves
-  with `with approve` at the call site.
+  Everything else passes: remaining effectful calls in the agents discharge
+  themselves with `with approve` at the call site.
 */
 export def handleScheduledInterrupt(i) {
   if (i.effect == "std::edit") {
@@ -256,6 +318,12 @@ export def handleScheduledInterrupt(i) {
   }
   if (i.effect == "std::guard") {
     return reject()
+  }
+  if (i.effect.startsWith("std::git::")) {
+    return approve()
+  }
+  if (i.effect == "std::exit") {
+    return approve()
   }
   return pass()
 }

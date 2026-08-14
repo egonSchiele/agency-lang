@@ -83,6 +83,19 @@ pnpm test:run lib/cli/schedule/backends/github.snapshot.test.ts
 
 Inspect the diff to confirm only the SHA and tag changed.
 
+### 5.5. Re-pin the live workflow files
+
+`pinnedActions.ts` controls workflows generated in *future*. The workflows that
+actually run on a schedule already exist and hold their own copy of the SHA:
+
+```bash
+grep -rln "run-agency-action@" ../../.github/workflows/
+```
+
+Update the `uses:` line and its trailing `# vX.Y.Z` comment in each. Skipping
+this leaves the scheduled jobs on the old version while every other file says
+they were upgraded.
+
 ### 6. Verify
 
 ```bash

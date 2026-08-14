@@ -1,0 +1,329 @@
+import { exec } from "std::shell"
+import { mkdir } from "std::fs"
+import { exit, env } from "std::system"
+import { now, format } from "std::date"
+import { gitLog, gitAdd, gitCommit, gitDiff } from "std::git"
+
+/** @module
+  Shared helpers for the scheduled maintenance agents in this directory.
+
+  These agents run non-interactively on GitHub Actions (see the generated
+  `.github/workflows/*.yml`), so every effectful call is discharged with
+  `with approve`. Safety comes from the workflow, not from in-agent prompting:
+  a least-privilege `GITHUB_TOKEN` (`contents: write` only — these agents do
+  not open pull requests), triggers that take no attacker-controlled input
+  (`schedule` + `workflow_dispatch` only), and the fact that every change lands
+  on a branch a human reviews before merging.
+
+  Failures are loud on purpose. `run()` aborts the whole process with a
+  non-zero exit code the moment any shell command fails, so a broken run shows
+  up as a red workflow instead of a green one that quietly did nothing.
+
+  On force-pushing: `CLAUDE.md` says never to force push. That rule protects
+  shared history. Each agent owns one branch whose entire content it
+  regenerates every run, and `pushBranch` refuses to push when the remote tip
+  is not the bot's own commit — so a force-push can overwrite the agent's
+  previous output but never a human's work.
+*/
+
+export static const BOT_NAME = "agency-scheduler[bot]"
+
+/**
+  Run a shell command and abort loudly if it fails.
+
+  `std::shell`'s `exec` does NOT throw on a non-zero exit — it resolves with
+  `{stdout, stderr, exitCode}`. Left unchecked, a failed `git push` would let
+  the agent march on and report success. So every git call goes through here:
+  on a non-zero exit we print the command and its stderr, then `exit(1)` to
+  fail the workflow. Only use this for commands whose non-zero exit genuinely
+  means failure (not, say, `git diff --quiet`, whose exit code is a signal,
+  not an error).
+*/
+export def run(command: string, args: string[], cwd: string) {
+  """
+  Run a shell command, printing stderr and exiting non-zero if it fails.
+
+  @param command - The executable to run
+  @param args - Arguments, passed without shell interpretation
+  @param cwd - Working directory ("" for the process cwd)
+  """
+  const result = exec(command, args, cwd: cwd) with approve
+  if (result.exitCode != 0) {
+    const joined = args.join(" ")
+    print("Command failed (exit ${result.exitCode}): ${command} ${joined}")
+    print(result.stderr)
+    exit(1)
+  }
+  return result
+}
+
+/** Absolute path to the git repo root of the checkout. */
+export def repoRoot(): string {
+  """Return the absolute path to the root of the checked-out git repository."""
+  const rootResult = run("git", ["rev-parse", "--show-toplevel"], "")
+  return rootResult.stdout.trim()
+}
+
+/** Absolute path to the agency-lang package inside the checkout. */
+export def pkgDir(): string {
+  """Return the absolute path to `packages/agency-lang` inside the checkout."""
+  return "${repoRoot()}/packages/agency-lang"
+}
+
+/** A UTC timestamp for report headers, e.g. `2026-08-14T03:12:00.123+00:00`. */
+export def stamp(): string {
+  """Return the current UTC time as an ISO 8601 string, for report headers."""
+  return format(now(), "UTC")
+}
+
+/** Create a directory (and parents), aborting loudly on failure. */
+export def ensureDir(dir: string) {
+  """Create `dir` and any missing parents, aborting the run if it cannot be created."""
+  const mkdirResult = mkdir(dir) with approve
+  if (mkdirResult is failure(err)) {
+    print("Failed to create directory ${dir}: ${err}")
+    exit(1)
+  }
+}
+
+/**
+  Author of the remote branch's tip commit, or "" when the branch does not
+  exist remotely. A failed fetch means "no such branch", which is the normal
+  first-run case — so it must NOT go through `run()`, which aborts on failure.
+
+  Known conflation: a transient network/auth failure also returns "", which
+  arms a force-push. The window is tolerable — the push moments later needs
+  the same network and credentials working, and destroying work additionally
+  requires a human tip to exist at that exact moment. If this ever needs
+  closing, `git ls-remote --heads origin <branch>` distinguishes "absent"
+  from "unreachable" cheaply.
+*/
+export def remoteTipAuthor(root: string, branch: string): string {
+  """
+  Return the author name of a remote branch's tip commit, or "" if the branch does not exist.
+
+  @param root - Absolute path to the repo root
+  @param branch - Branch name on origin
+  """
+  // `git fetch` has no std::git equivalent, so it stays on exec.
+  const fetched = exec("git", ["-C", root, "fetch", "origin", branch], cwd: "") with approve
+  if (fetched.exitCode != 0) {
+    return ""
+  }
+  const tip = try gitLog(n: 1, ref: "FETCH_HEAD", cwd: root)
+  if (tip is success(log)) {
+    if (log.commits.length > 0) {
+      return log.commits[0].author
+    }
+  }
+  return ""
+}
+
+/**
+  Commit the given files onto the agent's fixed branch and force-push it.
+  Returns the compare URL a human clicks to open a PR, or "" when there was
+  nothing to commit or the push was skipped to protect human commits.
+
+  Only the files in `paths` are staged (never `git add -A`) so a stray build
+  artifact the runner produced cannot leak into the branch.
+*/
+export def pushBranch(
+  root: string,
+  branch: string,
+  paths: string[],
+  commitMsg: string,
+): string {
+  """
+  Commit specific files onto a fixed branch and force-push; returns the compare URL, or "" if nothing changed or the push was skipped.
+
+  @param root - Absolute path to the repo root
+  @param branch - The agent's fixed branch name
+  @param paths - Repo-root-relative paths to stage and commit
+  @param commitMsg - Commit message
+  """
+  const tipAuthor = remoteTipAuthor(root, branch)
+  if (!shouldForcePush(tipAuthor)) {
+    print("Branch ${branch} has commits by ${tipAuthor}; refusing to force-push over them. Merge or delete it to re-arm this agent.")
+    return ""
+  }
+
+  // `git config` and `checkout -B` (create-or-reset) have no std::git
+  // equivalent (gitSwitch's create fails on an existing branch), so both
+  // stay on exec. Everything std::git does cover goes through its typed
+  // tools, whose std::git::* effects the shared handler approves as a family.
+  run("git", ["-C", root, "config", "user.name", BOT_NAME], "")
+  run("git", ["-C", root, "config", "user.email", "agency-scheduler@users.noreply.github.com"], "")
+  run("git", ["-C", root, "checkout", "-B", branch], "")
+
+  const added = try gitAdd(paths: paths, cwd: root)
+  if (added is failure(addErr)) {
+    print("Failed to stage ${paths.join(", ")}: ${addErr}")
+    exit(1)
+  }
+
+  // An empty staged diff means the generated output already matches main —
+  // skip cleanly rather than pushing an empty commit. gitDiff fails loudly on
+  // a real git error, so an error can never be mistaken for "no changes"
+  // (the ambiguity `git diff --cached --quiet` exit codes had).
+  const staged = try gitDiff(staged: true, cwd: root)
+  if (staged is failure(diffErr)) {
+    print("Failed to inspect the staged changes: ${diffErr}")
+    exit(1)
+  }
+  if (staged is success(diff)) {
+    if (diff.files.length == 0) {
+      print("No changes to commit; nothing to push.")
+      return ""
+    }
+  }
+
+  const committed = try gitCommit(commitMsg, cwd: root)
+  if (committed is failure(commitErr)) {
+    print("Failed to commit: ${commitErr}")
+    exit(1)
+  }
+
+  // `git push` has no std::git equivalent, so it stays on exec.
+  run("git", ["-C", root, "push", "--force", "origin", branch], "")
+
+  const repo = env("GITHUB_REPOSITORY")
+  if (repo == null) {
+    return ""
+  }
+  return compareUrl(repo, branch)
+}
+
+/** The "open a PR from this branch" link a human clicks after a run. */
+export def compareUrl(repo: string, branch: string): string {
+  """
+  Build the GitHub compare URL for a pushed branch. Returns "" when repo is empty.
+
+  @param repo - owner/name, as GitHub Actions sets GITHUB_REPOSITORY
+  @param branch - the branch that was pushed
+  """
+  if (repo == "") { return "" }
+  return "https://github.com/${repo}/compare/${branch}?expand=1"
+}
+
+/** True when an edit target lies under `.github/`, including via `../`. */
+export def isGithubPath(dir: string, filename: string): boolean {
+  """
+  Report whether a std::edit target lands under .github/.
+
+  A substring test rather than a path resolution: the `.github/` segment is
+  present whether the model writes the path directly or reaches it by
+  traversal, so no joining or `..` collapsing is needed. It can only
+  over-reject, which fails closed.
+
+  @param dir - The std::edit payload's dir
+  @param filename - The std::edit payload's filename
+  """
+  const target = "${dir}/${filename}"
+  return target.includes(".github/")
+}
+
+/** True when force-pushing the agent's branch cannot destroy human work. */
+export def shouldForcePush(tipAuthor: string): boolean {
+  """
+  Decide whether to force-push, given the author of the remote branch tip.
+
+  "" means the branch does not exist remotely yet. Any author other than the
+  bot means a human has pushed to it, so the run must leave it alone.
+
+  @param tipAuthor - Author name of the remote branch's tip commit, or ""
+  """
+  return tipAuthor == "" || tipAuthor == BOT_NAME
+}
+
+/** A report banner naming how much of the work a tripped budget cut short. */
+export def truncationNote(processed: number, total: number, label: string): string {
+  """
+  Build a warning banner when a run processed fewer items than it found. Returns "" for a complete run.
+
+  Without this, a run cut short by its budget produces a short report that is
+  indistinguishable from a clean bill of health.
+
+  @param processed - How many items the run actually got through
+  @param total - How many items it found to do
+  @param label - Plural noun for the items, e.g. "docs"
+  """
+  if (processed >= total) { return "" }
+  return "> **Truncated:** reviewed ${processed} of ${total} ${label} before the budget tripped. The rest were not examined.\n"
+}
+
+/** Split a list into consecutive chunks of at most `size` items. */
+export def chunk(items: string[], size: number): string[][] {
+  """
+  Split a list into consecutive chunks of at most `size` items. The last chunk
+  may be shorter. A size below 1 is treated as 1.
+
+  Used as a simple concurrency pool: `fork` one chunk at a time, so at most
+  `size` branches run concurrently and the parent regains control (to update
+  counters and saveDraft) at every chunk boundary.
+
+  @param items - The list to split
+  @param size - Maximum items per chunk
+  """
+  let capped = size
+  if (capped < 1) { capped = 1 }
+  let out: string[][] = []
+  let current: string[] = []
+  for (item in items) {
+    current.push(item)
+    if (current.length >= capped) {
+      out.push(current)
+      current = []
+    }
+  }
+  if (current.length > 0) {
+    out.push(current)
+  }
+  return out
+}
+
+/**
+  The shared handler every scheduled agent wraps its node body in, via
+  `handle { ... } with handleScheduledInterrupt`. (A node definition cannot
+  take a trailing `with` clause — the handler must attach to a handle block.)
+
+  The decisions that live here:
+
+  - `std::edit` under `.github/` is rejected: opening a PR runs that branch's
+    workflows with repository secrets BEFORE the review finishes, so it is the
+    one edit that acts before the review gate closes. All other edits are
+    approved — they land in the diff a human reviews.
+  - `std::guard` trips are rejected. CI runs `agency run` with no policy flag,
+    so an unadjudicated trip would surface unhandled and kill the process with
+    no salvage. reject() routes the trip into the salvage pipeline instead:
+    the guard returns success(draft) when the block saved one, and the plain
+    failure otherwise. Rejecting (not approving) is deliberate — approving
+    would grant more budget and defeat the cap.
+  - The `std::git::*` family (the `Git` effect set in `std::git`) is approved
+    wholesale: these are the agents' own deterministic git operations, never
+    reachable by the model (it holds no git tools).
+  - `std::exit` is approved, so agent code can call `exit(1)` bare — without
+    a handler an exit interrupt would surface unhandled (still non-zero, but
+    with a confusing "unhandled interrupt" message instead of a clean exit).
+
+  Everything else passes: remaining effectful calls in the agents discharge
+  themselves with `with approve` at the call site.
+*/
+export def handleScheduledInterrupt(i) {
+  if (i.effect == "std::edit") {
+    if (isGithubPath(i.data.dir, i.data.filename)) {
+      print("Rejected edit under .github/: ${i.data.dir}/${i.data.filename}")
+      return reject()
+    }
+    return approve()
+  }
+  if (i.effect == "std::guard") {
+    return reject()
+  }
+  if (i.effect.startsWith("std::git::")) {
+    return approve()
+  }
+  if (i.effect == "std::exit") {
+    return approve()
+  }
+  return pass()
+}

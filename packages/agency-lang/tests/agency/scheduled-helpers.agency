@@ -1,7 +1,11 @@
-// Pure-logic tests for the scheduled stdlib-docs-links agent's helpers.
-// No LLM calls: stripFences and extractLinks are deterministic string
-// functions, so each node self-checks and returns "ok" on success.
+// Pure-logic tests for the scheduled agents' helpers.
+// No LLM calls: each node self-checks and returns "ok" on success, or
+// "bad:<value>" naming what it saw instead. The handler and guard-trip
+// nodes exercise interrupt-level behavior with raised effects and a fake
+// clock, still without any LLM.
+import test { _advanceTime } from "std::date"
 import { stripFences, extractLinks } from "../../agents/scheduled/stdlib-docs-links.agency"
+import { compareUrl, isGithubPath, shouldForcePush, truncationNote, chunk, handleScheduledInterrupt } from "../../agents/scheduled/branch.agency"
 
 node stripPlain() {
   const got = stripFences("hello world")
@@ -41,4 +45,184 @@ node extractNoLinks() {
   const links = extractLinks("no links here\njust text")
   if (links.length == 0) { return "ok" }
   return "bad:${links.length}"
+}
+
+// ---- branch.agency pure helpers ----
+
+node compareUrlBuilds() {
+  const got = compareUrl("egonSchiele/agency-lang", "chore/docs-freshness")
+  if (got == "https://github.com/egonSchiele/agency-lang/compare/chore/docs-freshness?expand=1") { return "ok" }
+  return "bad:${got}"
+}
+
+node compareUrlEmptyRepo() {
+  // GITHUB_REPOSITORY is unset outside Actions; callers must get "" not a broken URL.
+  const got = compareUrl("", "chore/docs-freshness")
+  if (got == "") { return "ok" }
+  return "bad:${got}"
+}
+
+node githubPathDirect() {
+  const got = isGithubPath(".github/workflows", "ci.yml")
+  if (got) { return "ok" }
+  return "bad:false"
+}
+
+node githubPathTraversal() {
+  // The whole reason this is a substring test: traversal must not slip past.
+  const got = isGithubPath("packages/agency-lang/docs/dev", "../../../../.github/workflows/ci.yml")
+  if (got) { return "ok" }
+  return "bad:false"
+}
+
+node githubPathAllowsDocs() {
+  const got = isGithubPath("packages/agency-lang/docs/dev", "interrupts.md")
+  if (!got) { return "ok" }
+  return "bad:true"
+}
+
+// shouldForcePush is a PURE decision function: it looks at an author string
+// and returns a boolean. Nothing in these nodes touches git — no fetch, no
+// push — so a failing test can only ever print "bad:...", never move a branch.
+
+node forcePushWhenBotTip() {
+  const got = shouldForcePush("agency-scheduler[bot]")
+  if (got) { return "ok" }
+  return "bad:false"
+}
+
+node forcePushWhenNoRemoteBranch() {
+  // "" means the branch does not exist on the remote yet.
+  const got = shouldForcePush("")
+  if (got) { return "ok" }
+  return "bad:false"
+}
+
+node noForcePushOverHuman() {
+  const got = shouldForcePush("Aditya Bhargava")
+  if (!got) { return "ok" }
+  return "bad:true"
+}
+
+node truncationNoteWhenShort() {
+  const got = truncationNote(41, 60, "docs")
+  if (got.includes("41 of 60 docs")) { return "ok" }
+  return "bad:${got}"
+}
+
+node truncationNoteWhenComplete() {
+  const got = truncationNote(60, 60, "docs")
+  if (got == "") { return "ok" }
+  return "bad:${got}"
+}
+
+node chunkSplitsWithRemainder() {
+  const got = chunk(["a", "b", "c", "d", "e"], 2)
+  if (got.length != 3) { return "bad:len:${got.length}" }
+  if (got[0].join(",") != "a,b") { return "bad:0:${got[0].join(",")}" }
+  if (got[1].join(",") != "c,d") { return "bad:1:${got[1].join(",")}" }
+  if (got[2].join(",") != "e") { return "bad:2:${got[2].join(",")}" }
+  return "ok"
+}
+
+node chunkExactMultiple() {
+  const got = chunk(["a", "b", "c", "d"], 2)
+  if (got.length != 2) { return "bad:len:${got.length}" }
+  if (got[1].join(",") != "c,d") { return "bad:1:${got[1].join(",")}" }
+  return "ok"
+}
+
+node chunkEmptyList() {
+  const got = chunk([], 4)
+  if (got.length == 0) { return "ok" }
+  return "bad:${got.length}"
+}
+
+node chunkSizeBelowOne() {
+  // A size below 1 must not loop forever or drop items; it clamps to 1.
+  const got = chunk(["a", "b"], 0)
+  if (got.length != 2) { return "bad:len:${got.length}" }
+  if (got[0].join(",") != "a") { return "bad:0:${got[0].join(",")}" }
+  return "ok"
+}
+
+// ---- handler wiring: the interrupt-level behavior, not just the predicate ----
+// User code can raise a std:: effect directly (see tests/agency/raiseStatement.agency),
+// so these exercise handleScheduledInterrupt end to end with no LLM and no real files.
+
+def fakeEdit(dir: string, filename: string): string {
+  raise std::edit("apply?", { dir: dir, filename: filename, edits: [], before: "", after: "" })
+  return "applied"
+}
+
+node handlerRejectsGithubEdit() {
+  handle {
+    const r = fakeEdit(".github/workflows", "ci.yml")
+    if (isFailure(r)) { return "ok" }
+    return "bad:${r}"
+  } with handleScheduledInterrupt
+}
+
+node handlerRejectsTraversalEdit() {
+  handle {
+    const r = fakeEdit("packages/agency-lang/docs/dev", "../../../../.github/workflows/ci.yml")
+    if (isFailure(r)) { return "ok" }
+    return "bad:${r}"
+  } with handleScheduledInterrupt
+}
+
+node handlerApprovesDocsEdit() {
+  handle {
+    const r = fakeEdit("packages/agency-lang/docs/dev", "interrupts.md")
+    if (r == "applied") { return "ok" }
+    return "bad:${r}"
+  } with handleScheduledInterrupt
+}
+
+// The agents' own git operations go through std::git tools, whose
+// std::git::* effects the handler approves as a family (the model never
+// holds git tools, so this can only ever approve deterministic agent code).
+def fakeGitCommit(): string {
+  raise std::git::commit("commit?", { cwd: "/tmp/nowhere", message: "msg" })
+  return "committed"
+}
+
+node handlerApprovesGitFamily() {
+  handle {
+    const r = fakeGitCommit()
+    if (r == "committed") { return "ok" }
+    return "bad:${r}"
+  } with handleScheduledInterrupt
+}
+
+// ---- guard trips under the shared handler (fakeClock tests) ----
+// CI runs `agency run` with no policy flag, so an unadjudicated trip would
+// exit non-zero with no salvage. These prove the handler's reject() converts
+// a trip into success(draft) when a draft was saved, and a plain failure
+// when none was — the two paths the agents rely on.
+
+node guardTripSalvagesDraft() {
+  handle {
+    const r = guard(label: "salvage", time: 100ms) {
+      saveDraft("partial")
+      _advanceTime(200)
+      return "finished"
+    }
+    if (r is success(v)) {
+      if (v == "partial") { return "ok" }
+      return "bad:completed:${v}"
+    }
+    return "bad:failure"
+  } with handleScheduledInterrupt
+}
+
+node guardTripWithoutDraftFails() {
+  handle {
+    const r = guard(label: "no-draft", time: 100ms) {
+      _advanceTime(200)
+      return "finished"
+    }
+    if (isFailure(r)) { return "ok" }
+    return "bad:${r.value}"
+  } with handleScheduledInterrupt
 }

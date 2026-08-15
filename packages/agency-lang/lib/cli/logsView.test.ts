@@ -69,6 +69,29 @@ describe("logsView routing", () => {
     expect(calls.viewed).toEqual([{ file: "-", follow: false }]);
   });
 
+  it("passes --dataset and --checklist through to the file viewer", async () => {
+    const file = writeMultiTraceStatelog(tmpDir);
+    let seenOpts: { dataset?: string; checklist?: string } | undefined;
+    await logsView([file], { dataset: "my-ds", checklist: "cl.json" }, {
+      viewFile: async (_file, opts) => { seenOpts = { dataset: opts.dataset, checklist: opts.checklist }; },
+    });
+    expect(seenOpts).toEqual({ dataset: "my-ds", checklist: "cl.json" });
+  });
+
+  it("passes the promotion base to the explorer for a run directory", async () => {
+    const runDir = writeGradedRun(tmpDir);
+    let seenPromotion: { datasetDir: string; checklistFile?: string } | undefined;
+    await logsView([runDir], { dataset: "my-ds", checklist: "cl.json" }, {
+      explorer: async (options) => {
+        seenPromotion = options.promotion === undefined
+          ? undefined
+          : { datasetDir: options.promotion.datasetDir, checklistFile: options.promotion.checklistFile };
+      },
+    });
+    expect(seenPromotion?.datasetDir).toBe(path.resolve("my-ds"));
+    expect(seenPromotion?.checklistFile).toBe(path.resolve("cl.json"));
+  });
+
   it("a sole regular file with --follow goes straight to the viewer, even when empty", async () => {
     const empty = path.join(tmpDir, "empty.jsonl");
     fs.writeFileSync(empty, "");

@@ -13,9 +13,12 @@ agency eval grade <runDir> [--graders <file>] [-o <path>]
 agency eval logs <runDir> [--input <id>] [-f]
 agency eval optimize <file>[:<node>] [--inputs <file|dir>] [--goal <text>] [--graders <file>] [--validation-inputs <file|dir> | --validation-split <ratio>]
 agency eval extract <file>
-agency label ingest <source> --source <name> [--format run|files|json] [--task <text>]
-agency label [--checklist <file>] [--store <dir>] [--annotator <id>]
+agency label ingest <source> --source <name> [--format run|files|json|statelog] [--trace <id>] [--output <trace>=print:<index>] [--task <text>]
+agency label [--checklist <file>] [--dataset <dir>] [--annotator <id>]
 ```
+
+The collection of judged outputs is a **dataset** (`--dataset`, or `eval.dataset`
+in `agency.json`; `--store`/`eval.labelStore` still work as deprecated aliases).
 
 `agency label` also answers to `agency eval label`, if you prefer to keep the
 whole family under one name.
@@ -342,16 +345,41 @@ agency label --checklist news.json
 A record is one thing you judge. It holds named pieces of text, usually a `task`
 and an `output`.
 
-`ingest` reads three kinds of source:
+`ingest` reads four kinds of source:
 
 | Source | Each record is |
 |---|---|
 | A run directory | one input's final output, together with its task |
 | A directory of files | one whole file |
 | A `.json` file holding an array of strings | one element of the array |
+| A statelog `.jsonl` file | one chosen trace, named with `--trace` |
 
-It guesses which kind you meant. Pass `--format run`, `--format files` or
-`--format json` when you want to say so yourself.
+It guesses which kind you meant. Pass `--format run`, `--format files`,
+`--format json`, or `--format statelog` when you want to say so yourself.
+
+### Promoting a statelog trace
+
+A statelog usually holds many traces, so you name the one(s) you want with a
+repeatable `--trace <id>`:
+
+```bash
+agency label ingest run.jsonl --source agent-v1 --trace rpGXbww2gfHaZDLBL8Z2H
+```
+
+The trace's output is resolved by precedence: an `evalOutput()` value, else the
+entry node's return value, else one of its `print`/`printJSON` values. When a
+trace has several printed values and no recorded output, pick one with a keyed
+`--output <trace-id>=print:<index>` (headless never guesses):
+
+```bash
+agency label ingest run.jsonl --source agent-v1 --trace T1 --output T1=print:2
+```
+
+Running `--trace` with an unknown id, or `--output` for a trace you did not
+request, is an error that lists the available traces. A statelog with any
+unparseable line fails the whole ingest — a dataset must never be built from a
+partially read trace. (You can also do all of this interactively from the log
+viewer's `l` key; see [Viewing logs](/cli/logs#labeling-a-trace-from-the-viewer).)
 
 A directory holds one record per file. Add `--recursive` to descend into
 subdirectories. There is no pattern matching, so point it at a directory that
@@ -446,7 +474,8 @@ you back where you stopped.
 ### Where your answers go
 
 Everything lives in one directory, `labels/` by default. Set another with
-`--store`, or with `eval.labelStore` in `agency.json`.
+`--dataset`, or with `eval.dataset` in `agency.json` (`--store` /
+`eval.labelStore` remain as deprecated aliases).
 
 | File | Holds |
 |---|---|

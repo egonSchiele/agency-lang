@@ -28,6 +28,10 @@ export class TreeView implements View {
     roots: TreeNode[],
     private readonly thresholds: ViewerThresholds,
     private readonly viewport: Viewport,
+    /** When true, `l` promotes the focused trace into a dataset instead of
+     *  expanding the focused node (Right/Enter still expand). Off for remote or
+     *  stdin sources where there is no local file to promote. */
+    private readonly promotionEnabled: boolean = false,
   ) {
     this.state = {
       roots,
@@ -50,6 +54,11 @@ export class TreeView implements View {
     if (fmt === "d") {
       const id = this.cursorRealId();
       if (id !== undefined) return { kind: "openDetail", spanId: id };
+    }
+    // `l` promotes the focused trace when a dataset is configured. Right/Enter
+    // still expand, so no expand key is lost.
+    if (fmt === "l" && this.promotionEnabled) {
+      return { kind: "promoteTrace", traceId: this.cursorTraceId() };
     }
     const paged = this.paginate(ev, viewport);
     if (paged !== undefined) {
@@ -113,6 +122,7 @@ export class TreeView implements View {
     return [
       "t — timeline views (flame → by-name)",
       "d — full details of the focused span",
+      ...(this.promotionEnabled ? ["l — label this trace (promote into the dataset)"] : []),
       "",
       ...treeHelpLines(),
     ];

@@ -23,7 +23,7 @@ export const HELP_GROUPS: BindingGroup[] = [
   {
     heading: "Expand",
     bindings: [
-      { keys: "l / Right / Enter", action: "expand — leaves inline their JSON payload" },
+      { keys: "Right / Enter", action: "expand — leaves inline their JSON payload" },
       { keys: "h / Left", action: "collapse or go to parent" },
       { keys: "e / E", action: "expand / collapse current node and everything below it" },
       { keys: "z / Z", action: "expand-all / collapse-all" },

@@ -17,6 +17,7 @@ export type ViewAction =
   | { kind: "back" }
   | { kind: "promptLine"; label: string; onResult: (text: string) => void }
   | { kind: "copy"; text: string }
+  | { kind: "promoteTrace"; traceId: string }
   | { kind: "none" };
 
 export type View = {

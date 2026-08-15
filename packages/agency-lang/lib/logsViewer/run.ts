@@ -21,6 +21,12 @@ import { OccurrencesView } from "./views/occurrencesView.js";
 import { TreeView } from "./views/treeView.js";
 import { makeViewStack, type ViewAction, type Viewport } from "./views/view.js";
 import type { TreeNode } from "./types.js";
+import { createLabelingHost } from "../eval/label/labelingHost.js";
+import { projectArtifactField } from "../eval/label/project.js";
+import type { PrintCandidate, TaskChoice } from "../eval/label/load/statelog.js";
+import type { Annotator } from "../eval/label/types.js";
+import type { EventEnvelope } from "../statelog/wireTypes.js";
+import { promoteFocusedTrace, promotionServices, type PromotionUI } from "./promoteTrace.js";
 
 export type RunViewerOpts = {
   // The statelog text. Optional when `followPath` is given — the shell
@@ -46,9 +52,40 @@ export type RunViewerOpts = {
   // resolution tells the host whether the user backed out or quit.
   embedded?: boolean;
   thresholds?: ViewerThresholds;
+  // Enables the tree `l` action: promote the focused trace into this dataset
+  // and label it. Undefined for remote or stdin sources (no local file).
+  promotion?: PromotionLaunch;
+};
+
+/** What the shell needs to promote a focused trace into a dataset. */
+export type PromotionLaunch = {
+  datasetDir: string;
+  checklistFile?: string;
+  sourcePath: string;
+  annotator: Annotator;
 };
 
 export type ViewerResolution = "quit" | "back";
+
+const SOURCE_NAME_PREVIEW_CHARS = 60;
+
+/** The batch name a promoted occurrence records: the trace's agent name if it
+ *  set one, else the statelog file's basename. Keeps "did v2 beat v1"
+ *  answerable without asking. */
+function promotionSourceName(events: readonly EventEnvelope[], sourcePath: string): string {
+  for (const event of events) {
+    if (event.data.type === "agentName" && typeof event.data.name === "string") {
+      return event.data.name;
+    }
+  }
+  const base = sourcePath.split(/[\\/]/).pop();
+  return base !== undefined && base.length > 0 ? base : "statelog";
+}
+
+function previewOf(text: string): string {
+  const oneLine = text.replace(/\s+/g, " ").trim();
+  return oneLine.length > SOURCE_NAME_PREVIEW_CHARS ? `${oneLine.slice(0, SOURCE_NAME_PREVIEW_CHARS)}…` : oneLine;
+}
 
 export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> {
   const watcher = makeFollowWatcher(opts);
@@ -74,8 +111,11 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
 
   const thresholds = opts.thresholds ?? DEFAULT_THRESHOLDS;
   const viewport: Viewport = opts.viewport;
-  const treeView = new TreeView(roots, thresholds, viewport);
+  const treeView = new TreeView(roots, thresholds, viewport, opts.promotion !== undefined);
   const stack = makeViewStack(treeView);
+  // Kept alongside `roots` so a promotion can hand the trace's raw events to the
+  // resolver without re-reading the file.
+  let allEvents: readonly EventEnvelope[] = parsed.events;
   // The trace timeline views open on: fixed when flame opens from the tree.
   let timelineTraceId = treeView.cursorTraceId();
   let helpOpen = false;
@@ -87,6 +127,7 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
     const rebuilt = buildForest(reparsed.events);
     if (rebuilt.length === 0) return;
     roots = rebuilt;
+    allEvents = reparsed.events;
     parseErrors = reparsed.errors;
     for (const view of stack.all()) view.setData(roots);
     render();
@@ -159,6 +200,56 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
       action.onResult(text);
     } else if (action.kind === "copy") {
       copyToClipboard(action.text, (message) => stack.active().notify(message));
+    } else if (action.kind === "promoteTrace") {
+      await promote(action.traceId);
+    }
+  };
+
+  /** Promote the focused trace into the configured dataset, then label it on
+   *  this same screen. The main loop is awaiting this dispatch, so no key read
+   *  races the labeling TUI for stdin. */
+  const promote = async (traceId: string): Promise<void> => {
+    if (opts.promotion === undefined) {
+      return;
+    }
+    const launch = opts.promotion;
+    const traceEvents = allEvents.filter((event) => event.trace_id === traceId);
+    const host = createLabelingHost(screen, () => ({ width: viewport.cols, height: viewport.rows }));
+    const ui: PromotionUI = {
+      async choosePrint(candidates: readonly PrintCandidate[]): Promise<number | null> {
+        const list = candidates.map((candidate) => `  [${candidate.index}] ${previewOf(candidate.value)}`).join("\n");
+        const answer = (await screen.nextLine(`Which printed value to label?\n${list}\nindex (blank cancels): `)).trim();
+        if (answer === "") return null;
+        const index = Number(answer);
+        return Number.isInteger(index) && candidates.some((candidate) => candidate.index === index) ? index : null;
+      },
+      async editTask(defaultTask): Promise<TaskChoice | null> {
+        const preview = defaultTask === null ? "(none)" : previewOf(projectArtifactField(defaultTask));
+        const answer = await screen.nextLine(`Task [${preview}] — Enter keeps, text replaces, "-" clears: `);
+        const trimmed = answer.trim();
+        if (trimmed === "") return { kind: "keep-default" };
+        if (trimmed === "-") return { kind: "omit" };
+        return { kind: "replace", value: answer };
+      },
+      notify: (message: string) => stack.active().notify(message),
+    };
+    const outcome = await promoteFocusedTrace(
+      {
+        traceId,
+        events: traceEvents,
+        sourceName: promotionSourceName(traceEvents, launch.sourcePath),
+        sourcePath: launch.sourcePath,
+        datasetDir: launch.datasetDir,
+        annotator: launch.annotator,
+        checklistFile: launch.checklistFile,
+      },
+      ui,
+      promotionServices(host),
+    );
+    // The labeling TUI took over the screen; repaint the viewer on return.
+    render();
+    if (outcome.kind === "labeled") {
+      stack.active().notify(`Labeled and stored (${outcome.outputId.slice(0, 12)}…).`);
     }
   };
 

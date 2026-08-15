@@ -45,6 +45,34 @@ describe("runViewer", () => {
     expect(out.lastText()).toMatch(/agentRun/);
   });
 
+  it("l reports nothing to judge for an empty trace when promotion is enabled", async () => {
+    const out = new FrameRecorder();
+    await runViewer({
+      jsonl: sample, // trace has no evalOutput, no return value, no prints
+      input: new ScriptedInput(["l", "q"]),
+      output: out,
+      viewport: { rows: 12, cols: 80 },
+      promotion: { datasetDir: "/tmp/does-not-matter", sourcePath: "log.jsonl", annotator: { kind: "human", id: "t" } },
+    });
+    expect(out.lastText()).toMatch(/Nothing to label|no-output/);
+  });
+
+  it("l asks for a checklist when promotion is enabled but none is configured", async () => {
+    const withOutput = [
+      sampleEvents[0],
+      { ...sampleEvents[1], data: { type: "evalOutputRecorded", timestamp: "2026-05-16T00:00:01.000Z", value: "the answer", threadId: "0" } },
+    ].map((e) => JSON.stringify(e)).join("\n") + "\n";
+    const out = new FrameRecorder();
+    await runViewer({
+      jsonl: withOutput,
+      input: new ScriptedInput(["l", "q"]),
+      output: out,
+      viewport: { rows: 12, cols: 80 },
+      promotion: { datasetDir: "/tmp/does-not-matter", sourcePath: "log.jsonl", annotator: { kind: "human", id: "t" } },
+    });
+    expect(out.lastText()).toMatch(/--checklist/);
+  });
+
   it("shows a helpful message when the file is empty", async () => {
     const out = new FrameRecorder();
     await runViewer({

@@ -112,12 +112,15 @@ export class TreeView implements View {
   }
 
   setData(roots: TreeNode[]): void {
-    if (roots.length === 0) return;
+    // An empty forest is a real state under --follow (the file was truncated or
+    // rotated to nothing), not a transient to ignore: clearing it keeps the
+    // cursor — and so `cursorTraceId()` and the `l` label action — from pointing
+    // at a trace no longer in the file.
     const stillThere = findNode(roots, this.state.cursorId);
     this.state = {
       ...this.state,
       roots,
-      cursorId: stillThere !== undefined ? this.state.cursorId : roots[0].id,
+      cursorId: stillThere !== undefined ? this.state.cursorId : (roots[0]?.id ?? ""),
     };
   }
 

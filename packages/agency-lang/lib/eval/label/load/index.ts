@@ -107,7 +107,7 @@ export function loadBatch(
   // error instead of a silently ignored flag.
   if (format !== "statelog" && request.selection.kind === "statelog") {
     throw new IngestSourceError(
-      `--trace and --output only apply to a statelog source, but ${request.source.path} is a ` +
+      `--trace only applies to a statelog source, but ${request.source.path} is a ` +
       `${format} source.`,
     );
   }

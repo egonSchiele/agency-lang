@@ -30,6 +30,13 @@ function resolve(events: EventEnvelope[]) {
   return resolveTrace(events, "source.jsonl");
 }
 
+/** A clean, result-less terminal footer — the shape a run that ends via
+ *  `evalOutput()` writes. Every "resolved" fixture needs a terminal `agentEnd`,
+ *  because a real completed run always emits one. */
+function end(data: Record<string, unknown> = {}, traceId = "T"): EventEnvelope {
+  return ev("agentEnd", data, traceId);
+}
+
 const CONTEXT = { source: "s", constantFields: {}, maxBytes: 1_048_576 };
 
 describe("resolveTrace", () => {
@@ -37,6 +44,7 @@ describe("resolveTrace", () => {
     const result = resolve([
       ev("evalOutputRecorded", { value: "first" }),
       ev("evalOutputRecorded", { value: "second" }),
+      end(),
     ]);
     expect(result).toEqual({
       kind: "resolved",
@@ -45,23 +53,51 @@ describe("resolveTrace", () => {
   });
 
   it("uses the entry-node return value when no eval output was recorded", () => {
-    const result = resolve([ev("agentEnd", { result: "returned" })]);
+    const result = resolve([end({ result: "returned" })]);
     expect(result).toMatchObject({ kind: "resolved", trace: { output: "returned" } });
   });
 
   it("rejects a truncated explicit output", () => {
-    const result = resolve([ev("evalOutputRecorded", { value: "x".repeat(300_000) })]);
+    const result = resolve([ev("evalOutputRecorded", { value: "x".repeat(300_000) }), end()]);
     expect(result).toEqual({ kind: "rejected", reason: "truncated-output" });
   });
 
   it("rejects with no-output when there is nothing to judge", () => {
-    expect(resolve([ev("agentStart")])).toEqual({ kind: "rejected", reason: "no-output" });
+    expect(resolve([ev("agentStart"), end()])).toEqual({ kind: "rejected", reason: "no-output" });
+  });
+
+  it("rejects a trace that crashed after recording an output", () => {
+    // The runtime's crash footer: a terminal runtimeError, then a result-less
+    // agentEnd. Run-directory ingestion rejects the same as `run-failed`.
+    const result = resolve([
+      ev("evalOutputRecorded", { value: "answer" }),
+      ev("error", { errorType: "runtimeError", message: "boom" }),
+      end(),
+    ]);
+    expect(result).toEqual({ kind: "rejected", reason: "run-failed" });
+  });
+
+  it("still accepts a run that recovered from a transient tool error", () => {
+    // A retried/handled toolError is not terminal, so a completed run may carry
+    // one and still be labelable.
+    const result = resolve([
+      ev("error", { errorType: "toolError", message: "ret--y" }),
+      ev("evalOutputRecorded", { value: "answer" }),
+      end(),
+    ]);
+    expect(result).toMatchObject({ kind: "resolved", trace: { output: "answer" } });
+  });
+
+  it("rejects an unfinished trace that never reached its footer", () => {
+    const result = resolve([ev("evalOutputRecorded", { value: "answer" })]);
+    expect(result).toEqual({ kind: "rejected", reason: "trace-unfinished" });
   });
 
   it("infers the task from the first prompt when no evalValue was recorded", () => {
     const result = resolve([
       ev("promptCompletion", { messages: [{ role: "user", content: "the question" }] }),
       ev("evalOutputRecorded", { value: "answer" }),
+      end(),
     ]);
     expect(result).toMatchObject({ kind: "resolved", trace: { taskDefault: "the question" } });
   });
@@ -70,6 +106,7 @@ describe("resolveTrace", () => {
     const result = resolve([
       ev("evalValueRecorded", { value: { q: 1 } }),
       ev("evalOutputRecorded", { value: "answer" }),
+      end(),
     ]);
     expect(result).toMatchObject({ kind: "resolved", trace: { taskDefault: { q: 1 } } });
   });
@@ -117,10 +154,13 @@ describe("loadStatelog", () => {
 
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "loadstatelog-"));
-    // Trace A: an eval output (resolved). Trace B: nothing to judge.
+    // Trace A: an eval output (resolved). Trace B: nothing to judge. Both reach
+    // a terminal footer, as a real completed run does.
     const events = [
       ev("evalOutputRecorded", { value: "answer A" }, "A"),
+      ev("agentEnd", {}, "A"),
       ev("agentStart", {}, "B"),
+      ev("agentEnd", {}, "B"),
     ];
     file = path.join(dir, "log.jsonl");
     fs.writeFileSync(file, events.map((e) => JSON.stringify(e)).join("\n") + "\n");

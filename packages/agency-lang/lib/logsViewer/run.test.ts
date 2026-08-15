@@ -61,6 +61,7 @@ describe("runViewer", () => {
     const withOutput = [
       sampleEvents[0],
       { ...sampleEvents[1], data: { type: "evalOutputRecorded", timestamp: "2026-05-16T00:00:01.000Z", value: "the answer", threadId: "0" } },
+      sampleEvents[1], // a terminal agentEnd, as a real completed run emits
     ].map((e) => JSON.stringify(e)).join("\n") + "\n";
     const out = new FrameRecorder();
     await runViewer({

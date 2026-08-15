@@ -14,6 +14,7 @@ export type IngestSkipReason =
   | "not-utf8"
   | "symlink"
   | "run-failed"
+  | "trace-unfinished"
   | "record-unreadable"
   | "legacy-record"
   | "missing-trace-id"

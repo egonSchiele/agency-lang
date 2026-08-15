@@ -52,6 +52,21 @@ describe("statelog auto-detection", () => {
     fs.writeFileSync(file, first + "\n" + JSON.stringify({ format_version: 1, trace_id: "T", data: { type: "agentEnd" } }) + "\n");
     expect(auto(file)).toBe("statelog");
   });
+
+  it("classifies a statelog that begins with blank lines the parser tolerates", () => {
+    const file = path.join(root, "leading-blanks.jsonl");
+    const envelope = JSON.stringify({ format_version: 1, trace_id: "T", data: { type: "agentStart" } });
+    fs.writeFileSync(file, "\n\n  \n" + envelope + "\n");
+    expect(auto(file)).toBe("statelog");
+  });
+
+  it("classifies a statelog whose first non-empty line is a large event past blank lines", () => {
+    const file = path.join(root, "blank-then-big.jsonl");
+    const bigContent = "y".repeat(200_000);
+    const first = JSON.stringify({ format_version: 1, trace_id: "T", data: { type: "promptCompletion", content: bigContent } });
+    fs.writeFileSync(file, "\n" + first + "\n");
+    expect(auto(file)).toBe("statelog");
+  });
 });
 
 describe("parseFormat", () => {

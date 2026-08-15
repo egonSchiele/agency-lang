@@ -242,6 +242,6 @@ describe("statelog dispatch", () => {
     const { dependencies } = spies();
     expect(() => loadBatch(request({
       selection: { kind: "statelog", request: { traceIds: ["A"] } },
-    }), dependencies)).toThrow(/only apply to a statelog source/);
+    }), dependencies)).toThrow(/only applies to a statelog source/);
   });
 });

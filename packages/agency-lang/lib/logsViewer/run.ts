@@ -152,6 +152,11 @@ async function handleTraceLabeling(args: {
     args.notify(`Cannot label: the statelog has ${args.parseErrorCount} unparseable line(s); fix or regenerate it.`);
     return;
   }
+  if (args.traceEvents.length === 0) {
+    // The trace was truncated/rotated out of the file between focus and `l`.
+    args.notify("Cannot label: that trace is no longer in the file.");
+    return;
+  }
   if (args.following) {
     args.watcher.stop();
   }
@@ -211,10 +216,12 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
 
   let followOn = false;
   const onNewText = (text: string): void => {
+    // Update the parsed state unconditionally — including to an EMPTY forest.
+    // A truncation/rotation to empty or malformed content must clear the views;
+    // returning early here would leave the previous file's trace selectable, so
+    // `l` could label an output no longer in the file.
     const reparsed = parseStatelogJsonl(text);
-    const rebuilt = buildForest(reparsed.events);
-    if (rebuilt.length === 0) return;
-    roots = rebuilt;
+    roots = buildForest(reparsed.events);
     allEvents = reparsed.events;
     parseErrors = reparsed.errors;
     for (const view of stack.all()) view.setData(roots);
@@ -365,7 +372,8 @@ function makeFollowWatcher(
   const poll = (): void => {
     if (reader === undefined || opts.followPath === undefined) return;
     const size = currentFileSize(opts.followPath);
-    if (size < lastSize) {
+    const truncated = size < lastSize;
+    if (truncated) {
       reader = makeAppendReader(opts.followPath, 0);
       accum = "";
     }
@@ -373,6 +381,11 @@ function makeFollowWatcher(
     const chunk = reader.read();
     if (chunk.length > 0) {
       accum += chunk;
+      onText(accum);
+    } else if (truncated) {
+      // A shrink to empty (or whitespace) still changes what is on screen.
+      // Notify with the reset accumulator so the views clear rather than keep a
+      // trace no longer in the file — a chunk-only trigger would miss this.
       onText(accum);
     }
   };

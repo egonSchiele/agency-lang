@@ -30,12 +30,12 @@ viewer's own help (`?`) for keys.
 
 ## Labeling a trace from the viewer
 
-When you view a **local** statelog file, the tree's `l` key promotes the
-trace your cursor is in into a human-judged [dataset](/cli/eval) and drops
-you straight into labeling it — the moment you notice an agent did
-something well or badly, you can capture it. (`Right`/`Enter` still expand
-the focused node; `l` only expands when no dataset is in play, e.g. for
-stdin or remote logs.)
+When you view a **local** statelog file, the tree's `l` key labels the
+trace your cursor is in: it writes the trace into a human-judged
+[dataset](/cli/eval) and drops you straight into labeling it — the moment
+you notice an agent did something well or badly, you can capture it.
+`Right`/`Enter` expand the focused node. `l` never expands; where labeling
+is unavailable (stdin or remote logs) it does nothing.
 
 ```bash
 # label into ./labels (the default), against a checklist

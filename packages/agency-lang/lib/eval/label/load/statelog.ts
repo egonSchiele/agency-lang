@@ -51,9 +51,16 @@ export type ProjectionResult =
  * Extract one trace and choose its output: an `evalOutput()` value, else the
  * entry node's return value (via the same selection helper runs use). A
  * truncated or absent output is rejected — the last chat message is never a
- * stand-in. Pure: no prompting, no writes.
+ * stand-in. A trace that crashed or never finished is rejected too, so a
+ * labelled output always comes from a successful run, exactly as
+ * run-directory ingestion refuses a `failed` input. Pure: no prompting, no
+ * writes.
  */
 export function resolveTrace(events: readonly EventEnvelope[], sourcePath: string): TraceResolution {
+  const outcome = terminalOutcome(events);
+  if (outcome !== "ok") {
+    return { kind: "rejected", reason: outcome === "failed" ? "run-failed" : "trace-unfinished" };
+  }
   const record = extractEvalRecord(events as EventEnvelope[], sourcePath);
   const selection = selectLabelingFinalOutput(record);
   if (selection.kind !== "selected") {
@@ -63,6 +70,31 @@ export function resolveTrace(events: readonly EventEnvelope[], sourcePath: strin
     kind: "resolved",
     trace: { output: selection.value, finalOutputIndex: selection.index, taskDefault: taskDefaultFrom(record) },
   };
+}
+
+type TerminalOutcome = "ok" | "failed" | "unfinished";
+
+/**
+ * How a trace ended, read from raw events to mirror the eval runner's ok/failed
+ * decision. On an unhandled failure the runtime emits a `runtimeError` and then
+ * a result-less `agentEnd`; a clean run reaches an `agentEnd` carrying a
+ * `result`. A run that ends via `evalOutput()` alone also has a result-less
+ * `agentEnd`, so a result-less end is a crash only when a terminal
+ * `runtimeError` is present — transient `llmError`/`toolError` are retried or
+ * handled and a completed run can carry them. No `agentEnd` at all means the
+ * trace was interrupted or killed before its footer: unfinished.
+ */
+function terminalOutcome(events: readonly EventEnvelope[]): TerminalOutcome {
+  const ends = events.filter((e) => e.data.type === "agentEnd");
+  const last = ends.at(-1);
+  if (last === undefined) {
+    return "unfinished";
+  }
+  if (last.data.result !== undefined && last.data.result !== null) {
+    return "ok";
+  }
+  const crashed = events.some((e) => e.data.type === "error" && e.data.errorType === "runtimeError");
+  return crashed ? "failed" : "ok";
 }
 
 /** Project a resolved trace and a task decision into a durable occurrence, or a

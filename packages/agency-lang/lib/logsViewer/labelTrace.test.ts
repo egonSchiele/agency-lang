@@ -56,7 +56,7 @@ describe("labelTrace", () => {
   it("ingests then labels a resolved trace, focused on the computed output id", async () => {
     const svc = services();
     const outcome = await labelTrace(
-      { ...baseRequest, events: [ev("evalOutputRecorded", { value: "answer" })] },
+      { ...baseRequest, events: [ev("evalOutputRecorded", { value: "answer" }), ev("agentEnd")] },
       ui(),
       svc,
     );
@@ -68,7 +68,7 @@ describe("labelTrace", () => {
 
   it("does not ingest and reports when there is nothing to judge", async () => {
     const svc = services();
-    const outcome = await labelTrace({ ...baseRequest, events: [ev("agentStart")] }, ui(), svc);
+    const outcome = await labelTrace({ ...baseRequest, events: [ev("agentStart"), ev("agentEnd")] }, ui(), svc);
     expect(outcome).toEqual({ kind: "rejected", reason: "no-output" });
     expect(svc.ingested).toHaveLength(0);
     expect(svc.labeled).toHaveLength(0);
@@ -78,7 +78,7 @@ describe("labelTrace", () => {
     const svc = services();
     const theUi = ui();
     const outcome = await labelTrace(
-      { ...baseRequest, checklistFile: undefined, events: [ev("evalOutputRecorded", { value: "answer" })] },
+      { ...baseRequest, checklistFile: undefined, events: [ev("evalOutputRecorded", { value: "answer" }), ev("agentEnd")] },
       theUi,
       svc,
     );
@@ -90,7 +90,7 @@ describe("labelTrace", () => {
   it("cancels when the task editor is dismissed", async () => {
     const svc = services();
     const outcome = await labelTrace(
-      { ...baseRequest, events: [ev("evalOutputRecorded", { value: "answer" })] },
+      { ...baseRequest, events: [ev("evalOutputRecorded", { value: "answer" }), ev("agentEnd")] },
       ui({ editTask: vi.fn(async () => null) }),
       svc,
     );
@@ -102,7 +102,7 @@ describe("labelTrace", () => {
     const svc = services();
     svc.labelingHost.run = async () => { throw new Error("host boom"); };
     await expect(labelTrace(
-      { ...baseRequest, events: [ev("evalOutputRecorded", { value: "answer" })] },
+      { ...baseRequest, events: [ev("evalOutputRecorded", { value: "answer" }), ev("agentEnd")] },
       ui(),
       svc,
     )).rejects.toThrow("host boom");

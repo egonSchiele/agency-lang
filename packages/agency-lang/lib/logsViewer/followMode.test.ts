@@ -98,4 +98,20 @@ describe("follow mode", () => {
     expect(out.lastText()).toContain("afterTruncate");
     expect(out.lastText()).not.toContain("beforeTruncate");
   });
+
+  it("a truncation to empty clears the previous trace from the view", async () => {
+    // A shrink to nothing produces no chunk, so the watcher must still notify —
+    // otherwise the old trace stays on screen and stays labelable.
+    const input = new ScriptedInput([]);
+    const out = new FrameRecorder();
+    const done = start(input, out);
+    input.feedKey({ key: "f" });
+    fs.appendFileSync(file, toolLines("s2", "beforeTruncate", 1_000));
+    await until(() => out.frames.length > 0 && out.lastText().includes("beforeTruncate"));
+    fs.writeFileSync(file, "");
+    await until(() => out.frames.length > 0 && !out.lastText().includes("beforeTruncate"));
+    input.feedKey({ key: "q" });
+    await done;
+    expect(out.lastText()).not.toContain("beforeTruncate");
+  });
 });

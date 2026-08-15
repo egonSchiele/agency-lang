@@ -127,6 +127,16 @@ function conformTokenUsage(usage: Record<string, unknown>): TokenUsage {
   };
 }
 
+/** A recorded `print`/`printJSON` call. `value` is the final string the console
+ *  showed; when it exceeded the size cap it is a fixed placeholder and
+ *  `truncated` is true. */
+export type PrintEvent = {
+  kind: "print" | "printJSON";
+  value: string;
+  truncated: boolean;
+  threadId: string | null;
+};
+
 // === Client ===
 
 // Shared empty stack returned by `snapshotStack()` when the client is
@@ -984,6 +994,19 @@ export class StatelogClient {
       type: "evalOutputRecorded",
       value,
       threadId: threadId ?? null,
+    });
+  }
+
+  /** Record a `print`/`printJSON` call so a promoted trace can offer its
+   *  printed values as a labelable output. `value` is already the final string;
+   *  `truncated` says an oversized value was replaced with a placeholder. */
+  async printRecorded(event: PrintEvent): Promise<void> {
+    await this.post({
+      type: "print",
+      kind: event.kind,
+      value: event.value,
+      truncated: event.truncated,
+      threadId: event.threadId ?? null,
     });
   }
 

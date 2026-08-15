@@ -27,6 +27,7 @@ import { openOccurrenceLog, type OpenedOccurrenceLog } from "./occurrences.js";
 import type { StoreLock } from "./lock.js";
 import {
   ManifestSchema,
+  ManifestV2Schema,
   type AnnotationRow,
   type ChecklistRevision,
   type CorpusRow,
@@ -45,7 +46,12 @@ export class DatasetValidationError extends Error {}
  *  so the CLI can tell "wrong format" from "corrupt". */
 export class DatasetVersionError extends Error {}
 
-export const CURRENT_DATASET_VERSION = 2;
+export const CURRENT_DATASET_VERSION = 3;
+
+/** The one format we can upgrade in place: version 3 differs from version 2 only
+ *  by adding the statelog occurrence origin, so a v2 dataset needs no row
+ *  rewrite — just a manifest bump after its contents validate. */
+const UPGRADEABLE_DATASET_VERSION = 2;
 
 export type OpenDatasetArgs = {
   storeDir: string;
@@ -112,12 +118,20 @@ export function manifestPath(storeDir: string): string {
 export function openDataset(args: OpenDatasetArgs): LabelDataset {
   fs.mkdirSync(args.storeDir, { recursive: true });
   assertDatasetVersion(args.storeDir);
-  let manifest = ensureManifest(args.storeDir);
+  const loaded = ensureManifest(args.storeDir);
+  let manifest = loaded.manifest;
 
   const corpus = openCorpusLog(args.storeDir);
   const occurrences = openOccurrenceLog(args.storeDir);
   const annotations = openAnnotationLog(args.storeDir);
   validateDataset(args.storeDir, corpus, occurrences, annotations, manifest, args.reportWarning);
+
+  // Persist the version-3 manifest only now that the whole v2 dataset has been
+  // read and validated. Rewriting one small file, never the logs, so a partial
+  // failure leaves a still-valid v2 manifest behind.
+  if (loaded.upgradeFromV2) {
+    atomicWriteValidated({ targetPath: manifestPath(args.storeDir), value: manifest, schema: ManifestSchema });
+  }
 
   // Built once, then kept current by captureSource, so grounding an annotation
   // is O(1) rather than a scan of the whole corpus per append.
@@ -289,7 +303,9 @@ function assertDatasetVersion(storeDir: string): void {
     throw new DatasetValidationError(`${file} is not valid JSON: ${(error as Error).message}`);
   }
   const found = parsed.schemaVersion;
-  if (found === CURRENT_DATASET_VERSION) {
+  if (found === CURRENT_DATASET_VERSION || found === UPGRADEABLE_DATASET_VERSION) {
+    // A v2 dataset is upgraded in place after its contents validate (see
+    // openDataset); allowing it here is what lets that upgrade run.
     return;
   }
   // Rebuilding cannot help with a store from the FUTURE, so the two cases need
@@ -324,21 +340,38 @@ export function readFieldOrder(storeDir: string): readonly string[] {
   return parsed.success ? parsed.data.fieldOrder : [];
 }
 
-function ensureManifest(storeDir: string): Manifest {
+/** A manifest ready to use in memory, plus whether the on-disk file still says
+ *  version 2 and therefore needs an in-place upgrade once the dataset validates. */
+type LoadedManifest = {
+  manifest: Manifest;
+  upgradeFromV2: boolean;
+};
+
+function ensureManifest(storeDir: string): LoadedManifest {
   const file = manifestPath(storeDir);
   if (!fs.existsSync(file)) {
     const fresh: Manifest = { schemaVersion: CURRENT_DATASET_VERSION, fieldOrder: [] };
     atomicWriteValidated({ targetPath: file, value: fresh, schema: ManifestSchema });
-    return fresh;
+    return { manifest: fresh, upgradeFromV2: false };
   }
-  const parsed = ManifestSchema.safeParse(JSON.parse(fs.readFileSync(file, "utf8")));
-  if (!parsed.success) {
-    throw new DatasetValidationError(
-      `${file} is not a label store manifest this build understands. Refusing to touch the ` +
-      `store rather than risk a dataset written by a different version.`,
-    );
+  const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+  const current = ManifestSchema.safeParse(raw);
+  if (current.success) {
+    return { manifest: current.data, upgradeFromV2: false };
   }
-  return parsed.data;
+  // A version 2 file carries the same fields; upgrade it in memory now, and let
+  // openDataset persist the new manifest only after the whole dataset validates.
+  const legacy = ManifestV2Schema.safeParse(raw);
+  if (legacy.success) {
+    return {
+      manifest: { schemaVersion: CURRENT_DATASET_VERSION, fieldOrder: [...legacy.data.fieldOrder] },
+      upgradeFromV2: true,
+    };
+  }
+  throw new DatasetValidationError(
+    `${file} is not a label store manifest this build understands. Refusing to touch the ` +
+    `store rather than risk a dataset written by a different version.`,
+  );
 }
 
 /** Every cross-file invariant, checked once at open. */

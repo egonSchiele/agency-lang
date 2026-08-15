@@ -1,12 +1,18 @@
-import { describe, expect, it } from "vitest";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
 import {
+  loadStatelog,
   projectTrace,
   resolveTrace,
   type ResolvedTrace,
 } from "./statelog.js";
+import { IngestSourceError, type StatelogSelectionRequest } from "./types.js";
 
 let ts = 0;
 function nextTs(): string {
@@ -158,5 +164,83 @@ describe("projectTrace", () => {
     const big: ResolvedTrace = { ...resolved, selection: { source: { kind: "return" }, output: "x".repeat(10) } };
     const result = projectTrace("T", big, { kind: "omit" }, { ...CONTEXT, maxBytes: 4 });
     expect(result).toEqual({ kind: "skipped", skip: { item: "T", reason: "too-large" } });
+  });
+});
+
+describe("loadStatelog", () => {
+  let dir: string;
+  let file: string;
+
+  function evT(traceId: string, type: string, data: Record<string, unknown> = {}): EventEnvelope {
+    return {
+      format_version: 1,
+      trace_id: traceId,
+      project_id: "p",
+      span_id: null,
+      parent_span_id: null,
+      data: { type, timestamp: nextTs(), threadId: "0", ...data },
+    };
+  }
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "loadstatelog-"));
+    // Trace A: a clean eval output (resolved). Trace B: two prints (ambiguous).
+    const events = [
+      evT("A", "evalOutputRecorded", { value: "answer A" }),
+      evT("B", "print", { kind: "print", value: "b-one", truncated: false }),
+      evT("B", "print", { kind: "print", value: "b-two", truncated: false }),
+    ];
+    file = path.join(dir, "log.jsonl");
+    fs.writeFileSync(file, events.map((e) => JSON.stringify(e)).join("\n") + "\n");
+  });
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  const request = (over: Partial<StatelogSelectionRequest> = {}): StatelogSelectionRequest => ({
+    traceIds: [],
+    printSelections: {},
+    ...over,
+  });
+
+  const load = (req: StatelogSelectionRequest) =>
+    loadStatelog({ path: file, request: req, source: "s", constantFields: {}, includeTaskField: true, maxBytes: 1_048_576 });
+
+  it("promotes a resolved trace", () => {
+    const batch = load(request({ traceIds: ["A"] }));
+    expect(batch.occurrences).toHaveLength(1);
+    expect(batch.occurrences[0].origin).toMatchObject({ kind: "statelog", traceId: "A", outputSource: { kind: "evalOutput" } });
+  });
+
+  it("errors with the trace list when no --trace is given", () => {
+    expect(() => load(request())).toThrow(/at least one --trace/);
+    expect(() => load(request())).toThrow(/Available traces/);
+  });
+
+  it("errors naming available traces for an unknown id", () => {
+    expect(() => load(request({ traceIds: ["ZZ"] }))).toThrow(/"ZZ" is not in/);
+  });
+
+  it("errors asking for a print selector on an ambiguous trace", () => {
+    expect(() => load(request({ traceIds: ["B"] }))).toThrow(/Pick one with --output B=print/);
+  });
+
+  it("promotes the chosen print of an ambiguous trace", () => {
+    const batch = load(request({ traceIds: ["B"], printSelections: { B: 1 } }));
+    expect(batch.occurrences[0].origin).toMatchObject({ outputSource: { kind: "print", index: 1 } });
+    expect(batch.occurrences[0].fields.output).toBe("b-two");
+  });
+
+  it("rejects a selector for an already-resolved trace", () => {
+    expect(() => load(request({ traceIds: ["A"], printSelections: { A: 0 } }))).toThrow(/already has a definite output/);
+  });
+
+  it("rejects an out-of-range print index", () => {
+    expect(() => load(request({ traceIds: ["B"], printSelections: { B: 9 } }))).toThrow(/no printed value at index 9/);
+  });
+
+  it("throws IngestSourceError for a bad selection", () => {
+    expect(() => load(request({ traceIds: ["ZZ"] }))).toThrow(IngestSourceError);
   });
 });

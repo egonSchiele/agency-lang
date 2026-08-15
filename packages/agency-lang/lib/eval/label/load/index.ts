@@ -9,7 +9,8 @@ import { loadFiles } from "./files.js";
 import { resolveFormat, type Format } from "./format.js";
 import { loadJsonArray } from "./json.js";
 import { loadRun } from "./run.js";
-import { IngestSourceError, type LoadedBatch } from "./types.js";
+import { loadStatelog } from "./statelog.js";
+import { IngestSourceError, type IngestSelection, type LoadedBatch } from "./types.js";
 
 /** Field names each loader builds itself. A constant may not collide with one:
  *  the loader's value wins on merge, so the constant would vanish without a
@@ -18,6 +19,7 @@ const LOADER_FIELD_NAMES: Record<Exclude<Format, "auto">, readonly string[]> = {
   run: ["task", "output"],
   files: ["output"],
   json: ["output"],
+  statelog: ["task", "output"],
 };
 
 export function assertNoLoaderCollision(
@@ -56,6 +58,9 @@ export type IngestRequest = {
   sourceName: string;
   constantFields: Fields;
   maxBytes: number;
+  /** Interactive-free selection. `statelog` sources carry their chosen traces
+   *  here; every other source uses `{ kind: "none" }`. */
+  selection: IngestSelection;
   reportWarning(message: string): void;
 };
 
@@ -64,6 +69,7 @@ export type LoadDependencies = {
   loadRun: typeof loadRun;
   loadFiles: typeof loadFiles;
   loadJsonArray: typeof loadJsonArray;
+  loadStatelog: typeof loadStatelog;
   resolveFileSelection: typeof resolveFileSelection;
 };
 
@@ -71,6 +77,7 @@ const defaultDependencies: LoadDependencies = {
   loadRun,
   loadFiles,
   loadJsonArray,
+  loadStatelog,
   resolveFileSelection,
 };
 
@@ -94,6 +101,30 @@ export function loadBatch(
   // check and then be silently overwritten by the loader — changing the stored
   // record, and its id, from what the arguments said.
   assertNoLoaderCollision(format, request.constantFields, request.source.includeTaskField);
+
+  // Trace selection only means something for a statelog source. Rejecting it
+  // elsewhere turns "I put --trace on the wrong kind of source" into a clear
+  // error instead of a silently ignored flag.
+  if (format !== "statelog" && request.selection.kind === "statelog") {
+    throw new IngestSourceError(
+      `--trace and --output only apply to a statelog source, but ${request.source.path} is a ` +
+      `${format} source.`,
+    );
+  }
+
+  if (format === "statelog") {
+    const request_ = request.selection.kind === "statelog"
+      ? request.selection.request
+      : { traceIds: [], printSelections: {} };
+    return dependencies.loadStatelog({
+      path: request.source.path,
+      request: request_,
+      source: request.sourceName,
+      constantFields: request.constantFields,
+      includeTaskField: request.source.includeTaskField,
+      maxBytes: request.maxBytes,
+    });
+  }
 
   if (format === "run") {
     return dependencies.loadRun({

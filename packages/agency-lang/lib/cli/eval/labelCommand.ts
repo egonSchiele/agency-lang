@@ -73,14 +73,16 @@ export function addLabelCommand(
 
   label
     .command("ingest")
-    .description("Add outputs to the label store, from a run, a directory of files, or a JSON array")
+    .description("Add examples to the dataset, from a run, files, a JSON array, or a statelog")
     .argument("<source>", INGEST_PATH_DESCRIPTION)
     .argument("[extra...]", "Rejected: several arguments means the shell expanded an unquoted glob")
     .option("--source <name>", SOURCE_FLAG_DESCRIPTION)
-    .option("--format <fmt>", "auto (default), run, files, or json")
+    .option("--format <fmt>", "auto (default), run, files, json, or statelog")
     .option("--task <text>", "Shorthand for --field task=<text>")
     .option("--field <name=value>", "A constant field added to every record", collectRepeated, [])
-    .option("--no-task-field", "Run sources only: drop the run's own task field")
+    .option("--no-task-field", "Run/statelog sources only: drop the source's own task field")
+    .option("--trace <id>", "Statelog sources: a trace id to promote (repeatable)", collectRepeated, [])
+    .option("--output <trace=print:index>", "Statelog sources: pick a printed value for an ambiguous trace (repeatable)", collectRepeated, [])
     .option("--recursive", "Descend into subdirectories")
     .option("--max-bytes <n>", "Per-value size cap in bytes (default 1048576)", parseByteCap)
     .action(async (source: string, extra: string[], opts: {
@@ -89,6 +91,8 @@ export function addLabelCommand(
       task?: string;
       field?: string[];
       taskField?: boolean;
+      trace?: string[];
+      output?: string[];
       recursive?: boolean;
       maxBytes?: number;
     }, command: Command) => {

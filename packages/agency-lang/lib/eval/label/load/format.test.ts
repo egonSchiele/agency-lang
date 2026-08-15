@@ -32,11 +32,26 @@ function auto(source: string) {
   return resolveFormat({ source, requested: "auto" });
 }
 
+describe("statelog auto-detection", () => {
+  it("classifies a file whose first line is a statelog envelope as statelog", () => {
+    const file = path.join(root, "log.jsonl");
+    fs.writeFileSync(file, JSON.stringify({ format_version: 1, trace_id: "T", data: { type: "agentStart" } }) + "\n");
+    expect(auto(file)).toBe("statelog");
+  });
+
+  it("does not mistake a plain JSON array file for a statelog", () => {
+    const file = path.join(root, "answers.json");
+    fs.writeFileSync(file, JSON.stringify(["a", "b"]));
+    expect(auto(file)).toBe("json");
+  });
+});
+
 describe("parseFormat", () => {
   it("accepts every documented format", () => {
     expect(parseFormat("run")).toBe("run");
     expect(parseFormat("files")).toBe("files");
     expect(parseFormat("json")).toBe("json");
+    expect(parseFormat("statelog")).toBe("statelog");
     expect(parseFormat("auto")).toBe("auto");
   });
 

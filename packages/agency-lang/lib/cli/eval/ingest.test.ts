@@ -9,9 +9,28 @@ import type { LoadedBatch } from "@/eval/label/load/types.js";
 import {
   evalIngest,
   parseFieldArgs,
+  parseTracePrintSelections,
   type EvalIngestDependencies,
   type EvalIngestOptions,
 } from "./ingest.js";
+
+describe("parseTracePrintSelections", () => {
+  it("parses trace-specific print selectors", () => {
+    expect(parseTracePrintSelections(["A=print:0", "B=print:2"])).toEqual({ A: 0, B: 2 });
+  });
+
+  it("rejects two selectors for the same trace", () => {
+    expect(() => parseTracePrintSelections(["A=print:0", "A=print:1"])).toThrow(/twice for trace "A"/);
+  });
+
+  it("rejects a value missing the =", () => {
+    expect(() => parseTracePrintSelections(["Aprint:0"])).toThrow(/<trace-id>=print:<index>/);
+  });
+
+  it("rejects a right side that is not print:<index>", () => {
+    expect(() => parseTracePrintSelections(["A=return"])).toThrow(/must be print:<index>/);
+  });
+});
 
 let root: string;
 let storeDir: string;

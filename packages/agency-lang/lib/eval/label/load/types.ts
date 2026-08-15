@@ -33,6 +33,22 @@ export type LoadedBatch = {
   skips: readonly IngestSkip[];
 };
 
+/** Which printed value to promote for each ambiguous trace, keyed by trace id.
+ *  Only traces that resolve to `needs-selection` may appear. */
+export type TracePrintSelections = Readonly<Record<string, number>>;
+
+/** What the CLI asked a statelog source to promote. */
+export type StatelogSelectionRequest = {
+  traceIds: readonly string[];
+  printSelections: TracePrintSelections;
+};
+
+/** Interactive-free selection carried on an ingest request. `statelog` sources
+ *  need trace ids (and maybe print choices); every other source needs none. */
+export type IngestSelection =
+  | { kind: "none" }
+  | { kind: "statelog"; request: StatelogSelectionRequest };
+
 /** A screen cannot show more than this, and a value this large is far more
  *  likely to be a mistake than real output. */
 export const DEFAULT_MAX_INGEST_BYTES = 1_048_576;

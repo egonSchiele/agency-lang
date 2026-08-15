@@ -8,7 +8,9 @@ import {
   DEFAULT_MAX_INGEST_BYTES,
   EmptyIngestError,
   IngestSourceError,
+  type IngestSelection,
   type LoadedBatch,
+  type TracePrintSelections,
 } from "@/eval/label/load/types.js";
 import { acquireStoreLock } from "@/eval/label/lock.js";
 import { openDataset, type IngestResult, type LabelDataset } from "@/eval/label/dataset.js";
@@ -26,6 +28,8 @@ export type EvalIngestOptions = {
   taskField?: boolean;
   recursive?: boolean;
   maxBytes?: number;
+  trace?: string[];
+  output?: string[];
   dataset?: string;
   store?: string;
   config?: AgencyConfig;
@@ -92,6 +96,49 @@ export function parseFieldArgs(options: {
   return fields;
 }
 
+/**
+ * Parse repeatable `--output <trace-id>=print:<index>` selectors into a map.
+ *
+ * A selector applies to exactly one trace; two for the same trace, a missing
+ * `=`, or a right side that is not `print:<n>` are all errors rather than a
+ * silent last-wins, because the choice decides which output is labeled.
+ */
+export function parseTracePrintSelections(values: readonly string[]): TracePrintSelections {
+  const selections: Record<string, number> = Object.create(null);
+  for (const raw of values) {
+    const separator = raw.indexOf("=");
+    if (separator <= 0) {
+      throw new IngestSourceError(
+        `--output must be written <trace-id>=print:<index>; got "${raw}".`,
+      );
+    }
+    const traceId = raw.slice(0, separator);
+    const rightSide = raw.slice(separator + 1);
+    const match = /^print:(\d+)$/.exec(rightSide);
+    if (match === null) {
+      throw new IngestSourceError(
+        `--output value for trace "${traceId}" must be print:<index>; got "${rightSide}".`,
+      );
+    }
+    if (Object.hasOwn(selections, traceId)) {
+      throw new IngestSourceError(`--output was given twice for trace "${traceId}".`);
+    }
+    selections[traceId] = Number(match[1]);
+  }
+  return selections;
+}
+
+/** Build the interactive-free selection a statelog source needs. `none` when no
+ *  `--trace`/`--output` was given, so a non-statelog source is unaffected. */
+function buildSelection(options: { trace?: string[]; output?: string[] }): IngestSelection {
+  const traceIds = options.trace ?? [];
+  const printSelections = parseTracePrintSelections(options.output ?? []);
+  if (traceIds.length === 0 && Object.keys(printSelections).length === 0) {
+    return { kind: "none" };
+  }
+  return { kind: "statelog", request: { traceIds, printSelections } };
+}
+
 /** Reject a bad name here rather than letting the store's schema fail later:
  *  the message can name the flag that caused it. */
 function assertFieldName(name: string): void {
@@ -153,6 +200,7 @@ export async function evalIngest(
     sourceName,
     constantFields,
     maxBytes: options.maxBytes ?? DEFAULT_MAX_INGEST_BYTES,
+    selection: buildSelection(options),
     reportWarning: (message) => console.warn(message),
   });
 

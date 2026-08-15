@@ -15,11 +15,12 @@ type Calls = {
   run: unknown[];
   files: unknown[];
   json: unknown[];
+  statelog: unknown[];
   selection: unknown[];
 };
 
 function spies(): { calls: Calls; dependencies: LoadDependencies } {
-  const calls: Calls = { run: [], files: [], json: [], selection: [] };
+  const calls: Calls = { run: [], files: [], json: [], statelog: [], selection: [] };
   return {
     calls,
     dependencies: {
@@ -33,6 +34,10 @@ function spies(): { calls: Calls; dependencies: LoadDependencies } {
       },
       loadJsonArray: (args) => {
         calls.json.push(args);
+        return emptyBatch;
+      },
+      loadStatelog: (args) => {
+        calls.statelog.push(args);
         return emptyBatch;
       },
       resolveFileSelection: (source, recursive) => {
@@ -54,6 +59,7 @@ function request(over: Partial<IngestRequest> = {}): IngestRequest {
     sourceName: "agent-v1",
     constantFields: {},
     maxBytes: DEFAULT_MAX_INGEST_BYTES,
+    selection: { kind: "none" },
     reportWarning: () => {},
     ...over,
   };
@@ -212,5 +218,30 @@ describe("constant fields cannot collide with a loader's own fields", () => {
     const { dependencies } = spies();
     expect(() => loadBatch(request({ constantFields: { output: "x" } }), dependencies))
       .toThrow(/files loader/);
+  });
+});
+
+describe("statelog dispatch", () => {
+  function makeStatelogFile(): string {
+    const file = path.join(root, "log.jsonl");
+    fs.writeFileSync(file, JSON.stringify({ format_version: 1, trace_id: "A", data: { type: "agentStart" } }) + "\n");
+    return file;
+  }
+
+  it("routes an auto-detected statelog file to loadStatelog with the selection", () => {
+    const { calls, dependencies } = spies();
+    loadBatch(request({
+      source: { path: makeStatelogFile(), requestedFormat: "auto", includeTaskField: true, recursive: false },
+      selection: { kind: "statelog", request: { traceIds: ["A"], printSelections: {} } },
+    }), dependencies);
+    expect(calls.statelog).toHaveLength(1);
+    expect(calls.statelog[0]).toMatchObject({ request: { traceIds: ["A"] } });
+  });
+
+  it("rejects a statelog selection on a non-statelog source", () => {
+    const { dependencies } = spies();
+    expect(() => loadBatch(request({
+      selection: { kind: "statelog", request: { traceIds: ["A"], printSelections: {} } },
+    }), dependencies)).toThrow(/only apply to a statelog source/);
   });
 });

@@ -1,11 +1,13 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { isStatelogEnvelope } from "@/runsExplorer/sources.js";
+
 import { IngestSourceError } from "./types.js";
 
-export type Format = "auto" | "run" | "files" | "json";
+export type Format = "auto" | "run" | "files" | "json" | "statelog";
 
-export const FORMATS: readonly Format[] = ["auto", "run", "files", "json"];
+export const FORMATS: readonly Format[] = ["auto", "run", "files", "json", "statelog"];
 
 export function parseFormat(value: string): Format {
   if ((FORMATS as readonly string[]).includes(value)) {
@@ -47,12 +49,45 @@ export function resolveFormat(
     return isRunDirectory(resolved) ? "run" : "files";
   }
 
+  // A file whose first line is a statelog envelope is a statelog, whatever its
+  // extension — reusing the same classifier `agency logs` uses to route paths.
+  if (fs.existsSync(resolved) && fs.statSync(resolved).isFile() && looksLikeStatelog(resolved)) {
+    return "statelog";
+  }
+
   if (args.source.toLowerCase().endsWith(".json")) {
     return "json";
   }
 
   throw new IngestSourceError(
     `Cannot tell what kind of source ${args.source} is. Pass a run directory, a directory ` +
-    `of files, a quoted glob, or a .json file — or say which with --format run|files|json.`,
+    `of files, a quoted glob, a .json file, or a statelog file — or say which with ` +
+    `--format run|files|json|statelog.`,
   );
+}
+
+const SNIFF_CHUNK_BYTES = 65_536;
+
+/** True when the file's first non-empty line is a statelog event envelope. Reads
+ *  only a bounded prefix, so a large statelog is not slurped just to classify. */
+function looksLikeStatelog(resolved: string): boolean {
+  const firstLine = firstNonEmptyLine(resolved);
+  return firstLine !== undefined && isStatelogEnvelope(firstLine);
+}
+
+function firstNonEmptyLine(resolved: string): string | undefined {
+  const fd = fs.openSync(resolved, "r");
+  try {
+    const buffer = Buffer.alloc(SNIFF_CHUNK_BYTES);
+    const bytesRead = fs.readSync(fd, buffer, 0, buffer.length, 0);
+    const text = buffer.subarray(0, bytesRead).toString("utf8");
+    for (const line of text.split("\n")) {
+      if (line.trim() !== "") {
+        return line;
+      }
+    }
+    return undefined;
+  } finally {
+    fs.closeSync(fd);
+  }
 }

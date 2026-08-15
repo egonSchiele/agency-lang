@@ -174,6 +174,13 @@ scopes it), `debug`, `diff`.
 Eval: `evalValueRecorded`, `evalOutputRecorded` (emitted by the `std::statelog`
 stdlib wrappers — `stdlib/statelog.agency` + `lib/stdlib/statelog.ts`).
 
+Print: `print` — one per `print`/`printJSON` call, carrying `kind`, the final
+console-formatted `value`, a `truncated` flag (an oversized value is replaced
+with a fixed placeholder, never a prefix), and the active `threadId` (nullable).
+Emitted fire-and-forget by `recordPrint` (`lib/stdlib/statelog.ts`) after the
+console write, so labeling can offer a trace's printed values as an output. See
+`docs/dev/statelog-to-dataset.md`.
+
 ## Integration points
 
 - **RuntimeContext** (`lib/runtime/state/context.ts`) — holds one

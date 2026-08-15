@@ -38,10 +38,19 @@ export type DependencyFingerprint = {
  *  real bugs. (Resolver throws are a vacuous class here: pkg:: is
  *  filtered before resolution — see docs/dev/incremental-builds.md.) */
 const DISCOVERY_FS_CODES = [
-  "ENOENT", "EACCES", "EPERM", "EIO", "EBUSY", "EMFILE", "ENFILE", "EISDIR",
+  "ENOENT",
+  "EACCES",
+  "EPERM",
+  "EIO",
+  "EBUSY",
+  "EMFILE",
+  "ENFILE",
+  "EISDIR",
   // The stat-then-read race can also surface these (ancestor replaced by a
   // file, symlink loop appears, network-fs handle goes stale):
-  "ENOTDIR", "ELOOP", "ESTALE",
+  "ENOTDIR",
+  "ELOOP",
+  "ESTALE",
 ];
 
 function isDiscoveryFsError(e: unknown): boolean {

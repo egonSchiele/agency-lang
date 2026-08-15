@@ -25,7 +25,12 @@ export async function runWithPolicy(
   let result = await invoke();
 
   while (handlers.hasInterrupts(result)) {
-    const interrupts = result as Array<{ effect: string; message: string; data: any; origin: string }>;
+    const interrupts = result as Array<{
+      effect: string;
+      message: string;
+      data: any;
+      origin: string;
+    }>;
     const responses = applyPolicy(interrupts, policyStore.get());
     result = await handlers.respondToInterrupts(interrupts, responses);
   }

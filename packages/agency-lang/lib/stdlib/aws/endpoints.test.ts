@@ -1,8 +1,4 @@
-import {
-  resolveAwsPartition,
-  validateBucket,
-  BUCKET_NAME_MAX_LENGTH,
-} from "./endpoints.js";
+import { resolveAwsPartition, validateBucket, BUCKET_NAME_MAX_LENGTH } from "./endpoints.js";
 
 describe("resolveAwsPartition", () => {
   it("maps commercial, GovCloud, China, and ISO regions to exact suffixes", () => {

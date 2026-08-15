@@ -116,9 +116,9 @@ describe("createServeHandler", () => {
   it("throws a clear error when the target is not a compiled Agency serve module", async () => {
     const badPath = path.join(tmpDir, "bad.mjs");
     fs.writeFileSync(badPath, "export const nothing = 1;\n", "utf-8");
-    await expect(
-      createServeHandler(badPath, { ...baseOptions(), version: "1" }),
-    ).rejects.toThrow(/not a compiled Agency serve module/);
+    await expect(createServeHandler(badPath, { ...baseOptions(), version: "1" })).rejects.toThrow(
+      /not a compiled Agency serve module/,
+    );
   });
 
   it("returns the interrupts payload, then resumes to the final value", async () => {

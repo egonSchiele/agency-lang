@@ -127,9 +127,7 @@ describe("Partial", () => {
     };
     const out = evalBuiltinGeneric("Partial", [tagged], id);
     expect(out).toMatchObject({
-      properties: [
-        { key: "name", tags: [{ type: "tag", name: "validate", arguments: [] }] },
-      ],
+      properties: [{ key: "name", tags: [{ type: "tag", name: "validate", arguments: [] }] }],
     });
   });
 
@@ -207,9 +205,7 @@ describe("Required", () => {
     const out = evalBuiltinGeneric("Required", [t], id);
     expect(out).toEqual({
       type: "objectType",
-      properties: [
-        { key: "gone", value: { type: "primitiveType", value: "never" } },
-      ],
+      properties: [{ key: "gone", value: { type: "primitiveType", value: "never" } }],
     });
   });
 
@@ -321,11 +317,7 @@ describe("Omit", () => {
 
 describe("NonNullable", () => {
   it("strips null from a union", () => {
-    const out = evalBuiltinGeneric(
-      "NonNullable",
-      [{ type: "unionType", types: [STR, NUL] }],
-      id,
-    );
+    const out = evalBuiltinGeneric("NonNullable", [{ type: "unionType", types: [STR, NUL] }], id);
     expect(out).toEqual(STR);
   });
 
@@ -536,9 +528,7 @@ node main() {
   return 1
 }
 `);
-    expect(errors.map((e) => e.message).join("\n")).toMatch(
-      /Type alias 'Partial' is not defined/,
-    );
+    expect(errors.map((e) => e.message).join("\n")).toMatch(/Type alias 'Partial' is not defined/);
   });
 
   it("a user generic alias can delegate to a utility type", () => {
@@ -619,9 +609,10 @@ describe("use-site tag precedence", () => {
     expect(resolved.type).toBe("objectType");
     const validate = (resolved.tags ?? []).find((t) => t.name === "validate");
     expect(validate).toBeDefined();
-    expect(
-      validate!.arguments.map((a) => (a as { value: string }).value),
-    ).toEqual(["fromAlias", "fromUseSite"]);
+    expect(validate!.arguments.map((a) => (a as { value: string }).value)).toEqual([
+      "fromAlias",
+      "fromUseSite",
+    ]);
   });
 });
 

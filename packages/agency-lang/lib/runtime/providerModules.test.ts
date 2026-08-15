@@ -2,10 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as smoltalk from "smoltalk";
-import {
-  loadProviderModules,
-  __resetLoadedProviderModules,
-} from "./providerModules.js";
+import { loadProviderModules, __resetLoadedProviderModules } from "./providerModules.js";
 
 // Temp provider-module fixtures are written next to this test file so their
 // bare `import "smoltalk"` resolves against the package's node_modules.
@@ -31,7 +28,9 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const p of tmpFiles.splice(0)) {
-    try { fs.unlinkSync(p); } catch { }
+    try {
+      fs.unlinkSync(p);
+    } catch {}
   }
   for (const name of ["echo-a", "count-a", "retry-a"]) {
     smoltalk.unregisterProvider(name);
@@ -87,9 +86,9 @@ describe("loadProviderModules", () => {
 
   it("throws when the module has no register export", async () => {
     const mod = writeModule("noreg", `export const nope = 1;`);
-    await expect(
-      loadProviderModules({ providerModules: [mod] }),
-    ).rejects.toThrow(/does not export a "register" function/);
+    await expect(loadProviderModules({ providerModules: [mod] })).rejects.toThrow(
+      /does not export a "register" function/,
+    );
   });
 
   it("un-reserves a failed module so a later call can retry it", async () => {
@@ -105,21 +104,16 @@ describe("loadProviderModules", () => {
          registerProvider("retry-a", RetryA);
        }`,
     );
-    await expect(
-      loadProviderModules({ providerModules: [mod] }),
-    ).rejects.toThrow(/first-fails/);
+    await expect(loadProviderModules({ providerModules: [mod] })).rejects.toThrow(/first-fails/);
     // Retry: the path was un-reserved, so this re-imports + re-registers.
     await loadProviderModules({ providerModules: [mod] });
     expect(smoltalk.getClient({ model: "m", provider: "retry-a" }).constructor.name).toBe("RetryA");
   });
 
   it("throws when register() itself throws", async () => {
-    const mod = writeModule(
-      "boom",
-      `export function register() { throw new Error("kaboom"); }`,
+    const mod = writeModule("boom", `export function register() { throw new Error("kaboom"); }`);
+    await expect(loadProviderModules({ providerModules: [mod] })).rejects.toThrow(
+      /threw during register\(\): kaboom/,
     );
-    await expect(
-      loadProviderModules({ providerModules: [mod] }),
-    ).rejects.toThrow(/threw during register\(\): kaboom/);
   });
 });

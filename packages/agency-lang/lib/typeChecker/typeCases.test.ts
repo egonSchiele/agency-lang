@@ -26,7 +26,7 @@ describe("decomposeCases", () => {
     expect(r.cases.map((c) => c.kind).sort()).toEqual(["resultFailure", "resultSuccess"]);
   });
 
-  it("literal union '\"a\" | \"b\"' → two literal cases, closed", () => {
+  it('literal union \'"a" | "b"\' → two literal cases, closed', () => {
     const r = decomposeCases(union(lit("a"), lit("b")), {});
     expect(r.closed).toBe(true);
     expect(r.cases).toEqual([
@@ -44,7 +44,9 @@ describe("decomposeCases", () => {
   });
 
   it("union containing any → open", () => {
-    expect(decomposeCases(union(lit("a"), { type: "primitiveType", value: "any" }), {}).closed).toBe(false);
+    expect(
+      decomposeCases(union(lit("a"), { type: "primitiveType", value: "any" }), {}).closed,
+    ).toBe(false);
   });
 
   it("object union → member cases, closed (coverage is B2; enumeration is here)", () => {
@@ -58,7 +60,11 @@ describe("decomposeCases", () => {
   });
 
   it("effect-set union → open (owned by resolveEffectSet, never enumerated here)", () => {
-    const eff: VariableType = { type: "unionType", types: [lit("Timeout"), lit("Cancelled")], isEffectSet: true };
+    const eff: VariableType = {
+      type: "unionType",
+      types: [lit("Timeout"), lit("Cancelled")],
+      isEffectSet: true,
+    };
     expect(decomposeCases(eff, {})).toEqual({ cases: [], closed: false });
   });
 
@@ -94,7 +100,10 @@ describe("decomposeCases", () => {
   });
 
   it("mixed literal + member union → [literal, member], closed (contract)", () => {
-    const obj: VariableType = { type: "objectType", properties: [{ key: "kind", value: lit("b") }] };
+    const obj: VariableType = {
+      type: "objectType",
+      properties: [{ key: "kind", value: lit("b") }],
+    };
     const r = decomposeCases(union(lit("a"), obj), {});
     expect(r.closed).toBe(true);
     expect(r.cases.map((c) => c.kind)).toEqual(["literal", "member"]);
@@ -107,7 +116,10 @@ describe("decomposeCases", () => {
 
   it("boolean primitive → true | false, closed (B2 enumerates it)", () => {
     expect(decomposeCases({ type: "primitiveType", value: "boolean" }, {})).toEqual({
-      cases: [{ kind: "literal", value: true }, { kind: "literal", value: false }],
+      cases: [
+        { kind: "literal", value: true },
+        { kind: "literal", value: false },
+      ],
       closed: true,
     });
   });
@@ -120,7 +132,10 @@ describe("decomposeCases", () => {
 
 describe("decomposeCases — discriminated object unions (B2)", () => {
   it("tags a discriminated object union by its discriminant", () => {
-    const ev = union(obj({ kind: lit("click"), x: NUMBER_T }), obj({ kind: lit("scroll"), d: NUMBER_T }));
+    const ev = union(
+      obj({ kind: lit("click"), x: NUMBER_T }),
+      obj({ kind: lit("scroll"), d: NUMBER_T }),
+    );
     const cs = decomposeCases(ev, {});
     expect(cs.closed).toBe(true);
     expect(cs.cases).toEqual([
@@ -131,12 +146,16 @@ describe("decomposeCases — discriminated object unions (B2)", () => {
 
   it("leaves a non-discriminated object union as opaque members", () => {
     const u = union(obj({ a: NUMBER_T }), obj({ b: STRING_T }));
-    expect(decomposeCases(u, {}).cases.every((c) => c.kind === "member" && c.disc === undefined)).toBe(true);
+    expect(
+      decomposeCases(u, {}).cases.every((c) => c.kind === "member" && c.disc === undefined),
+    ).toBe(true);
   });
 
   it("does not discriminate a union with a shared tag value", () => {
     const u = union(obj({ kind: lit("a"), x: NUMBER_T }), obj({ kind: lit("a"), y: STRING_T }));
-    expect(decomposeCases(u, {}).cases.every((c) => c.kind === "member" && c.disc === undefined)).toBe(true);
+    expect(
+      decomposeCases(u, {}).cases.every((c) => c.kind === "member" && c.disc === undefined),
+    ).toBe(true);
   });
 
   it("does not discriminate when a member is not an object", () => {
@@ -146,14 +165,22 @@ describe("decomposeCases — discriminated object unions (B2)", () => {
 
   it("discriminates a 3-member union", () => {
     const u = union(obj({ kind: lit("a") }), obj({ kind: lit("b") }), obj({ kind: lit("c") }));
-    const disc = decomposeCases(u, {}).cases.map((c) => (c.kind === "member" ? c.disc?.value : null));
+    const disc = decomposeCases(u, {}).cases.map((c) =>
+      c.kind === "member" ? c.disc?.value : null,
+    );
     expect(disc).toEqual(["a", "b", "c"]);
   });
 
   it("discriminates a boolean-tagged union", () => {
-    const u = union(obj({ open: boolLit("true"), x: NUMBER_T }), obj({ open: boolLit("false"), y: STRING_T }));
+    const u = union(
+      obj({ open: boolLit("true"), x: NUMBER_T }),
+      obj({ open: boolLit("false"), y: STRING_T }),
+    );
     const disc = decomposeCases(u, {}).cases.map((c) => (c.kind === "member" ? c.disc : null));
-    expect(disc).toEqual([{ prop: "open", value: true }, { prop: "open", value: false }]);
+    expect(disc).toEqual([
+      { prop: "open", value: true },
+      { prop: "open", value: false },
+    ]);
   });
 
   it("advances past a shared-value literal prop to a later discriminating one", () => {
@@ -162,7 +189,10 @@ describe("decomposeCases — discriminated object unions (B2)", () => {
       obj({ version: numLit("1"), kind: lit("b") }),
     );
     const disc = decomposeCases(u, {}).cases.map((c) => (c.kind === "member" ? c.disc : null));
-    expect(disc).toEqual([{ prop: "kind", value: "a" }, { prop: "kind", value: "b" }]);
+    expect(disc).toEqual([
+      { prop: "kind", value: "a" },
+      { prop: "kind", value: "b" },
+    ]);
   });
 
   it("does not discriminate when a member is itself a nested union", () => {
@@ -174,7 +204,9 @@ describe("decomposeCases — discriminated object unions (B2)", () => {
     const ev = union(obj({ kind: lit("a") }), obj({ kind: lit("b") }));
     const aliases: Record<string, TypeAliasEntry> = { Ev: { body: ev } };
     const ref: VariableType = { type: "typeAliasVariable", aliasName: "Ev" };
-    const disc = decomposeCases(ref, aliases).cases.map((c) => (c.kind === "member" ? c.disc?.value : null));
+    const disc = decomposeCases(ref, aliases).cases.map((c) =>
+      c.kind === "member" ? c.disc?.value : null,
+    );
     expect(disc).toEqual(["a", "b"]);
   });
 });

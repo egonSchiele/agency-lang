@@ -1,16 +1,10 @@
 import * as readline from "readline";
 import process from "process";
-import {
-  readFileSync,
-  writeFileSync,
-  existsSync,
-  mkdirSync,
-  renameSync,
-} from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from "fs";
 import { dirname } from "path";
 import { __call } from "../runtime/call.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
-import { modifiers, RESET, styles } from "@/utils/termcolors.js"
+import { modifiers, RESET, styles } from "@/utils/termcolors.js";
 import { color, colors, bgColors } from "../utils/termcolors.js";
 import { _promptsAutocomplete } from "./ui.js";
 import { visualWidth, wrapText } from "./layout/ansi.js";
@@ -186,14 +180,14 @@ function recordHistoryEntry(history: string[], entry: string, command: string): 
 // uses for user messages in `lib/stdlib/ui.ts`, so line mode and TUI
 // mode look like the same agent. Only applied when stdout is a TTY
 // so piped output (e.g. `agency ... | tee log.txt`) stays clean.
-const USER_INPUT_COLOR = styles.cyan
+const USER_INPUT_COLOR = styles.cyan;
 const COLOR_RESET = RESET;
 const DIM = styles.dim;
 const HIDE_CURSOR = "\x1b[?25l";
 const SHOW_CURSOR = "\x1b[?25h";
 const SYNC_BEGIN = "\x1b[?2026h"; // DEC synchronized-update begin
-const SYNC_END = "\x1b[?2026l";   // DEC synchronized-update end
-const CLEAR_DOWN = "\x1b[0J";     // clear from cursor to end of screen
+const SYNC_END = "\x1b[?2026l"; // DEC synchronized-update end
+const CLEAR_DOWN = "\x1b[0J"; // clear from cursor to end of screen
 const MIN_FOOTER_WIDTH = 20;
 
 // ---------------------------------------------------------------------------
@@ -271,7 +265,7 @@ export type BottomRegion = { refresh: () => void; teardown: () => void };
 
 type RegionOptions = { hideCursor: boolean };
 
-const NOOP_REGION: BottomRegion = { refresh: () => { }, teardown: () => { } };
+const NOOP_REGION: BottomRegion = { refresh: () => {}, teardown: () => {} };
 
 // At most one bottom region owns process.stdout.write at a time. Folding the
 // spinner onto this coordinator makes single-ownership structural rather
@@ -362,18 +356,21 @@ export function installBottomRegion(
   stdoutAny.write = (chunk: any, ...rest: any[]): boolean => {
     const encoding = typeof rest[0] === "string" ? (rest[0] as BufferEncoding) : undefined;
     const cb = rest.find((arg) => typeof arg === "function") as
-      | ((error?: Error | null) => void)
-      | undefined;
+      ((error?: Error | null) => void) | undefined;
     return paint(chunkToText(chunk, encoding), cb);
   };
 
   // Repaint on resize so a mid-prompt window change doesn't leave the next
   // frame erasing a stale row count (rows were measured at the old width).
-  const onResize = (): void => { paint(null); };
+  const onResize = (): void => {
+    paint(null);
+  };
   process.stdout.on("resize", onResize);
 
   const region: BottomRegion = {
-    refresh: () => { paint(null); },
+    refresh: () => {
+      paint(null);
+    },
     teardown: () => {
       process.stdout.off("resize", onResize);
       stdoutAny.write = realWrite;
@@ -406,13 +403,7 @@ export function installBottomRegion(
 // added later) only wires keys to it and acts on the outcome.
 // ---------------------------------------------------------------------------
 
-type InterruptAction =
-  | "submit"
-  | "cancel"
-  | "exit"
-  | "backspace"
-  | { append: string }
-  | null;
+type InterruptAction = "submit" | "cancel" | "exit" | "backspace" | { append: string } | null;
 
 type KeyMeta = { name?: string; ctrl?: boolean; meta?: boolean };
 
@@ -444,10 +435,7 @@ function classifyInterruptKey(sequence: unknown, key: KeyMeta | undefined): Inte
 type InterruptState = { buffer: string; notice: string };
 
 type InterruptOutcome =
-  | { kind: "pending" }
-  | { kind: "resolve"; value: string }
-  | { kind: "cancel" }
-  | { kind: "exit" };
+  { kind: "pending" } | { kind: "resolve"; value: string } | { kind: "cancel" } | { kind: "exit" };
 
 type InterruptConfig = { validKeys: string[]; allowFreeText: boolean; allowCancel: boolean };
 
@@ -490,7 +478,10 @@ function reduceInterrupt(
     return { state, outcome: { kind: "pending" } };
   }
   if (action === "backspace") {
-    return { state: { buffer: state.buffer.slice(0, -1), notice: "" }, outcome: { kind: "pending" } };
+    return {
+      state: { buffer: state.buffer.slice(0, -1), notice: "" },
+      outcome: { kind: "pending" },
+    };
   }
   if (action === "submit") {
     return submitInterrupt(state, config);
@@ -551,7 +542,9 @@ function bodyLines(body: string, width: number): string[] {
     return [];
   }
   const wrapped = wrapText(body, Math.max(1, width - 1));
-  const shown = wrapped.slice(0, INTERRUPT_BODY_MAX_LINES).map((line) => ` ${DIM}${line}${COLOR_RESET}`);
+  const shown = wrapped
+    .slice(0, INTERRUPT_BODY_MAX_LINES)
+    .map((line) => ` ${DIM}${line}${COLOR_RESET}`);
   if (wrapped.length > INTERRUPT_BODY_MAX_LINES) {
     shown.push(` ${DIM}…${COLOR_RESET}`);
   }
@@ -605,7 +598,7 @@ function stopSpinnerIfRunning(): void {
 function assertRawMode(): () => void {
   const stdin = process.stdin as NodeJS.ReadStream & { setRawMode?: (mode: boolean) => void };
   if (!stdin.isTTY || !stdin.setRawMode) {
-    return () => { };
+    return () => {};
   }
   const wasRaw = !!stdin.isRaw;
   stdin.setRawMode(true);
@@ -634,14 +627,15 @@ function stickyInterruptPrompt(rl: readline.Interface, opts: InterruptOpts): Pro
   let state = INITIAL_INTERRUPT_STATE;
 
   const region = installBottomRegion(
-    () => renderInterruptFooter({
-      title: opts.title,
-      body: opts.body,
-      items: opts.items,
-      allowFreeText: opts.allowFreeText,
-      state,
-      columns: process.stdout.columns || 80,
-    }),
+    () =>
+      renderInterruptFooter({
+        title: opts.title,
+        body: opts.body,
+        items: opts.items,
+        allowFreeText: opts.allowFreeText,
+        state,
+        columns: process.stdout.columns || 80,
+      }),
     process.stdout.isTTY === true,
     { hideCursor: true },
   );
@@ -662,7 +656,7 @@ function stickyInterruptPrompt(rl: readline.Interface, opts: InterruptOpts): Pro
       state = step.state;
       const outcome = step.outcome;
       if (outcome.kind === "exit") {
-        settle(() => { });
+        settle(() => {});
         process.exit(130);
         return;
       }
@@ -713,51 +707,26 @@ export function _stickyInterruptAvailable(): boolean {
 }
 
 const SPINNERS = {
-  "line": {
-    "interval": 130,
-    "frames": [
-      "-",
-      "\\",
-      "|",
-      "/"
-    ]
+  line: {
+    interval: 130,
+    frames: ["-", "\\", "|", "/"],
   },
-  "rollingLine": {
-    "interval": 80,
-    "frames": [
-      "/  ",
-      " - ",
-      " \\ ",
-      "  |",
-      "  |",
-      " \\ ",
-      " - ",
-      "/  "
-    ]
+  rollingLine: {
+    interval: 80,
+    frames: ["/  ", " - ", " \\ ", "  |", "  |", " \\ ", " - ", "/  "],
   },
 
-  "star": {
-    "interval": 70,
-    "frames": [
-      "✶",
-      "✸",
-      "✹",
-      "✺",
-      "✹",
-      "✷"
-    ]
+  star: {
+    interval: 70,
+    frames: ["✶", "✸", "✹", "✺", "✹", "✷"],
   },
-  "star2": {
-    "interval": 80,
-    "frames": [
-      "+",
-      "x",
-      "*"
-    ]
+  star2: {
+    interval: 80,
+    frames: ["+", "x", "*"],
   },
-  "bouncingBar": {
-    "interval": 80,
-    "frames": [
+  bouncingBar: {
+    interval: 80,
+    frames: [
       "[    ]",
       "[=   ]",
       "[==  ]",
@@ -773,12 +742,12 @@ const SPINNERS = {
       "[====]",
       "[=== ]",
       "[==  ]",
-      "[=   ]"
-    ]
+      "[=   ]",
+    ],
   },
-  "bouncingBall": {
-    "interval": 80,
-    "frames": [
+  bouncingBall: {
+    interval: 80,
+    frames: [
       "( ●    )",
       "(  ●   )",
       "(   ●  )",
@@ -788,12 +757,12 @@ const SPINNERS = {
       "(   ●  )",
       "(  ●   )",
       "( ●    )",
-      "(●     )"
-    ]
+      "(●     )",
+    ],
   },
-  "pong": {
-    "interval": 80,
-    "frames": [
+  pong: {
+    interval: 80,
+    frames: [
       "▐⠂       ▌",
       "▐⠈       ▌",
       "▐ ⠂      ▌",
@@ -823,10 +792,10 @@ const SPINNERS = {
       "▐  ⠂     ▌",
       "▐ ⠠      ▌",
       "▐ ⡀      ▌",
-      "▐⠠       ▌"
-    ]
+      "▐⠠       ▌",
+    ],
   },
-}
+};
 
 // Same braille frames the TUI's `_spinnerFrame` uses. Kept inline
 // (not imported) so the line-mode bridge doesn't depend on the TUI
@@ -845,14 +814,13 @@ const SPINNER_INTERVAL_MS = SPINNERS.line.interval;
  */
 function startSpinner(useTTY: boolean): () => void {
   if (!useTTY) {
-    return () => { };
+    return () => {};
   }
   const startedAt = Date.now();
   const render = (): string[] => {
     const elapsedMs = Date.now() - startedAt;
     const elapsedSec = Math.floor(elapsedMs / 1000);
-    const frameIndex =
-      Math.floor(elapsedMs / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length;
+    const frameIndex = Math.floor(elapsedMs / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length;
     return [`${DIM}${SPINNER_FRAMES[frameIndex]} Thinking ${elapsedSec}s${COLOR_RESET}`];
   };
   const region = installBottomRegion(render, useTTY);
@@ -885,9 +853,7 @@ function startSpinner(useTTY: boolean): () => void {
 function paletteEntries(paletteCommands: unknown): [string, string][] {
   if (!paletteCommands || typeof paletteCommands !== "object") return [];
   const out: [string, string][] = [];
-  for (const [k, v] of Object.entries(
-    paletteCommands as Record<string, unknown>,
-  )) {
+  for (const [k, v] of Object.entries(paletteCommands as Record<string, unknown>)) {
     if (typeof k !== "string" || !k.startsWith("/")) continue;
     out.push([k, typeof v === "string" ? v : ""]);
   }
@@ -902,9 +868,7 @@ function paletteEntries(paletteCommands: unknown): [string, string][] {
  * hits display the list. Pairs with the live popup below — the
  * popup is the discovery aid, Tab is the "do it now" mechanism.
  */
-function buildCompleter(
-  entries: [string, string][],
-): (line: string) => [string[], string] {
+function buildCompleter(entries: [string, string][]): (line: string) => [string[], string] {
   const keys = entries.map(([k]) => k);
   return (line: string): [string[], string] => {
     if (!line.startsWith("/")) return [[], line];
@@ -926,17 +890,10 @@ function buildCompleter(
  *
  * No-op (returns null) when the palette is empty.
  */
-async function openSlashPalette(
-  entries: [string, string][],
-): Promise<string | null> {
+async function openSlashPalette(entries: [string, string][]): Promise<string | null> {
   if (entries.length === 0) return null;
   const items = entries.map(([key, label]) => ({ key, label }));
-  const result = await _promptsAutocomplete(
-    "Slash command:",
-    items,
-    false,
-    "press Esc to close",
-  );
+  const result = await _promptsAutocomplete("Slash command:", items, false, "press Esc to close");
   if (isFailure(result)) return null;
   return String(result.value);
 }
@@ -990,7 +947,7 @@ function installSlashTrigger(
   useTTY: boolean,
   onTrigger: () => void,
 ): () => void {
-  if (!useTTY || entries.length === 0) return () => { };
+  if (!useTTY || entries.length === 0) return () => {};
   const rlAny = rl as unknown as {
     _ttyWrite: (s: unknown, key: { name?: string; sequence?: string }) => void;
     line: string;
@@ -1041,7 +998,7 @@ function installCancelKey(
   useTTY: boolean,
   onEscape: () => void,
 ): () => void {
-  if (!useTTY) return () => { };
+  if (!useTTY) return () => {};
   const rlAny = rl as unknown as {
     _ttyWrite: (s: unknown, key: { name?: string; sequence?: string }) => void;
   };
@@ -1129,11 +1086,7 @@ function readTokenSnapshot(): TokenSnapshot {
     const models: ModelTotals = {};
     for (const m of normalizeModelUsage((stats as { models?: unknown }).models)) {
       models[m.model] = {
-        tokens:
-          m.inputTokens +
-          m.outputTokens +
-          m.cachedInputTokens +
-          m.cacheCreationInputTokens,
+        tokens: m.inputTokens + m.outputTokens + m.cachedInputTokens + m.cacheCreationInputTokens,
         cost: m.cost,
       };
     }
@@ -1148,9 +1101,7 @@ function readTokenSnapshot(): TokenSnapshot {
       // for. Counting only uncached input reports a small fraction of a
       // cached conversation — on a long agent turn, a few percent of it.
       inputTokens:
-        num(usage.inputTokens) +
-        num(usage.cachedInputTokens) +
-        num(usage.cacheCreationInputTokens),
+        num(usage.inputTokens) + num(usage.cachedInputTokens) + num(usage.cacheCreationInputTokens),
       outputTokens: num(usage.outputTokens),
       models,
     };
@@ -1344,9 +1295,7 @@ export async function _runLineRepl(
   // suppresses SGR sequences when the user has opted out of color.
   const useTTY = process.stdout.isTTY === true;
   const useColor = useTTY && process.env.NO_COLOR !== "1";
-  const coloredPrompt = useColor
-    ? `${USER_INPUT_COLOR}${prompt}`
-    : prompt;
+  const coloredPrompt = useColor ? `${USER_INPUT_COLOR}${prompt}` : prompt;
 
   // Tracks the spinner that's currently running for an in-flight
   // turn, if any. Lifted out of the loop so the
@@ -1488,10 +1437,7 @@ export async function _runLineRepl(
         // Esc is a recoverable interrupt: stop this turn's work and hand
         // control back, but keep the REPL session alive (vs a terminal
         // userKill from TS `cancel()`).
-        turnCtx?.cancel(
-          "cancelled by user",
-          makeAbortCause({ kind: "userInterrupt" }),
-        );
+        turnCtx?.cancel("cancelled by user", makeAbortCause({ kind: "userInterrupt" }));
       });
 
       try {
@@ -1644,13 +1590,7 @@ function pasteJoin(state: PasteState): string {
   return [...state.lines, state.current].join("\n");
 }
 
-type PasteAction =
-  | "submit"
-  | "cancel"
-  | "newline"
-  | "backspace"
-  | { append: string }
-  | null;
+type PasteAction = "submit" | "cancel" | "newline" | "backspace" | { append: string } | null;
 
 /** Map a readline keypress to a paste-mode action. Returns `null` for
  *  keys we ignore in this mode (arrows, function keys, other chords). */
@@ -1673,10 +1613,7 @@ function classifyPasteKey(
  *  Resolves with the joined buffer on Ctrl+D, or `null` on Ctrl+C /
  *  Esc. Restores the previous `_ttyWrite` (e.g. the slash-trigger
  *  wrapper) on exit. */
-function readMultiline(
-  rl: readline.Interface,
-  useColor: boolean,
-): Promise<string | null> {
+function readMultiline(rl: readline.Interface, useColor: boolean): Promise<string | null> {
   const out = process.stdout;
   const rlAny = rl as unknown as {
     _ttyWrite: (s: unknown, key: unknown) => void;
@@ -1700,9 +1637,7 @@ function readMultiline(
   };
   if (stdin.isTTY && stdin.setRawMode) stdin.setRawMode(true);
 
-  out.write(
-    `${dim}── paste mode · Enter: newline · Ctrl+D: submit · Ctrl+C: cancel ──${reset}\n`,
-  );
+  out.write(`${dim}── paste mode · Enter: newline · Ctrl+D: submit · Ctrl+C: cancel ──${reset}\n`);
   out.write(CONT);
 
   return new Promise<string | null>((resolve) => {
@@ -1791,7 +1726,7 @@ export const _internal = {
 export function _clearScreen(): void {
   // ANSI escape code to clear the screen and move the cursor to the top-left.
   //  process.stdout.write("\033[H\033[2J");
-  process.stdout.write('\x1B[2J\x1B[H');
+  process.stdout.write("\x1B[2J\x1B[H");
 }
 
 /** Clear `repl()` input history. Splits cleanly along the state boundary:

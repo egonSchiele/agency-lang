@@ -16,9 +16,7 @@
 import { describe, expect, it } from "vitest";
 import { search as braveSearch, tavilySearch } from "../../stdlib/web/search.js";
 
-function paramNames(fn: {
-  toolDefinition: { schema: { toJSONSchema: () => unknown } };
-}): string[] {
+function paramNames(fn: { toolDefinition: { schema: { toJSONSchema: () => unknown } } }): string[] {
   const schema = fn.toolDefinition.schema.toJSONSchema() as {
     properties?: Record<string, unknown>;
   };
@@ -32,17 +30,20 @@ describe("web-search tools", () => {
   });
 
   it("drop apiKey from the schema once it is bound", () => {
-    const tavily = (tavilySearch as never as { partial: (a: object) => never })
-      .partial({ apiKey: "test-key" });
-    const brave = (braveSearch as never as { partial: (a: object) => never })
-      .partial({ apiKey: "test-key" });
+    const tavily = (tavilySearch as never as { partial: (a: object) => never }).partial({
+      apiKey: "test-key",
+    });
+    const brave = (braveSearch as never as { partial: (a: object) => never }).partial({
+      apiKey: "test-key",
+    });
     expect(paramNames(tavily)).not.toContain("apiKey");
     expect(paramNames(brave)).not.toContain("apiKey");
   });
 
   it("keep the parameters the model actually needs", () => {
-    const tavily = (tavilySearch as never as { partial: (a: object) => never })
-      .partial({ apiKey: "test-key" });
+    const tavily = (tavilySearch as never as { partial: (a: object) => never }).partial({
+      apiKey: "test-key",
+    });
     expect(paramNames(tavily)).toEqual(["query", "count", "searchDepth", "topic"]);
   });
 
@@ -56,9 +57,9 @@ describe("web-search tools", () => {
     )
       .partial({ apiKey: "test-key" })
       .rename("web_search_tavily");
-    expect(
-      (bound as never as { toolDefinition: { name: string } }).toolDefinition.name,
-    ).toBe("web_search_tavily");
+    expect((bound as never as { toolDefinition: { name: string } }).toolDefinition.name).toBe(
+      "web_search_tavily",
+    );
     expect(paramNames(bound)).not.toContain("apiKey");
   });
 });

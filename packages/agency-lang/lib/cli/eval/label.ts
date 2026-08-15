@@ -40,10 +40,7 @@ export type EvalLabelDependencies = {
  * `runSuite` resolves `runsDir` — the two are sibling notions of "where this
  * project keeps its eval artifacts".
  */
-export function resolveDataset(
-  options: DatasetLocationOptions,
-  config: AgencyConfig,
-): string {
+export function resolveDataset(options: DatasetLocationOptions, config: AgencyConfig): string {
   // Flags win over config, matching how runsDir and every other CLI override
   // behaves.
   return path.resolve(options.dataset ?? config.eval?.dataset ?? DEFAULT_DATASET_DIRECTORY);
@@ -87,12 +84,13 @@ export function terminalDimension(value: number | undefined, fallback: number): 
 
 const defaultDependencies: EvalLabelDependencies = {
   makeHost: (screen, currentSize) => createLabelingHost(screen, currentSize),
-  makeScreen: () => new Screen({
-    input: new TerminalInput({ suppressSigint: true }),
-    output: new TerminalOutput(),
-    width: terminalDimension(process.stdout.columns, DEFAULT_COLUMNS),
-    height: terminalDimension(process.stdout.rows, DEFAULT_ROWS),
-  }),
+  makeScreen: () =>
+    new Screen({
+      input: new TerminalInput({ suppressSigint: true }),
+      output: new TerminalOutput(),
+      width: terminalDimension(process.stdout.columns, DEFAULT_COLUMNS),
+      height: terminalDimension(process.stdout.rows, DEFAULT_ROWS),
+    }),
   isInteractive: () => process.stdin.isTTY === true && process.stdout.isTTY === true,
   environment: process.env,
   osUserName: () => {
@@ -112,8 +110,8 @@ export async function evalLabel(
   if (options.checklist === undefined || options.checklist.trim().length === 0) {
     throw new Error(
       "--checklist is required: it names the questions you are judging against. Point it at a " +
-      'JSON file like { "name": "news-quality", "questions": [{ "text": "Is it accurate?" }] } to ' +
-      "start a new checklist, or at one you have used before to continue it.",
+        'JSON file like { "name": "news-quality", "questions": [{ "text": "Is it accurate?" }] } to ' +
+        "start a new checklist, or at one you have used before to continue it.",
     );
   }
   if (!fs.existsSync(options.checklist)) {
@@ -122,7 +120,7 @@ export async function evalLabel(
   if (!dependencies.isInteractive()) {
     throw new Error(
       "agency eval label needs an interactive terminal: it shows outputs and reads " +
-      "keystrokes. Run it directly rather than through a pipe.",
+        "keystrokes. Run it directly rather than through a pipe.",
     );
   }
 

@@ -36,9 +36,7 @@ export function assertNoLoaderCollision(
     if (Object.hasOwn(constantFields, name)) {
       throw new IngestSourceError(
         `Cannot set "${name}" as a constant: the ${format} loader already produces "${name}"` +
-        (name === "task"
-          ? ". Pass --no-task-field as well if you mean to replace it."
-          : "."),
+          (name === "task" ? ". Pass --no-task-field as well if you mean to replace it." : "."),
       );
     }
   }
@@ -108,12 +106,13 @@ export function loadBatch(
   if (format !== "statelog" && request.selection.kind === "statelog") {
     throw new IngestSourceError(
       `--trace only applies to a statelog source, but ${request.source.path} is a ` +
-      `${format} source.`,
+        `${format} source.`,
     );
   }
 
   if (format === "statelog") {
-    const traceIds = request.selection.kind === "statelog" ? request.selection.request.traceIds : [];
+    const traceIds =
+      request.selection.kind === "statelog" ? request.selection.request.traceIds : [];
     return dependencies.loadStatelog({
       path: request.source.path,
       traceIds,
@@ -137,10 +136,7 @@ export function loadBatch(
 
   if (format === "files") {
     return dependencies.loadFiles({
-      selection: dependencies.resolveFileSelection(
-        request.source.path,
-        request.source.recursive,
-      ),
+      selection: dependencies.resolveFileSelection(request.source.path, request.source.recursive),
       source: request.sourceName,
       constantFields: request.constantFields,
       maxBytes: request.maxBytes,

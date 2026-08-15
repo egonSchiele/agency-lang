@@ -32,10 +32,7 @@ export function mergeResults<T>(results: Result<T>[]): Result<T[]> {
   return success(values);
 }
 
-export function resultMap<T, U>(
-  result: Result<T>,
-  fn: (value: T) => U,
-): Result<U> {
+export function resultMap<T, U>(result: Result<T>, fn: (value: T) => U): Result<U> {
   if (result.success) {
     return success(fn(result.value));
   } else {

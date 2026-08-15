@@ -4,7 +4,8 @@ import { makeRng, sampleWithoutReplacement, weightedPick } from "./rng.js";
 
 describe("rng", () => {
   it("is deterministic for a given seed", () => {
-    const a = makeRng(42); const b = makeRng(42);
+    const a = makeRng(42);
+    const b = makeRng(42);
     expect([a(), a(), a()]).toEqual([b(), b(), b()]);
   });
 
@@ -22,7 +23,13 @@ describe("rng", () => {
   it("weightedPick never selects a zero-weight item", () => {
     const rng = makeRng(7);
     for (let i = 0; i < 50; i += 1) {
-      const pick = weightedPick([{ item: "a", weight: 0 }, { item: "b", weight: 1 }], rng);
+      const pick = weightedPick(
+        [
+          { item: "a", weight: 0 },
+          { item: "b", weight: 1 },
+        ],
+        rng,
+      );
       expect(pick).toBe("b");
     }
   });

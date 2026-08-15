@@ -3,20 +3,12 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { approve, reject } from "./interruptResponse.js";
-import type {
-  InterruptApprove,
-  InterruptReject,
-  InterruptResponse,
-} from "./interruptResponse.js";
+import type { InterruptApprove, InterruptReject, InterruptResponse } from "./interruptResponse.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
 import { resolveInvocation, type InvocationOptions } from "./invocationOptions.js";
 import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
 import { reinstallRootBudget } from "./rootBudget.js";
-import {
-  AgencyCancelledError,
-  HandlerRecursionError,
-  RestoreSignal,
-} from "./errors.js";
+import { AgencyCancelledError, HandlerRecursionError, RestoreSignal } from "./errors.js";
 import { isAborted } from "./abortedResult.js";
 import { mergeFor, mergeForIpc } from "./effectMerge.js";
 import { applyOverrides } from "./rewind.js";
@@ -29,18 +21,11 @@ import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { Approved, GraphState, Rejected, RunNodeResult } from "./types.js";
 import type { HandlerEntry } from "./types.js";
-import {
-  unwrapServedInvocationOutcome,
-  type ServedInvocationOutcome,
-} from "./invocationUsage.js";
+import { unwrapServedInvocationOutcome, type ServedInvocationOutcome } from "./invocationUsage.js";
 import { finishServedInvocation, type RawOutcome } from "./servedInvocationLifecycle.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { isIpcMode, sendInterruptToParent } from "./ipc.js";
-import {
-  runAsHandler,
-  executingHandlers,
-  insideHandlerFunction,
-} from "./executingHandlers.js";
+import { runAsHandler, executingHandlers, insideHandlerFunction } from "./executingHandlers.js";
 
 // The response API lives in the cycle-free `interruptResponse.ts` leaf (imported
 // at the top of this file). Re-export so `import { approve, reject,
@@ -77,9 +62,9 @@ export type InterruptState = {
 
 export type Interrupt<T = any> = {
   type: "interrupt";
-  effect: string;         // e.g. "std::read", "unknown"
-  message: string;        // human-readable description
-  origin: string;         // compiler-injected module origin
+  effect: string; // e.g. "std::read", "unknown"
+  message: string; // human-readable description
+  origin: string; // compiler-injected module origin
   interruptId: string; // nanoid — globally unique
   data: T;
   debugger?: boolean;
@@ -297,9 +282,7 @@ async function runHandlerChain(
         // StateStack.beginHandlerSuspension). Per handler, not per
         // chain: each handler in the chain has its own registration
         // site and therefore its own hidden set.
-        const suspensionToken = stack
-          ? stack.beginSuspension(entry.liveGuardIds)
-          : undefined;
+        const suspensionToken = stack ? stack.beginSuspension(entry.liveGuardIds) : undefined;
         stack!.executingHandlerEntries.push(entry);
         const promiseWatermark = ctx.pendingPromises.watermark();
         // Treat handler execution as atomic for the debugger — same as LLM tool calls.
@@ -358,7 +341,12 @@ async function runHandlerChain(
           data: interruptObj.data,
         };
         if (result.type === "pass") {
-          ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "pass", interrupt: interruptSummary });
+          ctx.statelogClient.handlerDecision({
+            interruptId,
+            handlerIndex: i,
+            decision: "pass",
+            interrupt: interruptSummary,
+          });
           continue;
         }
         if (result.type === "reject") {
@@ -369,16 +357,33 @@ async function runHandlerChain(
           // terminal events into the shared trace. An interrupt can carry
           // more than one interruptResolved (chain outcome, then a user
           // decision); the LAST is authoritative.
-          ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "reject", value: result.value, interrupt: interruptSummary });
+          ctx.statelogClient.handlerDecision({
+            interruptId,
+            handlerIndex: i,
+            decision: "reject",
+            value: result.value,
+            interrupt: interruptSummary,
+          });
           return { kind: "rejected", value: result.value };
         }
         if (result.type === "propagate") {
-          ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "propagate", interrupt: interruptSummary });
+          ctx.statelogClient.handlerDecision({
+            interruptId,
+            handlerIndex: i,
+            decision: "propagate",
+            interrupt: interruptSummary,
+          });
           hasPropagation = true;
           continue;
         }
         if (result.type === "approve") {
-          ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "approve", value: result.value, interrupt: interruptSummary });
+          ctx.statelogClient.handlerDecision({
+            interruptId,
+            handlerIndex: i,
+            decision: "approve",
+            value: result.value,
+            interrupt: interruptSummary,
+          });
           approvals.push(result.value);
           continue;
         }
@@ -645,10 +650,7 @@ const ResumeBatchSchema = z
  * when the batch is well-formed. `safeParse` never throws — a `null` or
  * primitive item is a validation error, not a crash.
  */
-export function validateResumeBatch(
-  interrupts: unknown,
-  responses: unknown,
-): string | null {
+export function validateResumeBatch(interrupts: unknown, responses: unknown): string | null {
   const result = ResumeBatchSchema.safeParse({ interrupts, responses });
   return result.success ? null : result.error.issues[0].message;
 }
@@ -700,17 +702,15 @@ async function runResumeLoop(
       // graph dispatch / setupNode tries to reach for it, the throw
       // surfaces the bug instead of letting a write silently land in
       // a discarded placeholder.
-      const result = await runInBootstrapFrame(
-        execCtx,
-        () =>
-          execCtx.graph.run(
-            nodeName,
-            { data: {}, ctx: execCtx, isResume: true },
-            {
-              onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
-              statelogClient: execCtx.statelogClient,
-            },
-          ),
+      const result = await runInBootstrapFrame(execCtx, () =>
+        execCtx.graph.run(
+          nodeName,
+          { data: {}, ctx: execCtx, isResume: true },
+          {
+            onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
+            statelogClient: execCtx.statelogClient,
+          },
+        ),
       );
       await execCtx.pendingPromises.awaitAll();
       const returnObject = createReturnObject({ result, globals: execCtx.globals });
@@ -819,8 +819,7 @@ async function respondToInterruptsCore(
       for (let i = 0; i < interrupts.length; i++) {
         const intr = interrupts[i];
         const resp = responses[i];
-        const resolvedOutcome =
-          resp.type === "approve" ? "approved" : ("rejected" as const);
+        const resolvedOutcome = resp.type === "approve" ? "approved" : ("rejected" as const);
         execCtx.statelogClient.interruptResolved({
           interruptId: intr.interruptId,
           outcome: resolvedOutcome,
@@ -840,10 +839,7 @@ async function respondToInterruptsCore(
     // reads ctx/threads/stack from ALS after the
     // drop-per-call-context-plumbing migration. See lib/runtime/node.ts
     // and lib/runtime/asyncContext.ts (`runInBootstrapFrame`).
-    await runInBootstrapFrame(
-      execCtx,
-      () => __initAllRegisteredCallbacks(execCtx),
-    );
+    await runInBootstrapFrame(execCtx, () => __initAllRegisteredCallbacks(execCtx));
     execCtx.restoreState(checkpoint);
     // Re-assert the root budget's LIMIT from the host context (the checkpoint's
     // ceiling is caller-controllable on a stateless resume), while preserving the
@@ -890,4 +886,3 @@ export async function respondToInterruptsForServe(
 ): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
   return respondToInterruptsCore(args);
 }
-

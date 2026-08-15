@@ -90,10 +90,7 @@ export function hoistCallsInProgram(program: AgencyProgram): AgencyProgram {
  *  if bodies, finalize bodies, thread blocks); omit it at a frame
  *  boundary (function, node, lifted block, fork branch) so numbering
  *  restarts against that frame's own flat locals. */
-export function hoistCallsInScope(
-  body: AgencyNode[],
-  counter?: Counter,
-): AgencyNode[] {
+export function hoistCallsInScope(body: AgencyNode[], counter?: Counter): AgencyNode[] {
   const c = counter ?? { n: seedCounter(body) };
   const out: AgencyNode[] = [];
   for (const stmt of body) {
@@ -310,11 +307,8 @@ function recurseSlots(stmt: any, counter: Counter): AgencyNode {
     if (stmt.type === "handleBlock" && slot.retargetsReturn) {
       continue;
     }
-    const ownFrame =
-      slot.blockAncestor !== undefined || stmt.type === "blockArgument";
-    const newBody = ownFrame
-      ? hoistCallsInScope(slot.body)
-      : hoistCallsInScope(slot.body, counter);
+    const ownFrame = slot.blockAncestor !== undefined || stmt.type === "blockArgument";
+    const newBody = ownFrame ? hoistCallsInScope(slot.body) : hoistCallsInScope(slot.body, counter);
     out = slot.write(out, newBody);
   }
   return out;

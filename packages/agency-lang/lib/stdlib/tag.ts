@@ -13,11 +13,7 @@ function tagsCopy(globals: GlobalStore, value: unknown): Record<string, unknown>
  * Attach a tag to a value and return the value's current tags. Primitives are
  * keyed by value (all equal primitives share tags); objects by reference.
  */
-export function _tag(
-  value: unknown,
-  key: string,
-  val: unknown,
-): Record<string, unknown> {
+export function _tag(value: unknown, key: string, val: unknown): Record<string, unknown> {
   const { globals } = getRuntimeContext();
   globals.setTag(value, key, val);
   return tagsCopy(globals, value);
@@ -26,10 +22,7 @@ export function _tag(
 /**
  * Attach every key/value in `tags` to `value`, then return its current tags.
  */
-export function _setTags(
-  value: unknown,
-  tags: Record<string, unknown>,
-): Record<string, unknown> {
+export function _setTags(value: unknown, tags: Record<string, unknown>): Record<string, unknown> {
   const { globals } = getRuntimeContext();
   for (const key of Object.keys(tags)) globals.setTag(value, key, tags[key]);
   return tagsCopy(globals, value);
@@ -42,10 +35,7 @@ export function _getTags(value: unknown): Record<string, unknown> {
 }
 
 /** Mark a value for statelog redaction and return its current tags. */
-export function _redact(
-  value: unknown,
-  label?: string | null,
-): Record<string, unknown> {
+export function _redact(value: unknown, label?: string | null): Record<string, unknown> {
   const { globals } = getRuntimeContext();
   globals.markRedacted(value, label ?? undefined);
   return tagsCopy(globals, value);

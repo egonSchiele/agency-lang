@@ -7,20 +7,14 @@ import { formatKey } from "../../tui/input/format.js";
 // asks the loop to open the line-prompt for `/`. `requestCopy` asks
 // it to shell out to the clipboard. Pure reducers can't do either on
 // their own.
-export type ViewerCommand =
-  | { kind: "search" }
-  | { kind: "copy" }
-  | { kind: "toggleFollow" };
+export type ViewerCommand = { kind: "search" } | { kind: "copy" } | { kind: "toggleFollow" };
 
 export type HandleKeyResult = {
   state: ViewerState;
   command?: ViewerCommand;
 };
 
-export function handleKeyEx(
-  state: ViewerState,
-  event: KeyEvent,
-): HandleKeyResult {
+export function handleKeyEx(state: ViewerState, event: KeyEvent): HandleKeyResult {
   // Help overlay swallows the next keystroke — any key closes it.
   if (state.helpOpen) {
     return { state: { ...state, helpOpen: false } };
@@ -107,11 +101,7 @@ function clearSearch(state: ViewerState): ViewerState {
 // Expand the node under the cursor and every span/trace beneath it.
 // Leaves stay leaves; the cursor doesn't move. Scoped to the current
 // subtree rather than the whole forest.
-function expandSubtree(
-  state: ViewerState,
-  rows: VisibleRow[],
-  idx: number,
-): ViewerState {
+function expandSubtree(state: ViewerState, rows: VisibleRow[], idx: number): ViewerState {
   if (idx < 0) return state;
   const next = new Set(state.expanded);
   const walk = (node: TreeNode): void => {
@@ -125,11 +115,7 @@ function expandSubtree(
 // Collapse the node under the cursor and everything beneath it, so
 // re-opening it shows its children collapsed. The cursor stays put — the
 // node remains visible because its ancestors are untouched.
-function collapseSubtree(
-  state: ViewerState,
-  rows: VisibleRow[],
-  idx: number,
-): ViewerState {
+function collapseSubtree(state: ViewerState, rows: VisibleRow[], idx: number): ViewerState {
   if (idx < 0) return state;
   const node = rows[idx].node;
   const next = new Set(state.expanded);
@@ -166,7 +152,7 @@ function collapseAll(state: ViewerState): ViewerState {
   const cursorTraceRoot = traceRootOf(state.roots, state.cursorId);
   const cursorId = expanded.has(state.cursorId)
     ? state.cursorId
-    : cursorTraceRoot ?? state.roots[0]?.id ?? state.cursorId;
+    : (cursorTraceRoot ?? state.roots[0]?.id ?? state.cursorId);
   return { ...state, expanded, cursorId, scrollTop: 0 };
 }
 
@@ -196,20 +182,12 @@ function containsId(node: TreeNode, id: string): boolean {
   return false;
 }
 
-function moveCursor(
-  state: ViewerState,
-  rows: VisibleRow[],
-  newIdx: number,
-): ViewerState {
+function moveCursor(state: ViewerState, rows: VisibleRow[], newIdx: number): ViewerState {
   if (newIdx < 0 || newIdx >= rows.length) return state;
   return { ...state, cursorId: rows[newIdx].node.id };
 }
 
-function expand(
-  state: ViewerState,
-  rows: VisibleRow[],
-  idx: number,
-): ViewerState {
+function expand(state: ViewerState, rows: VisibleRow[], idx: number): ViewerState {
   if (idx < 0) return state;
   const node = rows[idx].node;
   // Synthetic text rows aren't expandable and have no children to
@@ -236,11 +214,7 @@ function expand(
   return { ...state, expanded: next };
 }
 
-function collapseOrParent(
-  state: ViewerState,
-  rows: VisibleRow[],
-  idx: number,
-): ViewerState {
+function collapseOrParent(state: ViewerState, rows: VisibleRow[], idx: number): ViewerState {
   if (idx < 0) return state;
   const node = rows[idx].node;
   if (state.expanded.has(node.id)) {

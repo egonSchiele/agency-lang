@@ -44,7 +44,11 @@ describe("mcpAdd", () => {
   });
   it("writes an http+oauth server", async () => {
     await mcpAdd("gh", { url: "https://x/mcp", oauth: true });
-    expect(agencyJson().mcpServers.gh).toEqual({ type: "http", url: "https://x/mcp", auth: "oauth" });
+    expect(agencyJson().mcpServers.gh).toEqual({
+      type: "http",
+      url: "https://x/mcp",
+      auth: "oauth",
+    });
   });
   it("returns 1 with no transport", async () => {
     expect(await mcpAdd("bad", {})).toBe(1);

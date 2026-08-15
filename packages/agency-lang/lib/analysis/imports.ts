@@ -10,10 +10,7 @@ export function getImports(program: AgencyProgram): string[] {
     .map((node) => node.agencyFile.trim());
   // this makes compile() try to parse non-agency files
   const importStatements = program.nodes
-    .filter(
-      (node) =>
-        node.type === "importStatement" && isAgencyImport(node.modulePath),
-    )
+    .filter((node) => node.type === "importStatement" && isAgencyImport(node.modulePath))
     .map((node) => (node as ImportStatement).modulePath.trim());
 
   return [...toolAndNodeImports, ...importStatements];

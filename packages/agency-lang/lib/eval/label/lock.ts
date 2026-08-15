@@ -82,14 +82,19 @@ export function acquireDatasetLock(args: AcquireStoreLockArgs): DatasetLock {
 function describeExistingHolder(lockFile: string): string {
   const existing = readHolder(lockFile);
   if (existing === undefined) {
-    return `Another labelling session holds ${lockFile}, but the file is unreadable. ` +
-      `If no session is running, delete it.`;
+    return (
+      `Another labelling session holds ${lockFile}, but the file is unreadable. ` +
+      `If no session is running, delete it.`
+    );
   }
-  const liveness = processState(existing.pid) === "alive"
-    ? `That process is still running.`
-    : `That process is no longer running; if you are sure no session is active, delete the file.`;
-  return `Another labelling session holds ${lockFile} (pid ${existing.pid}, acquired ` +
-    `${existing.acquiredAt}). ${liveness}`;
+  const liveness =
+    processState(existing.pid) === "alive"
+      ? `That process is still running.`
+      : `That process is no longer running; if you are sure no session is active, delete the file.`;
+  return (
+    `Another labelling session holds ${lockFile} (pid ${existing.pid}, acquired ` +
+    `${existing.acquiredAt}). ${liveness}`
+  );
 }
 
 /**
@@ -116,7 +121,7 @@ function releaseOwnedLock(
   if (existing.token !== holder.token) {
     reportWarning(
       `Not releasing ${lockFile}: it is now held by pid ${existing.pid}, not this session. ` +
-      `Something removed our lock while we were running.`,
+        `Something removed our lock while we were running.`,
     );
     return;
   }

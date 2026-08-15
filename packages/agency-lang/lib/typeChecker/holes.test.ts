@@ -36,9 +36,7 @@ function codesOf(source: string): string[] {
 
 describe("AG8002: holes with no discoverable type", () => {
   it("fires when a hole has no expected type and no annotation", () => {
-    expect(codesOf(`node main() {\n  const x = #mystery\n  return x\n}\n`)).toContain(
-      "AG8002",
-    );
+    expect(codesOf(`node main() {\n  const x = #mystery\n  return x\n}\n`)).toContain("AG8002");
   });
 
   it("does not fire when the position supplies a type", () => {
@@ -69,8 +67,7 @@ describe("names a filler could introduce do not resolve in the template", () => 
 
 describe("definite returns and statement holes", () => {
   const DR = /^Not all code paths return a value in '/;
-  const misses = (src: string) =>
-    check(src).filter((e) => DR.test(e.message)).length > 0;
+  const misses = (src: string) => check(src).filter((e) => DR.test(e.message)).length > 0;
 
   it("exempts a function whose only return could come from a hole", () => {
     // Sanity anchor first: without the hole, the same shape DOES flag.

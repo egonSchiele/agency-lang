@@ -1,12 +1,6 @@
 import { isCode, kindOf, type Code } from "./code.js";
 import { typeKey } from "../../typeChecker/typeKey.js";
-import {
-  ANY_T,
-  BOOLEAN_T,
-  NULL_T,
-  NUMBER_T,
-  STRING_T,
-} from "../../typeChecker/primitives.js";
+import { ANY_T, BOOLEAN_T, NULL_T, NUMBER_T, STRING_T } from "../../typeChecker/primitives.js";
 import type { StringLiteral, VariableType } from "../../types.js";
 
 export type SynthesizeOptions = {
@@ -45,9 +39,7 @@ export function synthesizeType(
 ): VariableType | null {
   if (value === null || value === undefined) return NULL_T;
   if (typeof value === "string") {
-    return options.stringsAsLiterals === true
-      ? { type: "stringLiteralType", value }
-      : STRING_T;
+    return options.stringsAsLiterals === true ? { type: "stringLiteralType", value } : STRING_T;
   }
   if (typeof value === "number") return NUMBER_T;
   if (typeof value === "boolean") return BOOLEAN_T;
@@ -76,19 +68,14 @@ function isPlainObject(value: unknown): boolean {
  *  Honors `stringsAsLiterals` for the same reason a plain string does: the
  *  graft becomes the literal `"fast"`, which the compile infers as a
  *  string-literal type. */
-function literalFragmentType(
-  code: Code,
-  options: SynthesizeOptions,
-): VariableType | null {
+function literalFragmentType(code: Code, options: SynthesizeOptions): VariableType | null {
   if (kindOf(code) !== "expr" || code.nodes.length !== 1) return null;
   const node = code.nodes[0];
   if (node.type === "number") return NUMBER_T;
   if (node.type === "boolean") return BOOLEAN_T;
   if (node.type === "string") {
     const literal = node as StringLiteral;
-    const interpolated = literal.segments.some(
-      (segment) => segment.type === "interpolation",
-    );
+    const interpolated = literal.segments.some((segment) => segment.type === "interpolation");
     if (interpolated) return null;
     // Mirrors `literalToType`'s eligibility (one text segment); anything
     // else widens, as `synthType` does when `literalToType` declines.
@@ -108,10 +95,7 @@ function literalFragmentType(
 /** Members are deduplicated by canonical key, so a homogeneous array of
  *  1000 records yields one member. Dedupe rather than sampling: sampling
  *  would depend on where an odd element sat. */
-function arrayTypeOf(
-  value: unknown[],
-  options: SynthesizeOptions,
-): VariableType | null {
+function arrayTypeOf(value: unknown[], options: SynthesizeOptions): VariableType | null {
   const members: VariableType[] = [];
   // Keys come from user data, so the seen-set is null-prototype and
   // membership goes through Object.hasOwn (house pattern).
@@ -129,8 +113,7 @@ function arrayTypeOf(
   if (members.length === 0) return { type: "arrayType", elementType: ANY_T };
   return {
     type: "arrayType",
-    elementType:
-      members.length === 1 ? members[0] : { type: "unionType", types: members },
+    elementType: members.length === 1 ? members[0] : { type: "unionType", types: members },
   };
 }
 

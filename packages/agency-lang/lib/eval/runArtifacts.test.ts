@@ -34,7 +34,9 @@ describe("eval run artifacts", () => {
     });
 
     expect(fs.existsSync(path.join(tmpDir, "r1", "inputs"))).toBe(true);
-    expect(JSON.parse(fs.readFileSync(path.join(tmpDir, "r1", "config.json"), "utf-8"))).toMatchObject({
+    expect(
+      JSON.parse(fs.readFileSync(path.join(tmpDir, "r1", "config.json"), "utf-8")),
+    ).toMatchObject({
       runId: "r1",
       agentLabel: "agent.agency:main",
       continueOnError: true,
@@ -46,14 +48,16 @@ describe("eval run artifacts", () => {
   it("rejects existing run directories before writing partial state", () => {
     fs.mkdirSync(path.join(tmpDir, "existing"), { recursive: true });
 
-    expect(() => initializeEvalRun({
-      runId: "existing",
-      runsDir: tmpDir,
-      agentLabel: "agent.agency:main",
-      inputs: [],
-      continueOnError: true,
-      startedAt: new Date("2026-06-09T14:30:00.000Z"),
-    })).toThrow(
+    expect(() =>
+      initializeEvalRun({
+        runId: "existing",
+        runsDir: tmpDir,
+        agentLabel: "agent.agency:main",
+        inputs: [],
+        continueOnError: true,
+        startedAt: new Date("2026-06-09T14:30:00.000Z"),
+      }),
+    ).toThrow(
       `Run directory already exists: ${path.join(tmpDir, "existing")}.
 Choose a different --run-id or delete the existing directory.`,
     );
@@ -67,29 +71,39 @@ Choose a different --run-id or delete the existing directory.`,
 
     const prepared = prepareInput(state, { id: "t1", goal: "goal", task: "t" });
 
-    expect(JSON.parse(fs.readFileSync(path.join(state.runDir, "inputs", "t1", "input.json"), "utf-8"))).toMatchObject({ id: "t1", goal: "goal" });
+    expect(
+      JSON.parse(fs.readFileSync(path.join(state.runDir, "inputs", "t1", "input.json"), "utf-8")),
+    ).toMatchObject({ id: "t1", goal: "goal" });
     // prepareInput allocates the path but no longer creates the workdir — that's
     // prepareRunDir's job (seed + overlay + compile inside the workdir).
     expect(fs.existsSync(prepared.workdirPath)).toBe(false);
-    expect(prepared.statelogPath).toBe(path.join(state.runDir, "inputs", "t1", "agent", "statelog.jsonl"));
-    expect(prepared.evalRecordPath).toBe(path.join(state.runDir, "inputs", "t1", "agent", "eval-record.json"));
+    expect(prepared.statelogPath).toBe(
+      path.join(state.runDir, "inputs", "t1", "agent", "statelog.jsonl"),
+    );
+    expect(prepared.evalRecordPath).toBe(
+      path.join(state.runDir, "inputs", "t1", "agent", "eval-record.json"),
+    );
   });
 
   it("rejects run ids that escape the runs directory", () => {
-    expect(() => initializeEvalRun({
-      runId: "../escape",
-      runsDir: tmpDir,
-      agentLabel: "agent.agency:main",
-      inputs: [],
-      continueOnError: true,
-      startedAt: new Date("2026-06-09T14:30:00.000Z"),
-    })).toThrow("Invalid runId");
+    expect(() =>
+      initializeEvalRun({
+        runId: "../escape",
+        runsDir: tmpDir,
+        agentLabel: "agent.agency:main",
+        inputs: [],
+        continueOnError: true,
+        startedAt: new Date("2026-06-09T14:30:00.000Z"),
+      }),
+    ).toThrow("Invalid runId");
   });
 
   it("rejects input ids that escape the input directory", () => {
     const state = initializeState();
 
-    expect(() => prepareInput(state, { id: "../escape", goal: "goal", task: "t" })).toThrow("Invalid id");
+    expect(() => prepareInput(state, { id: "../escape", goal: "goal", task: "t" })).toThrow(
+      "Invalid id",
+    );
   });
 
   it("records prepare failures without touching artifact paths", () => {
@@ -120,12 +134,15 @@ Choose a different --run-id or delete the existing directory.`,
       const state = initializeState();
       const prepared = prepareInput(state, { id: "t1", goal: "g", task: "t" });
       fs.mkdirSync(path.dirname(prepared.evalRecordPath), { recursive: true });
-      fs.writeFileSync(prepared.evalRecordPath, JSON.stringify({
-        durationMs: 120_000,
-        startedAtMs: 1_754_000_000_000,
-        agentName: "gcode",
-        metrics: { costUsdTotal: 1.25, models: ["sonnet"] },
-      }));
+      fs.writeFileSync(
+        prepared.evalRecordPath,
+        JSON.stringify({
+          durationMs: 120_000,
+          startedAtMs: 1_754_000_000_000,
+          agentName: "gcode",
+          metrics: { costUsdTotal: 1.25, models: ["sonnet"] },
+        }),
+      );
 
       const summary = writeEvalRunSummary(state, [inputResult(prepared, "success")]);
 
@@ -142,9 +159,14 @@ Choose a different --run-id or delete the existing directory.`,
       const state = initializeState();
       const prepared = prepareInput(state, { id: "t1", goal: "g", task: "t" });
       fs.mkdirSync(path.dirname(prepared.evalRecordPath), { recursive: true });
-      fs.writeFileSync(prepared.evalRecordPath, JSON.stringify({
-        durationMs: 5, startedAtMs: 10, metrics: { costUsdTotal: 0, models: [] },
-      }));
+      fs.writeFileSync(
+        prepared.evalRecordPath,
+        JSON.stringify({
+          durationMs: 5,
+          startedAtMs: 10,
+          metrics: { costUsdTotal: 0, models: [] },
+        }),
+      );
 
       const summary = writeEvalRunSummary(state, [inputResult(prepared, "success")]);
 
@@ -157,7 +179,9 @@ Choose a different --run-id or delete the existing directory.`,
       const prepared = prepareInput(state, { id: "t1", goal: "g", task: "t" });
       const warnings: string[] = [];
 
-      const summary = writeEvalRunSummary(state, [inputResult(prepared, "error")], (m) => warnings.push(m));
+      const summary = writeEvalRunSummary(state, [inputResult(prepared, "error")], (m) =>
+        warnings.push(m),
+      );
 
       expect(summary.inputs[0].metrics).toBeUndefined();
       expect(warnings).toEqual([]);
@@ -167,13 +191,19 @@ Choose a different --run-id or delete the existing directory.`,
       const state = initializeState();
       const prepared = prepareInput(state, { id: "t1", goal: "g", task: "t" });
       fs.mkdirSync(path.dirname(prepared.evalRecordPath), { recursive: true });
-      fs.writeFileSync(prepared.evalRecordPath, JSON.stringify({
-        durationMs: "not-a-number", startedAtMs: 10,
-        metrics: { costUsdTotal: 1.0, models: ["sonnet"] },
-      }));
+      fs.writeFileSync(
+        prepared.evalRecordPath,
+        JSON.stringify({
+          durationMs: "not-a-number",
+          startedAtMs: 10,
+          metrics: { costUsdTotal: 1.0, models: ["sonnet"] },
+        }),
+      );
       const warnings: string[] = [];
 
-      const summary = writeEvalRunSummary(state, [inputResult(prepared, "success")], (m) => warnings.push(m));
+      const summary = writeEvalRunSummary(state, [inputResult(prepared, "success")], (m) =>
+        warnings.push(m),
+      );
 
       expect(summary.inputs[0].metrics).toBeUndefined();
       expect(warnings).toHaveLength(1);
@@ -187,7 +217,9 @@ Choose a different --run-id or delete the existing directory.`,
       fs.writeFileSync(prepared.evalRecordPath, "{ torn");
       const warnings: string[] = [];
 
-      const summary = writeEvalRunSummary(state, [inputResult(prepared, "success")], (m) => warnings.push(m));
+      const summary = writeEvalRunSummary(state, [inputResult(prepared, "success")], (m) =>
+        warnings.push(m),
+      );
 
       expect(summary.inputs[0].metrics).toBeUndefined();
       expect(warnings).toHaveLength(1);
@@ -196,7 +228,15 @@ Choose a different --run-id or delete the existing directory.`,
     });
   });
 
-  function inputResult(prepared: { input: { id?: string }; evalRecordPath: string; statelogPath: string; workdirPath: string }, status: "success" | "error") {
+  function inputResult(
+    prepared: {
+      input: { id?: string };
+      evalRecordPath: string;
+      statelogPath: string;
+      workdirPath: string;
+    },
+    status: "success" | "error",
+  ) {
     return {
       inputId: prepared.input.id ?? "t1",
       status,

@@ -70,11 +70,7 @@ describe("substituteTypeParams", () => {
         { key: "b", value: tparam("B") },
       ],
     };
-    const result = substituteTypeParams(
-      body,
-      ["A", "B"],
-      [stringType, numberType],
-    );
+    const result = substituteTypeParams(body, ["A", "B"], [stringType, numberType]);
     expect(result).toEqual({
       type: "objectType",
       properties: [
@@ -96,11 +92,7 @@ describe("substituteTypeParams", () => {
       successType: tparam("T"),
       failureType: tparam("E"),
     };
-    const result = substituteTypeParams(
-      body,
-      ["T", "E"],
-      [stringType, numberType],
-    );
+    const result = substituteTypeParams(body, ["T", "E"], [stringType, numberType]);
     expect(result).toEqual({
       type: "resultType",
       successType: stringType,

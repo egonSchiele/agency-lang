@@ -196,10 +196,7 @@ function nodeSortTs(node: TreeNode): number {
   return node.firstTs ?? Number.POSITIVE_INFINITY;
 }
 
-function ensureTrace(
-  traces: Record<string, TreeNode>,
-  traceId: string,
-): TreeNode {
+function ensureTrace(traces: Record<string, TreeNode>, traceId: string): TreeNode {
   const existing = traces[traceId];
   if (existing) return existing;
   const root: TreeNode = {
@@ -313,9 +310,7 @@ function aggregateMetrics(node: TreeNode): void {
       .map((l) => l.event!.data.cost?.totalCost ?? 0),
   );
 
-  const timestamps = leaves
-    .map((l) => Date.parse(l.event!.data.timestamp))
-    .filter(Number.isFinite);
+  const timestamps = leaves.map((l) => Date.parse(l.event!.data.timestamp)).filter(Number.isFinite);
 
   if (tokens > 0) node.tokens = tokens;
   if (cost > 0) node.cost = cost;
@@ -342,8 +337,7 @@ function aggregateMetrics(node: TreeNode): void {
   for (const l of leaves) {
     const ts = Date.parse(l.event!.data.timestamp);
     if (!Number.isFinite(ts)) continue;
-    const tt =
-      typeof l.event!.data.timeTaken === "number" ? l.event!.data.timeTaken : 0;
+    const tt = typeof l.event!.data.timeTaken === "number" ? l.event!.data.timeTaken : 0;
     if (ts - tt < minStart) minStart = ts - tt;
     if (ts > maxEnd) maxEnd = ts;
   }

@@ -34,9 +34,7 @@ describe("finalizeBlockParser — binder head forms (via the shared asParser)", 
   });
 
   it("binder name is the user's choice", () => {
-    const node = parseFinalize(
-      "finalize as partialSoFar {\n  return partialSoFar\n}",
-    );
+    const node = parseFinalize("finalize as partialSoFar {\n  return partialSoFar\n}");
     expect(node.params[0].name).toBe("partialSoFar");
   });
 

@@ -30,11 +30,7 @@ function ev(data: any, overrides: Partial<EventEnvelope> = {}): EventEnvelope {
 
 describe("groupByType / byType", () => {
   it("groups by data.type in one pass", () => {
-    const events = [
-      ev({ type: "a" }),
-      ev({ type: "b" }),
-      ev({ type: "a" }),
-    ];
+    const events = [ev({ type: "a" }), ev({ type: "b" }), ev({ type: "a" })];
     const grouped = groupByType(events);
     expect(Object.keys(grouped).sort()).toEqual(["a", "b"]);
     expect(grouped.a.length).toBe(2);
@@ -101,15 +97,11 @@ describe("tokensIn / tokensOut / cost", () => {
 
 describe("modelOf", () => {
   it("returns the model string", () => {
-    expect(modelOf(ev({ type: "promptCompletion", model: "gpt-5" }))).toBe(
-      "gpt-5",
-    );
+    expect(modelOf(ev({ type: "promptCompletion", model: "gpt-5" }))).toBe("gpt-5");
   });
 
   it("strips JSON.stringify wrapping quotes", () => {
-    expect(
-      modelOf(ev({ type: "promptCompletion", model: '"gpt-5"' })),
-    ).toBe("gpt-5");
+    expect(modelOf(ev({ type: "promptCompletion", model: '"gpt-5"' }))).toBe("gpt-5");
   });
 
   it("returns empty string when missing", () => {
@@ -170,9 +162,7 @@ describe("userMessageOf", () => {
 
   it("returns null when no user message", () => {
     expect(
-      userMessageOf(
-        ev({ type: "promptCompletion", messages: [{ role: "system", content: "x" }] }),
-      ),
+      userMessageOf(ev({ type: "promptCompletion", messages: [{ role: "system", content: "x" }] })),
     ).toBeNull();
   });
 
@@ -183,17 +173,11 @@ describe("userMessageOf", () => {
 
 describe("completionOf", () => {
   it("returns string completion", () => {
-    expect(
-      completionOf(ev({ type: "promptCompletion", completion: "hi" })),
-    ).toBe("hi");
+    expect(completionOf(ev({ type: "promptCompletion", completion: "hi" }))).toBe("hi");
   });
 
   it("returns completion.output", () => {
-    expect(
-      completionOf(
-        ev({ type: "promptCompletion", completion: { output: "hi" } }),
-      ),
-    ).toBe("hi");
+    expect(completionOf(ev({ type: "promptCompletion", completion: { output: "hi" } }))).toBe("hi");
   });
 
   it("returns choices[0].message.content fallback", () => {
@@ -208,9 +192,7 @@ describe("completionOf", () => {
   });
 
   it("returns null for empty string", () => {
-    expect(
-      completionOf(ev({ type: "promptCompletion", completion: "" })),
-    ).toBeNull();
+    expect(completionOf(ev({ type: "promptCompletion", completion: "" }))).toBeNull();
   });
 
   it("returns null when no completion", () => {

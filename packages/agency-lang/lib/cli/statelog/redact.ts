@@ -11,9 +11,7 @@
  *  destroy the long one's match and leak its suffix. Empty values are skipped
  *  (they would match everywhere). */
 export function redactValues(text: string, values: string[]): string {
-  const longestFirst = values
-    .filter((value) => value !== "")
-    .sort((a, b) => b.length - a.length);
+  const longestFirst = values.filter((value) => value !== "").sort((a, b) => b.length - a.length);
   let redacted = text;
   for (const value of longestFirst) {
     redacted = redacted.split(value).join("[redacted]");

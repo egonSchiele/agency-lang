@@ -4,31 +4,24 @@ import type { FunctionCall, FunctionParameter } from "../../types/function.js";
 import { resolveNamedArgs } from "./namedArgsResolver.js";
 
 // Tiny constructors so each test reads as a one-liner.
-const num = (value: number): Expression =>
-  ({ type: "number", value } as unknown as Expression);
+const num = (value: number): Expression => ({ type: "number", value }) as unknown as Expression;
 const str = (value: string): Expression =>
-  ({ type: "string", segments: [{ type: "text", value }] } as unknown as Expression);
+  ({ type: "string", segments: [{ type: "text", value }] }) as unknown as Expression;
 const named = (name: string, value: Expression): NamedArgument =>
-  ({ type: "namedArgument", name, value } as unknown as NamedArgument);
+  ({ type: "namedArgument", name, value }) as unknown as NamedArgument;
 
-const param = (
-  name: string,
-  opts: Partial<FunctionParameter> = {},
-): FunctionParameter => ({
+const param = (name: string, opts: Partial<FunctionParameter> = {}): FunctionParameter => ({
   type: "functionParameter",
   name,
   ...opts,
 });
 
-const call = (
-  args: (Expression | SplatExpression | NamedArgument)[],
-  name = "f",
-): FunctionCall =>
+const call = (args: (Expression | SplatExpression | NamedArgument)[], name = "f"): FunctionCall =>
   ({
     type: "functionCall",
     functionName: name,
     arguments: args,
-  } as unknown as FunctionCall);
+  }) as unknown as FunctionCall;
 
 describe("resolveNamedArgs", () => {
   it("returns args untouched when none are named", () => {
@@ -87,11 +80,7 @@ describe("resolveNamedArgs", () => {
     // Variadic param IS now nameable (spec 2026-06-03), but when no named
     // arg targets it the resolver leaves it empty — the result is just
     // the supplied positional/named values.
-    const result = resolveNamedArgs(
-      call([named("a", num(1))]),
-      [param("a"), variadicParam],
-      true,
-    );
+    const result = resolveNamedArgs(call([named("a", num(1))]), [param("a"), variadicParam], true);
     expect(result).toEqual([num(1)]);
 
     // Block-type param can be filled by name (function reference).
@@ -131,9 +120,9 @@ describe("resolveNamedArgs", () => {
   });
 
   it("throws on non-Agency function call with named args", () => {
-    expect(() =>
-      resolveNamedArgs(call([named("a", num(1))], "ext"), undefined, false),
-    ).toThrow(/Named arguments can only be used with Agency-defined functions/);
+    expect(() => resolveNamedArgs(call([named("a", num(1))], "ext"), undefined, false)).toThrow(
+      /Named arguments can only be used with Agency-defined functions/,
+    );
   });
 
   it("throws on positional after named", () => {
@@ -144,39 +133,27 @@ describe("resolveNamedArgs", () => {
 
   it("throws on splat after named (covered by checker but locked in here too)", () => {
     const splat = (value: Expression): SplatExpression =>
-      ({ type: "splat", value } as unknown as SplatExpression);
+      ({ type: "splat", value }) as unknown as SplatExpression;
     expect(() =>
-      resolveNamedArgs(
-        call([named("a", num(1)), splat(num(0))]),
-        [param("a"), param("b")],
-        true,
-      ),
+      resolveNamedArgs(call([named("a", num(1)), splat(num(0))]), [param("a"), param("b")], true),
     ).toThrow(/Positional argument cannot follow a named argument/);
   });
 
   it("throws on duplicate named arg", () => {
     expect(() =>
-      resolveNamedArgs(
-        call([named("a", num(1)), named("a", num(2))]),
-        [param("a")],
-        true,
-      ),
+      resolveNamedArgs(call([named("a", num(1)), named("a", num(2))]), [param("a")], true),
     ).toThrow(/Duplicate named argument 'a'/);
   });
 
   it("throws on unknown named arg", () => {
-    expect(() =>
-      resolveNamedArgs(call([named("z", str("x"))]), [param("a")], true),
-    ).toThrow(/Unknown named argument 'z'/);
+    expect(() => resolveNamedArgs(call([named("z", str("x"))]), [param("a")], true)).toThrow(
+      /Unknown named argument 'z'/,
+    );
   });
 
   it("throws when named arg conflicts with an already-positional slot", () => {
     expect(() =>
-      resolveNamedArgs(
-        call([num(1), named("a", num(2))]),
-        [param("a"), param("b")],
-        true,
-      ),
+      resolveNamedArgs(call([num(1), named("a", num(2))]), [param("a"), param("b")], true),
     ).toThrow(/Named argument 'a' conflicts with positional argument/);
   });
 

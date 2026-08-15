@@ -75,7 +75,10 @@ export async function evalRun(
     // run: not under --no-grade, not when a suite-level module is supplied,
     // and (relaxed inside the loader) not for inputs carrying their own
     // graders.
-    requireGoal: graders !== undefined && opts.graders === undefined && opts.config?.eval?.graders === undefined,
+    requireGoal:
+      graders !== undefined &&
+      opts.graders === undefined &&
+      opts.config?.eval?.graders === undefined,
     cacheRoot: opts.config?.eval?.sourceCacheRoot,
   });
 
@@ -85,24 +88,28 @@ export async function evalRun(
   if (graders) {
     const load = makeGraderModuleCache(opts.config ?? {});
     for (const input of suite.inputs) {
-      const effective = graders.mode === "fallback" && input.graders !== undefined
-        ? await load(input.graders)
-        : graders.graders;
+      const effective =
+        graders.mode === "fallback" && input.graders !== undefined
+          ? await load(input.graders)
+          : graders.graders;
       validateGraders(effective, input);
     }
   }
 
-  const summary = await runSuite({
-    agent: target,
-    inputs: suite.inputs,
-    provenance: suite.provenance,
-    runId: opts.runId,
-    runsDir: opts.runsDir,
-    continueOnError: opts.continueOnError,
-    config: opts.config,
-    parallel: opts.parallel,
-    perRun: { extractor: deps.extractor },
-  }, { runner: deps.runner });
+  const summary = await runSuite(
+    {
+      agent: target,
+      inputs: suite.inputs,
+      provenance: suite.provenance,
+      runId: opts.runId,
+      runsDir: opts.runsDir,
+      continueOnError: opts.continueOnError,
+      config: opts.config,
+      parallel: opts.parallel,
+      perRun: { extractor: deps.extractor },
+    },
+    { runner: deps.runner },
+  );
 
   // An empty override set means "grade with nothing" — skip, like --no-grade.
   // A fallback set is never empty: the goal judge backstops it, and an empty
@@ -138,13 +145,20 @@ function loadSuite(args: {
   // "__proto__", which on a plain object silently sets the prototype and
   // drops the entry from config.json. Same precedent as EvalCache.
   const filesProvenance: Record<string, SourceProvenance> = Object.create(null);
-  const loadOptions = { requireGoal: args.requireGoal, filesProvenance, sourceCacheRoot: args.cacheRoot };
+  const loadOptions = {
+    requireGoal: args.requireGoal,
+    filesProvenance,
+    sourceCacheRoot: args.cacheRoot,
+  };
   const parsed = parseSource(args.inputs ?? "", process.cwd());
   if (parsed.kind === "git") {
     const resolved = resolveSource(parsed, { cacheRoot: args.cacheRoot });
     return {
       inputs: loadInputs(resolved.dir, nanoid, { ...loadOptions, forbidGitFiles: true }),
-      provenance: { inputsSource: { source: args.inputs ?? "", sha: resolved.sha }, files: filesProvenance },
+      provenance: {
+        inputsSource: { source: args.inputs ?? "", sha: resolved.sha },
+        files: filesProvenance,
+      },
     };
   }
   return {
@@ -152,7 +166,6 @@ function loadSuite(args: {
     provenance: { inputsSource: { source: parsed.path }, files: filesProvenance },
   };
 }
-
 
 /** Total LLM spend across a run's inputs, summed from each eval record's
  *  metrics. Salvaged records count too, so an interrupted run still reports

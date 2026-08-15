@@ -23,9 +23,7 @@ describe("failureTier", () => {
 
   it("returns destructive when destructiveRan, even alongside neverStarted", () => {
     expect(failureTier(f({ destructiveRan: true }))).toBe("destructive");
-    expect(
-      failureTier(f({ destructiveRan: true, neverStarted: true })),
-    ).toBe("destructive");
+    expect(failureTier(f({ destructiveRan: true, neverStarted: true }))).toBe("destructive");
   });
 
   it("returns neverStarted when only neverStarted", () => {
@@ -35,9 +33,7 @@ describe("failureTier", () => {
   it("returns idempotent when the tool is idempotent and nothing more specific", () => {
     expect(failureTier(f({}), { idempotent: true })).toBe("idempotent");
     // destructiveRan still wins over an idempotent marker.
-    expect(
-      failureTier(f({ destructiveRan: true }), { idempotent: true }),
-    ).toBe("destructive");
+    expect(failureTier(f({ destructiveRan: true }), { idempotent: true })).toBe("destructive");
   });
 
   it("returns neutral otherwise, including a legacy failure with undefined fields", () => {
@@ -57,9 +53,7 @@ describe("failureTier", () => {
 
 describe("assertUniqueToolNames", () => {
   it("accepts a list of distinct tool names", () => {
-    expect(() =>
-      assertUniqueToolNames([{ name: "read" }, { name: "write" }]),
-    ).not.toThrow();
+    expect(() => assertUniqueToolNames([{ name: "read" }, { name: "write" }])).not.toThrow();
   });
 
   it("accepts an empty list", () => {
@@ -80,9 +74,7 @@ describe("assertUniqueToolNames", () => {
   });
 
   it("points at .rename() in the message", () => {
-    expect(() =>
-      assertUniqueToolNames([{ name: "x" }, { name: "x" }]),
-    ).toThrow(/\.rename\(/);
+    expect(() => assertUniqueToolNames([{ name: "x" }, { name: "x" }])).toThrow(/\.rename\(/);
   });
 });
 
@@ -98,9 +90,7 @@ describe("unwrapToolResultForLlm", () => {
   });
 
   it("unwraps a success Result to its value (object)", () => {
-    expect(
-      unwrapToolResultForLlm(success({ moduleId: "x" }), "myTool"),
-    ).toEqual({ moduleId: "x" });
+    expect(unwrapToolResultForLlm(success({ moduleId: "x" }), "myTool")).toEqual({ moduleId: "x" });
   });
 
   it("substitutes the no-value message when a success holds null/undefined", () => {
@@ -136,9 +126,7 @@ describe("toolErrorMessage", () => {
   });
 
   it("JSON-stringifies object errors instead of [object Object]", () => {
-    expect(toolErrorMessage({ source: "x", errors: [] })).toBe(
-      '{"source":"x","errors":[]}',
-    );
+    expect(toolErrorMessage({ source: "x", errors: [] })).toBe('{"source":"x","errors":[]}');
   });
 });
 
@@ -201,9 +189,7 @@ describe("capToolResultForLlm", () => {
     expect(DEFAULT_TOOL_RESULT_CHARS).toBe(100_000);
     const justOver = "q".repeat(DEFAULT_TOOL_RESULT_CHARS + 1);
     const out = capToolResultForLlm(justOver, DEFAULT_TOOL_RESULT_CHARS) as string;
-    expect(out.slice(0, DEFAULT_TOOL_RESULT_CHARS)).toBe(
-      "q".repeat(DEFAULT_TOOL_RESULT_CHARS),
-    );
+    expect(out.slice(0, DEFAULT_TOOL_RESULT_CHARS)).toBe("q".repeat(DEFAULT_TOOL_RESULT_CHARS));
     expect(out).toContain("truncated");
   });
 });
@@ -234,7 +220,12 @@ describe("armCallTimeout", () => {
 });
 
 describe("runWithRetry", () => {
-  const policy = { retries: 2, timeout: 0, backoff: { initial: 1, factor: 2, max: 10 }, validationRetries: 0 };
+  const policy = {
+    retries: 2,
+    timeout: 0,
+    backoff: { initial: 1, factor: 2, max: 10 },
+    validationRetries: 0,
+  };
   const noHooks = { onRetry: async () => {}, onTimeout: async () => {} };
   // Test normalizer: read status off a SmolError, else just the message.
   const normalize = (err: unknown) => {
@@ -249,7 +240,8 @@ describe("runWithRetry", () => {
 
   it("retries a transient error then succeeds; onLLMRetry fires per retry", async () => {
     let calls = 0;
-    const fired: Array<{ attempt: number; maxRetries: number; reason: string; delayMs: number }> = [];
+    const fired: Array<{ attempt: number; maxRetries: number; reason: string; delayMs: number }> =
+      [];
     const dispatch = async () => {
       if (calls < 2) {
         calls += 1;
@@ -318,7 +310,12 @@ describe("runWithRetry", () => {
 
   it("#8 timeout with retries:0 fires onLLMTimeout once, no retry, surfaces", async () => {
     vi.useFakeTimers();
-    const timeoutPolicy = { retries: 0, timeout: 20, backoff: policy.backoff, validationRetries: 0 };
+    const timeoutPolicy = {
+      retries: 0,
+      timeout: 20,
+      backoff: policy.backoff,
+      validationRetries: 0,
+    };
     let timeouts = 0;
     const dispatch = (signal: AbortSignal | undefined) => {
       return new Promise((_resolve, reject) => {
@@ -364,7 +361,12 @@ describe("runWithRetry", () => {
         order.push("timeout");
       },
     };
-    const timeoutPolicy = { retries: 1, timeout: 20, backoff: { initial: 1, factor: 2, max: 5 }, validationRetries: 0 };
+    const timeoutPolicy = {
+      retries: 1,
+      timeout: 20,
+      backoff: { initial: 1, factor: 2, max: 5 },
+      validationRetries: 0,
+    };
 
     const promise = _internal.runWithRetry(dispatch, timeoutPolicy, undefined, hooks, normalize);
     await vi.advanceTimersByTimeAsync(30);
@@ -375,7 +377,12 @@ describe("runWithRetry", () => {
   });
 
   it("the exhaustion message reads 'attempt(s)', not 'retries' (so retries:0 reads correctly)", async () => {
-    const zeroRetryPolicy = { retries: 0, timeout: 0, backoff: policy.backoff, validationRetries: 0 };
+    const zeroRetryPolicy = {
+      retries: 0,
+      timeout: 0,
+      backoff: policy.backoff,
+      validationRetries: 0,
+    };
     const dispatch = async () => {
       throw new SmolError("503", { status: 503 });
     };
@@ -440,16 +447,12 @@ describe("dropNullDefaultedArgs", () => {
     // A required (or intentionally-nullable) param keeps its value so the
     // normal type error still surfaces for the model to correct.
     const params = [P("target", false)];
-    expect(_internal.dropNullDefaultedArgs({ target: null }, params))
-      .toEqual({ target: null });
+    expect(_internal.dropNullDefaultedArgs({ target: null }, params)).toEqual({ target: null });
   });
 
   it("leaves non-null values untouched, including falsy ones", () => {
     const params = [P("cwd", true), P("count", true), P("flag", true)];
-    const out = _internal.dropNullDefaultedArgs(
-      { cwd: "/app", count: 0, flag: false },
-      params,
-    );
+    const out = _internal.dropNullDefaultedArgs({ cwd: "/app", count: 0, flag: false }, params);
     expect(out).toEqual({ cwd: "/app", count: 0, flag: false });
   });
 
@@ -461,10 +464,7 @@ describe("dropNullDefaultedArgs", () => {
   it("does not drop keys absent from the param list", () => {
     // An arg with no matching param (e.g. an LLM hallucinated key) is left
     // as-is; only declared defaulted params are considered.
-    const out = _internal.dropNullDefaultedArgs(
-      { extra: null },
-      [P("cwd", true)],
-    );
+    const out = _internal.dropNullDefaultedArgs({ extra: null }, [P("cwd", true)]);
     expect(out).toEqual({ extra: null });
   });
 });
@@ -472,7 +472,13 @@ describe("dropNullDefaultedArgs", () => {
 describe("meteredDispatch — provider-attempt unknown-cost accounting", () => {
   function makeCtx() {
     return new RuntimeContext<GraphState>({
-      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
       smoltalkDefaults: {},
       dirname: "/project",
     });
@@ -490,7 +496,9 @@ describe("meteredDispatch — provider-attempt unknown-cost accounting", () => {
     const ctx = makeCtx();
     const err = new Error("provider 500 after dispatch");
     await expect(
-      meteredDispatch(ctx, ctx.stateStack, "completion", async () => { throw err; }),
+      meteredDispatch(ctx, ctx.stateStack, "completion", async () => {
+        throw err;
+      }),
     ).rejects.toBe(err);
     const s = ctx.invocationUsage.snapshot();
     expect(s.usage.unknownCostCallCount).toBe(1);
@@ -502,7 +510,9 @@ describe("meteredDispatch — provider-attempt unknown-cost accounting", () => {
     const ctx = makeCtx();
     // First attempt throws (e.g. a timeout), second resolves.
     await expect(
-      meteredDispatch(ctx, ctx.stateStack, "completion", async () => { throw new Error("timeout"); }),
+      meteredDispatch(ctx, ctx.stateStack, "completion", async () => {
+        throw new Error("timeout");
+      }),
     ).rejects.toThrow();
     await meteredDispatch(ctx, ctx.stateStack, "completion", async () => "recovered");
     expect(ctx.invocationUsage.snapshot().usage.unknownCostCallCount).toBe(1);

@@ -42,7 +42,8 @@ export class TableComponent<Row> {
     const widths = this.resolveWidths(frame);
     const header = this.renderHeader(frame, widths);
     const body = frame.rows.map((rowData, index) =>
-      this.renderRow(frame, rowData, index === frame.cursor, widths));
+      this.renderRow(frame, rowData, index === frame.cursor, widths),
+    );
     return column({ height: 1 + frame.rows.length, justifyContent: "flex-start" }, header, ...body);
   }
 
@@ -74,7 +75,9 @@ export class TableComponent<Row> {
       const label = sorted
         ? `${column.header}${SORT_ARROWS[frame.sort!.direction]}`
         : column.header;
-      const style: CellStyle = column.headerStyle?.() ?? { fg: sorted ? SORTED_HEADER_FG : HEADER_FG };
+      const style: CellStyle = column.headerStyle?.() ?? {
+        fg: sorted ? SORTED_HEADER_FG : HEADER_FG,
+      };
       return segment(label, widths[index], column.align, style);
     });
     return row({ height: 1 }, ...cells);

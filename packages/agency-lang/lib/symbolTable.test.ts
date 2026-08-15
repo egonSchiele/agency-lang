@@ -110,7 +110,10 @@ type NumberInRange(low: number, high: number) = number
 
 describe("SymbolTable interrupt collection", () => {
   it("populates transitive interruptEffects on function and node symbols", () => {
-    const file = path.join(os.tmpdir(), `st-int-${Date.now()}-${Math.random().toString(36).slice(2)}.agency`);
+    const file = path.join(
+      os.tmpdir(),
+      `st-int-${Date.now()}-${Math.random().toString(36).slice(2)}.agency`,
+    );
     writeFileSync(
       file,
       `
@@ -178,9 +181,7 @@ describe("SymbolTable interrupt collection", () => {
       // imported function, and the symbol table follows that call.
       const mainSymbols = st.getFile(path.resolve(mainFile))!;
       expect(mainSymbols["main"].kind).toBe("node");
-      expect((mainSymbols["main"] as any).interruptEffects).toEqual([
-        { effect: "myapp::deploy" },
-      ]);
+      expect((mainSymbols["main"] as any).interruptEffects).toEqual([{ effect: "myapp::deploy" }]);
     } finally {
       unlinkSync(mainFile);
       unlinkSync(libFile);
@@ -189,9 +190,10 @@ describe("SymbolTable interrupt collection", () => {
 });
 
 /** Create temp .agency files keyed by a stable name; returns absolute paths and a cleanup fn. */
-function withTempFiles(
-  files: Record<string, string>,
-): { paths: Record<string, string>; cleanup: () => void } {
+function withTempFiles(files: Record<string, string>): {
+  paths: Record<string, string>;
+  cleanup: () => void;
+} {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const paths: Record<string, string> = {};
   for (const name of Object.keys(files)) {
@@ -308,9 +310,7 @@ describe("SymbolTable: re-export reachability and merging", () => {
       reexporter: `export { nope } from "@source@"`,
     });
     try {
-      expect(() => SymbolTable.build(paths.reexporter)).toThrow(
-        /Symbol 'nope' is not defined/,
-      );
+      expect(() => SymbolTable.build(paths.reexporter)).toThrow(/Symbol 'nope' is not defined/);
     } finally {
       cleanup();
     }
@@ -336,9 +336,7 @@ describe("SymbolTable: re-export reachability and merging", () => {
       reexporter: `export { Foo } from "@source@"`,
     });
     try {
-      expect(() => SymbolTable.build(paths.reexporter)).toThrow(
-        /Type 'Foo' .* is not exported/,
-      );
+      expect(() => SymbolTable.build(paths.reexporter)).toThrow(/Type 'Foo' .* is not exported/);
     } finally {
       cleanup();
     }
@@ -502,9 +500,7 @@ describe("SymbolTable: star and transitive re-exports", () => {
       b: `export * from "@a@"`,
     });
     try {
-      expect(() => SymbolTable.build(paths.a)).toThrow(
-        /Re-export cycle detected/,
-      );
+      expect(() => SymbolTable.build(paths.a)).toThrow(/Re-export cycle detected/);
     } finally {
       cleanup();
     }
@@ -518,9 +514,7 @@ describe("SymbolTable: star and transitive re-exports", () => {
         export * from "@b@"`,
     });
     try {
-      expect(() => SymbolTable.build(paths.reexporter)).toThrow(
-        /re-exported from both/,
-      );
+      expect(() => SymbolTable.build(paths.reexporter)).toThrow(/re-exported from both/);
     } finally {
       cleanup();
     }
@@ -534,9 +528,7 @@ describe("SymbolTable: star and transitive re-exports", () => {
         export { foo } from "@b@"`,
     });
     try {
-      expect(() => SymbolTable.build(paths.reexporter)).toThrow(
-        /re-exported from both/,
-      );
+      expect(() => SymbolTable.build(paths.reexporter)).toThrow(/re-exported from both/);
     } finally {
       cleanup();
     }
@@ -549,9 +541,7 @@ describe("SymbolTable: star and transitive re-exports", () => {
         export { foo } from "@source@"`,
     });
     try {
-      expect(() => SymbolTable.build(paths.reexporter)).toThrow(
-        /collides with local declaration/,
-      );
+      expect(() => SymbolTable.build(paths.reexporter)).toThrow(/collides with local declaration/);
     } finally {
       cleanup();
     }

@@ -3,12 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import { safeDeleteDirectory } from "../../utils.js";
-import {
-  cachedGeneratorRun,
-  clearSpliceCache,
-  spliceCacheKey,
-  spliceCacheSize,
-} from "./cache.js";
+import { cachedGeneratorRun, clearSpliceCache, spliceCacheKey, spliceCacheSize } from "./cache.js";
 import type { Code } from "../../runtime/template/code.js";
 import type { SpliceResult } from "./types.js";
 

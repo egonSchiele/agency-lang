@@ -37,9 +37,7 @@ function applyEdits(
     }
     if (replaceAll) {
       if (contents.indexOf(oldText) === -1) {
-        throw new Error(
-          `multiedit: edit #${i + 1} oldText not found in ${filename}`,
-        );
+        throw new Error(`multiedit: edit #${i + 1} oldText not found in ${filename}`);
       }
       let count = 0;
       contents = contents.replaceAll(oldText, () => {
@@ -50,9 +48,7 @@ function applyEdits(
     } else {
       const first = contents.indexOf(oldText);
       if (first === -1) {
-        throw new Error(
-          `multiedit: edit #${i + 1} oldText not found in ${filename}`,
-        );
+        throw new Error(`multiedit: edit #${i + 1} oldText not found in ${filename}`);
       }
       const second = contents.indexOf(oldText, first + oldText.length);
       if (second !== -1) {
@@ -60,10 +56,7 @@ function applyEdits(
           `multiedit: edit #${i + 1} oldText appears multiple times in ${filename}. Provide more context or set replaceAll.`,
         );
       }
-      contents =
-        contents.slice(0, first) +
-        newText +
-        contents.slice(first + oldText.length);
+      contents = contents.slice(0, first) + newText + contents.slice(first + oldText.length);
       total += 1;
     }
   }
@@ -108,10 +101,7 @@ export type PatchResult = {
   files: string[];
 };
 
-export async function _applyPatch(
-  patch: string,
-  allowedPaths?: string[],
-): Promise<PatchResult> {
+export async function _applyPatch(patch: string, allowedPaths?: string[]): Promise<PatchResult> {
   const files = parseUnifiedDiff(patch);
   const touched: string[] = [];
 
@@ -222,9 +212,7 @@ function applyHunks(original: string, hunks: Hunk[], filePath: string): string {
         after.push(content);
       }
     }
-    allPatches.push(
-      ...dmp.patch_make(before.join("\n"), after.join("\n")),
-    );
+    allPatches.push(...dmp.patch_make(before.join("\n"), after.join("\n")));
   }
 
   const [updated, applied] = dmp.patch_apply(allPatches, original);
@@ -237,29 +225,18 @@ function applyHunks(original: string, hunks: Hunk[], filePath: string): string {
   return updated;
 }
 
-export async function _mkdir(
-  dir: string,
-  allowedPaths?: string[],
-): Promise<void> {
+export async function _mkdir(dir: string, allowedPaths?: string[]): Promise<void> {
   const full = await resolveDir(dir, allowedPaths ?? []);
   await fs.mkdir(full, { recursive: true });
 }
 
-export async function _copy(
-  src: string,
-  dest: string,
-  allowedPaths?: string[],
-): Promise<void> {
+export async function _copy(src: string, dest: string, allowedPaths?: string[]): Promise<void> {
   const srcFull = await resolveDir(src, allowedPaths ?? []);
   const destFull = await resolveDir(dest, allowedPaths ?? []);
   await fs.cp(srcFull, destFull, { recursive: true });
 }
 
-export async function _move(
-  src: string,
-  dest: string,
-  allowedPaths?: string[],
-): Promise<void> {
+export async function _move(src: string, dest: string, allowedPaths?: string[]): Promise<void> {
   const srcFull = await resolveDir(src, allowedPaths ?? []);
   const destFull = await resolveDir(dest, allowedPaths ?? []);
   await rejectDangerousPath(src, "move", "source");
@@ -275,20 +252,13 @@ export async function _move(
   }
 }
 
-export async function _remove(
-  target: string,
-  allowedPaths?: string[],
-): Promise<void> {
+export async function _remove(target: string, allowedPaths?: string[]): Promise<void> {
   const full = await resolveDir(target, allowedPaths ?? []);
   await rejectDangerousPath(target, "remove", "target");
   await fs.rm(full, { recursive: true, force: true });
 }
 
-export async function rejectDangerousPath(
-  p: string,
-  op: string,
-  role: string,
-): Promise<void> {
+export async function rejectDangerousPath(p: string, op: string, role: string): Promise<void> {
   const trimmed = p.trim();
   if (trimmed === "") {
     throw new Error(`${op}: ${role} must not be empty`);
@@ -306,15 +276,11 @@ export async function rejectDangerousPath(
     const root = path.parse(candidate).root;
 
     if (samePath(candidate, root)) {
-      throw new Error(
-        `${op}: refusing to use the filesystem root as ${role} (got '${p}')`,
-      );
+      throw new Error(`${op}: refusing to use the filesystem root as ${role} (got '${p}')`);
     }
 
     if (homeReal && samePath(candidate, homeReal)) {
-      throw new Error(
-        `${op}: refusing to use the home directory as ${role} (got '${p}')`,
-      );
+      throw new Error(`${op}: refusing to use the home directory as ${role} (got '${p}')`);
     }
 
     const segments = candidate
@@ -327,10 +293,7 @@ export async function rejectDangerousPath(
       );
     }
 
-    if (
-      samePath(cwdReal, candidate) ||
-      cwdStartsWith(cwdReal, candidate + path.sep)
-    ) {
+    if (samePath(cwdReal, candidate) || cwdStartsWith(cwdReal, candidate + path.sep)) {
       throw new Error(
         `${op}: refusing to use the current working directory or one of its ancestors '${candidate}' as ${role} (got '${p}')`,
       );

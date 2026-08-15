@@ -1,9 +1,6 @@
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
-import type {
-  ExtractionResult,
-  ForgetResult,
-} from "../runtime/memory/index.js";
+import type { ExtractionResult, ForgetResult } from "../runtime/memory/index.js";
 import { MemoryFrame } from "../runtime/memory/frame.js";
 import type { MemoryConfig } from "../runtime/memory/types.js";
 import type { StateStack } from "../runtime/state/stateStack.js";

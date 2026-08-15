@@ -113,10 +113,7 @@ function defaultScratchDirForAgent(agencyFile: string): string | undefined {
   return isBundled ? fs.mkdtempSync(path.join(os.tmpdir(), "agency-agent-")) : undefined;
 }
 
-function configWithStatelog(
-  config: AgencyConfig,
-  statelogPath: string | undefined,
-): AgencyConfig {
+function configWithStatelog(config: AgencyConfig, statelogPath: string | undefined): AgencyConfig {
   if (!statelogPath) return config;
   return {
     ...config,
@@ -125,11 +122,7 @@ function configWithStatelog(
   };
 }
 
-function findNode(
-  agencyFile: string,
-  nodeName: string,
-  config: AgencyConfig,
-): GraphNodeDefinition {
+function findNode(agencyFile: string, nodeName: string, config: AgencyConfig): GraphNodeDefinition {
   const parsed = parseAgency(fs.readFileSync(agencyFile, "utf-8"), config);
   if (!parsed.success) {
     throw new Error(`Failed to parse ${agencyFile}: ${parsed.message}`);
@@ -142,10 +135,7 @@ function findNode(
   return node;
 }
 
-function argsStringForNode(
-  node: GraphNodeDefinition,
-  args: Record<string, unknown>,
-): string {
+function argsStringForNode(node: GraphNodeDefinition, args: Record<string, unknown>): string {
   const parameterNames = node.parameters.map((param) => param.name);
   for (const name of Object.keys(args)) {
     if (!parameterNames.includes(name)) {
@@ -159,11 +149,11 @@ function argsStringForNode(
     return "";
   }
   const lastProvidedIndex = node.parameters.reduce(
-    (last, param, index) => Object.prototype.hasOwnProperty.call(args, param.name) ? index : last,
+    (last, param, index) => (Object.prototype.hasOwnProperty.call(args, param.name) ? index : last),
     -1,
   );
   const lastRequiredIndex = node.parameters.reduce(
-    (last, param, index) => param.defaultValue ? last : index,
+    (last, param, index) => (param.defaultValue ? last : index),
     -1,
   );
   return node.parameters

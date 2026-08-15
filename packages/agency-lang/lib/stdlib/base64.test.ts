@@ -7,10 +7,7 @@ describe("decodeBase64Strict", () => {
   it("ignores whitespace", () => {
     expect(Array.from(decodeBase64Strict("aG\n k="))).toEqual([104, 105]);
   });
-  it.each(["aGk", "aG*=", "a===", "!!!!", "=aGk"])(
-    "throws on invalid input %s",
-    (bad) => {
-      expect(() => decodeBase64Strict(bad)).toThrow(/base64/);
-    },
-  );
+  it.each(["aGk", "aG*=", "a===", "!!!!", "=aGk"])("throws on invalid input %s", (bad) => {
+    expect(() => decodeBase64Strict(bad)).toThrow(/base64/);
+  });
 });

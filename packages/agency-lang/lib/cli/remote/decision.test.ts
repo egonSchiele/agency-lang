@@ -11,7 +11,15 @@ vi.mock("@/cli/runPolicy.js", () => ({
 const { resolveRemoteDecision } = await import("./decision.js");
 
 function intr(effect: string): Interrupt {
-  return { type: "interrupt", effect, message: "", data: null, origin: "", interruptId: "i", runId: "r" };
+  return {
+    type: "interrupt",
+    effect,
+    message: "",
+    data: null,
+    origin: "",
+    interruptId: "i",
+    runId: "r",
+  };
 }
 
 describe("resolveRemoteDecision", () => {

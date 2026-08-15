@@ -71,9 +71,7 @@ export function normalize(events: EventEnvelope[]): Normalized {
     0;
   const anyThreadId = normalized.some(
     (e) =>
-      (e.type === "promptCompletion" ||
-        e.type === "toolCall" ||
-        e.type === "toolCallStart") &&
+      (e.type === "promptCompletion" || e.type === "toolCall" || e.type === "toolCallStart") &&
       e.threadId !== null,
   );
   if (hasToolOrLlm && !anyThreadId) {

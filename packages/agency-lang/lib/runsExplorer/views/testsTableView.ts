@@ -12,8 +12,16 @@ import { bottomHints } from "../../logsViewer/views/shared.js";
 import type { LoaderProgress } from "../loader.js";
 import type { RunRow, TestRow } from "../rows.js";
 import {
-  costCellColor, fmtCost, fmtDate, fmtModels, fmtPass, fmtScore, fmtTime,
-  passColor, scoreColor, statusColor,
+  costCellColor,
+  fmtCost,
+  fmtDate,
+  fmtModels,
+  fmtPass,
+  fmtScore,
+  fmtTime,
+  passColor,
+  scoreColor,
+  statusColor,
 } from "./rowFormat.js";
 import { dropToFit } from "./runsTableView.js";
 import type { ExplorerAction, ExplorerView, Viewport } from "./explorerView.js";
@@ -113,19 +121,22 @@ export class TestsTableView implements ExplorerView {
     }
     const visible = tests.slice(this.scrollTop, this.scrollTop + bodyRows);
 
-    const title = parent === null
-      ? `RUN ${this.parentRunKey} — waiting for data…`
-      : `RUN ${parent.agent} — ${parent.suite} — open which test?`;
+    const title =
+      parent === null
+        ? `RUN ${this.parentRunKey} — waiting for data…`
+        : `RUN ${parent.agent} — ${parent.suite} — open which test?`;
     const tableElement = this.table.render({
       columns: this.columns(!(parent?.backfilled ?? true), viewport.cols),
       rows: visible,
-      cursor: cursor - this.scrollTop >= 0 && cursor - this.scrollTop < visible.length
-        ? cursor - this.scrollTop
-        : null,
+      cursor:
+        cursor - this.scrollTop >= 0 && cursor - this.scrollTop < visible.length
+          ? cursor - this.scrollTop
+          : null,
       width: viewport.cols,
     });
 
-    return column({ justifyContent: "flex-start" },
+    return column(
+      { justifyContent: "flex-start" },
       line(title, { height: 1, fg: "bright-white" }),
       tableElement,
       line(this.message, { height: 1, fg: "gray" }),
@@ -150,37 +161,55 @@ export class TestsTableView implements ExplorerView {
   private columns(pending: boolean, cols: number): TableColumn<TestRow>[] {
     const all: TableColumn<TestRow>[] = [
       {
-        key: "date", header: "date", width: 14,
+        key: "date",
+        header: "date",
+        width: 14,
         cell: (test) => fmtDate(test.startedAtMs),
         cellStyle: () => ({ fg: "gray" }),
       },
       { key: "test", header: "test", width: 22, cell: (test) => test.inputId },
       {
-        key: "score", header: "score", width: 7, align: "right",
+        key: "score",
+        header: "score",
+        width: 7,
+        align: "right",
         cell: (test) => fmtScore(test.score),
         cellStyle: (test) => ({ fg: scoreColor(test.score) }),
       },
       {
-        key: "pass", header: "pass", width: 6, align: "right",
+        key: "pass",
+        header: "pass",
+        width: 6,
+        align: "right",
         cell: (test) => fmtPass(test.gatesPassed),
         cellStyle: (test) => ({ fg: passColor(test.gatesPassed) }),
       },
       {
-        key: "status", header: "status", width: 9,
+        key: "status",
+        header: "status",
+        width: 9,
         cell: (test) => test.status,
         cellStyle: (test) => ({ fg: statusColor(test.status) }),
       },
       {
-        key: "cost", header: "cost", width: 9, align: "right",
+        key: "cost",
+        header: "cost",
+        width: 9,
+        align: "right",
         cell: (test) => fmtCost(test.costUsd, pending),
         cellStyle: (test) => ({ fg: costCellColor(test.costUsd) }),
       },
       {
-        key: "time", header: "time", width: 9, align: "right",
+        key: "time",
+        header: "time",
+        width: 9,
+        align: "right",
         cell: (test) => fmtTime(test.durationMs, pending),
       },
       {
-        key: "models", header: "models", width: "flex",
+        key: "models",
+        header: "models",
+        width: "flex",
         cell: (test) => fmtModels(test.models),
         cellStyle: () => ({ fg: "gray" }),
       },

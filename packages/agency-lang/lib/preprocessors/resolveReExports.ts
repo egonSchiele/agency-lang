@@ -8,10 +8,7 @@ import type {
   SymbolTable,
   TypeSymbol,
 } from "../symbolTable.js";
-import type {
-  ImportNodeStatement,
-  ImportStatement,
-} from "../types/importStatement.js";
+import type { ImportNodeStatement, ImportStatement } from "../types/importStatement.js";
 import type { ExportFromStatement } from "../types/exportFromStatement.js";
 import type { FunctionDefinition } from "../types/function.js";
 import type { TypeAlias } from "../types/typeHints.js";
@@ -56,9 +53,7 @@ export function resolveReExports(
   }
 
   // Strip all exportFromStatement nodes.
-  const kept: AgencyNode[] = program.nodes.filter(
-    (n) => n.type !== "exportFromStatement",
-  );
+  const kept: AgencyNode[] = program.nodes.filter((n) => n.type !== "exportFromStatement");
 
   // Synthesize per source:
   //   - For node re-exports: a single `import node { ... }` statement (no wrapper).
@@ -147,8 +142,7 @@ function buildCoalescedImport(
   const importedNames: string[] = [];
   const aliases: Record<string, string> = {};
   for (const { sym } of entries) {
-    const original = (sym as { reExportedFrom?: ReExportedFrom })
-      .reExportedFrom!.originalName;
+    const original = (sym as { reExportedFrom?: ReExportedFrom }).reExportedFrom!.originalName;
     if (importedNames.includes(original)) continue; // already coalesced
     importedNames.push(original);
     aliases[original] = `${REEXPORT_PREFIX}${original}`;
@@ -205,9 +199,7 @@ function buildWrapper(localName: string, sym: SymbolInfo): AgencyNode {
         `resolveReExports: nodes must be handled via buildNodeImport, not buildWrapper`,
       );
     default:
-      throw new Error(
-        `resolveReExports: unsupported re-export kind '${(sym as any).kind}'`,
-      );
+      throw new Error(`resolveReExports: unsupported re-export kind '${(sym as any).kind}'`);
   }
 }
 
@@ -222,10 +214,7 @@ function buildCallArgs(
   }));
 }
 
-function buildFunctionWrapper(
-  localName: string,
-  sym: FunctionSymbol,
-): FunctionDefinition {
+function buildFunctionWrapper(localName: string, sym: FunctionSymbol): FunctionDefinition {
   const original = sym.reExportedFrom!.originalName;
   const internal = `${REEXPORT_PREFIX}${original}`;
   const call: FunctionCall = {
@@ -267,10 +256,7 @@ function buildTypeWrapper(localName: string, sym: TypeSymbol): TypeAlias {
   };
 }
 
-function buildConstantWrapper(
-  localName: string,
-  sym: ConstantSymbol,
-): Assignment {
+function buildConstantWrapper(localName: string, sym: ConstantSymbol): Assignment {
   const original = sym.reExportedFrom!.originalName;
   const internal = `${REEXPORT_PREFIX}${original}`;
   return {

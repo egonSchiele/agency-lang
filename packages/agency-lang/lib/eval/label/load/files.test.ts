@@ -68,8 +68,10 @@ describe("loadFiles", () => {
 
   it("merges constant fields into every record", () => {
     write("a.txt", "answer");
-    expect(load({ constantFields: { task: "Summarize" } }).occurrences[0].fields)
-      .toEqual({ task: "Summarize", output: "answer" });
+    expect(load({ constantFields: { task: "Summarize" } }).occurrences[0].fields).toEqual({
+      task: "Summarize",
+      output: "answer",
+    });
   });
 
   it("skips an empty file with a reason", () => {
@@ -104,6 +106,4 @@ describe("loadFiles", () => {
     const batch = load({ selection: resolveFileSelection(root, true) });
     expect(batch.occurrences).toHaveLength(2);
   });
-
-
 });

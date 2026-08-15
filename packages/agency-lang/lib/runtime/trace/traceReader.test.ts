@@ -23,9 +23,7 @@ describe("TraceReader", () => {
   });
 
   async function writeSimpleTrace(count: number) {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [
-      new FileSink(tracePath),
-    ]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
     for (let i = 0; i < count; i++) {
       await writer.writeCheckpoint(
         new Checkpoint({
@@ -71,9 +69,7 @@ describe("TraceReader", () => {
   });
 
   it("roundtrips complex checkpoint data", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [
-      new FileSink(tracePath),
-    ]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
 
     const cp = new Checkpoint({
       id: 0,
@@ -114,10 +110,7 @@ describe("TraceReader", () => {
     expect(reconstructed.stack.mode).toBe("serialize");
     expect(reconstructed.stack.nodesTraversed).toEqual(["start", "process"]);
     expect(reconstructed.globals.store).toEqual(cp.globals.store);
-    expect(reconstructed.globals.initializedModules).toEqual([
-      "main.agency",
-      "helpers.agency",
-    ]);
+    expect(reconstructed.globals.initializedModules).toEqual(["main.agency", "helpers.agency"]);
     expect(reconstructed.nodeId).toBe("process");
   });
 
@@ -224,15 +217,13 @@ describe("TraceReader", () => {
     expect(fs.readFileSync(path.join(outDir, "main.agency"), "utf-8")).toBe(
       "node main() {\n  x = 1\n}",
     );
-    expect(
-      fs.readFileSync(path.join(outDir, "lib/helpers.agency"), "utf-8"),
-    ).toBe("function add(a, b) {}");
+    expect(fs.readFileSync(path.join(outDir, "lib/helpers.agency"), "utf-8")).toBe(
+      "function add(a, b) {}",
+    );
   });
 
   it("reads static-state line into staticState property", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [
-      new FileSink(tracePath),
-    ]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
     await writer.writeHeader();
     await writer.writeStaticState({ prompt: "hello world", maxRetries: 3 });
     await writer.writeCheckpoint(

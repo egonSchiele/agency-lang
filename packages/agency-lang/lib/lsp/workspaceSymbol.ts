@@ -4,17 +4,18 @@ import { pathToUri } from "./uri.js";
 
 function symbolKindToLsp(kind: SymbolInfo["kind"]): SymbolKind {
   switch (kind) {
-    case "function": return SymbolKind.Function;
-    case "node": return SymbolKind.Module;
-    case "type": return SymbolKind.TypeParameter;
-    default: return SymbolKind.Variable;
+    case "function":
+      return SymbolKind.Function;
+    case "node":
+      return SymbolKind.Module;
+    case "type":
+      return SymbolKind.TypeParameter;
+    default:
+      return SymbolKind.Variable;
   }
 }
 
-export function getWorkspaceSymbols(
-  query: string,
-  symbolTable: SymbolTable,
-): SymbolInformation[] {
+export function getWorkspaceSymbols(query: string, symbolTable: SymbolTable): SymbolInformation[] {
   const results: SymbolInformation[] = [];
   const lowerQuery = query.toLowerCase();
 
@@ -31,7 +32,10 @@ export function getWorkspaceSymbols(
         location: {
           uri: pathToUri(filePath),
           range: sym.loc
-            ? { start: { line: sym.loc.line, character: sym.loc.col }, end: { line: sym.loc.line, character: sym.loc.col } }
+            ? {
+                start: { line: sym.loc.line, character: sym.loc.col },
+                end: { line: sym.loc.line, character: sym.loc.col },
+              }
             : { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
         },
       });

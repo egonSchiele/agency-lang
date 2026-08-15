@@ -43,11 +43,7 @@ export class StatelogParser {
   evalRecord(): EvalRecord {
     if (!this.evalRecordCache) {
       assertSingleTrace(this.events());
-      this.evalRecordCache = extractEvalRecord(
-        this.events(),
-        this.filePath,
-        this.options,
-      );
+      this.evalRecordCache = extractEvalRecord(this.events(), this.filePath, this.options);
     }
     return this.evalRecordCache;
   }

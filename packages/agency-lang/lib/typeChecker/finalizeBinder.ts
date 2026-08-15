@@ -25,9 +25,7 @@ function binderType(
   // `(T | null) | null` would keep its inner null through an
   // `if (d != null)` guard.
   const members = t.type === "unionType" ? t.types : [t];
-  const hasNull = members.some(
-    (m) => m.type === "primitiveType" && m.value === "null",
-  );
+  const hasNull = members.some((m) => m.type === "primitiveType" && m.value === "null");
   if (hasNull) return t;
   return { type: "unionType", types: [...members, NULL_T] };
 }
@@ -51,10 +49,7 @@ function binderType(
  * declaration is function-wide, so a reference to the binder OUTSIDE
  * the finalize is not flagged as undefined here.
  */
-export function declareFinalizeBinders(
-  scopes: ScopeInfo[],
-  ctx: TypeCheckerContext,
-): void {
+export function declareFinalizeBinders(scopes: ScopeInfo[], ctx: TypeCheckerContext): void {
   for (const info of scopes) {
     ctx.withScope(info.scopeKey, () => {
       for (const { node, scopes: nodeScopes } of walkNodes(info.body)) {
@@ -64,29 +59,18 @@ export function declareFinalizeBinders(
         if (fin.params.length === 0) continue;
         if (fin.params.length > 1) {
           ctx.errors.push(
-            diagnostic(
-              "finalizeBinderArity",
-              { name: fin.params[0].name },
-              fin.loc ?? null,
-            ),
+            diagnostic("finalizeBinderArity", { name: fin.params[0].name }, fin.loc ?? null),
           );
           continue;
         }
         const binder = fin.params[0];
         if (info.scope.lookupInFunction(binder.name) !== undefined) {
           ctx.errors.push(
-            diagnostic(
-              "finalizeBinderCollision",
-              { name: binder.name },
-              fin.loc ?? null,
-            ),
+            diagnostic("finalizeBinderCollision", { name: binder.name }, fin.loc ?? null),
           );
           continue;
         }
-        info.scope.declare(
-          binder.name,
-          binderType(binder.typeHint, info.returnType),
-        );
+        info.scope.declare(binder.name, binderType(binder.typeHint, info.returnType));
       }
     });
   }

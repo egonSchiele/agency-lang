@@ -1,8 +1,5 @@
 import { describe, expect, test } from "vitest";
-import {
-  findIncompatibleField,
-  judgeCompileAttempt,
-} from "./expectedCompileError.js";
+import { findIncompatibleField, judgeCompileAttempt } from "./expectedCompileError.js";
 
 describe("judgeCompileAttempt", () => {
   test("nonzero exit whose output contains the substring passes", () => {

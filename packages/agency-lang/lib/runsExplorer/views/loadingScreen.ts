@@ -38,10 +38,12 @@ export class LoadingScreen implements ExplorerView {
   }
 
   render(viewport: Viewport): Element {
-    const text = this.progress === null
-      ? "Loading runs…"
-      : `Loading runs… ${this.progress.completed}/${this.progress.total}`;
-    return column({ justifyContent: "flex-start" },
+    const text =
+      this.progress === null
+        ? "Loading runs…"
+        : `Loading runs… ${this.progress.completed}/${this.progress.total}`;
+    return column(
+      { justifyContent: "flex-start" },
       line(text, { height: 1, fg: "bright-white" }),
       line(bottomHints("q quit", "loading", viewport.cols), { height: 1, fg: "gray" }),
     );

@@ -78,9 +78,7 @@ describe("presignRequest", () => {
       sessionToken: "TOKEN",
       expiresIn: 3600000,
     });
-    expect(url).toContain(
-      "&X-Amz-Security-Token=TOKEN&X-Amz-SignedHeaders=host&X-Amz-Signature=",
-    );
+    expect(url).toContain("&X-Amz-Security-Token=TOKEN&X-Amz-SignedHeaders=host&X-Amz-Signature=");
   });
 
   it("rounds a sub-second millisecond remainder UP to whole seconds", () => {

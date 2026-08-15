@@ -104,9 +104,7 @@ describe("JS_GLOBALS — namespace member sigs", () => {
 
   it("does not validate when the namespace base is shadowed", () => {
     // `let JSON = ...` opts out of JS_GLOBALS validation entirely.
-    const errors = errorsFrom(
-      `node main() { let JSON = { parse: 1 }\n let x = JSON.parse }`,
-    );
+    const errors = errorsFrom(`node main() { let JSON = { parse: 1 }\n let x = JSON.parse }`);
     expect(errors.filter(arityErr)).toHaveLength(0);
   });
 
@@ -118,5 +116,4 @@ describe("JS_GLOBALS — namespace member sigs", () => {
     );
     expect(errors.filter(arityErr)).toHaveLength(0);
   });
-
 });

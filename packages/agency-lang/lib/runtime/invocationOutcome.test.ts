@@ -1,9 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import {
-  runExportedFunction,
-  runExportedFunctionForServe,
-  runNodeForServe,
-} from "./node.js";
+import { runExportedFunction, runExportedFunctionForServe, runNodeForServe } from "./node.js";
 import { finishServedInvocation } from "./servedInvocationLifecycle.js";
 import { RuntimeContext } from "./state/context.js";
 import { AgencyCancelledError } from "./errors.js";
@@ -32,7 +28,11 @@ describe("runExportedFunctionForServe outcomes", () => {
     ["a number", 42],
     ["undefined", undefined],
   ])("returns a returned-outcome for %s, with a usage snapshot", async (_label, value) => {
-    const outcome = await runExportedFunctionForServe({ ctx: makeCtx(), fn: fakeFn(() => value), namedArgs: {} });
+    const outcome = await runExportedFunctionForServe({
+      ctx: makeCtx(),
+      fn: fakeFn(() => value),
+      namedArgs: {},
+    });
     expect(outcome.status).toBe("returned");
     if (outcome.status === "returned") expect(outcome.value).toEqual(value);
     expect(outcome.usage).toMatchObject({ cost: { totalCost: 0 }, pricingComplete: true });
@@ -46,7 +46,9 @@ describe("runExportedFunctionForServe outcomes", () => {
   ])("returns a threw-outcome preserving the identical error: %s", async (_label, err) => {
     const outcome = await runExportedFunctionForServe({
       ctx: makeCtx(),
-      fn: fakeFn(() => { throw err; }),
+      fn: fakeFn(() => {
+        throw err;
+      }),
       namedArgs: {},
     });
     expect(outcome.status).toBe("threw");
@@ -57,7 +59,10 @@ describe("runExportedFunctionForServe outcomes", () => {
   it("a budget trip yields a threw-outcome carrying the cost incurred up to the trip", async () => {
     const outcome = await runExportedFunctionForServe({
       ctx: makeCtx({ maxCost: 0 }),
-      fn: fakeFn(() => { addCost(1); return "unreached"; }),
+      fn: fakeFn(() => {
+        addCost(1);
+        return "unreached";
+      }),
       namedArgs: {},
     });
     expect(outcome.status).toBe("threw");
@@ -67,13 +72,21 @@ describe("runExportedFunctionForServe outcomes", () => {
 
 describe("runExportedFunction (public compatibility)", () => {
   it("returns the raw value", async () => {
-    await expect(runExportedFunction({ ctx: makeCtx(), fn: fakeFn(() => "x"), namedArgs: {} })).resolves.toBe("x");
+    await expect(
+      runExportedFunction({ ctx: makeCtx(), fn: fakeFn(() => "x"), namedArgs: {} }),
+    ).resolves.toBe("x");
   });
 
   it("throws the identical original error", async () => {
     const err = new Error("orig");
     await expect(
-      runExportedFunction({ ctx: makeCtx(), fn: fakeFn(() => { throw err; }), namedArgs: {} }),
+      runExportedFunction({
+        ctx: makeCtx(),
+        fn: fakeFn(() => {
+          throw err;
+        }),
+        namedArgs: {},
+      }),
     ).rejects.toBe(err);
   });
 });
@@ -107,7 +120,9 @@ describe("finishServedInvocation cleanup semantics", () => {
     const outcome = await finishServedInvocation(
       ctx,
       { status: "returned", value: "ok" },
-      async () => { throw cleanupErr; },
+      async () => {
+        throw cleanupErr;
+      },
     );
     expect(outcome.status).toBe("threw");
     if (outcome.status === "threw") expect(outcome.error).toBe(cleanupErr);
@@ -120,7 +135,9 @@ describe("finishServedInvocation cleanup semantics", () => {
     const outcome = await finishServedInvocation(
       ctx,
       { status: "threw", error: firstErr },
-      async () => { throw new Error("cleanup boom"); },
+      async () => {
+        throw new Error("cleanup boom");
+      },
     );
     expect(outcome.status).toBe("threw");
     if (outcome.status === "threw") expect(outcome.error).toBe(firstErr);
@@ -130,11 +147,19 @@ describe("finishServedInvocation cleanup semantics", () => {
 
   it("derives the outcome traceId from the execution context's run id", async () => {
     const ctx = await makeExecCtx("effective-run");
-    const returned = await finishServedInvocation(ctx, { status: "returned", value: "ok" }, async () => {});
+    const returned = await finishServedInvocation(
+      ctx,
+      { status: "returned", value: "ok" },
+      async () => {},
+    );
     expect(returned.traceId).toBe("effective-run");
     expect(returned.traceId).toBe(ctx.getRunId());
 
-    const threw = await finishServedInvocation(ctx, { status: "threw", error: new Error("x") }, async () => {});
+    const threw = await finishServedInvocation(
+      ctx,
+      { status: "threw", error: new Error("x") },
+      async () => {},
+    );
     expect(threw.traceId).toBe("effective-run");
   });
 
@@ -144,7 +169,9 @@ describe("finishServedInvocation cleanup semantics", () => {
     const outcome = await finishServedInvocation(
       ctx,
       { status: "threw", error: new Error("execution error") },
-      async () => { throw new Error("cleanup boom"); },
+      async () => {
+        throw new Error("cleanup boom");
+      },
     );
     expect(outcome.traceId).toBe("effective-run");
     warn.mockRestore();
@@ -157,8 +184,22 @@ describe("finishServedInvocation cleanup semantics", () => {
       { status: "returned", value: "ok" },
       async () => {
         ctx.invocationUsage.merge({
-          cost: { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0.5, currency: "USD" },
-          tokens: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 },
+          cost: {
+            inputCost: 0,
+            outputCost: 0,
+            cachedInputCost: 0,
+            cacheCreationInputCost: 0,
+            hostedToolsCost: 0,
+            totalCost: 0.5,
+            currency: "USD",
+          },
+          tokens: {
+            inputTokens: 0,
+            outputTokens: 0,
+            cachedInputTokens: 0,
+            cacheCreationInputTokens: 0,
+            totalTokens: 0,
+          },
           unknownCostCallCount: 0,
           attributionLost: false,
         });

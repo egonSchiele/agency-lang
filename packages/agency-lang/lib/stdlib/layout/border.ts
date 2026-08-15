@@ -12,26 +12,66 @@ export type BorderStyle = "rounded" | "heavy" | "double" | "light";
 
 export type BorderChars = {
   // Corners + edges of the outer frame.
-  tl: string; tr: string; bl: string; br: string;
-  h:  string; v:  string;
+  tl: string;
+  tr: string;
+  bl: string;
+  br: string;
+  h: string;
+  v: string;
   // Junction chars for horizontal section dividers crossing vertical
   // column dividers (`cross`) or the outer side borders (`leftTee` /
   // `rightTee`). Rounded shares its interior with light, so they use
   // the same junctions.
-  cross:     string;
-  leftTee:   string;
-  rightTee:  string;
+  cross: string;
+  leftTee: string;
+  rightTee: string;
 };
 
 export const BORDER_CHARS: Record<BorderStyle, BorderChars> = {
-  rounded: { tl: "╭", tr: "╮", bl: "╰", br: "╯", h: "─", v: "│",
-             cross: "┼", leftTee: "├", rightTee: "┤" },
-  heavy:   { tl: "┏", tr: "┓", bl: "┗", br: "┛", h: "━", v: "┃",
-             cross: "╋", leftTee: "┣", rightTee: "┫" },
-  double:  { tl: "╔", tr: "╗", bl: "╚", br: "╝", h: "═", v: "║",
-             cross: "╬", leftTee: "╠", rightTee: "╣" },
-  light:   { tl: "┌", tr: "┐", bl: "└", br: "┘", h: "─", v: "│",
-             cross: "┼", leftTee: "├", rightTee: "┤" },
+  rounded: {
+    tl: "╭",
+    tr: "╮",
+    bl: "╰",
+    br: "╯",
+    h: "─",
+    v: "│",
+    cross: "┼",
+    leftTee: "├",
+    rightTee: "┤",
+  },
+  heavy: {
+    tl: "┏",
+    tr: "┓",
+    bl: "┗",
+    br: "┛",
+    h: "━",
+    v: "┃",
+    cross: "╋",
+    leftTee: "┣",
+    rightTee: "┫",
+  },
+  double: {
+    tl: "╔",
+    tr: "╗",
+    bl: "╚",
+    br: "╝",
+    h: "═",
+    v: "║",
+    cross: "╬",
+    leftTee: "╠",
+    rightTee: "╣",
+  },
+  light: {
+    tl: "┌",
+    tr: "┐",
+    bl: "└",
+    br: "┘",
+    h: "─",
+    v: "│",
+    cross: "┼",
+    leftTee: "├",
+    rightTee: "┤",
+  },
 };
 
 const warnedUnknownStyles = new Set<string>();
@@ -44,9 +84,7 @@ export function resolveBorderStyle(s: string | undefined): BorderStyle {
   if (Object.hasOwn(BORDER_CHARS, s)) return s as BorderStyle;
   if (!warnedUnknownStyles.has(s)) {
     warnedUnknownStyles.add(s);
-    console.warn(
-      `std::ui/layout: unknown borderStyle "${s}"; falling back to "light"`,
-    );
+    console.warn(`std::ui/layout: unknown borderStyle "${s}"; falling back to "light"`);
   }
   return "light";
 }
@@ -84,15 +122,9 @@ export function minWidthForTitle(titleText: string): number {
 // rows, and the top edge is drawn plain. This is the rule both `box`
 // (via `bordered`) and `table` (via `composeTable`) use, so it lives
 // here as a single source of truth.
-export type TitlePlacement =
-  | { kind: "top"; title: string }
-  | { kind: "wrapped"; block: Block };
+export type TitlePlacement = { kind: "top"; title: string } | { kind: "wrapped"; block: Block };
 
-export function placeTitle(
-  title: string,
-  innerWidth: number,
-  titleStyle: Style,
-): TitlePlacement {
+export function placeTitle(title: string, innerWidth: number, titleStyle: Style): TitlePlacement {
   if (title === "" || minWidthForTitle(title) <= innerWidth) {
     return { kind: "top", title };
   }
@@ -113,27 +145,21 @@ function growToFitTitle(inner: Block, titleText: string, padding: number): Block
 
 function withPaddingApplied(block: Block, padding: number): Block {
   if (padding <= 0) return block;
-  return pad(
-    block,
-    block.width  + 2 * padding,
-    block.height + 2 * padding,
-    "center",
-    "center",
-  );
+  return pad(block, block.width + 2 * padding, block.height + 2 * padding, "center", "center");
 }
 
 export function bordered(block: Block, opts: BorderOpts): Block {
   const borderChars = BORDER_CHARS[resolveBorderStyle(opts.borderStyle)];
-  const padding     = opts.padding ?? 0;
-  const titleText   = opts.title   ?? "";
-  const padded      = withPaddingApplied(block, padding);
+  const padding = opts.padding ?? 0;
+  const titleText = opts.title ?? "";
+  const padded = withPaddingApplied(block, padding);
 
   if (opts.targetWidth !== undefined) {
     const innerWidth = Math.max(0, opts.targetWidth - BORDER_CELLS);
     const titleStyle: Style = opts.titleColor ? { fgColor: opts.titleColor } : {};
     const placement = placeTitle(titleText, innerWidth, titleStyle);
     const titleBlock = placement.kind === "wrapped" ? placement.block : Block.empty();
-    const topTitle   = placement.kind === "top"     ? placement.title : "";
+    const topTitle = placement.kind === "top" ? placement.title : "";
     const content = above(titleBlock, padded);
     const inner = pad(content, innerWidth, content.height, "start", "start");
     return frameWithBorder(inner, borderChars, innerWidth, opts, topTitle);
@@ -173,11 +199,7 @@ export function buildTopEdge(
   // `h` separates the corner from the title; `remaining` fills the
   // rest. innerWidth covers everything between the corners.
   const remaining = Math.max(0, innerWidth - 1 - titleWidth);
-  return (
-    wrapBorder(ch.tl + ch.h) +
-    segment +
-    wrapBorder(ch.h.repeat(remaining) + ch.tr)
-  );
+  return wrapBorder(ch.tl + ch.h) + segment + wrapBorder(ch.h.repeat(remaining) + ch.tr);
 }
 
 function frameWithBorder(
@@ -188,13 +210,13 @@ function frameWithBorder(
   titleText: string,
 ): Block {
   const borderStyle: Style = opts.borderColor ? { fgColor: opts.borderColor } : {};
-  const titleStyle:  Style = opts.titleColor  ? { fgColor: opts.titleColor  } : {};
+  const titleStyle: Style = opts.titleColor ? { fgColor: opts.titleColor } : {};
   const wrapBorder = styledWrapper(borderStyle);
 
-  const topEdge    = buildTopEdge(ch, innerWidth, wrapBorder, titleText, titleStyle);
+  const topEdge = buildTopEdge(ch, innerWidth, wrapBorder, titleText, titleStyle);
   const bottomEdge = wrapBorder(ch.bl + ch.h.repeat(innerWidth) + ch.br);
-  const bodyRows   = inner.lines.map((line) =>
-    wrapBorder(ch.v) + padLine(line, innerWidth, "start") + wrapBorder(ch.v),
+  const bodyRows = inner.lines.map(
+    (line) => wrapBorder(ch.v) + padLine(line, innerWidth, "start") + wrapBorder(ch.v),
   );
 
   return Block.of([topEdge, ...bodyRows, bottomEdge]);

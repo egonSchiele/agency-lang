@@ -237,9 +237,10 @@ export function openDataset(args: OpenDatasetArgs): LabelDataset {
     prepareChecklist(definition: NormalizedDefinition): PrepareChecklistResult {
       assertOpen();
       const pointer = readCurrentPointer(args.datasetDir, definition.checklistId);
-      const current = pointer === undefined
-        ? undefined
-        : readRevision(args.datasetDir, definition.checklistId, pointer.version);
+      const current =
+        pointer === undefined
+          ? undefined
+          : readRevision(args.datasetDir, definition.checklistId, pointer.version);
       return prepareRevision({ definition, current });
     },
 
@@ -251,7 +252,10 @@ export function openDataset(args: OpenDatasetArgs): LabelDataset {
     publishRevision(pending: PendingRevision, definitionPath: string): PublishRevisionResult {
       assertOpen();
       return publishPendingRevision({
-        datasetDir: args.datasetDir, pending, definitionPath, fault: args.fault,
+        datasetDir: args.datasetDir,
+        pending,
+        definitionPath,
+        fault: args.fault,
       });
     },
 
@@ -297,7 +301,7 @@ function assertDatasetVersion(datasetDir: string): void {
   if (typeof found === "number" && found > CURRENT_DATASET_VERSION) {
     throw new DatasetVersionError(
       `${datasetDir} uses label dataset format ${found}, which is newer than this build ` +
-      `understands (${CURRENT_DATASET_VERSION}). Upgrade Agency to read it.`,
+        `understands (${CURRENT_DATASET_VERSION}). Upgrade Agency to read it.`,
     );
   }
   // No migration exists, deliberately. Version 1 identified an output by the
@@ -307,9 +311,9 @@ function assertDatasetVersion(datasetDir: string): void {
   // misreading an old file is the only outcome worth preventing.
   throw new DatasetVersionError(
     `${datasetDir} uses label dataset format ${String(found)}; this build writes ` +
-    `format ${CURRENT_DATASET_VERSION}. That dataset predates content-derived record ids, so its ` +
-    `labels cannot be carried across.\n\n` +
-    `  Delete ${datasetDir} and rebuild it with \`agency label ingest\`.\n`,
+      `format ${CURRENT_DATASET_VERSION}. That dataset predates content-derived record ids, so its ` +
+      `labels cannot be carried across.\n\n` +
+      `  Delete ${datasetDir} and rebuild it with \`agency label ingest\`.\n`,
   );
 }
 
@@ -335,7 +339,7 @@ function ensureManifest(datasetDir: string): Manifest {
   if (!parsed.success) {
     throw new DatasetValidationError(
       `${file} is not a label dataset manifest this build understands. Refusing to touch the ` +
-      `dataset rather than risk a dataset written by a different version.`,
+        `dataset rather than risk a dataset written by a different version.`,
     );
   }
   return parsed.data;
@@ -359,7 +363,7 @@ function validateDataset(
     if (row.outputId !== expected) {
       throw new DatasetValidationError(
         `Corpus row "${row.outputId}" does not match the hash of its own fields (${expected}). ` +
-        `An output id is derived from its content and cannot be edited independently.`,
+          `An output id is derived from its content and cannot be edited independently.`,
       );
     }
     corpusById[row.outputId] = row;
@@ -374,13 +378,13 @@ function validateDataset(
     if (row.occurrenceId !== expected) {
       throw new DatasetValidationError(
         `Occurrence "${row.occurrenceId}" does not match the hash of its own identity ` +
-        `(${expected}).`,
+          `(${expected}).`,
       );
     }
     if (corpusById[row.outputId] === undefined) {
       throw new DatasetValidationError(
         `Occurrence "${row.occurrenceId}" refers to output "${row.outputId}", which is not in ` +
-        `the corpus. Records are always written before the occurrences that reference them.`,
+          `the corpus. Records are always written before the occurrences that reference them.`,
       );
     }
   }
@@ -410,7 +414,7 @@ function validateDataset(
     if (corpusById[row.outputId] === undefined) {
       throw new DatasetValidationError(
         `Annotation "${row.annotationId}" refers to output "${row.outputId}", which is not in ` +
-        `the corpus. Outputs are always captured before they can be labelled.`,
+          `the corpus. Outputs are always captured before they can be labelled.`,
       );
     }
     let revision: ChecklistRevision;
@@ -419,13 +423,13 @@ function validateDataset(
     } catch (error) {
       throw new DatasetValidationError(
         `Annotation "${row.annotationId}" refers to checklist revision ` +
-        `${row.checklistId}@${row.checklistVersion}, which is missing: ${(error as Error).message}`,
+          `${row.checklistId}@${row.checklistVersion}, which is missing: ${(error as Error).message}`,
       );
     }
     if (revision.hash !== row.checklistHash) {
       throw new DatasetValidationError(
         `Annotation "${row.annotationId}" records checklist hash ${row.checklistHash}, but ` +
-        `revision ${row.checklistId}@${row.checklistVersion} hashes to ${revision.hash}.`,
+          `revision ${row.checklistId}@${row.checklistVersion} hashes to ${revision.hash}.`,
       );
     }
     assertAnswersCoverExactly(row, revision);
@@ -472,13 +476,13 @@ function validateLineages(
     if (pointer.version > newest) {
       throw new DatasetValidationError(
         `Checklist "${checklistId}" current points at version ${pointer.version}, which has no ` +
-        `stored revision. The newest is ${newest}.`,
+          `stored revision. The newest is ${newest}.`,
       );
     }
     if (pointer.hash !== readCached(checklistId, pointer.version).hash) {
       throw new DatasetValidationError(
         `Checklist "${checklistId}" current records hash ${pointer.hash}, which does not match ` +
-        `revision ${pointer.version}.`,
+          `revision ${pointer.version}.`,
       );
     }
     // A pointer that LAGS is recoverable, not corrupt: it is exactly what a
@@ -489,8 +493,8 @@ function validateLineages(
     if (pointer.version < newest) {
       reportWarning(
         `Checklist "${checklistId}" has revisions up to ${newest} but current points at ` +
-        `${pointer.version}, which means a publication was interrupted. Reopening a session on ` +
-        `this checklist completes it.`,
+          `${pointer.version}, which means a publication was interrupted. Reopening a session on ` +
+          `this checklist completes it.`,
       );
     }
   }
@@ -511,14 +515,14 @@ function assertAnswersCoverExactly(row: AnnotationRow, revision: ChecklistRevisi
     if (known[questionId] !== true) {
       throw new DatasetValidationError(
         `Annotation "${row.annotationId}" covers question "${questionId}", which revision ` +
-        `${row.checklistId}@${row.checklistVersion} does not define.`,
+          `${row.checklistId}@${row.checklistVersion} does not define.`,
       );
     }
     if (typeof row.answers[questionId] !== "boolean") {
       throw new DatasetValidationError(
         `Annotation "${row.annotationId}" covers question "${questionId}" but records no answer. ` +
-        `A covered question carries an explicit true or false; a missing answer means "not judged" ` +
-        `and must not be listed as covered.`,
+          `A covered question carries an explicit true or false; a missing answer means "not judged" ` +
+          `and must not be listed as covered.`,
       );
     }
   }
@@ -547,14 +551,14 @@ function assertAnnotationIsGrounded(
   if (!present) {
     throw new DatasetValidationError(
       `Cannot record a judgement of output "${row.outputId}": it is not in the corpus. ` +
-      `Capture the source before labelling it.`,
+        `Capture the source before labelling it.`,
     );
   }
   const revision = readRevision(datasetDir, row.checklistId, row.checklistVersion);
   if (revision.hash !== row.checklistHash) {
     throw new DatasetValidationError(
       `Annotation "${row.annotationId}" records checklist hash ${row.checklistHash}, but ` +
-      `revision ${row.checklistId}@${row.checklistVersion} hashes to ${revision.hash}.`,
+        `revision ${row.checklistId}@${row.checklistVersion} hashes to ${revision.hash}.`,
     );
   }
   assertAnswersCoverExactly(row, revision);

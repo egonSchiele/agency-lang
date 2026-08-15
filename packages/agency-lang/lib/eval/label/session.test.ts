@@ -16,8 +16,13 @@ const OUT_B = `out_${"b".repeat(64)}`;
 const annotator = { kind: "human" as const, id: "adit" };
 
 const revision: ChecklistRevision = {
-  schemaVersion: 1, checklistId: "cl_news", name: "news", version: 1, parentVersion: null,
-  createdAt: "2026-08-03T00:00:00.000Z", hash: HASH,
+  schemaVersion: 1,
+  checklistId: "cl_news",
+  name: "news",
+  version: 1,
+  parentVersion: null,
+  createdAt: "2026-08-03T00:00:00.000Z",
+  hash: HASH,
   questions: [
     { id: "q_accurate", text: "Accurate?", weight: 1, deleted: false },
     { id: "q_today", text: "Today?", weight: 1, deleted: false },
@@ -41,11 +46,19 @@ function start(annotations: AnnotationRow[] = []): SessionState {
 
 function annotation(over: Partial<AnnotationRow> = {}): AnnotationRow {
   return {
-    schemaVersion: 1, annotationId: "ann_one", outputId: OUT_A, annotator,
-    checklistId: "cl_news", checklistVersion: 1, checklistHash: HASH,
-    createdAt: "2026-08-03T00:00:00.000Z", activeMs: 0,
+    schemaVersion: 1,
+    annotationId: "ann_one",
+    outputId: OUT_A,
+    annotator,
+    checklistId: "cl_news",
+    checklistVersion: 1,
+    checklistHash: HASH,
+    createdAt: "2026-08-03T00:00:00.000Z",
+    activeMs: 0,
     coveredQuestionIds: ["q_accurate", "q_today"],
-    answers: { q_accurate: true, q_today: false }, note: "", ...over,
+    answers: { q_accurate: true, q_today: false },
+    note: "",
+    ...over,
   };
 }
 
@@ -125,7 +138,9 @@ describe("staged question edits", () => {
   it("clears staged edits when a revision is adopted", () => {
     let state = reduceSession(start(), { kind: "toggleQuestionDeleted" });
     const published: ChecklistRevision = {
-      ...revision, version: 2, parentVersion: 1,
+      ...revision,
+      version: 2,
+      parentVersion: 1,
       questions: [{ ...revision.questions[0], deleted: true }, revision.questions[1]],
     };
     state = reduceSession(state, { kind: "revisionAdopted", revision: published });
@@ -228,9 +243,20 @@ describe("sessionSnapshot", () => {
   it("carries everything a renderer needs without exposing internals", () => {
     const snapshot = sessionSnapshot(start());
     expect(Object.keys(snapshot).sort()).toEqual([
-      "answers", "canSignOff", "currentItem", "currentQuestion", "editor",
-      "hasStagedQuestions", "itemIndex", "items", "note", "progress",
-      "questionIndex", "questions", "scores", "statuses",
+      "answers",
+      "canSignOff",
+      "currentItem",
+      "currentQuestion",
+      "editor",
+      "hasStagedQuestions",
+      "itemIndex",
+      "items",
+      "note",
+      "progress",
+      "questionIndex",
+      "questions",
+      "scores",
+      "statuses",
     ]);
   });
 

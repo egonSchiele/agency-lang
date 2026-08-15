@@ -41,10 +41,7 @@ import { prunePreludeShadows } from "./prunePreludeShadows.js";
  * Recursively apply a transform function to all body arrays in a node tree.
  * Handles ifElse (thenBody/elseBody), loops, threads, match blocks, handle blocks, etc.
  */
-function walkBody(
-  body: AgencyNode[],
-  fn: (body: AgencyNode[]) => AgencyNode[],
-): AgencyNode[] {
+function walkBody(body: AgencyNode[], fn: (body: AgencyNode[]) => AgencyNode[]): AgencyNode[] {
   const walked = body.map((node) => {
     if (node.type === "ifElse") {
       node.thenBody = walkBody(node.thenBody, fn);
@@ -99,11 +96,7 @@ function llmCallToString(call: FunctionCall): string {
   if (!firstArg) return "llm()";
   if (firstArg.type === "string" || firstArg.type === "multiLineString") {
     const str = firstArg.segments
-      .map((seg) =>
-        seg.type === "text"
-          ? seg.value
-          : `{${expressionToString(seg.expression)}}`,
-      )
+      .map((seg) => (seg.type === "text" ? seg.value : `{${expressionToString(seg.expression)}}`))
       .join("");
     return str;
   }
@@ -122,9 +115,13 @@ function attachTags(nodes: AgencyNode[]): AgencyNode[] {
     }
 
     if (pendingTags.length > 0) {
-      if (node.type === "graphNode" || node.type === "function" ||
-        node.type === "assignment" || node.type === "functionCall" ||
-        node.type === "typeAlias") {
+      if (
+        node.type === "graphNode" ||
+        node.type === "function" ||
+        node.type === "assignment" ||
+        node.type === "functionCall" ||
+        node.type === "typeAlias"
+      ) {
         node.tags = [...(node.tags || []), ...pendingTags];
         pendingTags = [];
       } else {
@@ -163,19 +160,13 @@ export class TypescriptPreprocessor {
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
   protected importedFunctions: Record<string, ImportedFunctionSignature> = {};
   protected graphNodeDefinitions: Record<string, AgencyNode> = {};
-  constructor(
-    program: AgencyProgram,
-    config: AgencyConfig = {},
-    info?: CompilationUnit,
-  ) {
+  constructor(program: AgencyProgram, config: AgencyConfig = {}, info?: CompilationUnit) {
     this.program = program;
     this.config = config;
     if (info) {
       this.functionDefinitions = { ...info.functionDefinitions };
       this.importedFunctions = { ...info.importedFunctions };
-      this.graphNodeDefinitions = Object.fromEntries(
-        info.graphNodes.map((n) => [n.nodeName, n]),
-      );
+      this.graphNodeDefinitions = Object.fromEntries(info.graphNodes.map((n) => [n.nodeName, n]));
     }
   }
 
@@ -208,13 +199,13 @@ export class TypescriptPreprocessor {
           const line = mc.loc?.line != null ? mc.loc.line + 1 : "unknown";
           if (foundModuleDoc) {
             throw new Error(
-              `Only one @module doc comment is allowed per file (duplicate found at line ${line}).`
+              `Only one @module doc comment is allowed per file (duplicate found at line ${line}).`,
             );
           }
           if (seenNonPreamble) {
             throw new Error(
               `@module doc comment must appear before any code (found at line ${line}). ` +
-              `Move it to the top of the file or right after the imports.`
+                `Move it to the top of the file or right after the imports.`,
             );
           }
           this.program.docComment = mc;
@@ -249,10 +240,7 @@ export class TypescriptPreprocessor {
 
       if (pendingDocComment && DECLARATION_TYPES.includes(node.type)) {
         const decl = node as
-          | FunctionDefinition
-          | GraphNodeDefinition
-          | TypeAlias
-          | EffectDeclaration;
+          FunctionDefinition | GraphNodeDefinition | TypeAlias | EffectDeclaration;
         decl.docComment = pendingDocComment;
         pendingDocComment = null;
       } else if (pendingDocComment) {
@@ -280,7 +268,7 @@ export class TypescriptPreprocessor {
     const fnDef = this.functionDefinitions[functionName];
     const params = fnDef?.parameters ?? this.importedFunctions[functionName]?.parameters;
     if (!params) return null;
-    const blockParam = params.find(p => p.typeHint?.type === "blockType");
+    const blockParam = params.find((p) => p.typeHint?.type === "blockType");
     return (blockParam?.typeHint as BlockType) ?? null;
   }
 
@@ -340,11 +328,7 @@ export class TypescriptPreprocessor {
     }
     prunePreludeShadows(this.program);
     this.propagateBlockTypes();
-    injectSchemaArgsInProgram(
-      this.program,
-      this.functionDefinitions,
-      this.importedFunctions,
-    );
+    injectSchemaArgsInProgram(this.program, this.functionDefinitions, this.importedFunctions);
     this.collectSkills();
     // Hoist helper calls into their own const steps so resume replay
     // never re-executes a completed call (frame-queue desync; spec
@@ -486,10 +470,7 @@ export class TypescriptPreprocessor {
     let nodeCounter = 0;
     const nextId = () => `n${nodeCounter++}`;
 
-    const addToolsLabel = (
-      call: FunctionCall,
-      callId: string,
-    ) => {
+    const addToolsLabel = (call: FunctionCall, callId: string) => {
       // TODO: Update to extract tools from llm() config object
     };
 
@@ -556,9 +537,7 @@ export class TypescriptPreprocessor {
     return lines;
   }
 
-  protected extractFunctionCalls(
-    body: AgencyNode[],
-  ): FunctionCall[] {
+  protected extractFunctionCalls(body: AgencyNode[]): FunctionCall[] {
     const calls: FunctionCall[] = [];
     for (const { node } of walkNodesArray(body)) {
       if (node.type === "functionCall") {
@@ -646,17 +625,10 @@ export class TypescriptPreprocessor {
     }
 
     // Pass 2: Find the first usage of each async variable across all bodies in this scope
-    const varToFirstUsageLocation: Record<
-      string,
-      { bodyPath: number[]; indexInBody: number }
-    > = {};
+    const varToFirstUsageLocation: Record<string, { bodyPath: number[]; indexInBody: number }> = {};
 
     for (const varName of asyncVars) {
-      const location = this._findFirstUsageInScope(
-        body,
-        varName,
-        asyncVarToAssignment[varName],
-      );
+      const location = this._findFirstUsageInScope(body, varName, asyncVarToAssignment[varName]);
       if (location) {
         varToFirstUsageLocation[varName] = location;
       }
@@ -667,8 +639,7 @@ export class TypescriptPreprocessor {
 
     for (const varName of Object.keys(varToFirstUsageLocation)) {
       const location = varToFirstUsageLocation[varName];
-      const locationKey =
-        location.bodyPath.join(",") + ":" + location.indexInBody;
+      const locationKey = location.bodyPath.join(",") + ":" + location.indexInBody;
       if (!locationToVars[locationKey]) {
         locationToVars[locationKey] = [];
       }
@@ -695,8 +666,7 @@ export class TypescriptPreprocessor {
 
       // Process assignments in this body
       if (node.type === "assignment") {
-        const isAsyncCall =
-          node.value.type === "functionCall" && node.value.async;
+        const isAsyncCall = node.value.type === "functionCall" && node.value.async;
 
         if (isAsyncCall) {
           asyncVarToAssignment[node.variableName] = node;
@@ -711,10 +681,7 @@ export class TypescriptPreprocessor {
       } else if (node.type === "ifElse") {
         this._collectAsyncVariablesInScope(node.thenBody, asyncVarToAssignment);
         if (node.elseBody) {
-          this._collectAsyncVariablesInScope(
-            node.elseBody,
-            asyncVarToAssignment,
-          );
+          this._collectAsyncVariablesInScope(node.elseBody, asyncVarToAssignment);
         }
       } else if (node.type === "handleBlock") {
         this._collectAsyncVariablesInScope(node.body, asyncVarToAssignment);
@@ -754,52 +721,42 @@ export class TypescriptPreprocessor {
 
       // Check nested bodies
       if (node.type === "messageThread") {
-        const found = this._findFirstUsageInScope(
-          node.body,
-          varName,
-          assignmentNode,
-          [...bodyPath, i],
-        );
+        const found = this._findFirstUsageInScope(node.body, varName, assignmentNode, [
+          ...bodyPath,
+          i,
+        ]);
         if (found) return found;
       } else if (node.type === "whileLoop") {
-        const found = this._findFirstUsageInScope(
-          node.body,
-          varName,
-          assignmentNode,
-          [...bodyPath, i],
-        );
+        const found = this._findFirstUsageInScope(node.body, varName, assignmentNode, [
+          ...bodyPath,
+          i,
+        ]);
         if (found) return found;
       } else if (node.type === "handleBlock") {
-        const found = this._findFirstUsageInScope(
-          node.body,
-          varName,
-          assignmentNode,
-          [...bodyPath, i],
-        );
+        const found = this._findFirstUsageInScope(node.body, varName, assignmentNode, [
+          ...bodyPath,
+          i,
+        ]);
         if (found) return found;
       } else if (node.type === "withModifier") {
-        const found = this._findFirstUsageInScope(
-          [node.statement],
-          varName,
-          assignmentNode,
-          [...bodyPath, i],
-        );
+        const found = this._findFirstUsageInScope([node.statement], varName, assignmentNode, [
+          ...bodyPath,
+          i,
+        ]);
         if (found) return found;
       } else if (node.type === "ifElse") {
-        const foundInThen = this._findFirstUsageInScope(
-          node.thenBody,
-          varName,
-          assignmentNode,
-          [...bodyPath, i, 0],
-        );
+        const foundInThen = this._findFirstUsageInScope(node.thenBody, varName, assignmentNode, [
+          ...bodyPath,
+          i,
+          0,
+        ]);
         if (foundInThen) return foundInThen;
         if (node.elseBody) {
-          const foundInElse = this._findFirstUsageInScope(
-            node.elseBody,
-            varName,
-            assignmentNode,
-            [...bodyPath, i, 1],
-          );
+          const foundInElse = this._findFirstUsageInScope(node.elseBody, varName, assignmentNode, [
+            ...bodyPath,
+            i,
+            1,
+          ]);
           if (foundInElse) return foundInElse;
         }
       }
@@ -811,10 +768,7 @@ export class TypescriptPreprocessor {
   /**
    * Check if a node uses a variable directly (not in nested bodies).
    */
-  protected _nodeUsesVariableDirectly(
-    node: AgencyNode,
-    varName: string,
-  ): boolean {
+  protected _nodeUsesVariableDirectly(node: AgencyNode, varName: string): boolean {
     // For nodes with bodies, we don't check inside the body here
     // (that's done separately in _findFirstUsageInScope)
     if (
@@ -869,37 +823,28 @@ export class TypescriptPreprocessor {
 
       // Recursively process nested bodies
       if (node.type === "messageThread") {
-        node.body = this._insertAwaitPendingCalls(node.body, locationToVars, [
-          ...currentPath,
-          i,
-        ]);
+        node.body = this._insertAwaitPendingCalls(node.body, locationToVars, [...currentPath, i]);
       } else if (node.type === "whileLoop") {
-        node.body = this._insertAwaitPendingCalls(node.body, locationToVars, [
-          ...currentPath,
-          i,
-        ]);
+        node.body = this._insertAwaitPendingCalls(node.body, locationToVars, [...currentPath, i]);
       } else if (node.type === "handleBlock") {
-        node.body = this._insertAwaitPendingCalls(node.body, locationToVars, [
-          ...currentPath,
-          i,
-        ]);
+        node.body = this._insertAwaitPendingCalls(node.body, locationToVars, [...currentPath, i]);
       } else if (node.type === "withModifier") {
         node.statement = this._insertAwaitPendingCalls([node.statement], locationToVars, [
           ...currentPath,
           i,
         ])[0];
       } else if (node.type === "ifElse") {
-        node.thenBody = this._insertAwaitPendingCalls(
-          node.thenBody,
-          locationToVars,
-          [...currentPath, i, 0],
-        );
+        node.thenBody = this._insertAwaitPendingCalls(node.thenBody, locationToVars, [
+          ...currentPath,
+          i,
+          0,
+        ]);
         if (node.elseBody) {
-          node.elseBody = this._insertAwaitPendingCalls(
-            node.elseBody,
-            locationToVars,
-            [...currentPath, i, 1],
-          );
+          node.elseBody = this._insertAwaitPendingCalls(node.elseBody, locationToVars, [
+            ...currentPath,
+            i,
+            1,
+          ]);
         }
       }
 
@@ -911,12 +856,7 @@ export class TypescriptPreprocessor {
 
   protected nodeHasBody(
     node: AgencyNode,
-  ): node is
-    | FunctionDefinition
-    | AgencyNode
-    | IfElse
-    | WhileLoop
-    | MessageThread {
+  ): node is FunctionDefinition | AgencyNode | IfElse | WhileLoop | MessageThread {
     return (
       node.type === "function" ||
       node.type === "graphNode" ||
@@ -951,7 +891,7 @@ export class TypescriptPreprocessor {
         if (insideLoop) {
           throw new Error(
             `Async function call "${node.functionName}()" is not allowed inside a loop. ` +
-            `Move the async call into a separate function, or remove the "async" keyword.`,
+              `Move the async call into a separate function, or remove the "async" keyword.`,
           );
         }
       }
@@ -1002,9 +942,7 @@ export class TypescriptPreprocessor {
 
     // Outermost-first list of the block-ancestor chain for a walk result.
     const blockChain = (ancestors: WalkAncestor[]): BlockArgument[] =>
-      ancestors.filter(
-        (a): a is BlockArgument => (a as AgencyNode).type === "blockArgument",
-      );
+      ancestors.filter((a): a is BlockArgument => (a as AgencyNode).type === "blockArgument");
 
     const ensureFrame = (b: BlockArgument): Frame => {
       let f = frames.find((fr) => fr.block === b);
@@ -1102,10 +1040,7 @@ export class TypescriptPreprocessor {
         applyBlockScope(node, node.value, chain, true);
       } else if (node.type === "functionCall") {
         applyBlockScope(node, node.functionName, chain, false);
-      } else if (
-        node.type === "handleBlock" &&
-        node.handler.kind === "functionRef"
-      ) {
+      } else if (node.type === "handleBlock" && node.handler.kind === "functionRef") {
         applyBlockScope(node.handler, node.handler.functionName, chain, false);
       }
     }
@@ -1148,19 +1083,13 @@ export class TypescriptPreprocessor {
       }
     }
 
-    const lookupScope = (
-      funcName: string,
-      varName: string,
-    ): ScopeType | null => {
+    const lookupScope = (funcName: string, varName: string): ScopeType | null => {
       // Local scopes (args, locals) take precedence over global scopes,
       // so that `let x` inside a function shadows a global `x`.
       if (funcArgs[funcName] && funcArgs[funcName].includes(varName)) {
         return "args";
       }
-      if (
-        localVarsInFunction[funcName] &&
-        localVarsInFunction[funcName].has(varName)
-      ) {
+      if (localVarsInFunction[funcName] && localVarsInFunction[funcName].has(varName)) {
         return "local";
       }
       // imported takes precedence over global
@@ -1198,11 +1127,7 @@ export class TypescriptPreprocessor {
         // outer `let`/`const` would treat the variable as block-local because
         // Phase 2 (which populates localVarsInFunction) hasn't run yet.
         for (const { node: declNode, ancestors } of walkNodesArray(node.body)) {
-          if (
-            declNode.type === "assignment" &&
-            declNode.declKind &&
-            !isInsideBlock(ancestors)
-          ) {
+          if (declNode.type === "assignment" && declNode.declKind && !isInsideBlock(ancestors)) {
             localVarsInFunction[nodeName].add(declNode.variableName);
           }
         }
@@ -1231,7 +1156,7 @@ export class TypescriptPreprocessor {
               scope = lookupScope(nodeName, varNode.variableName) ?? "local";
               if (scope === "static") {
                 throw new Error(
-                  `Cannot reassign static variable '${varNode.variableName}'. Static variables are immutable after initialization.`
+                  `Cannot reassign static variable '${varNode.variableName}'. Static variables are immutable after initialization.`,
                 );
               }
               if (scope === "local") {
@@ -1301,8 +1226,7 @@ export class TypescriptPreprocessor {
     for (const { node } of getAllVariablesInBodyArray(this.program.nodes)) {
       if (node.type === "variableName" || node.type === "assignment") {
         if (!node.scope) {
-          const name =
-            node.type === "variableName" ? node.value : node.variableName;
+          const name = node.type === "variableName" ? node.value : node.variableName;
           const scope = lookupScope("", name);
           if (scope) {
             node.scope = scope;
@@ -1368,5 +1292,4 @@ export class TypescriptPreprocessor {
       }
     }
   }
-
 }

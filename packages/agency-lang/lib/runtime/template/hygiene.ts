@@ -90,8 +90,7 @@ function bindersOfNode(node: AgencyNode): string[] {
     return node.parameters.map((param) => param.name);
   }
   if (node.type === "forLoop" || node.type === "comprehension") {
-    const names =
-      typeof node.itemVar === "string" ? [node.itemVar] : patternBinders(node.itemVar);
+    const names = typeof node.itemVar === "string" ? [node.itemVar] : patternBinders(node.itemVar);
     if (node.indexVar) names.push(node.indexVar);
     return names;
   }
@@ -239,10 +238,7 @@ function graftSites(template: Code, values: Record<string, unknown>): GraftSite[
  * Renaming is selective — only colliding names change — so generated code
  * normally reads as written.
  */
-export function computeRenames(
-  template: Code,
-  values: Record<string, unknown>,
-): RenamePlan {
+export function computeRenames(template: Code, values: Record<string, unknown>): RenamePlan {
   // Seed the counter above every __hyg<n> already present — in the
   // template (a previous fill's renames) and in every Code filler (a
   // previously filled fragment) — so fresh names cannot collide with
@@ -263,8 +259,7 @@ export function computeRenames(
   // Null-prototype dictionaries throughout: scope keys and filler keys
   // derive from user-controlled names ("__proto__" is a legal hole or
   // function name) — house pattern, see lib/optimize/registry.ts.
-  const bindersByScope: Record<string, { name: string; scopeKey: string }[]> =
-    Object.create(null);
+  const bindersByScope: Record<string, { name: string; scopeKey: string }[]> = Object.create(null);
   for (const visit of walkNodesArray(template.nodes)) {
     for (const name of bindersOfNode(visit.node)) {
       const owner =

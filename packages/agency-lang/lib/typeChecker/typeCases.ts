@@ -6,7 +6,11 @@ import { unescapeStringLiteralValue } from "../parsers/parsers.js";
 export type TypeCase =
   | { kind: "resultSuccess" }
   | { kind: "resultFailure" }
-  | { kind: "member"; type: VariableType; disc?: { prop: string; value: string | number | boolean } }
+  | {
+      kind: "member";
+      type: VariableType;
+      disc?: { prop: string; value: string | number | boolean };
+    }
   | { kind: "literal"; value: string | number | boolean };
 
 export type CaseSet = { cases: TypeCase[]; closed: boolean };
@@ -140,7 +144,13 @@ export function decomposeCases(
   // A bare `boolean` is a closed two-case type. Coverage rides B1's literal-arm
   // path (a `true`/`false` arm → a `literal` case).
   if (resolved.type === "primitiveType" && resolved.value === "boolean") {
-    return { cases: [{ kind: "literal", value: true }, { kind: "literal", value: false }], closed: true };
+    return {
+      cases: [
+        { kind: "literal", value: true },
+        { kind: "literal", value: false },
+      ],
+      closed: true,
+    };
   }
 
   // Other primitives (string/number/…), objectType, generics, etc. → open.

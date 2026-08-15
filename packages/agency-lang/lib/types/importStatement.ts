@@ -51,9 +51,7 @@ export function getImportedNames(importNameType: ImportNameType): string[] {
       // member instead of the (absent) alias.
       return importNameType.importedNames
         .filter((n): n is string => typeof n === "string")
-        .map((n) =>
-          Object.hasOwn(importNameType.aliases, n) ? importNameType.aliases[n] : n,
-        );
+        .map((n) => (Object.hasOwn(importNameType.aliases, n) ? importNameType.aliases[n] : n));
     case "namespaceImport":
       return [importNameType.importedNames];
     case "defaultImport":
@@ -89,5 +87,3 @@ export function getImportedToolNames(node: ImportToolStatement): string[] {
       .map((name) => n.aliases[name] ?? name),
   );
 }
-
-

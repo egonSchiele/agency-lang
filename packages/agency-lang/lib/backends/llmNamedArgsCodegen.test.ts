@@ -23,9 +23,7 @@ describe("llm named-arg option folding", () => {
   });
 
   it("preserves the positional options-object form", () => {
-    const out = gen(
-      `node main() {\n const r = llm("hi", { model: "gpt-4o-mini" })\n print(r)\n}`,
-    );
+    const out = gen(`node main() {\n const r = llm("hi", { model: "gpt-4o-mini" })\n print(r)\n}`);
     expect(out).toMatch(/clientConfig:\s*\{/);
     expect(out).toContain('"model":');
   });
@@ -38,9 +36,7 @@ describe("llm named-arg option folding", () => {
     expect(out).toContain("...__stack.locals.o");
     expect(out).toContain('"temperature":');
     // Spread must come before the named key so named args override.
-    expect(out.indexOf("...__stack.locals.o")).toBeLessThan(
-      out.indexOf('"temperature":'),
-    );
+    expect(out.indexOf("...__stack.locals.o")).toBeLessThan(out.indexOf('"temperature":'));
   });
 
   it("spreads a splat option argument without double-spreading", () => {

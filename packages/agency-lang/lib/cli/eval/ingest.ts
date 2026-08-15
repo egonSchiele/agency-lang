@@ -55,10 +55,7 @@ const defaultDependencies: EvalIngestDependencies = {
  * have exactly one origin: silently letting the last flag win would make the
  * stored artifact depend on argument order.
  */
-export function parseFieldArgs(options: {
-  task?: string;
-  field?: string[];
-}): Fields {
+export function parseFieldArgs(options: { task?: string; field?: string[] }): Fields {
   // Null-prototype accumulator, and names validated before assignment. A key
   // like "__proto__" assigned to a normal object sets the prototype instead of
   // creating an own property, so it would slip past the duplicate check and
@@ -69,9 +66,7 @@ export function parseFieldArgs(options: {
     // Split on the FIRST `=` only, so a value may contain one without escaping.
     const separator = raw.indexOf("=");
     if (separator <= 0) {
-      throw new IngestSourceError(
-        `--field must be written name=value; got "${raw}".`,
-      );
+      throw new IngestSourceError(`--field must be written name=value; got "${raw}".`);
     }
     const name = raw.slice(0, separator);
     assertFieldName(name);
@@ -109,7 +104,7 @@ function assertFieldName(name: string): void {
   if (!FieldNameSchema.safeParse(name).success) {
     throw new IngestSourceError(
       `"${name}" is not a valid field name. Use lowercase letters, digits and underscores, ` +
-      `starting with a letter — for example --field reference_answer=...`,
+        `starting with a letter — for example --field reference_answer=...`,
     );
   }
 }
@@ -118,9 +113,9 @@ function summarize(result: IngestResult, sourceName: string): string[] {
   const out = [
     `Ingested into source "${sourceName}":`,
     `  ${result.recordsAdded} new record${result.recordsAdded === 1 ? "" : "s"}, ` +
-    `${result.recordsReplayed} already stored`,
+      `${result.recordsReplayed} already stored`,
     `  ${result.occurrencesAdded} new occurrence${result.occurrencesAdded === 1 ? "" : "s"}, ` +
-    `${result.occurrencesReplayed} already recorded`,
+      `${result.occurrencesReplayed} already recorded`,
   ];
   if (result.skips.length > 0) {
     out.push(`  ${result.skips.length} skipped:`);
@@ -138,7 +133,7 @@ export async function evalIngest(
   if ((options.extraArgs ?? []).length > 0) {
     throw new IngestSourceError(
       "This command takes one source, but several were given. Pass a directory rather than a " +
-      "list of files, or a shell pattern that the shell has already expanded.",
+        "list of files, or a shell pattern that the shell has already expanded.",
     );
   }
 
@@ -146,7 +141,7 @@ export async function evalIngest(
   if (sourceName.length === 0) {
     throw new IngestSourceError(
       "--source is required: it names this batch on every occurrence, and is how you tell " +
-      "one agent's outputs from another's when you read the labels back.",
+        "one agent's outputs from another's when you read the labels back.",
     );
   }
 
@@ -171,9 +166,10 @@ export async function evalIngest(
   // A silent zero-record success is how you end up labelling an empty dataset and
   // wondering where everything went.
   if (batch.occurrences.length === 0) {
-    const detail = batch.skips.length === 0
-      ? "Nothing matched."
-      : `Every candidate was skipped:\n${batch.skips.map((skip) => `  ${describeIngestSkip(skip)}`).join("\n")}`;
+    const detail =
+      batch.skips.length === 0
+        ? "Nothing matched."
+        : `Every candidate was skipped:\n${batch.skips.map((skip) => `  ${describeIngestSkip(skip)}`).join("\n")}`;
     throw new EmptyIngestError(`No records to ingest from ${options.path}. ${detail}`);
   }
 
@@ -187,10 +183,12 @@ export async function evalIngest(
     dependencies.report(message);
   }
   if (result.newFieldNames.length > 0) {
-    dependencies.report(color.yellow(
-      `  note: this batch introduced ${result.newFieldNames.join(", ")}, which the dataset had ` +
-      "not seen. Records with different field names cannot be judged by the same question.",
-    ));
+    dependencies.report(
+      color.yellow(
+        `  note: this batch introduced ${result.newFieldNames.join(", ")}, which the dataset had ` +
+          "not seen. Records with different field names cannot be judged by the same question.",
+      ),
+    );
   }
 }
 

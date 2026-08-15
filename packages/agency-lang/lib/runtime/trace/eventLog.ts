@@ -93,10 +93,7 @@ export type TraceEvent =
 
 // --- Helpers ---
 
-export function makeBaseEvent(
-  checkpoint: Checkpoint,
-  step: number,
-): BaseEvent {
+export function makeBaseEvent(checkpoint: Checkpoint, step: number): BaseEvent {
   return {
     step,
     ...checkpoint.location,
@@ -137,8 +134,7 @@ function getMessages(checkpoint: Checkpoint): any[] {
   const { threads, activeStack } = frame.threads;
   const threadIds = Object.keys(threads);
   if (threadIds.length === 0) return [];
-  const activeId =
-    activeStack.findLast((id: string) => threads[id] != null) ?? threadIds[0];
+  const activeId = activeStack.findLast((id: string) => threads[id] != null) ?? threadIds[0];
   return threads[activeId]?.messages ?? [];
 }
 
@@ -149,41 +145,26 @@ function getMessageContent(message: any): string {
   }
   if (message.content == null && message.toolCalls) {
     return message.toolCalls
-      .map(
-        (tc: any) =>
-          `Tool call: ${tc.name}(${JSON.stringify(tc.arguments)})`,
-      )
+      .map((tc: any) => `Tool call: ${tc.name}(${JSON.stringify(tc.arguments)})`)
       .join("\n");
   }
   return message.content == null ? "" : JSON.stringify(message.content);
 }
 
-function getTokenUsageDiff(
-  prev: Checkpoint,
-  curr: Checkpoint,
-): LlmCallEvent["tokenUsage"] {
-  const prevStats =
-    prev.globals.store?.[GlobalStore.INTERNAL_MODULE]?.["__tokenStats"];
-  const currStats =
-    curr.globals.store?.[GlobalStore.INTERNAL_MODULE]?.["__tokenStats"];
+function getTokenUsageDiff(prev: Checkpoint, curr: Checkpoint): LlmCallEvent["tokenUsage"] {
+  const prevStats = prev.globals.store?.[GlobalStore.INTERNAL_MODULE]?.["__tokenStats"];
+  const currStats = curr.globals.store?.[GlobalStore.INTERNAL_MODULE]?.["__tokenStats"];
   if (!currStats?.usage) return null;
   if (!prevStats?.usage) return { ...currStats.usage };
   return {
-    inputTokens:
-      (currStats.usage.inputTokens ?? 0) -
-      (prevStats.usage.inputTokens ?? 0),
-    outputTokens:
-      (currStats.usage.outputTokens ?? 0) -
-      (prevStats.usage.outputTokens ?? 0),
+    inputTokens: (currStats.usage.inputTokens ?? 0) - (prevStats.usage.inputTokens ?? 0),
+    outputTokens: (currStats.usage.outputTokens ?? 0) - (prevStats.usage.outputTokens ?? 0),
     cachedInputTokens:
-      (currStats.usage.cachedInputTokens ?? 0) -
-      (prevStats.usage.cachedInputTokens ?? 0),
+      (currStats.usage.cachedInputTokens ?? 0) - (prevStats.usage.cachedInputTokens ?? 0),
     cacheCreationInputTokens:
       (currStats.usage.cacheCreationInputTokens ?? 0) -
       (prevStats.usage.cacheCreationInputTokens ?? 0),
-    totalTokens:
-      (currStats.usage.totalTokens ?? 0) -
-      (prevStats.usage.totalTokens ?? 0),
+    totalTokens: (currStats.usage.totalTokens ?? 0) - (prevStats.usage.totalTokens ?? 0),
   };
 }
 
@@ -277,11 +258,7 @@ export function detectVariableChanges(
 
   const prevFrame = prev.stack.stack.at(-1);
   const currFrame = curr.stack.stack.at(-1);
-  if (
-    prevFrame &&
-    currFrame &&
-    prev.stack.stack.length === curr.stack.stack.length
-  ) {
+  if (prevFrame && currFrame && prev.stack.stack.length === curr.stack.stack.length) {
     for (const change of diffObject(prevFrame.locals, currFrame.locals)) {
       events.push({
         ...base,
@@ -349,9 +326,7 @@ export function detectLlmCalls(
       }
     } else if (msg.role === "tool") {
       const pending = msg.toolCallId
-        ? toolCalls.find(
-            (tc) => tc.id === msg.toolCallId && tc.result === undefined,
-          )
+        ? toolCalls.find((tc) => tc.id === msg.toolCallId && tc.result === undefined)
         : toolCalls.find((tc) => tc.result === undefined);
       if (pending) {
         pending.result = getMessageContent(msg);
@@ -435,11 +410,7 @@ export function detectBranches(
 
 // --- Orchestrator ---
 
-type EventEmitter = (
-  prev: Checkpoint | null,
-  curr: Checkpoint,
-  step: number,
-) => TraceEvent[];
+type EventEmitter = (prev: Checkpoint | null, curr: Checkpoint, step: number) => TraceEvent[];
 
 const eventEmitters: EventEmitter[] = [
   detectNodeTransitions,
@@ -450,11 +421,7 @@ const eventEmitters: EventEmitter[] = [
   detectBranches,
 ];
 
-function diff(
-  prev: Checkpoint | null,
-  curr: Checkpoint,
-  step: number,
-): TraceEvent[] {
+function diff(prev: Checkpoint | null, curr: Checkpoint, step: number): TraceEvent[] {
   const events: TraceEvent[] = [];
   for (const emitter of eventEmitters) {
     events.push(...emitter(prev, curr, step));

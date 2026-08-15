@@ -41,7 +41,11 @@ export function resolveKeys(keys: BarKey[] | null, barChar: string): ResolvedKey
   return list.map((k, i) => ({
     name: isNonEmptyString(k.name) ? k.name : "",
     color: isNonEmptyString(k.color) ? k.color : DEFAULT_COLORS[i % DEFAULT_COLORS.length],
-    symbol: isNonEmptyString(k.symbol) ? k.symbol : (i === 0 ? barChar : DEFAULT_SYMBOLS[i % DEFAULT_SYMBOLS.length]),
+    symbol: isNonEmptyString(k.symbol)
+      ? k.symbol
+      : i === 0
+        ? barChar
+        : DEFAULT_SYMBOLS[i % DEFAULT_SYMBOLS.length],
   }));
 }
 
@@ -77,9 +81,7 @@ export function stackSegments(values: number[], rangeSpan: number, barArea: numb
   const raw = values.map((v) => (Math.abs(v) / total) * totalCells);
   const result = raw.map((x) => Math.floor(x));
   let remaining = totalCells - result.reduce((a, b) => a + b, 0);
-  const order = raw
-    .map((x, i) => ({ i, frac: x - Math.floor(x) }))
-    .sort((a, b) => b.frac - a.frac);
+  const order = raw.map((x, i) => ({ i, frac: x - Math.floor(x) })).sort((a, b) => b.frac - a.frac);
   for (let k = 0; k < order.length && remaining > 0; k++) {
     result[order[k].i] += 1;
     remaining--;
@@ -158,7 +160,9 @@ function drawStack(
     return c;
   });
   const total = clamped.reduce((a, b) => a + b, 0);
-  const body = clamped.map((n, i) => resolveColor(keys[i].color)(keys[i].symbol.repeat(n))).join("");
+  const body = clamped
+    .map((n, i) => resolveColor(keys[i].color)(keys[i].symbol.repeat(n)))
+    .join("");
   if (sign >= 0) {
     return track(baseline) + body + track(barArea - baseline - total);
   }
@@ -190,11 +194,24 @@ function chartRows(
     if (mode === "stacked") {
       const sign = bar.values.some((v) => v < 0) ? -1 : 1;
       const segs = stackSegments(bar.values, span, barArea);
-      return [{ label: bar.label, bar: drawStack(segs, keys, baseline, barArea, sign), value: barValue(bar, "stacked", 0) }];
+      return [
+        {
+          label: bar.label,
+          bar: drawStack(segs, keys, baseline, barArea, sign),
+          value: barValue(bar, "stacked", 0),
+        },
+      ];
     }
     return keys.map((k, ki) => {
       const v = bar.values[ki];
-      const bar_ = drawBar(barCells(v, span, barArea), baseline, barArea, Math.sign(v) || 1, k.symbol, resolveColor(k.color));
+      const bar_ = drawBar(
+        barCells(v, span, barArea),
+        baseline,
+        barArea,
+        Math.sign(v) || 1,
+        k.symbol,
+        resolveColor(k.color),
+      );
       return { label: ki === 0 ? bar.label : "", bar: bar_, value: barValue(bar, "grouped", ki) };
     });
   });
@@ -219,7 +236,8 @@ export function renderBarChart(node: LayoutNode): Block {
 
   const showValues: boolean = a.showValues !== false;
   const wantLegend: boolean = a.legend !== false;
-  const resolvedWidth: number | undefined = typeof a.resolvedWidth === "number" ? a.resolvedWidth : undefined;
+  const resolvedWidth: number | undefined =
+    typeof a.resolvedWidth === "number" ? a.resolvedWidth : undefined;
 
   if (typeof a.max === "number" && (!Number.isFinite(a.max) || a.max < 0)) {
     throw new Error(`std::ui/chart: max must be a non-negative number, got ${a.max}.`);

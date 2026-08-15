@@ -63,15 +63,11 @@ export function prunePreludeShadows(program: AgencyProgram): void {
       // non-empty (the exact-match-AST invariant), so a leftover `[]` would
       // violate it.
       if (spec.destructiveNames) {
-        spec.destructiveNames = spec.destructiveNames.filter((n) =>
-          spec.importedNames.includes(n),
-        );
+        spec.destructiveNames = spec.destructiveNames.filter((n) => spec.importedNames.includes(n));
         if (spec.destructiveNames.length === 0) delete spec.destructiveNames;
       }
       if (spec.idempotentNames) {
-        spec.idempotentNames = spec.idempotentNames.filter((n) =>
-          spec.importedNames.includes(n),
-        );
+        spec.idempotentNames = spec.idempotentNames.filter((n) => spec.importedNames.includes(n));
         if (spec.idempotentNames.length === 0) delete spec.idempotentNames;
       }
       for (const key of Object.keys(spec.aliases)) {

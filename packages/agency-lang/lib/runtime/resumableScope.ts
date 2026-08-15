@@ -162,12 +162,12 @@ export async function withResumableScope<T>(
     },
 
     setLocal: <U>(key: string, value: U): void => {
-      const userLocals = ((stack.locals[USER_LOCALS_KEY] ??= {}) as Record<string, unknown>);
+      const userLocals = (stack.locals[USER_LOCALS_KEY] ??= {}) as Record<string, unknown>;
       userLocals[key] = value;
     },
 
     getLocal: <U>(key: string): U | undefined => {
-      const userLocals = (stack.locals[USER_LOCALS_KEY] as Record<string, unknown> | undefined);
+      const userLocals = stack.locals[USER_LOCALS_KEY] as Record<string, unknown> | undefined;
       return userLocals?.[key] as U | undefined;
     },
 

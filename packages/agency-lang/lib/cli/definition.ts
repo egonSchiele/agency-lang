@@ -13,11 +13,7 @@ type DefinitionResult = {
  * Extract the identifier (word) at the given 0-indexed line and column
  * in the source text. Returns null if the cursor is not on an identifier.
  */
-export function getWordAtPosition(
-  source: string,
-  line: number,
-  column: number,
-): string | null {
+export function getWordAtPosition(source: string, line: number, column: number): string | null {
   const lines = source.split("\n");
   if (line < 0 || line >= lines.length) return null;
   const lineText = lines[line];
@@ -45,9 +41,7 @@ export function getWordAtPosition(
  * Build a map of symbol name → SourceLocation from the parsed program.
  * Covers graph nodes, function definitions, and type aliases.
  */
-export function collectDefinitions(
-  program: AgencyProgram,
-): Record<string, SourceLocation> {
+export function collectDefinitions(program: AgencyProgram): Record<string, SourceLocation> {
   const defs: Record<string, SourceLocation> = {};
 
   for (const node of program.nodes) {

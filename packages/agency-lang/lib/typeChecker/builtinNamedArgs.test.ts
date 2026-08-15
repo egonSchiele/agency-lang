@@ -55,9 +55,7 @@ describe("builtin named-arg validation (fork/race shared:)", () => {
       `node main() { let r = fork([1, 2], shared: true, shared: false) as _ { return 1 }\n print(r) }`,
     );
     expect(errors.length).toBeGreaterThan(0);
-    expect(
-      errors.some((e) => /duplicate/i.test(e.message) && /shared/.test(e.message)),
-    ).toBe(true);
+    expect(errors.some((e) => /duplicate/i.test(e.message) && /shared/.test(e.message))).toBe(true);
   });
 
   it("rejects duplicate named arg on race (Copilot #3)", () => {
@@ -65,9 +63,7 @@ describe("builtin named-arg validation (fork/race shared:)", () => {
       `node main() { let r = race([1, 2], shared: true, shared: true) as _ { return 1 }\n print(r) }`,
     );
     expect(errors.length).toBeGreaterThan(0);
-    expect(
-      errors.some((e) => /duplicate/i.test(e.message) && /shared/.test(e.message)),
-    ).toBe(true);
+    expect(errors.some((e) => /duplicate/i.test(e.message) && /shared/.test(e.message))).toBe(true);
   });
 
   it("rejects non-boolean shared: value on fork (Copilot #4)", () => {
@@ -90,9 +86,7 @@ describe("builtin named-arg validation (fork/race shared:)", () => {
 
 describe("builtin named-arg validation (llm options)", () => {
   it("accepts a known option as a named arg", () => {
-    const errors = errorsFrom(
-      `node main() { let r = llm("hi", model: "gpt-4o-mini")\n print(r) }`,
-    );
+    const errors = errorsFrom(`node main() { let r = llm("hi", model: "gpt-4o-mini")\n print(r) }`);
     expect(errors).toHaveLength(0);
   });
 
@@ -104,33 +98,25 @@ describe("builtin named-arg validation (llm options)", () => {
   });
 
   it("rejects an unknown option named arg", () => {
-    const errors = errorsFrom(
-      `node main() { let r = llm("hi", modle: "gpt-4o-mini")\n print(r) }`,
-    );
+    const errors = errorsFrom(`node main() { let r = llm("hi", modle: "gpt-4o-mini")\n print(r) }`);
     expect(errors.length).toBeGreaterThan(0);
     expect(errors.some((e) => /modle/.test(e.message))).toBe(true);
   });
 
   it("rejects a wrongly-typed option named arg", () => {
-    const errors = errorsFrom(
-      `node main() { let r = llm("hi", maxTokens: "big")\n print(r) }`,
-    );
+    const errors = errorsFrom(`node main() { let r = llm("hi", maxTokens: "big")\n print(r) }`);
     expect(errors.length).toBeGreaterThan(0);
     expect(errors.some((e) => /number/i.test(e.message))).toBe(true);
   });
 
   it("rejects prototype-chain names as options (no prototype pollution)", () => {
-    const errors = errorsFrom(
-      `node main() { let r = llm("hi", __proto__: "x")\n print(r) }`,
-    );
+    const errors = errorsFrom(`node main() { let r = llm("hi", __proto__: "x")\n print(r) }`);
     expect(errors.length).toBeGreaterThan(0);
     expect(errors.some((e) => /__proto__/.test(e.message))).toBe(true);
   });
 
   it("rejects 'constructor' as an option (no prototype-chain match)", () => {
-    const errors = errorsFrom(
-      `node main() { let r = llm("hi", constructor: "x")\n print(r) }`,
-    );
+    const errors = errorsFrom(`node main() { let r = llm("hi", constructor: "x")\n print(r) }`);
     expect(errors.length).toBeGreaterThan(0);
     expect(errors.some((e) => /constructor/.test(e.message))).toBe(true);
   });

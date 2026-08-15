@@ -41,7 +41,11 @@ function publishFirst(): { definition: NormalizedDefinition; revision: Checklist
   if (prepared.kind !== "publish") {
     throw new Error(`expected publish, got ${prepared.kind}`);
   }
-  const published = publishPendingRevision({ datasetDir, pending: prepared.pending, definitionPath });
+  const published = publishPendingRevision({
+    datasetDir,
+    pending: prepared.pending,
+    definitionPath,
+  });
   return { definition: readDefinition(), revision: published.revision };
 }
 
@@ -83,7 +87,10 @@ describe("normalizeDefinition", () => {
     const duplicated: ChecklistDefinition = {
       name: "n",
       checklistId: "cl_x",
-      questions: [{ id: "q_a", text: "one" }, { id: "q_a", text: "two" }],
+      questions: [
+        { id: "q_a", text: "one" },
+        { id: "q_a", text: "two" },
+      ],
     };
     expect(() => normalizeDefinition(duplicated)).toThrow(/unique|duplicate/i);
   });
@@ -101,7 +108,10 @@ describe("first publication", () => {
     const dir = path.join(datasetDir, "checklists", revision.checklistId);
     expect(fs.existsSync(path.join(dir, "1.json"))).toBe(true);
     expect(readCurrentPointer(datasetDir, revision.checklistId)).toEqual({
-      schemaVersion: 1, checklistId: revision.checklistId, version: 1, hash: revision.hash,
+      schemaVersion: 1,
+      checklistId: revision.checklistId,
+      version: 1,
+      hash: revision.hash,
     });
   });
 
@@ -132,7 +142,10 @@ describe("prepareRevision against an existing lineage", () => {
       ...definition,
       questions: [...definition.questions, { text: "Sourced?" }],
     };
-    const prepared = prepareRevision({ definition: normalizeDefinition(edited), current: revision });
+    const prepared = prepareRevision({
+      definition: normalizeDefinition(edited),
+      current: revision,
+    });
     expect(prepared.kind).toBe("publish");
     if (prepared.kind !== "publish") return;
     expect(prepared.pending.revision.version).toBe(2);
@@ -145,7 +158,8 @@ describe("prepareRevision against an existing lineage", () => {
     const edited = {
       ...definition,
       questions: definition.questions.map((question, index) =>
-        index === 0 ? { ...question, deleted: true } : question),
+        index === 0 ? { ...question, deleted: true } : question,
+      ),
     };
     const prepared = prepareRevision({ definition: edited, current: revision });
     expect(prepared.kind).toBe("publish");
@@ -156,7 +170,8 @@ describe("prepareRevision against an existing lineage", () => {
     const edited = {
       ...definition,
       questions: definition.questions.map((question, index) =>
-        index === 0 ? { ...question, weight: 3 } : question),
+        index === 0 ? { ...question, weight: 3 } : question,
+      ),
     };
     const prepared = prepareRevision({ definition: edited, current: revision });
     expect(prepared.kind).toBe("publish");
@@ -169,7 +184,8 @@ describe("prepareRevision against an existing lineage", () => {
     const edited = {
       ...definition,
       questions: definition.questions.map((question, index) =>
-        index === 0 ? { ...question, text: "Rewritten?" } : question),
+        index === 0 ? { ...question, text: "Rewritten?" } : question,
+      ),
     };
     expect(() => prepareRevision({ definition: edited, current: revision })).toThrow(/text/i);
   });
@@ -177,7 +193,9 @@ describe("prepareRevision against an existing lineage", () => {
   it("refuses a removed question rather than stranding its answers", () => {
     const { definition, revision } = publishFirst();
     const edited = { ...definition, questions: [definition.questions[0]] };
-    expect(() => prepareRevision({ definition: edited, current: revision })).toThrow(/removed|soft-delete/i);
+    expect(() => prepareRevision({ definition: edited, current: revision })).toThrow(
+      /removed|soft-delete/i,
+    );
   });
 
   it("refuses a non-positive weight", () => {
@@ -185,7 +203,8 @@ describe("prepareRevision against an existing lineage", () => {
     const edited = {
       ...definition,
       questions: definition.questions.map((question, index) =>
-        index === 0 ? { ...question, weight: 0 } : question),
+        index === 0 ? { ...question, weight: 0 } : question,
+      ),
     };
     expect(() => prepareRevision({ definition: edited, current: revision })).toThrow();
   });
@@ -193,7 +212,9 @@ describe("prepareRevision against an existing lineage", () => {
   it("refuses a definition claiming a different lineage", () => {
     const { definition, revision } = publishFirst();
     const edited = { ...definition, checklistId: "cl_someone_else" };
-    expect(() => prepareRevision({ definition: edited, current: revision })).toThrow(/lineage|checklist/i);
+    expect(() => prepareRevision({ definition: edited, current: revision })).toThrow(
+      /lineage|checklist/i,
+    );
   });
 
   it("refuses a definition claiming a version ahead of current", () => {
@@ -210,9 +231,16 @@ describe("stale external definitions", () => {
       ...first.definition,
       questions: [...first.definition.questions, { text: "Sourced?" }],
     };
-    const prepared = prepareRevision({ definition: normalizeDefinition(edited), current: first.revision });
+    const prepared = prepareRevision({
+      definition: normalizeDefinition(edited),
+      current: first.revision,
+    });
     if (prepared.kind !== "publish") throw new Error("expected publish");
-    const published = publishPendingRevision({ datasetDir, pending: prepared.pending, definitionPath });
+    const published = publishPendingRevision({
+      datasetDir,
+      pending: prepared.pending,
+      definitionPath,
+    });
     return { first, second: published.revision };
   }
 
@@ -231,14 +259,17 @@ describe("stale external definitions", () => {
       ...first.definition,
       questions: [...first.definition.questions, { text: "Something else?" }],
     };
-    expect(() => prepareRevision({ definition: normalizeDefinition(staleAndEdited), current: second }))
-      .toThrow(/ambiguous|stale/i);
+    expect(() =>
+      prepareRevision({ definition: normalizeDefinition(staleAndEdited), current: second }),
+    ).toThrow(/ambiguous|stale/i);
   });
 
   it("refuses a definition whose recorded hash does not match its recorded version", () => {
     const { first } = publishSecond();
     const tampered = { ...first.definition, hash: `sha256:${"9".repeat(64)}` };
-    expect(() => prepareRevision({ definition: tampered, current: first.revision })).toThrow(/hash/i);
+    expect(() => prepareRevision({ definition: tampered, current: first.revision })).toThrow(
+      /hash/i,
+    );
   });
 });
 
@@ -249,11 +280,18 @@ describe("publishPendingRevision idempotence", () => {
       ...definition,
       questions: [...definition.questions, { text: "Sourced?" }],
     };
-    const prepared = prepareRevision({ definition: normalizeDefinition(edited), current: revision });
+    const prepared = prepareRevision({
+      definition: normalizeDefinition(edited),
+      current: revision,
+    });
     if (prepared.kind !== "publish") throw new Error("expected publish");
 
     const first = publishPendingRevision({ datasetDir, pending: prepared.pending, definitionPath });
-    const second = publishPendingRevision({ datasetDir, pending: prepared.pending, definitionPath });
+    const second = publishPendingRevision({
+      datasetDir,
+      pending: prepared.pending,
+      definitionPath,
+    });
     expect(first.replayed).toBe(false);
     expect(second.replayed).toBe(true);
     expect(currentRevision(revision.checklistId).version).toBe(2);
@@ -269,7 +307,10 @@ describe("publishPendingRevision idempotence", () => {
       ...definition,
       questions: [...definition.questions, { text: "Sourced?" }],
     };
-    const prepared = prepareRevision({ definition: normalizeDefinition(edited), current: revision });
+    const prepared = prepareRevision({
+      definition: normalizeDefinition(edited),
+      current: revision,
+    });
     if (prepared.kind !== "publish") throw new Error("expected publish");
     publishPendingRevision({ datasetDir, pending: prepared.pending, definitionPath });
 
@@ -277,8 +318,10 @@ describe("publishPendingRevision idempotence", () => {
     fs.writeFileSync(
       path.join(datasetDir, "checklists", revision.checklistId, "current.json"),
       JSON.stringify({
-        schemaVersion: 1, checklistId: revision.checklistId,
-        version: revision.version, hash: revision.hash,
+        schemaVersion: 1,
+        checklistId: revision.checklistId,
+        version: revision.version,
+        hash: revision.hash,
       }),
     );
 
@@ -286,10 +329,14 @@ describe("publishPendingRevision idempotence", () => {
       ...definition,
       questions: [...definition.questions, { text: "A different question?" }],
     };
-    const other = prepareRevision({ definition: normalizeDefinition(conflicting), current: revision });
+    const other = prepareRevision({
+      definition: normalizeDefinition(conflicting),
+      current: revision,
+    });
     if (other.kind !== "publish") throw new Error("expected publish");
-    expect(() => publishPendingRevision({ datasetDir, pending: other.pending, definitionPath }))
-      .toThrow(/already exists|immutable/i);
+    expect(() =>
+      publishPendingRevision({ datasetDir, pending: other.pending, definitionPath }),
+    ).toThrow(/already exists|immutable/i);
   });
 
   it("completes a publication whose current pointer was never updated", () => {
@@ -298,18 +345,27 @@ describe("publishPendingRevision idempotence", () => {
       ...definition,
       questions: [...definition.questions, { text: "Sourced?" }],
     };
-    const prepared = prepareRevision({ definition: normalizeDefinition(edited), current: revision });
+    const prepared = prepareRevision({
+      definition: normalizeDefinition(edited),
+      current: revision,
+    });
     if (prepared.kind !== "publish") throw new Error("expected publish");
     publishPendingRevision({ datasetDir, pending: prepared.pending, definitionPath });
     fs.writeFileSync(
       path.join(datasetDir, "checklists", revision.checklistId, "current.json"),
       JSON.stringify({
-        schemaVersion: 1, checklistId: revision.checklistId,
-        version: revision.version, hash: revision.hash,
+        schemaVersion: 1,
+        checklistId: revision.checklistId,
+        version: revision.version,
+        hash: revision.hash,
       }),
     );
 
-    const replay = publishPendingRevision({ datasetDir, pending: prepared.pending, definitionPath });
+    const replay = publishPendingRevision({
+      datasetDir,
+      pending: prepared.pending,
+      definitionPath,
+    });
     expect(replay.replayed).toBe(true);
     expect(currentRevision(revision.checklistId).version).toBe(2);
   });
@@ -320,7 +376,10 @@ describe("publishPendingRevision idempotence", () => {
       ...definition,
       questions: [...definition.questions, { text: "Sourced?" }],
     };
-    const prepared = prepareRevision({ definition: normalizeDefinition(edited), current: revision });
+    const prepared = prepareRevision({
+      definition: normalizeDefinition(edited),
+      current: revision,
+    });
     if (prepared.kind !== "publish") throw new Error("expected publish");
     publishPendingRevision({ datasetDir, pending: prepared.pending, definitionPath });
 
@@ -328,8 +387,9 @@ describe("publishPendingRevision idempotence", () => {
       ...prepared.pending,
       revision: { ...prepared.pending.revision, version: 3, parentVersion: 2 },
     };
-    expect(() => publishPendingRevision({ datasetDir, pending: stalePending, definitionPath }))
-      .toThrow(/parent|current/i);
+    expect(() =>
+      publishPendingRevision({ datasetDir, pending: stalePending, definitionPath }),
+    ).toThrow(/parent|current/i);
   });
 });
 

@@ -1,4 +1,7 @@
-import { datasetWriter as defaultDatasetWriter, type DatasetWriter } from "@/eval/label/datasetWriter.js";
+import {
+  datasetWriter as defaultDatasetWriter,
+  type DatasetWriter,
+} from "@/eval/label/datasetWriter.js";
 import { makeOutputId } from "@/eval/label/ids.js";
 import type { LabelingHost } from "@/eval/label/labelingHost.js";
 import { projectTrace, resolveTrace, type TaskChoice } from "@/eval/label/load/statelog.js";

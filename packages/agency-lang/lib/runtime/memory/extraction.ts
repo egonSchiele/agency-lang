@@ -45,18 +45,13 @@ export function parseExtractionResult(text: string): ExtractionResult | null {
   }
   const result = ExtractionResultSchema.safeParse(raw);
   if (!result.success) {
-    console.warn(
-      `[memory] extraction parse failed: ${result.error.message}`,
-    );
+    console.warn(`[memory] extraction parse failed: ${result.error.message}`);
     return null;
   }
   return result.data;
 }
 
-export function buildExtractionPrompt(
-  messages: smoltalk.Message[],
-  graph: MemoryGraph
-): string {
+export function buildExtractionPrompt(messages: smoltalk.Message[], graph: MemoryGraph): string {
   const existingEntities = graph.getEntities();
   const entityContext =
     existingEntities.length > 0
@@ -65,8 +60,7 @@ export function buildExtractionPrompt(
 
   const conversationText = messages
     .map(
-      (m) =>
-        `${m.role}: ${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`
+      (m) => `${m.role}: ${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`,
     )
     .join("\n");
 
@@ -93,7 +87,7 @@ export type ApplyExtractionOutcome = {
 export function applyExtractionResult(
   graph: MemoryGraph,
   result: ExtractionResult,
-  source: string
+  source: string,
 ): ApplyExtractionOutcome {
   const newObservations: NewObservation[] = [];
   const expiredObservationIds: string[] = [];
@@ -104,9 +98,7 @@ export function applyExtractionResult(
     const entity = graph.findEntityByName(exp.entityName);
     if (!entity) continue;
     const obs = entity.observations.find(
-      (o) =>
-        o.validTo === null &&
-        o.content.toLowerCase() === exp.observationContent.toLowerCase()
+      (o) => o.validTo === null && o.content.toLowerCase() === exp.observationContent.toLowerCase(),
     );
     if (obs) {
       graph.expireObservation(obs.id);

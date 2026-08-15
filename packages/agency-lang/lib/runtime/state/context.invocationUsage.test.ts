@@ -15,8 +15,22 @@ function makeContext() {
 
 function delta(totalCost: number, over: Partial<NormalizedDelta> = {}): NormalizedDelta {
   return {
-    cost: { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost, currency: "USD" },
-    tokens: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 },
+    cost: {
+      inputCost: 0,
+      outputCost: 0,
+      cachedInputCost: 0,
+      cacheCreationInputCost: 0,
+      hostedToolsCost: 0,
+      totalCost,
+      currency: "USD",
+    },
+    tokens: {
+      inputTokens: 0,
+      outputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      totalTokens: 0,
+    },
     unknownCostCallCount: 0,
     attributionLost: false,
     ...over,
@@ -31,8 +45,22 @@ describe("execution-context invocation meter", () => {
 
     expect(a.invocationUsage.snapshot()).toEqual({
       usage: {
-        cost: { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0, currency: "USD" },
-        tokens: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 },
+        cost: {
+          inputCost: 0,
+          outputCost: 0,
+          cachedInputCost: 0,
+          cacheCreationInputCost: 0,
+          hostedToolsCost: 0,
+          totalCost: 0,
+          currency: "USD",
+        },
+        tokens: {
+          inputTokens: 0,
+          outputTokens: 0,
+          cachedInputTokens: 0,
+          cacheCreationInputTokens: 0,
+          totalTokens: 0,
+        },
         unknownCostCallCount: 0,
         pricingComplete: true,
         entries: [],

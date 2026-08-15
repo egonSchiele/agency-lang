@@ -1,8 +1,4 @@
-import type {
-  VariableType,
-  FunctionDefinition,
-  GraphNodeDefinition,
-} from "../types.js";
+import type { VariableType, FunctionDefinition, GraphNodeDefinition } from "../types.js";
 import type { ImportedFunctionSignature } from "../compilationUnit.js";
 import { STRING_T } from "./primitives.js";
 
@@ -41,7 +37,6 @@ export function effectiveReturnType(
   def: FunctionDefinition | GraphNodeDefinition | ImportedFunctionSignature,
 ): VariableType | null | undefined {
   if (!def.returnType) return def.returnType;
-  const validated =
-    "returnTypeValidated" in def ? def.returnTypeValidated : undefined;
+  const validated = "returnTypeValidated" in def ? def.returnTypeValidated : undefined;
   return resultTypeForValidation(def.returnType, validated);
 }

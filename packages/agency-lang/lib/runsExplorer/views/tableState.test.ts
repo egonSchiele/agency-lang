@@ -28,7 +28,13 @@ function run(key: string, over: Partial<RunRow> = {}): RunRow {
 const rows: RunRow[] = [
   run("r-old-good", { startedAtMs: 1_000, score: 0.9, costUsd: 5, agent: "agent-a" }),
   run("r-new-bad", { startedAtMs: 9_000, score: 0.1, costUsd: 1, agent: "agent-b" }),
-  run("r-mid-ungraded", { startedAtMs: 5_000, score: null, costUsd: null, agent: "agent-a", suite: "other" }),
+  run("r-mid-ungraded", {
+    startedAtMs: 5_000,
+    score: null,
+    costUsd: null,
+    agent: "agent-a",
+    suite: "other",
+  }),
 ];
 
 function keysOf(rowsIn: RunRow[], state: TableState): string[] {
@@ -48,7 +54,11 @@ describe("projectTable sorting", () => {
   it("score sorts put ungraded rows last regardless of direction", () => {
     const state: TableState = { ...initialTableState(), sort: "score" };
     expect(keysOf(rows, state)).toEqual(["r-old-good", "r-new-bad", "r-mid-ungraded"]);
-    expect(keysOf(rows, { ...state, ascending: true })).toEqual(["r-new-bad", "r-old-good", "r-mid-ungraded"]);
+    expect(keysOf(rows, { ...state, ascending: true })).toEqual([
+      "r-new-bad",
+      "r-old-good",
+      "r-mid-ungraded",
+    ]);
   });
 
   it("agent and suite sort lexically with stable key tie-breaks", () => {
@@ -80,7 +90,10 @@ describe("projectTable grouping", () => {
 
     const expanded: TableState = { ...grouped, expandedGroupKeys: ["group:agent:agent-a"] };
     expect(keysOf(rows, expanded)).toEqual([
-      "group:agent:agent-a", "r-old-good", "r-mid-ungraded", "group:agent:agent-b",
+      "group:agent:agent-a",
+      "r-old-good",
+      "r-mid-ungraded",
+      "group:agent:agent-b",
     ]);
   });
 
@@ -105,7 +118,13 @@ describe("cursor stability", () => {
   });
 
   it("an agent rename arriving from backfill regroups without losing the cursor", () => {
-    const state: TableState = { ...initialTableState(), sort: "score", group: "agent", cursorKey: "r-new-bad", expandedGroupKeys: ["group:agent:agent-b", "group:agent:agent-c"] };
+    const state: TableState = {
+      ...initialTableState(),
+      sort: "score",
+      group: "agent",
+      cursorKey: "r-new-bad",
+      expandedGroupKeys: ["group:agent:agent-b", "group:agent:agent-c"],
+    };
     expect(projectTable(rows, state).cursorKey).toBe("r-new-bad");
 
     const renamed = rows.map((r) => (r.key === "r-new-bad" ? { ...r, agent: "agent-c" } : r));
@@ -115,13 +134,22 @@ describe("cursor stability", () => {
   });
 
   it("a member hidden by collapse maps to its owning header", () => {
-    const state: TableState = { ...initialTableState(), sort: "score", group: "agent", cursorKey: "r-old-good" };
+    const state: TableState = {
+      ...initialTableState(),
+      sort: "score",
+      group: "agent",
+      cursorKey: "r-old-good",
+    };
     const projection = projectTable(rows, state);
     expect(projection.cursorKey).toBe("group:agent:agent-a");
   });
 
   it("a removed row clamps near the previous position via the index hint", () => {
-    const state: TableState = { ...initialTableState(), cursorKey: "r-mid-ungraded", cursorIndexHint: 1 };
+    const state: TableState = {
+      ...initialTableState(),
+      cursorKey: "r-mid-ungraded",
+      cursorIndexHint: 1,
+    };
     const without = rows.filter((r) => r.key !== "r-mid-ungraded");
     const projection = projectTable(without, state);
     expect(projection.cursorIndex).toBe(1);
@@ -159,7 +187,12 @@ describe("updateTable transitions", () => {
   });
 
   it("toggleGroup expands and collapses the header under the cursor", () => {
-    let state: TableState = { ...initialTableState(), sort: "score", group: "agent", cursorKey: "group:agent:agent-a" };
+    let state: TableState = {
+      ...initialTableState(),
+      sort: "score",
+      group: "agent",
+      cursorKey: "group:agent:agent-a",
+    };
     state = updateTable(state, { kind: "toggleGroup" }, rows);
     expect(state.expandedGroupKeys).toEqual(["group:agent:agent-a"]);
     state = updateTable(state, { kind: "toggleGroup" }, rows);

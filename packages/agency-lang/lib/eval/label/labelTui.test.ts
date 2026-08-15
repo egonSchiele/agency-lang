@@ -60,14 +60,16 @@ function frameText(over: Partial<SessionSnapshot> = {}, size = { width: 100, hei
     width: size.width,
     height: size.height,
   });
-  screen.render(labelScreen({
-    snapshot: snapshot(over),
-    datasetLabel: "labels",
-    width: size.width,
-    height: size.height,
-    scroll: 0,
-    body: ["output line one", "output line two"],
-  }));
+  screen.render(
+    labelScreen({
+      snapshot: snapshot(over),
+      datasetLabel: "labels",
+      width: size.width,
+      height: size.height,
+      scroll: 0,
+      body: ["output line one", "output line two"],
+    }),
+  );
   return recorder.lastText();
 }
 
@@ -97,13 +99,15 @@ describe("frame content", () => {
   });
 
   it("switches the footer to the question editor", () => {
-    expect(frameText({ editor: { kind: "question", draft: "Sourced?" } }))
-      .toContain("new question Sourced?");
+    expect(frameText({ editor: { kind: "question", draft: "Sourced?" } })).toContain(
+      "new question Sourced?",
+    );
   });
 
   it("labels d as undelete when the focused question is deleted", () => {
-    expect(frameText({ currentQuestion: { id: "q_b", text: "Today?", weight: 1, deleted: true } }))
-      .toContain("d undelete");
+    expect(
+      frameText({ currentQuestion: { id: "q_b", text: "Today?", weight: 1, deleted: true } }),
+    ).toContain("d undelete");
   });
 
   it("handles an empty corpus without throwing", () => {
@@ -136,15 +140,19 @@ describe("renderChecklist", () => {
       },
       { id: "q_b", text: "Second", weight: 1, deleted: false },
     ];
-    expect(renderChecklist(snapshot({ questions, questionIndex: 1 }), 24).focusLine)
-      .toBeGreaterThan(1);
+    expect(
+      renderChecklist(snapshot({ questions, questionIndex: 1 }), 24).focusLine,
+    ).toBeGreaterThan(1);
   });
 });
 
 describe("checklist viewport", () => {
   function manyQuestions(count: number, focusIndex: number): Partial<SessionSnapshot> {
     const questions = Array.from({ length: count }, (_, index) => ({
-      id: `q_${index}`, text: `Question number ${index}`, weight: 1, deleted: false,
+      id: `q_${index}`,
+      text: `Question number ${index}`,
+      weight: 1,
+      deleted: false,
     }));
     return { questions, questionIndex: focusIndex, currentQuestion: questions[focusIndex] };
   }
@@ -152,13 +160,15 @@ describe("checklist viewport", () => {
   it("keeps a question near the end of a long checklist visible", () => {
     // Without followCursor the pane always starts at question 0, so Space and
     // Enter would act on a checkbox the reader cannot see.
-    expect(frameText(manyQuestions(40, 39), { width: 100, height: 20 }))
-      .toContain("Question number 39");
+    expect(frameText(manyQuestions(40, 39), { width: 100, height: 20 })).toContain(
+      "Question number 39",
+    );
   });
 
   it("still shows the first question when focus is at the top", () => {
-    expect(frameText(manyQuestions(40, 0), { width: 100, height: 20 }))
-      .toContain("Question number 0");
+    expect(frameText(manyQuestions(40, 0), { width: 100, height: 20 })).toContain(
+      "Question number 0",
+    );
   });
 
   it("does not scroll a checklist that already fits", () => {
@@ -170,7 +180,8 @@ describe("checklist viewport", () => {
 
 describe("renderMarkdownSafely", () => {
   it("preserves the content words of a markdown document", () => {
-    const source = "## Heading\n\n- first bullet about reliability\n- second bullet about latency\n";
+    const source =
+      "## Heading\n\n- first bullet about reliability\n- second bullet about latency\n";
     const rendered = stripAnsi(renderMarkdownSafely(source));
     for (const word of ["reliability", "latency", "bullet", "Heading"]) {
       expect(rendered).toContain(word);
@@ -208,8 +219,10 @@ describe("actionForKey", () => {
 
 describe("paste in the editor", () => {
   it("appends the whole clipboard in one action", () => {
-    expect(actionForKey(key({ key: "paste", text: "some pasted text" }), true))
-      .toEqual({ kind: "appendEditorText", text: "some pasted text" });
+    expect(actionForKey(key({ key: "paste", text: "some pasted text" }), true)).toEqual({
+      kind: "appendEditorText",
+      text: "some pasted text",
+    });
   });
 
   it("is ignored outside the editor, where keys are commands", () => {
@@ -240,8 +253,9 @@ describe("scrollDelta and isQuitKey", () => {
   });
 
   it("half-pages with ctrl-d and ctrl-u", () => {
-    expect(scrollDelta(key({ key: "d", ctrl: true }), 20))
-      .toBeLessThan(scrollDelta(key({ key: "f", ctrl: true }), 20));
+    expect(scrollDelta(key({ key: "d", ctrl: true }), 20)).toBeLessThan(
+      scrollDelta(key({ key: "f", ctrl: true }), 20),
+    );
   });
 
   it("ignores the same letters without ctrl, which are commands", () => {
@@ -254,8 +268,9 @@ describe("scrollDelta and isQuitKey", () => {
   });
 
   it("pages the same distance whether by page key or ctrl chord", () => {
-    expect(scrollDelta(key({ key: "pagedown" }), 20))
-      .toBe(scrollDelta(key({ key: "f", ctrl: true }), 20));
+    expect(scrollDelta(key({ key: "pagedown" }), 20)).toBe(
+      scrollDelta(key({ key: "f", ctrl: true }), 20),
+    );
   });
 
   it("treats q and ctrl-c as quit", () => {
@@ -269,7 +284,10 @@ function fakeController(over: Partial<SessionSnapshot> = {}) {
   const dispatched: SessionAction[] = [];
   const controller: LabelingSessionController = {
     snapshot: () => snapshot(over),
-    dispatch: async (action) => { dispatched.push(action); return snapshot(over); },
+    dispatch: async (action) => {
+      dispatched.push(action);
+      return snapshot(over);
+    },
     close: async () => {},
   };
   return { controller, dispatched };
@@ -320,7 +338,9 @@ describe("runLabelTui", () => {
     const { screen } = scriptedScreen([" "]);
     const controller: LabelingSessionController = {
       snapshot: () => snapshot(),
-      dispatch: async () => { throw new Error("controller exploded"); },
+      dispatch: async () => {
+        throw new Error("controller exploded");
+      },
       close: async () => {},
     };
     await expect(runLabelTui({ controller, screen })).rejects.toThrow(/exploded/);

@@ -6,10 +6,10 @@ export type AccessChainElement =
   | { kind: "index"; index: Expression; optional?: boolean }
   | { kind: "slice"; start?: Expression; end?: Expression; optional?: boolean }
   | { kind: "methodCall"; functionCall: FunctionCall; optional?: boolean }
-  | { kind: "call"; optional?: boolean } & Pick<
+  | ({ kind: "call"; optional?: boolean } & Pick<
       FunctionCall,
       "arguments" | "block" | "argumentTrivia"
-    >;
+    >);
 
 export type ValueAccess = BaseNode & {
   type: "valueAccess";

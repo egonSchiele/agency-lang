@@ -89,9 +89,7 @@ describe("resolveReExports: function form", () => {
     expect(result.nodes.find((n) => n.type === "exportFromStatement")).toBeUndefined();
 
     // One import + one wrapper
-    const imports = result.nodes.filter(
-      (n) => n.type === "importStatement",
-    ) as ImportStatement[];
+    const imports = result.nodes.filter((n) => n.type === "importStatement") as ImportStatement[];
     expect(imports).toHaveLength(1);
     expect(imports[0].modulePath).toBe("./source.agency");
     const namedImport = imports[0].importedNames[0];
@@ -101,9 +99,7 @@ describe("resolveReExports: function form", () => {
       expect(namedImport.aliases).toEqual({ search: "_reexport_search" });
     }
 
-    const fns = result.nodes.filter(
-      (n) => n.type === "function",
-    ) as FunctionDefinition[];
+    const fns = result.nodes.filter((n) => n.type === "function") as FunctionDefinition[];
     expect(fns).toHaveLength(1);
     expect(fns[0].functionName).toBe("search");
     expect(fns[0].exported).toBe(true);
@@ -145,9 +141,7 @@ describe("resolveReExports: function form", () => {
     });
 
     const result = resolveReExports(program, symbolTable, reexporterPath);
-    const fns = result.nodes.filter(
-      (n) => n.type === "function",
-    ) as FunctionDefinition[];
+    const fns = result.nodes.filter((n) => n.type === "function") as FunctionDefinition[];
     expect(fns[0].functionName).toBe("wikiSearch");
     expect(fns[0].body[0]).toMatchObject({
       type: "returnStatement",
@@ -187,9 +181,7 @@ describe("resolveReExports: function form", () => {
     });
 
     const result = resolveReExports(program, symbolTable, reexporterPath);
-    const fns = result.nodes.filter(
-      (n) => n.type === "function",
-    ) as FunctionDefinition[];
+    const fns = result.nodes.filter((n) => n.type === "function") as FunctionDefinition[];
     expect(fns[0].markers?.destructive).toBe(true);
   });
 });
@@ -240,16 +232,10 @@ describe("resolveReExports: per-kind synthesis", () => {
     const fnImports = result.nodes.filter((n) => n.type === "importStatement");
     expect(fnImports).toHaveLength(0);
 
-    const nodeImports = result.nodes.filter(
-      (n) => n.type === "importNodeStatement",
-    );
+    const nodeImports = result.nodes.filter((n) => n.type === "importNodeStatement");
     expect(nodeImports).toHaveLength(1);
-    expect((nodeImports[0] as { importedNodes: string[] }).importedNodes).toEqual([
-      "main",
-    ]);
-    expect((nodeImports[0] as { agencyFile: string }).agencyFile).toBe(
-      "./source.agency",
-    );
+    expect((nodeImports[0] as { importedNodes: string[] }).importedNodes).toEqual(["main"]);
+    expect((nodeImports[0] as { agencyFile: string }).agencyFile).toBe("./source.agency");
   });
 
   it("synthesizes a type alias for a re-exported type", () => {
@@ -285,9 +271,7 @@ describe("resolveReExports: per-kind synthesis", () => {
     });
 
     const result = resolveReExports(program, symbolTable, reexporterPath);
-    const aliases = result.nodes.filter(
-      (n) => n.type === "typeAlias",
-    ) as TypeAlias[];
+    const aliases = result.nodes.filter((n) => n.type === "typeAlias") as TypeAlias[];
     expect(aliases).toHaveLength(1);
     expect(aliases[0].aliasName).toBe("Foo");
     expect(aliases[0].exported).toBe(true);
@@ -329,9 +313,7 @@ describe("resolveReExports: per-kind synthesis", () => {
     });
 
     const result = resolveReExports(program, symbolTable, reexporterPath);
-    const assigns = result.nodes.filter(
-      (n) => n.type === "assignment",
-    ) as Assignment[];
+    const assigns = result.nodes.filter((n) => n.type === "assignment") as Assignment[];
     expect(assigns).toHaveLength(1);
     expect(assigns[0].variableName).toBe("PROMPT");
     expect(assigns[0].static).toBe(true);
@@ -386,9 +368,7 @@ describe("resolveReExports: coalescing and star", () => {
     });
 
     const result = resolveReExports(program, symbolTable, reexporterPath);
-    const imports = result.nodes.filter(
-      (n) => n.type === "importStatement",
-    ) as ImportStatement[];
+    const imports = result.nodes.filter((n) => n.type === "importStatement") as ImportStatement[];
     expect(imports).toHaveLength(1);
     const namedImport = imports[0].importedNames[0];
     if (namedImport.type === "namedImport") {
@@ -426,9 +406,7 @@ describe("resolveReExports: coalescing and star", () => {
     });
 
     const result = resolveReExports(program, symbolTable, reexporterPath);
-    const fns = result.nodes.filter(
-      (n) => n.type === "function",
-    ) as FunctionDefinition[];
+    const fns = result.nodes.filter((n) => n.type === "function") as FunctionDefinition[];
     const names = fns.map((f) => f.functionName).sort();
     expect(names).toEqual(["bar", "foo"]);
   });
@@ -481,8 +459,7 @@ describe("resolveReExports: leading preamble ordering", () => {
     const wrapperIdx = result.nodes.findIndex((n) => n.type === "function");
     const synthImportIdx = result.nodes.findIndex(
       (n) =>
-        n.type === "importStatement" &&
-        (n as ImportStatement).modulePath === "./source.agency",
+        n.type === "importStatement" && (n as ImportStatement).modulePath === "./source.agency",
     );
 
     // The module doc must precede every synthesized node so the
@@ -499,9 +476,7 @@ describe("resolveReExports: leading preamble ordering", () => {
       "importStatement",
       "importNodeStatement",
     ]);
-    expect(
-      result.nodes.slice(0, docIdx).every((n) => preamble.has(n.type)),
-    ).toBe(true);
+    expect(result.nodes.slice(0, docIdx).every((n) => preamble.has(n.type))).toBe(true);
   });
 
   it("does not split a regular doc comment from the declaration it documents", () => {

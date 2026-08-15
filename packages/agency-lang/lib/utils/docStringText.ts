@@ -10,9 +10,7 @@ import { MultiLineStringLiteral, PromptSegment } from "@/types/literals.js";
  * while leaving the underlying AST unchanged so the formatter can
  * round-trip the original source.
  */
-export function trimDocStringSegments(
-  segments: PromptSegment[],
-): PromptSegment[] {
+export function trimDocStringSegments(segments: PromptSegment[]): PromptSegment[] {
   if (segments.length === 0) return segments;
   const result: PromptSegment[] = segments.map((s) => ({ ...s }));
   if (result[0].type === "text") {
@@ -47,11 +45,7 @@ export function docStringText(
   gen: AgencyGenerator = new AgencyGenerator(),
 ): string {
   return trimDocStringSegments(docString.segments)
-    .map((s) =>
-      s.type === "text"
-        ? s.value
-        : `\${${gen.processNode(s.expression).trim()}}`,
-    )
+    .map((s) => (s.type === "text" ? s.value : `\${${gen.processNode(s.expression).trim()}}`))
     .join("");
 }
 

@@ -22,7 +22,7 @@ export type InputGrades = {
 export function inputObjective(grades: GraderGrade[]): number {
   const contributions = grades.map((g) => ({
     weight: g.grader.weight(),
-    value: g.grade.score.kind === "scalar" ? g.grade.score.value : (g.grade.score.pass ? 1 : 0),
+    value: g.grade.score.kind === "scalar" ? g.grade.score.value : g.grade.score.pass ? 1 : 0,
   }));
   const totalWeight = contributions.reduce((sum, c) => sum + c.weight, 0);
   if (totalWeight === 0) return 0;

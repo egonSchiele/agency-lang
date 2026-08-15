@@ -67,8 +67,7 @@ describe("resolveInterrupts", () => {
       return { data: responses };
     };
     // approve the first, reject the second, keyed by effect stashed in id
-    const decide: DecideFn = async (intr) =>
-      intr.interruptId === "yes" ? approve() : reject();
+    const decide: DecideFn = async (intr) => (intr.interruptId === "yes" ? approve() : reject());
     const result = await resolveInterrupts(
       { data: [makeInterrupt("yes"), makeInterrupt("no")] },
       respond,
@@ -78,10 +77,7 @@ describe("resolveInterrupts", () => {
   });
 
   it("loops until the run stops pausing", async () => {
-    const script: InterruptResult[] = [
-      { data: [makeInterrupt("second")] },
-      { data: "done" },
-    ];
+    const script: InterruptResult[] = [{ data: [makeInterrupt("second")] }, { data: "done" }];
     const calls: Interrupt[][] = [];
     const respond: ResumeFn<InterruptResult> = async (interrupts) => {
       calls.push(interrupts);

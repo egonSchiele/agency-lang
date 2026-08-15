@@ -68,14 +68,13 @@ describe("resolveFileSelection on a directory", () => {
   });
 
   it("rejects a path that does not exist", () => {
-    expect(() => resolveFileSelection(path.join(root, "nope"), false))
-      .toThrow(IngestSourceError);
+    expect(() => resolveFileSelection(path.join(root, "nope"), false)).toThrow(IngestSourceError);
   });
 
   it("rejects a plain file, naming the shapes it does accept", () => {
     write("a.txt");
-    expect(() => resolveFileSelection(path.join(root, "a.txt"), false))
-      .toThrow(/directory of files, a run directory, or a .json file/);
+    expect(() => resolveFileSelection(path.join(root, "a.txt"), false)).toThrow(
+      /directory of files, a run directory, or a .json file/,
+    );
   });
 });
-

@@ -8,14 +8,8 @@ import { makeMockCtx } from "./__tests__/testHelpers.js";
 // The standard test harness for that is `withResumableScope` — its
 // `s.step(...)` callback runs inside `Runner.step`, which seeds the
 // ALS frame with the runner that `agency.interrupt` needs to halt.
-function inFrame<T>(
-  ctx: ReturnType<typeof makeMockCtx>,
-  fn: () => Promise<T>,
-): Promise<T> {
-  return agency.withTestContext(
-    { ctx, stack: ctx.stateStack, threads: new ThreadStore() },
-    fn,
-  );
+function inFrame<T>(ctx: ReturnType<typeof makeMockCtx>, fn: () => Promise<T>): Promise<T> {
+  return agency.withTestContext({ ctx, stack: ctx.stateStack, threads: new ThreadStore() }, fn);
 }
 
 describe("agency.interrupt — handler approves", () => {
@@ -236,7 +230,7 @@ describe("agency.interrupt — resume idempotency", () => {
 });
 
 describe("agency.interrupt — option defaults", () => {
-  it("defaults kind to \"unknown\" when omitted", async () => {
+  it('defaults kind to "unknown" when omitted', async () => {
     const ctx = makeMockCtx();
     let observedKind: string | undefined;
     await inFrame(ctx, () =>
@@ -275,9 +269,7 @@ describe("agency.interrupt — frame requirements", () => {
   it("throws when called without a Runner in the ALS frame", async () => {
     const ctx = makeMockCtx();
     await expect(
-      inFrame(ctx, () =>
-        agency.interrupt({ effect: "test", message: "x", data: {} }),
-      ),
+      inFrame(ctx, () => agency.interrupt({ effect: "test", message: "x", data: {} })),
     ).rejects.toThrow(/without an active Runner/);
   });
 });

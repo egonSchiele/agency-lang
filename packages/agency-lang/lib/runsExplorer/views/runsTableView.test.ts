@@ -16,8 +16,13 @@ function defaultRows() {
     runRow("r-new", { startedAtMs: 9_000, agent: "agent-b", score: 0.1 }),
     runRow("r-old", { startedAtMs: 1_000, agent: "agent-a", score: 0.9 }),
     runRow("r-trace", {
-      startedAtMs: 5_000, agent: "log.jsonl#ab", suite: "—", score: null,
-      gatesPassed: null, status: "trace", tests: [],
+      startedAtMs: 5_000,
+      agent: "log.jsonl#ab",
+      suite: "—",
+      score: null,
+      gatesPassed: null,
+      status: "trace",
+      tests: [],
       source: { kind: "statelog", file: "/logs/log.jsonl" },
     }),
   ];
@@ -26,7 +31,17 @@ function defaultRows() {
 describe("RunsTableView rendering", () => {
   it("renders the spec columns with the sorted header arrow", () => {
     const text = screenText(makeView().render(viewport));
-    for (const header of ["date▼", "agent", "suite", "score", "pass", "status", "cost", "time", "models"]) {
+    for (const header of [
+      "date▼",
+      "agent",
+      "suite",
+      "score",
+      "pass",
+      "status",
+      "cost",
+      "time",
+      "models",
+    ]) {
       expect(text).toContain(header);
     }
   });
@@ -101,7 +116,10 @@ describe("RunsTableView keys", () => {
   it("a single-test run opens its log directly", () => {
     const view = makeView([runRow("solo", { tests: [testRow("only")] })]);
     const action = view.handleKey({ key: "enter" }, viewport);
-    expect(action).toMatchObject({ kind: "openLog", statelogPath: "/runs/x/inputs/only/agent/statelog.jsonl" });
+    expect(action).toMatchObject({
+      kind: "openLog",
+      statelogPath: "/runs/x/inputs/only/agent/statelog.jsonl",
+    });
   });
 
   it("i opens info for the cursor row; e exports the current projection", () => {

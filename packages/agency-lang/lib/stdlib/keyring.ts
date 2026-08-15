@@ -16,27 +16,25 @@ export async function _setSecret(key: string, value: string, service?: string): 
 
   if (process.platform === "darwin") {
     try {
-      await execFileAsync("security", [
-        "delete-generic-password",
-        "-s", svc,
-        "-a", key,
-      ]);
+      await execFileAsync("security", ["delete-generic-password", "-s", svc, "-a", key]);
     } catch {}
 
     await execFileAsync("security", [
       "add-generic-password",
-      "-s", svc,
-      "-a", key,
-      "-w", value,
+      "-s",
+      svc,
+      "-a",
+      key,
+      "-w",
+      value,
       "-U",
     ]);
   } else if (process.platform === "linux") {
-    const child = spawn("secret-tool", [
-      "store",
-      "--label", `${svc}:${key}`,
-      "service", svc,
-      "account", key,
-    ], { stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(
+      "secret-tool",
+      ["store", "--label", `${svc}:${key}`, "service", svc, "account", key],
+      { stdio: ["pipe", "pipe", "pipe"] },
+    );
 
     child.stdin.write(value);
     child.stdin.end();
@@ -51,7 +49,7 @@ export async function _setSecret(key: string, value: string, service?: string): 
   } else {
     throw new Error(
       `System keyring is not supported on ${process.platform}. ` +
-      `Set the AGENCY_OAUTH_KEY environment variable instead.`
+        `Set the AGENCY_OAUTH_KEY environment variable instead.`,
     );
   }
 }
@@ -68,8 +66,10 @@ export async function _getSecret(key: string, service?: string): Promise<string 
     try {
       const { stdout } = await execFileAsync("security", [
         "find-generic-password",
-        "-s", svc,
-        "-a", key,
+        "-s",
+        svc,
+        "-a",
+        key,
         "-w",
       ]);
       return stdout.trimEnd();
@@ -80,8 +80,10 @@ export async function _getSecret(key: string, service?: string): Promise<string 
     try {
       const { stdout } = await execFileAsync("secret-tool", [
         "lookup",
-        "service", svc,
-        "account", key,
+        "service",
+        svc,
+        "account",
+        key,
       ]);
       return stdout.trimEnd();
     } catch {
@@ -90,7 +92,7 @@ export async function _getSecret(key: string, service?: string): Promise<string 
   } else {
     throw new Error(
       `System keyring is not supported on ${process.platform}. ` +
-      `Set the AGENCY_OAUTH_KEY environment variable instead.`
+        `Set the AGENCY_OAUTH_KEY environment variable instead.`,
     );
   }
 }
@@ -105,22 +107,14 @@ export async function _deleteSecret(key: string, service?: string): Promise<bool
 
   if (process.platform === "darwin") {
     try {
-      await execFileAsync("security", [
-        "delete-generic-password",
-        "-s", svc,
-        "-a", key,
-      ]);
+      await execFileAsync("security", ["delete-generic-password", "-s", svc, "-a", key]);
       return true;
     } catch {
       return false;
     }
   } else if (process.platform === "linux") {
     try {
-      await execFileAsync("secret-tool", [
-        "clear",
-        "service", svc,
-        "account", key,
-      ]);
+      await execFileAsync("secret-tool", ["clear", "service", svc, "account", key]);
       return true;
     } catch {
       return false;
@@ -128,7 +122,7 @@ export async function _deleteSecret(key: string, service?: string): Promise<bool
   } else {
     throw new Error(
       `System keyring is not supported on ${process.platform}. ` +
-      `Set the AGENCY_OAUTH_KEY environment variable instead.`
+        `Set the AGENCY_OAUTH_KEY environment variable instead.`,
     );
   }
 }

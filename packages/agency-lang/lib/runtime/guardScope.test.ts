@@ -45,7 +45,7 @@ describe("GuardScope.extend", () => {
   it("grants additively per named dimension and re-trips at the new limit (spend-shaped)", () => {
     const stack = new StateStack();
     const { cost } = pushScope(stack, 0.5, 60000);
-    stack.chargeGuards(0.6);                      // over
+    stack.chargeGuards(0.6); // over
     expect(stack.detectTrippedGuard()).not.toBeNull();
     GuardScope.resolve(stack, cost)!.extend({ maxCost: 0.5 }, "cost");
     expect(stack.detectTrippedGuard()).toBeNull(); // 0.6 ≤ 1.0
@@ -58,10 +58,7 @@ describe("GuardScope.extend", () => {
   it("extends BOTH members when the payload names both dimensions", () => {
     const stack = new StateStack();
     const { cost, time } = pushScope(stack, 0.5, 60000);
-    GuardScope.resolve(stack, cost)!.extend(
-      { maxCost: 0.5, maxTime: 30000 },
-      "cost",
-    );
+    GuardScope.resolve(stack, cost)!.extend({ maxCost: 0.5, maxTime: 30000 }, "cost");
     expect(cost.currentLimit()).toBe(1.0);
     expect(time.currentLimit()).toBe(90000);
   });
@@ -71,9 +68,9 @@ describe("GuardScope.extend", () => {
     const stack = new StateStack();
     const { cost } = pushScope(stack, 0.5, 60000);
     stack.chargeGuards(0.6);
-    expect(() =>
-      GuardScope.resolve(stack, cost)!.extend({ maxCost: -2 }, "cost"),
-    ).toThrow(GuardApproveError);
+    expect(() => GuardScope.resolve(stack, cost)!.extend({ maxCost: -2 }, "cost")).toThrow(
+      GuardApproveError,
+    );
     expect(warn).toHaveBeenCalled();
     expect(cost.currentLimit()).toBe(0.5); // metering intact — the point
   });
@@ -92,21 +89,19 @@ describe("GuardScope.extend", () => {
     const stack = new StateStack();
     const { cost } = pushScope(stack, 0.5, 60000);
     stack.chargeGuards(0.6);
-    expect(() =>
-      GuardScope.resolve(stack, cost)!.extend({}, "cost"),
-    ).toThrow(/still exceeded/);
-    expect(() =>
-      GuardScope.resolve(stack, cost)!.extend({ maxTime: 5000 }, "cost"),
-    ).toThrow(/still exceeded/);
+    expect(() => GuardScope.resolve(stack, cost)!.extend({}, "cost")).toThrow(/still exceeded/);
+    expect(() => GuardScope.resolve(stack, cost)!.extend({ maxTime: 5000 }, "cost")).toThrow(
+      /still exceeded/,
+    );
   });
 
   it("a payload naming a dimension the scope lacks is an error", () => {
     const stack = new StateStack();
     const g = new CostGuard(0.5);
     stack.pushGuard(g);
-    expect(() =>
-      GuardScope.resolve(stack, g)!.extend({ maxTime: 5000 }, "cost"),
-    ).toThrow(/no time limit/);
+    expect(() => GuardScope.resolve(stack, g)!.extend({ maxTime: 5000 }, "cost")).toThrow(
+      /no time limit/,
+    );
   });
 
   it("a scope containing a root budget refuses extension", () => {
@@ -114,9 +109,9 @@ describe("GuardScope.extend", () => {
     const g = new CostGuard(0.5);
     g.isRootBudget = true;
     stack.pushGuard(g);
-    expect(() =>
-      GuardScope.resolve(stack, g)!.extend({ maxCost: 5 }, "cost"),
-    ).toThrow(/root budget/);
+    expect(() => GuardScope.resolve(stack, g)!.extend({ maxCost: 5 }, "cost")).toThrow(
+      /root budget/,
+    );
   });
 });
 
@@ -162,13 +157,13 @@ describe("TimeGuard.extendBudget", () => {
     const stack = new StateStack();
     const g = new TimeGuard(500);
     stack.pushGuard(g);
-    vi.advanceTimersByTime(300);           // 300 of 500 elapsed (timer time)
-    g.extendBudget(1000);                  // limit now 1500, timer re-armed
-    vi.advanceTimersByTime(300);           // past the OLD 500 deadline
-    expect(g.isTripped()).toBe(false);     // old timer was cancelled — the point
+    vi.advanceTimersByTime(300); // 300 of 500 elapsed (timer time)
+    g.extendBudget(1000); // limit now 1500, timer re-armed
+    vi.advanceTimersByTime(300); // past the OLD 500 deadline
+    expect(g.isTripped()).toBe(false); // old timer was cancelled — the point
     expect(g.check(stack)).toBeNull();
-    vi.advanceTimersByTime(1500);          // past the NEW deadline
-    expect(g.isTripped()).toBe(true);      // still meters at the new limit
+    vi.advanceTimersByTime(1500); // past the NEW deadline
+    expect(g.isTripped()).toBe(true); // still meters at the new limit
     expect(g.check(stack)).not.toBeNull();
     stack.popGuard();
     vi.useRealTimers();
@@ -179,9 +174,9 @@ describe("TimeGuard.extendBudget", () => {
     const stack = new StateStack();
     const g = new TimeGuard(500);
     stack.pushGuard(g);
-    vi.advanceTimersByTime(500);           // trips
+    vi.advanceTimersByTime(500); // trips
     expect(g.check(stack)).not.toBeNull(); // consumes
-    expect(g.check(stack)).toBeNull();     // consumed latch holds
+    expect(g.check(stack)).toBeNull(); // consumed latch holds
     g.extendBudget(1000);
     // Both latches reset: the guard reports armed-and-under-budget
     // state (full re-trip of an already-aborted controller is PR 3).
@@ -223,7 +218,7 @@ describe("derived abort signal (PR 3 Task 3.1)", () => {
     stack.pushGuard(outer);
     stack.pushGuard(inner);
 
-    vi.advanceTimersByTime(500);                 // outer fires
+    vi.advanceTimersByTime(500); // outer fires
     expect(stack.abortSignal!.aborted).toBe(true);
     expect(outer.isTripped()).toBe(true);
 
@@ -242,7 +237,7 @@ describe("derived abort signal (PR 3 Task 3.1)", () => {
     // The INNER guard still enforces afterward — nothing above the
     // re-armed guard needed rebuilding by hand, because there is no
     // accumulated chain anymore.
-    vi.advanceTimersByTime(10_000);              // inner fires
+    vi.advanceTimersByTime(10_000); // inner fires
     expect(stack.abortSignal!.aborted).toBe(true);
     expect(inner.isTripped()).toBe(true);
 
@@ -254,13 +249,13 @@ describe("derived abort signal (PR 3 Task 3.1)", () => {
   it("a base signal set by non-guard machinery survives guard pushes, pops, and rebuilds", () => {
     const stack = new StateStack();
     const branchController = new AbortController();
-    stack.abortSignal = branchController.signal;    // the runBatch pattern
+    stack.abortSignal = branchController.signal; // the runBatch pattern
     const g = new TimeGuard(60_000);
     stack.pushGuard(g);
     expect(stack.abortSignal!.aborted).toBe(false);
-    branchController.abort();                        // race-loser cancel
-    expect(stack.abortSignal!.aborted).toBe(true);   // base propagates
+    branchController.abort(); // race-loser cancel
+    expect(stack.abortSignal!.aborted).toBe(true); // base propagates
     stack.popGuard();
-    expect(stack.abortSignal!.aborted).toBe(true);   // base remains after pop
+    expect(stack.abortSignal!.aborted).toBe(true); // base remains after pop
   });
 });

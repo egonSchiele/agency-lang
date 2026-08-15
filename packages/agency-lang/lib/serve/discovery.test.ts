@@ -15,7 +15,14 @@ describe("discoverExports", () => {
   it("fails fast when a bundle EXPORTS a function but lacks its serve invoker (recompile required)", () => {
     const registry: Record<string, AgencyFunction> = {};
     AgencyFunction.create(
-      { name: "f", module: "test", fn: async () => {}, params: [], toolDefinition: { name: "f", description: "", schema: null }, exported: true },
+      {
+        name: "f",
+        module: "test",
+        fn: async () => {},
+        params: [],
+        toolDefinition: { name: "f", description: "", schema: null },
+        exported: true,
+      },
       registry,
     );
     expect(() =>
@@ -30,7 +37,11 @@ describe("discoverExports", () => {
   it("a node-only bundle needs only the node serve invoker, not the function one", () => {
     const exports = discoverExports({
       toolRegistry: {},
-      moduleExports: { main: async () => {}, __mainNodeParams: [], __invokeNodeForServe: async () => returnedOutcome({ data: undefined }) },
+      moduleExports: {
+        main: async () => {},
+        __mainNodeParams: [],
+        __invokeNodeForServe: async () => returnedOutcome({ data: undefined }),
+      },
       moduleId: "test",
       exportedNodeNames: ["main"],
     });
@@ -96,7 +107,13 @@ describe("discoverExports", () => {
         fn: async () => {},
         params: [
           { name: "visible", hasDefault: false, defaultValue: undefined, variadic: false },
-          { name: "hidden", hasDefault: false, defaultValue: undefined, variadic: false, isBound: true },
+          {
+            name: "hidden",
+            hasDefault: false,
+            defaultValue: undefined,
+            variadic: false,
+            isBound: true,
+          },
         ],
         toolDefinition: { name: "boundFn", description: "", schema: null },
         exported: true,

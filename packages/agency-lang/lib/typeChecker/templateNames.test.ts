@@ -11,8 +11,7 @@ function codesOf(source: string): string[] {
 }
 
 function messageFor(source: string, code: string): string | undefined {
-  return diagnosticsOf(source).find((diagnostic) => diagnostic.code === code)
-    ?.message;
+  return diagnosticsOf(source).find((diagnostic) => diagnostic.code === code)?.message;
 }
 
 /** A host file with `body` inside a code literal. */
@@ -30,12 +29,7 @@ function withLiteral(body: string[]): string {
 
 describe("AG8015: names a template does not define", () => {
   it("reports a variable a statement hole would supply", () => {
-    const source = withLiteral([
-      "    node main() {",
-      "    #body",
-      "      print(res)",
-      "    }",
-    ]);
+    const source = withLiteral(["    node main() {", "    #body", "      print(res)", "    }"]);
     expect(codesOf(source)).toContain("AG8015");
   });
 
@@ -243,7 +237,7 @@ describe("AG8015: the analysis is isolated", () => {
   it("does not leak diagnostics from its own synthetic pass", () => {
     // Building scopes for the literal can produce incidental diagnostics.
     // This pass reports undefined names and nothing else.
-    const source = withLiteral(['    const value: string = 1']);
+    const source = withLiteral(["    const value: string = 1"]);
     expect(codesOf(source)).not.toContain("AG2001");
   });
 
@@ -272,12 +266,7 @@ describe("AG8015: the analysis is isolated", () => {
 
 describe("AG8015: the message", () => {
   it("names the name and says what to do", () => {
-    const source = withLiteral([
-      "    node main() {",
-      "    #body",
-      "      print(res)",
-      "    }",
-    ]);
+    const source = withLiteral(["    node main() {", "    #body", "      print(res)", "    }"]);
     const message = messageFor(source, "AG8015");
     expect(message).toMatch(/res/);
     expect(message).toMatch(/declares or imports/);
@@ -297,14 +286,9 @@ describe("AG8015: template files", () => {
     "",
   ].join("\n");
 
-  const missingCall = [
-    "#helpers",
-    "",
-    "node main(): string {",
-    "  return guarded()",
-    "}",
-    "",
-  ].join("\n");
+  const missingCall = ["#helpers", "", "node main(): string {", "  return guarded()", "}", ""].join(
+    "\n",
+  );
 
   it("reports a missing variable as AG8015, not AG4007", () => {
     expect(codesOf(missingVariable)).toContain("AG8015");
@@ -353,7 +337,7 @@ describe("AG8015: template files", () => {
   });
 
   it("leaves a hole-free file's missing call to AG4004", () => {
-    const source = 'node main(): string {\n  return missingHelper()\n}\n';
+    const source = "node main(): string {\n  return missingHelper()\n}\n";
     expect(codesOf(source)).toContain("AG4004");
     expect(codesOf(source)).not.toContain("AG8015");
   });
@@ -378,9 +362,7 @@ describe("AG8015: template files", () => {
     const names = diagnosticsOf(source)
       .filter((found) => found.code === "AG8015")
       .map((found) => found.message);
-    expect(names.some((message) => message.includes("missingInLiteral"))).toBe(
-      true,
-    );
+    expect(names.some((message) => message.includes("missingInLiteral"))).toBe(true);
   });
 
   it("keeps checking JS namespace members in a template file", () => {
@@ -400,10 +382,7 @@ describe("AG8015: template files", () => {
 
 describe("AG8015: names reached through an access", () => {
   it("reports an index expression the template does not define", () => {
-    const source = withLiteral([
-      "    const items = [1, 2]",
-      "    print(items[missingIndex])",
-    ]);
+    const source = withLiteral(["    const items = [1, 2]", "    print(items[missingIndex])"]);
     expect(codesOf(source)).toContain("AG8015");
     expect(messageFor(source, "AG8015")).toMatch(/missingIndex/);
   });
@@ -483,11 +462,7 @@ describe("AG8015: type names a template does not define", () => {
   });
 
   it("reports a borrowed type on a return annotation", () => {
-    const source = withLiteral([
-      "    def make(): Person {",
-      '      return { name: "a" }',
-      "    }",
-    ]);
+    const source = withLiteral(["    def make(): Person {", '      return { name: "a" }', "    }"]);
     expect(codesOf(source)).toContain("AG8015");
   });
 

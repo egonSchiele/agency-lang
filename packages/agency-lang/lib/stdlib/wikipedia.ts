@@ -1,6 +1,5 @@
 const WIKI_HEADERS = {
-  "User-Agent":
-    "agency-lang (https://github.com/egonschiele/agency-lang; contact via repo issues)",
+  "User-Agent": "agency-lang (https://github.com/egonschiele/agency-lang; contact via repo issues)",
   Accept: "application/json",
 };
 

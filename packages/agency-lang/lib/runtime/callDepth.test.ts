@@ -23,9 +23,7 @@ describe("call-depth guard", () => {
   test("throws CallDepthExceededError when nesting exceeds the limit", async () => {
     const recurse = async (n: number): Promise<number> =>
       withCallDepth(`f${n}`, () => recurse(n + 1));
-    await expect(withLimit(3, () => recurse(0))).rejects.toBeInstanceOf(
-      CallDepthExceededError,
-    );
+    await expect(withLimit(3, () => recurse(0))).rejects.toBeInstanceOf(CallDepthExceededError);
   });
 
   test("the error is an AgencyAbort carrying a callDepthExceeded cause with the limit", async () => {

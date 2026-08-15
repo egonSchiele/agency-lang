@@ -23,7 +23,10 @@ describe("eval optimize CLI", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  function writeAgent(relativePath = "agent.agency", source = "optimize const prompt = \"hi\"\n\nnode main(task: string) {}\n"): string {
+  function writeAgent(
+    relativePath = "agent.agency",
+    source = 'optimize const prompt = "hi"\n\nnode main(task: string) {}\n',
+  ): string {
     const file = path.join(tmpDir, relativePath);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, source);
@@ -39,7 +42,9 @@ describe("eval optimize CLI", () => {
   type Captured = { name?: string; config?: BaseOptimizerConfig; target?: OptimizeTarget };
 
   /** Run evalOptimize with a fake optimizer that captures the target + config it was built with. */
-  async function capture(opts: Partial<EvalOptimizeOptions> & { agent: string }): Promise<Captured> {
+  async function capture(
+    opts: Partial<EvalOptimizeOptions> & { agent: string },
+  ): Promise<Captured> {
     const captured: Captured = {};
     await evalOptimize(
       { config: {}, ...opts },
@@ -77,26 +82,39 @@ describe("eval optimize CLI", () => {
 
   it("requires at least one of --inputs or --goal", async () => {
     const agentFile = writeAgent();
-    await expect(evalOptimize({ agent: agentFile, config: {} })).rejects.toThrow(/Provide --inputs.*or --goal/i);
+    await expect(evalOptimize({ agent: agentFile, config: {} })).rejects.toThrow(
+      /Provide --inputs.*or --goal/i,
+    );
   });
 
   it("allows --inputs and --goal together; --goal fills in as the overall-goal default", async () => {
     const agentFile = writeAgent();
-    const inputsFile = writeInputs([{ id: "first", task: { text: "hi" } }]);   // no per-input goal
-    const { target } = await capture({ agent: `${agentFile}:main`, inputs: inputsFile, goal: "overall goal" });
+    const inputsFile = writeInputs([{ id: "first", task: { text: "hi" } }]); // no per-input goal
+    const { target } = await capture({
+      agent: `${agentFile}:main`,
+      inputs: inputsFile,
+      goal: "overall goal",
+    });
     expect(target?.inputs).toEqual([{ id: "first", task: { text: "hi" }, goal: "overall goal" }]);
   });
 
   it("loads graders from a configured grading module instead of the default goal judge", async () => {
     const agentFile = writeAgent();
-    const inputsFile = writeInputs([{ id: "a", task: "t", metadata: { expected: "x" } }]);   // no goal; grading module present
+    const inputsFile = writeInputs([{ id: "a", task: "t", metadata: { expected: "x" } }]); // no goal; grading module present
     // Write the grading module inside the package so its `import "agency-lang/optimize"` resolves.
     const gradingDir = fs.mkdtempSync(path.join(process.cwd(), ".test-grading-"));
     try {
       const gradingFile = path.join(gradingDir, "grading.ts");
-      fs.writeFileSync(gradingFile, `import { grader } from "agency-lang/optimize";
-export default [grader(({ output }) => (output === "x" ? 1 : 0), { name: "mine" })];`);
-      const { config } = await capture({ agent: `${agentFile}:main`, inputs: inputsFile, graders: gradingFile });
+      fs.writeFileSync(
+        gradingFile,
+        `import { grader } from "agency-lang/optimize";
+export default [grader(({ output }) => (output === "x" ? 1 : 0), { name: "mine" })];`,
+      );
+      const { config } = await capture({
+        agent: `${agentFile}:main`,
+        inputs: inputsFile,
+        graders: gradingFile,
+      });
       expect(config?.graders.map((g) => g.name())).toEqual(["mine"]);
     } finally {
       fs.rmSync(gradingDir, { recursive: true, force: true });
@@ -104,7 +122,10 @@ export default [grader(({ output }) => (output === "x" ? 1 : 0), { name: "mine" 
   });
 
   it("allows --goal for a one-parameter node: the goal text becomes its task", async () => {
-    const agentFile = writeAgent("agent.agency", "optimize const prompt = \"hi\"\n\nnode main(text: string) {}\n");
+    const agentFile = writeAgent(
+      "agent.agency",
+      'optimize const prompt = "hi"\n\nnode main(text: string) {}\n',
+    );
     const { target } = await capture({ agent: `${agentFile}:main`, goal: "g" });
     expect(target?.inputs).toEqual([{ id: "input-1", task: "g", goal: "g" }]);
   });
@@ -143,15 +164,18 @@ export default [grader(({ output }) => (output === "x" ? 1 : 0), { name: "mine" 
     const dir = fs.mkdtempSync(path.join(process.cwd(), ".test-optimizer-"));
     try {
       const optFile = path.join(dir, "opt.ts");
-      fs.writeFileSync(optFile, `export default (config) => ({
+      fs.writeFileSync(
+        optFile,
+        `export default (config) => ({
         name: "mine",
         optimize: async () => ({ runId: "CUSTOM:" + config.runId, runDir: "", championIter: "baseline", championFiles: {}, acceptedCount: 0, rejectedCount: 0, validationFailedCount: 0, iterations: [] }),
-      });`);
+      });`,
+      );
       const result = await evalOptimize(
         { agent: `${agentFile}:main`, inputs: inputsFile, optimizer: optFile, config: {} },
         { makeRunId: () => "run-id" },
       );
-      expect(result.runId).toBe("CUSTOM:run-id");   // the path optimizer's optimize() produced the result
+      expect(result.runId).toBe("CUSTOM:run-id"); // the path optimizer's optimize() produced the result
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -159,13 +183,22 @@ export default [grader(({ output }) => (output === "x" ? 1 : 0), { name: "mine" 
 
   it("uses configured optimize runs dir defaults", async () => {
     const agentFile = writeAgent();
-    const { config } = await capture({ agent: agentFile, goal: "g", config: { eval: { optimizeRunsDir: path.join(tmpDir, "configured-runs") } } });
+    const { config } = await capture({
+      agent: agentFile,
+      goal: "g",
+      config: { eval: { optimizeRunsDir: path.join(tmpDir, "configured-runs") } },
+    });
     expect(config?.runsDir).toBe(path.join(tmpDir, "configured-runs"));
   });
 
   it("includes the minibatch size in the config for the gepa optimizer", async () => {
     const agentFile = writeAgent();
-    const { config } = await capture({ agent: agentFile, goal: "g", optimizer: "gepa", minibatch: 4 });
+    const { config } = await capture({
+      agent: agentFile,
+      goal: "g",
+      optimizer: "gepa",
+      minibatch: 4,
+    });
     expect((config as { minibatch?: number }).minibatch).toBe(4);
   });
 
@@ -187,7 +220,10 @@ export default [grader(({ output }) => (output === "x" ? 1 : 0), { name: "mine" 
     const valFile = path.join(tmpDir, "val.json");
     fs.writeFileSync(trainFile, JSON.stringify({ inputs: [{ id: "t", goal: "g", task: "x" }] }));
     fs.writeFileSync(valFile, JSON.stringify({ inputs: [{ id: "v", goal: "g", task: "x" }] }));
-    const target = buildTarget({ agent: `${agentFile}:main`, inputs: trainFile, validationInputs: valFile }, {});
+    const target = buildTarget(
+      { agent: `${agentFile}:main`, inputs: trainFile, validationInputs: valFile },
+      {},
+    );
     expect(target.validationInputs?.map((i) => i.id)).toEqual(["v"]);
     expect(target.inputs.map((i) => i.id)).toEqual(["t"]);
   });
@@ -197,7 +233,10 @@ export default [grader(({ output }) => (output === "x" ? 1 : 0), { name: "mine" 
     const trainFile = path.join(tmpDir, "train.json");
     const inputs = Array.from({ length: 10 }, (_u, i) => ({ id: `t${i}`, goal: "g", task: "x" }));
     fs.writeFileSync(trainFile, JSON.stringify({ inputs }));
-    const target = buildTarget({ agent: `${agentFile}:main`, inputs: trainFile, validationSplit: 0.3, seed: 1 }, {});
+    const target = buildTarget(
+      { agent: `${agentFile}:main`, inputs: trainFile, validationSplit: 0.3, seed: 1 },
+      {},
+    );
     expect(target.validationInputs).toHaveLength(3);
     expect(target.inputs).toHaveLength(7);
   });

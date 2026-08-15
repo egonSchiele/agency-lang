@@ -10,7 +10,12 @@ import {
   toolsOf,
   userMessageOf,
 } from "../statelog/wireAccessors.js";
-import { extractThreads, normalize, type Normalized, type NormalizedEnvelope } from "./normalize.js";
+import {
+  extractThreads,
+  normalize,
+  type Normalized,
+  type NormalizedEnvelope,
+} from "./normalize.js";
 import type {
   ErrorEntry,
   EvalRecord,
@@ -63,7 +68,7 @@ export function extractEvalRecord(
   if (traceIds.length > 1) {
     throw new Error(
       `extract: multiple trace_ids in input (${traceIds.join(", ")}). ` +
-      `Exactly one trace per file is supported.`,
+        `Exactly one trace per file is supported.`,
     );
   }
   const [traceId] = traceIds;
@@ -78,7 +83,8 @@ export function extractEvalRecord(
   const metrics = computeMetrics(n);
   const topThreadProms = topLevelPromptCompletions(n, threads);
   const evalValues =
-    collectExplicit("evalValueRecorded", n) ?? heuristicValues(topThreadProms, opts.warnMissingValue ?? true);
+    collectExplicit("evalValueRecorded", n) ??
+    heuristicValues(topThreadProms, opts.warnMissingValue ?? true);
   const evalOutputs = collectExplicit("evalOutputRecorded", n) ?? returnValueOutputs(n);
 
   const last = n.events[n.events.length - 1];
@@ -131,23 +137,18 @@ function lastAgentName(n: Normalized): string | undefined {
 // reduce / groupBy). No switching loops over `n.events`.
 // ────────────────────────────────────────────────────────────────────
 
-function normalizeEvents(
-  n: Normalized,
-  opts: ExtractOptions,
-): WithWarnings<NormalizedEvent[]> {
+function normalizeEvents(n: Normalized, opts: ExtractOptions): WithWarnings<NormalizedEvent[]> {
   const previewChars = sanitizePreviewChars(opts.previewChars);
-  const llms: NormalizedEvent[] = (n.byType.promptCompletion ?? []).map(
-    (e) => ({
-      ...baseOf(e),
-      kind: "llm" as const,
-      model: modelOf(e.raw),
-      tools: toolsOf(e.raw),
-      durationMs: numberOrNull(e.raw.data.timeTaken),
-      costUsd: cost(e.raw) || null,
-      tokensIn: tokensIn(e.raw) || null,
-      tokensOut: tokensOut(e.raw) || null,
-    }),
-  );
+  const llms: NormalizedEvent[] = (n.byType.promptCompletion ?? []).map((e) => ({
+    ...baseOf(e),
+    kind: "llm" as const,
+    model: modelOf(e.raw),
+    tools: toolsOf(e.raw),
+    durationMs: numberOrNull(e.raw.data.timeTaken),
+    costUsd: cost(e.raw) || null,
+    tokensIn: tokensIn(e.raw) || null,
+    tokensOut: tokensOut(e.raw) || null,
+  }));
   const starts: NormalizedEvent[] = (n.byType.toolCallStart ?? []).map((e) => ({
     ...baseOf(e),
     kind: "tool_start" as const,
@@ -201,16 +202,11 @@ function extractInterrupts(n: Normalized): WithWarnings<InterruptEntry[]> {
     if (typeof id !== "string") continue;
     (groups[id] ??= []).push(ev);
   }
-  const result = Object.entries(groups).map(([id, group]) =>
-    buildInterruptEntry(id, group),
-  );
+  const result = Object.entries(groups).map(([id, group]) => buildInterruptEntry(id, group));
   return { result, warnings: [] };
 }
 
-function buildInterruptEntry(
-  interruptId: string,
-  group: NormalizedEnvelope[],
-): InterruptEntry {
+function buildInterruptEntry(interruptId: string, group: NormalizedEnvelope[]): InterruptEntry {
   const sorted = [...group].sort((a, b) => a.tMs - b.tMs || a.seq - b.seq);
   const thrown = sorted.find((e) => e.type === "interruptThrown");
   // LAST, not first: a surfaced interrupt records its chain outcome
@@ -229,17 +225,17 @@ function buildInterruptEntry(
   const outcomeRaw = resolved?.raw.data.outcome;
   const outcome: InterruptEntry["outcome"] =
     outcomeRaw === "approved" ||
-      outcomeRaw === "rejected" ||
-      outcomeRaw === "propagated" ||
-      outcomeRaw === "passed"
+    outcomeRaw === "rejected" ||
+    outcomeRaw === "propagated" ||
+    outcomeRaw === "passed"
       ? outcomeRaw
       : "unresolved";
   const resolvedByRaw = resolved?.raw.data.resolvedBy;
   const resolvedBy: InterruptEntry["resolvedBy"] =
     resolvedByRaw === "handler" ||
-      resolvedByRaw === "user" ||
-      resolvedByRaw === "policy" ||
-      resolvedByRaw === "ipc"
+    resolvedByRaw === "user" ||
+    resolvedByRaw === "policy" ||
+    resolvedByRaw === "ipc"
       ? resolvedByRaw
       : null;
   return {
@@ -264,9 +260,7 @@ function extractErrors(n: Normalized): WithWarnings<ErrorEntry[]> {
   return { result, warnings: [] };
 }
 
-function findIncompleteInvocations(
-  n: Normalized,
-): WithWarnings<IncompleteInvocation[]> {
+function findIncompleteInvocations(n: Normalized): WithWarnings<IncompleteInvocation[]> {
   const endedSpans = new Set(
     (n.byType.toolCall ?? []).map((e) => e.spanId).filter((s): s is string => s !== null),
   );
@@ -285,9 +279,7 @@ function computeMetrics(n: Normalized): WithWarnings<Metrics> {
   const proms = n.byType.promptCompletion ?? [];
   const starts = n.byType.toolCallStart ?? [];
   const ends = n.byType.toolCall ?? [];
-  const models = [
-    ...new Set(proms.map((e) => modelOf(e.raw)).filter((m) => m.length > 0)),
-  ].sort();
+  const models = [...new Set(proms.map((e) => modelOf(e.raw)).filter((m) => m.length > 0))].sort();
   const tokensInTotal = proms.reduce((s, e) => s + tokensIn(e.raw), 0);
   const tokensOutTotal = proms.reduce((s, e) => s + tokensOut(e.raw), 0);
   const costUsdTotal = proms.reduce((s, e) => s + cost(e.raw), 0);
@@ -317,10 +309,7 @@ function computeMetrics(n: Normalized): WithWarnings<Metrics> {
  *  known (legacy traces, or threads where parentThreadId isn't set
  *  for any entry): return all promptCompletion events in order.
  *  This is the one place the fallback rule lives. */
-function topLevelPromptCompletions(
-  n: Normalized,
-  threads: ThreadEntry[],
-): NormalizedEnvelope[] {
+function topLevelPromptCompletions(n: Normalized, threads: ThreadEntry[]): NormalizedEnvelope[] {
   const all = n.byType.promptCompletion ?? [];
   const top = threads.find((t) => t.parentThreadId === null);
   if (top === undefined) return all;
@@ -330,17 +319,15 @@ function topLevelPromptCompletions(
   return onTop.length === 0 ? all : onTop;
 }
 
-function extractUserMessage(
-  prompts: NormalizedEnvelope[],
-): { value: string | null; source: NormalizedEnvelope | null } {
+function extractUserMessage(prompts: NormalizedEnvelope[]): {
+  value: string | null;
+  source: NormalizedEnvelope | null;
+} {
   if (prompts.length === 0) return { value: null, source: null };
   return { value: userMessageOf(prompts[0].raw), source: prompts[0] };
 }
 
-function collectExplicit(
-  eventType: string,
-  n: Normalized,
-): WithWarnings<EvalValue[]> | null {
+function collectExplicit(eventType: string, n: Normalized): WithWarnings<EvalValue[]> | null {
   const events = n.byType[eventType] ?? [];
   if (events.length === 0) return null;
   return {
@@ -407,11 +394,7 @@ function capValue(entry: EvalValue): EvalValue {
   };
 }
 
-function truncateStringForJsonRecord(
-  source: string,
-  suffix: string,
-  maxBytes: number,
-): string {
+function truncateStringForJsonRecord(source: string, suffix: string, maxBytes: number): string {
   const chars = Array.from(source);
   let lo = 0;
   let hi = chars.length;

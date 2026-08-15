@@ -31,8 +31,7 @@ export type LogConfig = {
 };
 
 export type ResolveTargetResult =
-  | { ok: true; target: DeployTarget; provenance: TargetProvenance }
-  | { ok: false; error: string };
+  { ok: true; target: DeployTarget; provenance: TargetProvenance } | { ok: false; error: string };
 
 const DEFAULT_API_KEY_ENV = "STATELOG_API_KEY";
 

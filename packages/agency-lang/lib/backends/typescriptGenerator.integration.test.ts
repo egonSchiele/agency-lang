@@ -82,6 +82,6 @@ describe("TypeScript Backend Integration Tests", () => {
         // 5. Assert equality with helpful diff
         expect(normalizedGenerated).toBe(normalizedExpected);
       });
-    }
+    },
   );
 });

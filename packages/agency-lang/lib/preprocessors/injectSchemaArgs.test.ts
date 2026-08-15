@@ -1,11 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { injectSchemaArgsInProgram } from "./injectSchemaArgs.js";
-import type {
-  AgencyProgram,
-  Assignment,
-  FunctionCall,
-  FunctionDefinition,
-} from "../types.js";
+import type { AgencyProgram, Assignment, FunctionCall, FunctionDefinition } from "../types.js";
 import type { FunctionParameter } from "../types/function.js";
 
 /**
@@ -57,10 +52,7 @@ function buildConstAssignment(
   };
 }
 
-function buildCall(
-  functionName: string,
-  args: FunctionCall["arguments"] = [],
-): FunctionCall {
+function buildCall(functionName: string, args: FunctionCall["arguments"] = []): FunctionCall {
   return {
     type: "functionCall",
     functionName,
@@ -93,11 +85,7 @@ describe("injectSchemaArgsInProgram", () => {
       ],
     };
 
-    injectSchemaArgsInProgram(
-      program,
-      { parseValue: buildParseValueDef() },
-      {},
-    );
+    injectSchemaArgsInProgram(program, { parseValue: buildParseValueDef() }, {});
 
     expect(call.arguments).toHaveLength(2);
     expect(call.arguments[1].type).toBe("namedArgument");
@@ -133,11 +121,7 @@ describe("injectSchemaArgsInProgram", () => {
       ],
     };
 
-    injectSchemaArgsInProgram(
-      program,
-      { parseValue: buildParseValueDef() },
-      {},
-    );
+    injectSchemaArgsInProgram(program, { parseValue: buildParseValueDef() }, {});
 
     expect(call.arguments).toHaveLength(2);
     // The user-supplied schema (string) is preserved.
@@ -163,20 +147,10 @@ describe("injectSchemaArgsInProgram", () => {
     ]);
     const program: AgencyProgram = {
       type: "agencyProgram",
-      nodes: [
-        buildConstAssignment(
-          "xs",
-          { type: "primitiveType", value: "any" },
-          call,
-        ),
-      ],
+      nodes: [buildConstAssignment("xs", { type: "primitiveType", value: "any" }, call)],
     };
 
-    injectSchemaArgsInProgram(
-      program,
-      { parseValue: buildParseValueDef() },
-      {},
-    );
+    injectSchemaArgsInProgram(program, { parseValue: buildParseValueDef() }, {});
 
     expect(call.arguments).toHaveLength(2);
     expect(call.arguments[1].type).toBe("namedArgument");
@@ -194,16 +168,10 @@ describe("injectSchemaArgsInProgram", () => {
     const call = buildCall("parseValue", [buildStringLiteral("[1,2,3]")]);
     const program: AgencyProgram = {
       type: "agencyProgram",
-      nodes: [
-        buildConstAssignment("xs", undefined, call),
-      ],
+      nodes: [buildConstAssignment("xs", undefined, call)],
     };
 
-    injectSchemaArgsInProgram(
-      program,
-      { parseValue: buildParseValueDef() },
-      {},
-    );
+    injectSchemaArgsInProgram(program, { parseValue: buildParseValueDef() }, {});
 
     expect(call.arguments).toHaveLength(1);
   });
@@ -231,11 +199,7 @@ describe("injectSchemaArgsInProgram", () => {
       nodes: [wrapper],
     };
 
-    injectSchemaArgsInProgram(
-      program,
-      { parseValue: buildParseValueDef(), wrapper },
-      {},
-    );
+    injectSchemaArgsInProgram(program, { parseValue: buildParseValueDef(), wrapper }, {});
 
     expect(call.arguments).toHaveLength(2);
     if (call.arguments[1].type !== "namedArgument") return;
@@ -270,11 +234,7 @@ describe("injectSchemaArgsInProgram", () => {
       ],
     };
 
-    injectSchemaArgsInProgram(
-      program,
-      { parseValue: buildParseValueDef() },
-      {},
-    );
+    injectSchemaArgsInProgram(program, { parseValue: buildParseValueDef() }, {});
 
     expect(call.arguments).toHaveLength(2);
     if (call.arguments[1].type !== "namedArgument") return;
@@ -319,9 +279,9 @@ describe("injectSchemaArgsInProgram", () => {
       nodes: [],
     };
 
-    expect(() =>
-      injectSchemaArgsInProgram(program, { doubled: twoSchemas }, {}),
-    ).toThrowError(/more than one Schema parameter/);
+    expect(() => injectSchemaArgsInProgram(program, { doubled: twoSchemas }, {})).toThrowError(
+      /more than one Schema parameter/,
+    );
   });
 
   it("leaves calls to unknown functions alone (e.g. JS / builtins)", () => {
@@ -363,11 +323,7 @@ describe("injectSchemaArgsInProgram", () => {
       nodes: [assignment],
     };
 
-    injectSchemaArgsInProgram(
-      program,
-      { parseValue: buildParseValueDef() },
-      {},
-    );
+    injectSchemaArgsInProgram(program, { parseValue: buildParseValueDef() }, {});
 
     expect(call.arguments).toHaveLength(2);
     if (call.arguments[1].type !== "namedArgument") return;
@@ -401,11 +357,7 @@ describe("injectSchemaArgsInProgram", () => {
       ],
     };
 
-    injectSchemaArgsInProgram(
-      program,
-      { parseValue: buildParseValueDef() },
-      {},
-    );
+    injectSchemaArgsInProgram(program, { parseValue: buildParseValueDef() }, {});
 
     // Still just the splat — no synthetic Schema arg appended.
     expect(call.arguments).toHaveLength(1);
@@ -488,5 +440,4 @@ describe("injectSchemaArgsInProgram", () => {
       ),
     ).toThrowError(/more than one Schema parameter/);
   });
-
 });

@@ -7,7 +7,14 @@ import { GLOBAL_SCOPE_KEY, buildCompilationUnit } from "@/compilationUnit.js";
 import { agencyImportTargets, resolveAgencyImportPath } from "@/importPaths.js";
 import { parseAgency } from "@/parser.js";
 import { SymbolTable } from "@/symbolTable.js";
-import type { AgencyNode, AgencyProgram, Assignment, PromptSegment, TypeAliasEntry, VariableType } from "@/types.js";
+import type {
+  AgencyNode,
+  AgencyProgram,
+  Assignment,
+  PromptSegment,
+  TypeAliasEntry,
+  VariableType,
+} from "@/types.js";
 import { generateExpression } from "@/backends/agencyGenerator.js";
 import { expressionToString, isLiteralExpression, walkNodes } from "@/utils/node.js";
 import { checkProposal, renderDeclaredType } from "./constraint.js";
@@ -101,8 +108,9 @@ function buildTargetSet(
     };
     rejectLegacyOptimizeTags(parsed.program, file);
     targets.push(
-      ...collectTargets(parsed.program, file, parsed.absoluteFile, typeAliases)
-        .map((entry) => entry.target),
+      ...collectTargets(parsed.program, file, parsed.absoluteFile, typeAliases).map(
+        (entry) => entry.target,
+      ),
     );
   }
 
@@ -130,7 +138,9 @@ function collectClosureTypeAliases(
   absoluteEntryFile: string,
   parsedFiles: ParsedSourceFile[],
 ): Record<string, TypeAliasEntry> {
-  const entry = parsedFiles.find((parsed) => parsed.absoluteFile === fs.realpathSync(absoluteEntryFile));
+  const entry = parsedFiles.find(
+    (parsed) => parsed.absoluteFile === fs.realpathSync(absoluteEntryFile),
+  );
   if (!entry) return {};
   // SymbolTable.build is stricter than this file's own closure walk: it
   // follows pkg:: imports and validates re-exported symbols, either of which
@@ -238,9 +248,10 @@ function buildTarget(
   // contract). Literal targets carry formatter-exact source text, quotes
   // intact — parsed initializer nodes have no loc offsets to slice by.
   const valueSource = generateExpression(value);
-  const valueText = isText && (value.type === "string" || value.type === "multiLineString")
-    ? promptSegmentsToString(value.segments)
-    : valueSource;
+  const valueText =
+    isText && (value.type === "string" || value.type === "multiLineString")
+      ? promptSegmentsToString(value.segments)
+      : valueSource;
 
   if (!prior && !isText && !assignment.typeHint) {
     throw new Error(
@@ -288,7 +299,9 @@ function rejectDuplicateTargetIds(targets: OptimizeTarget[]): void {
   const seen: Record<string, true> = {};
   for (const target of targets) {
     if (seen[target.id]) {
-      throw new Error(`Duplicate optimize target id ${target.id}. Each optimized variable must be unique within its file and scope.`);
+      throw new Error(
+        `Duplicate optimize target id ${target.id}. Each optimized variable must be unique within its file and scope.`,
+      );
     }
     seen[target.id] = true;
   }
@@ -299,7 +312,11 @@ function rejectLegacyOptimizeTags(program: AgencyProgram, file: string): void {
     if (node.type === "tag" && node.name === "optimize") {
       throw legacyOptimizeError(file);
     }
-    if ("tags" in node && Array.isArray(node.tags) && node.tags.some((tag) => tag.name === "optimize")) {
+    if (
+      "tags" in node &&
+      Array.isArray(node.tags) &&
+      node.tags.some((tag) => tag.name === "optimize")
+    ) {
       throw legacyOptimizeError(file);
     }
   }
@@ -318,10 +335,12 @@ function legacyOptimizeError(file: string): Error {
  * guards compare against.
  */
 export function promptSegmentsToString(segments: PromptSegment[]): string {
-  return segments.map((segment) => {
-    if (segment.type === "text") return segment.value;
-    return `\${${expressionToString(segment.expression)}}`;
-  }).join("");
+  return segments
+    .map((segment) => {
+      if (segment.type === "text") return segment.value;
+      return `\${${expressionToString(segment.expression)}}`;
+    })
+    .join("");
 }
 
 function relativeFile(baseDir: string, absoluteFile: string): string {

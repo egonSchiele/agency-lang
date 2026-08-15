@@ -90,11 +90,7 @@ describe("extractEvalRecord", () => {
 
     it("has three normalized events (llm + tool_start + tool_end)", () => {
       expect(rec.events.length).toBe(3);
-      expect(rec.events.map((e) => e.kind)).toEqual([
-        "llm",
-        "tool_start",
-        "tool_end",
-      ]);
+      expect(rec.events.map((e) => e.kind)).toEqual(["llm", "tool_start", "tool_end"]);
     });
 
     it("each normalized event has a non-null threadId", () => {
@@ -122,12 +118,8 @@ describe("extractEvalRecord", () => {
       // This trace has no agentEnd, so there is no return value to grade — the
       // last LLM completion ("done.") is deliberately not used as a stand-in.
       expect(rec.evalOutputs).toEqual([]);
-      expect(
-        rec.warnings.some((w) => w.includes("Call evalValue(prompt)")),
-      ).toBe(true);
-      expect(
-        rec.warnings.some((w) => w.includes("produced no output")),
-      ).toBe(true);
+      expect(rec.warnings.some((w) => w.includes("Call evalValue(prompt)"))).toBe(true);
+      expect(rec.warnings.some((w) => w.includes("produced no output"))).toBe(true);
     });
 
     it("traceId / formatVersion / source / recordVersion", () => {
@@ -151,7 +143,12 @@ describe("extractEvalRecord", () => {
       ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
       ev(
         "promptCompletion",
-        { threadId: "0", model: "gpt-5", messages: [{ role: "user", content: "x" }], completion: { output: "" } },
+        {
+          threadId: "0",
+          model: "gpt-5",
+          messages: [{ role: "user", content: "x" }],
+          completion: { output: "" },
+        },
         "span-llm",
       ),
       ev(
@@ -190,7 +187,12 @@ describe("extractEvalRecord", () => {
       ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
       ev(
         "promptCompletion",
-        { threadId: "0", model: "gpt-5", messages: [{ role: "user", content: "delegate" }], completion: { output: "delegating" } },
+        {
+          threadId: "0",
+          model: "gpt-5",
+          messages: [{ role: "user", content: "delegate" }],
+          completion: { output: "delegating" },
+        },
         "span-llm-main",
       ),
       ev("threadCreated", {
@@ -201,7 +203,12 @@ describe("extractEvalRecord", () => {
       }),
       ev(
         "promptCompletion",
-        { threadId: "1", model: "gpt-5", messages: [{ role: "user", content: "sub-prompt" }], completion: { output: "did a search" } },
+        {
+          threadId: "1",
+          model: "gpt-5",
+          messages: [{ role: "user", content: "sub-prompt" }],
+          completion: { output: "did a search" },
+        },
         "span-llm-sub",
       ),
       ev(
@@ -227,9 +234,7 @@ describe("extractEvalRecord", () => {
     });
 
     it("tool_start / tool_end attribute to the subagent thread", () => {
-      const toolEvents = rec.events.filter(
-        (e) => e.kind === "tool_start" || e.kind === "tool_end",
-      );
+      const toolEvents = rec.events.filter((e) => e.kind === "tool_start" || e.kind === "tool_end");
       for (const e of toolEvents) expect(e.threadId).toBe("1");
     });
 
@@ -282,11 +287,7 @@ describe("extractEvalRecord", () => {
   describe("interrupt grouping", () => {
     resetClock();
     const events: EventEnvelope[] = [
-      ev(
-        "interruptThrown",
-        { interruptId: "i-1", interruptData: { foo: "bar" } },
-        "span-i",
-      ),
+      ev("interruptThrown", { interruptId: "i-1", interruptData: { foo: "bar" } }, "span-i"),
       ev("handlerDecision", {
         interruptId: "i-1",
         handlerIndex: 0,
@@ -323,8 +324,9 @@ describe("extractEvalRecord", () => {
         ev("interruptThrown", { interruptId: "i-u", interruptData: {} }, "s2"),
         // i-u: no interruptResolved — the run ended mid-interrupt.
       ];
-      const outcomes = extractEvalRecord(passedEvents, "test:pass-vs-unresolved")
-        .interrupts.map((entry) => [entry.interruptId, entry.outcome]);
+      const outcomes = extractEvalRecord(passedEvents, "test:pass-vs-unresolved").interrupts.map(
+        (entry) => [entry.interruptId, entry.outcome],
+      );
 
       // "passed" is an affirmative claim from a resolution event; "unresolved"
       // is the absence of one. Old records that say "unresolved" stay valid.
@@ -338,7 +340,11 @@ describe("extractEvalRecord", () => {
       const events: EventEnvelope[] = [
         ev("threadCreated", { threadId: "0", threadType: "thread" }),
         ev("interruptThrown", { interruptId: "i-s", interruptData: {} }, "s1"),
-        ev("interruptResolved", { interruptId: "i-s", outcome: "propagated", resolvedBy: "handler" }),
+        ev("interruptResolved", {
+          interruptId: "i-s",
+          outcome: "propagated",
+          resolvedBy: "handler",
+        }),
         ev("interruptResolved", { interruptId: "i-s", outcome: "approved", resolvedBy: "user" }),
       ];
       const [entry] = extractEvalRecord(events, "test:last-wins").interrupts;
@@ -358,11 +364,7 @@ describe("extractEvalRecord", () => {
         { threadId: "0", toolName: "grep", args: { pattern: longArgs } },
         "span-tool",
       ),
-      ev(
-        "toolCall",
-        { threadId: "0", toolName: "grep", args: {}, output: longArgs },
-        "span-tool",
-      ),
+      ev("toolCall", { threadId: "0", toolName: "grep", args: {}, output: longArgs }, "span-tool"),
     ];
 
     it("truncates to default 200 chars", () => {
@@ -394,18 +396,21 @@ describe("extractEvalRecord", () => {
 
     it("agentName is the last agentName event; absent when none is valid", () => {
       resetClock();
-      const named = extractEvalRecord([
-        ev("agentName", { name: "first-name" }),
-        ev("promptCompletion", { threadId: "0" }),
-        ev("agentName", { name: "gcode-v2" }),
-      ], "test:agentName");
+      const named = extractEvalRecord(
+        [
+          ev("agentName", { name: "first-name" }),
+          ev("promptCompletion", { threadId: "0" }),
+          ev("agentName", { name: "gcode-v2" }),
+        ],
+        "test:agentName",
+      );
       expect(named.agentName).toBe("gcode-v2");
 
       resetClock();
-      const unnamed = extractEvalRecord([
-        ev("promptCompletion", { threadId: "0" }),
-        ev("agentName", { name: 42 }),
-      ], "test:agentName-invalid");
+      const unnamed = extractEvalRecord(
+        [ev("promptCompletion", { threadId: "0" }), ev("agentName", { name: 42 })],
+        "test:agentName-invalid",
+      );
       expect(unnamed.agentName).toBeUndefined();
     });
   });
@@ -423,9 +428,7 @@ describe("extractEvalRecord", () => {
       expect(rec.evalValues).toEqual([
         { value: { prompt: "real input" }, threadId: "0", tMs: 100 },
       ]);
-      expect(rec.evalOutputs).toEqual([
-        { value: "real output", threadId: "0", tMs: 200 },
-      ]);
+      expect(rec.evalOutputs).toEqual([{ value: "real output", threadId: "0", tMs: 200 }]);
       expect(rec.warnings).not.toEqual(
         expect.arrayContaining([expect.stringMatching(/Call eval(Input|Output)/)]),
       );
@@ -442,10 +445,7 @@ describe("extractEvalRecord", () => {
       const rec = extractEvalRecord(events, "test:multiple");
 
       expect(rec.evalValues.map((v) => v.value)).toEqual(["first in", "second in"]);
-      expect(rec.evalOutputs.map((v) => v.value)).toEqual([
-        "first out",
-        "second out",
-      ]);
+      expect(rec.evalOutputs.map((v) => v.value)).toEqual(["first out", "second out"]);
     });
 
     it("reports no output, and does not nag about evalValue, when the trace is empty", () => {
@@ -478,15 +478,9 @@ describe("extractEvalRecord", () => {
       ];
       const rec = extractEvalRecord(events, "test:mixed");
 
-      expect(rec.evalValues).toEqual([
-        { value: "heuristic input", threadId: "0", tMs: 100 },
-      ]);
-      expect(rec.evalOutputs).toEqual([
-        { value: "real output", threadId: "0", tMs: 200 },
-      ]);
-      expect(rec.warnings).toEqual([
-        expect.stringContaining("Call evalValue(prompt)"),
-      ]);
+      expect(rec.evalValues).toEqual([{ value: "heuristic input", threadId: "0", tMs: 100 }]);
+      expect(rec.evalOutputs).toEqual([{ value: "real output", threadId: "0", tMs: 200 }]);
+      expect(rec.warnings).toEqual([expect.stringContaining("Call evalValue(prompt)")]);
     });
 
     it("truncates oversized explicit values without mutating smaller entries", () => {
@@ -533,9 +527,7 @@ describe("extractEvalRecord", () => {
 
       const truncated = String(rec.evalOutputs[0].value);
       expect(rec.evalOutputs[0].truncated).toBe(true);
-      expect(Buffer.byteLength(JSON.stringify(truncated), "utf8")).toBeLessThanOrEqual(
-        100_000,
-      );
+      expect(Buffer.byteLength(JSON.stringify(truncated), "utf8")).toBeLessThanOrEqual(100_000);
     });
 
     it("preserves subagent explicit evalOutputRecorded firings", () => {
@@ -552,9 +544,7 @@ describe("extractEvalRecord", () => {
       ];
       const rec = extractEvalRecord(events, "test:subagent-explicit");
 
-      expect(rec.evalOutputs).toEqual([
-        { value: "subagent output", threadId: "1", tMs: 200 },
-      ]);
+      expect(rec.evalOutputs).toEqual([{ value: "subagent output", threadId: "1", tMs: 200 }]);
     });
   });
 });
@@ -563,12 +553,16 @@ describe("agent output: the node return value", () => {
     resetClock();
     return [
       ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
-      ev("promptCompletion", {
-        threadId: "0",
-        model: '"gpt-5"',
-        messages: [{ role: "user", content: "capital of India?" }],
-        completion: { output: "Paris" }, // a "wrong" last LLM reply
-      }, "span-llm"),
+      ev(
+        "promptCompletion",
+        {
+          threadId: "0",
+          model: '"gpt-5"',
+          messages: [{ role: "user", content: "capital of India?" }],
+          completion: { output: "Paris" }, // a "wrong" last LLM reply
+        },
+        "span-llm",
+      ),
       ev("agentEnd", { threadId: "0", entryNode: "main", result: "New Delhi" }),
     ];
   }
@@ -578,13 +572,21 @@ describe("agent output: the node return value", () => {
     resetClock();
     return [
       ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
-      ev("promptCompletion", {
+      ev(
+        "promptCompletion",
+        {
+          threadId: "0",
+          model: '"gpt-5"',
+          messages: [{ role: "user", content: "capital of India?" }],
+          completion: { output: "Paris" },
+        },
+        "span-llm",
+      ),
+      ev("agentEnd", {
         threadId: "0",
-        model: '"gpt-5"',
-        messages: [{ role: "user", content: "capital of India?" }],
-        completion: { output: "Paris" },
-      }, "span-llm"),
-      ev("agentEnd", { threadId: "0", entryNode: "main", ...(result === undefined ? {} : { result }) }),
+        entryNode: "main",
+        ...(result === undefined ? {} : { result }),
+      }),
     ];
   }
 

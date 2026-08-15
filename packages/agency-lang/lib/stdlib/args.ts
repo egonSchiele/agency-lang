@@ -131,9 +131,7 @@ export type ParseError =
   | { kind: "mutuallyExclusive"; a: string; b: string }
   | { kind: "requiredTogether"; missing: string; trigger: string };
 
-export type ParseResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: ParseError };
+export type ParseResult<T> = { ok: true; value: T } | { ok: false; error: ParseError };
 
 // =============================================================================
 // validateSchema — fail-fast schema bug detection
@@ -154,22 +152,15 @@ const SCHEMA_RULES: SchemaRule[] = [
   {
     name: "flag name is valid identifier",
     check: (s) => {
-      const bad = Object.keys(s.flags).find(
-        (n) => !FLAG_NAME_PATTERN.test(n),
-      );
-      return bad
-        ? `invalid flag name "${bad}" (must match /^[a-z0-9][a-z0-9-]*$/)`
-        : null;
+      const bad = Object.keys(s.flags).find((n) => !FLAG_NAME_PATTERN.test(n));
+      return bad ? `invalid flag name "${bad}" (must match /^[a-z0-9][a-z0-9-]*$/)` : null;
     },
   },
   {
     name: "every flag has a valid type",
     check: (s) => {
       const bad = Object.entries(s.flags).find(
-        ([, spec]) =>
-          spec.type !== "string" &&
-          spec.type !== "number" &&
-          spec.type !== "boolean",
+        ([, spec]) => spec.type !== "string" && spec.type !== "number" && spec.type !== "boolean",
       );
       return bad
         ? `flag --${bad[0]} has invalid type "${String(bad[1].type)}" (must be "string", "number", or "boolean")`
@@ -195,9 +186,7 @@ const SCHEMA_RULES: SchemaRule[] = [
       const bad = Object.entries(s.flags).find(
         ([, spec]) => spec.required === true && spec.default !== undefined,
       );
-      return bad
-        ? `flag --${bad[0]} declares both required and default; pick one`
-        : null;
+      return bad ? `flag --${bad[0]} declares both required and default; pick one` : null;
     },
   },
   {
@@ -206,9 +195,7 @@ const SCHEMA_RULES: SchemaRule[] = [
       const bad = Object.entries(s.flags).find(
         ([, spec]) => spec.choices !== undefined && spec.type !== "string",
       );
-      return bad
-        ? `flag --${bad[0]} has choices but is not a string flag`
-        : null;
+      return bad ? `flag --${bad[0]} has choices but is not a string flag` : null;
     },
   },
   {
@@ -219,8 +206,7 @@ const SCHEMA_RULES: SchemaRule[] = [
     check: (s) => {
       const bad = Object.entries(s.flags).find(
         ([, spec]) =>
-          spec.optional === true &&
-          (spec.type !== "string" || spec.choices !== undefined),
+          spec.optional === true && (spec.type !== "string" || spec.choices !== undefined),
       );
       return bad
         ? `flag --${bad[0]} sets optional but must be a string flag without choices`
@@ -250,9 +236,7 @@ const SCHEMA_RULES: SchemaRule[] = [
     check: (s) => {
       const userDeclaresHelp = "help" in s.flags;
       if (userDeclaresHelp) return null;
-      const bad = Object.entries(s.flags).find(
-        ([, spec]) => spec.short === "h",
-      );
+      const bad = Object.entries(s.flags).find(([, spec]) => spec.short === "h");
       return bad
         ? `flag --${bad[0]} uses short -h, which collides with the auto-injected --help. Declare your own "help" flag in the schema to override auto-help.`
         : null;
@@ -266,9 +250,7 @@ const SCHEMA_RULES: SchemaRule[] = [
       if (s.version === undefined) return null;
       const userDeclaresVersion = "version" in s.flags;
       if (userDeclaresVersion) return null;
-      const bad = Object.entries(s.flags).find(
-        ([, spec]) => spec.short === "V",
-      );
+      const bad = Object.entries(s.flags).find(([, spec]) => spec.short === "V");
       return bad
         ? `flag --${bad[0]} uses short -V, which collides with the auto-injected --version. Declare your own "version" flag in the schema to override auto-version.`
         : null;
@@ -346,8 +328,8 @@ export function normalizeSchema(schema: ArgsSchema): NormalizedSchema {
   const autoHelp = !userDeclaresHelp;
   const autoVersion = !userDeclaresVersion && schema.version !== undefined;
 
-  const userFlags: NormalizedFlag[] = Object.entries(schema.flags).map(
-    ([name, spec]) => normalizeFlag(name, spec),
+  const userFlags: NormalizedFlag[] = Object.entries(schema.flags).map(([name, spec]) =>
+    normalizeFlag(name, spec),
   );
 
   const helpFlag: NormalizedFlag | null = autoHelp
@@ -419,10 +401,7 @@ function indexBy<T>(items: T[], key: (item: T) => string): Record<string, T> {
 }
 
 // Variant of `indexBy` that skips items whose key is null.
-function indexByOptional<T>(
-  items: T[],
-  key: (item: T) => string | null,
-): Record<string, T> {
+function indexByOptional<T>(items: T[], key: (item: T) => string | null): Record<string, T> {
   const out: Record<string, T> = {};
   for (const item of items) {
     const k = key(item);
@@ -481,10 +460,7 @@ const ARGV_RULES: ArgvRule[] = [
 // short (`-n`) forms uniformly — both rewrite to the long `--<name>=`. A token
 // that already carries a value (`--name=...`, `-nVALUE`) is left alone. Tokens
 // after a standalone `--` are positionals and are copied verbatim.
-export function expandOptionalFlags(
-  argv: string[],
-  schema: NormalizedSchema,
-): string[] {
+export function expandOptionalFlags(argv: string[], schema: NormalizedSchema): string[] {
   const out: string[] = [];
   let afterDoubleDash = false;
   for (let i = 0; i < argv.length; i++) {
@@ -517,10 +493,7 @@ function tokenHasAttachedValue(token: string): boolean {
   return token.length > 2; // "-n" → bare; "-nVALUE" → attached
 }
 
-export function preScanArgv(
-  argv: string[],
-  schema: NormalizedSchema,
-): ParseResult<void> {
+export function preScanArgv(argv: string[], schema: NormalizedSchema): ParseResult<void> {
   // Tracks single-value (string/number) flags we've already seen, so
   // a second occurrence trips the duplicateFlag rule below. Booleans
   // are excluded — repeating `--verbose --verbose` is harmless and
@@ -588,10 +561,7 @@ type NodeParseOutput = {
 
 // Options object passed to `node:util.parseArgs`. Built by
 // `buildNodeOptions` from a `NormalizedSchema`.
-type NodeOptionMap = Record<
-  string,
-  { type: "string" | "boolean"; short?: string }
->;
+type NodeOptionMap = Record<string, { type: "string" | "boolean"; short?: string }>;
 
 // Shape of the errors `node:util.parseArgs` throws. They carry an
 // ErrnoException-style `code` we dispatch on, and arbitrary string
@@ -624,9 +594,7 @@ export function callNodeParse(
     };
   } catch (e) {
     const err = e as NodeParseError;
-    const translate = err.code !== undefined
-      ? NODE_ERROR_TRANSLATIONS[err.code]
-      : undefined;
+    const translate = err.code !== undefined ? NODE_ERROR_TRANSLATIONS[err.code] : undefined;
     if (translate === undefined) throw e; // unknown Node error — surface loudly
     return { ok: false, error: translate(err) };
   }
@@ -840,28 +808,17 @@ type OptionRow = {
 };
 
 export function formatHelp(schema: NormalizedSchema): string {
-  const rows = schema.flags
-    .filter((f) => !f.hidden)
-    .map(toRow);
+  const rows = schema.flags.filter((f) => !f.hidden).map(toRow);
 
-  const longestLeft = Math.max(
-    0,
-    ...rows.map((r) => r.shortPart.length + r.longPart.length),
-  );
+  const longestLeft = Math.max(0, ...rows.map((r) => r.shortPart.length + r.longPart.length));
   const leftWidth = Math.min(HELP_MAX_LEFT_WIDTH, longestLeft);
   const termWidth = process.stdout.columns ?? DEFAULT_TERMINAL_WIDTH;
-  const descWidth = Math.max(
-    HELP_MIN_DESC_WIDTH,
-    termWidth - leftWidth - HELP_GUTTER,
-  );
+  const descWidth = Math.max(HELP_MIN_DESC_WIDTH, termWidth - leftWidth - HELP_GUTTER);
 
   const optionsBlock =
-    "Options:\n" +
-    rows.map((r) => renderRow(r, leftWidth, descWidth)).join("\n");
+    "Options:\n" + rows.map((r) => renderRow(r, leftWidth, descWidth)).join("\n");
 
-  const sections: string[] = [
-    `Usage: ${schema.programName} [options] [args...]`,
-  ];
+  const sections: string[] = [`Usage: ${schema.programName} [options] [args...]`];
   if (schema.description !== null) sections.push(schema.description);
   sections.push(optionsBlock);
   if (schema.epilog !== null) sections.push(schema.epilog);
@@ -912,7 +869,10 @@ function renderRow(row: OptionRow, leftWidth: number, descWidth: number): string
     "  " +
     padded +
     lines[0] +
-    lines.slice(1).map((l) => "\n" + indent + l).join("")
+    lines
+      .slice(1)
+      .map((l) => "\n" + indent + l)
+      .join("")
   );
 }
 
@@ -957,8 +917,7 @@ const ERROR_FORMATTERS: {
   booleanTakesNoValue: (e) => `flag --${e.flag} does not take a value`,
   greedyValue: (e) =>
     `--${e.flag} expects a value; got ${e.raw} (use --${e.flag}=${e.raw} to force)`,
-  shortEqualsSyntax: (e) =>
-    `invalid short flag syntax in "${e.raw}": use ${e.suggestion}`,
+  shortEqualsSyntax: (e) => `invalid short flag syntax in "${e.raw}": use ${e.suggestion}`,
   duplicateFlag: (e) => `flag --${e.flag} was provided more than once`,
   mutuallyExclusive: (e) => `--${e.a} and --${e.b} are mutually exclusive`,
   requiredTogether: (e) => `--${e.trigger} requires --${e.missing}`,
@@ -988,10 +947,7 @@ export function _parseArgs(schema: ArgsSchema): ParsedArgs {
 }
 
 // Exported for tests; NOT re-exported from stdlib/args.agency.
-export function _parseArgsWith(
-  argv: string[],
-  schema: ArgsSchema,
-): ParsedArgs {
+export function _parseArgsWith(argv: string[], schema: ArgsSchema): ParsedArgs {
   validateSchema(schema); // throws on schema bugs
   const normalized = normalizeSchema(schema);
 
@@ -1024,11 +980,7 @@ export function _parseArgsWith(
   const grouped = checkGroups(withDefaults.value, normalized);
   if (!grouped.ok) return exitWithError(grouped.error, normalized);
 
-  return buildResult(
-    withDefaults.value,
-    parsed.value.positionals,
-    normalized,
-  );
+  return buildResult(withDefaults.value, parsed.value.positionals, normalized);
 }
 
 function buildResult(

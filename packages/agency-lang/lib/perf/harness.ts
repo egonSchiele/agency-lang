@@ -97,8 +97,7 @@ export function growthFactor(
 type PerfRecord = { label: string; value: number; bound: number; pass: boolean };
 
 function recordResult(rec: PerfRecord): void {
-  const file =
-    process.env.PERF_RESULTS_FILE ?? path.join(process.cwd(), "perf-results.jsonl");
+  const file = process.env.PERF_RESULTS_FILE ?? path.join(process.cwd(), "perf-results.jsonl");
   fs.appendFileSync(file, `${JSON.stringify({ ...rec, ts: new Date().toISOString() })}\n`);
   const summary = process.env.GITHUB_STEP_SUMMARY;
   if (summary) {

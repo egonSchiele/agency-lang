@@ -12,9 +12,7 @@ describe("agency pack", () => {
     // Use realpath to avoid macOS /tmp -> /private/tmp symlink mismatch,
     // which would defeat the `argv[1] === fileURLToPath(import.meta.url)`
     // entry-point check in the compiled output.
-    workDir = fs.realpathSync(
-      fs.mkdtempSync(path.join(os.tmpdir(), "agency-pack-")),
-    );
+    workDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "agency-pack-")));
   });
   afterAll(() => fs.rmSync(workDir, { recursive: true, force: true }));
 
@@ -37,9 +35,7 @@ describe("agency pack", () => {
 
     // It should run under bare `node` from a directory with no
     // node_modules, producing the agent's output.
-    const runDir = fs.realpathSync(
-      fs.mkdtempSync(path.join(os.tmpdir(), "agency-pack-run-")),
-    );
+    const runDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "agency-pack-run-")));
     try {
       const copied = path.join(runDir, "hello.js");
       fs.copyFileSync(out, copied);
@@ -111,10 +107,7 @@ describe("agency pack", () => {
     fs.mkdirSync(subDir, { recursive: true });
     const helper = path.join(subDir, "helper.agency");
     const main = path.join(subDir, "trans.agency");
-    fs.writeFileSync(
-      helper,
-      'export def greet(): string { return "hi from helper" }\n',
-    );
+    fs.writeFileSync(helper, 'export def greet(): string { return "hi from helper" }\n');
     fs.writeFileSync(
       main,
       'import { greet } from "./helper.agency"\nnode main() { print(greet()) }\n',

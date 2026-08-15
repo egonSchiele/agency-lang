@@ -17,9 +17,7 @@ export function decodeBase64Strict(base64: string): Uint8Array {
     normalized.length % BASE64_QUANTUM_LENGTH !== 0 ||
     !BASE64_ALPHABET_AND_PADDING.test(normalized)
   ) {
-    throw new Error(
-      "`base64` is not valid base64-encoded data (expected standard base64).",
-    );
+    throw new Error("`base64` is not valid base64-encoded data (expected standard base64).");
   }
   return new Uint8Array(Buffer.from(normalized, "base64"));
 }

@@ -113,7 +113,11 @@ describe("resolveTrace", () => {
 });
 
 describe("projectTrace", () => {
-  const resolved: ResolvedTrace = { output: "answer", finalOutputIndex: 0, taskDefault: "the task" };
+  const resolved: ResolvedTrace = {
+    output: "answer",
+    finalOutputIndex: 0,
+    taskDefault: "the task",
+  };
 
   it("projects a resolved trace into an occurrence with a statelog origin", () => {
     expect(projectTrace("T", resolved, { kind: "keep-default" }, CONTEXT)).toEqual({
@@ -171,12 +175,23 @@ describe("loadStatelog", () => {
   });
 
   const load = (traceIds: string[]) =>
-    loadStatelog({ path: file, traceIds, source: "s", constantFields: {}, includeTaskField: true, maxBytes: 1_048_576 });
+    loadStatelog({
+      path: file,
+      traceIds,
+      source: "s",
+      constantFields: {},
+      includeTaskField: true,
+      maxBytes: 1_048_576,
+    });
 
   it("promotes a resolved trace", () => {
     const batch = load(["A"]);
     expect(batch.occurrences).toHaveLength(1);
-    expect(batch.occurrences[0].origin).toMatchObject({ kind: "statelog", traceId: "A", finalOutputIndex: 0 });
+    expect(batch.occurrences[0].origin).toMatchObject({
+      kind: "statelog",
+      traceId: "A",
+      finalOutputIndex: 0,
+    });
   });
 
   it("skips a trace with nothing to judge", () => {

@@ -31,9 +31,10 @@ describe("mergeFor(std::guard) — approvals accumulate", () => {
   });
 
   it("unions disarm lists without duplicates", () => {
-    expect(
-      merge({ disarm: ["cost"] }, { disarm: ["cost", "time"] }).disarm,
-    ).toEqual(["cost", "time"]);
+    expect(merge({ disarm: ["cost"] }, { disarm: ["cost", "time"] }).disarm).toEqual([
+      "cost",
+      "time",
+    ]);
   });
 
   it("joins messages in inner-to-outer order (merge is not commutative)", () => {
@@ -49,7 +50,13 @@ describe("mergeFor(std::guard) — approvals accumulate", () => {
 describe("the chain merges approvals through the effect table", () => {
   const makeCtx = (handlers: any[]): RuntimeContext<any> => {
     const ctx = new RuntimeContext({
-      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
@@ -91,7 +98,12 @@ describe("the chain merges approvals through the effect table", () => {
       async () => ({ type: "approve", value: { maxCost: 0.75 } }),
     ]);
     const verdict = (await interruptWithHandlers(
-      "std::guard", "m", {}, "o", ctx, new StateStack(),
+      "std::guard",
+      "m",
+      {},
+      "o",
+      ctx,
+      new StateStack(),
     )) as any;
     expect(verdict.value.maxCost).toBe(1.0);
   });

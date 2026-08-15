@@ -4,10 +4,7 @@ import { ts } from "@/ir/builders.js";
 import { mapTypeToValidationSchema } from "./typeToZodSchema.js";
 import { tagArgToTs } from "./tagArgToTs.js";
 import { mergeTagSets } from "@/typeChecker/mergeTags.js";
-import {
-  applyValueArgs,
-  isValueParamInstantiation,
-} from "@/typeChecker/valueParamSubstitution.js";
+import { applyValueArgs, isValueParamInstantiation } from "@/typeChecker/valueParamSubstitution.js";
 import { resolveTypeDeep } from "@/typeChecker/assignability.js";
 
 /** A user-defined generic alias has type params we can't represent at runtime. */
@@ -37,13 +34,7 @@ export function buildValidationDescriptor(
   typeAliasesFull?: Record<string, TypeAliasEntry>,
   pendingAliases?: Set<string>,
 ): TsNode {
-  return descriptor(
-    variableType,
-    typeAliases,
-    typeAliasesFull ?? {},
-    new Set(),
-    pendingAliases,
-  );
+  return descriptor(variableType, typeAliases, typeAliasesFull ?? {}, new Set(), pendingAliases);
 }
 
 /**
@@ -68,9 +59,7 @@ export function hasAnyValidateTag(
       return hasAnyValidateTag(t.elementType, aliasesFull, seen);
     case "objectType":
       return t.properties.some(
-        (p) =>
-          tagsHaveValidate(p.tags) ||
-          hasAnyValidateTag(p.value, aliasesFull, seen),
+        (p) => tagsHaveValidate(p.tags) || hasAnyValidateTag(p.value, aliasesFull, seen),
       );
     case "unionType":
       return t.types.some((m) => hasAnyValidateTag(m, aliasesFull, seen));
@@ -91,9 +80,7 @@ export function hasAnyValidateTag(
       return t.types.some((m) => hasAnyValidateTag(m, aliasesFull, seen));
     case "genericType": {
       // Type arguments may themselves carry @validate (e.g. `Array<Email>`).
-      if (
-        (t.typeArgs ?? []).some((a) => hasAnyValidateTag(a, aliasesFull, seen))
-      ) {
+      if ((t.typeArgs ?? []).some((a) => hasAnyValidateTag(a, aliasesFull, seen))) {
         return true;
       }
       // A user-defined generic alias reference (`Ranked<string>(...)`) carries
@@ -179,9 +166,7 @@ function validatorNodes(tags: Tag[] | undefined): TsNode[] {
 function isNullableType(t: VariableType): boolean {
   if (t.type !== "unionType") return false;
   return t.types.some(
-    (m) =>
-      m.type === "primitiveType" &&
-      (m.value === "null" || m.value === "undefined"),
+    (m) => m.type === "primitiveType" && (m.value === "null" || m.value === "undefined"),
   );
 }
 
@@ -196,9 +181,7 @@ function schemaNode(
   typeAliasesFull?: Record<string, TypeAliasEntry>,
   pendingAliases?: Set<string>,
 ): TsNode {
-  return ts.raw(
-    mapTypeToValidationSchema(t, typeAliases, typeAliasesFull, pendingAliases),
-  );
+  return ts.raw(mapTypeToValidationSchema(t, typeAliases, typeAliasesFull, pendingAliases));
 }
 
 /**
@@ -212,10 +195,7 @@ function schemaNode(
  * so spreading it AND reading `.validators` off it directly would rebuild the
  * whole descriptor — including the `min.partial(...)` allocations — twice.
  */
-function withUseSiteValidators(
-  base: TsNode,
-  useSiteValidators: TsNode[],
-): TsNode {
+function withUseSiteValidators(base: TsNode, useSiteValidators: TsNode[]): TsNode {
   if (useSiteValidators.length === 0) return base;
   const d = ts.id("__d");
   const existingValidators = ts.binOp(
@@ -226,15 +206,9 @@ function withUseSiteValidators(
   );
   const merged = ts.obj([
     ts.setSpread(d),
-    ts.set(
-      '"validators"',
-      ts.arr([ts.spread(existingValidators), ...useSiteValidators]),
-    ),
+    ts.set('"validators"', ts.arr([ts.spread(existingValidators), ...useSiteValidators])),
   ]);
-  return ts.call(
-    ts.arrowFn([{ name: "__d" }], ts.statements([ts.return(merged)])),
-    [base],
-  );
+  return ts.call(ts.arrowFn([{ name: "__d" }], ts.statements([ts.return(merged)])), [base]);
 }
 
 /**
@@ -265,20 +239,16 @@ function valueParamDescriptor(
       resolveTypeDeep(variableType, typeAliasesFull),
       typeAliases,
       typeAliasesFull,
-      seen, pendingAliases);
+      seen,
+      pendingAliases,
+    );
   }
   if (entry && hasAliasValidate(entry, typeAliasesFull)) {
-    const argList = (variableType.valueArgs ?? [])
-      .map((a) => tagArgToTs(a))
-      .join(", ");
+    const argList = (variableType.valueArgs ?? []).map((a) => tagArgToTs(a)).join(", ");
     const call = ts.raw(`${variableType.aliasName}(${argList})`);
     return withUseSiteValidators(call, useSiteValidators);
   }
-  const substituted = applyValueArgs(
-    entry!,
-    variableType.valueArgs,
-    variableType.aliasName,
-  );
+  const substituted = applyValueArgs(entry!, variableType.valueArgs, variableType.aliasName);
   const merged = mergeTagSets(substituted.tags, variableType.tags);
   const bodyWithTags: VariableType = {
     ...substituted.body,
@@ -326,10 +296,7 @@ function descriptor(
       // when every descriptor exists. Use-site validators wrap INSIDE
       // get(): the walker dispatches `ref` before running validators, so
       // they must ride the resolved descriptor, not the ref node.
-      const aliasRef = ts.prop(
-        ts.raw(`(${variableType.aliasName} as any)`),
-        "__agency_descriptor",
-      );
+      const aliasRef = ts.prop(ts.raw(`(${variableType.aliasName} as any)`), "__agency_descriptor");
       const resolved = withUseSiteValidators(aliasRef, useSiteValidators);
       return ts.obj([
         ts.set('"kind"', ts.str("ref")),
@@ -351,15 +318,14 @@ function descriptor(
   // resolved earlier). It can't be a runtime factory, so resolve it in place —
   // substituting type AND value args — and inline, rather than letting the
   // schema mapper choke on an unresolved generic.
-  if (
-    variableType.type === "genericType" &&
-    isGenericAlias(typeAliasesFull[variableType.name])
-  ) {
+  if (variableType.type === "genericType" && isGenericAlias(typeAliasesFull[variableType.name])) {
     return descriptor(
       resolveTypeDeep(variableType, typeAliasesFull),
       typeAliases,
       typeAliasesFull,
-      seen, pendingAliases);
+      seen,
+      pendingAliases,
+    );
   }
 
   const schema = schemaNode(variableType, typeAliases, typeAliasesFull, pendingAliases);
@@ -370,7 +336,9 @@ function descriptor(
       variableType.elementType,
       typeAliases,
       typeAliasesFull,
-      seen, pendingAliases);
+      seen,
+      pendingAliases,
+    );
     return objEntries([
       ["kind", ts.str("array")],
       ["schema", schema],
@@ -383,11 +351,7 @@ function descriptor(
     const propEntries: TsObjectEntry[] = variableType.properties.map((p) => {
       const merged = mergeTagSets(p.value.tags, p.tags);
       const childType: VariableType = { ...p.value, tags: merged };
-      const childDesc = descriptor(
-        childType,
-        typeAliases,
-        typeAliasesFull,
-        seen, pendingAliases);
+      const childDesc = descriptor(childType, typeAliases, typeAliasesFull, seen, pendingAliases);
       return ts.set(JSON.stringify(p.key), childDesc);
     });
     return objEntries([
@@ -402,18 +366,10 @@ function descriptor(
     // treat as nullable wrapper around the first non-null/undefined branch
     const u = variableType as Extract<VariableType, { type: "unionType" }>;
     const innerMembers = u.types.filter(
-      (m) =>
-        !(
-          m.type === "primitiveType" &&
-          (m.value === "null" || m.value === "undefined")
-        ),
+      (m) => !(m.type === "primitiveType" && (m.value === "null" || m.value === "undefined")),
     );
     if (innerMembers.length === 1) {
-      const inner = descriptor(
-        innerMembers[0],
-        typeAliases,
-        typeAliasesFull,
-        seen, pendingAliases);
+      const inner = descriptor(innerMembers[0], typeAliases, typeAliasesFull, seen, pendingAliases);
       return objEntries([
         ["kind", ts.str("nullable")],
         ["schema", schema],
@@ -442,7 +398,9 @@ function descriptor(
       variableType.successType,
       typeAliases,
       typeAliasesFull,
-      seen, pendingAliases);
+      seen,
+      pendingAliases,
+    );
     return objEntries([
       ["kind", ts.str("nullable")],
       ["schema", schema],
@@ -487,15 +445,9 @@ function unionDescriptor(
     // `(v) => (<branchSchema>).safeParse(v).success`
     const test = ts.arrowFn(
       [{ name: "v" }],
-      ts.prop(
-        ts.methodCall(branchSchema, "safeParse", [ts.id("v")]),
-        "success",
-      ),
+      ts.prop(ts.methodCall(branchSchema, "safeParse", [ts.id("v")]), "success"),
     );
-    return ts.obj([
-      ts.set("test", test),
-      ts.set("descriptor", branchDesc),
-    ]);
+    return ts.obj([ts.set("test", test), ts.set("descriptor", branchDesc)]);
   });
   return objEntries([
     ["kind", ts.str("union")],
@@ -523,13 +475,7 @@ function recordDescriptor(
   pendingAliases?: Set<string>,
 ): TsNode {
   const valueArg = variableType.writtenTypeArgs?.[1] ?? variableType.typeArgs[1];
-  const valueDesc = descriptor(
-    valueArg,
-    typeAliases,
-    typeAliasesFull,
-    seen,
-    pendingAliases,
-  );
+  const valueDesc = descriptor(valueArg, typeAliases, typeAliasesFull, seen, pendingAliases);
   return objEntries([
     ["kind", ts.str("record")],
     ["schema", schema],

@@ -34,10 +34,7 @@ function bodyHasNestedHandle(body: AgencyNode[]): boolean {
  * DOES make `e.<unknown-field>` a "does not exist" error during `checkScopes` —
  * intended, since the interrupt object has exactly `{ effect, message, data, origin }`.
  */
-function handlerParamType(
-  kinds: string[],
-  registry: Record<string, ObjectType>,
-): VariableType {
+function handlerParamType(kinds: string[], registry: Record<string, ObjectType>): VariableType {
   // Own-property guard: effect kinds are user-controlled strings, so a reserved
   // key ("__proto__"/"toString"/…) must not resolve a payload via Object.prototype.
   const payloadFor = (kind: string): VariableType =>
@@ -51,9 +48,7 @@ function handlerParamType(
       { key: "origin", value: ANY_T },
     ],
   });
-  return kinds.length === 1
-    ? member(kinds[0])
-    : { type: "unionType", types: kinds.map(member) };
+  return kinds.length === 1 ? member(kinds[0]) : { type: "unionType", types: kinds.map(member) };
 }
 
 /**

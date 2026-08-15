@@ -42,19 +42,23 @@ export function buildProvenance(args: {
     | { kind: "file"; seed: { baseDir: string; agentRelPath: string; closureFiles: string[] } }
     | { kind: "command"; command: string; cliVersion?: string };
 }): EvalRunProvenance {
-  const agent: AgentProvenance = args.agent.kind === "file"
-    ? {
-        entry: args.agent.seed.agentRelPath,
-        closure: args.agent.seed.closureFiles.map((closureFile) => ({
-          file: path.relative((args.agent as { kind: "file"; seed: { baseDir: string } }).seed.baseDir, closureFile),
-          sha256: sha256Text(fs.readFileSync(closureFile, "utf8")),
-        })),
-      }
-    : {
-        command: args.agent.command,
-        harnessVersion: harnessVersion(),
-        ...(args.agent.cliVersion !== undefined ? { cliVersion: args.agent.cliVersion } : {}),
-      };
+  const agent: AgentProvenance =
+    args.agent.kind === "file"
+      ? {
+          entry: args.agent.seed.agentRelPath,
+          closure: args.agent.seed.closureFiles.map((closureFile) => ({
+            file: path.relative(
+              (args.agent as { kind: "file"; seed: { baseDir: string } }).seed.baseDir,
+              closureFile,
+            ),
+            sha256: sha256Text(fs.readFileSync(closureFile, "utf8")),
+          })),
+        }
+      : {
+          command: args.agent.command,
+          harnessVersion: harnessVersion(),
+          ...(args.agent.cliVersion !== undefined ? { cliVersion: args.agent.cliVersion } : {}),
+        };
   return {
     inputsSource: args.inputsSource,
     files: args.files,
@@ -72,7 +76,10 @@ function harnessVersion(): string {
     const candidate = path.join(dir, "package.json");
     if (fs.existsSync(candidate)) {
       try {
-        return (JSON.parse(fs.readFileSync(candidate, "utf8")) as { version?: string }).version ?? "unknown";
+        return (
+          (JSON.parse(fs.readFileSync(candidate, "utf8")) as { version?: string }).version ??
+          "unknown"
+        );
       } catch {
         return "unknown";
       }
@@ -139,10 +146,7 @@ Choose a different --run-id or delete the existing directory.`,
   };
 }
 
-export function prepareInput(
-  state: EvalRunState,
-  input: Input,
-): PreparedInput {
+export function prepareInput(state: EvalRunState, input: Input): PreparedInput {
   const id = input.id ?? "";
   assertEvalInputId(id);
 
@@ -194,9 +198,6 @@ export function recordInputPrepareFailure(
     errorMessage,
   };
 }
-
-
-
 
 export function writeEvalRunSummary(
   state: EvalRunState,
@@ -254,13 +255,17 @@ function readInputMetrics(recordPath: string): InputMetricsRead {
   const durationMs = record.durationMs;
   const startedAtMs = record.startedAtMs;
   const models = record.metrics?.models;
-  const shapeOk = isFiniteNumber(costUsd)
-    && isFiniteNumber(durationMs)
-    && isFiniteNumber(startedAtMs)
-    && Array.isArray(models)
-    && models.every((model) => typeof model === "string");
+  const shapeOk =
+    isFiniteNumber(costUsd) &&
+    isFiniteNumber(durationMs) &&
+    isFiniteNumber(startedAtMs) &&
+    Array.isArray(models) &&
+    models.every((model) => typeof model === "string");
   if (!shapeOk) {
-    return { kind: "warning", message: `summary metrics: ${recordPath} has an unexpected shape — leaving metrics absent` };
+    return {
+      kind: "warning",
+      message: `summary metrics: ${recordPath} has an unexpected shape — leaving metrics absent`,
+    };
   }
   const value: InputMetricsSummary = { costUsd, durationMs, startedAtMs, models };
   if (typeof record.agentName === "string") {
@@ -280,7 +285,8 @@ function writeJson(filePath: string, value: unknown): void {
 /** One more than the highest existing verifier directory (the spec's rule:
  *  a deleted number stays retired, never reused). verifier == 1. */
 function nextVerifierNumber(runDir: string): number {
-  const numbers = fs.readdirSync(runDir)
+  const numbers = fs
+    .readdirSync(runDir)
     .map((name) => (name === "verifier" ? 1 : Number(/^verifier-(\d+)$/.exec(name)?.[1])))
     .filter((candidate) => Number.isInteger(candidate));
   return numbers.length === 0 ? 1 : Math.max(...numbers) + 1;
@@ -291,7 +297,10 @@ function nextVerifierNumber(runDir: string): number {
  *  call it, so its location and shape cannot drift between them. */
 export function writeVerifierGrading(runDir: string, grading: EvalRunGrading): string {
   const verifierNumber = nextVerifierNumber(runDir);
-  const verifierDir = path.join(runDir, verifierNumber === 1 ? "verifier" : `verifier-${verifierNumber}`);
+  const verifierDir = path.join(
+    runDir,
+    verifierNumber === 1 ? "verifier" : `verifier-${verifierNumber}`,
+  );
   fs.mkdirSync(verifierDir, { recursive: true });
   const gradingPath = path.join(verifierDir, "grading.json");
   fs.writeFileSync(gradingPath, JSON.stringify(grading, null, 2));

@@ -97,10 +97,7 @@ describe("topSortInitGraph", () => {
     const r = topSortInitGraph(g);
     expect(r.kind).toBe("ok");
     if (r.kind !== "ok") return;
-    expect(r.order).toEqual([
-      "/bar.agency::barStatic",
-      "/foo.agency::fooStatic",
-    ]);
+    expect(r.order).toEqual(["/bar.agency::barStatic", "/foo.agency::fooStatic"]);
   });
 
   it("reports a direct cycle as a CycleError", () => {

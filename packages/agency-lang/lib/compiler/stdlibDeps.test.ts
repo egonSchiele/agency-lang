@@ -107,7 +107,10 @@ function compileDir(): void {
   // Fresh session per logical CLI invocation: a reused session's
   // compiledFiles dedup can skip compilation independently of the
   // manifest and fake incremental results.
-  createBuildSession().compile({}, { entries: [fake.stdlibDir], freshness: "incremental", quiet: true });
+  createBuildSession().compile(
+    {},
+    { entries: [fake.stdlibDir], freshness: "incremental", quiet: true },
+  );
 }
 
 function jsFiles(): string[] {
@@ -159,7 +162,10 @@ describe("BuildSession rewrite sets (selective recompilation)", () => {
     makeFixture();
     compileDir();
     backdateAllJs();
-    write("helper.agency", `import { i } from "std::index"\nexport def h(): number { return i() + 1 }\n`);
+    write(
+      "helper.agency",
+      `import { i } from "std::index"\nexport def h(): number { return i() + 1 }\n`,
+    );
     compileDir();
     expect(rewrittenJs()).toEqual(["consumer.js", "helper.js"]);
   });
@@ -202,11 +208,19 @@ describe("BuildSession rewrite sets (selective recompilation)", () => {
     // helper.js before consumer's freshness check ran, making the
     // expected set traversal-order-dependent.
     const entry = (f: string) => path.join(fake.stdlibDir, f);
-    createBuildSession().compile({}, {
-      entries: [entry("consumer.agency"), entry("helper.agency"), entry("index.agency"), entry("other.agency")],
-      freshness: "incremental",
-      quiet: true,
-    });
+    createBuildSession().compile(
+      {},
+      {
+        entries: [
+          entry("consumer.agency"),
+          entry("helper.agency"),
+          entry("index.agency"),
+          entry("other.agency"),
+        ],
+        freshness: "incremental",
+        quiet: true,
+      },
+    );
     expect(rewrittenJs()).toEqual(["consumer.js", "helper.js"]);
   });
 });
@@ -269,7 +283,7 @@ describe("production manifest wiring", () => {
     compileDir();
     const entry = loadManifest(root).entries[stdlibRel("tpl.agency")];
     expect(entry).toBeDefined();
-    expect(entry.deps).toEqual([stdlibRel("index.agency")]);   // prelude edge, nothing else
+    expect(entry.deps).toEqual([stdlibRel("index.agency")]); // prelude edge, nothing else
     expect(entry.cacheable).toBe(true);
     // And the edge is load-bearing: editing index stales tpl.
     backdateAllJs();
@@ -283,31 +297,40 @@ describe("production manifest wiring", () => {
     const copyDir = path.join(root, "stdlib-copy");
     fs.mkdirSync(copyDir, { recursive: true });
     fs.writeFileSync(path.join(copyDir, "app.agency"), `export def a(): number { return 1 }\n`);
-    createBuildSession().compile({}, {
-      entries: [path.join(copyDir, "app.agency")],
-      freshness: "incremental",
-      quiet: true,
-    });
+    createBuildSession().compile(
+      {},
+      {
+        entries: [path.join(copyDir, "app.agency")],
+        freshness: "incremental",
+        quiet: true,
+      },
+    );
     const manifest = loadManifest(root);
     const entry = manifest.entries[path.join("stdlib-copy", "app.agency")];
     expect(entry).toBeDefined();
     expect(entry.deps).toEqual([]);
     // Contents flavor: an edit to a fixture-stdlib FILE changes the
     // recorded hash a fresh tracker computes, so the entry goes stale.
-    const before = createBuildSession().compile({}, {
-      entries: [path.join(copyDir, "app.agency")],
-      freshness: "incremental",
-      quiet: true,
-    });
+    const before = createBuildSession().compile(
+      {},
+      {
+        entries: [path.join(copyDir, "app.agency")],
+        freshness: "incremental",
+        quiet: true,
+      },
+    );
     expect(before).toBe(path.join(copyDir, "app.js")); // fresh fast-path
     write("index.agency", `export def i(): number { return 42 }\n`);
     const out = path.join(copyDir, "app.js");
     fs.utimesSync(out, EPOCH, EPOCH);
-    createBuildSession().compile({}, {
-      entries: [path.join(copyDir, "app.agency")],
-      freshness: "incremental",
-      quiet: true,
-    });
+    createBuildSession().compile(
+      {},
+      {
+        entries: [path.join(copyDir, "app.agency")],
+        freshness: "incremental",
+        quiet: true,
+      },
+    );
     expect(fs.statSync(out).mtimeMs).toBeGreaterThan(0); // re-emitted
   });
 });
@@ -316,16 +339,25 @@ describe("single-file guarantee boundary", () => {
   test("re-emits until directory build exists, skips after", () => {
     makeFixture();
     const consumer = path.join(fake.stdlibDir, "consumer.agency");
-    createBuildSession().compile({}, { entries: [consumer], freshness: "incremental", quiet: true });
+    createBuildSession().compile(
+      {},
+      { entries: [consumer], freshness: "incremental", quiet: true },
+    );
     const out = path.join(fake.stdlibDir, "consumer.js");
     fs.utimesSync(out, EPOCH, EPOCH);
     // Dep entries (helper, index) missing → still stale → re-emits.
-    createBuildSession().compile({}, { entries: [consumer], freshness: "incremental", quiet: true });
+    createBuildSession().compile(
+      {},
+      { entries: [consumer], freshness: "incremental", quiet: true },
+    );
     expect(fs.statSync(out).mtimeMs).toBeGreaterThan(0);
     // After a full directory build, the same single-file compile skips.
     compileDir();
     fs.utimesSync(out, EPOCH, EPOCH);
-    createBuildSession().compile({}, { entries: [consumer], freshness: "incremental", quiet: true });
+    createBuildSession().compile(
+      {},
+      { entries: [consumer], freshness: "incremental", quiet: true },
+    );
     expect(fs.statSync(out).mtimeMs).toBe(0);
   });
 });
@@ -333,30 +365,53 @@ describe("single-file guarantee boundary", () => {
 describe("incremental emit is byte-identical to force emit", () => {
   function forceSnapshot(): Record<string, string> {
     fs.rmSync(path.join(root, MANIFEST_DIR_NAME), { recursive: true, force: true });
-    createBuildSession().compile({}, { entries: [fake.stdlibDir], freshness: "force", quiet: true });
+    createBuildSession().compile(
+      {},
+      { entries: [fake.stdlibDir], freshness: "force", quiet: true },
+    );
     return jsSnapshotForSources();
   }
 
   const mutations: Array<[string, () => void]> = [
-    ["edit leaf (helper)", () => write("helper.agency", `import { i } from "std::index"\nexport def h(): number { return i() * 2 }\n`)],
+    [
+      "edit leaf (helper)",
+      () =>
+        write(
+          "helper.agency",
+          `import { i } from "std::index"\nexport def h(): number { return i() * 2 }\n`,
+        ),
+    ],
     ["edit hub (index)", () => write("index.agency", `export def i(): number { return 7 }\n`)],
     ["edit a re-export edge", () => write("reexport.agency", `export { h } from "std::helper"\n`)],
-    ["edit a cycle pair member", () => write("cycA.agency", `import { cb } from "std::cycB"\nexport def ca(): number { return 10 }\n`)],
+    [
+      "edit a cycle pair member",
+      () =>
+        write(
+          "cycA.agency",
+          `import { cb } from "std::cycB"\nexport def ca(): number { return 10 }\n`,
+        ),
+    ],
     ["add a file", () => write("added.agency", `export def added(): number { return 5 }\n`)],
     ["delete an unimported file", () => rmSource("other.agency")],
-    ["rename an unimported file", () => {
-      const from = path.join(fake.stdlibDir, "other.agency");
-      const to = path.join(fake.stdlibDir, "renamed.agency");
-      fs.renameSync(from, to);
-      evictParseCache(from);
-      evictParseCache(to);
-    }],
-    ["seeded version-1 manifest", () => {
-      const file = path.join(root, MANIFEST_DIR_NAME, "manifest.json");
-      const raw = JSON.parse(fs.readFileSync(file, "utf-8"));
-      raw.version = 1;
-      fs.writeFileSync(file, JSON.stringify(raw));
-    }],
+    [
+      "rename an unimported file",
+      () => {
+        const from = path.join(fake.stdlibDir, "other.agency");
+        const to = path.join(fake.stdlibDir, "renamed.agency");
+        fs.renameSync(from, to);
+        evictParseCache(from);
+        evictParseCache(to);
+      },
+    ],
+    [
+      "seeded version-1 manifest",
+      () => {
+        const file = path.join(root, MANIFEST_DIR_NAME, "manifest.json");
+        const raw = JSON.parse(fs.readFileSync(file, "utf-8"));
+        raw.version = 1;
+        fs.writeFileSync(file, JSON.stringify(raw));
+      },
+    ],
   ];
 
   test.each(mutations)("%s", (_name, mutate) => {

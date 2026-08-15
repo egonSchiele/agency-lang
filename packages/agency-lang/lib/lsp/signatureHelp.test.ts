@@ -11,7 +11,8 @@ function makeDoc(content: string) {
 describe("handleSignatureHelp", () => {
   it("returns signature for a function call", () => {
     // Source must be valid so the parser succeeds and semantic index is built
-    const source = 'def greet(name: string, age: number) {\n  return name\n}\nnode main() {\n  greet("hi", 1)\n}';
+    const source =
+      'def greet(name: string, age: number) {\n  return name\n}\nnode main() {\n  greet("hi", 1)\n}';
     const doc = makeDoc(source);
     const { semanticIndex } = runDiagnostics(doc, "/test.agency", {}, new SymbolTable());
     // Cursor right after the opening paren: greet(|
@@ -27,7 +28,8 @@ describe("handleSignatureHelp", () => {
   });
 
   it("returns correct active parameter after comma", () => {
-    const source = 'def greet(name: string, age: number) {\n  return name\n}\nnode main() {\n  greet("hi", 1)\n}';
+    const source =
+      'def greet(name: string, age: number) {\n  return name\n}\nnode main() {\n  greet("hi", 1)\n}';
     const doc = makeDoc(source);
     const { semanticIndex } = runDiagnostics(doc, "/test.agency", {}, new SymbolTable());
     // Cursor after the comma: greet("hi", |1)

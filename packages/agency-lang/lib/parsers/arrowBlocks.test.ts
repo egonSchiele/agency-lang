@@ -87,8 +87,9 @@ describe("arrow functions parse to the canonical block AST", () => {
   // first, `bodyParser` declines, and it falls through to `exprParser`, which
   // reads an object literal. Pinned because it depends on that ordering.
   it("reads a braced object literal body as an object, not a block", () => {
-    expect(program(`node main() { const y = f((n) => { a: 1 }) }`))
-      .toEqualWithoutLoc(program(`node main() { const y = f(\\n -> { a: 1 }) }`));
+    expect(program(`node main() { const y = f((n) => { a: 1 }) }`)).toEqualWithoutLoc(
+      program(`node main() { const y = f(\\n -> { a: 1 }) }`),
+    );
   });
 
   it("requires `()` for a zero-parameter arrow", () => {
@@ -163,10 +164,16 @@ describe("things that look like arrows but are not", () => {
     ["named arguments", `node main() { greet(name: "A", greeting: "B") }`],
     ["a comparison", `node main() { f(a >= b) }`],
     ["an object literal", `node main() { f({ a: 1 }) }`],
-    ["a function type in a signature", `def f(cb: (string) -> string) { print(1) }\nnode main() { f(g) }`],
+    [
+      "a function type in a signature",
+      `def f(cb: (string) -> string) { print(1) }\nnode main() { f(g) }`,
+    ],
     ["the backslash block form", `node main() { const y = map(xs, \\n -> n * 2) }`],
     ["the as block form", `node main() { const y = map(xs) as n { return n * 2 } }`],
-    ["an arrow nested in another call", `node main() { const y = [1, 2]\nprint(map(y, (n) => n + 1)) }`],
+    [
+      "an arrow nested in another call",
+      `node main() { const y = [1, 2]\nprint(map(y, (n) => n + 1)) }`,
+    ],
   ])("leaves %s alone", (_name, src) => {
     expect(parses(src)).toBe(true);
   });

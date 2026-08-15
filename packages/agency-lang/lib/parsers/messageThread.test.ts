@@ -49,7 +49,7 @@ describe("messageThreadParser", () => {
     }
   });
 
-  it("parses thread(label: \"x\") { ... }", () => {
+  it('parses thread(label: "x") { ... }', () => {
     const input = 'thread(label: "coding task") {\n  foo()\n}';
     const r = messageThreadParser(normalizeCode(input));
     expect(r.success).toBe(true);
@@ -79,7 +79,7 @@ describe("messageThreadParser", () => {
     }
   });
 
-  it("parses thread(session: \"coding\") { ... }", () => {
+  it('parses thread(session: "coding") { ... }', () => {
     const input = 'thread(session: "coding") {\n  foo()\n}';
     const r = messageThreadParser(normalizeCode(input));
     expect(r.success).toBe(true);
@@ -101,7 +101,7 @@ describe("messageThreadParser", () => {
     expect(r.success).toBe(false);
   });
 
-  it("parses subthread(label: \"x\") { ... }", () => {
+  it('parses subthread(label: "x") { ... }', () => {
     const input = 'subthread(label: "child") {\n  foo()\n}';
     const r = messageThreadParser(normalizeCode(input));
     expect(r.success).toBe(true);

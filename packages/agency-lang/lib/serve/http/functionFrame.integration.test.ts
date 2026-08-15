@@ -27,10 +27,7 @@ import type { ServedInvocationOutcome } from "../../runtime/invocationUsage.js";
  * end-to-end compile + invoke exercises the regression.
  */
 describe("serve http invokes exported functions inside a runtime frame", () => {
-  const fixturesRoot = path.resolve(
-    __dirname,
-    "../../../.agency-tmp/serve-function-frame",
-  );
+  const fixturesRoot = path.resolve(__dirname, "../../../.agency-tmp/serve-function-frame");
   const mainAgency = path.join(fixturesRoot, "main.agency");
   const mainJs = mainAgency.replace(/\.agency$/, ".js");
 

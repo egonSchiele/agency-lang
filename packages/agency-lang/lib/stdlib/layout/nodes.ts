@@ -10,9 +10,7 @@ import { Align, Block, pad, styled } from "./block.js";
 import { NodeHandler, SizingContext, resolveOwnWidth, setAttr } from "./sizing.js";
 
 export type NodeType =
-  | "box" | "row" | "column"
-  | "text" | "raw" | "space" | "hline" | "vline"
-  | "table" | "barchart";
+  "box" | "row" | "column" | "text" | "raw" | "space" | "hline" | "vline" | "table" | "barchart";
 
 export type LayoutNode = {
   type: NodeType;
@@ -33,19 +31,17 @@ export type Cell = string | LayoutNode;
 export type WidthInput = number | "full" | string;
 
 export type ColumnSpec = {
-  align?:    Align;
+  align?: Align;
   minWidth?: number;
-  width?:    WidthInput;
-  fgColor?:  string;
+  width?: WidthInput;
+  fgColor?: string;
 };
 
 // Result of `parseWidth`: a closed sum type that downstream sizers
 // pattern-match on. `"full"` is preserved as its own kind for clarity
 // at debug time, but the resolver treats it as a synonym for `100%`.
 export type Width =
-  | { kind: "cells";   value: number }
-  | { kind: "full" }
-  | { kind: "percent"; value: number };
+  { kind: "cells"; value: number } | { kind: "full" } | { kind: "percent"; value: number };
 
 export function parseWidth(raw: unknown): Width | null {
   if (raw == null) return null;
@@ -59,17 +55,17 @@ export function parseWidth(raw: unknown): Width | null {
   }
   throw new Error(
     `std::ui/layout: invalid width ${JSON.stringify(raw)}. ` +
-    `Expected a number, "full", or "<n>%" (e.g. "50%").`,
+      `Expected a number, "full", or "<n>%" (e.g. "50%").`,
   );
 }
 
 export function styleOf(attrs: Record<string, unknown>): Style {
   const s: Style = {};
-  if (typeof attrs.fgColor === "string"  && attrs.fgColor)  s.fgColor  = attrs.fgColor;
-  if (typeof attrs.bgColor === "string"  && attrs.bgColor)  s.bgColor  = attrs.bgColor;
-  if (attrs.bold      === true) s.bold      = true;
-  if (attrs.italic    === true) s.italic    = true;
-  if (attrs.dim       === true) s.dim       = true;
+  if (typeof attrs.fgColor === "string" && attrs.fgColor) s.fgColor = attrs.fgColor;
+  if (typeof attrs.bgColor === "string" && attrs.bgColor) s.bgColor = attrs.bgColor;
+  if (attrs.bold === true) s.bold = true;
+  if (attrs.italic === true) s.italic = true;
+  if (attrs.dim === true) s.dim = true;
   if (attrs.underline === true) s.underline = true;
   return s;
 }
@@ -109,14 +105,14 @@ export const LEAF_RENDERERS: Record<
   (n: LayoutNode) => Block
 > = {
   text: (n) => {
-    const content   = asString(n.attrs.content);
-    const align     = (n.attrs.align as Align) ?? "start";
+    const content = asString(n.attrs.content);
+    const align = (n.attrs.align as Align) ?? "start";
     const wrapWidth = n.attrs.wrapWidth as number | undefined;
     return styled(wrappedBlock(content, wrapWidth, align), styleOf(n.attrs));
   },
   raw: (n) => {
-    const content   = asString(n.attrs.content);
-    const align     = (n.attrs.align as Align) ?? "start";
+    const content = asString(n.attrs.content);
+    const align = (n.attrs.align as Align) ?? "start";
     const wrapWidth = n.attrs.wrapWidth as number | undefined;
     // No `styled` wrapper: raw carries its own ANSI and must not have
     // styling re-applied over it.
@@ -125,7 +121,7 @@ export const LEAF_RENDERERS: Record<
   space: (_n) => {
     throw new Error(
       "std::ui/layout: `space` must be resolved by its parent row/column. " +
-      "Found one outside a container at render time.",
+        "Found one outside a container at render time.",
     );
   },
   hline: (n) => {
@@ -133,7 +129,7 @@ export const LEAF_RENDERERS: Record<
     if (length == null || length === 0) {
       throw new Error(
         "std::ui/layout: bare `hline()` (no `length`) must be resolved by " +
-        "its parent column. Found one outside a container at render time.",
+          "its parent column. Found one outside a container at render time.",
       );
     }
     const char = (n.attrs.char as string) ?? "─";
@@ -144,7 +140,7 @@ export const LEAF_RENDERERS: Record<
     if (length == null || length === 0) {
       throw new Error(
         "std::ui/layout: bare `vline()` (no `length`) must be resolved by " +
-        "its parent row. Found one outside a container at render time.",
+          "its parent row. Found one outside a container at render time.",
       );
     }
     const char = (n.attrs.char as string) ?? "│";
@@ -183,8 +179,8 @@ function passthrough(node: LayoutNode, _ctx: SizingContext): LayoutNode {
   return node;
 }
 
-export const text:  NodeHandler = { size: sizeText,    render: LEAF_RENDERERS.text };
-export const raw:   NodeHandler = { size: sizeRaw,     render: LEAF_RENDERERS.raw };
+export const text: NodeHandler = { size: sizeText, render: LEAF_RENDERERS.text };
+export const raw: NodeHandler = { size: sizeRaw, render: LEAF_RENDERERS.raw };
 export const space: NodeHandler = { size: passthrough, render: LEAF_RENDERERS.space };
 export const hline: NodeHandler = { size: passthrough, render: LEAF_RENDERERS.hline };
 export const vline: NodeHandler = { size: passthrough, render: LEAF_RENDERERS.vline };

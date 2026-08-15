@@ -18,8 +18,7 @@ describe("getEffectsFromSource", () => {
     // behaviour and the safe direction to be wrong in.
     expect(() =>
       getEffectsFromSource(
-        `import { h } from "./helper.agency"\n` +
-          `export def f(): string {\n  return h()\n}\n`,
+        `import { h } from "./helper.agency"\n` + `export def f(): string {\n  return h()\n}\n`,
       ),
     ).toThrow();
   });

@@ -59,7 +59,15 @@ afterEach(() => {
 
 const context = () => ({ config: {}, configPath });
 function intr(effect: string): Interrupt {
-  return { type: "interrupt", effect, message: "", data: null, origin: "", interruptId: `i-${effect}`, runId: "r" };
+  return {
+    type: "interrupt",
+    effect,
+    message: "",
+    data: null,
+    origin: "",
+    interruptId: `i-${effect}`,
+    runId: "r",
+  };
 }
 
 describe("runCall", () => {
@@ -88,9 +96,7 @@ describe("runCall", () => {
 
   it("a failed function (serve client throws) exits non-zero, not a success result", async () => {
     fakeClient.invokeFunction.mockRejectedValueOnce(new Error("boom"));
-    await expect(
-      runCall("f", { function: true }, context()),
-    ).rejects.toBeInstanceOf(ProcessExit);
+    await expect(runCall("f", { function: true }, context())).rejects.toBeInstanceOf(ProcessExit);
     expect(exitSpy).toHaveBeenCalledWith(1);
     expect(logs.join("\n")).not.toContain("Result:");
   });

@@ -19,11 +19,17 @@ export type GraderContext = {
    *  Defaults: `output` falls back to `run.output`, `expected` falls back to
    *  `input.expected` (so the bundled judge grades against the gold answer when
    *  one is present, matching `LlmJudge`). */
-  judge: (args: { goal: string; output?: JSON; expected?: JSON }) => Promise<{ score: number; reasoning: string }>;
+  judge: (args: {
+    goal: string;
+    output?: JSON;
+    expected?: JSON;
+  }) => Promise<{ score: number; reasoning: string }>;
 };
 
 /** A metric: return a 0..1 number, a pass/fail boolean, or a full Grade. */
-export type GraderFn = (ctx: GraderContext) => number | boolean | Grade | Promise<number | boolean | Grade>;
+export type GraderFn = (
+  ctx: GraderContext,
+) => number | boolean | Grade | Promise<number | boolean | Grade>;
 
 /** Public "grader" union: a metric function or a configured grader instance. */
 export type Grader = GraderFn | BaseGrader;
@@ -32,7 +38,10 @@ export type Grader = GraderFn | BaseGrader;
  *  pipeline (sampling, gating, weighting, scoring) treats it like any grader. */
 export class FunctionGrader extends BaseGrader {
   protected readonly defaultName = "fn";
-  constructor(private readonly fn: GraderFn, options: GraderOptions = {}) {
+  constructor(
+    private readonly fn: GraderFn,
+    options: GraderOptions = {},
+  ) {
     super(options);
   }
 
@@ -41,11 +50,22 @@ export class FunctionGrader extends BaseGrader {
     // input's gold answer so a metric that calls ctx.judge({ goal }) grades the
     // same way LlmJudge does when input.expected is present.
     const inputExpected = (input as { expected?: JSON }).expected;
-    const judge = ({ goal, output, expected }: { goal: string; output?: JSON; expected?: JSON }) => {
+    const judge = ({
+      goal,
+      output,
+      expected,
+    }: {
+      goal: string;
+      output?: JSON;
+      expected?: JSON;
+    }) => {
       const exp = expected ?? inputExpected;
       const expectedText = exp === undefined || exp === null ? "" : asJudgeText(exp);
       return runAgency.runStructured(
-        goalJudgeFile(), "main", [goal, asJudgeText(output ?? run.output), expectedText], ScalarVerdict,
+        goalJudgeFile(),
+        "main",
+        [goal, asJudgeText(output ?? run.output), expectedText],
+        ScalarVerdict,
       );
     };
     const result = await this.fn({
@@ -73,7 +93,9 @@ function coerce(result: number | boolean | Grade): Grade {
   if (typeof result === "boolean") return { score: { kind: "binary", pass: result } };
   const parsed = GradeSchema.safeParse(result);
   if (parsed.success) return parsed.data;
-  throw new Error(`grader function must return a number, a boolean, or a Grade ({ score, feedback? }); got ${JSON.stringify(result)}`);
+  throw new Error(
+    `grader function must return a number, a boolean, or a Grade ({ score, feedback? }); got ${JSON.stringify(result)}`,
+  );
 }
 
 /** Wrap a metric function so it carries policy (mustPass/weight/threshold/inputScope/samples/name). */

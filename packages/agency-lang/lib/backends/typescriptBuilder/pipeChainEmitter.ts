@@ -1,10 +1,4 @@
-import type {
-  AgencyNode,
-  Assignment,
-  Expression,
-  ScopeType,
-  VariableType,
-} from "../../types.js";
+import type { AgencyNode, Assignment, Expression, ScopeType, VariableType } from "../../types.js";
 import type { BinOpExpression } from "../../types/binop.js";
 import type { AccessChainElement, ValueAccess } from "../../types/access.js";
 import type { TsNode } from "../../ir/tsIR.js";
@@ -70,10 +64,7 @@ export class PipeChainEmitter {
 
     const stages: Expression[] = [];
     let current: Expression = expr;
-    while (
-      current.type === "binOpExpression" &&
-      (current as BinOpExpression).operator === "|>"
-    ) {
+    while (current.type === "binOpExpression" && (current as BinOpExpression).operator === "|>") {
       stages.push((current as BinOpExpression).right);
       current = (current as BinOpExpression).left;
     }
@@ -86,9 +77,7 @@ export class PipeChainEmitter {
    * `await __pipeBind(left, async (__pipeArg) => stage(__pipeArg))`.
    */
   bind(leftIR: TsNode, stage: Expression): TsNode {
-    return ts.await(
-      ts.call(ts.raw("__pipeBind"), [leftIR, this.buildPipeLambda(stage)]),
-    );
+    return ts.await(ts.call(ts.raw("__pipeBind"), [leftIR, this.buildPipeLambda(stage)]));
   }
 
   /**
@@ -102,11 +91,7 @@ export class PipeChainEmitter {
    * If the assignment is validated (`x!: T = ...`), an extra runner step
    * wraps the final result in `__validateType`.
    */
-  expand(
-    stmt: Assignment,
-    stages: Expression[],
-    baseId: number,
-  ): TsNode[] {
+  expand(stmt: Assignment, stages: Expression[], baseId: number): TsNode[] {
     const tempName = `__pipe_${this.counter++}`;
     const tempVar = ts.scopedVar(tempName, "local");
     const targetVar = this.deps.buildAssignmentLhs(
@@ -180,9 +165,12 @@ export class PipeChainEmitter {
       // No placeholder: bare method/property reference — use __callMethod to preserve `this`
       const receiver = this.processValueAccessPartial(stage);
       const lastEl = stage.chain[stage.chain.length - 1];
-      const propName = lastEl.kind === "property" ? lastEl.name
-        : lastEl.kind === "methodCall" ? lastEl.functionCall.functionName
-          : null;
+      const propName =
+        lastEl.kind === "property"
+          ? lastEl.name
+          : lastEl.kind === "methodCall"
+            ? lastEl.functionCall.functionName
+            : null;
       if (propName) {
         const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
         const config = this.deps.buildStateConfig();
@@ -257,9 +245,12 @@ export class PipeChainEmitter {
       // Bare method/property reference — use __callMethod
       const receiver = this.processValueAccessPartial(stage);
       const lastEl = stage.chain[stage.chain.length - 1];
-      const propName = lastEl.kind === "property" ? lastEl.name
-        : lastEl.kind === "methodCall" ? lastEl.functionCall.functionName
-          : null;
+      const propName =
+        lastEl.kind === "property"
+          ? lastEl.name
+          : lastEl.kind === "methodCall"
+            ? lastEl.functionCall.functionName
+            : null;
       if (propName) {
         const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
         const config = this.deps.buildStateConfig();

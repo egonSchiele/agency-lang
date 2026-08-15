@@ -358,11 +358,7 @@ describe("parseAgency", () => {
 
 describe("parseAgency: export-from at top level", () => {
   it("parses a program containing an export-from statement", () => {
-    const result = parseAgency(
-      'export { search } from "std::wikipedia"\n',
-      {},
-      false,
-    );
+    const result = parseAgency('export { search } from "std::wikipedia"\n', {}, false);
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.result.nodes[0]).toMatchObject({
@@ -372,33 +368,21 @@ describe("parseAgency: export-from at top level", () => {
   });
 
   it("does not interfere with `export def` parsing", () => {
-    const result = parseAgency(
-      'export def foo(): number { return 1 }\n',
-      {},
-      false,
-    );
+    const result = parseAgency("export def foo(): number { return 1 }\n", {}, false);
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.result.nodes[0]?.type).toBe("function");
   });
 
   it("does not interfere with `export node` parsing", () => {
-    const result = parseAgency(
-      'export node main() { return 1 }\n',
-      {},
-      false,
-    );
+    const result = parseAgency("export node main() { return 1 }\n", {}, false);
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.result.nodes[0]?.type).toBe("graphNode");
   });
 
   it("parses star re-export at top level", () => {
-    const result = parseAgency(
-      'export * from "std::wikipedia"\n',
-      {},
-      false,
-    );
+    const result = parseAgency('export * from "std::wikipedia"\n', {}, false);
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.result.nodes[0]).toMatchObject({

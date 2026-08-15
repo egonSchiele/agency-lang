@@ -16,9 +16,7 @@ describe("formatKey", () => {
   it("prefixes with Ctrl+ / Shift+ in canonical order", () => {
     expect(formatKey({ key: "c", ctrl: true })).toBe("Ctrl+C");
     expect(formatKey({ key: "tab", shift: true })).toBe("Shift+Tab");
-    expect(formatKey({ key: "right", ctrl: true, shift: true })).toBe(
-      "Ctrl+Shift+Right",
-    );
+    expect(formatKey({ key: "right", ctrl: true, shift: true })).toBe("Ctrl+Shift+Right");
   });
 });
 

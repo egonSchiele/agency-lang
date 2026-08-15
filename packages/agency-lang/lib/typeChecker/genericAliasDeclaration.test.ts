@@ -9,10 +9,7 @@ import { typeCheck } from "./index.js";
 import type { TypeCheckError } from "./types.js";
 import type { AgencyConfig } from "../config.js";
 
-function errorsFrom(
-  source: string,
-  config: AgencyConfig = {},
-): TypeCheckError[] {
+function errorsFrom(source: string, config: AgencyConfig = {}): TypeCheckError[] {
   const file = path.join(
     os.tmpdir(),
     `tc-generic-${Date.now()}-${Math.random().toString(36).slice(2)}.agency`,
@@ -22,8 +19,7 @@ function errorsFrom(
     const absPath = path.resolve(file);
     const symbolTable = SymbolTable.build(absPath, config);
     const parseResult = parseAgency(source, config);
-    if (!parseResult.success)
-      throw new Error("Parse failed: " + parseResult.message);
+    if (!parseResult.success) throw new Error("Parse failed: " + parseResult.message);
     const program = parseResult.result;
     const info = buildCompilationUnit(program, symbolTable, absPath, source);
     return typeCheck(program, config, info).errors;
@@ -60,11 +56,9 @@ type Pair<A = string, B> = { first: A, second: B }
 `;
     const errs = errorsFrom(src);
     expect(errs.length).toBeGreaterThan(0);
-    expect(
-      errs.some((e) =>
-        /must come before parameters that have defaults/.test(e.message),
-      ),
-    ).toBe(true);
+    expect(errs.some((e) => /must come before parameters that have defaults/.test(e.message))).toBe(
+      true,
+    );
   });
 
   it("accepts an all-defaulted parameter list", () => {

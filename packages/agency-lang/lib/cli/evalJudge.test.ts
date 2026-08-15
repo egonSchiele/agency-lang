@@ -112,7 +112,10 @@ describe("evalJudge", () => {
       runB,
       policy: { samples: 3, confidenceThreshold: 50, marginThreshold: 0, positionBias: "swap" },
     });
-    expect(JSON.parse(fs.readFileSync(out, "utf-8"))).toMatchObject({ verdictVersion: 2, winner: "A" });
+    expect(JSON.parse(fs.readFileSync(out, "utf-8"))).toMatchObject({
+      verdictVersion: 2,
+      winner: "A",
+    });
     expect(logSpy).toHaveBeenCalledWith("Suite winner: A (A 1, B 0, ties 0)");
   });
 
@@ -121,7 +124,9 @@ describe("evalJudge", () => {
     const runA = writeRun(dir, "a", ["capital-france"]);
     const runB = writeRun(dir, "b", ["capital-france"]);
 
-    await expect(evalJudge(runA, runB, { goal: "Return Paris" })).rejects.toThrow(/carry their own goals/i);
+    await expect(evalJudge(runA, runB, { goal: "Return Paris" })).rejects.toThrow(
+      /carry their own goals/i,
+    );
     expect(mockedJudgeSuite).not.toHaveBeenCalled();
   });
 
@@ -129,7 +134,9 @@ describe("evalJudge", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-eval-judge-mixed-"));
     const runA = writeRun(dir, "a", ["task-1"]);
 
-    await expect(evalJudge("a.eval.json", runA, { goal: "Return Paris" })).rejects.toThrow(/both inputs/i);
+    await expect(evalJudge("a.eval.json", runA, { goal: "Return Paris" })).rejects.toThrow(
+      /both inputs/i,
+    );
   });
 
   it("rejects invalid numeric judge policy options", async () => {
@@ -138,7 +145,9 @@ describe("evalJudge", () => {
     const runB = writeRun(dir, "b", ["task-1"]);
 
     await expect(evalJudge(runA, runB, { samples: Number.NaN })).rejects.toThrow(/samples/);
-    await expect(evalJudge(runA, runB, { confidenceThreshold: Number.NaN })).rejects.toThrow(/confidenceThreshold/);
+    await expect(evalJudge(runA, runB, { confidenceThreshold: Number.NaN })).rejects.toThrow(
+      /confidenceThreshold/,
+    );
     await expect(evalJudge(runA, runB, { marginThreshold: -1 })).rejects.toThrow(/marginThreshold/);
     expect(mockedJudgeSuite).not.toHaveBeenCalled();
   });
@@ -151,17 +160,26 @@ function writeRun(baseDir: string, runId: string, inputIds: string[]): string {
     const inputDir = path.join(runDir, "inputs", inputId);
     fs.mkdirSync(inputDir, { recursive: true });
     const evalRecordPath = path.join(inputDir, "eval-record.json");
-    fs.writeFileSync(path.join(inputDir, "input.json"), JSON.stringify({ id: inputId, goal: "Return Paris", args: {} }));
-    fs.writeFileSync(evalRecordPath, JSON.stringify({ recordVersion: 2, evalOutputs: [{ value: "Paris", tMs: 1 }] }));
+    fs.writeFileSync(
+      path.join(inputDir, "input.json"),
+      JSON.stringify({ id: inputId, goal: "Return Paris", args: {} }),
+    );
+    fs.writeFileSync(
+      evalRecordPath,
+      JSON.stringify({ recordVersion: 2, evalOutputs: [{ value: "Paris", tMs: 1 }] }),
+    );
     return { inputId, status: "success", evalRecordPath, statelogPath: "", workdirPath: "" };
   });
-  fs.writeFileSync(path.join(runDir, "summary.json"), JSON.stringify({
-    runId,
-    runDir,
-    agent: "agent.agency:main",
-    inputs,
-    okCount: inputs.length,
-    errorCount: 0,
-  }));
+  fs.writeFileSync(
+    path.join(runDir, "summary.json"),
+    JSON.stringify({
+      runId,
+      runDir,
+      agent: "agent.agency:main",
+      inputs,
+      okCount: inputs.length,
+      errorCount: 0,
+    }),
+  );
   return runDir;
 }

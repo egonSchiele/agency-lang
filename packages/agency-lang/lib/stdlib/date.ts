@@ -20,11 +20,7 @@ function resolveTz(timezone?: string): string {
   return timezone || getLocalTimezone();
 }
 
-function formatWithTimezone(
-  date: Date,
-  timezone: string,
-  includeMillis: boolean = false,
-): string {
+function formatWithTimezone(date: Date, timezone: string, includeMillis: boolean = false): string {
   // Get the offset for this date in the target timezone
   const options: Intl.DateTimeFormatOptions = {
     timeZone: timezone,
@@ -62,9 +58,7 @@ function formatWithTimezone(
     offset = match ? match[1] : "+00:00";
   }
 
-  const frac = includeMillis
-    ? `.${(get("fractionalSecond") || "000").padEnd(3, "0")}`
-    : "";
+  const frac = includeMillis ? `.${(get("fractionalSecond") || "000").padEnd(3, "0")}` : "";
 
   return `${year}-${month}-${day}T${hour}:${minute}:${second}${frac}${offset}`;
 }
@@ -134,9 +128,7 @@ export function _tomorrow(timezone?: string): string {
 export function _nextDayOfWeek(dayName: string, timezone?: string): string {
   const target = DAYS_OF_WEEK.indexOf(dayName.toLowerCase());
   if (target === -1) {
-    throw new Error(
-      `Invalid day of week: "${dayName}". Use: ${DAYS_OF_WEEK.join(", ")}`
-    );
+    throw new Error(`Invalid day of week: "${dayName}". Use: ${DAYS_OF_WEEK.join(", ")}`);
   }
 
   const now = new Date(wallClockNow());
@@ -154,9 +146,7 @@ export function _nextDayOfWeek(dayName: string, timezone?: string): string {
 // The timezone offset (ms east of UTC) in effect at a given instant. EDT
 // (-04:00) is -14400000. Parsed from the offset formatWithTimezone renders.
 function offsetMsInTz(instant: number, tz: string): number {
-  const match = formatWithTimezone(new Date(instant), tz).match(
-    /([+-])(\d{2}):(\d{2})$/,
-  );
+  const match = formatWithTimezone(new Date(instant), tz).match(/([+-])(\d{2}):(\d{2})$/);
   if (!match) return 0;
   const sign = match[1] === "-" ? -1 : 1;
   return sign * (parseInt(match[2], 10) * 60 + parseInt(match[3], 10)) * 60000;
@@ -245,4 +235,3 @@ export function _startOfMonth(instant: number, timezone?: string): number {
 export function _endOfMonth(instant: number, timezone?: string): number {
   return boundary(instant, timezone, lastOfMonth, "end");
 }
-

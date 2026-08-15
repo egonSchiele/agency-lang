@@ -83,8 +83,7 @@ export function manifestDirFor(entryFile: string): string {
   // parent — otherwise `.agency-build/` would pollute a sibling-containing
   // parent dir in agency.json-less projects.
   const abs = path.resolve(entryFile);
-  const startDir =
-    fs.existsSync(abs) && fs.statSync(abs).isDirectory() ? abs : path.dirname(abs);
+  const startDir = fs.existsSync(abs) && fs.statSync(abs).isDirectory() ? abs : path.dirname(abs);
   const root = findProjectRoot(startDir);
   return root ?? startDir;
 }

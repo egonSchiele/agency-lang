@@ -1,9 +1,4 @@
-import type {
-  ResultType,
-  UnionType,
-  VariableType,
-  TypeAliasEntry,
-} from "../types/typeHints.js";
+import type { ResultType, UnionType, VariableType, TypeAliasEntry } from "../types/typeHints.js";
 import { ANY_T, BOOLEAN_T, STRING_T, NULL_T } from "./primitives.js";
 
 const bool = (v: "true" | "false"): VariableType => ({

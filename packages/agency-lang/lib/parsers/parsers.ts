@@ -141,11 +141,7 @@ import { CodeLiteral } from "../types/codeLiteral.js";
 import { Splice } from "../types/splice.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { ForLoop } from "../types/forLoop.js";
-import {
-  Comprehension,
-  COMPREHENSION_PREFIXES,
-  SEQ_PREFIX,
-} from "../types/comprehension.js";
+import { Comprehension, COMPREHENSION_PREFIXES, SEQ_PREFIX } from "../types/comprehension.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { ParallelBlock, SeqBlock } from "../types/parallelBlock.js";
 import { IfElse } from "../types/ifElse.js";
@@ -212,11 +208,7 @@ export const backtick = char("`");
 export const comma = seqR(optionalSpaces, char(","), optionalSpaces);
 export const plusSign = seqR(optionalSpaces, char("+"), optionalSpaces);
 
-export const commaWithNewline = seqR(
-  optionalSpacesOrNewline,
-  char(","),
-  optionalSpacesOrNewline,
-);
+export const commaWithNewline = seqR(optionalSpacesOrNewline, char(","), optionalSpacesOrNewline);
 export const varNameChar: Parser<string> = oneOf(
   "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_",
 );
@@ -232,13 +224,60 @@ export const LEGAL_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
  *  strings this grammar consumes (`def`, `node`, statement keywords,
  *  modifiers, literal words); extend it when a new keyword lands. */
 export const RESERVED_WORDS: readonly string[] = [
-  "def", "function", "node", "return", "goto", "raise", "interrupt", "import", "export",
-  "type", "interface", "effect", "effectSet", "if", "else", "elif", "for", "while", "in",
-  "match", "thread", "subthread", "handle", "finalize", "guard", "debugger",
-  "skills", "skill", "static", "const", "let", "async", "sync", "await",
-  "fork", "race", "try", "catch", "is", "as", "from", "with",
-  "destructive", "idempotent", "optimize", "class", "true", "false",
-  "null", "new", "typeof", "void", "instanceof", "test",
+  "def",
+  "function",
+  "node",
+  "return",
+  "goto",
+  "raise",
+  "interrupt",
+  "import",
+  "export",
+  "type",
+  "interface",
+  "effect",
+  "effectSet",
+  "if",
+  "else",
+  "elif",
+  "for",
+  "while",
+  "in",
+  "match",
+  "thread",
+  "subthread",
+  "handle",
+  "finalize",
+  "guard",
+  "debugger",
+  "skills",
+  "skill",
+  "static",
+  "const",
+  "let",
+  "async",
+  "sync",
+  "await",
+  "fork",
+  "race",
+  "try",
+  "catch",
+  "is",
+  "as",
+  "from",
+  "with",
+  "destructive",
+  "idempotent",
+  "optimize",
+  "class",
+  "true",
+  "false",
+  "null",
+  "new",
+  "typeof",
+  "void",
+  "instanceof",
+  "test",
 ];
 
 // =============================================================================
@@ -262,9 +301,7 @@ export function setTemplateOffset(n: number): void {
  * Wraps a parser to add a `loc` field from tarsec's withSpan.
  * Converts Span { start: Position, end: Position } to SourceLocation { line, col, start, end }.
  */
-export function withLoc<T>(
-  parser: Parser<T>,
-): Parser<T & { loc: SourceLocation }> {
+export function withLoc<T>(parser: Parser<T>): Parser<T & { loc: SourceLocation }> {
   const spanned = withSpan(parser);
   return (input: string) => {
     const result = spanned(input);
@@ -291,10 +328,7 @@ export function withLoc<T>(
 export const optionalSemicolon = optional(char(";"));
 
 export function removeQuotes(s: string): string {
-  if (
-    (s.startsWith('"') && s.endsWith('"')) ||
-    (s.startsWith("'") && s.endsWith("'"))
-  ) {
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
     return s.slice(1, -1);
   }
   return s;
@@ -320,17 +354,17 @@ export const BLANK_LINE_SENTINEL = "\uE000";
  *  lib/parser.ts re-exports it for existing importers. Idempotent: a
  *  sentinel line is not blank, so already-processed input passes through. */
 export function replaceBlankLines(input: string): string {
-  return input.replace(/(\r?\n)(\r?\n)+/g, (match) =>
-    BLANK_LINE_SENTINEL.repeat(match.length - 1) + "\n"
+  return input.replace(
+    /(\r?\n)(\r?\n)+/g,
+    (match) => BLANK_LINE_SENTINEL.repeat(match.length - 1) + "\n",
   );
 }
 
 export const stripSentinels = (s: string) => s.replaceAll(BLANK_LINE_SENTINEL, "\n");
 
-export const blankLineParser: Parser<NewLine> = map(
-  many1(char(BLANK_LINE_SENTINEL)),
-  () => ({ type: "newLine" as const }),
-);
+export const blankLineParser: Parser<NewLine> = map(many1(char(BLANK_LINE_SENTINEL)), () => ({
+  type: "newLine" as const,
+}));
 
 // =============================================================================
 // comment.ts
@@ -348,11 +382,7 @@ export const lineCommentCore: Parser<AgencyComment> = seqC(
 
 export const commentParser: Parser<AgencyComment> = (input: string) => {
   const parser = map(
-    seqC(
-      optionalSpaces,
-      capture(lineCommentCore, "comment"),
-      optionalSpacesOrNewline,
-    ),
+    seqC(optionalSpaces, capture(lineCommentCore, "comment"), optionalSpacesOrNewline),
     (result: { comment: AgencyComment }) => result.comment,
   );
   return parser(input);
@@ -369,16 +399,10 @@ type TrailingCommentOwner = {
 
 /** Trivia nodes describe the layout around a construct rather than a
  *  construct of their own, so nothing attaches to them. */
-const NON_TRAILING_OWNER_TYPES = [
-  "comment",
-  "multiLineComment",
-  "newLine",
-];
+const NON_TRAILING_OWNER_TYPES = ["comment", "multiLineComment", "newLine"];
 
 const LINE_ENDING_PATTERN = new RegExp(`[\\r\\n${BLANK_LINE_SENTINEL}]`);
-const TRAILING_WHITESPACE_PATTERN = new RegExp(
-  `[ \\t\\r\\n${BLANK_LINE_SENTINEL}]*$`,
-);
+const TRAILING_WHITESPACE_PATTERN = new RegExp(`[ \\t\\r\\n${BLANK_LINE_SENTINEL}]*$`);
 
 /** Whether ANY line ending was crossed going from `from` to `to`. Use this
  *  for a span that should sit entirely on one line, such as the delimiter
@@ -429,10 +453,7 @@ export function withTrailingLineComment<T extends TrailingCommentOwner>(
       return parsed;
     }
 
-    return success(
-      { ...parsed.result, trailingComment: comment.result },
-      comment.rest,
-    );
+    return success({ ...parsed.result, trailingComment: comment.result }, comment.rest);
   };
 }
 
@@ -445,10 +466,7 @@ export function completeConstructEntry<T extends TrailingCommentOwner>(
   parser: Parser<T>,
 ): Parser<T> {
   return map(
-    seqC(
-      capture(withTrailingLineComment(parser), "value"),
-      optionalSpacesOrNewline,
-    ),
+    seqC(capture(withTrailingLineComment(parser), "value"), optionalSpacesOrNewline),
     (result: { value: T }) => result.value,
   );
 }
@@ -459,9 +477,7 @@ export function completeConstructEntry<T extends TrailingCommentOwner>(
 
 const joinChars = (chars: string[]) => chars.join("");
 
-export const multiLineCommentParser: Parser<AgencyMultiLineComment> = (
-  input: string,
-) => {
+export const multiLineCommentParser: Parser<AgencyMultiLineComment> = (input: string) => {
   const parser = seqC(
     set("type", "multiLineComment"),
     set("isDoc", false as boolean),
@@ -563,11 +579,7 @@ const unicodeEscape: Parser<string> = map(
 // value is not a legal code point so the single-char arm preserves `\u`
 // verbatim, matching how unknown escapes are handled.
 const codePointEscape: Parser<string> = (input) => {
-  const shape = seqC(
-    str("\\u{"),
-    capture(many1WithJoin(hexDigit), "hex"),
-    char("}"),
-  )(input);
+  const shape = seqC(str("\\u{"), capture(many1WithJoin(hexDigit), "hex"), char("}"))(input);
   if (!shape.success) return failure("expected \\u{...}", input);
   const code = parseInt(shape.result.hex, 16);
   if (shape.result.hex.length > 6 || code > 0x10ffff)
@@ -576,9 +588,8 @@ const codePointEscape: Parser<string> = (input) => {
 };
 // Single-char escapes (`\\`, `\n`, `\t`, `\0`, `\"`, ...) plus the catch-all:
 // an unknown escape like `\z` decodes to `\z` (the backslash is preserved).
-const singleCharEscape: Parser<string> = map(
-  seqC(char("\\"), capture(anyChar, "c")),
-  (c) => unescapeStringChar(c.c),
+const singleCharEscape: Parser<string> = map(seqC(char("\\"), capture(anyChar, "c")), (c) =>
+  unescapeStringChar(c.c),
 );
 
 /** Parse one backslash escape and yield its decoded text. Ordered most-specific
@@ -604,7 +615,8 @@ export function unescapeStringLiteralValue(raw: string): string {
   return result.success ? result.result : raw;
 }
 
-const stringTextSegmentParserFor = (delim: '"' | "'" | "`"): Parser<TextSegment> =>
+const stringTextSegmentParserFor =
+  (delim: '"' | "'" | "`"): Parser<TextSegment> =>
   (input: string): ParserResult<TextSegment> => {
     let i = 0;
     let value = "";
@@ -637,10 +649,7 @@ const stringTextSegmentParserFor = (delim: '"' | "'" | "`"): Parser<TextSegment>
 // delimiter (`"""`) or an interpolation (`${`). `not(...)` is a zero-width
 // negative lookahead; `capture(anyChar)` then consumes the single char.
 const multiLineRawCharFor = (delim: string): Parser<string> =>
-  map(
-    seqC(not(or(str(delim), str("${"))), capture(anyChar, "c")),
-    (r: { c: string }) => r.c,
-  );
+  map(seqC(not(or(str(delim), str("${"))), capture(anyChar, "c")), (r: { c: string }) => r.c);
 
 const multiLineRawChar: Parser<string> = multiLineRawCharFor('"""');
 
@@ -651,24 +660,23 @@ const multiLineRawChar: Parser<string> = multiLineRawCharFor('"""');
 // source) without opening an interpolation. `\${` is tried first so its `${` is
 // consumed as an escape rather than starting one; a lone backslash and every
 // other `\x` stays verbatim. Ends at the closing `"""` or an unescaped `${`.
-export const multiLineStringTextSegmentParserFor = (
-  delim: string,
-): Parser<TextSegment> =>
-  map(
-    many1WithJoin(or(dollarBraceEscape, multiLineRawCharFor(delim))),
-    (value: string) => ({ type: "text" as const, value }),
-  );
+export const multiLineStringTextSegmentParserFor = (delim: string): Parser<TextSegment> =>
+  map(many1WithJoin(or(dollarBraceEscape, multiLineRawCharFor(delim))), (value: string) => ({
+    type: "text" as const,
+    value,
+  }));
 
 export const multiLineStringTextSegmentParser: Parser<TextSegment> =
   multiLineStringTextSegmentParserFor('"""');
 
-export const interpolationSegmentParser: Parser<InterpolationSegment> = withLoc((
-  input: string,
-) => {
+export const interpolationSegmentParser: Parser<InterpolationSegment> = withLoc((input: string) => {
   const parser = seqC(
     char("$"),
     char("{"),
-    capture(lazy(() => exprParser), "expression"),
+    capture(
+      lazy(() => exprParser),
+      "expression",
+    ),
     char("}"),
   );
 
@@ -697,10 +705,7 @@ const objectParser = (input: string): ParserResult<Record<string, any>> => {
       optionalSpaces,
       char(":"),
       optionalSpaces,
-      capture(
-        or(literalParser, objectParser),
-        "value",
-      ),
+      capture(or(literalParser, objectParser), "value"),
     ),
   );
 
@@ -734,7 +739,10 @@ const objectParser = (input: string): ParserResult<Record<string, any>> => {
 const digitRun: Parser<string> = map(
   seqC(
     capture(digit, "first"),
-    capture(manyWithJoin(map(seqC(optional(char("_")), capture(digit, "d")), (g: { d: string }) => g.d)), "rest"),
+    capture(
+      manyWithJoin(map(seqC(optional(char("_")), capture(digit, "d")), (g: { d: string }) => g.d)),
+      "rest",
+    ),
   ),
   (r: { first: string; rest: string }) => `${r.first}${r.rest}`,
 );
@@ -758,10 +766,7 @@ const numberMagnitude: Parser<string> = or(
 export const numberParser: Parser<NumberLiteral> = label(
   "a number",
   map(
-    seqC(
-      capture(optional(char("-")), "sign"),
-      capture(numberMagnitude, "magnitude"),
-    ),
+    seqC(capture(optional(char("-")), "sign"), capture(numberMagnitude, "magnitude")),
     (r: { sign: string | null; magnitude: string }) => ({
       type: "number" as const,
       value: `${r.sign ?? ""}${r.magnitude}`.replace(/_/g, ""),
@@ -781,37 +786,51 @@ const TIME_MULTIPLIERS: Record<TimeUnitLiteral["unit"], number> = {
 
 const timeSuffix = or(str("ms"), str("s"), str("m"), str("h"), str("d"), str("w"));
 
-const timeUnitParser: Parser<UnitLiteral> = label("a time unit literal", (input: string): ParserResult<UnitLiteral> => {
-  const parser = seqC(
-    set("type", "unitLiteral"),
-    set("dimension", "time"),
-    capture(numberMagnitude, "value"),
-    capture(timeSuffix, "unit"),
-  );
-  const result = parser(input);
-  if (!result.success) return result;
-  const { value, unit } = result.result;
-  return success({
-    ...result.result,
-    canonicalValue: Math.round(parseFloat(value) * TIME_MULTIPLIERS[unit as TimeUnitLiteral["unit"]]),
-  } as UnitLiteral, result.rest);
-});
+const timeUnitParser: Parser<UnitLiteral> = label(
+  "a time unit literal",
+  (input: string): ParserResult<UnitLiteral> => {
+    const parser = seqC(
+      set("type", "unitLiteral"),
+      set("dimension", "time"),
+      capture(numberMagnitude, "value"),
+      capture(timeSuffix, "unit"),
+    );
+    const result = parser(input);
+    if (!result.success) return result;
+    const { value, unit } = result.result;
+    return success(
+      {
+        ...result.result,
+        canonicalValue: Math.round(
+          parseFloat(value) * TIME_MULTIPLIERS[unit as TimeUnitLiteral["unit"]],
+        ),
+      } as UnitLiteral,
+      result.rest,
+    );
+  },
+);
 
-const costUnitParser: Parser<UnitLiteral> = label("a cost unit literal", (input: string): ParserResult<UnitLiteral> => {
-  const parser = seqC(
-    set("type", "unitLiteral"),
-    set("dimension", "cost"),
-    set("unit", "$"),
-    char("$"),
-    capture(numberMagnitude, "value"),
-  );
-  const result = parser(input);
-  if (!result.success) return result;
-  return success({
-    ...result.result,
-    canonicalValue: parseFloat(result.result.value),
-  } as UnitLiteral, result.rest);
-});
+const costUnitParser: Parser<UnitLiteral> = label(
+  "a cost unit literal",
+  (input: string): ParserResult<UnitLiteral> => {
+    const parser = seqC(
+      set("type", "unitLiteral"),
+      set("dimension", "cost"),
+      set("unit", "$"),
+      char("$"),
+      capture(numberMagnitude, "value"),
+    );
+    const result = parser(input);
+    if (!result.success) return result;
+    return success(
+      {
+        ...result.result,
+        canonicalValue: parseFloat(result.result.value),
+      } as UnitLiteral,
+      result.rest,
+    );
+  },
+);
 
 const BYTE_MULTIPLIERS: Record<ByteUnitLiteral["unit"], number> = {
   b: 1,
@@ -823,43 +842,50 @@ const BYTE_MULTIPLIERS: Record<ByteUnitLiteral["unit"], number> = {
 // Order matters — longest match first so "mb" matches before "b"
 const byteSuffix = or(istr("kb"), istr("mb"), istr("gb"), istr("b"));
 
-const byteUnitParser: Parser<UnitLiteral> = label("a byte unit literal", (input: string): ParserResult<UnitLiteral> => {
-  const parser = seqC(
-    set("type", "unitLiteral"),
-    set("dimension", "bytes"),
-    capture(numberMagnitude, "value"),
-    capture(byteSuffix, "unit"),
-  );
-  const result = parser(input);
-  if (!result.success) return result;
-  const { value, unit } = result.result;
-  const normalizedUnit = unit.toLowerCase() as ByteUnitLiteral["unit"];
-  return success({
-    ...result.result,
-    canonicalValue: Math.round(parseFloat(value) * BYTE_MULTIPLIERS[normalizedUnit]),
-  } as UnitLiteral, result.rest);
-});
+const byteUnitParser: Parser<UnitLiteral> = label(
+  "a byte unit literal",
+  (input: string): ParserResult<UnitLiteral> => {
+    const parser = seqC(
+      set("type", "unitLiteral"),
+      set("dimension", "bytes"),
+      capture(numberMagnitude, "value"),
+      capture(byteSuffix, "unit"),
+    );
+    const result = parser(input);
+    if (!result.success) return result;
+    const { value, unit } = result.result;
+    const normalizedUnit = unit.toLowerCase() as ByteUnitLiteral["unit"];
+    return success(
+      {
+        ...result.result,
+        canonicalValue: Math.round(parseFloat(value) * BYTE_MULTIPLIERS[normalizedUnit]),
+      } as UnitLiteral,
+      result.rest,
+    );
+  },
+);
 
-export const unitLiteralParser: Parser<UnitLiteral> = label("a unit literal",
+export const unitLiteralParser: Parser<UnitLiteral> = label(
+  "a unit literal",
   // Order matters: byteUnitParser before timeUnitParser so "1kb" doesn't match
   // as time "1k" (which would fail anyway, but more importantly "5mb" matches
   // as bytes rather than as time "5m" with leftover "b").
-  or(costUnitParser, byteUnitParser, timeUnitParser)
+  or(costUnitParser, byteUnitParser, timeUnitParser),
 );
 
-export const regexLiteralParser: Parser<RegexLiteral> = label("a regex", (input: string): ParserResult<RegexLiteral> => {
-  const parser = seqC(
-    set("type", "regex"),
-    str("re/"),
-    capture(many1WithJoin(or(
-      str("\\/"),
-      noneOf("/\n"),
-    )), "pattern"),
-    char("/"),
-    capture(manyWithJoin(oneOf("dgimsuy")), "flags"),
-  );
-  return parser(input);
-});
+export const regexLiteralParser: Parser<RegexLiteral> = label(
+  "a regex",
+  (input: string): ParserResult<RegexLiteral> => {
+    const parser = seqC(
+      set("type", "regex"),
+      str("re/"),
+      capture(many1WithJoin(or(str("\\/"), noneOf("/\n"))), "pattern"),
+      char("/"),
+      capture(manyWithJoin(oneOf("dgimsuy")), "flags"),
+    );
+    return parser(input);
+  },
+);
 
 // `_stringParser` is written as a plain function (rather than `seqC`) so it
 // can capture the opening delimiter and require the *same* character to
@@ -891,26 +917,25 @@ export const simpleStringParser: Parser<StringLiteral> = (input: string) => {
 // consts are rejected later by `validateStringLiteral` and would crash
 // at codegen, since tag strings are emitted where module-level Agency
 // consts are not bound as plain JS names.
-const staticInterpolationSegmentParser: Parser<InterpolationSegment> =
-  withLoc((input: string) => {
-    const parser = seqC(
-      char("$"),
-      char("{"),
-      optionalSpaces,
-      capture(variableNameParser, "expression"),
-      optionalSpaces,
-      char("}"),
-    );
-    const result = parser(input);
-    if (!result.success) return result;
-    return success(
-      {
-        type: "interpolation" as const,
-        expression: result.result.expression,
-      },
-      result.rest,
-    );
-  });
+const staticInterpolationSegmentParser: Parser<InterpolationSegment> = withLoc((input: string) => {
+  const parser = seqC(
+    char("$"),
+    char("{"),
+    optionalSpaces,
+    capture(variableNameParser, "expression"),
+    optionalSpaces,
+    char("}"),
+  );
+  const result = parser(input);
+  if (!result.success) return result;
+  return success(
+    {
+      type: "interpolation" as const,
+      expression: result.result.expression,
+    },
+    result.rest,
+  );
+});
 
 // String literal that allows identifier-only `${name}` interpolation but
 // nothing else. Used by `staticTagArgParser` so e.g.
@@ -920,22 +945,19 @@ const staticInterpolationSegmentParser: Parser<InterpolationSegment> =
 // parser before reaching the type checker / generator. Static const
 // names are not supported here — see the comment on
 // `staticInterpolationSegmentParser`.
-export const staticInterpolatedStringParser: Parser<StringLiteral> =
-  makeInterpolatedStringParser(staticInterpolationSegmentParser);
+export const staticInterpolatedStringParser: Parser<StringLiteral> = makeInterpolatedStringParser(
+  staticInterpolationSegmentParser,
+);
 
 // Multi-line variant of `staticInterpolatedStringParser`. Same
 // identifier-only interpolation rule for `${...}` slots, used inside
 // `staticTagArgParser` so a tag arg can be a `"""..."""` literal.
-export const staticMultiLineStringParser: Parser<MultiLineStringLiteral> = (
-  input: string,
-) => {
+export const staticMultiLineStringParser: Parser<MultiLineStringLiteral> = (input: string) => {
   const parser = seqC(
     set("type", "multiLineString"),
     str('"""'),
     capture(
-      many(
-        or(multiLineStringTextSegmentParser, staticInterpolationSegmentParser),
-      ),
+      many(or(multiLineStringTextSegmentParser, staticInterpolationSegmentParser)),
       "segments",
     ),
     str('"""'),
@@ -961,9 +983,7 @@ function makeInterpolatedStringParser(
     const open = oneOf("\"'`")(input);
     if (!open.success) return open as ParserResult<StringLiteral>;
     const delim = open.result as '"' | "'" | "`";
-    const segments = many(
-      or(stringTextSegmentParserFor(delim), segmentParser),
-    )(open.rest);
+    const segments = many(or(stringTextSegmentParserFor(delim), segmentParser))(open.rest);
     if (!segments.success) return segments as ParserResult<StringLiteral>;
     const close = char(delim)(segments.rest);
     if (!close.success) return failure(`expected closing ${delim}`, input);
@@ -974,15 +994,22 @@ function makeInterpolatedStringParser(
   };
 }
 
-export const _stringParser: Parser<StringLiteral> =
-  makeInterpolatedStringParser(interpolationSegmentParser);
+export const _stringParser: Parser<StringLiteral> = makeInterpolatedStringParser(
+  interpolationSegmentParser,
+);
 
 export const stringParser: Parser<StringLiteral> = label("a string", (input: string) => {
   // Allow `_valueAccessParser` on the right of `+` so function calls and
   // chained accesses (`foo()`, `foo.bar`, `foo.bar()`, `foo[0]`) interpolate
   // correctly. Without this, `"hi" + foo()` would parse `"hi" + foo` as a
   // string with `foo` interpolated and leave `()` unparsed.
-  const parser = sepBy1(plusSign, or(_stringParser, lazy(() => _valueAccessParser)));
+  const parser = sepBy1(
+    plusSign,
+    or(
+      _stringParser,
+      lazy(() => _valueAccessParser),
+    ),
+  );
   const result = parser(input);
   if (!result.success) {
     return result;
@@ -1031,9 +1058,7 @@ const multiLineStringParserFor =
       set("type", "multiLineString"),
       str(delim),
       capture(
-        many(
-          or(multiLineStringTextSegmentParserFor(delim), interpolationSegmentParser),
-        ),
+        many(or(multiLineStringTextSegmentParserFor(delim), interpolationSegmentParser)),
         "segments",
       ),
       str(delim),
@@ -1065,35 +1090,32 @@ const undefinedAliasParser: Parser<VariableNameLiteral> = map(
   () => ({ type: "variableName" as const, value: "null" }),
 );
 
-export const variableNameParser: Parser<VariableNameLiteral> = label("an identifier", memo("variableNameParser", (
-  input: string,
-) => {
-  const parser = seq(
-    [
-      set("type", "variableName"),
-      capture(or(letter, char("_")), "init"),
-      capture(manyWithJoin(varNameChar), "value"),
-    ],
-    (_, captures) => {
-      return {
-        type: "variableName" as const,
-        value: `${captures.init}${captures.value}`,
-      };
-    },
-  );
+export const variableNameParser: Parser<VariableNameLiteral> = label(
+  "an identifier",
+  memo("variableNameParser", (input: string) => {
+    const parser = seq(
+      [
+        set("type", "variableName"),
+        capture(or(letter, char("_")), "init"),
+        capture(manyWithJoin(varNameChar), "value"),
+      ],
+      (_, captures) => {
+        return {
+          type: "variableName" as const,
+          value: `${captures.init}${captures.value}`,
+        };
+      },
+    );
 
-  return parser(input);
-}));
+    return parser(input);
+  }),
+);
 
 /** A quoted hole name (`#"field-name"`): any characters except whitespace
  *  and the quote. The quotes are around the NAME only — quoting changes
  *  neither the sort nor what may fill the hole. */
 const quotedHoleNameParser: Parser<string> = map(
-  seqC(
-    char('"'),
-    capture(many1WithJoin(noneOf(" \t\n\r\"")), "quoted"),
-    char('"'),
-  ),
+  seqC(char('"'), capture(many1WithJoin(noneOf(' \t\n\r"')), "quoted"), char('"')),
   (r: unknown) => (r as { quoted: string }).quoted,
 );
 
@@ -1103,48 +1125,54 @@ const quotedHoleNameParser: Parser<string> = map(
  *  position-specific wrappers override the sort. */
 export const holeParser: Parser<Hole> = label(
   "a hole",
-  memo("holeParser", withLoc((input: string) => {
-    const parser = seqC(
-      char("#"),
-      capture(optional(str("...")), "splice"),
-      capture(
-        or(
-          quotedHoleNameParser,
-          map(variableNameParser, (name) => name.value),
+  memo(
+    "holeParser",
+    withLoc((input: string) => {
+      const parser = seqC(
+        char("#"),
+        capture(optional(str("...")), "splice"),
+        capture(
+          or(
+            quotedHoleNameParser,
+            map(variableNameParser, (name) => name.value),
+          ),
+          "name",
         ),
-        "name",
-      ),
-      optional(
-        captureCaptures(
-          seqC(
-            optionalSpaces,
-            char(":"),
-            optionalSpaces,
-            capture(lazy(() => variableTypeParser), "typeAnnotation"),
+        optional(
+          captureCaptures(
+            seqC(
+              optionalSpaces,
+              char(":"),
+              optionalSpaces,
+              capture(
+                lazy(() => variableTypeParser),
+                "typeAnnotation",
+              ),
+            ),
           ),
         ),
-      ),
-    );
-    const result = parser(input);
-    if (!result.success) return result;
-    const captures = result.result as unknown as {
-      name: string;
-      splice: string | null;
-      typeAnnotation?: VariableType;
-    };
-    return success(
-      {
-        type: "hole" as const,
-        name: captures.name,
-        sort: "expr" as const,
-        splice: !!captures.splice,
-        ...(captures.typeAnnotation !== undefined
-          ? { typeAnnotation: captures.typeAnnotation }
-          : {}),
-      } as Hole,
-      result.rest,
-    );
-  })),
+      );
+      const result = parser(input);
+      if (!result.success) return result;
+      const captures = result.result as unknown as {
+        name: string;
+        splice: string | null;
+        typeAnnotation?: VariableType;
+      };
+      return success(
+        {
+          type: "hole" as const,
+          name: captures.name,
+          sort: "expr" as const,
+          splice: !!captures.splice,
+          ...(captures.typeAnnotation !== undefined
+            ? { typeAnnotation: captures.typeAnnotation }
+            : {}),
+        } as Hole,
+        result.rest,
+      );
+    }),
+  ),
 );
 
 /** An expression-position hole: splices are rejected here because a splice
@@ -1175,66 +1203,66 @@ export const spliceHoleParser: Parser<Hole> = (input: string) => {
  *  "statements"; a hole inside a larger expression keeps sort "expr". The
  *  boundary check is what stops this parser from eating the `#a` prefix of
  *  an expression statement like `#a + 1`. */
-export const statementHoleParser: Parser<Hole> = memo(
-  "statementHoleParser",
-  (input: string) => {
-    const result = holeParser(input);
-    if (!result.success) return result;
-    const ws = optionalSpaces(result.rest);
-    const after = ws.success ? ws.rest : result.rest;
-    const atStatementEnd =
-      after === "" ||
-      after.startsWith("\n") ||
-      after.startsWith("\r") ||
-      after.startsWith("}") ||
-      after.startsWith("//") ||
-      // A blank line following the hole arrives as the sentinel, not "\n"
-      // (replaceBlankLines runs before parsing).
-      after.startsWith(BLANK_LINE_SENTINEL);
-    if (!atStatementEnd) {
-      return failure("a statement hole must occupy the whole statement", input);
-    }
-    return success({ ...result.result, sort: "statements" as const }, result.rest);
-  },
-);
+export const statementHoleParser: Parser<Hole> = memo("statementHoleParser", (input: string) => {
+  const result = holeParser(input);
+  if (!result.success) return result;
+  const ws = optionalSpaces(result.rest);
+  const after = ws.success ? ws.rest : result.rest;
+  const atStatementEnd =
+    after === "" ||
+    after.startsWith("\n") ||
+    after.startsWith("\r") ||
+    after.startsWith("}") ||
+    after.startsWith("//") ||
+    // A blank line following the hole arrives as the sentinel, not "\n"
+    // (replaceBlankLines runs before parsing).
+    after.startsWith(BLANK_LINE_SENTINEL);
+  if (!atStatementEnd) {
+    return failure("a statement hole must occupy the whole statement", input);
+  }
+  return success({ ...result.result, sort: "statements" as const }, result.rest);
+});
 
-export const identifierHoleParser: Parser<Hole> = memo(
-  "identifierHoleParser",
-  (input: string) => {
-    const result = holeParser(input);
-    if (!result.success) return result;
-    // A name position holds exactly one name; a splice has no meaning
-    // here. Rejecting at parse time keeps fill's identifier branch total
-    // (a splice flag reaching it would otherwise be silently dropped).
-    if (result.result.splice) {
-      return failure("a splice cannot appear in a name position", input);
-    }
-    return success({ ...result.result, sort: "identifier" as const }, result.rest);
-  },
-);
+export const identifierHoleParser: Parser<Hole> = memo("identifierHoleParser", (input: string) => {
+  const result = holeParser(input);
+  if (!result.success) return result;
+  // A name position holds exactly one name; a splice has no meaning
+  // here. Rejecting at parse time keeps fill's identifier branch total
+  // (a splice flag reaching it would otherwise be silently dropped).
+  if (result.result.splice) {
+    return failure("a splice cannot appear in a name position", input);
+  }
+  return success({ ...result.result, sort: "identifier" as const }, result.rest);
+});
 
 export const declHoleParser: Parser<Hole> = memo(
   "declHoleParser",
-  map(lazy(() => holeParser), (hole) => ({ ...hole, sort: "decl" as const })),
+  map(
+    lazy(() => holeParser),
+    (hole) => ({ ...hole, sort: "decl" as const }),
+  ),
 );
 
 /** A top-level hole is a decl hole: it stands for whole declarations
  *  (functions, nodes, types, imports). Reuses statementHoleParser's
  *  whole-statement boundary check so `#a + 1` at top level stays an
  *  expression statement. */
-export const topLevelHoleParser: Parser<Hole> = memo(
-  "topLevelHoleParser",
-  (input: string) => {
-    const result = statementHoleParser(input);
-    if (!result.success) return result;
-    return success({ ...result.result, sort: "decl" as const }, result.rest);
-  },
-);
+export const topLevelHoleParser: Parser<Hole> = memo("topLevelHoleParser", (input: string) => {
+  const result = statementHoleParser(input);
+  if (!result.success) return result;
+  return success({ ...result.result, sort: "decl" as const }, result.rest);
+});
 
 /** A declaration-name position (`def #name(`, `node #name(`): the hole plus
  *  any trailing spaces before the paren the surrounding parser expects. */
 const declNameHoleParser: Parser<Hole> = map(
-  seqC(capture(lazy(() => identifierHoleParser), "hole"), optionalSpaces),
+  seqC(
+    capture(
+      lazy(() => identifierHoleParser),
+      "hole",
+    ),
+    optionalSpaces,
+  ),
   (r: unknown) => (r as { hole: Hole }).hole,
 );
 
@@ -1249,19 +1277,22 @@ const declNameParser: Parser<string | Hole> = (input: string) => {
   return many1Till(char("("))(input) as ParserResult<string | Hole>;
 };
 
-export const booleanParser: Parser<BooleanLiteral> = label("a boolean", (input: string): ParserResult<BooleanLiteral> => {
-  const parser = seqC(
-    set("type", "boolean"),
-    capture(
-      or(
-        map(str("true"), () => true),
-        map(str("false"), () => false),
+export const booleanParser: Parser<BooleanLiteral> = label(
+  "a boolean",
+  (input: string): ParserResult<BooleanLiteral> => {
+    const parser = seqC(
+      set("type", "boolean"),
+      capture(
+        or(
+          map(str("true"), () => true),
+          map(str("false"), () => false),
+        ),
+        "value",
       ),
-      "value",
-    ),
-  );
-  return parser(input);
-});
+    );
+    return parser(input);
+  },
+);
 
 // `undefined` is a second spelling of `null`, not a second value. Agency has
 // exactly one nothing-value (docs/dev/null-and-undefined.md); the *type*
@@ -1270,21 +1301,23 @@ export const booleanParser: Parser<BooleanLiteral> = label("a boolean", (input: 
 //
 // Both spellings need the word boundary: without it `nullThing` is consumed as
 // `null` with `Thing` stranded, the same hazard the primitive types have.
-export const nullParser: Parser<NullLiteral> = label("null", seqC(
-  set("type", "null"),
-  or(str("null"), str("undefined")),
-  not(varNameChar),
-));
+export const nullParser: Parser<NullLiteral> = label(
+  "null",
+  seqC(set("type", "null"), or(str("null"), str("undefined")), not(varNameChar)),
+);
 
-export const literalParser: Parser<Literal> = memo("literalParser", or(
-  nullParser,
-  booleanParser,
-  unitLiteralParser,
-  numberParser,
-  multiLineStringParser,
-  stringParser,
-  variableNameParser,
-));
+export const literalParser: Parser<Literal> = memo(
+  "literalParser",
+  or(
+    nullParser,
+    booleanParser,
+    unitLiteralParser,
+    numberParser,
+    multiLineStringParser,
+    stringParser,
+    variableNameParser,
+  ),
+);
 
 export const literalParserNoVarName: Parser<Literal> = or(
   nullParser,
@@ -1415,7 +1448,10 @@ export const parenthesizedTypeParser: Parser<VariableType> = memo(
     seqC(
       char("("),
       optionalSpaces,
-      capture(lazy(() => variableTypeParser), "inner"),
+      capture(
+        lazy(() => variableTypeParser),
+        "inner",
+      ),
       optionalSpaces,
       char(")"),
     ),
@@ -1446,9 +1482,7 @@ const typePostfixBase: Parser<VariableType> = (input: string) =>
  * (`User[ "name" ]`), matching TypeScript; the bare `[]` array suffix
  * stays space-intolerant, matching its old behavior.
  */
-type TypeSuffix =
-  | { suffix: "array" }
-  | { suffix: "index"; index: VariableType };
+type TypeSuffix = { suffix: "array" } | { suffix: "index"; index: VariableType };
 
 const typeSuffixParser: Parser<TypeSuffix> = or(
   map(str("[]"), (): TypeSuffix => ({ suffix: "array" })),
@@ -1456,7 +1490,10 @@ const typeSuffixParser: Parser<TypeSuffix> = or(
     seqC(
       char("["),
       optionalSpaces,
-      capture(lazy(() => variableTypeParser), "index"),
+      capture(
+        lazy(() => variableTypeParser),
+        "index",
+      ),
       optionalSpaces,
       char("]"),
     ),
@@ -1465,10 +1502,7 @@ const typeSuffixParser: Parser<TypeSuffix> = or(
 );
 
 /** Fold suffixes onto a base type, left to right. */
-function applyTypeSuffixes(
-  base: VariableType,
-  suffixes: TypeSuffix[],
-): VariableType {
+function applyTypeSuffixes(base: VariableType, suffixes: TypeSuffix[]): VariableType {
   return suffixes.reduce<VariableType>(
     (current, s) =>
       s.suffix === "array"
@@ -1493,10 +1527,7 @@ function applyTypeSuffixes(
 export const arrayTypeParser: Parser<VariableType> = trace(
   "arrayTypeParser",
   map(
-    seqC(
-      capture(typePostfixBase, "base"),
-      capture(many1(typeSuffixParser), "suffixes"),
-    ),
+    seqC(capture(typePostfixBase, "base"), capture(many1(typeSuffixParser), "suffixes")),
     ({ base, suffixes }) => applyTypeSuffixes(base, suffixes),
   ),
 );
@@ -1507,10 +1538,7 @@ export const arrayTypeParser: Parser<VariableType> = trace(
  * and `keyof User["a"]` all bind the full postfix expression.
  */
 const postfixOperandParser: Parser<VariableType> = map(
-  seqC(
-    capture(typePostfixBase, "base"),
-    capture(many(typeSuffixParser), "suffixes"),
-  ),
+  seqC(capture(typePostfixBase, "base"), capture(many(typeSuffixParser), "suffixes")),
   ({ base, suffixes }) => applyTypeSuffixes(base, suffixes),
 );
 
@@ -1531,7 +1559,10 @@ export const keyofTypeParser: Parser<KeyofType> = memo(
     set("type", "keyofType"),
     str("keyof"),
     spaces,
-    capture(lazy(() => postfixOperandParser), "operand"),
+    capture(
+      lazy(() => postfixOperandParser),
+      "operand",
+    ),
   ),
 );
 export const angleBracketsArrayTypeParser: Parser<ArrayType> = memo(
@@ -1543,10 +1574,7 @@ export const angleBracketsArrayTypeParser: Parser<ArrayType> = memo(
     captureCaptures(
       parseError(
         "expected a type name followed by `>`, e.g. `array<string>`",
-        capture(
-          or(primitiveTypeParser, typeAliasVariableParser),
-          "elementType",
-        ),
+        capture(or(primitiveTypeParser, typeAliasVariableParser), "elementType"),
         char(">"),
       ),
     ),
@@ -1567,23 +1595,19 @@ export const numberLiteralTypeParser: Parser<NumberLiteralType> = memo(
   "numberLiteralTypeParser",
   seqC(
     set("type", "numberLiteralType"),
-    capture(map(many1WithJoin(or(char("-"), char("."), char("_"), digit)), (v) => v.replace(/_/g, "")), "value"),
+    capture(
+      map(many1WithJoin(or(char("-"), char("."), char("_"), digit)), (v) => v.replace(/_/g, "")),
+      "value",
+    ),
   ),
 );
 
 export const booleanLiteralTypeParser: Parser<BooleanLiteralType> = memo(
   "booleanLiteralTypeParser",
-  seqC(
-    set("type", "booleanLiteralType"),
-    capture(or(str("true"), str("false")), "value"),
-  ),
+  seqC(set("type", "booleanLiteralType"), capture(or(str("true"), str("false")), "value")),
 );
 
-export const objectPropertyDelimiter = seqR(
-  optionalSpaces,
-  oneOf(",;\n"),
-  optionalSpacesOrNewline,
-);
+export const objectPropertyDelimiter = seqR(optionalSpaces, oneOf(",;\n"), optionalSpacesOrNewline);
 
 export const objectPropertyParser: Parser<ObjectProperty> = memo(
   "objectPropertyParser",
@@ -1618,10 +1642,7 @@ export const objectPropertyParser: Parser<ObjectProperty> = memo(
           key,
           value: {
             type: "unionType",
-            types: [
-              ...value.types,
-              { type: "primitiveType", value: "null" },
-            ],
+            types: [...value.types, { type: "primitiveType", value: "null" }],
           },
         },
         result.rest,
@@ -1658,25 +1679,23 @@ export const taggedObjectPropertyParser: Parser<ObjectProperty> = memo(
   (input: string): ParserResult<ObjectProperty> => {
     const parser = seqC(
       capture(
-        many1(
-          seqC(
-            captureCaptures(lazy(() => tagParser)),
-            optionalSpacesOrNewline,
-          ),
-        ),
+        many1(seqC(captureCaptures(lazy(() => tagParser)), optionalSpacesOrNewline)),
         "tagWrappers",
       ),
-      capture(lazy(() => objectPropertyParser), "prop"),
+      capture(
+        lazy(() => objectPropertyParser),
+        "prop",
+      ),
     );
     const result = parser(input);
     if (!result.success) return result;
-    const tags = (result.result.tagWrappers as Array<any>).map(
-      (w) => ({ type: "tag", name: w.name, arguments: w.arguments, loc: w.loc }),
-    ) as Tag[];
-    return success(
-      { ...(result.result.prop as ObjectProperty), tags },
-      result.rest,
-    );
+    const tags = (result.result.tagWrappers as Array<any>).map((w) => ({
+      type: "tag",
+      name: w.name,
+      arguments: w.arguments,
+      loc: w.loc,
+    })) as Tag[];
+    return success({ ...(result.result.prop as ObjectProperty), tags }, result.rest);
   },
 );
 
@@ -1718,11 +1737,7 @@ const triviaEntry: Parser<TriviaEntry> = seqC(
  *  follows. Unlike the complete-construct case, the list's own `many(...)`
  *  loop does not consume that layout, so the entry must. */
 const trailingLineCommentEntry: Parser<LineComment> = map(
-  seqC(
-    optionalSpaces,
-    capture(lineCommentCore, "comment"),
-    optionalSpacesOrNewline,
-  ),
+  seqC(optionalSpaces, capture(lineCommentCore, "comment"), optionalSpacesOrNewline),
   (result: { comment: LineComment }) => result.comment,
 );
 
@@ -1730,10 +1745,8 @@ const trailingLineCommentEntry: Parser<LineComment> = map(
 // the trailing delimiter (`delimiter`) after it. A `//` comment is attached
 // only when the item AND its delimiter stayed on one line, so
 // `first, \n // about second` still belongs to `second`.
-const itemEntryAfterDelimiter = <T>(
-  itemParser: Parser<T>,
-  delimiter: Parser<unknown>,
-): Parser<ItemEntry<T>> =>
+const itemEntryAfterDelimiter =
+  <T>(itemParser: Parser<T>, delimiter: Parser<unknown>): Parser<ItemEntry<T>> =>
   (input: string): ParserResult<ItemEntry<T>> => {
     const item = itemParser(input);
     if (!item.success) {
@@ -1764,10 +1777,8 @@ const itemEntryAfterDelimiter = <T>(
  *  `property // comment` (comment before the newline delimiter) and
  *  `property, // comment` (comment after a punctuation delimiter) are
  *  legal, so this policy tries the comment on both sides. */
-const objectMemberEntry = <T>(
-  itemParser: Parser<T>,
-  delimiter: Parser<unknown>,
-): Parser<ItemEntry<T>> =>
+const objectMemberEntry =
+  <T>(itemParser: Parser<T>, delimiter: Parser<unknown>): Parser<ItemEntry<T>> =>
   (input: string): ParserResult<ItemEntry<T>> => {
     const item = itemParser(input);
     if (!item.success) {
@@ -1797,10 +1808,7 @@ const objectMemberEntry = <T>(
       return separated as ParserResult<ItemEntry<T>>;
     }
 
-    if (
-      consumedLineEnding(input, item.rest) ||
-      spanCrossesLine(item.rest, separated.rest)
-    ) {
+    if (consumedLineEnding(input, item.rest) || spanCrossesLine(item.rest, separated.rest)) {
       return success({ kind: "item", item: item.result }, separated.rest);
     }
 
@@ -1870,11 +1878,7 @@ type CommaListPolicy = {
 /** Look ahead past trivia to the closer, without consuming anything. */
 const closerAhead = (closer: string) =>
   peek(
-    seqR(
-      optionalSpacesOrNewline,
-      many(seqR(literalTrivia, optionalSpacesOrNewline)),
-      char(closer),
-    ),
+    seqR(optionalSpacesOrNewline, many(seqR(literalTrivia, optionalSpacesOrNewline)), char(closer)),
   );
 
 /** The separator between two items. In `reject` mode a comma must be
@@ -1882,8 +1886,7 @@ const closerAhead = (closer: string) =>
  *  dropping the empty slot. */
 function commaListDelimiter(policy: CommaListPolicy): Parser<unknown> {
   const ahead = closerAhead(policy.closer);
-  const comma =
-    policy.trailingComma === "allow" ? char(",") : seqR(char(","), not(ahead));
+  const comma = policy.trailingComma === "allow" ? char(",") : seqR(char(","), not(ahead));
   return seqR(optionalSpacesOrNewline, or(comma, ahead), optionalSpacesOrNewline);
 }
 
@@ -1896,10 +1899,7 @@ function commaDelimitedList<T>(
   policy: CommaListPolicy,
 ): Parser<ParsedList<T>> {
   const entries = many(
-    or(
-      triviaEntry,
-      itemEntryAfterDelimiter(itemParser, commaListDelimiter(policy)),
-    ),
+    or(triviaEntry, itemEntryAfterDelimiter(itemParser, commaListDelimiter(policy))),
   );
   return (input: string) => {
     const parsed = entries(input);
@@ -1963,11 +1963,7 @@ const OBJECT_PATTERN_LIST: CommaListPolicy = {
 
 /** `commaDelimitedList` shaped for `captureCaptures`: lifts the items and
  *  their trivia into the parent under the two given field names. */
-function commaDelimitedListCaptures<
-  T,
-  ItemsKey extends string,
-  TriviaKey extends string,
->(
+function commaDelimitedListCaptures<T, ItemsKey extends string, TriviaKey extends string>(
   itemParser: Parser<T>,
   policy: CommaListPolicy,
   itemsKey: ItemsKey,
@@ -1998,9 +1994,7 @@ export function remapListTrivia(
   }
 
   const sourceItemCount = canonicalSourceIndexes.length;
-  const sortedIndexes = [...canonicalSourceIndexes].sort(
-    (left, right) => left - right,
-  );
+  const sortedIndexes = [...canonicalSourceIndexes].sort((left, right) => left - right);
   const isPermutation = sortedIndexes.every(
     (sourceIndex, expectedIndex) => sourceIndex === expectedIndex,
   );
@@ -2020,19 +2014,14 @@ export function remapListTrivia(
     }
     const anchorIndex = sourceToCanonical[entry.anchorIndex];
     if (anchorIndex === undefined) {
-      throw new Error(
-        `list trivia has invalid source anchor ${entry.anchorIndex}`,
-      );
+      throw new Error(`list trivia has invalid source anchor ${entry.anchorIndex}`);
     }
     return { ...entry, anchorIndex };
   });
 }
 
 const objectMember = objectMemberEntry(
-  or(
-    taggedObjectPropertyParser,
-    objectPropertyParser,
-  ),
+  or(taggedObjectPropertyParser, objectPropertyParser),
   optional(objectPropertyDelimiter),
 );
 
@@ -2051,9 +2040,7 @@ export const objectTypeParser: Parser<ObjectType> = memo(
       optionalSpacesOrNewline,
     ),
     (r) => {
-      const { items, trivia } = partitionTrivia(
-        r.entries as InterleavedEntry<ObjectProperty>[],
-      );
+      const { items, trivia } = partitionTrivia(r.entries as InterleavedEntry<ObjectProperty>[]);
       const objectType: ObjectType = { type: "objectType", properties: items };
       if (trivia) {
         objectType.trivia = trivia;
@@ -2091,11 +2078,7 @@ export const intersectionItemParser: Parser<VariableType> = memo(
   ),
 );
 
-const ampersand = seqR(
-  optionalSpacesOrNewline,
-  str("&"),
-  optionalSpacesOrNewline,
-);
+const ampersand = seqR(optionalSpacesOrNewline, str("&"), optionalSpacesOrNewline);
 
 /**
  * One precedence level below union items: `&` binds tighter than `|`
@@ -2106,9 +2089,7 @@ const ampersand = seqR(
 export const intersectionTypeParser: Parser<VariableType> = map(
   sepBy1(ampersand, intersectionItemParser),
   (members): VariableType =>
-    members.length === 1
-      ? members[0]
-      : { type: "intersectionType", types: members },
+    members.length === 1 ? members[0] : { type: "intersectionType", types: members },
 );
 
 // Union items are intersection EXPRESSIONS: this is what makes
@@ -2120,9 +2101,7 @@ export const unionItemParser: Parser<VariableType> = memo(
 
 const pipe = seqR(optionalSpacesOrNewline, str("|"), optionalSpacesOrNewline);
 
-export const _unionTypeParser: Parser<UnionType> = (
-  input: string,
-): ParserResult<UnionType> => {
+export const _unionTypeParser: Parser<UnionType> = (input: string): ParserResult<UnionType> => {
   const parser = seqC(
     set("type", "unionType"),
     optional(pipe),
@@ -2142,10 +2121,7 @@ export const _unionTypeParser: Parser<UnionType> = (
   return result;
 };
 
-export const unionTypeParser: Parser<UnionType> = memo(
-  "unionTypeParser",
-  _unionTypeParser,
-);
+export const unionTypeParser: Parser<UnionType> = memo("unionTypeParser", _unionTypeParser);
 
 // An item inside an effect-set literal `<...>`: a namespaced label
 // (`std::read`) is unambiguously a literal effect → StringLiteralType. A
@@ -2177,26 +2153,14 @@ const effectSetItemParser: Parser<VariableType> = (input: string) => {
 export const effectSetLiteralParser: Parser<VariableType> = memo(
   "effectSetLiteralParser",
   (input: string): ParserResult<VariableType> => {
-    const star = seqC(
-      char("<"),
-      optionalSpaces,
-      char("*"),
-      optionalSpaces,
-      char(">"),
-    )(input);
+    const star = seqC(char("<"), optionalSpaces, char("*"), optionalSpaces, char(">"))(input);
     if (star.success) {
-      return success(
-        { type: "primitiveType", value: "any" } as PrimitiveType,
-        star.rest,
-      );
+      return success({ type: "primitiveType", value: "any" } as PrimitiveType, star.rest);
     }
     const parser = seqC(
       char("<"),
       optionalSpaces,
-      capture(
-        sepBy(seqR(optionalSpaces, char(","), optionalSpaces), effectSetItemParser),
-        "types",
-      ),
+      capture(sepBy(seqR(optionalSpaces, char(","), optionalSpaces), effectSetItemParser), "types"),
       optionalSpaces,
       char(">"),
     );
@@ -2217,25 +2181,27 @@ export const effectSetLiteralParser: Parser<VariableType> = memo(
 // Params may be named or unnamed: (userMsg: string) -> string, (string) -> string.
 // Both `->` (preferred, matches inline-block lambda syntax) and `=>` (legacy)
 // are accepted; the formatter rewrites `=>` to `->` on next save.
-const blockTypeParam: Parser<{ name: string; typeAnnotation: VariableType }> =
-  or(
-    // Named param: `ident : type`. Try this alternative first — once we
-    // see `ident :` we're committed (no other grammar produces that shape
-    // inside a block-type param list). `seqC` + `capture` already yields
-    // `{ name, typeAnnotation }`, no `map` wrapper needed.
-    seqC(
-      capture(many1WithJoin(varNameChar), "name"),
-      optionalSpaces,
-      char(":"),
-      optionalSpaces,
-      capture(lazy(() => variableTypeParser), "typeAnnotation"),
-    ) as Parser<{ name: string; typeAnnotation: VariableType }>,
-    // Unnamed (legacy): bare type. The AST keeps `name: ""` as a marker.
-    map(
+const blockTypeParam: Parser<{ name: string; typeAnnotation: VariableType }> = or(
+  // Named param: `ident : type`. Try this alternative first — once we
+  // see `ident :` we're committed (no other grammar produces that shape
+  // inside a block-type param list). `seqC` + `capture` already yields
+  // `{ name, typeAnnotation }`, no `map` wrapper needed.
+  seqC(
+    capture(many1WithJoin(varNameChar), "name"),
+    optionalSpaces,
+    char(":"),
+    optionalSpaces,
+    capture(
       lazy(() => variableTypeParser),
-      (t) => ({ name: "", typeAnnotation: t }),
+      "typeAnnotation",
     ),
-  );
+  ) as Parser<{ name: string; typeAnnotation: VariableType }>,
+  // Unnamed (legacy): bare type. The AST keeps `name: ""` as a marker.
+  map(
+    lazy(() => variableTypeParser),
+    (t) => ({ name: "", typeAnnotation: t }),
+  ),
+);
 
 export const blockTypeParser: Parser<BlockType> = memo(
   "blockTypeParser",
@@ -2244,19 +2210,16 @@ export const blockTypeParser: Parser<BlockType> = memo(
       set("type", "blockType"),
       char("("),
       optionalSpaces,
-      capture(
-        sepBy(
-          seqR(optionalSpaces, char(","), optionalSpaces),
-          blockTypeParam,
-        ),
-        "params",
-      ),
+      capture(sepBy(seqR(optionalSpaces, char(","), optionalSpaces), blockTypeParam), "params"),
       optionalSpaces,
       char(")"),
       optionalSpaces,
       or(str("->"), str("=>")),
       optionalSpaces,
-      capture(lazy(() => variableTypeParser), "returnType"),
+      capture(
+        lazy(() => variableTypeParser),
+        "returnType",
+      ),
       optionalSpaces,
       capture(optional(lazy(() => raisesClauseParser)), "raises"),
     );
@@ -2270,9 +2233,7 @@ export const blockTypeParser: Parser<BlockType> = memo(
           typeAnnotation: VariableType;
         }[],
         returnType: result.result.returnType,
-        ...((result.result as any).raises
-          ? { raises: (result.result as any).raises }
-          : {}),
+        ...((result.result as any).raises ? { raises: (result.result as any).raises } : {}),
       },
       result.rest,
     );
@@ -2287,24 +2248,37 @@ export const resultTypeParser: Parser<ResultType> = memo(
       set("type", "resultType"),
       str("Result"),
       char("<"),
-      captureCaptures(seqC(
-        capture(lazy(() => variableTypeParser), "successType"),
-        optionalSpaces,
-        char(","),
-        optionalSpaces,
-        capture(lazy(() => variableTypeParser), "failureType"),
-        char(">"),
-      )),
+      captureCaptures(
+        seqC(
+          capture(
+            lazy(() => variableTypeParser),
+            "successType",
+          ),
+          optionalSpaces,
+          char(","),
+          optionalSpaces,
+          capture(
+            lazy(() => variableTypeParser),
+            "failureType",
+          ),
+          char(">"),
+        ),
+      ),
     ),
     // Result<SuccessType> — single type param (sugar for Result<SuccessType, string>)
     seqC(
       set("type", "resultType"),
       str("Result"),
       char("<"),
-      captureCaptures(seqC(
-        capture(lazy(() => variableTypeParser), "successType"),
-        char(">"),
-      )),
+      captureCaptures(
+        seqC(
+          capture(
+            lazy(() => variableTypeParser),
+            "successType",
+          ),
+          char(">"),
+        ),
+      ),
       set("failureType", { type: "primitiveType", value: "string" }),
     ),
     // Bare Result (sugar for Result<any, any>)
@@ -2321,10 +2295,15 @@ export const resultTypeParser: Parser<ResultType> = memo(
       set("type", "resultType"),
       str("Success"),
       char("<"),
-      captureCaptures(seqC(
-        capture(lazy(() => variableTypeParser), "successType"),
-        char(">"),
-      )),
+      captureCaptures(
+        seqC(
+          capture(
+            lazy(() => variableTypeParser),
+            "successType",
+          ),
+          char(">"),
+        ),
+      ),
       set("failureType", { type: "primitiveType", value: "any" }),
     ),
     // Bare Success (sugar for Result<any, any>)
@@ -2340,10 +2319,15 @@ export const resultTypeParser: Parser<ResultType> = memo(
       set("type", "resultType"),
       str("Failure"),
       char("<"),
-      captureCaptures(seqC(
-        capture(lazy(() => variableTypeParser), "failureType"),
-        char(">"),
-      )),
+      captureCaptures(
+        seqC(
+          capture(
+            lazy(() => variableTypeParser),
+            "failureType",
+          ),
+          char(">"),
+        ),
+      ),
       set("successType", { type: "primitiveType", value: "any" }),
     ),
     // Bare Failure (sugar for Result<any, any>)
@@ -2429,7 +2413,10 @@ export const typeParamParser: Parser<TypeParam> = memo(
           optionalSpaces,
           char("="),
           optionalSpaces,
-          capture(lazy(() => variableTypeParser), "default"),
+          capture(
+            lazy(() => variableTypeParser),
+            "default",
+          ),
         ),
       ),
     ),
@@ -2451,14 +2438,20 @@ export const valueParamParser: Parser<ValueParam> = memo(
     optionalSpaces,
     char(":"),
     optionalSpaces,
-    capture(lazy(() => variableTypeParser), "type"),
+    capture(
+      lazy(() => variableTypeParser),
+      "type",
+    ),
     optional(
       captureCaptures(
         seqC(
           optionalSpaces,
           char("="),
           optionalSpaces,
-          capture(lazy(() => staticTagArgParser), "default"),
+          capture(
+            lazy(() => staticTagArgParser),
+            "default",
+          ),
         ),
       ),
     ),
@@ -2474,66 +2467,62 @@ export const valueParamParser: Parser<ValueParam> = memo(
  * both. Making it optional would also accept `type A number`, which is
  * currently a targeted parse error and is relied on well beyond this parser.
  */
-const baseTypeAliasParserFor = (keyword: string, separator: Parser<unknown>) => withLoc(memo(
-  `typeAliasParser:${keyword}`,
-  seqC(
-    set("type", "typeAlias"),
-    str(keyword),
-    spaces,
-    captureCaptures(
-      parseError(
-        "expected a statement of the form `type Foo = X' where X can be a union, array, object, type alias, or primitive type`",
-        capture(many1WithJoin(varNameChar), "aliasName"),
-        // Optional `<T, U = Default, ...>`. When absent, no `typeParams`
-        // capture is set, so non-generic aliases keep their existing shape.
-        optional(
-          captureCaptures(
-            seqC(
-              char("<"),
-              optionalSpaces,
-              capture(
-                sepBy1(
-                  seqR(optionalSpaces, char(","), optionalSpaces),
-                  typeParamParser,
+const baseTypeAliasParserFor = (keyword: string, separator: Parser<unknown>) =>
+  withLoc(
+    memo(
+      `typeAliasParser:${keyword}`,
+      seqC(
+        set("type", "typeAlias"),
+        str(keyword),
+        spaces,
+        captureCaptures(
+          parseError(
+            "expected a statement of the form `type Foo = X' where X can be a union, array, object, type alias, or primitive type`",
+            capture(many1WithJoin(varNameChar), "aliasName"),
+            // Optional `<T, U = Default, ...>`. When absent, no `typeParams`
+            // capture is set, so non-generic aliases keep their existing shape.
+            optional(
+              captureCaptures(
+                seqC(
+                  char("<"),
+                  optionalSpaces,
+                  capture(
+                    sepBy1(seqR(optionalSpaces, char(","), optionalSpaces), typeParamParser),
+                    "typeParams",
+                  ),
+                  optionalSpaces,
+                  char(">"),
                 ),
-                "typeParams",
               ),
-              optionalSpaces,
-              char(">"),
             ),
+            // Optional `(name: T, name: T = default, ...)`. Must come AFTER the
+            // optional `<...>` block: reversed ordering `(...)<...>` is rejected
+            // because nothing here consumes a `<` before the `=`.
+            optional(
+              captureCaptures(
+                seqC(
+                  char("("),
+                  optionalSpaces,
+                  capture(
+                    sepBy1(seqR(optionalSpaces, char(","), optionalSpaces), valueParamParser),
+                    "valueParams",
+                  ),
+                  optionalSpaces,
+                  char(")"),
+                ),
+              ),
+            ),
+            optionalSpaces,
+            separator,
+            optionalSpaces,
+            capture(variableTypeParser, "aliasedType"),
+            optionalSemicolon,
+            optionalSpacesOrNewline,
           ),
         ),
-        // Optional `(name: T, name: T = default, ...)`. Must come AFTER the
-        // optional `<...>` block: reversed ordering `(...)<...>` is rejected
-        // because nothing here consumes a `<` before the `=`.
-        optional(
-          captureCaptures(
-            seqC(
-              char("("),
-              optionalSpaces,
-              capture(
-                sepBy1(
-                  seqR(optionalSpaces, char(","), optionalSpaces),
-                  valueParamParser,
-                ),
-                "valueParams",
-              ),
-              optionalSpaces,
-              char(")"),
-            ),
-          ),
-        ),
-        optionalSpaces,
-        separator,
-        optionalSpaces,
-        capture(variableTypeParser, "aliasedType"),
-        optionalSemicolon,
-        optionalSpacesOrNewline,
       ),
     ),
-  ),
-));
-
+  );
 
 /**
  * `interface Foo extends Bar { ... }` is a shape models write constantly.
@@ -2574,20 +2563,18 @@ const baseTypeAliasParser: Parser<TypeAlias> = or(
   baseTypeAliasParserFor("interface", succeed(undefined)),
 );
 
-export const typeAliasParser: Parser<TypeAlias> = label("a type alias",
-  (input: string) => {
-    const exportResult = exportKeywordParser(input);
-    if (!exportResult.success) return exportResult;
-    const isExported = exportResult.result;
+export const typeAliasParser: Parser<TypeAlias> = label("a type alias", (input: string) => {
+  const exportResult = exportKeywordParser(input);
+  if (!exportResult.success) return exportResult;
+  const isExported = exportResult.result;
 
-    const baseResult = baseTypeAliasParser(exportResult.rest);
-    if (!baseResult.success) return baseResult;
+  const baseResult = baseTypeAliasParser(exportResult.rest);
+  if (!baseResult.success) return baseResult;
 
-    const result = { ...baseResult.result };
-    if (isExported) result.exported = true;
-    return { ...baseResult, result };
-  },
-);
+  const result = { ...baseResult.result };
+  if (isExported) result.exported = true;
+  return { ...baseResult, result };
+});
 
 // `effectSet X = <...>` — declares a named effect set. Lowers to a
 // `typeAlias` AST node flagged `isEffectSet: true`, so it rides the existing
@@ -2657,10 +2644,7 @@ export const effectDeclParser: Parser<EffectDeclaration> = label(
 // =============================================================================
 
 export const keywordParser: Parser<Keyword> = (input) => {
-  const parser = seqC(
-    capture(or(...keywords.map(str)), "keyword"),
-    optionalSemicolon,
-  );
+  const parser = seqC(capture(or(...keywords.map(str)), "keyword"), optionalSemicolon);
   const result = parser(input);
   if (!result.success) {
     return result;
@@ -2673,16 +2657,18 @@ export const keywordParser: Parser<Keyword> = (input) => {
 // debuggerStatement.ts
 // =============================================================================
 
-export const debuggerParser: Parser<DebuggerStatement> = withLoc(seqC(
-  set("type", "debuggerStatement"),
-  set("isUserAdded", true),
-  str("debugger"),
-  char("("),
-  optional(capture(map(quotedString, removeQuotes), "label")),
-  char(")"),
-  optionalSemicolon,
-  optionalSpacesOrNewline,
-));
+export const debuggerParser: Parser<DebuggerStatement> = withLoc(
+  seqC(
+    set("type", "debuggerStatement"),
+    set("isUserAdded", true),
+    str("debugger"),
+    char("("),
+    optional(capture(map(quotedString, removeQuotes), "label")),
+    char(")"),
+    optionalSemicolon,
+    optionalSpacesOrNewline,
+  ),
+);
 
 // =============================================================================
 // skill.ts
@@ -2714,9 +2700,7 @@ export function _skillParser(input: string): ParserResult<Skill> {
   return result;
 }
 
-export function _skillParserWithDescription(
-  input: string,
-): ParserResult<Skill> {
+export function _skillParserWithDescription(input: string): ParserResult<Skill> {
   const parser = trace(
     "skillParser",
     seqC(
@@ -2796,10 +2780,7 @@ const _identOrPfaParser: Parser<Expression> = (input: string) => {
   // and `(get()).partial(...)` are NOT static — they call a function at
   // runtime to compute the receiver. PFA must be rooted at an identifier
   // (typically a top-level validator function in scope).
-  if (
-    result.result.type === "valueAccess" &&
-    result.result.base.type !== "variableName"
-  ) {
+  if (result.result.type === "valueAccess" && result.result.base.type !== "variableName") {
     return failure(
       "PFA base must be a plain identifier (e.g. `min.partial(n: 0)`, not `min(1).partial(...)`)",
       input,
@@ -2859,10 +2840,7 @@ const _tagParserInner = memo(
     set("type", "tag"),
     char("@"),
     capture(many1WithJoin(varNameChar), "name"),
-    capture(
-      or(tagArgsList, succeed([] as Expression[])),
-      "arguments",
-    ),
+    capture(or(tagArgsList, succeed([] as Expression[])), "arguments"),
     optionalSemicolon,
   ),
 );
@@ -2876,7 +2854,10 @@ export const tagParser = label("a tag", withLoc(_tagParserInner));
 export const splatParser: Parser<SplatExpression> = seqC(
   set("type", "splat"),
   str("..."),
-  capture(lazy(() => exprParser), "value"),
+  capture(
+    lazy(() => exprParser),
+    "value",
+  ),
 );
 
 // The delimiter after each literal item: a comma is REQUIRED between
@@ -2892,15 +2873,7 @@ export const splatParser: Parser<SplatExpression> = seqC(
 const literalDelimiter = (closer: string) =>
   seqR(
     optionalSpacesOrNewline,
-    or(
-      char(","),
-      peek(
-        seqR(
-          many(seqR(literalTrivia, optionalSpacesOrNewline)),
-          char(closer),
-        ),
-      ),
-    ),
+    or(char(","), peek(seqR(many(seqR(literalTrivia, optionalSpacesOrNewline)), char(closer)))),
     optionalSpacesOrNewline,
   );
 
@@ -2914,7 +2887,13 @@ export const agencyArrayParser: Parser<AgencyArray> = memo(
         many(
           or(
             triviaEntry,
-            itemEntryAfterDelimiter(or(splatParser, lazy(() => exprParser)), literalDelimiter("]")),
+            itemEntryAfterDelimiter(
+              or(
+                splatParser,
+                lazy(() => exprParser),
+              ),
+              literalDelimiter("]"),
+            ),
           ),
         ),
         "entries",
@@ -3077,79 +3056,109 @@ function extractInlineBlock(
   existingBlock: BlockArgument | undefined,
   input: string,
   trivia?: ListTrivia[],
-): { success: true; arguments: FunctionCall["arguments"]; block?: BlockArgument; trivia?: ListTrivia[] } | { success: false; error: ParserResult<any> } {
+):
+  | {
+      success: true;
+      arguments: FunctionCall["arguments"];
+      block?: BlockArgument;
+      trivia?: ListTrivia[];
+    }
+  | { success: false; error: ParserResult<any> } {
   const inlineBlocks = args.filter((a): a is BlockArgument => a.type === "blockArgument");
   if (inlineBlocks.length > 1) {
-    return { success: false, error: failure("A function call cannot have more than one block argument", input) };
+    return {
+      success: false,
+      error: failure("A function call cannot have more than one block argument", input),
+    };
   }
   if (inlineBlocks.length === 1) {
     if (existingBlock) {
-      return { success: false, error: failure("A function call cannot have both an inline block and a trailing 'as' block", input) };
+      return {
+        success: false,
+        error: failure(
+          "A function call cannot have both an inline block and a trailing 'as' block",
+          input,
+        ),
+      };
     }
     // The block prints last regardless of where it was written, so canonical
     // order is every other argument followed by the block. Trivia anchors
     // move with it.
     const blockIndex = args.findIndex((a) => a.type === "blockArgument");
-    const ordinaryIndexes = args
-      .map((_, index) => index)
-      .filter((index) => index !== blockIndex);
+    const ordinaryIndexes = args.map((_, index) => index).filter((index) => index !== blockIndex);
     return {
       success: true,
-      arguments: args.filter((a): a is Exclude<ArgWithBlock, BlockArgument> => a.type !== "blockArgument"),
+      arguments: args.filter(
+        (a): a is Exclude<ArgWithBlock, BlockArgument> => a.type !== "blockArgument",
+      ),
       block: inlineBlocks[0],
       trivia: remapListTrivia(trivia, [...ordinaryIndexes, blockIndex]),
     };
   }
-  return { success: true, arguments: args as FunctionCall["arguments"], block: existingBlock, trivia };
+  return {
+    success: true,
+    arguments: args as FunctionCall["arguments"],
+    block: existingBlock,
+    trivia,
+  };
 }
 
 type ArgWithBlock = Expression | SplatExpression | NamedArgument | BlockArgument;
 
 type FunctionCallWithBlock = Omit<FunctionCall, "arguments"> & {
-  arguments: ArgWithBlock[]
-}
+  arguments: ArgWithBlock[];
+};
 
-export const _functionCallParser: Parser<FunctionCall> = memo("_functionCallParser", (input: string) => {
-  const parser: Parser<FunctionCallWithBlock> = seqC(
-    set("type", "functionCall"),
-    capture(many1WithJoin(varNameChar), "functionName"),
-    captureCaptures(argumentListParser),
-    optionalSpaces,
-    optional(
-      captureCaptures(
-        seqC(
-          capture(lazy(() => blockArgumentParser), "block"),
+export const _functionCallParser: Parser<FunctionCall> = memo(
+  "_functionCallParser",
+  (input: string) => {
+    const parser: Parser<FunctionCallWithBlock> = seqC(
+      set("type", "functionCall"),
+      capture(many1WithJoin(varNameChar), "functionName"),
+      captureCaptures(argumentListParser),
+      optionalSpaces,
+      optional(
+        captureCaptures(
+          seqC(
+            capture(
+              lazy(() => blockArgumentParser),
+              "block",
+            ),
+          ),
         ),
       ),
-    ),
-    optionalSemicolon,
-    optionalSpacesOrNewline
-  );
-  const result = parser(input);
-  if (!result.success) return result;
+      optionalSemicolon,
+      optionalSpacesOrNewline,
+    );
+    const result = parser(input);
+    if (!result.success) return result;
 
-  const funcCall = result.result;
-  const extracted = extractInlineBlock(
-    funcCall.arguments,
-    funcCall.block,
-    input,
-    funcCall.argumentTrivia,
-  );
-  if (!extracted.success) return extracted.error;
-  funcCall.arguments = extracted.arguments;
-  funcCall.block = extracted.block;
-  // Conditional so a trivia-free call has no `argumentTrivia` key at all,
-  // matching every other trivia owner and keeping exact-shape AST
-  // comparisons clean.
-  if (extracted.trivia) {
-    funcCall.argumentTrivia = extracted.trivia;
-  }
+    const funcCall = result.result;
+    const extracted = extractInlineBlock(
+      funcCall.arguments,
+      funcCall.block,
+      input,
+      funcCall.argumentTrivia,
+    );
+    if (!extracted.success) return extracted.error;
+    funcCall.arguments = extracted.arguments;
+    funcCall.block = extracted.block;
+    // Conditional so a trivia-free call has no `argumentTrivia` key at all,
+    // matching every other trivia owner and keeping exact-shape AST
+    // comparisons clean.
+    if (extracted.trivia) {
+      funcCall.argumentTrivia = extracted.trivia;
+    }
 
-  return result as ParserResult<FunctionCall>;
-});
+    return result as ParserResult<FunctionCall>;
+  },
+);
 
 // functionCallParser is now just _functionCallParser (no async/sync wrappers - handled by valueAccessParser)
-export const functionCallParser: Parser<FunctionCall> = label("a function call", _functionCallParser);
+export const functionCallParser: Parser<FunctionCall> = label(
+  "a function call",
+  _functionCallParser,
+);
 
 // =============================================================================
 // access.ts
@@ -3162,9 +3171,7 @@ const dotParser: Parser<boolean> = or(
 );
 
 // Parse a single chain element: .method(), ?.method(), .property, ?.property, [index], ?.[index]
-const dotMethodCallParser = (
-  input: string,
-): ParserResult<AccessChainElement> => {
+const dotMethodCallParser = (input: string): ParserResult<AccessChainElement> => {
   const dotResult = dotParser(input);
   if (!dotResult.success) return failure("expected dot", input);
   const optional = dotResult.result;
@@ -3174,7 +3181,11 @@ const dotMethodCallParser = (
   const fcResult = _functionCallParser(afterDot);
   if (fcResult.success) {
     return success(
-      { kind: "methodCall" as const, functionCall: fcResult.result, ...(optional && { optional: true }) },
+      {
+        kind: "methodCall" as const,
+        functionCall: fcResult.result,
+        ...(optional && { optional: true }),
+      },
       fcResult.rest,
     );
   }
@@ -3183,7 +3194,11 @@ const dotMethodCallParser = (
   const nameResult = variableNameParser(afterDot);
   if (nameResult.success) {
     return success(
-      { kind: "property" as const, name: nameResult.result.value, ...(optional && { optional: true }) },
+      {
+        kind: "property" as const,
+        name: nameResult.result.value,
+        ...(optional && { optional: true }),
+      },
       nameResult.rest,
     );
   }
@@ -3246,7 +3261,6 @@ const startOfLineContent: Parser<null> = (input: string) => {
     : failure("not at the start of a line", input);
 };
 
-
 const sliceChainParser: Parser<AccessChainElement> = (input: string) => {
   const parser = seqC(
     not(startOfLineContent),
@@ -3274,14 +3288,21 @@ const indexChainParser: Parser<AccessChainElement> = (input: string) => {
     not(startOfLineContent),
     capture(bracketParser, "optional"),
     optionalSpaces,
-    capture(lazy(() => exprParser), "index"),
+    capture(
+      lazy(() => exprParser),
+      "index",
+    ),
     optionalSpaces,
     char("]"),
   );
   const result = parser(input);
   if (!result.success) return result;
   return success(
-    { kind: "index" as const, index: result.result.index, ...(result.result.optional && { optional: true }) },
+    {
+      kind: "index" as const,
+      index: result.result.index,
+      ...(result.result.optional && { optional: true }),
+    },
     result.rest,
   );
 };
@@ -3304,17 +3325,21 @@ const callChainParser: Parser<AccessChainElement> = (input: string) => {
   if (!extracted.success) return extracted.error;
 
   return success(
-    { kind: "call" as const, arguments: extracted.arguments, ...(extracted.block && { block: extracted.block }), ...(extracted.trivia && { argumentTrivia: extracted.trivia }), ...(isOptional && { optional: true }) },
+    {
+      kind: "call" as const,
+      arguments: extracted.arguments,
+      ...(extracted.block && { block: extracted.block }),
+      ...(extracted.trivia && { argumentTrivia: extracted.trivia }),
+      ...(isOptional && { optional: true }),
+    },
     result.rest,
   );
 };
 
-const chainElementParser: Parser<AccessChainElement> = memo("chainElementParser", or(
-  dotMethodCallParser,
-  callChainParser,
-  sliceChainParser,
-  indexChainParser,
-));
+const chainElementParser: Parser<AccessChainElement> = memo(
+  "chainElementParser",
+  or(dotMethodCallParser, callChainParser, sliceChainParser, indexChainParser),
+);
 
 /**
  * Parse `( expr ) chain` as a value-access expression. This is what
@@ -3328,7 +3353,10 @@ const parenAccessParser: Parser<ValueAccess> = map(
   seqC(
     char("("),
     optionalSpaces,
-    capture(lazy(() => exprParser), "base"),
+    capture(
+      lazy(() => exprParser),
+      "base",
+    ),
     optionalSpaces,
     char(")"),
     capture(many1(chainElementParser), "chain"),
@@ -3369,7 +3397,10 @@ const bracketAccessParser: Parser<ValueAccess> = withLoc(
   map(
     seqC(
       capture(
-        or(lazy(() => comprehensionParser), lazy(() => agencyArrayParser)),
+        or(
+          lazy(() => comprehensionParser),
+          lazy(() => agencyArrayParser),
+        ),
         "base",
       ),
       capture(many1(chainElementParser), "chain"),
@@ -3383,59 +3414,55 @@ const bracketAccessParser: Parser<ValueAccess> = withLoc(
   ),
 );
 
-export const _valueAccessParser: Parser<VariableNameLiteral | FunctionCall | ValueAccess> = memo("_valueAccessParser", (
-  input: string,
-): ParserResult<VariableNameLiteral | FunctionCall | ValueAccess> => {
-  // First try the parenthesized form so `(expr).chain` and `(expr)[i]`
-  // work as standalone statements (the bodyParser calls _valueAccessParser
-  // directly, bypassing the exprParser's own paren handling).
-  const parenResult = parenAccessParser(input);
-  if (parenResult.success) return parenResult;
+export const _valueAccessParser: Parser<VariableNameLiteral | FunctionCall | ValueAccess> = memo(
+  "_valueAccessParser",
+  (input: string): ParserResult<VariableNameLiteral | FunctionCall | ValueAccess> => {
+    // First try the parenthesized form so `(expr).chain` and `(expr)[i]`
+    // work as standalone statements (the bodyParser calls _valueAccessParser
+    // directly, bypassing the exprParser's own paren handling).
+    const parenResult = parenAccessParser(input);
+    if (parenResult.success) return parenResult;
 
-  // Schema-with-chain must be tried before the general base parsers:
-  // `schema(number)` also matches _functionCallParser (as a call to an
-  // undefined function named `schema`), which would mis-tag the base.
-  // Call-time reference: schemaAccessParser is defined later in the module,
-  // which is safe inside a function body (the module is fully initialized
-  // before any parse runs) but would TDZ as a module-init value dependency.
-  const schemaResult = schemaAccessParser(input);
-  if (schemaResult.success) return schemaResult;
+    // Schema-with-chain must be tried before the general base parsers:
+    // `schema(number)` also matches _functionCallParser (as a call to an
+    // undefined function named `schema`), which would mis-tag the base.
+    // Call-time reference: schemaAccessParser is defined later in the module,
+    // which is safe inside a function body (the module is fully initialized
+    // before any parse runs) but would TDZ as a module-init value dependency.
+    const schemaResult = schemaAccessParser(input);
+    if (schemaResult.success) return schemaResult;
 
-  const parser = seqC(
-    capture(or(_functionCallParser, variableNameParser), "base"),
-    capture(many(chainElementParser), "chain"),
-  );
-  const result = parser(input);
-  if (!result.success)
-    return failure("expected value access expression", input);
-
-  const base = result.result.base;
-  const chain = result.result.chain;
-
-  if (chain.length === 0) {
-    // No chain, return base directly
-    return success(base, result.rest);
-  } else {
-    // Return ValueAccess with base and chain
-    return success(
-      {
-        type: "valueAccess" as const,
-        base,
-        chain,
-      },
-      result.rest,
+    const parser = seqC(
+      capture(or(_functionCallParser, variableNameParser), "base"),
+      capture(many(chainElementParser), "chain"),
     );
-  }
-});
+    const result = parser(input);
+    if (!result.success) return failure("expected value access expression", input);
+
+    const base = result.result.base;
+    const chain = result.result.chain;
+
+    if (chain.length === 0) {
+      // No chain, return base directly
+      return success(base, result.rest);
+    } else {
+      // Return ValueAccess with base and chain
+      return success(
+        {
+          type: "valueAccess" as const,
+          base,
+          chain,
+        },
+        result.rest,
+      );
+    }
+  },
+);
 
 export const asyncValueAccessParser = (
   input: string,
 ): ParserResult<FunctionCall | ValueAccess | VariableNameLiteral> => {
-  const parser = seqC(
-    str("async"),
-    spaces,
-    capture(_valueAccessParser, "access"),
-  );
+  const parser = seqC(str("async"), spaces, capture(_valueAccessParser, "access"));
   const result = parser(input);
   if (!result.success) return failure("expected async keyword", input);
 
@@ -3445,11 +3472,7 @@ export const asyncValueAccessParser = (
 export const syncValueAccessParser = (
   input: string,
 ): ParserResult<FunctionCall | ValueAccess | VariableNameLiteral> => {
-  const parser = seqC(
-    oneOfStr(["sync", "await"]),
-    spaces,
-    capture(_valueAccessParser, "access"),
-  );
+  const parser = seqC(oneOfStr(["sync", "await"]), spaces, capture(_valueAccessParser, "access"));
   const result = parser(input);
   if (!result.success) return failure("expected sync/await keyword", input);
 
@@ -3459,9 +3482,7 @@ export const syncValueAccessParser = (
 export function valueAccessParser(
   input: string,
 ): ParserResult<VariableNameLiteral | FunctionCall | ValueAccess> {
-  const parser = withLoc(
-    or(asyncValueAccessParser, syncValueAccessParser, _valueAccessParser),
-  );
+  const parser = withLoc(or(asyncValueAccessParser, syncValueAccessParser, _valueAccessParser));
   return parser(input);
 }
 
@@ -3524,8 +3545,18 @@ const unaryVoidParser = unaryKeywordParser("void");
 
 // --- try keyword ---
 // Parses: try functionCall(args) or try obj.method(args)
-const tryExpressionParser: Parser<TryExpression> =
-  seqC(set("type", "tryExpression"), str("try"), spaces, capture(or(lazy(() => valueAccessParser), functionCallParser) as Parser<TryExpression["call"]>, "call"));
+const tryExpressionParser: Parser<TryExpression> = seqC(
+  set("type", "tryExpression"),
+  str("try"),
+  spaces,
+  capture(
+    or(
+      lazy(() => valueAccessParser),
+      functionCallParser,
+    ) as Parser<TryExpression["call"]>,
+    "call",
+  ),
+);
 
 // Parses: new ClassName(args)
 export const newExpressionParser: Parser<NewExpression> = (input: string) => {
@@ -3537,7 +3568,10 @@ export const newExpressionParser: Parser<NewExpression> = (input: string) => {
     char("("),
     optionalSpaces,
     capture(
-      sepBy(comma, lazy(() => exprParser)),
+      sepBy(
+        comma,
+        lazy(() => exprParser),
+      ),
       "arguments",
     ),
     optionalSpaces,
@@ -3546,7 +3580,11 @@ export const newExpressionParser: Parser<NewExpression> = (input: string) => {
   const result = parser(input);
   if (!result.success) return failure("expected 'new ClassName(args)'", input);
   return success(
-    { type: "newExpression" as const, className: result.result.className, arguments: result.result.arguments },
+    {
+      type: "newExpression" as const,
+      className: result.result.className,
+      arguments: result.result.arguments,
+    },
     result.rest,
   );
 };
@@ -3584,24 +3622,26 @@ export const schemaExpressionParser: Parser<SchemaExpression> = memo(
  */
 export const schemaAccessParser: Parser<ValueAccess> = memo(
   "schemaAccessParser",
-  withLoc(map(
-    seqC(
-      capture(schemaExpressionParser, "base"),
-      peek(dotParser),
-      captureCaptures(
-        parseError(
-          "expected a method call after schema(...), e.g. schema(number).parseJSON(input)",
-          capture(many1(chainElementParser), "chain"),
+  withLoc(
+    map(
+      seqC(
+        capture(schemaExpressionParser, "base"),
+        peek(dotParser),
+        captureCaptures(
+          parseError(
+            "expected a method call after schema(...), e.g. schema(number).parseJSON(input)",
+            capture(many1(chainElementParser), "chain"),
+          ),
         ),
       ),
+      (result) =>
+        ({
+          type: "valueAccess" as const,
+          base: result.base as unknown as AgencyNode,
+          chain: result.chain,
+        }) as ValueAccess,
     ),
-    (result) =>
-      ({
-        type: "valueAccess" as const,
-        base: result.base as unknown as AgencyNode,
-        chain: result.chain,
-      }) as ValueAccess,
-  )),
+  ),
 );
 
 // =============================================================================
@@ -3647,8 +3687,8 @@ const codeLiteralBodyText: Parser<string> = matchedText(
  *  cycle. Runs INSIDE runNested, so getErrorMessage in the registered
  *  wrapper formats positions in enclosing-file coordinates. */
 let programParserForLiterals:
-  | ((source: string) => { ok: true; nodes: AgencyNode[] } | { ok: false; error: string })
-  | null = null;
+  ((source: string) => { ok: true; nodes: AgencyNode[] } | { ok: false; error: string }) | null =
+  null;
 
 export function registerProgramParserForLiterals(
   fn: (source: string) => { ok: true; nodes: AgencyNode[] } | { ok: false; error: string },
@@ -3657,8 +3697,7 @@ export function registerProgramParserForLiterals(
 }
 
 export type ParsedLiteralBody =
-  | { ok: true; nodes: AgencyNode[]; kind: CodeLiteral["kind"] }
-  | { ok: false; error: string };
+  { ok: true; nodes: AgencyNode[]; kind: CodeLiteral["kind"] } | { ok: false; error: string };
 
 /** Advance a tarsec position over `text` — the whitespace stripped off a
  *  body before the expr/statements attempts still occupies lines. */
@@ -3733,9 +3772,7 @@ export function parseCodeLiteralBody(body: string, base?: Position): ParsedLiter
   const savedOffset = currentTemplateOffset;
   setTemplateOffset(0);
   try {
-    const asExpr = tryAttempt(() =>
-      runNested(exprParser, trimmed, { basePosition: trimmedBase }),
-    );
+    const asExpr = tryAttempt(() => runNested(exprParser, trimmed, { basePosition: trimmedBase }));
     if (asExpr.success && stripSentinels(asExpr.rest).trim() === "") {
       return { ok: true, nodes: [asExpr.result as AgencyNode], kind: "expr" };
     }
@@ -3844,14 +3881,15 @@ const spliceRest: Parser<Splice> = seqC(
   spliceInnerWhitespace,
   // `exprParser` is declared further down this file, so the reference
   // has to be deferred past module init.
-  capture(lazy(() => exprParser), "expression"),
+  capture(
+    lazy(() => exprParser),
+    "expression",
+  ),
   spliceInnerWhitespace,
   str(")"),
 );
 
-export const spliceParser: Parser<Splice> = withLoc(
-  committed(str(SPLICE_OPEN), spliceRest),
-);
+export const spliceParser: Parser<Splice> = withLoc(committed(str(SPLICE_OPEN), spliceRest));
 
 /** Top-level form. Reuses spliceParser and rewrites the position, the same
  *  way topLevelHoleParser rewrites a hole's sort. */
@@ -4023,7 +4061,10 @@ const atomWithIs: Parser<Expression> = (input: string) => {
     str("is"),
     not(varNameChar),
     optionalSpaces,
-    capture(lazy(() => isRhsParser), "pattern"),
+    capture(
+      lazy(() => isRhsParser),
+      "pattern",
+    ),
   )(baseResult.rest);
   if (!isCheck.success) return baseResult;
   return success(
@@ -4040,69 +4081,69 @@ const atomWithIs: Parser<Expression> = (input: string) => {
 // Multi-char operators must come before their single-char prefixes
 // (e.g., *= before *, <= before <).
 
-const _exprParserBase: Parser<Expression> = label("an expression", memo("exprParser", buildExpressionParser<Expression>(
-  atomWithIs,
-  [
-    // Precedence 7: exponentiation
-    [
-      { op: wsOp("**"), assoc: "right" as const, apply: makeBinOp("**") },
-    ],
-    // Precedence 6: multiplicative (and *=, /=)
-    [
-      { op: wsOp("*="), assoc: "right" as const, apply: makeBinOp("*=") },
-      { op: wsOp("/="), assoc: "right" as const, apply: makeBinOp("/=") },
-      { op: wsOp("*"), assoc: "left" as const, apply: makeBinOp("*") },
-      { op: wsOp("/"), assoc: "left" as const, apply: makeBinOp("/") },
-      { op: wsOp("%"), assoc: "left" as const, apply: makeBinOp("%") },
-    ],
-    // Precedence 5: additive (and +=, -=)
-    [
-      { op: wsOp("+="), assoc: "right" as const, apply: makeBinOp("+=") },
-      { op: wsOp("-="), assoc: "right" as const, apply: makeBinOp("-=") },
-      { op: wsOp("+"), assoc: "left" as const, apply: makeBinOp("+") },
-      { op: wsOp("-"), assoc: "left" as const, apply: makeBinOp("-") },
-    ],
-    // Precedence 4: relational
-    [
-      { op: wsKeyword("instanceof"), assoc: "left" as const, apply: makeBinOp("instanceof") },
-      { op: wsKeyword("in"), assoc: "left" as const, apply: makeBinOp("in") },
-      { op: wsOp("<="), assoc: "left" as const, apply: makeBinOp("<=") },
-      { op: wsOp(">="), assoc: "left" as const, apply: makeBinOp(">=") },
-      { op: wsOp("<"), assoc: "left" as const, apply: makeBinOp("<") },
-      { op: wsOp(">"), assoc: "left" as const, apply: makeBinOp(">") },
-    ],
-    // Precedence 3: equality
-    [
-      { op: wsOp("==="), assoc: "left" as const, apply: makeBinOp("===") },
-      { op: wsOp("!=="), assoc: "left" as const, apply: makeBinOp("!==") },
-      { op: wsOp("=~"), assoc: "left" as const, apply: makeBinOp("=~") },
-      { op: wsOp("=="), assoc: "left" as const, apply: makeBinOp("==") },
-      { op: wsOp("!~"), assoc: "left" as const, apply: makeBinOp("!~") },
-      { op: wsOp("!="), assoc: "left" as const, apply: makeBinOp("!=") },
-    ],
-    // Precedence 2: logical AND
-    [
-      { op: wsOp("&&="), assoc: "right" as const, apply: makeBinOp("&&=") },
-      { op: wsOp("&&"), assoc: "left" as const, apply: makeBinOp("&&") },
-    ],
-    // Precedence 1: logical OR, nullish coalescing
-    [
-      { op: wsOp("??="), assoc: "right" as const, apply: makeBinOp("??=") },
-      { op: wsOp("??"), assoc: "left" as const, apply: makeBinOp("??") },
-      { op: wsOp("||="), assoc: "right" as const, apply: makeBinOp("||=") },
-      { op: wsOp("||"), assoc: "left" as const, apply: makeBinOp("||") },
-    ],
-    // Precedence 0: catch (unwrap Result with fallback)
-    [
-      { op: wsKeyword("catch"), assoc: "left" as const, apply: makeBinOp("catch") },
-    ],
-    // Precedence -1 (lowest): pipe
-    [
-      { op: wsOp("|>"), assoc: "left" as const, apply: makeBinOp("|>") },
-    ],
-  ],
-  parenParser,
-)));
+const _exprParserBase: Parser<Expression> = label(
+  "an expression",
+  memo(
+    "exprParser",
+    buildExpressionParser<Expression>(
+      atomWithIs,
+      [
+        // Precedence 7: exponentiation
+        [{ op: wsOp("**"), assoc: "right" as const, apply: makeBinOp("**") }],
+        // Precedence 6: multiplicative (and *=, /=)
+        [
+          { op: wsOp("*="), assoc: "right" as const, apply: makeBinOp("*=") },
+          { op: wsOp("/="), assoc: "right" as const, apply: makeBinOp("/=") },
+          { op: wsOp("*"), assoc: "left" as const, apply: makeBinOp("*") },
+          { op: wsOp("/"), assoc: "left" as const, apply: makeBinOp("/") },
+          { op: wsOp("%"), assoc: "left" as const, apply: makeBinOp("%") },
+        ],
+        // Precedence 5: additive (and +=, -=)
+        [
+          { op: wsOp("+="), assoc: "right" as const, apply: makeBinOp("+=") },
+          { op: wsOp("-="), assoc: "right" as const, apply: makeBinOp("-=") },
+          { op: wsOp("+"), assoc: "left" as const, apply: makeBinOp("+") },
+          { op: wsOp("-"), assoc: "left" as const, apply: makeBinOp("-") },
+        ],
+        // Precedence 4: relational
+        [
+          { op: wsKeyword("instanceof"), assoc: "left" as const, apply: makeBinOp("instanceof") },
+          { op: wsKeyword("in"), assoc: "left" as const, apply: makeBinOp("in") },
+          { op: wsOp("<="), assoc: "left" as const, apply: makeBinOp("<=") },
+          { op: wsOp(">="), assoc: "left" as const, apply: makeBinOp(">=") },
+          { op: wsOp("<"), assoc: "left" as const, apply: makeBinOp("<") },
+          { op: wsOp(">"), assoc: "left" as const, apply: makeBinOp(">") },
+        ],
+        // Precedence 3: equality
+        [
+          { op: wsOp("==="), assoc: "left" as const, apply: makeBinOp("===") },
+          { op: wsOp("!=="), assoc: "left" as const, apply: makeBinOp("!==") },
+          { op: wsOp("=~"), assoc: "left" as const, apply: makeBinOp("=~") },
+          { op: wsOp("=="), assoc: "left" as const, apply: makeBinOp("==") },
+          { op: wsOp("!~"), assoc: "left" as const, apply: makeBinOp("!~") },
+          { op: wsOp("!="), assoc: "left" as const, apply: makeBinOp("!=") },
+        ],
+        // Precedence 2: logical AND
+        [
+          { op: wsOp("&&="), assoc: "right" as const, apply: makeBinOp("&&=") },
+          { op: wsOp("&&"), assoc: "left" as const, apply: makeBinOp("&&") },
+        ],
+        // Precedence 1: logical OR, nullish coalescing
+        [
+          { op: wsOp("??="), assoc: "right" as const, apply: makeBinOp("??=") },
+          { op: wsOp("??"), assoc: "left" as const, apply: makeBinOp("??") },
+          { op: wsOp("||="), assoc: "right" as const, apply: makeBinOp("||=") },
+          { op: wsOp("||"), assoc: "left" as const, apply: makeBinOp("||") },
+        ],
+        // Precedence 0: catch (unwrap Result with fallback)
+        [{ op: wsKeyword("catch"), assoc: "left" as const, apply: makeBinOp("catch") }],
+        // Precedence -1 (lowest): pipe
+        [{ op: wsOp("|>"), assoc: "left" as const, apply: makeBinOp("|>") }],
+      ],
+      parenParser,
+    ),
+  ),
+);
 
 /**
  * `exprParser` plus one refusal: a JavaScript ternary.
@@ -4148,33 +4189,51 @@ export const exprParser: Parser<Expression> = (input: string) => {
 // Wire up the circular reference for parenParser
 _exprParser = exprParser;
 
-export const returnStatementParser: Parser<ReturnStatement> = label("a return statement", withLoc(seqC(
-  set("type", "returnStatement"),
-  str("return"),
-  not(varNameChar),
-  optional(
-    captureCaptures(
-      seqC(
-        optionalSpaces,
-        capture(or(lazy(() => guardBlockParser), lazy(() => matchBlockExprParser), lazy(() => ifExpressionParser), exprParser), "value"),
+export const returnStatementParser: Parser<ReturnStatement> = label(
+  "a return statement",
+  withLoc(
+    seqC(
+      set("type", "returnStatement"),
+      str("return"),
+      not(varNameChar),
+      optional(
+        captureCaptures(
+          seqC(
+            optionalSpaces,
+            capture(
+              or(
+                lazy(() => guardBlockParser),
+                lazy(() => matchBlockExprParser),
+                lazy(() => ifExpressionParser),
+                exprParser,
+              ),
+              "value",
+            ),
+          ),
+        ),
       ),
+      optionalSpaces,
+      optionalSemicolon,
+      optionalSpacesOrNewline,
     ),
   ),
-  optionalSpaces,
-  optionalSemicolon,
-  optionalSpacesOrNewline,
-)));
+);
 
-export const gotoStatementParser: Parser<GotoStatement> = label("a goto statement", withLoc(seqC(
-  set("type", "gotoStatement"),
-  str("goto"),
-  not(varNameChar),
-  optionalSpaces,
-  capture(functionCallParser, "nodeCall"),
-  optionalSpaces,
-  optionalSemicolon,
-  optionalSpacesOrNewline,
-)));
+export const gotoStatementParser: Parser<GotoStatement> = label(
+  "a goto statement",
+  withLoc(
+    seqC(
+      set("type", "gotoStatement"),
+      str("goto"),
+      not(varNameChar),
+      optionalSpaces,
+      capture(functionCallParser, "nodeCall"),
+      optionalSpaces,
+      optionalSemicolon,
+      optionalSpacesOrNewline,
+    ),
+  ),
+);
 
 // =============================================================================
 // interruptStatement.ts
@@ -4183,9 +4242,8 @@ export const gotoStatementParser: Parser<GotoStatement> = label("a goto statemen
 // Namespace identifier: two or more segments separated by "::"
 // e.g. "std::read", "myapp::deploy", "std::http::fetch"
 const namespaceIdentifier: Parser<string> = (input: string) => {
-  const parser = map(
-    sepBy1(str("::"), many1WithJoin(varNameChar)),
-    (segments) => segments.join("::"),
+  const parser = map(sepBy1(str("::"), many1WithJoin(varNameChar)), (segments) =>
+    segments.join("::"),
   );
   const result = parser(input);
   if (!result.success) return result;
@@ -4212,10 +4270,7 @@ const effectIdentifier: Parser<string> = (input: string) => {
   const bare = many1WithJoin(varNameChar)(input);
   if (!bare.success) return bare;
   if (RESERVED_EFFECT_WORDS.includes(bare.result)) {
-    return failure(
-      `'${bare.result}' is a keyword and cannot be used as an effect label`,
-      input,
-    );
+    return failure(`'${bare.result}' is a keyword and cannot be used as an effect label`, input);
   }
   return bare;
 };
@@ -4247,16 +4302,20 @@ const _interruptExprParser: Parser<InterruptStatement> = (input: string) => {
 
 export const interruptExprParser: Parser<InterruptStatement> = withLoc(_interruptExprParser);
 
-export const interruptStatementParser: Parser<InterruptStatement> = label("an interrupt statement", withLoc(
-  (input: string) => {
+export const interruptStatementParser: Parser<InterruptStatement> = label(
+  "an interrupt statement",
+  withLoc((input: string) => {
     const result = _interruptExprParser(input);
     if (!result.success) return result;
     // Consume trailing semicolon/whitespace
     const semiResult = optionalSemicolon(result.rest);
     const wsResult = optionalSpacesOrNewline(semiResult.success ? semiResult.rest : result.rest);
-    return success(result.result, wsResult.success ? wsResult.rest : (semiResult.success ? semiResult.rest : result.rest));
-  },
-));
+    return success(
+      result.result,
+      wsResult.success ? wsResult.rest : semiResult.success ? semiResult.rest : result.rest,
+    );
+  }),
+);
 
 // `raise` raises an interrupt as a statement. Accepted forms:
 //   raise interrupt("x")            — wraps an interrupt expression → effect "unknown"
@@ -4277,10 +4336,7 @@ const _raiseExprParser: Parser<InterruptStatement> = (input: string) => {
     // "interrupt".
     const wrapped = _interruptExprParser(head.rest);
     if (wrapped.success) {
-      return success(
-        { ...(wrapped.result as InterruptStatement), viaRaise: true },
-        wrapped.rest,
-      );
+      return success({ ...(wrapped.result as InterruptStatement), viaRaise: true }, wrapped.rest);
     }
     // `raise <effect>(args)` shorthand.
     const structured = seqC(
@@ -4353,12 +4409,7 @@ const blockParamParser: Parser<FunctionParameter> = memo(
     capture(many1WithJoin(varNameChar), "name"),
     optional(
       captureCaptures(
-        seqC(
-          optionalSpaces,
-          char(":"),
-          optionalSpaces,
-          capture(variableTypeParser, "typeHint"),
-        ),
+        seqC(optionalSpaces, char(":"), optionalSpaces, capture(variableTypeParser, "typeHint")),
       ),
     ),
   ),
@@ -4368,7 +4419,9 @@ const blockParamParser: Parser<FunctionParameter> = memo(
 //   as item { ... }           — single param
 //   as (prev, attempt) { ... } — multiple params
 //   as { ... }                — no params
-const blockParamsParser: Parser<FunctionParameter[]> = (input: string): ParserResult<FunctionParameter[]> => {
+const blockParamsParser: Parser<FunctionParameter[]> = (
+  input: string,
+): ParserResult<FunctionParameter[]> => {
   // Try multiple params: (a, b, c)
   const multiParser = seqC(
     char("("),
@@ -4393,17 +4446,11 @@ const blockParamsParser: Parser<FunctionParameter[]> = (input: string): ParserRe
 };
 
 export const asParser = (input: string): ParserResult<FunctionParameter[]> => {
-
-  const parser = seqC(
-    str("as"),
-    spaces,
-    capture(blockParamsParser, "params"),
-  )
+  const parser = seqC(str("as"), spaces, capture(blockParamsParser, "params"));
   const result = parser(input);
   if (!result.success) return success([], input); // "as" is optional, so if it doesn't match, return empty params and original input
   return success(result.result.params, result.rest);
-}
-
+};
 
 // Parse a block argument. Always requires "as" keyword:
 //   as params { body }     — with params
@@ -4417,7 +4464,10 @@ export const blockArgumentParser: Parser<BlockArgument> = memo(
     optionalSpaces,
     char("{"),
     optionalSpacesOrNewline,
-    capture(lazy(() => bodyParser), "body"),
+    capture(
+      lazy(() => bodyParser),
+      "body",
+    ),
     optionalSpacesOrNewline,
     char("}"),
   ),
@@ -4438,7 +4488,10 @@ export const inlineBlockParser: Parser<BlockArgument> = memo(
       optionalSpaces,
       or(str("->"), str("=>")),
       optionalSpaces,
-      capture(lazy(() => exprParser), "expr"),
+      capture(
+        lazy(() => exprParser),
+        "expr",
+      ),
     ),
     (result) => ({
       type: "blockArgument" as const,
@@ -4480,7 +4533,10 @@ const arrowBlockParser: Parser<BlockArgument> = memo(
     const braced = seqC(
       char("{"),
       optionalSpacesOrNewline,
-      capture(lazy(() => bodyParser), "body"),
+      capture(
+        lazy(() => bodyParser),
+        "body",
+      ),
       optionalSpacesOrNewline,
       char("}"),
     )(arrow.rest);
@@ -4532,11 +4588,7 @@ export const defaultCaseParser: Parser<DefaultCase> = map(
 // pattern named `_` instead of the default case.
 function armFollowsPattern(rest: string): boolean {
   const trimmed = rest.replace(/^[ \t]+/, "");
-  return (
-    trimmed.startsWith("=>") ||
-    trimmed.startsWith("->") ||
-    /^if[^A-Za-z0-9_]/.test(trimmed)
-  );
+  return trimmed.startsWith("=>") || trimmed.startsWith("->") || /^if[^A-Za-z0-9_]/.test(trimmed);
 }
 
 // Wrap an arm-LHS alternative so it only wins when the lookahead holds.
@@ -4569,7 +4621,10 @@ const isArmParser: Parser<TypePattern> = withLoc(
       not(varNameChar),
       spaces,
       // lazy: typePatternParser is declared later in this file
-      capture(lazy(() => typePatternParser), "typePattern"),
+      capture(
+        lazy(() => typePatternParser),
+        "typePattern",
+      ),
     ),
     (captures: { typePattern: TypePattern }) => captures.typePattern,
   ),
@@ -4648,7 +4703,10 @@ const matchArmBlockParser: Parser<AgencyNode[]> = map(
   seqC(
     char("{"),
     optionalSpacesOrNewline,
-    capture(lazy(() => bodyParser), "body"),
+    capture(
+      lazy(() => bodyParser),
+      "body",
+    ),
     optionalSpacesOrNewline,
     char("}"),
   ),
@@ -4695,7 +4753,12 @@ const matchBlockParserCaseInner: Parser<MatchBlockCase> = (
           seqC(
             not(char("{")),
             capture(
-              or(returnStatementParser, gotoStatementParser, lazy(() => assignmentParser), exprParser),
+              or(
+                returnStatementParser,
+                gotoStatementParser,
+                lazy(() => assignmentParser),
+                exprParser,
+              ),
               "n",
             ),
           ),
@@ -4721,47 +4784,54 @@ const matchBlockParserCaseInner: Parser<MatchBlockCase> = (
   );
 };
 
-export const matchBlockParserCase = completeConstructEntry(
-  matchBlockParserCaseInner,
-);
+export const matchBlockParserCase = completeConstructEntry(matchBlockParserCaseInner);
 
 const semicolon = seqC(optionalSpaces, char(";"), optionalSpaces);
 
 // Core form, no trailing statement whitespace — used at expression sites.
-export const matchBlockExprParser = label("a match expression", withLoc(seqC(
-  set("type", "matchBlock"),
-  str("match"),
-  optionalSpaces,
-  char("("),
-  // `exprParser` is declared further down this file, so the reference
-  // has to be deferred past module init.
-  capture(lazy(() => exprParser), "expression"),
-  char(")"),
-  optionalSpaces,
-  char("{"),
-  captureCaptures(
-    parseError(
-      MATCH_CASES_MESSAGE,
-      optionalSpacesOrNewline,
-      capture(many(or(blankLineParser, commentParser, matchBlockParserCase)), "cases"),
+export const matchBlockExprParser = label(
+  "a match expression",
+  withLoc(
+    seqC(
+      set("type", "matchBlock"),
+      str("match"),
       optionalSpaces,
-      char("}"),
+      char("("),
+      // `exprParser` is declared further down this file, so the reference
+      // has to be deferred past module init.
+      capture(
+        lazy(() => exprParser),
+        "expression",
+      ),
+      char(")"),
+      optionalSpaces,
+      char("{"),
+      captureCaptures(
+        parseError(
+          MATCH_CASES_MESSAGE,
+          optionalSpacesOrNewline,
+          capture(many(or(blankLineParser, commentParser, matchBlockParserCase)), "cases"),
+          optionalSpaces,
+          char("}"),
+        ),
+      ),
     ),
   ),
-)));
+);
 
 // Statement form. The outer `withLoc` overwrites the inner loc so that the
 // span covers the trailing semicolon/whitespace consumption, exactly as the
 // original single-withLoc parser did (source maps record statement locs, so
 // the statement form's span must stay byte-identical to the old behavior).
-export const matchBlockParser: Parser<MatchBlock> = label("a match block", withLoc(map(
-  seqC(
-    capture(matchBlockExprParser, "block"),
-    optionalSemicolon,
-    optionalSpacesOrNewline,
+export const matchBlockParser: Parser<MatchBlock> = label(
+  "a match block",
+  withLoc(
+    map(
+      seqC(capture(matchBlockExprParser, "block"), optionalSemicolon, optionalSpacesOrNewline),
+      (r: { block: MatchBlock }) => r.block,
+    ),
   ),
-  (r: { block: MatchBlock }) => r.block,
-)));
+);
 
 // =============================================================================
 // importStatement.ts
@@ -4780,95 +4850,93 @@ const singleQuotedPath: Parser<{ path: string }> = seqC(
   char("'"),
 );
 
-const quotedPath: Parser<string> = map(
-  or(doubleQuotedPath, singleQuotedPath),
-  (res) => res.path,
-);
+const quotedPath: Parser<string> = map(or(doubleQuotedPath, singleQuotedPath), (res) => res.path);
 
-export const importNodeStatmentParser: Parser<ImportNodeStatement> = withLoc(memo(
-  "importNodeStatement",
-  seqC(
-    set("type", "importNodeStatement"),
-    str("import"),
-    spaces,
-    or(str("nodes"), str("node")),
-    captureCaptures(
-      parseError(
-        "expected a statement of the form `import nodes { x, y } from 'filename.agency'`",
-        spaces,
-        char("{"),
-        optionalSpacesOrNewline,
-        captureCaptures(
-          commaDelimitedListCaptures(
-            many1WithJoin(varNameChar),
-            IMPORT_NODE_LIST,
-            "importedNodes",
-            "nodeTrivia",
+export const importNodeStatmentParser: Parser<ImportNodeStatement> = withLoc(
+  memo(
+    "importNodeStatement",
+    seqC(
+      set("type", "importNodeStatement"),
+      str("import"),
+      spaces,
+      or(str("nodes"), str("node")),
+      captureCaptures(
+        parseError(
+          "expected a statement of the form `import nodes { x, y } from 'filename.agency'`",
+          spaces,
+          char("{"),
+          optionalSpacesOrNewline,
+          captureCaptures(
+            commaDelimitedListCaptures(
+              many1WithJoin(varNameChar),
+              IMPORT_NODE_LIST,
+              "importedNodes",
+              "nodeTrivia",
+            ),
           ),
+          optionalSpacesOrNewline,
+          char("}"),
+          spaces,
+          str("from"),
+          spaces,
+          capture(quotedPath, "agencyFile"),
+          optionalSemicolon,
+          optional(newline),
         ),
-        optionalSpacesOrNewline,
-        char("}"),
-        spaces,
-        str("from"),
-        spaces,
-        capture(quotedPath, "agencyFile"),
-        optionalSemicolon,
-        optional(newline),
       ),
     ),
   ),
-));
+);
 
 const nameWithOptionalAlias: Parser<{ name: string | Hole; alias: string | undefined }> = or(
   // A hole specifier (`import { #tool } from ...`) — templates only. No
   // alias: the filler decides the real name, so there is nothing to bind.
-  map(lazy(() => identifierHoleParser), (hole) => ({
-    name: hole as string | Hole,
-    alias: undefined as string | undefined,
-  })),
   map(
-    seqC(capture(many1WithJoin(varNameChar), "name"), spaces, str("as"), spaces, capture(many1WithJoin(varNameChar), "alias")),
+    lazy(() => identifierHoleParser),
+    (hole) => ({
+      name: hole as string | Hole,
+      alias: undefined as string | undefined,
+    }),
+  ),
+  map(
+    seqC(
+      capture(many1WithJoin(varNameChar), "name"),
+      spaces,
+      str("as"),
+      spaces,
+      capture(many1WithJoin(varNameChar), "alias"),
+    ),
     (r) => ({ name: r.name as string | Hole, alias: r.alias as string }),
   ),
-  map(
-    seqC(capture(many1WithJoin(varNameChar), "name")),
-    (r) => ({ name: r.name as string | Hole, alias: undefined as string | undefined }),
-  ),
+  map(seqC(capture(many1WithJoin(varNameChar), "name")), (r) => ({
+    name: r.name as string | Hole,
+    alias: undefined as string | undefined,
+  })),
 );
 
 // A named import/export item, optionally carrying a retry-safety marker.
 // `destructive` and `idempotent` are the two markers; an unmarked item
 // carries neither. (There is no `safe` — it was removed.)
 const markedNameItem = or(
-  map(
-    seqC(str("destructive "), captureCaptures(nameWithOptionalAlias)),
-    (r) => ({
-      name: r.name,
-      alias: r.alias as string | undefined,
-      isDestructive: true,
-      isIdempotent: false,
-    }),
-  ),
-  map(
-    seqC(str("idempotent "), captureCaptures(nameWithOptionalAlias)),
-    (r) => ({
-      name: r.name,
-      alias: r.alias as string | undefined,
-      isDestructive: false,
-      isIdempotent: true,
-    }),
-  ),
-  map(
-    nameWithOptionalAlias,
-    (r) => ({
-      name: r.name,
-      alias: r.alias,
-      isDestructive: false,
-      isIdempotent: false,
-    }),
-  ),
+  map(seqC(str("destructive "), captureCaptures(nameWithOptionalAlias)), (r) => ({
+    name: r.name,
+    alias: r.alias as string | undefined,
+    isDestructive: true,
+    isIdempotent: false,
+  })),
+  map(seqC(str("idempotent "), captureCaptures(nameWithOptionalAlias)), (r) => ({
+    name: r.name,
+    alias: r.alias as string | undefined,
+    isDestructive: false,
+    isIdempotent: true,
+  })),
+  map(nameWithOptionalAlias, (r) => ({
+    name: r.name,
+    alias: r.alias,
+    isDestructive: false,
+    isIdempotent: false,
+  })),
 );
-
 
 const namedImportParser: Parser<NamedImport> = memo(
   "namedImportParser",
@@ -4877,12 +4945,7 @@ const namedImportParser: Parser<NamedImport> = memo(
       char("{"),
       optionalSpacesOrNewline,
       captureCaptures(
-        commaDelimitedListCaptures(
-          markedNameItem,
-          IMPORT_NAME_LIST,
-          "items",
-          "nameTrivia",
-        ),
+        commaDelimitedListCaptures(markedNameItem, IMPORT_NAME_LIST, "items", "nameTrivia"),
       ),
       optionalSpacesOrNewline,
       char("}"),
@@ -4940,10 +5003,7 @@ const namespaceImportParser: Parser<NamespaceImport> = memo(
 
 const defaultImportParser: Parser<DefaultImport> = memo(
   "defaultImportParser",
-  seqC(
-    capture(many1WithJoin(varNameChar), "importedNames"),
-    set("type", "defaultImport"),
-  ),
+  seqC(capture(many1WithJoin(varNameChar), "importedNames"), set("type", "defaultImport")),
 );
 
 const importNameTypeParser: Parser<ImportNameType[]> = sepBy(
@@ -4951,53 +5011,55 @@ const importNameTypeParser: Parser<ImportNameType[]> = sepBy(
   or(namedImportParser, namespaceImportParser, defaultImportParser),
 );
 
-export const importStatmentParser: Parser<ImportStatement> = withLoc(map(
-  memo(
-    "importStatement",
-    seqC(
-      set("type", "importStatement"),
-      str("import"),
-      captureCaptures(
-        parseError(
-          "expected a statement of the form `import { x, y } from 'filename'`",
-          spaces,
-          // `import test { … }` marks a test-only import. The peek({)
-          // disambiguates from a default import named `test` (`import test
-          // from …`, `import test, { bar } from …`): `optional` backtracks
-          // fully when `test` is not immediately followed by `{` (same
-          // precedent as the `static const` lookahead in
-          // optimizeAssignmentPrefixParser).
-          capture(
-            optional(map(seqC(str("test"), spaces, peek(char("{"))), () => true)),
-            "testOnly",
+export const importStatmentParser: Parser<ImportStatement> = withLoc(
+  map(
+    memo(
+      "importStatement",
+      seqC(
+        set("type", "importStatement"),
+        str("import"),
+        captureCaptures(
+          parseError(
+            "expected a statement of the form `import { x, y } from 'filename'`",
+            spaces,
+            // `import test { … }` marks a test-only import. The peek({)
+            // disambiguates from a default import named `test` (`import test
+            // from …`, `import test, { bar } from …`): `optional` backtracks
+            // fully when `test` is not immediately followed by `{` (same
+            // precedent as the `static const` lookahead in
+            // optimizeAssignmentPrefixParser).
+            capture(
+              optional(map(seqC(str("test"), spaces, peek(char("{"))), () => true)),
+              "testOnly",
+            ),
+            capture(importNameTypeParser, "importedNames"),
+            spaces,
+            str("from"),
+            spaces,
+            oneOf(`'"`),
+            capture(many1Till(oneOf(`'"`)), "modulePath"),
+            oneOf(`'"`),
+            optionalSemicolon,
+            optional(newline),
           ),
-          capture(importNameTypeParser, "importedNames"),
-          spaces,
-          str("from"),
-          spaces,
-          oneOf(`'"`),
-          capture(many1Till(oneOf(`'"`)), "modulePath"),
-          oneOf(`'"`),
-          optionalSemicolon,
-          optional(newline),
         ),
       ),
     ),
+    (result) => {
+      // `optional` records null on failure; keep the key absent on normal
+      // imports so exact-match AST comparisons and `agency ast` JSON stay clean.
+      const { testOnly, ...rest } = result;
+      const out: ImportStatement = {
+        ...rest,
+        isAgencyImport: isAgencyImport(result.modulePath),
+      };
+      if (testOnly) {
+        out.testOnly = true;
+      }
+      return out;
+    },
   ),
-  (result) => {
-    // `optional` records null on failure; keep the key absent on normal
-    // imports so exact-match AST comparisons and `agency ast` JSON stay clean.
-    const { testOnly, ...rest } = result;
-    const out: ImportStatement = {
-      ...rest,
-      isAgencyImport: isAgencyImport(result.modulePath),
-    };
-    if (testOnly) {
-      out.testOnly = true;
-    }
-    return out;
-  },
-));
+);
 
 // =============================================================================
 // exportFromStatement.ts — `export { x } from "..."` and `export * from "..."`
@@ -5008,12 +5070,7 @@ const namedExportBodyParser = map(
     char("{"),
     optionalSpacesOrNewline,
     captureCaptures(
-      commaDelimitedListCaptures(
-        markedNameItem,
-        EXPORT_NAME_LIST,
-        "items",
-        "nameTrivia",
-      ),
+      commaDelimitedListCaptures(markedNameItem, EXPORT_NAME_LIST, "items", "nameTrivia"),
     ),
     optionalSpacesOrNewline,
     char("}"),
@@ -5105,7 +5162,14 @@ const _destructuringAssignmentParser: Parser<Assignment> = (input: string) => {
     optionalSpaces,
     char("="),
     optionalSpaces,
-    capture(or(lazy(() => guardBlockParser), lazy(() => messageThreadParser), exprParser), "value"),
+    capture(
+      or(
+        lazy(() => guardBlockParser),
+        lazy(() => messageThreadParser),
+        exprParser,
+      ),
+      "value",
+    ),
     optionalSemicolon,
     optionalSpacesOrNewline,
   );
@@ -5134,14 +5198,7 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
     seqC(
       set("type", "assignment"),
       optionalSpaces,
-      optional(
-        captureCaptures(
-          seqC(
-            capture(or(str("let"), str("const")), "declKind"),
-            spaces,
-          ),
-        ),
-      ),
+      optional(captureCaptures(seqC(capture(or(str("let"), str("const")), "declKind"), spaces))),
       capture(_valueAccessParser, "target"),
       optionalSpaces,
       optional(
@@ -5157,7 +5214,16 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
       optionalSpaces,
       char("="),
       optionalSpaces,
-      capture(or(lazy(() => guardBlockParser), lazy(() => messageThreadParser), lazy(() => matchBlockExprParser), lazy(() => ifExpressionParser), exprParser), "value"),
+      capture(
+        or(
+          lazy(() => guardBlockParser),
+          lazy(() => messageThreadParser),
+          lazy(() => matchBlockExprParser),
+          lazy(() => ifExpressionParser),
+          exprParser,
+        ),
+        "value",
+      ),
       optionalSemicolon,
       optionalSpacesOrNewline,
     ),
@@ -5173,10 +5239,7 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
     variableName = target.value;
   } else if (target.type === "valueAccess") {
     if (target.base.type !== "variableName") {
-      return failure(
-        "assignment target must start with a variable name",
-        input,
-      );
+      return failure("assignment target must start with a variable name", input);
     }
     variableName = target.base.value;
     accessChain = target.chain;
@@ -5188,10 +5251,7 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
 
   // Reject let/const with access chains (e.g., "let obj.x = 1")
   if (parsed.declKind && accessChain) {
-    return failure(
-      "cannot use 'let' or 'const' with property/index assignment",
-      input,
-    );
+    return failure("cannot use 'let' or 'const' with property/index assignment", input);
   }
 
   const { target: _target, validated: _validated, value, ...rest } = parsed;
@@ -5199,7 +5259,10 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
   if (_validated) out.validated = true;
   return success(out, result.rest);
 };
-export const assignmentParser: Parser<Assignment> = label("an assignment", withLoc(_assignmentParserInner));
+export const assignmentParser: Parser<Assignment> = label(
+  "an assignment",
+  withLoc(_assignmentParserInner),
+);
 
 const staticKeywordParser: Parser<boolean> = or(
   map(seqC(str("static"), spaces), () => true),
@@ -5223,10 +5286,16 @@ const optimizeAssignmentParser: Parser<Assignment> = (input: string): ParserResu
 
   const assignment = result.result.assignment;
   if (!assignment.declKind) {
-    return failure("optimize requires 'let' or 'const' (e.g., 'optimize const prompt = ...')", input);
+    return failure(
+      "optimize requires 'let' or 'const' (e.g., 'optimize const prompt = ...')",
+      input,
+    );
   }
   if (result.result.isStatic && assignment.declKind !== "const") {
-    return failure("static requires 'const' (e.g., 'static const x = 1'). Static variables are immutable.", input);
+    return failure(
+      "static requires 'const' (e.g., 'static const x = 1'). Static variables are immutable.",
+      input,
+    );
   }
 
   const out = { ...assignment, optimize: true };
@@ -5276,7 +5345,10 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   if (!result.success) return result;
 
   if (isStatic && result.result.declKind !== "const") {
-    return failure("static requires 'const' (e.g., 'static const x = 1'). Static variables are immutable.", input);
+    return failure(
+      "static requires 'const' (e.g., 'static const x = 1'). Static variables are immutable.",
+      input,
+    );
   }
 
   // export requires a declaration (let or const), not a bare reassignment
@@ -5289,7 +5361,6 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   if (isStatic) out.static = true;
   return success(out, result.rest);
 });
-
 
 /**
  * `switch` is a construct Agency deliberately does not have — `match` differs
@@ -5339,7 +5410,6 @@ const switchStatementParser: Parser<never> = (input: string) => {
   return declined as ParserResult<never>;
 };
 
-
 /**
  * A C-style `for (let i = 0; i < n; i++)`. Without this the author gets
  * "expected `(` to open for loop condition", which is actively misleading —
@@ -5370,7 +5440,6 @@ const cStyleForParser: Parser<never> = (input: string) => {
   getParseState().committedFailure = declined;
   return declined as ParserResult<never>;
 };
-
 
 /**
  * `const double = (n) => n * 2`. Blocks in Agency are arguments, not values,
@@ -5473,7 +5542,6 @@ const bodyOptimizeAssignmentParser: Parser<Assignment> = (input: string) => {
   return failure("expected optimize assignment", input);
 };
 
-
 const bodyReservedModifierParser: Parser<never> = (input: string) => {
   const probe = seqC(
     or(str("static"), str("export")),
@@ -5522,62 +5590,54 @@ const bodyReservedModifierParser: Parser<never> = (input: string) => {
  * inner statement.
  */
 
-
-
-export const staticStatementParser: Parser<StaticStatement> = withLoc(
-  (input: string) => {
-    const kwResult = seqC(str("static"), spaces)(input);
-    if (!kwResult.success) {
-      // Probe failed — decline silently so we don't contribute a
-      // misleading "expected 'static'" message to unrelated top-level
-      // parse failures. Matches `reservedClassParser`'s convention.
-      return failure("", input);
-    }
-    const rest = kwResult.rest;
-    // `static const` belongs to `modifiedAssignmentParser`. Decline
-    // silently so its success path runs (it's tried before this
-    // parser in the top-level alternatives list).
-    if (/^const\b/.test(rest)) {
-      return failure("", input);
-    }
-    if (/^let\b/.test(rest)) {
-      return parseError(
-        STATIC_LET_MESSAGE,
-        fail("static let"),
-      )(input) as ParserResult<StaticStatement>;
-    }
-    // `static <ident> = ...` would otherwise be half-eaten as a bare
-    // statement whose inner is a variableName, and the trailing `=`
-    // would surface as a confusing "unexpected token" downstream.
-    // Reject up-front so the user gets the actionable "use `static
-    // const`" guidance instead.
-    if (/^[A-Za-z_][A-Za-z0-9_]*\s*=(?!=)/.test(rest)) {
-      return parseError(
-        STATIC_ASSIGN_MESSAGE,
-        fail("static <name> ="),
-      )(input) as ParserResult<StaticStatement>;
-    }
-    const innerParser = or(
-      interruptStatementParser,
-      functionCallParser,
-      valueAccessParser,
-    );
-    const innerResult = innerParser(rest);
-    if (!innerResult.success) {
-      // Fatal: once we've consumed `static`, any subsequent failure
-      // must surface — recoverable failure would let `or(...)`
-      // reinterpret `static` as an identifier and yield nonsense AST.
-      return parseError(
-        STATIC_INNER_MESSAGE,
-        fail("static <expr>"),
-      )(input) as ParserResult<StaticStatement>;
-    }
-    return success(
-      { type: "staticStatement", statement: innerResult.result as AgencyNode },
-      innerResult.rest,
-    );
-  },
-);
+export const staticStatementParser: Parser<StaticStatement> = withLoc((input: string) => {
+  const kwResult = seqC(str("static"), spaces)(input);
+  if (!kwResult.success) {
+    // Probe failed — decline silently so we don't contribute a
+    // misleading "expected 'static'" message to unrelated top-level
+    // parse failures. Matches `reservedClassParser`'s convention.
+    return failure("", input);
+  }
+  const rest = kwResult.rest;
+  // `static const` belongs to `modifiedAssignmentParser`. Decline
+  // silently so its success path runs (it's tried before this
+  // parser in the top-level alternatives list).
+  if (/^const\b/.test(rest)) {
+    return failure("", input);
+  }
+  if (/^let\b/.test(rest)) {
+    return parseError(
+      STATIC_LET_MESSAGE,
+      fail("static let"),
+    )(input) as ParserResult<StaticStatement>;
+  }
+  // `static <ident> = ...` would otherwise be half-eaten as a bare
+  // statement whose inner is a variableName, and the trailing `=`
+  // would surface as a confusing "unexpected token" downstream.
+  // Reject up-front so the user gets the actionable "use `static
+  // const`" guidance instead.
+  if (/^[A-Za-z_][A-Za-z0-9_]*\s*=(?!=)/.test(rest)) {
+    return parseError(
+      STATIC_ASSIGN_MESSAGE,
+      fail("static <name> ="),
+    )(input) as ParserResult<StaticStatement>;
+  }
+  const innerParser = or(interruptStatementParser, functionCallParser, valueAccessParser);
+  const innerResult = innerParser(rest);
+  if (!innerResult.success) {
+    // Fatal: once we've consumed `static`, any subsequent failure
+    // must surface — recoverable failure would let `or(...)`
+    // reinterpret `static` as an identifier and yield nonsense AST.
+    return parseError(
+      STATIC_INNER_MESSAGE,
+      fail("static <expr>"),
+    )(input) as ParserResult<StaticStatement>;
+  }
+  return success(
+    { type: "staticStatement", statement: innerResult.result as AgencyNode },
+    innerResult.rest,
+  );
+});
 
 // Doc strings are parsed identically to multi-line strings. Trimming of
 // the leading/trailing indentation is applied at the points that
@@ -5587,72 +5647,75 @@ export const staticStatementParser: Parser<StaticStatement> = withLoc(
 // faithfully for the formatter to round-trip.
 export const docStringParser = multiLineStringParser;
 
-const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
-  keywordParser,
-  effectSetDeclParser,
-  effectDeclParser,
-  typeAliasParser,
-  tagParser,
-  bodyReservedModifierParser,
-  // Next to bodyReservedModifierParser because it does the same job: both
-  // decline a top-level-only declaration written inside a body. This one
-  // must sit ahead of assignmentParser / binOpParser / valueAccessParser,
-  // which are what would otherwise read `node` as a name.
-  bodyDeclarationParser,
-  // Both decline a construct Agency deliberately does not have, replacing an
-  // unhelpful generic failure with a message naming the Agency equivalent.
-  // `cStyleForParser` MUST precede `forLoopParser`, which would otherwise
-  // report a missing `(` that is plainly present.
-  switchStatementParser,
-  cStyleForParser,
-  blockAsValueParser,
-  // withModifierParser must be tried before returnStatementParser/
-  // assignmentParser so that `return foo() with approve` and
-  // `const x = foo() with approve` don't get partially consumed by
-  // the inner statement parser, which would leave `with approve`
-  // dangling and unparseable. bodyReservedModifierParser sits before
-  // it so top-level-only `static`/`export` declarations are still
-  // rejected inside function and node bodies.
-  lazy(() => withModifierParser),
-  returnStatementParser,
-  gotoStatementParser,
-  raiseStatementParser,
-  interruptStatementParser,
-  lazy(() => forLoopParser),
-  lazy(() => whileLoopParser),
-  lazy(() => parallelBlockParser),
-  lazy(() => seqBlockParser),
-  lazy(() => destructiveBlockParser),
-  matchBlockParser,
-  lazy(() => ifParser),
-  lazy(() => messageThreadParser),
-  lazy(() => guardBlockParser),
-  lazy(() => handleBlockParser),
-  lazy(() => finalizeBlockParser),
-  debuggerParser,
-  multiLineCommentParser,
-  commentParser,
-  skillParser,
-  bodyOptimizeAssignmentParser,
-  assignmentParser,
-  // Ahead of binOpParser deliberately: order IS the sort tie-break. A bare
-  // hole occupying the whole statement gets sort "statements" here; a hole
-  // inside a larger expression fails statementHoleParser's boundary check
-  // and reaches binOpParser, whose operand path assigns sort "expr". (The
-  // parser-ordering exemption in docs/dev/anti-patterns.md covers this.)
-  lazy(() => statementHoleParser),
-  // A bare `$( gen() )` occupying a whole statement needs its own entry:
-  // binOpParser below rejects anything that is not a binOpExpression, and
-  // the remaining alternatives (valueAccess, literal) do not start at `$`.
-  // So statement position never reaches baseAtom's spliceParser.
-  lazy(() => statementSpliceParser),
-  binOpParser,
-  booleanParser,
-  valueAccessParser,
-  literalParser,
-  blankLineParser,
-  newLineParser,
-));
+const _bodyNodeParser: Parser<AgencyNode> = memo(
+  "bodyNodeParser",
+  or(
+    keywordParser,
+    effectSetDeclParser,
+    effectDeclParser,
+    typeAliasParser,
+    tagParser,
+    bodyReservedModifierParser,
+    // Next to bodyReservedModifierParser because it does the same job: both
+    // decline a top-level-only declaration written inside a body. This one
+    // must sit ahead of assignmentParser / binOpParser / valueAccessParser,
+    // which are what would otherwise read `node` as a name.
+    bodyDeclarationParser,
+    // Both decline a construct Agency deliberately does not have, replacing an
+    // unhelpful generic failure with a message naming the Agency equivalent.
+    // `cStyleForParser` MUST precede `forLoopParser`, which would otherwise
+    // report a missing `(` that is plainly present.
+    switchStatementParser,
+    cStyleForParser,
+    blockAsValueParser,
+    // withModifierParser must be tried before returnStatementParser/
+    // assignmentParser so that `return foo() with approve` and
+    // `const x = foo() with approve` don't get partially consumed by
+    // the inner statement parser, which would leave `with approve`
+    // dangling and unparseable. bodyReservedModifierParser sits before
+    // it so top-level-only `static`/`export` declarations are still
+    // rejected inside function and node bodies.
+    lazy(() => withModifierParser),
+    returnStatementParser,
+    gotoStatementParser,
+    raiseStatementParser,
+    interruptStatementParser,
+    lazy(() => forLoopParser),
+    lazy(() => whileLoopParser),
+    lazy(() => parallelBlockParser),
+    lazy(() => seqBlockParser),
+    lazy(() => destructiveBlockParser),
+    matchBlockParser,
+    lazy(() => ifParser),
+    lazy(() => messageThreadParser),
+    lazy(() => guardBlockParser),
+    lazy(() => handleBlockParser),
+    lazy(() => finalizeBlockParser),
+    debuggerParser,
+    multiLineCommentParser,
+    commentParser,
+    skillParser,
+    bodyOptimizeAssignmentParser,
+    assignmentParser,
+    // Ahead of binOpParser deliberately: order IS the sort tie-break. A bare
+    // hole occupying the whole statement gets sort "statements" here; a hole
+    // inside a larger expression fails statementHoleParser's boundary check
+    // and reaches binOpParser, whose operand path assigns sort "expr". (The
+    // parser-ordering exemption in docs/dev/anti-patterns.md covers this.)
+    lazy(() => statementHoleParser),
+    // A bare `$( gen() )` occupying a whole statement needs its own entry:
+    // binOpParser below rejects anything that is not a binOpExpression, and
+    // the remaining alternatives (valueAccess, literal) do not start at `$`.
+    // So statement position never reaches baseAtom's spliceParser.
+    lazy(() => statementSpliceParser),
+    binOpParser,
+    booleanParser,
+    valueAccessParser,
+    literalParser,
+    blankLineParser,
+    newLineParser,
+  ),
+);
 
 const _bodyParserImpl: Parser<AgencyNode[]> = memo(
   "functionBodyParser",
@@ -5679,13 +5742,7 @@ type ThreadNamedArgs = {
 /** The order the formatter prints thread arguments in, regardless of the
  *  order they were written. Trivia anchors are remapped into it so a
  *  comment travels with the argument it described. */
-const THREAD_ARGUMENT_ORDER = [
-  "label",
-  "summarize",
-  "continue",
-  "session",
-  "hidden",
-];
+const THREAD_ARGUMENT_ORDER = ["label", "summarize", "continue", "session", "hidden"];
 
 const _threadNamedArgsParser: Parser<ThreadNamedArgs> = (
   input: string,
@@ -5734,10 +5791,7 @@ const _threadNamedArgsParser: Parser<ThreadNamedArgs> = (
     const index = args.findIndex((arg) => arg.name === name);
     return index === -1 ? [] : [index];
   });
-  const argumentTrivia = remapListTrivia(
-    r.result.argumentTrivia,
-    canonicalSourceIndexes,
-  );
+  const argumentTrivia = remapListTrivia(r.result.argumentTrivia, canonicalSourceIndexes);
   return success(
     {
       label: seen.label ?? null,
@@ -5757,10 +5811,7 @@ export const _messageThreadParser: Parser<MessageThread> = memo(
     set("type", "messageThread"),
     str("thread"),
     set("threadType", "thread"),
-    capture(
-      optional(_threadNamedArgsParser),
-      "_args",
-    ),
+    capture(optional(_threadNamedArgsParser), "_args"),
     optionalSpaces,
     char("{"),
     captureCaptures(
@@ -5784,10 +5835,7 @@ export const _submessageThreadParser: Parser<MessageThread> = memo(
     set("type", "messageThread"),
     str("subthread"),
     set("threadType", "subthread"),
-    capture(
-      optional(_threadNamedArgsParser),
-      "_args",
-    ),
+    capture(optional(_threadNamedArgsParser), "_args"),
     optionalSpaces,
     char("{"),
     captureCaptures(
@@ -5841,7 +5889,10 @@ const inlineHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
     set("kind", "inline"),
     char("("),
     optionalSpaces,
-    capture(lazy(() => functionParameterParser), "param"),
+    capture(
+      lazy(() => functionParameterParser),
+      "param",
+    ),
     optionalSpaces,
     char(")"),
     optionalSpaces,
@@ -5908,7 +5959,10 @@ export const guardBlockParser: Parser<GuardBlock> = label(
       const bodyR = parseError(
         "expected guard block body followed by `}`",
         optionalSpacesOrNewline,
-        capture(lazy(() => bodyParser), "body"),
+        capture(
+          lazy(() => bodyParser),
+          "body",
+        ),
         optionalSpacesOrNewline,
         char("}"),
       )(pre.rest);
@@ -5928,33 +5982,35 @@ export const guardBlockParser: Parser<GuardBlock> = label(
   ),
 );
 
-export const handleBlockParser: Parser<HandleBlock> = withLoc(memo(
-  "handleBlockParser",
-  seqC(
-    set("type", "handleBlock"),
-    str("handle"),
-    // Require a word boundary so an identifier like `handler(...)` isn't
-    // matched as the `handle` keyword. Without this, the committing
-    // `parseError` below throws "expected `{`" instead of letting the
-    // statement parser backtrack to a function call.
-    not(varNameChar),
-    optionalSpaces,
-    captureCaptures(
-      parseError(
-        "expected `{` to open handle block body",
-        char("{"),
-        optionalSpacesOrNewline,
-        capture(bodyParser, "body"),
-        optionalSpacesOrNewline,
-        char("}"),
+export const handleBlockParser: Parser<HandleBlock> = withLoc(
+  memo(
+    "handleBlockParser",
+    seqC(
+      set("type", "handleBlock"),
+      str("handle"),
+      // Require a word boundary so an identifier like `handler(...)` isn't
+      // matched as the `handle` keyword. Without this, the committing
+      // `parseError` below throws "expected `{`" instead of letting the
+      // statement parser backtrack to a function call.
+      not(varNameChar),
+      optionalSpaces,
+      captureCaptures(
+        parseError(
+          "expected `{` to open handle block body",
+          char("{"),
+          optionalSpacesOrNewline,
+          capture(bodyParser, "body"),
+          optionalSpacesOrNewline,
+          char("}"),
+        ),
       ),
+      optionalSpacesOrNewline,
+      str("with"),
+      optionalSpaces,
+      capture(or(inlineHandlerParser, functionRefHandlerParser), "handler"),
     ),
-    optionalSpacesOrNewline,
-    str("with"),
-    optionalSpaces,
-    capture(or(inlineHandlerParser, functionRefHandlerParser), "handler"),
   ),
-));
+);
 
 /** `finalize { ... }` — keyword block. Four head forms parse:
  *  `finalize {`, `finalize() {`, `finalize as name {`,
@@ -5965,9 +6021,8 @@ export const handleBlockParser: Parser<HandleBlock> = withLoc(memo(
  *  binder-typing pass). Mirrors handleBlockParser's keyword handling:
  *  the word-boundary check keeps an identifier like `finalizer(...)`
  *  parsing as a call. */
-export const finalizeBlockParser: Parser<FinalizeBlock> = withLoc(memo(
-  "finalizeBlockParser",
-  (input: string): ParserResult<FinalizeBlock> => {
+export const finalizeBlockParser: Parser<FinalizeBlock> = withLoc(
+  memo("finalizeBlockParser", (input: string): ParserResult<FinalizeBlock> => {
     const pre = seqC(
       str("finalize"),
       not(varNameChar),
@@ -5984,7 +6039,10 @@ export const finalizeBlockParser: Parser<FinalizeBlock> = withLoc(memo(
     const bodyR = parseError(
       "expected `}` to close finalize block body",
       optionalSpacesOrNewline,
-      capture(lazy(() => bodyParser), "body"),
+      capture(
+        lazy(() => bodyParser),
+        "body",
+      ),
       optionalSpacesOrNewline,
       char("}"),
     )(pre.rest);
@@ -5997,12 +6055,17 @@ export const finalizeBlockParser: Parser<FinalizeBlock> = withLoc(memo(
       } as FinalizeBlock,
       bodyR.rest,
     );
-  },
-));
+  }),
+);
 
 export const withModifierParser: Parser<WithModifier> = withLoc((input: string) => {
   // Try to parse a static assignment, regular assignment, return, or bare function call as the inner statement.
-  const stmtResult = or(modifiedAssignmentParser, assignmentParser, returnStatementParser, functionCallParser)(input);
+  const stmtResult = or(
+    modifiedAssignmentParser,
+    assignmentParser,
+    returnStatementParser,
+    functionCallParser,
+  )(input);
   if (!stmtResult.success) return failure("expected statement before 'with'", input);
 
   // Look for "with <builtin>" on remaining input.
@@ -6061,46 +6124,45 @@ const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {
   return success(blockResult.result.body, blockResult.rest);
 };
 
-const _ifParserInnerFor = (keyword: string): Parser<IfElse> => (input: string) => {
-  const parser = trace(
-    "ifParser",
-    seqC(
-      set("type", "ifElse"),
-      str(keyword),
-      optionalSpaces,
-      char("("),
-      optionalSpaces,
-      capture(exprParser, "condition"),
-      optionalSpaces,
-      char(")"),
-      optionalSpaces,
-      captureCaptures(
-        parseError(
-          "expected `{` to open if block body",
-          char("{"),
-          optionalSpacesOrNewline,
-          capture(bodyParser, "thenBody"),
-          optionalSpacesOrNewline,
-          char("}"),
-          optionalSpacesOrNewline,
+const _ifParserInnerFor =
+  (keyword: string): Parser<IfElse> =>
+  (input: string) => {
+    const parser = trace(
+      "ifParser",
+      seqC(
+        set("type", "ifElse"),
+        str(keyword),
+        optionalSpaces,
+        char("("),
+        optionalSpaces,
+        capture(exprParser, "condition"),
+        optionalSpaces,
+        char(")"),
+        optionalSpaces,
+        captureCaptures(
+          parseError(
+            "expected `{` to open if block body",
+            char("{"),
+            optionalSpacesOrNewline,
+            capture(bodyParser, "thenBody"),
+            optionalSpacesOrNewline,
+            char("}"),
+            optionalSpacesOrNewline,
+          ),
         ),
       ),
-    ),
-  );
-  const result = parser(input);
-  if (!result.success) return result;
-
-  // Try to parse an optional else clause
-  const elseResult = elseClauseParser(result.rest);
-  if (elseResult.success) {
-    return success(
-      { ...result.result, elseBody: elseResult.result },
-      elseResult.rest,
     );
-  }
+    const result = parser(input);
+    if (!result.success) return result;
 
-  return result;
-};
+    // Try to parse an optional else clause
+    const elseResult = elseClauseParser(result.rest);
+    if (elseResult.success) {
+      return success({ ...result.result, elseBody: elseResult.result }, elseResult.rest);
+    }
+
+    return result;
+  };
 const _ifParserInner = _ifParserInnerFor("if");
 
 export const ifParser: Parser<IfElse> = label("an if statement", withLoc(_ifParserInner));
@@ -6110,10 +6172,7 @@ export const ifParser: Parser<IfElse> = label("an if statement", withLoc(_ifPars
  *  spans against the input it is handed, so a synthetic string would put every
  *  `loc` inside the branch at the wrong offset, and nested `elif` would compound
  *  the error. `agency fmt` prints `else if`. */
-const elifParser: Parser<IfElse> = label(
-  "an elif statement",
-  withLoc(_ifParserInnerFor("elif")),
-);
+const elifParser: Parser<IfElse> = label("an elif statement", withLoc(_ifParserInnerFor("elif")));
 
 // `if <condition> then <thenExpr> else <elseExpr>` — a conditional EXPRESSION.
 // Produces the SAME `IfElse` node a statement `if` uses (single-expression
@@ -6138,60 +6197,73 @@ const ifBranchExprParser: Parser<Expression> = (input: string) => {
       input,
     );
   }
-  return (lazy(() => exprParser))(input);
+  return lazy(() => exprParser)(input);
 };
 
 export const ifExpressionParser: Parser<IfElse> = label(
   "an if-expression",
-  withLoc(seqC(
-    set("type", "ifElse"),
-    str("if"),
-    not(varNameChar),
-    optionalSpacesOrNewline,
-    capture(ifBranchExprParser, "condition"),
-    optionalSpacesOrNewline,
-    str("then"),
-    not(varNameChar),
-    optionalSpacesOrNewline,
-    capture(map(ifBranchExprParser, (e) => [e]), "thenBody"),
-    optionalSpacesOrNewline,
-    captureCaptures(
-      parseError(
-        IF_EXPRESSION_MESSAGE,
-        str("else"),
-        not(varNameChar),
-        optionalSpacesOrNewline,
-        capture(map(ifBranchExprParser, (e) => [e]), "elseBody"),
+  withLoc(
+    seqC(
+      set("type", "ifElse"),
+      str("if"),
+      not(varNameChar),
+      optionalSpacesOrNewline,
+      capture(ifBranchExprParser, "condition"),
+      optionalSpacesOrNewline,
+      str("then"),
+      not(varNameChar),
+      optionalSpacesOrNewline,
+      capture(
+        map(ifBranchExprParser, (e) => [e]),
+        "thenBody",
       ),
-    ),
-  )),
-);
-
-export const whileLoopParser: Parser<WhileLoop> = label("a while loop", withLoc(memo(
-  "whileLoopParser",
-  seqC(
-    set("type", "whileLoop"),
-    str("while"),
-    optionalSpaces,
-    char("("),
-    optionalSpaces,
-    capture(exprParser, "condition"),
-    optionalSpaces,
-    char(")"),
-    optionalSpaces,
-    captureCaptures(
-      parseError(
-        "expected `{` to open while loop body",
-        char("{"),
-        optionalSpacesOrNewline,
-        capture(bodyParser, "body"),
-        optionalSpacesOrNewline,
-        char("}"),
-        optionalSpacesOrNewline,
+      optionalSpacesOrNewline,
+      captureCaptures(
+        parseError(
+          IF_EXPRESSION_MESSAGE,
+          str("else"),
+          not(varNameChar),
+          optionalSpacesOrNewline,
+          capture(
+            map(ifBranchExprParser, (e) => [e]),
+            "elseBody",
+          ),
+        ),
       ),
     ),
   ),
-)));
+);
+
+export const whileLoopParser: Parser<WhileLoop> = label(
+  "a while loop",
+  withLoc(
+    memo(
+      "whileLoopParser",
+      seqC(
+        set("type", "whileLoop"),
+        str("while"),
+        optionalSpaces,
+        char("("),
+        optionalSpaces,
+        capture(exprParser, "condition"),
+        optionalSpaces,
+        char(")"),
+        optionalSpaces,
+        captureCaptures(
+          parseError(
+            "expected `{` to open while loop body",
+            char("{"),
+            optionalSpacesOrNewline,
+            capture(bodyParser, "body"),
+            optionalSpacesOrNewline,
+            char("}"),
+            optionalSpacesOrNewline,
+          ),
+        ),
+      ),
+    ),
+  ),
+);
 
 /** Parser for the optional `(shared: <expr>)` named-args list after
  *  `parallel`. Modelled on `_threadNamedArgsParser` but with a smaller
@@ -6226,10 +6298,7 @@ const _parallelNamedArgsParser: Parser<ParallelNamedArgs> = (
   const seen: Record<string, Expression> = {};
   for (const arg of args) {
     if (arg.name !== "shared") {
-      return failure(
-        `Unknown parallel argument: ${arg.name}. Allowed: shared`,
-        input,
-      );
+      return failure(`Unknown parallel argument: ${arg.name}. Allowed: shared`, input);
     }
     if (seen[arg.name]) {
       return failure(`Duplicate parallel argument: ${arg.name}`, input);
@@ -6245,81 +6314,99 @@ const _parallelNamedArgsParser: Parser<ParallelNamedArgs> = (
   );
 };
 
-export const parallelBlockParser: Parser<ParallelBlock> = label("a parallel block", withLoc(map(memo(
-  "parallelBlockParser",
-  seqC(
-    set("type", "parallelBlock"),
-    str("parallel"),
-    capture(optional(_parallelNamedArgsParser), "_args"),
-    optionalSpaces,
-    captureCaptures(
-      parseError(
-        "expected `{` to open parallel block body",
-        char("{"),
-        optionalSpacesOrNewline,
-        capture(bodyParser, "body"),
-        optionalSpacesOrNewline,
-        char("}"),
+export const parallelBlockParser: Parser<ParallelBlock> = label(
+  "a parallel block",
+  withLoc(
+    map(
+      memo(
+        "parallelBlockParser",
+        seqC(
+          set("type", "parallelBlock"),
+          str("parallel"),
+          capture(optional(_parallelNamedArgsParser), "_args"),
+          optionalSpaces,
+          captureCaptures(
+            parseError(
+              "expected `{` to open parallel block body",
+              char("{"),
+              optionalSpacesOrNewline,
+              capture(bodyParser, "body"),
+              optionalSpacesOrNewline,
+              char("}"),
+            ),
+          ),
+        ),
       ),
+      (parsed: any): ParallelBlock => {
+        const args = parsed._args as ParallelNamedArgs | null | undefined;
+        const out: any = { ...parsed };
+        delete out._args;
+        if (args && args.shared !== null) {
+          out.shared = args.shared;
+        }
+        if (args?.argumentTrivia) {
+          out.argumentTrivia = args.argumentTrivia;
+        }
+        return out as ParallelBlock;
+      },
     ),
   ),
-), (parsed: any): ParallelBlock => {
-  const args = parsed._args as ParallelNamedArgs | null | undefined;
-  const out: any = { ...parsed };
-  delete out._args;
-  if (args && args.shared !== null) {
-    out.shared = args.shared;
-  }
-  if (args?.argumentTrivia) {
-    out.argumentTrivia = args.argumentTrivia;
-  }
-  return out as ParallelBlock;
-})));
+);
 
-export const seqBlockParser: Parser<SeqBlock> = label("a seq block", withLoc(memo(
-  "seqBlockParser",
-  seqC(
-    set("type", "seqBlock"),
-    str("seq"),
-    optionalSpaces,
-    captureCaptures(
-      parseError(
-        "expected `{` to open seq block body",
-        char("{"),
-        optionalSpacesOrNewline,
-        capture(bodyParser, "body"),
-        optionalSpacesOrNewline,
-        char("}"),
+export const seqBlockParser: Parser<SeqBlock> = label(
+  "a seq block",
+  withLoc(
+    memo(
+      "seqBlockParser",
+      seqC(
+        set("type", "seqBlock"),
+        str("seq"),
+        optionalSpaces,
+        captureCaptures(
+          parseError(
+            "expected `{` to open seq block body",
+            char("{"),
+            optionalSpacesOrNewline,
+            capture(bodyParser, "body"),
+            optionalSpacesOrNewline,
+            char("}"),
+          ),
+        ),
       ),
     ),
   ),
-)));
+);
 
 // A `destructive { ... }` region parses to a `seqBlock` flagged `destructive`.
 // The `char("{")` is a SOFT gate OUTSIDE `parseError` (a committing cut): a
 // leading `destructive def` fails here and the statement parser backtracks.
 // `not(varNameChar)` alone cannot disambiguate — both `destructive {` and
 // `destructive def` have a space after the keyword.
-export const destructiveBlockParser: Parser<SeqBlock> = label("a destructive block", withLoc(memo(
-  "destructiveBlockParser",
-  seqC(
-    set("type", "seqBlock"),
-    set("destructive", true as boolean),
-    str("destructive"),
-    not(varNameChar),
-    optionalSpaces,
-    char("{"),
-    captureCaptures(
-      parseError(
-        "unterminated destructive block",
-        optionalSpacesOrNewline,
-        capture(bodyParser, "body"),
-        optionalSpacesOrNewline,
-        char("}"),
+export const destructiveBlockParser: Parser<SeqBlock> = label(
+  "a destructive block",
+  withLoc(
+    memo(
+      "destructiveBlockParser",
+      seqC(
+        set("type", "seqBlock"),
+        set("destructive", true as boolean),
+        str("destructive"),
+        not(varNameChar),
+        optionalSpaces,
+        char("{"),
+        captureCaptures(
+          parseError(
+            "unterminated destructive block",
+            optionalSpacesOrNewline,
+            capture(bodyParser, "body"),
+            optionalSpacesOrNewline,
+            char("}"),
+          ),
+        ),
       ),
     ),
   ),
-)));
+);
 
 /** The iteration binder: an item name or destructuring pattern, plus an
  *  optional `, index` second binder. Shared between forLoopParser and
@@ -6357,123 +6444,115 @@ export const comprehensionParser: Parser<Comprehension> = label(
       "comprehensionParser",
       map(
         seqC(
-        set("type", "comprehension"),
-        // The concurrency prefix, as a raw keyword; the map() below this
-        // seqC converts it to mode/shared via COMPREHENSION_PREFIXES.
-        // Ordering in the or() is load-bearing: LONGEST FIRST, or
-        // str("fork") would half-match the fork in forkShared and then
-        // die on the required whitespace.
-        capture(
-          map(
-            optional(
-              seqR(
-                or(
-                  str("forkShared"),
-                  str("raceShared"),
-                  str("fork"),
-                  str("race"),
-                ),
-                spaces,
+          set("type", "comprehension"),
+          // The concurrency prefix, as a raw keyword; the map() below this
+          // seqC converts it to mode/shared via COMPREHENSION_PREFIXES.
+          // Ordering in the or() is load-bearing: LONGEST FIRST, or
+          // str("fork") would half-match the fork in forkShared and then
+          // die on the required whitespace.
+          capture(
+            map(
+              optional(
+                seqR(or(str("forkShared"), str("raceShared"), str("fork"), str("race")), spaces),
+              ),
+              // seqR returns ALL results as an array; the keyword is [0]
+              (r) => (r === null ? null : (r as unknown[])[0]),
+            ),
+            "prefix",
+          ),
+          char("["),
+          optionalSpacesOrNewline,
+          capture(
+            lazy(() => exprParser),
+            "expression",
+          ),
+          // `optionalSpacesOrNewline` BEFORE each keyword, required `spaces`
+          // AFTER. Before must be optional because exprParser eats trailing
+          // whitespace after a call (`f(x) ` leaves rest `for...`) but not
+          // after a bare name (`x ` leaves rest ` for...`) - requiring
+          // whitespace here broke every call-bodied comprehension. It must
+          // cross newlines (optionalSpaces is spaces/tabs only) or a
+          // comprehension could only break lines after a call, never before
+          // `in`/`if`. `for` stays a whole word via the not(varNameChar)
+          // boundary below: `[format, other]` fails at str("for") because
+          // exprParser greedily consumed the full identifier `format`, and
+          // `forx` fails the boundary.
+          optionalSpacesOrNewline,
+          str("for"),
+          // word boundary, not required whitespace: `[x for]` (an editor
+          // auto-closing a half-typed comprehension) must still reach the
+          // commit and get the binder message, while `forever` must fail
+          // here, BEFORE the commit, and fall through to the array rule
+          not(varNameChar),
+          // COMMIT POINT (#602). Once `[ expr for` has matched as a whole
+          // word, nothing but a comprehension attempt can be on the wire -
+          // arrays, strings containing the word for, and format-style
+          // identifiers all diverge earlier (pinned in
+          // comprehension.test.ts). So from here failures are hard,
+          // targeted parseError throws instead of a silent backtrack into
+          // the array parser, which used to swallow half-typed
+          // comprehensions.
+          captureCaptures(
+            parseError(
+              "expected a binder name or pattern after `for` in this list comprehension",
+              spaces,
+              ...iterationBinderFragment,
+            ),
+          ),
+          captureCaptures(
+            parseError(
+              "expected `in` after the list comprehension binder",
+              optionalSpacesOrNewline,
+              str("in"),
+              // word-bounded (the ifExpressionParser precedent), so
+              // `insomething` reports the missing `in` here instead of
+              // committing past it and blaming the iterable
+              not(varNameChar),
+            ),
+          ),
+          // the required whitespace after `in` lives with the iterable,
+          // so `[x for x in]` reports a missing iterable rather than
+          // blaming the `in` it already has
+          captureCaptures(
+            parseError(
+              "expected an iterable expression after `in` in this list comprehension",
+              spaces,
+              capture(
+                lazy(() => exprParser),
+                "iterable",
               ),
             ),
-            // seqR returns ALL results as an array; the keyword is [0]
-            (r) => (r === null ? null : (r as unknown[])[0]),
           ),
-          "prefix",
-        ),
-        char("["),
-        optionalSpacesOrNewline,
-        capture(
-          lazy(() => exprParser),
-          "expression",
-        ),
-        // `optionalSpacesOrNewline` BEFORE each keyword, required `spaces`
-        // AFTER. Before must be optional because exprParser eats trailing
-        // whitespace after a call (`f(x) ` leaves rest `for...`) but not
-        // after a bare name (`x ` leaves rest ` for...`) - requiring
-        // whitespace here broke every call-bodied comprehension. It must
-        // cross newlines (optionalSpaces is spaces/tabs only) or a
-        // comprehension could only break lines after a call, never before
-        // `in`/`if`. `for` stays a whole word via the not(varNameChar)
-        // boundary below: `[format, other]` fails at str("for") because
-        // exprParser greedily consumed the full identifier `format`, and
-        // `forx` fails the boundary.
-        optionalSpacesOrNewline,
-        str("for"),
-        // word boundary, not required whitespace: `[x for]` (an editor
-        // auto-closing a half-typed comprehension) must still reach the
-        // commit and get the binder message, while `forever` must fail
-        // here, BEFORE the commit, and fall through to the array rule
-        not(varNameChar),
-        // COMMIT POINT (#602). Once `[ expr for` has matched as a whole
-        // word, nothing but a comprehension attempt can be on the wire -
-        // arrays, strings containing the word for, and format-style
-        // identifiers all diverge earlier (pinned in
-        // comprehension.test.ts). So from here failures are hard,
-        // targeted parseError throws instead of a silent backtrack into
-        // the array parser, which used to swallow half-typed
-        // comprehensions.
-        captureCaptures(
-          parseError(
-            "expected a binder name or pattern after `for` in this list comprehension",
-            spaces,
-            ...iterationBinderFragment,
-          ),
-        ),
-        captureCaptures(
-          parseError(
-            "expected `in` after the list comprehension binder",
-            optionalSpacesOrNewline,
-            str("in"),
-            // word-bounded (the ifExpressionParser precedent), so
-            // `insomething` reports the missing `in` here instead of
-            // committing past it and blaming the iterable
-            not(varNameChar),
-          ),
-        ),
-        // the required whitespace after `in` lives with the iterable,
-        // so `[x for x in]` reports a missing iterable rather than
-        // blaming the `in` it already has
-        captureCaptures(
-          parseError(
-            "expected an iterable expression after `in` in this list comprehension",
-            spaces,
-            capture(
-              lazy(() => exprParser),
-              "iterable",
-            ),
-          ),
-        ),
-        optional(
-          captureCaptures(
-            seqC(
-              optionalSpacesOrNewline,
-              str("if"),
-              // word boundary: `iffy` is an identifier, not a filter
-              // keyword - it must fail here so the optional backtracks
-              // and the close-bracket commit reports instead
-              not(varNameChar),
-              // committed once `if` matched as a whole word: a filter
-              // keyword with no condition is a broken comprehension,
-              // not an array
-              captureCaptures(
-                parseError(
-                  "expected a filter condition after `if` in this list comprehension",
-                  spaces,
-                  capture(
-                    lazy(() => exprParser),
-                    "condition",
+          optional(
+            captureCaptures(
+              seqC(
+                optionalSpacesOrNewline,
+                str("if"),
+                // word boundary: `iffy` is an identifier, not a filter
+                // keyword - it must fail here so the optional backtracks
+                // and the close-bracket commit reports instead
+                not(varNameChar),
+                // committed once `if` matched as a whole word: a filter
+                // keyword with no condition is a broken comprehension,
+                // not an array
+                captureCaptures(
+                  parseError(
+                    "expected a filter condition after `if` in this list comprehension",
+                    spaces,
+                    capture(
+                      lazy(() => exprParser),
+                      "condition",
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-        parseError(
-          "expected `]` to close this list comprehension",
-          optionalSpacesOrNewline,
-          char("]"),
-        ),
+          parseError(
+            "expected `]` to close this list comprehension",
+            optionalSpacesOrNewline,
+            char("]"),
+          ),
         ),
         // Convert the raw prefix keyword into mode/shared by table
         // lookup - one branch, the sequential case being a table row
@@ -6482,9 +6561,7 @@ export const comprehensionParser: Parser<Comprehension> = label(
         // trailing cast below erases inference.
         (result: any): Comprehension => {
           const { prefix, ...rest } = result;
-          const fields = prefix
-            ? COMPREHENSION_PREFIXES[prefix as string]
-            : SEQ_PREFIX;
+          const fields = prefix ? COMPREHENSION_PREFIXES[prefix as string] : SEQ_PREFIX;
           return { ...rest, ...fields };
         },
       ),
@@ -6497,41 +6574,47 @@ export const comprehensionParser: Parser<Comprehension> = label(
 // the inferred capture object loses `itemVar`/`indexVar`. The fragment
 // really does capture both - comprehension.test.ts and the for-loop suite
 // pin it at runtime.
-export const forLoopParser: Parser<ForLoop> = label("a for loop", withLoc(memo(
-  "forLoopParser",
-  seqC(
-    set("type", "forLoop"),
-    str("for"),
-    optionalSpaces,
-    char("("),
-    optionalSpaces,
-    captureCaptures(
-      parseError(
-        "expected `(` to open for loop condition",
-        optional(or(str("let"), str("const"))),
+export const forLoopParser: Parser<ForLoop> = label(
+  "a for loop",
+  withLoc(
+    memo(
+      "forLoopParser",
+      seqC(
+        set("type", "forLoop"),
+        str("for"),
         optionalSpaces,
-        ...iterationBinderFragment,
+        char("("),
         optionalSpaces,
-        or(str("in"), str("of")),
-        spaces,
-        capture(exprParser, "iterable"),
+        captureCaptures(
+          parseError(
+            "expected `(` to open for loop condition",
+            optional(or(str("let"), str("const"))),
+            optionalSpaces,
+            ...iterationBinderFragment,
+            optionalSpaces,
+            or(str("in"), str("of")),
+            spaces,
+            capture(exprParser, "iterable"),
+            optionalSpaces,
+            char(")"),
+          ),
+        ),
         optionalSpaces,
-        char(")"),
-      )),
-    optionalSpaces,
-    captureCaptures(
-      parseError(
-        "expected `{` to open for loop body",
-        char("{"),
-        optionalSpacesOrNewline,
-        capture(bodyParser, "body"),
-        optionalSpacesOrNewline,
-        char("}"),
-        optionalSpacesOrNewline,
+        captureCaptures(
+          parseError(
+            "expected `{` to open for loop body",
+            char("{"),
+            optionalSpacesOrNewline,
+            capture(bodyParser, "body"),
+            optionalSpacesOrNewline,
+            char("}"),
+            optionalSpacesOrNewline,
+          ),
+        ),
       ),
     ),
-  ),
-)) as unknown as Parser<ForLoop>);
+  ) as unknown as Parser<ForLoop>,
+);
 
 // Parses: name, name?, name: type, name?: type, name = default, name? = default, name: type = default
 export const functionParameterParser: Parser<FunctionParameter> = memo(
@@ -6558,7 +6641,10 @@ export const functionParameterParser: Parser<FunctionParameter> = memo(
             optionalSpaces,
             str("="),
             optionalSpaces,
-            capture(or(agencyArrayParser, agencyObjectParser, literalParserNoVarName), "defaultValue"),
+            capture(
+              or(agencyArrayParser, agencyObjectParser, literalParserNoVarName),
+              "defaultValue",
+            ),
           ),
         ),
       ),
@@ -6575,9 +6661,7 @@ export const functionParameterParser: Parser<FunctionParameter> = memo(
         if (rest.typeHint) {
           const nullT = { type: "primitiveType", value: "null" };
           const existingMembers =
-            rest.typeHint.type === "unionType"
-              ? rest.typeHint.types
-              : [rest.typeHint];
+            rest.typeHint.type === "unionType" ? rest.typeHint.types : [rest.typeHint];
           rest.typeHint = {
             type: "unionType",
             types: [...existingMembers, nullT],
@@ -6600,12 +6684,7 @@ export const variadicParameterParser: Parser<FunctionParameter> = memo(
       capture(many1WithJoin(varNameChar), "name"),
       optional(
         captureCaptures(
-          seqC(
-            optionalSpaces,
-            char(":"),
-            optionalSpaces,
-            capture(variableTypeParser, "typeHint"),
-          ),
+          seqC(optionalSpaces, char(":"), optionalSpaces, capture(variableTypeParser, "typeHint")),
         ),
       ),
     ),
@@ -6618,9 +6697,7 @@ export const functionReturnTypeParser: Parser<VariableType> = memo(
   seqC(
     or(char(":"), str("->")),
     optionalSpaces,
-    captureCaptures(
-      or(variableTypeParser, parseError("Invalid return type", fail("error"))),
-    ),
+    captureCaptures(or(variableTypeParser, parseError("Invalid return type", fail("error")))),
   ),
 );
 
@@ -6665,10 +6742,7 @@ const _baseFunctionParser: Parser<any> = memo(
     // `label(...)` suppression) instead of falling through to the
     // top-level alternatives list and dumping every possible statement
     // form the user might have meant.
-    parseError(
-      "expected `,` between parameters or `)` to close the parameter list",
-      char(")"),
-    ),
+    parseError("expected `,` between parameters or `)` to close the parameter list", char(")")),
     optionalSpaces,
     capture(optional(functionReturnTypeParser), "returnType"),
     capture(optional(map(str("!"), () => true)), "returnTypeValidated"),
@@ -6699,15 +6773,14 @@ const exportKeywordParser: Parser<boolean> = or(
 // The modifiers that may precede `def`, in any order, each at most once.
 // A table looped to fixpoint keeps this order-independent and makes a new
 // modifier a one-line addition.
-const FUNCTION_MODIFIER_KEYWORDS = [
-  "export",
-  "destructive",
-  "idempotent",
-] as const;
+const FUNCTION_MODIFIER_KEYWORDS = ["export", "destructive", "idempotent"] as const;
 type FunctionModifierKeyword = (typeof FUNCTION_MODIFIER_KEYWORDS)[number];
 
 const modifierKeywordParser = (kw: string): Parser<boolean> =>
-  or(map(seqC(str(kw), spaces), () => true), succeed(false));
+  or(
+    map(seqC(str(kw), spaces), () => true),
+    succeed(false),
+  );
 
 type FunctionModifiers = {
   isExported: boolean;
@@ -6761,7 +6834,12 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   const baseResult = _baseFunctionParser(mods.rest);
   if (!baseResult.success) return baseResult;
 
-  const { keyword: _keyword, returnTypeValidated: _rtv, raises: _raises, ...rest } = baseResult.result as any;
+  const {
+    keyword: _keyword,
+    returnTypeValidated: _rtv,
+    raises: _raises,
+    ...rest
+  } = baseResult.result as any;
   const result = { ...rest } as FunctionDefinition;
   if (_rtv) result.returnTypeValidated = true;
   // Only attach `raises` when a clause was present (optional() yields null);
@@ -6785,10 +6863,7 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   for (let i = 0; i < params.length; i++) {
     if (params[i].variadic) {
       if (i !== params.length - 1) {
-        return failure(
-          `Variadic parameter '${params[i].name}' must be the last parameter`,
-          input,
-        );
+        return failure(`Variadic parameter '${params[i].name}' must be the last parameter`, input);
       }
     } else if (params[i].defaultValue) {
       seenOptional = true;
@@ -6802,64 +6877,71 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
 
   return { ...baseResult, result };
 };
-export const functionParser: Parser<FunctionDefinition> = label("a function definition", withLoc(_functionParserInner));
+export const functionParser: Parser<FunctionDefinition> = label(
+  "a function definition",
+  withLoc(_functionParserInner),
+);
 
-
-export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node definition", withLoc(memo(
-  "graphNodeParser",
-  map(
-    seqC(
-      set("type", "graphNode"),
-      capture(exportKeywordParser, "exported"),
-      optionalSpaces,
-      str("node"),
-      many1(space),
-      capture(declNameParser, "nodeName"),
-      char("("),
-      optionalSpacesOrNewline,
-      captureCaptures(
-        commaDelimitedListCaptures(
-          functionParameterParser,
-          CALL_ARGUMENT_LIST,
-          "parameters",
-          "parameterTrivia",
+export const graphNodeParser: Parser<GraphNodeDefinition> = label(
+  "a node definition",
+  withLoc(
+    memo(
+      "graphNodeParser",
+      map(
+        seqC(
+          set("type", "graphNode"),
+          capture(exportKeywordParser, "exported"),
+          optionalSpaces,
+          str("node"),
+          many1(space),
+          capture(declNameParser, "nodeName"),
+          char("("),
+          optionalSpacesOrNewline,
+          captureCaptures(
+            commaDelimitedListCaptures(
+              functionParameterParser,
+              CALL_ARGUMENT_LIST,
+              "parameters",
+              "parameterTrivia",
+            ),
+          ),
+          optionalSpacesOrNewline,
+          parseError(
+            "expected `,` between parameters or `)` to close the parameter list",
+            char(")"),
+          ),
+          optionalSpaces,
+          capture(optional(functionReturnTypeParser), "returnType"),
+          capture(optional(map(str("!"), () => true)), "returnTypeValidated"),
+          optionalSpacesOrNewline,
+          capture(optional(raisesClauseParser), "raises"),
+          captureCaptures(
+            parseError(
+              "expected node body",
+              optionalSpacesOrNewline,
+              char("{"),
+              optionalSpacesOrNewline,
+              capture(or(docStringParser, succeed(undefined)), "docString"),
+              optionalSpacesOrNewline,
+              capture(bodyParser, "body"),
+              optionalSpacesOrNewline,
+              char("}"),
+              optionalSemicolon,
+            ),
+          ),
         ),
-      ),
-      optionalSpacesOrNewline,
-      parseError(
-        "expected `,` between parameters or `)` to close the parameter list",
-        char(")"),
-      ),
-      optionalSpaces,
-      capture(optional(functionReturnTypeParser), "returnType"),
-      capture(optional(map(str("!"), () => true)), "returnTypeValidated"),
-      optionalSpacesOrNewline,
-      capture(optional(raisesClauseParser), "raises"),
-      captureCaptures(
-        parseError(
-          "expected node body",
-          optionalSpacesOrNewline,
-          char("{"),
-          optionalSpacesOrNewline,
-          capture(or(docStringParser, succeed(undefined)), "docString"),
-          optionalSpacesOrNewline,
-          capture(bodyParser, "body"),
-          optionalSpacesOrNewline,
-          char("}"),
-          optionalSemicolon,
-        ),
+        (result: any) => {
+          const { returnTypeValidated: _rtv, exported: _exp, raises: _raises, ...rest } = result;
+          if (_rtv) rest.returnTypeValidated = true;
+          if (_exp) rest.exported = true;
+          // Only attach `raises` when a clause was present (optional() yields null).
+          if (_raises) rest.raises = _raises;
+          return rest;
+        },
       ),
     ),
-    (result: any) => {
-      const { returnTypeValidated: _rtv, exported: _exp, raises: _raises, ...rest } = result;
-      if (_rtv) rest.returnTypeValidated = true;
-      if (_exp) rest.exported = true;
-      // Only attach `raises` when a clause was present (optional() yields null).
-      if (_raises) rest.raises = _raises;
-      return rest;
-    },
   ),
-)));
+);
 
 // =============================================================================
 // reserved `class` keyword detector
@@ -6886,11 +6968,7 @@ export const reservedClassParser: Parser<never> = (input: string) => {
   // many1 of " \t" (not `space`, which is single, and not `spaces`, which
   // permits newlines) tolerates `class Foo`, `class  Foo`, `class\tFoo`
   // without firing on `class\nFoo` or treating `classify` as a hit.
-  const probe = seqC(
-    str("class"),
-    many1(oneOf(" \t")),
-    many1WithJoin(varNameChar),
-  );
+  const probe = seqC(str("class"), many1(oneOf(" \t")), many1WithJoin(varNameChar));
   if (!probe(input).success) {
     return failure("", input);
   }
@@ -6899,10 +6977,7 @@ export const reservedClassParser: Parser<never> = (input: string) => {
   // carrying our actionable message. The cast is needed because
   // `parseError` is typed as `Parser<{}>` (it doesn't know its inner
   // parser always fails); the call never returns normally.
-  return parseError(
-    RESERVED_CLASS_MESSAGE,
-    fail("class definition"),
-  )(input) as ParserResult<never>;
+  return parseError(RESERVED_CLASS_MESSAGE, fail("class definition"))(input) as ParserResult<never>;
 };
 
 // =============================================================================
@@ -6917,11 +6992,7 @@ export const wildcardPatternParser: Parser<WildcardPattern> = label(
 export const restPatternParser: Parser<RestPattern> = label(
   "a rest pattern",
   withLoc(
-    seqC(
-      set("type", "restPattern"),
-      str("..."),
-      capture(many1WithJoin(varNameChar), "identifier"),
-    ),
+    seqC(set("type", "restPattern"), str("..."), capture(many1WithJoin(varNameChar), "identifier")),
   ),
 );
 
@@ -6939,9 +7010,7 @@ export const restPatternParser: Parser<RestPattern> = label(
  * The budget is per array pattern, not per arm — a nested array is its own
  * pattern and gets its own: `[a, ...outer, [b, ...inner]]` is fine.
  */
-function enforceAtMostOneRest<T extends { type: string }>(
-  elements: readonly T[],
-): void {
+function enforceAtMostOneRest<T extends { type: string }>(elements: readonly T[]): void {
   let seen = false;
   for (const element of elements) {
     if (element.type !== "restPattern") continue;
@@ -6968,14 +7037,17 @@ function enforceAtMostOneRest<T extends { type: string }>(
 
 // ---- binding pattern parsers ----
 
-const _bindingPatternParser: Parser<BindingPattern> = memo("bindingPatternParser", or(
-  lazy(() => arrayBindingPatternParser),
-  lazy(() => objectBindingPatternParser),
-  restPatternParser,
-  // wildcard MUST come before variableNameParser so `_` doesn't match as identifier
-  wildcardPatternParser,
-  variableNameParser,
-) as Parser<BindingPattern>);
+const _bindingPatternParser: Parser<BindingPattern> = memo(
+  "bindingPatternParser",
+  or(
+    lazy(() => arrayBindingPatternParser),
+    lazy(() => objectBindingPatternParser),
+    restPatternParser,
+    // wildcard MUST come before variableNameParser so `_` doesn't match as identifier
+    wildcardPatternParser,
+    variableNameParser,
+  ) as Parser<BindingPattern>,
+);
 export const bindingPatternParser: Parser<BindingPattern> = _bindingPatternParser;
 
 export const arrayBindingPatternParser: Parser<ArrayPattern> = label(
@@ -7005,15 +7077,10 @@ export const arrayBindingPatternParser: Parser<ArrayPattern> = label(
   },
 );
 
-const _objectPatternShorthandParser: Parser<ObjectPatternShorthand> = (
-  input: string,
-) => {
+const _objectPatternShorthandParser: Parser<ObjectPatternShorthand> = (input: string) => {
   const r = variableNameParser(input);
   if (!r.success) return r;
-  return success(
-    { type: "objectPatternShorthand" as const, name: r.result.value },
-    r.rest,
-  );
+  return success({ type: "objectPatternShorthand" as const, name: r.result.value }, r.rest);
 };
 
 // Shared helpers for binding and match object-property parsers. The two
@@ -7021,19 +7088,19 @@ const _objectPatternShorthandParser: Parser<ObjectPatternShorthand> = (
 // matchPatternParser). Both produce a subset of MatchPattern; the binding
 // parser cannot produce a resultPattern or a typePattern, which is why
 // binding position keeps `: Type` as a static annotation.
-const propertyWithValueParser = (
-  valueParser: Parser<ObjectPatternProperty["value"]>,
-): Parser<ObjectPatternProperty> => (input: string) => {
-  const parser = seqC(
-    set("type", "objectPatternProperty"),
-    capture(many1WithJoin(varNameChar), "key"),
-    optionalSpaces,
-    char(":"),
-    optionalSpaces,
-    capture(valueParser, "value"),
-  );
-  return parser(input);
-};
+const propertyWithValueParser =
+  (valueParser: Parser<ObjectPatternProperty["value"]>): Parser<ObjectPatternProperty> =>
+  (input: string) => {
+    const parser = seqC(
+      set("type", "objectPatternProperty"),
+      capture(many1WithJoin(varNameChar), "key"),
+      optionalSpaces,
+      char(":"),
+      optionalSpaces,
+      capture(valueParser, "value"),
+    );
+    return parser(input);
+  };
 
 /**
  * `key as name` — bind the field to a different name.
@@ -7127,10 +7194,7 @@ export const resultPatternParser: Parser<ResultPattern> = withLoc(
 
     // Bare form: no `(` after the keyword.
     if (kwResult.rest[0] !== "(") {
-      return success(
-        { type: "resultPattern", kind, binding: null },
-        kwResult.rest,
-      );
+      return success({ type: "resultPattern", kind, binding: null }, kwResult.rest);
     }
 
     // Committed to the result-pattern form: once we see `success(` or

@@ -5,10 +5,7 @@ import { MemoryGraph } from "./graph.js";
 
 describe("buildExtractionPrompt", () => {
   it("includes conversation messages in the prompt", () => {
-    const messages = [
-      userMessage("My mom loves pottery"),
-      assistantMessage("That's great!"),
-    ];
+    const messages = [userMessage("My mom loves pottery"), assistantMessage("That's great!")];
     const graph = new MemoryGraph();
     const prompt = buildExtractionPrompt(messages, graph);
     expect(prompt).toContain("My mom loves pottery");
@@ -27,9 +24,7 @@ describe("applyExtractionResult", () => {
   it("adds new entities from extraction", () => {
     const graph = new MemoryGraph();
     const result = {
-      entities: [
-        { name: "Mom", type: "person", observations: ["Likes pottery"] },
-      ],
+      entities: [{ name: "Mom", type: "person", observations: ["Likes pottery"] }],
       relations: [],
       expirations: [],
     };
@@ -41,14 +36,9 @@ describe("applyExtractionResult", () => {
   it("merges observations into existing entity by name", () => {
     const graph = new MemoryGraph();
     graph.addEntity("Mom", "person", "test");
-    graph.addObservation(
-      graph.findEntityByName("Mom")!.id,
-      "Birthday is March 5"
-    );
+    graph.addObservation(graph.findEntityByName("Mom")!.id, "Birthday is March 5");
     const result = {
-      entities: [
-        { name: "Mom", type: "person", observations: ["Likes pottery"] },
-      ],
+      entities: [{ name: "Mom", type: "person", observations: ["Likes pottery"] }],
       relations: [],
       expirations: [],
     };
@@ -75,13 +65,9 @@ describe("applyExtractionResult", () => {
     const mom = graph.addEntity("Mom", "person", "test");
     const oldObs = graph.addObservation(mom.id, "Favorite color is blue");
     const result = {
-      entities: [
-        { name: "Mom", type: "person", observations: ["Favorite color is red"] },
-      ],
+      entities: [{ name: "Mom", type: "person", observations: ["Favorite color is red"] }],
       relations: [],
-      expirations: [
-        { entityName: "Mom", observationContent: "Favorite color is blue" },
-      ],
+      expirations: [{ entityName: "Mom", observationContent: "Favorite color is blue" }],
     };
     const outcome = applyExtractionResult(graph, result, "test-agent");
     const current = graph.getCurrentObservations(mom.id);

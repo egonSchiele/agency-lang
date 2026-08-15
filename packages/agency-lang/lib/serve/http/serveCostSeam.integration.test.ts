@@ -19,15 +19,27 @@ import type { ServedExportedFunction } from "../types.js";
 describe("serve cost seam — end to end", () => {
   const BUDGET_ENV = ["AGENCY_IPC", "AGENCY_MAX_COST", "AGENCY_MAX_TIME"] as const;
   const saved: Record<string, string | undefined> = {};
-  const setup = () => BUDGET_ENV.forEach((k) => { saved[k] = process.env[k]; delete process.env[k]; });
-  afterEach(() => BUDGET_ENV.forEach((k) => {
-    if (saved[k] === undefined) delete process.env[k];
-    else process.env[k] = saved[k];
-  }));
+  const setup = () =>
+    BUDGET_ENV.forEach((k) => {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    });
+  afterEach(() =>
+    BUDGET_ENV.forEach((k) => {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }),
+  );
 
   function makeCtx(budget?: { maxCost?: number; maxTimeMs?: number }) {
     return new RuntimeContext<GraphState>({
-      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
       smoltalkDefaults: {},
       dirname: process.cwd(),
       budget,
@@ -40,7 +52,8 @@ describe("serve cost seam — end to end", () => {
   ): ServedExportedFunction {
     const fn = { invoke: async () => body() } as unknown as AgencyFunction;
     return {
-      kind: "function", ...unusedPublicInvoke,
+      kind: "function",
+      ...unusedPublicInvoke,
       name: "run",
       description: "run",
       parameters: [],
@@ -61,7 +74,10 @@ describe("serve cost seam — end to end", () => {
 
   it("success carries the exact priced cost and reads complete", async () => {
     setup();
-    const result = await handlerFor(makeCtx(), () => { addCost(0.03); return "done"; })("POST", "/function/run", {});
+    const result = await handlerFor(makeCtx(), () => {
+      addCost(0.03);
+      return "done";
+    })("POST", "/function/run", {});
     expect(result.status).toBe(200);
     expect(result.body).toEqual({ success: true, value: "done" });
     expect(result.usage?.cost.totalCost).toBeCloseTo(0.03);
@@ -71,19 +87,33 @@ describe("serve cost seam — end to end", () => {
 
   it("success carries a reconciled manual breakdown (addCost has model '')", async () => {
     setup();
-    const result = await handlerFor(makeCtx(), () => { addCost(0.03); return "done"; })("POST", "/function/run", {});
+    const result = await handlerFor(makeCtx(), () => {
+      addCost(0.03);
+      return "done";
+    })("POST", "/function/run", {});
     // addCost is a manual charge, so it lands in a single manual entry (model "").
     expect(result.usage?.entries).toHaveLength(1);
     expect(result.usage?.entries[0]).toMatchObject({ kind: "manual", model: "" });
     expect(result.usage?.entries[0].cost.totalCost).toBeCloseTo(0.03);
-    const attributed = result.usage!.entries.reduce((total, entry) => total + entry.cost.totalCost, 0);
-    expect(Math.abs(attributed - result.usage!.cost.totalCost)).toBeLessThanOrEqual(usageReconcileTolerance(result.usage!.cost.totalCost));
+    const attributed = result.usage!.entries.reduce(
+      (total, entry) => total + entry.cost.totalCost,
+      0,
+    );
+    expect(Math.abs(attributed - result.usage!.cost.totalCost)).toBeLessThanOrEqual(
+      usageReconcileTolerance(result.usage!.cost.totalCost),
+    );
   });
 
   it("two concurrent invocations report independent usage (own execCtx each)", async () => {
     setup();
-    const cheap = handlerFor(makeCtx(), () => { addCost(0.01); return "a"; })("POST", "/function/run", {});
-    const dear = handlerFor(makeCtx(), () => { addCost(0.5); return "b"; })("POST", "/function/run", {});
+    const cheap = handlerFor(makeCtx(), () => {
+      addCost(0.01);
+      return "a";
+    })("POST", "/function/run", {});
+    const dear = handlerFor(makeCtx(), () => {
+      addCost(0.5);
+      return "b";
+    })("POST", "/function/run", {});
     const [a, b] = await Promise.all([cheap, dear]);
     expect(a.usage?.cost.totalCost).toBeCloseTo(0.01);
     expect(b.usage?.cost.totalCost).toBeCloseTo(0.5);
@@ -105,7 +135,10 @@ describe("serve cost seam — end to end", () => {
 
   it("a baked budget trip returns 402 carrying the cost up to the trip", async () => {
     setup();
-    const result = await handlerFor(makeCtx({ maxCost: 0 }), () => { addCost(1); return "x"; })("POST", "/function/run", {});
+    const result = await handlerFor(makeCtx({ maxCost: 0 }), () => {
+      addCost(1);
+      return "x";
+    })("POST", "/function/run", {});
     expect(result.status).toBe(402);
     expect(result.body).toMatchObject({ code: "budgetExceeded", dimension: "cost", limit: 0 });
     expect(result.usage?.cost.totalCost).toBeCloseTo(1);

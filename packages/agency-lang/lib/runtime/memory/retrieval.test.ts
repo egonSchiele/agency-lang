@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  structuredLookup,
-  formatRetrievalResults,
-} from "./retrieval.js";
+import { structuredLookup, formatRetrievalResults } from "./retrieval.js";
 import { MemoryGraph } from "./graph.js";
 
 describe("structuredLookup", () => {

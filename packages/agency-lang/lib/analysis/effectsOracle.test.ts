@@ -81,9 +81,7 @@ describe("the new pass agrees with the type-check-everything analysis", () => {
     // analyzeInterrupts type-checks each reachable file separately and never
     // reads sym.interruptEffects for its call edges, so this is a real second
     // opinion rather than a round trip.
-    const sites = analyzeInterrupts(main, {}).sites.map(
-      (result) => result.site.effect,
-    );
+    const sites = analyzeInterrupts(main, {}).sites.map((result) => result.site.effect);
     expect(sites).toContain("std::read");
     expect(symbolTableEffects(main, "main")).toEqual(["std::read"]);
   });

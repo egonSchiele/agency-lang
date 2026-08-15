@@ -80,14 +80,8 @@ export function llm<S extends z.ZodSchema>(
   prompt: string | UserContentInput,
   opts: LlmOpts<S> & { schema: S },
 ): Promise<z.infer<S>>;
-export function llm(
-  prompt: string | UserContentInput,
-  opts?: LlmOpts,
-): Promise<string>;
-export async function llm(
-  prompt: string | UserContentInput,
-  opts: LlmOpts = {},
-): Promise<any> {
+export function llm(prompt: string | UserContentInput, opts?: LlmOpts): Promise<string>;
+export async function llm(prompt: string | UserContentInput, opts: LlmOpts = {}): Promise<any> {
   const thread = opts.thread ?? getRuntimeContext().threads.getOrCreateActive();
   // Build clientConfig with `model` only when explicitly overridden.
   // Passing `{ model: undefined }` would still let `runPrompt`'s merge

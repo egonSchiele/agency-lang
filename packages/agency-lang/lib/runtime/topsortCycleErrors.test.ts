@@ -25,10 +25,7 @@ import { compile, resetCompilationCache } from "@/compiler/defaultSession.js";
  * are fully exercised end-to-end.
  */
 
-const FIXTURES_ROOT = path.resolve(
-  __dirname,
-  "../../tests/agency/topsort/cycles",
-);
+const FIXTURES_ROOT = path.resolve(__dirname, "../../tests/agency/topsort/cycles");
 
 // Use-before-def fixtures are generated inline (per-test) into
 // `.agency-tmp/` because they are not runnable by `agency test` — only
@@ -36,14 +33,9 @@ const FIXTURES_ROOT = path.resolve(
 // `tests/agency/`. Each test writes its files in `beforeEach`, runs
 // the same `runFixture` helper as the cycle cases, and the tmp dir is
 // wiped in `afterEach` along with the `.js` outputs.
-const USE_BEFORE_DEF_TMP = path.resolve(
-  __dirname,
-  "../../.agency-tmp/use-before-def",
-);
+const USE_BEFORE_DEF_TMP = path.resolve(__dirname, "../../.agency-tmp/use-before-def");
 
-type CompileOutcome =
-  | { kind: "ok"; mod: any }
-  | { kind: "compileError"; message: string };
+type CompileOutcome = { kind: "ok"; mod: any } | { kind: "compileError"; message: string };
 
 let lastOutputs: string[] = [];
 
@@ -75,10 +67,7 @@ afterEach(() => {
  * Used by the use-before-def cases so each fixture lives in the test
  * file rather than under `tests/agency/`.
  */
-function writeUseBeforeDefFixture(
-  name: string,
-  files: Record<string, string>,
-): string {
+function writeUseBeforeDefFixture(name: string, files: Record<string, string>): string {
   const dir = path.join(USE_BEFORE_DEF_TMP, name);
   fs.mkdirSync(dir, { recursive: true });
   for (const [rel, contents] of Object.entries(files)) {
@@ -92,10 +81,7 @@ function writeUseBeforeDefFixture(
  * `process.exit(1)` the CLI fires for `CompileClosureError` so the
  * caller can assert on the captured stderr instead.
  */
-async function runFixture(
-  fixtureDir: string,
-  entryRel: string,
-): Promise<CompileOutcome> {
+async function runFixture(fixtureDir: string, entryRel: string): Promise<CompileOutcome> {
   const entryAbs = path.join(fixtureDir, entryRel);
   resetCompilationCache();
 
@@ -138,10 +124,7 @@ async function runFixture(
 
 describe("tests/agency/topsort/cycles fixtures", () => {
   it("same-file cycle → compile error names both decls", async () => {
-    const outcome = await runFixture(
-      path.join(FIXTURES_ROOT, "same-file-cycle"),
-      "main.agency",
-    );
+    const outcome = await runFixture(path.join(FIXTURES_ROOT, "same-file-cycle"), "main.agency");
     expect(outcome.kind).toBe("compileError");
     if (outcome.kind !== "compileError") return;
     expect(outcome.message).toMatch(/Circular static dependency/);
@@ -150,10 +133,7 @@ describe("tests/agency/topsort/cycles fixtures", () => {
   });
 
   it("two-file cycle → compile error names both decls", async () => {
-    const outcome = await runFixture(
-      path.join(FIXTURES_ROOT, "two-file-cycle"),
-      "bar.agency",
-    );
+    const outcome = await runFixture(path.join(FIXTURES_ROOT, "two-file-cycle"), "bar.agency");
     expect(outcome.kind).toBe("compileError");
     if (outcome.kind !== "compileError") return;
     expect(outcome.message).toMatch(/Circular static dependency/);
@@ -162,10 +142,7 @@ describe("tests/agency/topsort/cycles fixtures", () => {
   });
 
   it("three-file triangle cycle → compile error names all three decls", async () => {
-    const outcome = await runFixture(
-      path.join(FIXTURES_ROOT, "three-file-cycle"),
-      "c.agency",
-    );
+    const outcome = await runFixture(path.join(FIXTURES_ROOT, "three-file-cycle"), "c.agency");
     expect(outcome.kind).toBe("compileError");
     if (outcome.kind !== "compileError") return;
     expect(outcome.message).toMatch(/Circular static dependency/);
@@ -230,10 +207,7 @@ describe("tests/agency/topsort/cycles fixtures", () => {
     // result. `a` then holds the failure; `node main() { return a }`
     // surfaces it as `result.data.error` — that's where the trap
     // message arrives in user-visible form.
-    const outcome = await runFixture(
-      path.join(FIXTURES_ROOT, "runtime-trap"),
-      "main.agency",
-    );
+    const outcome = await runFixture(path.join(FIXTURES_ROOT, "runtime-trap"), "main.agency");
     if (outcome.kind !== "ok") {
       throw new Error(
         `expected fixture to compile cleanly, got compile error:\n${outcome.message}`,

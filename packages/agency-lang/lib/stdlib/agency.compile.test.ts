@@ -9,12 +9,20 @@ import { ThreadStore } from "../runtime/state/threadStore.js";
 describe("_subprocessDepth", () => {
   it("reads ctx.subprocessDepth (the agency.ctx().subprocessDepth exposure)", () => {
     const ctx = new RuntimeContext({
-      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
     ctx.subprocessDepth = 3;
-    const depth = runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () => _subprocessDepth());
+    const depth = runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
+      _subprocessDepth(),
+    );
     expect(depth).toBe(3);
   });
 });

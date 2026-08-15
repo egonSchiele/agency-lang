@@ -13,9 +13,7 @@ export function _isEmail(value: string): ResultValue {
 }
 
 export function _isUrl(value: string): ResultValue {
-  return URL_RE.test(value)
-    ? success(value)
-    : failure(`not a valid URL: ${JSON.stringify(value)}`);
+  return URL_RE.test(value) ? success(value) : failure(`not a valid URL: ${JSON.stringify(value)}`);
 }
 
 export function _isUuid(value: string): ResultValue {
@@ -25,21 +23,15 @@ export function _isUuid(value: string): ResultValue {
 }
 
 export function _isInt(value: number): ResultValue {
-  return Number.isInteger(value)
-    ? success(value)
-    : failure(`expected integer, got ${value}`);
+  return Number.isInteger(value) ? success(value) : failure(`expected integer, got ${value}`);
 }
 
 export function _isPositive(value: number): ResultValue {
-  return value > 0
-    ? success(value)
-    : failure(`expected positive number, got ${value}`);
+  return value > 0 ? success(value) : failure(`expected positive number, got ${value}`);
 }
 
 export function _isNegative(value: number): ResultValue {
-  return value < 0
-    ? success(value)
-    : failure(`expected negative number, got ${value}`);
+  return value < 0 ? success(value) : failure(`expected negative number, got ${value}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -60,15 +52,11 @@ export function _isNegative(value: number): ResultValue {
 // ---------------------------------------------------------------------------
 
 export function _min(n: number, value: number): ResultValue {
-  return value >= n
-    ? success(value)
-    : failure(`expected value >= ${n}, got ${value}`);
+  return value >= n ? success(value) : failure(`expected value >= ${n}, got ${value}`);
 }
 
 export function _max(n: number, value: number): ResultValue {
-  return value <= n
-    ? success(value)
-    : failure(`expected value <= ${n}, got ${value}`);
+  return value <= n ? success(value) : failure(`expected value <= ${n}, got ${value}`);
 }
 
 export function _minLength(n: number, value: string): ResultValue {
@@ -85,7 +73,5 @@ export function _maxLength(n: number, value: string): ResultValue {
 
 export function _matches(pattern: string, value: string): ResultValue {
   const re = new RegExp(pattern);
-  return re.test(value)
-    ? success(value)
-    : failure(`value does not match pattern ${re.source}`);
+  return re.test(value) ? success(value) : failure(`value does not match pattern ${re.source}`);
 }

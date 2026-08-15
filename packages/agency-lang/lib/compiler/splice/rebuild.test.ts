@@ -75,7 +75,6 @@ function expandAndRead(hostPath: string): string {
   return JSON.stringify(result.value);
 }
 
-
 describe("rebuilding a file with a splice", () => {
   it("picks up an edited generator", () => {
     const hostPath = write("host.agency", HOST);

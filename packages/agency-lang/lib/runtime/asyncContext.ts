@@ -138,9 +138,7 @@ export async function withPushedHandler<T>(
   // preapprove() passes [] because its handler registers conceptually
   // above any guard (and its body never spends).
   const captured =
-    liveGuardIds ??
-    agencyStore.getStore()?.stack?.guards.map((g) => g.guardId) ??
-    [];
+    liveGuardIds ?? agencyStore.getStore()?.stack?.guards.map((g) => g.guardId) ?? [];
   ctx.pushHandler(handler, captured);
   try {
     return await fn();

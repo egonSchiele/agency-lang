@@ -35,16 +35,13 @@ describe("identifierSlots completeness", () => {
   // wrong — flipped to `none`, or reading a field that exists but is not
   // the name. That is what the two tests below are for.
 
-  it.each(IDENTIFIER_BEARING_KINDS)(
-    "%s still produces a slot",
-    (kind) => {
-      // Fails if someone sets this entry to `none`, which compiles fine
-      // and would silently stop coloring that whole node kind.
-      const slots = slotsFor(SAMPLE_NODES[kind]);
-      expect(slots.length).toBe(1);
-      expect(slots[0].name).toBe("helper");
-    },
-  );
+  it.each(IDENTIFIER_BEARING_KINDS)("%s still produces a slot", (kind) => {
+    // Fails if someone sets this entry to `none`, which compiles fine
+    // and would silently stop coloring that whole node kind.
+    const slots = slotsFor(SAMPLE_NODES[kind]);
+    expect(slots.length).toBe(1);
+    expect(slots[0].name).toBe("helper");
+  });
 
   it("finds every located name in a real parsed file", () => {
     // The corpus check: parse real code, collect every node the walk
@@ -113,9 +110,7 @@ describe("identifierSlots positions", () => {
       arguments: [],
       loc,
     });
-    expect(slots).toEqual([
-      { name: "helper", line: 3, col: 7, scopeOffset: 42, isCall: true },
-    ]);
+    expect(slots).toEqual([{ name: "helper", line: 3, col: 7, scopeOffset: 42, isCall: true }]);
   });
 
   it("does not carry the node span as a length source", () => {
@@ -146,9 +141,7 @@ describe("identifierSlots exclusions", () => {
     // than on node kind, so these start producing slots automatically
     // once the parser carries positions for them.
     expect(slotsFor({ type: "variableName", value: "obj" })).toEqual([]);
-    expect(
-      slotsFor({ type: "functionCall", functionName: "invoke", arguments: [] }),
-    ).toEqual([]);
+    expect(slotsFor({ type: "functionCall", functionName: "invoke", arguments: [] })).toEqual([]);
   });
 
   it("skips a template hole used as a callee", () => {

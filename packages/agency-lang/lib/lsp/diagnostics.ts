@@ -1,8 +1,4 @@
-import {
-  Diagnostic,
-  DiagnosticSeverity,
-  DiagnosticTag,
-} from "vscode-languageserver-protocol";
+import { Diagnostic, DiagnosticSeverity, DiagnosticTag } from "vscode-languageserver-protocol";
 import { runLinter } from "../linter/registry.js";
 import { unusedImportsBatchEdits } from "../linter/rules/unusedImports.js";
 import type { LintEdit, LintFinding } from "../linter/types.js";
@@ -124,7 +120,15 @@ export function runDiagnostics(
         source: "agency",
       });
     }
-    return { diagnostics, program: null, info: null, semanticIndex: {}, scopes: [], lintFindings: [], lintBatchEdits: [] };
+    return {
+      diagnostics,
+      program: null,
+      info: null,
+      semanticIndex: {},
+      scopes: [],
+      lintFindings: [],
+      lintBatchEdits: [],
+    };
   }
 
   let program = parseResult.result;
@@ -187,7 +191,15 @@ export function runDiagnostics(
       message: err instanceof Error ? err.message : String(err),
       source: "agency",
     });
-    return { diagnostics, program: null, info: null, semanticIndex: {}, scopes: [], lintFindings: [], lintBatchEdits: [] };
+    return {
+      diagnostics,
+      program: null,
+      info: null,
+      semanticIndex: {},
+      scopes: [],
+      lintFindings: [],
+      lintBatchEdits: [],
+    };
   }
 
   // Analysis-only path (the LSP never executes anything):

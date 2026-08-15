@@ -147,9 +147,7 @@ describe("bindingPatternParser", () => {
     it("rejects two rest binders [a, ...b, c, ...d]", () => {
       // The constraint that replaced "rest must be last": nothing would decide
       // where the split between two rests falls.
-      expect(() => bindingPatternParser("[a, ...b, c, ...d]")).toThrow(
-        /at most one rest binder/i,
-      );
+      expect(() => bindingPatternParser("[a, ...b, c, ...d]")).toThrow(/at most one rest binder/i);
     });
   });
 
@@ -404,9 +402,7 @@ describe("matchPatternParser", () => {
     });
 
     it("rejects two rest binders [a, ...b, c, ...d]", () => {
-      expect(() => matchPatternParser("[a, ...b, c, ...d]")).toThrow(
-        /at most one rest binder/i,
-      );
+      expect(() => matchPatternParser("[a, ...b, c, ...d]")).toThrow(/at most one rest binder/i);
     });
   });
 });
@@ -493,10 +489,12 @@ describe("matchBlockParserCase with patterns and guards", () => {
           { type: "objectPatternShorthand", name: "v" },
         ],
       },
-      body: [{
-        type: "functionCall",
-        functionName: "f",
-      }],
+      body: [
+        {
+          type: "functionCall",
+          functionName: "f",
+        },
+      ],
     });
   });
 
@@ -519,10 +517,12 @@ describe("matchBlockParserCase with patterns and guards", () => {
         left: { type: "variableName", value: "s" },
         right: { type: "number", value: "5" },
       },
-      body: [{
-        type: "functionCall",
-        functionName: "f",
-      }],
+      body: [
+        {
+          type: "functionCall",
+          functionName: "f",
+        },
+      ],
     });
   });
 
@@ -552,9 +552,7 @@ describe("matchBlockParserCase with patterns and guards", () => {
 
 describe("matchBlockParser with `is` expression as scrutinee", () => {
   it("parses `match(response is { status, body }) { _ => g() }`", () => {
-    const result = matchBlockParser(
-      "match(response is { status, body }) { _ => g() }",
-    );
+    const result = matchBlockParser("match(response is { status, body }) { _ => g() }");
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.result).toMatchObject({
@@ -603,9 +601,7 @@ describe("forLoopParser with destructuring", () => {
   });
 
   it("parses `for ({ name, age } in users) { print(name) }`", () => {
-    const result = forLoopParser(
-      "for ({ name, age } in users) { print(name) }",
-    );
+    const result = forLoopParser("for ({ name, age } in users) { print(name) }");
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.result).toMatchObject({
@@ -634,7 +630,7 @@ describe("forLoopParser with destructuring", () => {
 });
 
 describe("exprParser with `is` expression", () => {
-  it("parses `step is { type: \"showPolicy\" }` as an IsExpression", () => {
+  it('parses `step is { type: "showPolicy" }` as an IsExpression', () => {
     const result = exprParser('step is { type: "showPolicy" }');
     expect(result.success).toBe(true);
     if (!result.success) return;
@@ -681,7 +677,7 @@ describe("exprParser with `is` expression", () => {
     });
   });
 
-  it("parses RHS of `let r = step is { type: \"showPolicy\" }` as IsExpression", () => {
+  it('parses RHS of `let r = step is { type: "showPolicy" }` as IsExpression', () => {
     const result = assignmentParser('let r = step is { type: "showPolicy" }');
     expect(result.success).toBe(true);
     if (!result.success) return;

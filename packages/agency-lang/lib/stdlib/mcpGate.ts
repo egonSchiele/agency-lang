@@ -18,16 +18,14 @@ const EFFECT = "mcp::call";
  *  --print path. */
 export function gate(realCallTool: CallToolFn): CallToolFn {
   return async (server, tool, args) => {
-    const response = await agency.withResumableScope(
-      { name: `mcp:${server}:${tool}` },
-      async (s) =>
-        s.step(() =>
-          agency.interrupt({
-            effect: EFFECT,
-            message: `MCP tool call: ${server} → ${tool}`,
-            data: { server, tool, args },
-          }),
-        ),
+    const response = await agency.withResumableScope({ name: `mcp:${server}:${tool}` }, async (s) =>
+      s.step(() =>
+        agency.interrupt({
+          effect: EFFECT,
+          message: `MCP tool call: ${server} → ${tool}`,
+          data: { server, tool, args },
+        }),
+      ),
     );
     if (isApproved(response)) {
       return realCallTool(server, tool, args);

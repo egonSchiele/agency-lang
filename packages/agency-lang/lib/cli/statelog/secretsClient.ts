@@ -99,7 +99,9 @@ export function createSecretsClient(
         return new SecretRequestError("unexpected secrets response shape", failure.status);
       case "envelope-error":
         return new SecretRequestError(
-          failure.serverError !== undefined ? redact(failure.serverError) : "secrets request failed",
+          failure.serverError !== undefined
+            ? redact(failure.serverError)
+            : "secrets request failed",
           failure.status,
         );
     }
@@ -163,4 +165,3 @@ export function createSecretsClient(
     },
   };
 }
-

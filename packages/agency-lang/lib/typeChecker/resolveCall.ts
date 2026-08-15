@@ -2,12 +2,7 @@ import type { FunctionDefinition, GraphNodeDefinition } from "../types.js";
 import type { ImportedFunctionSignature } from "../compilationUnit.js";
 import type { BuiltinSignature } from "./types.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
-import {
-  ANY_T,
-  BOOLEAN_T,
-  NUMBER_T,
-  STRING_T,
-} from "./primitives.js";
+import { ANY_T, BOOLEAN_T, NUMBER_T, STRING_T } from "./primitives.js";
 
 const stringArray = { type: "arrayType", elementType: STRING_T } as const;
 const anyArray = { type: "arrayType", elementType: ANY_T } as const;
@@ -365,8 +360,7 @@ export type CallResolution =
  * like "toString" / "constructor" would falsely resolve against any
  * Record. Use this for the registries below (which are plain objects).
  */
-const has = (obj: object, name: string): boolean =>
-  Object.prototype.hasOwnProperty.call(obj, name);
+const has = (obj: object, name: string): boolean => Object.prototype.hasOwnProperty.call(obj, name);
 
 /**
  * Resolution order matters:
@@ -414,24 +408,18 @@ export function isJsGlobalBase(name: string, input: ShadowingInput): boolean {
   return true;
 }
 
-export function resolveCall(
-  name: string,
-  input: ResolveCallInput,
-): CallResolution {
-  if (has(input.functionDefs, name) || has(input.nodeDefs, name))
-    return { kind: "def" };
+export function resolveCall(name: string, input: ResolveCallInput): CallResolution {
+  if (has(input.functionDefs, name) || has(input.nodeDefs, name)) return { kind: "def" };
   if (has(input.importedFunctions, name)) return { kind: "imported" };
   if (input.importedNodeNames.includes(name)) return { kind: "imported" };
-  if (input.jsImportedNames && has(input.jsImportedNames, name))
-    return { kind: "jsImported" };
+  if (input.jsImportedNames && has(input.jsImportedNames, name)) return { kind: "jsImported" };
   if (has(BUILTIN_FUNCTION_TYPES, name)) return { kind: "builtin" };
   if (input.scopeHas(name)) return { kind: "scopeBinding" };
   if (has(JS_GLOBALS, name)) {
     const jsEntry = JS_GLOBALS[name];
     if (jsEntry.kind === "callable") return { kind: "jsGlobal" };
     // Some namespaces are also directly callable (e.g. `String(x)`).
-    if (jsEntry.kind === "namespace" && jsEntry.callableSig)
-      return { kind: "jsGlobal" };
+    if (jsEntry.kind === "namespace" && jsEntry.callableSig) return { kind: "jsGlobal" };
   }
   return { kind: "unresolved" };
 }

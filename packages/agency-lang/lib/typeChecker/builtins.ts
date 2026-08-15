@@ -9,7 +9,6 @@ import {
   VOID_T as voidT,
 } from "./primitives.js";
 
-
 const anyArray = { type: "arrayType", elementType: ANY_T } as const;
 const stringArray = { type: "arrayType", elementType: string } as const;
 
@@ -52,80 +51,80 @@ const apiKeyObject: VariableType = {
  * we type it as optional `any` and skip structural checking.
  */
 const llmOptionProperties: { key: string; value: VariableType }[] = [
-    { key: "model", value: optional(string) },
-    { key: "provider", value: optional(string) },
-    // Per-provider key map only (see `apiKeyObject`) — no bare-string
-    // shorthand, so a key is never silently routed to the wrong provider.
-    // Runtime: `toSmolConfig`.
-    { key: "apiKey", value: optional(apiKeyObject) },
-    { key: "maxTokens", value: optional(number) },
-    { key: "temperature", value: optional(number) },
-    { key: "stream", value: optional(boolean) },
-    {
-      key: "reasoningEffort",
-      value: optional({
-        type: "unionType",
-        types: [
-          { type: "stringLiteralType", value: "low" },
-          { type: "stringLiteralType", value: "medium" },
-          { type: "stringLiteralType", value: "high" },
-        ],
-      }),
-    },
-    {
-      key: "thinking",
-      value: optional({
-        type: "objectType",
-        properties: [
-          { key: "enabled", value: boolean },
-          { key: "budgetTokens", value: optional(number) },
-        ],
-      }),
-    },
-    { key: "tools", value: optional(anyArray) },
-    // Provider hosted tools (server-side) to enable for this call, by
-    // capability name, e.g. ["web_search"]. Forwarded to smoltalk via the
-    // LLMClient PromptConfig. See lib/runtime/llmClient.ts.
-    { key: "hostedTools", value: optional(stringArray) },
-    // `memory: true` enables retrieval/injection on this llm() call.
-    // The object form is reserved for future config (e.g. per-call
-    // model override); for now only the boolean form is wired.
-    { key: "memory", value: optional(boolean) },
-    // Per-call cap on characters of a tool result fed back to the LLM
-    // (overrides agency.json `client.maxToolResultChars`). `0` disables.
-    { key: "maxToolResultChars", value: optional(number) },
-    // Resilience policy. Defaults: retries 2, timeout 10min, backoff 500ms
-    // x2 capped at 10s. `retries: 0` / `timeout: 0` disable. `setLlmOptions`
-    // sets the same per-branch.
-    //
-    // KEEP IN SYNC with `RetryConfig` in `lib/runtime/llmRetry.ts` — this is
-    // the Agency-AST mirror of that TS type. The TS side (`LlmOpts`,
-    // `LlmDefaults`) already extends `RetryConfig`; this list cannot, because
-    // it lives in the AST type universe rather than TS, so it must be
-    // updated by hand when fields are added.
-    { key: "retries", value: optional(number) },
-    { key: "timeout", value: optional(number) },
-    {
-      key: "backoff",
-      value: optional({
-        type: "objectType",
-        properties: [
-          { key: "initial", value: optional(number) },
-          { key: "factor", value: optional(number) },
-          { key: "max", value: optional(number) },
-        ],
-      }),
-    },
-    // Validation retries: re-ask the model when structured output fails
-    // schema validation. `0` disables. Independent of `retries`.
-    { key: "validationRetries", value: optional(number) },
-    // Observability-only debug label: stamps this call's promptStart event
-    // and the messages the call appends (its prompt and its completion).
-    // Stripped from the config before it reaches smoltalk — the provider
-    // never sees it.
-    { key: "label", value: optional(string) },
-    // `any` already accepts undefined, so no need to wrap in optional.
-    { key: "metadata", value: ANY_T },
+  { key: "model", value: optional(string) },
+  { key: "provider", value: optional(string) },
+  // Per-provider key map only (see `apiKeyObject`) — no bare-string
+  // shorthand, so a key is never silently routed to the wrong provider.
+  // Runtime: `toSmolConfig`.
+  { key: "apiKey", value: optional(apiKeyObject) },
+  { key: "maxTokens", value: optional(number) },
+  { key: "temperature", value: optional(number) },
+  { key: "stream", value: optional(boolean) },
+  {
+    key: "reasoningEffort",
+    value: optional({
+      type: "unionType",
+      types: [
+        { type: "stringLiteralType", value: "low" },
+        { type: "stringLiteralType", value: "medium" },
+        { type: "stringLiteralType", value: "high" },
+      ],
+    }),
+  },
+  {
+    key: "thinking",
+    value: optional({
+      type: "objectType",
+      properties: [
+        { key: "enabled", value: boolean },
+        { key: "budgetTokens", value: optional(number) },
+      ],
+    }),
+  },
+  { key: "tools", value: optional(anyArray) },
+  // Provider hosted tools (server-side) to enable for this call, by
+  // capability name, e.g. ["web_search"]. Forwarded to smoltalk via the
+  // LLMClient PromptConfig. See lib/runtime/llmClient.ts.
+  { key: "hostedTools", value: optional(stringArray) },
+  // `memory: true` enables retrieval/injection on this llm() call.
+  // The object form is reserved for future config (e.g. per-call
+  // model override); for now only the boolean form is wired.
+  { key: "memory", value: optional(boolean) },
+  // Per-call cap on characters of a tool result fed back to the LLM
+  // (overrides agency.json `client.maxToolResultChars`). `0` disables.
+  { key: "maxToolResultChars", value: optional(number) },
+  // Resilience policy. Defaults: retries 2, timeout 10min, backoff 500ms
+  // x2 capped at 10s. `retries: 0` / `timeout: 0` disable. `setLlmOptions`
+  // sets the same per-branch.
+  //
+  // KEEP IN SYNC with `RetryConfig` in `lib/runtime/llmRetry.ts` — this is
+  // the Agency-AST mirror of that TS type. The TS side (`LlmOpts`,
+  // `LlmDefaults`) already extends `RetryConfig`; this list cannot, because
+  // it lives in the AST type universe rather than TS, so it must be
+  // updated by hand when fields are added.
+  { key: "retries", value: optional(number) },
+  { key: "timeout", value: optional(number) },
+  {
+    key: "backoff",
+    value: optional({
+      type: "objectType",
+      properties: [
+        { key: "initial", value: optional(number) },
+        { key: "factor", value: optional(number) },
+        { key: "max", value: optional(number) },
+      ],
+    }),
+  },
+  // Validation retries: re-ask the model when structured output fails
+  // schema validation. `0` disables. Independent of `retries`.
+  { key: "validationRetries", value: optional(number) },
+  // Observability-only debug label: stamps this call's promptStart event
+  // and the messages the call appends (its prompt and its completion).
+  // Stripped from the config before it reaches smoltalk — the provider
+  // never sees it.
+  { key: "label", value: optional(string) },
+  // `any` already accepts undefined, so no need to wrap in optional.
+  { key: "metadata", value: ANY_T },
 ];
 
 const llmOptions: VariableType = {
@@ -213,14 +212,12 @@ export const AGENCY_FUNCTION_METHOD_TYPES: Record<string, BuiltinSignature> = {
   describe: {
     params: [string],
     returnType: ANY_T,
-    description:
-      "Override the tool description an LLM sees for this function. Returns a new tool.",
+    description: "Override the tool description an LLM sees for this function. Returns a new tool.",
   },
   preapprove: {
     params: [],
     returnType: ANY_T,
-    description:
-      "Auto-approve every interrupt this function raises. Returns a new tool.",
+    description: "Auto-approve every interrupt this function raises. Returns a new tool.",
   },
   rename: {
     params: [string],
@@ -324,8 +321,7 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
   checkpoint: {
     params: [],
     returnType: number,
-    description:
-      "Take a snapshot of the current execution state and return a checkpoint ID.",
+    description: "Take a snapshot of the current execution state and return a checkpoint ID.",
   },
   getCheckpoint: {
     params: [number],

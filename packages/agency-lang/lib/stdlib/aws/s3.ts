@@ -86,11 +86,7 @@ export type S3CreateBucketResult = {
   readonly location: string;
 };
 
-export type S3OperationResult =
-  | string
-  | S3PutResult
-  | S3CreateBucketResult
-  | ResultFailure;
+export type S3OperationResult = string | S3PutResult | S3CreateBucketResult | ResultFailure;
 
 // A key must not contain a complete "." or ".." slash-delimited segment: v1
 // `fetch` normalizes those away, so the signed path and the fetched path would
@@ -117,11 +113,7 @@ function keyFailure(key: string): ResultFailure | null {
 // No silent clamping: a caller who asked for 30 days must get an error, not a
 // 7-day link.
 function expiresFailure(expiresIn: number): ResultFailure | null {
-  if (
-    !Number.isInteger(expiresIn) ||
-    expiresIn < 1 ||
-    expiresIn > MAX_PRESIGN_MS
-  ) {
+  if (!Number.isInteger(expiresIn) || expiresIn < 1 || expiresIn > MAX_PRESIGN_MS) {
     return failure({
       message:
         `Invalid expiresIn ${String(expiresIn)}: must be ` +
@@ -157,10 +149,7 @@ function createObjectTarget(
   return createAwsRequestTarget(virtualHostedOrigin(partition, bucket), `/${encodedKey}`);
 }
 
-function createBucketTarget(
-  partition: AwsPartition,
-  bucket: ValidatedBucket,
-): AwsRequestTarget {
+function createBucketTarget(partition: AwsPartition, bucket: ValidatedBucket): AwsRequestTarget {
   if (bucket.addressing === "pathStyle") {
     return createAwsRequestTarget(pathStyleOrigin(partition), `/${bucket.name}`);
   }
@@ -254,7 +243,7 @@ export async function runS3Operation(
         partition.region === "us-east-1"
           ? ""
           : `<CreateBucketConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">` +
-          `<LocationConstraint>${partition.region}</LocationConstraint></CreateBucketConfiguration>`;
+            `<LocationConstraint>${partition.region}</LocationConstraint></CreateBucketConfiguration>`;
       const response = await sendAwsRequest(partition, credentials, {
         target,
         method: "PUT",
@@ -295,11 +284,7 @@ export async function runS3Operation(
   }
 }
 
-export function _s3Get(
-  bucket: string,
-  key: string,
-  region: string,
-): Promise<S3OperationResult> {
+export function _s3Get(bucket: string, key: string, region: string): Promise<S3OperationResult> {
   return runS3Operation(region, { kind: "getText", bucket, key });
 }
 
@@ -340,9 +325,6 @@ export function _s3PresignGet(
   return runS3Operation(region, { kind: "presignGet", bucket, key, expiresIn });
 }
 
-export function _createBucket(
-  bucket: string,
-  region: string,
-): Promise<S3OperationResult> {
+export function _createBucket(bucket: string, region: string): Promise<S3OperationResult> {
   return runS3Operation(region, { kind: "createBucket", bucket });
 }

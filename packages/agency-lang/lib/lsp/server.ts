@@ -59,8 +59,7 @@ export function startServer(): void {
 
   connection.onInitialize((params: InitializeParams): InitializeResult => {
     supportsWatchedFilesRegistration =
-      params.capabilities.workspace?.didChangeWatchedFiles
-        ?.dynamicRegistration ?? false;
+      params.capabilities.workspace?.didChangeWatchedFiles?.dynamicRegistration ?? false;
     return {
       capabilities: {
         textDocumentSync: TextDocumentSyncKind.Incremental,
@@ -100,10 +99,7 @@ export function startServer(): void {
     // that do not watch these globs on their own.
     connection.client
       .register(DidChangeWatchedFilesNotification.type, {
-        watchers: [
-          { globPattern: "**/*.agency" },
-          { globPattern: "**/agency.json" },
-        ],
+        watchers: [{ globPattern: "**/*.agency" }, { globPattern: "**/agency.json" }],
       })
       .catch(() => {
         // Registration is best-effort; some clients reject it. Open-document
@@ -233,7 +229,14 @@ export function startServer(): void {
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return null;
     const state = docStates.get(params.textDocument.uri);
-    return handleDefinition(params, doc, uriToPath(doc.uri), state?.semanticIndex ?? {}, state?.program, state?.scopes);
+    return handleDefinition(
+      params,
+      doc,
+      uriToPath(doc.uri),
+      state?.semanticIndex ?? {},
+      state?.program,
+      state?.scopes,
+    );
   });
 
   connection.onTypeDefinition((params) => {

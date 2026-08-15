@@ -12,10 +12,12 @@ function llm(id: string, at: number, data: Record<string, unknown> = {}) {
 
 describe("spanDisplayName", () => {
   it("tools show the tool name, nodes the node name, llm the model, others the kind", () => {
-    expect(spanDisplayName(span("toolExecution", [leaf("toolCallStart", 1, { toolName: "bash" })])))
-      .toBe("bash");
-    expect(spanDisplayName(span("nodeExecution", [leaf("enterNode", 1, { nodeId: "main" })])))
-      .toBe("node main");
+    expect(
+      spanDisplayName(span("toolExecution", [leaf("toolCallStart", 1, { toolName: "bash" })])),
+    ).toBe("bash");
+    expect(spanDisplayName(span("nodeExecution", [leaf("enterNode", 1, { nodeId: "main" })]))).toBe(
+      "node main",
+    );
     expect(spanDisplayName(llm("a", 1))).toBe("llm(m1)");
     expect(spanDisplayName(span("forkAll", [leaf("forkStart", 1)]))).toBe("forkAll");
   });
@@ -32,7 +34,10 @@ describe("groupKeyOf", () => {
 
   it("falls back to the enclosing function, then the model", () => {
     const enclosed = llm("b", 100, { threadId: "9" });
-    const tool = span("toolExecution", [leaf("toolCallStart", 50, { toolName: "codeAgent" }), enclosed]);
+    const tool = span("toolExecution", [
+      leaf("toolCallStart", 50, { toolName: "codeAgent" }),
+      enclosed,
+    ]);
     const bare = llm("c", 200, { threadId: "9" });
     const t = trace([tool, bare]);
     expect(groupKeyOf("b", t)).toBe("llm(codeAgent)");
@@ -84,7 +89,9 @@ describe("groupKeyOf", () => {
   });
 
   it("non-llm spans group by display name", () => {
-    const tool = span("toolExecution", [leaf("toolCallStart", 1, { toolName: "bash" })], { id: "t1" });
+    const tool = span("toolExecution", [leaf("toolCallStart", 1, { toolName: "bash" })], {
+      id: "t1",
+    });
     const t = trace([tool]);
     expect(groupKeyOf("t1", t)).toBe("bash");
   });
@@ -94,10 +101,14 @@ describe("groupSpans", () => {
   it("sums member self-time, dedupes models, sorts by total desc", () => {
     const a = llm("a", 1_000, { threadId: "7", timeTaken: 1_000 });
     const b = llm("b", 3_000, { threadId: "7", timeTaken: 500, model: '"m2"' });
-    const tool = span("toolExecution", [
-      leaf("toolCallStart", 100, { toolName: "bash" }),
-      leaf("toolCall", 200, { toolName: "bash" }),
-    ], { id: "t" });
+    const tool = span(
+      "toolExecution",
+      [
+        leaf("toolCallStart", 100, { toolName: "bash" }),
+        leaf("toolCall", 200, { toolName: "bash" }),
+      ],
+      { id: "t" },
+    );
     const t = trace([leaf("threadCreated", 0, { threadId: "7", label: "agent" }), a, b, tool]);
     const groups = groupSpans(timelineSpans(t, opts), t);
     expect(groups[0].key).toBe("llm(agent)");

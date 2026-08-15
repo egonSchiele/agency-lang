@@ -196,7 +196,7 @@ describe("returnStatementParser", () => {
       },
     },
     {
-      input: 'return { x: 1, y: 2 }',
+      input: "return { x: 1, y: 2 }",
       expected: {
         success: true,
         result: {
@@ -275,9 +275,9 @@ describe("returnStatementParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-          const result = returnStatementParser(input);
-          expect(result.success).toBe(false);
-        });
+        const result = returnStatementParser(input);
+        expect(result.success).toBe(false);
+      });
     }
   });
 });

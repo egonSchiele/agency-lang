@@ -142,10 +142,7 @@ export class DeterministicClient implements LLMClient {
   private readonly scoped: boolean;
   private readonly speechOptions: DeterministicClientOptions;
 
-  constructor(
-    mocks: LLMMock[] | ScopedLLMMocks,
-    options: DeterministicClientOptions = {},
-  ) {
+  constructor(mocks: LLMMock[] | ScopedLLMMocks, options: DeterministicClientOptions = {}) {
     this.speechOptions = options;
     this.scoped = !Array.isArray(mocks);
     // Null prototype: scope keys come from user-controlled JSON
@@ -177,7 +174,11 @@ export class DeterministicClient implements LLMClient {
       if (this.queues[moduleId]) {
         return { scope: moduleId, queue: this.queues[moduleId] };
       }
-      const basename = moduleId.split("/").pop()?.replace(/\.agency$/, "") ?? moduleId;
+      const basename =
+        moduleId
+          .split("/")
+          .pop()
+          ?.replace(/\.agency$/, "") ?? moduleId;
       if (this.queues[basename]) {
         return { scope: basename, queue: this.queues[basename] };
       }
@@ -187,7 +188,7 @@ export class DeterministicClient implements LLMClient {
     }
     throw new Error(
       `DeterministicClient: no llmMocks queue matches module ${moduleId ?? "(no execution frame)"}. ` +
-      `Available scopes: ${Object.keys(this.queues).join(", ")}. Add a "*" queue as a fallback.`
+        `Available scopes: ${Object.keys(this.queues).join(", ")}. Add a "*" queue as a fallback.`,
     );
   }
 
@@ -201,7 +202,7 @@ export class DeterministicClient implements LLMClient {
     if (queue.callIndex > queue.mocks.length) {
       const where = this.scoped ? ` in scope "${scope}"` : "";
       throw new Error(
-        `DeterministicClient: no mock provided for llm() call #${queue.callIndex}${where}. Add an entry to llmMocks in your test.json.`
+        `DeterministicClient: no mock provided for llm() call #${queue.callIndex}${where}. Add an entry to llmMocks in your test.json.`,
       );
     }
 
@@ -212,10 +213,7 @@ export class DeterministicClient implements LLMClient {
       if (mock.delayMs) {
         await abortableDelay(mock.delayMs, config.abortSignal);
       }
-      const output =
-        typeof mock.return === "string"
-          ? mock.return
-          : JSON.stringify(mock.return);
+      const output = typeof mock.return === "string" ? mock.return : JSON.stringify(mock.return);
       return {
         success: true,
         value: {
@@ -235,11 +233,7 @@ export class DeterministicClient implements LLMClient {
         (tc, i) =>
           // `tc.id ?? ...` (nullish, not `||`) so an explicit "" survives —
           // that's how a test simulates an id-less provider like Gemini.
-          new ToolCall(
-            tc.id ?? `mock-tool-${callIndex}-${i}`,
-            tc.name,
-            tc.args ?? {},
-          ),
+          new ToolCall(tc.id ?? `mock-tool-${callIndex}-${i}`, tc.name, tc.args ?? {}),
       );
       return {
         success: true,
@@ -306,18 +300,13 @@ export class DeterministicClient implements LLMClient {
   // Returns a fixed 1x1 PNG + a fixed cost, so tests can exercise the image
   // pipeline (cost accrual, guard trips, base64 composition) without a real
   // provider. Never makes a network call.
-  async image(
-    _input: ImageInput,
-    _config?: Partial<ImageConfig>,
-  ): Promise<Result<ImageGenResult>> {
+  async image(_input: ImageInput, _config?: Partial<ImageConfig>): Promise<Result<ImageGenResult>> {
     const pngBase64 =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC";
     return {
       success: true,
       value: {
-        images: [
-          { data: new Uint8Array(Buffer.from(pngBase64, "base64")), mimeType: "image/png" },
-        ],
+        images: [{ data: new Uint8Array(Buffer.from(pngBase64, "base64")), mimeType: "image/png" }],
         model: "deterministic-image",
         costEstimate: {
           inputCost: 0,

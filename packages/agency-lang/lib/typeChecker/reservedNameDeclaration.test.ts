@@ -39,9 +39,7 @@ describe("reserved-name declaration check", () => {
   });
 
   it("does not fire on substring matches like `static const schemaForX = 42`", () => {
-    const errors = errorsFrom(
-      `static const schemaForX = 42\nnode main() { print(schemaForX) }\n`,
-    );
+    const errors = errorsFrom(`static const schemaForX = 42\nnode main() { print(schemaForX) }\n`);
     const reserved = errors.filter(
       (e) => e.message.includes("schemaForX") && e.message.includes("reserved"),
     );
@@ -57,9 +55,7 @@ describe("reserved-name declaration check", () => {
   });
 
   it("blocks `const success = 1` inside a function body", () => {
-    const errors = errorsFrom(
-      `def helper(): number { const success = 1\n return success }\n`,
-    );
+    const errors = errorsFrom(`def helper(): number { const success = 1\n return success }\n`);
     const reserved = errors.filter(
       (e) => e.message.includes("success") && e.message.includes("reserved"),
     );
@@ -121,12 +117,7 @@ describe("reserved-name declaration check", () => {
     expect(parseResult.success).toBe(true);
     if (!parseResult.success) return;
     const symbolTable = SymbolTable.build(preludePath, {});
-    const info = buildCompilationUnit(
-      parseResult.result,
-      symbolTable,
-      preludePath,
-      source,
-    );
+    const info = buildCompilationUnit(parseResult.result, symbolTable, preludePath, source);
     const errors = typeCheck(parseResult.result, {}, info).errors;
     const reserved = errors.filter((e) => e.message.includes("reserved built-in"));
     expect(reserved).toEqual([]);

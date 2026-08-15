@@ -16,7 +16,7 @@ export type CASResult<T, S extends CASSchema> = {
       : S[K] extends CASSchema
         ? CASResult<T[K], S[K]>
         : T[K]
-    : T[K]
+    : T[K];
 };
 
 export type Chunk = {
@@ -121,11 +121,7 @@ export class ContentAddressableStore {
 
   private hashAndStore(value: any, chunks: Chunk[]): string {
     const canonical = canonicalize(value);
-    const hash = crypto
-      .createHash("sha256")
-      .update(canonical)
-      .digest("hex")
-      .slice(0, 16);
+    const hash = crypto.createHash("sha256").update(canonical).digest("hex").slice(0, 16);
 
     if (!this.seenHashes.has(hash)) {
       this.seenHashes.add(hash);

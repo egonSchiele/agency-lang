@@ -568,7 +568,7 @@ describe("literals parsers", () => {
       // landed, the only way to write `"` in a double-quoted string was
       // to switch to backticks. Now both forms work.
       { input: '"\\""', value: '"' },
-      { input: '"`"', value: "`" },        // other quote stays unescaped
+      { input: '"`"', value: "`" }, // other quote stays unescaped
       { input: '"a\\"b"', value: 'a"b' },
       { input: "`\\``", value: "`" },
       { input: '`"`', value: '"' },
@@ -596,8 +596,8 @@ describe("literals parsers", () => {
       // Invalid hex/unicode forms are preserved verbatim (as unknown escapes)
       // so existing strings that merely contain `\x`/`\u` don't change meaning.
       { input: '"C:\\users"', value: "C:\\users" }, // \u not followed by 4 hex
-      { input: '"\\x4"', value: "\\x4" },            // \x needs two hex digits
-      { input: '"\\uABCG"', value: "\\uABCG" },      // 4th char not hex
+      { input: '"\\x4"', value: "\\x4" }, // \x needs two hex digits
+      { input: '"\\uABCG"', value: "\\uABCG" }, // 4th char not hex
 
       // Escaping the interpolation start so `${...}` appears literally.
       // Only the full `\${` sequence is an escape; a bare `\$` not
@@ -650,9 +650,9 @@ describe("literals parsers", () => {
 
   describe("stringParser - delimiter round-tripping", () => {
     const delimiterCases: { input: string; delimiter: '"' | "'" | "`"; value: string }[] = [
-      { input: '"hello"',  delimiter: '"', value: "hello" },
-      { input: "'hello'",  delimiter: "'", value: "hello" },
-      { input: "`hello`",  delimiter: "`", value: "hello" },
+      { input: '"hello"', delimiter: '"', value: "hello" },
+      { input: "'hello'", delimiter: "'", value: "hello" },
+      { input: "`hello`", delimiter: "`", value: "hello" },
     ];
 
     delimiterCases.forEach(({ input, delimiter, value }) => {
@@ -661,9 +661,7 @@ describe("literals parsers", () => {
         expect(result.success).toBe(true);
         if (result.success) {
           expect(result.result.delimiter).toBe(delimiter);
-          expect(result.result.segments).toEqual([
-            { type: "text", value },
-          ]);
+          expect(result.result.segments).toEqual([{ type: "text", value }]);
         }
       });
     });
@@ -696,14 +694,12 @@ describe("literals parsers", () => {
       const result = stringParser("'it\\'s'");
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result.segments).toEqual([
-          { type: "text", value: "it's" },
-        ]);
+        expect(result.result.segments).toEqual([{ type: "text", value: "it's" }]);
       }
     });
 
     it("leaves the other two delimiters literal inside a single-quoted string", () => {
-      const result = stringParser('\'she said "hi" and `bye`\'');
+      const result = stringParser("'she said \"hi\" and `bye`'");
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.result.delimiter).toBe("'");

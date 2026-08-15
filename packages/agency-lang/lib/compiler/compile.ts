@@ -13,22 +13,14 @@ import { formatSpliceDiagnostic } from "./splice/report.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
-import {
-  buildCompiledClosure,
-  CompileClosureError,
-} from "./compileClosure.js";
+import { buildCompiledClosure, CompileClosureError } from "./compileClosure.js";
 import { transformSync } from "esbuild";
 import { nanoid } from "nanoid";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { parseAgency } from "@/parser.js";
-import {
-  ImportPolicy,
-  isImportAllowed,
-  isStdlibImport,
-  isPkgImport,
-} from "../importPaths.js";
+import { ImportPolicy, isImportAllowed, isStdlibImport, isPkgImport } from "../importPaths.js";
 import { CompileStrategy } from "../importStrategy.js";
 import { getAllImports } from "@/analysis/imports.js";
 
@@ -85,10 +77,7 @@ export type CompileSourceOptions = AgencyConfig & {
 // getAllImports — but to the policy that's a "local" import because it
 // always references another .agency file. Classify it that way so a
 // `allowKinds: ["stdlib"]` policy still rejects it (the legacy behavior).
-function checkImportPolicy(
-  program: AgencyProgram,
-  policy: ImportPolicy,
-): CompileFailure | null {
+function checkImportPolicy(program: AgencyProgram, policy: ImportPolicy): CompileFailure | null {
   const violations: string[] = [];
   // getAllImports surfaces both `importStatement` and the deprecated
   // `import nodes { ... }` form. importKind() already classifies any
@@ -96,9 +85,7 @@ function checkImportPolicy(
   // unchanged regardless of which import form they came from.
   for (const { path: importPath } of getAllImports(program)) {
     if (!isImportAllowed(importPath, policy)) {
-      violations.push(
-        `Import '${importPath}' is not allowed under the configured import policy.`,
-      );
+      violations.push(`Import '${importPath}' is not allowed under the configured import policy.`);
     }
   }
   if (violations.length === 0) return null;
@@ -108,10 +95,7 @@ function checkImportPolicy(
 export { typeCheckSource, getEffectsFromSource } from "./typecheck.js";
 export type { TypeCheckDiagnostic, TypeCheckReport } from "./typecheck.js";
 
-export function compileSource(
-  source: string,
-  config: CompileSourceOptions,
-): CompileResult {
+export function compileSource(source: string, config: CompileSourceOptions): CompileResult {
   const moduleId = `agency_${nanoid()}`;
   // SymbolTable.build() walks the file system from the source's path to resolve
   // imports. With a caller-supplied sourcePath (the file is already on disk
@@ -133,9 +117,7 @@ export function compileSource(
   // parse the SAME bytes rather than the passed `source`. In the temp-file case
   // that file IS `source` (just written); with a caller `sourcePath` this reads
   // the on-disk file, so the AST and symbol/import resolution can't diverge.
-  const compiledSource = config.sourcePath
-    ? fs.readFileSync(syntheticPath, "utf-8")
-    : source;
+  const compiledSource = config.sourcePath ? fs.readFileSync(syntheticPath, "utf-8") : source;
 
   try {
     // 1. Parse
@@ -192,20 +174,13 @@ export function compileSource(
     const liftedProgram = liftCallbackBlocks(resolvedProgram);
 
     // 4. Build compilation unit
-    const info = buildCompilationUnit(
-      liftedProgram,
-      symbolTable,
-      syntheticPath,
-      compiledSource,
-    );
+    const info = buildCompilationUnit(liftedProgram, symbolTable, syntheticPath, compiledSource);
 
     // 5. Type check
     if (config.typechecker?.enabled || config.typechecker?.strict) {
       const { errors } = typeCheck(liftedProgram, config, info);
       if (errors.length > 0) {
-        const hasFatal = errors.some(
-          (e) => e.severity === "error",
-        );
+        const hasFatal = errors.some((e) => e.severity === "error");
         if (hasFatal) {
           return {
             success: false,
@@ -219,12 +194,8 @@ export function compileSource(
     const strategy = new CompileStrategy({ targetExt: ".js" });
     liftedProgram.nodes.forEach((node) => {
       if (node.type !== "importStatement") return;
-      if (isStdlibImport(node.modulePath) || isPkgImport(node.modulePath))
-        return;
-      node.modulePath = strategy.rewriteImport(
-        node.modulePath,
-        syntheticPath,
-      );
+      if (isStdlibImport(node.modulePath) || isPkgImport(node.modulePath)) return;
+      node.modulePath = strategy.rewriteImport(node.modulePath, syntheticPath);
     });
 
     // 6b. Build the closure analysis to detect cycles + populate the

@@ -74,9 +74,7 @@ describe("date bridges", () => {
   });
 
   it("parse accepts an ISO string with no fractional seconds", () => {
-    expect(_parse("2026-05-05T10:30:00-07:00")).toBe(
-      Date.UTC(2026, 4, 5, 17, 30, 0, 0),
-    );
+    expect(_parse("2026-05-05T10:30:00-07:00")).toBe(Date.UTC(2026, 4, 5, 17, 30, 0, 0));
   });
 
   it("parse throws on input new Date cannot read", () => {
@@ -122,9 +120,9 @@ describe("_nextDayOfWeek", () => {
 
   it("returns a future date", () => {
     const now = new Date();
-    const dayName = [
-      "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
-    ][now.getDay()];
+    const dayName = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][
+      now.getDay()
+    ];
     const result = _nextDayOfWeek(dayName, "UTC");
     expect(new Date(result + "T12:00:00Z").getTime()).toBeGreaterThan(now.getTime());
   });

@@ -100,4 +100,3 @@ export type EvalRunResult = {
   /** Present unless grading was skipped (`--no-grade`). */
   grading?: EvalRunGrading;
 };
-

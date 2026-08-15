@@ -9,10 +9,9 @@ function getGitIgnorePatterns(): string[] {
   try {
     // Use git to resolve all ignore rules (including nested .gitignore files)
     // This works from any subdirectory within the repo
-    const output = execSync(
-      "git ls-files --others --ignored --exclude-standard --directory",
-      { encoding: "utf-8" },
-    );
+    const output = execSync("git ls-files --others --ignored --exclude-standard --directory", {
+      encoding: "utf-8",
+    });
     return output
       .split("\n")
       .filter((line) => line.length > 0)

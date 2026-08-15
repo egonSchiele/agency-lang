@@ -4,7 +4,9 @@ import { getPath } from "./getPath.js";
 
 describe("getPath", () => {
   it("reads a nested object path", () => {
-    expect(getPath({ metadata: { expectedOutput: "New Delhi" } }, ["metadata", "expectedOutput"])).toBe("New Delhi");
+    expect(
+      getPath({ metadata: { expectedOutput: "New Delhi" } }, ["metadata", "expectedOutput"]),
+    ).toBe("New Delhi");
   });
 
   it("reads an array index", () => {

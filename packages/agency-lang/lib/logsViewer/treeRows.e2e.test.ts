@@ -17,11 +17,7 @@ import { EventEnvelope, TreeNode, ViewerState } from "./types.js";
 // Scenario (mirrors bar.agency, shrunk to 2 fork branches):
 //   agent → llm("use fibonacciNumbers") → tool forks 2 parallel llms.
 
-const E = (
-  spanId: string | null,
-  parentSpanId: string | null,
-  data: any,
-): EventEnvelope => ({
+const E = (spanId: string | null, parentSpanId: string | null, data: any): EventEnvelope => ({
   format_version: 1,
   trace_id: "t1",
   project_id: "p",
@@ -64,10 +60,30 @@ const events: EventEnvelope[] = [
     messages: [{ role: "user", content: "Calculate the 1th Fibonacci number" }],
     completion: { output: '{"response":1}' },
   }),
-  E("F", "T", { type: "forkBranchEnd", timestamp: TS("4.000"), branchIndex: 0, outcome: "success", timeTaken: 2800, value: 0 }),
-  E("F", "T", { type: "forkBranchEnd", timestamp: TS("4.000"), branchIndex: 1, outcome: "success", timeTaken: 2900, value: 1 }),
+  E("F", "T", {
+    type: "forkBranchEnd",
+    timestamp: TS("4.000"),
+    branchIndex: 0,
+    outcome: "success",
+    timeTaken: 2800,
+    value: 0,
+  }),
+  E("F", "T", {
+    type: "forkBranchEnd",
+    timestamp: TS("4.000"),
+    branchIndex: 1,
+    outcome: "success",
+    timeTaken: 2900,
+    value: 1,
+  }),
   E("F", "T", { type: "forkEnd", timestamp: TS("4.100"), mode: "all", timeTaken: 3000 }),
-  E("T", "L", { type: "toolCall", timestamp: TS("4.100"), toolName: "fibonacciNumbers", output: [0, 1], timeTaken: 3000 }),
+  E("T", "L", {
+    type: "toolCall",
+    timestamp: TS("4.100"),
+    toolName: "fibonacciNumbers",
+    output: [0, 1],
+    timeTaken: 3000,
+  }),
   // Round 2: the final answer. The tool message content is the RAW array.
   E("L", "N", {
     type: "promptCompletion",
@@ -129,7 +145,9 @@ describe("logs viewer — end-to-end render", () => {
     // the assistant tool-call line and the tool-result line.
     const lines = text.split("\n").map((l) => l.trim());
     const idxAsstCall = lines.findIndex((l) => l.includes("tool call: fibonacciNumbers"));
-    const idxToolExec = lines.findIndex((l) => l.startsWith("▼ toolExecution") || l.startsWith("▶ toolExecution"));
+    const idxToolExec = lines.findIndex(
+      (l) => l.startsWith("▼ toolExecution") || l.startsWith("▶ toolExecution"),
+    );
     const idxToolResult = lines.findIndex((l) => l.includes("[tool: fibonacciNumbers]"));
     expect(idxAsstCall).toBeGreaterThanOrEqual(0);
     expect(idxToolExec).toBeGreaterThan(idxAsstCall);
@@ -144,7 +162,7 @@ describe("logs viewer — end-to-end render", () => {
     expect(text).toContain('nodeExecution "agent"');
     expect(text).toContain("toolExecution fibonacciNumbers");
     expect(text).toContain("forkAll 2 branches");
-    expect(text).toContain("agentRun \"main\"");
+    expect(text).toContain('agentRun "main"');
   });
 
   it("makes the parallel branch llmCalls distinguishable by prompt and outcome", () => {

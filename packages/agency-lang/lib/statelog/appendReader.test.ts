@@ -32,9 +32,9 @@ describe("makeAppendReader", () => {
 
   it("reassembles a multi-byte char split across read boundaries", () => {
     const reader = makeAppendReader(file, 0);
-    const heart = Buffer.from("❤");        // 3 bytes in UTF-8
+    const heart = Buffer.from("❤"); // 3 bytes in UTF-8
     fs.appendFileSync(file, heart.subarray(0, 1));
-    expect(reader.read()).toBe("");         // partial char held, not corrupted
+    expect(reader.read()).toBe(""); // partial char held, not corrupted
     fs.appendFileSync(file, heart.subarray(1));
     expect(reader.read()).toBe("❤");
   });
@@ -44,7 +44,7 @@ describe("makeAppendReader", () => {
     const reader = makeAppendReader(file, 0);
     reader.read();
     fs.writeFileSync(file, "new\n");
-    reader.read();                          // the rewind poll
+    reader.read(); // the rewind poll
     expect(reader.read()).toBe("new\n");
   });
 

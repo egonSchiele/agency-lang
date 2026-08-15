@@ -10,7 +10,10 @@ describe("goalJudgeFile", () => {
   });
 
   it("ScalarVerdict accepts a {score, reasoning} object", () => {
-    expect(ScalarVerdict.parse({ score: 0.5, reasoning: "ok" })).toEqual({ score: 0.5, reasoning: "ok" });
+    expect(ScalarVerdict.parse({ score: 0.5, reasoning: "ok" })).toEqual({
+      score: 0.5,
+      reasoning: "ok",
+    });
   });
 
   it("asJudgeText returns strings unchanged and JSON-stringifies everything else", () => {

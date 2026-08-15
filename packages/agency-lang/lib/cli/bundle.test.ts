@@ -29,9 +29,7 @@ describe("createBundle", () => {
   });
 
   async function writeTestTrace() {
-    const writer = new TraceWriter(RUN_ID, "main.agency", [
-      new FileSink(tracePath),
-    ]);
+    const writer = new TraceWriter(RUN_ID, "main.agency", [new FileSink(tracePath)]);
     await writer.writeCheckpoint(
       new Checkpoint({
         id: 0,
@@ -100,11 +98,7 @@ describe("createBundle", () => {
   it("throws if source file does not exist", async () => {
     await writeTestTrace();
     expect(() =>
-      createBundle(
-        path.join(sourceDir, "nonexistent.agency"),
-        tracePath,
-        bundlePath,
-      ),
+      createBundle(path.join(sourceDir, "nonexistent.agency"), tracePath, bundlePath),
     ).toThrow();
   });
 });
@@ -130,9 +124,7 @@ describe("extractBundle", () => {
   });
 
   async function writeTestTrace() {
-    const writer = new TraceWriter(RUN_ID, "main.agency", [
-      new FileSink(tracePath),
-    ]);
+    const writer = new TraceWriter(RUN_ID, "main.agency", [new FileSink(tracePath)]);
     await writer.writeCheckpoint(
       new Checkpoint({
         id: 0,
@@ -175,9 +167,7 @@ describe("extractBundle", () => {
     extractBundle(bundlePath, outDir);
 
     expect(fs.existsSync(path.join(outDir, "main.agency"))).toBe(true);
-    expect(
-      fs.readFileSync(path.join(outDir, "main.agency"), "utf-8"),
-    ).toContain("node main()");
+    expect(fs.readFileSync(path.join(outDir, "main.agency"), "utf-8")).toContain("node main()");
     expect(fs.existsSync(path.join(outDir, "main.trace"))).toBe(true);
   });
 
@@ -203,9 +193,7 @@ describe("extractBundle", () => {
     ].join("\n");
     fs.writeFileSync(bundlePath, malicious);
 
-    expect(() => extractBundle(bundlePath, outDir)).toThrow(
-      "absolute paths not allowed",
-    );
+    expect(() => extractBundle(bundlePath, outDir)).toThrow("absolute paths not allowed");
   });
 
   it("throws on path traversal in source path", () => {
@@ -219,8 +207,6 @@ describe("extractBundle", () => {
     ].join("\n");
     fs.writeFileSync(bundlePath, malicious);
 
-    expect(() => extractBundle(bundlePath, outDir)).toThrow(
-      "escapes target directory",
-    );
+    expect(() => extractBundle(bundlePath, outDir)).toThrow("escapes target directory");
   });
 });

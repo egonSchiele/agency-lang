@@ -59,11 +59,7 @@ export function _parseJSON(text: string): any {
  * `AgencyCancelledError`, which `__tryCall` re-throws so cancellation
  * actually propagates.
  */
-function inputImpl(
-  ctx: RuntimeContext<any>,
-  stack: StateStack,
-  prompt: string,
-): Promise<string> {
+function inputImpl(ctx: RuntimeContext<any>, stack: StateStack, prompt: string): Promise<string> {
   // Waiting on a human must not count against a time budget. Pause every
   // guard on the active branch stack before blocking, resume after. These
   // are the same idempotent calls the runner makes on halt()/step entry;
@@ -80,8 +76,7 @@ function inputImpl(
   const override =
     ctx.inputOverride ??
     ((globalThis as any).__agencyInputOverride as
-      | ((prompt: string) => Promise<string>)
-      | undefined);
+      ((prompt: string) => Promise<string>) | undefined);
   if (override) {
     // Promise.resolve().then(...) so a synchronously-throwing override
     // still reaches the finally — otherwise the guards stay paused for
@@ -101,7 +96,9 @@ function inputImpl(
   });
   return new Promise<string>((resolve, reject) => {
     const onAbort = () => {
-      try { rl.close(); } catch {}
+      try {
+        rl.close();
+      } catch {}
       reject(new AgencyCancelledError("input cancelled"));
     };
     signal.addEventListener("abort", onAbort, { once: true });
@@ -117,11 +114,7 @@ function inputImpl(
         // interactive stdin is filtered: piped input legitimately arrives
         // instantly. Real wall clock on purpose — this measures I/O latency,
         // and fake-clock tests use inputOverride, never this path.
-        if (
-          answer === "" &&
-          process.stdin.isTTY &&
-          Date.now() - askedAt < BUFFERED_BLANK_LINE_MS
-        ) {
+        if (answer === "" && process.stdin.isTTY && Date.now() - askedAt < BUFFERED_BLANK_LINE_MS) {
           ask();
           return;
         }
@@ -178,9 +171,7 @@ export function _installSlowInputImpl(delayMs: number, answer: string): void {
 export function _advanceTimeImpl(ms: number): void {
   const { ctx } = getRuntimeContext();
   if (!(ctx.clock instanceof FakeClock)) {
-    throw new Error(
-      '_advanceTime() needs a fake clock. Set "fakeClock": true on this test case.',
-    );
+    throw new Error('_advanceTime() needs a fake clock. Set "fakeClock": true on this test case.');
   }
   ctx.clock.advance(ms);
 }
@@ -250,7 +241,7 @@ export async function _read(
 }
 
 const VALID_WRITE_MODES = ["overwrite", "append", "create-only"] as const;
-export type WriteMode = typeof VALID_WRITE_MODES[number];
+export type WriteMode = (typeof VALID_WRITE_MODES)[number];
 
 /** Single owner of the write-mode ladder. `data` is a string (written UTF-8 by
  *  Node's default) or a Buffer (raw bytes). `_write` / `_writeBinary` delegate
@@ -262,9 +253,7 @@ async function _writeBytes(
   mode: WriteMode = "overwrite",
 ): Promise<boolean> {
   if (!VALID_WRITE_MODES.includes(mode)) {
-    throw new Error(
-      `Invalid mode '${mode}'. Must be one of: ${VALID_WRITE_MODES.join(", ")}.`,
-    );
+    throw new Error(`Invalid mode '${mode}'. Must be one of: ${VALID_WRITE_MODES.join(", ")}.`);
   }
   const filePath = await resolvePath(dir, filename);
   if (mode === "create-only" && existsSync(filePath)) {
@@ -326,19 +315,18 @@ export async function _notify(title: string, message: string): Promise<boolean> 
   } else if (platform === "wsl") {
     console.error(
       `notify is not yet supported in WSL. ` +
-      `WSL does not have reliable notification support.\n` +
-      `Title: ${title}\nMessage: ${message}`
+        `WSL does not have reliable notification support.\n` +
+        `Title: ${title}\nMessage: ${message}`,
     );
   } else if (platform === "windows") {
     console.error(
       `notify is not yet supported on Windows. ` +
-      `Supported platforms: macOS, Linux.\n` +
-      `Title: ${title}\nMessage: ${message}`
+        `Supported platforms: macOS, Linux.\n` +
+        `Title: ${title}\nMessage: ${message}`,
     );
   } else {
     console.error(
-      `notify is not supported on platform: ${platform}\n` +
-      `Title: ${title}\nMessage: ${message}`
+      `notify is not supported on platform: ${platform}\n` + `Title: ${title}\nMessage: ${message}`,
     );
   }
   return true;
@@ -389,10 +377,7 @@ export function _pairsOf(src: unknown): unknown[][] {
     // every index up to length (yielding undefined). Index-building
     // keeps the two agreeing on sparse arrays too.
     const arr = src as unknown[];
-    return Array.from({ length: arr.length }, (_, index) => [
-      arr[index],
-      index,
-    ]);
+    return Array.from({ length: arr.length }, (_, index) => [arr[index], index]);
   }
   if (shape.kind === "record") {
     const record = src as Record<string, unknown>;

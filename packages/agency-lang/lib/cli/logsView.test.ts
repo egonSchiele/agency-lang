@@ -24,7 +24,10 @@ function seams(): { deps: LogsViewDeps; calls: Calls } {
       calls.viewed.push({ file, follow: opts.follow ?? false });
     },
     explorer: async (options) => {
-      calls.explored.push({ route: options.route, sourceKinds: options.sources.map((s) => s.kind) });
+      calls.explored.push({
+        route: options.route,
+        sourceKinds: options.sources.map((s) => s.kind),
+      });
     },
     loadAll: (sources) => {
       calls.csvSources.push(sources.length);
@@ -72,22 +75,36 @@ describe("logsView routing", () => {
   it("passes --dataset and --checklist through to the file viewer", async () => {
     const file = writeMultiTraceStatelog(tmpDir);
     let seenOpts: { dataset?: string; checklist?: string } | undefined;
-    await logsView([file], { dataset: "my-ds", checklist: "cl.json" }, {
-      viewFile: async (_file, opts) => { seenOpts = { dataset: opts.dataset, checklist: opts.checklist }; },
-    });
+    await logsView(
+      [file],
+      { dataset: "my-ds", checklist: "cl.json" },
+      {
+        viewFile: async (_file, opts) => {
+          seenOpts = { dataset: opts.dataset, checklist: opts.checklist };
+        },
+      },
+    );
     expect(seenOpts).toEqual({ dataset: "my-ds", checklist: "cl.json" });
   });
 
   it("passes the labeling base to the explorer for a run directory", async () => {
     const runDir = writeGradedRun(tmpDir);
     let seenLabeling: { datasetDir: string; checklistFile?: string } | undefined;
-    await logsView([runDir], { dataset: "my-ds", checklist: "cl.json" }, {
-      explorer: async (options) => {
-        seenLabeling = options.labeling === undefined
-          ? undefined
-          : { datasetDir: options.labeling.datasetDir, checklistFile: options.labeling.checklistFile };
+    await logsView(
+      [runDir],
+      { dataset: "my-ds", checklist: "cl.json" },
+      {
+        explorer: async (options) => {
+          seenLabeling =
+            options.labeling === undefined
+              ? undefined
+              : {
+                  datasetDir: options.labeling.datasetDir,
+                  checklistFile: options.labeling.checklistFile,
+                };
+        },
       },
-    });
+    );
     expect(seenLabeling?.datasetDir).toBe(path.resolve("my-ds"));
     expect(seenLabeling?.checklistFile).toBe(path.resolve("cl.json"));
   });
@@ -180,7 +197,10 @@ describe("createViewerHost lifecycle", () => {
   function fakeInput(destroy = vi.fn()): { input: InputSource; destroy: ReturnType<typeof vi.fn> } {
     return { input: { destroy } as unknown as InputSource, destroy };
   }
-  function fakeOutput(destroy = vi.fn()): { output: OutputTarget; destroy: ReturnType<typeof vi.fn> } {
+  function fakeOutput(destroy = vi.fn()): {
+    output: OutputTarget;
+    destroy: ReturnType<typeof vi.fn>;
+  } {
     return { output: { destroy } as unknown as OutputTarget, destroy };
   }
   const viewport = () => ({ rows: 24, cols: 80 });

@@ -434,9 +434,7 @@ node main() {
       const kinds = result.sites.map((s) => s.site.effect).sort();
       expect(kinds).toEqual(["std::read", "std::write"]);
       const files = new Set(result.sites.map((s) => s.site.file));
-      expect(files).toEqual(
-        new Set([path.resolve(aFile), path.resolve(bFile)]),
-      );
+      expect(files).toEqual(new Set([path.resolve(aFile), path.resolve(bFile)]));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

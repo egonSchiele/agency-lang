@@ -21,7 +21,9 @@ export abstract class BaseGrader {
 
   /** Pre-flight check against an input before the run. Default: nothing to check.
    *  Match-based graders override this to fail fast on an unresolved matchOn. */
-  validateInput(_input: Input): void { /* no-op */ }
+  validateInput(_input: Input): void {
+    /* no-op */
+  }
 
   /** Single-shot grade. Declarative: no sampling, no aggregation. */
   protected abstract _run(input: GraderInput): Promise<Grade>;

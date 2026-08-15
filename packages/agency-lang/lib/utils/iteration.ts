@@ -27,9 +27,7 @@
  * allocation cost.
  */
 export type IterationShape =
-  | { kind: "array" }
-  | { kind: "record"; keys: string[] }
-  | { kind: "none" };
+  { kind: "array" } | { kind: "record"; keys: string[] } | { kind: "none" };
 
 export function classifyIterable(src: unknown): IterationShape {
   if (Array.isArray(src)) {

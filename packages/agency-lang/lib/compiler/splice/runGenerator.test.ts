@@ -45,7 +45,10 @@ function spliceIn(hostSource: string): Splice {
 }
 
 /** A generator module returning `body`, plus the splice that calls it. */
-function generatorReturning(body: string, params: string = ""): {
+function generatorReturning(
+  body: string,
+  params: string = "",
+): {
   splice: Splice;
   generator: { modulePath: string; exportedName: string };
 } {
@@ -71,9 +74,7 @@ describe("runGenerator", () => {
     if (!result.ok) return;
     expect(result.value.type).toBe("agencyProgram");
     expect(result.value.nodes).toHaveLength(1);
-    expect((result.value.nodes[0] as { functionName?: string }).functionName).toBe(
-      "greet",
-    );
+    expect((result.value.nodes[0] as { functionName?: string }).functionName).toBe("greet");
   }, 60_000);
 
   it("brings back an expression fragment", () => {
@@ -91,11 +92,7 @@ describe("runGenerator", () => {
       `import { Code } from "std::agency"\n\nexport def g(n: number): Code {\n  if (n > 1) {\n    return [| "big" |]\n  }\n  return [| "small" |]\n}\n`,
     );
     const splice = spliceIn(`import { g } from "./gen.agency"\n\n$( g(5) )\n`);
-    const result = runGenerator(
-      splice,
-      { modulePath, exportedName: "g" },
-      dir,
-    );
+    const result = runGenerator(splice, { modulePath, exportedName: "g" }, dir);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(JSON.stringify(result.value)).toContain("big");
@@ -108,14 +105,8 @@ describe("runGenerator", () => {
     );
     // The host renamed it, so the printed expression says `gen`. The
     // runner has to bind that spelling.
-    const splice = spliceIn(
-      `import { makeGetters as gen } from "./gen.agency"\n\n$( gen() )\n`,
-    );
-    const result = runGenerator(
-      splice,
-      { modulePath, exportedName: "makeGetters" },
-      dir,
-    );
+    const splice = spliceIn(`import { makeGetters as gen } from "./gen.agency"\n\n$( gen() )\n`);
+    const result = runGenerator(splice, { modulePath, exportedName: "makeGetters" }, dir);
     expect(result.ok).toBe(true);
   }, 60_000);
 
@@ -126,9 +117,7 @@ describe("runGenerator", () => {
       "gen.agency",
       `import { Code } from "std::agency"\n\nexport def g(piece: Code): Code {\n  return piece\n}\n`,
     );
-    const splice = spliceIn(
-      `import { g } from "./gen.agency"\n\n$( g([| 42 |]) )\n`,
-    );
+    const splice = spliceIn(`import { g } from "./gen.agency"\n\n$( g([| 42 |]) )\n`);
     const result = runGenerator(splice, { modulePath, exportedName: "g" }, dir);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -150,9 +139,7 @@ describe("runGenerator", () => {
   }, 60_000);
 
   it("reports a generator that returns a failure", () => {
-    const { splice, generator } = generatorReturning(
-      `  return failure("no data to work from")`,
-    );
+    const { splice, generator } = generatorReturning(`  return failure("no data to work from")`);
     const result = runGenerator(splice, generator, dir);
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -189,10 +176,7 @@ describe("runGenerator", () => {
   }, 60_000);
 
   it("refuses a generator that returns something other than Code", () => {
-    const modulePath = write(
-      "gen.agency",
-      `export def g(): number {\n  return 3\n}\n`,
-    );
+    const modulePath = write("gen.agency", `export def g(): number {\n  return 3\n}\n`);
     const splice = spliceIn(`import { g } from "./gen.agency"\n\n$( g() )\n`);
     const result = runGenerator(splice, { modulePath, exportedName: "g" }, dir);
     expect(result.ok).toBe(false);

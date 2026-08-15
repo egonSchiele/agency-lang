@@ -86,8 +86,16 @@ export function growToWidth(block: Block, targetWidth: number): Block {
 // Single dispatch table: each node type's size + render paired, sourced
 // from the per-concern files that own them.
 export const HANDLERS: Record<NodeType, NodeHandler> = {
-  box, row, column, table, barchart,
-  text, raw, space, hline, vline,
+  box,
+  row,
+  column,
+  table,
+  barchart,
+  text,
+  raw,
+  space,
+  hline,
+  vline,
 };
 
 // Derived views kept so the test surface (`_internal`) and any external
@@ -127,7 +135,12 @@ function buildViewport(cols?: number, rows?: number): Viewport | undefined {
   return { cols, rows: validRows };
 }
 
-export function _render(node: LayoutNode, color: "auto" | boolean, cols?: number, rows?: number): string {
+export function _render(
+  node: LayoutNode,
+  color: "auto" | boolean,
+  cols?: number,
+  rows?: number,
+): string {
   const useColor = color === "auto" ? autoUseColor() : color === true;
   const out = render(node, buildViewport(cols, rows));
   return useColor ? out : stripAnsi(out);

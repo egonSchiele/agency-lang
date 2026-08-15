@@ -3,11 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { makeOutputId } from "@/eval/label/ids.js";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
-import {
-  labelTrace,
-  type LabelTraceServices,
-  type LabelTraceUI,
-} from "./labelTrace.js";
+import { labelTrace, type LabelTraceServices, type LabelTraceUI } from "./labelTrace.js";
 
 let ts = 0;
 function ev(type: string, data: Record<string, unknown> = {}): EventEnvelope {
@@ -18,7 +14,12 @@ function ev(type: string, data: Record<string, unknown> = {}): EventEnvelope {
     project_id: "p",
     span_id: null,
     parent_span_id: null,
-    data: { type, timestamp: new Date(1_700_000_000_000 + ts).toISOString(), threadId: "0", ...data },
+    data: {
+      type,
+      timestamp: new Date(1_700_000_000_000 + ts).toISOString(),
+      threadId: "0",
+      ...data,
+    },
   };
 }
 
@@ -26,7 +27,9 @@ function ui(over: Partial<LabelTraceUI> = {}): LabelTraceUI & { notes: string[] 
   const notes: string[] = [];
   return {
     editTask: vi.fn(async () => ({ kind: "keep-default" as const })),
-    notify: (message: string) => { notes.push(message); },
+    notify: (message: string) => {
+      notes.push(message);
+    },
     notes,
     ...over,
   };
@@ -36,8 +39,17 @@ function services(): LabelTraceServices & { ingested: unknown[]; labeled: unknow
   const ingested: unknown[] = [];
   const labeled: unknown[] = [];
   return {
-    datasetWriter: { ingest: (request) => { ingested.push(request); return {} as never; } },
-    labelingHost: { run: async (request) => { labeled.push(request); } },
+    datasetWriter: {
+      ingest: (request) => {
+        ingested.push(request);
+        return {} as never;
+      },
+    },
+    labelingHost: {
+      run: async (request) => {
+        labeled.push(request);
+      },
+    },
     ingested,
     labeled,
   };
@@ -63,12 +75,20 @@ describe("labelTrace", () => {
     const expectedId = makeOutputId({ output: "answer" });
     expect(outcome).toEqual({ kind: "labeled", outputId: expectedId });
     expect(svc.ingested).toHaveLength(1);
-    expect(svc.labeled[0]).toMatchObject({ datasetDir: "/tmp/ds", checklistFile: "cl.json", focusOutputId: expectedId });
+    expect(svc.labeled[0]).toMatchObject({
+      datasetDir: "/tmp/ds",
+      checklistFile: "cl.json",
+      focusOutputId: expectedId,
+    });
   });
 
   it("does not ingest and reports when there is nothing to judge", async () => {
     const svc = services();
-    const outcome = await labelTrace({ ...baseRequest, events: [ev("agentStart"), ev("agentEnd")] }, ui(), svc);
+    const outcome = await labelTrace(
+      { ...baseRequest, events: [ev("agentStart"), ev("agentEnd")] },
+      ui(),
+      svc,
+    );
     expect(outcome).toEqual({ kind: "rejected", reason: "no-output" });
     expect(svc.ingested).toHaveLength(0);
     expect(svc.labeled).toHaveLength(0);
@@ -78,7 +98,11 @@ describe("labelTrace", () => {
     const svc = services();
     const theUi = ui();
     const outcome = await labelTrace(
-      { ...baseRequest, checklistFile: undefined, events: [ev("evalOutputRecorded", { value: "answer" }), ev("agentEnd")] },
+      {
+        ...baseRequest,
+        checklistFile: undefined,
+        events: [ev("evalOutputRecorded", { value: "answer" }), ev("agentEnd")],
+      },
       theUi,
       svc,
     );
@@ -100,11 +124,15 @@ describe("labelTrace", () => {
 
   it("propagates a labeling-host failure after ingesting", async () => {
     const svc = services();
-    svc.labelingHost.run = async () => { throw new Error("host boom"); };
-    await expect(labelTrace(
-      { ...baseRequest, events: [ev("evalOutputRecorded", { value: "answer" }), ev("agentEnd")] },
-      ui(),
-      svc,
-    )).rejects.toThrow("host boom");
+    svc.labelingHost.run = async () => {
+      throw new Error("host boom");
+    };
+    await expect(
+      labelTrace(
+        { ...baseRequest, events: [ev("evalOutputRecorded", { value: "answer" }), ev("agentEnd")] },
+        ui(),
+        svc,
+      ),
+    ).rejects.toThrow("host boom");
   });
 });

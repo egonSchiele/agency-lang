@@ -15,9 +15,7 @@ describe("the prelude", () => {
     const symbols = symbolTable.getFile(stdlibPath);
     expect(symbols).toBeDefined();
 
-    const exportedNames = Object.keys(symbols!).filter(
-      (name) => symbols![name].exported,
-    );
+    const exportedNames = Object.keys(symbols!).filter((name) => symbols![name].exported);
     const missing = PRELUDE_NAMES.filter((n) => !exportedNames.includes(n));
     expect(missing).toEqual([]);
   });
@@ -34,12 +32,9 @@ describe("the prelude", () => {
     expect(symbols).toBeDefined();
 
     const exportedFunctions = Object.keys(symbols!).filter(
-      (name) =>
-        symbols![name].exported && symbols![name].kind === "function",
+      (name) => symbols![name].exported && symbols![name].kind === "function",
     );
-    const missing = exportedFunctions.filter(
-      (n) => !PRELUDE_NAMES.includes(n),
-    );
+    const missing = exportedFunctions.filter((n) => !PRELUDE_NAMES.includes(n));
     expect(missing).toEqual([]);
   });
 

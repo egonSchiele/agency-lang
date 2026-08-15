@@ -40,9 +40,7 @@ export type GroupHeaderRow = {
   expanded: boolean;
 };
 
-export type DisplayRow =
-  | { kind: "run"; key: string; row: RunRow }
-  | GroupHeaderRow;
+export type DisplayRow = { kind: "run"; key: string; row: RunRow } | GroupHeaderRow;
 
 export type TableState = {
   sort: SortKey;
@@ -91,8 +89,10 @@ export function projectTable(rows: RunRow[], state: TableState): TableProjection
   // A run row hidden inside a collapsed group: the owning header is the
   // nearest visible thing that still means "that row".
   const owningIndex = display.findIndex(
-    (row) => row.kind === "groupHeader" && state.cursorKey !== null
-      && row.memberKeys.includes(state.cursorKey),
+    (row) =>
+      row.kind === "groupHeader" &&
+      state.cursorKey !== null &&
+      row.memberKeys.includes(state.cursorKey),
   );
   if (owningIndex !== -1) {
     return { rows: display, cursorIndex: owningIndex, cursorKey: display[owningIndex].key };
@@ -108,7 +108,10 @@ export function updateTable(state: TableState, action: TableAction, rows: RunRow
     if (projection.cursorIndex === null) {
       return state;
     }
-    const index = Math.max(0, Math.min(projection.rows.length - 1, projection.cursorIndex + action.delta));
+    const index = Math.max(
+      0,
+      Math.min(projection.rows.length - 1, projection.cursorIndex + action.delta),
+    );
     return { ...state, cursorKey: projection.rows[index].key, cursorIndexHint: index };
   }
   if (action.kind === "sortNext") {
@@ -123,7 +126,8 @@ export function updateTable(state: TableState, action: TableAction, rows: RunRow
     return rePin(rows, { ...state, group: GROUP_CYCLE[(at + 1) % GROUP_CYCLE.length] });
   }
   const projection = projectTable(rows, state);
-  const cursorRow = projection.cursorIndex === null ? undefined : projection.rows[projection.cursorIndex];
+  const cursorRow =
+    projection.cursorIndex === null ? undefined : projection.rows[projection.cursorIndex];
   if (cursorRow === undefined || cursorRow.kind !== "groupHeader") {
     return state;
   }
@@ -146,7 +150,9 @@ function rePin(rows: RunRow[], state: TableState): TableState {
 // ── projection internals ───────────────────────────────────────────
 
 function displayRows(rows: RunRow[], state: TableState): DisplayRow[] {
-  const sorted = [...rows].sort((left, right) => compareValues(sortValue(left, state.sort), sortValue(right, state.sort), state.ascending));
+  const sorted = [...rows].sort((left, right) =>
+    compareValues(sortValue(left, state.sort), sortValue(right, state.sort), state.ascending),
+  );
   if (state.group === "none") {
     return sorted.map((row) => ({ kind: "run", key: row.key, row }));
   }
@@ -171,7 +177,13 @@ function displayRows(rows: RunRow[], state: TableState): DisplayRow[] {
       expanded: state.expandedGroupKeys.includes(key),
     };
   });
-  headers.sort((left, right) => compareValues(headerSortValue(left, state.sort), headerSortValue(right, state.sort), state.ascending));
+  headers.sort((left, right) =>
+    compareValues(
+      headerSortValue(left, state.sort),
+      headerSortValue(right, state.sort),
+      state.ascending,
+    ),
+  );
 
   const display: DisplayRow[] = [];
   for (const header of headers) {
@@ -228,12 +240,15 @@ function headerSortValue(header: GroupHeaderRow, sort: SortKey): number | string
 /** Missing values sort LAST in both directions — an ungraded run must
  *  never look like the best or the worst. Sort is otherwise stable, so
  *  ties keep input order. */
-function compareValues(a: number | string | null, b: number | string | null, ascending: boolean): number {
+function compareValues(
+  a: number | string | null,
+  b: number | string | null,
+  ascending: boolean,
+): number {
   if (a === null && b === null) return 0;
   if (a === null) return 1;
   if (b === null) return -1;
-  const base = typeof a === "string" || typeof b === "string"
-    ? String(a).localeCompare(String(b))
-    : a - b;
+  const base =
+    typeof a === "string" || typeof b === "string" ? String(a).localeCompare(String(b)) : a - b;
   return ascending ? base : -base;
 }

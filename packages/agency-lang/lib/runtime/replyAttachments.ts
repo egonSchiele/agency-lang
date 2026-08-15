@@ -1,14 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import {
-  modelSupportsInputModality,
-  type ImagePart,
-  type FilePart,
-} from "smoltalk";
-import {
-  MAX_REPLY_ATTACHMENTS_PER_CALL,
-  MAX_REPLY_ATTACHMENT_BYTES,
-} from "../config.js";
+import { modelSupportsInputModality, type ImagePart, type FilePart } from "smoltalk";
+import { MAX_REPLY_ATTACHMENTS_PER_CALL, MAX_REPLY_ATTACHMENT_BYTES } from "../config.js";
 import { MIME_TYPES } from "../stdlib/mediaPathScan.js";
 import { success, failure, isSuccess, type ResultValue } from "./result.js";
 
@@ -126,9 +119,7 @@ export function harvestReplyAttachments(args: {
     const gate = gateReplyAttachment(part, buffer.length, model);
     if (isSuccess(gate)) {
       buffer.push({ id, toolName, part });
-      lines.push(
-        `[attached ${id} — delivered in the user message following these tool results]`,
-      );
+      lines.push(`[attached ${id} — delivered in the user message following these tool results]`);
     } else {
       lines.push(`[attachment ${id} skipped: ${gate.error}]`);
     }
@@ -159,9 +150,7 @@ export function appendReplyMarker(
  *  that may later be deleted or edited; url/base64/provider sources pass
  *  through. Never throws: an unreadable path becomes a text part naming the
  *  failure. */
-export function buildReplyUserMessage(
-  harvested: HarvestedReplyAttachment[],
-): unknown[] {
+export function buildReplyUserMessage(harvested: HarvestedReplyAttachment[]): unknown[] {
   const parts: unknown[] = [];
   for (const entry of harvested) {
     const kindWord = entry.part.type === "image" ? "image" : "file";

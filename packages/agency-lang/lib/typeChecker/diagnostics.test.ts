@@ -59,9 +59,7 @@ describe("diagnostic registry invariants", () => {
 
 describe("renderMessage", () => {
   it("substitutes named params", () => {
-    expect(renderMessage("got '{a}' and '{b}'", { a: "x", b: 2 })).toBe(
-      "got 'x' and '2'",
-    );
+    expect(renderMessage("got '{a}' and '{b}'", { a: "x", b: 2 })).toBe("got 'x' and '2'");
   });
 
   it("THROWS on a missing param instead of rendering undefined", () => {
@@ -69,9 +67,7 @@ describe("renderMessage", () => {
   });
 
   it("unescapes literal braces written as {{ and }}", () => {
-    expect(renderMessage("match (r) {{ {arm} }}", { arm: "..." })).toBe(
-      "match (r) { ... }",
-    );
+    expect(renderMessage("match (r) {{ {arm} }}", { arm: "..." })).toBe("match (r) { ... }");
   });
 });
 
@@ -85,9 +81,7 @@ describe("registry <-> runtime formatter locks", () => {
       { tool: "deploy", param: "block", type: "() => void" },
       null,
     );
-    expect(typed.message).toBe(
-      formatRequiredUnboundError("deploy", "block", "() => void"),
-    );
+    expect(typed.message).toBe(formatRequiredUnboundError("deploy", "block", "() => void"));
     const untyped = diagnostic(
       "toolRequiredParamUnbound",
       { tool: "deploy", param: "block" },
@@ -99,9 +93,7 @@ describe("registry <-> runtime formatter locks", () => {
       { tool: "deploy", params: "'a', 'b'" },
       null,
     );
-    expect(dropped.message).toBe(
-      formatOptionalUnboundWarning("deploy", ["a", "b"]),
-    );
+    expect(dropped.message).toBe(formatOptionalUnboundWarning("deploy", ["a", "b"]));
   });
 });
 
@@ -126,9 +118,7 @@ describe("diagnostic factory", () => {
       { actual: "string", expected: "number", name: "x" },
       null,
     );
-    expect(err.message).toBe(
-      "Type 'string' is not assignable to type 'number'.",
-    );
+    expect(err.message).toBe("Type 'string' is not assignable to type 'number'.");
     // extra structured key (name) rides along in params without rendering
     expect(err.params?.name).toBe("x");
   });
@@ -139,9 +129,7 @@ describe("diagnostic factory", () => {
       { alias: "Pair", max: 1, argumentWord: "argument", count: 3, context: "f" },
       null,
     );
-    expect(err.message).toBe(
-      "Pair expects at most 1 type argument, got 3 (referenced in 'f').",
-    );
+    expect(err.message).toBe("Pair expects at most 1 type argument, got 3 (referenced in 'f').");
   });
 
   it("severity override wins over the registry default", () => {

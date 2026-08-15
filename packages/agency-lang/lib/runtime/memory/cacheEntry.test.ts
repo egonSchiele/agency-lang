@@ -2,12 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { MemoryCacheEntry } from "./cacheEntry.js";
 import { MemoryGraph } from "./graph.js";
 import { EmbeddingManager } from "./embeddings.js";
-import type {
-  ConversationSummary,
-  EmbeddingIndex,
-  MemoryGraphData,
-  MemoryStore,
-} from "./types.js";
+import type { ConversationSummary, EmbeddingIndex, MemoryGraphData, MemoryStore } from "./types.js";
 
 // Tiny in-memory MemoryStore stub. Records the most recent save for
 // each method so tests can assert that persist() routes to the right
@@ -44,12 +39,7 @@ describe("MemoryCacheEntry", () => {
     const graph = new MemoryGraph();
     const mom = graph.addEntity("Mom", "person", "test");
     const obs = graph.addObservation(mom.id, "Likes pottery");
-    const entry = new MemoryCacheEntry(
-      "default",
-      graph,
-      new EmbeddingManager(),
-      null,
-    );
+    const entry = new MemoryCacheEntry("default", graph, new EmbeddingManager(), null);
     expect(entry.lookupEntityIdByObs(obs.id)).toBe(mom.id);
   });
 
@@ -59,9 +49,7 @@ describe("MemoryCacheEntry", () => {
     const entry = new MemoryCacheEntry("default", graph, embeddings, null);
     const outcome = entry.applyExtraction(
       {
-        entities: [
-          { name: "Mom", type: "person", observations: ["Likes pottery"] },
-        ],
+        entities: [{ name: "Mom", type: "person", observations: ["Likes pottery"] }],
         relations: [],
         expirations: [],
       },
@@ -92,9 +80,7 @@ describe("MemoryCacheEntry", () => {
       {
         entities: [],
         relations: [],
-        expirations: [
-          { entityName: "Mom", observationContent: "Likes pottery" },
-        ],
+        expirations: [{ entityName: "Mom", observationContent: "Likes pottery" }],
       },
       "test",
     );
@@ -122,12 +108,7 @@ describe("MemoryCacheEntry", () => {
     const a = graph.addEntity("A", "person", "test");
     const b = graph.addEntity("B", "person", "test");
     const rel = graph.addRelation(a.id, b.id, "knows", "test");
-    const entry = new MemoryCacheEntry(
-      "default",
-      graph,
-      new EmbeddingManager(),
-      null,
-    );
+    const entry = new MemoryCacheEntry("default", graph, new EmbeddingManager(), null);
     entry.expireRelation(rel.id);
     const stillActive = graph.getRelations().some((r) => r.id === rel.id && r.validTo === null);
     expect(stillActive).toBe(false);
@@ -135,12 +116,7 @@ describe("MemoryCacheEntry", () => {
 
   it("setEmbedding stashes a vector that findSimilar can recover", () => {
     const embeddings = new EmbeddingManager();
-    const entry = new MemoryCacheEntry(
-      "default",
-      new MemoryGraph(),
-      embeddings,
-      null,
-    );
+    const entry = new MemoryCacheEntry("default", new MemoryGraph(), embeddings, null);
     entry.setEmbedding("obs-1", [0.5, 0.5, 0.5]);
     const hit = embeddings.findSimilar([0.5, 0.5, 0.5], 1);
     expect(hit).toHaveLength(1);
@@ -149,12 +125,11 @@ describe("MemoryCacheEntry", () => {
 
   it("persist routes saves to the captured memoryId, ignoring later getMemoryId changes", async () => {
     const store = inMemoryStore();
-    const entry = new MemoryCacheEntry(
-      "user-a",
-      new MemoryGraph(),
-      new EmbeddingManager(),
-      { summary: "s", lastCompactedAt: "2026-05-16", messagesSummarized: 2 },
-    );
+    const entry = new MemoryCacheEntry("user-a", new MemoryGraph(), new EmbeddingManager(), {
+      summary: "s",
+      lastCompactedAt: "2026-05-16",
+      messagesSummarized: 2,
+    });
     await entry.persist(store);
     expect(store.graphSaves.map((s) => s.id)).toEqual(["user-a"]);
     expect(store.embeddingSaves.map((s) => s.id)).toEqual(["user-a"]);
@@ -163,12 +138,7 @@ describe("MemoryCacheEntry", () => {
 
   it("persist skips saveSummary when no summary is set", async () => {
     const store = inMemoryStore();
-    const entry = new MemoryCacheEntry(
-      "default",
-      new MemoryGraph(),
-      new EmbeddingManager(),
-      null,
-    );
+    const entry = new MemoryCacheEntry("default", new MemoryGraph(), new EmbeddingManager(), null);
     await entry.persist(store);
     expect(store.graphSaves).toHaveLength(1);
     expect(store.embeddingSaves).toHaveLength(1);
@@ -176,12 +146,7 @@ describe("MemoryCacheEntry", () => {
   });
 
   it("setSummary / getSummary round-trip", () => {
-    const entry = new MemoryCacheEntry(
-      "default",
-      new MemoryGraph(),
-      new EmbeddingManager(),
-      null,
-    );
+    const entry = new MemoryCacheEntry("default", new MemoryGraph(), new EmbeddingManager(), null);
     expect(entry.getSummary()).toBeNull();
     const s: ConversationSummary = {
       summary: "hi",

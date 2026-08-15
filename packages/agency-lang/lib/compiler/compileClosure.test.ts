@@ -34,20 +34,16 @@ describe("buildCompiledClosure", () => {
       "foo.agency",
       'import { barStatic } from "./bar.agency"\n' +
         'static const fooStatic = barStatic + "!"\n' +
-        'node main() { return fooStatic }\n',
+        "node main() { return fooStatic }\n",
     );
     write("bar.agency", 'export static const barStatic = "hello"\n');
 
     const c = buildCompiledClosure(fooPath, {});
-    expect(Object.keys(c.programs).sort()).toEqual(
-      [fooPath, path.join(dir, "bar.agency")].sort(),
-    );
+    expect(Object.keys(c.programs).sort()).toEqual([fooPath, path.join(dir, "bar.agency")].sort());
     expect(c.plans[fooPath]).toBeDefined();
     expect(c.plans[path.join(dir, "bar.agency")]).toBeDefined();
     expect(c.plans[fooPath]!.static.localOrder).toEqual(["fooStatic"]);
-    expect(c.plans[fooPath]!.static.awaitModules).toEqual([
-      path.join(dir, "bar.agency"),
-    ]);
+    expect(c.plans[fooPath]!.static.awaitModules).toEqual([path.join(dir, "bar.agency")]);
   });
 
   it("throws CompileClosureError on a static cycle, naming both decls", () => {
@@ -78,9 +74,7 @@ describe("buildCompiledClosure", () => {
   it("throws CompileClosureError when a static initializer references a global", () => {
     const entryPath = write(
       "entry.agency",
-      'const g = "hello"\n' +
-        'static const s = g + "!"\n' +
-        'node main() { return s }\n',
+      'const g = "hello"\n' + 'static const s = g + "!"\n' + "node main() { return s }\n",
     );
 
     let err: unknown = null;
@@ -93,21 +87,15 @@ describe("buildCompiledClosure", () => {
     // PR 4 reformatted the message: `static const 'name'` and
     // `global 'name'` (instead of generic "Static 'name'") so
     // the surface mirrors the source-level keyword.
-    expect((err as Error).message).toMatch(
-      /static const '?s'?.*references global '?g'?/,
-    );
+    expect((err as Error).message).toMatch(/static const '?s'?.*references global '?g'?/);
   });
 
   it("throws CompileClosureError when a file in the closure fails to parse", () => {
     const entryPath = write(
       "entry.agency",
-      'import { x } from "./broken.agency"\n' +
-        'static const s = x + "!"\n',
+      'import { x } from "./broken.agency"\n' + 'static const s = x + "!"\n',
     );
-    write(
-      "broken.agency",
-      'this is not (((( valid agency syntax\n',
-    );
+    write("broken.agency", "this is not (((( valid agency syntax\n");
 
     let err: unknown = null;
     try {
@@ -131,16 +119,10 @@ describe("buildCompiledClosure", () => {
       "foo.agency",
       'import { barStatic } from "./reexport.agency"\n' +
         'static const fooStatic = barStatic + "!"\n' +
-        'node main() { return fooStatic }\n',
+        "node main() { return fooStatic }\n",
     );
-    const reexportPath = write(
-      "reexport.agency",
-      'export { barStatic } from "./bar.agency"\n',
-    );
-    const barPath = write(
-      "bar.agency",
-      'export static const barStatic = "hello"\n',
-    );
+    const reexportPath = write("reexport.agency", 'export { barStatic } from "./bar.agency"\n');
+    const barPath = write("bar.agency", 'export static const barStatic = "hello"\n');
 
     const c = buildCompiledClosure(fooPath, {});
     expect(c.plans[fooPath]!.static.awaitModules).toEqual([reexportPath]);
@@ -164,14 +146,11 @@ describe("buildCompiledClosure", () => {
     const mainPath = write(
       "main.agency",
       'import * as helper from "./helper.agency"\n' +
-        'def show(s: string) {}\n' +
-        'show(helper.helperGlobal)\n' +
+        "def show(s: string) {}\n" +
+        "show(helper.helperGlobal)\n" +
         'node main() { return "ok" }\n',
     );
-    const helperPath = write(
-      "helper.agency",
-      'export const helperGlobal = "G"\n',
-    );
+    const helperPath = write("helper.agency", 'export const helperGlobal = "G"\n');
 
     const c = buildCompiledClosure(mainPath, {});
     expect(c.plans[mainPath]!.global.awaitModules).toEqual([helperPath]);
@@ -226,9 +205,7 @@ describe("agencyImportTargets resolveStdlib option", () => {
   });
 
   test("resolveStdlib maps std:: to absolute stdlib paths, incl. re-exports", () => {
-    expect(
-      agencyImportTargets(parse(src), "/x/mod.agency", { resolveStdlib: true }),
-    ).toEqual([
+    expect(agencyImportTargets(parse(src), "/x/mod.agency", { resolveStdlib: true })).toEqual([
       path.join(getStdlibDir(), "index.agency"),
       path.join(getStdlibDir(), "shell.agency"),
     ]);

@@ -53,9 +53,7 @@ afterEach(() => {
   }
 });
 
-const PRELUDE_STUBS = PRELUDE_NAMES.map(
-  (n) => `export def ${n}(): number { return 0 }`,
-).join("\n");
+const PRELUDE_STUBS = PRELUDE_NAMES.map((n) => `export def ${n}(): number { return 0 }`).join("\n");
 
 function write(rel: string, content: string): void {
   const abs = path.join(fake.stdlibDir, rel);
@@ -72,10 +70,7 @@ function makeFixture(): { out: string } {
     "helper.agency",
     `effect fake::alpha { value: string }\neffect fake::beta { value: string }\n\nexport def h(): string {\n  raise fake::alpha("go", { value: "v" })\n  return "h"\n}\n`,
   );
-  write(
-    "user.agency",
-    `import { h } from "std::helper"\nexport def u(): string { return h() }\n`,
-  );
+  write("user.agency", `import { h } from "std::helper"\nexport def u(): string { return h() }\n`);
   const out = tmp("agency-docstdlib-out-");
   generateDoc({}, fake.stdlibDir, out, []);
   return { out };

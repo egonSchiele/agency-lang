@@ -17,9 +17,7 @@ describe("_writeBinary", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "wb-"));
     const b64 = Buffer.from("hi").toString("base64");
     await _writeBinary(dir, "f.bin", b64, "overwrite");
-    await expect(_writeBinary(dir, "f.bin", b64, "create-only")).rejects.toThrow(
-      /already exists/,
-    );
+    await expect(_writeBinary(dir, "f.bin", b64, "create-only")).rejects.toThrow(/already exists/);
   });
 
   it("append mode concatenates rather than overwriting", async () => {
@@ -31,9 +29,9 @@ describe("_writeBinary", () => {
 
   it("rejects an invalid mode", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "wb-"));
-    await expect(
-      _writeBinary(dir, "x.bin", "AA==", "clobber" as never),
-    ).rejects.toThrow(/Invalid mode/);
+    await expect(_writeBinary(dir, "x.bin", "AA==", "clobber" as never)).rejects.toThrow(
+      /Invalid mode/,
+    );
   });
 
   it("throws on malformed base64 rather than writing corrupted bytes", async () => {

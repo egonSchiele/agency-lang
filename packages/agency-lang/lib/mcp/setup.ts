@@ -12,12 +12,12 @@ export function codexConfigPath(): string {
   return path.join(os.homedir(), ".codex", "config.toml");
 }
 
-export function renderCodexMcpServerBlock(command: string[], serverName: string = "agency"): string {
+export function renderCodexMcpServerBlock(
+  command: string[],
+  serverName: string = "agency",
+): string {
   const [executable, ...args] = command;
-  const lines = [
-    `[mcp_servers.${serverName}]`,
-    `command = ${JSON.stringify(executable)}`,
-  ];
+  const lines = [`[mcp_servers.${serverName}]`, `command = ${JSON.stringify(executable)}`];
   if (args.length > 0) {
     lines.push(`args = [${args.map((arg) => JSON.stringify(arg)).join(", ")}]`);
   }
@@ -40,7 +40,11 @@ function upsertTomlSection(content: string, header: string, block: string): stri
   return `${normalized}\n${block}\n`;
 }
 
-export function setupCodexMcp(configPath: string, command: string[], serverName: string = "agency"): CodexMcpSetupResult {
+export function setupCodexMcp(
+  configPath: string,
+  command: string[],
+  serverName: string = "agency",
+): CodexMcpSetupResult {
   const header = `[mcp_servers.${serverName}]`;
   const block = renderCodexMcpServerBlock(command, serverName);
   const current = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf-8") : "";

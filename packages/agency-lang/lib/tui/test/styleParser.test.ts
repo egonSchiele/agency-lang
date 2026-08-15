@@ -25,11 +25,7 @@ describe("parseStyledText", () => {
 
   it("handles mixed styled and unstyled text", () => {
     const result = parseStyledText("hello {bold}world{/bold} foo");
-    expect(result).toEqual([
-      { text: "hello " },
-      { text: "world", bold: true },
-      { text: " foo" },
-    ]);
+    expect(result).toEqual([{ text: "hello " }, { text: "world", bold: true }, { text: " foo" }]);
   });
 
   it("returns empty array for empty string", () => {
@@ -51,25 +47,17 @@ describe("parseStyledText", () => {
 
   it("unrecognized tags are preserved as literal text", () => {
     const result = parseStyledText("hello {unknown} world");
-    expect(result).toEqual([
-      { text: "hello " },
-      { text: "{unknown}" },
-      { text: " world" },
-    ]);
+    expect(result).toEqual([{ text: "hello " }, { text: "{unknown}" }, { text: " world" }]);
   });
 });
 
 describe("parseStyledText: ANSI passthrough", () => {
   it("parses a basic ANSI fg color escape", () => {
-    expect(parseStyledText("\x1b[31mred\x1b[0m")).toEqual([
-      { text: "red", fg: "red" },
-    ]);
+    expect(parseStyledText("\x1b[31mred\x1b[0m")).toEqual([{ text: "red", fg: "red" }]);
   });
 
   it("parses bright fg color codes", () => {
-    expect(parseStyledText("\x1b[91mhi\x1b[0m")).toEqual([
-      { text: "hi", fg: "bright-red" },
-    ]);
+    expect(parseStyledText("\x1b[91mhi\x1b[0m")).toEqual([{ text: "hi", fg: "bright-red" }]);
   });
 
   it("parses 24-bit truecolor as a hex string", () => {
@@ -80,10 +68,7 @@ describe("parseStyledText: ANSI passthrough", () => {
 
   it("treats ESC[m and ESC[0m as full reset", () => {
     const result = parseStyledText("\x1b[1m\x1b[31mhi\x1b[mafter");
-    expect(result).toEqual([
-      { text: "hi", bold: true, fg: "red" },
-      { text: "after" },
-    ]);
+    expect(result).toEqual([{ text: "hi", bold: true, fg: "red" }, { text: "after" }]);
   });
 
   it("intermixes ANSI and {tag} forms", () => {

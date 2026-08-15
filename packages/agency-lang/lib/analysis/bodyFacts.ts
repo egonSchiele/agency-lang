@@ -30,9 +30,7 @@ export type BodyFacts = {
  *  nothing here needs. */
 type Visit = { node: AgencyNode; ancestors: WalkAncestor[] };
 
-const isInterrupt = (
-  visit: Visit,
-): visit is Visit & { node: InterruptStatement } =>
+const isInterrupt = (visit: Visit): visit is Visit & { node: InterruptStatement } =>
   visit.node.type === "interruptStatement";
 
 const isCall = (visit: Visit): visit is Visit & { node: FunctionCall } =>
@@ -49,9 +47,7 @@ export function collectBodyFacts(body: AgencyNode[]): BodyFacts {
   const visits: Visit[] = [...walkNodes(body)];
   const calls = visits.filter(isCall);
   return {
-    effects: unique(
-      visits.filter(isInterrupt).map((visit) => visit.node.effect),
-    ),
+    effects: unique(visits.filter(isInterrupt).map((visit) => visit.node.effect)),
     callees: unique([
       ...visits.filter(isGuard).map(() => "_guard"),
       ...calls
@@ -77,10 +73,7 @@ export function collectBodyFacts(body: AgencyNode[]): BodyFacts {
  * walk does not have. That makes it one of the blind spots the splice
  * eligibility check refuses on.
  */
-export function calledName(
-  node: FunctionCall,
-  ancestors: WalkAncestor[],
-): string | null {
+export function calledName(node: FunctionCall, ancestors: WalkAncestor[]): string | null {
   return isChainLink(node, ancestors) ? null : node.functionName;
 }
 
@@ -95,13 +88,9 @@ export function calledName(
 function isChainLink(node: FunctionCall, ancestors: WalkAncestor[]): boolean {
   return [...ancestors]
     .reverse()
-    .filter(
-      (ancestor): ancestor is ValueAccess => ancestor.type === "valueAccess",
-    )
+    .filter((ancestor): ancestor is ValueAccess => ancestor.type === "valueAccess")
     .some((access) =>
-      access.chain.some(
-        (link) => link.kind === "methodCall" && link.functionCall === node,
-      ),
+      access.chain.some((link) => link.kind === "methodCall" && link.functionCall === node),
     );
 }
 
@@ -112,9 +101,7 @@ function isChainLink(node: FunctionCall, ancestors: WalkAncestor[]): boolean {
  * inspecting arguments has to unwrap all three or it silently skips the two
  * that are most likely to carry a callback.
  */
-export function argumentExpression(
-  arg: Expression | SplatExpression | NamedArgument,
-): Expression {
+export function argumentExpression(arg: Expression | SplatExpression | NamedArgument): Expression {
   if (arg.type === "splat") return arg.value;
   if (arg.type === "namedArgument") return arg.value;
   return arg;

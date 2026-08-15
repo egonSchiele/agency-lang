@@ -36,12 +36,8 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       // Check that function definitions are collected
       expect(preprocessor["functionDefinitions"]).toHaveProperty("testFunc");
       expect(preprocessor["functionDefinitions"]).toHaveProperty("anotherFunc");
-      expect(preprocessor["functionDefinitions"]["testFunc"].functionName).toBe(
-        "testFunc",
-      );
-      expect(
-        preprocessor["functionDefinitions"]["anotherFunc"].parameters.length,
-      ).toBe(1);
+      expect(preprocessor["functionDefinitions"]["testFunc"].functionName).toBe("testFunc");
+      expect(preprocessor["functionDefinitions"]["anotherFunc"].parameters.length).toBe(1);
     });
   });
 
@@ -247,11 +243,7 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       const funcNode = program.nodes[0];
       if (funcNode.type === "function") {
         const assignmentNode = funcNode.body[0];
-        const isUsed = preprocessor["isVarUsedInBody"](
-          "x",
-          assignmentNode,
-          funcNode.body,
-        );
+        const isUsed = preprocessor["isVarUsedInBody"]("x", assignmentNode, funcNode.body);
         expect(isUsed).toBe(true);
       }
     });
@@ -284,11 +276,7 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       const funcNode = program.nodes[0];
       if (funcNode.type === "function") {
         const assignmentNode = funcNode.body[0];
-        const isUsed = preprocessor["isVarUsedInBody"](
-          "x",
-          assignmentNode,
-          funcNode.body,
-        );
+        const isUsed = preprocessor["isVarUsedInBody"]("x", assignmentNode, funcNode.body);
         expect(isUsed).toBe(false);
       }
     });
@@ -429,7 +417,9 @@ describe("TypescriptPreprocessor Core Functionality", () => {
         ],
       };
       const preprocessor = new TypescriptPreprocessor(program);
-      expect(() => preprocessor.preprocess()).toThrow("@module doc comment must appear before any code");
+      expect(() => preprocessor.preprocess()).toThrow(
+        "@module doc comment must appear before any code",
+      );
     });
 
     it("should throw if there are duplicate @module doc comments", () => {
@@ -447,7 +437,9 @@ describe("TypescriptPreprocessor Core Functionality", () => {
         ],
       };
       const preprocessor = new TypescriptPreprocessor(program);
-      expect(() => preprocessor.preprocess()).toThrow("Only one @module doc comment is allowed per file");
+      expect(() => preprocessor.preprocess()).toThrow(
+        "Only one @module doc comment is allowed per file",
+      );
     });
 
     it("should skip regular comments before @module doc comment", () => {
@@ -479,7 +471,12 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
-          { type: "multiLineComment", content: " Not module doc ", isDoc: true, isModuleDoc: false },
+          {
+            type: "multiLineComment",
+            content: " Not module doc ",
+            isDoc: true,
+            isModuleDoc: false,
+          },
           {
             type: "importStatement",
             modulePath: "./foo.js",

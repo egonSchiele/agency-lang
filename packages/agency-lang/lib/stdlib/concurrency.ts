@@ -7,12 +7,8 @@ export async function _withLock(
   warnAfterMs: number | null,
   block: unknown,
 ): Promise<unknown> {
-  return agency.withLock(
-    name,
-    () => __call(block, { type: "positional", args: [] }),
-    {
-      ...(timeoutMs !== null ? { timeoutMs } : {}),
-      ...(warnAfterMs !== null ? { warnAfterMs } : {}),
-    },
-  );
+  return agency.withLock(name, () => __call(block, { type: "positional", args: [] }), {
+    ...(timeoutMs !== null ? { timeoutMs } : {}),
+    ...(warnAfterMs !== null ? { warnAfterMs } : {}),
+  });
 }

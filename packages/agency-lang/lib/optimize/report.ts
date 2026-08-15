@@ -9,9 +9,9 @@ import type { OptimizeResult } from "./types.js";
 export type ReportMeta = {
   optimizer: string;
   graders: string[];
-  trainObjective?: number;        // populated in Phase 3
-  validationObjective?: number;   // populated in Phase 3
-  validationConfiguredButUnused?: boolean;   // Phase 3, gepa/example honesty note
+  trainObjective?: number; // populated in Phase 3
+  validationObjective?: number; // populated in Phase 3
+  validationConfiguredButUnused?: boolean; // Phase 3, gepa/example honesty note
 };
 
 /** Escape a Markdown table cell: no pipes (column breaks) or newlines (row breaks). */
@@ -39,10 +39,17 @@ function metaLines(result: OptimizeResult, meta: ReportMeta): string[] {
     `- Graders: ${meta.graders.join(", ") || "(none)"}`,
     `- Champion: iteration ${result.championIter}`,
   ];
-  if (meta.trainObjective !== undefined) lines.push(`- Train objective: ${meta.trainObjective.toFixed(3)}`);
-  if (meta.validationObjective !== undefined) lines.push(`- Validation objective: ${meta.validationObjective.toFixed(3)}`);
-  if (meta.validationConfiguredButUnused) lines.push(`- Validation: provided, but **${meta.optimizer}** selects the champion on the training objective (validation not used for selection).`);
-  lines.push(`- Decisions — accepted: ${result.acceptedCount}, rejected: ${result.rejectedCount}, invalid: ${result.validationFailedCount}`);
+  if (meta.trainObjective !== undefined)
+    lines.push(`- Train objective: ${meta.trainObjective.toFixed(3)}`);
+  if (meta.validationObjective !== undefined)
+    lines.push(`- Validation objective: ${meta.validationObjective.toFixed(3)}`);
+  if (meta.validationConfiguredButUnused)
+    lines.push(
+      `- Validation: provided, but **${meta.optimizer}** selects the champion on the training objective (validation not used for selection).`,
+    );
+  lines.push(
+    `- Decisions — accepted: ${result.acceptedCount}, rejected: ${result.rejectedCount}, invalid: ${result.validationFailedCount}`,
+  );
   return lines;
 }
 
@@ -51,10 +58,21 @@ function metaLines(result: OptimizeResult, meta: ReportMeta): string[] {
 function championSection(breakdown?: InputBreakdown[]): string {
   if (!breakdown || breakdown.length === 0) return "";
   const rows = breakdown.flatMap((b) =>
-    b.grades.map((g) => `| ${cell(b.inputId)} | ${cell(g.grader)} | ${scoreText(g)} | ${cell(g.feedback ?? "")} | ${cell(asJudgeText(b.output)).slice(0, 80)} |`),
+    b.grades.map(
+      (g) =>
+        `| ${cell(b.inputId)} | ${cell(g.grader)} | ${scoreText(g)} | ${cell(g.feedback ?? "")} | ${cell(asJudgeText(b.output)).slice(0, 80)} |`,
+    ),
   );
   // Leading "" twice → a blank line before the heading (it follows the iterations table directly).
-  return ["", "", "## Champion grades", "", "| input | grader | score | feedback | output |", "| --- | --- | --- | --- | --- |", ...rows].join("\n");
+  return [
+    "",
+    "",
+    "## Champion grades",
+    "",
+    "| input | grader | score | feedback | output |",
+    "| --- | --- | --- | --- | --- |",
+    ...rows,
+  ].join("\n");
 }
 
 function scoreText(g: GradeRow): string {
@@ -68,6 +86,9 @@ export function writeReport(runDir: string, result: OptimizeResult, meta: Report
   if (result.championBreakdown) {
     const championDir = path.join(runDir, "champion");
     fs.mkdirSync(championDir, { recursive: true });
-    fs.writeFileSync(path.join(championDir, "grades.json"), JSON.stringify(result.championBreakdown, null, 2));
+    fs.writeFileSync(
+      path.join(championDir, "grades.json"),
+      JSON.stringify(result.championBreakdown, null, 2),
+    );
   }
 }

@@ -10,12 +10,9 @@ import { formatTypeHint } from "../utils/formatType.js";
  * Variadic params (`restParam`) render as `...T[]`.
  */
 function formatSig(sig: BuiltinSignature): string {
-  const parts = sig.params.map((p) =>
-    isAnyType(p) ? "any" : formatTypeHint(p),
-  );
+  const parts = sig.params.map((p) => (isAnyType(p) ? "any" : formatTypeHint(p)));
   if (sig.restParam !== undefined) {
-    const rest =
-      isAnyType(sig.restParam) ? "any" : formatTypeHint(sig.restParam);
+    const rest = isAnyType(sig.restParam) ? "any" : formatTypeHint(sig.restParam);
     parts.push(`...${rest}[]`);
   }
   const ret = isAnyType(sig.returnType) ? "any" : formatTypeHint(sig.returnType);
@@ -39,7 +36,7 @@ const KEYWORD_BUILTIN_HOVERS: Record<string, { sig: string; description: string 
       "Expression that returns the Zod schema for a type `T`. Useful when passing a schema to a TypeScript function or validator.",
   },
   debugger: {
-    sig: 'debugger(label?: string)',
+    sig: "debugger(label?: string)",
     description:
       "No-op when running the agent normally, but pauses execution when running under the Agency debugger. Accepts an optional label string.",
   },
@@ -94,13 +91,7 @@ export function lookupBuiltinHover(name: string): string | null {
     const entry = JS_GLOBALS[name];
     if (entry.kind === "callable") {
       const sigText = entry.sig ? formatSig(entry.sig) : "(any) => any";
-      return [
-        "```ts",
-        `${name}: ${sigText}`,
-        "```",
-        "",
-        "_JavaScript global._",
-      ].join("\n");
+      return ["```ts", `${name}: ${sigText}`, "```", "", "_JavaScript global._"].join("\n");
     }
     // namespace
     const memberNames = Object.keys(entry.members).sort();
@@ -121,18 +112,11 @@ export function lookupBuiltinHover(name: string): string | null {
  * Hover info for a `<JsNamespace>.<member>` pair (e.g. `JSON.parse`).
  * Returns null if the chain doesn't resolve to a known JS global.
  */
-export function lookupJsMemberHover(
-  baseName: string,
-  memberName: string,
-): string | null {
+export function lookupJsMemberHover(baseName: string, memberName: string): string | null {
   const entry = lookupJsMember([baseName, memberName]);
   if (!entry || entry.kind !== "callable") return null;
   const sigText = entry.sig ? formatSig(entry.sig) : "(any) => any";
-  return [
-    "```ts",
-    `${baseName}.${memberName}: ${sigText}`,
-    "```",
-    "",
-    "_JavaScript global._",
-  ].join("\n");
+  return ["```ts", `${baseName}.${memberName}: ${sigText}`, "```", "", "_JavaScript global._"].join(
+    "\n",
+  );
 }

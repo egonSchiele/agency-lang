@@ -53,11 +53,7 @@ function makeDir(fixture: string = SLEEPER): string {
   return dir;
 }
 
-async function runCli(
-  dir: string,
-  args: string[],
-  env: Record<string, string> = {},
-) {
+async function runCli(dir: string, args: string[], env: Record<string, string> = {}) {
   try {
     const { stdout, stderr } = await execFileAsync(
       process.execPath,

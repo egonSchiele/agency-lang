@@ -29,20 +29,14 @@ describe("intersection parsing", () => {
   it("binds tighter than union: A & B | C is (A & B) | C", () => {
     expect(firstParamHint("def f(x: A & B | C) { x }")).toMatchObject({
       type: "unionType",
-      types: [
-        { type: "intersectionType" },
-        { type: "typeAliasVariable", aliasName: "C" },
-      ],
+      types: [{ type: "intersectionType" }, { type: "typeAliasVariable", aliasName: "C" }],
     });
   });
 
   it("binds tighter than union on the right too: A | B & C", () => {
     expect(firstParamHint("def f(x: A | B & C) { x }")).toMatchObject({
       type: "unionType",
-      types: [
-        { type: "typeAliasVariable", aliasName: "A" },
-        { type: "intersectionType" },
-      ],
+      types: [{ type: "typeAliasVariable", aliasName: "A" }, { type: "intersectionType" }],
     });
   });
 
@@ -86,9 +80,7 @@ describe("regression: postfixed inline object types as members", () => {
     // Found via stdlib/memory.agency: the intersection passthrough made
     // an object-first item order commit to the bare object and strand
     // the [] suffix.
-    const parsed = parseAgency(
-      "type X = { a: { n: string; t: string }[] }",
-    );
+    const parsed = parseAgency("type X = { a: { n: string; t: string }[] }");
     expect(parsed.success).toBe(true);
   });
 
@@ -98,9 +90,7 @@ describe("regression: postfixed inline object types as members", () => {
   });
 
   it("and as an intersection member", () => {
-    expect(
-      firstParamHint("def f(x: { n: string }[] & B) { x }"),
-    ).toMatchObject({
+    expect(firstParamHint("def f(x: { n: string }[] & B) { x }")).toMatchObject({
       type: "intersectionType",
       types: [{ type: "arrayType" }, { aliasName: "B" }],
     });

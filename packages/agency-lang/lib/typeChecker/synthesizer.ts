@@ -67,12 +67,13 @@ import { recordLikeKeyValue } from "./recordLike.js";
 import type { ResultType, UnionType, TypeAliasEntry } from "../types/typeHints.js";
 import type { SourceLocation } from "../types/base.js";
 import { resultToObjectUnion } from "./resultUnion.js";
-import type {
-  NamedArgument,
-  SplatExpression,
-} from "../types/dataStructures.js";
+import type { NamedArgument, SplatExpression } from "../types/dataStructures.js";
 import { formatTypeHint } from "../utils/formatType.js";
-import { BUILTIN_FUNCTION_TYPES, AGENCY_FUNCTION_METHOD_TYPES, BUILTIN_VARIABLE_TYPES } from "./builtins.js";
+import {
+  BUILTIN_FUNCTION_TYPES,
+  AGENCY_FUNCTION_METHOD_TYPES,
+  BUILTIN_VARIABLE_TYPES,
+} from "./builtins.js";
 import { isAssignable, isNever, safeResolveType } from "./assignability.js";
 import { typeAt, flowHasNarrowFor, stablePrefix } from "./flow.js";
 import { literalToType } from "./literalType.js";
@@ -120,10 +121,7 @@ const RESULT_FIELDS = new Set<string>([
 // The Result fields that exist on exactly one branch (everything except
 // `success`, which is on both). Derived from RESULT_FIELDS so adding a field in
 // one place updates both. `value` is success-only; the rest are failure-only.
-const RESULT_BRANCH_FIELDS = new Set(
-  [...RESULT_FIELDS].filter((f) => f !== "success"),
-);
-
+const RESULT_BRANCH_FIELDS = new Set([...RESULT_FIELDS].filter((f) => f !== "success"));
 
 /**
  * Resolve a field access on a `ResultType` against the narrowing layer.
@@ -137,10 +135,7 @@ const RESULT_BRANCH_FIELDS = new Set(
  * structural linter's max-lines-per-function budget. Single caller; the
  * extraction is purely organizational.
  */
-function resolveResultFieldType(
-  _resolved: ResultType,
-  fieldName: string,
-): VariableType | null {
+function resolveResultFieldType(_resolved: ResultType, fieldName: string): VariableType | null {
   // Narrowed Results are now real member object types (narrowed via the
   // discriminant engine), so this only sees UN-narrowed Results: keep the
   // lenient `any` for known Result fields. Task 2 deletes this entirely and
@@ -292,12 +287,9 @@ function accessResultField(
     // a new success-side field.
     const branch = fieldName === "value" ? "success" : "failure";
     ctx.errors.push(
-      diagnostic(
-        "resultBranchFieldAccess",
-        { field: fieldName, branch },
-        loc ?? null,
-        { severity: strictSeverity(severity) },
-      ),
+      diagnostic("resultBranchFieldAccess", { field: fieldName, branch }, loc ?? null, {
+        severity: strictSeverity(severity),
+      }),
     );
   }
   return type;
@@ -315,11 +307,7 @@ function asPositionalArg(
   return arg;
 }
 
-export function synthType(
-  expr: AgencyNode,
-  scope: Scope,
-  ctx: TypeCheckerContext,
-): VariableType {
+export function synthType(expr: AgencyNode, scope: Scope, ctx: TypeCheckerContext): VariableType {
   switch (expr.type) {
     case "variableName": {
       // Expression-match temp: `__matchval_<id>` is the synthetic ref the
@@ -366,9 +354,7 @@ export function synthType(
       // Same hasOwnProperty rule for the def/node/import maps: a name
       // like "toString" would otherwise resolve to a prototype method
       // and crash assignability with a params-less functionRefType.
-      const fnDef = hasOwn(ctx.functionDefs, expr.value)
-        ? ctx.functionDefs[expr.value]
-        : undefined;
+      const fnDef = hasOwn(ctx.functionDefs, expr.value) ? ctx.functionDefs[expr.value] : undefined;
       if (fnDef) {
         return {
           type: "functionRefType",
@@ -378,9 +364,7 @@ export function synthType(
           returnTypeValidated: fnDef.returnTypeValidated,
         };
       }
-      const nodeDef = hasOwn(ctx.nodeDefs, expr.value)
-        ? ctx.nodeDefs[expr.value]
-        : undefined;
+      const nodeDef = hasOwn(ctx.nodeDefs, expr.value) ? ctx.nodeDefs[expr.value] : undefined;
       if (nodeDef) {
         return {
           type: "functionRefType",
@@ -471,7 +455,14 @@ export function synthType(
  *  pattern. They get a pointed AG1013 hint: type patterns never mean
  *  `instanceof`, so there is no schema-vs-class ambiguity to learn. */
 const JS_CLASS_NAMES: readonly string[] = [
-  "Date", "Map", "Set", "RegExp", "Error", "Promise", "Function", "Symbol",
+  "Date",
+  "Map",
+  "Set",
+  "RegExp",
+  "Error",
+  "Promise",
+  "Function",
+  "Symbol",
 ];
 
 /**
@@ -494,11 +485,7 @@ function synthTypeTestExpression(
         ? `\`${t.aliasName}\` is a JavaScript class, and type patterns only test Agency types. Use \`is object\` or a helper function.`
         : `to bind the value write \`const ${t.aliasName} = x\`, or inside an object pattern \`{ field as ${t.aliasName} }\`.`;
       ctx.errors.push(
-        diagnostic(
-          "typePatternUnknownType",
-          { name: t.aliasName, hint },
-          expr.loc ?? null,
-        ),
+        diagnostic("typePatternUnknownType", { name: t.aliasName, hint }, expr.loc ?? null),
       );
     }
   });
@@ -533,9 +520,7 @@ const BOOLEAN_OPS = new Set([
   "!",
 ]);
 
-const DIMENSION_CHECK_OPS = new Set([
-  "+", "-", ">", "<", ">=", "<=", "==", "!=", "===", "!==",
-]);
+const DIMENSION_CHECK_OPS = new Set(["+", "-", ">", "<", ">=", "<=", "==", "!=", "===", "!=="]);
 
 function synthBinOp(
   expr: AgencyNode & { type: "binOpExpression" },
@@ -549,9 +534,12 @@ function synthBinOp(
   if (op === "||" || op === "&&") return synthLogical(expr, scope, ctx);
 
   // Dimension mismatch check: only when both sides are direct unit literals
-  if (DIMENSION_CHECK_OPS.has(op) &&
-      expr.left.type === "unitLiteral" && expr.right.type === "unitLiteral" &&
-      expr.left.dimension !== expr.right.dimension) {
+  if (
+    DIMENSION_CHECK_OPS.has(op) &&
+    expr.left.type === "unitLiteral" &&
+    expr.right.type === "unitLiteral" &&
+    expr.left.dimension !== expr.right.dimension
+  ) {
     ctx.errors.push(
       diagnostic(
         "dimensionMismatch",
@@ -573,8 +561,7 @@ function synthBinOp(
     const rightType = synthType(expr.right, scope, ctx);
     const isString = (t: VariableType) =>
       !isAnyType(t) &&
-      ((t.type === "primitiveType" && t.value === "string") ||
-        t.type === "stringLiteralType");
+      ((t.type === "primitiveType" && t.value === "string") || t.type === "stringLiteralType");
     if (isString(leftType) || isString(rightType)) {
       return STRING_T;
     }
@@ -635,9 +622,7 @@ function synthNullishCoalesce(
 }
 
 function isNullishPrimitive(t: VariableType): boolean {
-  return (
-    t.type === "primitiveType" && (t.value === "null" || t.value === "undefined")
-  );
+  return t.type === "primitiveType" && (t.value === "null" || t.value === "undefined");
 }
 
 function stripNullable(t: VariableType): VariableType | undefined {
@@ -697,11 +682,7 @@ function synthPipe(
  * functionRefType for bare identifiers, so we extract the return type from
  * it and apply Result wrapping.
  */
-function synthPipeRhs(
-  rhs: AgencyNode,
-  scope: Scope,
-  ctx: TypeCheckerContext,
-): VariableType {
+function synthPipeRhs(rhs: AgencyNode, scope: Scope, ctx: TypeCheckerContext): VariableType {
   const rhsType = synthType(rhs, scope, ctx);
   if (!isAnyType(rhsType) && rhsType.type === "functionRefType") {
     const returnType =
@@ -716,9 +697,7 @@ function synthPipeRhs(
 
 /** The block argument of a call, if it carries one. The single home for
  *  the block cast - every block-typing consumer reads through this. */
-function blockOf(
-  expr: AgencyNode & { type: "functionCall" },
-): { body: AgencyNode[] } | undefined {
+function blockOf(expr: AgencyNode & { type: "functionCall" }): { body: AgencyNode[] } | undefined {
   return (expr as unknown as { block?: { body: AgencyNode[] } }).block;
 }
 
@@ -740,10 +719,7 @@ function blockReturnType(
       continue;
     }
     const nested = ancestors.some(
-      (a) =>
-        a.type === "function" ||
-        a.type === "graphNode" ||
-        a.type === "blockArgument",
+      (a) => a.type === "function" || a.type === "graphNode" || a.type === "blockArgument",
     );
     if (!nested) {
       returnTypes.push(synthType(node.value, scope, ctx));
@@ -762,10 +738,7 @@ function blockReturnType(
  *  is shared (blockReturnType); only the wrapper differs. Adding
  *  another block-carrying reserved call is a row. Keying on the call
  *  name is shadow-proof: every key is in RESERVED_FUNCTION_NAMES. */
-const BLOCK_CALL_RESULT: Record<
-  string,
-  (element: VariableType) => VariableType
-> = {
+const BLOCK_CALL_RESULT: Record<string, (element: VariableType) => VariableType> = {
   // The guard construct's Result<T> precision. By synth time the
   // construct has desugared to `_guard(...)` carrying its block
   // (guardDesugar.ts + the TypeChecker constructor); _guard's own
@@ -790,8 +763,7 @@ const BLOCK_CALL_RESULT: Record<
   // unionTypes does not absorb any, and fail-open must stay fail-open.
   // COUPLED to #606: if the empty-race return value or first-success
   // semantics change there, this row changes with them.
-  race: (element) =>
-    isAnyType(element) ? ANY_T : unionTypes([element, NULL_T]),
+  race: (element) => (isAnyType(element) ? ANY_T : unionTypes([element, NULL_T])),
 };
 
 function synthFunctionCall(
@@ -818,10 +790,7 @@ function synthFunctionCall(
   // get `Result<T, any>` (success) or `Result<any, T>` (failure). The names
   // are reserved at the typechecker level (see RESERVED_FUNCTION_NAMES in
   // index.ts), so shadowing is impossible — no gating needed here.
-  if (
-    RESULT_CONSTRUCTORS.has(expr.functionName) &&
-    expr.arguments.length >= 1
-  ) {
+  if (RESULT_CONSTRUCTORS.has(expr.functionName) && expr.arguments.length >= 1) {
     const inner = asPositionalArg(expr.arguments[0]);
     if (inner) {
       const innerType = synthType(inner, scope, ctx);
@@ -833,8 +802,7 @@ function synthFunctionCall(
   const fn = ctx.functionDefs[expr.functionName];
   const graphNode = ctx.nodeDefs[expr.functionName];
   const def = fn ?? graphNode;
-  if (def?.returnType)
-    return resultTypeForValidation(def.returnType, def.returnTypeValidated);
+  if (def?.returnType) return resultTypeForValidation(def.returnType, def.returnTypeValidated);
   if (expr.functionName in ctx.inferredReturnTypes) {
     return ctx.inferredReturnTypes[expr.functionName];
   }
@@ -856,9 +824,8 @@ function synthArray(
   scope: Scope,
   ctx: TypeCheckerContext,
 ): VariableType {
-  if (expr.items.length === 0)
-    return { type: "arrayType", elementType: ANY_T };
-  const itemTypes: (VariableType)[] = [];
+  if (expr.items.length === 0) return { type: "arrayType", elementType: ANY_T };
+  const itemTypes: VariableType[] = [];
   for (const item of expr.items) {
     if (item.type === "splat") {
       const splatType = synthType(item.value, scope, ctx);
@@ -882,9 +849,8 @@ function synthArray(
     if (!seen.has(key)) seen.set(key, t);
   }
   const unique = Array.from(seen.values());
-  const elementType = unique.length === 1
-    ? unique[0]
-    : { type: "unionType" as const, types: unique };
+  const elementType =
+    unique.length === 1 ? unique[0] : { type: "unionType" as const, types: unique };
   return { type: "arrayType", elementType };
 }
 
@@ -915,8 +881,7 @@ function synthObject(
       const splatType = synthType(entry.value, scope, ctx);
       if (isAnyType(splatType)) return ANY_T;
       if (splatType.type !== "objectType") return ANY_T;
-      for (const prop of splatType.properties)
-        properties.set(prop.key, prop.value);
+      for (const prop of splatType.properties) properties.set(prop.key, prop.value);
       continue;
     }
     const kv = entry as {
@@ -931,9 +896,7 @@ function synthObject(
     // Type it as null here so siblings keep their checks. Scoped to object
     // literals on purpose: a general synthType null case would bind
     // `let x = null` to the null type and break later reassignment.
-    const valueType = isNullLiteralExpr(kv.value)
-      ? NULL_T
-      : synthType(kv.value, scope, ctx);
+    const valueType = isNullLiteralExpr(kv.value) ? NULL_T : synthType(kv.value, scope, ctx);
     if (isAnyType(valueType)) {
       return ANY_T;
     }
@@ -945,16 +908,11 @@ function synthObject(
     properties.set(kv.key, valueType);
   }
   if (hasComputedKey) {
-    const allValueTypes = [
-      ...Array.from(properties.values()),
-      ...computedValueTypes,
-    ];
+    const allValueTypes = [...Array.from(properties.values()), ...computedValueTypes];
     if (allValueTypes.length === 0) return ANY_T;
     const unique = uniqBy(allValueTypes, (t) => typeKey(t, ctx.getTypeAliases()));
     const valueType: VariableType =
-      unique.length === 1
-        ? unique[0]
-        : { type: "unionType" as const, types: unique };
+      unique.length === 1 ? unique[0] : { type: "unionType" as const, types: unique };
     return {
       type: "genericType",
       name: "Record",
@@ -998,32 +956,28 @@ function toolMethodResultType(
 
 function validateAgencyFunctionMethod(
   expr: ValueAccess,
-  element: { kind: "methodCall"; functionCall: { type: "functionCall"; functionName: string; arguments: any[] } },
+  element: {
+    kind: "methodCall";
+    functionCall: { type: "functionCall"; functionName: string; arguments: any[] };
+  },
   methodName: string,
   scope: Scope,
   ctx: TypeCheckerContext,
 ): void {
-  const baseName =
-    expr.base.type === "variableName" ? (expr.base as any).value : null;
-  const fnDef = baseName ? ctx.functionDefs[baseName] ?? null : null;
-  const importedSig = baseName ? ctx.importedFunctions[baseName] ?? null : null;
+  const baseName = expr.base.type === "variableName" ? (expr.base as any).value : null;
+  const fnDef = baseName ? (ctx.functionDefs[baseName] ?? null) : null;
+  const importedSig = baseName ? (ctx.importedFunctions[baseName] ?? null) : null;
 
   if (methodName === "partial") {
     const args = element.functionCall.arguments;
-    const hasNonNamed = args.some(
-      (a: any) => !("type" in a && a.type === "namedArgument"),
-    );
+    const hasNonNamed = args.some((a: any) => !("type" in a && a.type === "namedArgument"));
     if (hasNonNamed) {
-      ctx.errors.push(
-        diagnostic("partialRequiresNamedArgs", {}, expr.loc ?? null),
-      );
+      ctx.errors.push(diagnostic("partialRequiresNamedArgs", {}, expr.loc ?? null));
     }
     const params = fnDef?.parameters ?? importedSig?.parameters ?? null;
     if (!params) return;
     const paramNames = new Set(params.map((p) => p.name));
-    const namedArgs = args.filter(
-      (a: any) => "type" in a && a.type === "namedArgument",
-    );
+    const namedArgs = args.filter((a: any) => "type" in a && a.type === "namedArgument");
     const typeAliases = ctx.getTypeAliases();
     for (const arg of namedArgs) {
       if (!paramNames.has(arg.name)) {
@@ -1049,9 +1003,10 @@ function validateAgencyFunctionMethod(
       // otherwise be invisible to that pass.
       if (param.variadic) {
         if (!param.typeHint) continue;
-        const expected: VariableType = param.typeHint.type === "arrayType"
-          ? param.typeHint
-          : { type: "arrayType", elementType: param.typeHint };
+        const expected: VariableType =
+          param.typeHint.type === "arrayType"
+            ? param.typeHint
+            : { type: "arrayType", elementType: param.typeHint };
         const actual = synthType(arg.value, scope, ctx);
         if (isAnyType(actual)) continue;
         if (!isAssignable(actual, expected, typeAliases)) {
@@ -1126,11 +1081,7 @@ function pushPropertyDoesNotExist(
   loc: SourceLocation | undefined,
 ): void {
   ctx.errors.push(
-    diagnostic(
-      "propertyDoesNotExist",
-      { property, type: formatTypeHint(receiver) },
-      loc ?? null,
-    ),
+    diagnostic("propertyDoesNotExist", { property, type: formatTypeHint(receiver) }, loc ?? null),
   );
 }
 
@@ -1180,13 +1131,7 @@ export function synthValueAccess(
         // (.value/.error/…) without narrowing is diagnosed with Result-framed
         // guidance; `strictMemberAccess: "silent"` keeps the lenient `any`.
         if (resolved.type === "resultType") {
-          const fieldType = accessResultField(
-            resolved,
-            element.name,
-            typeAliases,
-            ctx,
-            expr.loc,
-          );
+          const fieldType = accessResultField(resolved, element.name, typeAliases, ctx, expr.loc);
           if (fieldType !== null && isAnyType(fieldType)) return ANY_T;
           if (fieldType !== null) {
             currentType = fieldType;
@@ -1196,13 +1141,7 @@ export function synthValueAccess(
           // "does not exist"), matching today's behavior.
         }
         if (resolved.type === "unionType") {
-          const memberType = accessUnionField(
-            resolved,
-            element.name,
-            typeAliases,
-            ctx,
-            expr.loc,
-          );
+          const memberType = accessUnionField(resolved, element.name, typeAliases, ctx, expr.loc);
           if (memberType === null) {
             pushPropertyDoesNotExist(ctx, element.name, resolved, expr.loc);
             return ANY_T;
@@ -1273,9 +1212,7 @@ export function synthValueAccess(
         // their result types depend on a callback's return type, which we
         // synth from the block body or function-ref argument.
         if (resolved.type === "arrayType") {
-          const cbKind = lookupArrayCallbackMethod(
-            element.functionCall.functionName,
-          );
+          const cbKind = lookupArrayCallbackMethod(element.functionCall.functionName);
           if (cbKind !== null) {
             currentType = synthArrayCallbackMethod(
               resolved,
@@ -1289,10 +1226,7 @@ export function synthValueAccess(
         }
         // Built-in method on a primitive receiver? (`s.toUpperCase()`,
         // `xs.slice(1, 3)`, …) — see primitiveMembers.ts.
-        const member = lookupPrimitiveMember(
-          resolved,
-          element.functionCall.functionName,
-        );
+        const member = lookupPrimitiveMember(resolved, element.functionCall.functionName);
         if (member && member.kind === "method") {
           const sig = resolveSig(member.sig, resolved);
           validatePrimitiveMethodCall(expr, element.functionCall, sig, scope, ctx);
@@ -1320,7 +1254,10 @@ export function synthValueAccess(
  */
 function validatePrimitiveMethodCall(
   expr: ValueAccess,
-  call: { functionName: string; arguments: AgencyNode[] | (Expression | SplatExpression | NamedArgument)[] },
+  call: {
+    functionName: string;
+    arguments: AgencyNode[] | (Expression | SplatExpression | NamedArgument)[];
+  },
   sig: BuiltinSignature,
   scope: Scope,
   ctx: TypeCheckerContext,
@@ -1328,11 +1265,7 @@ function validatePrimitiveMethodCall(
   const args = call.arguments as (Expression | SplatExpression | NamedArgument)[];
   if (args.some((a) => "type" in a && a.type === "namedArgument")) {
     ctx.errors.push(
-      diagnostic(
-        "namedArgsOnBuiltinMethod",
-        { method: call.functionName },
-        expr.loc ?? null,
-      ),
+      diagnostic("namedArgsOnBuiltinMethod", { method: call.functionName }, expr.loc ?? null),
     );
     return;
   }
@@ -1345,20 +1278,12 @@ function validatePrimitiveMethodCall(
       const arity = { method: call.functionName, count: args.length };
       const loc = expr.loc ?? null;
       if (minArgs === maxArgs) {
-        ctx.errors.push(
-          diagnostic("methodArityExact", { ...arity, expected: minArgs }, loc),
-        );
+        ctx.errors.push(diagnostic("methodArityExact", { ...arity, expected: minArgs }, loc));
       } else if (maxArgs === Infinity) {
-        ctx.errors.push(
-          diagnostic("methodArityAtLeast", { ...arity, min: minArgs }, loc),
-        );
+        ctx.errors.push(diagnostic("methodArityAtLeast", { ...arity, min: minArgs }, loc));
       } else {
         ctx.errors.push(
-          diagnostic(
-            "methodArityRange",
-            { ...arity, min: minArgs, max: maxArgs },
-            loc,
-          ),
+          diagnostic("methodArityRange", { ...arity, min: minArgs, max: maxArgs }, loc),
         );
       }
       return;
@@ -1507,7 +1432,7 @@ function synthBlockReturnType(
     else child.declareLocal(p.name, ANY_T);
   });
 
-  const returnTypes: (VariableType)[] = [];
+  const returnTypes: VariableType[] = [];
   for (const { node } of walkNodes(block.body)) {
     if (node.type === "returnStatement" && node.value) {
       returnTypes.push(synthType(node.value, child, ctx));
@@ -1525,7 +1450,5 @@ function synthBlockReturnType(
     if (!seen.has(key)) seen.set(key, t);
   }
   const unique = Array.from(seen.values());
-  return unique.length === 1
-    ? unique[0]
-    : { type: "unionType", types: unique };
+  return unique.length === 1 ? unique[0] : { type: "unionType", types: unique };
 }

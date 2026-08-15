@@ -30,15 +30,18 @@ export function readEvalRun(
     const input = readOptionalJson<Input>(path.join(inputDir, "input.json"), onWarning);
     const recordPath = result.evalRecordPath || agentRunPaths(inputDir).evalRecordPath;
     const status = inputStatus(result, recordPath);
-    const errorMessage = status === "failed"
-      ? readOptionalText(agentRunPaths(inputDir).errorPath) ?? result.errorMessage
-      : undefined;
+    const errorMessage =
+      status === "failed"
+        ? (readOptionalText(agentRunPaths(inputDir).errorPath) ?? result.errorMessage)
+        : undefined;
 
     if (Object.hasOwn(inputsById, result.inputId)) {
       // The by-id map would silently swallow one of them, changing the mean's
       // denominator. Unreachable via the CLI (loadInputs rejects duplicate
       // ids), but programmatic callers skip that validation.
-      onWarning(`readEvalRun: duplicate inputId "${result.inputId}" in ${resolvedRunDir} — keeping the last`);
+      onWarning(
+        `readEvalRun: duplicate inputId "${result.inputId}" in ${resolvedRunDir} — keeping the last`,
+      );
     }
     inputsById[result.inputId] = {
       inputId: result.inputId,
@@ -66,11 +69,12 @@ function warnIfLegacyLayout(
   const allMissing = all.length > 0 && all.every((input) => input.status === "missing");
   if (!allMissing) return;
   const hasFlatRecord = all.some((input) =>
-    fs.existsSync(path.join(runDir, "inputs", input.inputId, "eval-record.json")));
+    fs.existsSync(path.join(runDir, "inputs", input.inputId, "eval-record.json")),
+  );
   if (hasFlatRecord) {
     onWarning(
       `readEvalRun: ${runDir} uses the pre-#733 run layout and is no longer readable. ` +
-      `Re-run the suite, or read this directory with a build from before PR #737.`,
+        `Re-run the suite, or read this directory with a build from before PR #737.`,
     );
   }
 }

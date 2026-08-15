@@ -9,8 +9,7 @@ const booleanType: VariableType = {
   value: "boolean",
 };
 
-const isNumber = (t: VariableType): boolean =>
-  t.type === "primitiveType" && t.value === "number";
+const isNumber = (t: VariableType): boolean => t.type === "primitiveType" && t.value === "number";
 
 describe("mapTypes", () => {
   it("returns a primitive unchanged when fn is identity", () => {
@@ -25,9 +24,7 @@ describe("mapTypes", () => {
 
   it("recurses into arrayType element", () => {
     const arr: VariableType = { type: "arrayType", elementType: numberType };
-    const result = mapTypes(arr, (t) =>
-      isNumber(t) ? stringType : t,
-    );
+    const result = mapTypes(arr, (t) => (isNumber(t) ? stringType : t));
     expect(result).toEqual({ type: "arrayType", elementType: stringType });
   });
 
@@ -36,9 +33,7 @@ describe("mapTypes", () => {
       type: "unionType",
       types: [numberType, booleanType],
     };
-    const result = mapTypes(u, (t) =>
-      isNumber(t) ? stringType : t,
-    );
+    const result = mapTypes(u, (t) => (isNumber(t) ? stringType : t));
     expect(result).toEqual({
       type: "unionType",
       types: [stringType, booleanType],
@@ -53,9 +48,7 @@ describe("mapTypes", () => {
         { key: "b", value: booleanType },
       ],
     };
-    const result = mapTypes(obj, (t) =>
-      isNumber(t) ? stringType : t,
-    );
+    const result = mapTypes(obj, (t) => (isNumber(t) ? stringType : t));
     expect(result).toEqual({
       type: "objectType",
       properties: [
@@ -71,9 +64,7 @@ describe("mapTypes", () => {
       successType: numberType,
       failureType: booleanType,
     };
-    const result = mapTypes(r, (t) =>
-      isNumber(t) ? stringType : t,
-    );
+    const result = mapTypes(r, (t) => (isNumber(t) ? stringType : t));
     expect(result).toEqual({
       type: "resultType",
       successType: stringType,
@@ -83,9 +74,7 @@ describe("mapTypes", () => {
 
   it("recurses into schemaType inner", () => {
     const s: VariableType = { type: "schemaType", inner: numberType };
-    const result = mapTypes(s, (t) =>
-      isNumber(t) ? stringType : t,
-    );
+    const result = mapTypes(s, (t) => (isNumber(t) ? stringType : t));
     expect(result).toEqual({ type: "schemaType", inner: stringType });
   });
 
@@ -95,9 +84,7 @@ describe("mapTypes", () => {
       params: [{ name: "x", typeAnnotation: numberType }],
       returnType: booleanType,
     };
-    const result = mapTypes(b, (t) =>
-      isNumber(t) ? stringType : t,
-    );
+    const result = mapTypes(b, (t) => (isNumber(t) ? stringType : t));
     expect(result).toEqual({
       type: "blockType",
       params: [{ name: "x", typeAnnotation: stringType }],
@@ -111,9 +98,7 @@ describe("mapTypes", () => {
       name: "Container",
       typeArgs: [numberType, booleanType],
     };
-    const result = mapTypes(g, (t) =>
-      isNumber(t) ? stringType : t,
-    );
+    const result = mapTypes(g, (t) => (isNumber(t) ? stringType : t));
     expect(result).toEqual({
       type: "genericType",
       name: "Container",
@@ -148,9 +133,7 @@ describe("mapTypes", () => {
       ],
       returnType: numberType,
     };
-    const result = mapTypes(fn, (t) =>
-      isNumber(t) ? stringType : t,
-    );
+    const result = mapTypes(fn, (t) => (isNumber(t) ? stringType : t));
     expect(result).toEqual({
       type: "functionRefType",
       name: "f",
@@ -169,9 +152,7 @@ describe("mapTypes", () => {
       params: [{ type: "functionParameter", name: "x" }],
       returnType: numberType,
     };
-    const result = mapTypes(fn, (t) =>
-      isNumber(t) ? stringType : t,
-    );
+    const result = mapTypes(fn, (t) => (isNumber(t) ? stringType : t));
     expect(result).toEqual({
       type: "functionRefType",
       name: "f",

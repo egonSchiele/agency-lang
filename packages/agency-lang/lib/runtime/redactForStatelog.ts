@@ -22,11 +22,7 @@ export const REDACTED = "[REDACTED]";
 export function makeRedactReplacer(
   globals: GlobalStore,
 ): (this: unknown, key: string, value: unknown) => unknown {
-  return function redactReplacer(
-    this: unknown,
-    key: string,
-    value: unknown,
-  ): unknown {
+  return function redactReplacer(this: unknown, key: string, value: unknown): unknown {
     // Recover the raw, pre-toJSON value for the tag lookup. JSON.stringify
     // applies toJSON() BEFORE calling the replacer, so `value` may already be
     // transformed (e.g. a Date → ISO string, or a custom toJSON returning an

@@ -43,9 +43,7 @@ node main() {
 `,
       { typechecker: { undefinedVariables: "error" } },
     );
-    expect(errs.filter((e) => /not defined|undefined/i.test(e.message))).toEqual(
-      [],
-    );
+    expect(errs.filter((e) => /not defined|undefined/i.test(e.message))).toEqual([]);
   });
 
   it("does not resolve prototype-chain names as builtin variables", () => {

@@ -41,8 +41,8 @@ export function resolveOwnWidth(node: LayoutNode, ctx: SizingContext): number | 
   if (ctx.percentBasis === undefined) {
     throw new Error(
       `std::ui/layout: width "${node.attrs.width}" on this ${node.type} ` +
-      `requires a sized ancestor (set an explicit width on the parent ` +
-      `or one of its ancestors).`,
+        `requires a sized ancestor (set an explicit width on the parent ` +
+        `or one of its ancestors).`,
     );
   }
   return Math.floor((ctx.percentBasis * pct) / 100);

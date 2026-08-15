@@ -89,10 +89,7 @@ describe("stageConfiguredAgent", () => {
     const root = freshRoot();
     const agentDir = makeAgentDir(root);
     const cfg = path.join(root, "agency.json");
-    fs.writeFileSync(
-      cfg,
-      JSON.stringify({ client: { defaultModel: "openai/sentinel-staged" } }),
-    );
+    fs.writeFileSync(cfg, JSON.stringify({ client: { defaultModel: "openai/sentinel-staged" } }));
     const { runFile, cleanup } = stageConfiguredAgent(cfg, agentDir);
     cleanupFns.push(cleanup);
     expect(fs.readFileSync(runFile, "utf8")).toContain("sentinel-staged");
@@ -164,9 +161,9 @@ describe("stageConfiguredAgent", () => {
   test("a nonexistent explicit config path throws instead of building empty", () => {
     const root = freshRoot();
     const agentDir = makeAgentDir(root);
-    expect(() =>
-      stageConfiguredAgent(path.join(root, "no-such.json"), agentDir),
-    ).toThrow(/no-such\.json/);
+    expect(() => stageConfiguredAgent(path.join(root, "no-such.json"), agentDir)).toThrow(
+      /no-such\.json/,
+    );
   });
 
   test("cleanup unregisters the process exit listener", () => {
@@ -188,14 +185,8 @@ describe("stageConfiguredAgent", () => {
     const agentDir = makeAgentDir(root);
     const firstConfig = path.join(root, "first.json");
     const secondConfig = path.join(root, "second.json");
-    fs.writeFileSync(
-      firstConfig,
-      JSON.stringify({ client: { defaultModel: "openai/first" } }),
-    );
-    fs.writeFileSync(
-      secondConfig,
-      JSON.stringify({ client: { defaultModel: "openai/second" } }),
-    );
+    fs.writeFileSync(firstConfig, JSON.stringify({ client: { defaultModel: "openai/first" } }));
+    fs.writeFileSync(secondConfig, JSON.stringify({ client: { defaultModel: "openai/second" } }));
     const first = stageConfiguredAgent(firstConfig, agentDir);
     const second = stageConfiguredAgent(secondConfig, agentDir);
     cleanupFns.push(first.cleanup, second.cleanup);

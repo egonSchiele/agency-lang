@@ -123,13 +123,9 @@ describe("agency.llm — basic behavior", () => {
   it("structured output: parses the response against opts.schema", async () => {
     const ctx = makeCtx();
     const schema = z.object({ name: z.string(), age: z.number() });
-    ctx.setLLMClient(
-      new DeterministicClient([{ return: { name: "ada", age: 36 } }]),
-    );
+    ctx.setLLMClient(new DeterministicClient([{ return: { name: "ada", age: 36 } }]));
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
-    const r = await inFrame(ctx, threads, () =>
-      agency.llm("extract", { schema }),
-    );
+    const r = await inFrame(ctx, threads, () => agency.llm("extract", { schema }));
     expect(r).toEqual({ name: "ada", age: 36 });
   });
 });
@@ -141,9 +137,7 @@ describe("agency.llm — options mapping", () => {
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
     const auxId = threads.create();
     const auxThread = threads.get(auxId)!;
-    await inFrame(ctx, threads, () =>
-      agency.llm("aux-prompt", { thread: auxThread }),
-    );
+    await inFrame(ctx, threads, () => agency.llm("aux-prompt", { thread: auxThread }));
     expect(auxThread.getMessages().map((m: any) => m.content)).toEqual([
       "aux-prompt",
       "aux-response",
@@ -206,9 +200,7 @@ describe("agency.llm — return type", () => {
   it("returns Promise<z.infer<S>> when a schema is provided (compile-time check)", async () => {
     const ctx = makeCtx();
     const schema = z.object({ first: z.string(), last: z.string() });
-    ctx.setLLMClient(
-      new DeterministicClient([{ return: { first: "ada", last: "lovelace" } }]),
-    );
+    ctx.setLLMClient(new DeterministicClient([{ return: { first: "ada", last: "lovelace" } }]));
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
     await inFrame(ctx, threads, async () => {
       const r = await agency.llm("extract", { schema });
@@ -226,13 +218,7 @@ describe("agency.llm — return type", () => {
 describe("agency.llm — v1 surface lock", () => {
   it("LlmOpts has no tools / removedTools / maxToolCallRounds fields", async () => {
     const ctx = makeCtx();
-    ctx.setLLMClient(
-      new DeterministicClient([
-        { return: "x" },
-        { return: "y" },
-        { return: "z" },
-      ]),
-    );
+    ctx.setLLMClient(new DeterministicClient([{ return: "x" }, { return: "y" }, { return: "z" }]));
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
     await inFrame(ctx, threads, async () => {
       // @ts-expect-error — tools are not part of LlmOpts in v1.
@@ -251,9 +237,7 @@ describe("agency.llm — frame requirement", () => {
     // so getRuntimeContext() inside the helper throws. Pin this so a
     // future "auto-wrap in a bootstrap frame" change is a conscious
     // decision, not silent drift.
-    await expect(agency.llm("hi")).rejects.toThrow(
-      /outside an Agency execution frame/,
-    );
+    await expect(agency.llm("hi")).rejects.toThrow(/outside an Agency execution frame/);
   });
 });
 
@@ -284,20 +268,16 @@ describe("model and provider precedence", () => {
   });
 
   it("a baked provider survives a branch model-only override", async () => {
-    const pair = await effectivePair(
-      { model: "baked-model", provider: "openrouter" },
-      async () => {
-        _setLlmOptions({ model: "branch-model" });
-        return agency.llm("hi");
-      },
-    );
+    const pair = await effectivePair({ model: "baked-model", provider: "openrouter" }, async () => {
+      _setLlmOptions({ model: "branch-model" });
+      return agency.llm("hi");
+    });
     expect(pair).toEqual({ model: "branch-model", provider: "openrouter" });
   });
 
   it("a baked provider survives a per-call model-only override", async () => {
-    const pair = await effectivePair(
-      { model: "baked-model", provider: "openrouter" },
-      () => agency.llm("hi", { model: "call-model" }),
+    const pair = await effectivePair({ model: "baked-model", provider: "openrouter" }, () =>
+      agency.llm("hi", { model: "call-model" }),
     );
     expect(pair).toEqual({ model: "call-model", provider: "openrouter" });
   });
@@ -307,17 +287,15 @@ describe("model and provider precedence", () => {
     // not provider. Generated Agency code passes its options object through
     // verbatim, so this calls the runPrompt seam directly to exercise the
     // per-call spread the way compiled code does.
-    const pair = await effectivePair(
-      { model: "baked-model", provider: "openrouter" },
-      (threads) =>
-        runPrompt({
-          prompt: "hi",
-          messages: threads.getOrCreateActive(),
-          clientConfig: {
-            model: "call-model",
-            provider: "anthropic",
-          },
-        }),
+    const pair = await effectivePair({ model: "baked-model", provider: "openrouter" }, (threads) =>
+      runPrompt({
+        prompt: "hi",
+        messages: threads.getOrCreateActive(),
+        clientConfig: {
+          model: "call-model",
+          provider: "anthropic",
+        },
+      }),
     );
     expect(pair).toEqual({ model: "call-model", provider: "anthropic" });
   });

@@ -85,19 +85,13 @@ describe("AgencyFunction", () => {
     });
 
     it("pads missing args with UNSET when defaults exist", async () => {
-      const fn = makeFunction([
-        { name: "a" },
-        { name: "b", hasDefault: true, defaultValue: 10 },
-      ]);
+      const fn = makeFunction([{ name: "a" }, { name: "b", hasDefault: true, defaultValue: 10 }]);
       const result = await fn.invoke({ type: "positional", args: [1] });
       expect(result).toEqual([1, UNSET]);
     });
 
     it("wraps trailing args into array for variadic param", async () => {
-      const fn = makeFunction([
-        { name: "prefix" },
-        { name: "items", variadic: true },
-      ]);
+      const fn = makeFunction([{ name: "prefix" }, { name: "items", variadic: true }]);
       const result = await fn.invoke({ type: "positional", args: [1, 2, 3, 4] });
       expect(result).toEqual([1, [2, 3, 4]]);
     });
@@ -138,9 +132,7 @@ describe("AgencyFunction", () => {
       const foo = makeNamedFunction("foo", () => bar.invoke(noArgs));
       const bar = makeNamedFunction("bar", () => foo.invoke(noArgs));
       await runInTestContext(ctx, ctx.stateStack, ctx.threads, async () => {
-        await expect(foo.invoke(noArgs)).rejects.toBeInstanceOf(
-          CallDepthExceededError,
-        );
+        await expect(foo.invoke(noArgs)).rejects.toBeInstanceOf(CallDepthExceededError);
       });
     });
 
@@ -149,16 +141,11 @@ describe("AgencyFunction", () => {
       ctx.maxCallDepth = 100;
       const countdown: AgencyFunction = makeNamedFunction(
         "countdown",
-        (n: number) =>
-          n <= 0
-            ? "done"
-            : countdown.invoke({ type: "positional", args: [n - 1] }),
+        (n: number) => (n <= 0 ? "done" : countdown.invoke({ type: "positional", args: [n - 1] })),
         [{ name: "n" }],
       );
       await runInTestContext(ctx, ctx.stateStack, ctx.threads, async () => {
-        await expect(
-          countdown.invoke({ type: "positional", args: [10] }),
-        ).resolves.toBe("done");
+        await expect(countdown.invoke({ type: "positional", args: [10] })).resolves.toBe("done");
       });
     });
 
@@ -172,9 +159,7 @@ describe("AgencyFunction", () => {
         return self.invoke(noArgs);
       });
       await runInTestContext(ctx, ctx.stateStack, ctx.threads, async () => {
-        await expect(self.invoke(noArgs)).rejects.toBeInstanceOf(
-          CallDepthExceededError,
-        );
+        await expect(self.invoke(noArgs)).rejects.toBeInstanceOf(CallDepthExceededError);
       });
     });
   });
@@ -279,13 +264,16 @@ describe("AgencyFunction", () => {
   describe("create", () => {
     it("creates instance and registers it in the registry", () => {
       const registry: Record<string, AgencyFunction> = {};
-      const fn = AgencyFunction.create({
-        name: "add",
-        module: "math.agency",
-        fn: async () => { },
-        params: [],
-        toolDefinition: null,
-      }, registry);
+      const fn = AgencyFunction.create(
+        {
+          name: "add",
+          module: "math.agency",
+          fn: async () => {},
+          params: [],
+          toolDefinition: null,
+        },
+        registry,
+      );
       expect(registry["math.agency:add"]).toBe(fn);
       expect(fn.name).toBe("add");
     });
@@ -294,10 +282,7 @@ describe("AgencyFunction", () => {
 
 describe("partial()", () => {
   it("binds a single param by name", () => {
-    const fn = makeFunction([
-      { name: "a" },
-      { name: "b" },
-    ]);
+    const fn = makeFunction([{ name: "a" }, { name: "b" }]);
     const bound = fn.partial({ a: 5 });
     expect(bound.getUnboundParams()).toHaveLength(1);
     expect(bound.getUnboundParams()[0].name).toBe("b");
@@ -306,21 +291,14 @@ describe("partial()", () => {
   });
 
   it("binds multiple params", () => {
-    const fn = makeFunction([
-      { name: "a" },
-      { name: "b" },
-      { name: "c" },
-    ]);
+    const fn = makeFunction([{ name: "a" }, { name: "b" }, { name: "c" }]);
     const bound = fn.partial({ a: 1, c: 3 });
     expect(bound.getUnboundParams()).toHaveLength(1);
     expect(bound.getUnboundParams()[0].name).toBe("b");
   });
 
   it("empty partial returns same instance", () => {
-    const fn = makeFunction([
-      { name: "a" },
-      { name: "b" },
-    ]);
+    const fn = makeFunction([{ name: "a" }, { name: "b" }]);
     const same = fn.partial({});
     expect(same).toBe(fn);
   });
@@ -331,11 +309,7 @@ describe("partial()", () => {
   });
 
   it("chained partial binds remaining params", () => {
-    const fn = makeFunction([
-      { name: "a" },
-      { name: "b" },
-      { name: "c" },
-    ]);
+    const fn = makeFunction([{ name: "a" }, { name: "b" }, { name: "c" }]);
     const bound1 = fn.partial({ a: 1 });
     const bound2 = bound1.partial({ c: 3 });
     expect(bound2.getUnboundParams()).toHaveLength(1);
@@ -343,26 +317,19 @@ describe("partial()", () => {
   });
 
   it("throws when re-binding an already-bound param", () => {
-    const fn = makeFunction([
-      { name: "a" },
-      { name: "b" },
-    ]);
+    const fn = makeFunction([{ name: "a" }, { name: "b" }]);
     const bound = fn.partial({ a: 5 });
     expect(() => bound.partial({ a: 10 })).toThrow("already bound");
   });
 
   it("binds a variadic param via the named-array form", () => {
-    const fn = makeFunction([
-      { name: "messages", variadic: true },
-    ]);
+    const fn = makeFunction([{ name: "messages", variadic: true }]);
     const bound = fn.partial({ messages: ["hi", "there"] });
     expect(bound.getUnboundParams()).toHaveLength(0);
   });
 
   it("rejects binding a variadic to a non-array value", () => {
-    const fn = makeFunction([
-      { name: "messages", variadic: true },
-    ]);
+    const fn = makeFunction([{ name: "messages", variadic: true }]);
     expect(() => fn.partial({ messages: "hi" })).toThrow(
       "Variadic parameter 'messages' must be bound to an array",
     );
@@ -420,17 +387,20 @@ describe("partial()", () => {
 
   it("invoke on bound function merges args correctly", async () => {
     const impl = (a: number, b: number, c: number) => a + b + c;
-    const fn = AgencyFunction.create({
-      name: "add3",
-      module: "test",
-      fn: impl,
-      params: [
-        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
-        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
-        { name: "c", hasDefault: false, defaultValue: undefined, variadic: false },
-      ],
-      toolDefinition: null,
-    }, {});
+    const fn = AgencyFunction.create(
+      {
+        name: "add3",
+        module: "test",
+        fn: impl,
+        params: [
+          { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "c", hasDefault: false, defaultValue: undefined, variadic: false },
+        ],
+        toolDefinition: null,
+      },
+      {},
+    );
     const bound = fn.partial({ a: 10 });
     const result = await bound.invoke({ type: "positional", args: [20, 30] });
     expect(result).toBe(60);
@@ -438,17 +408,20 @@ describe("partial()", () => {
 
   it("invoke on chained partial merges all bound values", async () => {
     const impl = (a: number, b: number, c: number) => a * 100 + b * 10 + c;
-    const fn = AgencyFunction.create({
-      name: "combine",
-      module: "test",
-      fn: impl,
-      params: [
-        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
-        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
-        { name: "c", hasDefault: false, defaultValue: undefined, variadic: false },
-      ],
-      toolDefinition: null,
-    }, {});
+    const fn = AgencyFunction.create(
+      {
+        name: "combine",
+        module: "test",
+        fn: impl,
+        params: [
+          { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "c", hasDefault: false, defaultValue: undefined, variadic: false },
+        ],
+        toolDefinition: null,
+      },
+      {},
+    );
     const bound1 = fn.partial({ a: 1 });
     const bound2 = bound1.partial({ c: 3 });
     const result = await bound2.invoke({ type: "positional", args: [2] });
@@ -457,17 +430,20 @@ describe("partial()", () => {
 
   it("invoke with middle param bound", async () => {
     const impl = (a: number, b: number, c: number) => a * 100 + b * 10 + c;
-    const fn = AgencyFunction.create({
-      name: "combine",
-      module: "test",
-      fn: impl,
-      params: [
-        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
-        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
-        { name: "c", hasDefault: false, defaultValue: undefined, variadic: false },
-      ],
-      toolDefinition: null,
-    }, {});
+    const fn = AgencyFunction.create(
+      {
+        name: "combine",
+        module: "test",
+        fn: impl,
+        params: [
+          { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "c", hasDefault: false, defaultValue: undefined, variadic: false },
+        ],
+        toolDefinition: null,
+      },
+      {},
+    );
     const bound = fn.partial({ b: 5 });
     const result = await bound.invoke({ type: "positional", args: [1, 3] });
     expect(result).toBe(153);
@@ -475,17 +451,20 @@ describe("partial()", () => {
 
   it("invoke bound function with named args", async () => {
     const impl = (a: number, b: number, c: number) => a + b + c;
-    const fn = AgencyFunction.create({
-      name: "add3",
-      module: "test",
-      fn: impl,
-      params: [
-        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
-        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
-        { name: "c", hasDefault: false, defaultValue: undefined, variadic: false },
-      ],
-      toolDefinition: null,
-    }, {});
+    const fn = AgencyFunction.create(
+      {
+        name: "add3",
+        module: "test",
+        fn: impl,
+        params: [
+          { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "c", hasDefault: false, defaultValue: undefined, variadic: false },
+        ],
+        toolDefinition: null,
+      },
+      {},
+    );
     const bound = fn.partial({ a: 10 });
     const result = await bound.invoke({
       type: "named",
@@ -525,20 +504,23 @@ describe("partial()", () => {
   });
 
   it("strips @param lines from tool description", () => {
-    const fn = AgencyFunction.create({
-      name: "readFile",
-      module: "test",
-      fn: () => { },
-      params: [
-        { name: "dir", hasDefault: false, defaultValue: undefined, variadic: false },
-        { name: "filename", hasDefault: false, defaultValue: undefined, variadic: false },
-      ],
-      toolDefinition: {
+    const fn = AgencyFunction.create(
+      {
         name: "readFile",
-        description: "Read a file.\n@param dir - The directory\n@param filename - The file",
-        schema: {},
+        module: "test",
+        fn: () => {},
+        params: [
+          { name: "dir", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "filename", hasDefault: false, defaultValue: undefined, variadic: false },
+        ],
+        toolDefinition: {
+          name: "readFile",
+          description: "Read a file.\n@param dir - The directory\n@param filename - The file",
+          schema: {},
+        },
       },
-    }, {});
+      {},
+    );
     const bound = fn.partial({ dir: "/foo" });
     expect(bound.toolDefinition!.description).toBe("Read a file.\n@param filename - The file");
   });
@@ -546,72 +528,89 @@ describe("partial()", () => {
 
 describe("describe()", () => {
   it("returns new AgencyFunction with updated description", () => {
-    const fn = AgencyFunction.create({
-      name: "readFile",
-      module: "test",
-      fn: () => { },
-      params: [
-        { name: "filename", hasDefault: false, defaultValue: undefined, variadic: false },
-      ],
-      toolDefinition: {
+    const fn = AgencyFunction.create(
+      {
         name: "readFile",
-        description: "Original description",
-        schema: {},
+        module: "test",
+        fn: () => {},
+        params: [{ name: "filename", hasDefault: false, defaultValue: undefined, variadic: false }],
+        toolDefinition: {
+          name: "readFile",
+          description: "Original description",
+          schema: {},
+        },
       },
-    }, {});
+      {},
+    );
     const described = fn.describe("New description");
     expect(described.toolDefinition!.description).toBe("New description");
     expect(fn.toolDefinition!.description).toBe("Original description");
   });
 
   it("works on function without toolDefinition", () => {
-    const fn = AgencyFunction.create({
-      name: "readFile",
-      module: "test",
-      fn: () => { },
-      params: [],
-      toolDefinition: null,
-    }, {});
+    const fn = AgencyFunction.create(
+      {
+        name: "readFile",
+        module: "test",
+        fn: () => {},
+        params: [],
+        toolDefinition: null,
+      },
+      {},
+    );
     const described = fn.describe("New description");
     expect(described.toolDefinition!.description).toBe("New description");
     expect(described.toolDefinition!.name).toBe("readFile");
   });
 
   it("does not mutate original", () => {
-    const fn = AgencyFunction.create({
-      name: "foo",
-      module: "test",
-      fn: () => { },
-      params: [],
-      toolDefinition: { name: "foo", description: "old", schema: {} },
-    }, {});
+    const fn = AgencyFunction.create(
+      {
+        name: "foo",
+        module: "test",
+        fn: () => {},
+        params: [],
+        toolDefinition: { name: "foo", description: "old", schema: {} },
+      },
+      {},
+    );
     fn.describe("new");
     expect(fn.toolDefinition!.description).toBe("old");
   });
 
   it("empty string clears description", () => {
-    const fn = AgencyFunction.create({
-      name: "foo",
-      module: "test",
-      fn: () => { },
-      params: [],
-      toolDefinition: { name: "foo", description: "old", schema: {} },
-    }, {});
+    const fn = AgencyFunction.create(
+      {
+        name: "foo",
+        module: "test",
+        fn: () => {},
+        params: [],
+        toolDefinition: { name: "foo", description: "old", schema: {} },
+      },
+      {},
+    );
     const described = fn.describe("");
     expect(described.toolDefinition!.description).toBe("");
   });
 
   it("preserves bound params when describing a partial function", () => {
-    const fn = AgencyFunction.create({
-      name: "add",
-      module: "test",
-      fn: (a: number, b: number) => a + b,
-      params: [
-        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
-        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
-      ],
-      toolDefinition: { name: "add", description: "Add.\n@param a - First\n@param b - Second", schema: {} },
-    }, {});
+    const fn = AgencyFunction.create(
+      {
+        name: "add",
+        module: "test",
+        fn: (a: number, b: number) => a + b,
+        params: [
+          { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+        ],
+        toolDefinition: {
+          name: "add",
+          description: "Add.\n@param a - First\n@param b - Second",
+          schema: {},
+        },
+      },
+      {},
+    );
     const bound = fn.partial({ a: 5 });
     const described = bound.describe("Adds 5 to a number");
     expect(described.params[0].isBound).toBe(true);
@@ -624,16 +623,19 @@ describe("preapprove handler wiring", () => {
   it("invokes via withPushedHandler: handler pushed during call, popped after", async () => {
     const ctx = makeMockCtx();
     let lenDuring = -1;
-    const fn = AgencyFunction.create({
-      name: "tool",
-      module: "test",
-      fn: async () => {
-        lenDuring = ctx.handlers.length;
-        return "x";
+    const fn = AgencyFunction.create(
+      {
+        name: "tool",
+        module: "test",
+        fn: async () => {
+          lenDuring = ctx.handlers.length;
+          return "x";
+        },
+        params: [],
+        toolDefinition: null,
       },
-      params: [],
-      toolDefinition: null,
-    }, {}).preapprove();
+      {},
+    ).preapprove();
 
     const before = ctx.handlers.length;
     await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
@@ -645,15 +647,18 @@ describe("preapprove handler wiring", () => {
 
   it("pops the preapprove handler even when the body throws", async () => {
     const ctx = makeMockCtx();
-    const fn = AgencyFunction.create({
-      name: "tool",
-      module: "test",
-      fn: async () => {
-        throw new Error("boom");
+    const fn = AgencyFunction.create(
+      {
+        name: "tool",
+        module: "test",
+        fn: async () => {
+          throw new Error("boom");
+        },
+        params: [],
+        toolDefinition: null,
       },
-      params: [],
-      toolDefinition: null,
-    }, {}).preapprove();
+      {},
+    ).preapprove();
 
     const before = ctx.handlers.length;
     await expect(
@@ -667,15 +672,18 @@ describe("preapprove handler wiring", () => {
   it("does not push a handler for non-preapproved functions", async () => {
     const ctx = makeMockCtx();
     let lenDuring = -1;
-    const fn = AgencyFunction.create({
-      name: "tool",
-      module: "test",
-      fn: async () => {
-        lenDuring = ctx.handlers.length;
+    const fn = AgencyFunction.create(
+      {
+        name: "tool",
+        module: "test",
+        fn: async () => {
+          lenDuring = ctx.handlers.length;
+        },
+        params: [],
+        toolDefinition: null,
       },
-      params: [],
-      toolDefinition: null,
-    }, {});
+      {},
+    );
 
     const before = ctx.handlers.length;
     await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
@@ -741,16 +749,19 @@ describe("preapprove verdict shape", () => {
   it("auto-approves ordinary interrupts but PASSES on std::guard trips", async () => {
     const ctx = makeMockCtx();
     let handler: any;
-    const fn = AgencyFunction.create({
-      name: "tool",
-      module: "test",
-      fn: async () => {
-        handler = ctx.handlers[ctx.handlers.length - 1].fn;
-        return "x";
+    const fn = AgencyFunction.create(
+      {
+        name: "tool",
+        module: "test",
+        fn: async () => {
+          handler = ctx.handlers[ctx.handlers.length - 1].fn;
+          return "x";
+        },
+        params: [],
+        toolDefinition: null,
       },
-      params: [],
-      toolDefinition: null,
-    }, {}).preapprove();
+      {},
+    ).preapprove();
 
     await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
       fn.invoke({ type: "positional", args: [] }),
@@ -766,16 +777,19 @@ describe("preapprove verdict shape", () => {
   it("registers with an explicit empty liveGuardIds (above any guard)", async () => {
     const ctx = makeMockCtx();
     let entry: any;
-    const fn = AgencyFunction.create({
-      name: "tool",
-      module: "test",
-      fn: async () => {
-        entry = ctx.handlers[ctx.handlers.length - 1];
-        return "x";
+    const fn = AgencyFunction.create(
+      {
+        name: "tool",
+        module: "test",
+        fn: async () => {
+          entry = ctx.handlers[ctx.handlers.length - 1];
+          return "x";
+        },
+        params: [],
+        toolDefinition: null,
       },
-      params: [],
-      toolDefinition: null,
-    }, {}).preapprove();
+      {},
+    ).preapprove();
 
     await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
       fn.invoke({ type: "positional", args: [] }),

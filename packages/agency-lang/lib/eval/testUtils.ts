@@ -7,7 +7,8 @@ import { execFileSync } from "child_process";
  *  Callers own cleanup of the returned directory. */
 export function makeRepo(): { repo: string; first: string; second: string } {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "fixture-repo-"));
-  const git = (...args: string[]) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trim();
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trim();
   git("init", "-q", "-b", "main");
   fs.mkdirSync(path.join(repo, "tests"), { recursive: true });
   fs.writeFileSync(path.join(repo, "tests", "a.txt"), "v1");

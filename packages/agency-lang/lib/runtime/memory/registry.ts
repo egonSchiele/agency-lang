@@ -57,10 +57,7 @@ const stores: Record<string, FileMemoryStore> = {};
  * through `MemoryFrame`'s constructor, which mkdir-p's before
  * reaching here).
  */
-export function getOrCreateStore(
-  absDir: string,
-  logLevel?: LogLevel,
-): FileMemoryStore {
+export function getOrCreateStore(absDir: string, logLevel?: LogLevel): FileMemoryStore {
   const existing = stores[absDir];
   if (existing) return existing;
   const store = new FileMemoryStore(absDir, logLevel);

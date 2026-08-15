@@ -182,7 +182,11 @@ class PatternLowerer {
         // tree so nested `isExpression` is lowered.
         const withRecursedBodies = mapBodies(node, (b) => this.lowerBody(b));
         if (isExpr(withRecursedBodies as unknown)) {
-          return [this.lowerExpression(withRecursedBodies as unknown as Expression) as unknown as AgencyNode];
+          return [
+            this.lowerExpression(
+              withRecursedBodies as unknown as Expression,
+            ) as unknown as AgencyNode,
+          ];
         }
         return [withRecursedBodies];
       }
@@ -321,10 +325,7 @@ class PatternLowerer {
           arguments: [],
           loc: node.loc,
         };
-        return [
-          synthFn,
-          { ...node, value: call, matchExprSource: { matchId: region.matchId } },
-        ];
+        return [synthFn, { ...node, value: call, matchExprSource: { matchId: region.matchId } }];
       }
       return [
         ...region.statements,
@@ -368,7 +369,8 @@ class PatternLowerer {
   private lowerIfElse(node: IfElse): IfElse {
     if (node.condition.type === "isExpression") {
       const isExp = node.condition;
-      const condition = patternToCondition(isExp.pattern, isExp.expression) ?? boolLit(true, node.loc);
+      const condition =
+        patternToCondition(isExp.pattern, isExp.expression) ?? boolLit(true, node.loc);
       const bindings = this.extractBindings(isExp.pattern, isExp.expression, "const", node.loc);
       return {
         ...node,
@@ -388,7 +390,8 @@ class PatternLowerer {
   private lowerWhileLoop(node: WhileLoop): WhileLoop {
     if (node.condition.type === "isExpression") {
       const isExp = node.condition;
-      const condition = patternToCondition(isExp.pattern, isExp.expression) ?? boolLit(true, node.loc);
+      const condition =
+        patternToCondition(isExp.pattern, isExp.expression) ?? boolLit(true, node.loc);
       const bindings = this.extractBindings(isExp.pattern, isExp.expression, "const", node.loc);
       return {
         ...node,
@@ -477,14 +480,18 @@ class PatternLowerer {
       // checker can find the owning match for exhaustiveness / union typing.
       ...(matchExprId !== undefined ? { matchExprId } : {}),
     };
-    const scrutineeRef = this.narrowableScrutineeRef(node.expression, scrutineeName, node.cases, node.loc);
+    const scrutineeRef = this.narrowableScrutineeRef(
+      node.expression,
+      scrutineeName,
+      node.cases,
+      node.loc,
+    );
 
     const ifChain = this.buildIfChainFromArms(cases, scrutineeRef, node.loc);
     if (!ifChain) return [scrutineeAssign];
     // Tag the root of the lowered if-chain: it is the node that OWNS the
     // matchExprId (yields unwind to it). Attached at construction.
-    const taggedChain: IfElse =
-      matchExprId !== undefined ? { ...ifChain, matchExprId } : ifChain;
+    const taggedChain: IfElse = matchExprId !== undefined ? { ...ifChain, matchExprId } : ifChain;
     return [scrutineeAssign, taggedChain];
   }
 
@@ -512,9 +519,7 @@ class PatternLowerer {
     cases: MatchBlock["cases"],
     loc: SourceLocation | undefined,
   ): Expression {
-    const hasGuard = cases.some(
-      (c) => c.type === "matchBlockCase" && c.guard !== undefined,
-    );
+    const hasGuard = cases.some((c) => c.type === "matchBlockCase" && c.guard !== undefined);
     if (hasGuard) {
       return varRef(scrutineeName, loc);
     }
@@ -546,9 +551,7 @@ class PatternLowerer {
     }
     const matchId = ++this.counter;
     const cases = match.cases.map((c) =>
-      c.type === "matchBlockCase"
-        ? { ...c, body: this.rewriteArmForYield(c.body, matchId, c) }
-        : c,
+      c.type === "matchBlockCase" ? { ...c, body: this.rewriteArmForYield(c.body, matchId, c) } : c,
     );
     const statements = this.lowerMatchBlock({ ...match, cases }, matchId);
     return { statements, valueRef: varRef(matchValName(matchId), loc), matchId };
@@ -601,7 +604,12 @@ class PatternLowerer {
         value: this.lowerExpression(expr),
         loc: expr.loc,
       };
-      const yielded: MatchYield = { type: "matchYield", matchId, value: varRef(tmp, expr.loc), loc: expr.loc };
+      const yielded: MatchYield = {
+        type: "matchYield",
+        matchId,
+        value: varRef(tmp, expr.loc),
+        loc: expr.loc,
+      };
       return [binding, yielded];
     };
     const elseBody = yieldBranch((node.elseBody as AgencyNode[])[0] as Expression);
@@ -609,7 +617,7 @@ class PatternLowerer {
     const condIsExpr = node.condition.type === "isExpression";
     const isExp = node.condition as IsExpression;
     const condition = condIsExpr
-      ? patternToCondition(isExp.pattern, isExp.expression) ?? boolLit(true, node.loc)
+      ? (patternToCondition(isExp.pattern, isExp.expression) ?? boolLit(true, node.loc))
       : this.lowerExpression(node.condition);
     const thenBranch = yieldBranch(node.thenBody[0] as Expression);
     const thenBody = condIsExpr
@@ -667,8 +675,7 @@ class PatternLowerer {
     const rewritten = this.rewriteReturnsToYields(body, matchId);
     if (!this.alwaysYields(rewritten)) {
       const loc =
-        body[0]?.loc ??
-        (arm.caseValue === "_" ? undefined : (arm.caseValue as AgencyNode).loc);
+        body[0]?.loc ?? (arm.caseValue === "_" ? undefined : (arm.caseValue as AgencyNode).loc);
       throw new LoweringError(
         "match arm must return a value on every path when the match is used as an expression",
         loc,
@@ -723,10 +730,7 @@ class PatternLowerer {
       if (stmt.type === "seqBlock" || stmt.type === "messageThread") {
         out.push({
           ...stmt,
-          body: this.rewriteReturnsToYields(
-            (stmt as { body: AgencyNode[] }).body,
-            matchId,
-          ),
+          body: this.rewriteReturnsToYields((stmt as { body: AgencyNode[] }).body, matchId),
         });
         continue;
       }
@@ -1091,10 +1095,17 @@ class PatternLowerer {
             return [makeAssign(prop.name, fieldAccess(source, prop.name, loc), declKind, loc)];
           }
           if (prop.type === "objectPatternProperty") {
-            return this.extractBindings(prop.value, fieldAccess(source, prop.key, loc), declKind, loc);
+            return this.extractBindings(
+              prop.value,
+              fieldAccess(source, prop.key, loc),
+              declKind,
+              loc,
+            );
           }
           // restPattern
-          return [makeAssign(prop.identifier, makeObjectRestCall(source, namedKeys, loc), declKind, loc)];
+          return [
+            makeAssign(prop.identifier, makeObjectRestCall(source, namedKeys, loc), declKind, loc),
+          ];
         });
       }
       case "arrayPattern": {
@@ -1121,9 +1132,7 @@ class PatternLowerer {
         // the value is too short. Matching cannot reach that state (the length
         // check fails first); a declaration can, so guard the source here.
         const guardedSource =
-          tail.length > 0
-            ? requireLengthCall(source, head.length + tail.length, loc)
-            : source;
+          tail.length > 0 ? requireLengthCall(source, head.length + tail.length, loc) : source;
         const tailBindings = tail.flatMap((el, i): Assignment[] => {
           if (el.type === "wildcardPattern") return [];
           return this.extractBindings(
@@ -1143,14 +1152,7 @@ class PatternLowerer {
       case "resultPattern": {
         if (pattern.binding === null) return [];
         const field = pattern.kind === "success" ? "value" : "error";
-        return [
-          makeAssign(
-            pattern.binding,
-            fieldAccess(source, field, loc),
-            declKind,
-            loc,
-          ),
-        ];
+        return [makeAssign(pattern.binding, fieldAccess(source, field, loc), declKind, loc)];
       }
       case "typePattern":
         // The type test contributes no bindings of its own; the inner
@@ -1232,7 +1234,11 @@ function collectChecks(pattern: MatchPattern, source: Expression, checks: Expres
       checks.push(...shapeCheck(source, OBJECT_HINT, pattern.loc));
       for (const prop of pattern.properties) {
         if (prop.type === "objectPatternProperty") {
-          collectChecks(prop.value as MatchPattern, fieldAccess(source, prop.key, pattern.loc), checks);
+          collectChecks(
+            prop.value as MatchPattern,
+            fieldAccess(source, prop.key, pattern.loc),
+            checks,
+          );
         }
         // shorthand and rest do not produce checks (binders only)
       }
@@ -1265,9 +1271,7 @@ function collectChecks(pattern: MatchPattern, source: Expression, checks: Expres
       // walk.
       const { head, tail } = splitAtRest(pattern.elements);
       const needsCheck = (el: { type: string }): boolean =>
-        el.type !== "wildcardPattern" &&
-        el.type !== "restPattern" &&
-        el.type !== "variableName";
+        el.type !== "wildcardPattern" && el.type !== "restPattern" && el.type !== "variableName";
 
       head.forEach((el, i) => {
         if (needsCheck(el)) {
@@ -1332,7 +1336,10 @@ function resultCheckCall(
 // ---------------------------------------------------------------------------
 
 export class PatternLoweringError extends Error {
-  constructor(message: string, public loc?: SourceLocation) {
+  constructor(
+    message: string,
+    public loc?: SourceLocation,
+  ) {
     super(message);
     this.name = "PatternLoweringError";
   }
@@ -1359,10 +1366,7 @@ function assertNoBindersInBoolIs(pattern: MatchPattern): void {
         loc,
       );
     }
-    if (
-      p.type === "resultPattern" &&
-      (p as ResultPattern).binding !== null
-    ) {
+    if (p.type === "resultPattern" && (p as ResultPattern).binding !== null) {
       throw new PatternLoweringError(
         `result pattern binder in pure-boolean \`is\` context has nowhere to bind; binders are introduced by an \`if\` or \`while\` CONDITION, or by a match arm pattern — a match-arm guard is a pure-boolean context even though it is spelled with \`if\``,
         loc,
@@ -1493,16 +1497,16 @@ function varRef(name: string, loc: SourceLocation | undefined): VariableNameLite
   return { type: "variableName", value: name, loc: loc as SourceLocation };
 }
 
-function fieldAccess(source: Expression, key: string, loc: SourceLocation | undefined): ValueAccess {
+function fieldAccess(
+  source: Expression,
+  key: string,
+  loc: SourceLocation | undefined,
+): ValueAccess {
   return chainAccess(source, [{ kind: "property", name: key }], loc);
 }
 
 function indexAccess(source: Expression, i: number, loc: SourceLocation | undefined): ValueAccess {
-  return chainAccess(
-    source,
-    [{ kind: "index", index: numberLit(i, loc) }],
-    loc,
-  );
+  return chainAccess(source, [{ kind: "index", index: numberLit(i, loc) }], loc);
 }
 
 /**
@@ -1565,11 +1569,7 @@ function restSlice(
     numberLit(tailCount, loc),
     loc,
   );
-  return chainAccess(
-    source,
-    [{ kind: "slice", start: numberLit(start, loc), end }],
-    loc,
-  );
+  return chainAccess(source, [{ kind: "slice", start: numberLit(start, loc), end }], loc);
 }
 
 /**
@@ -1589,12 +1589,12 @@ function splitAtRest<T extends { type: string }>(
   };
 }
 
-function sliceCall(source: Expression, start: number, loc: SourceLocation | undefined): ValueAccess {
-  return chainAccess(
-    source,
-    [{ kind: "slice", start: numberLit(start, loc) }],
-    loc,
-  );
+function sliceCall(
+  source: Expression,
+  start: number,
+  loc: SourceLocation | undefined,
+): ValueAccess {
+  return chainAccess(source, [{ kind: "slice", start: numberLit(start, loc) }], loc);
 }
 
 /**

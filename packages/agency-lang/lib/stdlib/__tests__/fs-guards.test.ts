@@ -55,9 +55,7 @@ describe("rejectDangerousPath", () => {
 
   it("allows a deep path under a top-level dir", async () => {
     const root = path.parse(process.cwd()).root;
-    expect(await isRejected(root + path.join("tmp", "scratch", "file.txt"))).toBe(
-      false,
-    );
+    expect(await isRejected(root + path.join("tmp", "scratch", "file.txt"))).toBe(false);
   });
 
   it("allows a child of cwd", async () => {

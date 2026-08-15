@@ -101,12 +101,8 @@ describe("renderViewerLines", () => {
       rows: 10,
       cols: 80,
     });
-    expect(lines[1].search(/▶|▼|●/)).toBeGreaterThan(
-      lines[0].search(/▶|▼|●/),
-    );
-    expect(lines[2].search(/▶|▼|●/)).toBeGreaterThan(
-      lines[1].search(/▶|▼|●/),
-    );
+    expect(lines[1].search(/▶|▼|●/)).toBeGreaterThan(lines[0].search(/▶|▼|●/));
+    expect(lines[2].search(/▶|▼|●/)).toBeGreaterThan(lines[1].search(/▶|▼|●/));
   });
 
   it("marks the cursor row distinctly", () => {
@@ -119,9 +115,7 @@ describe("renderViewerLines", () => {
   });
 
   it("clips to viewport.rows starting at scrollTop", () => {
-    const roots = Array.from({ length: 20 }, (_, i) =>
-      trace([span(`s${i}`, "agentRun")]),
-    );
+    const roots = Array.from({ length: 20 }, (_, i) => trace([span(`s${i}`, "agentRun")]));
     const state: ViewerState = {
       roots,
       expanded: new Set(),
@@ -201,9 +195,7 @@ describe("promptCompletion expansion", () => {
           messages: [{ role: "user", content: "Get the area of France" }],
           completion: {
             output: null,
-            toolCalls: [
-              { id: "call_1", name: "getArea", arguments: { country: "France" } },
-            ],
+            toolCalls: [{ id: "call_1", name: "getArea", arguments: { country: "France" } }],
           },
         },
       },
@@ -220,9 +212,7 @@ describe("promptCompletion expansion", () => {
 
   it("expands the raw-data toggle into JSON lines", () => {
     const t = trace([pcLeaf()]);
-    const rows = flattenVisibleRows(
-      baseState([t], ["trace-t", "evt-0", "evt-0:raw"]),
-    );
+    const rows = flattenVisibleRows(baseState([t], ["trace-t", "evt-0", "evt-0:raw"]));
     // Should now include JSON lines after the toggle.
     const jsonRows = rows.filter((r) => r.node.nodeKind === "jsonLine");
     expect(jsonRows.length).toBeGreaterThan(0);
@@ -284,12 +274,7 @@ describe("wrapLine", () => {
   });
 
   it("hard-breaks mid-word when no space is in range", () => {
-    expect(wrapLine("supercalifragilistic", 6)).toEqual([
-      "superc",
-      "alifra",
-      "gilist",
-      "ic",
-    ]);
+    expect(wrapLine("supercalifragilistic", 6)).toEqual(["superc", "alifra", "gilist", "ic"]);
   });
 
   it("returns a single-element list for width <= 0", () => {
@@ -311,8 +296,13 @@ describe("colorFor", () => {
 
   it("highlights error leaves in bright-red", () => {
     const leaf: TreeNode = {
-      id: "evt-0", traceId: "t", parentId: null, children: [],
-      nodeKind: "event", label: "error", summary: "",
+      id: "evt-0",
+      traceId: "t",
+      parentId: null,
+      children: [],
+      nodeKind: "event",
+      label: "error",
+      summary: "",
     };
     expect(colorFor(leaf)).toBe("bright-red");
   });

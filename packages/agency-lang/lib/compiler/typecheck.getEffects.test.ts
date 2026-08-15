@@ -9,8 +9,7 @@ describe("getEffectsFromSource", () => {
 
   it("reports transitive effects through a local def and omits unexported symbols", () => {
     const src =
-      `def helper() {\n  write("out.txt", "hi")\n}\n` +
-      `export node main() {\n  helper()\n}`;
+      `def helper() {\n  write("out.txt", "hi")\n}\n` + `export node main() {\n  helper()\n}`;
     expect(getEffectsFromSource(src)).toEqual({ main: ["std::write"] });
   });
 

@@ -14,11 +14,7 @@ describe("formatErrors", () => {
     // loc.line and loc.col are 0-indexed (docs/dev/locations.md); display
     // adds 1 to both.
     const err = {
-      ...diagnostic(
-        "reassignToConst",
-        { name: "c" },
-        { line: 12, col: 8, start: 100, end: 110 },
-      ),
+      ...diagnostic("reassignToConst", { name: "c" }, { line: 12, col: 8, start: 100, end: 110 }),
       file: "main.agency",
     };
     expect(plain(formatErrors([err]))).toBe(
@@ -50,9 +46,7 @@ describe("formatErrors", () => {
 
   it("no file falls back to severity CODE: message", () => {
     const err = diagnostic("reassignToConst", { name: "c" }, null);
-    expect(plain(formatErrors([err]))).toBe(
-      "error AG4005: Cannot reassign to constant 'c'.",
-    );
+    expect(plain(formatErrors([err]))).toBe("error AG4005: Cannot reassign to constant 'c'.");
   });
 });
 
@@ -72,19 +66,12 @@ describe("end-to-end file stamping + formatting", () => {
     if (!parsed.success) {
       throw new Error("unreachable");
     }
-    const unit = buildCompilationUnit(
-      parsed.result,
-      undefined,
-      "/tmp/stamp-test.agency",
-      source,
-    );
+    const unit = buildCompilationUnit(parsed.result, undefined, "/tmp/stamp-test.agency", source);
     const { errors } = typeCheck(parsed.result, {}, unit);
     expect(errors.length).toBeGreaterThanOrEqual(1);
     const formatted = plain(formatErrors(errors));
     const lines = formatted.split("\n");
-    expect(lines[0]).toMatch(
-      /^\/tmp\/stamp-test\.agency:\d+:\d+ - error AG\d{4}: /,
-    );
+    expect(lines[0]).toMatch(/^\/tmp\/stamp-test\.agency:\d+:\d+ - error AG\d{4}: /);
   });
 });
 
@@ -99,10 +86,7 @@ describe("formatDiagnosticsHint", () => {
   });
 
   it("names the first ERROR-severity code, not errors[0]", () => {
-    const hint = formatDiagnosticsHint([
-      err("AG3009", "warning"),
-      err("AG2005", "error"),
-    ]);
+    const hint = formatDiagnosticsHint([err("AG3009", "warning"), err("AG2005", "error")]);
     expect(hint).not.toBeNull();
     expect(hint!).toContain("AG2005");
     expect(hint!).not.toContain("AG3009");

@@ -84,10 +84,7 @@ type ScopeFinder = ReturnType<typeof makeScopeFinder>;
  *  bound to a function infers to `functionRefType`, whose own `name` is
  *  the function it refers to — `const f = helper` resolves to
  *  `functionRefType{ name: "helper" }`. */
-function resolveFunctionRef(
-  slot: IdentifierSlot,
-  findScope: ScopeFinder,
-): { name: string } | null {
+function resolveFunctionRef(slot: IdentifierSlot, findScope: ScopeFinder): { name: string } | null {
   const inferred = findScope(slot.scopeOffset)?.scope.lookup(slot.name);
   if (inferred && (inferred as { type?: string }).type === "functionRefType") {
     return inferred as unknown as { name: string };
@@ -129,10 +126,7 @@ function isDeclaredInFile(name: string, state: DocumentState): boolean {
  */
 function isStandardLibrary(name: string, state: DocumentState): boolean {
   if (isDeclaredInFile(name, state)) return false;
-  return (
-    Object.hasOwn(BUILTIN_FUNCTION_TYPES, name) ||
-    Object.hasOwn(PRELUDE_NAME_SET, name)
-  );
+  return Object.hasOwn(BUILTIN_FUNCTION_TYPES, name) || Object.hasOwn(PRELUDE_NAME_SET, name);
 }
 
 /**
@@ -166,11 +160,7 @@ function isFunctionReference(
   return slot.isCall;
 }
 
-function toToken(
-  slot: IdentifierSlot,
-  state: DocumentState,
-  findScope: ScopeFinder,
-): Token | null {
+function toToken(slot: IdentifierSlot, state: DocumentState, findScope: ScopeFinder): Token | null {
   const resolved = resolveFunctionRef(slot, findScope);
   if (!isFunctionReference(slot, state, resolved)) return null;
 
@@ -247,15 +237,10 @@ function paintsItsOwnName(token: Token, lines: string[] | null): boolean {
  * and 5.4 ms on a generated 1200-line file, so this is a note for the
  * next reader rather than a todo.
  */
-export function getSemanticTokens(
-  state: DocumentState,
-  currentText?: string,
-): SemanticTokens {
+export function getSemanticTokens(state: DocumentState, currentText?: string): SemanticTokens {
   const text = currentText ?? state.info.sourceText;
   const lines = text === undefined ? null : text.split("\n");
-  const slots = [...walkNodes(state.program.nodes)].flatMap(({ node }) =>
-    identifierSlots(node),
-  );
+  const slots = [...walkNodes(state.program.nodes)].flatMap(({ node }) => identifierSlots(node));
 
   const findScope = makeScopeFinder(state.scopes, state.program);
   const tokens = slots
@@ -266,13 +251,7 @@ export function getSemanticTokens(
 
   const builder = new SemanticTokensBuilder();
   for (const token of tokens) {
-    builder.push(
-      token.line,
-      token.col,
-      token.length,
-      token.typeIndex,
-      token.modifiers,
-    );
+    builder.push(token.line, token.col, token.length, token.typeIndex, token.modifiers);
   }
   return builder.build();
 }

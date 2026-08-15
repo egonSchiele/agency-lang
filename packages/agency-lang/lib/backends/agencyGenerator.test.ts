@@ -46,10 +46,8 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
       },
       {
         description: "type hint with docstring",
-        input:
-          'def add(x: number, y: number) {\n  """Adds two numbers"""\n  x\n}',
-        expectedOutput:
-          'def add(x: number, y: number) {\n  """\n  Adds two numbers\n  """\nx\n}',
+        input: 'def add(x: number, y: number) {\n  """Adds two numbers"""\n  x\n}',
+        expectedOutput: 'def add(x: number, y: number) {\n  """\n  Adds two numbers\n  """\nx\n}',
       },
       {
         description: "multiple array types",
@@ -146,8 +144,8 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
 
       {
         description: "schema chaining round-trips (issue #480)",
-        input: 'def f(x: string) { const r = schema(number).parseJSON(x) }',
-        expectedOutput: 'def f(x: string) {\n  const r = schema(number).parseJSON(x)\n}',
+        input: "def f(x: string) { const r = schema(number).parseJSON(x) }",
+        expectedOutput: "def f(x: string) {\n  const r = schema(number).parseJSON(x)\n}",
       },
     ];
 
@@ -184,11 +182,7 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
     });
 
     it("preserves keyof and indexed access in alias declarations", () => {
-      const parseResult = parseAgency(
-        'type F = keyof User\ntype N = User["name"]',
-        {},
-        false,
-      );
+      const parseResult = parseAgency('type F = keyof User\ntype N = User["name"]', {}, false);
       expect(parseResult.success).toBe(true);
 
       if (!parseResult.success) return;
@@ -355,11 +349,7 @@ describe("AgencyGenerator - new expressions", () => {
   // error, not a downstream "unexpected token" surprise.
   for (const sep of ["  ", "\t", " \t "]) {
     it(`rejects \`class${JSON.stringify(sep)}Foo\` (whitespace variant)`, () => {
-      const parseResult = parseAgency(
-        `class${sep}User {\n  name: string\n}`,
-        {},
-        false,
-      );
+      const parseResult = parseAgency(`class${sep}User {\n  name: string\n}`, {}, false);
       expect(parseResult.success).toBe(false);
       if (!parseResult.success) {
         expect(parseResult.message).toMatch(/no longer supported/i);
@@ -462,7 +452,9 @@ describe("AgencyGenerator - optimize modifier", () => {
   });
 
   it("formats optimize static const in canonical order", () => {
-    expect(formatAgency('optimize static const prompt = "hi"')).toBe('optimize static const prompt = "hi"');
+    expect(formatAgency('optimize static const prompt = "hi"')).toBe(
+      'optimize static const prompt = "hi"',
+    );
   });
 });
 
@@ -696,9 +688,7 @@ describe("AgencyGenerator - Result Patterns", () => {
       }
       return node;
     };
-    expect(stripLoc(reparsed.result.nodes)).toEqual(
-      stripLoc(firstParse.result.nodes),
-    );
+    expect(stripLoc(reparsed.result.nodes)).toEqual(stripLoc(firstParse.result.nodes));
   }
 
   it("formats `r is success` (bare boolean form) — round trip", () => {
@@ -766,7 +756,7 @@ describe("AgencyGenerator - preserveOrder mode", () => {
     const input = `def first(): number { return 1 }\n\nimport { later } from "wherever"\n\ndef second(): number { return 2 }\n`;
     const output = formatPreserveOrder(input);
     const firstIdx = output.indexOf("def first");
-    const importIdx = output.indexOf('import { later }');
+    const importIdx = output.indexOf("import { later }");
     const secondIdx = output.indexOf("def second");
     expect(firstIdx).toBeGreaterThanOrEqual(0);
     expect(importIdx).toBeGreaterThan(firstIdx);
@@ -783,12 +773,12 @@ describe("AgencyGenerator - string escape round-tripping", () => {
   // `"\\"` parses as `\` the first time and as a syntax error the
   // second time).
   const cases = [
-    { name: "embedded double-quote",   source: '"a\\"b"',       value: 'a"b' },
-    { name: "embedded backslash",      source: '"a\\\\b"',      value: 'a\\b' },
-    { name: "newline / tab",           source: '"x\\ny\\tz"',   value: 'x\ny\tz' },
-    { name: "escaped interpolation",   source: '"\\${foo}"',    value: '${foo}' },
-    { name: "plain dollar sign",       source: '"$5"',          value: '$5' },
-    { name: "backtick allowed inline", source: '"a`b"',         value: 'a`b' },
+    { name: "embedded double-quote", source: '"a\\"b"', value: 'a"b' },
+    { name: "embedded backslash", source: '"a\\\\b"', value: "a\\b" },
+    { name: "newline / tab", source: '"x\\ny\\tz"', value: "x\ny\tz" },
+    { name: "escaped interpolation", source: '"\\${foo}"', value: "${foo}" },
+    { name: "plain dollar sign", source: '"$5"', value: "$5" },
+    { name: "backtick allowed inline", source: '"a`b"', value: "a`b" },
   ];
 
   cases.forEach(({ name, source, value }) => {
@@ -803,18 +793,15 @@ describe("AgencyGenerator - string escape round-tripping", () => {
       const emitted = gen.generate(r1.result).output;
 
       const r2 = parseAgency(emitted, {}, false);
-      expect(r2.success, `second parse of ${JSON.stringify(emitted)}`).toBe(
-        true,
-      );
+      expect(r2.success, `second parse of ${JSON.stringify(emitted)}`).toBe(true);
       if (!r2.success) return;
 
       // Extract the string literal from both parses and compare its
       // text-segment value. The parsed value should match what the
       // test asked for, both before and after the round trip.
       const stringOf = (program: { nodes: unknown[] }): string | null => {
-        const assignment = program.nodes.find(
-          (n: any) => n?.type === "assignment",
-        ) as { value?: { type?: string; segments?: { type: string; value?: string }[] } } | undefined;
+        const assignment = program.nodes.find((n: any) => n?.type === "assignment") as
+          { value?: { type?: string; segments?: { type: string; value?: string }[] } } | undefined;
         if (assignment?.value?.type !== "string") return null;
         const segs = assignment.value.segments ?? [];
         if (segs.length === 0) return "";
@@ -840,8 +827,7 @@ describe("AgencyGenerator - multi-line string escape round-tripping", () => {
 
   const segsOf = (program: { nodes: unknown[] }) => {
     const a = program.nodes.find((n: any) => n?.type === "assignment") as
-      | { value?: { type?: string; segments?: any[] } }
-      | undefined;
+      { value?: { type?: string; segments?: any[] } } | undefined;
     if (a?.value?.type !== "multiLineString") return null;
     return (a.value.segments ?? []).map((s: any) =>
       s.type === "text"
@@ -886,7 +872,7 @@ describe("AgencyGenerator - string delimiter round-tripping", () => {
     },
     {
       name: "single-quoted string containing the other two delimiters",
-      source: '\'she said "hi" and `hi`\'',
+      source: "'she said \"hi\" and `hi`'",
       value: 'she said "hi" and `hi`',
     },
     {
@@ -921,9 +907,8 @@ describe("AgencyGenerator - string delimiter round-tripping", () => {
       if (!r2.success) return;
 
       const stringOf = (program: { nodes: unknown[] }): string | null => {
-        const assignment = program.nodes.find(
-          (n: any) => n?.type === "assignment",
-        ) as { value?: { type?: string; segments?: { type: string; value?: string }[] } } | undefined;
+        const assignment = program.nodes.find((n: any) => n?.type === "assignment") as
+          { value?: { type?: string; segments?: { type: string; value?: string }[] } } | undefined;
         if (assignment?.value?.type !== "string") return null;
         const segs = assignment.value.segments ?? [];
         if (segs.length === 0) return "";
@@ -936,7 +921,7 @@ describe("AgencyGenerator - string delimiter round-tripping", () => {
     });
   });
 
-  it("synthesized literals (no delimiter field) format as \"...\"", () => {
+  it('synthesized literals (no delimiter field) format as "..."', () => {
     const gen = new AgencyGenerator();
     const synth = {
       type: "string" as const,
@@ -978,13 +963,17 @@ describe("AgencyGenerator - nested object type trivia", () => {
   }
 
   it("omits parameter trivia from direct display signatures", () => {
-    const parsed = parseAgency(`def configure(
+    const parsed = parseAgency(
+      `def configure(
   // keep
   host: string,
   port: number
 ): string {
   return host
-}`, {}, false);
+}`,
+      {},
+      false,
+    );
     expect(parsed.success).toBe(true);
     if (!parsed.success) {
       return;
@@ -998,19 +987,25 @@ describe("AgencyGenerator - nested object type trivia", () => {
     expect(new AgencyGenerator().signatureOf(definition)).toBe(
       "configure(host: string, port: number): string",
     );
-    expect(formatAgency(`def configure(
+    expect(
+      formatAgency(`def configure(
   // keep
   host: string,
   port: number
 ): string {
   return host
-}`)).toContain("// keep");
+}`),
+    ).toContain("// keep");
   });
 
   it("retains alias doc comments and avoids whitespace before multiline RHS", () => {
-    const parsed = parseAgency(`/** Kept in generated code blocks. */
+    const parsed = parseAgency(
+      `/** Kept in generated code blocks. */
 @jsonSchema({ description: "choice" })
-type Choice = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india"`, {}, false);
+type Choice = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india"`,
+      {},
+      false,
+    );
     expect(parsed.success).toBe(true);
     if (!parsed.success) {
       return;
@@ -1194,66 +1189,105 @@ type IndexedWrapped = {
 
   describe("source type positions", () => {
     const cases = [
-      ["schema type argument", `const value = schema({
+      [
+        "schema type argument",
+        `const value = schema({
   id: string // keep
-})`],
-      ["hole annotation", `node main() {
+})`,
+      ],
+      [
+        "hole annotation",
+        `node main() {
   const value = #value: {
     id: string // keep
   }
-}`],
-      ["function parameter and return", `def save(value: {
+}`,
+      ],
+      [
+        "function parameter and return",
+        `def save(value: {
   id: string // keep
 }): Result<{
   ok: boolean // keep
 }> {
   return success(value)
-}`],
-      ["node parameter and return", `node save(value: {
+}`,
+      ],
+      [
+        "node parameter and return",
+        `node save(value: {
   id: string // keep
 }): {
   ok: boolean // keep
 } {
   return value
-}`],
-      ["generic default", `type Box<T = {
+}`,
+      ],
+      [
+        "generic default",
+        `type Box<T = {
   id: string // keep
-}> = T`],
-      ["value parameter", `type Box(options: {
+}> = T`,
+      ],
+      [
+        "value parameter",
+        `type Box(options: {
   id: string // keep
-}) = string`],
-      ["variable annotation", `const value: {
+}) = string`,
+      ],
+      [
+        "variable annotation",
+        `const value: {
   id: string // keep
-} = null`],
-      ["match-arm type pattern", `match(value) {
+} = null`,
+      ],
+      [
+        "match-arm type pattern",
+        `match(value) {
   is {
     id: string // keep
   } => value
-}`],
-      ["is-expression type pattern", `const valid = value is {
+}`,
+      ],
+      [
+        "is-expression type pattern",
+        `const valid = value is {
   id: string // keep
-}`],
-      ["inline handler parameter", `handle {
+}`,
+      ],
+      [
+        "inline handler parameter",
+        `handle {
   interrupt("stop")
 } with (event: {
   id: string // keep
 }) {
   return approve()
-}`],
-      ["finalize parameter", `def save(): any {
+}`,
+      ],
+      [
+        "finalize parameter",
+        `def save(): any {
   return null
   finalize as draft: {
     id: string // keep
   } {
     return draft
   }
-}`],
-      ["type alias", `type Item = {
+}`,
+      ],
+      [
+        "type alias",
+        `type Item = {
   id: string // keep
-}`],
-      ["effect payload", `effect Save {
+}`,
+      ],
+      [
+        "effect payload",
+        `effect Save {
   id: string // keep
-}`],
+}`,
+      ],
     ] as const;
 
     it.each(cases)("preserves comments in %s", (_name, source) => {
@@ -1347,33 +1381,27 @@ describe("AgencyGenerator - destructive/idempotent markers", () => {
     expect(roundTrip("destructive def rm(p: string) {\n  return 1\n}")).toContain(
       "destructive def rm",
     );
-    expect(roundTrip("idempotent def f() {\n  return 1\n}")).toContain(
-      "idempotent def f",
-    );
+    expect(roundTrip("idempotent def f() {\n  return 1\n}")).toContain("idempotent def f");
   });
 
   it("round-trips destructive on a single named import", () => {
-    expect(roundTrip('import { destructive rm } from "./t.js"')).toContain(
+    expect(roundTrip('import { destructive rm } from "./t.js"')).toContain("destructive rm");
+  });
+
+  it("round-trips destructive through the mixed/default import path", () => {
+    expect(roundTrip('import foo, { destructive rm, stat } from "./t.js"')).toContain(
       "destructive rm",
     );
   });
 
-  it("round-trips destructive through the mixed/default import path", () => {
-    expect(
-      roundTrip('import foo, { destructive rm, stat } from "./t.js"'),
-    ).toContain("destructive rm");
-  });
-
   it("round-trips destructive on export-from", () => {
-    expect(
-      roundTrip('export { destructive rm } from "./t.agency"'),
-    ).toContain("destructive rm");
+    expect(roundTrip('export { destructive rm } from "./t.agency"')).toContain("destructive rm");
   });
 
   it("round-trips destructive with alias", () => {
-    expect(
-      roundTrip('import { destructive rm as remove } from "./t.js"'),
-    ).toContain("destructive rm as remove");
+    expect(roundTrip('import { destructive rm as remove } from "./t.js"')).toContain(
+      "destructive rm as remove",
+    );
   });
 
   it("renders an idempotent def", () => {
@@ -1398,13 +1426,13 @@ describe("AgencyGenerator - destructive/seq blocks", () => {
   }
 
   it("formats a destructive block with the destructive keyword", () => {
-    const output = formatAgency('def f() {\n  destructive {\n    return _w(x)\n  }\n}');
+    const output = formatAgency("def f() {\n  destructive {\n    return _w(x)\n  }\n}");
     expect(output).toContain("destructive {");
     expect(output).not.toContain("seq {");
   });
 
   it("still formats a seq block as seq", () => {
-    const output = formatAgency('def f() {\n  seq {\n    return 1\n  }\n}');
+    const output = formatAgency("def f() {\n  seq {\n    return 1\n  }\n}");
     expect(output).toContain("seq {");
     expect(output).not.toContain("destructive {");
   });

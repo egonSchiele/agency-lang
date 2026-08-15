@@ -39,7 +39,12 @@ function assignNodeForAccessChainWrite(
   const chain = chainToSegments(accessChain);
   if (chain === null) return null;
   const ref = { variable: variableName, chain };
-  return { kind: "assign", prev: flow, ref, type: declaredPathType(env.scope, ref, env.typeAliases) };
+  return {
+    kind: "assign",
+    prev: flow,
+    ref,
+    type: declaredPathType(env.scope, ref, env.typeAliases),
+  };
 }
 
 /**
@@ -60,16 +65,10 @@ export function attachExpressionsToFlow(
   // the RHS of `||` only when the LHS is falsy (else-facts). Recurse through
   // this same function (not the flow-agnostic child walk) so the split holds at
   // any nesting depth.
-  if (
-    node.type === "binOpExpression" &&
-    (node.operator === "&&" || node.operator === "||")
-  ) {
+  if (node.type === "binOpExpression" && (node.operator === "&&" || node.operator === "||")) {
     attachExpressionsToFlow(node.left as AgencyNode, flow, env);
     const leftFacts = analyzeCondition(node.left);
-    const rightFlow = wrapFacts(
-      flow,
-      node.operator === "&&" ? leftFacts.then : leftFacts.else,
-    );
+    const rightFlow = wrapFacts(flow, node.operator === "&&" ? leftFacts.then : leftFacts.else);
     attachExpressionsToFlow(node.right as AgencyNode, rightFlow, env);
     return;
   }
@@ -110,11 +109,8 @@ export function assignedNames(body: AgencyNode[]): string[] {
     // Assignments inside a nested function/graphNode rebind a variable in THAT
     // definition's scope, not the loop's — skip them so the back-edge doesn't
     // widen names unnecessarily.
-    const insideNestedDef = ancestors.some(
-      (a) => a.type === "function" || a.type === "graphNode",
-    );
-    const isBareRebind =
-      node.type === "assignment" && !node.accessChain && !node.pattern;
+    const insideNestedDef = ancestors.some((a) => a.type === "function" || a.type === "graphNode");
+    const isBareRebind = node.type === "assignment" && !node.accessChain && !node.pattern;
     if (!insideNestedDef && isBareRebind && !names.includes(node.variableName)) {
       names.push(node.variableName);
     }
@@ -258,9 +254,7 @@ const statementRules: StatementRuleTable = {
     const facts = analyzeCondition(node.condition);
     const thenEnd = buildFlowGraph(node.thenBody, wrapFacts(flow, facts.then), env);
     const elseStart = wrapFacts(flow, facts.else);
-    const elseEnd = node.elseBody
-      ? buildFlowGraph(node.elseBody, elseStart, env)
-      : elseStart;
+    const elseEnd = node.elseBody ? buildFlowGraph(node.elseBody, elseStart, env) : elseStart;
     // A matchExprId-tagged node is the root of a lowered expression match:
     // every arm ends in a matchYield, which exits its branch but resumes
     // AFTER the match. Post-match flow is therefore the join of every
@@ -293,10 +287,7 @@ const statementRules: StatementRuleTable = {
     if (isLiteralTrue(node.condition as AgencyNode) && !hasReachableBreak(node.body)) {
       return { kind: "exit" };
     }
-    return wrapFacts(
-      widenAtLoopBackEdge(flow, bodyEnd, assignedNames(node.body), env),
-      facts.else,
-    );
+    return wrapFacts(widenAtLoopBackEdge(flow, bodyEnd, assignedNames(node.body), env), facts.else);
   },
   forLoop: (node, flow, env) => {
     attachExpressionsToFlow(node.iterable as AgencyNode, flow, env);
@@ -355,9 +346,7 @@ const statementRules: StatementRuleTable = {
       armEnds.push(buildFlowGraph(c.body, armFlow, env));
     }
     const yields =
-      node.matchExprId !== undefined
-        ? env.matchYieldFlows?.[node.matchExprId] ?? []
-        : [];
+      node.matchExprId !== undefined ? (env.matchYieldFlows?.[node.matchExprId] ?? []) : [];
     return mergeFlows([flow, ...armEnds, ...yields]);
   },
 

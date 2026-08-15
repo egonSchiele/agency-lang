@@ -27,7 +27,9 @@ function tmp(): string {
   return d;
 }
 
-function base(overrides: Partial<Parameters<typeof runCommandInSpawn>[0]>): Parameters<typeof runCommandInSpawn>[0] {
+function base(
+  overrides: Partial<Parameters<typeof runCommandInSpawn>[0]>,
+): Parameters<typeof runCommandInSpawn>[0] {
   return {
     argv: ["node", "-e", ""],
     cwd: tmp(),
@@ -51,12 +53,17 @@ describe("runCommandInSpawn", () => {
       nodeOptions: process.env.NODE_OPTIONS,
     }))`;
 
-    const result = await runCommandInSpawn(base({ argv: ["node", "-e", script], cwd, statelogPath: "/x/statelog.jsonl" }));
+    const result = await runCommandInSpawn(
+      base({ argv: ["node", "-e", script], cwd, statelogPath: "/x/statelog.jsonl" }),
+    );
 
     expect(result).toEqual({ ok: true });
     const probe = JSON.parse(fs.readFileSync(outFile, "utf8"));
     expect(fs.realpathSync(probe.cwd)).toBe(fs.realpathSync(cwd));
-    expect(JSON.parse(probe.overrides)).toEqual({ observability: true, log: { logFile: "/x/statelog.jsonl" } });
+    expect(JSON.parse(probe.overrides)).toEqual({
+      observability: true,
+      log: { logFile: "/x/statelog.jsonl" },
+    });
     expect(probe.traceId).toBe("trace-test");
     expect(probe.nodeOptions).toContain("--max-old-space-size=256");
   });
@@ -69,10 +76,12 @@ describe("runCommandInSpawn", () => {
   });
 
   it("kills on wall clock and names the limit plus the interactive hint", async () => {
-    const result = await runCommandInSpawn(base({
-      argv: ["node", "-e", "setTimeout(() => {}, 60000)"],
-      limits: { ...LIMITS, wallClock: 300 },
-    }));
+    const result = await runCommandInSpawn(
+      base({
+        argv: ["node", "-e", "setTimeout(() => {}, 60000)"],
+        limits: { ...LIMITS, wallClock: 300 },
+      }),
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.errorMessage).toMatch(/wall clock limit exceeded/);
@@ -81,20 +90,29 @@ describe("runCommandInSpawn", () => {
   });
 
   it("names the missing executable on ENOENT", async () => {
-    const result = await runCommandInSpawn(base({ argv: ["definitely-not-a-real-binary-xyz", "arg"] }));
-    expect(result).toEqual({ ok: false, errorMessage: `command not found: "definitely-not-a-real-binary-xyz"` });
+    const result = await runCommandInSpawn(
+      base({ argv: ["definitely-not-a-real-binary-xyz", "arg"] }),
+    );
+    expect(result).toEqual({
+      ok: false,
+      errorMessage: `command not found: "definitely-not-a-real-binary-xyz"`,
+    });
   });
 
   it("rejects an oversized substituted command before spawning", async () => {
-    const result = await runCommandInSpawn(base({ argv: ["node", "-e", "x".repeat(MAX_COMMAND_BYTES + 1)] }));
+    const result = await runCommandInSpawn(
+      base({ argv: ["node", "-e", "x".repeat(MAX_COMMAND_BYTES + 1)] }),
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errorMessage).toMatch(/over the .*-byte cap/);
   });
 
   it("maps a non-zero exit to an error carrying the stderr tail", async () => {
-    const result = await runCommandInSpawn(base({
-      argv: ["node", "-e", `process.stderr.write("boom detail"); process.exit(3)`],
-    }));
+    const result = await runCommandInSpawn(
+      base({
+        argv: ["node", "-e", `process.stderr.write("boom detail"); process.exit(3)`],
+      }),
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.errorMessage).toMatch(/exited with code 3/);
@@ -114,10 +132,12 @@ describe("runCommandInSpawn", () => {
       grandchild.on("exit", () => process.exit(0));
     `;
     const startedAt = Date.now();
-    const result = await runCommandInSpawn(base({
-      argv: ["node", "-e", script],
-      limits: { ...LIMITS, wallClock: 500 },
-    }));
+    const result = await runCommandInSpawn(
+      base({
+        argv: ["node", "-e", script],
+        limits: { ...LIMITS, wallClock: 500 },
+      }),
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errorMessage).toMatch(/wall clock limit exceeded/);
     // settled promptly after the limit (grace is 5s; the sleep was 60s)
@@ -138,12 +158,14 @@ describe("runCommandInSpawn", () => {
       fs.appendFileSync(${JSON.stringify(statelogPath)}, line(0.4));
       setTimeout(() => {}, 30000);
     `;
-    const result = await runCommandInSpawn(base({
-      argv: ["node", "-e", script],
-      cwd,
-      statelogPath,
-      maxCostUsd: 0.5,
-    }));
+    const result = await runCommandInSpawn(
+      base({
+        argv: ["node", "-e", script],
+        cwd,
+        statelogPath,
+        maxCostUsd: 0.5,
+      }),
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.errorMessage).toMatch(/cost cap exceeded: \$0\.70 spent, cap \$0\.50/);
@@ -156,7 +178,8 @@ describe("runCommandInSpawn", () => {
     await runCommandInSpawn(base({ argv: ["node", "-e", "1"] }));
     const after = process.listenerCount("SIGINT");
     const runs = Array.from({ length: 12 }, () =>
-      runCommandInSpawn(base({ argv: ["node", "-e", "setTimeout(() => {}, 100)"] })));
+      runCommandInSpawn(base({ argv: ["node", "-e", "setTimeout(() => {}, 100)"] })),
+    );
     expect(process.listenerCount("SIGINT")).toBe(after);
     expect(process.listenerCount("exit")).toBeLessThanOrEqual(process.getMaxListeners());
     await Promise.all(runs);

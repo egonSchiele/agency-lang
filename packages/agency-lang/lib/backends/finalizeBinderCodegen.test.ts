@@ -23,9 +23,7 @@ describe("finalize binder codegen", () => {
     const out = gen(
       'def f(): string {\n  return "x"\n  finalize as draft: string {\n    return "none"\n  }\n}\nnode main() { return f() }\n',
     );
-    expect(out).toContain(
-      "const __finalize = async (draft: string | null): Promise<any>",
-    );
+    expect(out).toContain("const __finalize = async (draft: string | null): Promise<any>");
   });
 
   it("binder-less output is byte-identical to the old form", () => {

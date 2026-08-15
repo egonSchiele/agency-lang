@@ -49,9 +49,7 @@ export function checkGeneratorEffects(
   // Every effect, sorted, not just the first: refusing one at a time means the
   // user fixes it and is immediately refused for the next. Matches how AG3013
   // reports what a raises clause exceeded.
-  const effects = (symbol.interruptEffects ?? [])
-    .map((entry) => entry.effect)
-    .sort();
+  const effects = (symbol.interruptEffects ?? []).map((entry) => entry.effect).sort();
   if (effects.length > 0) {
     return {
       diagnostic: "spliceGeneratorRaises",
@@ -76,10 +74,7 @@ function refusal(name: string, reason: string): SpliceDiagnostic {
  *  parse. closureFiles cannot answer this: it drops a file it cannot parse
  *  rather than reporting it, which is right for its own callers and wrong
  *  here, where an unreadable file is the whole point. */
-function firstUnparseableImport(
-  generatorFile: string,
-  config: AgencyConfig,
-): string | null {
+function firstUnparseableImport(generatorFile: string, config: AgencyConfig): string | null {
   const reachable = [path.resolve(generatorFile), ...closureFiles(generatorFile, config)];
   for (const file of reachable) {
     const program = parseFileOrNull(file, config);
@@ -114,7 +109,7 @@ function firstBlindSpot(
     const program = programs[reached.file];
     const declaration = program && declarationOf(program, reached.name);
     if (!declaration) continue;
-      const reason = blindSpotIn(table, program, reached.file, declaration);
+    const reason = blindSpotIn(table, program, reached.file, declaration);
     if (reason !== null) return reason;
   }
   return null;
@@ -132,13 +127,9 @@ function blindSpotIn(
   if (nodes.some((node) => node.type === "splice")) {
     return `it reaches ${fileLabel}, which contains a compile-time splice`;
   }
-  const parameterNames = (declaration.parameters ?? []).map(
-    (parameter) => parameter.name,
-  );
+  const parameterNames = (declaration.parameters ?? []).map((parameter) => parameter.name);
   const facts = collectBodyFacts(declaration.body);
-  const throughParameter = facts.callees.find((callee: string) =>
-    parameterNames.includes(callee),
-  );
+  const throughParameter = facts.callees.find((callee: string) => parameterNames.includes(callee));
   if (throughParameter !== undefined) {
     return `it reaches ${declaredName(nameOf(declaration))}, which calls '${throughParameter}', a function it received as a parameter`;
   }
@@ -149,12 +140,8 @@ function blindSpotIn(
   return null;
 }
 
-function nameOf(
-  declaration: FunctionDefinition | GraphNodeDefinition,
-): string | Hole {
-  return declaration.type === "function"
-    ? declaration.functionName
-    : declaration.nodeName;
+function nameOf(declaration: FunctionDefinition | GraphNodeDefinition): string | Hole {
+  return declaration.type === "function" ? declaration.functionName : declaration.nodeName;
 }
 
 /**
@@ -193,10 +180,7 @@ function heldFunctionReference(
     if (node.type !== "functionCall") continue;
     for (const argument of node.arguments) {
       const expression = argumentExpression(argument);
-      if (
-        expression.type === "variableName" &&
-        Object.hasOwn(aliases, expression.value)
-      ) {
+      if (expression.type === "variableName" && Object.hasOwn(aliases, expression.value)) {
         return aliases[expression.value];
       }
     }
@@ -245,10 +229,7 @@ function declarationOf(
  */
 const programsByTable = new WeakMap<SymbolTable, Record<string, AgencyProgram>>();
 
-function programsFor(
-  table: SymbolTable,
-  config: AgencyConfig,
-): Record<string, AgencyProgram> {
+function programsFor(table: SymbolTable, config: AgencyConfig): Record<string, AgencyProgram> {
   const cached = programsByTable.get(table);
   if (cached) return cached;
   const programs: Record<string, AgencyProgram> = Object.create(null);
@@ -259,4 +240,3 @@ function programsFor(
   programsByTable.set(table, programs);
   return programs;
 }
-

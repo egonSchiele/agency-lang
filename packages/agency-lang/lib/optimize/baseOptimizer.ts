@@ -13,9 +13,18 @@ import { Scorecard } from "@/eval/grading/scorecard.js";
 import type { Input } from "@/eval/grading/types.js";
 import type { BaseOptimizerConfig, OptimizeTarget } from "./optimizer.js";
 import { createPointwiseReporter, type PointwiseReporter } from "./reporter.js";
-import type { OptimizeMutationDiagnostic, OptimizeMutationOperation, OptimizeMutationPreview } from "./sourceMutator.js";
+import type {
+  OptimizeMutationDiagnostic,
+  OptimizeMutationOperation,
+  OptimizeMutationPreview,
+} from "./sourceMutator.js";
 import { discoverOptimizeTargets, type OptimizeTargetSet } from "./targets.js";
-import type { IterationResult, MutationProposal, OptimizeDecision, OptimizeResult } from "./types.js";
+import type {
+  IterationResult,
+  MutationProposal,
+  OptimizeDecision,
+  OptimizeResult,
+} from "./types.js";
 import { WorkspaceManager, type CachePartition } from "./workspace.js";
 
 /** Result of proposing a mutation: a clean preview, or the reason it couldn't be produced. */
@@ -60,12 +69,17 @@ export abstract class BaseOptimizer {
   /** Held-out validation inputs (empty when none); set in optimize(). */
   protected validationInputs: Input[] = [];
 
-  constructor(protected readonly config: BaseOptimizerConfig, deps: BaseOptimizerDeps = {}) {
+  constructor(
+    protected readonly config: BaseOptimizerConfig,
+    deps: BaseOptimizerDeps = {},
+  ) {
     this.workspace = new WorkspaceManager();
     this.agencyRunner = deps.agencyRunner ?? new AgencyRunner(config.config);
     this.cache = deps.cache ?? new EvalCache();
     this.reporter = deps.reporter ?? createPointwiseReporter(config.verbosity ?? "silent");
-    this.runInput = deps.runInput ?? ((ws, source, files, input, id) => this.runInputViaEval(ws, source, files, input, id));
+    this.runInput =
+      deps.runInput ??
+      ((ws, source, files, input, id) => this.runInputViaEval(ws, source, files, input, id));
     this.discover = deps.discover ?? discoverOptimizeTargets;
   }
 
@@ -80,7 +94,9 @@ export abstract class BaseOptimizer {
     const agentFile = resolveEvalRunTarget(target.agent).agentFile;
     const source = this.discover(agentFile);
     if (source.targets.length === 0) {
-      throw new Error(`No optimize targets found in ${agentFile}. Mark a declaration with the optimize modifier.`);
+      throw new Error(
+        `No optimize targets found in ${agentFile}. Mark a declaration with the optimize modifier.`,
+      );
     }
     this.validationInputs = target.validationInputs ?? [];
     this.echoAndValidateGrading(target.inputs);
@@ -102,7 +118,10 @@ export abstract class BaseOptimizer {
   }
 
   /** Run the search over already-discovered targets. The one method an optimizer must implement. */
-  protected abstract optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult>;
+  protected abstract optimizeTargets(
+    source: OptimizeTargetSet,
+    inputs: Input[],
+  ): Promise<OptimizeResult>;
 
   /**
    * A scorecard at the maximum objective can't be improved, so optimizers stop
@@ -153,7 +172,11 @@ export abstract class BaseOptimizer {
 
   /** Allocate a fresh cache-partition workspace and grade `files` on `inputs`.
    *  The canonical fresh-scoring primitive (used for validation). */
-  protected async scoreFiles(source: OptimizeTargetSet, files: Record<string, string>, inputs: Input[]): Promise<Scorecard> {
+  protected async scoreFiles(
+    source: OptimizeTargetSet,
+    files: Record<string, string>,
+    inputs: Input[],
+  ): Promise<Scorecard> {
     const ws = this.fork();
     return this.evaluate(ws, source, files, inputs);
   }
@@ -163,7 +186,9 @@ export abstract class BaseOptimizer {
    *  champion. Scoring (the "how") is separated from the max selection (the
    *  "what"); shared by the pointwise optimizers so validation selection lives
    *  in one place. */
-  protected async pickValidationChampion<C extends { files: Record<string, string>; scorecard: Scorecard }>(
+  protected async pickValidationChampion<
+    C extends { files: Record<string, string>; scorecard: Scorecard },
+  >(
     source: OptimizeTargetSet,
     candidates: C[],
     trainChampion: C,
@@ -187,14 +212,25 @@ export abstract class BaseOptimizer {
    *  train/validation objectives + grade breakdown, and report completion. An
    *  optimizer's job is just to produce the candidates and per-iteration attempts;
    *  this turns them into the final OptimizeResult. */
-  protected async finishPointwise<C extends { iter: number | "baseline"; files: Record<string, string>; scorecard: Scorecard; targetSet: OptimizeTargetSet }>(
+  protected async finishPointwise<
+    C extends {
+      iter: number | "baseline";
+      files: Record<string, string>;
+      scorecard: Scorecard;
+      targetSet: OptimizeTargetSet;
+    },
+  >(
     source: OptimizeTargetSet,
     candidates: C[],
     trainChampion: C,
     attempts: { iter: number; decision: OptimizeDecision; detail?: string }[],
     startedAt: number,
   ): Promise<OptimizeResult> {
-    const { champion, validationObjective } = await this.pickValidationChampion(source, candidates, trainChampion);
+    const { champion, validationObjective } = await this.pickValidationChampion(
+      source,
+      candidates,
+      trainChampion,
+    );
     if (this.config.writeback && champion.iter !== "baseline") {
       this.workspace.writeBack(source, champion.files);
     }
@@ -202,7 +238,7 @@ export abstract class BaseOptimizer {
     const result = this.buildPointwiseResult({
       championIter: champion.iter,
       championFiles: champion.files,
-      attempts
+      attempts,
     });
 
     // Gate-aware: match the score optimizers actually use to compare
@@ -249,14 +285,18 @@ export abstract class BaseOptimizer {
     const perInput = await Promise.all(
       inputs.map(async (input, index) => {
         const id = inputId(input, index);
-        const runDir = await this.cache.get(ws.key, id, () => this.runInput(ws, source, files, input, id));
+        const runDir = await this.cache.get(ws.key, id, () =>
+          this.runInput(ws, source, files, input, id),
+        );
         // A suite of one, graded like every other run directory.
         const card = await gradeRun(runDir, ctx);
         if (card.perInput.length !== 1) {
           // Guards the suite-of-one contract at the place that depends on it:
           // `runInput` is an injectable seam, and a directory with 0 or 2
           // inputs would otherwise surface much later inside objective().
-          throw new Error(`runInput for input ${id} returned ${runDir} with ${card.perInput.length} graded inputs; expected exactly 1`);
+          throw new Error(
+            `runInput for input ${id} returned ${runDir} with ${card.perInput.length} graded inputs; expected exactly 1`,
+          );
         }
         return card.perInput[0];
       }),
@@ -277,7 +317,7 @@ export abstract class BaseOptimizer {
   ): Promise<string> {
     this.runCounter += 1;
     const result = await runSuite({
-      agent: path.join(source.baseDir, source.entryFile),  // used for label/node parsing only
+      agent: path.join(source.baseDir, source.entryFile), // used for label/node parsing only
       inputs: [{ ...input, id }],
       provenance: { inputsSource: { source: "optimize" }, files: {} },
       runsDir: path.join(this.config.runsDir, this.config.runId, "agent-runs", ws.key),
@@ -302,7 +342,9 @@ export abstract class BaseOptimizer {
     });
     const inputResult = result.inputs[0];
     if (!inputResult || inputResult.status !== "success") {
-      throw new Error(`agent run failed for input ${input.id ?? "(no id)"}: ${inputResult?.errorMessage ?? "unknown error"}`);
+      throw new Error(
+        `agent run failed for input ${input.id ?? "(no id)"}: ${inputResult?.errorMessage ?? "unknown error"}`,
+      );
     }
     return result.runDir;
   }
@@ -330,7 +372,8 @@ export abstract class BaseOptimizer {
     championFiles: Record<string, string>;
     attempts: { iter: number; decision: OptimizeDecision; detail?: string }[];
   }): OptimizeResult {
-    const count = (decision: OptimizeDecision): number => args.attempts.filter((a) => a.decision === decision).length;
+    const count = (decision: OptimizeDecision): number =>
+      args.attempts.filter((a) => a.decision === decision).length;
     const baselineIteration: IterationResult = { iter: 0, decision: "baseline" };
     return {
       runId: this.config.runId,
@@ -343,7 +386,8 @@ export abstract class BaseOptimizer {
       iterations: [
         baselineIteration,
         ...args.attempts.map((a) => ({
-          iter: a.iter, decision: a.decision,
+          iter: a.iter,
+          decision: a.decision,
           ...(a.detail ? { detail: a.detail } : {}),
         })),
       ],
@@ -354,7 +398,9 @@ export abstract class BaseOptimizer {
 /** Names of the must-pass graders that failed on at least one input. */
 function failingGraders(scorecard: Scorecard): string[] {
   const names = scorecard.perInput.flatMap((input) =>
-    input.grades.filter((g) => g.grader.mustPass() && !g.grader.passes(g.grade)).map((g) => g.grader.name()),
+    input.grades
+      .filter((g) => g.grader.mustPass() && !g.grader.passes(g.grade))
+      .map((g) => g.grader.name()),
   );
   return names.filter((name, i) => names.indexOf(name) === i);
 }

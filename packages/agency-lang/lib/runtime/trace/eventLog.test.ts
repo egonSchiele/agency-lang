@@ -197,9 +197,7 @@ describe("detectStackChanges", () => {
       scopeName: "main",
       stepPath: "2",
       stack: {
-        stack: [
-          { args: {}, locals: { x: 1 }, threads: null, step: 2, scopeName: null },
-        ],
+        stack: [{ args: {}, locals: { x: 1 }, threads: null, step: 2, scopeName: null }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,
@@ -264,9 +262,7 @@ describe("detectStackChanges", () => {
       scopeName: "main",
       stepPath: "2",
       stack: {
-        stack: [
-          { args: {}, locals: {}, threads: null, step: 2, scopeName: null },
-        ],
+        stack: [{ args: {}, locals: {}, threads: null, step: 2, scopeName: null }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,
@@ -302,9 +298,7 @@ describe("detectVariableChanges", () => {
     const curr = makeCheckpoint({
       stepPath: "1",
       stack: {
-        stack: [
-          { args: {}, locals: { name: "Alice" }, threads: null, step: 1, scopeName: null },
-        ],
+        stack: [{ args: {}, locals: { name: "Alice" }, threads: null, step: 1, scopeName: null }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,
@@ -460,9 +454,7 @@ describe("detectLlmCalls", () => {
     const prev = makeCheckpoint({
       stepPath: "0",
       stack: {
-        stack: [
-          { args: {}, locals: {}, threads: makeThreads([]), step: 0 },
-        ],
+        stack: [{ args: {}, locals: {}, threads: makeThreads([]), step: 0 }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,
@@ -503,9 +495,7 @@ describe("detectLlmCalls", () => {
     const prev = makeCheckpoint({
       stepPath: "0",
       stack: {
-        stack: [
-          { args: {}, locals: {}, threads: makeThreads([]), step: 0 },
-        ],
+        stack: [{ args: {}, locals: {}, threads: makeThreads([]), step: 0 }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,
@@ -525,9 +515,7 @@ describe("detectLlmCalls", () => {
               {
                 role: "assistant",
                 content: null,
-                toolCalls: [
-                  { name: "add", arguments: { a: 4, b: 5 } },
-                ],
+                toolCalls: [{ name: "add", arguments: { a: 4, b: 5 } }],
               },
               { role: "tool", content: "9" },
               { role: "assistant", content: "The answer is 9" },
@@ -561,9 +549,7 @@ describe("detectLlmCalls", () => {
     const prev = makeCheckpoint({
       stepPath: "0",
       stack: {
-        stack: [
-          { args: {}, locals: {}, threads: makeThreads([]), step: 0 },
-        ],
+        stack: [{ args: {}, locals: {}, threads: makeThreads([]), step: 0 }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,
@@ -640,9 +626,7 @@ describe("detectLlmCalls", () => {
     const prev = makeCheckpoint({
       stepPath: "0",
       stack: {
-        stack: [
-          { args: {}, locals: {}, threads: makeThreads([]), step: 0 },
-        ],
+        stack: [{ args: {}, locals: {}, threads: makeThreads([]), step: 0 }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,
@@ -681,9 +665,7 @@ describe("detectLlmCalls", () => {
     const prev = makeCheckpoint({
       stepPath: "0",
       stack: {
-        stack: [
-          { args: {}, locals: {}, threads: makeThreads([]), step: 0 },
-        ],
+        stack: [{ args: {}, locals: {}, threads: makeThreads([]), step: 0 }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,
@@ -703,9 +685,7 @@ describe("detectLlmCalls", () => {
               {
                 role: "assistant",
                 content: null,
-                toolCalls: [
-                  { name: "add", arguments: { a: 1, b: 2 } },
-                ],
+                toolCalls: [{ name: "add", arguments: { a: 1, b: 2 } }],
               },
               { role: "tool", content: "3" },
             ]),
@@ -762,9 +742,7 @@ describe("detectLlmCalls", () => {
     const prev = makeCheckpoint({
       stepPath: "0",
       stack: {
-        stack: [
-          { args: {}, locals: {}, threads: makeThreads([]), step: 0 },
-        ],
+        stack: [{ args: {}, locals: {}, threads: makeThreads([]), step: 0 }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,
@@ -975,9 +953,7 @@ describe("generateEventLog", () => {
       nodeId: "main",
       stepPath: "1",
       stack: {
-        stack: [
-          { args: {}, locals: { x: 42 }, threads: null, step: 1, scopeName: null },
-        ],
+        stack: [{ args: {}, locals: { x: 42 }, threads: null, step: 1, scopeName: null }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,

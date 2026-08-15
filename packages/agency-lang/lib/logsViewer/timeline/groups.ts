@@ -112,12 +112,16 @@ function keyOf(node: TreeNode, index: TreeIndex, cache: ScopeLabelCache): string
  *  threadCreated events for id "1"), so the lookup scope is the nearest
  *  enclosing subprocessRun span — or the trace root — EXCLUDING nested
  *  subprocessRun subtrees, which are other processes' id spaces. */
-function threadLabelFor(node: TreeNode, index: TreeIndex, cache: ScopeLabelCache): string | undefined {
+function threadLabelFor(
+  node: TreeNode,
+  index: TreeIndex,
+  cache: ScopeLabelCache,
+): string | undefined {
   const call = childEvent(node, "promptCompletion") ?? childEvent(node, "promptStart");
   const threadId = call?.data.threadId;
   if (threadId === undefined) return undefined;
-  const scope = nearestAncestor(node, index, (a) => a.label === "subprocessRun")
-    ?? rootOf(node, index);
+  const scope =
+    nearestAncestor(node, index, (a) => a.label === "subprocessRun") ?? rootOf(node, index);
   cache[scope.id] ??= scanScopeLabels(scope);
   return cache[scope.id][String(threadId)];
 }
@@ -141,8 +145,11 @@ function scanScopeLabels(scope: TreeNode): Record<string, string> {
 }
 
 function enclosingFunctionName(node: TreeNode, index: TreeIndex): string | undefined {
-  const found = nearestAncestor(node, index, (a) =>
-    a.label === "toolExecution" || a.label === "nodeExecution");
+  const found = nearestAncestor(
+    node,
+    index,
+    (a) => a.label === "toolExecution" || a.label === "nodeExecution",
+  );
   if (found === undefined) return undefined;
   return spanDisplayName(found);
 }

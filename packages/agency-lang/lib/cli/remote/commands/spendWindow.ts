@@ -13,13 +13,14 @@ export type ResolvedSpendWindow = SpendWindow & { description: string };
 
 const MAX_DATE_TIMESTAMP_MS = 8.64e15;
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
-const DATETIME_WITH_ZONE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
+const DATETIME_WITH_ZONE =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
 
 function requireInstant(milliseconds: number, label: string): number {
   if (
-    !Number.isSafeInteger(milliseconds)
-    || milliseconds < 0
-    || milliseconds > MAX_DATE_TIMESTAMP_MS
+    !Number.isSafeInteger(milliseconds) ||
+    milliseconds < 0 ||
+    milliseconds > MAX_DATE_TIMESTAMP_MS
   ) {
     throw new Error(`${label} is out of range`);
   }
@@ -28,10 +29,7 @@ function requireInstant(milliseconds: number, label: string): number {
 
 function requireCalendarDate(value: string, label: string): void {
   const milliseconds = Date.parse(`${value}T00:00:00Z`);
-  if (
-    Number.isNaN(milliseconds)
-    || new Date(milliseconds).toISOString().slice(0, 10) !== value
-  ) {
+  if (Number.isNaN(milliseconds) || new Date(milliseconds).toISOString().slice(0, 10) !== value) {
     throw new Error(`${label} is not a valid date`);
   }
 }
@@ -70,7 +68,10 @@ function describe(from: number | null, to: number | null): string {
   return "all time";
 }
 
-export function resolveSpendWindow(options: SpendWindowOptions, now: number = Date.now()): ResolvedSpendWindow {
+export function resolveSpendWindow(
+  options: SpendWindowOptions,
+  now: number = Date.now(),
+): ResolvedSpendWindow {
   const { since, from, to } = options;
   if (since !== undefined && (from !== undefined || to !== undefined)) {
     throw new Error("--since cannot be combined with --from/--to");

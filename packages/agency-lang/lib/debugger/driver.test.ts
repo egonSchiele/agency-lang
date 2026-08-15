@@ -812,7 +812,11 @@ describe("Debugger save and load", () => {
   const saveFile = path.join(fixtureDir, "__test-checkpoint.json");
 
   afterAll(() => {
-    try { fs.unlinkSync(saveFile); } catch { /* ignore */ }
+    try {
+      fs.unlinkSync(saveFile);
+    } catch {
+      /* ignore */
+    }
   });
 
   it("save and load preserves overridden variable state", async () => {
@@ -821,9 +825,11 @@ describe("Debugger save and load", () => {
     const session1 = await DebuggerTestSession.create({ mod: mod1 });
 
     await session1.press("s"); // past x = 1
-    await session1.press(":"); await session1.type("set x = 10");
+    await session1.press(":");
+    await session1.type("set x = 10");
     await session1.press("s"); // resume with override
-    await session1.press(":"); await session1.type(`save ${saveFile}`);
+    await session1.press(":");
+    await session1.type(`save ${saveFile}`);
 
     expect(fs.existsSync(saveFile)).toBe(true);
 
@@ -831,7 +837,8 @@ describe("Debugger save and load", () => {
     const mod2 = await freshImport(stepTestCompiled);
     const session2 = await DebuggerTestSession.create({ mod: mod2 });
 
-    await session2.press(":"); await session2.type(`load ${saveFile}`);
+    await session2.press(":");
+    await session2.type(`load ${saveFile}`);
     await session2.press("s", { times: 10 });
 
     const result = await session2.quit();

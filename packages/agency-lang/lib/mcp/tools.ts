@@ -9,11 +9,7 @@ import { handleHover } from "../lsp/hover.js";
 import { getDocumentSymbols } from "../lsp/documentSymbol.js";
 import { handleFormatting } from "../lsp/formatting.js";
 import { getCompletions } from "../lsp/completion.js";
-import {
-  CompletionItemKind,
-  DiagnosticSeverity,
-  SymbolKind,
-} from "vscode-languageserver-protocol";
+import { CompletionItemKind, DiagnosticSeverity, SymbolKind } from "vscode-languageserver-protocol";
 import { fileURLToPath, pathToFileURL } from "url";
 
 type DocumentInput = {
@@ -40,12 +36,7 @@ function createDocument(input: DocumentInput): {
       throw new Error(`Failed to read '${fsPath}': ${message}`);
     }
   }
-  const doc = TextDocument.create(
-    pathToFileURL(fsPath).href,
-    "agency",
-    1,
-    text,
-  );
+  const doc = TextDocument.create(pathToFileURL(fsPath).href, "agency", 1, text);
   return { fsPath, doc };
 }
 
@@ -146,12 +137,7 @@ export function agencyDefinition(input: PositionInput) {
 export function agencyHover(input: PositionInput) {
   const { fsPath, doc } = createDocument(input);
   const { config, symbolTable } = getSymbolTableAndConfig(fsPath);
-  const { diagnostics, semanticIndex } = runDiagnostics(
-    doc,
-    fsPath,
-    config,
-    symbolTable,
-  );
+  const { diagnostics, semanticIndex } = runDiagnostics(doc, fsPath, config, symbolTable);
 
   if (Object.keys(semanticIndex).length === 0 && diagnostics.length > 0) {
     return { hover: null, diagnostics: diagnostics.length };
@@ -168,12 +154,7 @@ export function agencyHover(input: PositionInput) {
 
   const contents = hover?.contents;
   let hoverText: unknown = null;
-  if (
-    contents &&
-    typeof contents === "object" &&
-    "kind" in contents &&
-    "value" in contents
-  ) {
+  if (contents && typeof contents === "object" && "kind" in contents && "value" in contents) {
     hoverText = contents.value;
   } else if (Array.isArray(contents)) {
     hoverText = contents;

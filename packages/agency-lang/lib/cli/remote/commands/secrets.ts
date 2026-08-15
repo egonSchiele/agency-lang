@@ -99,10 +99,7 @@ export async function runSecretsRm(
   console.log(`${color.green("Removed")} secret ${terminalSafe(name)}.`);
 }
 
-export type ImportResult =
-  | { kind: "declined" }
-  | { kind: "succeeded" }
-  | { kind: "failed" };
+export type ImportResult = { kind: "declined" } | { kind: "succeeded" } | { kind: "failed" };
 
 export type SecretsImportIO = {
   stdinIsTty: boolean;

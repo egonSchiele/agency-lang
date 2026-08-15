@@ -1,9 +1,4 @@
-import type {
-  AgencyNode,
-  Assignment,
-  Expression,
-  NamedArgument,
-} from "../types.js";
+import type { AgencyNode, Assignment, Expression, NamedArgument } from "../types.js";
 import type { BlockArgument } from "../types/blockArgument.js";
 import type { Comprehension } from "../types/comprehension.js";
 import type { FunctionCall } from "../types/function.js";
@@ -33,9 +28,7 @@ import type { VariableNameLiteral } from "../types/literals.js";
  * parallelDesugar.ts synthesizes the same shape for `parallel { }`, which
  * proves it compiles.
  */
-export function desugarComprehensionsInBody(
-  body: AgencyNode[],
-): AgencyNode[] {
+export function desugarComprehensionsInBody(body: AgencyNode[]): AgencyNode[] {
   body.forEach((node, i) => {
     body[i] = desugarNode(node);
   });
@@ -131,9 +124,7 @@ function returnStmt(value: Expression): AgencyNode {
  *  diagnostics. Every other shape needs unpacking in the body, so it
  *  takes the reserved name. */
 function paramNameFor(node: Comprehension): string {
-  return typeof node.itemVar === "string" && !node.indexVar
-    ? node.itemVar
-    : PARAM;
+  return typeof node.itemVar === "string" && !node.indexVar ? node.itemVar : PARAM;
 }
 
 /** `<paramName>[position]` - recovers one binder from a pair. The block
@@ -145,9 +136,7 @@ function pairIndex(paramName: string, position: number): Expression {
   return {
     type: "valueAccess",
     base: varRef(paramName),
-    chain: [
-      { kind: "index", index: { type: "number", value: String(position) } },
-    ],
+    chain: [{ kind: "index", index: { type: "number", value: String(position) } }],
   } as unknown as Expression;
 }
 
@@ -165,10 +154,7 @@ function bindName(name: string, value: Expression): Assignment {
  *  `if (!node.pattern)`). It creates its own temp and calls
  *  extractBindings, and never reads `variableName` on that path, so the
  *  empty string is inert rather than a placeholder. */
-function bindPattern(
-  pattern: Comprehension["itemVar"],
-  value: Expression,
-): Assignment {
+function bindPattern(pattern: Comprehension["itemVar"], value: Expression): Assignment {
   return {
     type: "assignment",
     variableName: "",
@@ -179,13 +165,8 @@ function bindPattern(
 }
 
 /** Bind one binder target, whichever shape it is. */
-function bindTarget(
-  target: Comprehension["itemVar"],
-  value: Expression,
-): Assignment {
-  return typeof target === "string"
-    ? bindName(target, value)
-    : bindPattern(target, value);
+function bindTarget(target: Comprehension["itemVar"], value: Expression): Assignment {
+  return typeof target === "string" ? bindName(target, value) : bindPattern(target, value);
 }
 
 /** The statements the block body must run before the user's expression,
@@ -194,10 +175,7 @@ function bindTarget(
  *  Empty for a single-name binder, which IS the parameter. A two-binder
  *  form unpacks both halves of a `_pairsOf` pair. A destructuring binder
  *  binds the whole parameter through its pattern. */
-function unpackStatements(
-  node: Comprehension,
-  paramName: string,
-): AgencyNode[] {
+function unpackStatements(node: Comprehension, paramName: string): AgencyNode[] {
   if (node.indexVar) {
     return [
       bindTarget(node.itemVar, pairIndex(paramName, 0)),
@@ -232,11 +210,7 @@ function comprehensionSource(
 
   if (!node.condition) return paired;
 
-  return call(
-    "filter",
-    [paired],
-    blockArg([...unpack, returnStmt(node.condition)], paramName),
-  );
+  return call("filter", [paired], blockArg([...unpack, returnStmt(node.condition)], paramName));
 }
 
 /** Copy the comprehension's source location onto a synthesized node and
@@ -268,11 +242,7 @@ function lower(node: Comprehension): FunctionCall {
   // whichever block is processed second would overwrite the first
   // block's stamps - the same aliasing hazard Assignment.matchSource
   // deep-clones to avoid.
-  const source = comprehensionSource(
-    node,
-    unpackStatements(node, paramName),
-    paramName,
-  );
+  const source = comprehensionSource(node, unpackStatements(node, paramName), paramName);
 
   return stampLoc(
     call(
@@ -280,10 +250,7 @@ function lower(node: Comprehension): FunctionCall {
       // named argument AFTER the positional source, matching how a user
       // writes fork(xs, shared: true)
       node.shared ? [source, sharedArg()] : [source],
-      blockArg(
-        [...unpackStatements(node, paramName), returnStmt(node.expression)],
-        paramName,
-      ),
+      blockArg([...unpackStatements(node, paramName), returnStmt(node.expression)], paramName),
     ),
     node.loc,
   );

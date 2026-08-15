@@ -5,10 +5,12 @@ import type { AnalysisResult } from "@/analysis/interrupts.js";
 describe("renderInterrupts", () => {
   it("renders a site with no handlers as (none) under the standard header", () => {
     const r: AnalysisResult = {
-      sites: [{
-        site: { file: "/x/a.agency", line: 5, effect: "std::read" },
-        handlers: [],
-      }],
+      sites: [
+        {
+          site: { file: "/x/a.agency", line: 5, effect: "std::read" },
+          handlers: [],
+        },
+      ],
     };
     const out = renderInterrupts(r);
     expect(out).toContain("/x/a.agency:5  interrupt of effect std::read");
@@ -18,10 +20,12 @@ describe("renderInterrupts", () => {
 
   it("omits the effect clause when effect is unknown", () => {
     const r: AnalysisResult = {
-      sites: [{
-        site: { file: "/x/a.agency", line: 5, effect: "unknown" },
-        handlers: [],
-      }],
+      sites: [
+        {
+          site: { file: "/x/a.agency", line: 5, effect: "unknown" },
+          handlers: [],
+        },
+      ],
     };
     const out = renderInterrupts(r);
     expect(out).toContain("/x/a.agency:5  interrupt");
@@ -30,13 +34,15 @@ describe("renderInterrupts", () => {
 
   it("renders inline and functionRef handlers in the right format", () => {
     const r: AnalysisResult = {
-      sites: [{
-        site: { file: "/x/a.agency", line: 5, effect: "std::read" },
-        handlers: [
-          { file: "/x/m.agency", line: 10, shape: "inline" },
-          { file: "/x/m.agency", line: 18, shape: "functionRef", functionName: "approveReads" },
-        ],
-      }],
+      sites: [
+        {
+          site: { file: "/x/a.agency", line: 5, effect: "std::read" },
+          handlers: [
+            { file: "/x/m.agency", line: 10, shape: "inline" },
+            { file: "/x/m.agency", line: 18, shape: "functionRef", functionName: "approveReads" },
+          ],
+        },
+      ],
     };
     const out = renderInterrupts(r);
     expect(out).toContain("handle block at /x/m.agency:10");
@@ -57,10 +63,12 @@ describe("renderInterrupts", () => {
 
   it("ends the output with a single trailing newline", () => {
     const r: AnalysisResult = {
-      sites: [{
-        site: { file: "/x/a.agency", line: 5, effect: "std::read" },
-        handlers: [],
-      }],
+      sites: [
+        {
+          site: { file: "/x/a.agency", line: 5, effect: "std::read" },
+          handlers: [],
+        },
+      ],
     };
     const out = renderInterrupts(r);
     expect(out.endsWith("\n")).toBe(true);

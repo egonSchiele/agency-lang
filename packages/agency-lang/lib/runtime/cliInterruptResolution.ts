@@ -14,10 +14,7 @@ import { hasInterrupts, reportUnhandledInterrupts } from "./interrupts.js";
 import type { RunNodeResult } from "./types.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
 import { hasRunPolicyMechanism } from "./runPolicyHandler.js";
-import {
-  AGENCY_RUN_POLICY_INTERACTIVE,
-  AGENCY_RUN_POLICY_INTERACTIVE_ON,
-} from "@/constants.js";
+import { AGENCY_RUN_POLICY_INTERACTIVE, AGENCY_RUN_POLICY_INTERACTIVE_ON } from "@/constants.js";
 import type { PromptFn, ValuePromptFn } from "./interruptPrompts.js";
 
 export type ResolveCliInterruptOptions = {

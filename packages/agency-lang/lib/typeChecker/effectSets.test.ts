@@ -2,7 +2,11 @@ import { describe, it, expect } from "vitest";
 import { resolveEffectSet } from "./effectSets.js";
 import type { VariableType } from "../types.js";
 
-const union = (types: VariableType[]): VariableType => ({ type: "unionType", types, isEffectSet: true });
+const union = (types: VariableType[]): VariableType => ({
+  type: "unionType",
+  types,
+  isEffectSet: true,
+});
 const lit = (value: string): VariableType => ({ type: "stringLiteralType", value });
 const ref = (aliasName: string): VariableType => ({ type: "typeAliasVariable", aliasName });
 const any: VariableType = { type: "primitiveType", value: "any" };
@@ -17,7 +21,11 @@ describe("resolveEffectSet", () => {
   });
 
   it("resolves the empty set to no labels", () => {
-    expect(resolveEffectSet(union([]), {})).toEqual({ any: false, labels: [], nonEffectSetRefs: [] });
+    expect(resolveEffectSet(union([]), {})).toEqual({
+      any: false,
+      labels: [],
+      nonEffectSetRefs: [],
+    });
   });
 
   it("resolves <*> (any primitive) to any:true", () => {
@@ -25,7 +33,9 @@ describe("resolveEffectSet", () => {
   });
 
   it("flattens a referenced effect set (spread)", () => {
-    const aliases = { FsKinds: { body: union([lit("std::read"), lit("std::write")]), isEffectSet: true } };
+    const aliases = {
+      FsKinds: { body: union([lit("std::read"), lit("std::write")]), isEffectSet: true },
+    };
     expect(resolveEffectSet(union([ref("FsKinds"), lit("std::shell")]), aliases as any)).toEqual({
       any: false,
       labels: ["std::read", "std::write", "std::shell"],

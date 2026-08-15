@@ -109,7 +109,10 @@ export function createProjectClient(
           // OTHER 404 on a route the caller flagged as host-optional means the
           // host predates that route; without such a flag, keep the historical
           // project-not-found message.
-          if (failure.serverError !== "Project not found" && unsupportedRouteMessage !== undefined) {
+          if (
+            failure.serverError !== "Project not found" &&
+            unsupportedRouteMessage !== undefined
+          ) {
             return new ProjectRequestError(unsupportedRouteMessage);
           }
           return new ProjectRequestError(
@@ -154,10 +157,7 @@ export function createProjectClient(
     async traceLogs(traceId) {
       // Validate the argument BEFORE the request (an empty id would pass the
       // viewer's truthiness check nowhere).
-      const requested = parseWire(
-        z.string().min(1, "trace id must not be empty"),
-        traceId,
-      );
+      const requested = parseWire(z.string().min(1, "trace id must not be empty"), traceId);
       const logs = parseWire(
         z.array(traceLogSchema),
         await request({ segments: ["traces", requested, "logs"] }),
@@ -175,7 +175,8 @@ export function createProjectClient(
       const value = await request({
         segments: ["spend"],
         query: toSpendQuery(window),
-        unsupportedRouteMessage: "this statelog host does not support the spend API (upgrade the host)",
+        unsupportedRouteMessage:
+          "this statelog host does not support the spend API (upgrade the host)",
       });
       return parseWire(projectSpendSchema, value);
     },
@@ -193,4 +194,3 @@ function parseWire<T>(schema: z.ZodType<T>, value: unknown): T {
   }
   return result.data;
 }
-

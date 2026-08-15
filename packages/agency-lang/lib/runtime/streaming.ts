@@ -15,9 +15,7 @@ import { hasCallbackConsumer, invokeCallbacks, type CallbackMap } from "./hooks.
 
 export function isGenerator(variable: any): boolean {
   const toString = Object.prototype.toString.call(variable);
-  return (
-    toString === "[object Generator]" || toString === "[object AsyncGenerator]"
-  );
+  return toString === "[object Generator]" || toString === "[object AsyncGenerator]";
 }
 
 export async function handleStreamingResponse(args: {
@@ -28,9 +26,7 @@ export async function handleStreamingResponse(args: {
    *  Used to discover scoped `callback("onStream")` registrations on the
    *  right frame chain — passed straight through to the callback machinery. */
   stateStack?: StateStack;
-}): Promise<
-  Result<{ completion: PromptResult; toolCalls: ToolCallJSON[] }> | undefined
-> {
+}): Promise<Result<{ completion: PromptResult; toolCalls: ToolCallJSON[] }> | undefined> {
   const { ctx, completion, prompt, stateStack } = args;
   const toolCalls: ToolCallJSON[] = [];
 

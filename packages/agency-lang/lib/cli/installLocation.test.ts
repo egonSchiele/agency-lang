@@ -3,22 +3,16 @@ import { classifyInstall, installDirFromUrl } from "./installLocation.js";
 
 describe("classifyInstall", () => {
   it("flags npm global paths on unix", () => {
-    expect(
-      classifyInstall("/usr/local/lib/node_modules/agency-lang/dist/scripts"),
-    ).toBe("global");
+    expect(classifyInstall("/usr/local/lib/node_modules/agency-lang/dist/scripts")).toBe("global");
   });
   it("flags npm prefix global paths on macOS homebrew", () => {
-    expect(
-      classifyInstall(
-        "/opt/homebrew/lib/node_modules/agency-lang/dist/scripts",
-      ),
-    ).toBe("global");
+    expect(classifyInstall("/opt/homebrew/lib/node_modules/agency-lang/dist/scripts")).toBe(
+      "global",
+    );
   });
   it("flags pnpm global paths", () => {
     expect(
-      classifyInstall(
-        "/home/x/.local/share/pnpm/global/5/node_modules/agency-lang/dist/scripts",
-      ),
+      classifyInstall("/home/x/.local/share/pnpm/global/5/node_modules/agency-lang/dist/scripts"),
     ).toBe("global");
   });
   it("flags Windows npm global", () => {
@@ -29,24 +23,18 @@ describe("classifyInstall", () => {
     ).toBe("global");
   });
   it("treats project-local installs as local", () => {
-    expect(
-      classifyInstall("/Users/x/proj/node_modules/agency-lang/dist/scripts"),
-    ).toBe("local");
+    expect(classifyInstall("/Users/x/proj/node_modules/agency-lang/dist/scripts")).toBe("local");
   });
   it("treats workspace dev path as workspace", () => {
-    expect(
-      classifyInstall(
-        "/Users/x/agency-lang/packages/agency-lang/dist/scripts",
-      ),
-    ).toBe("workspace");
+    expect(classifyInstall("/Users/x/agency-lang/packages/agency-lang/dist/scripts")).toBe(
+      "workspace",
+    );
   });
   it("flags npx / npm exec ephemeral installs as global", () => {
     // npx puts a fresh install under <npm-cache>/_npx/<hash>/node_modules
-    expect(
-      classifyInstall(
-        "/Users/x/.npm/_npx/abc123/node_modules/agency-lang/dist/scripts",
-      ),
-    ).toBe("global");
+    expect(classifyInstall("/Users/x/.npm/_npx/abc123/node_modules/agency-lang/dist/scripts")).toBe(
+      "global",
+    );
   });
 });
 

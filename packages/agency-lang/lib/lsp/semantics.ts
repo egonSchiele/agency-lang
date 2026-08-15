@@ -1,7 +1,13 @@
 import { declaredName } from "../types/hole.js";
 import { getWordAtPosition } from "../cli/definition.js";
 import { formatTypeHint } from "../utils/formatType.js";
-import type { FileSymbols, InterruptEffect, SymbolInfo, SymbolKind, SymbolTable } from "../symbolTable.js";
+import type {
+  FileSymbols,
+  InterruptEffect,
+  SymbolInfo,
+  SymbolKind,
+  SymbolTable,
+} from "../symbolTable.js";
 import type {
   AgencyProgram,
   FunctionDefinition,
@@ -31,7 +37,10 @@ function addSymbol(index: SemanticIndex, symbol: SemanticSymbol): void {
   index[symbol.name] = symbol;
 }
 
-function interruptEffectsFor(fileSymbols: FileSymbols | undefined, name: string): InterruptEffect[] | undefined {
+function interruptEffectsFor(
+  fileSymbols: FileSymbols | undefined,
+  name: string,
+): InterruptEffect[] | undefined {
   const sym = fileSymbols?.[name];
   if (sym?.kind === "function" || sym?.kind === "node") return sym.interruptEffects;
   return undefined;
@@ -164,14 +173,13 @@ export function buildSemanticIndex(
   interruptEffectsByFunction?: Record<string, InterruptEffect[]>,
 ): SemanticIndex {
   const index: SemanticIndex = {};
-  const fileSymbols = enrichWithInterruptEffects(symbolTable.getFile(fsPath), interruptEffectsByFunction);
+  const fileSymbols = enrichWithInterruptEffects(
+    symbolTable.getFile(fsPath),
+    interruptEffectsByFunction,
+  );
 
   for (const node of program.nodes) {
-    if (
-      node.type === "function" ||
-      node.type === "graphNode" ||
-      node.type === "typeAlias"
-    ) {
+    if (node.type === "function" || node.type === "graphNode" || node.type === "typeAlias") {
       addLocalDefinition(index, fsPath, node, fileSymbols);
     }
   }
@@ -230,9 +238,7 @@ function prettyPrintType(vt: VariableType, indent: number = 0): string {
     if (vt.properties.length === 0) return "{}";
     const inner = indent + 2;
     const pad = " ".repeat(inner);
-    const lines = vt.properties.map(
-      (p) => `${pad}${p.key}: ${prettyPrintType(p.value, inner)}`,
-    );
+    const lines = vt.properties.map((p) => `${pad}${p.key}: ${prettyPrintType(p.value, inner)}`);
     return `{\n${lines.join("\n")}\n${" ".repeat(indent)}}`;
   }
   return formatTypeHint(vt);
@@ -273,8 +279,6 @@ export function formatSemanticHover(symbol: SemanticSymbol): string {
     return `${codeBlock}${interrupts}`;
   }
 
-  const aliasNote = symbol.originalName !== symbol.name
-    ? ` as \`${symbol.originalName}\``
-    : "";
+  const aliasNote = symbol.originalName !== symbol.name ? ` as \`${symbol.originalName}\`` : "";
   return `${codeBlock}\n\nImported from \`${symbol.importPath}\`${aliasNote}${interrupts}`;
 }

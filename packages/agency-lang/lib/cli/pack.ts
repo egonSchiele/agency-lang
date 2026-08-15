@@ -13,10 +13,7 @@ import { compile } from "@/compiler/defaultSession.js";
 // Works for both the built `dist/lib/cli/pack.js` and the dev-tree
 // `lib/cli/pack.ts` paths.
 function agencyLangInstallRoot(): string {
-  return findPackageRoot(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "agency-lang",
-  );
+  return findPackageRoot(path.dirname(fileURLToPath(import.meta.url)), "agency-lang");
 }
 
 // esbuild plugin that resolves `agency-lang` and `agency-lang/<sub>`
@@ -95,9 +92,7 @@ export async function pack(opts: PackOptions): Promise<void> {
   //    tmp-file derivation below could end up writing over the input
   //    and then deleting it in `finally`.
   if (!opts.inputFile.endsWith(".agency")) {
-    throw new Error(
-      `agency pack: input file must end in .agency (got ${opts.inputFile})`,
-    );
+    throw new Error(`agency pack: input file must end in .agency (got ${opts.inputFile})`);
   }
   if (!fs.existsSync(opts.inputFile)) {
     throw new Error(`agency pack: input file not found: ${opts.inputFile}`);
@@ -108,9 +103,7 @@ export async function pack(opts: PackOptions): Promise<void> {
   //    user-authored .js that already existed must never be deleted.
   const reachable = reachableAgencyFiles(opts.inputFile, opts.config);
   const siblingJsPaths = reachable.map((p) => p.replace(/\.agency$/, ".js"));
-  const preExistingJs = new Set(
-    siblingJsPaths.filter((p) => fs.existsSync(p)),
-  );
+  const preExistingJs = new Set(siblingJsPaths.filter((p) => fs.existsSync(p)));
 
   // 3. Compile the entry next to its source under a `.__pack__.js`
   //    suffix so we never collide with a user-authored `<name>.js`.
@@ -191,9 +184,7 @@ export async function pack(opts: PackOptions): Promise<void> {
     fs.chmodSync(opts.outputFile, 0o755);
     if (verbose) {
       const size = fs.statSync(opts.outputFile).size;
-      console.error(
-        `agency pack: wrote ${opts.outputFile} (${size} bytes, mode 0755)`,
-      );
+      console.error(`agency pack: wrote ${opts.outputFile} (${size} bytes, mode 0755)`);
     }
   } finally {
     // 6. Tidy up: the entry `.__pack__.js`, plus any sibling .js files

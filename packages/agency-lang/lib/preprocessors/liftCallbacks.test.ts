@@ -62,9 +62,7 @@ describe("liftCallbackBlocks", () => {
     const lifted = findFn(out, "__cb_wrap_0");
     expect(lifted).toBeDefined();
     // Lifted def appears BEFORE `wrap` (preprended).
-    const wrapIdx = out.nodes.findIndex(
-      (n) => n.type === "function" && n.functionName === "wrap",
-    );
+    const wrapIdx = out.nodes.findIndex((n) => n.type === "function" && n.functionName === "wrap");
     const liftedIdx = out.nodes.findIndex(
       (n) => n.type === "function" && n.functionName === "__cb_wrap_0",
     );
@@ -84,13 +82,13 @@ describe("liftCallbackBlocks", () => {
   });
 
   it("leaves named-fn form `callback(name, fn)` unchanged", () => {
-    const out = lift(
-      `def myCb(data: any) { print(data) }\ncallback("onNodeStart", myCb)\n`,
-    );
+    const out = lift(`def myCb(data: any) { print(data) }\ncallback("onNodeStart", myCb)\n`);
     // No lifted def beyond the user's `myCb`.
     const liftedDefs = out.nodes.filter(
       (n): n is FunctionDefinition =>
-        n.type === "function" && typeof n.functionName === "string" && n.functionName.startsWith("__cb_"),
+        n.type === "function" &&
+        typeof n.functionName === "string" &&
+        n.functionName.startsWith("__cb_"),
     );
     expect(liftedDefs).toHaveLength(0);
 
@@ -111,9 +109,7 @@ describe("liftCallbackBlocks", () => {
   });
 
   it("preserves loc on the lifted def (from the block-arg or call)", () => {
-    const out = lift(
-      `callback("onNodeStart") as data { print(data.nodeName) }\n`,
-    );
+    const out = lift(`callback("onNodeStart") as data { print(data.nodeName) }\n`);
     const lifted = findFn(out, "__cb_top_0");
     expect(lifted!.loc).toBeDefined();
     // The original callback() call started at line 0.
@@ -145,9 +141,9 @@ describe("liftCallbackBlocks", () => {
     // won't descend into it; the post-pass assertion should catch it
     // rather than silently emit a closure that would re-introduce the
     // resume bug.
-    expect(() =>
-      lift(`node main() {\n  print(callback("onNodeStart") { 1 })\n}\n`),
-    ).toThrow(/statement position/);
+    expect(() => lift(`node main() {\n  print(callback("onNodeStart") { 1 })\n}\n`)).toThrow(
+      /statement position/,
+    );
   });
 
   it("synthesizes a `data` param for the bare-body callback form (no `as` clause)", () => {
@@ -173,8 +169,7 @@ describe("liftCallbackBlocks", () => {
     // location instead of silently regressing on resume.
     expect(() =>
       lift(
-        `def myFn(data: any) { print(data) }\n` +
-          `callback("onNodeStart", myFn) with approve\n`,
+        `def myFn(data: any) { print(data) }\n` + `callback("onNodeStart", myFn) with approve\n`,
       ),
     ).toThrow(/cannot be wrapped in `with approve`/);
   });

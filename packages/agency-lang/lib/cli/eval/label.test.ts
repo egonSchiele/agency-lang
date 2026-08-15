@@ -33,7 +33,12 @@ afterEach(() => {
 function fakeHost(run: (request: unknown) => Promise<void> = async () => {}) {
   const calls: unknown[] = [];
   return {
-    host: { run: (request: unknown) => { calls.push(request); return run(request); } },
+    host: {
+      run: (request: unknown) => {
+        calls.push(request);
+        return run(request);
+      },
+    },
     calls,
   };
 }
@@ -65,13 +70,15 @@ describe("resolveDataset", () => {
   });
 
   it("prefers a flag over config", () => {
-    expect(resolveDataset({ dataset: "flag" }, { eval: { dataset: "cfg" } }))
-      .toBe(path.resolve("flag"));
+    expect(resolveDataset({ dataset: "flag" }, { eval: { dataset: "cfg" } })).toBe(
+      path.resolve("flag"),
+    );
   });
 
   it("reads eval.dataset from config", () => {
-    expect(resolveDataset({}, { eval: { dataset: "configured" } }))
-      .toBe(path.resolve(process.cwd(), "configured"));
+    expect(resolveDataset({}, { eval: { dataset: "configured" } })).toBe(
+      path.resolve(process.cwd(), "configured"),
+    );
   });
 
   it("defaults to labels/ under the invoking directory, matching runsDir", () => {
@@ -81,8 +88,10 @@ describe("resolveDataset", () => {
 
 describe("resolveAnnotator", () => {
   it("prefers the explicit flag", () => {
-    expect(resolveAnnotator({ annotator: "someone" }, dependencies()))
-      .toEqual({ kind: "human", id: "someone" });
+    expect(resolveAnnotator({ annotator: "someone" }, dependencies())).toEqual({
+      kind: "human",
+      id: "someone",
+    });
   });
 
   it("falls back to $USER", () => {
@@ -90,8 +99,10 @@ describe("resolveAnnotator", () => {
   });
 
   it("falls back to the OS account when $USER is unset", () => {
-    expect(resolveAnnotator({}, dependencies({ environment: {} })))
-      .toEqual({ kind: "human", id: "os-account" });
+    expect(resolveAnnotator({}, dependencies({ environment: {} }))).toEqual({
+      kind: "human",
+      id: "os-account",
+    });
   });
 
   it("falls back to the literal human when nothing else is available", () => {
@@ -100,39 +111,43 @@ describe("resolveAnnotator", () => {
   });
 
   it("ignores a blank flag rather than recording an empty annotator", () => {
-    expect(resolveAnnotator({ annotator: "   " }, dependencies()))
-      .toEqual({ kind: "human", id: "adit" });
+    expect(resolveAnnotator({ annotator: "   " }, dependencies())).toEqual({
+      kind: "human",
+      id: "adit",
+    });
   });
 });
 
 describe("evalLabel", () => {
   it("requires a checklist", async () => {
-    await expect(evalLabel({ }, dependencies()))
-      .rejects.toThrow(/--checklist is required/);
+    await expect(evalLabel({}, dependencies())).rejects.toThrow(/--checklist is required/);
   });
 
   it("reports a missing checklist file", async () => {
-    await expect(evalLabel({ checklist: path.join(root, "nope.json") }, dependencies()))
-      .rejects.toThrow(/Checklist file not found/);
+    await expect(
+      evalLabel({ checklist: path.join(root, "nope.json") }, dependencies()),
+    ).rejects.toThrow(/Checklist file not found/);
   });
 
   it("refuses a non-interactive terminal before running the host", async () => {
     const { host, calls } = fakeHost();
     const deps = dependencies({ isInteractive: () => false, makeHost: () => host as never });
-    await expect(evalLabel({ checklist: checklistFile }, deps))
-      .rejects.toThrow(/interactive terminal/i);
+    await expect(evalLabel({ checklist: checklistFile }, deps)).rejects.toThrow(
+      /interactive terminal/i,
+    );
     expect(calls).toHaveLength(0);
   });
 
   it("destroys the screen even when the host throws", async () => {
     const destroyed = vi.fn();
-    const { host } = fakeHost(async () => { throw new Error("host exploded"); });
+    const { host } = fakeHost(async () => {
+      throw new Error("host exploded");
+    });
     const deps = dependencies({
       makeHost: () => host as never,
       makeScreen: () => ({ destroy: destroyed }) as never,
     });
-    await expect(evalLabel({ checklist: checklistFile }, deps))
-      .rejects.toThrow(/host exploded/);
+    await expect(evalLabel({ checklist: checklistFile }, deps)).rejects.toThrow(/host exploded/);
     expect(destroyed).toHaveBeenCalled();
   });
 
@@ -151,13 +166,16 @@ describe("evalLabel", () => {
 
   it("propagates a host failure after destroying the screen", async () => {
     const destroyed = vi.fn();
-    const { host } = fakeHost(async () => { throw new Error("dataset is locked"); });
+    const { host } = fakeHost(async () => {
+      throw new Error("dataset is locked");
+    });
     const deps = dependencies({
       makeHost: () => host as never,
       makeScreen: () => ({ destroy: destroyed }) as never,
     });
-    await expect(evalLabel({ checklist: checklistFile }, deps))
-      .rejects.toThrow(/dataset is locked/);
+    await expect(evalLabel({ checklist: checklistFile }, deps)).rejects.toThrow(
+      /dataset is locked/,
+    );
     expect(destroyed).toHaveBeenCalled();
   });
 });

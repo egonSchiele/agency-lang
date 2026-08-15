@@ -227,18 +227,21 @@ describe("schedulesClient failures", () => {
     await expect(client().list()).rejects.toThrow(/non-JSON response \(HTTP 200\)/);
   });
 
-  it.each([[401], [403], [404], [500]])("JSON HTTP %d preserves message and status", async (status) => {
-    fetchMock.mockResolvedValue(response(status, { error: `server says ${status}` }));
-    const failure = await client()
-      .list()
-      .then(
-        () => null,
-        (error: unknown) => error,
-      );
-    expect(failure).toBeInstanceOf(ScheduleRequestError);
-    expect((failure as ScheduleRequestError).message).toBe(`server says ${status}`);
-    expect((failure as ScheduleRequestError).status).toBe(status);
-  });
+  it.each([[401], [403], [404], [500]])(
+    "JSON HTTP %d preserves message and status",
+    async (status) => {
+      fetchMock.mockResolvedValue(response(status, { error: `server says ${status}` }));
+      const failure = await client()
+        .list()
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      expect(failure).toBeInstanceOf(ScheduleRequestError);
+      expect((failure as ScheduleRequestError).message).toBe(`server says ${status}`);
+      expect((failure as ScheduleRequestError).status).toBe(status);
+    },
+  );
 
   it("a non-JSON 500 reports the status", async () => {
     fetchMock.mockResolvedValue(nonJsonResponse(500));
@@ -257,11 +260,17 @@ describe("schedulesClient failures", () => {
       return null;
     };
     fetchMock.mockRejectedValueOnce(new Error("ECONNREFUSED"));
-    await client().list().then(() => null, collect);
+    await client()
+      .list()
+      .then(() => null, collect);
     fetchMock.mockResolvedValueOnce(response(401, { error: "nope" }));
-    await client().list().then(() => null, collect);
+    await client()
+      .list()
+      .then(() => null, collect);
     fetchMock.mockResolvedValueOnce(response(200, { success: false, error: "bad" }));
-    await client().list().then(() => null, collect);
+    await client()
+      .list()
+      .then(() => null, collect);
     expect(failures).toHaveLength(3);
     for (const failure of failures) {
       expect((failure as Error).message).not.toContain("secret-key");

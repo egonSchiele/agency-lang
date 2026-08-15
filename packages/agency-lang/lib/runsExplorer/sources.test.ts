@@ -59,7 +59,10 @@ describe("discoverSources", () => {
 
   it("skips blank JSONL prefixes when sniffing", () => {
     const file = path.join(tmpDir, "blanks.jsonl");
-    fs.writeFileSync(file, "\n\n  \n" + JSON.stringify({ format_version: 1, trace_id: "t", data: {} }) + "\n");
+    fs.writeFileSync(
+      file,
+      "\n\n  \n" + JSON.stringify({ format_version: 1, trace_id: "t", data: {} }) + "\n",
+    );
 
     expect(discoverSources([file]).sources).toEqual([{ kind: "statelog", file }]);
   });
@@ -90,7 +93,11 @@ describe("discoverSources", () => {
 
   it("a first nonblank line larger than 4 KiB still classifies", () => {
     const file = path.join(tmpDir, "big-line.jsonl");
-    const bigEvent = { format_version: 1, trace_id: "t", data: { type: "x", blob: "y".repeat(8192) } };
+    const bigEvent = {
+      format_version: 1,
+      trace_id: "t",
+      data: { type: "x", blob: "y".repeat(8192) },
+    };
     fs.writeFileSync(file, JSON.stringify(bigEvent) + "\n");
 
     expect(discoverSources([file]).sources).toEqual([{ kind: "statelog", file }]);

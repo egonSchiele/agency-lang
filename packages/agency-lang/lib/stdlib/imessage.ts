@@ -49,11 +49,7 @@ export async function _sendIMessage(
     throw new Error("Missing message body.");
   }
 
-  const recipientError = checkRecipients(
-    [to],
-    options?.allowList ?? [],
-    options?.blockList ?? [],
-  );
+  const recipientError = checkRecipients([to], options?.allowList ?? [], options?.blockList ?? []);
   if (recipientError) throw new Error(recipientError);
 
   try {

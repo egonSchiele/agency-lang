@@ -257,19 +257,17 @@ export class MemoryManager {
     const spanId = this.statelogClient?.startSpan("llmCall");
     const startTime = performance.now();
     try {
-      const result = await meteredMemoryDispatch("completion", () => this.llmClient.text({
-        ...this.smoltalkDefaults,
-        messages: [smoltalk.userMessage(prompt)],
-        model,
-        ...(options?.responseFormat
-          ? { responseFormat: options.responseFormat }
-          : {}),
-      } as any));
+      const result = await meteredMemoryDispatch("completion", () =>
+        this.llmClient.text({
+          ...this.smoltalkDefaults,
+          messages: [smoltalk.userMessage(prompt)],
+          model,
+          ...(options?.responseFormat ? { responseFormat: options.responseFormat } : {}),
+        } as any),
+      );
       const timeTaken = performance.now() - startTime;
       if (!result.success) {
-        this.logger.warn(
-          `[memory] llm text call failed (phase=${phase}): ${result.error}`,
-        );
+        this.logger.warn(`[memory] llm text call failed (phase=${phase}): ${result.error}`);
         // Best-effort statelog notification — never let an observability
         // failure mask the real LLM error.
         try {
@@ -283,17 +281,12 @@ export class MemoryManager {
             functionName: phase,
           });
         } catch (err) {
-          this.logger.debug(
-            `[memory] statelog error event failed: ${(err as Error).message}`,
-          );
+          this.logger.debug(`[memory] statelog error event failed: ${(err as Error).message}`);
         }
         throw new Error(`memory llm text call failed: ${result.error}`);
       }
       try {
-        const projectedUsage = projectProviderTokenUsage(
-          result.value.usage,
-          "completion",
-        ).usage;
+        const projectedUsage = projectProviderTokenUsage(result.value.usage, "completion").usage;
         await this.statelogClient?.promptCompletion({
           messages: [smoltalk.userMessage(prompt)],
           completion: { ...result.value, usage: projectedUsage },
@@ -305,9 +298,7 @@ export class MemoryManager {
           stream: false,
         });
       } catch (err) {
-        this.logger.debug(
-          `[memory] statelog promptCompletion failed: ${(err as Error).message}`,
-        );
+        this.logger.debug(`[memory] statelog promptCompletion failed: ${(err as Error).message}`);
       }
       // Account this call's full cost/tokens against the surrounding branch.
       // Mirrors the post-completion accounting that `prompt.ts` performs for
@@ -342,22 +333,22 @@ export class MemoryManager {
     const spanId = this.statelogClient?.startSpan("embedding");
     const startTime = performance.now();
     try {
-      const result = await meteredMemoryDispatch("embedding", () => this.llmClient.embed(text, {
-        model: options?.model,
-        // Pass the provider explicitly so smoltalk routes to the right embed
-        // endpoint even when the model name doesn't imply it (e.g. ollama).
-        provider: options?.provider,
-        apiKey: {
-          openAi: (this.smoltalkDefaults as any).apiKey?.openAi,
-          google: (this.smoltalkDefaults as any).apiKey?.google,
-        },
-        baseUrl: { ollama: (this.smoltalkDefaults as any).baseUrl?.ollama },
-      } as any));
+      const result = await meteredMemoryDispatch("embedding", () =>
+        this.llmClient.embed(text, {
+          model: options?.model,
+          // Pass the provider explicitly so smoltalk routes to the right embed
+          // endpoint even when the model name doesn't imply it (e.g. ollama).
+          provider: options?.provider,
+          apiKey: {
+            openAi: (this.smoltalkDefaults as any).apiKey?.openAi,
+            google: (this.smoltalkDefaults as any).apiKey?.google,
+          },
+          baseUrl: { ollama: (this.smoltalkDefaults as any).baseUrl?.ollama },
+        } as any),
+      );
       const timeTaken = performance.now() - startTime;
       if (!result.success) {
-        this.logger.warn(
-          `[memory] embed call failed (phase=${phase}): ${result.error}`,
-        );
+        this.logger.warn(`[memory] embed call failed (phase=${phase}): ${result.error}`);
         try {
           // Same rationale as `_text` above: reuse `llmError` and let
           // the phase string convey the embed-specific context.
@@ -367,9 +358,7 @@ export class MemoryManager {
             functionName: phase,
           });
         } catch (err) {
-          this.logger.debug(
-            `[memory] statelog error event failed: ${(err as Error).message}`,
-          );
+          this.logger.debug(`[memory] statelog error event failed: ${(err as Error).message}`);
         }
         throw new Error(`memory embed call failed: ${result.error}`);
       }
@@ -390,9 +379,7 @@ export class MemoryManager {
             phase,
           });
         } catch (err) {
-          this.logger.debug(
-            `[memory] statelog embedCompletion failed: ${(err as Error).message}`,
-          );
+          this.logger.debug(`[memory] statelog embedCompletion failed: ${(err as Error).message}`);
         }
       } else {
         this.logger.warn(
@@ -432,11 +419,8 @@ export class MemoryManager {
    *  undefined when no provider can be determined. */
   private activeEmbeddingProvider(): string | undefined {
     const active = agencyStore.getStore()?.stack?.other?.llmDefaults as
-      | { model?: string; provider?: string }
-      | undefined;
-    const baked = this.smoltalkDefaults as
-      | { model?: string; provider?: string }
-      | undefined;
+      { model?: string; provider?: string } | undefined;
+    const baked = this.smoltalkDefaults as { model?: string; provider?: string } | undefined;
     const provider = active?.provider || baked?.provider || undefined;
     if (provider) return provider;
     const model = active?.model || baked?.model || undefined;
@@ -472,10 +456,7 @@ export class MemoryManager {
   /** Embed `text`, or return null (logging once) when Tier-2 is disabled
    *  because the active provider has no embedding endpoint. Callers treat null
    *  as "skip semantic embedding for this item" — no remote call is made. */
-  private async embedOrSkip(
-    text: string,
-    phase: string,
-  ): Promise<number[] | null> {
+  private async embedOrSkip(text: string, phase: string): Promise<number[] | null> {
     const target = this.resolveEmbedding();
     if (!target) {
       await this.noteEmbeddingDisabled();
@@ -502,9 +483,7 @@ export class MemoryManager {
     try {
       await this.statelogClient?.debug(msg, { provider });
     } catch (err) {
-      this.logger.debug(
-        `[memory] statelog notice failed: ${(err as Error).message}`,
-      );
+      this.logger.debug(`[memory] statelog notice failed: ${(err as Error).message}`);
     }
   }
 
@@ -556,8 +535,7 @@ export class MemoryManager {
     // would produce semantically wrong similarity scores. The next
     // write rebuilds with the current contextualized format.
     const indexFormatOk =
-      embeddingIndex !== null &&
-      (embeddingIndex.formatVersion ?? 1) >= EMBEDDING_FORMAT_VERSION;
+      embeddingIndex !== null && (embeddingIndex.formatVersion ?? 1) >= EMBEDDING_FORMAT_VERSION;
     if (
       embeddingIndex &&
       indexFormatOk &&
@@ -595,9 +573,7 @@ export class MemoryManager {
     this.cache[id] = entry;
     // One-line summary of what was loaded so users can sanity-check
     // graph sizes and embedding coverage on first use of a memoryId.
-    const obsCount = graph
-      .getEntities()
-      .reduce((n, e) => n + e.observations.length, 0);
+    const obsCount = graph.getEntities().reduce((n, e) => n + e.observations.length, 0);
     this.logger.debug(
       `[memory] loaded memoryId="${id}" entities=${graph.getEntities().length} observations=${obsCount} embeddings=${embeddings.toIndex().entries.length}`,
     );
@@ -651,9 +627,7 @@ export class MemoryManager {
         memoryId: this.getMemoryId(),
       });
     } catch (err) {
-      this.logger.debug(
-        `[memory] statelog memoryRemember failed: ${(err as Error).message}`,
-      );
+      this.logger.debug(`[memory] statelog memoryRemember failed: ${(err as Error).message}`);
     }
     try {
       const entry = await this.getEntry();
@@ -664,9 +638,7 @@ export class MemoryManager {
         `[memory] applyExtraction added observations=${outcome.newObservations.length} expired=${outcome.expiredObservationIds.length}`,
       );
     } catch (err) {
-      this.logger.debug(
-        `[memory] applyExtractionFromLLM caught: ${(err as Error).message}`,
-      );
+      this.logger.debug(`[memory] applyExtractionFromLLM caught: ${(err as Error).message}`);
       throw err;
     } finally {
       this.statelogClient?.endSpan(spanId);
@@ -699,9 +671,7 @@ export class MemoryManager {
         memoryId: this.getMemoryId(),
       });
     } catch (err) {
-      this.logger.debug(
-        `[memory] statelog memoryRemember failed: ${(err as Error).message}`,
-      );
+      this.logger.debug(`[memory] statelog memoryRemember failed: ${(err as Error).message}`);
     }
     try {
       const prompt = await this.buildExtractionPromptFor(content);
@@ -711,9 +681,7 @@ export class MemoryManager {
       });
       const result = parseExtractionResult(response);
       if (!result) {
-        this.logger.debug(
-          `[memory] remember: extraction parse returned null (no-op)`,
-        );
+        this.logger.debug(`[memory] remember: extraction parse returned null (no-op)`);
         return;
       }
       await this.applyExtractionFromLLM(result);
@@ -729,10 +697,7 @@ export class MemoryManager {
   // return entity ids in priority order, deduped. Used by both
   // `recall` (which then layers Tier 3 LLM recall on top) and
   // `recallForInjection` (which intentionally stops here for latency).
-  private async tier1And2(
-    entry: MemoryCacheEntry,
-    query: string,
-  ): Promise<string[]> {
+  private async tier1And2(entry: MemoryCacheEntry, query: string): Promise<string[]> {
     const orderedIds: string[] = [];
 
     const tier1 = structuredLookup(entry.getGraph(), query);
@@ -754,9 +719,7 @@ export class MemoryManager {
 
   async recall(query: string, options?: { model?: string }): Promise<string> {
     const spanId = this.statelogClient?.startSpan("memoryRecall");
-    this.logger.debug(
-      `[memory] recall query="${truncatePreview(query, QUERY_PREVIEW_CHARS)}"`,
-    );
+    this.logger.debug(`[memory] recall query="${truncatePreview(query, QUERY_PREVIEW_CHARS)}"`);
     try {
       await this.statelogClient?.memoryRecall({
         queryPreview: truncatePreview(query, QUERY_PREVIEW_CHARS),
@@ -764,9 +727,7 @@ export class MemoryManager {
         phase: "recall",
       });
     } catch (err) {
-      this.logger.debug(
-        `[memory] statelog memoryRecall failed: ${(err as Error).message}`,
-      );
+      this.logger.debug(`[memory] statelog memoryRecall failed: ${(err as Error).message}`);
     }
     try {
       const entry = await this.getEntry();
@@ -808,12 +769,7 @@ export class MemoryManager {
       const model = options?.model ?? this.model();
       let relevantIds: string[];
       try {
-        relevantIds = await this.llmFilterCandidates(
-          entry,
-          query,
-          candidateIds,
-          model,
-        );
+        relevantIds = await this.llmFilterCandidates(entry, query, candidateIds, model);
         this.logger.debug(
           `[memory] tier3 matched ${relevantIds.length} / candidates=${candidateIds.length}${usedFallback ? " (fallback)" : ""}`,
         );
@@ -861,9 +817,7 @@ export class MemoryManager {
         phase: "recallForInjection",
       });
     } catch (err) {
-      this.logger.debug(
-        `[memory] statelog memoryRecall failed: ${(err as Error).message}`,
-      );
+      this.logger.debug(`[memory] statelog memoryRecall failed: ${(err as Error).message}`);
     }
     try {
       const entry = await this.getEntry();
@@ -878,9 +832,7 @@ export class MemoryManager {
       );
       return result;
     } catch (err) {
-      this.logger.debug(
-        `[memory] recallForInjection caught: ${(err as Error).message}`,
-      );
+      this.logger.debug(`[memory] recallForInjection caught: ${(err as Error).message}`);
       throw err;
     } finally {
       this.statelogClient?.endSpan(spanId);
@@ -931,9 +883,7 @@ export class MemoryManager {
         memoryId: this.getMemoryId(),
       });
     } catch (err) {
-      this.logger.debug(
-        `[memory] statelog memoryForget failed: ${(err as Error).message}`,
-      );
+      this.logger.debug(`[memory] statelog memoryForget failed: ${(err as Error).message}`);
     }
     try {
       const entry = await this.getEntry();
@@ -947,9 +897,7 @@ export class MemoryManager {
         const obs = entity.observations.find(
           (o) =>
             o.validTo === null &&
-            o.content
-              .toLowerCase()
-              .includes(exp.observationContent.toLowerCase()),
+            o.content.toLowerCase().includes(exp.observationContent.toLowerCase()),
         );
         if (obs) {
           // Goes through the entry so the embedding entry for this
@@ -984,9 +932,7 @@ export class MemoryManager {
         `[memory] forget expired observations=${expiredObservations} relations=${expiredRelations}`,
       );
     } catch (err) {
-      this.logger.debug(
-        `[memory] applyForgetFromLLM caught: ${(err as Error).message}`,
-      );
+      this.logger.debug(`[memory] applyForgetFromLLM caught: ${(err as Error).message}`);
       throw err;
     } finally {
       this.statelogClient?.endSpan(spanId);
@@ -1000,18 +946,14 @@ export class MemoryManager {
    */
   async forget(query: string): Promise<void> {
     const spanId = this.statelogClient?.startSpan("memoryForget");
-    this.logger.debug(
-      `[memory] forget query="${truncatePreview(query, QUERY_PREVIEW_CHARS)}"`,
-    );
+    this.logger.debug(`[memory] forget query="${truncatePreview(query, QUERY_PREVIEW_CHARS)}"`);
     try {
       await this.statelogClient?.memoryForget({
         queryPreview: truncatePreview(query, QUERY_PREVIEW_CHARS),
         memoryId: this.getMemoryId(),
       });
     } catch (err) {
-      this.logger.debug(
-        `[memory] statelog memoryForget failed: ${(err as Error).message}`,
-      );
+      this.logger.debug(`[memory] statelog memoryForget failed: ${(err as Error).message}`);
     }
     try {
       const prompt = await this.buildForgetPromptFor(query);
@@ -1060,17 +1002,13 @@ export class MemoryManager {
     }
   }
 
-  async compactIfNeeded(
-    messages: smoltalk.Message[],
-  ): Promise<CompactionPlan | null> {
+  async compactIfNeeded(messages: smoltalk.Message[]): Promise<CompactionPlan | null> {
     const spanId = this.statelogClient?.startSpan("memoryCompaction");
     try {
       const entry = await this.getEntry();
       const compactionConfig = {
         trigger: this.config.compaction?.trigger ?? ("token" as const),
-        threshold:
-          this.config.compaction?.threshold ??
-          MEMORY_COMPACTION_DEFAULT_THRESHOLD,
+        threshold: this.config.compaction?.threshold ?? MEMORY_COMPACTION_DEFAULT_THRESHOLD,
       };
       if (!shouldCompact(messages, compactionConfig)) return null;
       this.logger.debug(
@@ -1086,9 +1024,7 @@ export class MemoryManager {
           threshold: compactionConfig.threshold,
         });
       } catch (err) {
-        this.logger.debug(
-          `[memory] statelog memoryCompaction failed: ${(err as Error).message}`,
-        );
+        this.logger.debug(`[memory] statelog memoryCompaction failed: ${(err as Error).message}`);
       }
 
       // Preserve system messages at the head verbatim — but exclude any
@@ -1096,10 +1032,7 @@ export class MemoryManager {
       // stack a new one beside it, so the head doesn't grow on every
       // compaction.
       let systemPrefixEnd = 0;
-      while (
-        systemPrefixEnd < messages.length &&
-        messages[systemPrefixEnd].role === "system"
-      ) {
+      while (systemPrefixEnd < messages.length && messages[systemPrefixEnd].role === "system") {
         systemPrefixEnd++;
       }
       const systemPrefixIndices: number[] = [];
@@ -1146,10 +1079,7 @@ export class MemoryManager {
       const prevSummary = entry.getSummary();
       const merged = prevSummary !== null;
       if (prevSummary) {
-        const mergePrompt = buildMergeSummaryPrompt(
-          prevSummary.summary,
-          newSummary,
-        );
+        const mergePrompt = buildMergeSummaryPrompt(prevSummary.summary, newSummary);
         newSummary = await this._text(mergePrompt, {
           model: this.model(),
           phase: "compaction.merge",
@@ -1159,8 +1089,7 @@ export class MemoryManager {
       entry.setSummary({
         summary: newSummary,
         lastCompactedAt: new Date().toISOString(),
-        messagesSummarized:
-          (prevSummary?.messagesSummarized ?? 0) + toCompact.length,
+        messagesSummarized: (prevSummary?.messagesSummarized ?? 0) + toCompact.length,
       });
 
       await entry.persist(this.store);
@@ -1174,8 +1103,7 @@ export class MemoryManager {
       // new messages (a stale watermark larger than the shrunken thread
       // would clamp to its end and swallow whatever comes next).
       const extracted = Math.min(entry.extractedUpTo, messages.length);
-      entry.extractedUpTo =
-        systemPrefixIndices.length + 1 + Math.max(0, extracted - tailStart);
+      entry.extractedUpTo = systemPrefixIndices.length + 1 + Math.max(0, extracted - tailStart);
 
       return {
         systemPrefixIndices,
@@ -1183,9 +1111,7 @@ export class MemoryManager {
         summaryMessageContent: `${SUMMARY_MESSAGE_PREFIX}${newSummary}`,
       };
     } catch (err) {
-      this.logger.debug(
-        `[memory] compactIfNeeded caught: ${(err as Error).message}`,
-      );
+      this.logger.debug(`[memory] compactIfNeeded caught: ${(err as Error).message}`);
       throw err;
     } finally {
       this.statelogClient?.endSpan(spanId);
@@ -1201,10 +1127,7 @@ export class MemoryManager {
 
   // ---- internals ----
 
-  private async autoExtract(
-    entry: MemoryCacheEntry,
-    messages: smoltalk.Message[],
-  ): Promise<void> {
+  private async autoExtract(entry: MemoryCacheEntry, messages: smoltalk.Message[]): Promise<void> {
     const prompt = buildExtractionPrompt(messages, entry.getGraph());
     const response = await this._text(prompt, {
       model: this.model(),
@@ -1273,10 +1196,7 @@ export class MemoryManager {
    * dump the full graph; using stable ids (not names) makes the
    * response unambiguous and lets us reject hallucinated ids.
    */
-  private buildCandidateIndex(
-    graph: MemoryGraph,
-    candidateIds: string[],
-  ): string {
+  private buildCandidateIndex(graph: MemoryGraph, candidateIds: string[]): string {
     const lines: string[] = [];
     for (const id of candidateIds) {
       const e = graph.getEntity(id);
@@ -1286,9 +1206,7 @@ export class MemoryManager {
         .map((o) => o.content)
         .join("; ");
       lines.push(
-        facts
-          ? `${e.id}: ${e.name} (${e.type}) — ${facts}`
-          : `${e.id}: ${e.name} (${e.type})`,
+        facts ? `${e.id}: ${e.name} (${e.type}) — ${facts}` : `${e.id}: ${e.name} (${e.type})`,
       );
     }
     return lines.join("\n");
@@ -1431,9 +1349,7 @@ function parseForgetResult(text: string, logger?: Logger): ForgetResult | null {
   try {
     raw = JSON.parse(text);
   } catch (err) {
-    logger?.debug(
-      `[memory] forget: JSON.parse failed: ${(err as Error).message}`,
-    );
+    logger?.debug(`[memory] forget: JSON.parse failed: ${(err as Error).message}`);
     return null;
   }
   const result = ForgetResultSchema.safeParse(raw);

@@ -105,5 +105,3 @@ export type FunctionCall = BaseNode & {
    *  registry in the diagnostic. */
   synthetic?: boolean;
 };
-
-

@@ -55,7 +55,7 @@ export class OccurrencesView implements View {
     if (this.stale) {
       return { kind: "back" };
     }
-    this.message = "";   // transient, like the tree's message bar
+    this.message = ""; // transient, like the tree's message bar
     const fmt = formatKey(ev);
     const move = (delta: number) => {
       this.cursor = Math.max(0, Math.min(this.occ.length - 1, this.cursor + delta));
@@ -99,17 +99,29 @@ export class OccurrencesView implements View {
       viewportRows: bodyRows,
       renderItem: (item, isCursor) => this.renderRow(item, isCursor, window, widths),
     });
-    const under = this.sharedPrefix !== ""
-      ? `  (all under ${this.sharedPrefix.replace(/ » $/, "")})`
-      : "";
-    return column({ justifyContent: "flex-start" },
-      line(`TIMELINE [occurrences]  ${this.groupKey} — ${this.occ.length} call(s)${under}` +
-        (this.following ? "  [following]" : "") +
-        (this.stale ? "  [group no longer exists — press any key]" : ""), { fg: "bright-white" }),
-      line(new AxisHeader(widths.gutter).computeText(window, window.start, widths.bar), { fg: "gray" }),
+    const under =
+      this.sharedPrefix !== "" ? `  (all under ${this.sharedPrefix.replace(/ » $/, "")})` : "";
+    return column(
+      { justifyContent: "flex-start" },
+      line(
+        `TIMELINE [occurrences]  ${this.groupKey} — ${this.occ.length} call(s)${under}` +
+          (this.following ? "  [following]" : "") +
+          (this.stale ? "  [group no longer exists — press any key]" : ""),
+        { fg: "bright-white" },
+      ),
+      line(new AxisHeader(widths.gutter).computeText(window, window.start, widths.bar), {
+        fg: "gray",
+      }),
       body,
       line(new SelectionFooter().computeText(this.footerText(window)), { fg: "bright-white" }),
-      line(bottomHints("↑↓ select  Enter/→ drill or detail  d detail  o tree  ←/Esc back to by-name", "occurrences", viewport.cols), { fg: "gray" }),
+      line(
+        bottomHints(
+          "↑↓ select  Enter/→ drill or detail  d detail  o tree  ←/Esc back to by-name",
+          "occurrences",
+          viewport.cols,
+        ),
+        { fg: "gray" },
+      ),
     );
   }
 
@@ -191,17 +203,28 @@ export class OccurrencesView implements View {
   private footerText(window: Interval): string {
     const sel = this.occ[this.cursor];
     if (sel === undefined) return this.message;
-    const base = `${sel.node.summary}  ·  start +${fmtDuration(sel.span.extent.start - window.start, { minutes: true })}` +
+    const base =
+      `${sel.node.summary}  ·  start +${fmtDuration(sel.span.extent.start - window.start, { minutes: true })}` +
       `  self ${fmtDuration(sel.span.selfMs, { minutes: true })}`;
     return this.message ? `${base}  ${this.message}` : base;
   }
 
-  private renderRow(item: Occurrence, isCursor: boolean, window: Interval, widths: { gutter: number; bar: number; stats: number }): Element {
+  private renderRow(
+    item: Occurrence,
+    isCursor: boolean,
+    window: Interval,
+    widths: { gutter: number; bar: number; stats: number },
+  ): Element {
     const detail = new RowLabel(item.node).computeText();
     const text = `#${String(item.rowNumber).padStart(2)} ${item.contextTail} · ${detail}`;
-    const label = padCell(clipCell(`${isCursor ? "▶ " : "  "}${text}`, widths.gutter - 1), widths.gutter);
-    const bar = new BarComponent([item.span.extent], { running: item.span.running })
-      .computeCells(window, widths.bar);
+    const label = padCell(
+      clipCell(`${isCursor ? "▶ " : "  "}${text}`, widths.gutter - 1),
+      widths.gutter,
+    );
+    const bar = new BarComponent([item.span.extent], { running: item.span.running }).computeCells(
+      window,
+      widths.bar,
+    );
     const stats = new DurationCell(this.thresholds).computeText(item.span, widths.stats);
     return row(
       line(label + bar, { fg: isCursor ? "bright-white" : undefined }),
@@ -236,13 +259,10 @@ function commonSegmentPrefix(paths: string[]): string {
   for (const p of paths) {
     while (!p.startsWith(prefix)) prefix = prefix.slice(0, -1);
   }
-  const segmentComplete = paths.every(
-    (p) => p === prefix || p.startsWith(`${prefix} » `),
-  );
+  const segmentComplete = paths.every((p) => p === prefix || p.startsWith(`${prefix} » `));
   if (segmentComplete) {
     return paths.some((p) => p !== prefix) ? `${prefix} » ` : prefix;
   }
   const at = prefix.lastIndexOf(" » ");
   return at === -1 ? "" : prefix.slice(0, at + 3);
 }
-

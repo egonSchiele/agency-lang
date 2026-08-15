@@ -78,33 +78,21 @@ export type BatchChild<T> = {
    * signal composed with parent) and that stack's abort signal. Must
    * return either a value `T` (success) or an `Interrupt[]` (halted with
    * interrupts). MUST NOT throw `Interrupt[]`. May throw other errors. */
-  invoke: (
-    childStack: StateStack,
-    abortSignal: AbortSignal,
-  ) => Promise<T | Interrupt[]>;
+  invoke: (childStack: StateStack, abortSignal: AbortSignal) => Promise<T | Interrupt[]>;
 };
 
 export type BatchHooks = {
   seedBranchCost?: (childStack: StateStack, parentStack: StateStack) => void;
   /** Used by mode "all" / "sequential" only. The race adapter uses the
    * asymmetric pair below instead. */
-  propagateBranchCost?: (
-    branches: BranchState[],
-    parentStack: StateStack,
-  ) => void;
+  propagateBranchCost?: (branches: BranchState[], parentStack: StateStack) => void;
   /** Race mode only: propagate loser-branch cost at race-time (before the
    * losers are deleted). The winner's cost propagates separately on resume
    * via `propagateWinnerCost`. */
-  propagateLoserCost?: (
-    loserBranches: BranchState[],
-    parentStack: StateStack,
-  ) => void;
+  propagateLoserCost?: (loserBranches: BranchState[], parentStack: StateStack) => void;
   /** Race mode only: propagate the winner's cost when the winner finally
    * completes (no-interrupt resume). */
-  propagateWinnerCost?: (
-    winnerBranch: BranchState,
-    parentStack: StateStack,
-  ) => void;
+  propagateWinnerCost?: (winnerBranch: BranchState, parentStack: StateStack) => void;
   /** Called once per branch start (statelog). */
   onBranchStart?: (key: string, index: number) => void;
   /** Called once per branch end with its outcome and elapsed time in ms.
@@ -197,8 +185,7 @@ export type RunBatchOpts<T> = {
 };
 
 export type RunBatchResult<T> =
-  | { kind: "values"; values: T[] }
-  | { kind: "interrupts"; interrupts: Interrupt[] };
+  { kind: "values"; values: T[] } | { kind: "interrupts"; interrupts: Interrupt[] };
 
 type Task<T> = {
   child: BatchChild<T>;
@@ -214,10 +201,7 @@ type Task<T> = {
  * first use and persists for the life of the branch in this run; the
  * field is live-only on BranchState and not serialized, so resumes
  * start from a fresh controller. */
-function composeBranchAbortSignal(
-  branch: BranchState,
-  parentStack: StateStack,
-): AbortSignal {
+function composeBranchAbortSignal(branch: BranchState, parentStack: StateStack): AbortSignal {
   if (!branch.abortController) {
     branch.abortController = new AbortController();
   }
@@ -314,10 +298,7 @@ function chargeAndResumeParentTimeGuards(
  *  is live-only — automatically reset on deserialize). Must run before
  *  any code reads `branch.stack.guards` or before the branch is
  *  `invoke`d. */
-function rehydrateInheritedGuards(
-  branch: BranchState,
-  parentStack: StateStack,
-): void {
+function rehydrateInheritedGuards(branch: BranchState, parentStack: StateStack): void {
   // Before the rehydration flag: the executing-handler snapshot must
   // track the parent's CURRENT list on every entry, not the list from
   // the branch's first rehydration. A branch started inside a handler
@@ -336,10 +317,7 @@ function rehydrateInheritedGuards(
  *  does not rely on a live-only flag) so a resumed branch, whose stack
  *  was restored from JSON with its own serialized state, is never
  *  re-seeded from the parent. */
-function inheritBranchMemory(
-  branchStack: StateStack,
-  parentStack: StateStack,
-): void {
+function inheritBranchMemory(branchStack: StateStack, parentStack: StateStack): void {
   const fresh =
     !branchStack.hasMemoryFrameStack() &&
     branchStack.other.memoryId === undefined &&
@@ -523,10 +501,7 @@ function runInBranchAlsFrame<T>(
 
 /** Stamp the shared batch-level checkpoint and overwrite every interrupt's
  * checkpoint+id so they all resume from the same point. */
-function stampSharedCheckpoint<T>(
-  opts: RunBatchOpts<T>,
-  interrupts: Interrupt[],
-): void {
+function stampSharedCheckpoint<T>(opts: RunBatchOpts<T>, interrupts: Interrupt[]): void {
   const { ctx, parentStack, checkpointLocation, hooks } = opts;
   // Give the caller a last chance to mutate frame state that needs to
   // be visible in the deep-cloned checkpoint (see beforeCheckpoint
@@ -544,18 +519,14 @@ function stampSharedCheckpoint<T>(
   hooks?.onCheckpoint?.(cpId);
 }
 
-export async function runBatch<T>(
-  opts: RunBatchOpts<T>,
-): Promise<RunBatchResult<T>> {
+export async function runBatch<T>(opts: RunBatchOpts<T>): Promise<RunBatchResult<T>> {
   const { ctx, parentStack, parentFrame, mode, children, hooks } = opts;
 
   // 0a. Cheap insurance against caller bugs.
   const seen = new Set<string>();
   for (const c of children) {
     if (seen.has(c.key)) {
-      throw new Error(
-        `runBatch: duplicate child key ${JSON.stringify(c.key)}`,
-      );
+      throw new Error(`runBatch: duplicate child key ${JSON.stringify(c.key)}`);
     }
     seen.add(c.key);
   }
@@ -565,16 +536,13 @@ export async function runBatch<T>(
   // non-race mode (or vice versa), that's a serious checkpoint/code
   // mismatch — fail loudly rather than produce subtly broken state.
   const raceKey = opts.raceWinnerLocalKey;
-  const persistedWinner =
-    raceKey !== undefined ? parentFrame.locals[raceKey] : undefined;
+  const persistedWinner = raceKey !== undefined ? parentFrame.locals[raceKey] : undefined;
   if (persistedWinner !== undefined && typeof persistedWinner === "number") {
     if (mode !== "race") {
       throw new Error(
         `runBatch: checkpoint/mode mismatch — parentFrame.locals[${JSON.stringify(
           raceKey,
-        )}] holds a race winner (${persistedWinner}) but mode is ${JSON.stringify(
-          mode,
-        )}.`,
+        )}] holds a race winner (${persistedWinner}) but mode is ${JSON.stringify(mode)}.`,
       );
     }
   }
@@ -590,11 +558,7 @@ export async function runBatch<T>(
   // 0c. Race resume short-circuit: if a winner is persisted, run only the
   // winner's child. Subsumes the old `resumeRaceWinner` so the caller
   // (`Runner.fork`) can unconditionally invoke `runBatch`.
-  if (
-    mode === "race" &&
-    raceKey !== undefined &&
-    typeof persistedWinner === "number"
-  ) {
+  if (mode === "race" && raceKey !== undefined && typeof persistedWinner === "number") {
     return runRaceResume(opts, persistedWinner);
   }
 
@@ -718,9 +682,7 @@ export async function runBatch<T>(
 async function runRaceFirstTime<T>(
   opts: RunBatchOpts<T>,
   tasks: Task<T>[],
-  parentSpanStack: ReturnType<
-    RuntimeContext<any>["statelogClient"]["snapshotStack"]
-  >,
+  parentSpanStack: ReturnType<RuntimeContext<any>["statelogClient"]["snapshotStack"]>,
 ): Promise<RunBatchResult<T>> {
   const { parentFrame, hooks } = opts;
   const raceKey = opts.raceWinnerLocalKey;
@@ -760,9 +722,7 @@ async function runRaceFirstTime<T>(
   } catch (tagged) {
     const { index: failedIndex, err } = tagged as { index: number; err: any };
     const failedTask = tasks[failedIndex];
-    const failedTime = failedTask.cached
-      ? 0
-      : performance.now() - failedTask.startedAt;
+    const failedTime = failedTask.cached ? 0 : performance.now() - failedTask.startedAt;
     if (!failedTask.cached) {
       hooks?.onBranchEnd?.(failedTask.child.key, failedIndex, "failure", failedTime);
     }
@@ -784,9 +744,7 @@ async function runRaceFirstTime<T>(
 
   // Compute winner timing + abort losers + emit end events.
   const winnerTask = tasks[winnerIndex];
-  const winnerTime = winnerTask.cached
-    ? 0
-    : performance.now() - winnerTask.startedAt;
+  const winnerTime = winnerTask.cached ? 0 : performance.now() - winnerTask.startedAt;
   for (let i = 0; i < tasks.length; i++) {
     if (i === winnerIndex) continue;
     const t = tasks[i];
@@ -794,12 +752,7 @@ async function runRaceFirstTime<T>(
       new AgencyCancelledError("race loser", makeAbortCause({ kind: "raceLoser" })),
     );
     if (!t.cached) {
-      hooks?.onBranchEnd?.(
-        t.child.key,
-        i,
-        "aborted",
-        performance.now() - t.startedAt,
-      );
+      hooks?.onBranchEnd?.(t.child.key, i, "aborted", performance.now() - t.startedAt);
     }
   }
   if (!winnerTask.cached) {
@@ -946,12 +899,7 @@ async function runRaceResume<T>(
       ),
     );
   } catch (err) {
-    hooks?.onBranchEnd?.(
-      child.key,
-      winnerIndex,
-      "failure",
-      performance.now() - startedAt,
-    );
+    hooks?.onBranchEnd?.(child.key, winnerIndex, "failure", performance.now() - startedAt);
     pauseBranchTimeGuards(branch.stack);
     chargeAndResumeParentTimeGuards(parentStack, [branch.stack], "max");
     throw err;
@@ -961,24 +909,14 @@ async function runRaceResume<T>(
     // An aborted branch fulfilled with a value (its compiled frames
     // convert aborts to AbortedResults). At the fork boundary that value
     // becomes a rejection again — see the note in startInvoke.
-    hooks?.onBranchEnd?.(
-      child.key,
-      winnerIndex,
-      "failure",
-      performance.now() - startedAt,
-    );
+    hooks?.onBranchEnd?.(child.key, winnerIndex, "failure", performance.now() - startedAt);
     pauseBranchTimeGuards(branch.stack);
     chargeAndResumeParentTimeGuards(parentStack, [branch.stack], "max");
     throw value.atForkBoundary().toError();
   }
 
   if (hasInterrupts(value)) {
-    hooks?.onBranchEnd?.(
-      child.key,
-      winnerIndex,
-      "interrupted",
-      performance.now() - startedAt,
-    );
+    hooks?.onBranchEnd?.(child.key, winnerIndex, "interrupted", performance.now() - startedAt);
     // Bank the winner's working time before the stamp; parent stays
     // paused across yet another human wait.
     pauseBranchTimeGuards(branch.stack);
@@ -992,13 +930,7 @@ async function runRaceResume<T>(
     return { kind: "interrupts", interrupts: value };
   }
 
-  hooks?.onBranchEnd?.(
-    child.key,
-    winnerIndex,
-    "success",
-    performance.now() - startedAt,
-    value,
-  );
+  hooks?.onBranchEnd?.(child.key, winnerIndex, "success", performance.now() - startedAt, value);
   parentFrame.setResultOnBranch(child.key, value as any);
   hooks?.propagateWinnerCost?.(branch, parentStack);
   pauseBranchTimeGuards(branch.stack);

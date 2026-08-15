@@ -188,11 +188,7 @@ describe("StatelogClient", () => {
 
       const events = readEvents(file);
       expect(events).toHaveLength(3);
-      expect(events.map((e) => e.data.type)).toEqual([
-        "debug",
-        "enterNode",
-        "exitNode",
-      ]);
+      expect(events.map((e) => e.data.type)).toEqual(["debug", "enterNode", "exitNode"]);
     });
 
     it("auto-creates the logFile's parent directory", async () => {
@@ -258,19 +254,17 @@ describe("StatelogClient", () => {
 
     it("aborts the remote fetch after requestTimeoutMs", async () => {
       // Mock fetch as a hang-forever-unless-aborted.
-      const fetchSpy = vi
-        .spyOn(globalThis, "fetch")
-        .mockImplementation(
-          (_url, init) =>
-            new Promise<Response>((_resolve, reject) => {
-              const signal = (init as RequestInit | undefined)?.signal;
-              signal?.addEventListener("abort", () => {
-                const err = new Error("aborted");
-                (err as Error & { name?: string }).name = "AbortError";
-                reject(err);
-              });
-            }),
-        );
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
+        (_url, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            const signal = (init as RequestInit | undefined)?.signal;
+            signal?.addEventListener("abort", () => {
+              const err = new Error("aborted");
+              (err as Error & { name?: string }).name = "AbortError";
+              reject(err);
+            });
+          }),
+      );
       const client = new StatelogClient({
         host: "https://example.invalid",
         apiKey: "secret",
@@ -907,10 +901,7 @@ describe("StatelogClient", () => {
     });
     await client.threadEndHooksEnd({ threadId: "t3", timeTaken: 12.5 });
     const events = readEvents(file);
-    expect(events.map((e) => e.data.type)).toEqual([
-      "threadEndHooksStart",
-      "threadEndHooksEnd",
-    ]);
+    expect(events.map((e) => e.data.type)).toEqual(["threadEndHooksStart", "threadEndHooksEnd"]);
     expect(events[0].data).toMatchObject({ eagerSummarize: true, messageCount: 5 });
     expect(events[1].data).toMatchObject({ threadId: "t3", timeTaken: 12.5 });
   });

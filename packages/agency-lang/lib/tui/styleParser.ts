@@ -30,19 +30,39 @@ const TAG_FLAGS = "g";
 // Map standard ANSI color codes (30-37, 40-47, 90-97, 100-107) to our
 // palette names. Used when ANSI escapes are encountered in styled text.
 const ANSI_FG_NAMES: Record<number, string> = {
-  30: "black", 31: "red", 32: "green", 33: "yellow",
-  34: "blue", 35: "magenta", 36: "cyan", 37: "white",
+  30: "black",
+  31: "red",
+  32: "green",
+  33: "yellow",
+  34: "blue",
+  35: "magenta",
+  36: "cyan",
+  37: "white",
   90: "gray",
-  91: "bright-red", 92: "bright-green", 93: "bright-yellow",
-  94: "bright-blue", 95: "bright-magenta", 96: "bright-cyan",
+  91: "bright-red",
+  92: "bright-green",
+  93: "bright-yellow",
+  94: "bright-blue",
+  95: "bright-magenta",
+  96: "bright-cyan",
   97: "bright-white",
 };
 const ANSI_BG_NAMES: Record<number, string> = {
-  40: "black", 41: "red", 42: "green", 43: "yellow",
-  44: "blue", 45: "magenta", 46: "cyan", 47: "white",
+  40: "black",
+  41: "red",
+  42: "green",
+  43: "yellow",
+  44: "blue",
+  45: "magenta",
+  46: "cyan",
+  47: "white",
   100: "gray",
-  101: "bright-red", 102: "bright-green", 103: "bright-yellow",
-  104: "bright-blue", 105: "bright-magenta", 106: "bright-cyan",
+  101: "bright-red",
+  102: "bright-green",
+  103: "bright-yellow",
+  104: "bright-blue",
+  105: "bright-magenta",
+  106: "bright-cyan",
   107: "bright-white",
 };
 
@@ -140,8 +160,22 @@ function xterm256ToHex(idx: number): string {
   if (idx < 16) {
     // Standard 16-color palette (approximate hex).
     const standard = [
-      "#000000", "#800000", "#008000", "#808000", "#000080", "#800080", "#008080", "#c0c0c0",
-      "#808080", "#ff0000", "#00ff00", "#ffff00", "#0000ff", "#ff00ff", "#00ffff", "#ffffff",
+      "#000000",
+      "#800000",
+      "#008000",
+      "#808000",
+      "#000080",
+      "#800080",
+      "#008080",
+      "#c0c0c0",
+      "#808080",
+      "#ff0000",
+      "#00ff00",
+      "#ffff00",
+      "#0000ff",
+      "#ff00ff",
+      "#00ffff",
+      "#ffffff",
     ];
     return standard[idx];
   }

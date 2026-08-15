@@ -18,10 +18,10 @@ describe("BarComponent", () => {
     const firstCell = (end: number) =>
       new BarComponent([{ start: 0, end }], {}).computeCells(window, 4)[0];
     expect(new BarComponent([], {}).computeCells(window, 4)).toBe("····");
-    expect(firstCell(6)).toBe("░");    // 0.24 ≤ 0.25
-    expect(firstCell(12)).toBe("▒");   // 0.48 ≤ 0.5
-    expect(firstCell(22)).toBe("▓");   // 0.88 ≤ 0.9
-    expect(firstCell(24)).toBe("█");   // 0.96
+    expect(firstCell(6)).toBe("░"); // 0.24 ≤ 0.25
+    expect(firstCell(12)).toBe("▒"); // 0.48 ≤ 0.5
+    expect(firstCell(22)).toBe("▓"); // 0.88 ≤ 0.9
+    expect(firstCell(24)).toBe("█"); // 0.96
   });
 
   it("the ░ floor: a 60ms call inside a 20-minute window still paints one cell", () => {
@@ -37,8 +37,10 @@ describe("BarComponent", () => {
   });
 
   it("a running bar extends to the window end and caps with ⋯", () => {
-    const cells = new BarComponent([{ start: 0, end: 30 }], { running: true })
-      .computeCells(window, 10);
+    const cells = new BarComponent([{ start: 0, end: 30 }], { running: true }).computeCells(
+      window,
+      10,
+    );
     expect(cells[cells.length - 1]).toBe("⋯");
     expect(cells).not.toContain("·");
   });

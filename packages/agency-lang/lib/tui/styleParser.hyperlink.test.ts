@@ -11,7 +11,9 @@ function link(url: string, label: string): string {
 }
 
 function visibleText(input: string): string {
-  return parseStyledText(input).map((span) => span.text).join("");
+  return parseStyledText(input)
+    .map((span) => span.text)
+    .join("");
 }
 
 describe("OSC sequences in styled text", () => {

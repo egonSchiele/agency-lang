@@ -41,9 +41,7 @@ export function checkRaisesDeclarations(
     // a KNOWN alias of the wrong kind is an error.
     if (declared.nonEffectSetRefs.length > 0) {
       for (const ref of declared.nonEffectSetRefs) {
-        ctx.errors.push(
-          diagnostic("raisesNotAnEffectSet", { ref }, loc ?? null),
-        );
+        ctx.errors.push(diagnostic("raisesNotAnEffectSet", { ref }, loc ?? null));
       }
       return; // don't run the subset check against a malformed clause
     }
@@ -56,11 +54,7 @@ export function checkRaisesDeclarations(
     for (const effect of inferred) {
       if (!declared.labels.includes(effect)) {
         ctx.errors.push(
-          diagnostic(
-            "raisesExceeded",
-            { kind, name, effect, declared: declaredStr },
-            loc ?? null,
-          ),
+          diagnostic("raisesExceeded", { kind, name, effect, declared: declaredStr }, loc ?? null),
         );
       }
     }

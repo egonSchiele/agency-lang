@@ -39,8 +39,7 @@ export function decodeUtf8Strict(bytes: Buffer): string | undefined {
 
 const SKIP_DESCRIPTIONS: Record<IngestSkipReason, string> = {
   empty: "empty or whitespace only, so there is nothing to judge.",
-  "too-large":
-    "larger than the size cap. Raise it with --max-bytes if this is real output.",
+  "too-large": "larger than the size cap. Raise it with --max-bytes if this is real output.",
   "not-utf8": "not valid UTF-8. A binary file swept up by a broad glob?",
   symlink: "a symbolic link. Links are skipped: they make the item key ambiguous.",
   "run-failed":

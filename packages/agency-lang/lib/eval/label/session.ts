@@ -25,9 +25,7 @@ export type SessionItem = {
 };
 
 export type SessionEditor =
-  | { kind: "none" }
-  | { kind: "question"; draft: string }
-  | { kind: "note"; draft: string };
+  { kind: "none" } | { kind: "question"; draft: string } | { kind: "note"; draft: string };
 
 /**
  * What a person can ask for. `submitEditor` and `signOff` are intents rather
@@ -192,9 +190,13 @@ export function sessionSnapshot(state: SessionState): SessionSnapshot {
     if (status === "stale") {
       stale += 1;
     }
-    scores[entry.outputId] = status === "reviewed"
-      ? scoreOf({ answers: state.answersByOutputId[entry.outputId] ?? {}, revision: stagedRevision })
-      : null;
+    scores[entry.outputId] =
+      status === "reviewed"
+        ? scoreOf({
+            answers: state.answersByOutputId[entry.outputId] ?? {},
+            revision: stagedRevision,
+          })
+        : null;
   }
 
   return {
@@ -204,8 +206,8 @@ export function sessionSnapshot(state: SessionState): SessionSnapshot {
     currentItem: item ?? null,
     currentQuestion: currentQuestion(state) ?? null,
     questions: questionsOf(state),
-    answers: item === undefined ? {} : state.answersByOutputId[item.outputId] ?? {},
-    note: item === undefined ? "" : state.notesByOutputId[item.outputId] ?? "",
+    answers: item === undefined ? {} : (state.answersByOutputId[item.outputId] ?? {}),
+    note: item === undefined ? "" : (state.notesByOutputId[item.outputId] ?? ""),
     editor: state.editor,
     statuses,
     scores,
@@ -217,12 +219,14 @@ export function sessionSnapshot(state: SessionState): SessionSnapshot {
 
 /** The answers a sign-off would record: every live question, with an untouched
  *  box written as an explicit `false` because you looked at it and moved on. */
-export function signOffPayload(state: SessionState): {
-  outputId: string;
-  coveredQuestionIds: string[];
-  answers: Record<string, boolean>;
-  note: string;
-} | undefined {
+export function signOffPayload(state: SessionState):
+  | {
+      outputId: string;
+      coveredQuestionIds: string[];
+      answers: Record<string, boolean>;
+      note: string;
+    }
+  | undefined {
   const item = currentItem(state);
   if (item === undefined) {
     return undefined;
@@ -268,7 +272,7 @@ export function reduceSession(state: SessionState, event: SessionEvent): Session
       return { ...state, editor: { kind: "question", draft: "" } };
     case "beginNote": {
       const item = currentItem(state);
-      const draft = item === undefined ? "" : state.notesByOutputId[item.outputId] ?? "";
+      const draft = item === undefined ? "" : (state.notesByOutputId[item.outputId] ?? "");
       return { ...state, editor: { kind: "note", draft } };
     }
     case "appendEditorText":
@@ -352,7 +356,8 @@ function applyToggleDeleted(state: SessionState): SessionState {
   return {
     ...state,
     stagedQuestions: questionsOf(state).map((entry) =>
-      entry.id === question.id ? { ...entry, deleted: !entry.deleted } : entry),
+      entry.id === question.id ? { ...entry, deleted: !entry.deleted } : entry,
+    ),
   };
 }
 
@@ -367,7 +372,10 @@ function applyCommitted(state: SessionState, row: AnnotationRow): SessionState {
       [row.outputId]: { ...state.answersByOutputId[row.outputId], ...row.answers },
     },
     notesByOutputId: { ...state.notesByOutputId, [row.outputId]: row.note },
-    reviewedByOutputId: { ...state.reviewedByOutputId, [row.outputId]: [...row.coveredQuestionIds] },
+    reviewedByOutputId: {
+      ...state.reviewedByOutputId,
+      [row.outputId]: [...row.coveredQuestionIds],
+    },
     itemIndex: clamp(state.itemIndex + 1, state.items.length),
     questionIndex: 0,
     editor: { kind: "none" },

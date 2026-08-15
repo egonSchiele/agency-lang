@@ -81,7 +81,7 @@ describe.runIf(enabled)("local-model integration (real download + inference)", (
       // eslint-disable-next-line no-console
       console.warn(
         `[local-model integration] EXPECTED_SHA256 is null; got=${got}. ` +
-        `Paste this into tests/integration/local-model/smoltest.test.ts to enable strict matching.`,
+          `Paste this into tests/integration/local-model/smoltest.test.ts to enable strict matching.`,
       );
       expect(got).toMatch(/^[0-9a-f]{64}$/);
     } else {
@@ -104,15 +104,19 @@ describe.runIf(enabled)("local-model integration (real download + inference)", (
     expect(listed.some((m) => m.name.toLowerCase().includes("smollm2-135m"))).toBe(true);
   });
 
-  it("registers the provider and runs real inference (shape-only assertions)", { timeout: 3 * 60_000 }, async () => {
-    const modelPath = await _registerLocalModel(TINY);
-    const client = smoltalk.getClient({ provider: "llama-cpp", model: modelPath });
-    const result = await client.textSync({
-      messages: [{ role: "user", content: "Reply with one short word." }],
-      temperature: 0,
-    });
-    expect(result.success).toBe(true);
-    expect(typeof result.value.output).toBe("string");
-    expect(result.value.output.length).toBeGreaterThan(0);
-  });
+  it(
+    "registers the provider and runs real inference (shape-only assertions)",
+    { timeout: 3 * 60_000 },
+    async () => {
+      const modelPath = await _registerLocalModel(TINY);
+      const client = smoltalk.getClient({ provider: "llama-cpp", model: modelPath });
+      const result = await client.textSync({
+        messages: [{ role: "user", content: "Reply with one short word." }],
+        temperature: 0,
+      });
+      expect(result.success).toBe(true);
+      expect(typeof result.value.output).toBe("string");
+      expect(result.value.output.length).toBeGreaterThan(0);
+    },
+  );
 });

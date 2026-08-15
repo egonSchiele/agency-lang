@@ -40,10 +40,7 @@ export type Comprehension = BaseNode & {
  *  Adding a prefix is one row here plus one str(...) in the parser's
  *  or(...) (longest keyword first). Neither word is reserved - they are
  *  only special immediately before a comprehension bracket. */
-export const COMPREHENSION_PREFIXES: Record<
-  string,
-  { mode: "fork" | "race"; shared: boolean }
-> = {
+export const COMPREHENSION_PREFIXES: Record<string, { mode: "fork" | "race"; shared: boolean }> = {
   fork: { mode: "fork", shared: false },
   forkShared: { mode: "fork", shared: true },
   race: { mode: "race", shared: false },
@@ -61,20 +58,15 @@ export const SEQ_PREFIX: { mode: "seq"; shared: boolean } = {
  *  COMPREHENSION_PREFIXES so a prefix that parses always prints back as
  *  itself. Throws on an unprintable combination rather than emitting
  *  source text that would not re-parse. */
-export function comprehensionPrefixString(
-  node: Pick<Comprehension, "mode" | "shared">,
-): string {
+export function comprehensionPrefixString(node: Pick<Comprehension, "mode" | "shared">): string {
   if (node.mode === "seq") {
     return "";
   }
   const entry = Object.entries(COMPREHENSION_PREFIXES).find(
-    ([, fields]) =>
-      fields.mode === node.mode && fields.shared === node.shared,
+    ([, fields]) => fields.mode === node.mode && fields.shared === node.shared,
   );
   if (entry === undefined) {
-    throw new Error(
-      `no comprehension prefix spells mode=${node.mode} shared=${node.shared}`,
-    );
+    throw new Error(`no comprehension prefix spells mode=${node.mode} shared=${node.shared}`);
   }
   return `${entry[0]} `;
 }

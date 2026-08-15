@@ -57,7 +57,9 @@ describe("PromptRunner.step", () => {
   it("runs the body on first call and marks it completed", async () => {
     const { runner, self } = makeRunner();
     let ran = 0;
-    await runner.step("a", async () => { ran++; });
+    await runner.step("a", async () => {
+      ran++;
+    });
     expect(ran).toBe(1);
     expect(self.runnerState.completedSteps.includes("a")).toBe(true);
   });
@@ -66,7 +68,9 @@ describe("PromptRunner.step", () => {
     const self: any = { runnerState: { completedSteps: ["a"] } };
     const { runner } = makeRunner({ self });
     let ran = 0;
-    await runner.step("a", async () => { ran++; });
+    await runner.step("a", async () => {
+      ran++;
+    });
     expect(ran).toBe(0);
   });
 
@@ -97,9 +101,9 @@ describe("PromptRunner.step", () => {
     const { runner, self } = makeRunner();
     await runner.step("a", async () => {});
     expect(self.runnerState.completedSteps.includes("a")).toBe(true);
-    await expect(
-      runner.step("b", async () => [fakeInterrupt()] as any),
-    ).rejects.toBeInstanceOf(PromptBailout);
+    await expect(runner.step("b", async () => [fakeInterrupt()] as any)).rejects.toBeInstanceOf(
+      PromptBailout,
+    );
     expect(self.runnerState.completedSteps.includes("a")).toBe(true);
     expect(self.runnerState.completedSteps.includes("b")).toBe(false);
   });
@@ -117,9 +121,9 @@ describe("PromptRunner.step", () => {
 describe("PromptRunner.step interrupt handling", () => {
   it("throws PromptBailout when the body returns interrupts", async () => {
     const { runner } = makeRunner();
-    await expect(
-      runner.step("a", async () => [fakeInterrupt()] as any),
-    ).rejects.toBeInstanceOf(PromptBailout);
+    await expect(runner.step("a", async () => [fakeInterrupt()] as any)).rejects.toBeInstanceOf(
+      PromptBailout,
+    );
   });
 
   it("PromptBailout.interrupts contains exactly the items returned by the body", async () => {
@@ -141,9 +145,9 @@ describe("PromptRunner.step interrupt handling", () => {
 
   it("does NOT mark the key completed when bailing", async () => {
     const { runner, self } = makeRunner();
-    await expect(
-      runner.step("a", async () => [fakeInterrupt()] as any),
-    ).rejects.toBeInstanceOf(PromptBailout);
+    await expect(runner.step("a", async () => [fakeInterrupt()] as any)).rejects.toBeInstanceOf(
+      PromptBailout,
+    );
     expect(self.runnerState.completedSteps.includes("a")).toBe(false);
   });
 
@@ -151,7 +155,10 @@ describe("PromptRunner.step interrupt handling", () => {
     let createdWith: any;
     const ctx: any = {
       checkpoints: {
-        create: (_s: any, _c: any, info: any) => { createdWith = info; return 42; },
+        create: (_s: any, _c: any, info: any) => {
+          createdWith = info;
+          return 42;
+        },
         get: () => ({ moduleId: "m", scopeName: "s", stepPath: "p/a" }),
       },
       statelogClient: stubStatelogClient(),
@@ -169,9 +176,7 @@ describe("PromptRunner.step interrupt handling", () => {
       },
     });
     const intr = fakeInterrupt();
-    await expect(
-      runner.step("a", async () => [intr] as any),
-    ).rejects.toBeInstanceOf(PromptBailout);
+    await expect(runner.step("a", async () => [intr] as any)).rejects.toBeInstanceOf(PromptBailout);
     // stepPath is `${basePath}/${key}` so the per-call key (`a`) is
     // appended to the runPrompt-level checkpointInfo.stepPath (`p`).
     expect(createdWith.moduleId).toBe("m");
@@ -186,7 +191,10 @@ describe("PromptRunner.step interrupt handling", () => {
     let createdWith: any;
     const ctx: any = {
       checkpoints: {
-        create: (_s: any, _c: any, info: any) => { createdWith = info; return 7; },
+        create: (_s: any, _c: any, info: any) => {
+          createdWith = info;
+          return 7;
+        },
         get: () => ({ moduleId: "", scopeName: "", stepPath: "a" }),
       },
       statelogClient: stubStatelogClient(),
@@ -198,9 +206,9 @@ describe("PromptRunner.step interrupt handling", () => {
       checkpointInfo: undefined,
       snapshotMessages: () => [],
     });
-    await expect(
-      runner.step("a", async () => [fakeInterrupt()] as any),
-    ).rejects.toBeInstanceOf(PromptBailout);
+    await expect(runner.step("a", async () => [fakeInterrupt()] as any)).rejects.toBeInstanceOf(
+      PromptBailout,
+    );
     expect(createdWith.stepPath).toBe("a");
   });
 
@@ -212,7 +220,9 @@ describe("PromptRunner.step interrupt handling", () => {
         get: () => ({ moduleId: "m", scopeName: "s", stepPath: "p/a" }),
       },
       statelogClient: stubStatelogClient({
-        checkpointCreated: (args: any) => { logged.push(args); },
+        checkpointCreated: (args: any) => {
+          logged.push(args);
+        },
       }),
     };
     const runner = new PromptRunner({
@@ -222,9 +232,9 @@ describe("PromptRunner.step interrupt handling", () => {
       checkpointInfo: { moduleId: "m", scopeName: "s", stepPath: "p" },
       snapshotMessages: () => [],
     });
-    await expect(
-      runner.step("a", async () => [fakeInterrupt()] as any),
-    ).rejects.toBeInstanceOf(PromptBailout);
+    await expect(runner.step("a", async () => [fakeInterrupt()] as any)).rejects.toBeInstanceOf(
+      PromptBailout,
+    );
     expect(logged.length).toBe(1);
     expect(logged[0].checkpointId).toBe(5);
     expect(logged[0].reason).toBe("interrupt");
@@ -245,20 +255,15 @@ describe("PromptRunner.parallel", () => {
   it("runs every branch concurrently", async () => {
     const { runner } = makeRunner();
     const order: string[] = [];
-    const result = await runner.parallel(
-      "group",
-      ["a", "b", "c"],
-      keyFor,
-      async (item, b) => {
-        await b.step(`${item}.s1`, async () => {
-          order.push(`start-${item}`);
-        });
-        await new Promise((r) => setTimeout(r, 5));
-        await b.step(`${item}.s2`, async () => {
-          order.push(`end-${item}`);
-        });
-      },
-    );
+    const result = await runner.parallel("group", ["a", "b", "c"], keyFor, async (item, b) => {
+      await b.step(`${item}.s1`, async () => {
+        order.push(`start-${item}`);
+      });
+      await new Promise((r) => setTimeout(r, 5));
+      await b.step(`${item}.s2`, async () => {
+        order.push(`end-${item}`);
+      });
+    });
     expect(result.kind).toBe("values");
     // All three starts happen before any end (concurrent).
     expect(order.indexOf("start-c")).toBeLessThan(order.indexOf("end-a"));
@@ -277,14 +282,9 @@ describe("PromptRunner.parallel", () => {
       statelogClient: stubStatelogClient(),
     };
     const { runner } = makeRunner({ ctx });
-    const result = await runner.parallel(
-      "group",
-      ["a", "b"],
-      keyFor,
-      async (item, b) => {
-        await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
-      },
-    );
+    const result = await runner.parallel("group", ["a", "b"], keyFor, async (item, b) => {
+      await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
+    });
     expect(result.kind).toBe("interrupts");
     if (result.kind !== "interrupts") return;
     expect(result.interrupts.length).toBe(2);
@@ -296,16 +296,11 @@ describe("PromptRunner.parallel", () => {
     const self: any = { runnerState: { completedSteps: ["a.s1"] } };
     const { runner } = makeRunner({ self });
     let ran = 0;
-    const result = await runner.parallel(
-      "group",
-      ["a"],
-      keyFor,
-      async (item, b) => {
-        await b.step(`${item}.s1`, async () => {
-          ran++;
-        });
-      },
-    );
+    const result = await runner.parallel("group", ["a"], keyFor, async (item, b) => {
+      await b.step(`${item}.s1`, async () => {
+        ran++;
+      });
+    });
     expect(result.kind).toBe("values");
     expect(ran).toBe(0);
   });
@@ -313,17 +308,12 @@ describe("PromptRunner.parallel", () => {
   it("once a branch step has collected interrupts, later steps on that branch are no-ops", async () => {
     const { runner } = makeRunner();
     let later = 0;
-    const result = await runner.parallel(
-      "group",
-      ["a"],
-      keyFor,
-      async (item, b) => {
-        await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
-        await b.step(`${item}.s2`, async () => {
-          later++;
-        });
-      },
-    );
+    const result = await runner.parallel("group", ["a"], keyFor, async (item, b) => {
+      await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
+      await b.step(`${item}.s2`, async () => {
+        later++;
+      });
+    });
     expect(result.kind).toBe("interrupts");
     expect(later).toBe(0);
   });
@@ -341,14 +331,9 @@ describe("PromptRunner.parallel", () => {
       statelogClient: stubStatelogClient(),
     };
     const { runner } = makeRunner({ ctx });
-    const result = await runner.parallel(
-      "group",
-      ["a", "b"],
-      keyFor,
-      async (item, b) => {
-        await b.step(`${item}.s1`, async () => {});
-      },
-    );
+    const result = await runner.parallel("group", ["a", "b"], keyFor, async (item, b) => {
+      await b.step(`${item}.s1`, async () => {});
+    });
     expect(result.kind).toBe("values");
     expect(cpCount).toBe(0);
   });
@@ -359,18 +344,13 @@ describe("PromptRunner.parallel", () => {
     // branch's interrupts, and the completed branch's step must be marked
     // so resume doesn't re-run it.
     const { runner, self } = makeRunner();
-    const result = await runner.parallel(
-      "group",
-      ["a", "b"],
-      keyFor,
-      async (item, b) => {
-        if (item === "a") {
-          await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
-        } else {
-          await b.step(`${item}.s1`, async () => {});
-        }
-      },
-    );
+    const result = await runner.parallel("group", ["a", "b"], keyFor, async (item, b) => {
+      if (item === "a") {
+        await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
+      } else {
+        await b.step(`${item}.s1`, async () => {});
+      }
+    });
     expect(result.kind).toBe("interrupts");
     if (result.kind !== "interrupts") return;
     expect(result.interrupts.length).toBe(1);
@@ -404,14 +384,9 @@ describe("PromptRunner.parallel", () => {
         return [{ role: "user", content: "x" }] as any;
       },
     });
-    const result = await runner.parallel(
-      "group",
-      ["a"],
-      keyFor,
-      async (item, b) => {
-        await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
-      },
-    );
+    const result = await runner.parallel("group", ["a"], keyFor, async (item, b) => {
+      await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
+    });
     expect(result.kind).toBe("interrupts");
     expect(snapshots.length).toBe(1);
     expect(self.messagesJSON).toEqual([{ role: "user", content: "x" }]);
@@ -449,17 +424,12 @@ describe("PromptRunner.parallel", () => {
     const { runner } = makeRunner({ self });
     let aRan = 0;
     let bRan = 0;
-    const result = await runner.parallel(
-      "group",
-      ["a", "b"],
-      keyFor,
-      async (item, b) => {
-        await b.step(`${item}.s1`, async () => {
-          if (item === "a") aRan++;
-          else bRan++;
-        });
-      },
-    );
+    const result = await runner.parallel("group", ["a", "b"], keyFor, async (item, b) => {
+      await b.step(`${item}.s1`, async () => {
+        if (item === "a") aRan++;
+        else bRan++;
+      });
+    });
     expect(result.kind).toBe("values");
     expect(aRan).toBe(1);
     expect(bRan).toBe(0);

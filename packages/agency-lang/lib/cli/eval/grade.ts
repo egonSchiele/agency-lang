@@ -21,10 +21,7 @@ export type EvalGradeOptions = {
  * rewrites summary.json — the run keeps the score it was born with, and
  * re-grades sit beside it.
  */
-export async function evalGrade(
-  runDir: string,
-  opts: EvalGradeOptions,
-): Promise<EvalRunGrading> {
+export async function evalGrade(runDir: string, opts: EvalGradeOptions): Promise<EvalRunGrading> {
   const config = opts.config ?? {};
   const resolvedRunDir = path.resolve(runDir);
   // `grade` is undefined here: there is no point running this command with

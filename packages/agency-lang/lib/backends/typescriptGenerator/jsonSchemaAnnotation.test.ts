@@ -24,9 +24,7 @@ import { z } from "zod";
  * relative `agency-lang/...` imports resolve), and dynamically import
  * it. Returns the resolved module namespace plus a cleanup function.
  */
-async function compileAndImport(
-  agencySource: string,
-): Promise<{ mod: any; cleanup: () => void }> {
+async function compileAndImport(agencySource: string): Promise<{ mod: any; cleanup: () => void }> {
   const generated = generateWithBuilder(agencySource);
   const dir = path.resolve(__dirname, "../../../.agency-tmp");
   fs.mkdirSync(dir, { recursive: true });
@@ -100,9 +98,7 @@ type User = {
     // newline so a reusable alias's description is preserved when the
     // use-site adds its own. The escaped sequence in the emitted source is
     // `\n` (two chars).
-    expect(ts).toMatch(
-      /description:\s*"Alias-level description\.\\nUse-site description\."/,
-    );
+    expect(ts).toMatch(/description:\s*"Alias-level description\.\\nUse-site description\."/);
     // The alias-level format must still propagate since the use-site did not
     // override it.
     expect(ts).toMatch(/format:\s*"email"/);

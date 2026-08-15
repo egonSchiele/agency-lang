@@ -16,11 +16,7 @@ import {
 } from "@/constants.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
 import { fileURLToPath, pathToFileURL } from "url";
-import {
-  classifyInstall,
-  installDirFromUrl,
-  type InstallKind,
-} from "./installLocation.js";
+import { classifyInstall, installDirFromUrl, type InstallKind } from "./installLocation.js";
 import { findRecursively } from "@/utils/findRecursively.js";
 import { readFile } from "../compiler/buildSession.js";
 import { compile } from "../compiler/defaultSession.js";
@@ -35,9 +31,7 @@ import { compile } from "../compiler/defaultSession.js";
 // relative to this module's URL.
 export function compiledOutputRegisterUrl(): string {
   const thisDir = path.dirname(fileURLToPath(import.meta.url));
-  return pathToFileURL(
-    path.join(thisDir, "runShim", "register.mjs"),
-  ).href;
+  return pathToFileURL(path.join(thisDir, "runShim", "register.mjs")).href;
 }
 
 // Build the argv prefix to use when spawning `node` on a compiled .agency
@@ -72,9 +66,10 @@ export function compileWarning(
   resolvesFrom: (dir: string) => boolean = agencyLangResolvesFrom,
 ): string | null {
   if (kind !== "global") return null;
-  const dir = fs.existsSync(outputContext) && fs.statSync(outputContext).isDirectory()
-    ? outputContext
-    : path.dirname(path.resolve(outputContext));
+  const dir =
+    fs.existsSync(outputContext) && fs.statSync(outputContext).isDirectory()
+      ? outputContext
+      : path.dirname(path.resolve(outputContext));
   if (resolvesFrom(dir)) return null;
   return [
     "",
@@ -88,10 +83,7 @@ export function compileWarning(
 }
 
 // Load configuration from agency.json
-export function loadConfig(
-  configPath?: string,
-  verbose: boolean = false,
-): AgencyConfig {
+export function loadConfig(configPath?: string, verbose: boolean = false): AgencyConfig {
   const finalConfigPath = configPath || path.join(process.cwd(), "agency.json");
 
   // Diagnostics go to stderr so they never contaminate a command's
@@ -229,10 +221,7 @@ export function parse(
 
 export { readFile };
 
-export async function format(
-  contents: string,
-  config: AgencyConfig = {},
-): Promise<string> {
+export async function format(contents: string, config: AgencyConfig = {}): Promise<string> {
   // Format path opts out of pattern lowering so the formatter sees the original
   // pattern AST and can print it back as pattern syntax.
   const program = parse(replaceBlankLines(contents), config, false, false);
@@ -310,15 +299,11 @@ export function run(
   // Use process.execPath so the child runs under the same Node as the CLI,
   // and pass our resolver shim so the compiled output's `import "agency-lang"`
   // succeeds even when the CLI is installed globally.
-  const nodeProcess = spawn(
-    process.execPath,
-    [...compiledOutputNodeArgs(), output, ...nodeArgs],
-    {
-      stdio: "inherit",
-      shell: false,
-      env,
-    },
-  );
+  const nodeProcess = spawn(process.execPath, [...compiledOutputNodeArgs(), output, ...nodeArgs], {
+    stdio: "inherit",
+    shell: false,
+    env,
+  });
 
   nodeProcess.on("error", (error) => {
     console.error(`Failed to run ${output}:`, error);

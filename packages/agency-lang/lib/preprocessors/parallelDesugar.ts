@@ -67,10 +67,7 @@ const ALLOWED_ARM_TYPES = new Set([
 const COMMENT_TYPES = new Set(["comment", "multiLineComment", "newLine"]);
 
 function isAssignmentDecl(node: AgencyNode): node is Assignment {
-  return (
-    node.type === "assignment" &&
-    (node.declKind === "let" || node.declKind === "const")
-  );
+  return node.type === "assignment" && (node.declKind === "let" || node.declKind === "const");
 }
 
 /**
@@ -389,11 +386,7 @@ function ifStmt(cond: Expression, body: AgencyNode[]): IfElse {
   return { type: "ifElse", condition: cond, thenBody: body };
 }
 
-function forkCall(
-  items: Expression[],
-  block: BlockArgument,
-  shared?: Expression,
-): FunctionCall {
+function forkCall(items: Expression[], block: BlockArgument, shared?: Expression): FunctionCall {
   const args: FunctionCall["arguments"] = [arrayLit(items)];
   if (shared !== undefined) {
     args.push({
@@ -529,9 +522,7 @@ function desugarOneParallel(pb: ParallelBlock): AgencyNode[] {
     // Append `return { binding1: binding1, binding2: binding2, ... }`.
     armStmts.push(ret(objectLit(bindings)));
 
-    ifChainBody.push(
-      ifStmt(eqExpr(varRef(armParam), strLit(armName)), armStmts),
-    );
+    ifChainBody.push(ifStmt(eqExpr(varRef(armParam), strLit(armName)), armStmts));
   }
 
   // Build the fork call. `pb.shared` (from `parallel(shared: true)

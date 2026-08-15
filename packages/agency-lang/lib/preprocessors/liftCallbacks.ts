@@ -112,14 +112,8 @@ function assertNoWrappedTopLevelCallbacks(program: AgencyProgram): void {
  */
 function assertNoUnliftedCallbackBlocks(program: AgencyProgram): void {
   for (const { node } of walkNodes(program.nodes)) {
-    if (
-      node.type === "functionCall" &&
-      node.functionName === "callback" &&
-      node.block
-    ) {
-      const loc = node.loc
-        ? ` at line ${node.loc.line}, col ${node.loc.col}`
-        : "";
+    if (node.type === "functionCall" && node.functionName === "callback" && node.block) {
+      const loc = node.loc ? ` at line ${node.loc.line}, col ${node.loc.col}` : "";
       throw new Error(
         `callback("...") { ... } block is only supported at statement ` +
           `position${loc}. Bind to a let/const first, or use the named-function ` +
@@ -274,17 +268,20 @@ function transformFunctionCall(
   // source omits it; user code can't reference it (the name isn't in
   // scope without `as data`), but the calling convention stays
   // consistent with the named-fn form.
-  const parameters = block.params.length > 0
-    ? block.params.map((p) => ({
-        type: "functionParameter" as const,
-        name: p.name,
-        typeHint: { type: "primitiveType" as const, value: "any" as const },
-      }))
-    : [{
-        type: "functionParameter" as const,
-        name: "data",
-        typeHint: { type: "primitiveType" as const, value: "any" as const },
-      }];
+  const parameters =
+    block.params.length > 0
+      ? block.params.map((p) => ({
+          type: "functionParameter" as const,
+          name: p.name,
+          typeHint: { type: "primitiveType" as const, value: "any" as const },
+        }))
+      : [
+          {
+            type: "functionParameter" as const,
+            name: "data",
+            typeHint: { type: "primitiveType" as const, value: "any" as const },
+          },
+        ];
   const liftedDef: FunctionDefinition = {
     type: "function",
     functionName: name,

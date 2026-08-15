@@ -179,8 +179,7 @@ export class StatelogClient {
     this.debugMode = debugMode || false;
     this.traceId = traceId || nanoid();
     this.logFile = config.logFile;
-    this.requestTimeoutMs =
-      config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    this.requestTimeoutMs = config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 
     this.metadata = config.metadata;
 
@@ -193,10 +192,9 @@ export class StatelogClient {
     }
 
     if (this.debugMode) {
-      console.log(
-        `Statelog client initialized with host: ${host} and traceId: ${this.traceId}`,
-        { config },
-      );
+      console.log(`Statelog client initialized with host: ${host} and traceId: ${this.traceId}`, {
+        config,
+      });
     }
 
     // Decide whether the remote sink is usable. The remote sink (any
@@ -222,8 +220,7 @@ export class StatelogClient {
       try {
         fs.mkdirSync(path.dirname(this.logFile), { recursive: true });
       } catch (err) {
-        if (this.debugMode)
-          console.warn(`StatelogClient: failed to ensure logFile dir: ${err}`);
+        if (this.debugMode) console.warn(`StatelogClient: failed to ensure logFile dir: ${err}`);
       }
     }
   }
@@ -266,10 +263,7 @@ export class StatelogClient {
   // — we just invoke `fn()` directly. The runner can therefore always
   // wrap branches in this call without paying ALS overhead in no-op
   // mode.
-  runInBranchContext<T>(
-    parentStack: SpanContext[],
-    fn: () => Promise<T>,
-  ): Promise<T> {
+  runInBranchContext<T>(parentStack: SpanContext[], fn: () => Promise<T>): Promise<T> {
     if (!this.enabled) return fn();
     return this.spanStorage.run([...parentStack], fn);
   }
@@ -371,13 +365,7 @@ export class StatelogClient {
     });
   }
 
-  async enterNode({
-    nodeId,
-    data,
-  }: {
-    nodeId: string;
-    data: any;
-  }): Promise<void> {
+  async enterNode({ nodeId, data }: { nodeId: string; data: any }): Promise<void> {
     await this.post({
       type: "enterNode",
       nodeId,
@@ -513,11 +501,7 @@ export class StatelogClient {
    *  path skips llmError for the same reason). Without this, every
    *  healthy race() would leave its losers' starts unpaired and the
    *  viewer would cry wolf. */
-  async promptCancelled({
-    threadId,
-  }: {
-    threadId?: string | null;
-  }): Promise<void> {
+  async promptCancelled({ threadId }: { threadId?: string | null }): Promise<void> {
     await this.post({
       type: "promptCancelled",
       threadId: threadId ?? null,
@@ -1006,23 +990,19 @@ export class StatelogClient {
 
   // === New event methods ===
 
-  async runMetadata(metadata: RunMetadata & {
-    moduleName?: string;
-    entryNode?: string;
-  }): Promise<void> {
+  async runMetadata(
+    metadata: RunMetadata & {
+      moduleName?: string;
+      entryNode?: string;
+    },
+  ): Promise<void> {
     await this.post({
       type: "runMetadata",
       ...metadata,
     });
   }
 
-  async agentStart({
-    entryNode,
-    args,
-  }: {
-    entryNode: string;
-    args?: any;
-  }): Promise<void> {
+  async agentStart({ entryNode, args }: { entryNode: string; args?: any }): Promise<void> {
     await this.post({
       type: "agentStart",
       entryNode,
@@ -1328,11 +1308,7 @@ export class StatelogClient {
    *  or `thread(session: name)` on second+ entry). Mirrors
    *  `threadCreated` so trace consumers can distinguish first-entry
    *  from resumption. */
-  async threadResumed({
-    threadId,
-  }: {
-    threadId: string;
-  }): Promise<void> {
+  async threadResumed({ threadId }: { threadId: string }): Promise<void> {
     await this.post({
       type: "threadResumed",
       threadId,
@@ -1391,7 +1367,14 @@ export class StatelogClient {
     sourceLocation,
     tools,
   }: {
-    errorType: "toolError" | "llmError" | "runtimeError" | "validationError" | "limitExceeded" | "structuredOutput" | "finalizeError";
+    errorType:
+      | "toolError"
+      | "llmError"
+      | "runtimeError"
+      | "validationError"
+      | "limitExceeded"
+      | "structuredOutput"
+      | "finalizeError";
     message: string;
     functionName?: string;
     /** Tool-failure classification for the tool loop's retry policy. */
@@ -1471,12 +1454,7 @@ export class StatelogClient {
     functionArgs,
     partial,
   }: {
-    action:
-      | "carried"
-      | "erased"
-      | "delivered"
-      | "clearedAtFork"
-      | "droppedAtArgPosition";
+    action: "carried" | "erased" | "delivered" | "clearedAtFork" | "droppedAtArgPosition";
     scopeName?: string;
     spanId?: string;
     functionArgs?: string;
@@ -1564,8 +1542,7 @@ export class StatelogClient {
       try {
         fs.appendFileSync(this.logFile, postBody + "\n");
       } catch (err) {
-        if (this.debugMode)
-          console.error("StatelogClient: failed to append to logFile:", err);
+        if (this.debugMode) console.error("StatelogClient: failed to append to logFile:", err);
       }
     }
 

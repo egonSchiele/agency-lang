@@ -6,8 +6,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createRunsLoader, loadAllRuns, type LoaderEvent } from "./loader.js";
 import type { RunRow } from "./rows.js";
 import {
-  resetFixtureClock, writeCorruptRun, writeGradedRun, writeKilledRun,
-  writeLegacyRun, writeMultiTraceStatelog,
+  resetFixtureClock,
+  writeCorruptRun,
+  writeGradedRun,
+  writeKilledRun,
+  writeLegacyRun,
+  writeMultiTraceStatelog,
 } from "./testFixtures.js";
 
 function drain(events: LoaderEvent[][]): LoaderEvent[] {
@@ -15,10 +19,15 @@ function drain(events: LoaderEvent[][]): LoaderEvent[] {
 }
 
 function upserts(events: LoaderEvent[]): RunRow[] {
-  return events.filter((e) => e.kind === "upsert").map((e) => (e as { kind: "upsert"; row: RunRow }).row);
+  return events
+    .filter((e) => e.kind === "upsert")
+    .map((e) => (e as { kind: "upsert"; row: RunRow }).row);
 }
 
-function runLoaderToEnd(sources: Parameters<typeof createRunsLoader>[0], deps?: Parameters<typeof createRunsLoader>[1]) {
+function runLoaderToEnd(
+  sources: Parameters<typeof createRunsLoader>[0],
+  deps?: Parameters<typeof createRunsLoader>[1],
+) {
   const loader = createRunsLoader(sources, deps);
   const batches: LoaderEvent[][] = [];
   let advances = 0;
@@ -47,10 +56,12 @@ describe("createRunsLoader", () => {
   it("a modern run completes in phase 1 with exactly two content reads", () => {
     const runDir = writeGradedRun(tmpDir);
     const reads: string[] = [];
-    const { events } = runLoaderToEnd(
-      [{ kind: "runDir", dir: runDir }],
-      { readFile: (p) => { reads.push(p); return fs.readFileSync(p, "utf-8"); } },
-    );
+    const { events } = runLoaderToEnd([{ kind: "runDir", dir: runDir }], {
+      readFile: (p) => {
+        reads.push(p);
+        return fs.readFileSync(p, "utf-8");
+      },
+    });
 
     expect(reads.sort()).toEqual([
       path.join(runDir, "config.json"),
@@ -111,12 +122,41 @@ describe("createRunsLoader", () => {
     // A second, busier trace in the SAME input statelog (an agent that
     // invoked agency twice). Backfill must sum both, and the agent name
     // comes from the busiest trace, not whichever id appeared first.
-    fs.appendFileSync(statelog, [
-      JSON.stringify({ format_version: 1, trace_id: "killed-t1-second", data: { type: "threadCreated", timestamp: "2026-08-01T10:00:01.000Z", threadId: "0" } }),
-      JSON.stringify({ format_version: 1, trace_id: "killed-t1-second", data: { type: "agentName", timestamp: "2026-08-01T10:00:02.000Z", name: "busy-agent" } }),
-      JSON.stringify({ format_version: 1, trace_id: "killed-t1-second", data: { type: "promptCompletion", timestamp: "2026-08-01T10:00:03.000Z", model: '"opus"', cost: { totalCost: 1.5 } } }),
-      JSON.stringify({ format_version: 1, trace_id: "killed-t1-second", data: { type: "promptCompletion", timestamp: "2026-08-01T10:00:04.000Z", model: '"opus"', cost: { totalCost: 1.5 } } }),
-    ].join("\n") + "\n");
+    fs.appendFileSync(
+      statelog,
+      [
+        JSON.stringify({
+          format_version: 1,
+          trace_id: "killed-t1-second",
+          data: { type: "threadCreated", timestamp: "2026-08-01T10:00:01.000Z", threadId: "0" },
+        }),
+        JSON.stringify({
+          format_version: 1,
+          trace_id: "killed-t1-second",
+          data: { type: "agentName", timestamp: "2026-08-01T10:00:02.000Z", name: "busy-agent" },
+        }),
+        JSON.stringify({
+          format_version: 1,
+          trace_id: "killed-t1-second",
+          data: {
+            type: "promptCompletion",
+            timestamp: "2026-08-01T10:00:03.000Z",
+            model: '"opus"',
+            cost: { totalCost: 1.5 },
+          },
+        }),
+        JSON.stringify({
+          format_version: 1,
+          trace_id: "killed-t1-second",
+          data: {
+            type: "promptCompletion",
+            timestamp: "2026-08-01T10:00:04.000Z",
+            model: '"opus"',
+            cost: { totalCost: 1.5 },
+          },
+        }),
+      ].join("\n") + "\n",
+    );
 
     const { events } = runLoaderToEnd([{ kind: "runDir", dir: runDir }]);
 
@@ -175,7 +215,9 @@ describe("createRunsLoader", () => {
   it("backfill progress is reported as its own phase", () => {
     const runDir = writeLegacyRun(tmpDir);
     const { events } = runLoaderToEnd([{ kind: "runDir", dir: runDir }]);
-    const phases = events.filter((e) => e.kind === "progress").map((e) => (e as { phase: string }).phase);
+    const phases = events
+      .filter((e) => e.kind === "progress")
+      .map((e) => (e as { phase: string }).phase);
     expect(phases).toContain("summary");
     expect(phases).toContain("backfill");
   });

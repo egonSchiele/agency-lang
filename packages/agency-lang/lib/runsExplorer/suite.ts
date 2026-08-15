@@ -49,9 +49,13 @@ function suiteFromSource(source: string): string {
 /** Mirrors lib/eval/sources.ts looksLikeGitUrl — a copy small enough
  *  that importing eval internals here is not worth the coupling. */
 function looksLikeGitUrl(candidate: string): boolean {
-  return candidate.startsWith("git@") || candidate.includes("://")
-    || /^github\.com\//.test(candidate) || candidate.endsWith(".git")
-    || candidate.includes(".git?ref=");
+  return (
+    candidate.startsWith("git@") ||
+    candidate.includes("://") ||
+    /^github\.com\//.test(candidate) ||
+    candidate.endsWith(".git") ||
+    candidate.includes(".git?ref=")
+  );
 }
 
 function gitSuite(source: string): string {
@@ -68,7 +72,11 @@ function gitSuite(source: string): string {
 /** Basename with data-file extensions stripped: terminal-bench.json →
  *  terminal-bench. Also strips git@host: prefixes. */
 function dataBasename(source: string): string {
-  const lastSegment = source.split(/[/:]/).filter((part) => part !== "").pop() ?? source;
+  const lastSegment =
+    source
+      .split(/[/:]/)
+      .filter((part) => part !== "")
+      .pop() ?? source;
   return lastSegment.replace(/\.(json|jsonl|agency)$/, "");
 }
 

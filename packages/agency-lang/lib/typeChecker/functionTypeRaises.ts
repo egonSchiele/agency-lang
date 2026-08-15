@@ -50,11 +50,7 @@ function assignmentFlows(node: Assignment, info: ScopeInfo): Flow[] {
 
 /** `return f`. A return inside a block belongs to the block, not the enclosing
  *  function, so its slot is a different clause and we skip it here. */
-function returnFlows(
-  node: ReturnStatement,
-  ancestors: WalkAncestor[],
-  info: ScopeInfo,
-): Flow[] {
+function returnFlows(node: ReturnStatement, ancestors: WalkAncestor[], info: ScopeInfo): Flow[] {
   if (isInsideBlock(ancestors)) return [];
   if (!node.value) return [];
   return [{ source: node.value, target: info.returnType }];
@@ -63,10 +59,7 @@ function returnFlows(
 /** The callee's declared parameters — local `def`/`node` or imported — or null
  *  when the name isn't a resolvable function (a truthy inherited
  *  Object.prototype method like "constructor" has no `parameters`). */
-function calleeParams(
-  functionName: string,
-  ctx: TypeCheckerContext,
-): FunctionParameter[] | null {
+function calleeParams(functionName: string, ctx: TypeCheckerContext): FunctionParameter[] | null {
   const def = ctx.functionDefs[functionName] ?? ctx.nodeDefs[functionName];
   const params = def?.parameters ?? ctx.importedFunctions[functionName]?.parameters;
   return Array.isArray(params) ? params : null;
@@ -100,11 +93,7 @@ function blockFlow(node: FunctionCall, params: FunctionParameter[]): Flow[] {
 
 /** `f(reads)` / `runIt(cb: reads)` / `m(xs) as x { ... }`. A method call
  *  (`x.foo(...)`) resolves against the chain, not a same-named global def. */
-function callFlows(
-  node: FunctionCall,
-  ancestors: WalkAncestor[],
-  ctx: TypeCheckerContext,
-): Flow[] {
+function callFlows(node: FunctionCall, ancestors: WalkAncestor[], ctx: TypeCheckerContext): Flow[] {
   if (ancestors[ancestors.length - 1]?.type === "valueAccess") return [];
   const params = calleeParams(node.functionName, ctx);
   if (!params) return [];
@@ -137,8 +126,7 @@ function targetAllowed(
   if (resolved.type !== "blockType" || !resolved.raises) return null;
   const allowed = resolveEffectSet(resolved.raises, ctx.getTypeAliases());
   if (allowed.any) return null;
-  const name =
-    target.type === "typeAliasVariable" ? target.aliasName : formatTypeHint(target);
+  const name = target.type === "typeAliasVariable" ? target.aliasName : formatTypeHint(target);
   return { labels: allowed.labels, name };
 }
 
@@ -166,9 +154,7 @@ function exceedances(
   }
   return source.labels
     .filter((effect) => !allowed.labels.includes(effect))
-    .map((effect) =>
-      diagnostic("valueEffectExceedsRaises", { ...shared, effect }, loc),
-    );
+    .map((effect) => diagnostic("valueEffectExceedsRaises", { ...shared, effect }, loc));
 }
 
 // -- The pass ----------------------------------------------------------------
@@ -184,12 +170,7 @@ export function checkFunctionTypeRaises(
         for (const flow of valueFlows(node, ancestors, info, ctx)) {
           const allowed = targetAllowed(flow.target, ctx);
           if (!allowed) continue;
-          const source = functionValueEffects(
-            flow.source,
-            info,
-            interruptEffectsByFunction,
-            ctx,
-          );
+          const source = functionValueEffects(flow.source, info, interruptEffectsByFunction, ctx);
           for (const err of exceedances(source, allowed, flow.source.loc ?? null)) {
             ctx.errors.push(err);
           }

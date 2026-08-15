@@ -73,12 +73,48 @@ export const vscodeDarkTheme = {
 // (unthemed classes get the theme's base color instead of cli-highlight's
 // fallback theme).
 const TOKEN_CLASSES = [
-  "keyword", "built_in", "type", "literal", "number", "regexp", "string", "subst",
-  "symbol", "class", "function", "title", "params", "comment", "doctag", "meta",
-  "meta-keyword", "meta-string", "section", "tag", "name", "builtin-name", "attr",
-  "attribute", "variable", "bullet", "code", "emphasis", "strong", "formula", "link",
-  "quote", "selector-tag", "selector-id", "selector-class", "selector-attr",
-  "selector-pseudo", "template-tag", "template-variable", "addition", "deletion", "default",
+  "keyword",
+  "built_in",
+  "type",
+  "literal",
+  "number",
+  "regexp",
+  "string",
+  "subst",
+  "symbol",
+  "class",
+  "function",
+  "title",
+  "params",
+  "comment",
+  "doctag",
+  "meta",
+  "meta-keyword",
+  "meta-string",
+  "section",
+  "tag",
+  "name",
+  "builtin-name",
+  "attr",
+  "attribute",
+  "variable",
+  "bullet",
+  "code",
+  "emphasis",
+  "strong",
+  "formula",
+  "link",
+  "quote",
+  "selector-tag",
+  "selector-id",
+  "selector-class",
+  "selector-attr",
+  "selector-pseudo",
+  "template-tag",
+  "template-variable",
+  "addition",
+  "deletion",
+  "default",
 ] as const;
 
 // camelCase ColorScheme field -> real hljs class (non-identifier classes).
@@ -126,7 +162,7 @@ function buildStyleFn(spec: ColorSpec): (s: string) => string {
 function buildBuiltin(data: ThemeData): Theme {
   const out: Record<string, (s: string) => string> = {};
   for (const cls of TOKEN_CLASSES) {
-    const spec = cls === "default" ? {} : data.tokens[cls] ?? {};
+    const spec = cls === "default" ? {} : (data.tokens[cls] ?? {});
     out[cls] = buildStyleFn({ ...spec, color: spec.color ?? data.base });
   }
   return out as unknown as Theme;
@@ -420,7 +456,9 @@ export function resolveTheme(theme?: string | CustomScheme): Theme {
   if (typeof theme === "string") {
     const t = BUILTINS[theme];
     if (!t) {
-      throw new Error(`Unknown color scheme "${theme}". Available: ${Object.keys(BUILTINS).join(", ")}`);
+      throw new Error(
+        `Unknown color scheme "${theme}". Available: ${Object.keys(BUILTINS).join(", ")}`,
+      );
     }
     return t;
   }

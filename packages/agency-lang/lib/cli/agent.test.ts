@@ -15,12 +15,9 @@ describe("agent wrapper forwarding contract", () => {
     agent(config, forwarded, { explicitConfigPath: "root.json" });
 
     expect(runBundledAgent).toHaveBeenCalledTimes(1);
-    expect(runBundledAgent).toHaveBeenCalledWith(
-      config,
-      "agency-agent",
-      forwarded,
-      { explicitConfigPath: "root.json" },
-    );
+    expect(runBundledAgent).toHaveBeenCalledWith(config, "agency-agent", forwarded, {
+      explicitConfigPath: "root.json",
+    });
     // Identity, not just deep equality: the wrapper must preserve the argv
     // object so the launcher's "child receives the original argv" contract
     // holds end to end.

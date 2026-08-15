@@ -43,12 +43,14 @@ export function openCorpusLog(datasetDir: string): OpenedCorpusLog {
 
     ensureRecord(fields: Fields): EnsureRecordResult {
       const outputId = makeOutputId(fields);
-      return log.findOrAppend(outputId, () => CorpusRowSchema.parse({
-        schemaVersion: 2,
-        outputId,
-        capturedAt: new Date().toISOString(),
-        fields,
-      }));
+      return log.findOrAppend(outputId, () =>
+        CorpusRowSchema.parse({
+          schemaVersion: 2,
+          outputId,
+          capturedAt: new Date().toISOString(),
+          fields,
+        }),
+      );
     },
   };
 }

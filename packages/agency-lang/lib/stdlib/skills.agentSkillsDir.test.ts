@@ -10,9 +10,7 @@ describe("_agentSkillsDir", () => {
 
   it("resolves a nested agent name", () => {
     const dir = _agentSkillsDir("agency/coding");
-    expect(
-      dir.endsWith(path.join("agents", "skills", "agency", "coding")),
-    ).toBe(true);
+    expect(dir.endsWith(path.join("agents", "skills", "agency", "coding"))).toBe(true);
   });
 
   // agentSkill skips the approval interrupt because the files ship in the
@@ -20,9 +18,7 @@ describe("_agentSkillsDir", () => {
   // shipped directory.
   it("rejects a name that escapes the skills directory", () => {
     expect(() => _agentSkillsDir("../../..")).toThrow(/outside the shipped/);
-    expect(() => _agentSkillsDir("coding/../../../etc")).toThrow(
-      /outside the shipped/,
-    );
+    expect(() => _agentSkillsDir("coding/../../../etc")).toThrow(/outside the shipped/);
   });
 
   it("rejects an absolute path", () => {

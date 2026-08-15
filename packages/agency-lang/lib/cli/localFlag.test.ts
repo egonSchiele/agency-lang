@@ -59,8 +59,6 @@ describe("resolveLocalRunFlag", () => {
     // No override; rely on smoltalk-llama-cpp not being installed in CI.
     // Skip on dev machines that have it resolvable.
     if (hasLocalModelSupport()) return;
-    await expect(resolveLocalRunFlag("qwen3.5-0.8b")).rejects.toThrow(
-      /smoltalk-llama-cpp/,
-    );
+    await expect(resolveLocalRunFlag("qwen3.5-0.8b")).rejects.toThrow(/smoltalk-llama-cpp/);
   });
 });

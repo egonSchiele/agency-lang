@@ -33,11 +33,7 @@ describe("destructiveBlockParser", () => {
   });
 
   it("a top-level `destructive { }` inside a function body parses via the statement parser", () => {
-    const r = parseAgency(
-      "def f(): number {\n  destructive {\n    return 1\n  }\n}",
-      {},
-      false,
-    );
+    const r = parseAgency("def f(): number {\n  destructive {\n    return 1\n  }\n}", {}, false);
     expect(r.success).toBe(true);
   });
 

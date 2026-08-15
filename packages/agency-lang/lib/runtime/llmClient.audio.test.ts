@@ -60,9 +60,9 @@ describe("SmoltalkClient.transcribe / speak adapters", () => {
       controller.abort(reason);
       return { success: false, error: "Request was aborted" } as any;
     });
-    await expect(
-      client.transcribe(source, { model: "whisper-1" }, controller.signal),
-    ).rejects.toBe(reason);
+    await expect(client.transcribe(source, { model: "whisper-1" }, controller.signal)).rejects.toBe(
+      reason,
+    );
   });
 
   it("converts an aborted outcome into a rejection carrying signal.reason (speak)", async () => {

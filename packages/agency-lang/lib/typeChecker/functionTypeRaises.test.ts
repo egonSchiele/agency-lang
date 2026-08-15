@@ -50,7 +50,9 @@ describe("raises on function types is enforced", () => {
   });
 
   it("partial/preapprove recovers the base name and errors", () => {
-    expect(msgs(`${PRELUDE}\nnode main() { let cb: Callback = reads.preapprove() }`)).toMatch(/std::read/);
+    expect(msgs(`${PRELUDE}\nnode main() { let cb: Callback = reads.preapprove() }`)).toMatch(
+      /std::read/,
+    );
   });
 
   it("a block that raises, passed to a raises <> param, errors", () => {

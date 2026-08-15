@@ -38,7 +38,9 @@ export async function evalJudge(
   }
 
   if (opts.goal) {
-    throw new Error("--goal is only for judging eval record files; run directories carry their own goals in input.json");
+    throw new Error(
+      "--goal is only for judging eval record files; run directories carry their own goals in input.json",
+    );
   }
   const verdict = await judgeSuite({
     runA: inputA,
@@ -48,11 +50,15 @@ export async function evalJudge(
   const outPath = opts.out ?? defaultOutPath(inputA, inputB);
   fs.writeFileSync(outPath, JSON.stringify(verdict, null, 2));
 
-  console.log(`Suite winner: ${verdict.winner} (A ${verdict.winsA}, B ${verdict.winsB}, ties ${verdict.ties})`);
+  console.log(
+    `Suite winner: ${verdict.winner} (A ${verdict.winsA}, B ${verdict.winsB}, ties ${verdict.ties})`,
+  );
   // A tie from "we could not judge this" must not read as "these were close".
   const unjudgeable = verdict.perInput.filter((entry) => entry.unjudgeable).length;
   if (unjudgeable > 0) {
-    console.log(`${unjudgeable} input(s) could not be judged (missing data or no goal) — counted as ties above`);
+    console.log(
+      `${unjudgeable} input(s) could not be judged (missing data or no goal) — counted as ties above`,
+    );
   }
   console.log(`\nWrote verdict to ${outPath}`);
 }
@@ -68,7 +74,10 @@ function inputMode(inputA: string, inputB: string): "files" | "dirs" | "mixed" {
 function policyFromOptions(opts: EvalJudgeOptions): JudgeAggregationPolicy {
   return {
     samples: integerOption("samples", opts.samples ?? 3, { min: 1 }),
-    confidenceThreshold: integerOption("confidenceThreshold", opts.confidenceThreshold ?? 50, { min: 0, max: 100 }),
+    confidenceThreshold: integerOption("confidenceThreshold", opts.confidenceThreshold ?? 50, {
+      min: 0,
+      max: 100,
+    }),
     marginThreshold: integerOption("marginThreshold", opts.marginThreshold ?? 0, { min: 0 }),
     positionBias: opts.positionBias ?? "swap",
   };

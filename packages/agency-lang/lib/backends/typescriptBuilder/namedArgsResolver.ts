@@ -68,15 +68,11 @@ export function resolveNamedArgs(
   for (let i = namedStartIdx; i < args.length; i++) {
     const arg = args[i] as NamedArgument;
     if (namedArgMap.has(arg.name)) {
-      throw new Error(
-        `Duplicate named argument '${arg.name}' in call to '${node.functionName}'`,
-      );
+      throw new Error(`Duplicate named argument '${arg.name}' in call to '${node.functionName}'`);
     }
     const paramIdx = paramList.findIndex((p) => p.name === arg.name);
     if (paramIdx === -1) {
-      throw new Error(
-        `Unknown named argument '${arg.name}' in call to '${node.functionName}'`,
-      );
+      throw new Error(`Unknown named argument '${arg.name}' in call to '${node.functionName}'`);
     }
     // Conflict check applies to fixed params only; variadic conflicts are
     // handled below by the mixed-rule check (the wording is more
@@ -119,9 +115,7 @@ export function resolveNamedArgs(
       // Insert `null` placeholder only if a later param has a named arg;
       // otherwise we are at the trailing-optional tail and the call-site
       // pad logic will fill the rest.
-      const hasLaterNamedArg = nonVariadicParams
-        .slice(i + 1)
-        .some((p) => namedArgMap.has(p.name));
+      const hasLaterNamedArg = nonVariadicParams.slice(i + 1).some((p) => namedArgMap.has(p.name));
       if (hasLaterNamedArg) {
         result.push({ type: "null" } as Expression);
       } else {

@@ -59,10 +59,9 @@ afterEach(() => {
 describe("resolveAccountTarget", () => {
   it("selects a valid --host ahead of config and binding", () => {
     writeBinding("https://binding.example");
-    const result = resolveAccountTarget(
-      context({ log: { host: "https://config.example" } }),
-      { host: "https://flag.example/" },
-    );
+    const result = resolveAccountTarget(context({ log: { host: "https://config.example" } }), {
+      host: "https://flag.example/",
+    });
     expect(result).toEqual({
       origin: "https://flag.example",
       apiKey: "default-secret",
@@ -82,9 +81,9 @@ describe("resolveAccountTarget", () => {
 
   it("rejects invalid log.host instead of falling through to binding", () => {
     writeBinding("https://binding.example");
-    expect(() =>
-      resolveAccountTarget(context({ log: { host: "ftp://bad" } }), {}),
-    ).toThrow(ProcessExit);
+    expect(() => resolveAccountTarget(context({ log: { host: "ftp://bad" } }), {})).toThrow(
+      ProcessExit,
+    );
     expect(errors.join("\n")).toContain('Invalid statelog host "ftp://bad"');
   });
 
@@ -125,7 +124,9 @@ describe("resolveProjectTarget", () => {
 
   it("uses the binding slug when the resolved origin equals the binding origin", () => {
     writeBinding("https://h");
-    expect(resolveProjectTarget(context({ log: { host: "https://h" } }), {}).projectSlug).toBe("proj");
+    expect(resolveProjectTarget(context({ log: { host: "https://h" } }), {}).projectSlug).toBe(
+      "proj",
+    );
   });
 
   it("rejects a binding slug against a different resolved origin", () => {
@@ -140,13 +141,15 @@ describe("resolveProjectTarget", () => {
     expect(
       resolveProjectTarget(context({ log: { host: "https://h" } }), { project: "foo" }).projectSlug,
     ).toBe("foo");
-    expect(() => resolveProjectTarget(context({ log: { host: "https://h" } }), { project: "" })).toThrow(
-      ProcessExit,
-    );
+    expect(() =>
+      resolveProjectTarget(context({ log: { host: "https://h" } }), { project: "" }),
+    ).toThrow(ProcessExit);
   });
 
   it("fails with no binding and no --project", () => {
-    expect(() => resolveProjectTarget(context({ log: { host: "https://h" } }), {})).toThrow(ProcessExit);
+    expect(() => resolveProjectTarget(context({ log: { host: "https://h" } }), {})).toThrow(
+      ProcessExit,
+    );
     expect(errors.join("\n")).toContain("Pass --project");
   });
 
@@ -166,7 +169,11 @@ describe("resolveProjectTarget", () => {
     };
 
     it("an empty --project", () => {
-      expectInputError({ log: { host: "https://h" } }, { project: "" }, "--project must not be empty.");
+      expectInputError(
+        { log: { host: "https://h" } },
+        { project: "" },
+        "--project must not be empty.",
+      );
     });
 
     it("no host source at all", () => {

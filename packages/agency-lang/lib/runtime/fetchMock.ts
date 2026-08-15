@@ -106,7 +106,9 @@ function compileMock(mock: FetchMock, index: number): CompiledMock {
   }
 
   if (mock.return === undefined) {
-    throw new Error(`${where}: a "return" body is required (returnFile is inlined to "return" by the runner).`);
+    throw new Error(
+      `${where}: a "return" body is required (returnFile is inlined to "return" by the runner).`,
+    );
   }
   const body = typeof mock.return === "string" ? mock.return : JSON.stringify(mock.return);
 

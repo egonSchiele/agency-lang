@@ -4,7 +4,12 @@ import { checkPolicy, validatePolicy } from "./policy.js";
 describe("checkPolicy", () => {
   it("returns propagate when no rules exist for the kind", () => {
     const policy = {};
-    const interrupt = { effect: "std::read", message: "msg", data: { filename: "foo" }, origin: "std::fs" };
+    const interrupt = {
+      effect: "std::read",
+      message: "msg",
+      data: { filename: "foo" },
+      origin: "std::fs",
+    };
     const result = checkPolicy(policy, interrupt);
     expect(result).toEqual({ type: "propagate" });
   });
@@ -16,10 +21,22 @@ describe("checkPolicy", () => {
         { action: "reject" as const },
       ],
     };
-    expect(checkPolicy(policy, { effect: "test::greet", message: "", data: { name: "Alice" }, origin: "" }))
-      .toEqual({ type: "approve" });
-    expect(checkPolicy(policy, { effect: "test::greet", message: "", data: { name: "Bob" }, origin: "" }))
-      .toEqual({ type: "reject" });
+    expect(
+      checkPolicy(policy, {
+        effect: "test::greet",
+        message: "",
+        data: { name: "Alice" },
+        origin: "",
+      }),
+    ).toEqual({ type: "approve" });
+    expect(
+      checkPolicy(policy, {
+        effect: "test::greet",
+        message: "",
+        data: { name: "Bob" },
+        origin: "",
+      }),
+    ).toEqual({ type: "reject" });
   });
 
   it("matches glob patterns with *", () => {
@@ -29,10 +46,22 @@ describe("checkPolicy", () => {
         { action: "reject" as const },
       ],
     };
-    expect(checkPolicy(policy, { effect: "test::cmd", message: "", data: { command: "ls -la" }, origin: "" }))
-      .toEqual({ type: "approve" });
-    expect(checkPolicy(policy, { effect: "test::cmd", message: "", data: { command: "rm -rf" }, origin: "" }))
-      .toEqual({ type: "reject" });
+    expect(
+      checkPolicy(policy, {
+        effect: "test::cmd",
+        message: "",
+        data: { command: "ls -la" },
+        origin: "",
+      }),
+    ).toEqual({ type: "approve" });
+    expect(
+      checkPolicy(policy, {
+        effect: "test::cmd",
+        message: "",
+        data: { command: "rm -rf" },
+        origin: "",
+      }),
+    ).toEqual({ type: "reject" });
   });
 
   it("matches glob patterns with ** for paths", () => {
@@ -42,10 +71,22 @@ describe("checkPolicy", () => {
         { action: "reject" as const },
       ],
     };
-    expect(checkPolicy(policy, { effect: "test::read", message: "", data: { path: "src/foo/bar.ts" }, origin: "" }))
-      .toEqual({ type: "approve" });
-    expect(checkPolicy(policy, { effect: "test::read", message: "", data: { path: "dist/foo.js" }, origin: "" }))
-      .toEqual({ type: "reject" });
+    expect(
+      checkPolicy(policy, {
+        effect: "test::read",
+        message: "",
+        data: { path: "src/foo/bar.ts" },
+        origin: "",
+      }),
+    ).toEqual({ type: "approve" });
+    expect(
+      checkPolicy(policy, {
+        effect: "test::read",
+        message: "",
+        data: { path: "dist/foo.js" },
+        origin: "",
+      }),
+    ).toEqual({ type: "reject" });
   });
 
   it("uses first-match-wins ordering", () => {
@@ -55,8 +96,14 @@ describe("checkPolicy", () => {
         { match: { name: "Ali*" }, action: "approve" as const },
       ],
     };
-    expect(checkPolicy(policy, { effect: "test::greet", message: "", data: { name: "Alice" }, origin: "" }))
-      .toEqual({ type: "reject" });
+    expect(
+      checkPolicy(policy, {
+        effect: "test::greet",
+        message: "",
+        data: { name: "Alice" },
+        origin: "",
+      }),
+    ).toEqual({ type: "reject" });
   });
 
   it("skips rules when match field is missing from data", () => {
@@ -66,8 +113,14 @@ describe("checkPolicy", () => {
         { action: "approve" as const },
       ],
     };
-    expect(checkPolicy(policy, { effect: "test::greet", message: "", data: { name: "Alice" }, origin: "" }))
-      .toEqual({ type: "approve" });
+    expect(
+      checkPolicy(policy, {
+        effect: "test::greet",
+        message: "",
+        data: { name: "Alice" },
+        origin: "",
+      }),
+    ).toEqual({ type: "approve" });
   });
 
   it("matches on origin (special key)", () => {
@@ -77,10 +130,17 @@ describe("checkPolicy", () => {
         { action: "reject" as const },
       ],
     };
-    expect(checkPolicy(policy, { effect: "std::read", message: "", data: {}, origin: "std::fs" }))
-      .toEqual({ type: "approve" });
-    expect(checkPolicy(policy, { effect: "std::read", message: "", data: {}, origin: "./myfile.agency" }))
-      .toEqual({ type: "reject" });
+    expect(
+      checkPolicy(policy, { effect: "std::read", message: "", data: {}, origin: "std::fs" }),
+    ).toEqual({ type: "approve" });
+    expect(
+      checkPolicy(policy, {
+        effect: "std::read",
+        message: "",
+        data: {},
+        origin: "./myfile.agency",
+      }),
+    ).toEqual({ type: "reject" });
   });
 
   it("matches on message (special key)", () => {
@@ -90,8 +150,14 @@ describe("checkPolicy", () => {
         { action: "reject" as const },
       ],
     };
-    expect(checkPolicy(policy, { effect: "test::x", message: "Are you sure about this?", data: {}, origin: "" }))
-      .toEqual({ type: "approve" });
+    expect(
+      checkPolicy(policy, {
+        effect: "test::x",
+        message: "Are you sure about this?",
+        data: {},
+        origin: "",
+      }),
+    ).toEqual({ type: "approve" });
   });
 
   it("ANDs all match fields together", () => {
@@ -101,18 +167,36 @@ describe("checkPolicy", () => {
         { action: "reject" as const },
       ],
     };
-    expect(checkPolicy(policy, { effect: "test::cmd", message: "", data: { command: "rm foo", dir: "/tmp/x" }, origin: "" }))
-      .toEqual({ type: "approve" });
-    expect(checkPolicy(policy, { effect: "test::cmd", message: "", data: { command: "rm foo", dir: "/home/x" }, origin: "" }))
-      .toEqual({ type: "reject" });
+    expect(
+      checkPolicy(policy, {
+        effect: "test::cmd",
+        message: "",
+        data: { command: "rm foo", dir: "/tmp/x" },
+        origin: "",
+      }),
+    ).toEqual({ type: "approve" });
+    expect(
+      checkPolicy(policy, {
+        effect: "test::cmd",
+        message: "",
+        data: { command: "rm foo", dir: "/home/x" },
+        origin: "",
+      }),
+    ).toEqual({ type: "reject" });
   });
 
   it("catch-all rule (no match) matches everything", () => {
     const policy = {
       "test::x": [{ action: "approve" as const }],
     };
-    expect(checkPolicy(policy, { effect: "test::x", message: "", data: { anything: "whatever" }, origin: "" }))
-      .toEqual({ type: "approve" });
+    expect(
+      checkPolicy(policy, {
+        effect: "test::x",
+        message: "",
+        data: { anything: "whatever" },
+        origin: "",
+      }),
+    ).toEqual({ type: "approve" });
   });
 
   it("reject action produces reject result", () => {
@@ -127,8 +211,9 @@ describe("checkPolicy", () => {
     it("approve-all: applies to every effect, including unlisted ones", () => {
       const policy = { "*": [{ action: "approve" as const }] };
       for (const effect of ["std::write", "std::bash", "std::remove", "anything::else"]) {
-        expect(checkPolicy(policy, { effect, message: "", data: { dir: "/etc" }, origin: "" }))
-          .toEqual({ type: "approve" });
+        expect(
+          checkPolicy(policy, { effect, message: "", data: { dir: "/etc" }, origin: "" }),
+        ).toEqual({ type: "approve" });
       }
     });
 
@@ -137,11 +222,13 @@ describe("checkPolicy", () => {
         "std::bash": [{ action: "reject" as const }],
         "*": [{ action: "approve" as const }],
       };
-      expect(checkPolicy(policy, { effect: "std::bash", message: "", data: {}, origin: "" }))
-        .toEqual({ type: "reject" });
+      expect(
+        checkPolicy(policy, { effect: "std::bash", message: "", data: {}, origin: "" }),
+      ).toEqual({ type: "reject" });
       // An effect with no specific rule falls through to the wildcard.
-      expect(checkPolicy(policy, { effect: "std::write", message: "", data: {}, origin: "" }))
-        .toEqual({ type: "approve" });
+      expect(
+        checkPolicy(policy, { effect: "std::write", message: "", data: {}, origin: "" }),
+      ).toEqual({ type: "approve" });
     });
 
     it("falls back to the wildcard when a specific effect's rules all miss", () => {
@@ -150,19 +237,37 @@ describe("checkPolicy", () => {
         "*": [{ action: "reject" as const }],
       };
       // Inside /app: matched by the specific rule.
-      expect(checkPolicy(policy, { effect: "std::write", message: "", data: { dir: "/app/x" }, origin: "" }))
-        .toEqual({ type: "approve" });
+      expect(
+        checkPolicy(policy, {
+          effect: "std::write",
+          message: "",
+          data: { dir: "/app/x" },
+          origin: "",
+        }),
+      ).toEqual({ type: "approve" });
       // Outside /app: the specific rule misses, so the wildcard rejects.
-      expect(checkPolicy(policy, { effect: "std::write", message: "", data: { dir: "/etc/x" }, origin: "" }))
-        .toEqual({ type: "reject" });
+      expect(
+        checkPolicy(policy, {
+          effect: "std::write",
+          message: "",
+          data: { dir: "/etc/x" },
+          origin: "",
+        }),
+      ).toEqual({ type: "reject" });
     });
 
     it("still propagates when neither the effect nor the wildcard matches", () => {
       const policy = {
         "*": [{ match: { dir: "/app/**" }, action: "approve" as const }],
       };
-      expect(checkPolicy(policy, { effect: "std::write", message: "", data: { dir: "/etc/x" }, origin: "" }))
-        .toEqual({ type: "propagate" });
+      expect(
+        checkPolicy(policy, {
+          effect: "std::write",
+          message: "",
+          data: { dir: "/etc/x" },
+          origin: "",
+        }),
+      ).toEqual({ type: "propagate" });
     });
   });
 
@@ -316,20 +421,16 @@ describe("checkPolicy for mcp::call", () => {
     const rejectGithub = {
       "mcp::call": [{ match: { server: "github" }, action: "reject" as const }],
     };
-    expect(
-      checkPolicy(rejectGithub, intr({ server: "github", tool: "x", args: {} })).type,
-    ).toBe("reject");
+    expect(checkPolicy(rejectGithub, intr({ server: "github", tool: "x", args: {} })).type).toBe(
+      "reject",
+    );
 
     const approveRead = {
-      "mcp::call": [
-        { match: { server: "fs", tool: "read_file" }, action: "approve" as const },
-      ],
+      "mcp::call": [{ match: { server: "fs", tool: "read_file" }, action: "approve" as const }],
     };
     expect(
-      checkPolicy(
-        approveRead,
-        intr({ server: "fs", tool: "read_file", args: { path: "/a" } }),
-      ).type,
+      checkPolicy(approveRead, intr({ server: "fs", tool: "read_file", args: { path: "/a" } }))
+        .type,
     ).toBe("approve");
 
     // A rule that tries to match on args does NOT match (nested object) → propagate.
@@ -337,10 +438,7 @@ describe("checkPolicy for mcp::call", () => {
       "mcp::call": [{ match: { args: "anything" }, action: "approve" as const }],
     };
     expect(
-      checkPolicy(
-        argsRule,
-        intr({ server: "fs", tool: "read_file", args: { path: "/a" } }),
-      ).type,
+      checkPolicy(argsRule, intr({ server: "fs", tool: "read_file", args: { path: "/a" } })).type,
     ).toBe("propagate");
   });
 });

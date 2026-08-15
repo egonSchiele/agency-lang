@@ -10,13 +10,21 @@
 // record could not supply (old records lack startedAtMs/agentName;
 // killed inputs have no record at all).
 import {
-  applyInputPatch, buildFailedRunRow, buildRunRow, buildTraceRows,
-  recomputeRunAggregates, type InputBackfillPatch, type RunRow,
+  applyInputPatch,
+  buildFailedRunRow,
+  buildRunRow,
+  buildTraceRows,
+  recomputeRunAggregates,
+  type InputBackfillPatch,
+  type RunRow,
 } from "./rows.js";
 import { readEvalRunPhaseOne, type ReadFileFn } from "./readRunSummary.js";
 import {
-  createStatelogScan, readRecordMetrics,
-  type RecordMetrics, type StatelogScan, type TraceTotals,
+  createStatelogScan,
+  readRecordMetrics,
+  type RecordMetrics,
+  type StatelogScan,
+  type TraceTotals,
 } from "./mine.js";
 import type { Source } from "./sources.js";
 
@@ -69,10 +77,16 @@ export function createRunsLoader(sources: Source[], deps: LoaderDeps = {}): Runs
   let done = false;
 
   const summaryProgress = (): LoaderProgress => ({
-    kind: "progress", phase: "summary", completed: summaryCompleted, total: sources.length,
+    kind: "progress",
+    phase: "summary",
+    completed: summaryCompleted,
+    total: sources.length,
   });
   const backfillProgress = (): LoaderProgress => ({
-    kind: "progress", phase: "backfill", completed: backfillCompleted, total: backfillTotal,
+    kind: "progress",
+    phase: "backfill",
+    completed: backfillCompleted,
+    total: backfillTotal,
   });
 
   const loadRunDir = (dir: string): LoaderEvent[] => {
@@ -85,7 +99,8 @@ export function createRunsLoader(sources: Source[], deps: LoaderDeps = {}): Runs
     }
     const built = buildRunRow(phaseOne.value, { kind: "runDir", dir });
     rows.push(built.row);
-    const byInputId: Record<string, { recordPath: string; statelogPath: string }> = Object.create(null);
+    const byInputId: Record<string, { recordPath: string; statelogPath: string }> =
+      Object.create(null);
     for (const input of phaseOne.value.summary.inputs) {
       byInputId[input.inputId] = {
         recordPath: input.evalRecordPath ?? "",
@@ -127,9 +142,10 @@ export function createRunsLoader(sources: Source[], deps: LoaderDeps = {}): Runs
       }
       if (read.kind === "metrics") {
         job.record = read.value;
-        const complete = read.value.costUsd !== null
-          && read.value.startedAtMs !== null
-          && read.value.agentName !== undefined;
+        const complete =
+          read.value.costUsd !== null &&
+          read.value.startedAtMs !== null &&
+          read.value.agentName !== undefined;
         if (complete) {
           return finishJob(job);
         }
@@ -283,14 +299,12 @@ function sumTraces(traces: TraceTotals[]): TraceTotals {
       }
     }
     if (totals.firstTsMs !== null) {
-      summed.firstTsMs = summed.firstTsMs === null
-        ? totals.firstTsMs
-        : Math.min(summed.firstTsMs, totals.firstTsMs);
+      summed.firstTsMs =
+        summed.firstTsMs === null ? totals.firstTsMs : Math.min(summed.firstTsMs, totals.firstTsMs);
     }
     if (totals.lastTsMs !== null) {
-      summed.lastTsMs = summed.lastTsMs === null
-        ? totals.lastTsMs
-        : Math.max(summed.lastTsMs, totals.lastTsMs);
+      summed.lastTsMs =
+        summed.lastTsMs === null ? totals.lastTsMs : Math.max(summed.lastTsMs, totals.lastTsMs);
     }
     if (totals.agentName !== undefined && totals.eventCount > namedEventCount) {
       summed.agentName = totals.agentName;

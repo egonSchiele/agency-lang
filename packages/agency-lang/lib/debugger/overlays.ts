@@ -1,12 +1,4 @@
-import {
-  box,
-  row,
-  column,
-  text,
-  escapeStyleTags,
-  type Screen,
-  type Element,
-} from "@/tui/index.js";
+import { box, row, column, text, escapeStyleTags, type Screen, type Element } from "@/tui/index.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { UIState } from "./uiState.js";
 import { formatValue } from "./util.js";
@@ -56,10 +48,7 @@ export async function showRewindSelector(
         text(formatCheckpointList(checkpoints, selectedIndex)),
       ),
       ctx.buildStatsBar(),
-      box(
-        { height: 3, border: true, borderColor: "white" },
-        text(ctx.commandBarContent),
-      ),
+      box({ height: 3, border: true, borderColor: "white" }, text(ctx.commandBarContent)),
     );
     ctx.screen.render(tree);
   };
@@ -159,10 +148,7 @@ export async function showCheckpointsPanel(
           text(detailContent),
         ),
       ),
-      box(
-        { height: 3, border: true, borderColor: "white" },
-        text(CHECKPOINTS_HELP),
-      ),
+      box({ height: 3, border: true, borderColor: "white" }, text(CHECKPOINTS_HELP)),
     );
     ctx.screen.render(tree);
   };
@@ -223,10 +209,7 @@ export async function showCheckpointsPanel(
 // Checkpoint formatting helpers
 // ---------------------------------------------------------------------------
 
-function formatCheckpointList(
-  checkpoints: Checkpoint[],
-  selectedIndex: number,
-): string {
+function formatCheckpointList(checkpoints: Checkpoint[], selectedIndex: number): string {
   return checkpoints
     .map((cp, i) => {
       const tag = checkpointTag(cp);
@@ -238,10 +221,7 @@ function formatCheckpointList(
     .join("\n");
 }
 
-function formatCheckpointListStyled(
-  checkpoints: Checkpoint[],
-  selectedIndex: number,
-): string {
+function formatCheckpointListStyled(checkpoints: Checkpoint[], selectedIndex: number): string {
   return checkpoints
     .map((cp, i) => {
       let tag = "{gray-fg}[auto]{/gray-fg}";
@@ -313,9 +293,7 @@ function formatKeyValueSection(
   obj: Record<string, unknown> | undefined,
 ): string[] {
   const fmt = escapeStyleTags;
-  const entries = obj
-    ? Object.entries(obj).filter(([k]) => !k.startsWith("__"))
-    : [];
+  const entries = obj ? Object.entries(obj).filter(([k]) => !k.startsWith("__")) : [];
   const lines = ["", `{bold}{${color}-fg}${title}:{/${color}-fg}{/bold}`];
   if (entries.length > 0) {
     for (const [key, value] of entries) {

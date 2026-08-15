@@ -73,7 +73,7 @@ describe("unitLiteralParser", () => {
       const r = parsed("$5.00");
       expect(r.result.unit).toBe("$");
       expect(r.result.value).toBe("5.00");
-      expect(r.result.canonicalValue).toBe(5.00);
+      expect(r.result.canonicalValue).toBe(5.0);
       expect(r.result.dimension).toBe("cost");
     });
 

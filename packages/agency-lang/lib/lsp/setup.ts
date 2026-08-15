@@ -1,14 +1,9 @@
 import * as fs from "fs";
 import * as path from "path";
 
-export const SUPPORTED_AGENT_LSP_TARGETS = [
-  "claude-code",
-  "codex",
-  "opencode",
-  "pi",
-] as const;
+export const SUPPORTED_AGENT_LSP_TARGETS = ["claude-code", "codex", "opencode", "pi"] as const;
 
-export type AgentLspTarget = typeof SUPPORTED_AGENT_LSP_TARGETS[number];
+export type AgentLspTarget = (typeof SUPPORTED_AGENT_LSP_TARGETS)[number];
 
 export interface AgentLspSetupResult {
   target: AgentLspTarget;
@@ -42,9 +37,10 @@ function writeJsonFile(filePath: string, value: Record<string, unknown>): void {
 function setupOpenCode(projectDir: string): AgentLspSetupResult {
   const configPath = path.join(projectDir, "opencode.json");
   const config = readJsonFile(configPath);
-  const lsp = config.lsp && typeof config.lsp === "object" && !Array.isArray(config.lsp)
-    ? config.lsp as Record<string, unknown>
-    : {};
+  const lsp =
+    config.lsp && typeof config.lsp === "object" && !Array.isArray(config.lsp)
+      ? (config.lsp as Record<string, unknown>)
+      : {};
 
   lsp.agency = {
     command: ["agency", "lsp"],
@@ -91,8 +87,7 @@ function setupClaudeCode(projectDir: string): AgentLspSetupResult {
     target: "claude-code",
     ok: true,
     files: [manifestPath, lspConfigPath],
-    message:
-      `Created Claude Code plugin at ${pluginDir}. Start Claude with --plugin-dir ${pluginDir}`,
+    message: `Created Claude Code plugin at ${pluginDir}. Start Claude with --plugin-dir ${pluginDir}`,
   };
 }
 

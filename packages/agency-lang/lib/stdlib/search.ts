@@ -16,10 +16,7 @@ export type SearchOptions = {
   freshness?: string;
 };
 
-export async function _search(
-  query: string,
-  options?: SearchOptions,
-): Promise<SearchResult[]> {
+export async function _search(query: string, options?: SearchOptions): Promise<SearchResult[]> {
   // Note: using || (not ??) so empty strings from Agency defaults fall through to env var
   const apiKey = options?.apiKey || process.env.BRAVE_API_KEY;
   if (!apiKey) {
@@ -33,10 +30,8 @@ export async function _search(
   url.searchParams.set("count", String(options?.count ?? 5));
 
   if (options?.country) url.searchParams.set("country", options.country);
-  if (options?.searchLang)
-    url.searchParams.set("search_lang", options.searchLang);
-  if (options?.safesearch)
-    url.searchParams.set("safesearch", options.safesearch);
+  if (options?.searchLang) url.searchParams.set("search_lang", options.searchLang);
+  if (options?.safesearch) url.searchParams.set("safesearch", options.safesearch);
   if (options?.freshness) url.searchParams.set("freshness", options.freshness);
 
   const response = await fetch(url, {
@@ -75,9 +70,7 @@ export async function _tavilySearch(
   // Note: using || (not ??) so empty strings from Agency defaults fall through to env var
   const apiKey = options?.apiKey || process.env.TAVILY_API_KEY;
   if (!apiKey) {
-    throw new Error(
-      "Missing Tavily API key. Set TAVILY_API_KEY env var or pass apiKey option.",
-    );
+    throw new Error("Missing Tavily API key. Set TAVILY_API_KEY env var or pass apiKey option.");
   }
 
   // Tavily takes a JSON POST body and a Bearer token (not a query string).

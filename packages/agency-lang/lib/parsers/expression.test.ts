@@ -434,7 +434,11 @@ describe("exprParser", () => {
       // Newly parses with this change (tryExpressionParser captures
       // valueAccessParser, which now routes through the schema branch).
       // Pinned so a future parser reshuffle cannot silently drop it.
-      const parsed = parseAgency('node main() {\n  const r = try schema(number).parseJSON("5")\n  return r\n}', {}, false);
+      const parsed = parseAgency(
+        'node main() {\n  const r = try schema(number).parseJSON("5")\n  return r\n}',
+        {},
+        false,
+      );
       expect(parsed.success).toBe(true);
     });
 
@@ -471,13 +475,19 @@ describe("exprParser", () => {
         expect(result.result).toMatchObject({
           type: "valueAccess",
           base: { type: "schemaExpression" },
-          chain: [{ kind: "methodCall", optional: true, functionCall: { functionName: "parseJSON" } }],
+          chain: [
+            { kind: "methodCall", optional: true, functionCall: { functionName: "parseJSON" } },
+          ],
         });
       }
     });
 
     it("a malformed chain after the dot is a targeted parse error", () => {
-      const parsed = parseAgency("node main() {\n  const r = schema(number).123\n  return r\n}", {}, false);
+      const parsed = parseAgency(
+        "node main() {\n  const r = schema(number).123\n  return r\n}",
+        {},
+        false,
+      );
       expect(parsed.success).toBe(false);
       if (!parsed.success) {
         expect(parsed.message).toContain("expected a method call after schema(...)");
@@ -519,7 +529,11 @@ describe("exprParser", () => {
       // The assignment parser rejects any non-variableName base ("assignment
       // target must start with a variable name"), so this fails identically
       // before and after schema chains became parseable.
-      const parsed = parseAgency("node main() {\n  schema(number).foo = 5\n  return 1\n}", {}, false);
+      const parsed = parseAgency(
+        "node main() {\n  schema(number).foo = 5\n  return 1\n}",
+        {},
+        false,
+      );
       expect(parsed.success).toBe(false);
     });
   });

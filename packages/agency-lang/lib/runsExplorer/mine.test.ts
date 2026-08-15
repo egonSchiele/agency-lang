@@ -3,8 +3,19 @@ import * as os from "os";
 import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { createStatelogScan, readRecordMetrics, runScanToEnd, STATELOG_SCAN_CHUNK_BYTES } from "./mine.js";
-import { envelope, promptCompletion, resetFixtureClock, writeStatelog, FIXTURE_EPOCH_MS } from "./testFixtures.js";
+import {
+  createStatelogScan,
+  readRecordMetrics,
+  runScanToEnd,
+  STATELOG_SCAN_CHUNK_BYTES,
+} from "./mine.js";
+import {
+  envelope,
+  promptCompletion,
+  resetFixtureClock,
+  writeStatelog,
+  FIXTURE_EPOCH_MS,
+} from "./testFixtures.js";
 
 describe("readRecordMetrics", () => {
   let tmpDir: string;
@@ -20,25 +31,38 @@ describe("readRecordMetrics", () => {
 
   it("reads a modern record completely", () => {
     const recordPath = path.join(tmpDir, "record.json");
-    fs.writeFileSync(recordPath, JSON.stringify({
-      durationMs: 60_000, startedAtMs: 100, agentName: "named",
-      metrics: { costUsdTotal: 2.0, models: ["opus"] },
-    }));
+    fs.writeFileSync(
+      recordPath,
+      JSON.stringify({
+        durationMs: 60_000,
+        startedAtMs: 100,
+        agentName: "named",
+        metrics: { costUsdTotal: 2.0, models: ["opus"] },
+      }),
+    );
 
     const read = readRecordMetrics(recordPath);
     if (read.kind !== "metrics") {
       throw new Error(`expected metrics, got ${read.kind}`);
     }
     expect(read.value).toEqual({
-      costUsd: 2.0, durationMs: 60_000, startedAtMs: 100, models: ["opus"], agentName: "named",
+      costUsd: 2.0,
+      durationMs: 60_000,
+      startedAtMs: 100,
+      models: ["opus"],
+      agentName: "named",
     });
   });
 
   it("an old record without startedAtMs or agentName reports which fields are missing", () => {
     const recordPath = path.join(tmpDir, "old-record.json");
-    fs.writeFileSync(recordPath, JSON.stringify({
-      durationMs: 45_000, metrics: { costUsdTotal: 2.5, models: ["opus"] },
-    }));
+    fs.writeFileSync(
+      recordPath,
+      JSON.stringify({
+        durationMs: 45_000,
+        metrics: { costUsdTotal: 2.5, models: ["opus"] },
+      }),
+    );
 
     const read = readRecordMetrics(recordPath);
     if (read.kind !== "metrics") {

@@ -83,15 +83,14 @@ export class FakeClock implements Clock {
     this.monotonicMs = target;
   }
 
-  private earliestDueBy(
-    target: number,
-  ): { dueAt: number; fn: () => void; id: number } | undefined {
-    return this.timers.reduce<
-      { dueAt: number; fn: () => void; id: number } | undefined
-    >((earliest, t) => {
-      if (t.dueAt > target) return earliest;
-      if (!earliest || t.dueAt < earliest.dueAt) return t;
-      return earliest;
-    }, undefined);
+  private earliestDueBy(target: number): { dueAt: number; fn: () => void; id: number } | undefined {
+    return this.timers.reduce<{ dueAt: number; fn: () => void; id: number } | undefined>(
+      (earliest, t) => {
+        if (t.dueAt > target) return earliest;
+        if (!earliest || t.dueAt < earliest.dueAt) return t;
+        return earliest;
+      },
+      undefined,
+    );
   }
 }

@@ -55,11 +55,7 @@ def f(): string {
 }`),
       ),
     ) as any[];
-    expect(body.map((n) => n.value.functionName)).toEqual([
-      "fetchRaw",
-      "prepare",
-      "enrich",
-    ]);
+    expect(body.map((n) => n.value.functionName)).toEqual(["fetchRaw", "prepare", "enrich"]);
   });
 
   it("the statement tail call is not hoisted", () => {
@@ -124,9 +120,7 @@ def f(): string {
   return outer(inner(1))
 }`),
     );
-    const temp = (stmts(body) as any[]).find(
-      (n) => n.value?.functionName === "inner",
-    );
+    const temp = (stmts(body) as any[]).find((n) => n.value?.functionName === "inner");
     expect(temp.variableName).toBe("__hoist_1");
   });
 
@@ -140,10 +134,7 @@ def f(): string {
 }`),
       ),
     ) as any[];
-    expect(body.map((n) => n.value.functionName)).toEqual([
-      "searchTools",
-      "render",
-    ]);
+    expect(body.map((n) => n.value.functionName)).toEqual(["searchTools", "render"]);
   });
 
   it("a temp emitted inside a block body lands in that body, never the enclosing one", () => {
@@ -297,9 +288,7 @@ node main() {
 }`;
     const parsed = parseAgency(src, {}, true);
     if (!parsed.success) throw new Error(parsed.message);
-    const main = (parsed.result.nodes as any[]).find(
-      (n) => n.type === "graphNode",
-    );
+    const main = (parsed.result.nodes as any[]).find((n) => n.type === "graphNode");
     const out = hoistCallsInScope(main.body);
     const handle = (stmts(out) as any[]).find((n) => n.type === "handleBlock");
     expect(handle).toBeDefined();
@@ -352,14 +341,18 @@ node main() {
   });
 
   it("hoists goto arguments (the node call itself is control flow and stays)", () => {
-    const parsed = parseAgency(`
+    const parsed = parseAgency(
+      `
 node main() {
   goto second(wrap(side(1)))
 }
 
 node second(x: number) {
   return x
-}`, {}, true);
+}`,
+      {},
+      true,
+    );
     if (!parsed.success) throw new Error(parsed.message);
     const main = (parsed.result.nodes as any[]).find(
       (n) => n.type === "graphNode" && n.nodeName !== "second",
@@ -421,10 +414,7 @@ def f(): string {
     const t = temps(body) as any[];
     // inner() extracts first, then the base call mk(...) hoists as its
     // own step; the chain applies .field to the temp ref.
-    expect(t.map((n) => n.value.functionName ?? n.value.type)).toEqual([
-      "inner",
-      "mk",
-    ]);
+    expect(t.map((n) => n.value.functionName ?? n.value.type)).toEqual(["inner", "mk"]);
     const assign = (stmts(body) as any[]).find((n) => n.variableName === "x");
     const chainArg = assign.value.arguments[0];
     expect(chainArg.type).toBe("valueAccess");
@@ -481,9 +471,7 @@ describe("fixture shape pins (S6): the flagship fixtures exercise hoisted shapes
     const t = temps(out) as any[];
     expect(t).toHaveLength(1);
     expect(t[0].value.functionName).toBe("myOptions");
-    const llmStmt = (stmts(out) as any[]).find(
-      (n) => n.value?.functionName === "llm",
-    );
+    const llmStmt = (stmts(out) as any[]).find((n) => n.value?.functionName === "llm");
     const optionsArg = llmStmt.value.arguments[1];
     expect(optionsArg).toMatchObject({ type: "variableName", value: t[0].variableName });
   });

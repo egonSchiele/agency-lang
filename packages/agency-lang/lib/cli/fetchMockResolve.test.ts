@@ -5,8 +5,12 @@ import * as path from "path";
 import { resolveFetchMocks } from "./fetchMockResolve.js";
 
 let dir: string;
-beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), "fm-")); });
-afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+beforeEach(() => {
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "fm-"));
+});
+afterEach(() => {
+  fs.rmSync(dir, { recursive: true, force: true });
+});
 
 describe("resolveFetchMocks", () => {
   it("orders per-test entries before file-level entries", () => {
@@ -19,8 +23,9 @@ describe("resolveFetchMocks", () => {
   });
 
   it("throws (pointing at the test file) when an entry has neither return nor returnFile", () => {
-    expect(() => resolveFetchMocks(undefined, [{ url: "a" }], dir))
-      .toThrow(/needs a "return" or a "returnFile"/);
+    expect(() => resolveFetchMocks(undefined, [{ url: "a" }], dir)).toThrow(
+      /needs a "return" or a "returnFile"/,
+    );
   });
 
   it("inlines returnFile contents into return and strips returnFile", () => {
@@ -31,14 +36,16 @@ describe("resolveFetchMocks", () => {
   });
 
   it("throws when returnFile is missing", () => {
-    expect(() => resolveFetchMocks(undefined, [{ url: "a", returnFile: "nope.html" }], dir))
-      .toThrow(/returnFile not found/);
+    expect(() =>
+      resolveFetchMocks(undefined, [{ url: "a", returnFile: "nope.html" }], dir),
+    ).toThrow(/returnFile not found/);
   });
 
   it("throws when both return and returnFile are set", () => {
     fs.writeFileSync(path.join(dir, "f.txt"), "x");
-    expect(() => resolveFetchMocks(undefined, [{ url: "a", return: "y", returnFile: "f.txt" }], dir))
-      .toThrow(/only one of "return" or "returnFile"/);
+    expect(() =>
+      resolveFetchMocks(undefined, [{ url: "a", return: "y", returnFile: "f.txt" }], dir),
+    ).toThrow(/only one of "return" or "returnFile"/);
   });
 
   it("returns [] for two undefined inputs", () => {

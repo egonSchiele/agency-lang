@@ -66,12 +66,10 @@ export function stageConfiguredAgent(
   try {
     fs.cpSync(agentDir, staged, { recursive: true });
     makeTreeWritable(staged);
-    const runFile = compile(
-      config,
-      path.join(staged, "agent.agency"),
-      undefined,
-      { freshness: "always", quiet: true },
-    );
+    const runFile = compile(config, path.join(staged, "agent.agency"), undefined, {
+      freshness: "always",
+      quiet: true,
+    });
     if (runFile === null) {
       throw new Error(`Failed to compile agent with config ${configPath}`);
     }

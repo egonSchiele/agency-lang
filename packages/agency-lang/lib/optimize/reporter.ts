@@ -8,8 +8,17 @@ export type OptimizeVerbosity = "silent" | "default";
 
 /** Presentation boundary for the optimizers. `silent` renders nothing. */
 export type PointwiseReporter = {
-  runStarted(args: { optimizer: string; runId: string; targets: OptimizeTarget[]; inputCount: number; iterations: number }): void;
-  gradingSetup(args: { graders: { name: string; describe: string }[]; firstInput?: { id: string; goal?: string } }): void;
+  runStarted(args: {
+    optimizer: string;
+    runId: string;
+    targets: OptimizeTarget[];
+    inputCount: number;
+    iterations: number;
+  }): void;
+  gradingSetup(args: {
+    graders: { name: string; describe: string }[];
+    firstInput?: { id: string; goal?: string };
+  }): void;
   baselineScored(args: { objective: number }): void;
   iterationDecided(args: {
     iter: number;
@@ -53,20 +62,40 @@ export function createPointwiseReporter(
   if (verbosity === "silent") return SILENT_POINTWISE_REPORTER;
   return {
     runStarted({ optimizer, runId, targets, inputCount, iterations }) {
-      log(color.yellow(`\n== optimize ${optimizer} (run ${runId}): ${targets.length} target(s), ${inputCount} input(s), up to ${iterations} iteration(s) ==`));
+      log(
+        color.yellow(
+          `\n== optimize ${optimizer} (run ${runId}): ${targets.length} target(s), ${inputCount} input(s), up to ${iterations} iteration(s) ==`,
+        ),
+      );
       for (const target of targets) {
-        log(`  - ${color.blue(target.id)} = ${JSON.stringify(truncate(target.value, LIST_VALUE_LIMIT))}`);
+        log(
+          `  - ${color.blue(target.id)} = ${JSON.stringify(truncate(target.value, LIST_VALUE_LIMIT))}`,
+        );
       }
     },
     gradingSetup({ graders, firstInput }) {
       log(color.yellow("  grading:"));
       for (const g of graders) log(`    - ${g.describe}`);
-      if (firstInput) log(color.dim(`    first input: ${firstInput.id}${firstInput.goal ? ` — goal: ${truncate(firstInput.goal, 80)}` : ""}`));
+      if (firstInput)
+        log(
+          color.dim(
+            `    first input: ${firstInput.id}${firstInput.goal ? ` — goal: ${truncate(firstInput.goal, 80)}` : ""}`,
+          ),
+        );
     },
     baselineScored({ objective }) {
       log(`  baseline   objective ${objective.toFixed(3)}`);
     },
-    iterationDecided({ iter, total, decision, objective, rationale, changes, diagnostics, durationMs }) {
+    iterationDecided({
+      iter,
+      total,
+      decision,
+      objective,
+      rationale,
+      changes,
+      diagnostics,
+      durationMs,
+    }) {
       const obj = objective === undefined ? "" : ` objective ${objective.toFixed(3)}`;
       const timing = durationMs === undefined ? "" : color.dim(` (${formatMs(durationMs)})`);
       log(`  iter ${iter}/${total}  ${decisionTag(decision)}${obj}${timing}`);
@@ -90,20 +119,23 @@ export function createPointwiseReporter(
         logValueDiff(log, initial.id, initial.value, finalById[initial.id]?.value ?? initial.value);
       }
       log("");
-      log(color.yellow(`Complete: champion iteration ${result.championIter}, accepted ${result.acceptedCount}, rejected ${result.rejectedCount}, invalid ${result.validationFailedCount} (${formatMs(durationMs)})`));
+      log(
+        color.yellow(
+          `Complete: champion iteration ${result.championIter}, accepted ${result.acceptedCount}, rejected ${result.rejectedCount}, invalid ${result.validationFailedCount} (${formatMs(durationMs)})`,
+        ),
+      );
     },
   };
 }
 
 export const SILENT_POINTWISE_REPORTER: PointwiseReporter = {
-  runStarted() { },
-  gradingSetup() { },
-  baselineScored() { },
-  iterationDecided() { },
-  note() { },
-  runFinished() { },
+  runStarted() {},
+  gradingSetup() {},
+  baselineScored() {},
+  iterationDecided() {},
+  note() {},
+  runFinished() {},
 };
-
 
 const LIST_VALUE_LIMIT = 60;
 const DIFF_VALUE_LIMIT = 1000;
@@ -113,9 +145,17 @@ const DIFF_VALUE_LIMIT = 1000;
  * line-based diff. Identical values come out dimmed with no +/- markers,
  * which is exactly `formatDiff`'s behavior for equal inputs.
  */
-function logValueDiff(log: (line: string) => void, target: string, oldValue: string, newValue: string): void {
+function logValueDiff(
+  log: (line: string) => void,
+  target: string,
+  oldValue: string,
+  newValue: string,
+): void {
   log(color.blue(`  ~ ${target}:`));
-  logBlock(log, formatDiff(truncate(oldValue, DIFF_VALUE_LIMIT), truncate(newValue, DIFF_VALUE_LIMIT)));
+  logBlock(
+    log,
+    formatDiff(truncate(oldValue, DIFF_VALUE_LIMIT), truncate(newValue, DIFF_VALUE_LIMIT)),
+  );
 }
 
 function logBlock(log: (line: string) => void, block: string): void {

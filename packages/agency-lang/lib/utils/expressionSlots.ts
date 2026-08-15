@@ -205,21 +205,43 @@ function chainSlots(chain: any[], key: string): ExpressionSlot[] {
         [key]: replaceAt(owner[key], i, patch(owner[key][i], expr)),
       });
     if (entry.kind === "index" && entry.index) {
-      return [slot(entry.index, "once", writeEntry((en, e) => ({ ...en, index: e })))];
+      return [
+        slot(
+          entry.index,
+          "once",
+          writeEntry((en, e) => ({ ...en, index: e })),
+        ),
+      ];
     }
     if (entry.kind === "slice") {
       const out: ExpressionSlot[] = [];
       if (entry.start) {
-        out.push(slot(entry.start, "once", writeEntry((en, e) => ({ ...en, start: e }))));
+        out.push(
+          slot(
+            entry.start,
+            "once",
+            writeEntry((en, e) => ({ ...en, start: e })),
+          ),
+        );
       }
       if (entry.end) {
-        out.push(slot(entry.end, "once", writeEntry((en, e) => ({ ...en, end: e }))));
+        out.push(
+          slot(
+            entry.end,
+            "once",
+            writeEntry((en, e) => ({ ...en, end: e })),
+          ),
+        );
       }
       return out;
     }
     if (entry.kind === "methodCall" && entry.functionCall) {
       return [
-        slot(entry.functionCall, "once", writeEntry((en, e) => ({ ...en, functionCall: e }))),
+        slot(
+          entry.functionCall,
+          "once",
+          writeEntry((en, e) => ({ ...en, functionCall: e })),
+        ),
       ];
     }
     return [];
@@ -284,9 +306,7 @@ export function expressionSlots(node: AgencyNode): ExpressionSlot[] {
       // value-position form pattern lowering rewrites at parse time.
       return [slot(n.condition, "once", (o, e) => ({ ...o, condition: e }) as AgencyNode)];
     case "whileLoop":
-      return [
-        slot(n.condition, "perIteration", (o, e) => ({ ...o, condition: e }) as AgencyNode),
-      ];
+      return [slot(n.condition, "perIteration", (o, e) => ({ ...o, condition: e }) as AgencyNode)];
     case "forLoop":
       return [slot(n.iterable, "once", (o, e) => ({ ...o, iterable: e }) as AgencyNode)];
     case "matchBlock":
@@ -347,9 +367,7 @@ export function expressionSlots(node: AgencyNode): ExpressionSlot[] {
             })),
           ];
         }
-        return [
-          slot(item, "once", (o: any, e) => ({ ...o, items: replaceAt(o.items, i, e) })),
-        ];
+        return [slot(item, "once", (o: any, e) => ({ ...o, items: replaceAt(o.items, i, e) }))];
       });
     case "agencyObject":
       return (n.entries ?? []).flatMap((entry: any, i: number) => {

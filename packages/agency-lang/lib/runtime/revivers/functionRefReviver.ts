@@ -30,7 +30,7 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
       result.registeredName = value.registeredName;
     }
     // Serialize params with bound values inline
-    if (value.params.some(p => p.isBound)) {
+    if (value.params.some((p) => p.isBound)) {
       result.params = value.params;
     }
     // Serialize full tool definition (may have reduced schema/description)
@@ -50,13 +50,12 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
   revive(value: Record<string, unknown>): AgencyFunction {
     if (!this.registry) {
       throw new Error(
-        `FunctionRefReviver: no registry set. Cannot revive function "${value.name}" from module "${value.module}".`
+        `FunctionRefReviver: no registry set. Cannot revive function "${value.name}" from module "${value.module}".`,
       );
     }
     const name = value.name as string;
     const module = value.module as string;
-    const lookupName =
-      typeof value.registeredName === "string" ? value.registeredName : name;
+    const lookupName = typeof value.registeredName === "string" ? value.registeredName : name;
 
     const found = lookupInRegistry(this.registry, lookupName, module);
     if (!found) {
@@ -85,12 +84,16 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
       // result may have `toolDefinition === null` (when the original had
       // no tool def), and `.describe()` synthesizes a stub tool def in
       // that case so the description isn't silently dropped.
-      if (typeof value.toolDescription === "string"
-          && value.toolDescription !== result.toolDefinition?.description) {
+      if (
+        typeof value.toolDescription === "string" &&
+        value.toolDescription !== result.toolDefinition?.description
+      ) {
         result = result.describe(value.toolDescription);
       }
-    } else if (typeof value.toolDescription === "string"
-        && value.toolDescription !== original.toolDefinition?.description) {
+    } else if (
+      typeof value.toolDescription === "string" &&
+      value.toolDescription !== original.toolDefinition?.description
+    ) {
       // Restore tool description for non-bound functions that used .describe().
       // Covers the case where `original.toolDefinition` is null too (a function
       // that gained its tool def solely through `.describe()`).
@@ -113,11 +116,7 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
    *  writes — including the guard-trip checkpoint that salvages drafts
    *  (#652). Every miss maps to a stub that survives re-serialization and
    *  fails, precisely, only if something actually invokes it. */
-  private reviveMiss(
-    name: string,
-    module: string,
-    value: Record<string, unknown>,
-  ): AgencyFunction {
+  private reviveMiss(name: string, module: string, value: Record<string, unknown>): AgencyFunction {
     // Compiler-generated blocks register themselves only when their creating
     // line executes. A fresh process restoring a checkpoint has executed
     // nothing yet, so a miss here is EXPECTED for blocks — replay rebinds
@@ -243,9 +242,7 @@ function makeLazyCallbackRef(
     name,
     module,
     fn: async (...args: unknown[]) => {
-      const real = reviver.registry
-        ? lookupInRegistry(reviver.registry, name, module)
-        : undefined;
+      const real = reviver.registry ? lookupInRegistry(reviver.registry, name, module) : undefined;
       if (!real) {
         const msg =
           `Callback "${name}" from module "${module}" crossed a process ` +
@@ -284,8 +281,7 @@ function makeUnresolvedFunctionStub(
   return new AgencyFunction({
     name,
     module,
-    registeredName:
-      typeof value.registeredName === "string" ? value.registeredName : name,
+    registeredName: typeof value.registeredName === "string" ? value.registeredName : name,
     fn: () => {
       const msg =
         `Function "${name}" from module "${module}" crossed a serialization ` +

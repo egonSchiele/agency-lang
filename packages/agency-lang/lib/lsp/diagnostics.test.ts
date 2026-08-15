@@ -119,9 +119,7 @@ describe("runDiagnostics — every prelude name resolves", () => {
       // would leave zero name-resolution diagnostics and the assertion
       // below would pass while checking nothing.
       expect(program).not.toBeNull();
-      const undefinedNames = diagnostics.filter((d) =>
-        /is not defined/.test(d.message),
-      );
+      const undefinedNames = diagnostics.filter((d) => /is not defined/.test(d.message));
       expect(undefinedNames.map((d) => d.message)).toEqual([]);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -189,9 +187,7 @@ describe("runDiagnostics — shadowing a prelude name", () => {
       // The shadow warning must survive the pruning pass for this name
       // specifically, and the reserved-name error rides alongside it.
       expect(messages).toContain("'_guard' shadows an imported function.");
-      expect(messages).toContain(
-        "'_guard' is a reserved built-in; cannot be redefined.",
-      );
+      expect(messages).toContain("'_guard' is a reserved built-in; cannot be redefined.");
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -216,10 +212,7 @@ describe("runDiagnostics — unsaved edits use the editor buffer", () => {
     try {
       const mainFile = path.join(tmpDir, "main.agency");
       // Saved on disk: no import yet.
-      fs.writeFileSync(
-        mainFile,
-        ["node main() {", "  print(now())", "}", ""].join("\n"),
-      );
+      fs.writeFileSync(mainFile, ["node main() {", "  print(now())", "}", ""].join("\n"));
       // Editor buffer: the import has been typed but not saved.
       const buffer = [
         'import { now } from "std::date"',
@@ -248,10 +241,7 @@ describe("runDiagnostics — unsaved edits use the editor buffer", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-lsp-partial-"));
     try {
       const mainFile = path.join(tmpDir, "main.agency");
-      fs.writeFileSync(
-        mainFile,
-        ["node main() {", "  print(now())", "}", ""].join("\n"),
-      );
+      fs.writeFileSync(mainFile, ["node main() {", "  print(now())", "}", ""].join("\n"));
       // Buffer imports `now` but not `elapsedTime`. The `elapsedTime` squiggle
       // must survive — the old code wiped it by aborting before type-checking.
       const buffer = [
@@ -264,12 +254,7 @@ describe("runDiagnostics — unsaved edits use the editor buffer", () => {
       ].join("\n");
 
       const doc = makeDoc(buffer, `file://${mainFile}`);
-      const { diagnostics } = runDiagnostics(
-        doc,
-        mainFile,
-        {},
-        buildWithBuffer(mainFile, buffer),
-      );
+      const { diagnostics } = runDiagnostics(doc, mainFile, {}, buildWithBuffer(mainFile, buffer));
 
       const messages = diagnostics.map((d) => d.message);
       expect(messages).toContain("Function 'elapsedTime' is not defined.");
@@ -306,9 +291,7 @@ describe("runDiagnostics — an unresolvable import degrades gracefully", () => 
       expect(program).not.toBeNull();
       const messages = diagnostics.map((d) => d.message);
       // The bad name is reported exactly once, not duplicated.
-      const badImportErrors = messages.filter((m) =>
-        /'doesNotExist'.*not defined in/.test(m),
-      );
+      const badImportErrors = messages.filter((m) => /'doesNotExist'.*not defined in/.test(m));
       expect(badImportErrors).toHaveLength(1);
       // The good import still resolves: `now` must not read as undefined.
       expect(messages.some((m) => /'now' is not defined/.test(m))).toBe(false);
@@ -365,10 +348,9 @@ describe("lint diagnostics", () => {
     expect(lint!.severity).toBe(DiagnosticSeverity.Hint);
     expect(lint!.tags).toContain(DiagnosticTag.Unnecessary);
     // The grayed range covers only the name 'now'.
-    expect(source.slice(
-      doc.offsetAt(lint!.range.start),
-      doc.offsetAt(lint!.range.end),
-    )).toBe("now");
+    expect(source.slice(doc.offsetAt(lint!.range.start), doc.offsetAt(lint!.range.end))).toBe(
+      "now",
+    );
   });
 
   it("does not gray out the injected prelude names", () => {

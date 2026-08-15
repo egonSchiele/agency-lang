@@ -17,14 +17,26 @@ describe("FrameRecorder", () => {
   it("writeHTML produces valid HTML with all frames", () => {
     const recorder = new FrameRecorder();
     recorder.write(
-      new Frame({ x: 0, y: 0, width: 10, height: 2, style: {},
-        content: [[{ char: "h" }, { char: "i" }]] }),
-      "step 1"
+      new Frame({
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 2,
+        style: {},
+        content: [[{ char: "h" }, { char: "i" }]],
+      }),
+      "step 1",
     );
     recorder.write(
-      new Frame({ x: 0, y: 0, width: 10, height: 2, style: {},
-        content: [[{ char: "b" }, { char: "y" }]] }),
-      "step 2"
+      new Frame({
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 2,
+        style: {},
+        content: [[{ char: "b" }, { char: "y" }]],
+      }),
+      "step 2",
     );
     const html = recorder.toHTML();
     expect(html).toContain("step 1");

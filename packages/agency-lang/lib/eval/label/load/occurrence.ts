@@ -41,8 +41,9 @@ export function projectOccurrenceFields(args: {
   if (ineligible !== undefined) {
     return { skipReason: ineligible };
   }
-  const fields: Fields = args.taskValue === null
-    ? { ...args.constantFields, output }
-    : { task: projectArtifactField(args.taskValue), ...args.constantFields, output };
+  const fields: Fields =
+    args.taskValue === null
+      ? { ...args.constantFields, output }
+      : { task: projectArtifactField(args.taskValue), ...args.constantFields, output };
   return { fields };
 }

@@ -35,9 +35,9 @@ describe("formatting splices", () => {
   });
 
   it("round-trips a declaration splice structurally", () => {
-    expect(roundTripsStructurally(`$( makeGetters(["a"]) )\n\nnode main() {\n  return 1\n}\n`)).toBe(
-      true,
-    );
+    expect(
+      roundTripsStructurally(`$( makeGetters(["a"]) )\n\nnode main() {\n  return 1\n}\n`),
+    ).toBe(true);
   });
 
   it("round-trips an expression splice structurally", () => {

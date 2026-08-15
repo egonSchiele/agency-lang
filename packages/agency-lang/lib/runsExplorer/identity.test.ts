@@ -4,24 +4,32 @@ import { agentColors, resolveAgentName, shortAgentLabel } from "./identity.js";
 
 describe("resolveAgentName", () => {
   it("prefers the statelog agentName over everything", () => {
-    expect(resolveAgentName({
-      agentName: "gcode-v2",
-      agentLabel: "/abs/agent.agency:main",
-      command: "claude -p {task}",
-      fallback: "run-1",
-    })).toBe("gcode-v2");
+    expect(
+      resolveAgentName({
+        agentName: "gcode-v2",
+        agentLabel: "/abs/agent.agency:main",
+        command: "claude -p {task}",
+        fallback: "run-1",
+      }),
+    ).toBe("gcode-v2");
   });
 
   it("falls back through label, then command, then the fallback", () => {
-    expect(resolveAgentName({ agentLabel: "/abs/regex.agency:main", fallback: "f" })).toBe("regex.agency");
-    expect(resolveAgentName({ command: "node ./agency.js agent --agent gcode", fallback: "f" })).toBe("agency-agent(gcode)");
+    expect(resolveAgentName({ agentLabel: "/abs/regex.agency:main", fallback: "f" })).toBe(
+      "regex.agency",
+    );
+    expect(
+      resolveAgentName({ command: "node ./agency.js agent --agent gcode", fallback: "f" }),
+    ).toBe("agency-agent(gcode)");
     expect(resolveAgentName({ fallback: "log.jsonl#a41f2c" })).toBe("log.jsonl#a41f2c");
   });
 });
 
 describe("shortAgentLabel", () => {
   it("shortens agency agent commands to agency-agent(name)", () => {
-    expect(shortAgentLabel("node ./dist/scripts/agency.js agent --agent gcode --policy x")).toBe("agency-agent(gcode)");
+    expect(shortAgentLabel("node ./dist/scripts/agency.js agent --agent gcode --policy x")).toBe(
+      "agency-agent(gcode)",
+    );
     expect(shortAgentLabel("agency agent")).toBe("agency-agent");
   });
 

@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  __internal_setMemoryId,
-  __internal_shouldRunMemory,
-} from "./memory.js";
+import { __internal_setMemoryId, __internal_shouldRunMemory } from "./memory.js";
 
 /**
  * Concurrency regression test for the context-injected builtins
@@ -82,13 +79,8 @@ describe("std::memory ctx-passing concurrency", () => {
   });
 });
 
-import {
-  _enableMemory,
-  _disableMemory,
-} from "./memory.js";
-import {
-  _resetStoreRegistry,
-} from "../runtime/memory/index.js";
+import { _enableMemory, _disableMemory } from "./memory.js";
+import { _resetStoreRegistry } from "../runtime/memory/index.js";
 import { runInTestContext } from "../runtime/asyncContext.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { StateStack } from "../runtime/state/stateStack.js";

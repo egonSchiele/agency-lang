@@ -135,10 +135,7 @@ function runCheckerPipeline<T>(
   });
 }
 
-export function typeCheckSource(
-  source: string,
-  sourcePath?: string,
-): TypeCheckReport {
+export function typeCheckSource(source: string, sourcePath?: string): TypeCheckReport {
   return runCheckerPipeline(source, sourcePath, ({ checkResult }) => {
     // Partition into errors and warnings in a single pass. The only severity
     // values the type-checker emits are "error" and "warning" (see

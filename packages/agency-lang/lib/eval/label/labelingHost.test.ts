@@ -9,7 +9,9 @@ function fakeController() {
   return {
     snapshot: () => ({}) as never,
     dispatch: async () => ({}) as never,
-    close: async () => { closeCount += 1; },
+    close: async () => {
+      closeCount += 1;
+    },
     closed: () => closeCount,
   };
 }
@@ -39,17 +41,21 @@ describe("labelingHost", () => {
     const dependencies = deps({ openSession: vi.fn(async () => controller) as never });
     await createLabelingHost(SCREEN, SIZE, dependencies).run(request);
 
-    expect(dependencies.openSession).toHaveBeenCalledWith(expect.objectContaining({
-      datasetDir: "/tmp/ds",
-      checklistFile: "/tmp/cl.json",
-      annotator: { kind: "human", id: "adit" },
-      focusOutputId: "out_abc",
-    }));
-    expect(dependencies.runTui).toHaveBeenCalledWith(expect.objectContaining({
-      controller,
-      screen: SCREEN,
-      fieldOrder: ["task", "output"],
-    }));
+    expect(dependencies.openSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        datasetDir: "/tmp/ds",
+        checklistFile: "/tmp/cl.json",
+        annotator: { kind: "human", id: "adit" },
+        focusOutputId: "out_abc",
+      }),
+    );
+    expect(dependencies.runTui).toHaveBeenCalledWith(
+      expect.objectContaining({
+        controller,
+        screen: SCREEN,
+        fieldOrder: ["task", "output"],
+      }),
+    );
     expect(controller.closed()).toBe(1);
   });
 
@@ -59,10 +65,13 @@ describe("labelingHost", () => {
     const screen = { destroy } as unknown as Screen;
     const dependencies = deps({
       openSession: vi.fn(async () => controller) as never,
-      runTui: vi.fn(async () => { throw new Error("tui exploded"); }) as never,
+      runTui: vi.fn(async () => {
+        throw new Error("tui exploded");
+      }) as never,
     });
-    await expect(createLabelingHost(screen, SIZE, dependencies).run(request))
-      .rejects.toThrow(/tui exploded/);
+    await expect(createLabelingHost(screen, SIZE, dependencies).run(request)).rejects.toThrow(
+      /tui exploded/,
+    );
     expect(controller.closed()).toBe(1);
     expect(destroy).not.toHaveBeenCalled();
   });

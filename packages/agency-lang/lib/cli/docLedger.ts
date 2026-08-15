@@ -210,7 +210,10 @@ export function ledgerEntryHasValidShape(entry: unknown): entry is DocLedgerEntr
  * never dereference an unvalidated field: `authority: true` implies every
  * top-level field, every entry, and every key checked out.
  */
-export function loadDocLedger(outDirReal: string): { ledger: DocLedger | null; authority: boolean } {
+export function loadDocLedger(outDirReal: string): {
+  ledger: DocLedger | null;
+  authority: boolean;
+} {
   const file = path.join(outDirReal, DOC_LEDGER_NAME);
   if (!fs.existsSync(file)) {
     return { ledger: null, authority: false };
@@ -474,8 +477,7 @@ export function buildDocLedgerEntry(args: {
     const pre = args.preRender;
     const sameMembership =
       pre.deps.length === fp.deps.length && pre.deps.every((d, i) => d === fp.deps[i]);
-    const sameBytes =
-      sameMembership && pre.depHashes.every((h, i) => (h ?? "") === depHashes[i]);
+    const sameBytes = sameMembership && pre.depHashes.every((h, i) => (h ?? "") === depHashes[i]);
     if (!sameMembership || !sameBytes) {
       cacheable = false;
     }

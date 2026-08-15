@@ -11,8 +11,19 @@
  */
 
 import { pathToFileURL } from "url";
-import type { IpcResultMessage, IpcErrorMessage, IpcInterruptedMessage, RunInstruction, ResumeInstruction } from "./ipc.js";
-import { ipcLog, resolveNodeCallArgs, setSubprocessIpcPayloadLimit, serializeInterruptsForIpc } from "./ipc.js";
+import type {
+  IpcResultMessage,
+  IpcErrorMessage,
+  IpcInterruptedMessage,
+  RunInstruction,
+  ResumeInstruction,
+} from "./ipc.js";
+import {
+  ipcLog,
+  resolveNodeCallArgs,
+  setSubprocessIpcPayloadLimit,
+  serializeInterruptsForIpc,
+} from "./ipc.js";
 import { hasInterrupts } from "./interrupts.js";
 import { setRuntimeConfigOverrides } from "./configOverrides.js";
 import { setSubprocessRunInfo } from "./subprocessRunInfo.js";
@@ -40,7 +51,9 @@ process.on("disconnect", () => {
  */
 function sendOrDie(msg: IpcResultMessage | IpcErrorMessage | IpcInterruptedMessage): Promise<void> {
   if (typeof process.send !== "function") {
-    console.error("[bootstrap] No IPC channel — was this script run directly? It should only be forked by _run().");
+    console.error(
+      "[bootstrap] No IPC channel — was this script run directly? It should only be forked by _run().",
+    );
     process.exit(1);
   }
   ipcLog("send", msg);
@@ -58,7 +71,9 @@ function sendOrDie(msg: IpcResultMessage | IpcErrorMessage | IpcInterruptedMessa
  * them back to the same Result.failure shape that wall_clock and memory
  * limits produce.
  */
-async function sendResultOrLimitError(msg: IpcResultMessage | IpcInterruptedMessage): Promise<void> {
+async function sendResultOrLimitError(
+  msg: IpcResultMessage | IpcInterruptedMessage,
+): Promise<void> {
   const serialized = JSON.stringify(msg);
   const byteLength = Buffer.byteLength(serialized, "utf8");
   if (byteLength > ipcPayloadLimit) {
@@ -135,7 +150,10 @@ async function executeResume(mod: any, msg: ResumeInstruction): Promise<any> {
     process.exit(1);
   }
   const interrupts = msg.interrupts.map((intr) => ({ ...intr, checkpoint: msg.checkpoint }));
-  ipcLog("send", { type: "log", detail: `resuming node ${msg.node} with ${msg.responses.length} responses` });
+  ipcLog("send", {
+    type: "log",
+    detail: `resuming node ${msg.node} with ${msg.responses.length} responses`,
+  });
   return mod.respondToInterrupts(interrupts, msg.responses);
 }
 
@@ -179,9 +197,8 @@ const bootstrapHandler = async (msg: RunInstruction | ResumeInstruction) => {
     // eslint-disable-next-line no-restricted-syntax -- dynamic import required: script path is determined at runtime by the parent process
     const mod = await import(scriptUrl);
 
-    const result = msg.type === "resume"
-      ? await executeResume(mod, msg)
-      : await executeRun(mod, msg);
+    const result =
+      msg.type === "resume" ? await executeResume(mod, msg) : await executeRun(mod, msg);
     ipcLog("send", { type: "log", detail: `node ${msg.node} returned` });
 
     if (hasInterrupts(result.data)) {

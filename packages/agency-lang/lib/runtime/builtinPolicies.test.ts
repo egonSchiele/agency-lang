@@ -29,9 +29,7 @@ describe("builtinPolicy", () => {
     // target field (remove) — a fat-fingered "dir" here would silently disable scoping
     expect(p!["std::remove"]).toEqual([{ match: { target: scope }, action: "approve" }]);
     // src + dest fields (copy/move)
-    expect(p!["std::copy"]).toEqual([
-      { match: { src: scope, dest: scope }, action: "approve" },
-    ]);
+    expect(p!["std::copy"]).toEqual([{ match: { src: scope, dest: scope }, action: "approve" }]);
     // cwd field (git)
     expect(p!["std::git::commit"]).toEqual([{ match: { cwd: scope }, action: "approve" }]);
   });
@@ -55,12 +53,7 @@ describe("builtinPolicy", () => {
   });
 
   it("lists the four built-in names", () => {
-    expect(builtinPolicyNames()).toEqual([
-      "recommended",
-      "minimal",
-      "with-writes",
-      "approve-all",
-    ]);
+    expect(builtinPolicyNames()).toEqual(["recommended", "minimal", "with-writes", "approve-all"]);
     expect(BUILTIN_POLICIES).toHaveLength(4);
   });
 });

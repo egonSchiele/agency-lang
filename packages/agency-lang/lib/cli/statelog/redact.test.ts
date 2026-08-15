@@ -7,9 +7,7 @@ describe("redactValues", () => {
   });
 
   it("replaces every occurrence of every value", () => {
-    expect(redactValues("a=X b=Y a=X", ["X", "Y"])).toBe(
-      "a=[redacted] b=[redacted] a=[redacted]",
-    );
+    expect(redactValues("a=X b=Y a=X", ["X", "Y"])).toBe("a=[redacted] b=[redacted] a=[redacted]");
   });
 
   it("skips empty values (they would match everywhere)", () => {

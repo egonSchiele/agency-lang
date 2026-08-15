@@ -26,9 +26,7 @@ def main() {
 `);
     expect(
       errs.some((e) =>
-        e.includes(
-          "Argument type 'number' is not assignable to parameter type 'string'",
-        ),
+        e.includes("Argument type 'number' is not assignable to parameter type 'string'"),
       ),
     ).toBe(true);
   });
@@ -53,9 +51,7 @@ def main() {
   f = 6
 }
 `);
-    expect(
-      errs.some((e) => e.includes("Cannot reassign to constant 'f'")),
-    ).toBe(true);
+    expect(errs.some((e) => e.includes("Cannot reassign to constant 'f'"))).toBe(true);
   });
 });
 
@@ -67,11 +63,9 @@ def main() {
   const x: string = f
 }
 `);
-    expect(
-      errs.some((e) =>
-        e.includes("Type 'number' is not assignable to type 'string'"),
-      ),
-    ).toBe(true);
+    expect(errs.some((e) => e.includes("Type 'number' is not assignable to type 'string'"))).toBe(
+      true,
+    );
   });
 
   it("flags a top-level const passed as a wrongly-typed argument inside a node", () => {
@@ -84,9 +78,7 @@ node main() {
 `);
     expect(
       errs.some((e) =>
-        e.includes(
-          "Argument type 'number' is not assignable to parameter type 'string'",
-        ),
+        e.includes("Argument type 'number' is not assignable to parameter type 'string'"),
       ),
     ).toBe(true);
   });
@@ -102,9 +94,7 @@ node main() {
 `);
     expect(
       errs.some((e) =>
-        e.includes(
-          "Argument type 'number' is not assignable to parameter type 'string'",
-        ),
+        e.includes("Argument type 'number' is not assignable to parameter type 'string'"),
       ),
     ).toBe(true);
   });
@@ -116,9 +106,7 @@ def main() {
   f = 6
 }
 `);
-    expect(
-      errs.some((e) => e.includes("Cannot reassign to constant 'f'")),
-    ).toBe(true);
+    expect(errs.some((e) => e.includes("Cannot reassign to constant 'f'"))).toBe(true);
   });
 
   it("lets a parameter shadow a top-level binding", () => {

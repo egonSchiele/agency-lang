@@ -50,9 +50,17 @@ function writeSource(inputIds: string[], traceId = "trace-1"): void {
 }
 
 function writeChecklist(questions: string[]): void {
-  fs.writeFileSync(checklistFile, JSON.stringify({
-    name: "news-quality", questions: questions.map((text) => ({ text })),
-  }, null, 2));
+  fs.writeFileSync(
+    checklistFile,
+    JSON.stringify(
+      {
+        name: "news-quality",
+        questions: questions.map((text) => ({ text })),
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 /**
@@ -94,9 +102,7 @@ async function open(dependencies = makeDependencies()): Promise<LabelingSessionC
   return openOnly(dependencies);
 }
 
-async function openOnly(
-  dependencies = makeDependencies(),
-): Promise<LabelingSessionController> {
+async function openOnly(dependencies = makeDependencies()): Promise<LabelingSessionController> {
   return createLabelingSessionOpener(dependencies)({
     datasetDir,
     checklistFile,
@@ -110,7 +116,12 @@ function readAnnotations(): AnnotationRow[] {
   if (!fs.existsSync(file)) {
     return [];
   }
-  return fs.readFileSync(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  return fs
+    .readFileSync(file, "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
 }
 
 function checklistId(): string {
@@ -190,8 +201,13 @@ describe("opening", () => {
     const controller = await open();
     // Records are content-identified, so a reordered source produces the same
     // two records; the session id changes because the ORDER changed.
-    expect(controller.snapshot().items.map((item) => item.fields.task).slice().sort())
-      .toEqual(["task a", "task b"]);
+    expect(
+      controller
+        .snapshot()
+        .items.map((item) => item.fields.task)
+        .slice()
+        .sort(),
+    ).toEqual(["task a", "task b"]);
     await controller.close();
     expect(fs.readdirSync(path.join(datasetDir, "drafts"))).toHaveLength(1);
   });
@@ -384,7 +400,8 @@ async function addQuestionAndSignOff(controller: LabelingSessionController): Pro
 describe("crash recovery", () => {
   it("after-pending-annotation-save: the annotation lands exactly once on reopen", async () => {
     await crashAt("after-pending-annotation-save", (controller) =>
-      controller.dispatch({ kind: "signOff" }));
+      controller.dispatch({ kind: "signOff" }),
+    );
     expect(readAnnotations()).toHaveLength(0);
 
     const reopened = await open();
@@ -396,7 +413,8 @@ describe("crash recovery", () => {
 
   it("after-annotation-append: the row is replayed, not duplicated", async () => {
     await crashAt("after-annotation-append", (controller) =>
-      controller.dispatch({ kind: "signOff" }));
+      controller.dispatch({ kind: "signOff" }),
+    );
     expect(readAnnotations()).toHaveLength(1);
 
     const reopened = await open();
@@ -409,7 +427,8 @@ describe("crash recovery", () => {
     // Appending the row is only half the transition. Stopping there leaves the
     // person back on an item they already judged, with its old time running.
     await crashAt("after-pending-annotation-save", (controller) =>
-      controller.dispatch({ kind: "signOff" }));
+      controller.dispatch({ kind: "signOff" }),
+    );
 
     const reopened = await open();
     expect(reopened.snapshot().itemIndex).toBe(1);
@@ -422,7 +441,8 @@ describe("crash recovery", () => {
 
   it("after-annotation-commit-save: reopening is a no-op", async () => {
     await crashAt("after-annotation-commit-save", (controller) =>
-      controller.dispatch({ kind: "signOff" }));
+      controller.dispatch({ kind: "signOff" }),
+    );
     expect(readAnnotations()).toHaveLength(1);
 
     const reopened = await open();

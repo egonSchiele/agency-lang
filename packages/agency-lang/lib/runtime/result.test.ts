@@ -1,11 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { success, failure, isSuccess, isFailure, __pipeBind, __tryCall, stampFailureBoundary, markDestructiveWork, propagateFailure } from "./result.js";
 import {
-  AgencyAbort,
-  AgencyCancelledError,
-  makeAbortCause,
-  type AbortCause,
-} from "./errors.js";
+  success,
+  failure,
+  isSuccess,
+  isFailure,
+  __pipeBind,
+  __tryCall,
+  stampFailureBoundary,
+  markDestructiveWork,
+  propagateFailure,
+} from "./result.js";
+import { AgencyAbort, AgencyCancelledError, makeAbortCause, type AbortCause } from "./errors.js";
 import { AbortedResult } from "./abortedResult.js";
 import { State } from "./state/stateStack.js";
 
@@ -106,14 +111,10 @@ describe("__tryCall — propagate-never-swallow lock-in (C2: ownedGuardIds)", ()
     ).rejects.toBeInstanceOf(AgencyAbort);
   };
 
-  it("re-throws a userInterrupt abort", () =>
-    reThrows(makeAbortCause({ kind: "userInterrupt" })));
-  it("re-throws a userKill abort", () =>
-    reThrows(makeAbortCause({ kind: "userKill" })));
-  it("re-throws a raceLoser abort", () =>
-    reThrows(makeAbortCause({ kind: "raceLoser" })));
-  it("re-throws a cleanup abort", () =>
-    reThrows(makeAbortCause({ kind: "cleanup" })));
+  it("re-throws a userInterrupt abort", () => reThrows(makeAbortCause({ kind: "userInterrupt" })));
+  it("re-throws a userKill abort", () => reThrows(makeAbortCause({ kind: "userKill" })));
+  it("re-throws a raceLoser abort", () => reThrows(makeAbortCause({ kind: "raceLoser" })));
+  it("re-throws a cleanup abort", () => reThrows(makeAbortCause({ kind: "cleanup" })));
 
   it("re-throws a guardTrip when no ownedGuardIds (a plain try must not swallow it)", () =>
     reThrows(

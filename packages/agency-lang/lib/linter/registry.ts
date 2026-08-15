@@ -24,11 +24,7 @@ export function runLinter(ctx: LintContext): LintFinding[] {
  * to fix first, and every caller of this function surfaces parse errors
  * through its own channel (CLI compile errors, LSP parse diagnostics).
  */
-export function lintSource(
-  source: string,
-  filePath: string,
-  config: AgencyConfig,
-): LintFinding[] {
+export function lintSource(source: string, filePath: string, config: AgencyConfig): LintFinding[] {
   const parsed = parseAgency(source, config, false);
   if (!parsed.success) {
     return [];

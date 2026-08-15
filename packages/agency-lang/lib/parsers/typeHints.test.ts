@@ -99,9 +99,9 @@ describe("primitiveTypeParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-          const result = primitiveTypeParser(input);
-          expect(result.success).toBe(false);
-        });
+        const result = primitiveTypeParser(input);
+        expect(result.success).toBe(false);
+      });
     }
   });
 });
@@ -210,9 +210,9 @@ describe("arrayTypeParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-          const result = arrayTypeParser(input);
-          expect(result.success).toBe(false);
-        });
+        const result = arrayTypeParser(input);
+        expect(result.success).toBe(false);
+      });
     }
   });
 });
@@ -271,9 +271,9 @@ describe("angleBracketsArrayTypeParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-          const result = angleBracketsArrayTypeParser(input);
-          expect(result.success).toBe(false);
-        });
+        const result = angleBracketsArrayTypeParser(input);
+        expect(result.success).toBe(false);
+      });
     }
   });
 });
@@ -389,9 +389,9 @@ describe("numberLiteralTypeParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-          const result = numberLiteralTypeParser(input);
-          expect(result.success).toBe(false);
-        });
+        const result = numberLiteralTypeParser(input);
+        expect(result.success).toBe(false);
+      });
     }
   });
 });
@@ -441,9 +441,9 @@ describe("booleanLiteralTypeParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-          const result = booleanLiteralTypeParser(input);
-          expect(result.success).toBe(false);
-        });
+        const result = booleanLiteralTypeParser(input);
+        expect(result.success).toBe(false);
+      });
     }
   });
 });
@@ -839,13 +839,13 @@ describe("typeAliasParser", () => {
       });
     } else if (throws) {
       it(`should fail to parse "${input}"`, () => {
-          expect(() => typeAliasParser(input)).toThrow();
-        });
+        expect(() => typeAliasParser(input)).toThrow();
+      });
     } else {
       it(`should fail to parse "${input}"`, () => {
-          const result = typeAliasParser(input);
-          expect(result.success).toBe(false);
-        });
+        const result = typeAliasParser(input);
+        expect(result.success).toBe(false);
+      });
     }
   });
 });
@@ -942,9 +942,9 @@ describe("typeAliasVariableParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-          const result = typeAliasVariableParser(input);
-          expect(result.success).toBe(false);
-        });
+        const result = typeAliasVariableParser(input);
+        expect(result.success).toBe(false);
+      });
     }
   });
 });
@@ -1096,9 +1096,9 @@ describe("objectPropertyParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-          const result = objectPropertyParser(input);
-          expect(result.success).toBe(false);
-        });
+        const result = objectPropertyParser(input);
+        expect(result.success).toBe(false);
+      });
     }
   });
 });
@@ -1595,13 +1595,13 @@ describe("objectTypeParser", () => {
       });
     } else if (throws) {
       it(`should fail to parse "${input}"`, () => {
-          expect(() => objectTypeParser(input)).toThrow();
-        });
+        expect(() => objectTypeParser(input)).toThrow();
+      });
     } else {
       it(`should fail to parse "${input}"`, () => {
-          const result = objectTypeParser(input);
-          expect(result.success).toBe(false);
-        });
+        const result = objectTypeParser(input);
+        expect(result.success).toBe(false);
+      });
     }
   });
 });
@@ -1993,8 +1993,7 @@ describe("unionTypeParser", () => {
       },
     },
     {
-      input:
-        '{ type: "user"; name: string } | { type: "admin"; level: number }',
+      input: '{ type: "user"; name: string } | { type: "admin"; level: number }',
       expected: {
         success: true,
         result: {
@@ -2151,9 +2150,9 @@ describe("unionTypeParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-          const result = unionTypeParser(input);
-          expect(result.success).toBe(false);
-        });
+        const result = unionTypeParser(input);
+        expect(result.success).toBe(false);
+      });
     }
   });
 });
@@ -2432,9 +2431,9 @@ describe("variableTypeParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-          const result = variableTypeParser(input);
-          expect(result.success).toBe(false);
-        });
+        const result = variableTypeParser(input);
+        expect(result.success).toBe(false);
+      });
     }
   });
 });
@@ -2651,7 +2650,6 @@ describe("parenthesized type", () => {
   });
 });
 
-
 describe("genericTypeParser", () => {
   it("parses a single-arg generic", () => {
     const result = genericTypeParser("Container<string>");
@@ -2818,9 +2816,7 @@ describe("typeAliasParser with value parameters", () => {
   });
 
   it("parses multiple value parameters: type NumberInRange(low, high) = number", () => {
-    const result = typeAliasParser(
-      "type NumberInRange(low: number, high: number) = number",
-    );
+    const result = typeAliasParser("type NumberInRange(low: number, high: number) = number");
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.aliasName).toBe("NumberInRange");
@@ -2889,9 +2885,7 @@ describe("type-reference with value arguments", () => {
   });
 
   it("typeAliasVariableParser parses NumberInRange(0, 150)", () => {
-    const result = typeAliasParser(
-      "type User = { score: NumberInRange(0, 150) }",
-    );
+    const result = typeAliasParser("type User = { score: NumberInRange(0, 150) }");
     expect(result.success).toBe(true);
     if (result.success) {
       const obj = result.result.aliasedType as any;
@@ -2905,9 +2899,7 @@ describe("type-reference with value arguments", () => {
   });
 
   it("genericTypeParser parses BoundedList<string>(3)", () => {
-    const result = typeAliasParser(
-      "type Names = BoundedList<string>(3)",
-    );
+    const result = typeAliasParser("type Names = BoundedList<string>(3)");
     expect(result.success).toBe(true);
     if (result.success) {
       const v = result.result.aliasedType as any;

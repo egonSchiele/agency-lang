@@ -1,4 +1,4 @@
-export type Rng = () => number;   // returns a float in [0, 1)
+export type Rng = () => number; // returns a float in [0, 1)
 
 /** mulberry32 — small, fast, deterministic PRNG. */
 export function makeRng(seed: number): Rng {

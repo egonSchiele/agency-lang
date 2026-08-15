@@ -20,21 +20,27 @@ export default [
     mustPass: true,
   }),
 
-  grader(({ workdir }) => {
-    const file = join(workdir, "out.txt");
-    if (!existsSync(file)) {
-      return { score: { kind: "binary" as const, pass: false }, feedback: "out.txt was not written" };
-    }
-    const content = readFileSync(file, "utf8").trim();
-    const digest = createHash("sha256").update(content).digest("hex");
-    if (digest === EXPECTED_SHA256) {
-      return true;
-    }
-    return {
-      score: { kind: "binary" as const, pass: false },
-      feedback:
-        `out.txt does not contain the expected text (sha256 mismatch). ` +
-        `Got ${content.length} chars starting with ${JSON.stringify(content.slice(0, 40))}`,
-    };
-  }, { name: "decoded-text-matches", mustPass: true }),
+  grader(
+    ({ workdir }) => {
+      const file = join(workdir, "out.txt");
+      if (!existsSync(file)) {
+        return {
+          score: { kind: "binary" as const, pass: false },
+          feedback: "out.txt was not written",
+        };
+      }
+      const content = readFileSync(file, "utf8").trim();
+      const digest = createHash("sha256").update(content).digest("hex");
+      if (digest === EXPECTED_SHA256) {
+        return true;
+      }
+      return {
+        score: { kind: "binary" as const, pass: false },
+        feedback:
+          `out.txt does not contain the expected text (sha256 mismatch). ` +
+          `Got ${content.length} chars starting with ${JSON.stringify(content.slice(0, 40))}`,
+      };
+    },
+    { name: "decoded-text-matches", mustPass: true },
+  ),
 ];

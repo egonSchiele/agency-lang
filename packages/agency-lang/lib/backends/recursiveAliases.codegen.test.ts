@@ -8,8 +8,7 @@ import type { AgencyConfig } from "@/config.js";
 
 function generate(source: string): string {
   const parseResult = parseAgency(source, {}, false);
-  if (!parseResult.success)
-    throw new Error(`Failed to parse: ${parseResult.message}`);
+  if (!parseResult.success) throw new Error(`Failed to parse: ${parseResult.message}`);
   const info = buildCompilationUnit(parseResult.result);
   const preprocessor = new TypescriptPreprocessor(parseResult.result, {}, info);
   const pre = preprocessor.preprocess();

@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import type { BaseOptimizerConfig } from "./optimizer.js";
-import {
-  DEFAULT_OPTIMIZER,
-  getOptimizer,
-  listOptimizers,
-  registerOptimizer,
-} from "./registry.js";
+import { DEFAULT_OPTIMIZER, getOptimizer, listOptimizers, registerOptimizer } from "./registry.js";
 import type { OptimizeResult } from "./types.js";
 
-const config: BaseOptimizerConfig = { graders: [], iterations: 1, config: {}, runsDir: ".", runId: "r" };
+const config: BaseOptimizerConfig = {
+  graders: [],
+  iterations: 1,
+  config: {},
+  runsDir: ".",
+  runId: "r",
+};
 
 describe("optimizer registry", () => {
   it("resolves the built-in greedy optimizer", () => {
@@ -26,7 +27,9 @@ describe("optimizer registry", () => {
   });
 
   it("resolves the built-in gepa optimizer", () => {
-    expect(getOptimizer("gepa", { ...config, minibatch: 4 } as BaseOptimizerConfig).name).toBe("gepa");
+    expect(getOptimizer("gepa", { ...config, minibatch: 4 } as BaseOptimizerConfig).name).toBe(
+      "gepa",
+    );
     expect(listOptimizers()).toContain("gepa");
   });
 

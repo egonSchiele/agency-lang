@@ -1,13 +1,7 @@
 import type { PromptResult, StreamChunk, TokenUsage, CostEstimate } from "smoltalk";
 import type { Result } from "smoltalk";
 import { DEFAULT_EMBEDDING_MODEL } from "../constants.js";
-import type {
-  EmbedConfig,
-  EmbedResult,
-  LLMClient,
-  PromptConfig,
-  ToolCall,
-} from "./llmClient.js";
+import type { EmbedConfig, EmbedResult, LLMClient, PromptConfig, ToolCall } from "./llmClient.js";
 
 export class SimpleOpenAIClient implements LLMClient {
   private apiKey: string;
@@ -16,7 +10,9 @@ export class SimpleOpenAIClient implements LLMClient {
   constructor(opts?: { apiKey?: string; model?: string }) {
     const apiKey = opts?.apiKey ?? process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      throw new Error("OPENAI_API_KEY not found. Pass apiKey option or set OPENAI_API_KEY environment variable.");
+      throw new Error(
+        "OPENAI_API_KEY not found. Pass apiKey option or set OPENAI_API_KEY environment variable.",
+      );
     }
     this.apiKey = apiKey;
     this.defaultModel = opts?.model ?? "gpt-4o-mini";
@@ -31,7 +27,7 @@ export class SimpleOpenAIClient implements LLMClient {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify(body),
         signal: config.abortSignal,

@@ -255,9 +255,10 @@ class ExplorerShell {
         viewport: { rows: this.options.viewport.rows, cols: this.options.viewport.cols },
         followPath: statelogPath,
         embedded: true,
-        labeling: this.options.labeling === undefined
-          ? undefined
-          : { ...this.options.labeling, sourcePath: statelogPath },
+        labeling:
+          this.options.labeling === undefined
+            ? undefined
+            : { ...this.options.labeling, sourcePath: statelogPath },
       });
       if (resolution === "quit") {
         return true;

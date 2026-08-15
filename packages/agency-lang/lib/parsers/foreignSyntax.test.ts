@@ -19,8 +19,9 @@ describe("switch statements are refused with a message naming match", () => {
   });
 
   it("catches a `default`-only body", () => {
-    expect(failure(`node main() { switch (x) { default: print(1) } }`))
-      .toMatch(/no `switch` statement/);
+    expect(failure(`node main() { switch (x) { default: print(1) } }`)).toMatch(
+      /no `switch` statement/,
+    );
   });
 
   it("explains the two things match does differently", () => {
@@ -40,19 +41,23 @@ describe("switch statements are refused with a message naming match", () => {
     // A probe that scanned to the first `)` would stop at the one closing
     // `f(x)` and decline. Switching on a computed value is at least as common
     // as switching on a name.
-    expect(failure(`node main() { switch (f(x)) { case 1: print(1) } }`))
-      .toMatch(/no `switch` statement/);
+    expect(failure(`node main() { switch (f(x)) { case 1: print(1) } }`)).toMatch(
+      /no `switch` statement/,
+    );
   });
 
   it("catches a parenthesized case label", () => {
-    expect(failure(`node main() { switch (x) { case (1): print(1) } }`))
-      .toMatch(/no `switch` statement/);
+    expect(failure(`node main() { switch (x) { case (1): print(1) } }`)).toMatch(
+      /no `switch` statement/,
+    );
   });
 
   // The label's `:` is what disambiguates. A block that merely starts with
   // something *named* `case` is ordinary Agency.
   it("leaves a call whose block starts with a call to `case` alone", () => {
-    expect(parses(`def switch(b) { return b() }\nnode main() { switch(1) { case(1) } }`)).toBe(true);
+    expect(parses(`def switch(b) { return b() }\nnode main() { switch(1) { case(1) } }`)).toBe(
+      true,
+    );
   });
 
   it("leaves a block containing a variable named case alone", () => {
@@ -72,8 +77,9 @@ describe("C-style for loops are refused with a message naming the alternatives",
   });
 
   it("catches the form with no declaration keyword", () => {
-    expect(failure(`node main() { for (i = 0; i < 10; i++) { print(i) } }`))
-      .toMatch(/no C-style `for` loop/);
+    expect(failure(`node main() { for (i = 0; i < 10; i++) { print(i) } }`)).toMatch(
+      /no C-style `for` loop/,
+    );
   });
 
   it("offers iteration, comprehensions and while as alternatives", () => {

@@ -123,9 +123,7 @@ export type InterruptOpts<T = unknown> = {
   expectsValue?: boolean;
 };
 
-export async function interrupt<T = unknown>(
-  opts: InterruptOpts<T>,
-): Promise<InterruptResponse> {
+export async function interrupt<T = unknown>(opts: InterruptOpts<T>): Promise<InterruptResponse> {
   const rt = getRuntimeContext();
   const { ctx, callsite, runner, stack } = rt;
   if (!runner) {

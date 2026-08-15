@@ -23,13 +23,15 @@ const limits: RunLimits = {
 
 describe("subprocess IPC config overrides", () => {
   it("includes config overrides in the run instruction", () => {
-    expect(buildRunInstruction({
-      scriptPath: "/tmp/agent.js",
-      node: "main",
-      args: { prompt: "x" },
-      limits,
-      configOverrides: { observability: true, log: { logFile: "task/statelog.jsonl" } },
-    })).toMatchObject({
+    expect(
+      buildRunInstruction({
+        scriptPath: "/tmp/agent.js",
+        node: "main",
+        args: { prompt: "x" },
+        limits,
+        configOverrides: { observability: true, log: { logFile: "task/statelog.jsonl" } },
+      }),
+    ).toMatchObject({
       type: "run",
       scriptPath: "/tmp/agent.js",
       node: "main",
@@ -47,19 +49,16 @@ describe("subprocess IPC config overrides", () => {
   });
 
   it("forwards the parent's provider modules as absolute paths", () => {
-    const result = withParentProviderModules(
-      { observability: true },
-      ["./llama-setup.mjs", "/abs/other.mjs"],
-    );
+    const result = withParentProviderModules({ observability: true }, [
+      "./llama-setup.mjs",
+      "/abs/other.mjs",
+    ]);
     // Existing overrides are preserved; provider paths are absolutized
     // against the parent's cwd so they resolve in a child with a different cwd.
     expect(result).toEqual({
       observability: true,
       client: {
-        providerModules: [
-          path.resolve(process.cwd(), "./llama-setup.mjs"),
-          "/abs/other.mjs",
-        ],
+        providerModules: [path.resolve(process.cwd(), "./llama-setup.mjs"), "/abs/other.mjs"],
       },
     });
   });
@@ -124,10 +123,12 @@ describe("subprocess interrupt IPC", () => {
     }) as any;
     setSubprocessIpcPayloadLimit(1);
 
-    await expect(sendInterruptToParent(
-      { effect: "test", message: "too large", data: { value: "é" }, origin: "test" },
-      "intr-oversized",
-    )).resolves.toEqual({ kind: "rejected", value: expect.stringContaining("ipc_payload") });
+    await expect(
+      sendInterruptToParent(
+        { effect: "test", message: "too large", data: { value: "é" }, origin: "test" },
+        "intr-oversized",
+      ),
+    ).resolves.toEqual({ kind: "rejected", value: expect.stringContaining("ipc_payload") });
 
     expect(sent).toHaveLength(1);
     expect(sent[0].type).toBe("error");
@@ -148,10 +149,15 @@ describe("subprocess interrupt IPC", () => {
     const circular: Record<string, any> = {};
     circular.self = circular;
 
-    await expect(sendInterruptToParent(
-      { effect: "test", message: "bad", data: circular, origin: "test" },
-      "intr-circular",
-    )).resolves.toEqual({ kind: "rejected", value: expect.stringContaining("Failed to serialize interrupt payload") });
+    await expect(
+      sendInterruptToParent(
+        { effect: "test", message: "bad", data: circular, origin: "test" },
+        "intr-circular",
+      ),
+    ).resolves.toEqual({
+      kind: "rejected",
+      value: expect.stringContaining("Failed to serialize interrupt payload"),
+    });
 
     expect(sent).toHaveLength(1);
     expect(sent[0]).toEqual({
@@ -227,7 +233,13 @@ describe("subprocess lock IPC", () => {
 
   it("cleanupSessionLocks releases locks held by a closed child session", async () => {
     const ctx = new RuntimeContext({
-      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });

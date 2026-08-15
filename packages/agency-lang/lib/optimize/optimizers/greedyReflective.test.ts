@@ -16,8 +16,15 @@ import { loadedRun } from "@/eval/grading/testUtils.js";
 
 class ValueGrader extends BaseGrader {
   protected readonly defaultName = "value";
-  constructor(private readonly next: () => number, options: GraderOptions = {}) { super(options); }
-  protected _run(_i: GraderInput): Promise<Grade> { return Promise.resolve({ score: { kind: "scalar", value: this.next() } }); }
+  constructor(
+    private readonly next: () => number,
+    options: GraderOptions = {},
+  ) {
+    super(options);
+  }
+  protected _run(_i: GraderInput): Promise<Grade> {
+    return Promise.resolve({ score: { kind: "scalar", value: this.next() } });
+  }
 }
 
 afterEach(cleanupFakeRuns);
@@ -29,23 +36,53 @@ describe("GreedyReflective (pointwise)", () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "greedy-"));
     src = path.join(root, "src");
     fs.mkdirSync(src);
-    fs.writeFileSync(path.join(src, "agent.agency"), 'optimize const prompt = "hi"\n\nnode main() {}\n');
+    fs.writeFileSync(
+      path.join(src, "agent.agency"),
+      'optimize const prompt = "hi"\n\nnode main() {}\n',
+    );
   });
-  afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+  afterEach(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
 
   const fakeSource = (): OptimizeTargetSet => ({
     baseDir: src,
     entryFile: "agent.agency",
     typeAliases: {},
-    files: { "agent.agency": { file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), source: "x", sha256: "x" } },
-    targets: [{ id: "agent.agency:global:prompt", kind: "variable", file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), scope: "global", name: "prompt", valueKind: "string", value: "hi", declaredType: null }],
+    files: {
+      "agent.agency": {
+        file: "agent.agency",
+        absoluteFile: path.join(src, "agent.agency"),
+        source: "x",
+        sha256: "x",
+      },
+    },
+    targets: [
+      {
+        id: "agent.agency:global:prompt",
+        kind: "variable",
+        file: "agent.agency",
+        absoluteFile: path.join(src, "agent.agency"),
+        scope: "global",
+        name: "prompt",
+        valueKind: "string",
+        value: "hi",
+        declaredType: null,
+      },
+    ],
   });
 
   const deps = (): GreedyDeps => ({
     runInput: async (_ws, _source, _files, input, id) => fakeRun(id, "out", input),
     discover: () => fakeSource(),
     propose: async () => ({ rationale: "tighten", operations: [] }),
-    preview: (targetSet): OptimizeMutationPreview => ({ files: {}, changes: [], diff: "", diagnostics: [], targetSet }),
+    preview: (targetSet): OptimizeMutationPreview => ({
+      files: {},
+      changes: [],
+      diff: "",
+      diagnostics: [],
+      targetSet,
+    }),
   });
 
   it("accepts a candidate only when gates pass and the objective improves", async () => {
@@ -55,7 +92,10 @@ describe("GreedyReflective (pointwise)", () => {
       { graders: [grader], iterations: 2, config: {}, runsDir: root, runId: "r", writeback: false },
       deps(),
     );
-    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", task: "t" }] });
+    const result = await opt.optimize({
+      agent: path.join(src, "agent.agency"),
+      inputs: [{ id: "a", task: "t" }],
+    });
     expect(result.acceptedCount).toBe(2);
     expect(result.rejectedCount).toBe(0);
   });
@@ -63,10 +103,20 @@ describe("GreedyReflective (pointwise)", () => {
   it("rejects a candidate whose objective does not improve", async () => {
     const grader = new ValueGrader(() => 0.5); // constant — no candidate beats the champion
     const opt = new GreedyReflective(
-      { graders: [grader], iterations: 2, config: {}, runsDir: root, runId: "r2", writeback: false },
+      {
+        graders: [grader],
+        iterations: 2,
+        config: {},
+        runsDir: root,
+        runId: "r2",
+        writeback: false,
+      },
       deps(),
     );
-    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", task: "t" }] });
+    const result = await opt.optimize({
+      agent: path.join(src, "agent.agency"),
+      inputs: [{ id: "a", task: "t" }],
+    });
     expect(result.acceptedCount).toBe(0);
     expect(result.rejectedCount).toBe(2);
     expect(result.championIter).toBe("baseline");
@@ -76,27 +126,51 @@ describe("GreedyReflective (pointwise)", () => {
     let n = 0;
     const gate = new (class extends BaseGrader {
       protected readonly defaultName = "gate";
-      protected _run(): Promise<Grade> { return Promise.resolve({ score: { kind: "binary", pass: ++n === 1 } }); }
+      protected _run(): Promise<Grade> {
+        return Promise.resolve({ score: { kind: "binary", pass: ++n === 1 } });
+      }
     })({ mustPass: true });
     // 0.5 keeps the baseline below the max objective (so the run doesn't early-exit);
     // the candidate then fails the gate and is rejected regardless of its scalar.
     const scalar = new ValueGrader(() => 0.5);
     const opt = new GreedyReflective(
-      { graders: [gate, scalar], iterations: 1, config: {}, runsDir: root, runId: "r3", writeback: false },
+      {
+        graders: [gate, scalar],
+        iterations: 1,
+        config: {},
+        runsDir: root,
+        runId: "r3",
+        writeback: false,
+      },
       deps(),
     );
-    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", task: "t" }] });
+    const result = await opt.optimize({
+      agent: path.join(src, "agent.agency"),
+      inputs: [{ id: "a", task: "t" }],
+    });
     expect(result.acceptedCount).toBe(0);
     expect(result.rejectedCount).toBe(1);
   });
 
   it("does not crash when the proposer throws; records the iteration as invalid after retries", async () => {
-    const propose = vi.fn(async () => { throw new Error("malformed mutator response"); });
+    const propose = vi.fn(async () => {
+      throw new Error("malformed mutator response");
+    });
     const opt = new GreedyReflective(
-      { graders: [new ValueGrader(() => 0.5)], iterations: 1, config: {}, runsDir: root, runId: "throw", writeback: false },
+      {
+        graders: [new ValueGrader(() => 0.5)],
+        iterations: 1,
+        config: {},
+        runsDir: root,
+        runId: "throw",
+        writeback: false,
+      },
       { ...deps(), propose },
     );
-    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", task: "t" }] });
+    const result = await opt.optimize({
+      agent: path.join(src, "agent.agency"),
+      inputs: [{ id: "a", task: "t" }],
+    });
     expect(result.validationFailedCount).toBe(1);
     expect(result.championIter).toBe("baseline");
     expect(propose).toHaveBeenCalledTimes(3); // retried up to maxAttempts before giving up
@@ -105,10 +179,20 @@ describe("GreedyReflective (pointwise)", () => {
   it("exits early without iterating when the baseline already scores the maximum objective", async () => {
     const propose = vi.fn(async () => ({ rationale: "x", operations: [] }));
     const opt = new GreedyReflective(
-      { graders: [new ValueGrader(() => 1)], iterations: 3, config: {}, runsDir: root, runId: "perfect", writeback: false },
+      {
+        graders: [new ValueGrader(() => 1)],
+        iterations: 3,
+        config: {},
+        runsDir: root,
+        runId: "perfect",
+        writeback: false,
+      },
       { ...deps(), propose },
     );
-    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", task: "t" }] });
+    const result = await opt.optimize({
+      agent: path.join(src, "agent.agency"),
+      inputs: [{ id: "a", task: "t" }],
+    });
     expect(result.championIter).toBe("baseline");
     expect(result.acceptedCount).toBe(0);
     expect(result.rejectedCount).toBe(0);
@@ -121,10 +205,20 @@ describe("GreedyReflective (pointwise)", () => {
     const scalar = new ValueGrader(() => (calls++ === 0 ? 0.5 : 1)); // baseline 0.5, first candidate 1.0
     const propose = vi.fn(async () => ({ rationale: "x", operations: [] }));
     const opt = new GreedyReflective(
-      { graders: [scalar], iterations: 5, config: {}, runsDir: root, runId: "stop", writeback: false },
+      {
+        graders: [scalar],
+        iterations: 5,
+        config: {},
+        runsDir: root,
+        runId: "stop",
+        writeback: false,
+      },
       { ...deps(), propose },
     );
-    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", task: "t" }] });
+    const result = await opt.optimize({
+      agent: path.join(src, "agent.agency"),
+      inputs: [{ id: "a", task: "t" }],
+    });
     expect(result.acceptedCount).toBe(1);
     expect(result.iterations).toHaveLength(2); // baseline + 1 accepted, then stop (not all 5)
     expect(propose).toHaveBeenCalledTimes(1);
@@ -135,53 +229,87 @@ describe("GreedyReflective (pointwise)", () => {
     const grader = new (class extends BaseGrader {
       protected readonly defaultName = "g";
       protected _run({ input }: GraderInput): Promise<Grade> {
-        return Promise.resolve({ score: { kind: "scalar", value: 0 }, feedback: `wanted ${input.expected}` });
+        return Promise.resolve({
+          score: { kind: "scalar", value: 0 },
+          feedback: `wanted ${input.expected}`,
+        });
       }
     })();
-    const propose = vi.fn(async (a: { feedback?: string }) => { captured = a; return { rationale: "x", operations: [] }; });
+    const propose = vi.fn(async (a: { feedback?: string }) => {
+      captured = a;
+      return { rationale: "x", operations: [] };
+    });
     const opt = new GreedyReflective(
-      { graders: [grader], iterations: 1, config: {}, runsDir: root, runId: "fb", writeback: false },
+      {
+        graders: [grader],
+        iterations: 1,
+        config: {},
+        runsDir: root,
+        runId: "fb",
+        writeback: false,
+      },
       { ...deps(), propose },
     );
-    await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "india", task: "t", expected: "New Delhi" }] });
-    expect(captured?.feedback).toContain("New Delhi");        // the expected answer surfaced
+    await opt.optimize({
+      agent: path.join(src, "agent.agency"),
+      inputs: [{ id: "india", task: "t", expected: "New Delhi" }],
+    });
+    expect(captured?.feedback).toContain("New Delhi"); // the expected answer surfaced
     expect(captured?.feedback).toContain("wanted New Delhi"); // the grader's feedback surfaced
   });
 
   it("writes back the candidate with the best validation objective, not the best train objective", async () => {
-    const trainCurve = [0.2, 0.4, 0.6];   // baseline, c1, c2 — climbing → both accepted; train champion = c2
-    const valCurve   = [0.3, 0.9, 0.5];   // baseline, c1, c2 — peaks at c1
+    const trainCurve = [0.2, 0.4, 0.6]; // baseline, c1, c2 — climbing → both accepted; train champion = c2
+    const valCurve = [0.3, 0.9, 0.5]; // baseline, c1, c2 — peaks at c1
     let ti = 0;
     let vi = 0;
     const keyed = new (class extends BaseGrader {
       protected readonly defaultName = "keyed";
       protected _run({ input }: GraderInput): Promise<Grade> {
-        const value = input.id === "v"
-          ? valCurve[Math.min(vi++, valCurve.length - 1)]
-          : trainCurve[Math.min(ti++, trainCurve.length - 1)];
+        const value =
+          input.id === "v"
+            ? valCurve[Math.min(vi++, valCurve.length - 1)]
+            : trainCurve[Math.min(ti++, trainCurve.length - 1)];
         return Promise.resolve({ score: { kind: "scalar", value } });
       }
     })();
     const opt = new GreedyReflective(
-      { graders: [keyed], iterations: 2, config: {}, runsDir: root, runId: "valpick", writeback: false },
-      deps(),   // deps().propose returns valid empty-op proposals → every iteration is accepted
+      {
+        graders: [keyed],
+        iterations: 2,
+        config: {},
+        runsDir: root,
+        runId: "valpick",
+        writeback: false,
+      },
+      deps(), // deps().propose returns valid empty-op proposals → every iteration is accepted
     );
     const result = await opt.optimize({
       agent: path.join(src, "agent.agency"),
       inputs: [{ id: "a", task: "t" }],
       validationInputs: [{ id: "v", task: "t" }],
     });
-    expect(result.championIter).toBe(1);                  // val winner, though iter 2 had the higher train objective
+    expect(result.championIter).toBe(1); // val winner, though iter 2 had the higher train objective
     expect(result.validationObjective).toBeCloseTo(0.9, 5);
   });
 
   it("records the gate-aware baseline objective on the result", async () => {
     const grader = new ValueGrader(() => 0.5); // every grade 0.5 → baseline obj 0.5, no gates
     const opt = new GreedyReflective(
-      { graders: [grader], iterations: 2, config: {}, runsDir: root, runId: "baseobj", writeback: false },
+      {
+        graders: [grader],
+        iterations: 2,
+        config: {},
+        runsDir: root,
+        runId: "baseobj",
+        writeback: false,
+      },
       deps(),
     );
-    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", task: "t" }] });
+    const result = await opt.optimize({
+      agent: path.join(src, "agent.agency"),
+      inputs: [{ id: "a", task: "t" }],
+    });
     expect(result.championIter).toBe("baseline"); // constant grade → nothing beats baseline
     expect(result.baselineObjective).toBeCloseTo(0.5, 10);
     expect(result.trainObjective).toBeCloseTo(0.5, 10);
@@ -192,20 +320,28 @@ describe("GreedyReflective (pointwise)", () => {
   // pin the gate-aware rule at the Scorecard layer where the field's value is
   // actually computed.
   it("Scorecard.gatedObjective() zeroes out a gate-failed score even when the raw objective is high", () => {
-    const passed = new Scorecard([{
-      input: { id: "a", task: "t" },
-      run: loadedRun("out"),
-      grades: [{ grader: new ValueGrader(() => 0.9), grade: { score: { kind: "scalar", value: 0.9 } } }],
-      gatesPassed: true,
-    }]);
+    const passed = new Scorecard([
+      {
+        input: { id: "a", task: "t" },
+        run: loadedRun("out"),
+        grades: [
+          { grader: new ValueGrader(() => 0.9), grade: { score: { kind: "scalar", value: 0.9 } } },
+        ],
+        gatesPassed: true,
+      },
+    ]);
     expect(passed.gatedObjective()).toBeCloseTo(0.9, 10);
 
-    const failed = new Scorecard([{
-      input: { id: "a", task: "t" },
-      run: loadedRun("out"),
-      grades: [{ grader: new ValueGrader(() => 0.9), grade: { score: { kind: "scalar", value: 0.9 } } }],
-      gatesPassed: false,
-    }]);
+    const failed = new Scorecard([
+      {
+        input: { id: "a", task: "t" },
+        run: loadedRun("out"),
+        grades: [
+          { grader: new ValueGrader(() => 0.9), grade: { score: { kind: "scalar", value: 0.9 } } },
+        ],
+        gatesPassed: false,
+      },
+    ]);
     expect(failed.gatedObjective()).toBe(0);
   });
 });
@@ -222,7 +358,9 @@ describe("typed target end-to-end guarantee", () => {
       `type Status = "pass" | "fail"\n\noptimize const status: Status = "pass"\n\nnode main() {\n  return status\n}\n`,
     );
   });
-  afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+  afterEach(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
 
   const BAD_OPERATION = {
     target: "agent.agency:global:status",
@@ -251,7 +389,14 @@ describe("typed target end-to-end guarantee", () => {
     });
     const opt = new GreedyReflective(
       // 0.5 keeps the baseline below the max objective so the iteration runs.
-      { graders: [new ValueGrader(() => 0.5)], iterations: 1, config: {}, runsDir: root, runId: "typed-e2e", writeback: false },
+      {
+        graders: [new ValueGrader(() => 0.5)],
+        iterations: 1,
+        config: {},
+        runsDir: root,
+        runId: "typed-e2e",
+        writeback: false,
+      },
       {
         runInput: async (_ws, _source, _files, input, id) => fakeRun(id, "out", input),
         discover: () => discoverOptimizeTargets(path.join(src, "agent.agency"), { baseDir: src }),
@@ -260,7 +405,10 @@ describe("typed target end-to-end guarantee", () => {
       },
     );
 
-    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", task: "t" }] });
+    const result = await opt.optimize({
+      agent: path.join(src, "agent.agency"),
+      inputs: [{ id: "a", task: "t" }],
+    });
 
     // Retried up to the attempt cap, every attempt rejected by the shape check.
     expect(propose).toHaveBeenCalledTimes(3);

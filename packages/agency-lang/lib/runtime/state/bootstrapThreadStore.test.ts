@@ -19,9 +19,7 @@ describe("BootstrapThreadStore", () => {
       { name: "getOrCreateActive", fn: () => store.getOrCreateActive() },
     ];
     for (const call of calls) {
-      expect(call.fn, `BootstrapThreadStore.${call.name} should throw`).toThrow(
-        expectedFragment,
-      );
+      expect(call.fn, `BootstrapThreadStore.${call.name} should throw`).toThrow(expectedFragment);
     }
   });
 

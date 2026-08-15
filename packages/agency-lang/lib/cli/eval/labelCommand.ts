@@ -2,11 +2,7 @@ import { InvalidArgumentError, type Command } from "@/vendor/commander/index.js"
 
 import type { AgencyConfig } from "@/config.js";
 
-import {
-  evalIngest,
-  INGEST_PATH_DESCRIPTION,
-  SOURCE_FLAG_DESCRIPTION,
-} from "./ingest.js";
+import { evalIngest, INGEST_PATH_DESCRIPTION, SOURCE_FLAG_DESCRIPTION } from "./ingest.js";
 import { evalLabel } from "./label.js";
 
 export type LabelCommandDependencies = {
@@ -23,9 +19,7 @@ function defaultFail(message: string): void {
   process.exit(2);
 }
 
-export function labelCommandDependencies(
-  getConfig: () => AgencyConfig,
-): LabelCommandDependencies {
+export function labelCommandDependencies(getConfig: () => AgencyConfig): LabelCommandDependencies {
   return { getConfig, evalLabel, evalIngest, fail: defaultFail };
 }
 
@@ -52,10 +46,7 @@ export function labelCommandDependencies(
  * always two commands. That is the shape the dataset wants anyway: you ingest
  * several sources, then label once.
  */
-export function addLabelCommand(
-  parent: Command,
-  dependencies: LabelCommandDependencies,
-): Command {
+export function addLabelCommand(parent: Command, dependencies: LabelCommandDependencies): Command {
   const label = parent
     .command("label")
     .description("Label the examples in a dataset. Add examples with `label ingest` first")
@@ -80,31 +71,43 @@ export function addLabelCommand(
     .option("--task <text>", "Shorthand for --field task=<text>")
     .option("--field <name=value>", "A constant field added to every record", collectRepeated, [])
     .option("--no-task-field", "Run/statelog sources only: drop the source's own task field")
-    .option("--trace <id>", "Statelog sources: a trace id to label (repeatable)", collectRepeated, [])
+    .option(
+      "--trace <id>",
+      "Statelog sources: a trace id to label (repeatable)",
+      collectRepeated,
+      [],
+    )
     .option("--recursive", "Descend into subdirectories")
     .option("--max-bytes <n>", "Per-value size cap in bytes (default 1048576)", parseByteCap)
-    .action(async (source: string, extra: string[], opts: {
-      source?: string;
-      format?: string;
-      task?: string;
-      field?: string[];
-      taskField?: boolean;
-      trace?: string[];
-      recursive?: boolean;
-      maxBytes?: number;
-    }, command: Command) => {
-      try {
-        await dependencies.evalIngest({
-          ...opts,
-          dataset: datasetOptionOf(command),
-          path: source,
-          extraArgs: extra,
-          config: dependencies.getConfig(),
-        });
-      } catch (error) {
-        dependencies.fail((error as Error).message);
-      }
-    });
+    .action(
+      async (
+        source: string,
+        extra: string[],
+        opts: {
+          source?: string;
+          format?: string;
+          task?: string;
+          field?: string[];
+          taskField?: boolean;
+          trace?: string[];
+          recursive?: boolean;
+          maxBytes?: number;
+        },
+        command: Command,
+      ) => {
+        try {
+          await dependencies.evalIngest({
+            ...opts,
+            dataset: datasetOptionOf(command),
+            path: source,
+            extraArgs: extra,
+            config: dependencies.getConfig(),
+          });
+        } catch (error) {
+          dependencies.fail((error as Error).message);
+        }
+      },
+    );
 
   return label;
 }

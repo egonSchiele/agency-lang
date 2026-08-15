@@ -2,9 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { _sendIMessage } from "../imessage.js";
 
 vi.mock("child_process", () => ({
-  execFile: vi.fn((_cmd: string, _args: string[], cb: (err: Error | null, result: { stdout: string; stderr: string }) => void) => {
-    cb(null, { stdout: "", stderr: "" });
-  }),
+  execFile: vi.fn(
+    (
+      _cmd: string,
+      _args: string[],
+      cb: (err: Error | null, result: { stdout: string; stderr: string }) => void,
+    ) => {
+      cb(null, { stdout: "", stderr: "" });
+    },
+  ),
 }));
 
 import { execFile } from "child_process";
@@ -52,10 +58,13 @@ describe("_sendIMessage", () => {
   // LLM as a tool, so `message` is model-authored and may echo a web page, an
   // email, or a file the agent read. These payloads must land as inert data.
   const hostile = [
-    ['a quote-and-concat break-out', '" & (do shell script "touch /tmp/pwned") & "'],
-    ['a statement injection', 'hi\nend tell\ndo shell script "touch /tmp/pwned"\ntell application "Messages"'],
-    ['an escaped-quote break-out', 'hi\\" & (do shell script "touch /tmp/pwned") & \\"'],
-    ['a tab and backslash payload', 'col1\tcol2\\path\\to\\file'],
+    ["a quote-and-concat break-out", '" & (do shell script "touch /tmp/pwned") & "'],
+    [
+      "a statement injection",
+      'hi\nend tell\ndo shell script "touch /tmp/pwned"\ntell application "Messages"',
+    ],
+    ["an escaped-quote break-out", 'hi\\" & (do shell script "touch /tmp/pwned") & \\"'],
+    ["a tab and backslash payload", "col1\tcol2\\path\\to\\file"],
   ] as const;
 
   for (const [description, payload] of hostile) {
@@ -72,7 +81,8 @@ describe("_sendIMessage", () => {
   }
 
   it("treats a hostile recipient as data, not code", async () => {
-    const payload = '" of targetService\ndo shell script "touch /tmp/pwned"\nset x to participant "';
+    const payload =
+      '" of targetService\ndo shell script "touch /tmp/pwned"\nset x to participant "';
     await _sendIMessage(payload, "Hi");
     const args = osascriptArgs();
 
@@ -83,9 +93,7 @@ describe("_sendIMessage", () => {
   it("throws on non-macOS platforms", async () => {
     Object.defineProperty(process, "platform", { value: "linux", writable: true });
 
-    await expect(_sendIMessage("+15551234567", "Hi")).rejects.toThrow(
-      "only available on macOS"
-    );
+    await expect(_sendIMessage("+15551234567", "Hi")).rejects.toThrow("only available on macOS");
   });
 
   it("throws when recipient is empty", async () => {
@@ -93,16 +101,14 @@ describe("_sendIMessage", () => {
   });
 
   it("throws when message is empty", async () => {
-    await expect(_sendIMessage("+15551234567", "")).rejects.toThrow(
-      "Missing message body"
-    );
+    await expect(_sendIMessage("+15551234567", "")).rejects.toThrow("Missing message body");
   });
 
   it("throws with stderr info when osascript fails, without leaking the message", async () => {
     (execFile as unknown as ReturnType<typeof vi.fn>).mockImplementation(
       (_cmd: string, _args: string[], cb: (err: unknown) => void) => {
         cb({ stderr: "execution error: Messages got an error", code: 1 });
-      }
+      },
     );
 
     const err = await _sendIMessage("+15551234567", "Hi").catch((e) => e);

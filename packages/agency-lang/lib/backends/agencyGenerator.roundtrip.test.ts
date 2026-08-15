@@ -235,13 +235,7 @@ describe("formatter gate: code literals", () => {
 
   it("golden: a one-line expr literal prints inline", () => {
     const source = `node main() {\n  const t = [|   1   +   2   |]\n  return t\n}\n`;
-    const expected = [
-      "node main() {",
-      "  const t = [| 1 + 2 |]",
-      "  return t",
-      "}",
-      "",
-    ].join("\n");
+    const expected = ["node main() {", "  const t = [| 1 + 2 |]", "  return t", "}", ""].join("\n");
     expect(generateAgency(parseTemplateMode(source))).toBe(expected);
   });
 

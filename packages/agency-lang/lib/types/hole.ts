@@ -19,9 +19,7 @@ export type Hole = BaseNode & {
 
 export function isHole(value: unknown): value is Hole {
   return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as { type?: string }).type === "hole"
+    typeof value === "object" && value !== null && (value as { type?: string }).type === "hole"
   );
 }
 

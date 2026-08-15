@@ -146,10 +146,7 @@ export function createSchedulesClient(
       if (input.name !== undefined) {
         body.name = input.name;
       }
-      return parseWire(
-        remoteScheduleSchema,
-        await request({ method: "POST", segments: [], body }),
-      );
+      return parseWire(remoteScheduleSchema, await request({ method: "POST", segments: [], body }));
     },
     async list() {
       return parseWire(
@@ -164,10 +161,7 @@ export function createSchedulesClient(
       );
     },
     async delete(id) {
-      return parseWire(
-        deletedSchema,
-        await request({ method: "DELETE", segments: [id] }),
-      );
+      return parseWire(deletedSchema, await request({ method: "DELETE", segments: [id] }));
     },
   };
 }
@@ -181,4 +175,3 @@ function parseWire<T>(schema: z.ZodType<T>, value: unknown): T {
   }
   return result.data;
 }
-

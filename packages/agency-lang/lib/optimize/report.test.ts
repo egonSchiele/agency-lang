@@ -3,17 +3,33 @@ import { renderReport } from "./report.js";
 import type { OptimizeResult } from "./types.js";
 
 const result: OptimizeResult = {
-  runId: "r1", runDir: "/runs/r1", championIter: 2,
+  runId: "r1",
+  runDir: "/runs/r1",
+  championIter: 2,
   championFiles: { "agent.agency": "node main() {}\n" },
-  acceptedCount: 1, rejectedCount: 1, validationFailedCount: 0,
+  acceptedCount: 1,
+  rejectedCount: 1,
+  validationFailedCount: 0,
   iterations: [
     { iter: 0, decision: "baseline" },
     { iter: 1, decision: "rejected", detail: "no improvement" },
     { iter: 2, decision: "accepted" },
   ],
   championBreakdown: [
-    { inputId: "brazil", output: "area is 8.5M km²", objective: 0.2, gatesPassed: true,
-      grades: [{ grader: "goal", kind: "scalar", value: 0.2, feedback: "off-topic; gives area not capital" }] },
+    {
+      inputId: "brazil",
+      output: "area is 8.5M km²",
+      objective: 0.2,
+      gatesPassed: true,
+      grades: [
+        {
+          grader: "goal",
+          kind: "scalar",
+          value: 0.2,
+          feedback: "off-topic; gives area not capital",
+        },
+      ],
+    },
   ],
 };
 

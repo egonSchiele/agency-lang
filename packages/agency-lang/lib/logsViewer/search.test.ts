@@ -3,7 +3,12 @@ import { findMatches, expandAncestorsOf, highlightMatches } from "./search.js";
 import { buildForest } from "./tree.js";
 import { EventEnvelope, TreeNode, ViewerState } from "./types.js";
 
-function span(id: string, summary: string, children: TreeNode[] = [], parentId: string | null = null): TreeNode {
+function span(
+  id: string,
+  summary: string,
+  children: TreeNode[] = [],
+  parentId: string | null = null,
+): TreeNode {
   return {
     id,
     traceId: "t",
@@ -30,20 +35,14 @@ function trace(id: string, children: TreeNode[] = []): TreeNode {
 describe("findMatches", () => {
   it("returns ids of nodes whose summary contains the query case-insensitively", () => {
     const t = trace("T", [
-      span("a", "agentRun (1s)", [
-        span("b", "llmCall (2s)"),
-        span("c", "toolCall search"),
-      ]),
+      span("a", "agentRun (1s)", [span("b", "llmCall (2s)"), span("c", "toolCall search")]),
     ]);
     expect(findMatches([t], "llm")).toEqual(["b"]);
     expect(findMatches([t], "LLM")).toEqual(["b"]);
   });
 
   it("returns ids in depth-first pre-order", () => {
-    const t = trace("T", [
-      span("a", "X", [span("b", "X"), span("c", "X")]),
-      span("d", "X"),
-    ]);
+    const t = trace("T", [span("a", "X", [span("b", "X"), span("c", "X")]), span("d", "X")]);
     expect(findMatches([t], "X")).toEqual(["a", "b", "c", "d"]);
   });
 
@@ -187,7 +186,16 @@ describe("findMatches — llmCall span flatten", () => {
         completion: { output: null, toolCalls: [{ id: "c1", name: "getArea", arguments: {} }] },
       },
     }),
-    evt({ span_id: "T", parent_span_id: "L", data: { type: "toolCall", timestamp: "2026-06-21T00:00:02Z", toolName: "getArea", output: "551695" } }),
+    evt({
+      span_id: "T",
+      parent_span_id: "L",
+      data: {
+        type: "toolCall",
+        timestamp: "2026-06-21T00:00:02Z",
+        toolName: "getArea",
+        output: "551695",
+      },
+    }),
     evt({
       span_id: "L",
       parent_span_id: "a",
@@ -196,7 +204,11 @@ describe("findMatches — llmCall span flatten", () => {
         timestamp: "2026-06-21T00:00:03Z",
         messages: [
           { role: "user", content: "area of France" },
-          { role: "assistant", content: null, toolCalls: [{ id: "c1", name: "getArea", arguments: {} }] },
+          {
+            role: "assistant",
+            content: null,
+            toolCalls: [{ id: "c1", name: "getArea", arguments: {} }],
+          },
           { role: "tool", name: "getArea", content: "551695", tool_call_id: "c1" },
         ],
         completion: { output: "The area is 551695", toolCalls: [] },

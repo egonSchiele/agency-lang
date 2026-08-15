@@ -13,7 +13,13 @@ const rows: Fruit[] = [
 const columns: TableColumn<Fruit>[] = [
   { key: "name", header: "name", width: 10, cell: (r) => r.name },
   { key: "score", header: "score", width: 7, align: "right", cell: (r) => r.score },
-  { key: "note", header: "note", width: "flex", cell: (r) => r.note, cellStyle: (r) => ({ fg: r.note === "crisp" ? "green" : "gray" }) },
+  {
+    key: "note",
+    header: "note",
+    width: "flex",
+    cell: (r) => r.note,
+    cellStyle: (r) => ({ fg: r.note === "crisp" ? "green" : "gray" }),
+  },
 ];
 
 /** All text leaves of an element in render order, with their styles. */
@@ -66,7 +72,10 @@ describe("TableComponent", () => {
 
   it("sorted header carries the direction arrow with no padding gap", () => {
     const cells = renderCells({
-      columns, rows, cursor: null, width: 40,
+      columns,
+      rows,
+      cursor: null,
+      width: 40,
       sort: { columnKey: "score", direction: "desc" },
     });
     const scoreHeader = cells[1];
@@ -80,7 +89,9 @@ describe("TableComponent", () => {
       { key: "pass", header: "pass", width: 5, align: "right", cell: () => "✓" },
       { key: "status", header: "status", width: 7, cell: () => "ok" },
     ];
-    const cells = textCells(new TableComponent<Fruit>().render({ columns: tight, rows, cursor: null, width: 20 }));
+    const cells = textCells(
+      new TableComponent<Fruit>().render({ columns: tight, rows, cursor: null, width: 20 }),
+    );
     expect(cells[0].content + cells[1].content).toContain("pass status");
   });
 
@@ -97,9 +108,18 @@ describe("TableComponent", () => {
 
   it("headerStyle and cellStyle pass through (identity colors, bold group cells)", () => {
     const styled: TableColumn<Fruit>[] = [
-      { key: "a", header: "agent", width: 8, cell: (r) => r.name, headerStyle: () => ({ fg: "bright-cyan" }), cellStyle: () => ({ bold: true }) },
+      {
+        key: "a",
+        header: "agent",
+        width: 8,
+        cell: (r) => r.name,
+        headerStyle: () => ({ fg: "bright-cyan" }),
+        cellStyle: () => ({ bold: true }),
+      },
     ];
-    const cells = textCells(new TableComponent<Fruit>().render({ columns: styled, rows, cursor: null, width: 20 }));
+    const cells = textCells(
+      new TableComponent<Fruit>().render({ columns: styled, rows, cursor: null, width: 20 }),
+    );
     expect(cells[0].style.fg).toBe("bright-cyan");
     expect(cells[1].style.bold).toBe(true);
   });
@@ -109,7 +129,9 @@ describe("TableComponent", () => {
       { key: "n", header: "nm", cell: (r) => r.name },
       { key: "s", header: "score", width: { min: 30 }, cell: (r) => r.score },
     ];
-    const cells = textCells(new TableComponent<Fruit>().render({ columns: natural, rows, cursor: null, width: 60 }));
+    const cells = textCells(
+      new TableComponent<Fruit>().render({ columns: natural, rows, cursor: null, width: 60 }),
+    );
     expect(cells[0].style.width).toBe("watermelon-very-long".length + 1);
     expect(cells[1].style.width).toBe(30);
   });

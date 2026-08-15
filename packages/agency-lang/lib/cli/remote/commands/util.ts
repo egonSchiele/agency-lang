@@ -153,7 +153,9 @@ function resolveProjectSlug(
       "The selected host differs from the linked project's host; pass --project <slug> to be explicit.",
     );
   }
-  fail("No project. Pass --project <slug>, or link this directory with 'agency remote deploy'/'link'.");
+  fail(
+    "No project. Pass --project <slug>, or link this directory with 'agency remote deploy'/'link'.",
+  );
 }
 
 /** Turn a project-read command error into a clean CLI exit. The client is

@@ -16,10 +16,7 @@ export class PendingPromiseStore {
     return key;
   }
 
-  async awaitPending(
-    keys: string[],
-    opts?: { rejectInterrupts?: boolean },
-  ): Promise<void> {
+  async awaitPending(keys: string[], opts?: { rejectInterrupts?: boolean }): Promise<void> {
     const entries = keys
       .map((k) => ({ key: k, entry: this.pending[k] }))
       .filter((e) => e.entry !== undefined);
@@ -34,10 +31,7 @@ export class PendingPromiseStore {
       // means an async function paused while we were awaiting it, which
       // this code path cannot transport. The handler-exit await opts in
       // so an in-handler straggler cannot be silently consumed here.
-      if (
-        opts?.rejectInterrupts &&
-        (hasInterrupts(results[i]) || isInterrupt(results[i]))
-      ) {
+      if (opts?.rejectInterrupts && (hasInterrupts(results[i]) || isInterrupt(results[i]))) {
         throw new ConcurrentInterruptError(
           "An async function launched inside a handler returned an interrupt. " +
             "Handlers cannot pause, so this interrupt cannot be delivered. " +
@@ -71,8 +65,8 @@ export class PendingPromiseStore {
       if (hasInterrupts(result) || isInterrupt(result)) {
         throw new ConcurrentInterruptError(
           "An async function returned an interrupt while awaiting pending promises. " +
-          "Async interrupts from pending promises are not yet supported. " +
-          "Assign the async call to a variable if it may trigger an interrupt.",
+            "Async interrupts from pending promises are not yet supported. " +
+            "Assign the async call to a variable if it may trigger an interrupt.",
         );
       }
 
@@ -96,8 +90,6 @@ export class PendingPromiseStore {
 
   /** Still-pending keys registered at or after the given watermark. */
   keysSince(mark: number): string[] {
-    return Object.keys(this.pending).filter(
-      (k) => Number(k.slice("__pending_".length)) >= mark,
-    );
+    return Object.keys(this.pending).filter((k) => Number(k.slice("__pending_".length)) >= mark);
   }
 }

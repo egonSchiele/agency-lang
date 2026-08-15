@@ -46,9 +46,10 @@ function expandField(field: string, fieldIndex: number): number[] {
 // E.g. "weekdays at 9am" = 5 dicts (one per weekday), each with Hour=9, Minute=0.
 export function buildIntervals(cron: string): string {
   const cronFields = cron.split(/\s+/);
-  const expanded = CRON_TO_LAUNCHD
-    .map(({ index, key }, i) => ({ key, values: expandField(cronFields[index], i) }))
-    .filter(({ values }) => values.length > 0);
+  const expanded = CRON_TO_LAUNCHD.map(({ index, key }, i) => ({
+    key,
+    values: expandField(cronFields[index], i),
+  })).filter(({ values }) => values.length > 0);
 
   // Cartesian product of all constrained fields
   const combos = expanded.reduce<Record<string, number>[]>(
@@ -85,7 +86,9 @@ export class LaunchdBackend implements ScheduleBackend {
     fs.mkdirSync(PLIST_DIR, { recursive: true });
     // Unload first if already loaded (launchctl load fails on already-loaded plists)
     if (fs.existsSync(dest)) {
-      try { execFileSync("launchctl", ["unload", dest]); } catch {}
+      try {
+        execFileSync("launchctl", ["unload", dest]);
+      } catch {}
     }
     fs.writeFileSync(dest, plist);
     execFileSync("launchctl", ["load", dest]);

@@ -1,7 +1,4 @@
-export function stripBoundParams(
-  description: string,
-  boundParamNames: string[]
-): string {
+export function stripBoundParams(description: string, boundParamNames: string[]): string {
   if (!description || boundParamNames.length === 0) return description;
 
   const lines = description.split("\n");

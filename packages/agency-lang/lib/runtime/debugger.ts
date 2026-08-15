@@ -57,9 +57,7 @@ export async function debugStep(
   to keep running until the current function you're in returns, and you
   get out of the current depth. That's what this logic does.
   */
-  const shouldPause = isStepping
-    ? dbg.isAtOrBelowTargetDepth()
-    : isUserBreakpoint;
+  const shouldPause = isStepping ? dbg.isAtOrBelowTargetDepth() : isUserBreakpoint;
 
   dbg.createRollingCheckpoint(ctx, {
     moduleId: info.moduleId,
@@ -100,9 +98,7 @@ export async function debugStep(
       info,
       checkpointId,
     };
-    throw new Error(
-      `Failed to create debug checkpoint: ${JSON.stringify(debugData)}`,
-    );
+    throw new Error(`Failed to create debug checkpoint: ${JSON.stringify(debugData)}`);
   }
 
   const debugInterrupt = createDebugInterrupt(

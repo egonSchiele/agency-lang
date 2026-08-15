@@ -7,11 +7,7 @@ import { mergeTagSets } from "./mergeTags.js";
 import { applyValueArgs } from "./valueParamSubstitution.js";
 import { resultToObjectUnion } from "./resultUnion.js";
 import { typeKey } from "./typeKey.js";
-import {
-  evalBuiltinGeneric,
-  isBuiltinGenericName,
-  withUseSiteTags,
-} from "./builtinGenerics.js";
+import { evalBuiltinGeneric, isBuiltinGenericName, withUseSiteTags } from "./builtinGenerics.js";
 import { evalIndexedAccess, evalIntersection, evalKeyof } from "./typeOperators.js";
 
 /**
@@ -119,9 +115,7 @@ function resolveTypeWithGuard(
     // survives resolution. Occurrence tags thread through like the
     // genericType branch below.
     return withUseSiteTags(
-      evalKeyof(vt.operand, (t) =>
-        resolveTypeWithGuard(t, typeAliases, inProgress),
-      ),
+      evalKeyof(vt.operand, (t) => resolveTypeWithGuard(t, typeAliases, inProgress)),
       vt.tags,
     );
   }
@@ -168,9 +162,7 @@ function resolveTypeWithGuard(
     if (inProgress.has(vt.name)) {
       return {
         ...vt,
-        typeArgs: vt.typeArgs.map((a) =>
-          resolveTypeWithGuard(a, typeAliases, inProgress),
-        ),
+        typeArgs: vt.typeArgs.map((a) => resolveTypeWithGuard(a, typeAliases, inProgress)),
       };
     }
 
@@ -247,11 +239,7 @@ function attachAliasTags(vt: VariableType, aliasTags: Tag[] | undefined): Variab
  * Fill in defaults for omitted type arguments on a user-defined generic.
  * Errors if too many args are supplied or a required (defaultless) param is missing.
  */
-function fillDefaults(
-  args: VariableType[],
-  params: TypeParam[],
-  name: string,
-): VariableType[] {
+function fillDefaults(args: VariableType[], params: TypeParam[], name: string): VariableType[] {
   if (args.length > params.length) {
     throw new TypeError(
       `${name} expects at most ${params.length} type arguments, got ${args.length}`,
@@ -261,9 +249,7 @@ function fillDefaults(
   for (let i = args.length; i < params.length; i++) {
     const p = params[i];
     if (!p.default) {
-      throw new TypeError(
-        `${name} requires at least ${i + 1} type arguments`,
-      );
+      throw new TypeError(`${name} requires at least ${i + 1} type arguments`);
     }
     result.push(p.default);
   }
@@ -340,11 +326,7 @@ function deepResolveNode(
   typeAliases: Record<string, TypeAliasEntry>,
 ): VariableType {
   if (n.type === "genericType") return resolveType(n, typeAliases);
-  if (
-    n.type === "keyofType" ||
-    n.type === "indexedAccessType" ||
-    n.type === "intersectionType"
-  ) {
+  if (n.type === "keyofType" || n.type === "indexedAccessType" || n.type === "intersectionType") {
     // Same routing as genericType: these evaluate to concrete types and
     // must never reach the zod mapper unresolved — the mapper's fallback
     // silently emits z.string(). See docs/dev/adding-features.md.
@@ -364,9 +346,7 @@ function deepResolveNode(
 }
 
 /** True if `t` is the built-in `Record<K, V>` generic (after resolution). */
-function isRecord(
-  t: VariableType,
-): t is VariableType & { type: "genericType"; name: "Record" } {
+function isRecord(t: VariableType): t is VariableType & { type: "genericType"; name: "Record" } {
   return t.type === "genericType" && t.name === "Record";
 }
 
@@ -475,8 +455,7 @@ export function isOptionalType(
   typeAliases: Record<string, TypeAliasEntry>,
 ): boolean {
   const resolved = safeResolveType(vt, typeAliases);
-  if (resolved.type === "primitiveType")
-    return resolved.value === "null" || isAnyType(resolved);
+  if (resolved.type === "primitiveType") return resolved.value === "null" || isAnyType(resolved);
   if (resolved.type === "unionType")
     return resolved.types.some((t) => isOptionalType(t, typeAliases));
   return false;
@@ -597,20 +576,11 @@ function isAssignableInner(
 
   // Literal types assignable to their base primitives
   if (resolvedTarget.type === "primitiveType") {
-    if (
-      resolvedSource.type === "stringLiteralType" &&
-      resolvedTarget.value === "string"
-    )
+    if (resolvedSource.type === "stringLiteralType" && resolvedTarget.value === "string")
       return true;
-    if (
-      resolvedSource.type === "numberLiteralType" &&
-      resolvedTarget.value === "number"
-    )
+    if (resolvedSource.type === "numberLiteralType" && resolvedTarget.value === "number")
       return true;
-    if (
-      resolvedSource.type === "booleanLiteralType" &&
-      resolvedTarget.value === "boolean"
-    )
+    if (resolvedSource.type === "booleanLiteralType" && resolvedTarget.value === "boolean")
       return true;
   }
 
@@ -645,24 +615,15 @@ function isAssignableInner(
   }
 
   // Same kind matching
-  if (
-    resolvedSource.type === "primitiveType" &&
-    resolvedTarget.type === "primitiveType"
-  ) {
+  if (resolvedSource.type === "primitiveType" && resolvedTarget.type === "primitiveType") {
     return resolvedSource.value === resolvedTarget.value;
   }
 
-  if (
-    resolvedSource.type === "stringLiteralType" &&
-    resolvedTarget.type === "stringLiteralType"
-  ) {
+  if (resolvedSource.type === "stringLiteralType" && resolvedTarget.type === "stringLiteralType") {
     return resolvedSource.value === resolvedTarget.value;
   }
 
-  if (
-    resolvedSource.type === "numberLiteralType" &&
-    resolvedTarget.type === "numberLiteralType"
-  ) {
+  if (resolvedSource.type === "numberLiteralType" && resolvedTarget.type === "numberLiteralType") {
     return resolvedSource.value === resolvedTarget.value;
   }
 
@@ -673,47 +634,53 @@ function isAssignableInner(
     return resolvedSource.value === resolvedTarget.value;
   }
 
-  if (
-    resolvedSource.type === "arrayType" &&
-    resolvedTarget.type === "arrayType"
-  ) {
+  if (resolvedSource.type === "arrayType" && resolvedTarget.type === "arrayType") {
     return isAssignableGuarded(
       resolvedSource.elementType,
       resolvedTarget.elementType,
-      typeAliases, inProgress);
+      typeAliases,
+      inProgress,
+    );
   }
 
   // Block types: contravariant in parameters, covariant in return — standard
   // function compatibility. Arity must match exactly (no auto-extension).
-  if (
-    resolvedSource.type === "blockType" &&
-    resolvedTarget.type === "blockType"
-  ) {
-    if (resolvedSource.params.length !== resolvedTarget.params.length)
-      return false;
+  if (resolvedSource.type === "blockType" && resolvedTarget.type === "blockType") {
+    if (resolvedSource.params.length !== resolvedTarget.params.length) return false;
     for (let i = 0; i < resolvedSource.params.length; i++) {
       if (
         !isAssignableGuarded(
           resolvedTarget.params[i].typeAnnotation,
           resolvedSource.params[i].typeAnnotation,
-          typeAliases, inProgress)
+          typeAliases,
+          inProgress,
+        )
       )
         return false;
     }
     return isAssignableGuarded(
       resolvedSource.returnType,
       resolvedTarget.returnType,
-      typeAliases, inProgress);
+      typeAliases,
+      inProgress,
+    );
   }
 
   // Result<T, E>: covariant in both type parameters.
-  if (
-    resolvedSource.type === "resultType" &&
-    resolvedTarget.type === "resultType"
-  ) {
+  if (resolvedSource.type === "resultType" && resolvedTarget.type === "resultType") {
     return (
-      isAssignableGuarded(resolvedSource.successType, resolvedTarget.successType, typeAliases, inProgress) &&
-      isAssignableGuarded(resolvedSource.failureType, resolvedTarget.failureType, typeAliases, inProgress)
+      isAssignableGuarded(
+        resolvedSource.successType,
+        resolvedTarget.successType,
+        typeAliases,
+        inProgress,
+      ) &&
+      isAssignableGuarded(
+        resolvedSource.failureType,
+        resolvedTarget.failureType,
+        typeAliases,
+        inProgress,
+      )
     );
   }
 
@@ -728,16 +695,15 @@ function isAssignableInner(
     return isAssignableGuarded(
       resolvedSource,
       resultToObjectUnion(resolvedTarget, typeAliases),
-      typeAliases, inProgress);
+      typeAliases,
+      inProgress,
+    );
   }
 
   // Schema<T>: covariant in the validated type. There's no parser surface
   // for `Schema<T>` annotations yet — this rule lets a synthed schema flow
   // through `let` bindings whose RHS is `schema(T)` without false positives.
-  if (
-    resolvedSource.type === "schemaType" &&
-    resolvedTarget.type === "schemaType"
-  ) {
+  if (resolvedSource.type === "schemaType" && resolvedTarget.type === "schemaType") {
     return isAssignableGuarded(resolvedSource.inner, resolvedTarget.inner, typeAliases, inProgress);
   }
 
@@ -750,11 +716,15 @@ function isAssignableInner(
       isAssignableGuarded(
         resolvedSource.typeArgs[0],
         resolvedTarget.typeArgs[0],
-        typeAliases, inProgress) &&
+        typeAliases,
+        inProgress,
+      ) &&
       isAssignableGuarded(
         resolvedSource.typeArgs[1],
         resolvedTarget.typeArgs[1],
-        typeAliases, inProgress)
+        typeAliases,
+        inProgress,
+      )
     );
   }
 
@@ -780,17 +750,12 @@ function isAssignableInner(
     return resolvedTarget.properties.length === 0;
   }
 
-  if (
-    resolvedSource.type === "objectType" &&
-    resolvedTarget.type === "objectType"
-  ) {
+  if (resolvedSource.type === "objectType" && resolvedTarget.type === "objectType") {
     // Structural: source must have all properties of target with compatible
     // types. A target property whose type permits `undefined` (the desugaring
     // of `key?:`) may be omitted from the source.
     for (const targetProp of resolvedTarget.properties) {
-      const sourceProp = resolvedSource.properties.find(
-        (p) => p.key === targetProp.key,
-      );
+      const sourceProp = resolvedSource.properties.find((p) => p.key === targetProp.key);
       if (!sourceProp) {
         if (isOptionalType(targetProp.value, typeAliases)) continue;
         return false;
@@ -811,10 +776,7 @@ function isAssignableInner(
   }
 
   // Two functionRefTypes: compatible if same arity and compatible param/return types
-  if (
-    resolvedSource.type === "functionRefType" &&
-    resolvedTarget.type === "functionRefType"
-  ) {
+  if (resolvedSource.type === "functionRefType" && resolvedTarget.type === "functionRefType") {
     const sourceVariadic = resolvedSource.params.some((p) => p.variadic);
     const targetVariadic = resolvedTarget.params.some((p) => p.variadic);
     if (sourceVariadic !== targetVariadic) return false;
@@ -828,7 +790,12 @@ function isAssignableInner(
       if (!isAssignableGuarded(targetHint, sourceHint, typeAliases, inProgress)) return false;
     }
     if (resolvedSource.returnType && resolvedTarget.returnType) {
-      return isAssignableGuarded(resolvedSource.returnType, resolvedTarget.returnType, typeAliases, inProgress);
+      return isAssignableGuarded(
+        resolvedSource.returnType,
+        resolvedTarget.returnType,
+        typeAliases,
+        inProgress,
+      );
     }
     return true;
   }
@@ -842,10 +809,7 @@ function isAssignableInner(
   // order built-in like `map(arr, helper)` (where the parameter is
   // typed `(any) => any`) would emit a false-positive warning, even
   // when the helper's signature is structurally compatible.
-  if (
-    resolvedSource.type === "functionRefType" &&
-    resolvedTarget.type === "blockType"
-  ) {
+  if (resolvedSource.type === "functionRefType" && resolvedTarget.type === "blockType") {
     const sourceVariadic = resolvedSource.params.some((p) => p.variadic);
     if (sourceVariadic) return false;
     const sourceParams = resolvedSource.params.filter((p) => !p.variadic);
@@ -860,7 +824,9 @@ function isAssignableInner(
       return isAssignableGuarded(
         resolvedSource.returnType,
         resolvedTarget.returnType,
-        typeAliases, inProgress);
+        typeAliases,
+        inProgress,
+      );
     }
     return true;
   }

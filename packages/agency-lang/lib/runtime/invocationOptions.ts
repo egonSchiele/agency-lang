@@ -108,9 +108,7 @@ function selectContextOverride(
  * intentionally omitted (local-only sinks — spec §5). Returns `undefined` when
  * no allowed key was present.
  */
-function selectLogConfig(
-  log: AgencyConfig["log"] | undefined,
-): PerInvocationLogConfig | undefined {
+function selectLogConfig(log: AgencyConfig["log"] | undefined): PerInvocationLogConfig | undefined {
   if (!log) {
     return undefined;
   }
@@ -154,17 +152,14 @@ function selectLogConfig(
  * empty or not — is ignored. A supplied empty trace id on a fresh run is a
  * caller error and is rejected.
  */
-export function resolveInvocation(
-  request: InvocationRequest,
-): ResolvedInvocation {
+export function resolveInvocation(request: InvocationRequest): ResolvedInvocation {
   const contextOverride = selectContextOverride(request.options?.config);
 
   if (request.kind === "resume") {
     return { runId: request.runId, contextOverride };
   }
 
-  const runId =
-    request.inheritedRunId ?? request.options?.traceId ?? nanoid();
+  const runId = request.inheritedRunId ?? request.options?.traceId ?? nanoid();
   if (runId.length === 0) {
     throw new Error("traceId must not be empty");
   }

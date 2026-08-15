@@ -21,9 +21,7 @@ describe("setupAgentLsp", () => {
     expect(result.ok).toBe(true);
     expect(result.files).toHaveLength(1);
 
-    const config = JSON.parse(
-      fs.readFileSync(path.join(tmpDir, "opencode.json"), "utf-8"),
-    );
+    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, "opencode.json"), "utf-8"));
     expect(config.$schema).toBe("https://opencode.ai/config.json");
     expect(config.lsp.agency.command).toEqual(["agency", "lsp"]);
     expect(config.lsp.agency.extensions).toEqual([".agency"]);
@@ -31,10 +29,7 @@ describe("setupAgentLsp", () => {
 
   it("merges into existing OpenCode config", () => {
     const configPath = path.join(tmpDir, "opencode.json");
-    fs.writeFileSync(
-      configPath,
-      JSON.stringify({ model: "anthropic/claude-sonnet-4-5" }),
-    );
+    fs.writeFileSync(configPath, JSON.stringify({ model: "anthropic/claude-sonnet-4-5" }));
 
     setupAgentLsp("opencode", tmpDir);
 
@@ -57,13 +52,7 @@ describe("setupAgentLsp", () => {
       ".claude-plugin",
       "plugin.json",
     );
-    const lspConfigPath = path.join(
-      tmpDir,
-      ".claude",
-      "plugins",
-      "agency-lsp",
-      ".lsp.json",
-    );
+    const lspConfigPath = path.join(tmpDir, ".claude", "plugins", "agency-lsp", ".lsp.json");
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
     const lspConfig = JSON.parse(fs.readFileSync(lspConfigPath, "utf-8"));
 

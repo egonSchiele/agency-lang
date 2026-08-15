@@ -10,7 +10,9 @@ export async function runLs(
 ): Promise<void> {
   const binding = readBinding(context.configPath);
   if (!binding) {
-    fail("Not linked. Run 'agency remote deploy <file>' first (or 'agency remote link --url <serveBase>').");
+    fail(
+      "Not linked. Run 'agency remote deploy <file>' first (or 'agency remote link --url <serveBase>').",
+    );
   }
   const apiKey = apiKeyOrExit(options);
   try {

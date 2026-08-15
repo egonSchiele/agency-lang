@@ -19,8 +19,9 @@ function names(source: string): string[] {
 
 describe("missing-docstring rule", () => {
   it("flags an exported function without a docstring", () => {
-    expect(names(`export def fetchUser(id: string): string { return id }\n`))
-      .toEqual(["fetchUser"]);
+    expect(names(`export def fetchUser(id: string): string { return id }\n`)).toEqual([
+      "fetchUser",
+    ]);
   });
 
   it("does not flag an exported function with a docstring", () => {

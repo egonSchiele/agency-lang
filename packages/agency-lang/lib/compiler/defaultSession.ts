@@ -1,10 +1,6 @@
 import type { AgencyConfig } from "@/config.js";
 
-import {
-  createBuildSession,
-  type BuildSession,
-  type CompileOptions,
-} from "./buildSession.js";
+import { createBuildSession, type BuildSession, type CompileOptions } from "./buildSession.js";
 
 // The default session backing the module-level entry points
 // (compile/compileMany/resetCompilationCache). Deliberately the ONLY

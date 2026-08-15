@@ -31,7 +31,9 @@ describe("functionContainsDestructiveBlock", () => {
   });
 
   it("false when there is no seqBlock", () => {
-    const body = [{ type: "returnStatement", value: { type: "number", value: 1 } }] as unknown as AgencyNode[];
+    const body = [
+      { type: "returnStatement", value: { type: "number", value: 1 } },
+    ] as unknown as AgencyNode[];
     expect(functionContainsDestructiveBlock(body)).toBe(false);
   });
 });

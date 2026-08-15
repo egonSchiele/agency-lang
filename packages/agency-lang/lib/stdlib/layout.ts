@@ -25,8 +25,14 @@ import { HANDLERS, RENDERERS, _viewport, growToWidth, resolveSizes } from "./lay
 import { _coerceCell, _tableChromeWidth, _validateTable } from "./layout/table.js";
 import { parseWidth, styleOf } from "./layout/nodes.js";
 import {
-  barCells, baselineColumn, dataRange, renderBarChart, resolveColor, resolveKeys,
-  stackSegments, validateChart,
+  barCells,
+  baselineColumn,
+  dataRange,
+  renderBarChart,
+  resolveColor,
+  resolveKeys,
+  stackSegments,
+  validateChart,
 } from "./layout/barchart.js";
 
 export { Style, wrapText } from "./layout/ansi.js";
@@ -39,11 +45,30 @@ export { NodeHandler, SizingContext } from "./layout/sizing.js";
 // Internal exports for tests only — pinned here so the test surface
 // stays at a single import path even as implementation files move.
 export const _internal = {
-  visualWidth, sgr, padLine, stripAnsi, colorToRgb,
-  BORDER_CHARS, resolveBorderStyle,
-  styleOf, RENDERERS, HANDLERS,
-  parseWidth, wrapText, _viewport, resolveSizes, growToWidth,
-  _coerceCell, _validateTable, _tableChromeWidth,
-  barCells, baselineColumn, dataRange, resolveKeys, stackSegments, renderBarChart,
-  resolveColor, validateChart,
+  visualWidth,
+  sgr,
+  padLine,
+  stripAnsi,
+  colorToRgb,
+  BORDER_CHARS,
+  resolveBorderStyle,
+  styleOf,
+  RENDERERS,
+  HANDLERS,
+  parseWidth,
+  wrapText,
+  _viewport,
+  resolveSizes,
+  growToWidth,
+  _coerceCell,
+  _validateTable,
+  _tableChromeWidth,
+  barCells,
+  baselineColumn,
+  dataRange,
+  resolveKeys,
+  stackSegments,
+  renderBarChart,
+  resolveColor,
+  validateChart,
 };

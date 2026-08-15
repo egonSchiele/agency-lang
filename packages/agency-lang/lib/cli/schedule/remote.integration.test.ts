@@ -116,9 +116,7 @@ describe("addRemote vertical contract", () => {
       response(200, { success: false, error: "Project already has the maximum of 20 schedules" }),
     );
 
-    await expect(addRemote("agents/daily.agency", addOptions, context())).rejects.toThrow(
-      "exit:1",
-    );
+    await expect(addRemote("agents/daily.agency", addOptions, context())).rejects.toThrow("exit:1");
 
     expect(logSpy).not.toHaveBeenCalled();
     const errors = errorSpy.mock.calls.map((call: unknown[]) => call.join(" ")).join("\n");

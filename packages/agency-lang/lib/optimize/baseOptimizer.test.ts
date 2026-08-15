@@ -9,21 +9,34 @@ import type { Grade, GraderInput, GraderOptions, Input } from "@/eval/grading/ty
 import type { Scorecard } from "@/eval/grading/scorecard.js";
 import { BaseOptimizer, type MutationOutcome, type RunInput } from "./baseOptimizer.js";
 import type { OptimizeTarget } from "./optimizer.js";
-import type { OptimizeMutationDiagnostic, OptimizeMutationOperation, OptimizeMutationPreview } from "./sourceMutator.js";
+import type {
+  OptimizeMutationDiagnostic,
+  OptimizeMutationOperation,
+  OptimizeMutationPreview,
+} from "./sourceMutator.js";
 import type { OptimizeTargetSet } from "./targets.js";
 import type { MutationProposal, OptimizeResult } from "./types.js";
 import { cleanupFakeRuns, fakeRun } from "./testUtils.js";
 
 class FixedGrader extends BaseGrader {
   protected readonly defaultName = "fixed";
-  constructor(private readonly grade: Grade, options: GraderOptions = {}) { super(options); }
-  protected _run(_input: GraderInput): Promise<Grade> { return Promise.resolve(this.grade); }
+  constructor(
+    private readonly grade: Grade,
+    options: GraderOptions = {},
+  ) {
+    super(options);
+  }
+  protected _run(_input: GraderInput): Promise<Grade> {
+    return Promise.resolve(this.grade);
+  }
 }
 
 /** Concrete subclass exposing `evaluate` for testing. */
 class Probe extends BaseOptimizer {
   readonly name = "probe";
-  protected async optimizeTargets(): Promise<OptimizeResult> { return {} as OptimizeResult; }
+  protected async optimizeTargets(): Promise<OptimizeResult> {
+    return {} as OptimizeResult;
+  }
   evaluateAt(
     ws: ReturnType<Probe["fork"]>,
     source: OptimizeTargetSet,
@@ -32,15 +45,27 @@ class Probe extends BaseOptimizer {
   ): Promise<Scorecard> {
     return this.evaluate(ws, source, files, inputs);
   }
-  forkAt() { return this.fork(); }
-  requireBaselineGatesPassAt(sc: Scorecard): void { this.requireBaselineGatesPass(sc); }
+  forkAt() {
+    return this.fork();
+  }
+  requireBaselineGatesPassAt(sc: Scorecard): void {
+    this.requireBaselineGatesPass(sc);
+  }
   proposeValidMutationAt(
     propose: (d: OptimizeMutationDiagnostic[]) => Promise<MutationProposal>,
     preview: (ops: OptimizeMutationOperation[]) => OptimizeMutationPreview,
     max?: number,
-  ): Promise<MutationOutcome> { return this.proposeValidMutation(propose, preview, max); }
-  buildResultAt(args: Parameters<Probe["buildPointwiseResult"]>[0]): OptimizeResult { return this.buildPointwiseResult(args); }
-  scoreFilesAt(source: OptimizeTargetSet, files: Record<string, string>, inputs: Input[]): Promise<Scorecard> {
+  ): Promise<MutationOutcome> {
+    return this.proposeValidMutation(propose, preview, max);
+  }
+  buildResultAt(args: Parameters<Probe["buildPointwiseResult"]>[0]): OptimizeResult {
+    return this.buildPointwiseResult(args);
+  }
+  scoreFilesAt(
+    source: OptimizeTargetSet,
+    files: Record<string, string>,
+    inputs: Input[],
+  ): Promise<Scorecard> {
     return this.scoreFiles(source, files, inputs);
   }
 }
@@ -56,7 +81,9 @@ describe("BaseOptimizer.evaluate", () => {
     fs.mkdirSync(src);
     fs.writeFileSync(path.join(src, "agent.agency"), "node main() {}\n");
   });
-  afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+  afterEach(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
 
   function probe(graders: BaseGrader[], runInput: RunInput): Probe {
     return new Probe(
@@ -65,7 +92,10 @@ describe("BaseOptimizer.evaluate", () => {
     );
   }
 
-  const inputs: Input[] = [{ id: "a", task: "t" }, { id: "b", task: "t" }];
+  const inputs: Input[] = [
+    { id: "a", task: "t" },
+    { id: "b", task: "t" },
+  ];
   const fixedRun: RunInput = async (_ws, _source, _files, input, id) => fakeRun(id, "out", input);
 
   const source: OptimizeTargetSet = {
@@ -93,10 +123,19 @@ describe("BaseOptimizer.evaluate", () => {
       baseDir: src,
       entryFile: "agent.agency",
       typeAliases: {},
-      files: { "agent.agency": { file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), source: "node main() {}\n", sha256: "x" } },
+      files: {
+        "agent.agency": {
+          file: "agent.agency",
+          absoluteFile: path.join(src, "agent.agency"),
+          source: "node main() {}\n",
+          sha256: "x",
+        },
+      },
       targets: [],
     };
-    const sc = await p.scoreFilesAt(scoreSource, { "agent.agency": "node main() {}\n" }, [{ id: "a", task: "t" }]);
+    const sc = await p.scoreFilesAt(scoreSource, { "agent.agency": "node main() {}\n" }, [
+      { id: "a", task: "t" },
+    ]);
     expect(sc.objective()).toBeCloseTo(0.4, 10);
   });
 
@@ -104,14 +143,19 @@ describe("BaseOptimizer.evaluate", () => {
     class NeedsExpected extends BaseGrader {
       protected readonly defaultName = "needs-expected";
       validateInput(input: Input): void {
-        if (!input.metadata?.expected) throw new Error("matchOn [metadata,expected] did not resolve");
+        if (!input.metadata?.expected)
+          throw new Error("matchOn [metadata,expected] did not resolve");
       }
-      protected _run(): Promise<Grade> { return Promise.resolve({ score: { kind: "scalar", value: 1 } }); }
+      protected _run(): Promise<Grade> {
+        return Promise.resolve({ score: { kind: "scalar", value: 1 } });
+      }
     }
     const runInput = vi.fn(fixedRun);
     const opt = new (class extends BaseOptimizer {
       readonly name = "probe2";
-      protected async optimizeTargets(): Promise<OptimizeResult> { return {} as OptimizeResult; }
+      protected async optimizeTargets(): Promise<OptimizeResult> {
+        return {} as OptimizeResult;
+      }
     })(
       { graders: [new NeedsExpected()], iterations: 1, config: {}, runsDir: root, runId: "ff" },
       {
@@ -121,12 +165,25 @@ describe("BaseOptimizer.evaluate", () => {
           entryFile: "agent.agency",
           typeAliases: {},
           files: {},
-          targets: [{ id: "t", kind: "variable", file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), scope: "global", name: "p", valueKind: "string", value: "x", declaredType: null }],
+          targets: [
+            {
+              id: "t",
+              kind: "variable",
+              file: "agent.agency",
+              absoluteFile: path.join(src, "agent.agency"),
+              scope: "global",
+              name: "p",
+              valueKind: "string",
+              value: "x",
+              declaredType: null,
+            },
+          ],
         }),
       },
     );
-    await expect(opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", task: "t" }] }))
-      .rejects.toThrow(/did not resolve/);
+    await expect(
+      opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", task: "t" }] }),
+    ).rejects.toThrow(/did not resolve/);
     expect(runInput).not.toHaveBeenCalled();
   });
 
@@ -141,7 +198,10 @@ describe("BaseOptimizer.evaluate", () => {
   });
 
   it("only runs graders whose inputScope matches the input", async () => {
-    const scoped = new FixedGrader({ score: { kind: "scalar", value: 1 } }, { inputScope: { ids: ["a"] } });
+    const scoped = new FixedGrader(
+      { score: { kind: "scalar", value: 1 } },
+      { inputScope: { ids: ["a"] } },
+    );
     const p = probe([scoped], fixedRun);
     const sc = await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, inputs);
     // input "a" scores 1; input "b" has no contributing grader → 0; mean = 0.5
@@ -156,7 +216,10 @@ describe("BaseOptimizer.evaluate", () => {
   });
 
   it("requireBaselineGatesPass throws naming the failing must-pass grader", async () => {
-    const gate = new FixedGrader({ score: { kind: "binary", pass: false } }, { mustPass: true, name: "must-be-json" });
+    const gate = new FixedGrader(
+      { score: { kind: "binary", pass: false } },
+      { mustPass: true, name: "must-be-json" },
+    );
     const p = probe([gate], fixedRun);
     const sc = await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, [{ id: "a", task: "t" }]);
     expect(() => p.requireBaselineGatesPassAt(sc)).toThrow(/must-be-json/);
@@ -170,11 +233,29 @@ describe("BaseOptimizer.evaluate", () => {
   });
 
   describe("proposeValidMutation", () => {
-    const probeFor = () => probe([new FixedGrader({ score: { kind: "scalar", value: 1 } })], fixedRun);
-    const op: OptimizeMutationOperation = { target: "t", kind: "variable", op: "replaceInitializer", value: '"x"' };
+    const probeFor = () =>
+      probe([new FixedGrader({ score: { kind: "scalar", value: 1 } })], fixedRun);
+    const op: OptimizeMutationOperation = {
+      target: "t",
+      kind: "variable",
+      op: "replaceInitializer",
+      value: '"x"',
+    };
     const proposal = (rationale: string): MutationProposal => ({ rationale, operations: [op] });
-    const cleanPreview = (): OptimizeMutationPreview => ({ files: {}, changes: [], diff: "", diagnostics: [], targetSet: {} as OptimizeTargetSet });
-    const badPreview = (): OptimizeMutationPreview => ({ files: {}, changes: [], diff: "", diagnostics: [{ target: "t", code: "interpolation-mismatch", message: "dropped ${x}" }], targetSet: {} as OptimizeTargetSet });
+    const cleanPreview = (): OptimizeMutationPreview => ({
+      files: {},
+      changes: [],
+      diff: "",
+      diagnostics: [],
+      targetSet: {} as OptimizeTargetSet,
+    });
+    const badPreview = (): OptimizeMutationPreview => ({
+      files: {},
+      changes: [],
+      diff: "",
+      diagnostics: [{ target: "t", code: "interpolation-mismatch", message: "dropped ${x}" }],
+      targetSet: {} as OptimizeTargetSet,
+    });
 
     it("returns the preview on the first clean proposal", async () => {
       const propose = vi.fn(async () => proposal("r"));
@@ -184,16 +265,22 @@ describe("BaseOptimizer.evaluate", () => {
     });
 
     it("retries with the diagnostics fed back, then succeeds", async () => {
-      const propose = vi.fn(async (d: OptimizeMutationDiagnostic[]) => proposal(d.length ? "fixed" : "first"));
+      const propose = vi.fn(async (d: OptimizeMutationDiagnostic[]) =>
+        proposal(d.length ? "fixed" : "first"),
+      );
       let calls = 0;
-      const out = await probeFor().proposeValidMutationAt(propose, () => (calls++ === 0 ? badPreview() : cleanPreview()));
+      const out = await probeFor().proposeValidMutationAt(propose, () =>
+        calls++ === 0 ? badPreview() : cleanPreview(),
+      );
       expect(out.ok).toBe(true);
       expect(propose).toHaveBeenCalledTimes(2);
       expect(propose.mock.calls[1][0]).toHaveLength(1); // 2nd call received the prior diagnostics
     });
 
     it("does not throw when the proposer keeps failing; returns ok:false after maxAttempts", async () => {
-      const propose = vi.fn(async () => { throw new Error("bad json"); });
+      const propose = vi.fn(async () => {
+        throw new Error("bad json");
+      });
       const out = await probeFor().proposeValidMutationAt(propose, () => cleanPreview(), 3);
       expect(out.ok).toBe(false);
       if (!out.ok) expect(out.rationale).toMatch(/malformed/);
@@ -209,7 +296,11 @@ describe("BaseOptimizer.evaluate", () => {
       attempts: [
         { iter: 1, decision: "rejected" },
         { iter: 2, decision: "accepted" },
-        { iter: 3, decision: "validation-failed", detail: "[interpolation-mismatch] you removed ${x}" },
+        {
+          iter: 3,
+          decision: "validation-failed",
+          detail: "[interpolation-mismatch] you removed ${x}",
+        },
       ],
     });
     expect(result.iterations[0].decision).toBe("baseline");

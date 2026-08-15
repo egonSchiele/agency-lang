@@ -63,10 +63,7 @@ function unknownModelMessage(value: string, catalogNames: string[]): string {
   return lines.join("\n  ");
 }
 
-function closestName(
-  value: string,
-  catalogNames: string[],
-): string | undefined {
+function closestName(value: string, catalogNames: string[]): string | undefined {
   let best: string | undefined;
   let bestDistance = SUGGESTION_DISTANCE + 1;
   for (const name of catalogNames) {

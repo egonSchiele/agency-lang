@@ -90,9 +90,7 @@ export type AbortCause =
 /** Brand so a plain object on `signal.reason` is recognizable as ours. */
 const ABORT_CAUSE_BRAND = "__agencyAbortCause";
 
-export function makeAbortCause(
-  cause: AbortCause,
-): AbortCause & { [ABORT_CAUSE_BRAND]: true } {
+export function makeAbortCause(cause: AbortCause): AbortCause & { [ABORT_CAUSE_BRAND]: true } {
   return { ...cause, [ABORT_CAUSE_BRAND]: true } as AbortCause & {
     [ABORT_CAUSE_BRAND]: true;
   };

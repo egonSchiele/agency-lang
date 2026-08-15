@@ -133,7 +133,11 @@ describe("checkFailureArgs", () => {
     const events: any[] = [];
     const ctx: any = {
       failurePropagation: "on",
-      statelogClient: { warn: (e: any) => { events.push(e); } },
+      statelogClient: {
+        warn: (e: any) => {
+          events.push(e);
+        },
+      },
     };
     agencyStore.run({ ctx, stack: null, threads: null } as any, () => {
       const out = checkFailureArgs("t", [param("x", { acceptsResult: false })], [f]);
@@ -149,7 +153,11 @@ describe("checkFailureArgs", () => {
     const events: any[] = [];
     const ctx: any = {
       failurePropagation: "warn",
-      statelogClient: { warn: (e: any) => { events.push(e); } },
+      statelogClient: {
+        warn: (e: any) => {
+          events.push(e);
+        },
+      },
     };
     agencyStore.run({ ctx, stack: null, threads: null } as any, () => {
       const out = checkFailureArgs("t", [param("x", { acceptsResult: false })], [f]);
@@ -162,7 +170,11 @@ describe("checkFailureArgs", () => {
     const events: any[] = [];
     const ctx: any = {
       failurePropagation: "warn",
-      statelogClient: { warn: (e: any) => { events.push(e); } },
+      statelogClient: {
+        warn: (e: any) => {
+          events.push(e);
+        },
+      },
     };
     agencyStore.run({ ctx, stack: null, threads: null } as any, () => {
       checkFailureArgs(
@@ -178,7 +190,11 @@ describe("checkFailureArgs", () => {
     const events: any[] = [];
     const ctx: any = {
       failurePropagation: "off",
-      statelogClient: { warn: (e: any) => { events.push(e); } },
+      statelogClient: {
+        warn: (e: any) => {
+          events.push(e);
+        },
+      },
     };
     agencyStore.run({ ctx, stack: null, threads: null } as any, () => {
       const out = checkFailureArgs("t", [param("x", { acceptsResult: false })], [f]);
@@ -212,11 +228,18 @@ describe("checkTsFunctionArgs", () => {
 
   it("warn mode logs without throwing; off mode does neither", () => {
     const target = function formatDate() {};
-    for (const [mode, expectedLogs] of [["warn", 1], ["off", 0]] as const) {
+    for (const [mode, expectedLogs] of [
+      ["warn", 1],
+      ["off", 0],
+    ] as const) {
       const events: any[] = [];
       const ctx: any = {
         failurePropagation: mode,
-        statelogClient: { warn: (e: any) => { events.push(e); } },
+        statelogClient: {
+          warn: (e: any) => {
+            events.push(e);
+          },
+        },
       };
       agencyStore.run({ ctx, stack: null, threads: null } as any, () => {
         expect(() => checkTsFunctionArgs(target, "formatDate", [f])).not.toThrow();
@@ -237,7 +260,12 @@ describe("checkResultMethodCall", () => {
   });
 
   it("allows own-field callables (r.value holding a function or AgencyFunction)", () => {
-    expect(() => checkResultMethodCall(success(() => 1), "value")).not.toThrow();
+    expect(() =>
+      checkResultMethodCall(
+        success(() => 1),
+        "value",
+      ),
+    ).not.toThrow();
     const agencyLike = { __agencyFunction: true };
     expect(() => checkResultMethodCall(success(agencyLike), "value")).not.toThrow();
   });
@@ -254,11 +282,18 @@ describe("checkResultMethodCall", () => {
 
   it("warn mode logs without throwing; off mode does neither", () => {
     const f = failure("nope", { functionName: "getF" });
-    for (const [mode, expectedLogs] of [["warn", 1], ["off", 0]] as const) {
+    for (const [mode, expectedLogs] of [
+      ["warn", 1],
+      ["off", 0],
+    ] as const) {
       const events: any[] = [];
       const ctx: any = {
         failurePropagation: mode,
-        statelogClient: { warn: (e: any) => { events.push(e); } },
+        statelogClient: {
+          warn: (e: any) => {
+            events.push(e);
+          },
+        },
       };
       agencyStore.run({ ctx, stack: null, threads: null } as any, () => {
         expect(() => checkResultMethodCall(f, "split")).not.toThrow();
@@ -270,10 +305,7 @@ describe("checkResultMethodCall", () => {
 
 import { AgencyFunction } from "./agencyFunction.js";
 
-function makeFn(
-  params: Array<Partial<FuncParam> & { name: string }>,
-  fn: (...args: any[]) => any,
-) {
+function makeFn(params: Array<Partial<FuncParam> & { name: string }>, fn: (...args: any[]) => any) {
   return new AgencyFunction({
     name: "target",
     module: "test.agency",
@@ -293,7 +325,9 @@ describe("invoke() failure propagation", () => {
 
   it("skips the body and propagates for a rejecting param", async () => {
     let ran = false;
-    const fn = makeFn([{ name: "text", acceptsResult: false }], () => { ran = true; });
+    const fn = makeFn([{ name: "text", acceptsResult: false }], () => {
+      ran = true;
+    });
     const out: any = await fn.invoke({ type: "positional", args: [f] });
     expect(ran).toBe(false);
     expect(isFailure(out)).toBe(true);
@@ -311,8 +345,13 @@ describe("invoke() failure propagation", () => {
   it("checks values bound via .partial()", async () => {
     let ran = false;
     const fn = makeFn(
-      [{ name: "a", acceptsResult: false }, { name: "b", acceptsResult: false }],
-      () => { ran = true; },
+      [
+        { name: "a", acceptsResult: false },
+        { name: "b", acceptsResult: false },
+      ],
+      () => {
+        ran = true;
+      },
     );
     const bound = fn.partial({ a: f });
     const out: any = await bound.invoke({ type: "positional", args: ["ok"] });
@@ -354,22 +393,24 @@ describe("dispatcher failure checks", () => {
 
   it("__call: failure arg into an untagged plain TS function throws", async () => {
     const target = function formatDate() {};
-    await expect(
-      __call(target, { type: "positional", args: [f] }),
-    ).rejects.toThrowError(/formatDate.*origin/s);
+    await expect(__call(target, { type: "positional", args: [f] })).rejects.toThrowError(
+      /formatDate.*origin/s,
+    );
   });
 
   it("__call: tagged plain TS function receives the failure", async () => {
     const seen: unknown[] = [];
-    const target = acceptsFailures((...args: unknown[]) => { seen.push(...args); });
+    const target = acceptsFailures((...args: unknown[]) => {
+      seen.push(...args);
+    });
     await __call(target, { type: "positional", args: [f] });
     expect(isFailure(seen[0])).toBe(true);
   });
 
   it("__call: calling a failure value gives the rich message", async () => {
-    await expect(
-      __call(f, { type: "positional", args: [] }),
-    ).rejects.toThrowError(/failure value produced by 'origin'/);
+    await expect(__call(f, { type: "positional", args: [] })).rejects.toThrowError(
+      /failure value produced by 'origin'/,
+    );
   });
 
   it("__callMethod: method call on a failure throws the rich message", async () => {
@@ -421,7 +462,10 @@ describe("FAILURE_TOLERANT_BUILTINS sync tripwire", () => {
     // NOT a direct-call function, either the entry is wrong or the
     // classifier changed — both need a human decision, so fail loudly.
     for (const fn of FAILURE_TOLERANT_BUILTINS) {
-      expect(DIRECT_CALL_FUNCTIONS.has(fn.name), `${fn.name} missing from DIRECT_CALL_FUNCTIONS`).toBe(true);
+      expect(
+        DIRECT_CALL_FUNCTIONS.has(fn.name),
+        `${fn.name} missing from DIRECT_CALL_FUNCTIONS`,
+      ).toBe(true);
     }
   });
 });
@@ -461,7 +505,11 @@ describe("warn-mode console echo", () => {
     const events: any[] = [];
     const ctx: any = {
       failurePropagation: "warn",
-      statelogClient: { warn: (e: any) => { events.push(e); } },
+      statelogClient: {
+        warn: (e: any) => {
+          events.push(e);
+        },
+      },
     };
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {

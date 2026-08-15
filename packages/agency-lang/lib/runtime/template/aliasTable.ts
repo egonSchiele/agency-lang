@@ -8,9 +8,7 @@ import type { AgencyNode, TypeAlias, TypeAliasEntry } from "../../types.js";
  * as unknowable, so a gap here means fills go unchecked, never wrongly
  * rejected.
  */
-export function aliasTableFrom(
-  nodes: AgencyNode[],
-): Record<string, TypeAliasEntry> {
+export function aliasTableFrom(nodes: AgencyNode[]): Record<string, TypeAliasEntry> {
   // Null-prototype: alias names are user-controlled keys (house pattern).
   const table: Record<string, TypeAliasEntry> = Object.create(null);
   for (const node of nodes) {

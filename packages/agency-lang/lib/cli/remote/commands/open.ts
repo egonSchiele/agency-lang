@@ -8,7 +8,9 @@ import type { RemoteCommandContext } from "./util.js";
 export async function runOpen(context: RemoteCommandContext): Promise<void> {
   const binding = readBinding(context.configPath);
   if (!binding) {
-    fail("Not linked. Run 'agency remote deploy <file>' first (or 'agency remote link --url <serveBase>').");
+    fail(
+      "Not linked. Run 'agency remote deploy <file>' first (or 'agency remote link --url <serveBase>').",
+    );
   }
   const url = projectPageUrl(binding);
   console.log(color.dim(`Opening ${url}`));

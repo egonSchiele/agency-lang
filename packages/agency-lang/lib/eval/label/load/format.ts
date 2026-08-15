@@ -13,9 +13,7 @@ export function parseFormat(value: string): Format {
   if ((FORMATS as readonly string[]).includes(value)) {
     return value as Format;
   }
-  throw new IngestSourceError(
-    `Unknown --format "${value}". Use one of: ${FORMATS.join(", ")}.`,
-  );
+  throw new IngestSourceError(`Unknown --format "${value}". Use one of: ${FORMATS.join(", ")}.`);
 }
 
 /**
@@ -26,8 +24,10 @@ export function parseFormat(value: string): Format {
  * it through a loader that cannot read it.
  */
 function isRunDirectory(resolved: string): boolean {
-  return fs.existsSync(path.join(resolved, "config.json")) &&
-    fs.existsSync(path.join(resolved, "inputs"));
+  return (
+    fs.existsSync(path.join(resolved, "config.json")) &&
+    fs.existsSync(path.join(resolved, "inputs"))
+  );
 }
 
 /**
@@ -37,9 +37,10 @@ function isRunDirectory(resolved: string): boolean {
  * test, and anything it cannot classify is an error naming the explicit
  * formats rather than a silent fallback.
  */
-export function resolveFormat(
-  args: { source: string; requested: Format },
-): Exclude<Format, "auto"> {
+export function resolveFormat(args: {
+  source: string;
+  requested: Format;
+}): Exclude<Format, "auto"> {
   if (args.requested !== "auto") {
     return args.requested;
   }
@@ -61,8 +62,8 @@ export function resolveFormat(
 
   throw new IngestSourceError(
     `Cannot tell what kind of source ${args.source} is. Pass a run directory, a directory ` +
-    `of files, a quoted glob, a .json file, or a statelog file — or say which with ` +
-    `--format run|files|json|statelog.`,
+      `of files, a quoted glob, a .json file, or a statelog file — or say which with ` +
+      `--format run|files|json|statelog.`,
   );
 }
 
@@ -105,7 +106,11 @@ function firstNonEmptyLine(resolved: string): string | undefined {
         continue; // no complete line yet; keep reading within the cap
       }
       const buffer = Buffer.concat(collected);
-      for (let nl = buffer.indexOf(0x0a, lineStart); nl !== -1; nl = buffer.indexOf(0x0a, lineStart)) {
+      for (
+        let nl = buffer.indexOf(0x0a, lineStart);
+        nl !== -1;
+        nl = buffer.indexOf(0x0a, lineStart)
+      ) {
         const line = buffer.subarray(lineStart, nl).toString("utf8");
         if (line.trim() !== "") {
           return line;

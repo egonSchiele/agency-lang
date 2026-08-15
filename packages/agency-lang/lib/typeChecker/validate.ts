@@ -60,11 +60,7 @@ function checkValueArgsArity(
       if (valueArgsLen === 0) {
         const formals = valueParams.map((p) => p.name).join(", ");
         errors.push(
-          diagnostic(
-            "valueArgsRequired",
-            { alias: aliasName, formals, context },
-            loc ?? null,
-          ),
+          diagnostic("valueArgsRequired", { alias: aliasName, formals, context }, loc ?? null),
         );
       } else {
         errors.push(
@@ -97,13 +93,7 @@ export function validateTypeReferences(
     if (t.type === "typeAliasVariable") {
       const entry = typeAliases[t.aliasName];
       if (!entry) {
-        errors.push(
-          diagnostic(
-            "unknownTypeAlias",
-            { alias: t.aliasName, context },
-            loc ?? null,
-          ),
-        );
+        errors.push(diagnostic("unknownTypeAlias", { alias: t.aliasName, context }, loc ?? null));
         return;
       }
       // Bare reference to a generic alias is only legal if every type
@@ -111,11 +101,7 @@ export function validateTypeReferences(
       // they needed `StringMap<...>`.
       if (entry.typeParams && entry.typeParams.some((p) => !p.default)) {
         errors.push(
-          diagnostic(
-            "genericRequiresTypeArgs",
-            { alias: t.aliasName, context },
-            loc ?? null,
-          ),
+          diagnostic("genericRequiresTypeArgs", { alias: t.aliasName, context }, loc ?? null),
         );
       }
       // Bare reference to a value-parameterized alias is only legal if
@@ -156,15 +142,11 @@ export function validateTypeReferences(
       }
       const entry = typeAliases[t.name];
       if (!entry) {
-        errors.push(
-          diagnostic("unknownGenericType", { alias: t.name, context }, loc ?? null),
-        );
+        errors.push(diagnostic("unknownGenericType", { alias: t.name, context }, loc ?? null));
         return;
       }
       if (!entry.typeParams) {
-        errors.push(
-          diagnostic("notGenericType", { alias: t.name, context }, loc ?? null),
-        );
+        errors.push(diagnostic("notGenericType", { alias: t.name, context }, loc ?? null));
         return;
       }
       if (t.typeArgs.length > entry.typeParams.length) {

@@ -28,7 +28,7 @@ function tmp(): string {
 function freshFixture(): { dir: string; manifest: BuildManifest; ctx: FreshnessContext } {
   const dir = tmp();
   fs.writeFileSync(path.join(dir, "main.agency"), "node main() {\n  return 1\n}\n");
-  fs.writeFileSync(path.join(dir, "dep.agency"), 'export def d(): number {\n  return 2\n}\n');
+  fs.writeFileSync(path.join(dir, "dep.agency"), "export def d(): number {\n  return 2\n}\n");
   fs.writeFileSync(path.join(dir, "main.js"), "// compiled");
   fs.writeFileSync(path.join(dir, "dep.js"), "// compiled dep");
   const depHash = hashFile(path.join(dir, "dep.agency"))!;
@@ -173,7 +173,7 @@ describe("isEntryFresh — each field is load-bearing", () => {
 
   test("dep content edit → stale", () => {
     const { dir, manifest, ctx } = freshFixture();
-    fs.writeFileSync(path.join(dir, "dep.agency"), 'export def d(): number {\n  return 3\n}\n');
+    fs.writeFileSync(path.join(dir, "dep.agency"), "export def d(): number {\n  return 3\n}\n");
     expect(isEntryFresh("main.agency", manifest, ctx)).toBe(false);
   });
 
@@ -207,7 +207,9 @@ describe("isEntryFresh — each field is load-bearing", () => {
 
   test("configKey mismatch → stale", () => {
     const { manifest, ctx } = freshFixture();
-    expect(isEntryFresh("main.agency", manifest, { ...ctx, configKey: '{"verbose":true}' })).toBe(false);
+    expect(isEntryFresh("main.agency", manifest, { ...ctx, configKey: '{"verbose":true}' })).toBe(
+      false,
+    );
   });
 
   test("hasPkgImports → never fresh", () => {
@@ -254,9 +256,13 @@ describe("isEntryFresh — each field is load-bearing", () => {
     };
     expect(isEntryFresh(relocate("main.agency"), manifest, ctx)).toBe(true);
     // Contents flavor changing does NOT stale a stdlib-resident entry…
-    expect(isEntryFresh(relocate("main.agency"), manifest, { ...ctx, stdlibHash: "OTHER" })).toBe(true);
+    expect(isEntryFresh(relocate("main.agency"), manifest, { ...ctx, stdlibHash: "OTHER" })).toBe(
+      true,
+    );
     // …but the names flavor changing does.
-    expect(isEntryFresh(relocate("main.agency"), manifest, { ...ctx, stdlibNamesHash: "OTHER" })).toBe(false);
+    expect(
+      isEntryFresh(relocate("main.agency"), manifest, { ...ctx, stdlibNamesHash: "OTHER" }),
+    ).toBe(false);
   });
 });
 
@@ -268,7 +274,9 @@ describe("stdlib hash flavors", () => {
     const stdlibDir = path.join(m, "stdlib");
     expect(stdlibHashFlavor(path.join(stdlibDir, "math.agency"), stdlibDir, "N", "C")).toBe("N");
     expect(stdlibHashFlavor(path.join(m, "src", "app.agency"), stdlibDir, "N", "C")).toBe("C");
-    expect(stdlibHashFlavor(path.join(m, "stdlib-copy", "x.agency"), stdlibDir, "N", "C")).toBe("C");
+    expect(stdlibHashFlavor(path.join(m, "stdlib-copy", "x.agency"), stdlibDir, "N", "C")).toBe(
+      "C",
+    );
   });
 
   test("computeStdlibNamesHash: edits invisible; add/rename visible; recursive; .agency-only; order-insensitive", () => {

@@ -4,10 +4,7 @@ import path from "node:path";
 import { nanoid } from "nanoid";
 import { safeDeleteDirectory } from "../../utils.js";
 import { parseAgency } from "../../parser.js";
-import {
-  checkImportGraph,
-  resolveGeneratorModule
-} from "./eligibility.js";
+import { checkImportGraph, resolveGeneratorModule } from "./eligibility.js";
 import { checkGeneratorEffects } from "./generatorEffects.js";
 import type { AgencyProgram } from "../../types.js";
 
@@ -112,9 +109,7 @@ describe("checkImportGraph", () => {
       "gen.agency",
       `import { z } from "zod"\n\nexport def g(): number {\n  return 1\n}\n`,
     );
-    expect(checkImportGraph(generator, "g")?.diagnostic).toBe(
-      "spliceGeneratorReachesNonAgency",
-    );
+    expect(checkImportGraph(generator, "g")?.diagnostic).toBe("spliceGeneratorReachesNonAgency");
   });
 
   it("refuses a generator reaching npm one file away", () => {
@@ -125,9 +120,7 @@ describe("checkImportGraph", () => {
       "gen.agency",
       `import { s } from "./side.agency"\n\nexport def g(): number {\n  return s()\n}\n`,
     );
-    expect(checkImportGraph(generator, "g")?.diagnostic).toBe(
-      "spliceGeneratorReachesNonAgency",
-    );
+    expect(checkImportGraph(generator, "g")?.diagnostic).toBe("spliceGeneratorReachesNonAgency");
   });
 
   it("refuses an `export from` that leaves Agency", () => {
@@ -137,9 +130,7 @@ describe("checkImportGraph", () => {
       "gen.agency",
       `export { z } from "zod"\n\nexport def g(): number {\n  return 1\n}\n`,
     );
-    expect(checkImportGraph(generator, "g")?.diagnostic).toBe(
-      "spliceGeneratorReachesNonAgency",
-    );
+    expect(checkImportGraph(generator, "g")?.diagnostic).toBe("spliceGeneratorReachesNonAgency");
   });
 });
 

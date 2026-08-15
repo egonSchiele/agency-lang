@@ -4,9 +4,7 @@ import { printTs } from "./prettyPrint.js";
 
 describe("prettyPrint", () => {
   it("TsRaw passes through verbatim", () => {
-    expect(printTs(ts.raw("console.log('hello');"))).toBe(
-      "console.log('hello');",
-    );
+    expect(printTs(ts.raw("console.log('hello');"))).toBe("console.log('hello');");
   });
 
   it("TsIdentifier", () => {
@@ -27,17 +25,12 @@ describe("prettyPrint", () => {
   });
 
   it("TsCall with nested args", () => {
-    const node = ts.call(ts.id("foo"), [
-      ts.str("bar"),
-      ts.call(ts.id("baz"), [ts.num(1)]),
-    ]);
+    const node = ts.call(ts.id("foo"), [ts.str("bar"), ts.call(ts.id("baz"), [ts.num(1)])]);
     expect(printTs(node)).toBe('foo("bar", baz(1))');
   });
 
   it("TsAwait", () => {
-    expect(printTs(ts.await(ts.call(ts.id("fetch"), [ts.str("url")])))).toBe(
-      'await fetch("url")',
-    );
+    expect(printTs(ts.await(ts.call(ts.id("fetch"), [ts.str("url")])))).toBe('await fetch("url")');
   });
 
   it("TsReturn with expr", () => {
@@ -53,9 +46,7 @@ describe("prettyPrint", () => {
   });
 
   it("TsVarDecl with type annotation", () => {
-    expect(printTs(ts.letDecl("x", undefined, "number"))).toBe(
-      "let x: number;",
-    );
+    expect(printTs(ts.letDecl("x", undefined, "number"))).toBe("let x: number;");
   });
 
   it("TsAssign", () => {
@@ -75,9 +66,7 @@ describe("prettyPrint", () => {
   });
 
   it("TsArrayLiteral", () => {
-    expect(printTs(ts.arr([ts.num(1), ts.num(2), ts.num(3)]))).toBe(
-      "[1, 2, 3]",
-    );
+    expect(printTs(ts.arr([ts.num(1), ts.num(2), ts.num(3)]))).toBe("[1, 2, 3]");
   });
 
   it("TsArrayLiteral empty", () => {
@@ -120,9 +109,7 @@ describe("prettyPrint", () => {
       [{ name: "name", typeAnnotation: "string" }],
       ts.return(ts.id("name")),
     );
-    expect(printTs(fn)).toBe(
-      "function greet(name: string) {\n  return name;\n}",
-    );
+    expect(printTs(fn)).toBe("function greet(name: string) {\n  return name;\n}");
   });
 
   it("TsFunctionDecl async export", () => {
@@ -132,16 +119,11 @@ describe("prettyPrint", () => {
       ts.statements([ts.return(ts.call(ts.id("fetch"), []))]),
       { async: true, export: true },
     );
-    expect(printTs(fn)).toBe(
-      "export async function fetchData() {\n  return fetch();\n}",
-    );
+    expect(printTs(fn)).toBe("export async function fetchData() {\n  return fetch();\n}");
   });
 
   it("TsArrowFn expression body", () => {
-    const fn = ts.arrowFn(
-      [{ name: "x" }],
-      ts.binOp(ts.id("x"), "+", ts.num(1)),
-    );
+    const fn = ts.arrowFn([{ name: "x" }], ts.binOp(ts.id("x"), "+", ts.num(1)));
     expect(printTs(fn)).toBe("(x) => x + 1");
   });
 
@@ -164,19 +146,15 @@ describe("prettyPrint", () => {
   });
 
   it("TsIf with else-if chain", () => {
-    const node = ts.if(
-      ts.binOp(ts.id("x"), ">", ts.num(0)),
-      ts.return(ts.str("positive")),
-      {
-        elseIfs: [
-          {
-            condition: ts.binOp(ts.id("x"), "<", ts.num(0)),
-            body: ts.return(ts.str("negative")),
-          },
-        ],
-        elseBody: ts.return(ts.str("zero")),
-      },
-    );
+    const node = ts.if(ts.binOp(ts.id("x"), ">", ts.num(0)), ts.return(ts.str("positive")), {
+      elseIfs: [
+        {
+          condition: ts.binOp(ts.id("x"), "<", ts.num(0)),
+          body: ts.return(ts.str("negative")),
+        },
+      ],
+      elseBody: ts.return(ts.str("zero")),
+    });
     const expected = [
       "if (x > 0) {",
       '  return "positive";',
@@ -195,9 +173,7 @@ describe("prettyPrint", () => {
       ts.id("items"),
       ts.call(ts.prop(ts.id("console"), "log"), [ts.id("item")]),
     );
-    expect(printTs(node)).toBe(
-      "for (const item of items) {\n  console.log(item)\n}",
-    );
+    expect(printTs(node)).toBe("for (const item of items) {\n  console.log(item)\n}");
   });
 
   it("TsFor c-style", () => {
@@ -207,9 +183,7 @@ describe("prettyPrint", () => {
       ts.assign(ts.id("i"), ts.binOp(ts.id("i"), "+", ts.num(1))),
       ts.call(ts.prop(ts.id("console"), "log"), [ts.id("i")]),
     );
-    expect(printTs(node)).toBe(
-      "for (let i = 0; i < 10; i = i + 1) {\n  console.log(i)\n}",
-    );
+    expect(printTs(node)).toBe("for (let i = 0; i < 10; i = i + 1) {\n  console.log(i)\n}");
   });
 
   it("TsWhile", () => {
@@ -246,9 +220,7 @@ describe("prettyPrint", () => {
       ts.call(ts.prop(ts.id("console"), "error"), [ts.id("e")]),
       "e",
     );
-    expect(printTs(node)).toBe(
-      "try {\n  riskyOp()\n} catch (e) {\n  console.error(e)\n}",
-    );
+    expect(printTs(node)).toBe("try {\n  riskyOp()\n} catch (e) {\n  console.error(e)\n}");
   });
 
   it("TsTemplateLit with interpolations", () => {
@@ -369,10 +341,7 @@ describe("prettyPrint", () => {
   });
 
   it("TsStatements", () => {
-    const node = ts.statements([
-      ts.constDecl("x", ts.num(1)),
-      ts.constDecl("y", ts.num(2)),
-    ]);
+    const node = ts.statements([ts.constDecl("x", ts.num(1)), ts.constDecl("y", ts.num(2))]);
     expect(printTs(node)).toBe("const x = 1;\nconst y = 2;");
   });
 
@@ -412,9 +381,7 @@ describe("prettyPrint", () => {
       ],
       ts.return(ts.id("name")),
     );
-    expect(printTs(fn)).toBe(
-      'function greet(name: string = "world") {\n  return name;\n}',
-    );
+    expect(printTs(fn)).toBe('function greet(name: string = "world") {\n  return name;\n}');
   });
 
   it("TsScopedVar global with moduleId", () => {
@@ -424,9 +391,9 @@ describe("prettyPrint", () => {
   });
 
   it("TsScopedVar global with topLevel flag uses __globalCtx", () => {
-    expect(
-      printTs({ ...ts.scopedVar("x", "global", "test.agency"), topLevel: true }),
-    ).toBe('__globalCtx.globals.get("test.agency", "x")');
+    expect(printTs({ ...ts.scopedVar("x", "global", "test.agency"), topLevel: true })).toBe(
+      '__globalCtx.globals.get("test.agency", "x")',
+    );
   });
 
   it("TsScopedVar global without moduleId throws", () => {
@@ -434,15 +401,11 @@ describe("prettyPrint", () => {
   });
 
   it("TsScopedVar function", () => {
-    expect(printTs(ts.scopedVar("count", "function"))).toBe(
-      "__stack.locals.count",
-    );
+    expect(printTs(ts.scopedVar("count", "function"))).toBe("__stack.locals.count");
   });
 
   it("TsScopedVar node", () => {
-    expect(printTs(ts.scopedVar("result", "node"))).toBe(
-      "__stack.locals.result",
-    );
+    expect(printTs(ts.scopedVar("result", "node"))).toBe("__stack.locals.result");
   });
 
   it("TsScopedVar args", () => {
@@ -460,40 +423,30 @@ describe("prettyPrint", () => {
   // ── high-frequency builders ───────────────────────────────────────────────
 
   it("ts.methodCall produces receiver.name(args)", () => {
-    expect(printTs(ts.methodCall(ts.id("runner"), "halt", [ts.num(1)]))).toBe(
-      "runner.halt(1)",
-    );
+    expect(printTs(ts.methodCall(ts.id("runner"), "halt", [ts.num(1)]))).toBe("runner.halt(1)");
   });
 
   it("ts.methodCall with no args", () => {
-    expect(printTs(ts.methodCall(ts.id("performance"), "now"))).toBe(
-      "performance.now()",
-    );
+    expect(printTs(ts.methodCall(ts.id("performance"), "now"))).toBe("performance.now()");
   });
 
   it("ts.methodCall with optional chaining", () => {
-    expect(
-      printTs(ts.methodCall(ts.id("x"), "foo", [], { optional: true })),
-    ).toBe("x?.foo()");
+    expect(printTs(ts.methodCall(ts.id("x"), "foo", [], { optional: true }))).toBe("x?.foo()");
   });
 
   it("ts.awaitCall wraps a call in await", () => {
-    expect(printTs(ts.awaitCall(ts.id("init"), [ts.id("ctx")]))).toBe(
-      "await init(ctx)",
-    );
+    expect(printTs(ts.awaitCall(ts.id("init"), [ts.id("ctx")]))).toBe("await init(ctx)");
   });
 
   it("ts.awaitMethodCall produces await receiver.name(args)", () => {
-    expect(
-      printTs(ts.awaitMethodCall(ts.id("ctx"), "drain", [ts.num(0)])),
-    ).toBe("await ctx.drain(0)");
+    expect(printTs(ts.awaitMethodCall(ts.id("ctx"), "drain", [ts.num(0)]))).toBe(
+      "await ctx.drain(0)",
+    );
   });
 
   it("ts.iife wraps arrow callee in parens (async)", () => {
     const node = ts.iife({ async: true, body: [ts.return(ts.num(1))] });
-    expect(printTs(node)).toBe(
-      "(async () => {\n  return 1;\n})()",
-    );
+    expect(printTs(node)).toBe("(async () => {\n  return 1;\n})()");
   });
 
   it("ts.iife wraps arrow callee in parens (sync, expression body)", () => {
@@ -504,9 +457,7 @@ describe("prettyPrint", () => {
   it("ts.call with arrow-fn callee parenthesises the callee", () => {
     // Regression-style: the printer must add parens around arrow callees
     // so `(async () => {...})()` parses as an IIFE.
-    const node = ts.call(
-      ts.arrowFn([], ts.statements([ts.return(ts.num(7))]), { async: true }),
-    );
+    const node = ts.call(ts.arrowFn([], ts.statements([ts.return(ts.num(7))]), { async: true }));
     expect(printTs(node).startsWith("(async () =>")).toBe(true);
     expect(printTs(node).endsWith(")()")).toBe(true);
   });
@@ -517,15 +468,15 @@ describe("prettyPrint", () => {
     });
 
     it("uses the ancestor frame binding when blockFrameVar is set", () => {
-      expect(
-        printTs(ts.scopedVar("y", "block", "m", "__bframe___block_0")),
-      ).toBe("__bframe___block_0.locals.y");
+      expect(printTs(ts.scopedVar("y", "block", "m", "__bframe___block_0"))).toBe(
+        "__bframe___block_0.locals.y",
+      );
     });
 
     it("addresses ancestor block args via blockFrameVar", () => {
-      expect(
-        printTs(ts.scopedVar("p", "blockArgs", "m", "__bframe___block_0")),
-      ).toBe("__bframe___block_0.args.p");
+      expect(printTs(ts.scopedVar("p", "blockArgs", "m", "__bframe___block_0"))).toBe(
+        "__bframe___block_0.args.p",
+      );
     });
   });
 
@@ -575,11 +526,8 @@ describe("prettyPrint", () => {
 
   describe("runnerExitMatch", () => {
     it("emits the exitMatch call and a bare return", () => {
-      const out = printTs(
-        ts.runnerExitMatch({ matchId: 7, value: ts.str("hi") }),
-      );
+      const out = printTs(ts.runnerExitMatch({ matchId: 7, value: ts.str("hi") }));
       expect(out).toBe('runner.exitMatch(7, "hi");\nreturn;');
     });
   });
-
 });

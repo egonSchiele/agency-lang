@@ -36,9 +36,7 @@ describe("debuggerParser", () => {
     expect(result.success).toBe(true);
     if (!result.success) throw new Error("expected success");
     const nodeBody = (result.result.nodes[0] as any).body;
-    const debuggerNodes = nodeBody.filter(
-      (n: any) => n.type === "debuggerStatement",
-    );
+    const debuggerNodes = nodeBody.filter((n: any) => n.type === "debuggerStatement");
     expect(debuggerNodes.length).toBe(2);
     expect(debuggerNodes[0].type).toBe("debuggerStatement");
     expect(debuggerNodes[0].label).toBeUndefined();

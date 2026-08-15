@@ -75,8 +75,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     category: "general",
     contextWindow: 131072,
     license: "apache-2.0",
-    description:
-      "Tiny model from Alibaba's current generation. Good edge-device default.",
+    description: "Tiny model from Alibaba's current generation. Good edge-device default.",
     sha256: "bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517",
   },
   "qwen3.5-2b": {
@@ -86,8 +85,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     category: "general",
     contextWindow: 131072,
     license: "apache-2.0",
-    description:
-      "Most popular modern small general model. Runs on CPU comfortably.",
+    description: "Most popular modern small general model. Runs on CPU comfortably.",
     sha256: "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
   },
   "qwen3.5-4b": {
@@ -128,8 +126,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     category: "general",
     contextWindow: 131072,
     license: "apache-2.0",
-    description:
-      "IBM's enterprise-tuned 8B. Built for retrieval, tool use, and long documents.",
+    description: "IBM's enterprise-tuned 8B. Built for retrieval, tool use, and long documents.",
     sha256: "0f45c1af986e9900bb3b6ba46a25937e1bb80426935bc242d88c9ca90e9f5c88",
   },
   "qwen3.5-9b": {
@@ -149,8 +146,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     category: "general",
     contextWindow: 262144,
     license: "apache-2.0",
-    description:
-      "Google's mid-size Gemma 4 dense model. Strong multilingual multimodal use.",
+    description: "Google's mid-size Gemma 4 dense model. Strong multilingual multimodal use.",
     sha256: "0a270ec9fe6b34f4a0d33992b6135117b484ebc4766ab76b51d4ae8c457e4c42",
   },
   "gpt-oss-20b": {
@@ -160,8 +156,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     category: "general",
     contextWindow: 131072,
     license: "apache-2.0",
-    description:
-      "OpenAI's open-weights release. Balanced general model for ~16 GB machines.",
+    description: "OpenAI's open-weights release. Balanced general model for ~16 GB machines.",
     sha256: "c27536640e410032865dc68781d80a08b98f8db5e93575919af8ccc0568aeb4f",
   },
   "mistral-small-3.1": {
@@ -171,8 +166,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     category: "general",
     contextWindow: 131072,
     license: "apache-2.0",
-    description:
-      "Mistral's general 24B base model (also Devstral's foundation). Broad utility.",
+    description: "Mistral's general 24B base model (also Devstral's foundation). Broad utility.",
     sha256: "6d670773c3908584349d41a5048d1472226b593c881fd394e8ac196c802e81e2",
   },
   "mistral-small-3.2": {
@@ -193,8 +187,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     category: "general",
     contextWindow: 131072,
     license: "apache-2.0",
-    description:
-      "Modern dense general 27B. The practical ceiling for most workstations.",
+    description: "Modern dense general 27B. The practical ceiling for most workstations.",
     sha256: "84b5f7f112156d63836a01a69dc3f11a6ba63b10a23b8ca7a7efaf52d5a2d806",
   },
   "gemma-4-26b-a4b": {
@@ -204,8 +197,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     category: "general",
     contextWindow: 262144,
     license: "apache-2.0",
-    description:
-      "Google's Gemma 4 MoE (3.8B active). Fast yet capable multimodal model.",
+    description: "Google's Gemma 4 MoE (3.8B active). Fast yet capable multimodal model.",
     sha256: "f2c28b3dc4776931ac6f879e11f203dec637ea0f14267a86ec8f6165f63f293f",
   },
   "gemma-4-31b": {
@@ -215,8 +207,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     category: "general",
     contextWindow: 262144,
     license: "apache-2.0",
-    description:
-      "Largest dense Gemma 4. Top Gemma quality for high-RAM workstations.",
+    description: "Largest dense Gemma 4. Top Gemma quality for high-RAM workstations.",
     sha256: "38bd64c852c4b460434cc7162fa9bdcf242faf86502581a754cb72956bb17f84",
   },
   "qwen3.5-35b-a3b": {
@@ -226,8 +217,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     category: "general",
     contextWindow: 262144,
     license: "apache-2.0",
-    description:
-      "Qwen's general MoE (3B active). 27B-class quality at 9B speed, needs ~32 GB RAM.",
+    description: "Qwen's general MoE (3B active). 27B-class quality at 9B speed, needs ~32 GB RAM.",
     sha256: "3b46d1066bc91cc2d613e3bc22ce691dd77e6f0d33c9060690d24ce6de494375",
   },
   "deepseek-r1-distill-llama-8b": {
@@ -237,8 +227,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     category: "reasoning",
     contextWindow: 131072,
     license: "mit",
-    description:
-      "Chain-of-thought distill into Llama-8B. Best small reasoning model.",
+    description: "Chain-of-thought distill into Llama-8B. Best small reasoning model.",
     sha256: "0addb1339a82385bcd973186cd80d18dcc71885d45eabd899781a118d03827d9",
   },
   "deepseek-r1-0528-qwen3-8b": {
@@ -248,8 +237,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     category: "reasoning",
     contextWindow: 131072,
     license: "mit",
-    description:
-      "DeepSeek's newer R1 distill onto Qwen3-8B. Supersedes the Llama-8B distill.",
+    description: "DeepSeek's newer R1 distill onto Qwen3-8B. Supersedes the Llama-8B distill.",
     sha256: "a86349a4180c4e6bb43f874c29c404fa2be3f90b15509bd6d86f697dba724ec1",
   },
   "phi-4-reasoning": {
@@ -291,8 +279,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     category: "coding",
     contextWindow: 393216,
     license: "apache-2.0",
-    description:
-      "Mistral's current coding agent. Supersedes 2507 and reads 384K tokens at once.",
+    description: "Mistral's current coding agent. Supersedes 2507 and reads 384K tokens at once.",
     sha256: "d14ba9edee1bb4c4996a726deb81e49ae81800a3216f0774634238c380aee496",
   },
   "qwen3-coder-30b-a3b": {
@@ -370,13 +357,8 @@ function isCatalogUri(v: string): boolean {
 /** The agency.json that owns aliases: nearest `agency.json` walking up from
  *  `startDir` (cwd by default); falls back to `~/agency.json` when none is
  *  found. Exported so the CLI can echo it on every write. */
-export function resolveAliasConfigPath(
-  startDir: string = process.cwd(),
-): string {
-  return (
-    findFileUp(startDir, "agency.json") ??
-    path.join(os.homedir(), "agency.json")
-  );
+export function resolveAliasConfigPath(startDir: string = process.cwd()): string {
+  return findFileUp(startDir, "agency.json") ?? path.join(os.homedir(), "agency.json");
 }
 
 /** Treat empty string as "caller wants resolveAliasConfigPath()". */
@@ -442,9 +424,7 @@ export function aliasUri(value: AliasValue): string {
   return typeof value === "string" ? value : value.uri;
 }
 
-export function readModelAliases(
-  file: string = "",
-): Record<string, AliasValue> {
+export function readModelAliases(file: string = ""): Record<string, AliasValue> {
   const cfg = readJson(resolveAliasFile(file));
   return (cfg.client?.modelAliases ?? {}) as Record<string, AliasValue>;
 }
@@ -473,10 +453,7 @@ export function _resolveModelName(value: string, file: string = ""): string {
   const curated = CURATED_LOCAL_MODELS[value];
   const mapped = aliasTarget ?? curated?.uri;
   if (!mapped) {
-    const names = [
-      ...Object.keys(CURATED_LOCAL_MODELS),
-      ...Object.keys(aliases),
-    ].join(", ");
+    const names = [...Object.keys(CURATED_LOCAL_MODELS), ...Object.keys(aliases)].join(", ");
     throw new Error(
       `Unknown local model "${value}". Known names: ${names || "(none)"}; ` +
         `or pass a .gguf path or an "hf:" URI.`,
@@ -487,13 +464,7 @@ export function _resolveModelName(value: string, file: string = ""): string {
 
 type EntryMeta = Pick<
   ModelNameEntry,
-  | "params"
-  | "sizeBytes"
-  | "category"
-  | "description"
-  | "contextWindow"
-  | "license"
-  | "sha256"
+  "params" | "sizeBytes" | "category" | "description" | "contextWindow" | "license" | "sha256"
 >;
 
 /** Project the optional display-metadata fields off any source shape
@@ -515,37 +486,31 @@ function metaFrom(src: string | Partial<EntryMeta>): EntryMeta {
 }
 
 export function _listModelNames(file: string = ""): ModelNameEntry[] {
-  const curatedEntries: ModelNameEntry[] = Object.entries(
-    CURATED_LOCAL_MODELS,
-  ).map(([name, info]) => ({
-    name,
-    target: info.uri,
-    source: "curated",
-    ...metaFrom(info),
-  }));
-  const aliasEntries: ModelNameEntry[] = Object.entries(
-    readModelAliases(file),
-  ).map(([name, value]) => ({
-    name,
-    target: aliasUri(value),
-    source: "alias",
-    ...metaFrom(value),
-  }));
+  const curatedEntries: ModelNameEntry[] = Object.entries(CURATED_LOCAL_MODELS).map(
+    ([name, info]) => ({
+      name,
+      target: info.uri,
+      source: "curated",
+      ...metaFrom(info),
+    }),
+  );
+  const aliasEntries: ModelNameEntry[] = Object.entries(readModelAliases(file)).map(
+    ([name, value]) => ({
+      name,
+      target: aliasUri(value),
+      source: "alias",
+      ...metaFrom(value),
+    }),
+  );
   // Alias wins on name collision: the alias entry overwrites the curated one
   // in the object literal because it comes later. `Object.values` then yields
   // exactly one entry per name.
   return Object.values(
-    Object.fromEntries(
-      [...curatedEntries, ...aliasEntries].map((e) => [e.name, e]),
-    ),
+    Object.fromEntries([...curatedEntries, ...aliasEntries].map((e) => [e.name, e])),
   );
 }
 
-export function _aliasModel(
-  name: string,
-  uri: string,
-  file: string = "",
-): string {
+export function _aliasModel(name: string, uri: string, file: string = ""): string {
   const resolved = resolveAliasFile(file);
   writeJson(resolved, withAlias(readJson(resolved), name, uri));
   return resolved;
@@ -619,25 +584,15 @@ export type CatalogModel = {
 };
 
 /** Resolve the catalog URL: explicit arg → env → config → built-in default. */
-export function resolveCatalogUrl(
-  explicit: string = "",
-  file: string = "",
-): string {
+export function resolveCatalogUrl(explicit: string = "", file: string = ""): string {
   if (explicit !== "") return explicit;
-  if (process.env.AGENCY_MODEL_CATALOG_URL)
-    return process.env.AGENCY_MODEL_CATALOG_URL;
+  if (process.env.AGENCY_MODEL_CATALOG_URL) return process.env.AGENCY_MODEL_CATALOG_URL;
   const configured = readJson(resolveAliasFile(file)).client?.modelCatalogUrl;
-  if (typeof configured === "string" && configured.length > 0)
-    return configured;
+  if (typeof configured === "string" && configured.length > 0) return configured;
   return DEFAULT_CATALOG_URL;
 }
 
-const CATALOG_CATEGORIES = [
-  "general",
-  "coding",
-  "reasoning",
-  "embedding",
-] as const;
+const CATALOG_CATEGORIES = ["general", "coding", "reasoning", "embedding"] as const;
 
 /** Bound on how long the default fetcher will wait for the remote catalog
  *  before aborting. Long enough to tolerate slow CI mirrors; short enough
@@ -654,9 +609,7 @@ const CATALOG_MAX_BYTES = 5_000_000;
 // is dropped rather than failing the whole entry (lenient metadata); a
 // missing/insecure `uri` fails the entry (it's then skipped + warned).
 const CatalogModelSchema = z.object({
-  uri: z
-    .string()
-    .refine(isCatalogUri, "uri must be an hf:/https: URI or a .gguf path"),
+  uri: z.string().refine(isCatalogUri, "uri must be an hf:/https: URI or a .gguf path"),
   params: z.string().optional().catch(undefined),
   sizeBytes: z.number().optional().catch(undefined),
   category: z.enum(CATALOG_CATEGORIES).optional().catch(undefined),
@@ -683,9 +636,7 @@ const CatalogTopSchema = z.object({
 /** Strip keys whose value is `undefined` so the resulting object is JSON-clean
  *  (no `"params": undefined` after `JSON.stringify`) and in canonical order. */
 function compact<T extends Record<string, unknown>>(o: T): Partial<T> {
-  return Object.fromEntries(
-    Object.entries(o).filter(([, v]) => v !== undefined),
-  ) as Partial<T>;
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
 }
 
 /** Parse + validate the catalog JSON. Throws on blob-level problems (bad JSON,
@@ -717,34 +668,32 @@ export function parseCatalog(text: string): Record<string, CatalogModel> {
   }
   // Validate each entry independently; a bad entry is skipped + warned, not
   // fatal. Rebuild a canonical-order `CatalogModel` from the validated data.
-  const entries: ([string, CatalogModel] | null)[] = Object.entries(
-    top.data.models,
-  ).map(([name, entry]) => {
-    const parsed = CatalogModelSchema.safeParse(entry);
-    if (!parsed.success) {
-      console.warn(
-        `[catalog] skipping "${name}": ${parsed.error.issues[0]?.message ?? "invalid entry"}`,
-      );
-      return null;
-    }
-    const d = parsed.data;
-    const model: CatalogModel = {
-      uri: d.uri,
-      ...compact({
-        params: d.params,
-        sizeBytes: d.sizeBytes,
-        category: d.category,
-        contextWindow: d.contextWindow,
-        license: d.license,
-        description: d.description,
-        sha256: d.sha256,
-      }),
-    };
-    return [name, model];
-  });
-  return Object.fromEntries(
-    entries.filter((e): e is [string, CatalogModel] => e !== null),
+  const entries: ([string, CatalogModel] | null)[] = Object.entries(top.data.models).map(
+    ([name, entry]) => {
+      const parsed = CatalogModelSchema.safeParse(entry);
+      if (!parsed.success) {
+        console.warn(
+          `[catalog] skipping "${name}": ${parsed.error.issues[0]?.message ?? "invalid entry"}`,
+        );
+        return null;
+      }
+      const d = parsed.data;
+      const model: CatalogModel = {
+        uri: d.uri,
+        ...compact({
+          params: d.params,
+          sizeBytes: d.sizeBytes,
+          category: d.category,
+          contextWindow: d.contextWindow,
+          license: d.license,
+          description: d.description,
+          sha256: d.sha256,
+        }),
+      };
+      return [name, model];
+    },
   );
+  return Object.fromEntries(entries.filter((e): e is [string, CatalogModel] => e !== null));
 }
 
 /** If `url` names a local file (a `file://` URL or a plain filesystem path —
@@ -753,8 +702,7 @@ export function parseCatalog(text: string): Record<string, CatalogModel> {
  *  makes the merge logic integration-testable without a network round-trip. */
 function catalogLocalPath(url: string): string | null {
   if (url.startsWith("file://")) return fileURLToPath(url);
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(url) || url.startsWith("hf:"))
-    return null;
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(url) || url.startsWith("hf:")) return null;
   return url;
 }
 
@@ -762,9 +710,7 @@ function catalogLocalPath(url: string): string | null {
 function readCatalogFile(path: string): string {
   const size = fs.statSync(path).size;
   if (size > CATALOG_MAX_BYTES) {
-    throw new Error(
-      `catalog file too large (${size} bytes; cap ${CATALOG_MAX_BYTES} bytes)`,
-    );
+    throw new Error(`catalog file too large (${size} bytes; cap ${CATALOG_MAX_BYTES} bytes)`);
   }
   return fs.readFileSync(path, "utf-8");
 }
@@ -773,11 +719,7 @@ function readCatalogFile(path: string): string {
  *  large/malicious body can't be fully buffered first. Mirrors the capped
  *  reader in `lib/stdlib/http.ts`; counts raw bytes (`byteLength`), not
  *  UTF-16 code units. */
-async function readBodyCapped(
-  res: Response,
-  url: string,
-  maxBytes: number,
-): Promise<string> {
+async function readBodyCapped(res: Response, url: string, maxBytes: number): Promise<string> {
   if (!res.body) return "";
   const reader = res.body.getReader();
   const decoder = new TextDecoder("utf-8");
@@ -881,8 +823,7 @@ function classifyEntry(
   // model named like a prototype member (`toString`, `__proto__`, …) must not
   // be treated as a collision with — or a previous value from — an inherited
   // property the user never set.
-  const has = (o: object, k: string): boolean =>
-    Object.prototype.hasOwnProperty.call(o, k);
+  const has = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);
   if (has(userAliases, name)) {
     return {
       kind: "skipped",
@@ -907,8 +848,7 @@ function classifyEntry(
 
 /** Predicate factory for declarative filtering by `Classification.kind`. */
 function isKind<K extends Classification["kind"]>(k: K) {
-  return (c: Classification): c is Extract<Classification, { kind: K }> =>
-    c.kind === k;
+  return (c: Classification): c is Extract<Classification, { kind: K }> => c.kind === k;
 }
 
 /** Fetch + validate the catalog, then rewrite the `source:"remote"` aliases in
@@ -939,21 +879,18 @@ export async function _refreshCatalog(
 
   // Partition existing aliases by who manages them.
   const userAliases: Record<string, AliasValue> = Object.fromEntries(
-    Object.entries(existing).filter(
-      ([, v]) => !(typeof v === "object" && v.source === "remote"),
-    ),
+    Object.entries(existing).filter(([, v]) => !(typeof v === "object" && v.source === "remote")),
   );
   const oldManaged: Record<string, AliasObject> = Object.fromEntries(
     Object.entries(existing).filter(
-      (e): e is [string, AliasObject] =>
-        typeof e[1] === "object" && e[1].source === "remote",
+      (e): e is [string, AliasObject] => typeof e[1] === "object" && e[1].source === "remote",
     ),
   );
 
   // The entire merge policy: classify each catalog entry once. Everything
   // downstream is a filter/project on this array.
-  const classifications: Classification[] = Object.entries(models).map(
-    ([name, model]) => classifyEntry(name, model, userAliases, oldManaged),
+  const classifications: Classification[] = Object.entries(models).map(([name, model]) =>
+    classifyEntry(name, model, userAliases, oldManaged),
   );
 
   const namesIn = <K extends Classification["kind"]>(k: K): string[] =>
@@ -1019,9 +956,7 @@ function requireSupport(): void {
     return;
   }
   if (!_localModelsSupported()) {
-    throw new Error(
-      "Local models need smoltalk-llama-cpp — run: npm i -g smoltalk-llama-cpp",
-    );
+    throw new Error("Local models need smoltalk-llama-cpp — run: npm i -g smoltalk-llama-cpp");
   }
 }
 
@@ -1079,10 +1014,7 @@ export async function verifyModelFile(
     fs.renameSync(filePath, quarantine);
   } catch (err) {
     moved = false;
-    console.warn(
-      `Could not move "${filePath}" to "${quarantine}" after SHA-256 mismatch:`,
-      err,
-    );
+    console.warn(`Could not move "${filePath}" to "${quarantine}" after SHA-256 mismatch:`, err);
   }
   throw new Error(
     `SHA-256 verification failed for "${name}": expected ${expected}, got ${actual}. ` +
@@ -1097,10 +1029,7 @@ export async function verifyModelFile(
  *  model). An alias entry governs the name entirely — a user alias shadowing a
  *  curated name must NOT borrow the curated hash, but a user MAY opt in by
  *  setting their own `sha256` on the alias object. */
-export function pinnedSha256(
-  value: string,
-  file: string = "",
-): string | undefined {
+export function pinnedSha256(value: string, file: string = ""): string | undefined {
   if (isGgufPath(value) || isModelUri(value)) return undefined;
   const aliases = readModelAliases(file);
   if (Object.hasOwn(aliases, value)) {
@@ -1125,10 +1054,7 @@ export function snapshotFreshness(dir: string): FreshnessProbe {
 }
 
 /** Resolve a name/uri/path to a local .gguf path, downloading if needed. */
-export async function _downloadModel(
-  value: string,
-  cacheDir: string = "",
-): Promise<string> {
+export async function _downloadModel(value: string, cacheDir: string = ""): Promise<string> {
   requireSupport();
   const target = _resolveModelName(value);
   const dir = resolveCacheDir(cacheDir);
@@ -1149,10 +1075,7 @@ export async function _downloadModel(
 }
 
 /** Convenience: register the provider + ensure the model is downloaded. */
-export async function _registerLocalModel(
-  value: string,
-  cacheDir: string = "",
-): Promise<string> {
+export async function _registerLocalModel(value: string, cacheDir: string = ""): Promise<string> {
   await _registerLocalProvider();
   return await _downloadModel(value, cacheDir);
 }
@@ -1223,15 +1146,7 @@ export function formatLocalList(args: {
     .map((e) => args.manifest[e.target])
     .filter((f): f is string => f !== undefined);
   const others = args.files.filter((f) => !claimedFiles.includes(f.name));
-  const headers = [
-    "",
-    "NAME",
-    "PARAMS",
-    "SIZE",
-    "CONTEXT",
-    "CATEGORY",
-    "LICENSE",
-  ];
+  const headers = ["", "NAME", "PARAMS", "SIZE", "CONTEXT", "CATEGORY", "LICENSE"];
   const cols = [
     colWidth(
       headers[0],
@@ -1275,9 +1190,7 @@ export function formatLocalList(args: {
     // Blank line *between* models, not after the last one, so the sections
     // below (which push their own leading "") aren't double-spaced.
     if (args.long === true && i > 0) lines.push("");
-    lines.push(
-      render([r.mark, r.name, r.params, r.size, r.ctx, r.category, r.license]),
-    );
+    lines.push(render([r.mark, r.name, r.params, r.size, r.ctx, r.category, r.license]));
     if (args.long === true && r.description !== "") {
       lines.push(ttyColor.dim(`${descIndent}${r.description}`));
     }
@@ -1357,11 +1270,7 @@ export function formatModelCatalog(): string {
       )}  ${size.padStart(w.size)}  ${ctx.padStart(w.ctx)}  ${license}`;
 
     // LICENSE is the last column, so it needs no trailing pad.
-    lines.push(
-      ttyColor.bold(
-        row("NAME", "PARAMS", "CATEGORY", "SIZE", "CTX", "LICENSE"),
-      ),
-    );
+    lines.push(ttyColor.bold(row("NAME", "PARAMS", "CATEGORY", "SIZE", "CTX", "LICENSE")));
     rows.forEach((r, i) => {
       // Blank line *between* models, not after the last one, so the joined
       // string has no trailing newline (console.log adds exactly one).

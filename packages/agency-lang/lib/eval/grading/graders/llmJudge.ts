@@ -6,12 +6,12 @@ import { getPath } from "../getPath.js";
 import type { Grade, GraderInput, GraderOptions, JSONPath } from "../types.js";
 
 type LlmJudgeOptions = GraderOptions & {
-  agencyFile?: string;     // judge .agency file (default: the bundled goal judge)
-  goal?: string;           // fixed goal for every input (overrides goalPath)
-  goalPath?: JSONPath;     // where to read the goal from the input (default ["goal"])
+  agencyFile?: string; // judge .agency file (default: the bundled goal judge)
+  goal?: string; // fixed goal for every input (overrides goalPath)
+  goalPath?: JSONPath; // where to read the goal from the input (default ["goal"])
   expectedPath?: JSONPath; // where to read the gold answer (default ["expected"]); passed to the judge
-  binary?: boolean;        // expect a pass/fail verdict instead of a 0..1 score
-  node?: string;           // judge node (default "main")
+  binary?: boolean; // expect a pass/fail verdict instead of a 0..1 score
+  node?: string; // judge node (default "main")
 };
 
 const BinaryVerdict = z.object({ pass: z.boolean(), reasoning: z.string() });
@@ -30,7 +30,9 @@ export class LlmJudge extends BaseGrader {
     // An LLM judge with no goal has nothing to judge against — fail loudly rather
     // than ask the model to grade output against an empty criterion.
     if (goal === undefined || goal === null || String(goal).trim() === "") {
-      throw new Error(`${this.name()}: no goal (set options.goal or provide one at ${globalThis.JSON.stringify(goalPath)} on input ${input.id ?? "(no id)"}); an LLM judge needs a goal.`);
+      throw new Error(
+        `${this.name()}: no goal (set options.goal or provide one at ${globalThis.JSON.stringify(goalPath)} on input ${input.id ?? "(no id)"}); an LLM judge needs a goal.`,
+      );
     }
     const agencyFile = this.options.agencyFile ?? goalJudgeFile();
     // Judges take a string output; stringify structured outputs so they read as JSON
@@ -39,7 +41,8 @@ export class LlmJudge extends BaseGrader {
     // The gold answer, when the input carries one — the bundled judge grades against
     // it. Empty string when absent; a custom judge node that ignores it is unaffected.
     const expectedRaw = getPath(input, this.options.expectedPath ?? ["expected"]);
-    const expected = expectedRaw === undefined || expectedRaw === null ? "" : asJudgeText(expectedRaw);
+    const expected =
+      expectedRaw === undefined || expectedRaw === null ? "" : asJudgeText(expectedRaw);
     const args = [String(goal), output, expected];
     const node = this.options.node ?? "main";
     if (this.options.binary) {

@@ -21,79 +21,103 @@ describe("resolveSecretValue", () => {
   it("--from-env wins over everything and copies the variable", async () => {
     const readStdin = vi.fn();
     const promptHidden = vi.fn();
-    const result = await resolveSecretValue("N", sources({
-      fromEnv: "MY_VAR",
-      env: { MY_VAR: "from-env-value" },
-      stdinIsTty: false,
-      readStdin,
-      promptHidden,
-    }));
+    const result = await resolveSecretValue(
+      "N",
+      sources({
+        fromEnv: "MY_VAR",
+        env: { MY_VAR: "from-env-value" },
+        stdinIsTty: false,
+        readStdin,
+        promptHidden,
+      }),
+    );
     expect(result).toEqual({ kind: "value", value: "from-env-value" });
     expect(readStdin).not.toHaveBeenCalled();
     expect(promptHidden).not.toHaveBeenCalled();
   });
 
-  it.each([["unset", {}], ["empty", { MY_VAR: "" }]])(
-    "--from-env with an %s variable is an error and makes no other reads",
-    async (_label, env) => {
-      const result = await resolveSecretValue("N", sources({ fromEnv: "MY_VAR", env }));
-      expect(result.kind).toBe("error");
-      if (result.kind === "error") {
-        expect(result.message).toContain("$MY_VAR");
-      }
-    },
-  );
+  it.each([
+    ["unset", {}],
+    ["empty", { MY_VAR: "" }],
+  ])("--from-env with an %s variable is an error and makes no other reads", async (_label, env) => {
+    const result = await resolveSecretValue("N", sources({ fromEnv: "MY_VAR", env }));
+    expect(result.kind).toBe("error");
+    if (result.kind === "error") {
+      expect(result.message).toContain("$MY_VAR");
+    }
+  });
 
   it("piped stdin strips exactly one \\n", async () => {
-    const result = await resolveSecretValue("N", sources({
-      stdinIsTty: false,
-      readStdin: vi.fn().mockResolvedValue("piped-value\n"),
-    }));
+    const result = await resolveSecretValue(
+      "N",
+      sources({
+        stdinIsTty: false,
+        readStdin: vi.fn().mockResolvedValue("piped-value\n"),
+      }),
+    );
     expect(result).toEqual({ kind: "value", value: "piped-value" });
   });
 
   it("piped stdin strips exactly one \\r\\n", async () => {
-    const result = await resolveSecretValue("N", sources({
-      stdinIsTty: false,
-      readStdin: vi.fn().mockResolvedValue("crlf-value\r\n"),
-    }));
+    const result = await resolveSecretValue(
+      "N",
+      sources({
+        stdinIsTty: false,
+        readStdin: vi.fn().mockResolvedValue("crlf-value\r\n"),
+      }),
+    );
     expect(result).toEqual({ kind: "value", value: "crlf-value" });
   });
 
   it("two trailing newlines keep one", async () => {
-    const result = await resolveSecretValue("N", sources({
-      stdinIsTty: false,
-      readStdin: vi.fn().mockResolvedValue("keeps-one\n\n"),
-    }));
+    const result = await resolveSecretValue(
+      "N",
+      sources({
+        stdinIsTty: false,
+        readStdin: vi.fn().mockResolvedValue("keeps-one\n\n"),
+      }),
+    );
     expect(result).toEqual({ kind: "value", value: "keeps-one\n" });
   });
 
   it("empty piped stdin is an error", async () => {
-    const result = await resolveSecretValue("N", sources({
-      stdinIsTty: false,
-      readStdin: vi.fn().mockResolvedValue("\n"),
-    }));
+    const result = await resolveSecretValue(
+      "N",
+      sources({
+        stdinIsTty: false,
+        readStdin: vi.fn().mockResolvedValue("\n"),
+      }),
+    );
     expect(result.kind).toBe("error");
   });
 
   it("TTY prompt returns the entered value", async () => {
-    const result = await resolveSecretValue("N", sources({
-      promptHidden: vi.fn().mockResolvedValue("typed"),
-    }));
+    const result = await resolveSecretValue(
+      "N",
+      sources({
+        promptHidden: vi.fn().mockResolvedValue("typed"),
+      }),
+    );
     expect(result).toEqual({ kind: "value", value: "typed" });
   });
 
   it("prompt cancellation is a distinct canceled outcome", async () => {
-    const result = await resolveSecretValue("N", sources({
-      promptHidden: vi.fn().mockResolvedValue(undefined),
-    }));
+    const result = await resolveSecretValue(
+      "N",
+      sources({
+        promptHidden: vi.fn().mockResolvedValue(undefined),
+      }),
+    );
     expect(result).toEqual({ kind: "canceled" });
   });
 
   it("an empty prompted value is an error, not a cancellation", async () => {
-    const result = await resolveSecretValue("N", sources({
-      promptHidden: vi.fn().mockResolvedValue(""),
-    }));
+    const result = await resolveSecretValue(
+      "N",
+      sources({
+        promptHidden: vi.fn().mockResolvedValue(""),
+      }),
+    );
     expect(result.kind).toBe("error");
   });
 });

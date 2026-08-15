@@ -6,12 +6,7 @@ import { parseAgency } from "../parser.js";
  *  by type. The runtime tag is "graphNode" - "graphNodeDefinition" is
  *  only the TypeScript type name and matches nothing at runtime. */
 function parseExpr(src: string) {
-  const result = parseAgency(
-    `node main() {\n  const x = ${src}\n}`,
-    {},
-    true,
-    false,
-  );
+  const result = parseAgency(`node main() {\n  const x = ${src}\n}`, {}, true, false);
   if (!result.success) {
     throw new Error("parse failed");
   }
@@ -24,24 +19,14 @@ function parseExpr(src: string) {
 }
 
 function parseFails(src: string): boolean {
-  const result = parseAgency(
-    `node main() {\n  const x = ${src}\n}`,
-    {},
-    true,
-    false,
-  );
+  const result = parseAgency(`node main() {\n  const x = ${src}\n}`, {}, true, false);
   return !result.success;
 }
 
 /** True when the source fails to parse AND the failure message matches -
  *  the targeted-diagnostic contract from #602. */
 function parseFailsWith(src: string, re: RegExp): boolean {
-  const result = parseAgency(
-    `node main() {\n  const x = ${src}\n}`,
-    {},
-    true,
-    false,
-  );
+  const result = parseAgency(`node main() {\n  const x = ${src}\n}`, {}, true, false);
   if (result.success) {
     return false;
   }
@@ -239,9 +224,7 @@ describe("comprehensionParser", () => {
   // in/if inside the commit points are word-bounded, so a fused token
   // reports the missing KEYWORD rather than blaming the next clause
   it("does not let insomething match as in", () => {
-    expect(
-      parseFailsWith("[x for x insomething]", /expected `in`/),
-    ).toBe(true);
+    expect(parseFailsWith("[x for x insomething]", /expected `in`/)).toBe(true);
   });
 
   it("does not let iffy match as a filter if", () => {

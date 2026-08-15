@@ -74,10 +74,12 @@ export class CompareView implements ExplorerView {
       cursor: null,
       width: viewport.cols,
     });
-    const empty = compareRows.length === 0
-      ? line("(no graded eval runs — comparing needs scores)", { height: 1, fg: "gray" })
-      : tableElement;
-    return column({ justifyContent: "flex-start" },
+    const empty =
+      compareRows.length === 0
+        ? line("(no graded eval runs — comparing needs scores)", { height: 1, fg: "gray" })
+        : tableElement;
+    return column(
+      { justifyContent: "flex-start" },
       line("COMPARE  which agent does best on which suite?", { height: 1, fg: "bright-white" }),
       empty,
       line(this.message, { height: 1, fg: "gray" }),
@@ -107,12 +109,13 @@ export class CompareView implements ExplorerView {
       const cells: Record<string, CompareCell> = Object.create(null);
       for (const agent of agents) {
         const pair = graded.filter((row) => row.suite === suite && row.agent === agent);
-        cells[agent] = pair.length === 0
-          ? null
-          : {
-              mean: pair.reduce((sum, row) => sum + (row.score ?? 0), 0) / pair.length,
-              count: pair.length,
-            };
+        cells[agent] =
+          pair.length === 0
+            ? null
+            : {
+                mean: pair.reduce((sum, row) => sum + (row.score ?? 0), 0) / pair.length,
+                count: pair.length,
+              };
       }
       return { suite, cells };
     });
@@ -120,7 +123,9 @@ export class CompareView implements ExplorerView {
 
   private columns(agents: string[]): TableColumn<CompareRow>[] {
     const suiteColumn: TableColumn<CompareRow> = {
-      key: "suite", header: "suite", width: 18,
+      key: "suite",
+      header: "suite",
+      width: 18,
       cell: (row) => row.suite,
       cellStyle: () => ({ fg: "bright-white" }),
     };

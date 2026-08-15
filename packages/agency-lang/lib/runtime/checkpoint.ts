@@ -25,9 +25,7 @@ export function getCheckpoint(checkpointId: number): Checkpoint {
   const { ctx } = getRuntimeContext();
   const cp = ctx.checkpoints.get(checkpointId);
   if (!cp)
-    throw new CheckpointError(
-      `Checkpoint ${checkpointId} does not exist or has been deleted`,
-    );
+    throw new CheckpointError(`Checkpoint ${checkpointId} does not exist or has been deleted`);
   return cp;
 }
 

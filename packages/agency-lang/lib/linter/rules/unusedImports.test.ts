@@ -21,68 +21,74 @@ describe("unused-imports rule: detection", () => {
   it("never reports a template's hole specifier as unused", () => {
     // `#tool` is an identifier hole (template file); it binds nothing, so
     // the unused-imports rule must skip it rather than flag or crash.
-    expect(names(`import { #tool } from "std::fs"\n\nnode main() { return 1 }\n`))
-      .toEqual([]);
+    expect(names(`import { #tool } from "std::fs"\n\nnode main() { return 1 }\n`)).toEqual([]);
   });
 
   it("flags an import that is never referenced", () => {
-    expect(names(`import { now } from "std::date"\nnode main() { return 1 }\n`))
-      .toEqual(["now"]);
+    expect(names(`import { now } from "std::date"\nnode main() { return 1 }\n`)).toEqual(["now"]);
   });
 
   it("does not flag an import used in a call", () => {
-    expect(names(`import { now } from "std::date"\nnode main() { return now() }\n`))
-      .toEqual([]);
+    expect(names(`import { now } from "std::date"\nnode main() { return now() }\n`)).toEqual([]);
   });
 
   it("does not flag an import used as a value", () => {
-    expect(names(`import { now } from "std::date"\nnode main() { const f = now\n  return f() }\n`))
-      .toEqual([]);
+    expect(
+      names(`import { now } from "std::date"\nnode main() { const f = now\n  return f() }\n`),
+    ).toEqual([]);
   });
 
   it("does not flag an import used only as a bare type annotation (typeAliasVariable)", () => {
-    expect(names(`import { Config } from "./types.agency"\ndef f(x: Config): number { return 1 }\n`))
-      .toEqual([]);
+    expect(
+      names(`import { Config } from "./types.agency"\ndef f(x: Config): number { return 1 }\n`),
+    ).toEqual([]);
   });
 
   it("does not flag an import used only as a parameterized type (genericType)", () => {
-    expect(names(`import { Box } from "./types.agency"\ndef f(x: Box<number>): number { return 1 }\n`))
-      .toEqual([]);
+    expect(
+      names(`import { Box } from "./types.agency"\ndef f(x: Box<number>): number { return 1 }\n`),
+    ).toEqual([]);
   });
 
   it("does not flag an aliased import that is used by its local name", () => {
-    expect(names(`import { now as clock } from "std::date"\nnode main() { return clock() }\n`))
-      .toEqual([]);
+    expect(
+      names(`import { now as clock } from "std::date"\nnode main() { return clock() }\n`),
+    ).toEqual([]);
   });
 
   it("flags an aliased import that is never used", () => {
-    expect(names(`import { now as clock } from "std::date"\nnode main() { return 1 }\n`))
-      .toEqual(["clock"]);
+    expect(names(`import { now as clock } from "std::date"\nnode main() { return 1 }\n`)).toEqual([
+      "clock",
+    ]);
   });
 
   it("keeps an import when a local of the same name is present (conservative)", () => {
-    expect(names(`import { now } from "std::date"\nnode main() { const now = 5\n  return now }\n`))
-      .toEqual([]);
+    expect(
+      names(`import { now } from "std::date"\nnode main() { const now = 5\n  return now }\n`),
+    ).toEqual([]);
   });
 
   it("never flags std::index imports (the injected prelude)", () => {
-    expect(names(`import { map } from "std::index"\nnode main() { return 1 }\n`))
-      .toEqual([]);
+    expect(names(`import { map } from "std::index"\nnode main() { return 1 }\n`)).toEqual([]);
   });
 
   it("never flags a testOnly import", () => {
-    expect(names(`import test { secret } from "./helpers.agency"\nnode main() { return 1 }\n`))
-      .toEqual([]);
+    expect(
+      names(`import test { secret } from "./helpers.agency"\nnode main() { return 1 }\n`),
+    ).toEqual([]);
   });
 
   it("flags an unused import node", () => {
-    expect(names(`import node { greet } from "./other.agency"\nnode main() { return 1 }\n`))
-      .toEqual(["greet"]);
+    expect(
+      names(`import node { greet } from "./other.agency"\nnode main() { return 1 }\n`),
+    ).toEqual(["greet"]);
   });
 
   it("flags every unused name when a statement has more than one", () => {
-    expect(names(`import { a, b, c } from "./x.agency"\nnode main() { return a() }\n`))
-      .toEqual(["b", "c"]);
+    expect(names(`import { a, b, c } from "./x.agency"\nnode main() { return a() }\n`)).toEqual([
+      "b",
+      "c",
+    ]);
   });
 
   it("reports each finding at its own source range, even for names that are substrings of other names", () => {
@@ -120,7 +126,8 @@ describe("unused-imports rule: at-risk used positions are kept", () => {
   });
 
   it("flags an unused import named after an Object.prototype key", () => {
-    expect(names(`import { constructor } from "./x.agency"\nnode main() { return 1 }\n`))
-      .toEqual(["constructor"]);
+    expect(names(`import { constructor } from "./x.agency"\nnode main() { return 1 }\n`)).toEqual([
+      "constructor",
+    ]);
   });
 });

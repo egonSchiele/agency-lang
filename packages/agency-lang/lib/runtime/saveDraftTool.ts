@@ -44,8 +44,7 @@ export function draftCharCount(value: unknown): number {
  *  when there is one — because that is what the model calls and what
  *  tool-call dispatch matches against (#654). */
 export const saveDraftIntrinsic: IntrinsicTool = {
-  matches: (fn) =>
-    fn.registeredName === "saveDraft" && fn.module === STDLIB_INDEX_MODULE,
+  matches: (fn) => fn.registeredName === "saveDraft" && fn.module === STDLIB_INDEX_MODULE,
 
   buildDefinition: ({ draftSchema, fn }) => ({
     name: fn.name,

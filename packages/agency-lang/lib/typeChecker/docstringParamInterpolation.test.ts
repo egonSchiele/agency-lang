@@ -9,10 +9,7 @@ import { typeCheck } from "./index.js";
 import type { TypeCheckError } from "./types.js";
 import type { AgencyConfig } from "../config.js";
 
-function errorsFrom(
-  source: string,
-  config: AgencyConfig = {},
-): TypeCheckError[] {
+function errorsFrom(source: string, config: AgencyConfig = {}): TypeCheckError[] {
   const file = path.join(
     os.tmpdir(),
     `tc-docstring-${Date.now()}-${Math.random().toString(36).slice(2)}.agency`,
@@ -39,9 +36,7 @@ def greet(name: string) {
 }
 node main() {}
 `);
-    const relevant = errors.filter((e) =>
-      e.message.includes("Cannot interpolate parameter"),
-    );
+    const relevant = errors.filter((e) => e.message.includes("Cannot interpolate parameter"));
     expect(relevant).toHaveLength(1);
     expect(relevant[0].message).toContain("'name'");
   });
@@ -53,9 +48,7 @@ node greet(user: string) {
 }
 node main() {}
 `);
-    const relevant = errors.filter((e) =>
-      e.message.includes("Cannot interpolate parameter"),
-    );
+    const relevant = errors.filter((e) => e.message.includes("Cannot interpolate parameter"));
     expect(relevant).toHaveLength(1);
     expect(relevant[0].message).toContain("'user'");
   });
@@ -68,9 +61,7 @@ def info() {
 }
 node main() {}
 `);
-    const relevant = errors.filter((e) =>
-      e.message.includes("Cannot interpolate parameter"),
-    );
+    const relevant = errors.filter((e) => e.message.includes("Cannot interpolate parameter"));
     expect(relevant).toHaveLength(0);
   });
 
@@ -81,9 +72,7 @@ def add(a: number, b: number) {
 }
 node main() {}
 `);
-    const relevant = errors.filter((e) =>
-      e.message.includes("Cannot interpolate parameter"),
-    );
+    const relevant = errors.filter((e) => e.message.includes("Cannot interpolate parameter"));
     expect(relevant).toHaveLength(0);
   });
 });

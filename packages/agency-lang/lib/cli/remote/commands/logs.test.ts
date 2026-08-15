@@ -86,7 +86,12 @@ describe("runLogs", () => {
     await runLogs({ kind: "fetch", traceId: "t1", output: "viewer" }, opts, context());
     expect(hoisted.client.traceLogs).toHaveBeenCalledWith("t1");
     expect(viewMocks.openViewer).toHaveBeenCalledWith({
-      jsonl: JSON.stringify({ trace_id: "t1", span_id: null, parent_span_id: null, data: { type: "debug", message: "x" } }),
+      jsonl: JSON.stringify({
+        trace_id: "t1",
+        span_id: null,
+        parent_span_id: null,
+        data: { type: "debug", message: "x" },
+      }),
       terminalInput: "current-stdin",
     });
   });

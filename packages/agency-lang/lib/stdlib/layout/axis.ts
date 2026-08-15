@@ -28,26 +28,26 @@ type Axis = "row" | "column";
 //   * how to render a `space(n)` leaf to a Block on this axis
 type AxisOps = {
   stretchyType: "vline" | "hline";
-  crossSize:    (b: Block) => number;
-  alignCross:   (b: Block, cross: number, align: Align) => Block;
-  join:         (a: Block, b: Block) => Block;
-  spaceBlock:   (count: number) => Block;
+  crossSize: (b: Block) => number;
+  alignCross: (b: Block, cross: number, align: Align) => Block;
+  join: (a: Block, b: Block) => Block;
+  spaceBlock: (count: number) => Block;
 };
 
 const AXIS_OPS: Record<Axis, AxisOps> = {
   row: {
     stretchyType: "vline",
-    crossSize:    (b) => b.height,
-    alignCross:   (b, h, align) => pad(b, b.width, h, "start", align),
-    join:         beside,
-    spaceBlock:   (count) => Block.of(" ".repeat(count)),
+    crossSize: (b) => b.height,
+    alignCross: (b, h, align) => pad(b, b.width, h, "start", align),
+    join: beside,
+    spaceBlock: (count) => Block.of(" ".repeat(count)),
   },
   column: {
     stretchyType: "hline",
-    crossSize:    (b) => b.width,
-    alignCross:   (b, w, align) => pad(b, w, b.height, align, "start"),
-    join:         above,
-    spaceBlock:   (count) => Block.of(Array(count).fill("")),
+    crossSize: (b) => b.width,
+    alignCross: (b, w, align) => pad(b, w, b.height, align, "start"),
+    join: above,
+    spaceBlock: (count) => Block.of(Array(count).fill("")),
   },
 };
 
@@ -65,11 +65,7 @@ function isDynamic(child: LayoutNode, axis: Axis): boolean {
   return child.type === "space" || isStretchyLine(child, axis);
 }
 
-function renderDynamicChild(
-  child: LayoutNode,
-  axis: Axis,
-  crossSize: number,
-): Block {
+function renderDynamicChild(child: LayoutNode, axis: Axis, crossSize: number): Block {
   if (isStretchyLine(child, axis)) {
     return renderNode({ ...child, attrs: { ...child.attrs, length: crossSize } });
   }
@@ -119,9 +115,9 @@ function joinWithGap(
 function composeAxis(node: LayoutNode, axis: Axis): Block {
   if (node.children.length === 0) return Block.empty();
 
-  const gapCells   = (node.attrs.gap   as number) ?? 0;
-  const childAlign = (node.attrs.align as Align)  ?? "start";
-  const ops        = AXIS_OPS[axis];
+  const gapCells = (node.attrs.gap as number) ?? 0;
+  const childAlign = (node.attrs.align as Align) ?? "start";
+  const ops = AXIS_OPS[axis];
 
   const resolved = node.attrs.resolvedWidth as number | undefined;
 
@@ -132,17 +128,21 @@ function composeAxis(node: LayoutNode, axis: Axis): Block {
   // grown via `growToWidth` below, so it doesn't enter the cross size.
   const crossFloor = axis === "column" && resolved !== undefined ? resolved : 0;
 
-  const rendered  = renderChildrenAlongAxis(node.children, axis);
+  const rendered = renderChildrenAlongAxis(node.children, axis);
   const crossSize = maxOf(rendered, ops.crossSize, crossFloor);
-  const aligned   = rendered.map((b) => ops.alignCross(b, crossSize, childAlign));
+  const aligned = rendered.map((b) => ops.alignCross(b, crossSize, childAlign));
 
   const gapBlock = gapCells > 0 ? ops.spaceBlock(gapCells) : null;
   const combined = joinWithGap(aligned, gapBlock, ops.join);
   return resolved !== undefined ? growToWidth(combined, resolved) : combined;
 }
 
-export function composeRow(node: LayoutNode):    Block { return composeAxis(node, "row"); }
-export function composeColumn(node: LayoutNode): Block { return composeAxis(node, "column"); }
+export function composeRow(node: LayoutNode): Block {
+  return composeAxis(node, "row");
+}
+export function composeColumn(node: LayoutNode): Block {
+  return composeAxis(node, "column");
+}
 
 function sizeColumn(node: LayoutNode, ctx: SizingContext): LayoutNode {
   const own = resolveOwnWidth(node, ctx);
@@ -169,5 +169,5 @@ function sizeRow(node: LayoutNode, ctx: SizingContext): LayoutNode {
   });
 }
 
-export const row:    NodeHandler = { size: sizeRow,    render: composeRow };
+export const row: NodeHandler = { size: sizeRow, render: composeRow };
 export const column: NodeHandler = { size: sizeColumn, render: composeColumn };

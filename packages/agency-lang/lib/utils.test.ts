@@ -51,9 +51,7 @@ describe("safeDeleteFile / safeDeleteDirectory (dry-run only)", () => {
     it("returns success with [DRY RUN] message for a real file inside the project", () => {
       const result = safeDeleteFile(insideFile);
       expect(result.success).toBe(true);
-      expect(result.message).toBe(
-        `[DRY RUN]: would have deleted ${realpathSync(insideFile)}`,
-      );
+      expect(result.message).toBe(`[DRY RUN]: would have deleted ${realpathSync(insideFile)}`);
       // File still exists — we were in dry-run.
       expect(existsSync(insideFile)).toBe(true);
     });
@@ -90,9 +88,7 @@ describe("safeDeleteFile / safeDeleteDirectory (dry-run only)", () => {
     it("returns success with [DRY RUN] message for a real directory inside the project", () => {
       const result = safeDeleteDirectory(insideDir);
       expect(result.success).toBe(true);
-      expect(result.message).toBe(
-        `[DRY RUN]: would have deleted ${realpathSync(insideDir)}`,
-      );
+      expect(result.message).toBe(`[DRY RUN]: would have deleted ${realpathSync(insideDir)}`);
       // Directory still exists — we were in dry-run.
       expect(existsSync(insideDir)).toBe(true);
     });

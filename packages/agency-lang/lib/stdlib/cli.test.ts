@@ -2,7 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { _internal, _clearHistory, installBottomRegion, _stickyInterruptAvailable, type PasteState } from "./cli.js";
+import {
+  _internal,
+  _clearHistory,
+  installBottomRegion,
+  _stickyInterruptAvailable,
+  type PasteState,
+} from "./cli.js";
 
 const {
   EMPTY_PASTE,
@@ -32,7 +38,10 @@ function captureStdout(): { captured: string[]; restore: () => void } {
   const captured: string[] = [];
   const originalWrite = process.stdout.write;
   const originalIsTTY = (process.stdout as any).isTTY;
-  (process.stdout as any).write = (chunk: any) => { captured.push(String(chunk)); return true; };
+  (process.stdout as any).write = (chunk: any) => {
+    captured.push(String(chunk));
+    return true;
+  };
   (process.stdout as any).isTTY = true;
   return {
     captured,
@@ -236,8 +245,8 @@ describe("modelsUsedThisTurn (footer model attribution)", () => {
 
   it("uses the per-turn delta, not cumulative totals, to order", () => {
     // opus has a bigger cumulative cost, but gpt spent more THIS turn.
-    const before = snap({ "opus-4.8": [1000, 0.50], "gpt-5-mini": [0, 0] });
-    const after = snap({ "opus-4.8": [1010, 0.505], "gpt-5-mini": [500, 0.40] });
+    const before = snap({ "opus-4.8": [1000, 0.5], "gpt-5-mini": [0, 0] });
+    const after = snap({ "opus-4.8": [1010, 0.505], "gpt-5-mini": [500, 0.4] });
     expect(modelsUsedThisTurn(before, after)).toEqual(["gpt-5-mini", "opus-4.8"]);
   });
 
@@ -293,9 +302,9 @@ describe("prettyModel", () => {
   });
 
   it("strips a full path and the .gguf extension", () => {
-    expect(prettyModel("/home/u/.agency-agent/models/hf_mistralai_Devstral-Small-2507.Q4_K_M.gguf")).toBe(
-      "Devstral-Small-2507",
-    );
+    expect(
+      prettyModel("/home/u/.agency-agent/models/hf_mistralai_Devstral-Small-2507.Q4_K_M.gguf"),
+    ).toBe("Devstral-Small-2507");
   });
 
   it("keeps a non-quant version segment (only strips real quants)", () => {
@@ -447,7 +456,9 @@ describe("recordHistoryEntry", () => {
 
 describe("_clearHistory", () => {
   let dir: string;
-  beforeEach(() => { dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "clearhist-"))); });
+  beforeEach(() => {
+    dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "clearhist-")));
+  });
   afterEach(() => {
     delete (globalThis as Record<string, unknown>).__agencyClearHistory;
     fs.rmSync(dir, { recursive: true, force: true });
@@ -488,26 +499,53 @@ describe("eraseRows", () => {
 
 describe("buildFrame", () => {
   it("first frame of a 1-row footer: sync brackets + footer, no erase", () => {
-    const result = buildFrame({ above: null, footerLines: ["FOOTER"], prevRows: 0, columns: 80, cursor: "keep" });
+    const result = buildFrame({
+      above: null,
+      footerLines: ["FOOTER"],
+      prevRows: 0,
+      columns: 80,
+      cursor: "keep",
+    });
     expect(result.rows).toBe(1);
     expect(result.seq).toBe("\x1b[?2026h" + "FOOTER" + "\x1b[?2026l");
   });
   it("erases the previous footer, then emits `above`, then redraws", () => {
-    const result = buildFrame({ above: "trace\n", footerLines: ["A", "B"], prevRows: 3, columns: 80, cursor: "keep" });
-    expect(result.seq).toBe("\x1b[?2026h" + "\x1b[2A\r\x1b[0J" + "trace\n" + "A\nB" + "\x1b[?2026l");
+    const result = buildFrame({
+      above: "trace\n",
+      footerLines: ["A", "B"],
+      prevRows: 3,
+      columns: 80,
+      cursor: "keep",
+    });
+    expect(result.seq).toBe(
+      "\x1b[?2026h" + "\x1b[2A\r\x1b[0J" + "trace\n" + "A\nB" + "\x1b[?2026l",
+    );
     expect(result.rows).toBe(2);
   });
   it("appends a newline to `above` when missing so the footer starts fresh", () => {
-    const result = buildFrame({ above: "x", footerLines: ["F"], prevRows: 1, columns: 80, cursor: "keep" });
+    const result = buildFrame({
+      above: "x",
+      footerLines: ["F"],
+      prevRows: 1,
+      columns: 80,
+      cursor: "keep",
+    });
     expect(result.seq).toContain("x\n");
   });
   it("emits hide/show cursor when asked", () => {
-    expect(buildFrame({ above: null, footerLines: ["F"], prevRows: 0, columns: 80, cursor: "hide" }).seq).toContain("\x1b[?25l");
-    expect(buildFrame({ above: null, footerLines: [], prevRows: 1, columns: 80, cursor: "show" }).seq).toContain("\x1b[?25h");
+    expect(
+      buildFrame({ above: null, footerLines: ["F"], prevRows: 0, columns: 80, cursor: "hide" }).seq,
+    ).toContain("\x1b[?25l");
+    expect(
+      buildFrame({ above: null, footerLines: [], prevRows: 1, columns: 80, cursor: "show" }).seq,
+    ).toContain("\x1b[?25h");
   });
   it("counts wrapped rows for an over-wide footer line", () => {
     const wide = "w".repeat(50);
-    expect(buildFrame({ above: null, footerLines: [wide], prevRows: 0, columns: 20, cursor: "keep" }).rows).toBeGreaterThan(1);
+    expect(
+      buildFrame({ above: null, footerLines: [wide], prevRows: 0, columns: 20, cursor: "keep" })
+        .rows,
+    ).toBeGreaterThan(1);
   });
 });
 
@@ -570,7 +608,11 @@ describe("classifyInterruptKey", () => {
 });
 
 describe("reduceInterrupt", () => {
-  const config = { validKeys: ["a", "r", "aa", "ap", "rr"], allowFreeText: true, allowCancel: true };
+  const config = {
+    validKeys: ["a", "r", "aa", "ap", "rr"],
+    allowFreeText: true,
+    allowCancel: true,
+  };
   const from = (buffer: string) => ({ buffer, notice: "" });
   const reduce = _internal.reduceInterrupt;
 
@@ -579,7 +621,9 @@ describe("reduceInterrupt", () => {
   });
   it("Escape cancels when allowCancel, pends otherwise", () => {
     expect(reduce(from(""), "cancel", config).outcome).toEqual({ kind: "cancel" });
-    expect(reduce(from(""), "cancel", { ...config, allowCancel: false }).outcome).toEqual({ kind: "pending" });
+    expect(reduce(from(""), "cancel", { ...config, allowCancel: false }).outcome).toEqual({
+      kind: "pending",
+    });
   });
   it("appends a printable char and clears the notice", () => {
     const step = reduce({ buffer: "a", notice: "x" }, { append: "a" }, config);
@@ -590,14 +634,20 @@ describe("reduceInterrupt", () => {
     expect(reduce(from("a"), { append: "b\nc" }, config).state.buffer).toBe("abc");
   });
   it("backspace deletes the last char and clears the notice", () => {
-    expect(reduce({ buffer: "aa", notice: "x" }, "backspace", config).state).toEqual({ buffer: "a", notice: "" });
+    expect(reduce({ buffer: "aa", notice: "x" }, "backspace", config).state).toEqual({
+      buffer: "a",
+      notice: "",
+    });
   });
   it("submit resolves an exact key — 'a' does NOT early-resolve before 'aa'", () => {
     expect(reduce(from("aa"), "submit", config).outcome).toEqual({ kind: "resolve", value: "aa" });
     expect(reduce(from("a"), "submit", config).outcome).toEqual({ kind: "resolve", value: "a" });
   });
   it("submit returns a free-text reason even when it starts with an option letter", () => {
-    expect(reduce(from("actually no"), "submit", config).outcome).toEqual({ kind: "resolve", value: "actually no" });
+    expect(reduce(from("actually no"), "submit", config).outcome).toEqual({
+      kind: "resolve",
+      value: "actually no",
+    });
   });
   it("submit on empty pends with no notice (must-answer)", () => {
     const step = reduce(from(""), "submit", config);
@@ -610,16 +660,35 @@ describe("reduceInterrupt", () => {
     expect(step.state.notice).toBe("not a valid option");
   });
   it("an ignored key pends without changing state", () => {
-    expect(reduce(from("a"), null, config)).toEqual({ state: { buffer: "a", notice: "" }, outcome: { kind: "pending" } });
+    expect(reduce(from("a"), null, config)).toEqual({
+      state: { buffer: "a", notice: "" },
+      outcome: { kind: "pending" },
+    });
   });
 });
 
 describe("packOptions", () => {
   it("packs short tokens onto one line", () => {
-    expect(_internal.packOptions([{ key: "a", label: "ok" }, { key: "r", label: "no" }], 40)).toEqual(["a=ok  r=no"]);
+    expect(
+      _internal.packOptions(
+        [
+          { key: "a", label: "ok" },
+          { key: "r", label: "no" },
+        ],
+        40,
+      ),
+    ).toEqual(["a=ok  r=no"]);
   });
   it("wraps when the next token would overflow", () => {
-    expect(_internal.packOptions([{ key: "a", label: "approve" }, { key: "r", label: "reject" }], 10)).toEqual(["a=approve", "r=reject"]);
+    expect(
+      _internal.packOptions(
+        [
+          { key: "a", label: "approve" },
+          { key: "r", label: "reject" },
+        ],
+        10,
+      ),
+    ).toEqual(["a=approve", "r=reject"]);
   });
 });
 
@@ -654,7 +723,10 @@ describe("renderInterruptFooter", () => {
     expect(lines.some((line) => line.includes("…"))).toBe(true);
   });
   it("shows a notice when present", () => {
-    const lines = _internal.renderInterruptFooter({ ...base, state: { buffer: "z", notice: "not a valid option" } });
+    const lines = _internal.renderInterruptFooter({
+      ...base,
+      state: { buffer: "z", notice: "not a valid option" },
+    });
     expect(lines.join("\n")).toContain("not a valid option");
   });
 });
@@ -663,27 +735,36 @@ describe("stickyInterruptPrompt (integration)", () => {
   it("resolves 'aa' typed then Enter, with a trace streamed above", async () => {
     const cap = captureStdout();
     (process.stdin as any).isTTY = false; // skip real raw-mode toggling
-    const fakeRl: any = { _ttyWrite: (_s: any, _k: any) => { } };
+    const fakeRl: any = { _ttyWrite: (_s: any, _k: any) => {} };
     const pending = _internal.stickyInterruptPrompt(fakeRl, {
-      title: "approve?", body: "", allowFreeText: true, allowCancel: true,
-      items: [{ key: "a", label: "approve once" }, { key: "aa", label: "approve always" }],
+      title: "approve?",
+      body: "",
+      allowFreeText: true,
+      allowCancel: true,
+      items: [
+        { key: "a", label: "approve once" },
+        { key: "aa", label: "approve always" },
+      ],
     });
-    process.stdout.write("⏺ read(\"x\")\n"); // concurrent branch output
+    process.stdout.write('⏺ read("x")\n'); // concurrent branch output
     fakeRl._ttyWrite("a", { name: "a" });
     fakeRl._ttyWrite("a", { name: "a" });
     fakeRl._ttyWrite(null, { name: "return" });
     const answer = await pending;
     cap.restore();
     expect(answer).toBe("aa");
-    expect(cap.captured.join("")).toContain("⏺ read(\"x\")\n");
+    expect(cap.captured.join("")).toContain('⏺ read("x")\n');
   });
 
   it("Escape rejects with AgencyCancelledError", async () => {
     const cap = captureStdout();
     (process.stdin as any).isTTY = false;
-    const fakeRl: any = { _ttyWrite: (_s: any, _k: any) => { } };
+    const fakeRl: any = { _ttyWrite: (_s: any, _k: any) => {} };
     const pending = _internal.stickyInterruptPrompt(fakeRl, {
-      title: "t", body: "", allowFreeText: true, allowCancel: true,
+      title: "t",
+      body: "",
+      allowFreeText: true,
+      allowCancel: true,
       items: [{ key: "a", label: "ok" }],
     });
     fakeRl._ttyWrite(null, { name: "escape" });
@@ -707,15 +788,17 @@ describe("installBottomRegion — write contract + resize (PR review fixes)", ()
     };
     const region = installBottomRegion(() => ["F"], true);
     let bufCbCalled = false;
-    (process.stdout as any).write(Buffer.from("hi\n"), () => { bufCbCalled = true; });
+    (process.stdout as any).write(Buffer.from("hi\n"), () => {
+      bufCbCalled = true;
+    });
     (process.stdout as any).write(new TextEncoder().encode("bye\n"));
     region.teardown();
     (process.stdout as any).write = origWrite;
     (process.stdout as any).isTTY = origTTY;
     const text = captured.join("");
-    expect(bufCbCalled).toBe(true);          // callback forwarded
-    expect(text).toContain("hi\n");          // Buffer decoded, not "<Buffer ...>"
-    expect(text).toContain("bye\n");         // Uint8Array decoded, not "98,121,..."
+    expect(bufCbCalled).toBe(true); // callback forwarded
+    expect(text).toContain("hi\n"); // Buffer decoded, not "<Buffer ...>"
+    expect(text).toContain("bye\n"); // Uint8Array decoded, not "98,121,..."
   });
 
   it("repaints the footer on terminal resize", () => {

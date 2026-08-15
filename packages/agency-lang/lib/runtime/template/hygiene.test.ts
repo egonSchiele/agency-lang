@@ -48,10 +48,9 @@ describe("hygiene", () => {
   });
 
   it("renames when a filler collides with a for-loop binder", () => {
-    const out = fillAndPrint(
-      `node main() {\n  for (item in xs) {\n    print(#e)\n  }\n}\n`,
-      { e: _parseExpr("item") },
-    );
+    const out = fillAndPrint(`node main() {\n  for (item in xs) {\n    print(#e)\n  }\n}\n`, {
+      e: _parseExpr("item"),
+    });
     expect(out).toContain("__hyg");
   });
 
@@ -70,19 +69,20 @@ describe("hygiene", () => {
     // its own binding shadows the outer rename. (Sibling-def tests never
     // reach the filter, because a scope-owned rename is not active when
     // the walk enters an unrelated scope.)
-    const src = [
-      "const tmp = getApiKey()",
-      "",
-      "def inner(): number {",
-      "  const tmp = 5",
-      "  return tmp",
-      "}",
-      "",
-      "node main() {",
-      "  const r = #e",
-      "  return r",
-      "}",
-    ].join("\n") + "\n";
+    const src =
+      [
+        "const tmp = getApiKey()",
+        "",
+        "def inner(): number {",
+        "  const tmp = 5",
+        "  return tmp",
+        "}",
+        "",
+        "node main() {",
+        "  const r = #e",
+        "  return r",
+        "}",
+      ].join("\n") + "\n";
     const out = fillAndPrint(src, { e: _parseExpr("tmp") });
     expect(out).toMatch(/const tmp = 5/);
     expect(out).toMatch(/return tmp\b/);
@@ -151,10 +151,9 @@ describe("hygiene", () => {
 
   it("seeds past __hyg declaration names in fillers", () => {
     // fresh() must not produce __hyg1_* when a filler already declares it.
-    const out = fillAndPrint(
-      `node main() {\n  const tmp = 1\n  #s\n  print(tmp)\n}\n`,
-      { s: _parseStatements("const __hyg1_q = 2\nconst tmp = 3") },
-    );
+    const out = fillAndPrint(`node main() {\n  const tmp = 1\n  #s\n  print(tmp)\n}\n`, {
+      s: _parseStatements("const __hyg1_q = 2\nconst tmp = 3"),
+    });
     // The filler's redeclared tmp renames to an index above 1.
     expect(out).toMatch(/const __hyg2_tmp = 3/);
     expect(out).toContain("const __hyg1_q = 2");
@@ -270,11 +269,11 @@ describe("branch-scoped binders rename consistently", () => {
   it("a match-arm shorthand pattern renames together with its arm uses", () => {
     const source = [
       "node main() {",
-      "  const name = \"outer\"",
+      '  const name = "outer"',
       "  const r = getUser()",
       "  const label = match (r) {",
       "    { name } => name",
-      "    _ => \"none\"",
+      '    _ => "none"',
       "  }",
       "  const out = #userExpr",
       "  print(label)",

@@ -12,12 +12,7 @@ import { declaredName } from "../types/hole.js";
 import type { AgencyProgram } from "../types.js";
 import type { FunctionDefinition } from "../types/function.js";
 import type { GraphNodeDefinition } from "../types/graphNode.js";
-import type {
-  FunctionSymbol,
-  NodeSymbol,
-  ResolvedImport,
-  SymbolTable,
-} from "../symbolTable.js";
+import type { FunctionSymbol, NodeSymbol, ResolvedImport, SymbolTable } from "../symbolTable.js";
 
 export type PropagationNode = {
   effects: string[];
@@ -69,9 +64,7 @@ export function propagateToFixpoint<T extends PropagationNode>(
 }
 
 /** Reverse of the call edges: for each entry, who calls it. */
-function callerIndex(
-  nodes: Record<string, PropagationNode>,
-): Record<string, string[]> {
+function callerIndex(nodes: Record<string, PropagationNode>): Record<string, string[]> {
   const callers: Record<string, string[]> = Object.create(null);
   for (const [key, node] of Object.entries(nodes)) {
     for (const calleeKey of node.calleeKeys) {
@@ -81,7 +74,6 @@ function callerIndex(
   }
   return callers;
 }
-
 
 /** Where a name is really defined, after renaming and re-export. */
 export type Origin = { file: string; name: string };
@@ -162,9 +154,7 @@ function summariesForFile(
     .filter(isCallableDeclaration)
     .map((declaration) => {
       const name = declaredName(
-        declaration.type === "function"
-          ? declaration.functionName
-          : declaration.nodeName,
+        declaration.type === "function" ? declaration.functionName : declaration.nodeName,
       );
       return {
         file,
@@ -180,20 +170,13 @@ function summariesForFile(
 /** What classifySymbols already worked out, including the seed table. Read
  *  rather than recomputed: _guard raises on the TypeScript side and has no
  *  `interrupt` in its body, so a body walk would report nothing for it. */
-function directEffectsOf(
-  table: SymbolTable,
-  file: string,
-  name: string,
-): string[] {
+function directEffectsOf(table: SymbolTable, file: string, name: string): string[] {
   const sym = table.getFile(file)?.[name];
   if (!sym || (sym.kind !== "function" && sym.kind !== "node")) return [];
   return (sym.interruptEffects ?? []).map((entry) => entry.effect);
 }
 
-function writeBack(
-  table: SymbolTable,
-  summaries: Record<string, EffectSummary>,
-): void {
+function writeBack(table: SymbolTable, summaries: Record<string, EffectSummary>): void {
   for (const { file, name, sym } of callableSymbols(table)) {
     // Resolve through re-exports so a barrel's own copy of a name gets the
     // origin's answer rather than an empty one.
@@ -235,9 +218,7 @@ function makeResolver(
     ),
   );
   return (localName) =>
-    Object.hasOwn(imported, localName)
-      ? imported[localName]
-      : { file: fromFile, name: localName };
+    Object.hasOwn(imported, localName) ? imported[localName] : { file: fromFile, name: localName };
 }
 
 /**
@@ -249,11 +230,7 @@ function makeResolver(
  * so this must too, or a program with one uninstalled package would lose the
  * effects of every other import in the same file.
  */
-function importsOf(
-  table: SymbolTable,
-  program: AgencyProgram,
-  fromFile: string,
-): ResolvedImport[] {
+function importsOf(table: SymbolTable, program: AgencyProgram, fromFile: string): ResolvedImport[] {
   return [...walkNodes(program.nodes)].flatMap(({ node }) => {
     try {
       if (node.type === "importStatement") {
@@ -280,9 +257,7 @@ function importsOf(
 export function originOf(table: SymbolTable, at: Origin): Origin {
   const sym = table.getFile(at.file)?.[at.name];
   const from = sym && "reExportedFrom" in sym ? sym.reExportedFrom : undefined;
-  return from
-    ? originOf(table, { file: from.sourceFile, name: from.originalName })
-    : at;
+  return from ? originOf(table, { file: from.sourceFile, name: from.originalName }) : at;
 }
 
 /**
@@ -302,10 +277,7 @@ export function callableNamesIn(
     .filter(([, sym]) => sym.kind === "function" || sym.kind === "node")
     .map(([name]) => name);
   const imported = importsOf(table, program, file)
-    .filter(
-      (resolved) =>
-        resolved.symbol.kind === "function" || resolved.symbol.kind === "node",
-    )
+    .filter((resolved) => resolved.symbol.kind === "function" || resolved.symbol.kind === "node")
     .map((resolved) => resolved.localName);
   return unique([...local, ...imported]);
 }

@@ -11,10 +11,7 @@ export type EvalExtractOptions = {
 };
 
 /** CLI entry point for `agency eval extract`. */
-export async function evalExtract(
-  file: string,
-  opts: EvalExtractOptions = {},
-): Promise<void> {
+export async function evalExtract(file: string, opts: EvalExtractOptions = {}): Promise<void> {
   const record = new StatelogParser(file, {
     previewChars: opts.previewChars,
   }).evalRecord();

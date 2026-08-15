@@ -73,13 +73,17 @@ describe("keys and paths", () => {
     // symlinked ancestor
     const victim = tmp();
     fs.symlinkSync(victim, path.join(out, "sub"));
-    expect(() => resolveOwnedOutputPath(out, path.join("sub", "a.md"))).toThrow(/symlinked ancestor/);
+    expect(() => resolveOwnedOutputPath(out, path.join("sub", "a.md"))).toThrow(
+      /symlinked ancestor/,
+    );
     // leaf symlink reported, not followed
     fs.writeFileSync(path.join(victim, "real.md"), "x");
     fs.symlinkSync(path.join(victim, "real.md"), path.join(out, "leaf.md"));
     expect(resolveOwnedOutputPath(out, "leaf.md").leafIsSymlink).toBe(true);
     // createParents makes nested dirs and verifies them
-    const r = resolveOwnedOutputPath(out, path.join("deep", "nest", "p.md"), { createParents: true });
+    const r = resolveOwnedOutputPath(out, path.join("deep", "nest", "p.md"), {
+      createParents: true,
+    });
     expect(fs.existsSync(path.dirname(r.abs))).toBe(true);
   });
 
@@ -136,8 +140,14 @@ describe("ledger load/save authority", () => {
     ["wrong version", (raw) => ({ ...raw, version: 99 })],
     ["foreign outputDir", (raw) => ({ ...raw, outputDir: "/somewhere/else" })],
     ["missing identity", (raw) => ({ ...raw, identity: undefined })],
-    ["malformed identity.inputDir", (raw) => ({ ...raw, identity: { inputDir: 42, ignoreDirs: [] } })],
-    ["malformed ignoreDirs", (raw) => ({ ...raw, identity: { inputDir: "/in", ignoreDirs: "tests" } })],
+    [
+      "malformed identity.inputDir",
+      (raw) => ({ ...raw, identity: { inputDir: 42, ignoreDirs: [] } }),
+    ],
+    [
+      "malformed ignoreDirs",
+      (raw) => ({ ...raw, identity: { inputDir: "/in", ignoreDirs: "tests" } }),
+    ],
     ["missing renderKey", (raw) => ({ ...raw, renderKey: undefined })],
     ["array entries", (raw) => ({ ...raw, entries: ["x"] })],
     ["unsafe entry key", (raw) => ({ ...raw, entries: { "../evil.agency": validEntry() } })],
@@ -232,7 +242,10 @@ describe("entry builder + freshness predicate (writer/checker pair)", () => {
   function pairFixture() {
     const inputDir = tmp();
     const outDir = tmp();
-    fs.writeFileSync(path.join(inputDir, "a.agency"), `import { b } from "./b.agency"\nexport def a(): number { return b() }\n`);
+    fs.writeFileSync(
+      path.join(inputDir, "a.agency"),
+      `import { b } from "./b.agency"\nexport def a(): number { return b() }\n`,
+    );
     fs.writeFileSync(path.join(inputDir, "b.agency"), `export def b(): number { return 2 }\n`);
     const ctx = buildDocFreshnessContext(inputDir, outDir);
     const md = "# a\n\ncontent\n";
@@ -256,16 +269,33 @@ describe("entry builder + freshness predicate (writer/checker pair)", () => {
   });
 
   test.each<[string, (f: ReturnType<typeof pairFixture>) => void]>([
-    ["source edit", (f) => fs.writeFileSync(path.join(f.inputDir, "a.agency"), "export def a(): number { return 9 }\n")],
-    ["dep edit", (f) => fs.writeFileSync(path.join(f.inputDir, "b.agency"), "export def b(): number { return 9 }\n")],
+    [
+      "source edit",
+      (f) =>
+        fs.writeFileSync(
+          path.join(f.inputDir, "a.agency"),
+          "export def a(): number { return 9 }\n",
+        ),
+    ],
+    [
+      "dep edit",
+      (f) =>
+        fs.writeFileSync(
+          path.join(f.inputDir, "b.agency"),
+          "export def b(): number { return 9 }\n",
+        ),
+    ],
     ["dep deleted", (f) => fs.rmSync(path.join(f.inputDir, "b.agency"))],
     ["output hand-edited", (f) => fs.writeFileSync(path.join(f.outDir, "a.md"), "tampered")],
     ["output deleted", (f) => fs.rmSync(path.join(f.outDir, "a.md"))],
-    ["output replaced by symlink", (f) => {
-      fs.rmSync(path.join(f.outDir, "a.md"));
-      fs.writeFileSync(path.join(f.outDir, "elsewhere"), f.md);
-      fs.symlinkSync(path.join(f.outDir, "elsewhere"), path.join(f.outDir, "a.md"));
-    }],
+    [
+      "output replaced by symlink",
+      (f) => {
+        fs.rmSync(path.join(f.outDir, "a.md"));
+        fs.writeFileSync(path.join(f.outDir, "elsewhere"), f.md);
+        fs.symlinkSync(path.join(f.outDir, "elsewhere"), path.join(f.outDir, "a.md"));
+      },
+    ],
   ])("stale after: %s", (_name, perturb) => {
     const f = pairFixture();
     perturb(f);
@@ -280,7 +310,11 @@ describe("entry builder + freshness predicate (writer/checker pair)", () => {
     // flavor: pretend the source dir IS the stdlib — the entry recorded the
     // contents flavor, so the names flavor must mismatch and stale it.
     expect(
-      isDocEntryFresh("a.agency", f.entry, { ...f.ctx, stdlibDir: f.ctx.inputDir, stdlibNamesHash: "N" }),
+      isDocEntryFresh("a.agency", f.entry, {
+        ...f.ctx,
+        stdlibDir: f.ctx.inputDir,
+        stdlibNamesHash: "N",
+      }),
     ).toBe(false);
   });
 
@@ -306,7 +340,10 @@ describe("entry builder + freshness predicate (writer/checker pair)", () => {
   test("dep drift between pre-render snapshot and entry-build forces cacheable:false", () => {
     const inputDir = tmp();
     const outDir = tmp();
-    fs.writeFileSync(path.join(inputDir, "a.agency"), `import { b } from "./b.agency"\nexport def a(): number { return b() }\n`);
+    fs.writeFileSync(
+      path.join(inputDir, "a.agency"),
+      `import { b } from "./b.agency"\nexport def a(): number { return b() }\n`,
+    );
     fs.writeFileSync(path.join(inputDir, "b.agency"), `export def b(): number { return 2 }\n`);
     const ctx = buildDocFreshnessContext(inputDir, outDir);
     const preRender = captureDepSnapshot(path.join(inputDir, "a.agency"), {}, ctx.stdlibDir);
@@ -328,7 +365,10 @@ describe("entry builder + freshness predicate (writer/checker pair)", () => {
   test("missing dep at BUILD time forces cacheable:false", () => {
     const inputDir = tmp();
     const outDir = tmp();
-    fs.writeFileSync(path.join(inputDir, "a.agency"), `import { b } from "./gone.agency"\nexport def a(): number { return 1 }\n`);
+    fs.writeFileSync(
+      path.join(inputDir, "a.agency"),
+      `import { b } from "./gone.agency"\nexport def a(): number { return 1 }\n`,
+    );
     const ctx = buildDocFreshnessContext(inputDir, outDir);
     const entry = buildDocLedgerEntry({
       sourceRel: "a.agency",

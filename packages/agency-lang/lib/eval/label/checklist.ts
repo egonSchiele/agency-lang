@@ -140,7 +140,12 @@ export function prepareRevision(args: {
     return {
       kind: "publish",
       pending: {
-        revision: revisionFromDefinition({ definition, version: 1, parentVersion: null, createdAt }),
+        revision: revisionFromDefinition({
+          definition,
+          version: 1,
+          parentVersion: null,
+          createdAt,
+        }),
         expectedParentVersion: null,
         expectedParentHash: null,
       },
@@ -150,30 +155,31 @@ export function prepareRevision(args: {
   if (definition.checklistId !== current.checklistId) {
     throw new Error(
       `Checklist file names lineage "${definition.checklistId}" but the dataset holds ` +
-      `"${current.checklistId}". A checklist file belongs to one lineage.`,
+        `"${current.checklistId}". A checklist file belongs to one lineage.`,
     );
   }
   if (definition.version === undefined || definition.hash === undefined) {
     throw new Error(
       `Checklist "${definition.checklistId}" has an id but no recorded version. ` +
-      `The file is partly written; restore it from the dataset or start a new checklist.`,
+        `The file is partly written; restore it from the dataset or start a new checklist.`,
     );
   }
   if (definition.version > current.version) {
     throw new Error(
       `Checklist file claims version ${definition.version} but the dataset's newest is ` +
-      `${current.version}. The dataset is the record; a file cannot be ahead of it.`,
+        `${current.version}. The dataset is the record; a file cannot be ahead of it.`,
     );
   }
 
   const basis = definition.version === current.version ? current : undefined;
-  const unchangedFromBasis = basis !== undefined && sameQuestions(definition.questions, basis.questions);
+  const unchangedFromBasis =
+    basis !== undefined && sameQuestions(definition.questions, basis.questions);
 
   if (basis !== undefined) {
     if (definition.hash !== basis.hash) {
       throw new Error(
         `Checklist file records version ${definition.version} with hash ${definition.hash}, ` +
-        `which does not match the stored revision's hash ${basis.hash}.`,
+          `which does not match the stored revision's hash ${basis.hash}.`,
       );
     }
     if (unchangedFromBasis) {
@@ -184,7 +190,10 @@ export function prepareRevision(args: {
       kind: "publish",
       pending: {
         revision: revisionFromDefinition({
-          definition, version: current.version + 1, parentVersion: current.version, createdAt,
+          definition,
+          version: current.version + 1,
+          parentVersion: current.version,
+          createdAt,
         }),
         expectedParentVersion: current.version,
         expectedParentHash: current.hash,
@@ -202,9 +211,9 @@ export function prepareRevision(args: {
   if (recordedHash !== definition.hash) {
     throw new Error(
       `Checklist file is based on version ${definition.version} but has been edited since, ` +
-      `while the dataset has moved on to version ${current.version}. This is ambiguous: ` +
-      `publishing it would discard whatever changed in between. Refresh the file from the ` +
-      `dataset and reapply your edit.`,
+        `while the dataset has moved on to version ${current.version}. This is ambiguous: ` +
+        `publishing it would discard whatever changed in between. Refresh the file from the ` +
+        `dataset and reapply your edit.`,
     );
   }
   return { kind: "refresh-definition", revision: current };
@@ -214,7 +223,9 @@ function assertQuestionsWellFormed(questions: readonly ChecklistQuestion[]): voi
   const seen: Record<string, true> = Object.create(null);
   for (const question of questions) {
     if (!Number.isFinite(question.weight) || question.weight <= 0) {
-      throw new Error(`Question "${question.id}" has weight ${question.weight}; weights must be finite and positive`);
+      throw new Error(
+        `Question "${question.id}" has weight ${question.weight}; weights must be finite and positive`,
+      );
     }
     if (seen[question.id] === true) {
       throw new Error(`Duplicate question id "${question.id}"`);
@@ -242,22 +253,27 @@ function assertQuestionsEvolveLegally(
     if (after === undefined) {
       throw new Error(
         `Question "${before.id}" ("${before.text}") was removed. Questions are never removed — ` +
-        `soft-delete it so its recorded answers keep their meaning.`,
+          `soft-delete it so its recorded answers keep their meaning.`,
       );
     }
     if (after.text !== before.text) {
       throw new Error(
         `Question "${before.id}" changed text from "${before.text}" to "${after.text}". ` +
-        `An id names a meaning; changing the text would silently change what past answers meant. ` +
-        `Soft-delete this question and add a new one instead.`,
+          `An id names a meaning; changing the text would silently change what past answers meant. ` +
+          `Soft-delete this question and add a new one instead.`,
       );
     }
   }
 }
 
-function sameQuestions(left: readonly ChecklistQuestion[], right: readonly ChecklistQuestion[]): boolean {
-  return canonicalize(left.map((question) => ({ ...question }))) ===
-    canonicalize(right.map((question) => ({ ...question })));
+function sameQuestions(
+  left: readonly ChecklistQuestion[],
+  right: readonly ChecklistQuestion[],
+): boolean {
+  return (
+    canonicalize(left.map((question) => ({ ...question }))) ===
+    canonicalize(right.map((question) => ({ ...question })))
+  );
 }
 
 // --- publication ---------------------------------------------------------
@@ -287,7 +303,7 @@ export function publishPendingRevision(args: {
     if (canonicalize(stored) !== canonicalize(revision)) {
       throw new Error(
         `Revision ${revision.version} of "${revision.checklistId}" already exists with different ` +
-        `content. Published revisions are immutable.`,
+          `content. Published revisions are immutable.`,
       );
     }
     replayed = true;
@@ -330,19 +346,20 @@ function assertParentStillMatches(
     }
     throw new Error(
       `Revision ${revision.version} expects parent ${pending.expectedParentVersion}, but the ` +
-      `dataset has no published revision for "${revision.checklistId}".`,
+        `dataset has no published revision for "${revision.checklistId}".`,
     );
   }
   const isReplayOfThis = current.version === revision.version && current.hash === revision.hash;
-  const isOnExpectedParent = current.version === pending.expectedParentVersion &&
+  const isOnExpectedParent =
+    current.version === pending.expectedParentVersion &&
     current.hash === pending.expectedParentHash;
   if (isReplayOfThis || isOnExpectedParent) {
     return;
   }
   throw new Error(
     `Revision ${revision.version} of "${revision.checklistId}" expects to follow version ` +
-    `${pending.expectedParentVersion}, but current is version ${current.version}. ` +
-    `The lineage moved; recompute the change against current.`,
+      `${pending.expectedParentVersion}, but current is version ${current.version}. ` +
+      `The lineage moved; recompute the change against current.`,
   );
 }
 
@@ -367,7 +384,10 @@ export function syncChecklistDefinition(args: {
 
 // --- reading -------------------------------------------------------------
 
-export function readCurrentPointer(datasetDir: string, checklistId: string): ChecklistCurrent | undefined {
+export function readCurrentPointer(
+  datasetDir: string,
+  checklistId: string,
+): ChecklistCurrent | undefined {
   const file = currentPath(datasetDir, checklistId);
   if (!fs.existsSync(file)) {
     return undefined;
@@ -384,7 +404,11 @@ export function readCurrentPointer(datasetDir: string, checklistId: string): Che
  * would otherwise change what old answers mean while still matching the
  * hash those annotations recorded.
  */
-export function readRevision(datasetDir: string, checklistId: string, version: number): ChecklistRevision {
+export function readRevision(
+  datasetDir: string,
+  checklistId: string,
+  version: number,
+): ChecklistRevision {
   const file = revisionPath(datasetDir, checklistId, version);
   if (!fs.existsSync(file)) {
     throw new Error(`Checklist revision not found: ${file}`);
@@ -408,7 +432,7 @@ export function readRevision(datasetDir: string, checklistId: string, version: n
   if (recomputed !== revision.hash) {
     throw new Error(
       `${file} has been edited: its questions hash to ${recomputed}, but it records ` +
-      `${revision.hash}. Published revisions are immutable because annotations bind to them.`,
+        `${revision.hash}. Published revisions are immutable because annotations bind to them.`,
     );
   }
   return revision;
@@ -434,7 +458,7 @@ export function validateLineageContinuity(
     if (versions[index] !== expectedVersion) {
       throw new Error(
         `Checklist "${checklistId}" is missing revision ${expectedVersion}; the stored versions ` +
-        `are ${versions.join(", ")}. Revisions are a chain, not a set.`,
+          `are ${versions.join(", ")}. Revisions are a chain, not a set.`,
       );
     }
     const revision = readRevision(datasetDir, checklistId, versions[index]);
@@ -442,7 +466,7 @@ export function validateLineageContinuity(
     if (revision.parentVersion !== expectedParent) {
       throw new Error(
         `Revision ${checklistId}@${revision.version} records parent ${revision.parentVersion}, ` +
-        `but the previous published revision is ${expectedParent}.`,
+          `but the previous published revision is ${expectedParent}.`,
       );
     }
     if (previous !== undefined) {
@@ -459,7 +483,8 @@ export function listRevisionVersions(datasetDir: string, checklistId: string): n
   if (!fs.existsSync(dir)) {
     return [];
   }
-  return fs.readdirSync(dir)
+  return fs
+    .readdirSync(dir)
     .filter((name) => /^\d+\.json$/.test(name))
     .map((name) => Number.parseInt(name.replace(".json", ""), 10))
     .sort((left, right) => left - right);

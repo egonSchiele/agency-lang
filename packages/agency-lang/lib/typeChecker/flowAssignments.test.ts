@@ -16,32 +16,34 @@ describe("assignment value-checks run flow-aware (PR 3)", () => {
   const R = `type R = { kind: "a", v: string } | { kind: "b", v: number }`;
 
   it("annotated assignment with a narrowed RHS passes", () => {
-    expect(check(`
+    expect(
+      check(`
 ${R}
 def f(r: R): void {
   if (r.kind == "a") {
     let s: string = r.v
   }
-}`)).toEqual([]);
+}`),
+    ).toEqual([]);
   });
 
   it("annotated assignment with a wrong RHS still errors", () => {
-    expect(check(`
+    expect(
+      check(`
 def f(): void {
   let s: string = 5
-}`)).toEqual([
-      "Type 'number' is not assignable to type 'string' (assignment to 's').",
-    ]);
+}`),
+    ).toEqual(["Type 'number' is not assignable to type 'string' (assignment to 's')."]);
   });
 
   it("reassignment is checked against the declared type", () => {
-    expect(check(`
+    expect(
+      check(`
 def f(): void {
   let n: number = 1
   n = "x"
-}`)).toEqual([
-      `Type '"x"' is not assignable to type 'number'.`,
-    ]);
+}`),
+    ).toEqual([`Type '"x"' is not assignable to type 'number'.`]);
   });
 
   it("post-guard narrowing flows into the assignment check via the flow graph", () => {
@@ -50,7 +52,8 @@ def f(): void {
     // narrowing (early-return on the `err` arm leaves `r` narrowed to `ok`) into
     // the `let s: string = r.value` check. Behavior-preserving (passed before via
     // the child-scope path too); this locks that the flow path covers it.
-    expect(check(`
+    expect(
+      check(`
 type R2 = { kind: "ok", value: string } | { kind: "err", msg: string }
 def f(r: R2): string {
   if (r.kind == "err") {
@@ -58,7 +61,8 @@ def f(r: R2): string {
   }
   let s: string = r.value
   return s
-}`)).toEqual([]);
+}`),
+    ).toEqual([]);
   });
 
   it("access-chain write checks the LHS target against the NARROWED base", () => {
@@ -68,29 +72,29 @@ def f(r: R2): string {
     // base node, so this only passes if that base resolves through the flow
     // graph (typeAt) — a flat scope.lookup would see the wide union and the
     // string would be assignable to `number | string`, silently dropping it.
-    expect(check(`
+    expect(
+      check(`
 type T = { kind: "a", box: { n: number } } | { kind: "b", box: { n: string } }
 def f(t: T): void {
   if (t.kind == "a") {
     t.box.n = "wrong"
   }
-}`)).toContainEqual(
-      expect.stringContaining("not assignable to type 'number'"),
-    );
+}`),
+    ).toContainEqual(expect.stringContaining("not assignable to type 'number'"));
   });
 
   it("access-chain index write checks against the narrowed record value type", () => {
     // Symmetric to the property-write case but through a Record index write
     // (`t.m["k"] = …`): the value type is `number` once `t` is narrowed to the
     // "a" member, so the string RHS must error.
-    expect(check(`
+    expect(
+      check(`
 type T = { kind: "a", m: Record<string, number> } | { kind: "b", m: Record<string, string> }
 def f(t: T): void {
   if (t.kind == "a") {
     t.m["k"] = "wrong"
   }
-}`)).toContainEqual(
-      expect.stringContaining("not assignable to type 'number'"),
-    );
+}`),
+    ).toContainEqual(expect.stringContaining("not assignable to type 'number'"));
   });
 });

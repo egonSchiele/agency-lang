@@ -28,14 +28,7 @@ function weaveAndRead(
 ): string {
   const inputPath = writeInput(name, contents);
   const outputDir = path.join(tmpDir, "out");
-  generateLiterate(
-    {},
-    inputPath,
-    outputDir,
-    [],
-    opts.lang ?? "agency",
-    opts.baseUrl,
-  );
+  generateLiterate({}, inputPath, outputDir, [], opts.lang ?? "agency", opts.baseUrl);
   const outName = name.replace(/\.agency$/, ".md");
   return fs.readFileSync(path.join(outputDir, outName), "utf-8");
 }
@@ -170,14 +163,8 @@ def foo(): number {
     const nestedDir = path.join(inputDir, "nested");
     fs.mkdirSync(nestedDir, { recursive: true });
 
-    fs.writeFileSync(
-      path.join(inputDir, "a.agency"),
-      `def a(): number { return 1 }\n`,
-    );
-    fs.writeFileSync(
-      path.join(nestedDir, "b.agency"),
-      `def b(): number { return 2 }\n`,
-    );
+    fs.writeFileSync(path.join(inputDir, "a.agency"), `def a(): number { return 1 }\n`);
+    fs.writeFileSync(path.join(nestedDir, "b.agency"), `def b(): number { return 2 }\n`);
 
     const outputDir = path.join(tmpDir, "out");
     generateLiterate({}, inputDir, outputDir, [], "agency");
@@ -213,10 +200,7 @@ def foo(): number {
   it("escalates the fence delimiter to 5 backticks when content has 4", () => {
     const md = weaveAndRead(
       "test.agency",
-      "def foo(): string {\n" +
-        '  """contains ```` four backticks"""\n' +
-        '  return "x"\n' +
-        "}\n",
+      "def foo(): string {\n" + '  """contains ```` four backticks"""\n' + '  return "x"\n' + "}\n",
     );
 
     expect(md).toMatch(/^`````+agency\n/m);
@@ -405,16 +389,12 @@ def second(): number { return 2 }
   });
 
   it("adds a 'View source' link at the top when --base-url is given", () => {
-    const md = weaveAndRead(
-      "test.agency",
-      `def foo(): number { return 1 }\n`,
-      { baseUrl: "https://example.com/src" },
-    );
+    const md = weaveAndRead("test.agency", `def foo(): number { return 1 }\n`, {
+      baseUrl: "https://example.com/src",
+    });
 
     // The link is the first line and points at the source file.
-    expect(md.startsWith("[View source](https://example.com/src/test.agency)")).toBe(
-      true,
-    );
+    expect(md.startsWith("[View source](https://example.com/src/test.agency)")).toBe(true);
     // And the code still follows it.
     const linkIdx = md.indexOf("[View source]");
     const fenceIdx = md.indexOf("```agency");
@@ -427,11 +407,9 @@ def second(): number { return 2 }
   });
 
   it("strips a trailing slash from the base URL", () => {
-    const md = weaveAndRead(
-      "test.agency",
-      `def foo(): number { return 1 }\n`,
-      { baseUrl: "https://example.com/src/" },
-    );
+    const md = weaveAndRead("test.agency", `def foo(): number { return 1 }\n`, {
+      baseUrl: "https://example.com/src/",
+    });
     expect(md).toContain("(https://example.com/src/test.agency)");
     expect(md).not.toContain("src//test.agency");
   });
@@ -440,28 +418,13 @@ def second(): number { return 2 }
     const inputDir = path.join(tmpDir, "src");
     const nestedDir = path.join(inputDir, "nested");
     fs.mkdirSync(nestedDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(nestedDir, "b.agency"),
-      `def b(): number { return 2 }\n`,
-    );
+    fs.writeFileSync(path.join(nestedDir, "b.agency"), `def b(): number { return 2 }\n`);
 
     const outputDir = path.join(tmpDir, "out");
-    generateLiterate(
-      {},
-      inputDir,
-      outputDir,
-      [],
-      "agency",
-      "https://example.com/src",
-    );
+    generateLiterate({}, inputDir, outputDir, [], "agency", "https://example.com/src");
 
-    const md = fs.readFileSync(
-      path.join(outputDir, "nested", "b.md"),
-      "utf-8",
-    );
-    expect(md).toContain(
-      "[View source](https://example.com/src/nested/b.agency)",
-    );
+    const md = fs.readFileSync(path.join(outputDir, "nested", "b.md"), "utf-8");
+    expect(md).toContain("[View source](https://example.com/src/nested/b.agency)");
   });
 
   it("smoke-tests against stdlib/markdown.agency (real-world AST)", () => {

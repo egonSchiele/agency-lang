@@ -8,11 +8,13 @@ const viewport = { rows: 40, cols: 120 };
 describe("InfoScreen", () => {
   it("shows command, per-test statuses, and warnings", () => {
     const view = new InfoScreen("r-1");
-    view.setData([runRow("r-1", {
-      command: "claude -p {task}",
-      warnings: ["could not parse config.json"],
-      tests: [testRow("t-a", { status: "failed" })],
-    })]);
+    view.setData([
+      runRow("r-1", {
+        command: "claude -p {task}",
+        warnings: ["could not parse config.json"],
+        tests: [testRow("t-a", { status: "failed" })],
+      }),
+    ]);
 
     const text = screenText(view.render(viewport));
     expect(text).toContain("claude -p {task}");

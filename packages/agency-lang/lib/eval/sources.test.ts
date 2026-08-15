@@ -38,28 +38,38 @@ describe("parseSource", () => {
 
   it("ssh URLs are git", () => {
     expect(parseSource("git@github.com:egonSchiele/agency-evals.git", base)).toEqual({
-      kind: "git", url: "git@github.com:egonSchiele/agency-evals.git",
+      kind: "git",
+      url: "git@github.com:egonSchiele/agency-evals.git",
       display: "git@github.com:egonSchiele/agency-evals.git",
     });
   });
 
   it("GitHub https URLs derive the clone URL; //subdir and ?ref= parse out", () => {
-    expect(parseSource("https://github.com/egonSchiele/agency-evals//tests/git-tasks?ref=v1.2", base)).toEqual({
-      kind: "git", url: "https://github.com/egonSchiele/agency-evals.git",
-      subdir: "tests/git-tasks", ref: "v1.2",
+    expect(
+      parseSource("https://github.com/egonSchiele/agency-evals//tests/git-tasks?ref=v1.2", base),
+    ).toEqual({
+      kind: "git",
+      url: "https://github.com/egonSchiele/agency-evals.git",
+      subdir: "tests/git-tasks",
+      ref: "v1.2",
       display: "https://github.com/egonSchiele/agency-evals//tests/git-tasks?ref=v1.2",
     });
   });
 
   it("a schemeless github.com form works", () => {
     expect(parseSource("github.com/egonSchiele/agency-evals//tests?ref=main", base)).toMatchObject({
-      kind: "git", url: "https://github.com/egonSchiele/agency-evals.git", subdir: "tests", ref: "main",
+      kind: "git",
+      url: "https://github.com/egonSchiele/agency-evals.git",
+      subdir: "tests",
+      ref: "main",
     });
   });
 
   it("a local path with ?ref= is a git source cloning from that path", () => {
     expect(parseSource("./fixtures?ref=8d601eb1", base)).toMatchObject({
-      kind: "git", url: "/base/fixtures", ref: "8d601eb1",
+      kind: "git",
+      url: "/base/fixtures",
+      ref: "8d601eb1",
     });
   });
 
@@ -71,12 +81,17 @@ describe("parseSource", () => {
 describe("resolveSource", () => {
   it("a local source passes through with no sha", () => {
     const localDir = tmp();
-    expect(resolveSource({ kind: "local", path: localDir })).toEqual({ dir: localDir, display: localDir });
+    expect(resolveSource({ kind: "local", path: localDir })).toEqual({
+      dir: localDir,
+      display: localDir,
+    });
   });
 
   it("resolves a sha ref to that exact commit and records it", () => {
     const { repo, first } = trackedRepo();
-    const resolved = resolveSource(parseSource(`${repo}//tests?ref=${first}`, "/"), { cacheRoot: tmp() });
+    const resolved = resolveSource(parseSource(`${repo}//tests?ref=${first}`, "/"), {
+      cacheRoot: tmp(),
+    });
     expect(resolved.sha).toBe(first);
     expect(fs.readFileSync(path.join(resolved.dir, "a.txt"), "utf8")).toBe("v1");
   });
@@ -85,7 +100,9 @@ describe("resolveSource", () => {
     const { repo, first, second } = trackedRepo();
     const cacheRoot = tmp();
     expect(resolveSource(parseSource(`${repo}//tests?ref=v1`, "/"), { cacheRoot }).sha).toBe(first);
-    expect(resolveSource(parseSource(`${repo}//tests?ref=main`, "/"), { cacheRoot }).sha).toBe(second);
+    expect(resolveSource(parseSource(`${repo}//tests?ref=main`, "/"), { cacheRoot }).sha).toBe(
+      second,
+    );
   });
 
   it("a branch re-resolves after the upstream moves", () => {
@@ -94,7 +111,9 @@ describe("resolveSource", () => {
     resolveSource(parseSource(`${repo}?ref=main`, "/"), { cacheRoot });
     fs.writeFileSync(path.join(repo, "tests", "a.txt"), "v3");
     execFileSync("git", ["add", "-A"], { cwd: repo });
-    execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "three"], { cwd: repo });
+    execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "three"], {
+      cwd: repo,
+    });
 
     const moved = resolveSource(parseSource(`${repo}?ref=main`, "/"), { cacheRoot });
 
@@ -104,13 +123,15 @@ describe("resolveSource", () => {
 
   it("errors clearly on a bad ref, naming the source", () => {
     const { repo } = trackedRepo();
-    expect(() => resolveSource(parseSource(`${repo}?ref=nope-does-not-exist`, "/"), { cacheRoot: tmp() }))
-      .toThrow(/nope-does-not-exist/);
+    expect(() =>
+      resolveSource(parseSource(`${repo}?ref=nope-does-not-exist`, "/"), { cacheRoot: tmp() }),
+    ).toThrow(/nope-does-not-exist/);
   });
 
   it("errors clearly when the subdir does not exist at the ref", () => {
     const { repo, first } = trackedRepo();
-    expect(() => resolveSource(parseSource(`${repo}//no-such-dir?ref=${first}`, "/"), { cacheRoot: tmp() }))
-      .toThrow(/no-such-dir/);
+    expect(() =>
+      resolveSource(parseSource(`${repo}//no-such-dir?ref=${first}`, "/"), { cacheRoot: tmp() }),
+    ).toThrow(/no-such-dir/);
   });
 });

@@ -19,11 +19,7 @@ export type Intr = {
   expectsValue?: boolean;
 };
 
-export type PromptDecision =
-  | "approve"
-  | "reject"
-  | "approve-always"
-  | "reject-always";
+export type PromptDecision = "approve" | "reject" | "approve-always" | "reject-always";
 
 export type PromptFn = (intr: Intr) => Promise<PromptDecision>;
 
@@ -83,9 +79,7 @@ export async function terminalPrompt(intr: Intr): Promise<PromptDecision> {
 export async function terminalValuePrompt(intr: Intr): Promise<InterruptResponse> {
   if (!process.stdin.isTTY) return reject();
   return queuePrompt(async () =>
-    parseValueAnswer(
-      await askLine(formatInterruptPrompt(intr) + `answer (empty line rejects): `),
-    ),
+    parseValueAnswer(await askLine(formatInterruptPrompt(intr) + `answer (empty line rejects): `)),
   );
 }
 
@@ -102,16 +96,9 @@ export function parseValueAnswer(raw: string): InterruptResponse {
 // none (null/undefined or an empty object). Exported for unit tests.
 export function formatInterruptPrompt(intr: Intr): string {
   const rule = "─".repeat(Math.max(intr.effect.length, 36));
-  const lines = [
-    "",
-    color.cyan(intr.effect),
-    color.cyan(rule),
-    "",
-    color.bold(intr.message),
-  ];
+  const lines = ["", color.cyan(intr.effect), color.cyan(rule), "", color.bold(intr.message)];
   const hasData =
-    intr.data != null &&
-    !(typeof intr.data === "object" && Object.keys(intr.data).length === 0);
+    intr.data != null && !(typeof intr.data === "object" && Object.keys(intr.data).length === 0);
   if (hasData) {
     // Best-effort: interrupt data is program-controlled and may not be
     // serializable (circular references, BigInt). The prompt must still

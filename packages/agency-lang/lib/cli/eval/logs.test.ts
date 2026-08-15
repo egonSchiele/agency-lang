@@ -33,7 +33,9 @@ describe("resolveRunStatelog", () => {
     addInput("a");
     addInput("b");
     expect(() => resolveRunStatelog(runDir)).toThrow(/--input: a, b/);
-    expect(resolveRunStatelog(runDir, "b")).toBe(path.join(runDir, "inputs", "b", "agent", "statelog.jsonl"));
+    expect(resolveRunStatelog(runDir, "b")).toBe(
+      path.join(runDir, "inputs", "b", "agent", "statelog.jsonl"),
+    );
     expect(() => resolveRunStatelog(runDir, "zzz")).toThrow(/No input "zzz".*a, b/);
   });
 
@@ -45,6 +47,8 @@ describe("resolveRunStatelog", () => {
 
   it("names the failure when an input never produced a statelog", () => {
     addInput("dead", false);
-    expect(() => resolveRunStatelog(runDir)).toThrow(/no statelog.*failed before the agent started/);
+    expect(() => resolveRunStatelog(runDir)).toThrow(
+      /no statelog.*failed before the agent started/,
+    );
   });
 });

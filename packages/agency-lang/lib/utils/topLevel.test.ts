@@ -9,9 +9,7 @@ function firstNode(source: string): AgencyNode {
   const result = parseAgency(source, {}, false);
   if (!result.success) throw new Error(`${source}: ${result.message}`);
   // Skip trivia only. NOT importStatement — one allowed case IS an import.
-  const node = result.result.nodes.find(
-    (n) => n.type !== "newLine" && n.type !== "comment",
-  );
+  const node = result.result.nodes.find((n) => n.type !== "newLine" && n.type !== "comment");
   if (!node) throw new Error(`no node in: ${source}`);
   return node;
 }
@@ -75,7 +73,12 @@ describe("isLegalAtTopLevel: template features are legal", () => {
   // mechanism than this rule. Saying otherwise reported a template's own
   // declaration hole as a user error advising "move it inside a node".
   it("allows a declaration hole, which AG8001 refuses at compile with better advice", () => {
-    const parsed = parseAgency("#helper\n\nnode main(): string {\n  return greet()\n}\n", {}, false, false);
+    const parsed = parseAgency(
+      "#helper\n\nnode main(): string {\n  return greet()\n}\n",
+      {},
+      false,
+      false,
+    );
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
     const hole = parsed.result.nodes.find((n) => n.type === "hole");

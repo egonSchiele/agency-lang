@@ -27,11 +27,14 @@ export class WorkspaceManager {
   writeBack(source: OptimizeTargetSet, championFiles: Record<string, string>): void {
     for (const sf of Object.values(source.files)) {
       if (sha256Text(fs.readFileSync(sf.absoluteFile, "utf8")) !== sf.sha256) {
-        throw new Error(`Source file ${sf.absoluteFile} was modified externally; writeback aborted.`);
+        throw new Error(
+          `Source file ${sf.absoluteFile} was modified externally; writeback aborted.`,
+        );
       }
     }
     for (const [rel, contents] of Object.entries(championFiles)) {
-      if (contents !== source.files[rel]?.source) fs.writeFileSync(source.files[rel].absoluteFile, contents);
+      if (contents !== source.files[rel]?.source)
+        fs.writeFileSync(source.files[rel].absoluteFile, contents);
     }
   }
 }

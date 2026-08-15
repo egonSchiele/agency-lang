@@ -30,33 +30,23 @@ function makeMockCtx(): RuntimeContext<any> {
 
 describe("resolveUrl", () => {
   it("joins baseUrl and path", () => {
-    expect(resolveUrl("https://api.github.com", "/repos")).toBe(
-      "https://api.github.com/repos",
-    );
+    expect(resolveUrl("https://api.github.com", "/repos")).toBe("https://api.github.com/repos");
   });
 
   it("uses baseUrl alone when path is empty", () => {
-    expect(resolveUrl("https://api.github.com", "")).toBe(
-      "https://api.github.com",
-    );
+    expect(resolveUrl("https://api.github.com", "")).toBe("https://api.github.com");
   });
 
   it("handles trailing slash on baseUrl", () => {
-    expect(resolveUrl("https://api.github.com/", "/repos")).toBe(
-      "https://api.github.com/repos",
-    );
+    expect(resolveUrl("https://api.github.com/", "/repos")).toBe("https://api.github.com/repos");
   });
 
   it("handles path without leading slash", () => {
-    expect(resolveUrl("https://api.github.com", "repos")).toBe(
-      "https://api.github.com/repos",
-    );
+    expect(resolveUrl("https://api.github.com", "repos")).toBe("https://api.github.com/repos");
   });
 
   it("handles both trailing and leading slashes", () => {
-    expect(resolveUrl("https://api.github.com/", "repos")).toBe(
-      "https://api.github.com/repos",
-    );
+    expect(resolveUrl("https://api.github.com/", "repos")).toBe("https://api.github.com/repos");
   });
 });
 
@@ -66,27 +56,17 @@ describe("checkAllowedDomains", () => {
   });
 
   it("returns null when domain is in list", () => {
-    expect(
-      checkAllowedDomains("https://api.github.com/repos", [
-        "api.github.com",
-      ]),
-    ).toBeNull();
+    expect(checkAllowedDomains("https://api.github.com/repos", ["api.github.com"])).toBeNull();
   });
 
   it("returns error when domain is not in list", () => {
-    const result = checkAllowedDomains("https://evil.com/data", [
-      "api.github.com",
-    ]);
+    const result = checkAllowedDomains("https://evil.com/data", ["api.github.com"]);
     expect(result).toContain("evil.com");
     expect(result).toContain("not in allowedDomains");
   });
 
   it("is case-insensitive", () => {
-    expect(
-      checkAllowedDomains("https://API.GitHub.COM/repos", [
-        "api.github.com",
-      ]),
-    ).toBeNull();
+    expect(checkAllowedDomains("https://API.GitHub.COM/repos", ["api.github.com"])).toBeNull();
   });
 
   it("returns error for invalid URL", () => {
@@ -95,9 +75,7 @@ describe("checkAllowedDomains", () => {
   });
 
   it("allows any of multiple domains", () => {
-    expect(
-      checkAllowedDomains("https://b.com/data", ["a.com", "b.com", "c.com"]),
-    ).toBeNull();
+    expect(checkAllowedDomains("https://b.com/data", ["a.com", "b.com", "c.com"])).toBeNull();
   });
 });
 
@@ -126,9 +104,7 @@ describe("HTTP fetch abort integration", () => {
     return new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
-  function startServer(
-    handler: (req: any, res: any) => void,
-  ): Promise<void> {
+  function startServer(handler: (req: any, res: any) => void): Promise<void> {
     return new Promise((resolve) => {
       server = createServer((req, res) => {
         pendingResponses.push({ end: () => res.end() });
@@ -269,11 +245,7 @@ describe("readBodyBytesCapped", () => {
     const integrationAbortController = new AbortController();
     const integratedRead = runHttp(
       () =>
-        readBodyBytesCapped(
-          integrationResponse,
-          integrationUrl,
-          integrationAbortController.signal,
-        ),
+        readBodyBytesCapped(integrationResponse, integrationUrl, integrationAbortController.signal),
       integrationUrl,
     );
     integrationAbortController.abort();

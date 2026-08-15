@@ -89,19 +89,21 @@ describe("ensureOccurrence", () => {
 
   it("records a run origin with its provenance intact", () => {
     const log = openOccurrenceLog(datasetDir);
-    const { row } = log.ensureOccurrence(candidate({
-      origin: {
-        kind: "run",
-        traceId: "t-1",
-        inputId: "news-01",
-        finalOutputIndex: 2,
-        runStartedAtMs: 1754000000000,
-        models: ["claude-opus-5"],
-        agent: { file: "news.agency" },
-        rawTask: "Summarize",
-        rawValue: { summary: "..." },
-      },
-    }));
+    const { row } = log.ensureOccurrence(
+      candidate({
+        origin: {
+          kind: "run",
+          traceId: "t-1",
+          inputId: "news-01",
+          finalOutputIndex: 2,
+          runStartedAtMs: 1754000000000,
+          models: ["claude-opus-5"],
+          agent: { file: "news.agency" },
+          rawTask: "Summarize",
+          rawValue: { summary: "..." },
+        },
+      }),
+    );
     expect(row.origin).toMatchObject({ kind: "run", models: ["claude-opus-5"] });
   });
 });

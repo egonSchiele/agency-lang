@@ -12,10 +12,7 @@ export const PolicySchema = z.record(z.string(), z.array(PolicyRuleSchema));
 
 export type Policy = z.infer<typeof PolicySchema>;
 
-type PolicyResult =
-  | { type: "approve" }
-  | { type: "reject" }
-  | { type: "propagate" };
+type PolicyResult = { type: "approve" } | { type: "reject" } | { type: "propagate" };
 
 export function checkPolicy(
   policy: Policy,

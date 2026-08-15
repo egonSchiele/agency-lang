@@ -48,9 +48,9 @@ describe("named-argument structural checks", () => {
         f(a: 1, ...xs)
       }
     `);
-    expect(errors.some((e) =>
-      /Splat argument cannot follow a named argument/.test(e.message),
-    )).toBe(true);
+    expect(
+      errors.some((e) => /Splat argument cannot follow a named argument/.test(e.message)),
+    ).toBe(true);
   });
 
   it("rejects a positional that comes after a named arg", () => {
@@ -60,9 +60,9 @@ describe("named-argument structural checks", () => {
         f(a: 1, 2)
       }
     `);
-    expect(errors.some((e) =>
-      /Positional argument cannot follow a named argument/.test(e.message),
-    )).toBe(true);
+    expect(
+      errors.some((e) => /Positional argument cannot follow a named argument/.test(e.message)),
+    ).toBe(true);
   });
 
   it("accepts reordered named args", () => {

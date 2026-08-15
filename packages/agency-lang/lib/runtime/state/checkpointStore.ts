@@ -95,8 +95,7 @@ export class Checkpoint implements SourceLocation {
       selectedId = threadIds[selectedIndex];
     } else {
       // Default: prefer the active thread at the top of the stack
-      selectedId =
-        activeStack.findLast((id) => threads[id] != null) ?? threadIds[0];
+      selectedId = activeStack.findLast((id) => threads[id] != null) ?? threadIds[0];
       selectedIndex = threadIds.indexOf(selectedId);
     }
 
@@ -108,7 +107,12 @@ export class Checkpoint implements SourceLocation {
       content: this.getContentFromMessage(m),
     }));
 
-    return { threadId: selectedId, threadIndex: selectedIndex, threadCount: threadIds.length, messages };
+    return {
+      threadId: selectedId,
+      threadIndex: selectedIndex,
+      threadCount: threadIds.length,
+      messages,
+    };
   }
 
   private getContentFromMessage(message: MessageJSON): string {
@@ -126,7 +130,6 @@ export class Checkpoint implements SourceLocation {
     }
     return JSON.stringify(message.content);
   }
-
 
   getGlobalsForModule(): Record<string, any> | null {
     return this.globals.store?.[this.moduleId] ?? null;
@@ -250,10 +253,7 @@ export class CheckpointStore {
     }
   }
 
-  cloneCheckpoint(
-    _checkpoint: Checkpoint,
-    opts: Partial<CheckpointArgs> = {},
-  ): number {
+  cloneCheckpoint(_checkpoint: Checkpoint, opts: Partial<CheckpointArgs> = {}): number {
     const checkpoint = Checkpoint.fromJSON(_checkpoint);
     if (!checkpoint) {
       throw new CheckpointError("Invalid checkpoint provided for cloning.");
@@ -288,10 +288,7 @@ export class CheckpointStore {
     return null;
   }
 
-  createRolling(
-    ctx: RuntimeContext<any>,
-    opts: SourceLocationOpts,
-  ): number {
+  createRolling(ctx: RuntimeContext<any>, opts: SourceLocationOpts): number {
     // Remove existing unpinned checkpoint at the same location to avoid duplicates
     const id = this.create(ctx.stateStack, ctx, {
       ...opts,
@@ -413,10 +410,7 @@ export class CheckpointStore {
     };
   }
 
-  static fromJSON(
-    json: CheckpointStoreJSON,
-    maxRestores = 100,
-  ): CheckpointStore {
+  static fromJSON(json: CheckpointStoreJSON, maxRestores = 100): CheckpointStore {
     const store = new CheckpointStore(maxRestores);
     const rehydrated: Record<number, Checkpoint> = {};
     for (const [id, cpJson] of Object.entries(json.checkpoints)) {
@@ -425,9 +419,7 @@ export class CheckpointStore {
         rehydrated[Number(id)] = checkpoint;
       } else {
         console.warn(
-          `Failed to rehydrate checkpoint with id ${id}, skipping. Data: ${JSON.stringify(
-            cpJson,
-          )}`,
+          `Failed to rehydrate checkpoint with id ${id}, skipping. Data: ${JSON.stringify(cpJson)}`,
         );
       }
     }

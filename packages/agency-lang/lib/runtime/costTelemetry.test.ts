@@ -17,13 +17,35 @@ afterEach(() => {
 });
 
 function cost(over: Partial<CostBreakdown> = {}): CostBreakdown {
-  return { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0, currency: "USD", ...over };
+  return {
+    inputCost: 0,
+    outputCost: 0,
+    cachedInputCost: 0,
+    cacheCreationInputCost: 0,
+    hostedToolsCost: 0,
+    totalCost: 0,
+    currency: "USD",
+    ...over,
+  };
 }
 function tokens(over: Partial<TokenBreakdown> = {}): TokenBreakdown {
-  return { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0, ...over };
+  return {
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    totalTokens: 0,
+    ...over,
+  };
 }
 function delta(over: Partial<NormalizedDelta> = {}): NormalizedDelta {
-  return { cost: cost(), tokens: tokens(), unknownCostCallCount: 0, attributionLost: false, ...over };
+  return {
+    cost: cost(),
+    tokens: tokens(),
+    unknownCostCallCount: 0,
+    attributionLost: false,
+    ...over,
+  };
 }
 
 describe("sendInvocationUsageToParent", () => {
@@ -34,7 +56,12 @@ describe("sendInvocationUsageToParent", () => {
     const d = delta({
       cost: cost({ totalCost: 0.5, inputCost: 0.3, outputCost: 0.2 }),
       tokens: tokens({ inputTokens: 100, outputTokens: 20, totalTokens: 120 }),
-      entry: { kind: "completion", model: "opus", cost: cost({ totalCost: 0.5 }), tokens: tokens({ totalTokens: 120 }) },
+      entry: {
+        kind: "completion",
+        model: "opus",
+        cost: cost({ totalCost: 0.5 }),
+        tokens: tokens({ totalTokens: 120 }),
+      },
     });
     sendInvocationUsageToParent(d);
     expect(send).toHaveBeenCalledExactlyOnceWith({ type: "invocationUsage", ...d });
@@ -44,7 +71,9 @@ describe("sendInvocationUsageToParent", () => {
     vi.stubEnv("AGENCY_IPC", "1");
     const send = vi.fn(() => true);
     process.send = send as any;
-    sendInvocationUsageToParent(delta({ tokens: tokens({ inputTokens: 3, totalTokens: 4 }), unknownCostCallCount: 1 }));
+    sendInvocationUsageToParent(
+      delta({ tokens: tokens({ inputTokens: 3, totalTokens: 4 }), unknownCostCallCount: 1 }),
+    );
     expect(send).toHaveBeenCalledOnce();
   });
 
@@ -68,7 +97,9 @@ describe("sendInvocationUsageToParent", () => {
     vi.stubEnv("AGENCY_IPC", "1");
     const send = vi.fn(() => true);
     process.send = send as any;
-    sendInvocationUsageToParent(delta({ entry: { kind: "manual", model: "", cost: cost(), tokens: tokens() } }));
+    sendInvocationUsageToParent(
+      delta({ entry: { kind: "manual", model: "", cost: cost(), tokens: tokens() } }),
+    );
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -76,7 +107,12 @@ describe("sendInvocationUsageToParent", () => {
     vi.stubEnv("AGENCY_IPC", "1");
     const send = vi.fn(() => true);
     process.send = send as any;
-    sendInvocationUsageToParent(delta({ cost: cost({ totalCost: 0.03 }), entry: { kind: "manual", model: "", cost: cost({ totalCost: 0.03 }), tokens: tokens() } }));
+    sendInvocationUsageToParent(
+      delta({
+        cost: cost({ totalCost: 0.03 }),
+        entry: { kind: "manual", model: "", cost: cost({ totalCost: 0.03 }), tokens: tokens() },
+      }),
+    );
     expect(send).toHaveBeenCalledOnce();
   });
 
@@ -94,7 +130,9 @@ describe("sendInvocationUsageToParent", () => {
     vi.stubEnv("AGENCY_IPC", "1");
     const send = vi.fn(() => true);
     process.send = send as any;
-    sendInvocationUsageToParent(delta({ entry: { kind: "completion", model: "opus", cost: cost(), tokens: tokens() } }));
+    sendInvocationUsageToParent(
+      delta({ entry: { kind: "completion", model: "opus", cost: cost(), tokens: tokens() } }),
+    );
     expect(send).toHaveBeenCalledOnce();
   });
 
@@ -107,8 +145,12 @@ describe("sendInvocationUsageToParent", () => {
 
   it("swallows a dead-channel send error", () => {
     vi.stubEnv("AGENCY_IPC", "1");
-    process.send = vi.fn(() => { throw new Error("channel closed"); }) as any;
-    expect(() => sendInvocationUsageToParent(delta({ cost: cost({ totalCost: 0.5 }) }))).not.toThrow();
+    process.send = vi.fn(() => {
+      throw new Error("channel closed");
+    }) as any;
+    expect(() =>
+      sendInvocationUsageToParent(delta({ cost: cost({ totalCost: 0.5 }) })),
+    ).not.toThrow();
   });
 });
 

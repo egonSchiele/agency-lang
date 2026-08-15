@@ -60,7 +60,7 @@ export function enforceNoKeyOnNonLoopback(host: string, apiKey: string | undefin
   if (!apiKey && !isLoopbackHost(host)) {
     throw new Error(
       `Refusing to start: no API key configured but bind host is "${host}" (non-loopback). ` +
-      `Either configure an API key, or bind to 127.0.0.1.`,
+        `Either configure an API key, or bind to 127.0.0.1.`,
     );
   }
 }
@@ -79,9 +79,7 @@ export function logServerStart(
   const displayHost = host.includes(":") ? `[${host}]` : host;
   logger.info(`${serverLabel} listening on http://${displayHost}:${port}`);
   if (!isLoopbackHost(host)) {
-    logger.info(
-      `WARNING: bound to ${host} (non-loopback). Server is reachable from the network.`,
-    );
+    logger.info(`WARNING: bound to ${host} (non-loopback). Server is reachable from the network.`);
   }
   if (!apiKey) {
     logger.info(

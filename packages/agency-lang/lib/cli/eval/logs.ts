@@ -27,7 +27,8 @@ export function resolveRunStatelog(target: string, inputId?: string): string {
       `${resolved} is neither a run directory (no inputs/), an input directory (no agent/statelog.jsonl), nor a statelog file`,
     );
   }
-  const ids = fs.readdirSync(inputsDir, { withFileTypes: true })
+  const ids = fs
+    .readdirSync(inputsDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort();

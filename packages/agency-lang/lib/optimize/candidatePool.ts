@@ -22,7 +22,10 @@ export class CandidatePool<T> {
   }
 
   sampleParent(rng: Rng): PoolCandidate<T> {
-    const scored: Scored<PoolCandidate<T>>[] = this.candidates.map((c) => ({ item: c, scores: c.inputScores }));
+    const scored: Scored<PoolCandidate<T>>[] = this.candidates.map((c) => ({
+      item: c,
+      scores: c.inputScores,
+    }));
     return sampleFrontier(scored, rng);
   }
 }

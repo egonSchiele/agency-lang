@@ -55,13 +55,16 @@ export class DetailScreen implements View {
     this.scroll = Math.max(0, Math.min(this.scroll, Math.max(0, all.length - page)));
     const visible = all.slice(this.scroll, this.scroll + page);
     const shownTo = Math.min(all.length, this.scroll + page);
-    return column({ justifyContent: "flex-start" },
-      line(`DETAIL  ${this.node?.summary ?? "(span no longer in the log)"}`, { fg: "bright-white" }),
+    return column(
+      { justifyContent: "flex-start" },
+      line(`DETAIL  ${this.node?.summary ?? "(span no longer in the log)"}`, {
+        fg: "bright-white",
+      }),
       ...visible.map((text) => line(text)),
       line(
         bottomHints(
           `↑↓ scroll (${Math.min(this.scroll + 1, all.length)}–${shownTo} of ${all.length})  y copy  ←/Esc back` +
-          (this.message ? `  ${this.message}` : ""),
+            (this.message ? `  ${this.message}` : ""),
           "detail",
           viewport.cols,
         ),
@@ -108,7 +111,7 @@ export class DetailScreen implements View {
       const self = spans.length > 0 ? spans[0].selfMs : extent.end - extent.start;
       out.push(
         `start +${fmtOffset(0)}   duration ${fmtDuration(extent.end - extent.start, { minutes: true })}` +
-        `   self ${fmtDuration(self, { minutes: true })}`,
+          `   self ${fmtDuration(self, { minutes: true })}`,
       );
     }
     out.push("");
@@ -119,17 +122,19 @@ export class DetailScreen implements View {
       const usage = d.usage ?? {};
       out.push(
         `tokens: ${usage.inputTokens ?? "?"} in / ${usage.outputTokens ?? "?"} out` +
-        `   cost: $${(d.cost?.totalCost ?? 0).toFixed(4)}`,
+          `   cost: $${(d.cost?.totalCost ?? 0).toFixed(4)}`,
       );
       out.push("", "── transcript ──");
       const messages = Array.isArray(d.messages) ? d.messages : [];
-      const completion = d.completion?.output || d.completion?.toolCalls?.length
-        ? [{ role: "assistant", content: d.completion.output, toolCalls: d.completion.toolCalls }]
-        : [];
+      const completion =
+        d.completion?.output || d.completion?.toolCalls?.length
+          ? [{ role: "assistant", content: d.completion.output, toolCalls: d.completion.toolCalls }]
+          : [];
       out.push(...formatConversation([...messages, ...completion]));
       return out;
     }
-    const tool = firstDescendantEvent(node, "toolCallStart") ?? firstDescendantEvent(node, "toolCall");
+    const tool =
+      firstDescendantEvent(node, "toolCallStart") ?? firstDescendantEvent(node, "toolCall");
     const payload = tool?.event ?? node.event;
     if (payload !== undefined) {
       out.push("── call ──");

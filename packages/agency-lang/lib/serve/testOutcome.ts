@@ -1,11 +1,28 @@
 // Test-only builders for ServedInvocationOutcome, so adapter/discovery unit
 // tests can supply plain-JS invokers without spinning up a real runtime.
-import type { InvocationUsageSnapshot, ServedInvocationOutcome } from "../runtime/invocationUsage.js";
+import type {
+  InvocationUsageSnapshot,
+  ServedInvocationOutcome,
+} from "../runtime/invocationUsage.js";
 
 const ZERO_SNAPSHOT: InvocationUsageSnapshot = {
   usage: {
-    cost: { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0, currency: "USD" },
-    tokens: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 },
+    cost: {
+      inputCost: 0,
+      outputCost: 0,
+      cachedInputCost: 0,
+      cacheCreationInputCost: 0,
+      hostedToolsCost: 0,
+      totalCost: 0,
+      currency: "USD",
+    },
+    tokens: {
+      inputTokens: 0,
+      outputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      totalTokens: 0,
+    },
     unknownCostCallCount: 0,
     pricingComplete: true,
     entries: [],
@@ -25,7 +42,9 @@ export function returnedOutcome<T>(
 /** A threw outcome carrying the identical error. */
 export function threwOutcome(
   error: unknown,
-  overrides: Partial<Pick<ServedInvocationOutcome<never>, "usage" | "usageComplete" | "traceId">> = {},
+  overrides: Partial<
+    Pick<ServedInvocationOutcome<never>, "usage" | "usageComplete" | "traceId">
+  > = {},
 ): ServedInvocationOutcome<never> {
   return { status: "threw", error, traceId: "test-trace", ...ZERO_SNAPSHOT, ...overrides };
 }

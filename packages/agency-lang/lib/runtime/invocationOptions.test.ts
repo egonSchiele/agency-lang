@@ -25,9 +25,9 @@ describe("resolveInvocation — run id policy", () => {
   });
 
   it("rejects a supplied empty trace id on a fresh run", () => {
-    expect(() =>
-      resolveInvocation({ kind: "fresh", options: { traceId: "" } }),
-    ).toThrow("traceId must not be empty");
+    expect(() => resolveInvocation({ kind: "fresh", options: { traceId: "" } })).toThrow(
+      "traceId must not be empty",
+    );
   });
 
   it("always keeps interrupt.runId on a resume, ignoring a supplied trace id", () => {

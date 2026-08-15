@@ -38,7 +38,10 @@ export function liftValue(value: unknown, loc: SourceLocation): AgencyNode {
   }
   if (typeof value === "boolean") return booleanLiteral(value, loc);
   if (Array.isArray(value)) {
-    return arrayLiteral(value.map((item) => liftValue(item, loc)), loc);
+    return arrayLiteral(
+      value.map((item) => liftValue(item, loc)),
+      loc,
+    );
   }
   if (typeof value === "object") {
     return objectLiteral(
@@ -49,9 +52,7 @@ export function liftValue(value: unknown, loc: SourceLocation): AgencyNode {
         // loudly rather than emit a literal whose shape silently differs
         // from the data.
         if (key === "__proto__") {
-          throw new Error(
-            `Cannot lift an object with a "__proto__" key into a template.`,
-          );
+          throw new Error(`Cannot lift an object with a "__proto__" key into a template.`);
         }
         return {
           key,

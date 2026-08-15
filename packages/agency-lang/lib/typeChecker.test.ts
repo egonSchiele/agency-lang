@@ -48,7 +48,6 @@ function inferenceCheck(program: AgencyProgram) {
   };
 }
 
-
 describe("TypeChecker", () => {
   describe("function call argument type matching", () => {
     it("should pass with correct argument types", () => {
@@ -406,7 +405,9 @@ describe("TypeChecker", () => {
                 value: {
                   type: "functionCall",
                   functionName: "llm",
-                  arguments: [{ type: "string", segments: [{ type: "text", value: "What is your name?" }] }],
+                  arguments: [
+                    { type: "string", segments: [{ type: "text", value: "What is your name?" }] },
+                  ],
                 },
               },
             ],
@@ -421,9 +422,7 @@ describe("TypeChecker", () => {
 
   describe("literal type assignable to base primitive", () => {
     it("should allow string literal assignable to string", () => {
-      const checker = new TypeChecker(
-        { type: "agencyProgram", nodes: [] },
-      );
+      const checker = new TypeChecker({ type: "agencyProgram", nodes: [] });
       checker.check();
 
       expect(
@@ -435,9 +434,7 @@ describe("TypeChecker", () => {
     });
 
     it("should allow number literal assignable to number", () => {
-      const checker = new TypeChecker(
-        { type: "agencyProgram", nodes: [] },
-      );
+      const checker = new TypeChecker({ type: "agencyProgram", nodes: [] });
       checker.check();
 
       expect(
@@ -449,9 +446,7 @@ describe("TypeChecker", () => {
     });
 
     it("should allow boolean literal assignable to boolean", () => {
-      const checker = new TypeChecker(
-        { type: "agencyProgram", nodes: [] },
-      );
+      const checker = new TypeChecker({ type: "agencyProgram", nodes: [] });
       checker.check();
 
       expect(
@@ -463,18 +458,14 @@ describe("TypeChecker", () => {
     });
 
     it("should allow objectType assignable to object primitive", () => {
-      const checker = new TypeChecker(
-        { type: "agencyProgram", nodes: [] },
-      );
+      const checker = new TypeChecker({ type: "agencyProgram", nodes: [] });
       checker.check();
 
       expect(
         checker.isAssignable(
           {
             type: "objectType",
-            properties: [
-              { key: "name", value: { type: "primitiveType", value: "string" } },
-            ],
+            properties: [{ key: "name", value: { type: "primitiveType", value: "string" } }],
           },
           { type: "primitiveType", value: "object" },
         ),
@@ -482,9 +473,7 @@ describe("TypeChecker", () => {
     });
 
     it("should not allow object primitive assignable to objectType", () => {
-      const checker = new TypeChecker(
-        { type: "agencyProgram", nodes: [] },
-      );
+      const checker = new TypeChecker({ type: "agencyProgram", nodes: [] });
       checker.check();
 
       expect(
@@ -492,18 +481,14 @@ describe("TypeChecker", () => {
           { type: "primitiveType", value: "object" },
           {
             type: "objectType",
-            properties: [
-              { key: "name", value: { type: "primitiveType", value: "string" } },
-            ],
+            properties: [{ key: "name", value: { type: "primitiveType", value: "string" } }],
           },
         ),
       ).toBe(false);
     });
 
     it("should not allow string assignable to number", () => {
-      const checker = new TypeChecker(
-        { type: "agencyProgram", nodes: [] },
-      );
+      const checker = new TypeChecker({ type: "agencyProgram", nodes: [] });
       checker.check();
 
       expect(
@@ -650,9 +635,7 @@ describe("TypeChecker", () => {
           {
             type: "functionCall",
             functionName: "getCheckpoint",
-            arguments: [
-              { type: "string", segments: [{ type: "text", value: "hello" }] },
-            ],
+            arguments: [{ type: "string", segments: [{ type: "text", value: "hello" }] }],
           },
         ],
       };
@@ -671,9 +654,7 @@ describe("TypeChecker", () => {
           {
             type: "functionCall",
             functionName: "restore",
-            arguments: [
-              { type: "number", value: "1" },
-            ],
+            arguments: [{ type: "number", value: "1" }],
           },
         ],
       };
@@ -944,9 +925,7 @@ describe("TypeChecker", () => {
             variableName: "obj",
             typeHint: {
               type: "objectType",
-              properties: [
-                { key: "name", value: { type: "primitiveType", value: "string" } },
-              ],
+              properties: [{ key: "name", value: { type: "primitiveType", value: "string" } }],
             },
             value: {
               type: "agencyObject",
@@ -1098,7 +1077,9 @@ describe("TypeChecker", () => {
               {
                 type: "functionCall",
                 functionName: "llm",
-                arguments: [{ type: "string", segments: [{ type: "text", value: "What is 2+2?" }] }],
+                arguments: [
+                  { type: "string", segments: [{ type: "text", value: "What is 2+2?" }] },
+                ],
               },
             ],
           },
@@ -1174,9 +1155,7 @@ describe("TypeChecker", () => {
             },
             value: {
               type: "agencyArray",
-              items: [
-                { type: "string", segments: [{ type: "text", value: "Alice" }] },
-              ],
+              items: [{ type: "string", segments: [{ type: "text", value: "Alice" }] }],
             },
           },
           {
@@ -1227,9 +1206,7 @@ describe("TypeChecker", () => {
             },
             value: {
               type: "agencyArray",
-              items: [
-                { type: "string", segments: [{ type: "text", value: "Alice" }] },
-              ],
+              items: [{ type: "string", segments: [{ type: "text", value: "Alice" }] }],
             },
           },
           {
@@ -1411,9 +1388,7 @@ describe("TypeChecker", () => {
             variableName: "obj",
             typeHint: {
               type: "objectType",
-              properties: [
-                { key: "name", value: { type: "primitiveType", value: "string" } },
-              ],
+              properties: [{ key: "name", value: { type: "primitiveType", value: "string" } }],
             },
             value: {
               type: "agencyObject",
@@ -1466,7 +1441,12 @@ describe("TypeChecker", () => {
             value: {
               type: "functionCall",
               functionName: "llm",
-              arguments: [{ type: "string", segments: [{ type: "text", value: "What is your name and age?" }] }],
+              arguments: [
+                {
+                  type: "string",
+                  segments: [{ type: "text", value: "What is your name and age?" }],
+                },
+              ],
             },
           },
           {
@@ -2229,9 +2209,7 @@ describe("TypeChecker", () => {
             },
             value: {
               type: "agencyArray",
-              items: [
-                { type: "string", segments: [{ type: "text", value: "x" }] },
-              ],
+              items: [{ type: "string", segments: [{ type: "text", value: "x" }] }],
             },
           },
           {
@@ -2385,9 +2363,7 @@ describe("TypeChecker", () => {
             value: {
               type: "functionCall",
               functionName: "greet",
-              arguments: [
-                { type: "string", segments: [{ type: "text", value: "World" }] },
-              ],
+              arguments: [{ type: "string", segments: [{ type: "text", value: "World" }] }],
             },
           },
         ],
@@ -2442,14 +2418,14 @@ describe("TypeChecker", () => {
             variableName: "result",
             typeHint: {
               type: "objectType",
-              properties: [
-                { key: "name", value: { type: "primitiveType", value: "string" } },
-              ],
+              properties: [{ key: "name", value: { type: "primitiveType", value: "string" } }],
             },
             value: {
               type: "functionCall",
               functionName: "llm",
-              arguments: [{ type: "string", segments: [{ type: "text", value: "What is your name?" }] }],
+              arguments: [
+                { type: "string", segments: [{ type: "text", value: "What is your name?" }] },
+              ],
             },
           },
         ],
@@ -2591,7 +2567,9 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors.length).toBeGreaterThan(0);
-      expect(errors.some((e) => e.message.includes("string") && e.message.includes("number"))).toBe(true);
+      expect(errors.some((e) => e.message.includes("string") && e.message.includes("number"))).toBe(
+        true,
+      );
     });
 
     it("should infer return type from multiple consistent returns", () => {
@@ -2636,7 +2614,9 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors.length).toBeGreaterThan(0);
-      expect(errors.some((e) => e.message.includes("number") && e.message.includes("string"))).toBe(true);
+      expect(errors.some((e) => e.message.includes("number") && e.message.includes("string"))).toBe(
+        true,
+      );
     });
 
     it("should infer void when no return statements", () => {
@@ -2670,7 +2650,9 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors.length).toBeGreaterThan(0);
-      expect(errors.some((e) => e.message.includes("void") && e.message.includes("string"))).toBe(true);
+      expect(errors.some((e) => e.message.includes("void") && e.message.includes("string"))).toBe(
+        true,
+      );
     });
 
     it("should fall back to any with inconsistent return types", () => {
@@ -2803,7 +2785,9 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors.length).toBeGreaterThan(0);
-      expect(errors.some((e) => e.message.includes("boolean") && e.message.includes("number"))).toBe(true);
+      expect(
+        errors.some((e) => e.message.includes("boolean") && e.message.includes("number")),
+      ).toBe(true);
     });
 
     it("should prefer explicit return type over inferred type", () => {
@@ -2837,7 +2821,9 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       // The return type mismatch (number vs string) should be caught
-      expect(errors.some((e) => e.message.includes("number") && e.message.includes("string"))).toBe(true);
+      expect(errors.some((e) => e.message.includes("number") && e.message.includes("string"))).toBe(
+        true,
+      );
       // But assignment of typed() to string should NOT error (explicit return type is string)
       expect(errors.some((e) => e.message.includes("assignment to 'x'"))).toBe(false);
     });
@@ -2889,7 +2875,9 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors.length).toBeGreaterThan(0);
-      expect(errors.some((e) => e.message.includes("number") && e.message.includes("string"))).toBe(true);
+      expect(errors.some((e) => e.message.includes("number") && e.message.includes("string"))).toBe(
+        true,
+      );
     });
 
     it("should infer return types for graph nodes", () => {
@@ -2922,7 +2910,9 @@ describe("TypeChecker", () => {
 
       const { errors } = typeCheck(program);
       expect(errors.length).toBeGreaterThan(0);
-      expect(errors.some((e) => e.message.includes("number") && e.message.includes("string"))).toBe(true);
+      expect(errors.some((e) => e.message.includes("number") && e.message.includes("string"))).toBe(
+        true,
+      );
     });
   });
 
@@ -3316,8 +3306,16 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "takesNums",
             parameters: [
-              { type: "functionParameter", name: "a", typeHint: { type: "primitiveType", value: "number" } },
-              { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "number" } },
+              {
+                type: "functionParameter",
+                name: "a",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+              {
+                type: "functionParameter",
+                name: "b",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
             ],
             body: [],
           },
@@ -3339,9 +3337,7 @@ describe("TypeChecker", () => {
           {
             type: "functionCall",
             functionName: "takesNums",
-            arguments: [
-              { type: "splat", value: { type: "variableName", value: "nums" } },
-            ],
+            arguments: [{ type: "splat", value: { type: "variableName", value: "nums" } }],
           },
         ],
       };
@@ -3356,8 +3352,16 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "takesNums",
             parameters: [
-              { type: "functionParameter", name: "a", typeHint: { type: "primitiveType", value: "number" } },
-              { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "number" } },
+              {
+                type: "functionParameter",
+                name: "a",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+              {
+                type: "functionParameter",
+                name: "b",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
             ],
             body: [],
           },
@@ -3376,9 +3380,7 @@ describe("TypeChecker", () => {
           {
             type: "functionCall",
             functionName: "takesNums",
-            arguments: [
-              { type: "splat", value: { type: "variableName", value: "strs" } },
-            ],
+            arguments: [{ type: "splat", value: { type: "variableName", value: "strs" } }],
           },
         ],
       };
@@ -3395,7 +3397,11 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "anyFn",
             parameters: [
-              { type: "functionParameter", name: "x", typeHint: { type: "primitiveType", value: "any" } },
+              {
+                type: "functionParameter",
+                name: "x",
+                typeHint: { type: "primitiveType", value: "any" },
+              },
             ],
             body: [],
           },
@@ -3408,9 +3414,7 @@ describe("TypeChecker", () => {
           {
             type: "functionCall",
             functionName: "anyFn",
-            arguments: [
-              { type: "splat", value: { type: "variableName", value: "n" } },
-            ],
+            arguments: [{ type: "splat", value: { type: "variableName", value: "n" } }],
           },
         ],
       };
@@ -3469,7 +3473,11 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "expectStr",
             parameters: [
-              { type: "functionParameter", name: "s", typeHint: { type: "primitiveType", value: "string" } },
+              {
+                type: "functionParameter",
+                name: "s",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
             ],
             body: [],
           },
@@ -3501,7 +3509,11 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "expectNum",
             parameters: [
-              { type: "functionParameter", name: "n", typeHint: { type: "primitiveType", value: "number" } },
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
             ],
             body: [],
           },
@@ -3534,7 +3546,11 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "expectStr",
             parameters: [
-              { type: "functionParameter", name: "s", typeHint: { type: "primitiveType", value: "string" } },
+              {
+                type: "functionParameter",
+                name: "s",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
             ],
             body: [],
           },
@@ -3570,7 +3586,11 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "expectStr",
             parameters: [
-              { type: "functionParameter", name: "s", typeHint: { type: "primitiveType", value: "string" } },
+              {
+                type: "functionParameter",
+                name: "s",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
             ],
             body: [],
           },
@@ -3579,7 +3599,11 @@ describe("TypeChecker", () => {
             body: [],
             handler: {
               kind: "inline",
-              param: { type: "functionParameter", name: "err", typeHint: { type: "primitiveType", value: "string" } },
+              param: {
+                type: "functionParameter",
+                name: "err",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
               body: [
                 {
                   type: "functionCall",
@@ -3604,7 +3628,11 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "expectStr",
             parameters: [
-              { type: "functionParameter", name: "s", typeHint: { type: "primitiveType", value: "string" } },
+              {
+                type: "functionParameter",
+                name: "s",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
             ],
             body: [],
           },
@@ -3627,8 +3655,16 @@ describe("TypeChecker", () => {
       const info = withImports(program, {
         add: {
           parameters: [
-            { type: "functionParameter", name: "a", typeHint: { type: "primitiveType", value: "number" } },
-            { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "number" } },
+            {
+              type: "functionParameter",
+              name: "a",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+            {
+              type: "functionParameter",
+              name: "b",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
           ],
           returnType: { type: "primitiveType", value: "number" },
         },
@@ -3652,8 +3688,16 @@ describe("TypeChecker", () => {
       const info = withImports(program, {
         add: {
           parameters: [
-            { type: "functionParameter", name: "a", typeHint: { type: "primitiveType", value: "number" } },
-            { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "number" } },
+            {
+              type: "functionParameter",
+              name: "a",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
+            {
+              type: "functionParameter",
+              name: "b",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
           ],
           returnType: { type: "primitiveType", value: "number" },
         },
@@ -3677,7 +3721,11 @@ describe("TypeChecker", () => {
       const info = withImports(program, {
         range: {
           parameters: [
-            { type: "functionParameter", name: "start", typeHint: { type: "primitiveType", value: "number" } },
+            {
+              type: "functionParameter",
+              name: "start",
+              typeHint: { type: "primitiveType", value: "number" },
+            },
             {
               type: "functionParameter",
               name: "end",
@@ -3783,16 +3831,16 @@ describe("TypeChecker", () => {
           {
             type: "functionCall",
             functionName: "print",
-            arguments: [
-              { type: "string", segments: [{ type: "text", value: "x" }] },
-            ],
+            arguments: [{ type: "string", segments: [{ type: "text", value: "x" }] }],
           },
         ],
       };
       // No SymbolTable passed → typeCheck builds a CompilationUnit with
       // empty importedFunctions and falls through to the builtin signature.
       const errors = typeCheck(program).errors;
-      expect(errors.filter((e) => /Expected.*argument\(s\) for 'print'/.test(e.message))).toHaveLength(0);
+      expect(
+        errors.filter((e) => /Expected.*argument\(s\) for 'print'/.test(e.message)),
+      ).toHaveLength(0);
     });
 
     it("local definition wins over imported function", () => {
@@ -3811,16 +3859,18 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "expectStr",
             parameters: [
-              { type: "functionParameter", name: "s", typeHint: { type: "primitiveType", value: "string" } },
+              {
+                type: "functionParameter",
+                name: "s",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
             ],
             body: [],
           },
           {
             type: "functionCall",
             functionName: "expectStr",
-            arguments: [
-              { type: "functionCall", functionName: "add", arguments: [] },
-            ],
+            arguments: [{ type: "functionCall", functionName: "add", arguments: [] }],
           },
         ],
       };
@@ -3845,7 +3895,11 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "expectStr",
             parameters: [
-              { type: "functionParameter", name: "s", typeHint: { type: "primitiveType", value: "string" } },
+              {
+                type: "functionParameter",
+                name: "s",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
             ],
             body: [],
           },
@@ -4104,7 +4158,11 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "half",
             parameters: [
-              { type: "functionParameter", name: "x", typeHint: { type: "primitiveType", value: "number" } },
+              {
+                type: "functionParameter",
+                name: "x",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
             ],
             returnType: { type: "primitiveType", value: "number" },
             body: [],
@@ -4143,7 +4201,11 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "safeHalf",
             parameters: [
-              { type: "functionParameter", name: "x", typeHint: { type: "primitiveType", value: "number" } },
+              {
+                type: "functionParameter",
+                name: "x",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
             ],
             returnType: {
               type: "resultType",
@@ -4187,8 +4249,16 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "labeler",
             parameters: [
-              { type: "functionParameter", name: "n", typeHint: { type: "primitiveType", value: "number" } },
-              { type: "functionParameter", name: "tag", typeHint: { type: "primitiveType", value: "string" } },
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
+              {
+                type: "functionParameter",
+                name: "tag",
+                typeHint: { type: "primitiveType", value: "string" },
+              },
             ],
             returnType: { type: "primitiveType", value: "string" },
             body: [],
@@ -4218,7 +4288,13 @@ describe("TypeChecker", () => {
                     functionCall: {
                       type: "functionCall",
                       functionName: "partial",
-                      arguments: [{ type: "namedArgument", name: "tag", value: { type: "string", segments: [{ type: "text", value: "tag" }] } }],
+                      arguments: [
+                        {
+                          type: "namedArgument",
+                          name: "tag",
+                          value: { type: "string", segments: [{ type: "text", value: "tag" }] },
+                        },
+                      ],
                     },
                   },
                 ],
@@ -4243,7 +4319,11 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "foo",
             parameters: [
-              { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "boolean" } },
+              {
+                type: "functionParameter",
+                name: "b",
+                typeHint: { type: "primitiveType", value: "boolean" },
+              },
             ],
             body: [
               {
@@ -4334,12 +4414,8 @@ describe("TypeChecker", () => {
         ],
       };
       const errors = typeCheck(program).errors;
-      expect(
-        errors.some((e) => /'success' is a reserved built-in/.test(e.message)),
-      ).toBe(true);
-      expect(
-        errors.some((e) => /'failure' is a reserved built-in/.test(e.message)),
-      ).toBe(true);
+      expect(errors.some((e) => /'success' is a reserved built-in/.test(e.message))).toBe(true);
+      expect(errors.some((e) => /'failure' is a reserved built-in/.test(e.message))).toBe(true);
     });
 
     it("user-defined Result type alias is rejected as reserved", () => {
@@ -4354,9 +4430,7 @@ describe("TypeChecker", () => {
         ],
       };
       const errors = typeCheck(program).errors;
-      expect(
-        errors.some((e) => /'Result' is a reserved built-in type/.test(e.message)),
-      ).toBe(true);
+      expect(errors.some((e) => /'Result' is a reserved built-in type/.test(e.message))).toBe(true);
     });
 
     it("pipe synth flows the actual return type (regression: variableName RHS used to be 'any')", () => {
@@ -4370,7 +4444,11 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "labeler",
             parameters: [
-              { type: "functionParameter", name: "n", typeHint: { type: "primitiveType", value: "number" } },
+              {
+                type: "functionParameter",
+                name: "n",
+                typeHint: { type: "primitiveType", value: "number" },
+              },
             ],
             returnType: { type: "primitiveType", value: "number" },
             body: [],
@@ -4449,7 +4527,10 @@ describe("TypeChecker", () => {
                     type: "agencyObject",
                     entries: [
                       { key: "a", value: { type: "number", value: "1" } },
-                      { key: "b", value: { type: "string", segments: [{ type: "text", value: "x" }] } },
+                      {
+                        key: "b",
+                        value: { type: "string", segments: [{ type: "text", value: "x" }] },
+                      },
                     ],
                   },
                 ],
@@ -4473,7 +4554,9 @@ describe("TypeChecker", () => {
         ],
       };
       const errors = typeCheck(program).errors;
-      expect(errors.some((e) => /Expected 1 argument\(s\) for 'success'/.test(e.message))).toBe(true);
+      expect(errors.some((e) => /Expected 1 argument\(s\) for 'success'/.test(e.message))).toBe(
+        true,
+      );
     });
 
     it("all-success returns infer as Result<T, any>", () => {
@@ -4484,7 +4567,11 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "f",
             parameters: [
-              { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "boolean" } },
+              {
+                type: "functionParameter",
+                name: "b",
+                typeHint: { type: "primitiveType", value: "boolean" },
+              },
             ],
             body: [
               {
@@ -4536,7 +4623,11 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "f",
             parameters: [
-              { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "boolean" } },
+              {
+                type: "functionParameter",
+                name: "b",
+                typeHint: { type: "primitiveType", value: "boolean" },
+              },
             ],
             body: [
               {
@@ -4594,15 +4685,17 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "f",
             parameters: [
-              { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "boolean" } },
+              {
+                type: "functionParameter",
+                name: "b",
+                typeHint: { type: "primitiveType", value: "boolean" },
+              },
             ],
             body: [
               {
                 type: "ifElse",
                 condition: { type: "variableName", value: "b" },
-                thenBody: [
-                  { type: "returnStatement", value: { type: "number", value: "5" } },
-                ],
+                thenBody: [{ type: "returnStatement", value: { type: "number", value: "5" } }],
                 elseBody: [
                   {
                     type: "returnStatement",
@@ -4743,9 +4836,7 @@ describe("TypeChecker", () => {
           {
             type: "function",
             functionName: "half",
-            parameters: [
-              { type: "functionParameter", name: "x", typeHint: num },
-            ],
+            parameters: [{ type: "functionParameter", name: "x", typeHint: num }],
             returnType: num,
             body: [],
           },
@@ -4935,9 +5026,7 @@ describe("TypeChecker", () => {
           {
             type: "function",
             functionName: "expectResult",
-            parameters: [
-              { type: "functionParameter", name: "r", typeHint: resultPersonStr },
-            ],
+            parameters: [{ type: "functionParameter", name: "r", typeHint: resultPersonStr }],
             body: [],
           },
           {
@@ -4948,7 +5037,10 @@ describe("TypeChecker", () => {
             value: {
               type: "agencyObject",
               entries: [
-                { key: "name", value: { type: "string", segments: [{ type: "text", value: "alice" }] } },
+                {
+                  key: "name",
+                  value: { type: "string", segments: [{ type: "text", value: "alice" }] },
+                },
               ],
             },
           },
@@ -4970,9 +5062,7 @@ describe("TypeChecker", () => {
           {
             type: "function",
             functionName: "expectResult",
-            parameters: [
-              { type: "functionParameter", name: "r", typeHint: resultPersonStr },
-            ],
+            parameters: [{ type: "functionParameter", name: "r", typeHint: resultPersonStr }],
             body: [],
           },
           {
@@ -4987,7 +5077,10 @@ describe("TypeChecker", () => {
                 {
                   type: "agencyObject",
                   entries: [
-                    { key: "name", value: { type: "string", segments: [{ type: "text", value: "alice" }] } },
+                    {
+                      key: "name",
+                      value: { type: "string", segments: [{ type: "text", value: "alice" }] },
+                    },
                   ],
                 },
               ],
@@ -5021,7 +5114,10 @@ describe("TypeChecker", () => {
                 value: {
                   type: "agencyObject",
                   entries: [
-                    { key: "name", value: { type: "string", segments: [{ type: "text", value: "alice" }] } },
+                    {
+                      key: "name",
+                      value: { type: "string", segments: [{ type: "text", value: "alice" }] },
+                    },
                   ],
                 },
               },
@@ -5030,9 +5126,7 @@ describe("TypeChecker", () => {
           {
             type: "function",
             functionName: "expectResult",
-            parameters: [
-              { type: "functionParameter", name: "r", typeHint: resultPersonStr },
-            ],
+            parameters: [{ type: "functionParameter", name: "r", typeHint: resultPersonStr }],
             body: [],
           },
           {
@@ -5053,9 +5147,7 @@ describe("TypeChecker", () => {
           {
             type: "function",
             functionName: "greet",
-            parameters: [
-              { type: "functionParameter", name: "n", typeHint: str, validated: true },
-            ],
+            parameters: [{ type: "functionParameter", name: "n", typeHint: str, validated: true }],
             returnType: num,
             body: [{ type: "returnStatement", value: { type: "number", value: "5" } }],
           },
@@ -5079,17 +5171,13 @@ describe("TypeChecker", () => {
           {
             type: "function",
             functionName: "greet",
-            parameters: [
-              { type: "functionParameter", name: "n", typeHint: str, validated: true },
-            ],
+            parameters: [{ type: "functionParameter", name: "n", typeHint: str, validated: true }],
             body: [{ type: "returnStatement", value: { type: "number", value: "5" } }],
           },
           {
             type: "function",
             functionName: "expectResult",
-            parameters: [
-              { type: "functionParameter", name: "r", typeHint: resultNumStr },
-            ],
+            parameters: [{ type: "functionParameter", name: "r", typeHint: resultNumStr }],
             body: [],
           },
           {
@@ -5120,9 +5208,7 @@ describe("TypeChecker", () => {
           {
             type: "function",
             functionName: "greet",
-            parameters: [
-              { type: "functionParameter", name: "n", typeHint: str, validated: true },
-            ],
+            parameters: [{ type: "functionParameter", name: "n", typeHint: str, validated: true }],
             returnType: resultNum,
             body: [
               {
@@ -5147,13 +5233,14 @@ describe("TypeChecker", () => {
           {
             type: "function",
             functionName: "greet",
-            parameters: [
-              { type: "functionParameter", name: "n", typeHint: str, validated: true },
-            ],
+            parameters: [{ type: "functionParameter", name: "n", typeHint: str, validated: true }],
             returnType: str,
             returnTypeValidated: true,
             body: [
-              { type: "returnStatement", value: { type: "string", segments: [{ type: "text", value: "hi" }] } },
+              {
+                type: "returnStatement",
+                value: { type: "string", segments: [{ type: "text", value: "hi" }] },
+              },
             ],
           },
         ],
@@ -5181,9 +5268,7 @@ describe("TypeChecker", () => {
           {
             type: "function",
             functionName: "greet",
-            parameters: [
-              { type: "functionParameter", name: "n", typeHint: str, validated: true },
-            ],
+            parameters: [{ type: "functionParameter", name: "n", typeHint: str, validated: true }],
             returnType: resultNum,
             body: [
               {
@@ -5229,9 +5314,7 @@ describe("TypeChecker", () => {
           {
             type: "function",
             functionName: "greet",
-            parameters: [
-              { type: "functionParameter", name: "n", typeHint: str, validated: true },
-            ],
+            parameters: [{ type: "functionParameter", name: "n", typeHint: str, validated: true }],
             returnType: resultNum,
             body: [
               {
@@ -5305,7 +5388,10 @@ describe("TypeChecker", () => {
             value: {
               type: "agencyObject",
               entries: [
-                { key: "name", value: { type: "string", segments: [{ type: "text", value: "alice" }] } },
+                {
+                  key: "name",
+                  value: { type: "string", segments: [{ type: "text", value: "alice" }] },
+                },
               ],
             },
           },
@@ -5350,7 +5436,10 @@ describe("TypeChecker", () => {
             value: {
               type: "agencyObject",
               entries: [
-                { key: "name", value: { type: "string", segments: [{ type: "text", value: "alice" }] } },
+                {
+                  key: "name",
+                  value: { type: "string", segments: [{ type: "text", value: "alice" }] },
+                },
               ],
             },
           },
@@ -5379,9 +5468,7 @@ describe("TypeChecker", () => {
           {
             type: "function",
             functionName: "expectResult",
-            parameters: [
-              { type: "functionParameter", name: "r", typeHint: resultPersonStr },
-            ],
+            parameters: [{ type: "functionParameter", name: "r", typeHint: resultPersonStr }],
             body: [],
           },
           {
@@ -5428,9 +5515,7 @@ describe("TypeChecker", () => {
           {
             type: "function",
             functionName: "expectResult",
-            parameters: [
-              { type: "functionParameter", name: "r", typeHint: resultPersonStr },
-            ],
+            parameters: [{ type: "functionParameter", name: "r", typeHint: resultPersonStr }],
             body: [],
           },
           {
@@ -5522,7 +5607,11 @@ describe("TypeChecker", () => {
             type: "assignment",
             variableName: "r",
             typeHint: resultNumStr,
-            value: { type: "functionCall", functionName: "success", arguments: [{ type: "number", value: "10" }] },
+            value: {
+              type: "functionCall",
+              functionName: "success",
+              arguments: [{ type: "number", value: "10" }],
+            },
           },
           {
             type: "binOpExpression",
@@ -5578,7 +5667,11 @@ describe("TypeChecker", () => {
             type: "functionCall",
             functionName: "greet",
             arguments: [
-              { type: "namedArgument", name: "nayme", value: { type: "string", segments: [{ type: "text", value: "x" }] } },
+              {
+                type: "namedArgument",
+                name: "nayme",
+                value: { type: "string", segments: [{ type: "text", value: "x" }] },
+              },
             ],
           },
         ],
@@ -5677,8 +5770,16 @@ describe("TypeChecker", () => {
             type: "functionCall",
             functionName: "greet",
             arguments: [
-              { type: "namedArgument", name: "name", value: { type: "string", segments: [{ type: "text", value: "a" }] } },
-              { type: "namedArgument", name: "name", value: { type: "string", segments: [{ type: "text", value: "b" }] } },
+              {
+                type: "namedArgument",
+                name: "name",
+                value: { type: "string", segments: [{ type: "text", value: "a" }] },
+              },
+              {
+                type: "namedArgument",
+                name: "name",
+                value: { type: "string", segments: [{ type: "text", value: "b" }] },
+              },
             ],
           },
         ],
@@ -5705,14 +5806,20 @@ describe("TypeChecker", () => {
             type: "functionCall",
             functionName: "greet",
             arguments: [
-              { type: "namedArgument", name: "name", value: { type: "string", segments: [{ type: "text", value: "a" }] } },
+              {
+                type: "namedArgument",
+                name: "name",
+                value: { type: "string", segments: [{ type: "text", value: "a" }] },
+              },
               { type: "number", value: "5" },
             ],
           },
         ],
       };
       const errors = typeCheck(program).errors;
-      expect(errors.some((e) => /Positional argument cannot follow a named argument/.test(e.message))).toBe(true);
+      expect(
+        errors.some((e) => /Positional argument cannot follow a named argument/.test(e.message)),
+      ).toBe(true);
     });
 
     it("named argument that conflicts with a positional argument errors", () => {
@@ -5735,7 +5842,11 @@ describe("TypeChecker", () => {
             functionName: "greet",
             arguments: [
               { type: "string", segments: [{ type: "text", value: "alice" }] },
-              { type: "namedArgument", name: "name", value: { type: "string", segments: [{ type: "text", value: "bob" }] } },
+              {
+                type: "namedArgument",
+                name: "name",
+                value: { type: "string", segments: [{ type: "text", value: "bob" }] },
+              },
             ],
           },
         ],
@@ -5826,7 +5937,9 @@ describe("TypeChecker", () => {
       // Should NOT report "unknown named argument" — the variadic IS nameable now.
       expect(errors.some((e) => /Unknown named argument 'xs'/.test(e.message))).toBe(false);
       // Should report an assignability error: number is not number[].
-      expect(errors.some((e) => /not assignable/.test(e.message) && /number\[\]/.test(e.message))).toBe(true);
+      expect(
+        errors.some((e) => /not assignable/.test(e.message) && /number\[\]/.test(e.message)),
+      ).toBe(true);
     });
 
     it("named args on a builtin call error with a clear message", () => {
@@ -5838,13 +5951,21 @@ describe("TypeChecker", () => {
             type: "functionCall",
             functionName: "success",
             arguments: [
-              { type: "namedArgument", name: "x", value: { type: "string", segments: [{ type: "text", value: "hi" }] } },
+              {
+                type: "namedArgument",
+                name: "x",
+                value: { type: "string", segments: [{ type: "text", value: "hi" }] },
+              },
             ],
           },
         ],
       };
       const errors = typeCheck(program).errors;
-      expect(errors.some((e) => /Named arguments can only be used with Agency-defined functions/.test(e.message))).toBe(true);
+      expect(
+        errors.some((e) =>
+          /Named arguments can only be used with Agency-defined functions/.test(e.message),
+        ),
+      ).toBe(true);
     });
 
     it("rejects regex in an llm() structured-output type", () => {
@@ -5921,7 +6042,10 @@ describe("TypeChecker", () => {
               {
                 type: "agencyObject",
                 entries: [
-                  { key: "model", value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] } },
+                  {
+                    key: "model",
+                    value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] },
+                  },
                 ],
               },
             ],
@@ -5973,7 +6097,10 @@ describe("TypeChecker", () => {
               {
                 type: "agencyObject",
                 entries: [
-                  { key: "model", value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] } },
+                  {
+                    key: "model",
+                    value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] },
+                  },
                   { key: "temperature", value: { type: "number", value: "0.5" } },
                 ],
               },
@@ -5996,7 +6123,10 @@ describe("TypeChecker", () => {
               {
                 type: "agencyObject",
                 entries: [
-                  { key: "modle", value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] } },
+                  {
+                    key: "modle",
+                    value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] },
+                  },
                 ],
               },
             ],
@@ -6019,7 +6149,10 @@ describe("TypeChecker", () => {
               {
                 type: "agencyObject",
                 entries: [
-                  { key: "temperature", value: { type: "string", segments: [{ type: "text", value: "hot" }] } },
+                  {
+                    key: "temperature",
+                    value: { type: "string", segments: [{ type: "text", value: "hot" }] },
+                  },
                 ],
               },
             ],
@@ -6046,7 +6179,10 @@ describe("TypeChecker", () => {
             value: {
               type: "agencyObject",
               entries: [
-                { key: "modle", value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] } },
+                {
+                  key: "modle",
+                  value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] },
+                },
               ],
             },
           },
@@ -6076,7 +6212,10 @@ describe("TypeChecker", () => {
                 value: {
                   type: "agencyObject",
                   entries: [
-                    { key: "modle", value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] } },
+                    {
+                      key: "modle",
+                      value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] },
+                    },
                   ],
                 },
               },
@@ -6124,7 +6263,10 @@ describe("TypeChecker", () => {
                     value: {
                       type: "agencyObject",
                       entries: [
-                        { key: "enabled", value: { type: "string", segments: [{ type: "text", value: "yes" }] } },
+                        {
+                          key: "enabled",
+                          value: { type: "string", segments: [{ type: "text", value: "yes" }] },
+                        },
                       ],
                     },
                   },
@@ -6151,7 +6293,10 @@ describe("TypeChecker", () => {
               {
                 type: "agencyObject",
                 entries: [
-                  { key: "reasoningEffort", value: { type: "string", segments: [{ type: "text", value: "ultra" }] } },
+                  {
+                    key: "reasoningEffort",
+                    value: { type: "string", segments: [{ type: "text", value: "ultra" }] },
+                  },
                 ],
               },
             ],
@@ -6166,9 +6311,7 @@ describe("TypeChecker", () => {
       // type Opts = { model?: string }; use({ model: 123 })  ← number, not string
       const opts: VariableType = {
         type: "objectType",
-        properties: [
-          { key: "model", value: { type: "unionType", types: [str, nullish] } },
-        ],
+        properties: [{ key: "model", value: { type: "unionType", types: [str, nullish] } }],
       };
       const program: AgencyProgram = {
         type: "agencyProgram",
@@ -6206,9 +6349,7 @@ describe("TypeChecker", () => {
             aliasName: "Opts",
             aliasedType: {
               type: "objectType",
-              properties: [
-                { key: "a", value: { type: "unionType", types: [str, nullish] } },
-              ],
+              properties: [{ key: "a", value: { type: "unionType", types: [str, nullish] } }],
             },
           },
           {
@@ -6242,7 +6383,12 @@ describe("TypeChecker", () => {
             typeHint: opts,
             value: {
               type: "agencyObject",
-              entries: [{ key: "model", value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] } }],
+              entries: [
+                {
+                  key: "model",
+                  value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] },
+                },
+              ],
             },
           },
           {
@@ -6259,7 +6405,10 @@ describe("TypeChecker", () => {
                 type: "agencyObject",
                 entries: [
                   { type: "splat", value: { type: "variableName", value: "base" } },
-                  { key: "modle", value: { type: "string", segments: [{ type: "text", value: "x" }] } },
+                  {
+                    key: "modle",
+                    value: { type: "string", segments: [{ type: "text", value: "x" }] },
+                  },
                 ],
               },
             ],
@@ -6293,7 +6442,11 @@ describe("TypeChecker", () => {
             type: "functionCall",
             functionName: "f",
             arguments: [
-              { type: "namedArgument", name: "a", value: { type: "string", segments: [{ type: "text", value: "y" }] } },
+              {
+                type: "namedArgument",
+                name: "a",
+                value: { type: "string", segments: [{ type: "text", value: "y" }] },
+              },
             ],
           },
         ],
@@ -6354,8 +6507,14 @@ describe("TypeChecker", () => {
             value: {
               type: "agencyObject",
               entries: [
-                { key: "model", value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] } },
-                { key: "modle", value: { type: "string", segments: [{ type: "text", value: "x" }] } },
+                {
+                  key: "model",
+                  value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] },
+                },
+                {
+                  key: "modle",
+                  value: { type: "string", segments: [{ type: "text", value: "x" }] },
+                },
               ],
             },
           },
@@ -6401,7 +6560,10 @@ describe("TypeChecker", () => {
               type: "blockArgument",
               params: [{ type: "functionParameter", name: "y" }],
               body: [
-                { type: "returnStatement", value: { type: "string", segments: [{ type: "text", value: "ok" }] } },
+                {
+                  type: "returnStatement",
+                  value: { type: "string", segments: [{ type: "text", value: "ok" }] },
+                },
               ],
             },
           },
@@ -6453,7 +6615,12 @@ describe("TypeChecker", () => {
             functionName: "takes",
             parameters: [{ type: "functionParameter", name: "b", typeHint: blockT }],
             returnType: str,
-            body: [{ type: "returnStatement", value: { type: "string", segments: [{ type: "text", value: "ok" }] } }],
+            body: [
+              {
+                type: "returnStatement",
+                value: { type: "string", segments: [{ type: "text", value: "ok" }] },
+              },
+            ],
           },
           {
             type: "function",
@@ -6496,7 +6663,12 @@ describe("TypeChecker", () => {
             functionName: "takes",
             parameters: [{ type: "functionParameter", name: "b", typeHint: strToStr }],
             returnType: str,
-            body: [{ type: "returnStatement", value: { type: "string", segments: [{ type: "text", value: "ok" }] } }],
+            body: [
+              {
+                type: "returnStatement",
+                value: { type: "string", segments: [{ type: "text", value: "ok" }] },
+              },
+            ],
           },
           {
             type: "function",
@@ -6543,7 +6715,12 @@ describe("TypeChecker", () => {
             functionName: "takes",
             parameters: [{ type: "functionParameter", name: "b", typeHint: twoArgs }],
             returnType: str,
-            body: [{ type: "returnStatement", value: { type: "string", segments: [{ type: "text", value: "ok" }] } }],
+            body: [
+              {
+                type: "returnStatement",
+                value: { type: "string", segments: [{ type: "text", value: "ok" }] },
+              },
+            ],
           },
           {
             type: "function",
@@ -6599,9 +6776,7 @@ describe("TypeChecker", () => {
             type: "importStatement",
             modulePath: "./shell.agency",
             isAgencyImport: true,
-            importedNames: [
-              { type: "namedImport", importedNames: ["exec"], aliases: {} },
-            ],
+            importedNames: [{ type: "namedImport", importedNames: ["exec"], aliases: {} }],
           },
           {
             type: "assignment",
@@ -6642,7 +6817,9 @@ describe("TypeChecker", () => {
         "/project/a.agency": {
           Result2: { kind: "type", name: "Result2", aliasedType: aResult, exported: true },
           getA: {
-            kind: "function", name: "getA", exported: true,
+            kind: "function",
+            name: "getA",
+            exported: true,
             parameters: [],
             returnType: { type: "typeAliasVariable", aliasName: "Result2" },
           },
@@ -6655,9 +6832,7 @@ describe("TypeChecker", () => {
             type: "importStatement",
             modulePath: "./a.agency",
             isAgencyImport: true,
-            importedNames: [
-              { type: "namedImport", importedNames: ["getA"], aliases: {} },
-            ],
+            importedNames: [{ type: "namedImport", importedNames: ["getA"], aliases: {} }],
           },
           {
             type: "assignment",
@@ -6720,7 +6895,9 @@ describe("TypeChecker", () => {
         },
         "/project/origin.agency": {
           getThing: {
-            kind: "function", name: "getThing", exported: true,
+            kind: "function",
+            name: "getThing",
+            exported: true,
             parameters: [],
             returnType: { type: "typeAliasVariable", aliasName: "Outer" },
           },
@@ -6733,9 +6910,7 @@ describe("TypeChecker", () => {
             type: "importStatement",
             modulePath: "./origin.agency",
             isAgencyImport: true,
-            importedNames: [
-              { type: "namedImport", importedNames: ["getThing"], aliases: {} },
-            ],
+            importedNames: [{ type: "namedImport", importedNames: ["getThing"], aliases: {} }],
           },
           {
             type: "assignment",
@@ -6777,9 +6952,7 @@ describe("TypeChecker", () => {
       };
       const outer: VariableType = {
         type: "objectType",
-        properties: [
-          { key: "inner", value: { type: "typeAliasVariable", aliasName: "Inner" } },
-        ],
+        properties: [{ key: "inner", value: { type: "typeAliasVariable", aliasName: "Inner" } }],
       };
       const symbolTable = new SymbolTable({
         "/project/types.agency": {
@@ -6794,15 +6967,17 @@ describe("TypeChecker", () => {
             type: "importStatement",
             modulePath: "./types.agency",
             isAgencyImport: true,
-            importedNames: [
-              { type: "namedImport", importedNames: ["Outer"], aliases: {} },
-            ],
+            importedNames: [{ type: "namedImport", importedNames: ["Outer"], aliases: {} }],
           },
           {
             type: "function",
             functionName: "consume",
             parameters: [
-              { type: "functionParameter", name: "o", typeHint: { type: "typeAliasVariable", aliasName: "Outer" } },
+              {
+                type: "functionParameter",
+                name: "o",
+                typeHint: { type: "typeAliasVariable", aliasName: "Outer" },
+              },
             ],
             body: [
               {
@@ -6947,8 +7122,16 @@ describe("TypeChecker", () => {
       const program = partialProgram(
         "add",
         [
-          { type: "functionParameter", name: "a", typeHint: { type: "primitiveType", value: "number" } },
-          { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "number" } },
+          {
+            type: "functionParameter",
+            name: "a",
+            typeHint: { type: "primitiveType", value: "number" },
+          },
+          {
+            type: "functionParameter",
+            name: "b",
+            typeHint: { type: "primitiveType", value: "number" },
+          },
         ],
         [{ type: "namedArgument", name: "a", value: { type: "number", value: "5" } }],
       );
@@ -6959,8 +7142,16 @@ describe("TypeChecker", () => {
       const program = partialProgram(
         "add",
         [
-          { type: "functionParameter", name: "a", typeHint: { type: "primitiveType", value: "number" } },
-          { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "number" } },
+          {
+            type: "functionParameter",
+            name: "a",
+            typeHint: { type: "primitiveType", value: "number" },
+          },
+          {
+            type: "functionParameter",
+            name: "b",
+            typeHint: { type: "primitiveType", value: "number" },
+          },
         ],
         [{ type: "namedArgument", name: "z", value: { type: "number", value: "5" } }],
       );
@@ -6976,9 +7167,23 @@ describe("TypeChecker", () => {
       const program = partialProgram(
         "log",
         [
-          { type: "functionParameter", name: "msgs", variadic: true, typeHint: { type: "arrayType", elementType: { type: "primitiveType", value: "string" } } },
+          {
+            type: "functionParameter",
+            name: "msgs",
+            variadic: true,
+            typeHint: {
+              type: "arrayType",
+              elementType: { type: "primitiveType", value: "string" },
+            },
+          },
         ],
-        [{ type: "namedArgument", name: "msgs", value: { type: "string", segments: [{ type: "text", value: "hi" }] } }],
+        [
+          {
+            type: "namedArgument",
+            name: "msgs",
+            value: { type: "string", segments: [{ type: "text", value: "hi" }] },
+          },
+        ],
       );
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
@@ -6990,19 +7195,29 @@ describe("TypeChecker", () => {
       const program = partialProgram(
         "log",
         [
-          { type: "functionParameter", name: "msgs", variadic: true, typeHint: { type: "arrayType", elementType: { type: "primitiveType", value: "string" } } },
-        ],
-        [{
-          type: "namedArgument",
-          name: "msgs",
-          value: {
-            type: "agencyArray",
-            items: [
-              { type: "string", segments: [{ type: "text", value: "a" }] },
-              { type: "string", segments: [{ type: "text", value: "b" }] },
-            ],
+          {
+            type: "functionParameter",
+            name: "msgs",
+            variadic: true,
+            typeHint: {
+              type: "arrayType",
+              elementType: { type: "primitiveType", value: "string" },
+            },
           },
-        }],
+        ],
+        [
+          {
+            type: "namedArgument",
+            name: "msgs",
+            value: {
+              type: "agencyArray",
+              items: [
+                { type: "string", segments: [{ type: "text", value: "a" }] },
+                { type: "string", segments: [{ type: "text", value: "b" }] },
+              ],
+            },
+          },
+        ],
       );
       const { errors } = typeCheck(program);
       expect(errors).toEqual([]);
@@ -7012,12 +7227,16 @@ describe("TypeChecker", () => {
       const program = partialProgram(
         "add",
         [
-          { type: "functionParameter", name: "a", typeHint: { type: "primitiveType", value: "number" } },
+          {
+            type: "functionParameter",
+            name: "a",
+            typeHint: { type: "primitiveType", value: "number" },
+          },
         ],
         [{ type: "number", value: "5" }],
       );
       const { errors } = typeCheck(program);
-      expect(errors.some(e => e.message.includes("named arguments"))).toBe(true);
+      expect(errors.some((e) => e.message.includes("named arguments"))).toBe(true);
     });
 
     it("should error when .describe() has no arguments", () => {
@@ -7058,7 +7277,7 @@ describe("TypeChecker", () => {
         ],
       };
       const { errors } = typeCheck(program);
-      expect(errors.some(e => e.message.includes(".describe()"))).toBe(true);
+      expect(errors.some((e) => e.message.includes(".describe()"))).toBe(true);
     });
 
     it("should not error on valid .describe() call", () => {
@@ -7088,7 +7307,9 @@ describe("TypeChecker", () => {
                       functionCall: {
                         type: "functionCall",
                         functionName: "describe",
-                        arguments: [{ type: "string", segments: [{ type: "text", value: "my tool" }] }],
+                        arguments: [
+                          { type: "string", segments: [{ type: "text", value: "my tool" }] },
+                        ],
                       },
                     },
                   ],

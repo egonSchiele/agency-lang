@@ -69,37 +69,32 @@ export async function _evalRecord(
   statelogPath: string,
   allowedPaths: string[] = [],
 ): Promise<EvalRecord> {
-  return new StatelogParser(await resolveStatelogPath(statelogPath, allowedPaths))
-    .evalRecord();
+  return new StatelogParser(await resolveStatelogPath(statelogPath, allowedPaths)).evalRecord();
 }
 
 export async function _evalValues(
   statelogPath: string,
   allowedPaths: string[] = [],
 ): Promise<EvalValue[]> {
-  return new StatelogParser(await resolveStatelogPath(statelogPath, allowedPaths))
-    .evalValues();
+  return new StatelogParser(await resolveStatelogPath(statelogPath, allowedPaths)).evalValues();
 }
 
 export async function _evalOutputs(
   statelogPath: string,
   allowedPaths: string[] = [],
 ): Promise<EvalValue[]> {
-  return new StatelogParser(await resolveStatelogPath(statelogPath, allowedPaths))
-    .evalOutputs();
+  return new StatelogParser(await resolveStatelogPath(statelogPath, allowedPaths)).evalOutputs();
 }
 
 export async function _finalEvalOutput(
   statelogPath: string,
   allowedPaths: string[] = [],
 ): Promise<EvalValue | null> {
-  return new StatelogParser(await resolveStatelogPath(statelogPath, allowedPaths))
-    .finalEvalOutput();
+  return new StatelogParser(
+    await resolveStatelogPath(statelogPath, allowedPaths),
+  ).finalEvalOutput();
 }
 
-function resolveStatelogPath(
-  statelogPath: string,
-  allowedPaths: string[],
-): Promise<string> {
+function resolveStatelogPath(statelogPath: string, allowedPaths: string[]): Promise<string> {
   return resolveDir(statelogPath, allowedPaths);
 }

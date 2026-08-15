@@ -70,9 +70,7 @@ describe("expandSplices", () => {
 
   it("replaces a declaration splice with the generator's declarations", () => {
     writeDeclGenerator();
-    const result = expand(
-      `import { makeGreet } from "./gen.agency"\n\n$( makeGreet() )\n`,
-    );
+    const result = expand(`import { makeGreet } from "./gen.agency"\n\n$( makeGreet() )\n`);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const names = result.value.nodes
@@ -176,14 +174,12 @@ describe("expandSplices", () => {
     // What toSource plus runCode cannot do: an error inside generated code
     // still says where it came from.
     writeDeclGenerator();
-    const result = expand(
-      `import { makeGreet } from "./gen.agency"\n\n$( makeGreet() )\n`,
-    );
+    const result = expand(`import { makeGreet } from "./gen.agency"\n\n$( makeGreet() )\n`);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const grafted = result.value.nodes.find(
-      (node) => node.type === "function",
-    ) as { loc?: { origin?: { kind: string; name: string } } };
+    const grafted = result.value.nodes.find((node) => node.type === "function") as {
+      loc?: { origin?: { kind: string; name: string } };
+    };
     expect(grafted.loc?.origin).toEqual({ kind: "splice", name: "makeGreet" });
   }, 60_000);
 
@@ -300,9 +296,7 @@ describe("expandSplices", () => {
       "gen.agency",
       `import { Code } from "std::agency"\n\nexport def g(): Code {\n  return [|\n    def dup(): number {\n      return 1\n    }\n  |]\n}\n`,
     );
-    const result = expand(
-      `import { g } from "./gen.agency"\n\n$( g() )\n\n$( g() )\n`,
-    );
+    const result = expand(`import { g } from "./gen.agency"\n\n$( g() )\n\n$( g() )\n`);
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.diagnostic.diagnostic).toBe("spliceRedeclaresHostName");
@@ -364,7 +358,10 @@ describe("expandSplices", () => {
     // Splices are expressions, so a generator can return one. This pass
     // enumerates the host's splices once, so a generated splice would
     // survive to the codegen tripwire and surface as an internal error.
-    write("inner.agency", `import { Code } from "std::agency"\n\nexport def i(): Code {\n  return [| 1 |]\n}\n`);
+    write(
+      "inner.agency",
+      `import { Code } from "std::agency"\n\nexport def i(): Code {\n  return [| 1 |]\n}\n`,
+    );
     write(
       "gen.agency",
       `import { Code, parseStatements } from "std::agency"\n\nexport def g(): Code {\n  const parsed = parseStatements("const x = $( i() )")\n  if (isFailure(parsed)) {\n    return [| 0 |]\n  }\n  return parsed.value\n}\n`,

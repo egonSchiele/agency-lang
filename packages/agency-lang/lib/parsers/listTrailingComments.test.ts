@@ -46,9 +46,7 @@ describe("list trailing trivia", () => {
   });
 
   it("keeps a trailing comment and following standalone trivia apart", () => {
-    const parsed = agencyArrayParser(
-      `[\n  first, // one\n\n  // about second\n  second\n]`,
-    );
+    const parsed = agencyArrayParser(`[\n  first, // one\n\n  // about second\n  second\n]`);
     expect(parsed.success).toBe(true);
     if (!parsed.success) {
       return;
@@ -160,10 +158,7 @@ describe("inline block canonicalization keeps comments with their argument", () 
   it.each([
     ["first", `map(\n  \\n -> n * n, // block\n  items // ordinary\n)`],
     ["last", `map(\n  items, // ordinary\n  \\n -> n * n // block\n)`],
-    [
-      "middle",
-      `reduce(\n  items, // ordinary\n  \\n -> n * n, // block\n  0 // seed\n)`,
-    ],
+    ["middle", `reduce(\n  items, // ordinary\n  \\n -> n * n, // block\n  0 // seed\n)`],
   ])("keeps both comments when the block starts %s", (_name, call) => {
     const source = `node main() {\n  const r = ${call}\n}\n`;
     const once = formatSource(source);
@@ -298,8 +293,7 @@ describe("remaining multiline surfaces", () => {
     // Written zeta-first; the formatter sorts alpha first. Both the name
     // comment inside each list and the comment after each `from` clause must
     // travel with their own import.
-    const source =
-      `import {\n  zeta // the zeta name\n} from "./zeta" // trailing zeta\nimport {\n  alpha // the alpha name\n} from "./alpha" // trailing alpha\n`;
+    const source = `import {\n  zeta // the zeta name\n} from "./zeta" // trailing zeta\nimport {\n  alpha // the alpha name\n} from "./alpha" // trailing alpha\n`;
     const formatted = formatSource(source);
     expect(formatted).not.toBeNull();
     const once = formatted as string;

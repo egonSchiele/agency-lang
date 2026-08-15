@@ -129,9 +129,11 @@ export function expressionToString(expr: Expression): string {
       return "null";
     case "string":
     case "multiLineString":
-      return expr.segments.map(seg =>
-        seg.type === "text" ? seg.value : `\${${expressionToString(seg.expression)}}`
-      ).join("");
+      return expr.segments
+        .map((seg) =>
+          seg.type === "text" ? seg.value : `\${${expressionToString(seg.expression)}}`,
+        )
+        .join("");
     case "functionCall": {
       const args = expr.arguments.map(callArgToString).join(", ");
       return `${expr.functionName}(${args})`;
@@ -159,19 +161,23 @@ export function expressionToString(expr: Expression): string {
     case "binOpExpression":
       return `${expressionToString(expr.left)} ${expr.operator} ${expressionToString(expr.right)}`;
     case "agencyArray":
-      return `[${expr.items.map(item =>
-        item.type === "splat" ? `...${expressionToString(item.value)}` : expressionToString(item)
-      ).join(", ")}]`;
+      return `[${expr.items
+        .map((item) =>
+          item.type === "splat" ? `...${expressionToString(item.value)}` : expressionToString(item),
+        )
+        .join(", ")}]`;
     case "agencyObject":
-      return `{${expr.entries.map(entry =>
-        "type" in entry && entry.type === "splat"
-          ? `...${expressionToString(entry.value)}`
-          : `${(entry as any).key}: ${expressionToString((entry as any).value)}`
-      ).join(", ")}}`;
+      return `{${expr.entries
+        .map((entry) =>
+          "type" in entry && entry.type === "splat"
+            ? `...${expressionToString(entry.value)}`
+            : `${(entry as any).key}: ${expressionToString((entry as any).value)}`,
+        )
+        .join(", ")}}`;
     case "tryExpression":
       return `try ${expressionToString(expr.call)}`;
     case "newExpression": {
-      const args = expr.arguments.map(a => expressionToString(a)).join(", ");
+      const args = expr.arguments.map((a) => expressionToString(a)).join(", ");
       return `new ${expr.className}(${args})`;
     }
     case "regex":
@@ -185,8 +191,11 @@ export function expressionToString(expr: Expression): string {
       return `interrupt ${expr.effect}(${args})`;
     }
     case "blockArgument": {
-      const params = expr.params.map(p => p.typeHint ? `${p.name}: ${variableTypeToString(p.typeHint, {})}` : p.name).join(", ");
-      const paramStr = expr.params.length === 1 && !expr.params[0].typeHint ? params : `(${params})`;
+      const params = expr.params
+        .map((p) => (p.typeHint ? `${p.name}: ${variableTypeToString(p.typeHint, {})}` : p.name))
+        .join(", ");
+      const paramStr =
+        expr.params.length === 1 && !expr.params[0].typeHint ? params : `(${params})`;
       return `\\${paramStr} -> ...`;
     }
     case "unitLiteral":
@@ -285,10 +294,7 @@ export function* getAllVariablesInBody(
           yield* getAllVariablesInBody([kv.value]);
         }
       }
-    } else if (
-      node.type === "string" ||
-      node.type === "multiLineString"
-    ) {
+    } else if (node.type === "string" || node.type === "multiLineString") {
       for (const seg of node.segments) {
         if (seg.type === "interpolation") {
           yield* getAllVariablesInBody([seg.expression as AgencyNode]);
@@ -345,8 +351,7 @@ export function* walkNodes(
     scopes.push(globalScope());
   }
   for (const node of nodes) {
-    if (walkNodeDebug)
-      console.log(color.magenta("walkNodes:"), { node, ancestors });
+    if (walkNodeDebug) console.log(color.magenta("walkNodes:"), { node, ancestors });
     yield { node, ancestors, scopes };
     // Expression descent: per-type, hand-enumerated below. Statement-BODY
     // descent is NOT enumerated here — it runs generically at the end of
@@ -364,11 +369,7 @@ export function* walkNodes(
       // away before any walk. The binder is a binding site, not a
       // sub-expression, so it is not descended into, matching forLoop.
       yield* walkNodes(
-        [
-          node.expression,
-          node.iterable,
-          ...(node.condition ? [node.condition] : []),
-        ],
+        [node.expression, node.iterable, ...(node.condition ? [node.condition] : [])],
         [...ancestors, node],
         scopes,
       );
@@ -382,9 +383,12 @@ export function* walkNodes(
       // otherwise codegen emits bare identifiers instead of
       // `__stack.locals.foo`.
       if (node.label) yield* walkNodes([node.label as AgencyNode], [...ancestors, node], scopes);
-      if (node.summarize) yield* walkNodes([node.summarize as AgencyNode], [...ancestors, node], scopes);
-      if (node.continueExpr) yield* walkNodes([node.continueExpr as AgencyNode], [...ancestors, node], scopes);
-      if (node.sessionExpr) yield* walkNodes([node.sessionExpr as AgencyNode], [...ancestors, node], scopes);
+      if (node.summarize)
+        yield* walkNodes([node.summarize as AgencyNode], [...ancestors, node], scopes);
+      if (node.continueExpr)
+        yield* walkNodes([node.continueExpr as AgencyNode], [...ancestors, node], scopes);
+      if (node.sessionExpr)
+        yield* walkNodes([node.sessionExpr as AgencyNode], [...ancestors, node], scopes);
       if (node.hidden) yield* walkNodes([node.hidden as AgencyNode], [...ancestors, node], scopes);
     } else if (node.type === "returnStatement" || node.type === "matchYield") {
       if (node.value) yield* walkNodes([node.value], [...ancestors, node], scopes);
@@ -401,17 +405,9 @@ export function* walkNodes(
       if (node.accessChain) {
         for (const accessElement of node.accessChain) {
           if (accessElement.kind === "index") {
-            yield* walkNodes(
-              [accessElement.index],
-              [...ancestors, node],
-              scopes,
-            );
+            yield* walkNodes([accessElement.index], [...ancestors, node], scopes);
           } else if (accessElement.kind === "methodCall") {
-            yield* walkNodes(
-              [accessElement.functionCall],
-              [...ancestors, node],
-              scopes,
-            );
+            yield* walkNodes([accessElement.functionCall], [...ancestors, node], scopes);
           }
         }
       }
@@ -447,22 +443,12 @@ export function* walkNodes(
           if (element.start) yield* walkNodes([element.start], [...ancestors, node], scopes);
           if (element.end) yield* walkNodes([element.end], [...ancestors, node], scopes);
         } else if (element.kind === "methodCall") {
-          yield* walkNodes(
-            [element.functionCall],
-            [...ancestors, node],
-            scopes,
-          );
+          yield* walkNodes([element.functionCall], [...ancestors, node], scopes);
         }
       }
     } else if (node.type === "agencyArray") {
-      const arrayItems = node.items.map((item) =>
-        item.type === "splat" ? item.value : item,
-      );
-      yield* walkNodes(
-        arrayItems as AgencyNode[],
-        [...ancestors, node],
-        scopes,
-      );
+      const arrayItems = node.items.map((item) => (item.type === "splat" ? item.value : item));
+      yield* walkNodes(arrayItems as AgencyNode[], [...ancestors, node], scopes);
     } else if (node.type === "agencyObject") {
       const objChildren: AgencyNode[] = [];
       for (const e of node.entries) {
@@ -475,17 +461,10 @@ export function* walkNodes(
         }
       }
       yield* walkNodes(objChildren, [...ancestors, node], scopes);
-    } else if (
-      node.type === "string" ||
-      node.type === "multiLineString"
-    ) {
+    } else if (node.type === "string" || node.type === "multiLineString") {
       for (const seg of node.segments) {
         if (seg.type === "interpolation") {
-          yield* walkNodes(
-            [seg.expression as AgencyNode],
-            [...ancestors, node],
-            scopes,
-          );
+          yield* walkNodes([seg.expression as AgencyNode], [...ancestors, node], scopes);
         }
       }
     } else if (node.type === "binOpExpression") {

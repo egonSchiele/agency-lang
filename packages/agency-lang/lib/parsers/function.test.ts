@@ -87,9 +87,7 @@ describe("docStringParser", () => {
         success: true,
         result: {
           type: "multiLineString",
-          segments: [
-            { type: "text", value: "Docstring with numbers: 123, 456" },
-          ],
+          segments: [{ type: "text", value: "Docstring with numbers: 123, 456" }],
         },
       },
     },
@@ -551,8 +549,7 @@ describe("functionParser", () => {
       },
     },
     {
-      input:
-        'def multilineDoc() {\n  """\n  This is a multi-line\n  docstring\n  """\n  x = 5\n}',
+      input: 'def multilineDoc() {\n  """\n  This is a multi-line\n  docstring\n  """\n  x = 5\n}',
       expected: {
         success: true,
         result: {
@@ -1231,8 +1228,7 @@ describe("functionParser", () => {
     },
     // Functions with type hints and docstrings
     {
-      input:
-        'def add(x: number, y: number) {\n  """Adds two numbers"""\n  x\n}',
+      input: 'def add(x: number, y: number) {\n  """Adds two numbers"""\n  x\n}',
       expected: {
         success: true,
         result: {
@@ -1260,8 +1256,7 @@ describe("functionParser", () => {
       },
     },
     {
-      input:
-        'def greet(name: string) {\n  """Greets a person by name"""\n  name\n}',
+      input: 'def greet(name: string) {\n  """Greets a person by name"""\n  name\n}',
       expected: {
         success: true,
         result: {
@@ -1633,8 +1628,7 @@ describe("functionParser", () => {
     },
     // Functions with return types and docstrings
     {
-      input:
-        'def add(x: number, y: number): number {\n  """Adds two numbers"""\n  x\n}',
+      input: 'def add(x: number, y: number): number {\n  """Adds two numbers"""\n  x\n}',
       expected: {
         success: true,
         result: {
@@ -1662,8 +1656,7 @@ describe("functionParser", () => {
       },
     },
     {
-      input:
-        'def greet(name: string): string {\n  """Greets a person"""\n  name\n}',
+      input: 'def greet(name: string): string {\n  """Greets a person"""\n  name\n}',
       expected: {
         success: true,
         result: {
@@ -1815,9 +1808,7 @@ describe("functionParser", () => {
         result: {
           type: "function",
           functionName: "log",
-          parameters: [
-            { type: "functionParameter", name: "messages", variadic: true },
-          ],
+          parameters: [{ type: "functionParameter", name: "messages", variadic: true }],
           returnType: null,
           docString: undefined,
           body: [{ type: "variableName", value: "messages" }],
@@ -1837,7 +1828,10 @@ describe("functionParser", () => {
               type: "functionParameter",
               name: "messages",
               variadic: true,
-              typeHint: { type: "arrayType", elementType: { type: "primitiveType", value: "string" } },
+              typeHint: {
+                type: "arrayType",
+                elementType: { type: "primitiveType", value: "string" },
+              },
             },
           ],
           returnType: null,
@@ -1855,12 +1849,19 @@ describe("functionParser", () => {
           type: "function",
           functionName: "log",
           parameters: [
-            { type: "functionParameter", name: "prefix", typeHint: { type: "primitiveType", value: "string" } },
+            {
+              type: "functionParameter",
+              name: "prefix",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
             {
               type: "functionParameter",
               name: "messages",
               variadic: true,
-              typeHint: { type: "arrayType", elementType: { type: "primitiveType", value: "string" } },
+              typeHint: {
+                type: "arrayType",
+                elementType: { type: "primitiveType", value: "string" },
+              },
             },
           ],
           returnType: null,
@@ -1888,7 +1889,11 @@ describe("functionParser", () => {
           type: "function",
           functionName: "speak",
           parameters: [
-            { type: "functionParameter", name: "text", typeHint: { type: "primitiveType", value: "string" } },
+            {
+              type: "functionParameter",
+              name: "text",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
             {
               type: "functionParameter",
               name: "voice",
@@ -1926,14 +1931,18 @@ describe("functionParser", () => {
     },
     // Default value with variadic
     {
-      input: 'def foo(a: string, b: number = 5, ...rest: string[]) { a }',
+      input: "def foo(a: string, b: number = 5, ...rest: string[]) { a }",
       expected: {
         success: true,
         result: {
           type: "function",
           functionName: "foo",
           parameters: [
-            { type: "functionParameter", name: "a", typeHint: { type: "primitiveType", value: "string" } },
+            {
+              type: "functionParameter",
+              name: "a",
+              typeHint: { type: "primitiveType", value: "string" },
+            },
             {
               type: "functionParameter",
               name: "b",
@@ -1944,7 +1953,10 @@ describe("functionParser", () => {
               type: "functionParameter",
               name: "rest",
               variadic: true,
-              typeHint: { type: "arrayType", elementType: { type: "primitiveType", value: "string" } },
+              typeHint: {
+                type: "arrayType",
+                elementType: { type: "primitiveType", value: "string" },
+              },
             },
           ],
           returnType: null,
@@ -2230,9 +2242,7 @@ describe("functionParser with destructive/idempotent markers", () => {
   });
 
   it("a def named destructive still parses", () => {
-    expect(functionParser("def destructive(): number { return 1 }").success).toBe(
-      true,
-    );
+    expect(functionParser("def destructive(): number { return 1 }").success).toBe(true);
   });
 
   it("does not set markers on a plain def", () => {
@@ -3180,8 +3190,7 @@ describe("messageThreadParser", () => {
 
         // Find the nested subthread in the body
         const nestedSubthread = result.result.body.find(
-          (node: any) =>
-            node.type === "messageThread" && node.threadType === "subthread",
+          (node: any) => node.type === "messageThread" && node.threadType === "subthread",
         );
         expect(nestedSubthread).toBeDefined();
       }
@@ -3206,8 +3215,7 @@ describe("messageThreadParser", () => {
 
         // Count subthreads in the body
         const subthreads = result.result.body.filter(
-          (node: any) =>
-            node.type === "messageThread" && node.threadType === "subthread",
+          (node: any) => node.type === "messageThread" && node.threadType === "subthread",
         );
         expect(subthreads.length).toBe(2);
       }
@@ -3229,8 +3237,7 @@ describe("messageThreadParser", () => {
 
         // Find the nested thread in the body
         const nestedThread = result.result.body.find(
-          (node: any) =>
-            node.type === "messageThread" && node.threadType === "thread",
+          (node: any) => node.type === "messageThread" && node.threadType === "thread",
         );
         expect(nestedThread).toBeDefined();
       }
@@ -3255,16 +3262,14 @@ describe("messageThreadParser", () => {
 
         // Find the first level subthread
         const firstSubthread = result.result.body.find(
-          (node: any) =>
-            node.type === "messageThread" && node.threadType === "subthread",
+          (node: any) => node.type === "messageThread" && node.threadType === "subthread",
         );
         expect(firstSubthread).toBeDefined();
 
         if (firstSubthread) {
           // Find the second level subthread
           const secondSubthread = (firstSubthread as any).body.find(
-            (node: any) =>
-              node.type === "messageThread" && node.threadType === "subthread",
+            (node: any) => node.type === "messageThread" && node.threadType === "subthread",
           );
           expect(secondSubthread).toBeDefined();
         }
@@ -3289,15 +3294,13 @@ describe("messageThreadParser", () => {
         expect(result.result.threadType).toBe("thread");
 
         const firstSubthread = result.result.body.find(
-          (node: any) =>
-            node.type === "messageThread" && node.threadType === "subthread",
+          (node: any) => node.type === "messageThread" && node.threadType === "subthread",
         );
         expect(firstSubthread).toBeDefined();
 
         if (firstSubthread) {
           const nestedThread = (firstSubthread as any).body.find(
-            (node: any) =>
-              node.type === "messageThread" && node.threadType === "thread",
+            (node: any) => node.type === "messageThread" && node.threadType === "thread",
           );
           expect(nestedThread).toBeDefined();
         }
@@ -3329,8 +3332,7 @@ describe("messageThreadParser", () => {
 
         // Should have 2 top-level subthreads
         const topLevelSubthreads = result.result.body.filter(
-          (node: any) =>
-            node.type === "messageThread" && node.threadType === "subthread",
+          (node: any) => node.type === "messageThread" && node.threadType === "subthread",
         );
         expect(topLevelSubthreads.length).toBe(2);
       }
@@ -3349,8 +3351,7 @@ describe("messageThreadParser", () => {
         expect(result.result.type).toBe("messageThread");
 
         const nestedSubthread = result.result.body.find(
-          (node: any) =>
-            node.type === "messageThread" && node.threadType === "subthread",
+          (node: any) => node.type === "messageThread" && node.threadType === "subthread",
         );
         expect(nestedSubthread).toBeDefined();
         if (nestedSubthread) {
@@ -3373,8 +3374,7 @@ describe("messageThreadParser", () => {
         expect(result.result.threadType).toBe("subthread");
 
         const nestedThread = result.result.body.find(
-          (node: any) =>
-            node.type === "messageThread" && node.threadType === "thread",
+          (node: any) => node.type === "messageThread" && node.threadType === "thread",
         );
         expect(nestedThread).toBeDefined();
         if (nestedThread) {
@@ -3402,9 +3402,7 @@ describe("messageThreadParser", () => {
         expect(result.result.type).toBe("messageThread");
         expect(result.result.body.length).toBeGreaterThan(4);
 
-        const subthreads = result.result.body.filter(
-          (node: any) => node.type === "messageThread",
-        );
+        const subthreads = result.result.body.filter((node: any) => node.type === "messageThread");
         expect(subthreads.length).toBe(2);
       }
     });
@@ -3454,8 +3452,7 @@ describe("messageThreadParser", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         const subthreads = result.result.body.filter(
-          (node: any) =>
-            node.type === "messageThread" && node.threadType === "subthread",
+          (node: any) => node.type === "messageThread" && node.threadType === "subthread",
         );
         expect(subthreads.length).toBe(3);
       }
@@ -3517,8 +3514,7 @@ x=1
         expect(result.result.body.length).toBeGreaterThan(0);
 
         const nestedSubthread = result.result.body.find(
-          (node: any) =>
-            node.type === "messageThread" && node.threadType === "subthread",
+          (node: any) => node.type === "messageThread" && node.threadType === "subthread",
         );
         expect(nestedSubthread).toBeDefined();
       }
@@ -3546,12 +3542,7 @@ x=1
         expect(result.result.type).toBe("messageThread");
         expect(result.result.threadType).toBe("thread");
       } else {
-        console.log(
-          "Parsing failed for input:",
-          input,
-          "with error:",
-          result.message,
-        );
+        console.log("Parsing failed for input:", input, "with error:", result.message);
       }
     });
   });
@@ -3569,7 +3560,10 @@ describe("bang (!) validated type annotations", () => {
     const result = functionParser("def process(data: number!) { }");
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result.parameters[0].typeHint).toEqual({ type: "primitiveType", value: "number" });
+      expect(result.result.parameters[0].typeHint).toEqual({
+        type: "primitiveType",
+        value: "number",
+      });
       expect(result.result.parameters[0].validated).toBe(true);
     }
   });
@@ -3688,13 +3682,15 @@ describe("nested declaration probe", () => {
 
 describe("function keyword", () => {
   it("parses `function` to the same AST as `def`", () => {
-    expect(program(`function add(a: number, b: number): number { return a + b }`))
-      .toEqualWithoutLoc(program(`def add(a: number, b: number): number { return a + b }`));
+    expect(
+      program(`function add(a: number, b: number): number { return a + b }`),
+    ).toEqualWithoutLoc(program(`def add(a: number, b: number): number { return a + b }`));
   });
 
   it("accepts modifiers before `function`", () => {
-    expect(program(`export destructive function f() { print(1) }`))
-      .toEqualWithoutLoc(program(`export destructive def f() { print(1) }`));
+    expect(program(`export destructive function f() { print(1) }`)).toEqualWithoutLoc(
+      program(`export destructive def f() { print(1) }`),
+    );
   });
 
   it("normalizes `function` to `def` when formatted", () => {
@@ -3706,8 +3702,9 @@ describe("function keyword", () => {
   // RESERVED_WORDS governs identifier-hole filling only, not general identifier
   // parsing, so `function` stays usable as a variable name.
   it("leaves `function` usable as an identifier", () => {
-    expect(parseAgency(`node main() { const function = 5\nprint(function) }`, {}, false).success)
-      .toBe(true);
+    expect(
+      parseAgency(`node main() { const function = 5\nprint(function) }`, {}, false).success,
+    ).toBe(true);
   });
 });
 
@@ -3735,7 +3732,8 @@ describe("arrow return type", () => {
   }
 
   it("normalizes the separator without touching the arrow inside the type", () => {
-    expect(formatSource(`def f() -> (string) -> string { return g }`))
-      .toContain("def f(): (string) -> string");
+    expect(formatSource(`def f() -> (string) -> string { return g }`)).toContain(
+      "def f(): (string) -> string",
+    );
   });
 });

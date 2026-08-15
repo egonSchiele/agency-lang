@@ -117,11 +117,13 @@ export class AgencyFunction {
     this.exported = opts.exported ?? false;
     this.markers = opts.markers ?? {};
     this._isPreapproved = opts.isPreapproved ?? false;
-    this._unboundParams = opts.params.filter(p => !p.isBound);
-    this._nonVariadicUnbound = this._unboundParams.filter(p => !p.variadic);
-    this._hasVariadic = this._unboundParams.length > 0 && this._unboundParams[this._unboundParams.length - 1].variadic;
-    this._isBound = opts.params.some(p => p.isBound);
-    this._checksFailures = opts.params.some(p => p.acceptsResult === false);
+    this._unboundParams = opts.params.filter((p) => !p.isBound);
+    this._nonVariadicUnbound = this._unboundParams.filter((p) => !p.variadic);
+    this._hasVariadic =
+      this._unboundParams.length > 0 &&
+      this._unboundParams[this._unboundParams.length - 1].variadic;
+    this._isBound = opts.params.some((p) => p.isBound);
+    this._checksFailures = opts.params.some((p) => p.acceptsResult === false);
   }
 
   get isPreapproved(): boolean {
@@ -216,7 +218,7 @@ export class AgencyFunction {
     // the supplied value must be an array. Runtime backstop only — the
     // type checker rejects shape mismatches earlier.
     for (const name of Object.keys(bindings)) {
-      const param = this.params.find(p => p.name === name);
+      const param = this.params.find((p) => p.name === name);
       if (!param) {
         throw new Error(`Unknown parameter '${name}' in .partial() call`);
       }
@@ -231,14 +233,14 @@ export class AgencyFunction {
     }
 
     // Build new params with bound values set
-    const newParams = this.params.map(p => {
+    const newParams = this.params.map((p) => {
       if (p.name in bindings) {
         return { ...p, isBound: true, boundValue: bindings[p.name] };
       }
       return p;
     });
 
-    const unboundParams = newParams.filter(p => !p.isBound);
+    const unboundParams = newParams.filter((p) => !p.isBound);
 
     // Build reduced tool definition if one exists
     const boundNames = Object.keys(bindings);
@@ -292,10 +294,7 @@ export class AgencyFunction {
       // liveGuardIds: [] is an explicit decision, not a default — this
       // handler conceptually registers above any guard (its body never
       // spends, so the hide-everything reading is also harmless).
-      return withPushedHandler(ctx, autoApprove, () =>
-        Promise.resolve(original(...args)),
-        [],
-      );
+      return withPushedHandler(ctx, autoApprove, () => Promise.resolve(original(...args)), []);
     };
     return new AgencyFunction({
       name: this.name,
@@ -331,9 +330,7 @@ export class AgencyFunction {
    * each derived tool a distinct name.
    */
   rename(newName: string): AgencyFunction {
-    const newToolDef = this.toolDefinition
-      ? { ...this.toolDefinition, name: newName }
-      : null;
+    const newToolDef = this.toolDefinition ? { ...this.toolDefinition, name: newName } : null;
     return new AgencyFunction({
       name: newName,
       module: this.module,
@@ -366,11 +363,7 @@ export class AgencyFunction {
     if (descriptor.type === "positional") {
       return this.resolvePositional(descriptor.args);
     }
-    return this.resolveNamed(
-      descriptor.positionalArgs,
-      descriptor.namedArgs,
-      descriptor.blockArg,
-    );
+    return this.resolveNamed(descriptor.positionalArgs, descriptor.namedArgs, descriptor.blockArg);
   }
 
   private resolvePositional(args: unknown[]): unknown[] {
@@ -417,12 +410,10 @@ export class AgencyFunction {
 
     // Validate named args: no unknowns, no conflicts with positional
     for (const name of Object.keys(namedArgs)) {
-      const paramIdx = this._nonVariadicUnbound.findIndex(p => p.name === name);
+      const paramIdx = this._nonVariadicUnbound.findIndex((p) => p.name === name);
       const targetsVariadic = variadicParam && variadicParam.name === name;
       if (paramIdx === -1 && !targetsVariadic) {
-        throw new Error(
-          `Unknown named argument '${name}' in call to '${this.name}'`,
-        );
+        throw new Error(`Unknown named argument '${name}' in call to '${this.name}'`);
       }
       if (paramIdx !== -1 && paramIdx < positionalArgs.length) {
         throw new Error(
@@ -479,16 +470,14 @@ export class AgencyFunction {
       } else if (param.hasDefault) {
         const hasLaterNamedArg = this._nonVariadicUnbound
           .slice(i + 1)
-          .some(p => p.name in namedArgs);
+          .some((p) => p.name in namedArgs);
         if (hasLaterNamedArg) {
           result.push(UNSET);
         } else {
           break;
         }
       } else {
-        throw new Error(
-          `Missing required argument '${param.name}' in call to '${this.name}'`,
-        );
+        throw new Error(`Missing required argument '${param.name}' in call to '${this.name}'`);
       }
     }
 
@@ -524,8 +513,7 @@ export class AgencyFunction {
   // Serialization handled by FunctionRefReviver — toJSON() would conflict with the replacer pattern.
 
   static isAgencyFunction(value: unknown): value is AgencyFunction {
-    return typeof value === "object" && value !== null
-      && (value as any).__agencyFunction === true;
+    return typeof value === "object" && value !== null && (value as any).__agencyFunction === true;
   }
 
   static create(
@@ -541,12 +529,9 @@ export class AgencyFunction {
   }
 }
 
-function buildReducedSchema(
-  originalSchema: any,
-  unboundParams: FuncParam[]
-): any {
+function buildReducedSchema(originalSchema: any, unboundParams: FuncParam[]): any {
   if (!originalSchema || !originalSchema.shape) return originalSchema;
-  const unboundNames = unboundParams.map(p => p.name);
+  const unboundNames = unboundParams.map((p) => p.name);
   const shape = originalSchema.shape;
   const reducedShape: Record<string, any> = {};
   for (const [key, value] of Object.entries(shape)) {

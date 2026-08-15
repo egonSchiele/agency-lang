@@ -12,17 +12,13 @@ describe("effectDeclParser", () => {
       effect: "std::read",
       payloadType: {
         type: "objectType",
-        properties: [
-          { key: "dir", value: { type: "primitiveType", value: "string" } },
-        ],
+        properties: [{ key: "dir", value: { type: "primitiveType", value: "string" } }],
       },
     });
   });
 
   it("parses a bare effect label and multi-field payload", () => {
-    const r = effectDeclParser(
-      "effect deploy { service: string, version: string }",
-    );
+    const r = effectDeclParser("effect deploy { service: string, version: string }");
     expect(r.success).toBe(true);
     if (!r.success) return;
     expect(r.result).toMatchObject({
@@ -30,10 +26,7 @@ describe("effectDeclParser", () => {
       effect: "deploy",
     });
     if (r.result.payloadType.type === "objectType") {
-      expect(r.result.payloadType.properties.map((p) => p.key)).toEqual([
-        "service",
-        "version",
-      ]);
+      expect(r.result.payloadType.properties.map((p) => p.key)).toEqual(["service", "version"]);
     }
   });
 
@@ -59,43 +52,30 @@ describe("effectDeclParser", () => {
     // objectTypeParser already permits internal whitespace/newlines; this
     // test locks in that effect decls inherit that behavior so users can
     // format real payloads across multiple lines.
-    const r = effectDeclParser(
-      "effect std::write {\n  dir: string,\n  content: string,\n}",
-    );
+    const r = effectDeclParser("effect std::write {\n  dir: string,\n  content: string,\n}");
     expect(r.success).toBe(true);
     if (!r.success) return;
     if (r.result.payloadType.type === "objectType") {
-      expect(r.result.payloadType.properties.map((p) => p.key)).toEqual([
-        "dir",
-        "content",
-      ]);
+      expect(r.result.payloadType.properties.map((p) => p.key)).toEqual(["dir", "content"]);
     }
   });
 });
 
 describe("effect declaration at module level", () => {
   it("parses as a top-level effectDeclaration node", () => {
-    const parsed = parseAgency(
-      'effect std::read { dir: string }\nnode main() { print("hi") }',
-    );
+    const parsed = parseAgency('effect std::read { dir: string }\nnode main() { print("hi") }');
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
-    const decl = parsed.result.nodes.find(
-      (n: any) => n.type === "effectDeclaration",
-    );
+    const decl = parsed.result.nodes.find((n: any) => n.type === "effectDeclaration");
     expect(decl).toMatchObject({ effect: "std::read" });
   });
 
   it("still parses an effectSet at module level (ordering)", () => {
-    const parsed = parseAgency(
-      'effectSet FsKinds = <std::read>\nnode main() { print("hi") }',
-    );
+    const parsed = parseAgency('effectSet FsKinds = <std::read>\nnode main() { print("hi") }');
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
     expect(
-      parsed.result.nodes.find(
-        (n: any) => n.type === "typeAlias" && n.isEffectSet,
-      ),
+      parsed.result.nodes.find((n: any) => n.type === "typeAlias" && n.isEffectSet),
     ).toBeDefined();
   });
 
@@ -104,9 +84,7 @@ describe("effect declaration at module level", () => {
     // `effectDeclParser` next to `effectSetDeclParser` in the body
     // dispatcher, this test fails. Without it, the bug is silent because
     // every other test is module-level.
-    const parsed = parseAgency(
-      "def f() { effect std::read { dir: string }\n  return 1 }",
-    );
+    const parsed = parseAgency("def f() { effect std::read { dir: string }\n  return 1 }");
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
     // Walk into the function body — succeeding to parse the program isn't

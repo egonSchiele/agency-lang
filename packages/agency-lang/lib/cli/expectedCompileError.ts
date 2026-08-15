@@ -21,10 +21,7 @@ export type CompileAttempt = {
 
 export type CompileVerdict = { ok: true } | { ok: false; reason: string };
 
-export function judgeCompileAttempt(
-  expected: string,
-  attempt: CompileAttempt,
-): CompileVerdict {
+export function judgeCompileAttempt(expected: string, attempt: CompileAttempt): CompileVerdict {
   // A killed child says nothing about whether the file compiles, so this
   // is reported as its own outcome rather than as a mismatch — even when
   // the expected text appears in what it printed before dying.

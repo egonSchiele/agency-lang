@@ -27,11 +27,17 @@ function entry(github: GithubOpts): ScheduleEntry {
 const CASES: Array<{ label: string; github: GithubOpts }> = [
   { label: "readonly-sha", github: { secrets: [], write: false, noPin: false, force: false } },
   { label: "write-sha", github: { secrets: [], write: true, noPin: false, force: false } },
-  { label: "with-secrets-sha", github: { secrets: ["FOO", "BAR"], write: false, noPin: false, force: false } },
+  {
+    label: "with-secrets-sha",
+    github: { secrets: ["FOO", "BAR"], write: false, noPin: false, force: false },
+  },
   { label: "all-sha", github: { secrets: ["FOO"], write: true, noPin: false, force: false } },
   { label: "readonly-tag", github: { secrets: [], write: false, noPin: true, force: false } },
   { label: "write-tag", github: { secrets: [], write: true, noPin: true, force: false } },
-  { label: "with-secrets-tag", github: { secrets: ["FOO", "BAR"], write: false, noPin: true, force: false } },
+  {
+    label: "with-secrets-tag",
+    github: { secrets: ["FOO", "BAR"], write: false, noPin: true, force: false },
+  },
   { label: "all-tag", github: { secrets: ["FOO"], write: true, noPin: true, force: false } },
 ];
 

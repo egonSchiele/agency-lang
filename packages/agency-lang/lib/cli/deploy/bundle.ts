@@ -30,9 +30,7 @@ export type AgencyBundle = {
   files: BundleFile[];
 };
 
-export type CollectBundleResult =
-  | { ok: true; bundle: AgencyBundle }
-  | { ok: false; error: string };
+export type CollectBundleResult = { ok: true; bundle: AgencyBundle } | { ok: false; error: string };
 
 /**
  * Collect the entrypoint and every local `.agency` file it imports
@@ -67,7 +65,10 @@ export function collectAgencyBundle(
     const contents = fs.readFileSync(fileAbs, "utf-8");
     const parsed = parseAgency(contents, config);
     if (!parsed.success) {
-      return { ok: false, error: `Parse error in ${name}: ${parsed.message ?? "invalid Agency source"}` };
+      return {
+        ok: false,
+        error: `Parse error in ${name}: ${parsed.message ?? "invalid Agency source"}`,
+      };
     }
     collected[fileAbs] = { name, contents, absPath: fileAbs };
 
@@ -111,10 +112,7 @@ export type ValidateResult = { ok: true } | { ok: false; error: string };
  * A pass here is a pre-flight, not a guarantee the server (which may run a
  * different agency-lang) accepts it.
  */
-export function validateBundleCompiles(
-  bundle: AgencyBundle,
-  config: AgencyConfig,
-): ValidateResult {
+export function validateBundleCompiles(bundle: AgencyBundle, config: AgencyConfig): ValidateResult {
   const failures = bundle.files
     .map((file) => ({
       file,

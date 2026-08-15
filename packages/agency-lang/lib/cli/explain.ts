@@ -5,10 +5,7 @@ import {
   type DiagnosticName,
 } from "@/typeChecker/diagnostics.js";
 import { DIAGNOSTIC_EXPLANATIONS } from "@/typeChecker/diagnosticExplanations.js";
-import {
-  LINT_DIAGNOSTICS,
-  type LintDiagnosticName,
-} from "@/linter/diagnostics.js";
+import { LINT_DIAGNOSTICS, type LintDiagnosticName } from "@/linter/diagnostics.js";
 import { LINT_EXPLANATIONS } from "@/linter/diagnosticExplanations.js";
 import { color } from "@/utils/termcolors.js";
 

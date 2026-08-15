@@ -11,7 +11,12 @@ const hoisted = vi.hoisted(() => {
     listProjects: vi.fn(),
     createProject: vi.fn(),
   };
-  return { AccountRequestError, AccountScopeError, client, createAccountClient: vi.fn(() => client) };
+  return {
+    AccountRequestError,
+    AccountScopeError,
+    client,
+    createAccountClient: vi.fn(() => client),
+  };
 });
 
 vi.mock("../../statelog/accountClient.js", () => ({

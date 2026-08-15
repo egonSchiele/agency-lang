@@ -74,12 +74,7 @@ const scheduleLocalMocks = vi.hoisted(() => {
 });
 vi.mock("@/cli/schedule/index.js", () => scheduleLocalMocks);
 
-import {
-  createProgram,
-  parseNonNegativeInt,
-  parsePositiveInt,
-  runCli,
-} from "./agency.js";
+import { createProgram, parseNonNegativeInt, parsePositiveInt, runCli } from "./agency.js";
 import { confirmQuestion, promptSecretValue } from "@/cli/remote/confirmation.js";
 
 const execFileAsync = promisify(execFile);
@@ -132,12 +127,11 @@ describe("runCli", () => {
     const configPath = path.join(tmpDir, "config.toml");
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
-    await runCli(
-      ["node", "agency", "mcp", "setup", "codex", "--codex-config", configPath],
-      { resolveMcpCommand: () => ["node", "/tmp/agency.js", "mcp"] },
-    );
+    await runCli(["node", "agency", "mcp", "setup", "codex", "--codex-config", configPath], {
+      resolveMcpCommand: () => ["node", "/tmp/agency.js", "mcp"],
+    });
 
-    expect(fs.readFileSync(configPath, "utf-8")).toContain('[mcp_servers.agency]');
+    expect(fs.readFileSync(configPath, "utf-8")).toContain("[mcp_servers.agency]");
     expect(fs.readFileSync(configPath, "utf-8")).toContain('command = "node"');
     logSpy.mockRestore();
   });
@@ -146,12 +140,10 @@ describe("runCli", () => {
     const configPath = path.join(tmpDir, "config.toml");
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
-    await runCli(
-      ["node", "agency", "mcp", "setup", "codex", "--codex-config", configPath],
-    );
+    await runCli(["node", "agency", "mcp", "setup", "codex", "--codex-config", configPath]);
 
     const written = fs.readFileSync(configPath, "utf-8");
-    expect(written).toContain('[mcp_servers.agency]');
+    expect(written).toContain("[mcp_servers.agency]");
     expect(written).toContain('command = "agency"');
     expect(written).toContain('args = ["mcp"]');
     expect(written).not.toContain("/tmp/");
@@ -181,8 +173,9 @@ describe("agency CLI command tree", () => {
     // and has its own action handler — a sole statelog file is the
     // default-view path; run dirs and multiple paths open the explorer.
     expect(logsCommand?.usage()).toContain("[files...]");
-    expect(typeof (logsCommand as unknown as { _actionHandler?: unknown })._actionHandler)
-      .toBe("function");
+    expect(typeof (logsCommand as unknown as { _actionHandler?: unknown })._actionHandler).toBe(
+      "function",
+    );
   });
 
   it("registers the remote command group with its subcommands", () => {
@@ -209,13 +202,33 @@ describe("agency CLI command tree", () => {
     remoteRecipeMocks.runSpend.mockClear();
     const program = createProgram();
     await program.parseAsync(
-      ["remote", "spend", "my-project", "--since", "7d", "--json", "--by-model", "--by-kind", "--host", "https://h", "--api-key-env", "SPEND_KEY"],
+      [
+        "remote",
+        "spend",
+        "my-project",
+        "--since",
+        "7d",
+        "--json",
+        "--by-model",
+        "--by-kind",
+        "--host",
+        "https://h",
+        "--api-key-env",
+        "SPEND_KEY",
+      ],
       { from: "user" },
     );
     expect(remoteRecipeMocks.runSpend).toHaveBeenCalledTimes(1);
     const [project, options] = remoteRecipeMocks.runSpend.mock.calls[0];
     expect(project).toBe("my-project");
-    expect(options).toMatchObject({ since: "7d", json: true, byModel: true, byKind: true, host: "https://h", apiKeyEnv: "SPEND_KEY" });
+    expect(options).toMatchObject({
+      since: "7d",
+      json: true,
+      byModel: true,
+      byKind: true,
+      host: "https://h",
+      apiKeyEnv: "SPEND_KEY",
+    });
   });
 
   it("forwards bare `remote spend` with an undefined project", async () => {
@@ -251,24 +264,27 @@ describe.skipIf(!HAS_BUILT_CLI)("compile --strict (integration, requires build)"
   });
 });
 
-describe.skipIf(!HAS_BUILT_CLI)("compile --max-tool-call-rounds (integration, requires build)", () => {
-  it("bakes the flag value into the generated runPrompt call (overriding the default 10)", async () => {
-    const cli = CLI;
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mtcr-"));
-    const f = path.join(dir, "prog.agency");
-    const out = path.join(dir, "prog.ts");
-    fs.writeFileSync(f, 'node main() {\n  const reply = llm("hi")\n}\n');
-    await execFileAsync("node", [cli, "compile", "--ts", "--max-tool-call-rounds", "3", f]);
-    const generated = fs.readFileSync(out, "utf-8");
-    expect(generated).toContain("maxToolCallRounds: 3");
-    expect(generated).not.toContain("maxToolCallRounds: 10");
-    // A positive integer is required.
-    await expect(
-      execFileAsync("node", [cli, "compile", "--ts", "--max-tool-call-rounds", "0", f]),
-    ).rejects.toBeTruthy();
-    fs.rmSync(dir, { recursive: true, force: true });
-  });
-});
+describe.skipIf(!HAS_BUILT_CLI)(
+  "compile --max-tool-call-rounds (integration, requires build)",
+  () => {
+    it("bakes the flag value into the generated runPrompt call (overriding the default 10)", async () => {
+      const cli = CLI;
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mtcr-"));
+      const f = path.join(dir, "prog.agency");
+      const out = path.join(dir, "prog.ts");
+      fs.writeFileSync(f, 'node main() {\n  const reply = llm("hi")\n}\n');
+      await execFileAsync("node", [cli, "compile", "--ts", "--max-tool-call-rounds", "3", f]);
+      const generated = fs.readFileSync(out, "utf-8");
+      expect(generated).toContain("maxToolCallRounds: 3");
+      expect(generated).not.toContain("maxToolCallRounds: 10");
+      // A positive integer is required.
+      await expect(
+        execFileAsync("node", [cli, "compile", "--ts", "--max-tool-call-rounds", "0", f]),
+      ).rejects.toBeTruthy();
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+  },
+);
 
 describe.skipIf(!HAS_BUILT_CLI)("config show (integration, requires build)", () => {
   it("prints the resolved, merged config as JSON, with secrets masked by default", async () => {
@@ -365,7 +381,14 @@ describe("remote management command registration", () => {
 
   it("remote whoami forwards options and context", async () => {
     await createProgram().parseAsync([
-      "node", "agency", "remote", "whoami", "--host", "https://h", "--api-key-env", "ACCOUNT_KEY",
+      "node",
+      "agency",
+      "remote",
+      "whoami",
+      "--host",
+      "https://h",
+      "--api-key-env",
+      "ACCOUNT_KEY",
     ]);
     expect(remoteRecipeMocks.runWhoami).toHaveBeenCalledWith(
       { host: "https://h", apiKeyEnv: "ACCOUNT_KEY" },
@@ -375,7 +398,14 @@ describe("remote management command registration", () => {
 
   it("remote projects defaults to list", async () => {
     await createProgram().parseAsync([
-      "node", "agency", "remote", "projects", "--host", "https://h", "--api-key-env", "ACCOUNT_KEY",
+      "node",
+      "agency",
+      "remote",
+      "projects",
+      "--host",
+      "https://h",
+      "--api-key-env",
+      "ACCOUNT_KEY",
     ]);
     expect(remoteRecipeMocks.runProjectsList).toHaveBeenCalledWith(
       { host: "https://h", apiKeyEnv: "ACCOUNT_KEY" },
@@ -391,8 +421,20 @@ describe("remote management command registration", () => {
 
   it("remote projects create forwards the slug and options", async () => {
     await createProgram().parseAsync([
-      "node", "agency", "remote", "projects", "create", "foo",
-      "--name", "Foo", "--description", "Text", "--host", "https://h", "--api-key-env", "ACCOUNT_KEY",
+      "node",
+      "agency",
+      "remote",
+      "projects",
+      "create",
+      "foo",
+      "--name",
+      "Foo",
+      "--description",
+      "Text",
+      "--host",
+      "https://h",
+      "--api-key-env",
+      "ACCOUNT_KEY",
     ]);
     expect(remoteRecipeMocks.runProjectsCreate).toHaveBeenCalledWith(
       "foo",
@@ -403,7 +445,14 @@ describe("remote management command registration", () => {
 
   it("remote keys defaults to list", async () => {
     await createProgram().parseAsync([
-      "node", "agency", "remote", "keys", "--host", "https://h", "--api-key-env", "ACCOUNT_KEY",
+      "node",
+      "agency",
+      "remote",
+      "keys",
+      "--host",
+      "https://h",
+      "--api-key-env",
+      "ACCOUNT_KEY",
     ]);
     expect(remoteRecipeMocks.runKeysList).toHaveBeenCalledWith(
       { host: "https://h", apiKeyEnv: "ACCOUNT_KEY" },
@@ -418,8 +467,18 @@ describe("remote management command registration", () => {
 
   it("remote keys create forwards the name and --project", async () => {
     await createProgram().parseAsync([
-      "node", "agency", "remote", "keys", "create", "ci",
-      "--project", "foo", "--host", "https://h", "--api-key-env", "ACCOUNT_KEY",
+      "node",
+      "agency",
+      "remote",
+      "keys",
+      "create",
+      "ci",
+      "--project",
+      "foo",
+      "--host",
+      "https://h",
+      "--api-key-env",
+      "ACCOUNT_KEY",
     ]);
     expect(remoteRecipeMocks.runKeysCreate).toHaveBeenCalledWith(
       "ci",
@@ -459,8 +518,16 @@ describe("remote management command registration", () => {
 
     it("set forwards the name, options, context, and the production io adapters", async () => {
       await createProgram().parseAsync([
-        "node", "agency", "remote", "secrets", "set", "OPENAI_API_KEY",
-        "--from-env", "SRC", "--project", "p",
+        "node",
+        "agency",
+        "remote",
+        "secrets",
+        "set",
+        "OPENAI_API_KEY",
+        "--from-env",
+        "SRC",
+        "--project",
+        "p",
       ]);
       expect(secretsRecipeMocks.runSecretsSet).toHaveBeenCalledTimes(1);
       const [name, opts, cmdContext, ioArg] = secretsRecipeMocks.runSecretsSet.mock.calls[0]!;
@@ -477,7 +544,14 @@ describe("remote management command registration", () => {
     it("a canceled set maps to exit code 1", async () => {
       secretsRecipeMocks.runSecretsSet.mockResolvedValue({ kind: "canceled" });
       await createProgram().parseAsync([
-        "node", "agency", "remote", "secrets", "set", "N", "--project", "p",
+        "node",
+        "agency",
+        "remote",
+        "secrets",
+        "set",
+        "N",
+        "--project",
+        "p",
       ]);
       expect(process.exitCode).toBe(1);
     });
@@ -488,7 +562,14 @@ describe("remote management command registration", () => {
       // so a value passed via argv is never sent anywhere.
       await expect(
         createProgram().parseAsync([
-          "node", "agency", "remote", "secrets", "set", "N", "--value", "leak",
+          "node",
+          "agency",
+          "remote",
+          "secrets",
+          "set",
+          "N",
+          "--value",
+          "leak",
         ]),
       ).rejects.toThrow();
       expect(secretsRecipeMocks.runSecretsSet).not.toHaveBeenCalled();
@@ -496,19 +577,37 @@ describe("remote management command registration", () => {
 
     it("list routes with target options; ls is an alias", async () => {
       await createProgram().parseAsync([
-        "node", "agency", "remote", "secrets", "list", "--project", "p",
+        "node",
+        "agency",
+        "remote",
+        "secrets",
+        "list",
+        "--project",
+        "p",
       ]);
-      expect(secretsRecipeMocks.runSecretsList).toHaveBeenCalledWith(
-        { project: "p" },
-        CONTEXT,
-      );
-      await createProgram().parseAsync(["node", "agency", "remote", "secrets", "ls", "--project", "p"]);
+      expect(secretsRecipeMocks.runSecretsList).toHaveBeenCalledWith({ project: "p" }, CONTEXT);
+      await createProgram().parseAsync([
+        "node",
+        "agency",
+        "remote",
+        "secrets",
+        "ls",
+        "--project",
+        "p",
+      ]);
       expect(secretsRecipeMocks.runSecretsList).toHaveBeenCalledTimes(2);
     });
 
     it("rm forwards the positional name", async () => {
       await createProgram().parseAsync([
-        "node", "agency", "remote", "secrets", "rm", "OPENAI_API_KEY", "--project", "p",
+        "node",
+        "agency",
+        "remote",
+        "secrets",
+        "rm",
+        "OPENAI_API_KEY",
+        "--project",
+        "p",
       ]);
       expect(secretsRecipeMocks.runSecretsRm).toHaveBeenCalledWith(
         "OPENAI_API_KEY",
@@ -519,7 +618,14 @@ describe("remote management command registration", () => {
 
     it("import forwards the optional file and the production confirm adapter", async () => {
       await createProgram().parseAsync([
-        "node", "agency", "remote", "secrets", "import", "prod.env", "--project", "p",
+        "node",
+        "agency",
+        "remote",
+        "secrets",
+        "import",
+        "prod.env",
+        "--project",
+        "p",
       ]);
       const [file, , , ioArg] = secretsRecipeMocks.runSecretsImport.mock.calls[0]!;
       expect(file).toBe("prod.env");
@@ -542,7 +648,15 @@ describe("remote management command registration", () => {
 
   it("remote pull forwards --out/--force and context", async () => {
     await createProgram().parseAsync([
-      "node", "agency", "remote", "pull", "--out", "/o", "--force", "--project", "p",
+      "node",
+      "agency",
+      "remote",
+      "pull",
+      "--out",
+      "/o",
+      "--force",
+      "--project",
+      "p",
     ]);
     expect(remoteRecipeMocks.runPull).toHaveBeenCalledWith(
       { out: "/o", force: true, project: "p" },
@@ -551,7 +665,15 @@ describe("remote management command registration", () => {
   });
 
   it("remote logs --json forwards a fetch/json mode", async () => {
-    await createProgram().parseAsync(["node", "agency", "remote", "logs", "--json", "--project", "p"]);
+    await createProgram().parseAsync([
+      "node",
+      "agency",
+      "remote",
+      "logs",
+      "--json",
+      "--project",
+      "p",
+    ]);
     expect(remoteRecipeMocks.runLogs).toHaveBeenCalledWith(
       { kind: "fetch", traceId: undefined, output: "json" },
       { json: true, project: "p" },
@@ -610,9 +732,7 @@ describe("remote management command registration", () => {
 });
 
 describe("--model wiring", () => {
-  const [firstCatalogModel, secondCatalogModel] = _listHostedModels().map(
-    (model) => model.name,
-  );
+  const [firstCatalogModel, secondCatalogModel] = _listHostedModels().map((model) => model.name);
   if (firstCatalogModel === undefined || secondCatalogModel === undefined) {
     throw new Error("the hosted text catalog needs at least two models");
   }
@@ -638,15 +758,16 @@ describe("--model wiring", () => {
   }
 
   it("resolves a bare model", async () => {
-    const opts = await runOptionsFor([
-      "run", "--model", firstCatalogModel, "f.agency",
-    ]);
+    const opts = await runOptionsFor(["run", "--model", firstCatalogModel, "f.agency"]);
     expect(opts.model).toEqual({ model: firstCatalogModel });
   });
 
   it("resolves a prefixed model", async () => {
     const opts = await runOptionsFor([
-      "run", "--model", "openrouter/anthropic/claude-sonnet-4", "f.agency",
+      "run",
+      "--model",
+      "openrouter/anthropic/claude-sonnet-4",
+      "f.agency",
     ]);
     expect(opts.model).toEqual({
       model: "anthropic/claude-sonnet-4",
@@ -660,17 +781,19 @@ describe("--model wiring", () => {
     // Both values stay bare on purpose: a prefixed second value returns
     // before consulting the catalog and would prove nothing.
     const opts = await runOptionsFor([
-      "run", "--model", firstCatalogModel,
-      "--model", secondCatalogModel, "f.agency",
+      "run",
+      "--model",
+      firstCatalogModel,
+      "--model",
+      secondCatalogModel,
+      "f.agency",
     ]);
     expect(opts.model).toEqual({ model: secondCatalogModel });
   });
 
   it("rejects an unknown bare model", async () => {
     await expect(
-      runOptionsFor([
-        "run", "--model", "definitely-not-a-hosted-model", "f.agency",
-      ]),
+      runOptionsFor(["run", "--model", "definitely-not-a-hosted-model", "f.agency"]),
     ).rejects.toThrow();
   });
 });
@@ -709,10 +832,28 @@ describe("schedule --backend remote dispatch", () => {
 
   it("routes add to addRemote with normalized options and a config context", async () => {
     await parse([
-      "add", "daily.agency", "--backend", "remote",
-      "--node", "refresh", "--every", "daily", "--timezone", "UTC",
-      "--arg", "a=1", "--data", '{"b":2}', "--name", "mine",
-      "--host", "https://h", "--project", "proj", "--api-key-env", "K",
+      "add",
+      "daily.agency",
+      "--backend",
+      "remote",
+      "--node",
+      "refresh",
+      "--every",
+      "daily",
+      "--timezone",
+      "UTC",
+      "--arg",
+      "a=1",
+      "--data",
+      '{"b":2}',
+      "--name",
+      "mine",
+      "--host",
+      "https://h",
+      "--project",
+      "proj",
+      "--api-key-env",
+      "K",
     ]);
     expect(scheduleRemoteMocks.addRemote).toHaveBeenCalledTimes(1);
     const [file, options, context] = scheduleRemoteMocks.addRemote.mock.calls[0]!;
@@ -734,7 +875,17 @@ describe("schedule --backend remote dispatch", () => {
   });
 
   it("--no-deploy arrives as deploy:false; absence as deploy:true", async () => {
-    await parse(["add", "a.agency", "--backend", "remote", "--node", "n", "--every", "daily", "--no-deploy"]);
+    await parse([
+      "add",
+      "a.agency",
+      "--backend",
+      "remote",
+      "--node",
+      "n",
+      "--every",
+      "daily",
+      "--no-deploy",
+    ]);
     expect(scheduleRemoteMocks.addRemote.mock.calls[0]![1]).toMatchObject({ deploy: false });
 
     scheduleRemoteMocks.addRemote.mockClear();
@@ -744,7 +895,14 @@ describe("schedule --backend remote dispatch", () => {
 
   it("--function and --cron values are preserved", async () => {
     await parse([
-      "add", "a.agency", "--backend", "remote", "--function", "sum", "--cron", "*/5 * * * *",
+      "add",
+      "a.agency",
+      "--backend",
+      "remote",
+      "--function",
+      "sum",
+      "--cron",
+      "*/5 * * * *",
     ]);
     expect(scheduleRemoteMocks.addRemote.mock.calls[0]![1]).toMatchObject({
       function: "sum",
@@ -807,7 +965,14 @@ describe("schedule --backend remote dispatch", () => {
         }),
     );
     const parsing = parse([
-      "add", "a.agency", "--backend", "remote", "--node", "n", "--every", "daily",
+      "add",
+      "a.agency",
+      "--backend",
+      "remote",
+      "--node",
+      "n",
+      "--every",
+      "daily",
     ]).then(() => "done");
     await Promise.resolve();
     await Promise.resolve();
@@ -830,8 +995,9 @@ describe("schedule --backend remote dispatch", () => {
   });
 
   it("an unknown backend on add calls neither path", async () => {
-    await expect(parse(["add", "a.agency", "--every", "daily", "--backend", "bogus"]))
-      .rejects.toBeInstanceOf(ExitError);
+    await expect(
+      parse(["add", "a.agency", "--every", "daily", "--backend", "bogus"]),
+    ).rejects.toBeInstanceOf(ExitError);
     expect(scheduleLocalMocks.scheduleAdd).not.toHaveBeenCalled();
     expect(scheduleRemoteMocks.addRemote).not.toHaveBeenCalled();
   });
@@ -850,8 +1016,34 @@ describe("schedule --backend remote dispatch", () => {
     [["list", "--project", "p"]],
     // The inverse direction: flags the remote backend cannot honor must fail
     // loudly rather than be silently discarded.
-    [["add", "a.agency", "--backend", "remote", "--node", "n", "--every", "daily", "--env-file", ".env"]],
-    [["add", "a.agency", "--backend", "remote", "--node", "n", "--every", "daily", "--secret", "S"]],
+    [
+      [
+        "add",
+        "a.agency",
+        "--backend",
+        "remote",
+        "--node",
+        "n",
+        "--every",
+        "daily",
+        "--env-file",
+        ".env",
+      ],
+    ],
+    [
+      [
+        "add",
+        "a.agency",
+        "--backend",
+        "remote",
+        "--node",
+        "n",
+        "--every",
+        "daily",
+        "--secret",
+        "S",
+      ],
+    ],
     [["add", "a.agency", "--backend", "remote", "--node", "n", "--every", "daily", "--write"]],
     [["add", "a.agency", "--backend", "remote", "--node", "n", "--every", "daily", "--no-pin"]],
     [["edit", "x", "--backend", "remote", "--enabled", "--env-file", ".env"]],

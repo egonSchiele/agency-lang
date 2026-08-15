@@ -12,22 +12,22 @@ const STDLIB_DIR = path.resolve(__dirname, "../../stdlib");
 
 // Fixtures that intentionally contain type errors (e.g. testing runtime validation)
 const SKIP_TYPECHECK = new Set([
-  "bangParams",         // intentionally passes wrong type to test bang (!) validation
-  "functionRef",        // typechecker doesn't yet support function-ref assignability to function types
-  "blockParams",        // calls append() which doesn't exist (should use .push())
-  "ifElse",             // calls undefined isReady(), uses undeclared variables
-  "setLLMClient",       // setLLMClient() is runtime-injected, not visible to typechecker
-  "imports",            // exercises import SYNTAX/codegen with intentionally-dangling
-                        // modules (./foo.agency etc. don't exist); strict imports (AG4009)
-                        // now flags them, which is correct for real code but not this fixture
+  "bangParams", // intentionally passes wrong type to test bang (!) validation
+  "functionRef", // typechecker doesn't yet support function-ref assignability to function types
+  "blockParams", // calls append() which doesn't exist (should use .push())
+  "ifElse", // calls undefined isReady(), uses undeclared variables
+  "setLLMClient", // setLLMClient() is runtime-injected, not visible to typechecker
+  "imports", // exercises import SYNTAX/codegen with intentionally-dangling
+  // modules (./foo.agency etc. don't exist); strict imports (AG4009)
+  // now flags them, which is correct for real code but not this fixture
 ]);
 
 // Stdlib files with known warnings from typechecker limitations
 const SKIP_STDLIB = new Set([
-  "index",     // shadows warnings are expected (index.agency re-exports builtins)
-  "strategy",  // uses fork which is a language primitive, not a function
-  "agency",    // unhandled interrupt warning for run()
-  "object",    // uses object methods the typechecker doesn't resolve yet
+  "index", // shadows warnings are expected (index.agency re-exports builtins)
+  "strategy", // uses fork which is a language primitive, not a function
+  "agency", // unhandled interrupt warning for run()
+  "object", // uses object methods the typechecker doesn't resolve yet
 ]);
 
 function assertNoTypeErrors(name: string, filePath: string) {
@@ -37,9 +37,7 @@ function assertNoTypeErrors(name: string, filePath: string) {
   // 1. Parse (with template, like the CLI tc command does)
   const parseResult = parseAgency(contents);
   if (!parseResult.success) {
-    throw new Error(
-      `Failed to parse: ${name}\nFile: ${filePath}\nError: ${parseResult.message}`
-    );
+    throw new Error(`Failed to parse: ${name}\nFile: ${filePath}\nError: ${parseResult.message}`);
   }
 
   // 2. Build symbol table and compilation unit (resolves imports including stdlib)
@@ -52,15 +50,12 @@ function assertNoTypeErrors(name: string, filePath: string) {
   // 4. Fail on any errors or warnings
   if (errors.length > 0) {
     const formatted = formatErrors(errors);
-    throw new Error(
-      `Type errors/warnings in: ${name}\nFile: ${filePath}\n${formatted}`
-    );
+    throw new Error(`Type errors/warnings in: ${name}\nFile: ${filePath}\n${formatted}`);
   }
 }
 
 describe("Typechecker Integration Tests (fixtures)", () => {
-  const fixtures = discoverAgencyFiles(FIXTURES_DIR)
-    .filter((f) => !SKIP_TYPECHECK.has(f.name));
+  const fixtures = discoverAgencyFiles(FIXTURES_DIR).filter((f) => !SKIP_TYPECHECK.has(f.name));
 
   if (fixtures.length === 0) {
     it("should find test fixtures", () => {
@@ -68,19 +63,15 @@ describe("Typechecker Integration Tests (fixtures)", () => {
     });
   }
 
-  describe.each(fixtures)(
-    "Fixture: $name",
-    ({ name, filePath }) => {
-      it("should have no type errors or warnings", () => {
-        assertNoTypeErrors(name, filePath);
-      });
-    }
-  );
+  describe.each(fixtures)("Fixture: $name", ({ name, filePath }) => {
+    it("should have no type errors or warnings", () => {
+      assertNoTypeErrors(name, filePath);
+    });
+  });
 });
 
 describe("Typechecker Integration Tests (stdlib)", () => {
-  const stdlibFiles = discoverAgencyFiles(STDLIB_DIR)
-    .filter((f) => !SKIP_STDLIB.has(f.name));
+  const stdlibFiles = discoverAgencyFiles(STDLIB_DIR).filter((f) => !SKIP_STDLIB.has(f.name));
 
   if (stdlibFiles.length === 0) {
     it("should find stdlib files", () => {
@@ -88,22 +79,15 @@ describe("Typechecker Integration Tests (stdlib)", () => {
     });
   }
 
-  describe.each(stdlibFiles)(
-    "stdlib: $name",
-    ({ name, filePath }) => {
-      // The larger stdlib modules (notably `policy` and `ui`) can
-      // exceed the 5s default when the full vitest suite is running
-      // in parallel and the typechecker is CPU-starved. Bumping the
-      // per-it timeout — run in isolation each finishes in ~2-4s, so
-      // 30s is comfortable headroom without masking a real
-      // regression.
-      it(
-        "should have no type errors or warnings",
-        () => {
-          assertNoTypeErrors(name, filePath);
-        },
-        30000,
-      );
-    }
-  );
+  describe.each(stdlibFiles)("stdlib: $name", ({ name, filePath }) => {
+    // The larger stdlib modules (notably `policy` and `ui`) can
+    // exceed the 5s default when the full vitest suite is running
+    // in parallel and the typechecker is CPU-starved. Bumping the
+    // per-it timeout — run in isolation each finishes in ~2-4s, so
+    // 30s is comfortable headroom without masking a real
+    // regression.
+    it("should have no type errors or warnings", () => {
+      assertNoTypeErrors(name, filePath);
+    }, 30000);
+  });
 });

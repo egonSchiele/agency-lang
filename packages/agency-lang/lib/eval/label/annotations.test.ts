@@ -19,8 +19,14 @@ function question(id: string, over: Partial<ChecklistQuestion> = {}): ChecklistQ
 
 function revision(questions: ChecklistQuestion[]): ChecklistRevision {
   return {
-    schemaVersion: 1, checklistId: "cl_news", name: "news", version: 1,
-    parentVersion: null, createdAt: "2026-08-03T00:00:00.000Z", hash: HASH, questions,
+    schemaVersion: 1,
+    checklistId: "cl_news",
+    name: "news",
+    version: 1,
+    parentVersion: null,
+    createdAt: "2026-08-03T00:00:00.000Z",
+    hash: HASH,
+    questions,
   };
 }
 
@@ -56,12 +62,16 @@ describe("effectiveAnswers", () => {
     // log's own order is what actually happened.
     const rows = [
       annotation({
-        annotationId: "ann_1", createdAt: "2026-08-03T10:00:00.000Z",
-        coveredQuestionIds: ["q_a"], answers: { q_a: true },
+        annotationId: "ann_1",
+        createdAt: "2026-08-03T10:00:00.000Z",
+        coveredQuestionIds: ["q_a"],
+        answers: { q_a: true },
       }),
       annotation({
-        annotationId: "ann_2", createdAt: "2026-08-03T09:00:00.000Z",
-        coveredQuestionIds: ["q_a"], answers: { q_a: false },
+        annotationId: "ann_2",
+        createdAt: "2026-08-03T09:00:00.000Z",
+        coveredQuestionIds: ["q_a"],
+        answers: { q_a: false },
       }),
     ];
     expect(effectiveAnswers(rows, key).q_a).toBe(false);
@@ -88,28 +98,42 @@ describe("effectiveAnswers", () => {
   });
 
   it("ignores a different output", () => {
-    const rows = [annotation({ outputId: OTHER_OUTPUT_ID, coveredQuestionIds: ["q_a"], answers: { q_a: false } })];
+    const rows = [
+      annotation({
+        outputId: OTHER_OUTPUT_ID,
+        coveredQuestionIds: ["q_a"],
+        answers: { q_a: false },
+      }),
+    ];
     expect(effectiveAnswers(rows, key).q_a).toBeUndefined();
   });
 
   it("ignores a different annotator id", () => {
-    const rows = [annotation({
-      annotator: { kind: "human", id: "someone-else" },
-      coveredQuestionIds: ["q_a"], answers: { q_a: false },
-    })];
+    const rows = [
+      annotation({
+        annotator: { kind: "human", id: "someone-else" },
+        coveredQuestionIds: ["q_a"],
+        answers: { q_a: false },
+      }),
+    ];
     expect(effectiveAnswers(rows, key).q_a).toBeUndefined();
   });
 
   it("ignores a machine judge sharing the human's id", () => {
-    const rows = [annotation({
-      annotator: { kind: "llm", id: "adit" },
-      coveredQuestionIds: ["q_a"], answers: { q_a: false },
-    })];
+    const rows = [
+      annotation({
+        annotator: { kind: "llm", id: "adit" },
+        coveredQuestionIds: ["q_a"],
+        answers: { q_a: false },
+      }),
+    ];
     expect(effectiveAnswers(rows, key).q_a).toBeUndefined();
   });
 
   it("ignores a different checklist lineage", () => {
-    const rows = [annotation({ checklistId: "cl_other", coveredQuestionIds: ["q_a"], answers: { q_a: false } })];
+    const rows = [
+      annotation({ checklistId: "cl_other", coveredQuestionIds: ["q_a"], answers: { q_a: false } }),
+    ];
     expect(effectiveAnswers(rows, key).q_a).toBeUndefined();
   });
 });
@@ -121,7 +145,9 @@ describe("itemStatus", () => {
 
   it("is reviewed when every live question has an answer", () => {
     const answers = effectiveAnswers(
-      [annotation({ coveredQuestionIds: ["q_a"], answers: { q_a: true } })], key);
+      [annotation({ coveredQuestionIds: ["q_a"], answers: { q_a: true } })],
+      key,
+    );
     expect(itemStatus({ answers, revision: revision([question("q_a")]) })).toBe("reviewed");
   });
 
@@ -129,9 +155,15 @@ describe("itemStatus", () => {
     // "untouched" means nobody judged this. A `false` is a judgement, and the
     // fold records it explicitly rather than omitting it, so failing every
     // question is a reviewed item with score 0.
-    const answers = effectiveAnswers([annotation({
-      coveredQuestionIds: ["q_a", "q_b"], answers: { q_a: false, q_b: false },
-    })], key);
+    const answers = effectiveAnswers(
+      [
+        annotation({
+          coveredQuestionIds: ["q_a", "q_b"],
+          answers: { q_a: false, q_b: false },
+        }),
+      ],
+      key,
+    );
     const both = revision([question("q_a"), question("q_b")]);
     expect(itemStatus({ answers, revision: both })).toBe("reviewed");
     expect(score({ answers, revision: both })).toBe(0);
@@ -139,55 +171,87 @@ describe("itemStatus", () => {
 
   it("is stale when a live question has no answer", () => {
     const answers = effectiveAnswers(
-      [annotation({ coveredQuestionIds: ["q_a"], answers: { q_a: true } })], key);
-    expect(itemStatus({ answers, revision: revision([question("q_a"), question("q_b")]) })).toBe("stale");
+      [annotation({ coveredQuestionIds: ["q_a"], answers: { q_a: true } })],
+      key,
+    );
+    expect(itemStatus({ answers, revision: revision([question("q_a"), question("q_b")]) })).toBe(
+      "stale",
+    );
   });
 
   it("is not stale when the only unanswered question is deleted", () => {
     const answers = effectiveAnswers(
-      [annotation({ coveredQuestionIds: ["q_a"], answers: { q_a: true } })], key);
+      [annotation({ coveredQuestionIds: ["q_a"], answers: { q_a: true } })],
+      key,
+    );
     const withDeleted = revision([question("q_a"), question("q_b", { deleted: true })]);
     expect(itemStatus({ answers, revision: withDeleted })).toBe("reviewed");
   });
 
   it("restores reviewed status when a deleted question with a prior answer comes back", () => {
-    const answers = effectiveAnswers([annotation({
-      coveredQuestionIds: ["q_a", "q_b"], answers: { q_a: true, q_b: false },
-    })], key);
-    expect(itemStatus({ answers, revision: revision([question("q_a"), question("q_b")]) })).toBe("reviewed");
+    const answers = effectiveAnswers(
+      [
+        annotation({
+          coveredQuestionIds: ["q_a", "q_b"],
+          answers: { q_a: true, q_b: false },
+        }),
+      ],
+      key,
+    );
+    expect(itemStatus({ answers, revision: revision([question("q_a"), question("q_b")]) })).toBe(
+      "reviewed",
+    );
   });
 });
 
 describe("score", () => {
   it("is null for a stale item rather than a confident low number", () => {
     const answers = effectiveAnswers(
-      [annotation({ coveredQuestionIds: ["q_a"], answers: { q_a: true } })], key);
+      [annotation({ coveredQuestionIds: ["q_a"], answers: { q_a: true } })],
+      key,
+    );
     expect(score({ answers, revision: revision([question("q_a"), question("q_b")]) })).toBeNull();
   });
 
   it("is null when there are no live questions", () => {
-    expect(score({ answers: {}, revision: revision([question("q_a", { deleted: true })]) })).toBeNull();
+    expect(
+      score({ answers: {}, revision: revision([question("q_a", { deleted: true })]) }),
+    ).toBeNull();
   });
 
   it("weights questions", () => {
-    const answers = effectiveAnswers([annotation({
-      coveredQuestionIds: ["q_a", "q_b"], answers: { q_a: true, q_b: false },
-    })], key);
+    const answers = effectiveAnswers(
+      [
+        annotation({
+          coveredQuestionIds: ["q_a", "q_b"],
+          answers: { q_a: true, q_b: false },
+        }),
+      ],
+      key,
+    );
     const weighted = revision([question("q_a", { weight: 3 }), question("q_b", { weight: 1 })]);
     expect(score({ answers, revision: weighted })).toBe(0.75);
   });
 
   it("excludes a deleted question from both sides of the fraction", () => {
-    const answers = effectiveAnswers([annotation({
-      coveredQuestionIds: ["q_a", "q_b"], answers: { q_a: true, q_b: false },
-    })], key);
+    const answers = effectiveAnswers(
+      [
+        annotation({
+          coveredQuestionIds: ["q_a", "q_b"],
+          answers: { q_a: true, q_b: false },
+        }),
+      ],
+      key,
+    );
     const withDeleted = revision([question("q_a"), question("q_b", { deleted: true })]);
     expect(score({ answers, revision: withDeleted })).toBe(1);
   });
 
   it("is 0 when every live question is unticked but all were judged", () => {
     const answers = effectiveAnswers(
-      [annotation({ coveredQuestionIds: ["q_a"], answers: { q_a: false } })], key);
+      [annotation({ coveredQuestionIds: ["q_a"], answers: { q_a: false } })],
+      key,
+    );
     expect(score({ answers, revision: revision([question("q_a")]) })).toBe(0);
   });
 });

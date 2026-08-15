@@ -1,18 +1,11 @@
 import { BaseNode } from "./types/base.js";
 import { AccessChainElement, ValueAccess } from "./types/access.js";
 import { BinOpExpression } from "./types/binop.js";
-import {
-  AgencyArray,
-  AgencyObject,
-  SplatExpression,
-} from "./types/dataStructures.js";
+import { AgencyArray, AgencyObject, SplatExpression } from "./types/dataStructures.js";
 import { FunctionCall, FunctionDefinition } from "./types/function.js";
 import { GraphNodeDefinition } from "./types/graphNode.js";
 import { IfElse } from "./types/ifElse.js";
-import {
-  ImportNodeStatement,
-  ImportStatement,
-} from "./types/importStatement.js";
+import { ImportNodeStatement, ImportStatement } from "./types/importStatement.js";
 import { ExportFromStatement } from "./types/exportFromStatement.js";
 import { ForLoop } from "./types/forLoop.js";
 import { Keyword } from "./types/keyword.js";
@@ -214,13 +207,7 @@ export type BlockScope = {
 };
 
 export type Scope =
-  | GlobalScope
-  | FunctionScope
-  | NodeScope
-  | ImportedScope
-  | StaticScope
-  | LocalScope
-  | BlockScope;
+  GlobalScope | FunctionScope | NodeScope | ImportedScope | StaticScope | LocalScope | BlockScope;
 export type ScopeType = Scope["type"] | "args" | "blockArgs" | "functionRef";
 export type GlobalScope = {
   type: "global";
@@ -399,5 +386,4 @@ export type AgencyProgram = {
 };
 
 export type JSONEdge =
-  | { type: "regular"; to: string }
-  | { type: "conditional"; adjacentNodes: readonly string[] };
+  { type: "regular"; to: string } | { type: "conditional"; adjacentNodes: readonly string[] };

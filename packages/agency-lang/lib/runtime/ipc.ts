@@ -17,11 +17,14 @@ import { gatherChainOutcome, type HandlerChainOutcome, type Interrupt } from "./
 import { runBatch } from "./runBatch.js";
 import { AgencyAbort, AgencyCancelledError } from "./errors.js";
 import type { State, StateStack } from "./state/stateStack.js";
-import { getSubprocessRunInfo, setSubprocessRunInfo, isIpcMode, type SubprocessRunInfo } from "./subprocessRunInfo.js";
-import { truncate } from "./truncate.js";
 import {
-  type IpcInvocationUsageMessage,
-} from "./costTelemetry.js";
+  getSubprocessRunInfo,
+  setSubprocessRunInfo,
+  isIpcMode,
+  type SubprocessRunInfo,
+} from "./subprocessRunInfo.js";
+import { truncate } from "./truncate.js";
+import { type IpcInvocationUsageMessage } from "./costTelemetry.js";
 import { recordNormalizedUsageDelta, markInvocationUsageIncompleteAt } from "./recordPaidUsage.js";
 import { normalizeIpcUsageDelta, type NormalizedDelta } from "./invocationUsage.js";
 import { type IpcCallbackMessage, NON_FORWARDABLE_CALLBACKS } from "./callbackForwarding.js";
@@ -57,10 +60,10 @@ const agencyPackageRoot = path.resolve(__dirname, "..", "..", "..");
 // See docs/superpowers/specs/2026-05-09-subprocess-resource-limits-design.md.
 
 const LIMIT_CEILINGS = {
-  wallClock: 60 * 60 * 1000,           // 1h in ms
-  memory: 4 * 1024 * 1024 * 1024,      // 4gb in bytes
-  ipcPayload: 1024 * 1024 * 1024,      // 1gb in bytes
-  stdout: 100 * 1024 * 1024,           // 100mb in bytes
+  wallClock: 60 * 60 * 1000, // 1h in ms
+  memory: 4 * 1024 * 1024 * 1024, // 4gb in bytes
+  ipcPayload: 1024 * 1024 * 1024, // 1gb in bytes
+  stdout: 100 * 1024 * 1024, // 100mb in bytes
 } as const;
 
 // Depth cap on nested subprocess trees. Every run() is already gated by a
@@ -93,7 +96,12 @@ export function clampLimits(input: RunLimits): RunLimits {
   const out = { ...input };
   for (const key of Object.keys(LIMIT_CEILINGS) as (keyof typeof LIMIT_CEILINGS)[]) {
     if (input[key] > LIMIT_CEILINGS[key]) {
-      ipcLog("send", { type: "limit_clamped", limit: key, requested: input[key], clamped: LIMIT_CEILINGS[key] });
+      ipcLog("send", {
+        type: "limit_clamped",
+        limit: key,
+        requested: input[key],
+        clamped: LIMIT_CEILINGS[key],
+      });
       out[key] = LIMIT_CEILINGS[key];
     }
   }
@@ -136,7 +144,9 @@ export function setSubprocessIpcPayloadLimit(limit: number): void {
   subprocessIpcPayloadLimit = limit;
 }
 
-function serializedByteLength(value: any): { ok: true; serialized: string; byteLength: number } | { ok: false; error: string } {
+function serializedByteLength(
+  value: any,
+): { ok: true; serialized: string; byteLength: number } | { ok: false; error: string } {
   try {
     const serialized = JSON.stringify(value);
     return { ok: true, serialized, byteLength: Buffer.byteLength(serialized, "utf8") };
@@ -145,7 +155,11 @@ function serializedByteLength(value: any): { ok: true; serialized: string; byteL
   }
 }
 
-function buildIpcPayloadLimitError(threshold: number, value: number, samplePrefix = ""): IpcErrorMessage {
+function buildIpcPayloadLimitError(
+  threshold: number,
+  value: number,
+  samplePrefix = "",
+): IpcErrorMessage {
   return {
     type: "error",
     error: JSON.stringify({
@@ -165,7 +179,6 @@ function buildIpcPayloadLimitError(threshold: number, value: number, samplePrefi
 
 const ipcDebug = process.env.AGENCY_IPC_DEBUG === "1";
 const role = isIpcMode() ? "child" : "parent";
-
 
 export function ipcLog(direction: "send" | "recv", msg: any): void {
   if (!ipcDebug) return;
@@ -486,8 +499,7 @@ export type RunSession = {
  * failures, which are ordinary Result failures), or a self-checkpointed
  * pause. Session errors reject instead. */
 type SessionOutcome =
-  | { type: "result"; value: any }
-  | { type: "interrupted"; msg: IpcInterruptedMessage };
+  { type: "result"; value: any } | { type: "interrupted"; msg: IpcInterruptedMessage };
 
 /** Everything `_run` persists across a pause so the replayed call can
  * re-fork and resume: the child's checkpoint (OPAQUE — its frames belong
@@ -568,13 +580,19 @@ export function resolveNodeCallArgs(
     return { args: paramNames.map((p) => msg.args[p]) };
   }
   if (Object.keys(msg.args ?? {}).length > 0) {
-    return { error: "Malformed run instruction: both task and args were provided; they are mutually exclusive" };
+    return {
+      error:
+        "Malformed run instruction: both task and args were provided; they are mutually exclusive",
+    };
   }
   if (paramNames.length !== 1) {
-    const detail = paramNames.length === 0
-      ? `eval delivers the input's task as the node's parameter, but node "${msg.node}" takes none`
-      : `eval entry nodes take exactly one parameter; node "${msg.node}" takes ${paramNames.length} (${paramNames.join(", ")})`;
-    return { error: `${detail}. Agents with a different shape should add a one-parameter adapter node.` };
+    const detail =
+      paramNames.length === 0
+        ? `eval delivers the input's task as the node's parameter, but node "${msg.node}" takes none`
+        : `eval entry nodes take exactly one parameter; node "${msg.node}" takes ${paramNames.length} (${paramNames.join(", ")})`;
+    return {
+      error: `${detail}. Agents with a different shape should add a one-parameter adapter node.`,
+    };
   }
   return { args: [msg.task] };
 }
@@ -646,7 +664,7 @@ export function collectSubprocessResponses(ctx: any, saved: SubprocessResumePayl
     if (response === undefined) {
       throw new Error(
         `Missing user response for subprocess interrupt ${intr.interruptId} (${intr.effect}). ` +
-        `All surfaced interrupts must be answered via respondToInterrupts before the subprocess can resume.`,
+          `All surfaced interrupts must be answered via respondToInterrupts before the subprocess can resume.`,
       );
     }
     return response;
@@ -675,7 +693,7 @@ export function materializeCompiledScript(compiled: { moduleId: string; code: st
   if (typeof compiled?.code !== "string" || compiled.code.length === 0) {
     throw new Error(
       "CompiledProgram has no code; obtain it from compile() (or compileFile()). " +
-      "Values from older Agency versions carried a file path instead and must be recompiled.",
+        "Values from older Agency versions carried a file path instead and must be recompiled.",
     );
   }
   const tempDir = path.join(agencyPackageRoot, ".agency-tmp", nanoid());
@@ -727,7 +745,10 @@ function killChildSafely(s: RunSession): void {
   try {
     s.child.kill("SIGKILL");
   } catch (err) {
-    ipcLog("send", { type: "kill_failed", detail: err instanceof Error ? err.message : String(err) });
+    ipcLog("send", {
+      type: "kill_failed",
+      detail: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
@@ -782,7 +803,11 @@ function trySendDecision(s: RunSession, msg: any): void {
     }
   } catch (_) {
     // IPC channel closed — subprocess is gone
-    settle(s, s.rejectPromise, new Error("IPC channel closed while sending decision to subprocess"));
+    settle(
+      s,
+      s.rejectPromise,
+      new Error("IPC channel closed while sending decision to subprocess"),
+    );
   }
 }
 
@@ -830,12 +855,13 @@ async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
     // (same discipline runBatch applies to its children).
     const { outcome } = await s.ctx.statelogClient.runInBranchContext(
       s.ctx.statelogClient.snapshotStack(),
-      () => gatherChainOutcome(
-        { effect, message, data, origin, expectsValue },
-        s.ctx,
-        s.stateStack,
-        msg.interruptId,
-      ),
+      () =>
+        gatherChainOutcome(
+          { effect, message, data, origin, expectsValue },
+          s.ctx,
+          s.stateStack,
+          msg.interruptId,
+        ),
     );
     trySendDecision(s, {
       type: "decision",
@@ -903,7 +929,11 @@ function handleLockReleaseMessage(s: RunSession, msg: IpcLockReleaseMessage): vo
  */
 function handleErrorMessage(s: RunSession, msg: any): void {
   let parsed: any = null;
-  try { parsed = JSON.parse(msg.error); } catch (_) { /* not JSON */ }
+  try {
+    parsed = JSON.parse(msg.error);
+  } catch (_) {
+    /* not JSON */
+  }
   if (parsed?.reason === "limit_exceeded") {
     settle(s, s.resolvePromise, {
       type: "result",
@@ -987,13 +1017,15 @@ function markSessionUsageIncomplete(s: RunSession): void {
 }
 
 function isForwardableCallbackName(name: unknown): name is CallbackName {
-  return typeof name === "string"
-    && (VALID_CALLBACK_NAMES as readonly string[]).includes(name)
+  return (
+    typeof name === "string" &&
+    (VALID_CALLBACK_NAMES as readonly string[]).includes(name) &&
     // Reject the same names the child-side sender denylists. The child never
     // forwards these, but a version-skewed or future-refactored child might; a
     // JSON-stripped onOAuthRequired/onStream would fire a broken (function-less)
     // parent callback, so the guard must match its name and exclude them.
-    && !(NON_FORWARDABLE_CALLBACKS as readonly string[]).includes(name);
+    !(NON_FORWARDABLE_CALLBACKS as readonly string[]).includes(name)
+  );
 }
 
 /**
@@ -1102,12 +1134,18 @@ export async function handleChildMessage(s: RunSession, msg: any): Promise<void>
   if (!serialized.ok) {
     // An observational message is never worth killing the run over.
     if (isObservationalMessage(msg)) {
-      ipcLog("recv", { type: "observational_dropped", messageType: msg.type, reason: "unserializable" });
+      ipcLog("recv", {
+        type: "observational_dropped",
+        messageType: msg.type,
+        reason: "unserializable",
+      });
       return;
     }
-    settle(s, s.rejectPromise, new Error(
-      `Failed to serialize subprocess message: ${serialized.error}`,
-    ));
+    settle(
+      s,
+      s.rejectPromise,
+      new Error(`Failed to serialize subprocess message: ${serialized.error}`),
+    );
     return;
   }
   if (serialized.byteLength > s.limits.ipcPayload) {
@@ -1152,9 +1190,13 @@ function handleChildClose(s: RunSession, code: number | null, signal: NodeJS.Sig
   if (isLikelyOom) {
     settleWithLimitFailure(s, "memory", s.limits.memory, s.limits.memory);
   } else {
-    settle(s, s.rejectPromise, new Error(
-      `Subprocess exited unexpectedly with code ${code}${signal ? ` signal ${signal}` : ""}`,
-    ));
+    settle(
+      s,
+      s.rejectPromise,
+      new Error(
+        `Subprocess exited unexpectedly with code ${code}${signal ? ` signal ${signal}` : ""}`,
+      ),
+    );
   }
 }
 
@@ -1165,7 +1207,10 @@ function handleChildClose(s: RunSession, code: number | null, signal: NodeJS.Sig
  * per session, cleared at settle, never firing across a pause) is pinned
  * with fake timers here rather than by a timing-arithmetic execution test.
  */
-export function attachSessionHandlers(s: RunSession, instruction: RunInstruction | ResumeInstruction): void {
+export function attachSessionHandlers(
+  s: RunSession,
+  instruction: RunInstruction | ResumeInstruction,
+): void {
   attachStdoutForwarder(s, s.child.stdout, process.stdout);
   attachStdoutForwarder(s, s.child.stderr, process.stderr);
 
@@ -1175,9 +1220,13 @@ export function attachSessionHandlers(s: RunSession, instruction: RunInstruction
     settleWithLimitFailure(s, "wall_clock", s.limits.wallClock, elapsed);
   }, s.limits.wallClock);
 
-  s.child.on("message", (msg: any) => { void handleChildMessage(s, msg); });
+  s.child.on("message", (msg: any) => {
+    void handleChildMessage(s, msg);
+  });
   s.child.on("close", (code, signal) => handleChildClose(s, code, signal));
-  s.child.on("error", (err: Error) => settle(s, s.rejectPromise, new Error(`Subprocess error: ${err.message}`)));
+  s.child.on("error", (err: Error) =>
+    settle(s, s.rejectPromise, new Error(`Subprocess error: ${err.message}`)),
+  );
 
   ipcLog("send", instruction);
   s.child.send(instruction);
@@ -1200,7 +1249,11 @@ async function runSubprocessSession(opts: {
   // stdio fds 1/2 piped (not inherit) so we can byte-count and truncate
   // when the stdout limit is exceeded; bytes still forward through to the
   // parent's own stdout/stderr until the limit hits.
-  const child = fork(subprocessBootstrapPath, [], buildForkOptions({ limits: opts.limits, cwd: opts.cwd }));
+  const child = fork(
+    subprocessBootstrapPath,
+    [],
+    buildForkOptions({ limits: opts.limits, cwd: opts.cwd }),
+  );
 
   return new Promise((resolvePromise, rejectPromise) => {
     const session: RunSession = {
@@ -1436,28 +1489,34 @@ export async function _run(
       // `store.callsite` is set by Runner.runInScope for every generated
       // step; it is undefined only in bootstrap-frame contexts, where the
       // fallback keeps checkpoint metadata attributable.
-      checkpointLocation: store.callsite ?? { moduleId: "", scopeName: "_run", stepPath: "subprocess" },
+      checkpointLocation: store.callsite ?? {
+        moduleId: "",
+        scopeName: "_run",
+        stepPath: "subprocess",
+      },
       mode: "all",
-      children: [{
-        key: "subprocess_0",
-        invoke: (_childStack: StateStack, abortSignal: AbortSignal) =>
-          invokeSubprocess({
-            ctx,
-            stateStack,
-            parentStore: store,
-            parentFrame,
-            compiled,
-            node,
-            nodeArgs: args,
-            limits,
-            configOverrides: mergedConfigOverrides,
-            cwd,
-            abortSignal,
-            spanId,
-            childDepth,
-            cappedMaxDepth,
-          }),
-      }],
+      children: [
+        {
+          key: "subprocess_0",
+          invoke: (_childStack: StateStack, abortSignal: AbortSignal) =>
+            invokeSubprocess({
+              ctx,
+              stateStack,
+              parentStore: store,
+              parentFrame,
+              compiled,
+              node,
+              nodeArgs: args,
+              limits,
+              configOverrides: mergedConfigOverrides,
+              cwd,
+              abortSignal,
+              spanId,
+              childDepth,
+              cappedMaxDepth,
+            }),
+        },
+      ],
     });
     if (batchResult.kind === "interrupts") return batchResult.interrupts;
     return batchResult.values[0];
@@ -1505,7 +1564,9 @@ export function withParentStatelog(
     ...(parentConfig.host !== undefined ? { host: parentConfig.host } : {}),
     ...(parentConfig.apiKey !== undefined ? { apiKey: parentConfig.apiKey } : {}),
     ...(parentConfig.projectId !== undefined ? { projectId: parentConfig.projectId } : {}),
-    ...(parentConfig.requestTimeoutMs !== undefined ? { requestTimeoutMs: parentConfig.requestTimeoutMs } : {}),
+    ...(parentConfig.requestTimeoutMs !== undefined
+      ? { requestTimeoutMs: parentConfig.requestTimeoutMs }
+      : {}),
     ...(parentConfig.metadata !== undefined ? { metadata: parentConfig.metadata } : {}),
     ...(logFile ? { logFile } : {}),
   };

@@ -45,11 +45,14 @@ function writeBundle(
     fs.writeSync(fd, JSON.stringify(header) + "\n");
 
     for (const source of sources) {
-      fs.writeSync(fd, JSON.stringify({
-        type: "source",
-        path: source.path,
-        content: source.content,
-      }) + "\n");
+      fs.writeSync(
+        fd,
+        JSON.stringify({
+          type: "source",
+          path: source.path,
+          content: source.content,
+        }) + "\n",
+      );
     }
 
     // Copy trace lines after the header, skipping any existing source lines
@@ -72,10 +75,7 @@ function readJsonlLines(filePath: string, label: string): string[] {
   return content.split("\n");
 }
 
-export function extractBundle(
-  bundleFile: string,
-  outputDir: string,
-): void {
+export function extractBundle(bundleFile: string, outputDir: string): void {
   const lines = readJsonlLines(bundleFile, "bundle file");
   const baseDir = path.resolve(outputDir);
   fs.mkdirSync(baseDir, { recursive: true });
@@ -115,11 +115,7 @@ export function extractBundle(
   console.log(`  ${traceName}`);
 }
 
-export function createBundle(
-  sourceFile: string,
-  traceFile: string,
-  outputFile: string,
-): void {
+export function createBundle(sourceFile: string, traceFile: string, outputFile: string): void {
   const traceLines = readJsonlLines(traceFile, "trace file");
 
   const sources = discoverSourceFiles(sourceFile);

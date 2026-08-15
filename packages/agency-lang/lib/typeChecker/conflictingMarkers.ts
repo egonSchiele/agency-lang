@@ -11,11 +11,7 @@ import type { TypeCheckerContext } from "./types.js";
  */
 export function checkConflictingMarkers(ctx: TypeCheckerContext): void {
   for (const node of ctx.programNodes) {
-    if (
-      node.type === "function" &&
-      node.markers?.destructive &&
-      node.markers?.idempotent
-    ) {
+    if (node.type === "function" && node.markers?.destructive && node.markers?.idempotent) {
       ctx.errors.push(
         diagnostic(
           "conflictingMarkers",

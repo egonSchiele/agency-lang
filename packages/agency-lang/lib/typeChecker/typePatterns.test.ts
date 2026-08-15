@@ -169,11 +169,8 @@ def f(x: any): string {
   }
 }
 `);
-    expect(
-      errors.some((e) => e.code === "AG5003" && e.severity === "warning"),
-    ).toBe(true);
+    expect(errors.some((e) => e.code === "AG5003" && e.severity === "warning")).toBe(true);
   });
-
 
   it("negatives: ordinary binders and guarded arms do not warn", () => {
     const errors = check(`
@@ -203,8 +200,6 @@ def f(x: "a" | "b"): "a" | "b" {
 `);
     expect(errors).toEqual([]);
   });
-
-
 
   it("shadow warnings anchor to the arm, not the match head", () => {
     // The offending arm is the LAST of three; its loc must sit below the

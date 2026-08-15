@@ -62,9 +62,7 @@ function agencyFilesUnder(dir: string): string[] {
 function bodyOf(src: string) {
   const result = parseAgency(src, {}, false);
   if (!result.success) throw new Error(result.message ?? "parse failed");
-  const fn = result.result.nodes.find(
-    (n): n is FunctionDefinition => n.type === "function",
-  );
+  const fn = result.result.nodes.find((n): n is FunctionDefinition => n.type === "function");
   if (!fn) throw new Error("no function in source");
   return fn.body;
 }
@@ -243,9 +241,7 @@ describe("method calls in an access chain", () => {
   });
 
   it("records no callee for a method call on a property path", () => {
-    const facts = collectBodyFacts(
-      bodyOf(`def f(): string { return obj.handler.rename("x") }`),
-    );
+    const facts = collectBodyFacts(bodyOf(`def f(): string { return obj.handler.rename("x") }`));
     expect(facts.callees).toEqual([]);
   });
 
@@ -263,8 +259,7 @@ describe("the type checker finds more than the shared walk, never fewer", () => 
     // can, and must keep doing so after the extraction — deleting the
     // type-aware half of collectFromBody would otherwise break nothing.
     const source =
-      `export def runIt(cb: () -> string raises <std::read>): string {\n` +
-      `  return cb()\n}\n`;
+      `export def runIt(cb: () -> string raises <std::read>): string {\n` + `  return cb()\n}\n`;
     expect(collectBodyFacts(bodyOf(source)).effects).toEqual([]);
 
     const dir = makeAgencyTempDir("invariant");

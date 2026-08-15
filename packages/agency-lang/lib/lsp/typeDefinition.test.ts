@@ -25,11 +25,15 @@ function setup(source: string) {
 
 describe("handleTypeDefinition", () => {
   it("jumps to type alias definition from variable", () => {
-    const source = 'type Foo = { name: string }\nnode main() {\n  let x: Foo = llm("hi")\n  print(x)\n}';
+    const source =
+      'type Foo = { name: string }\nnode main() {\n  let x: Foo = llm("hi")\n  print(x)\n}';
     const { program, doc, scopes, semanticIndex } = setup(source);
     const result = handleTypeDefinition(
       { textDocument: { uri: doc.uri }, position: { line: 3, character: 8 } },
-      doc, program, scopes, semanticIndex,
+      doc,
+      program,
+      scopes,
+      semanticIndex,
     );
     expect(result).not.toBeNull();
     expect(result!.range.start.line).toBe(0);
@@ -40,7 +44,10 @@ describe("handleTypeDefinition", () => {
     const { program, doc, scopes, semanticIndex } = setup(source);
     const result = handleTypeDefinition(
       { textDocument: { uri: doc.uri }, position: { line: 2, character: 8 } },
-      doc, program, scopes, semanticIndex,
+      doc,
+      program,
+      scopes,
+      semanticIndex,
     );
     expect(result).toBeNull();
   });

@@ -217,10 +217,7 @@ export function checkTsFunctionArgs(
  * AgencyFunction). Prototype methods like .toString() throw too. Plain
  * Error only — see checkTsFunctionArgs.
  */
-export function checkResultMethodCall(
-  obj: unknown,
-  prop: string | number,
-): void {
+export function checkResultMethodCall(obj: unknown, prop: string | number): void {
   const isFailureObj = isFailure(obj);
   if (!isFailureObj && !isSuccess(obj)) {
     return;

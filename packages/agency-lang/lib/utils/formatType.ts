@@ -107,8 +107,7 @@ export function formatTypeHint(
       // `keyof (A & B)` must not print bare, which would re-parse as
       // (keyof A) | B and (keyof A) & B.
       const op = recurse(vt.operand);
-      return vt.operand.type === "unionType" ||
-        vt.operand.type === "intersectionType"
+      return vt.operand.type === "unionType" || vt.operand.type === "intersectionType"
         ? `keyof (${op})`
         : `keyof ${op}`;
     }

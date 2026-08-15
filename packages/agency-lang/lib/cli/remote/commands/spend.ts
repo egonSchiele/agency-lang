@@ -22,11 +22,12 @@ import {
 } from "./util.js";
 import type { AccountCommandOptions, RemoteCommandContext } from "./util.js";
 
-export type SpendOptions = AccountCommandOptions & SpendWindowOptions & {
-  json?: boolean;
-  byModel?: boolean;
-  byKind?: boolean;
-};
+export type SpendOptions = AccountCommandOptions &
+  SpendWindowOptions & {
+    json?: boolean;
+    byModel?: boolean;
+    byKind?: boolean;
+  };
 
 export async function runSpend(
   project: string | undefined,
@@ -57,14 +58,20 @@ export async function runSpend(
 
   const target = resolveProjectTarget(context, { ...options, project });
   try {
-    const spend = await createProjectClient(target.origin, target.projectSlug, target.apiKey).getSpend(window);
+    const spend = await createProjectClient(
+      target.origin,
+      target.projectSlug,
+      target.apiKey,
+    ).getSpend(window);
     if (options.json) {
       printJson(spend);
     } else {
-      console.log(renderProjectSpend(target.projectSlug, spend, window.description, {
-        byModel: options.byModel ?? false,
-        byKind: options.byKind ?? false,
-      }));
+      console.log(
+        renderProjectSpend(target.projectSlug, spend, window.description, {
+          byModel: options.byModel ?? false,
+          byKind: options.byKind ?? false,
+        }),
+      );
     }
   } catch (error) {
     failProjectCommand(error);

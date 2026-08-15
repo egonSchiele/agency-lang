@@ -99,11 +99,7 @@ export const ts = {
     return { kind: "varDecl", declKind, name, typeAnnotation, initializer };
   },
 
-  letDecl(
-    name: string,
-    initializer?: TsNode,
-    typeAnnotation?: string,
-  ): TsVarDecl {
+  letDecl(name: string, initializer?: TsNode, typeAnnotation?: string): TsVarDecl {
     return {
       kind: "varDecl",
       declKind: "let",
@@ -113,11 +109,7 @@ export const ts = {
     };
   },
 
-  constDecl(
-    name: string,
-    initializer?: TsNode,
-    typeAnnotation?: string,
-  ): TsVarDecl {
+  constDecl(name: string, initializer?: TsNode, typeAnnotation?: string): TsVarDecl {
     return {
       kind: "varDecl",
       declKind: "const",
@@ -127,11 +119,7 @@ export const ts = {
     };
   },
 
-  constDeclId(
-    name: TsIdentifier,
-    initializer?: TsNode,
-    typeAnnotation?: string,
-  ): TsVarDecl {
+  constDeclId(name: TsIdentifier, initializer?: TsNode, typeAnnotation?: string): TsVarDecl {
     return {
       kind: "varDecl",
       declKind: "const",
@@ -258,16 +246,9 @@ export const ts = {
    * `body` can be a `TsStatements` body or any single `TsNode`.
    * The printer adds the wrapping parens around the arrow callee automatically.
    */
-  iife(opts: {
-    async?: boolean;
-    params?: TsParam[];
-    body: TsNode | TsNode[];
-  }): TsCall {
+  iife(opts: { async?: boolean; params?: TsParam[]; body: TsNode | TsNode[] }): TsCall {
     const body = Array.isArray(opts.body) ? ts.statements(opts.body) : opts.body;
-    return ts.call(
-      ts.arrowFn(opts.params ?? [], body, { async: opts.async }),
-      [],
-    );
+    return ts.call(ts.arrowFn(opts.params ?? [], body, { async: opts.async }), []);
   },
 
   return(expr?: TsNode): TsReturn {
@@ -308,11 +289,7 @@ export const ts = {
     return { kind: "templateLit", parts };
   },
 
-  if(
-    condition: TsNode,
-    body: TsNode,
-    opts?: { elseIfs?: TsElseIf[]; elseBody?: TsNode },
-  ): TsIf {
+  if(condition: TsNode, body: TsNode, opts?: { elseIfs?: TsElseIf[]; elseBody?: TsNode }): TsIf {
     return {
       kind: "if",
       condition,
@@ -364,11 +341,23 @@ export const ts = {
   },
 
   prop(object: TsNode, property: string, opts?: { optional?: boolean }): TsPropertyAccess {
-    return { kind: "propertyAccess", object, property, computed: false, ...(opts?.optional && { optional: true }) };
+    return {
+      kind: "propertyAccess",
+      object,
+      property,
+      computed: false,
+      ...(opts?.optional && { optional: true }),
+    };
   },
 
   index(object: TsNode, property: TsNode, opts?: { optional?: boolean }): TsPropertyAccess {
-    return { kind: "propertyAccess", object, property, computed: true, ...(opts?.optional && { optional: true }) };
+    return {
+      kind: "propertyAccess",
+      object,
+      property,
+      computed: true,
+      ...(opts?.optional && { optional: true }),
+    };
   },
 
   spread(expr: TsNode): TsSpread {
@@ -415,10 +404,7 @@ export const ts = {
    * active `agencyStore` ALS frame, so no explicit ctx arg is threaded.
    */
   validateChainRecursive(value: TsNode, descriptor: TsNode): TsAwait {
-    return ts.awaitCall(ts.id("__validateChainRecursive"), [
-      value,
-      descriptor,
-    ]);
+    return ts.awaitCall(ts.id("__validateChainRecursive"), [value, descriptor]);
   },
 
   scopedVar(
@@ -472,7 +458,12 @@ export const ts = {
     return { kind: "withHandler", handler, body };
   },
 
-  runnerIfElse(opts: { id: number; branches: { condition: TsNode; body: TsNode[] }[]; elseBranch?: TsNode[]; matchId?: number }): TsRunnerIfElse {
+  runnerIfElse(opts: {
+    id: number;
+    branches: { condition: TsNode; body: TsNode[] }[];
+    elseBranch?: TsNode[];
+    matchId?: number;
+  }): TsRunnerIfElse {
     return { kind: "runnerIfElse", ...opts };
   },
 
@@ -480,7 +471,13 @@ export const ts = {
     return { kind: "runnerExitMatch", ...opts };
   },
 
-  runnerLoop(opts: { id: number; items: TsNode; itemVar: string; body: TsNode[]; indexVar?: string }): TsRunnerLoop {
+  runnerLoop(opts: {
+    id: number;
+    items: TsNode;
+    itemVar: string;
+    body: TsNode[];
+    indexVar?: string;
+  }): TsRunnerLoop {
     return { kind: "runnerLoop", ...opts };
   },
 
@@ -520,10 +517,7 @@ export const ts = {
 
   /** Call runner.halt(value) and return from the current callback */
   runnerHalt(value: TsNode): TsStatements {
-    return ts.statements([
-      ts.methodCall(ts.id("runner"), "halt", [value]),
-      ts.return(),
-    ]);
+    return ts.statements([ts.methodCall(ts.id("runner"), "halt", [value]), ts.return()]);
   },
 
   /** Halt with { messages: __threads(), data: value } and return from a graph node callback */
@@ -568,18 +562,15 @@ export const ts = {
     // (globals, callsite, runner) are inherited here instead of being
     // silently reset to undefined for stdlib helpers invoked from
     // inside this body frame.
-    return ts.awaitCall(
-      ts.prop(ts.id("agencyStore"), "run"),
-      [
-        ts.obj([
-          ts.setSpread(ts.call(ts.id("getRuntimeContext"))),
-          ts.set("ctx", ctx),
-          ts.set("stack", stack),
-          ts.set("threads", threads),
-        ]),
-        ts.arrowFn([], ts.statements(body), { async: true }),
-      ],
-    );
+    return ts.awaitCall(ts.prop(ts.id("agencyStore"), "run"), [
+      ts.obj([
+        ts.setSpread(ts.call(ts.id("getRuntimeContext"))),
+        ts.set("ctx", ctx),
+        ts.set("stack", stack),
+        ts.set("threads", threads),
+      ]),
+      ts.arrowFn([], ts.statements(body), { async: true }),
+    ]);
   },
 
   env(varName: string): TsRaw {
@@ -596,7 +587,7 @@ export const ts = {
    * returns `void`; the codegen-emitted hook sites fire-and-forget.
    */
   callHook(hookName: string, data: Record<string, TsNode> | TsNode): TsNode {
-    const dataNode = "kind" in data ? data as TsNode : ts.obj(data as Record<string, TsNode>);
+    const dataNode = "kind" in data ? (data as TsNode) : ts.obj(data as Record<string, TsNode>);
     return ts.awaitCall(ts.id("callHook"), [
       ts.obj({
         name: ts.str(hookName),
@@ -642,11 +633,7 @@ export const ts = {
   },
 
   time(varName: string): TsNode {
-    return ts.letDecl(
-      varName,
-      ts.methodCall(ts.id("performance"), "now"),
-      "number",
-    );
+    return ts.letDecl(varName, ts.methodCall(ts.id("performance"), "now"), "number");
   },
 
   stack(varName: string): TsNode {
@@ -781,42 +768,30 @@ export const ts = {
    *  accessor by default ensures every user-visible read/write
    *  participates in per-branch isolation without further codegen
    *  changes. */
-  globalGet(
-    moduleId: string,
-    varName: string,
-    globalsRef?: TsNode,
-  ): TsCall {
+  globalGet(moduleId: string, varName: string, globalsRef?: TsNode): TsCall {
     // Inline the default — referencing `ts.runtime.globals` here
     // creates a self-typing cycle that makes TS infer `ts: any`. The
     // `__globals()!` raw is the canonical "current per-scope
     // GlobalStore" expression (see `ts.runtime.globals`).
     const receiver = globalsRef ?? ({ kind: "raw", code: "__globals()!" } as TsRaw);
-    return ts.methodCall(
-      receiver,
-      "get",
-      [ts.str(moduleId), ts.str(varName)],
-    );
+    return ts.methodCall(receiver, "get", [ts.str(moduleId), ts.str(varName)]);
   },
 
-  globalSet(
-    moduleId: string,
-    varName: string,
-    value: TsNode,
-    globalsRef?: TsNode,
-  ): TsCall {
+  globalSet(moduleId: string, varName: string, value: TsNode, globalsRef?: TsNode): TsCall {
     const receiver = globalsRef ?? ({ kind: "raw", code: "__globals()!" } as TsRaw);
-    return ts.methodCall(
-      receiver,
-      "set",
-      [ts.str(moduleId), ts.str(varName), value],
-    );
+    return ts.methodCall(receiver, "set", [ts.str(moduleId), ts.str(varName), value]);
   },
 
   ternary(condition: TsNode, trueExpr: TsNode, falseExpr: TsNode): TsTernary {
     return { kind: "ternary", condition, trueExpr, falseExpr };
   },
 
-  agencyFunctionWrap(fn: TsNode, name: string, module: string, params: { name: string }[]): TsAgencyFunctionWrap {
+  agencyFunctionWrap(
+    fn: TsNode,
+    name: string,
+    module: string,
+    params: { name: string }[],
+  ): TsAgencyFunctionWrap {
     return { kind: "agencyFunctionWrap", name, module, fn, params };
   },
 

@@ -44,9 +44,7 @@ function stateFor(events: EventEnvelope[]): ViewerState {
 // Summaries of the convoLine rows, in order, with ANSI color stripped
 // so assertions are readable.
 function convoSummaries(rows: { node: TreeNode }[]): string[] {
-  return rows
-    .filter((r) => r.node.nodeKind === "convoLine")
-    .map((r) => stripAnsi(r.node.summary));
+  return rows.filter((r) => r.node.nodeKind === "convoLine").map((r) => stripAnsi(r.node.summary));
 }
 
 function stripAnsi(s: string): string {
@@ -106,7 +104,12 @@ describe("llmCall span flatten", () => {
         evt({
           span_id: "T",
           parent_span_id: "L",
-          data: { type: "toolCall", timestamp: "2026-06-21T00:00:03Z", toolName: "getArea", output: "551695" },
+          data: {
+            type: "toolCall",
+            timestamp: "2026-06-21T00:00:03Z",
+            toolName: "getArea",
+            output: "551695",
+          },
         }),
         // Round 2: final answer (holds the full transcript).
         evt({
@@ -117,7 +120,11 @@ describe("llmCall span flatten", () => {
             timestamp: "2026-06-21T00:00:04Z",
             messages: [
               { role: "user", content: "Get the area of France" },
-              { role: "assistant", content: null, toolCalls: [{ id: "c1", name: "getArea", arguments: { country: "France" } }] },
+              {
+                role: "assistant",
+                content: null,
+                toolCalls: [{ id: "c1", name: "getArea", arguments: { country: "France" } }],
+              },
               { role: "tool", name: "getArea", content: "551695", tool_call_id: "c1" },
             ],
             completion: { output: "The area of France is 551,695 km²", toolCalls: [] },
@@ -143,9 +150,7 @@ describe("llmCall span flatten", () => {
           r.node.nodeKind === "convoLine" ||
           (r.node.nodeKind === "span" && r.node.label === "toolExecution"),
       )
-      .map((r) =>
-        r.node.nodeKind === "span" ? "toolExecution" : stripAnsi(r.node.summary),
-      );
+      .map((r) => (r.node.nodeKind === "span" ? "toolExecution" : stripAnsi(r.node.summary)));
     expect(kinds).toEqual([
       '[user] "Get the area of France"',
       '[assistant] tool call: getArea({"country":"France"})',
@@ -155,9 +160,7 @@ describe("llmCall span flatten", () => {
     ]);
 
     // Exactly one llmCall span node at the top level (no sibling rounds).
-    const llmNodes = rows.filter(
-      (r) => r.node.nodeKind === "span" && r.node.label === "llmCall",
-    );
+    const llmNodes = rows.filter((r) => r.node.nodeKind === "span" && r.node.label === "llmCall");
     expect(llmNodes).toHaveLength(1);
   });
 
@@ -181,8 +184,26 @@ describe("llmCall span flatten", () => {
             },
           },
         }),
-        evt({ span_id: "TA", parent_span_id: "L", data: { type: "toolCall", timestamp: "2026-06-21T00:00:02Z", toolName: "toolA", output: "a" } }),
-        evt({ span_id: "TB", parent_span_id: "L", data: { type: "toolCall", timestamp: "2026-06-21T00:00:03Z", toolName: "toolB", output: "b" } }),
+        evt({
+          span_id: "TA",
+          parent_span_id: "L",
+          data: {
+            type: "toolCall",
+            timestamp: "2026-06-21T00:00:02Z",
+            toolName: "toolA",
+            output: "a",
+          },
+        }),
+        evt({
+          span_id: "TB",
+          parent_span_id: "L",
+          data: {
+            type: "toolCall",
+            timestamp: "2026-06-21T00:00:03Z",
+            toolName: "toolB",
+            output: "b",
+          },
+        }),
         evt({
           span_id: "L",
           parent_span_id: "a",
@@ -191,10 +212,14 @@ describe("llmCall span flatten", () => {
             timestamp: "2026-06-21T00:00:04Z",
             messages: [
               { role: "user", content: "do both" },
-              { role: "assistant", content: null, toolCalls: [
-                { id: "c1", name: "toolA", arguments: {} },
-                { id: "c2", name: "toolB", arguments: {} },
-              ] },
+              {
+                role: "assistant",
+                content: null,
+                toolCalls: [
+                  { id: "c1", name: "toolA", arguments: {} },
+                  { id: "c2", name: "toolB", arguments: {} },
+                ],
+              },
               { role: "tool", name: "toolA", content: "a", tool_call_id: "c1" },
               { role: "tool", name: "toolB", content: "b", tool_call_id: "c2" },
             ],
@@ -229,7 +254,16 @@ describe("llmCall span flatten", () => {
             completion: { output: null, toolCalls: [{ id: "c1", name: "getArea", arguments: {} }] },
           },
         }),
-        evt({ span_id: "T", parent_span_id: "L", data: { type: "toolCall", timestamp: "2026-06-21T00:00:05Z", toolName: "getArea", output: "x" } }),
+        evt({
+          span_id: "T",
+          parent_span_id: "L",
+          data: {
+            type: "toolCall",
+            timestamp: "2026-06-21T00:00:05Z",
+            toolName: "getArea",
+            output: "x",
+          },
+        }),
         // getArea's own llm() — a nested llmCall span under the tool.
         evt({
           span_id: "L2",
@@ -249,7 +283,11 @@ describe("llmCall span flatten", () => {
             timestamp: "2026-06-21T00:00:06Z",
             messages: [
               { role: "user", content: "outer" },
-              { role: "assistant", content: null, toolCalls: [{ id: "c1", name: "getArea", arguments: {} }] },
+              {
+                role: "assistant",
+                content: null,
+                toolCalls: [{ id: "c1", name: "getArea", arguments: {} }],
+              },
               { role: "tool", name: "getArea", content: "about 551,695", tool_call_id: "c1" },
             ],
             completion: { output: "final", toolCalls: [] },

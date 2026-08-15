@@ -144,9 +144,7 @@ function checkFinalizeBody(
 ): void {
   for (const { node } of walkNodes(finalize.body)) {
     if (node.type === "interruptStatement") {
-      ctx.errors.push(
-        diagnostic("finalizeInterrupts", { callee: "interrupt" }, node.loc ?? null),
-      );
+      ctx.errors.push(diagnostic("finalizeInterrupts", { callee: "interrupt" }, node.loc ?? null));
     }
     if (node.type === "functionCall") {
       if (node.functionName === "saveDraft") {
@@ -156,11 +154,7 @@ function checkFinalizeBody(
       const effects = interruptEffectsByFunction[node.functionName];
       if (effects && effects.length > 0) {
         ctx.errors.push(
-          diagnostic(
-            "finalizeInterrupts",
-            { callee: node.functionName },
-            node.loc ?? null,
-          ),
+          diagnostic("finalizeInterrupts", { callee: node.functionName }, node.loc ?? null),
         );
       }
     }

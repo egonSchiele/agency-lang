@@ -105,10 +105,7 @@ describe("PolicyStore", () => {
     store.addRule("email::send", { action: "reject" });
     store.removeRule("email::send", 1);
     expect(store.get()).toEqual({
-      "email::send": [
-        { match: { recipient: "*@a.com" }, action: "approve" },
-        { action: "reject" },
-      ],
+      "email::send": [{ match: { recipient: "*@a.com" }, action: "approve" }, { action: "reject" }],
     });
   });
 
@@ -147,6 +144,8 @@ describe("PolicyStore", () => {
 
   it("addRule rejects non-string match values", () => {
     const store = new PolicyStore("test-server", tmpDir);
-    expect(() => store.addRule("x::y", { action: "approve", match: { foo: 123 as any } })).toThrow("match values must be strings");
+    expect(() => store.addRule("x::y", { action: "approve", match: { foo: 123 as any } })).toThrow(
+      "match values must be strings",
+    );
   });
 });

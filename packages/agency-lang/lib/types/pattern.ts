@@ -28,12 +28,7 @@ export type ArrayPattern = BaseNode & {
   // ResultPattern and TypePattern are only valid in match-position use; the
   // parser does not produce either in binding-position contexts.
   elements: (
-    | BindingPattern
-    | Literal
-    | WildcardPattern
-    | RestPattern
-    | ResultPattern
-    | TypePattern
+    BindingPattern | Literal | WildcardPattern | RestPattern | ResultPattern | TypePattern
   )[];
   /** Comments between elements. */
   elementTrivia?: ListTrivia[];
@@ -89,19 +84,11 @@ export type TypeTestExpression = BaseNode & {
 // A binding pattern: only variable bindings, no value-matching.
 // Used in let/const LHS and for-loop item position.
 export type BindingPattern =
-  | ObjectPattern
-  | ArrayPattern
-  | RestPattern
-  | WildcardPattern
-  | VariableNameLiteral;
+  ObjectPattern | ArrayPattern | RestPattern | WildcardPattern | VariableNameLiteral;
 
 // A match pattern: binders OR literal value matchers.
 // Used in match arm LHS and after `is`.
-export type MatchPattern =
-  | BindingPattern
-  | Literal
-  | ResultPattern
-  | TypePattern;
+export type MatchPattern = BindingPattern | Literal | ResultPattern | TypePattern;
 
 // Convenience union when context doesn't matter
 export type Pattern = MatchPattern;

@@ -66,10 +66,7 @@ export function inferReturnTypeFor(
     for (const { node, ancestors } of walkNodes(def.body)) {
       if (node.type === "returnStatement" && node.value) {
         const insideNested = ancestors.some(
-          (a) =>
-            a.type === "function" ||
-            a.type === "graphNode" ||
-            a.type === "blockArgument",
+          (a) => a.type === "function" || a.type === "graphNode" || a.type === "blockArgument",
         );
         if (!insideNested) {
           returnValues.push(node.value);
@@ -100,9 +97,7 @@ export function inferReturnTypeFor(
         } else {
           const first = concrete[0];
           const allSame = concrete.every(
-            (t) =>
-              isAssignable(t, first, typeAliases) &&
-              isAssignable(first, t, typeAliases),
+            (t) => isAssignable(t, first, typeAliases) && isAssignable(first, t, typeAliases),
           );
           inferred = allSame ? first : ANY_T;
         }
@@ -125,7 +120,6 @@ export function inferReturnTypeFor(
 }
 
 type ResultTypes = readonly ResultType[];
-
 
 /**
  * Merge multiple Result types from different return paths. The success type

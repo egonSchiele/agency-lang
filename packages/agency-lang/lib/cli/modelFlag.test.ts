@@ -85,8 +85,6 @@ describe("resolveModelFlag: the default catalog", () => {
   });
 
   it("rejects a name the adapter does not return", () => {
-    expect(() => resolveModelFlag("catalog-model-three")).toThrow(
-      /Unknown model/,
-    );
+    expect(() => resolveModelFlag("catalog-model-three")).toThrow(/Unknown model/);
   });
 });

@@ -40,9 +40,7 @@ export type IpcInvocationUsageIncompleteMessage = {
   type: "invocationUsageIncomplete";
 };
 
-export type IpcUsageMessage =
-  | IpcInvocationUsageMessage
-  | IpcInvocationUsageIncompleteMessage;
+export type IpcUsageMessage = IpcInvocationUsageMessage | IpcInvocationUsageIncompleteMessage;
 
 function canSend(): boolean {
   return isIpcMode() && typeof process.send === "function";

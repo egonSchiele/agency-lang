@@ -28,10 +28,7 @@ import type { AgencyConfig } from "../config.js";
 import type { AgencyNode, AgencyProgram } from "../types.js";
 import type { Splice } from "../types/splice.js";
 import type { Code } from "../runtime/template/code.js";
-import type {
-  SpliceDiagnostic,
-  SpliceResult,
-} from "../compiler/splice/types.js";
+import type { SpliceDiagnostic, SpliceResult } from "../compiler/splice/types.js";
 
 /**
  * Expand every `$( ... )` in a program: run its generator and paste the
@@ -171,10 +168,7 @@ function expandOne(
   // before the generator, so it sits outside cachedGeneratorRun and would
   // otherwise re-walk the closure on every call.
   const ineligible = cachedEligibility(slot, fingerprint, () =>
-    CHECKS.reduce<SpliceDiagnostic | null>(
-      (found, check) => found ?? check(decided.value),
-      null,
-    ),
+    CHECKS.reduce<SpliceDiagnostic | null>((found, check) => found ?? check(decided.value), null),
   );
   if (ineligible !== null) {
     return {
@@ -183,17 +177,14 @@ function expandOne(
     };
   }
 
-  const produced = cachedGeneratorRun(
-    slot,
-    fingerprint,
-    () =>
-      runGenerator(splice, generator, path.dirname(path.resolve(hostPath)), {
-        config,
-        wallClockMs: options.wallClockMs,
-        argumentSources: argumentSources
-          .map((entry) => entry.source)
-          .filter((source): source is ImportSource => source !== null),
-      }),
+  const produced = cachedGeneratorRun(slot, fingerprint, () =>
+    runGenerator(splice, generator, path.dirname(path.resolve(hostPath)), {
+      config,
+      wallClockMs: options.wallClockMs,
+      argumentSources: argumentSources
+        .map((entry) => entry.source)
+        .filter((source): source is ImportSource => source !== null),
+    }),
   );
   if (!produced.ok) {
     // A cached failure carries the position of whichever splice ran first,
@@ -226,12 +217,7 @@ type DecisionContext = {
 const CHECKS: ReadonlyArray<(ctx: DecisionContext) => SpliceDiagnostic | null> = [
   checkArgumentsAvailable,
   ({ generator, config, symbolTable }) =>
-    checkGeneratorEligible(
-      generator.modulePath,
-      generator.exportedName,
-      config,
-      symbolTable,
-    ),
+    checkGeneratorEligible(generator.modulePath, generator.exportedName, config, symbolTable),
 ];
 
 function decide(
@@ -529,10 +515,7 @@ function checkNoGeneratedExport(
  * alone let a generated re-export through.
  */
 function isExporting(node: AgencyNode): boolean {
-  return (
-    (node as { exported?: boolean }).exported === true ||
-    node.type === "exportFromStatement"
-  );
+  return (node as { exported?: boolean }).exported === true || node.type === "exportFromStatement";
 }
 
 function exportedNameOf(node: AgencyNode): string {
@@ -543,19 +526,13 @@ function exportedNameOf(node: AgencyNode): string {
   return declaredNamesIn({ type: "agencyProgram", nodes: [node] })[0] ?? "a declaration";
 }
 
-function graft(
-  splice: Splice,
-  code: Code,
-  generatorName: string,
-): SpliceResult<AgencyNode[]> {
+function graft(splice: Splice, code: Code, generatorName: string): SpliceResult<AgencyNode[]> {
   // Splices are expressions, so a generator can return a fragment holding
   // one. This pass enumerates the host's splices once, so a generated
   // splice would survive to the codegen tripwire and surface as an
   // internal error. Refuse it here, where the message can name the
   // generator.
-  const nested = [...walkNodesArray(code.nodes)].some(
-    (visit) => visit.node.type === "splice",
-  );
+  const nested = [...walkNodesArray(code.nodes)].some((visit) => visit.node.type === "splice");
   if (nested) {
     return {
       ok: false,

@@ -29,31 +29,40 @@ export type WriteRunFixtureArgs = {
 export function writeRunFixture(args: WriteRunFixtureArgs): string {
   const { dir, inputs } = args;
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, "config.json"), JSON.stringify({
-    provenance: { agent: { kind: "file", entry: "news.agency" } },
-  }));
-  fs.writeFileSync(path.join(dir, "summary.json"), JSON.stringify({
-    runId: path.basename(dir),
-    runDir: dir,
-    agentLabel: "news.agency:main",
-    okCount: inputs.length,
-    errorCount: 0,
-    inputs: inputs.map((input) => ({
-      inputId: input.inputId,
-      status: input.status ?? "success",
-      evalRecordPath: path.join(dir, "inputs", input.inputId, "agent", "eval-record.json"),
-      statelogPath: "",
-      workdirPath: "",
-    })),
-  }));
+  fs.writeFileSync(
+    path.join(dir, "config.json"),
+    JSON.stringify({
+      provenance: { agent: { kind: "file", entry: "news.agency" } },
+    }),
+  );
+  fs.writeFileSync(
+    path.join(dir, "summary.json"),
+    JSON.stringify({
+      runId: path.basename(dir),
+      runDir: dir,
+      agentLabel: "news.agency:main",
+      okCount: inputs.length,
+      errorCount: 0,
+      inputs: inputs.map((input) => ({
+        inputId: input.inputId,
+        status: input.status ?? "success",
+        evalRecordPath: path.join(dir, "inputs", input.inputId, "agent", "eval-record.json"),
+        statelogPath: "",
+        workdirPath: "",
+      })),
+    }),
+  );
 
   for (const input of inputs) {
     const inputDir = path.join(dir, "inputs", input.inputId);
     fs.mkdirSync(path.join(inputDir, "agent"), { recursive: true });
-    fs.writeFileSync(path.join(inputDir, "input.json"), JSON.stringify({
-      id: input.inputId,
-      task: input.task === undefined ? "do a thing" : input.task,
-    }));
+    fs.writeFileSync(
+      path.join(inputDir, "input.json"),
+      JSON.stringify({
+        id: input.inputId,
+        task: input.task === undefined ? "do a thing" : input.task,
+      }),
+    );
     if (input.omitRecord === true) {
       continue;
     }

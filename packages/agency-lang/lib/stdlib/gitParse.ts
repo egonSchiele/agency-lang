@@ -5,14 +5,32 @@
 // stash) parse with String.split — that framing is designed for unambiguous
 // splitting. The unified diff is a real line-grammar, so parseDiff uses tarsec.
 import {
-  str, capture, map, many, seqC, optional, newline, noneOf, not, eof,
-  manyWithJoin, type Parser,
+  str,
+  capture,
+  map,
+  many,
+  seqC,
+  optional,
+  newline,
+  noneOf,
+  not,
+  eof,
+  manyWithJoin,
+  type Parser,
 } from "tarsec";
 import {
-  type ChangeCode, type FileStatus, type GitStatus, type GitLog,
-  type FileDiff, type GitDiff, type GitBranch, type BlameLine,
-  type GitRemote, type GitStash,
-  FIELD_SEP, RECORD_SEP,
+  type ChangeCode,
+  type FileStatus,
+  type GitStatus,
+  type GitLog,
+  type FileDiff,
+  type GitDiff,
+  type GitBranch,
+  type BlameLine,
+  type GitRemote,
+  type GitStash,
+  FIELD_SEP,
+  RECORD_SEP,
 } from "./gitCore.js";
 
 /**

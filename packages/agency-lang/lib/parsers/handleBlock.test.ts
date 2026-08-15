@@ -7,7 +7,7 @@ describe("handleBlockParser", () => {
     // Regression: `str("handle")` lacked a word boundary, so a statement
     // `handler(data)` matched the `handle` keyword and the committing
     // parseError threw "expected `{`" instead of backtracking to a call.
-    const input = 'handle {\n  foo()\n} with (data) {\n  handler(data)\n}';
+    const input = "handle {\n  foo()\n} with (data) {\n  handler(data)\n}";
     const result = handleBlockParser(normalizeCode(input));
     expect(result.success).toBe(true);
     if (result.success && result.result.handler.kind === "inline") {
@@ -25,7 +25,7 @@ describe("handleBlockParser", () => {
   });
 
   it("should parse inline handler", () => {
-    const input = 'handle {\n  foo()\n} with (data) {\n  return approve()\n}';
+    const input = "handle {\n  foo()\n} with (data) {\n  return approve()\n}";
     const result = handleBlockParser(normalizeCode(input));
     expect(result.success).toBe(true);
     if (result.success) {
@@ -38,7 +38,7 @@ describe("handleBlockParser", () => {
   });
 
   it("should parse inline handler with typed param", () => {
-    const input = 'handle {\n  foo()\n} with (data: string) {\n  return approve()\n}';
+    const input = "handle {\n  foo()\n} with (data: string) {\n  return approve()\n}";
     const result = handleBlockParser(normalizeCode(input));
     expect(result.success).toBe(true);
     if (result.success) {
@@ -67,7 +67,7 @@ describe("handleBlockParser", () => {
   });
 
   it("should parse handle block body", () => {
-    const input = 'handle {\n  x = 1\n  foo()\n} with (data) {\n  return approve()\n}';
+    const input = "handle {\n  x = 1\n  foo()\n} with (data) {\n  return approve()\n}";
     const result = handleBlockParser(normalizeCode(input));
     expect(result.success).toBe(true);
     if (result.success) {

@@ -13,7 +13,10 @@ describe("ipcChildDebug", () => {
     const store: any = {
       ctx: {
         statelogClient: {
-          debug: (m: string, d: any) => { debugCalls.push([m, d]); return Promise.resolve(); },
+          debug: (m: string, d: any) => {
+            debugCalls.push([m, d]);
+            return Promise.resolve();
+          },
         },
       },
     };
@@ -29,10 +32,18 @@ describe("ipcChildDebug", () => {
 
   it("swallows a throwing statelog client (never affects the run)", () => {
     const store: any = {
-      ctx: { statelogClient: { debug: () => { throw new Error("statelog down"); } } },
+      ctx: {
+        statelogClient: {
+          debug: () => {
+            throw new Error("statelog down");
+          },
+        },
+      },
     };
     expect(() =>
-      agencyStore.run(store, () => { ipcChildDebug("callback_unserializable onNodeStart"); }),
+      agencyStore.run(store, () => {
+        ipcChildDebug("callback_unserializable onNodeStart");
+      }),
     ).not.toThrow();
   });
 });

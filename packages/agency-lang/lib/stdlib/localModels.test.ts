@@ -57,9 +57,7 @@ describe("name resolution", () => {
 
 describe("curated catalog shape", () => {
   it("every entry has a non-empty uri, params, description, and a known category", () => {
-    const validCategories = new Set([
-      "general", "coding", "reasoning", "embedding",
-    ]);
+    const validCategories = new Set(["general", "coding", "reasoning", "embedding"]);
     // Curated set is permissive-licensed only.
     const permissiveLicenses = new Set(["apache-2.0", "mit"]);
     for (const [name, info] of Object.entries(CURATED_LOCAL_MODELS)) {
@@ -84,7 +82,11 @@ describe("aliases", () => {
     const file = _aliasModel("my7b", "hf:org/repo:Q4_K_M", aliasFile);
     expect(file).toBe(aliasFile);
     expect(_resolveModelName("my7b", aliasFile)).toBe("hf:org/repo:Q4_K_M");
-    expect(_listModelNames(aliasFile)).toContainEqual({ name: "my7b", target: "hf:org/repo:Q4_K_M", source: "alias" });
+    expect(_listModelNames(aliasFile)).toContainEqual({
+      name: "my7b",
+      target: "hf:org/repo:Q4_K_M",
+      source: "alias",
+    });
     _unaliasModel("my7b", aliasFile);
     expect(() => _resolveModelName("my7b", aliasFile)).toThrow();
   });
@@ -177,7 +179,9 @@ describe("provider register + download (fake plugin module)", () => {
   // identical across tests (it is).
   function fakeModule(): string {
     const p = path.join(here2, "__tmp_fakellama.mjs");
-    fs.writeFileSync(p, `import { BaseClient } from "smoltalk";
+    fs.writeFileSync(
+      p,
+      `import { BaseClient } from "smoltalk";
       import * as fs from "node:fs";
       import * as path from "node:path";
       export class LlamaCPP extends BaseClient { async textSync() { return { success: true, value: { output: "x", toolCalls: [] } }; } }
@@ -186,12 +190,19 @@ describe("provider register + download (fake plugin module)", () => {
         const file = path.join(dir, "model.gguf");
         fs.writeFileSync(file, "FAKE:" + target);
         return file;
-      }`);
+      }`,
+    );
     fakes.push(p);
     return p;
   }
   afterEach(() => {
-    for (const p of fakes.splice(0)) { try { fs.unlinkSync(p); } catch { /* ignore */ } }
+    for (const p of fakes.splice(0)) {
+      try {
+        fs.unlinkSync(p);
+      } catch {
+        /* ignore */
+      }
+    }
     delete process.env.AGENCY_LLAMA_PROVIDER_MODULE;
     smoltalkPkg.unregisterProvider("llama-cpp");
   });
@@ -199,7 +210,9 @@ describe("provider register + download (fake plugin module)", () => {
   it("registers the provider", async () => {
     process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
     await _registerLocalProvider();
-    expect(smoltalkPkg.getClient({ model: "m", provider: "llama-cpp" }).constructor.name).toBe("LlamaCPP");
+    expect(smoltalkPkg.getClient({ model: "m", provider: "llama-cpp" }).constructor.name).toBe(
+      "LlamaCPP",
+    );
   });
   it("downloads (resolves) a uri to a real path and records it in the manifest", async () => {
     process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
@@ -212,14 +225,21 @@ describe("provider register + download (fake plugin module)", () => {
     process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
     const out = await _registerLocalModel("/abs/my.gguf", dir); // raw path → no pin
     expect(out).toBe(path.join(dir, "model.gguf"));
-    expect(smoltalkPkg.getClient({ model: "m", provider: "llama-cpp" }).constructor.name).toBe("LlamaCPP");
+    expect(smoltalkPkg.getClient({ model: "m", provider: "llama-cpp" }).constructor.name).toBe(
+      "LlamaCPP",
+    );
   });
 
   it("verifies a freshly-downloaded pinned model (match → ok)", async () => {
     process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
     const target = "hf:org/x:Q4";
-    const sha = createHash("sha256").update("FAKE:" + target).digest("hex");
-    fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelAliases: { mymodel: { uri: target, sha256: sha } } } }));
+    const sha = createHash("sha256")
+      .update("FAKE:" + target)
+      .digest("hex");
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({ client: { modelAliases: { mymodel: { uri: target, sha256: sha } } } }),
+    );
     const cwd = process.cwd();
     process.chdir(dir);
     try {
@@ -233,7 +253,12 @@ describe("provider register + download (fake plugin module)", () => {
 
   it("quarantines a freshly-downloaded model whose hash is wrong", async () => {
     process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
-    fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelAliases: { mymodel: { uri: "hf:org/x:Q4", sha256: "0".repeat(64) } } } }));
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({
+        client: { modelAliases: { mymodel: { uri: "hf:org/x:Q4", sha256: "0".repeat(64) } } },
+      }),
+    );
     const cwd = process.cwd();
     process.chdir(dir);
     try {
@@ -251,7 +276,12 @@ describe("provider register + download (fake plugin module)", () => {
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, "model.gguf"), "pre-existing");
     // A deliberately-wrong pin would fail IF it verified — it must be skipped.
-    fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelAliases: { mymodel: { uri: "hf:org/x:Q4", sha256: "0".repeat(64) } } } }));
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({
+        client: { modelAliases: { mymodel: { uri: "hf:org/x:Q4", sha256: "0".repeat(64) } } },
+      }),
+    );
     const cwd = process.cwd();
     process.chdir(dir);
     try {
@@ -449,7 +479,9 @@ describe("formatModelCatalog with rich aliases", () => {
 });
 
 describe("resolveCatalogUrl", () => {
-  afterEach(() => { delete process.env.AGENCY_MODEL_CATALOG_URL; });
+  afterEach(() => {
+    delete process.env.AGENCY_MODEL_CATALOG_URL;
+  });
 
   it("uses the explicit arg first", () => {
     expect(resolveCatalogUrl("https://x/y.json", aliasFile)).toBe("https://x/y.json");
@@ -459,17 +491,22 @@ describe("resolveCatalogUrl", () => {
     expect(resolveCatalogUrl("", aliasFile)).toBe("https://env/c.json");
   });
   it("then the config, then the default", () => {
-    fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelCatalogUrl: "https://cfg/c.json" } }));
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({ client: { modelCatalogUrl: "https://cfg/c.json" } }),
+    );
     expect(resolveCatalogUrl("", aliasFile)).toBe("https://cfg/c.json");
     fs.writeFileSync(aliasFile, "{}");
-    expect(resolveCatalogUrl("", aliasFile)).toContain("raw.githubusercontent.com/egonSchiele/agency-lang");
+    expect(resolveCatalogUrl("", aliasFile)).toContain(
+      "raw.githubusercontent.com/egonSchiele/agency-lang",
+    );
   });
 });
 
 describe("parseCatalog", () => {
   const good = JSON.stringify({
     version: 1,
-    models: { "m1": { uri: "hf:org/m1:Q4_K_M", params: "2B", sizeBytes: 1, category: "general" } },
+    models: { m1: { uri: "hf:org/m1:Q4_K_M", params: "2B", sizeBytes: 1, category: "general" } },
   });
   it("parses a valid catalog", () => {
     const out = parseCatalog(good);
@@ -570,7 +607,9 @@ describe("_refreshCatalog", () => {
     expect(r.modelCount).toBe(1); // total catalog entries
     const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
     expect(cfg.client.modelAliases["qwen3.5-2b"]).toEqual({
-      uri: "hf:org/q:Q4_K_M", params: "2B", source: "remote",
+      uri: "hf:org/q:Q4_K_M",
+      params: "2B",
+      source: "remote",
     });
   });
 
@@ -597,20 +636,22 @@ describe("_refreshCatalog", () => {
     // First run: seed two managed entries.
     await _refreshCatalog({
       file: aliasFile,
-      fetcher: async () => blob({
-        a: { uri: "hf:org/a:Q4_K_M", params: "1B" },
-        b: { uri: "hf:org/b:Q4_K_M" },
-      }),
+      fetcher: async () =>
+        blob({
+          a: { uri: "hf:org/a:Q4_K_M", params: "1B" },
+          b: { uri: "hf:org/b:Q4_K_M" },
+        }),
     });
     // Second run: `a` unchanged, `b` dropped, `c` added with same-uri but no
     // metadata change vs first run (it's new — `added`), and `a` gets a new
     // params value (this is the actual `updated` case).
     const r = await _refreshCatalog({
       file: aliasFile,
-      fetcher: async () => blob({
-        a: { uri: "hf:org/a:Q4_K_M", params: "2B" }, // metadata changed
-        c: { uri: "hf:org/c:Q4_K_M" },               // new
-      }),
+      fetcher: async () =>
+        blob({
+          a: { uri: "hf:org/a:Q4_K_M", params: "2B" }, // metadata changed
+          c: { uri: "hf:org/c:Q4_K_M" }, // new
+        }),
     });
     expect(r.added).toEqual(["c"]);
     expect(r.updated).toEqual(["a"]);
@@ -633,7 +674,10 @@ describe("_refreshCatalog", () => {
   });
 
   it("leaves agency.json untouched when the blob is invalid", async () => {
-    fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelAliases: { keep: "hf:k:Q4_K_M" } } }));
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({ client: { modelAliases: { keep: "hf:k:Q4_K_M" } } }),
+    );
     await expect(
       _refreshCatalog({ file: aliasFile, fetcher: async () => "{not json" }),
     ).rejects.toThrow(/valid JSON/);
@@ -679,7 +723,11 @@ describe("_refreshCatalog", () => {
     const r = await _refreshCatalog({ url: catalogPath, file: aliasFile });
     expect(r.added).toEqual(["m"]);
     const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
-    expect(cfg.client.modelAliases.m).toEqual({ uri: "hf:org/m:Q4_K_M", params: "2B", source: "remote" });
+    expect(cfg.client.modelAliases.m).toEqual({
+      uri: "hf:org/m:Q4_K_M",
+      params: "2B",
+      source: "remote",
+    });
   });
 });
 
@@ -710,7 +758,9 @@ describe("model file verification", () => {
   it("verifyModelFile quarantines + throws on a mismatch", async () => {
     const p = path.join(dir, "m.gguf");
     fs.writeFileSync(p, "tampered");
-    await expect(verifyModelFile(p, "0".repeat(64), "m")).rejects.toThrow(/SHA-256 verification failed/);
+    await expect(verifyModelFile(p, "0".repeat(64), "m")).rejects.toThrow(
+      /SHA-256 verification failed/,
+    );
     expect(fs.existsSync(p)).toBe(false); // moved aside
     expect(fs.existsSync(p + ".invalidSha")).toBe(true); // kept for inspection
   });

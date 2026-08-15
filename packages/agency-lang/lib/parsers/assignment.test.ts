@@ -580,9 +580,9 @@ describe("assignmentParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-          const result = assignmentParser(input);
-          expect(result.success).toBe(false);
-        });
+        const result = assignmentParser(input);
+        expect(result.success).toBe(false);
+      });
     }
   });
 });
@@ -635,10 +635,10 @@ describe("modifiedAssignmentParser", () => {
     const optimize = parseAgency('node main() { optimize const prompt = "hi" }', {}, false);
     expect(optimize.success).toBe(true);
 
-    const staticConst = parseAgency("node main() { static const prompt = \"hi\" }", {}, false);
+    const staticConst = parseAgency('node main() { static const prompt = "hi" }', {}, false);
     expect(staticConst.success).toBe(false);
 
-    const exportedConst = parseAgency("def helper() { export const prompt = \"hi\" }", {}, false);
+    const exportedConst = parseAgency('def helper() { export const prompt = "hi" }', {}, false);
     expect(exportedConst.success).toBe(false);
   });
 

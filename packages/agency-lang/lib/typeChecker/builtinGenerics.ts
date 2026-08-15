@@ -84,52 +84,35 @@ function stripNull(t: VariableType): VariableType {
  * ARGUMENT (alias-side per the `mergeTagSets` contract); the occurrence's
  * tags are the use-site layer and override on `@jsonSchema` key conflicts.
  */
-export function withUseSiteTags(
-  t: VariableType,
-  useSiteTags: Tag[] | undefined,
-): VariableType {
+export function withUseSiteTags(t: VariableType, useSiteTags: Tag[] | undefined): VariableType {
   const merged = mergeTagSets(t.tags, useSiteTags);
   if (!merged) return t;
   return { ...t, tags: merged } as VariableType;
 }
 
 function isValidRecordKey(t: VariableType): boolean {
-  if (t.type === "primitiveType")
-    return t.value === "string" || t.value === "number";
-  if (t.type === "stringLiteralType" || t.type === "numberLiteralType")
-    return true;
+  if (t.type === "primitiveType") return t.value === "string" || t.value === "number";
+  if (t.type === "stringLiteralType" || t.type === "numberLiteralType") return true;
   if (t.type === "unionType") return t.types.every(isValidRecordKey);
   return false;
 }
 
-export function resolveObjectArg(
-  name: string,
-  arg: VariableType,
-  resolve: Resolve,
-): ObjectType {
+export function resolveObjectArg(name: string, arg: VariableType, resolve: Resolve): ObjectType {
   const resolved = resolve(arg);
   if (resolved.type !== "objectType") {
-    throw new TypeError(
-      `${name} expects an object type, got '${formatTypeHint(resolved)}'`,
-    );
+    throw new TypeError(`${name} expects an object type, got '${formatTypeHint(resolved)}'`);
   }
   return resolved;
 }
 
 /** K must resolve to a string literal or a union of string literals. */
-export function resolveKeysArg(
-  name: string,
-  arg: VariableType,
-  resolve: Resolve,
-): string[] {
+export function resolveKeysArg(name: string, arg: VariableType, resolve: Resolve): string[] {
   const resolved = resolve(arg);
   const members = resolved.type === "unionType" ? resolved.types : [resolved];
   return members.map((member) => {
     const resolvedMember = resolve(member);
     if (resolvedMember.type !== "stringLiteralType") {
-      throw new TypeError(
-        `${name} expects string literal keys, got '${formatTypeHint(resolved)}'`,
-      );
+      throw new TypeError(`${name} expects string literal keys, got '${formatTypeHint(resolved)}'`);
     }
     return resolvedMember.value;
   });
@@ -290,9 +273,7 @@ function lookupBuiltinGeneric(name: string): BuiltinGeneric | undefined {
  */
 export const BUILTIN_GENERIC_ARITY: Record<string, number> = Object.assign(
   Object.create(null) as Record<string, number>,
-  Object.fromEntries(
-    Object.entries(BUILTIN_GENERICS).map(([name, entry]) => [name, entry.arity]),
-  ),
+  Object.fromEntries(Object.entries(BUILTIN_GENERICS).map(([name, entry]) => [name, entry.arity])),
 );
 
 /** The names users may not declare type aliases for (index.ts). */

@@ -32,40 +32,57 @@ export function fakeRun(inputId: string, output: unknown, spec?: Input): string 
   fs.mkdirSync(agentDir, { recursive: true });
 
   const recordPath = path.join(agentDir, "eval-record.json");
-  fs.writeFileSync(recordPath, JSON.stringify({
-    traceId: "t",
-    recordVersion: 2,
-    formatVersion: 1,
-    durationMs: 1,
-    source: "test",
-    evalValues: [],
-    evalOutputs: [{ value: output, threadId: "0", tMs: 1 }],
-    threads: [],
-    events: [],
-    interrupts: [],
-    errors: [],
-    incomplete: [],
-    metrics: {
-      llmCalls: 0, toolStarts: 0, toolEnds: 0, models: [],
-      tokensInTotal: 0, tokensOutTotal: 0, costUsdTotal: 0, toolCounts: {},
-    },
-    warnings: [],
-  }));
+  fs.writeFileSync(
+    recordPath,
+    JSON.stringify({
+      traceId: "t",
+      recordVersion: 2,
+      formatVersion: 1,
+      durationMs: 1,
+      source: "test",
+      evalValues: [],
+      evalOutputs: [{ value: output, threadId: "0", tMs: 1 }],
+      threads: [],
+      events: [],
+      interrupts: [],
+      errors: [],
+      incomplete: [],
+      metrics: {
+        llmCalls: 0,
+        toolStarts: 0,
+        toolEnds: 0,
+        models: [],
+        tokensInTotal: 0,
+        tokensOutTotal: 0,
+        costUsdTotal: 0,
+        toolCounts: {},
+      },
+      warnings: [],
+    }),
+  );
 
-  fs.writeFileSync(path.join(inputDir, "input.json"), JSON.stringify({ args: {}, ...spec, id: inputId }));
-  fs.writeFileSync(path.join(root, "summary.json"), JSON.stringify({
-    runId: "fake",
-    runDir: root,
-    agentLabel: "fake:main",
-    inputs: [{
-      inputId,
-      status: "success",
-      evalRecordPath: recordPath,
-      statelogPath: path.join(agentDir, "statelog.jsonl"),
-      workdirPath: workdir,
-    }],
-    okCount: 1,
-    errorCount: 0,
-  }));
+  fs.writeFileSync(
+    path.join(inputDir, "input.json"),
+    JSON.stringify({ args: {}, ...spec, id: inputId }),
+  );
+  fs.writeFileSync(
+    path.join(root, "summary.json"),
+    JSON.stringify({
+      runId: "fake",
+      runDir: root,
+      agentLabel: "fake:main",
+      inputs: [
+        {
+          inputId,
+          status: "success",
+          evalRecordPath: recordPath,
+          statelogPath: path.join(agentDir, "statelog.jsonl"),
+          workdirPath: workdir,
+        },
+      ],
+      okCount: 1,
+      errorCount: 0,
+    }),
+  );
   return root;
 }

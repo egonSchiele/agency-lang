@@ -28,11 +28,7 @@ function jsonl(events: EventEnvelope[]): string {
 
 describe("scanStatelog", () => {
   it("groups two interleaved traces in first-seen order", () => {
-    const text = jsonl([
-      ev("A", "agentStart"),
-      ev("B", "agentStart"),
-      ev("A", "exitNode"),
-    ]);
+    const text = jsonl([ev("A", "agentStart"), ev("B", "agentStart"), ev("A", "exitNode")]);
     const scan = scanStatelog(text);
     expect(scan.traces.map((t) => t.traceId)).toEqual(["A", "B"]);
     expect(scan.eventsByTrace["A"]).toHaveLength(2);
@@ -78,7 +74,10 @@ describe("describeAvailableTraces", () => {
   it("lists each trace with its label and cost", () => {
     const text = jsonl([
       ev("A", "agentName", { name: "coder" }),
-      ev("A", "promptCompletion", { messages: [{ role: "user", content: "hi" }], cost: { totalCost: 0.5 } }),
+      ev("A", "promptCompletion", {
+        messages: [{ role: "user", content: "hi" }],
+        cost: { totalCost: 0.5 },
+      }),
       ev("B", "agentStart"),
     ]);
     const description = describeAvailableTraces(scanStatelog(text));

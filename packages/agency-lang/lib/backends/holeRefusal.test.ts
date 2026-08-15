@@ -61,8 +61,6 @@ describe("pipeline stages tolerate holes", () => {
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
     const symbolTable = SymbolTable.build(file, {});
-    expect(() =>
-      buildCompilationUnit(parsed.result, symbolTable, file, template),
-    ).not.toThrow();
+    expect(() => buildCompilationUnit(parsed.result, symbolTable, file, template)).not.toThrow();
   });
 });

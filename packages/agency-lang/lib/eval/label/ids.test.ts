@@ -34,7 +34,9 @@ describe("statelog occurrence origin", () => {
 
   it("leaves the existing run/file/json origins unchanged", () => {
     expect(OccurrenceOriginSchema.parse({ kind: "file", itemKey: "a.txt" }).kind).toBe("file");
-    expect(OccurrenceOriginSchema.parse({ kind: "json", itemKey: "d.json", itemIndex: 1 }).kind).toBe("json");
+    expect(
+      OccurrenceOriginSchema.parse({ kind: "json", itemKey: "d.json", itemIndex: 1 }).kind,
+    ).toBe("json");
   });
 
   it("gives one trace two distinct occurrence ids for two different output indexes", () => {
@@ -60,13 +62,15 @@ describe("makeOutputId", () => {
   });
 
   it("changes when a field NAME changes, because the record shape is content", () => {
-    expect(makeOutputId({ task: "Summarize", response: "A summary" }))
-      .not.toBe(makeOutputId(fields));
+    expect(makeOutputId({ task: "Summarize", response: "A summary" })).not.toBe(
+      makeOutputId(fields),
+    );
   });
 
   it("distinguishes a missing field from an empty one", () => {
-    expect(makeOutputId({ output: "A summary" }))
-      .not.toBe(makeOutputId({ task: "", output: "A summary" }));
+    expect(makeOutputId({ output: "A summary" })).not.toBe(
+      makeOutputId({ task: "", output: "A summary" }),
+    );
   });
 
   it("cannot be confused by values that contain a field separator", () => {
@@ -110,8 +114,9 @@ describe("makeOccurrenceId", () => {
   });
 
   it("separates the same observation under two source names", () => {
-    expect(makeOccurrenceId({ ...occurrence, source: "agent-v2" }))
-      .not.toBe(makeOccurrenceId(occurrence));
+    expect(makeOccurrenceId({ ...occurrence, source: "agent-v2" })).not.toBe(
+      makeOccurrenceId(occurrence),
+    );
   });
 
   it("produces a filesystem-safe prefixed digest", () => {
@@ -195,8 +200,9 @@ describe("durable schemas", () => {
   });
 
   it("rejects unknown keys, so a typo cannot silently persist", () => {
-    expect(ManifestSchema.safeParse({ schemaVersion: 2, fieldOrder: [], extra: true }).success)
-      .toBe(false);
+    expect(
+      ManifestSchema.safeParse({ schemaVersion: 2, fieldOrder: [], extra: true }).success,
+    ).toBe(false);
   });
 
   it("rejects a manifest field order holding a malformed field name", () => {
@@ -208,7 +214,9 @@ describe("durable schemas", () => {
     expect(ChecklistQuestionSchema.safeParse({ ...base, weight: 1 }).success).toBe(true);
     expect(ChecklistQuestionSchema.safeParse({ ...base, weight: 0 }).success).toBe(false);
     expect(ChecklistQuestionSchema.safeParse({ ...base, weight: -1 }).success).toBe(false);
-    expect(ChecklistQuestionSchema.safeParse({ ...base, weight: Number.POSITIVE_INFINITY }).success).toBe(false);
+    expect(
+      ChecklistQuestionSchema.safeParse({ ...base, weight: Number.POSITIVE_INFINITY }).success,
+    ).toBe(false);
   });
 
   it("rejects a corpus row whose outputId is not a well-formed digest", () => {
@@ -308,27 +316,32 @@ describe("occurrence identity uses only the stable locator", () => {
   it("ignores a corrected model name", () => {
     // Hashing descriptive provenance would make this a SECOND observation of
     // the same execution, and per-source counts would overstate the run.
-    expect(makeOccurrenceId({ ...base, origin: { ...runOrigin, models: ["gpt-4o-2024"] } }))
-      .toBe(makeOccurrenceId(base));
+    expect(makeOccurrenceId({ ...base, origin: { ...runOrigin, models: ["gpt-4o-2024"] } })).toBe(
+      makeOccurrenceId(base),
+    );
   });
 
   it("ignores changed agent provenance, start time and raw values", () => {
-    expect(makeOccurrenceId({
-      ...base,
-      origin: {
-        ...runOrigin,
-        agent: { file: "other.agency" },
-        runStartedAtMs: 9999,
-        rawTask: "changed",
-        rawValue: null,
-      },
-    })).toBe(makeOccurrenceId(base));
+    expect(
+      makeOccurrenceId({
+        ...base,
+        origin: {
+          ...runOrigin,
+          agent: { file: "other.agency" },
+          runStartedAtMs: 9999,
+          rawTask: "changed",
+          rawValue: null,
+        },
+      }),
+    ).toBe(makeOccurrenceId(base));
   });
 
   it("still distinguishes a different execution", () => {
-    expect(makeOccurrenceId({ ...base, origin: { ...runOrigin, traceId: "t-2" } }))
-      .not.toBe(makeOccurrenceId(base));
-    expect(makeOccurrenceId({ ...base, origin: { ...runOrigin, finalOutputIndex: 3 } }))
-      .not.toBe(makeOccurrenceId(base));
+    expect(makeOccurrenceId({ ...base, origin: { ...runOrigin, traceId: "t-2" } })).not.toBe(
+      makeOccurrenceId(base),
+    );
+    expect(makeOccurrenceId({ ...base, origin: { ...runOrigin, finalOutputIndex: 3 } })).not.toBe(
+      makeOccurrenceId(base),
+    );
   });
 });

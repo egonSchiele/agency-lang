@@ -55,7 +55,9 @@ describe("desugarGuardsInBody", () => {
 
   it("desugars statement-position and return-position guards", () => {
     const body = desugarGuardsInBody(
-      mainBody("node main() { guard(time: 5ms) { doWork() }\n return guard(cost: $1) { return 2 } }"),
+      mainBody(
+        "node main() { guard(time: 5ms) { doWork() }\n return guard(cost: $1) { return 2 } }",
+      ),
     );
     const stmt: any = body.find((s: any) => s.type === "functionCall");
     expect(stmt.functionName).toBe("_guard");
@@ -127,12 +129,8 @@ describe("guardDesugar — declaredYieldType stamping (#580)", () => {
     const nodes = desugarSource(
       'node main(): Result<string> {\n  return guard(cost: $1) {\n    return "x"\n  }\n}\n',
     );
-    const graphNode = nodes.find(
-      (node: any) => node.type === "graphNode",
-    ) as any;
-    const ret = graphNode.body.find(
-      (node: any) => node.type === "returnStatement",
-    );
+    const graphNode = nodes.find((node: any) => node.type === "graphNode") as any;
+    const ret = graphNode.body.find((node: any) => node.type === "returnStatement");
     expect(ret.value.block.declaredYieldType).toEqual(STRING_T);
   });
 
@@ -142,9 +140,7 @@ describe("guardDesugar — declaredYieldType stamping (#580)", () => {
     );
     const def = nodes.find((node: any) => node.type === "function") as any;
     const ifNode = def.body.find((node: any) => node.type === "ifElse");
-    const innerReturn = ifNode.thenBody.find(
-      (node: any) => node.type === "returnStatement",
-    );
+    const innerReturn = ifNode.thenBody.find((node: any) => node.type === "returnStatement");
     expect(innerReturn.value.block.declaredYieldType).toEqual(STRING_T);
   });
 
@@ -166,14 +162,10 @@ describe("guardDesugar — declaredYieldType stamping (#580)", () => {
     );
     const def = nodes.find((node: any) => node.type === "function") as any;
     const handle = def.body.find((node: any) => node.type === "handleBlock");
-    const handlerReturn = handle.handler.body.find(
-      (node: any) => node.type === "returnStatement",
-    );
+    const handlerReturn = handle.handler.body.find((node: any) => node.type === "returnStatement");
     expect(handlerReturn.value.block.declaredYieldType).toBeUndefined();
     // The guarded body itself INHERITS (a return there returns from f):
-    const bodyReturn = handle.body.find(
-      (node: any) => node.type === "returnStatement",
-    );
+    const bodyReturn = handle.body.find((node: any) => node.type === "returnStatement");
     expect(bodyReturn.value.block.declaredYieldType).toEqual(STRING_T);
   });
 
@@ -182,12 +174,8 @@ describe("guardDesugar — declaredYieldType stamping (#580)", () => {
       'def f(): Result<string> {\n  return guard(cost: $1) { return "ok" }\n\n  finalize {\n    return guard(cost: $1) {\n      return "x"\n    }\n  }\n}\n',
     );
     const def = nodes.find((node: any) => node.type === "function") as any;
-    const finalize = def.body.find(
-      (node: any) => node.type === "finalizeBlock",
-    );
-    const finReturn = finalize.body.find(
-      (node: any) => node.type === "returnStatement",
-    );
+    const finalize = def.body.find((node: any) => node.type === "finalizeBlock");
+    const finReturn = finalize.body.find((node: any) => node.type === "returnStatement");
     expect(finReturn.value.block.declaredYieldType).toBeUndefined();
   });
 
@@ -196,13 +184,9 @@ describe("guardDesugar — declaredYieldType stamping (#580)", () => {
       'def f(): string {\n  const r: Result<Result<string>> = guard(cost: $1) {\n    return guard(cost: $1) {\n      return "x"\n    }\n  }\n  return "y"\n}\n',
     );
     const def = nodes.find((node: any) => node.type === "function") as any;
-    const outer = def.body.find(
-      (node: any) => node.type === "assignment",
-    ).value;
+    const outer = def.body.find((node: any) => node.type === "assignment").value;
     expect(outer.block.declaredYieldType.type).toBe("resultType");
-    const innerReturn = outer.block.body.find(
-      (node: any) => node.type === "returnStatement",
-    );
+    const innerReturn = outer.block.body.find((node: any) => node.type === "returnStatement");
     expect(innerReturn.value.block.declaredYieldType).toEqual(STRING_T);
   });
 
@@ -224,8 +208,7 @@ describe("guardDesugar — declaredYieldType stamping (#580)", () => {
     );
     const def = nodes.find((node: any) => node.type === "function") as any;
     const stmt = def.body.find(
-      (node: any) =>
-        node.type === "functionCall" && node.functionName === "_guard",
+      (node: any) => node.type === "functionCall" && node.functionName === "_guard",
     );
     expect(stmt.block.declaredYieldType).toBeUndefined();
   });

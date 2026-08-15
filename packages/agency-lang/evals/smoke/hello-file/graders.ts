@@ -19,15 +19,20 @@ export default [
     mustPass: true,
   }),
 
-  grader(({ workdir }) => {
-    const file = join(workdir, "out.txt");
-    if (!existsSync(file)) {
-      return fail("out.txt was not written");
-    }
-    const content = readFileSync(file, "utf8").trim();
-    if (content === EXPECTED) {
-      return true;
-    }
-    return fail(`out.txt should contain exactly ${JSON.stringify(EXPECTED)}, got ${JSON.stringify(content)}`);
-  }, { name: "content-matches", mustPass: true }),
+  grader(
+    ({ workdir }) => {
+      const file = join(workdir, "out.txt");
+      if (!existsSync(file)) {
+        return fail("out.txt was not written");
+      }
+      const content = readFileSync(file, "utf8").trim();
+      if (content === EXPECTED) {
+        return true;
+      }
+      return fail(
+        `out.txt should contain exactly ${JSON.stringify(EXPECTED)}, got ${JSON.stringify(content)}`,
+      );
+    },
+    { name: "content-matches", mustPass: true },
+  ),
 ];

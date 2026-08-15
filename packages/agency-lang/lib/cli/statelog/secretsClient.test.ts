@@ -119,9 +119,7 @@ describe("secretsClient transport", () => {
     fetchMock.mockResolvedValue(
       response(200, { success: false, error: `echoing a different secret: ${other}` }),
     );
-    const error = await failureOf(
-      client().set("N", SENTINEL, { alsoRedact: [other] }),
-    );
+    const error = await failureOf(client().set("N", SENTINEL, { alsoRedact: [other] }));
     expect(error.message).toContain("[redacted]");
     expect(error.message).not.toContain(other);
   });
@@ -144,9 +142,7 @@ describe("secretsClient failure taxonomy", () => {
   });
 
   it("the middleware 404 maps to slug guidance, matching the error field only", async () => {
-    fetchMock.mockResolvedValue(
-      response(404, { error: "Project not found", extra: "harmless" }),
-    );
+    fetchMock.mockResolvedValue(response(404, { error: "Project not found", extra: "harmless" }));
     const error = await failureOf(client().list());
     expect(error.message).toContain("project 'proj' not found");
     expect(error.message).not.toContain("upgrade");

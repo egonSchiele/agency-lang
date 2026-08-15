@@ -37,9 +37,8 @@ export type ScrollListResult = {
  */
 export function scrollList<T>(opts: ScrollListOpts<T>): ScrollListResult {
   const clamped = clampScroll(opts.scrollTop, opts.items.length, opts.viewportRows);
-  const scrollTop = opts.cursorIdx >= 0
-    ? followCursor(clamped, opts.cursorIdx, opts.viewportRows)
-    : clamped;
+  const scrollTop =
+    opts.cursorIdx >= 0 ? followCursor(clamped, opts.cursorIdx, opts.viewportRows) : clamped;
   const visible = opts.items.slice(scrollTop, scrollTop + opts.viewportRows);
   const children = visible.map((item, i) =>
     opts.renderItem(item, scrollTop + i === opts.cursorIdx),

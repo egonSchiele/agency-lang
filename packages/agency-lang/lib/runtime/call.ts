@@ -29,10 +29,7 @@ import { type AbortedResult, isAborted } from "./abortedResult.js";
  *  result so the caller's post-call interrupt guard halts and the
  *  batch surfaces normally. */
 function findInterruptArg(descriptor: CallType): unknown | undefined {
-  const positional =
-    descriptor.type === "positional"
-      ? descriptor.args
-      : descriptor.positionalArgs;
+  const positional = descriptor.type === "positional" ? descriptor.args : descriptor.positionalArgs;
   for (const arg of positional) {
     if (hasInterrupts(arg)) return arg;
   }
@@ -45,10 +42,7 @@ function findInterruptArg(descriptor: CallType): unknown | undefined {
 }
 
 function findAbortedArg(descriptor: CallType): AbortedResult | undefined {
-  const positional =
-    descriptor.type === "positional"
-      ? descriptor.args
-      : descriptor.positionalArgs;
+  const positional = descriptor.type === "positional" ? descriptor.args : descriptor.positionalArgs;
   for (const arg of positional) {
     if (isAborted(arg)) {
       return arg;
@@ -115,7 +109,7 @@ export async function __call(
     if (descriptor.blockArg !== undefined) {
       throw new Error(
         `Cannot pass a trailing block to non-Agency function '${target.name || "(anonymous)"}'. ` +
-        `Trailing 'as x { ... }' blocks are only valid on Agency-defined functions.`,
+          `Trailing 'as x { ... }' blocks are only valid on Agency-defined functions.`,
       );
     }
     throw new Error(
@@ -175,17 +169,14 @@ export async function __callMethod(
       // typechecker enforces this statically, but `any` values and direct
       // JS callers bypass it — guard at runtime too.
       if (typeof descriptor.args[0] !== "string") {
-        throw new Error(
-          `.rename() requires a string argument, got ${typeof descriptor.args[0]}`,
-        );
+        throw new Error(`.rename() requires a string argument, got ${typeof descriptor.args[0]}`);
       }
       return obj.rename(descriptor.args[0]);
     }
     if (prop === "preapprove") {
       const hasArgs =
         descriptor.type === "named"
-          ? descriptor.positionalArgs.length > 0 ||
-            Object.keys(descriptor.namedArgs).length > 0
+          ? descriptor.positionalArgs.length > 0 || Object.keys(descriptor.namedArgs).length > 0
           : descriptor.args.length > 0;
       if (hasArgs) {
         throw new Error(".preapprove() takes no arguments");
@@ -211,7 +202,9 @@ export async function __callMethod(
     return target.invoke(descriptor);
   }
   if (typeof target !== "function") {
-    throw new Error(`Cannot call non-function value at property '${String(prop)}': ${String(target)}`);
+    throw new Error(
+      `Cannot call non-function value at property '${String(prop)}': ${String(target)}`,
+    );
   }
   if (descriptor.type === "named") {
     // See the matching branch in `__call` above. A trailing block on
@@ -220,12 +213,10 @@ export async function __callMethod(
     if (descriptor.blockArg !== undefined) {
       throw new Error(
         `Cannot pass a trailing block to non-Agency function '${String(prop)}'. ` +
-        `Trailing 'as x { ... }' blocks are only valid on Agency-defined functions.`,
+          `Trailing 'as x { ... }' blocks are only valid on Agency-defined functions.`,
       );
     }
-    throw new Error(
-      `Named arguments are not supported for non-Agency function '${String(prop)}'`,
-    );
+    throw new Error(`Named arguments are not supported for non-Agency function '${String(prop)}'`);
   }
   // Reuse the single property lookup while preserving `this` binding.
   return Reflect.apply(target, obj, descriptor.args);

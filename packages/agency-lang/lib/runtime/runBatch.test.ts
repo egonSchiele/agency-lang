@@ -199,8 +199,7 @@ describe("runBatch — mode 'all'", () => {
         { key: "c1", invoke: async () => ({ a: 1 }) },
       ],
       hooks: {
-        onBranchEnd: (_key, index, outcome, _t, value) =>
-          ends.push({ index, outcome, value }),
+        onBranchEnd: (_key, index, outcome, _t, value) => ends.push({ index, outcome, value }),
       },
     });
     expect(ends).toEqual([
@@ -221,8 +220,7 @@ describe("runBatch — mode 'all'", () => {
       mode: "all",
       children: [{ key: "c0", invoke: async () => [fakeInterrupt("z", 5)] }],
       hooks: {
-        onBranchEnd: (_key, _index, outcome, _t, value) =>
-          ends.push({ outcome, value }),
+        onBranchEnd: (_key, _index, outcome, _t, value) => ends.push({ outcome, value }),
       },
     });
     expect(ends).toEqual([{ outcome: "interrupted", value: undefined }]);
@@ -361,7 +359,12 @@ describe("runBatch — mode 'all'", () => {
         mode: "all",
         children: [
           { key: "c0", invoke: async () => [fakeInterrupt()] },
-          { key: "c1", invoke: async () => { throw err; } },
+          {
+            key: "c1",
+            invoke: async () => {
+              throw err;
+            },
+          },
         ],
       }),
     ).rejects.toBe(err);
@@ -435,14 +438,7 @@ describe("runBatch — mode 'sequential'", () => {
       children: [make("a"), make("b"), make("c")],
     });
     expect(result).toEqual({ kind: "values", values: ["a", "b", "c"] });
-    expect(log).toEqual([
-      "start-a",
-      "end-a",
-      "start-b",
-      "end-b",
-      "start-c",
-      "end-c",
-    ]);
+    expect(log).toEqual(["start-a", "end-a", "start-b", "end-b", "start-c", "end-c"]);
   });
 
   it("stamps a single shared checkpoint when any child interrupts", async () => {
@@ -621,8 +617,20 @@ describe("runBatch — mode 'race'", () => {
       mode: "race",
       raceWinnerLocalKey: WINNER_KEY,
       children: [
-        { key: "c0", invoke: async () => { aInvoked = true; return "a"; } },
-        { key: "c1", invoke: async () => { bInvoked = true; return "b"; } },
+        {
+          key: "c0",
+          invoke: async () => {
+            aInvoked = true;
+            return "a";
+          },
+        },
+        {
+          key: "c1",
+          invoke: async () => {
+            bInvoked = true;
+            return "b";
+          },
+        },
       ],
     });
     expect(aInvoked).toBe(false);
@@ -647,10 +655,26 @@ describe("runBatch — mode 'race'", () => {
       mode: "race",
       raceWinnerLocalKey: WINNER_KEY,
       children: [
-        { key: "c0", invoke: async () => { invokes++; return "x"; } },
-        { key: "c1", invoke: async () => { invokes++; return "y"; } },
+        {
+          key: "c0",
+          invoke: async () => {
+            invokes++;
+            return "x";
+          },
+        },
+        {
+          key: "c1",
+          invoke: async () => {
+            invokes++;
+            return "y";
+          },
+        },
       ],
-      hooks: { propagateWinnerCost: () => { winnerCostCalls++; } },
+      hooks: {
+        propagateWinnerCost: () => {
+          winnerCostCalls++;
+        },
+      },
     });
     expect(invokes).toBe(0);
     // Cost was already propagated when winner first completed; defensive
@@ -797,17 +821,13 @@ describe("runBatch — durable object-tag flag propagation", () => {
 
   it("propagates the flag when the branch settles as INTERRUPTS (payload may reference a tagged object)", async () => {
     const ctx = makeTagCtx();
-    const result = await runInTestContext(
-      ctx,
-      new StateStack(),
-      new ThreadStore(),
-      () =>
-        runBatch(
-          batchOpts(ctx, async () => {
-            getRuntimeContext().globals.setTag({ secret: "s" }, "redact", true);
-            return [fakeInterrupt("t", 9)];
-          }),
-        ),
+    const result = await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+      runBatch(
+        batchOpts(ctx, async () => {
+          getRuntimeContext().globals.setTag({ secret: "s" }, "redact", true);
+          return [fakeInterrupt("t", 9)];
+        }),
+      ),
     );
     expect(result.kind).toBe("interrupts");
     expect((ctx.globals as GlobalStore).hasDurableObjectTagFlag()).toBe(true);
@@ -852,53 +872,48 @@ describe("runBatch — branch primitive redaction propagation (fork/race)", () =
     const defaultSecret = "CCCCdefault-marker-secret"; // default [REDACTED], no custom label
     const captured: Record<number, unknown> = {};
 
-    await runInTestContext(
-      execCtx,
-      execCtx.stateStack,
-      new ThreadStore(),
-      async () => {
-        await runBatch<string>({
-          ctx,
-          parentStack,
-          parentFrame,
-          checkpointLocation: cpLoc,
-          mode: "all",
-          shareGlobals: false, // default isolation: branch globals are discarded at join
-          children: [
-            {
-              key: "c0",
-              invoke: async () => {
-                getRuntimeContext().globals.markRedacted(small, marker);
-                return small;
-              },
-            },
-            {
-              key: "c1",
-              invoke: async () => {
-                getRuntimeContext().globals.markRedacted(big, marker);
-                return big;
-              },
-            },
-            {
-              key: "c2",
-              invoke: async () => {
-                // DEFAULT redaction (no custom label): the gap is not specific
-                // to custom markers — a plain [REDACTED] primitive leaks too.
-                getRuntimeContext().globals.markRedacted(defaultSecret);
-                return defaultSecret;
-              },
-            },
-          ],
-          hooks: {
-            // Mirror runner.ts's forkBranchEnd: serialize the branch value on the
-            // parent side, where redaction must still fire.
-            onBranchEnd: (_key, branchIndex, _outcome, _time, value) => {
-              captured[branchIndex] = safeStatelogValue(value);
+    await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
+      await runBatch<string>({
+        ctx,
+        parentStack,
+        parentFrame,
+        checkpointLocation: cpLoc,
+        mode: "all",
+        shareGlobals: false, // default isolation: branch globals are discarded at join
+        children: [
+          {
+            key: "c0",
+            invoke: async () => {
+              getRuntimeContext().globals.markRedacted(small, marker);
+              return small;
             },
           },
-        });
-      },
-    );
+          {
+            key: "c1",
+            invoke: async () => {
+              getRuntimeContext().globals.markRedacted(big, marker);
+              return big;
+            },
+          },
+          {
+            key: "c2",
+            invoke: async () => {
+              // DEFAULT redaction (no custom label): the gap is not specific
+              // to custom markers — a plain [REDACTED] primitive leaks too.
+              getRuntimeContext().globals.markRedacted(defaultSecret);
+              return defaultSecret;
+            },
+          },
+        ],
+        hooks: {
+          // Mirror runner.ts's forkBranchEnd: serialize the branch value on the
+          // parent side, where redaction must still fire.
+          onBranchEnd: (_key, branchIndex, _outcome, _time, value) => {
+            captured[branchIndex] = safeStatelogValue(value);
+          },
+        },
+      });
+    });
 
     expect(captured[0]).toBe(marker);
     expect(captured[1]).toBe(marker); // redacted BEFORE the >4000-char truncation path

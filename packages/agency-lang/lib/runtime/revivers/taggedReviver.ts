@@ -1,9 +1,5 @@
 import { BaseReviver } from "./baseReviver.js";
-import {
-  isPlainObjectOrArray,
-  attachTag,
-  readTag,
-} from "../state/tagSymbol.js";
+import { isPlainObjectOrArray, attachTag, readTag } from "../state/tagSymbol.js";
 
 // Preserves a plain object's / array's durable tag (a non-enumerable TAG_SYMBOL
 // property) across the shared JSON round-trip. Plain objects/arrays match no

@@ -1,9 +1,5 @@
 import { spawn, SpawnOptions, ChildProcess } from "child_process";
-import {
-  AgencyCancelledError,
-  isAbortError,
-  readCause,
-} from "../runtime/errors.js";
+import { AgencyCancelledError, isAbortError, readCause } from "../runtime/errors.js";
 
 /**
  * Build the cancellation a leaf op rejects with when its abort signal
@@ -13,10 +9,7 @@ import {
  * convert it instead of letting a bare cancel escape. Falls back to a
  * plain cancel when no structured cause is present.
  */
-function leafCancel(
-  message: string,
-  signal: AbortSignal | undefined,
-): AgencyCancelledError {
+function leafCancel(message: string, signal: AbortSignal | undefined): AgencyCancelledError {
   return new AgencyCancelledError(message, readCause(signal));
 }
 
@@ -139,7 +132,9 @@ export function abortableSpawn(
       }
       stdout += data;
     });
-    child.stderr!.on("data", (data: string) => { stderr += data; });
+    child.stderr!.on("data", (data: string) => {
+      stderr += data;
+    });
 
     // Guard every stdio stream against a stray `error` event, or an unhandled
     // one crashes the process. The common case is EPIPE on stdin: a child that
@@ -184,7 +179,11 @@ export function abortableSpawn(
       } else if (truncated) {
         // We killed the child on purpose after hitting the byte cap; treat
         // the partial output as a success rather than a spawn failure.
-        resolve({ stdout: stdout + `\n[output truncated at ${maxOutputBytes} bytes]`, stderr, exitCode: 0 });
+        resolve({
+          stdout: stdout + `\n[output truncated at ${maxOutputBytes} bytes]`,
+          stderr,
+          exitCode: 0,
+        });
       } else if (timedOut) {
         resolve({ stdout, stderr: stderr + "\nProcess timed out", exitCode: 1 });
       } else {
@@ -229,7 +228,9 @@ export function abortableExec(
     let stderr = "";
     let aborted = false;
     child.stderr?.setEncoding("utf8");
-    child.stderr?.on("data", (data: string) => { stderr += data; });
+    child.stderr?.on("data", (data: string) => {
+      stderr += data;
+    });
     // stdin/stdout are `ignore`d here (no stream), but stderr is piped and,
     // like any stdio emitter, crashes the process on an unhandled `error`.
     guardStdioStream(child.stdin, reject);
@@ -280,10 +281,7 @@ export function abortableExec(
  * Ctrl-C would just sit there for ten minutes. Translates to
  * `AgencyCancelledError` so `__tryCall` re-throws it.
  */
-export function abortableSleep(
-  ms: number,
-  signal: AbortSignal | undefined,
-): Promise<void> {
+export function abortableSleep(ms: number, signal: AbortSignal | undefined): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
       reject(leafCancel("sleep cancelled", signal));

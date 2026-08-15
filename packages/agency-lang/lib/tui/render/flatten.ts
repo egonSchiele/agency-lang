@@ -16,7 +16,14 @@ export function flatten(frame: Frame, width: number, height: number): Cell[][] {
   return grid;
 }
 
-function blitFrame(grid: Cell[][], frame: Frame, gridWidth: number, gridHeight: number, originX: number, originY: number): void {
+function blitFrame(
+  grid: Cell[][],
+  frame: Frame,
+  gridWidth: number,
+  gridHeight: number,
+  originX: number,
+  originY: number,
+): void {
   if (frame.content) {
     for (let y = 0; y < frame.content.length; y++) {
       const gridY = frame.y - originY + y;

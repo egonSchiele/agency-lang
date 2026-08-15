@@ -6,10 +6,7 @@ export const __dirname = import.meta.dirname;
 export const rootDir = join(__dirname, "../../");
 
 export function loadEnv() {
-  const envfiles = [
-    resolve(rootDir, "..", ".env.local"),
-    resolve(rootDir, "..", ".env"),
-  ];
+  const envfiles = [resolve(rootDir, "..", ".env.local"), resolve(rootDir, "..", ".env")];
   for (const envfile of envfiles) {
     if (tryEnvFile(envfile)) {
       break;

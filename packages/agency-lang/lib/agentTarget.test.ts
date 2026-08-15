@@ -4,7 +4,12 @@ import * as path from "path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { assertEvalEntryNodeTakesOneParameter, parseTarget, resolveEvalRunTarget, resolveEvalTarget } from "./agentTarget.js";
+import {
+  assertEvalEntryNodeTakesOneParameter,
+  parseTarget,
+  resolveEvalRunTarget,
+  resolveEvalTarget,
+} from "./agentTarget.js";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -30,9 +35,21 @@ describe("agent targets", () => {
     fs.mkdirSync(dir);
     fs.writeFileSync(path.join(dir, "main.agency"), "node main() {}\n");
 
-    expect(resolveEvalRunTarget(`${file}:evalMain`)).toEqual({ agentFile: file, node: "evalMain", label: `${file}:evalMain` });
-    expect(resolveEvalRunTarget(file)).toEqual({ agentFile: file, node: "main", label: `${file}:main` });
-    expect(resolveEvalRunTarget(dir)).toEqual({ agentFile: path.join(dir, "main.agency"), node: "main", label: `${path.join(dir, "main.agency")}:main` });
+    expect(resolveEvalRunTarget(`${file}:evalMain`)).toEqual({
+      agentFile: file,
+      node: "evalMain",
+      label: `${file}:evalMain`,
+    });
+    expect(resolveEvalRunTarget(file)).toEqual({
+      agentFile: file,
+      node: "main",
+      label: `${file}:main`,
+    });
+    expect(resolveEvalRunTarget(dir)).toEqual({
+      agentFile: path.join(dir, "main.agency"),
+      node: "main",
+      label: `${path.join(dir, "main.agency")}:main`,
+    });
   });
 });
 
@@ -42,17 +59,26 @@ describe("resolveEvalTarget", () => {
     dirs.push(tmpDir);
     const file = path.join(tmpDir, "a.agency");
     fs.writeFileSync(file, "node main(task: string) {}\n");
-    expect(resolveEvalTarget({ agent: `${file}:main` }))
-      .toEqual({ kind: "file", agentFile: file, node: "main", label: `${file}:main` });
+    expect(resolveEvalTarget({ agent: `${file}:main` })).toEqual({
+      kind: "file",
+      agentFile: file,
+      node: "main",
+      label: `${file}:main`,
+    });
   });
 
   it("resolves --agent-cmd into a command target with the placeholder intact", () => {
-    expect(resolveEvalTarget({ agentCmd: `agency agent -p -- {task}` }))
-      .toEqual({ kind: "command", tokens: ["agency", "agent", "-p", "--", "{task}"], label: "agency agent -p -- {task}" });
+    expect(resolveEvalTarget({ agentCmd: `agency agent -p -- {task}` })).toEqual({
+      kind: "command",
+      tokens: ["agency", "agent", "-p", "--", "{task}"],
+      label: "agency agent -p -- {task}",
+    });
   });
 
   it("rejects both, neither, and a command without {task}", () => {
-    expect(() => resolveEvalTarget({ agent: "a.agency", agentCmd: "x {task}" })).toThrow(/exactly one of/);
+    expect(() => resolveEvalTarget({ agent: "a.agency", agentCmd: "x {task}" })).toThrow(
+      /exactly one of/,
+    );
     expect(() => resolveEvalTarget({})).toThrow(/exactly one of/);
     expect(() => resolveEvalTarget({ agentCmd: "agency agent -p hello" })).toThrow(/\{task\}/);
   });
@@ -68,23 +94,38 @@ describe("assertEvalEntryNodeTakesOneParameter", () => {
   }
 
   it("accepts a one-parameter node, default value or not", () => {
-    expect(() => assertEvalEntryNodeTakesOneParameter(agentWith("node main(task: string) {}\n"), "main")).not.toThrow();
-    expect(() => assertEvalEntryNodeTakesOneParameter(agentWith('node main(task: string = "") {}\n'), "main")).not.toThrow();
+    expect(() =>
+      assertEvalEntryNodeTakesOneParameter(agentWith("node main(task: string) {}\n"), "main"),
+    ).not.toThrow();
+    expect(() =>
+      assertEvalEntryNodeTakesOneParameter(agentWith('node main(task: string = "") {}\n'), "main"),
+    ).not.toThrow();
   });
 
   it("rejects a zero-parameter node with the add-one hint", () => {
-    expect(() => assertEvalEntryNodeTakesOneParameter(agentWith("node main() {}\n"), "main"))
-      .toThrow(/takes none — add one/);
+    expect(() =>
+      assertEvalEntryNodeTakesOneParameter(agentWith("node main() {}\n"), "main"),
+    ).toThrow(/takes none — add one/);
   });
 
   it("rejects a two-parameter node, naming the parameters", () => {
-    expect(() => assertEvalEntryNodeTakesOneParameter(agentWith("node main(a: string, b: string) {}\n"), "main"))
-      .toThrow(/takes 2 \(a, b\)/);
+    expect(() =>
+      assertEvalEntryNodeTakesOneParameter(
+        agentWith("node main(a: string, b: string) {}\n"),
+        "main",
+      ),
+    ).toThrow(/takes 2 \(a, b\)/);
   });
 
   it("stays quiet on unparseable files and absent nodes — compile/run report those better", () => {
-    expect(() => assertEvalEntryNodeTakesOneParameter(agentWith("this is not agency"), "main")).not.toThrow();
-    expect(() => assertEvalEntryNodeTakesOneParameter(agentWith("node other(x: string) {}\n"), "main")).not.toThrow();
-    expect(() => assertEvalEntryNodeTakesOneParameter(path.join(os.tmpdir(), "does-not-exist.agency"), "main")).not.toThrow();
+    expect(() =>
+      assertEvalEntryNodeTakesOneParameter(agentWith("this is not agency"), "main"),
+    ).not.toThrow();
+    expect(() =>
+      assertEvalEntryNodeTakesOneParameter(agentWith("node other(x: string) {}\n"), "main"),
+    ).not.toThrow();
+    expect(() =>
+      assertEvalEntryNodeTakesOneParameter(path.join(os.tmpdir(), "does-not-exist.agency"), "main"),
+    ).not.toThrow();
   });
 });

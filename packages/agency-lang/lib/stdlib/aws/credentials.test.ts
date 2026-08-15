@@ -1,8 +1,4 @@
-import {
-  resolveAwsCredentials,
-  resolveRegion,
-  type AwsCredentials,
-} from "./credentials.js";
+import { resolveAwsCredentials, resolveRegion, type AwsCredentials } from "./credentials.js";
 
 const ORIGINAL_ENV = process.env;
 beforeEach(() => {

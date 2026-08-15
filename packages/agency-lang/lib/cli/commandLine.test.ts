@@ -24,15 +24,13 @@ function parseRun(tail: string[]): { run: Command; input: string } {
 }
 
 describe("warnMisplacedAgencyFlags", () => {
-  test.each([
-    [["--max-cost", "5"]],
-    [["--policy=strict"]],
-    [["-cx.json"]],
-    [["-iv"]],
-  ])("warns for %j", (tail) => {
-    const { run, input } = parseRun(tail);
-    expect(warnMisplacedAgencyFlags(run, input)).toMatch(/went to your program/);
-  });
+  test.each([[["--max-cost", "5"]], [["--policy=strict"]], [["-cx.json"]], [["-iv"]]])(
+    "warns for %j",
+    (tail) => {
+      const { run, input } = parseRun(tail);
+      expect(warnMisplacedAgencyFlags(run, input)).toMatch(/went to your program/);
+    },
+  );
 
   test("explicit -- suppresses", () => {
     const { run, input } = parseRun(["--", "--max-cost", "5"]);

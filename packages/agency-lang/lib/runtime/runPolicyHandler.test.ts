@@ -108,9 +108,7 @@ describe("formatInterruptPrompt", () => {
 
   it("omits data when it is an empty object or null", () => {
     for (const data of [{}, null, undefined]) {
-      const out = plain(
-        formatInterruptPrompt({ effect: "e", message: "m", data, origin: "t" }),
-      );
+      const out = plain(formatInterruptPrompt({ effect: "e", message: "m", data, origin: "t" }));
       expect(out).not.toContain("{}");
       expect(out).not.toContain("null");
       expect(out).not.toContain("undefined");
@@ -131,9 +129,7 @@ describe("formatInterruptPrompt", () => {
 
   it("extends the rule to cover a long effect name", () => {
     const effect = "a".repeat(50);
-    const out = plain(
-      formatInterruptPrompt({ effect, message: "m", data: {}, origin: "t" }),
-    );
+    const out = plain(formatInterruptPrompt({ effect, message: "m", data: {}, origin: "t" }));
     expect(out).toContain("─".repeat(50));
   });
 
@@ -141,9 +137,7 @@ describe("formatInterruptPrompt", () => {
     const circular: any = { name: "loop" };
     circular.self = circular;
     for (const data of [circular, { n: BigInt(1) }]) {
-      const out = plain(
-        formatInterruptPrompt({ effect: "e", message: "m", data, origin: "t" }),
-      );
+      const out = plain(formatInterruptPrompt({ effect: "e", message: "m", data, origin: "t" }));
       expect(out).toContain("[object Object]"); // best-effort String() fallback
     }
   });
@@ -184,10 +178,7 @@ describe("terminalPrompt", () => {
 
 const READ_OK = JSON.stringify({ "std::read": [{ action: "approve" }] });
 
-async function withEnv(
-  vars: Record<string, string | undefined>,
-  fn: () => void | Promise<void>,
-) {
+async function withEnv(vars: Record<string, string | undefined>, fn: () => void | Promise<void>) {
   const prev: Record<string, string | undefined> = {};
   for (const k of Object.keys(vars)) {
     prev[k] = process.env[k];

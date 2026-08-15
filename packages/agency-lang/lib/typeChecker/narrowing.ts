@@ -60,13 +60,7 @@ export function narrowByRefine(
 ): VariableType | null {
   switch (refine.kind) {
     case "discriminant":
-      return narrowUnionByDiscriminant(
-        current,
-        refine.prop,
-        refine.literal,
-        refine.keep,
-        aliases,
-      );
+      return narrowUnionByDiscriminant(current, refine.prop, refine.literal, refine.keep, aliases);
     case "presence":
       return narrowUnionByPresence(current, refine.present, aliases);
     case "typeTest":
@@ -108,9 +102,7 @@ function asPathReference(e: Expression): Reference | null {
  * Variable-keyed, so the narrowed scrutinee is statically the same binding at
  * the access site.
  */
-function asDiscriminantAccess(
-  e: Expression,
-): { ref: Reference; prop: string } | null {
+function asDiscriminantAccess(e: Expression): { ref: Reference; prop: string } | null {
   if (e.type !== "valueAccess" || e.base.type !== "variableName") return null;
   if (e.chain.length < 1) return null;
   const last = e.chain[e.chain.length - 1];
@@ -126,9 +118,7 @@ function asDiscriminantAccess(
  * — a bare `variableName` whose value is `"null"`. Recognize both shapes.
  */
 function isNullExpr(e: Expression): boolean {
-  return (
-    e.type === "null" || (e.type === "variableName" && e.value === "null")
-  );
+  return e.type === "null" || (e.type === "variableName" && e.value === "null");
 }
 
 /**
@@ -348,9 +338,7 @@ export function narrowUnionByDiscriminant(
   const kept = members.filter((m) => {
     const rm = safeResolveType(m, aliases);
     const propType =
-      rm.type === "objectType"
-        ? rm.properties.find((p) => p.key === prop)?.value
-        : undefined;
+      rm.type === "objectType" ? rm.properties.find((p) => p.key === prop)?.value : undefined;
     const match = propType ? literalTypeMatches(propType, literal, aliases) : "unknown";
     return keep ? match !== "no" : match !== "yes";
   });

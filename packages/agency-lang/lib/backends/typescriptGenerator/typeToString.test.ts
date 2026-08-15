@@ -50,9 +50,7 @@ describe("variableTypeToString: genericType", () => {
         },
       ],
     };
-    expect(variableTypeToString(t, {})).toBe(
-      "Record<string, Record<string, number>>",
-    );
+    expect(variableTypeToString(t, {})).toBe("Record<string, Record<string, number>>");
   });
 
   it("renders generics with multiple args", () => {
@@ -104,10 +102,7 @@ describe("variableTypeToString: object rendering hook", () => {
       name: "effect-set union members",
       type: {
         type: "unionType",
-        types: [
-          objectOf(numberType),
-          { type: "stringLiteralType", value: "std::read" },
-        ],
+        types: [objectOf(numberType), { type: "stringLiteralType", value: "std::read" }],
         isEffectSet: true,
       },
       expected: "<OBJECT<number>, std::read>",
@@ -170,8 +165,7 @@ describe("variableTypeToString: object rendering hook", () => {
         returnType: objectOf(stringType),
         raises: objectOf({ type: "primitiveType", value: "boolean" }),
       },
-      expected:
-        "(input: OBJECT<number>) -> OBJECT<string> raises OBJECT<boolean>",
+      expected: "(input: OBJECT<number>) -> OBJECT<string> raises OBJECT<boolean>",
     },
   ];
 

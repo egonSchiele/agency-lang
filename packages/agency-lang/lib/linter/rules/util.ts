@@ -6,10 +6,7 @@ import type { SourceLocation } from "../../types/base.js";
  *  positions rules must see. Collectors (collectReferencedNames,
  *  usedNamesIn, reassignedNames) are callbacks over this shared HOW,
  *  each stating only WHAT it collects. */
-export function walkValues(
-  root: unknown,
-  visit: (node: Record<string, unknown>) => void,
-): void {
+export function walkValues(root: unknown, visit: (node: Record<string, unknown>) => void): void {
   if (Array.isArray(root)) {
     for (const item of root) {
       walkValues(item, visit);
@@ -101,9 +98,9 @@ export function nameRange(
   lineIndex?: LineIndex,
 ): SourceLocation {
   const span = source.slice(stmtStart, stmtEnd);
-  const match = new RegExp(
-    `(?<![A-Za-z0-9_])${escapeForRegex(localName)}(?![A-Za-z0-9_])`,
-  ).exec(span);
+  const match = new RegExp(`(?<![A-Za-z0-9_])${escapeForRegex(localName)}(?![A-Za-z0-9_])`).exec(
+    span,
+  );
   if (!match) {
     return locFromOffsets(source, stmtStart, stmtEnd, lineIndex);
   }

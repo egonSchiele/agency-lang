@@ -1,7 +1,13 @@
 import * as fs from "fs";
 
 import { runAgencyAgent } from "@/cli/runAgencyAgent.js";
-import type { JudgeSample, JudgeWinner, PairwiseJudgeResult, PairwiseVerdict, InputVerdict } from "./types.js";
+import type {
+  JudgeSample,
+  JudgeWinner,
+  PairwiseJudgeResult,
+  PairwiseVerdict,
+  InputVerdict,
+} from "./types.js";
 import { selectFinalResponse } from "./selectFinalResponse.js";
 import { z } from "zod";
 
@@ -46,10 +52,7 @@ export async function judgePair(args: JudgePairArgs): Promise<InputVerdict> {
   return {
     inputId: args.inputId,
     goal: args.goal,
-    inputs: [
-      verdictSideOf(args.recordPathA, respA),
-      verdictSideOf(args.recordPathB, respB),
-    ],
+    inputs: [verdictSideOf(args.recordPathA, respA), verdictSideOf(args.recordPathB, respB)],
     winner,
     confidence: sample.confidence,
     reasoning: sample.reasoning,
@@ -68,10 +71,7 @@ export async function judgePairwise(
   return {
     verdictVersion: 1,
     goal,
-    inputs: [
-      pairwiseInputOf(verdict.inputs[0]),
-      pairwiseInputOf(verdict.inputs[1]),
-    ],
+    inputs: [pairwiseInputOf(verdict.inputs[0]), pairwiseInputOf(verdict.inputs[1])],
     winner: verdict.winner,
     confidence: verdict.confidence,
     reasoning: verdict.reasoning,

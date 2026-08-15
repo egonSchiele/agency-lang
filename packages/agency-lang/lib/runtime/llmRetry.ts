@@ -169,10 +169,20 @@ export function decideRetry(
   // c.kind === "retryable". Out of attempts → surface the residual as a Failure
   // (a plain throw the catch ladder converts — NOT an abort that aborts the run).
   if (attempt >= policy.retries) {
-    return { kind: "surfaceFailure", reason: c.reason, detail: c.detail, retryAfterMs: c.retryAfterMs };
+    return {
+      kind: "surfaceFailure",
+      reason: c.reason,
+      detail: c.detail,
+      retryAfterMs: c.retryAfterMs,
+    };
   }
 
-  return { kind: "retry", delayMs: backoffMs(c.retryAfterMs, attempt, policy), reason: c.reason, detail: c.detail };
+  return {
+    kind: "retry",
+    delayMs: backoffMs(c.retryAfterMs, attempt, policy),
+    reason: c.reason,
+    detail: c.detail,
+  };
 }
 
 function backoffMs(retryAfterMs: number | undefined, attempt: number, policy: RetryPolicy): number {
@@ -232,7 +242,11 @@ export function resolveRetryPolicy(opts: RetryConfig, branchDefaults: RetryConfi
         branchDefaults.backoff?.factor,
         DEFAULT_RETRY_POLICY.backoff.factor,
       ),
-      max: firstDefined(opts.backoff?.max, branchDefaults.backoff?.max, DEFAULT_RETRY_POLICY.backoff.max),
+      max: firstDefined(
+        opts.backoff?.max,
+        branchDefaults.backoff?.max,
+        DEFAULT_RETRY_POLICY.backoff.max,
+      ),
     },
   };
 }

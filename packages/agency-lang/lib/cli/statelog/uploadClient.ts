@@ -12,8 +12,7 @@ import type { ServeManifest } from "./serveClient.js";
 import { statelogRequest } from "./statelogRequest.js";
 
 export type UploadResult =
-  | { ok: true; endpointUrls: string[]; manifest?: ServeManifest }
-  | { ok: false; error: string };
+  { ok: true; endpointUrls: string[]; manifest?: ServeManifest } | { ok: false; error: string };
 
 /**
  * Upload the bundle and return the agent's serve endpoints (absolute URLs).
@@ -70,9 +69,7 @@ export async function uploadBundle(
   // not redirect the API key to another origin.
   let absoluteUrls: string[];
   try {
-    absoluteUrls = endpointUrls.map((relative) =>
-      resolveTrustedEndpointUrl(relative, target.host),
-    );
+    absoluteUrls = endpointUrls.map((relative) => resolveTrustedEndpointUrl(relative, target.host));
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }

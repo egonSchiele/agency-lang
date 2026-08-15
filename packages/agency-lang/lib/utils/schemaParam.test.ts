@@ -33,9 +33,7 @@ describe("isSchemaTypeHint", () => {
   });
 
   it("rejects primitives and arrays", () => {
-    expect(isSchemaTypeHint({ type: "primitiveType", value: "string" })).toBe(
-      false,
-    );
+    expect(isSchemaTypeHint({ type: "primitiveType", value: "string" })).toBe(false);
     expect(
       isSchemaTypeHint({
         type: "arrayType",

@@ -22,10 +22,7 @@ export function recordLikeKeyValue(
     return { key: t.typeArgs[0], value: t.typeArgs[1] };
   }
   if (t.type === "objectType") {
-    const value =
-      t.properties.length === 0
-        ? ANY_T
-        : unionTypes(t.properties.map((p) => p.value));
+    const value = t.properties.length === 0 ? ANY_T : unionTypes(t.properties.map((p) => p.value));
     return { key: STRING_T, value };
   }
   return undefined;

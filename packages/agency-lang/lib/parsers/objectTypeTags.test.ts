@@ -53,5 +53,4 @@ describe("objectTypeParser — property tags", () => {
     expect(emailProp?.tags).toHaveLength(1);
     expect(nameProp?.tags).toBeUndefined();
   });
-
 });

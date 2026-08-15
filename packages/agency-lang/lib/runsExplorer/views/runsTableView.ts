@@ -11,21 +11,31 @@ import { agentColors } from "../identity.js";
 import type { LoaderProgress } from "../loader.js";
 import type { RunRow } from "../rows.js";
 import {
-  costCellColor, fmtCost, fmtDate, fmtModels, fmtPass, fmtScore,
-  fmtTime, passColor, scoreColor, statusColor,
+  costCellColor,
+  fmtCost,
+  fmtDate,
+  fmtModels,
+  fmtPass,
+  fmtScore,
+  fmtTime,
+  passColor,
+  scoreColor,
+  statusColor,
 } from "./rowFormat.js";
 import type { ExplorerAction, ExplorerView, Viewport } from "./explorerView.js";
 import {
-  initialTableState, projectTable, updateTable,
-  type DisplayRow, type TableState,
+  initialTableState,
+  projectTable,
+  updateTable,
+  type DisplayRow,
+  type TableState,
 } from "./tableState.js";
 
 /** Columns dropped right-to-left when the terminal is too narrow. */
 const DROP_ORDER = ["models", "time", "pass"];
 const CHROME_ROWS = 4;
 
-const HINTS =
-  "t/T views  s sort  S asc/desc  b group  Enter open/expand  i info  e export  q quit";
+const HINTS = "t/T views  s sort  S asc/desc  b group  Enter open/expand  i info  e export  q quit";
 
 export class RunsTableView implements ExplorerView {
   readonly viewName = "runs" as const;
@@ -140,7 +150,8 @@ export class RunsTableView implements ExplorerView {
       width: viewport.cols,
     });
 
-    return column({ justifyContent: "flex-start" },
+    return column(
+      { justifyContent: "flex-start" },
       line(this.title(), { height: 1, fg: "bright-white" }),
       tableElement,
       line(this.statusLine(), { height: 1, fg: "gray" }),
@@ -188,7 +199,11 @@ export class RunsTableView implements ExplorerView {
       return { kind: "openLog", statelogPath: row.source.file, title: row.agent };
     }
     if (row.tests.length === 1 && row.tests[0].statelogPath !== undefined) {
-      return { kind: "openLog", statelogPath: row.tests[0].statelogPath, title: `${row.agent} / ${row.tests[0].inputId}` };
+      return {
+        kind: "openLog",
+        statelogPath: row.tests[0].statelogPath,
+        title: `${row.agent} / ${row.tests[0].inputId}`,
+      };
     }
     if (row.tests.length > 1) {
       return { kind: "openRun", parentRunKey: row.key };
@@ -201,70 +216,109 @@ export class RunsTableView implements ExplorerView {
   private columns(cols: number): TableColumn<DisplayRow>[] {
     const all: TableColumn<DisplayRow>[] = [
       {
-        key: "date", header: "date", width: 14,
-        cell: (row) => row.kind === "groupHeader"
-          ? `${row.expanded ? "▾" : "▸"} `
-          : fmtDate(row.row.startedAtMs),
-        cellStyle: (row) => row.kind === "groupHeader"
-          ? { fg: this.colors[row.aggregates.agent] ?? "bright-cyan", bold: true }
-          : { fg: "gray" },
+        key: "date",
+        header: "date",
+        width: 14,
+        cell: (row) =>
+          row.kind === "groupHeader"
+            ? `${row.expanded ? "▾" : "▸"} `
+            : fmtDate(row.row.startedAtMs),
+        cellStyle: (row) =>
+          row.kind === "groupHeader"
+            ? { fg: this.colors[row.aggregates.agent] ?? "bright-cyan", bold: true }
+            : { fg: "gray" },
       },
       {
-        key: "agent", header: "agent", width: 22,
-        cell: (row) => row.kind === "groupHeader"
-          ? (row.group === "agent" ? `${row.label} (${row.count})` : "")
-          : row.row.agent,
-        cellStyle: (row) => row.kind === "groupHeader"
-          ? { fg: this.colors[row.label] ?? "bright-cyan", bold: true }
-          : { fg: this.colors[row.row.agent] ?? (row.row.status === "trace" ? "gray" : undefined) },
+        key: "agent",
+        header: "agent",
+        width: 22,
+        cell: (row) =>
+          row.kind === "groupHeader"
+            ? row.group === "agent"
+              ? `${row.label} (${row.count})`
+              : ""
+            : row.row.agent,
+        cellStyle: (row) =>
+          row.kind === "groupHeader"
+            ? { fg: this.colors[row.label] ?? "bright-cyan", bold: true }
+            : {
+                fg: this.colors[row.row.agent] ?? (row.row.status === "trace" ? "gray" : undefined),
+              },
       },
       {
-        key: "suite", header: "suite", width: 16,
-        cell: (row) => row.kind === "groupHeader"
-          ? (row.group === "suite" ? `${row.label} (${row.count})` : "")
-          : row.row.suite,
-        cellStyle: (row) => row.kind === "groupHeader"
-          ? { fg: "bright-cyan", bold: true }
-          : { fg: row.row.status === "trace" ? "gray" : undefined },
+        key: "suite",
+        header: "suite",
+        width: 16,
+        cell: (row) =>
+          row.kind === "groupHeader"
+            ? row.group === "suite"
+              ? `${row.label} (${row.count})`
+              : ""
+            : row.row.suite,
+        cellStyle: (row) =>
+          row.kind === "groupHeader"
+            ? { fg: "bright-cyan", bold: true }
+            : { fg: row.row.status === "trace" ? "gray" : undefined },
       },
       {
-        key: "score", header: "score", width: 7, align: "right",
-        cell: (row) => row.kind === "groupHeader"
-          ? fmtScore(row.aggregates.score)
-          : fmtScore(row.row.score),
+        key: "score",
+        header: "score",
+        width: 7,
+        align: "right",
+        cell: (row) =>
+          row.kind === "groupHeader" ? fmtScore(row.aggregates.score) : fmtScore(row.row.score),
         cellStyle: (row) => ({
           fg: scoreColor(row.kind === "groupHeader" ? row.aggregates.score : row.row.score),
         }),
       },
       {
-        key: "pass", header: "pass", width: 6, align: "right",
-        cell: (row) => row.kind === "groupHeader" ? "" : fmtPass(row.row.gatesPassed),
-        cellStyle: (row) => ({ fg: row.kind === "groupHeader" ? undefined : passColor(row.row.gatesPassed) }),
+        key: "pass",
+        header: "pass",
+        width: 6,
+        align: "right",
+        cell: (row) => (row.kind === "groupHeader" ? "" : fmtPass(row.row.gatesPassed)),
+        cellStyle: (row) => ({
+          fg: row.kind === "groupHeader" ? undefined : passColor(row.row.gatesPassed),
+        }),
       },
       {
-        key: "status", header: "status", width: 9,
-        cell: (row) => row.kind === "groupHeader" ? "" : row.row.status,
-        cellStyle: (row) => ({ fg: row.kind === "groupHeader" ? undefined : statusColor(row.row.status) }),
+        key: "status",
+        header: "status",
+        width: 9,
+        cell: (row) => (row.kind === "groupHeader" ? "" : row.row.status),
+        cellStyle: (row) => ({
+          fg: row.kind === "groupHeader" ? undefined : statusColor(row.row.status),
+        }),
       },
       {
-        key: "cost", header: "cost", width: 9, align: "right",
-        cell: (row) => row.kind === "groupHeader"
-          ? fmtCost(row.aggregates.cost, false)
-          : fmtCost(row.row.costUsd, !row.row.backfilled),
+        key: "cost",
+        header: "cost",
+        width: 9,
+        align: "right",
+        cell: (row) =>
+          row.kind === "groupHeader"
+            ? fmtCost(row.aggregates.cost, false)
+            : fmtCost(row.row.costUsd, !row.row.backfilled),
         cellStyle: (row) => ({
           fg: costCellColor(row.kind === "groupHeader" ? row.aggregates.cost : row.row.costUsd),
         }),
       },
       {
-        key: "time", header: "time", width: 9, align: "right",
-        cell: (row) => row.kind === "groupHeader"
-          ? fmtTime(row.aggregates.time, false)
-          : fmtTime(row.row.wallMs, !row.row.backfilled),
+        key: "time",
+        header: "time",
+        width: 9,
+        align: "right",
+        cell: (row) =>
+          row.kind === "groupHeader"
+            ? fmtTime(row.aggregates.time, false)
+            : fmtTime(row.row.wallMs, !row.row.backfilled),
         cellStyle: () => ({ fg: undefined }),
       },
       {
-        key: "models", header: "models", width: "flex",
-        cell: (row) => row.kind === "groupHeader" ? "" : fmtModels(row.row.models),
+        key: "models",
+        header: "models",
+        width: "flex",
+        cell: (row) => (row.kind === "groupHeader" ? "" : fmtModels(row.row.models)),
         cellStyle: () => ({ fg: "gray" }),
       },
     ];
@@ -288,8 +342,10 @@ export function dropToFit<Row>(all: TableColumn<Row>[], cols: number): TableColu
 const MIN_FLEX_WIDTH = 8;
 
 function neededWidth<Row>(columns: TableColumn<Row>[]): number {
-  const fixed = columns.reduce((sum, columnSpec) =>
-    sum + (typeof columnSpec.width === "number" ? columnSpec.width : 0), 0);
+  const fixed = columns.reduce(
+    (sum, columnSpec) => sum + (typeof columnSpec.width === "number" ? columnSpec.width : 0),
+    0,
+  );
   const hasFlex = columns.some((columnSpec) => columnSpec.width === "flex");
   return fixed + (hasFlex ? MIN_FLEX_WIDTH : 0);
 }

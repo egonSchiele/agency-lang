@@ -16,18 +16,11 @@ import type {
   VariableType,
 } from "./types.js";
 import type { SourceLocation } from "./types/base.js";
-import type {
-  ImportNodeStatement,
-  ImportStatement,
-} from "./types/importStatement.js";
+import type { ImportNodeStatement, ImportStatement } from "./types/importStatement.js";
 import type { ExportFromStatement } from "./types/exportFromStatement.js";
 import type { EffectDeclaration } from "./types/effectDeclaration.js";
 import { walkNodes } from "./utils/node.js";
-import {
-  resolveAgencyImportPath,
-  isAgencyImport,
-  isNonTemplatedStdlib,
-} from "./importPaths.js";
+import { resolveAgencyImportPath, isAgencyImport, isNonTemplatedStdlib } from "./importPaths.js";
 
 export type InterruptEffect = {
   effect: string;
@@ -103,9 +96,7 @@ export type SymbolKind = SymbolInfo["kind"];
 export type FileSymbols = Record<string, SymbolInfo>;
 
 export type ImportModuleResolution =
-  | { kind: "missing" }
-  | { kind: "notLoaded" }
-  | { kind: "loaded"; symbols: FileSymbols };
+  { kind: "missing" } | { kind: "notLoaded" } | { kind: "loaded"; symbols: FileSymbols };
 
 /**
  * One named symbol resolved through an import: where it lives, what name
@@ -208,15 +199,9 @@ export class SymbolTable {
       for (const { node } of walkNodes(program.nodes)) {
         if (node.type === "importNodeStatement") {
           visitImport(node.agencyFile);
-        } else if (
-          node.type === "importStatement" &&
-          isAgencyImport(node.modulePath)
-        ) {
+        } else if (node.type === "importStatement" && isAgencyImport(node.modulePath)) {
           visitImport(node.modulePath);
-        } else if (
-          node.type === "exportFromStatement" &&
-          isAgencyImport(node.modulePath)
-        ) {
+        } else if (node.type === "exportFromStatement" && isAgencyImport(node.modulePath)) {
           visitImport(node.modulePath);
         }
       }
@@ -390,10 +375,7 @@ export class SymbolTable {
     return out;
   }
 
-  resolveImportedNodes(
-    stmt: ImportNodeStatement,
-    fromFile: string,
-  ): ResolvedImport[] {
+  resolveImportedNodes(stmt: ImportNodeStatement, fromFile: string): ResolvedImport[] {
     const file = resolveAgencyImportPath(stmt.agencyFile, fromFile);
     const out: ResolvedImport[] = [];
     for (const name of stmt.importedNodes) {
@@ -471,14 +453,15 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           parameters: node.parameters,
           returnType: node.returnType ?? null,
           returnTypeValidated: node.returnTypeValidated,
-          interruptEffects: collectDirectInterruptEffects(declaredName(node.functionName), node.body),
+          interruptEffects: collectDirectInterruptEffects(
+            declaredName(node.functionName),
+            node.body,
+          ),
         };
         break;
       case "typeAlias":
         if (RESERVED_TYPE_NAMES.has(node.aliasName)) {
-          throw new Error(
-            `'${node.aliasName}' is a reserved built-in type; cannot be redefined.`,
-          );
+          throw new Error(`'${node.aliasName}' is a reserved built-in type; cannot be redefined.`);
         }
         symbols[node.aliasName] = {
           kind: "type",
@@ -489,9 +472,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           ...(node.typeParams ? { typeParams: node.typeParams } : {}),
           ...(node.valueParams ? { valueParams: node.valueParams } : {}),
           ...(node.isEffectSet ? { isEffectSet: true } : {}),
-          ...(typeAliasTags[node.aliasName]?.length
-            ? { tags: typeAliasTags[node.aliasName] }
-            : {}),
+          ...(typeAliasTags[node.aliasName]?.length ? { tags: typeAliasTags[node.aliasName] } : {}),
         };
         break;
       case "assignment":
@@ -530,14 +511,8 @@ const TS_SIDE_EFFECT_SEEDS: Record<string, string[]> = Object.assign(
   },
 );
 
-function collectDirectInterruptEffects(
-  name: string,
-  body: AgencyNode[],
-): InterruptEffect[] {
-  const seeded = Object.prototype.hasOwnProperty.call(
-    TS_SIDE_EFFECT_SEEDS,
-    name,
-  )
+function collectDirectInterruptEffects(name: string, body: AgencyNode[]): InterruptEffect[] {
+  const seeded = Object.prototype.hasOwnProperty.call(TS_SIDE_EFFECT_SEEDS, name)
     ? TS_SIDE_EFFECT_SEEDS[name]
     : [];
   const effects: string[] = [...seeded];
@@ -587,9 +562,7 @@ export function mergeExportsFrom(
 ): void {
   const sourceSymbols = files[sourcePath];
   if (!sourceSymbols) {
-    throw new Error(
-      `Re-export source '${stmt.modulePath}' could not be resolved`,
-    );
+    throw new Error(`Re-export source '${stmt.modulePath}' could not be resolved`);
   }
   const targetSymbols: FileSymbols = files[reExporterPath] ?? {};
   files[reExporterPath] = targetSymbols;
@@ -608,9 +581,7 @@ export function mergeExportsFrom(
   for (const originalName of stmt.body.names) {
     const sym = sourceSymbols[originalName];
     if (!sym) {
-      throw new Error(
-        `Symbol '${originalName}' is not defined in '${stmt.modulePath}'`,
-      );
+      throw new Error(`Symbol '${originalName}' is not defined in '${stmt.modulePath}'`);
     }
     if (!isExportedSymbol(sym)) {
       throw new Error(
@@ -624,10 +595,8 @@ export function mergeExportsFrom(
           `Re-exported nodes preserve their original name because the source graph is merged wholesale.`,
       );
     }
-    const isDestructive =
-      stmt.body.destructiveNames?.includes(originalName) ?? false;
-    const isIdempotent =
-      stmt.body.idempotentNames?.includes(originalName) ?? false;
+    const isDestructive = stmt.body.destructiveNames?.includes(originalName) ?? false;
+    const isIdempotent = stmt.body.idempotentNames?.includes(originalName) ?? false;
     if (sym.kind === "node" && (isDestructive || isIdempotent)) {
       throw new Error(
         `A retry-safety marker (destructive/idempotent) cannot be applied to node '${originalName}' from '${stmt.modulePath}'. ` +
@@ -661,9 +630,7 @@ function mergeOne(
   if (existing) {
     if (!("reExportedFrom" in existing) || !existing.reExportedFrom) {
       const at = existing.loc ? ` at line ${existing.loc.line + 1}` : "";
-      throw new Error(
-        `Re-exported name '${localName}' collides with local declaration${at}`,
-      );
+      throw new Error(`Re-exported name '${localName}' collides with local declaration${at}`);
     }
     const sameSource =
       existing.reExportedFrom.sourceFile === sourcePath &&

@@ -39,9 +39,9 @@ describe("defaultCaseParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-          const result = defaultCaseParser(input);
-          expect(result.success).toBe(false);
-        });
+        const result = defaultCaseParser(input);
+        expect(result.success).toBe(false);
+      });
     }
   });
 });
@@ -110,11 +110,13 @@ describe("matchBlockParserCase", () => {
         result: {
           type: "matchBlockCase",
           caseValue: { type: "variableName", value: "x" },
-          body: [{
-            type: "assignment",
-            variableName: "result",
-            value: { type: "number", value: "5" },
-          }],
+          body: [
+            {
+              type: "assignment",
+              variableName: "result",
+              value: { type: "number", value: "5" },
+            },
+          ],
         },
       },
     },
@@ -125,11 +127,13 @@ describe("matchBlockParserCase", () => {
         result: {
           type: "matchBlockCase",
           caseValue: { type: "variableName", value: "x" },
-          body: [{
-            type: "functionCall",
-            functionName: "print",
-            arguments: [{ type: "variableName", value: "y" }],
-          }],
+          body: [
+            {
+              type: "functionCall",
+              functionName: "print",
+              arguments: [{ type: "variableName", value: "y" }],
+            },
+          ],
         },
       },
     },
@@ -140,14 +144,16 @@ describe("matchBlockParserCase", () => {
         result: {
           type: "matchBlockCase",
           caseValue: { type: "variableName", value: "x" },
-          body: [{
-            type: "gotoStatement",
-            nodeCall: {
-              type: "functionCall",
-              functionName: "next",
-              arguments: [],
+          body: [
+            {
+              type: "gotoStatement",
+              nodeCall: {
+                type: "functionCall",
+                functionName: "next",
+                arguments: [],
+              },
             },
-          }],
+          ],
         },
       },
     },
@@ -179,9 +185,9 @@ describe("matchBlockParserCase", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-          const result = matchBlockParserCase(input);
-          expect(result.success).toBe(false);
-        });
+        const result = matchBlockParserCase(input);
+        expect(result.success).toBe(false);
+      });
     }
   });
 });
@@ -363,20 +369,24 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "1" },
-              body: [{
-                type: "assignment",
-                variableName: "result",
-                value: { type: "number", value: "10" },
-              }],
+              body: [
+                {
+                  type: "assignment",
+                  variableName: "result",
+                  value: { type: "number", value: "10" },
+                },
+              ],
             },
             {
               type: "matchBlockCase",
               caseValue: { type: "number", value: "2" },
-              body: [{
-                type: "assignment",
-                variableName: "result",
-                value: { type: "number", value: "20" },
-              }],
+              body: [
+                {
+                  type: "assignment",
+                  variableName: "result",
+                  value: { type: "number", value: "20" },
+                },
+              ],
             },
           ],
         },
@@ -397,20 +407,24 @@ describe("matchBlockParser", () => {
             {
               type: "matchBlockCase",
               caseValue: { type: "string", segments: [{ type: "text", value: "start" }] },
-              body: [{
-                type: "functionCall",
-                functionName: "print",
-                arguments: [{ type: "string", segments: [{ type: "text", value: "Starting" }] }],
-              }],
+              body: [
+                {
+                  type: "functionCall",
+                  functionName: "print",
+                  arguments: [{ type: "string", segments: [{ type: "text", value: "Starting" }] }],
+                },
+              ],
             },
             {
               type: "matchBlockCase",
               caseValue: { type: "string", segments: [{ type: "text", value: "stop" }] },
-              body: [{
-                type: "functionCall",
-                functionName: "print",
-                arguments: [{ type: "string", segments: [{ type: "text", value: "Stopping" }] }],
-              }],
+              body: [
+                {
+                  type: "functionCall",
+                  functionName: "print",
+                  arguments: [{ type: "string", segments: [{ type: "text", value: "Stopping" }] }],
+                },
+              ],
             },
           ],
         },
@@ -1000,25 +1014,34 @@ function program(src: string) {
 
 describe("arm arrow", () => {
   it("accepts -> in a match arm", () => {
-    expect(program(`node main() { match (1) { 1 -> print("one") _ -> print("no") } }`))
-      .toEqualWithoutLoc(program(`node main() { match (1) { 1 => print("one") _ => print("no") } }`));
+    expect(
+      program(`node main() { match (1) { 1 -> print("one") _ -> print("no") } }`),
+    ).toEqualWithoutLoc(
+      program(`node main() { match (1) { 1 => print("one") _ => print("no") } }`),
+    );
   });
 
   it("normalizes -> to => when formatted", () => {
-    const formatted = formatSource(`node main() { match (1) { 1 -> print("one") _ -> print("no") } }`);
+    const formatted = formatSource(
+      `node main() { match (1) { 1 -> print("one") _ -> print("no") } }`,
+    );
     expect(formatted).toContain("=>");
     expect(formatted).not.toMatch(/\d\s*->/);
   });
 
   // The risk here is MISparsing, not failing to parse: `>-` next to the arrow.
   it("does not confuse a guard ending in a negative comparison with the arrow", () => {
-    expect(program(`node main() { match (1) { _ if (a >-3) -> print("yes") } }`))
-      .toEqualWithoutLoc(program(`node main() { match (1) { _ if (a >-3) => print("yes") } }`));
+    expect(program(`node main() { match (1) { _ if (a >-3) -> print("yes") } }`)).toEqualWithoutLoc(
+      program(`node main() { match (1) { _ if (a >-3) => print("yes") } }`),
+    );
   });
 
   // Where the two edits in this task meet.
   it("accepts an inline block as an arm body with either arrow", () => {
-    expect(program(`node main() { match (1) { 1 -> map(xs, \\n => n * 2) _ -> [] } }`))
-      .toEqualWithoutLoc(program(`node main() { match (1) { 1 => map(xs, \\n -> n * 2) _ => [] } }`));
+    expect(
+      program(`node main() { match (1) { 1 -> map(xs, \\n => n * 2) _ -> [] } }`),
+    ).toEqualWithoutLoc(
+      program(`node main() { match (1) { 1 => map(xs, \\n -> n * 2) _ => [] } }`),
+    );
   });
 });

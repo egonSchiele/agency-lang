@@ -26,26 +26,53 @@ function makeRunDir(output: string): string {
     path.join(inputDir, "input.json"),
     JSON.stringify({ id: "a", goal: "g", args: {} }),
   );
-  fs.writeFileSync(path.join(inputDir, "agent", "eval-record.json"), JSON.stringify({
-    traceId: "t", recordVersion: 2, formatVersion: 1, durationMs: 1, source: "s",
-    evalValues: [], evalOutputs: [{ value: output, threadId: "0", tMs: 1 }],
-    threads: [], events: [], interrupts: [], errors: [], incomplete: [],
-    metrics: {
-      llmCalls: 0, toolStarts: 0, toolEnds: 0, models: [],
-      tokensInTotal: 0, tokensOutTotal: 0, costUsdTotal: 0, toolCounts: {},
-    },
-    warnings: [],
-  }));
-  fs.writeFileSync(path.join(runDir, "summary.json"), JSON.stringify({
-    runId: "r", runDir, agentLabel: "a:main", okCount: 1, errorCount: 0,
-    inputs: [{
-      inputId: "a",
-      status: "success",
-      evalRecordPath: path.join(inputDir, "agent", "eval-record.json"),
-      statelogPath: path.join(inputDir, "agent", "statelog.jsonl"),
-      workdirPath: path.join(inputDir, "workdir"),
-    }],
-  }));
+  fs.writeFileSync(
+    path.join(inputDir, "agent", "eval-record.json"),
+    JSON.stringify({
+      traceId: "t",
+      recordVersion: 2,
+      formatVersion: 1,
+      durationMs: 1,
+      source: "s",
+      evalValues: [],
+      evalOutputs: [{ value: output, threadId: "0", tMs: 1 }],
+      threads: [],
+      events: [],
+      interrupts: [],
+      errors: [],
+      incomplete: [],
+      metrics: {
+        llmCalls: 0,
+        toolStarts: 0,
+        toolEnds: 0,
+        models: [],
+        tokensInTotal: 0,
+        tokensOutTotal: 0,
+        costUsdTotal: 0,
+        toolCounts: {},
+      },
+      warnings: [],
+    }),
+  );
+  fs.writeFileSync(
+    path.join(runDir, "summary.json"),
+    JSON.stringify({
+      runId: "r",
+      runDir,
+      agentLabel: "a:main",
+      okCount: 1,
+      errorCount: 0,
+      inputs: [
+        {
+          inputId: "a",
+          status: "success",
+          evalRecordPath: path.join(inputDir, "agent", "eval-record.json"),
+          statelogPath: path.join(inputDir, "agent", "statelog.jsonl"),
+          workdirPath: path.join(inputDir, "workdir"),
+        },
+      ],
+    }),
+  );
   return runDir;
 }
 
@@ -58,8 +85,11 @@ function makeGraders(): string {
   const dir = fs.mkdtempSync(path.join(process.cwd(), ".test-grading-"));
   dirs.push(dir);
   const file = path.join(dir, "graders.ts");
-  fs.writeFileSync(file, `import { grader } from "agency-lang/eval";
-export default [grader(({ output }) => String(output).length / 10, { name: "len" })];`);
+  fs.writeFileSync(
+    file,
+    `import { grader } from "agency-lang/eval";
+export default [grader(({ output }) => String(output).length / 10, { name: "len" })];`,
+  );
   return file;
 }
 
@@ -72,7 +102,9 @@ describe("evalGrade", () => {
 
     expect(grading.objective).toBeCloseTo(0.5);
     expect(grading.graders).toEqual(["len"]);
-    const written = JSON.parse(fs.readFileSync(path.join(runDir, "verifier", "grading.json"), "utf8"));
+    const written = JSON.parse(
+      fs.readFileSync(path.join(runDir, "verifier", "grading.json"), "utf8"),
+    );
     expect(written.objective).toBeCloseTo(0.5);
     expect(fs.readFileSync(path.join(runDir, "summary.json"), "utf8")).toBe(before);
   });

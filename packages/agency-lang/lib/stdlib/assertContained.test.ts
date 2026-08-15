@@ -27,9 +27,7 @@ describe("assertContained", () => {
   });
 
   it("is a no-op when allowedRoots is empty", async () => {
-    await expect(
-      assertContained("/anywhere/at/all", []),
-    ).resolves.toBeUndefined();
+    await expect(assertContained("/anywhere/at/all", [])).resolves.toBeUndefined();
   });
 
   it("accepts a target equal to the root", async () => {
@@ -37,21 +35,19 @@ describe("assertContained", () => {
   });
 
   it("accepts a target inside the root", async () => {
-    await expect(
-      assertContained(path.join(allowed, "ok.txt"), [allowed]),
-    ).resolves.toBeUndefined();
+    await expect(assertContained(path.join(allowed, "ok.txt"), [allowed])).resolves.toBeUndefined();
   });
 
   it("rejects a target outside the root", async () => {
-    await expect(
-      assertContained(path.join(outside, "secret.txt"), [allowed]),
-    ).rejects.toThrow(/is not under any of the allowed paths/);
+    await expect(assertContained(path.join(outside, "secret.txt"), [allowed])).rejects.toThrow(
+      /is not under any of the allowed paths/,
+    );
   });
 
   it("rejects a non-existent target outside the root", async () => {
-    await expect(
-      assertContained(path.join(outside, "missing.txt"), [allowed]),
-    ).rejects.toThrow(/is not under any of the allowed paths/);
+    await expect(assertContained(path.join(outside, "missing.txt"), [allowed])).rejects.toThrow(
+      /is not under any of the allowed paths/,
+    );
   });
 
   it("accepts a non-existent target inside the root", async () => {
@@ -65,10 +61,7 @@ describe("assertContained", () => {
     // `outside/`. Accessing `outside/secret.txt` via `allowed/escape/secret.txt`
     // must be rejected by the realpath check.
     await expect(
-      assertContained(
-        path.join(symlinkInside, "secret.txt"),
-        [allowed],
-      ),
+      assertContained(path.join(symlinkInside, "secret.txt"), [allowed]),
     ).rejects.toThrow(/is not under any of the allowed paths/);
   });
 
@@ -82,58 +75,48 @@ describe("assertContained", () => {
   });
 
   it("rejects an empty target with a non-empty root list", async () => {
-    await expect(assertContained("", [allowed])).rejects.toThrow(
-      /must not be empty/,
-    );
+    await expect(assertContained("", [allowed])).rejects.toThrow(/must not be empty/);
   });
 
   it("ignores empty strings inside allowedRoots when other roots remain", async () => {
     // An empty string in `allowedRoots` would otherwise resolve to cwd,
     // accidentally allowing way too much. We skip empties instead.
-    await expect(
-      assertContained(path.join(outside, "secret.txt"), ["", allowed]),
-    ).rejects.toThrow(/is not under any of the allowed paths/);
+    await expect(assertContained(path.join(outside, "secret.txt"), ["", allowed])).rejects.toThrow(
+      /is not under any of the allowed paths/,
+    );
   });
 
   it("rejects when every entry in allowedRoots is empty or whitespace", async () => {
     // Caller asked for a restriction but every entry was unusable.
     // Falling through to unrestricted would be a silent capability leak.
-    await expect(
-      assertContained(path.join(outside, "secret.txt"), ["", "  "]),
-    ).rejects.toThrow(/no usable entries/);
+    await expect(assertContained(path.join(outside, "secret.txt"), ["", "  "])).rejects.toThrow(
+      /no usable entries/,
+    );
   });
 
   it("accepts descendants of the filesystem root when root is the allow-list", async () => {
     // Regression: a naive `realRoot + path.sep` startsWith check makes
     // `/` produce the prefix `//`, which matches no real path.
     const fsRoot = path.parse(allowed).root;
-    await expect(
-      assertContained(path.join(allowed, "ok.txt"), [fsRoot]),
-    ).resolves.toBeUndefined();
+    await expect(assertContained(path.join(allowed, "ok.txt"), [fsRoot])).resolves.toBeUndefined();
   });
 });
 
 describe("assertContained ~ expansion", () => {
   it("accepts a path resolved under ~/proj when allowlist includes ~/proj", async () => {
     const target = path.join(os.homedir(), "proj", "sub");
-    await expect(
-      assertContained(target, ["~/proj"]),
-    ).resolves.toBeUndefined();
+    await expect(assertContained(target, ["~/proj"])).resolves.toBeUndefined();
   });
 
   it("rejects a path outside ~/proj when allowlist is ~/proj", async () => {
     // Use a deliberately-outside-home absolute target.
-    await expect(
-      assertContained("/tmp/some-other-thing", ["~/proj"]),
-    ).rejects.toThrow(/not under/);
+    await expect(assertContained("/tmp/some-other-thing", ["~/proj"])).rejects.toThrow(/not under/);
   });
 
   it("accepts a ~-prefixed target against an absolute allowlist (target gets expanded too)", async () => {
     // Mirror image of the test above — exercises that expansion is
     // applied to the *target* path, not only to allowlist entries.
     const allowedAbs = path.join(os.homedir(), "proj");
-    await expect(
-      assertContained("~/proj/file.txt", [allowedAbs]),
-    ).resolves.toBeUndefined();
+    await expect(assertContained("~/proj/file.txt", [allowedAbs])).resolves.toBeUndefined();
   });
 });

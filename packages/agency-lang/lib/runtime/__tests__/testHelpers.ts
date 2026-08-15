@@ -8,9 +8,11 @@ import type { DebuggerState } from "../../debugger/debuggerState.js";
  * Creates a mock RuntimeContext for unit tests.
  * Includes all methods that runtime code calls on the context.
  */
-export function makeMockCtx(opts: {
-  debuggerState?: DebuggerState | null;
-} = {}): any {
+export function makeMockCtx(
+  opts: {
+    debuggerState?: DebuggerState | null;
+  } = {},
+): any {
   const stateStack = new StateStack();
   stateStack.nodesTraversed = ["start", "process"];
   const state = stateStack.getNewState();
@@ -33,11 +35,21 @@ export function makeMockCtx(opts: {
     _toolCallDepth: 0,
     runId: null,
     traceConfig: {},
-    pushHandler(fn: any, liveGuardIds: string[] = []) { this.handlers.push({ fn, liveGuardIds }); },
-    popHandler() { this.handlers.pop(); },
-    isCancelled() { return false; },
-    enterToolCall() { this._toolCallDepth++; },
-    exitToolCall() { this._toolCallDepth--; },
+    pushHandler(fn: any, liveGuardIds: string[] = []) {
+      this.handlers.push({ fn, liveGuardIds });
+    },
+    popHandler() {
+      this.handlers.pop();
+    },
+    isCancelled() {
+      return false;
+    },
+    enterToolCall() {
+      this._toolCallDepth++;
+    },
+    exitToolCall() {
+      this._toolCallDepth--;
+    },
     interruptResponses: {} as Record<string, { response: any }>,
     setInterruptResponses(responses: Record<string, { response: any }>) {
       this.interruptResponses = responses;
@@ -80,10 +92,18 @@ export function makeMockCtx(opts: {
       agentStart: () => {},
       agentEnd: () => {},
     },
-    hasDebugger() { return this.debuggerState !== null; },
-    hasTraceWriter() { return false; },
-    isInsideToolCall() { return this._toolCallDepth > 0; },
-    getRunId() { return this.runId || "mock-run-id"; },
+    hasDebugger() {
+      return this.debuggerState !== null;
+    },
+    hasTraceWriter() {
+      return false;
+    },
+    isInsideToolCall() {
+      return this._toolCallDepth > 0;
+    },
+    getRunId() {
+      return this.runId || "mock-run-id";
+    },
     async writeCheckpointToTraceWriter() {},
     async pauseTraceWriter() {},
     async closeTraceWriter() {},

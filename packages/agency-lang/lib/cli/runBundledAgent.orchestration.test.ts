@@ -1,9 +1,6 @@
 import { EventEmitter } from "events";
 import { describe, expect, test, vi } from "vitest";
-import {
-  runBundledAgent,
-  type RunBundledAgentDependencies,
-} from "./runBundledAgent.js";
+import { runBundledAgent, type RunBundledAgentDependencies } from "./runBundledAgent.js";
 
 /** A launcher harness with every dependency injected: no filesystem, no
  *  compiler, no real processes. The stage registers no exit listener, so
@@ -128,16 +125,8 @@ describe("runBundledAgent config selection and cleanup", () => {
       throw new Error("Invalid agency.json config:\n  - client: boom");
     });
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    runBundledAgent(
-      harness.config,
-      "agency-agent",
-      ["--config", "bad.json"],
-      {},
-      harness.deps,
-    );
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/Invalid agency\.json config/),
-    );
+    runBundledAgent(harness.config, "agency-agent", ["--config", "bad.json"], {}, harness.deps);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/Invalid agency\.json config/));
     expect(harness.deps.exit).toHaveBeenCalledWith(2);
     expect(harness.deps.spawn).not.toHaveBeenCalled();
     errorSpy.mockRestore();

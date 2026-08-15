@@ -1,8 +1,4 @@
-import {
-  AgencyAbort,
-  describeAbortCause,
-  type AbortCause,
-} from "./errors.js";
+import { AgencyAbort, describeAbortCause, type AbortCause } from "./errors.js";
 import type { State } from "./state/stateStack.js";
 import { agencyStore } from "./asyncContext.js";
 import { hasInterrupts } from "./interrupts.js";
@@ -68,11 +64,7 @@ export class AbortedResult {
   /** A frame caught an abort exception. The frame stops here and returns
    *  its saved draft as its partial — or nothing, if it never saved one.
    *  This is the only place an abort exception becomes a value. */
-  static fromError(
-    error: AgencyAbort,
-    frame: State,
-    scopeName: string,
-  ): AbortedResult {
+  static fromError(error: AgencyAbort, frame: State, scopeName: string): AbortedResult {
     // Converting the exception into a value IS the trip's delivery: from
     // here the abort travels the value pipeline. Marking the cause
     // delivered (shared by identity with the abort signal's reason)
@@ -84,11 +76,7 @@ export class AbortedResult {
     if (error.agencyCause.kind === "guardTrip") {
       error.agencyCause.delivered = true;
     }
-    const result = new AbortedResult(
-      error.agencyCause,
-      frame.savedDraft,
-      undefined,
-    );
+    const result = new AbortedResult(error.agencyCause, frame.savedDraft, undefined);
     return result.logged("carried", frame, scopeName);
   }
 
@@ -98,11 +86,7 @@ export class AbortedResult {
    *  (In return position no code runs at all — `return f()` simply
    *  returns f's AbortedResult, which is what passes a partial through.) */
   carryThrough(frame: State, scopeName: string): AbortedResult {
-    const next = new AbortedResult(
-      this.cause,
-      frame.savedDraft,
-      this.unwindSpanId,
-    );
+    const next = new AbortedResult(this.cause, frame.savedDraft, this.unwindSpanId);
     return next.logged("carried", frame, scopeName, this.partial);
   }
 
@@ -171,8 +155,7 @@ export class AbortedResult {
     const client = statelogClient();
     client?.error?.({
       errorType: "finalizeError",
-      message:
-        failure instanceof Error ? failure.message : previewForLog(failure),
+      message: failure instanceof Error ? failure.message : previewForLog(failure),
       functionName: scopeName,
     });
   }
@@ -186,10 +169,7 @@ export class AbortedResult {
       client?.abortSalvage({
         action: "delivered",
         spanId: this.unwindSpanId,
-        partial:
-          this.partial !== undefined
-            ? previewForLog(this.partial.value)
-            : undefined,
+        partial: this.partial !== undefined ? previewForLog(this.partial.value) : undefined,
       });
       client?.endSpan(this.unwindSpanId);
     }
@@ -206,9 +186,7 @@ export class AbortedResult {
 
   /** Drop the partial, emit the reason, close the span (the partial's
    *  story ends where it is dropped). */
-  private dropped(
-    action: "droppedAtArgPosition" | "clearedAtFork",
-  ): AbortedResult {
+  private dropped(action: "droppedAtArgPosition" | "clearedAtFork"): AbortedResult {
     if (this.partial === undefined) {
       return this;
     }

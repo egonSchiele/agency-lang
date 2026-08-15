@@ -174,17 +174,13 @@ describe("std::statelog eval annotations", () => {
 
   it("rejects top-level functions with a clear serialization error", async () => {
     await withFrame(ThreadStore.withDefaultActive(makeCtx().statelogClient), async () => {
-      await expect(_evalValue(() => "nope")).rejects.toThrow(
-        /must be JSON-serializable/i,
-      );
+      await expect(_evalValue(() => "nope")).rejects.toThrow(/must be JSON-serializable/i);
     });
   });
 
   it("rejects top-level symbols with a clear serialization error", async () => {
     await withFrame(ThreadStore.withDefaultActive(makeCtx().statelogClient), async () => {
-      await expect(_evalOutput(Symbol("nope"))).rejects.toThrow(
-        /must be JSON-serializable/i,
-      );
+      await expect(_evalOutput(Symbol("nope"))).rejects.toThrow(/must be JSON-serializable/i);
     });
   });
 

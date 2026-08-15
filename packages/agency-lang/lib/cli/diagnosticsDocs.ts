@@ -1,8 +1,4 @@
-import {
-  DIAGNOSTICS,
-  DIAGNOSTIC_CATEGORIES,
-  categoryForCode,
-} from "@/typeChecker/diagnostics.js";
+import { DIAGNOSTICS, DIAGNOSTIC_CATEGORIES, categoryForCode } from "@/typeChecker/diagnostics.js";
 import { DIAGNOSTIC_EXPLANATIONS } from "@/typeChecker/diagnosticExplanations.js";
 import { LINT_DIAGNOSTICS } from "@/linter/diagnostics.js";
 import { LINT_EXPLANATIONS } from "@/linter/diagnosticExplanations.js";
@@ -63,14 +59,18 @@ function indexPage(): string {
     lines.push("| Code | Message |", "| --- | --- |");
     for (const [, e] of entries) {
       const anchor = e.code.toLowerCase();
-      lines.push(`| [${e.code}](${cat.slug}.md#${anchor}) | ${escapeCell(messageForMd(e.message))} |`);
+      lines.push(
+        `| [${e.code}](${cat.slug}.md#${anchor}) | ${escapeCell(messageForMd(e.message))} |`,
+      );
     }
     lines.push("");
   }
   lines.push("## Lint", "");
   lines.push("| Code | Message |", "| --- | --- |");
   for (const [, e] of lintEntries()) {
-    lines.push(`| [${e.code}](lint.md#${e.code.toLowerCase()}) | ${escapeCell(messageForMd(e.message))} |`);
+    lines.push(
+      `| [${e.code}](lint.md#${e.code.toLowerCase()}) | ${escapeCell(messageForMd(e.message))} |`,
+    );
   }
   lines.push("");
   return lines.join("\n");

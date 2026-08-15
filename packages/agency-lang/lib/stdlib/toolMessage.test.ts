@@ -21,12 +21,9 @@ describe("_toolMessage", () => {
   it("seeds exactly a matched assistant tool-call + tool-result pair", async () => {
     const ctx = makeCtx();
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      async () => {
-        await _toolMessage("saveDraft", { value: "hi" }, "Draft saved.", "budget");
-      },
-    );
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, async () => {
+      await _toolMessage("saveDraft", { value: "hi" }, "Draft saved.", "budget");
+    });
 
     const msgs = threads
       .getOrCreateActive()
@@ -52,12 +49,9 @@ describe("_toolMessage", () => {
   it("labels both pushed messages", async () => {
     const ctx = makeCtx();
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      async () => {
-        await _toolMessage("saveDraft", { value: "hi" }, "Draft saved.", "budget");
-      },
-    );
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, async () => {
+      await _toolMessage("saveDraft", { value: "hi" }, "Draft saved.", "budget");
+    });
     const thread = threads.getOrCreateActive();
     expect(thread.labelAt(0)).toBe("budget");
     expect(thread.labelAt(1)).toBe("budget");
@@ -66,12 +60,9 @@ describe("_toolMessage", () => {
   it("leaves both messages unlabeled when no label is given", async () => {
     const ctx = makeCtx();
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      async () => {
-        await _toolMessage("saveDraft", { value: "hi" }, "Draft saved.");
-      },
-    );
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, async () => {
+      await _toolMessage("saveDraft", { value: "hi" }, "Draft saved.");
+    });
     const thread = threads.getOrCreateActive();
     expect(thread.labelAt(0)).toBe(null);
     expect(thread.labelAt(1)).toBe(null);
@@ -80,12 +71,9 @@ describe("_toolMessage", () => {
   it("defaults null/undefined args to an empty record", async () => {
     const ctx = makeCtx();
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      async () => {
-        await _toolMessage("noArgs", null, "ok");
-      },
-    );
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, async () => {
+      await _toolMessage("noArgs", null, "ok");
+    });
     const asst: any = threads.getOrCreateActive().getMessages()[0].toJSON();
     expect(asst.toolCalls[0].arguments).toEqual({});
   });
@@ -93,12 +81,9 @@ describe("_toolMessage", () => {
   it("creates the active thread when there is none", async () => {
     const ctx = makeCtx();
     const threads = new ThreadStore(); // bare: no default active thread
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      async () => {
-        await _toolMessage("saveDraft", { value: "hi" }, "Draft saved.");
-      },
-    );
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, async () => {
+      await _toolMessage("saveDraft", { value: "hi" }, "Draft saved.");
+    });
     expect(threads.getOrCreateActive().getMessages()).toHaveLength(2);
   });
 
@@ -108,12 +93,9 @@ describe("_toolMessage", () => {
 
     for (const bad of [5, "raw", [1, 2]]) {
       await expect(
-        agency.withTestContext(
-          { ctx, stack: ctx.stateStack, threads },
-          async () => {
-            await _toolMessage("t", bad, "r");
-          },
-        ),
+        agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, async () => {
+          await _toolMessage("t", bad, "r");
+        }),
       ).rejects.toThrow(/must be a JSON object/);
     }
 
@@ -127,12 +109,9 @@ describe("_toolMessage", () => {
     circular.self = circular;
 
     await expect(
-      agency.withTestContext(
-        { ctx, stack: ctx.stateStack, threads },
-        async () => {
-          await _toolMessage("x", circular, "r");
-        },
-      ),
+      agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, async () => {
+        await _toolMessage("x", circular, "r");
+      }),
     ).rejects.toThrow(/could not be serialized/);
 
     expect(threads.getOrCreateActive().getMessages()).toHaveLength(0);

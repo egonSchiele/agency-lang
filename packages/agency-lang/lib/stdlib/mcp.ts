@@ -96,8 +96,8 @@ export async function _loadMcpToolsForServer(
   const { tools, callTool } = res.value;
   const gated = gate(callTool);
   return Promise.all(
-    tools.map((tool: McpTool) =>
-      mcpBridge.mcpToolToAgencyFunction(tool, gated) as Promise<AgencyFunction>,
+    tools.map(
+      (tool: McpTool) => mcpBridge.mcpToolToAgencyFunction(tool, gated) as Promise<AgencyFunction>,
     ),
   );
 }
@@ -127,7 +127,10 @@ export async function _loadMcpToolsWithStatus(
   const [first, ...rest] = names;
   const firstTools = await _loadMcpToolsForServer(first, merged, onOAuthRequired);
   const restPairs = await Promise.all(
-    rest.map(async (s) => ({ server: s, tools: await _loadMcpToolsForServer(s, merged, onOAuthRequired) })),
+    rest.map(async (s) => ({
+      server: s,
+      tools: await _loadMcpToolsForServer(s, merged, onOAuthRequired),
+    })),
   );
   const pairs = [{ server: first, tools: firstTools }, ...restPairs];
   const tools: AgencyFunction[] = [];
@@ -187,13 +190,17 @@ function readConfigObject(file: string): ResultValue {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return success(null);
     }
-    return failure(`cannot read ${file}: ${error instanceof Error ? error.message : String(error)}`);
+    return failure(
+      `cannot read ${file}: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {
-    return failure(`${file} is not valid JSON — fix it before editing servers (nothing was written)`);
+    return failure(
+      `${file} is not valid JSON — fix it before editing servers (nothing was written)`,
+    );
   }
   if (!isPlainObject(parsed)) {
     return failure(`${file} is not a JSON object (nothing was written)`);
@@ -237,7 +244,9 @@ export async function _addMcpServer(
   try {
     writeConfigObject(file, raw);
   } catch (error) {
-    return failure(`cannot write ${file}: ${error instanceof Error ? error.message : String(error)}`);
+    return failure(
+      `cannot write ${file}: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
   return success(null);
 }
@@ -267,7 +276,9 @@ export async function _removeMcpServer(name: string, file: string): Promise<Resu
   try {
     writeConfigObject(file, raw);
   } catch (error) {
-    return failure(`cannot write ${file}: ${error instanceof Error ? error.message : String(error)}`);
+    return failure(
+      `cannot write ${file}: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
   return success(true);
 }

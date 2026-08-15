@@ -40,11 +40,7 @@ afterEach(() => {
 
 describe("std::ui bridge — _runLoop", () => {
   it("drives the loop with scripted keys and returns final state", async () => {
-    const input = new ScriptedInput([
-      { key: "down" },
-      { key: "down" },
-      { key: "q" },
-    ]);
+    const input = new ScriptedInput([{ key: "down" }, { key: "down" }, { key: "q" }]);
     const output = new FrameRecorder();
     _setInputSource(input);
     _setOutputTarget(output);

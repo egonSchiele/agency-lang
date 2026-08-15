@@ -24,8 +24,7 @@ const TITLE_CASED: Record<string, string> = {
 // so "Ctrl+C" matches what most docs and bindings use.
 export function formatKey(event: KeyEvent): string {
   const base = TITLE_CASED[event.key] ?? event.key;
-  const body =
-    event.ctrl && base.length === 1 ? base.toUpperCase() : base;
+  const body = event.ctrl && base.length === 1 ? base.toUpperCase() : base;
   const parts: string[] = [];
   if (event.ctrl) parts.push("Ctrl");
   if (event.shift) parts.push("Shift");

@@ -13,11 +13,7 @@ import type { ScopeInfo } from "../typeChecker/types.js";
  * identifier — used to detect JS namespace member access like `JSON.parse`
  * so we can hover the member instead of the bare function name.
  */
-function getDottedBase(
-  source: string,
-  line: number,
-  column: number,
-): string | null {
+function getDottedBase(source: string, line: number, column: number): string | null {
   const lines = source.split("\n");
   if (line < 0 || line >= lines.length) return null;
   const lineText = lines[line];
@@ -85,20 +81,10 @@ export function handleHover(
   // Last: language primitives (success, failure, …) and JS globals.
   // Stdlib functions (print, fetch, …) come through importedFunctions and
   // are already covered by the semantic-symbol path above.
-  const word = getWordAtPosition(
-    source,
-    params.position.line,
-    params.position.character,
-  );
+  const word = getWordAtPosition(source, params.position.line, params.position.character);
   if (word) {
-    const base = getDottedBase(
-      source,
-      params.position.line,
-      params.position.character,
-    );
-    const hover = base
-      ? lookupJsMemberHover(base, word)
-      : lookupBuiltinHover(word);
+    const base = getDottedBase(source, params.position.line, params.position.character);
+    const hover = base ? lookupJsMemberHover(base, word) : lookupBuiltinHover(word);
     if (hover) {
       return { contents: { kind: "markdown", value: hover } };
     }

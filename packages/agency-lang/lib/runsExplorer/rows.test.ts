@@ -16,18 +16,37 @@ function gradedPhaseOne(): EvalRunPhaseOne {
       errorCount: 0,
       inputs: [
         {
-          inputId: "t1", status: "success", statelogPath: "/runs/r1/inputs/t1/agent/statelog.jsonl",
-          evalRecordPath: "/runs/r1/inputs/t1/agent/eval-record.json", workdirPath: "",
-          metrics: { costUsd: 1.25, durationMs: 60_000, startedAtMs: 1_000_000, models: ["sonnet"], agentName: "regex-log" },
+          inputId: "t1",
+          status: "success",
+          statelogPath: "/runs/r1/inputs/t1/agent/statelog.jsonl",
+          evalRecordPath: "/runs/r1/inputs/t1/agent/eval-record.json",
+          workdirPath: "",
+          metrics: {
+            costUsd: 1.25,
+            durationMs: 60_000,
+            startedAtMs: 1_000_000,
+            models: ["sonnet"],
+            agentName: "regex-log",
+          },
         },
         {
-          inputId: "t2", status: "success", statelogPath: "/runs/r1/inputs/t2/agent/statelog.jsonl",
-          evalRecordPath: "/runs/r1/inputs/t2/agent/eval-record.json", workdirPath: "",
-          metrics: { costUsd: 0.75, durationMs: 120_000, startedAtMs: 1_030_000, models: ["sonnet", "opus"] },
+          inputId: "t2",
+          status: "success",
+          statelogPath: "/runs/r1/inputs/t2/agent/statelog.jsonl",
+          evalRecordPath: "/runs/r1/inputs/t2/agent/eval-record.json",
+          workdirPath: "",
+          metrics: {
+            costUsd: 0.75,
+            durationMs: 120_000,
+            startedAtMs: 1_030_000,
+            models: ["sonnet", "opus"],
+          },
         },
       ],
       grading: {
-        graders: ["g"], objective: 0.9, gatesPassed: true,
+        graders: ["g"],
+        objective: 0.9,
+        gatesPassed: true,
         perInput: [
           { inputId: "t1", objective: 1.0, gatesPassed: true },
           { inputId: "t2", objective: 0.8, gatesPassed: false },
@@ -110,8 +129,12 @@ describe("applyInputPatch + recomputeRunAggregates", () => {
     expect(row.agent).toBe("regex.agency");
 
     applyInputPatch(row, "t1", {
-      costUsd: 3.0, durationMs: 60_000, startedAtMs: 2_000_000,
-      models: ["opus"], agentName: "patched-agent", warnings: ["torn line"],
+      costUsd: 3.0,
+      durationMs: 60_000,
+      startedAtMs: 2_000_000,
+      models: ["opus"],
+      agentName: "patched-agent",
+      warnings: ["torn line"],
     });
     recomputeRunAggregates(row);
 

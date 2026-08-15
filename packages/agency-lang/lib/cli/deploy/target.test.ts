@@ -40,11 +40,7 @@ describe("resolveDeployTarget", () => {
   });
 
   it("never reads the key from agency.json (env only)", () => {
-    const result = resolveDeployTarget(
-      { host: "https://h", projectId: "p" },
-      {},
-      {},
-    );
+    const result = resolveDeployTarget({ host: "https://h", projectId: "p" }, {}, {});
     expect(result.ok).toBe(false);
     if (result.ok) {
       return;

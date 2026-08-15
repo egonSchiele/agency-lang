@@ -8,8 +8,7 @@ const STR: VariableType = { type: "primitiveType", value: "string" };
 const NUM: VariableType = { type: "primitiveType", value: "number" };
 const AGE_TAG = { type: "tag" as const, name: "validate", arguments: [] };
 const id = (t: VariableType) => t;
-const eq = (a: VariableType, b: VariableType) =>
-  typeKey(a, {}) === typeKey(b, {});
+const eq = (a: VariableType, b: VariableType) => typeKey(a, {}) === typeKey(b, {});
 
 function user(): VariableType {
   return {
@@ -57,9 +56,9 @@ describe("evalKeyof", () => {
 
   it("rejects every non-object operand form in the spec table", () => {
     expect(() => evalKeyof(NUM, id)).toThrow(/keyof expects an object type/);
-    expect(() =>
-      evalKeyof({ type: "arrayType", elementType: STR }, id),
-    ).toThrow(/keyof expects an object type/);
+    expect(() => evalKeyof({ type: "arrayType", elementType: STR }, id)).toThrow(
+      /keyof expects an object type/,
+    );
     const rec: VariableType = {
       type: "genericType",
       name: "Record",
@@ -112,15 +111,11 @@ describe("evalIndexedAccess", () => {
   });
 
   it("rejects a non-literal index (shared resolveKeysArg wording)", () => {
-    expect(() => evalIndexedAccess(user(), STR, id)).toThrow(
-      /expects string literal keys/,
-    );
+    expect(() => evalIndexedAccess(user(), STR, id)).toThrow(/expects string literal keys/);
   });
 
   it("rejects a non-object base", () => {
-    expect(() => evalIndexedAccess(NUM, lit("a"), id)).toThrow(
-      /expects an object type/,
-    );
+    expect(() => evalIndexedAccess(NUM, lit("a"), id)).toThrow(/expects an object type/);
   });
 });
 
@@ -412,9 +407,7 @@ describe("evalIntersection", () => {
     };
     // mergeTagSets collapses stacked @validate tags into ONE combined
     // tag; assert a validate tag survives rather than counting tags.
-    expect(out.properties[0].tags?.some((t) => t.name === "validate")).toBe(
-      true,
-    );
+    expect(out.properties[0].tags?.some((t) => t.name === "validate")).toBe(true);
   });
 
   it("three-way merge groups ALL operands at once", () => {
@@ -424,12 +417,7 @@ describe("evalIntersection", () => {
     };
     const out = evalIntersection([named(), aged(), c], id, eq);
     expect(out).toMatchObject({
-      properties: [
-        { key: "id" },
-        { key: "name" },
-        { key: "age" },
-        { key: "extra" },
-      ],
+      properties: [{ key: "id" }, { key: "name" }, { key: "age" }, { key: "extra" }],
     });
   });
 
@@ -438,11 +426,7 @@ describe("evalIntersection", () => {
       /intersection expects an object type/,
     );
     expect(() =>
-      evalIntersection(
-        [named(), { type: "primitiveType", value: "never" }],
-        id,
-        eq,
-      ),
+      evalIntersection([named(), { type: "primitiveType", value: "never" }], id, eq),
     ).toThrow(/intersection expects an object type/);
     const rec: VariableType = {
       type: "genericType",
@@ -467,9 +451,7 @@ describe("evalIntersection", () => {
       properties: [{ key: "extra", value: STR }],
     };
     const resolve = (t: VariableType): VariableType =>
-      t.type === "intersectionType"
-        ? evalIntersection(t.types, resolve, eq)
-        : t;
+      t.type === "intersectionType" ? evalIntersection(t.types, resolve, eq) : t;
     const leftNested = evalIntersection(
       [{ type: "intersectionType", types: [named(), aged()] }, extra],
       resolve,

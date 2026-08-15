@@ -159,5 +159,4 @@ node main(shape: Shape) {
       throw new Error(`example does not parse:\n${source}`);
     }
   });
-
 });

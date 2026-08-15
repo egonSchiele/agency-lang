@@ -1,7 +1,10 @@
 import { validatePolicy } from "@/runtime/policy.js";
 import { writeFileSync } from "fs";
 import { resolveDir } from "./resolveDir.js";
-export { checkPolicy as _checkPolicy, validatePolicy as _validatePolicy } from "@/runtime/policy.js";
+export {
+  checkPolicy as _checkPolicy,
+  validatePolicy as _validatePolicy,
+} from "@/runtime/policy.js";
 import type { Policy } from "@/runtime/policy.js";
 
 // Built-in policies live in the runtime (single source of truth, shared with
@@ -17,11 +20,7 @@ export {
   approveAllPolicy as _approveAllPolicy,
 } from "@/runtime/builtinPolicies.js";
 
-export async function _writePolicyFile(
-  filePath: string,
-  policy: Policy,
-  allowedPaths?: string[],
-) {
+export async function _writePolicyFile(filePath: string, policy: Policy, allowedPaths?: string[]) {
   const result = validatePolicy(policy);
   if (!result.success) throw new Error(`Invalid policy: ${result.error}`);
   // `resolveDir` (cwd-anchored) handles `~` expansion + allow-list

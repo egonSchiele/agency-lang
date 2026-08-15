@@ -23,19 +23,29 @@ describe("paramAcceptsFailure", () => {
   it("Result and Result<...> accept", () => {
     expect(paramAcceptsFailure(makeParam({ typeHint: RESULT }))).toBe(true);
     expect(
-      paramAcceptsFailure(makeParam({ typeHint: { type: "resultType", successType: STR, failureType: STR } })),
+      paramAcceptsFailure(
+        makeParam({ typeHint: { type: "resultType", successType: STR, failureType: STR } }),
+      ),
     ).toBe(true);
   });
   it("unions accept iff an arm accepts", () => {
-    expect(paramAcceptsFailure(makeParam({ typeHint: { type: "unionType", types: [STR, RESULT] } }))).toBe(true);
-    expect(paramAcceptsFailure(makeParam({ typeHint: { type: "unionType", types: [STR, STR] } }))).toBe(false);
+    expect(
+      paramAcceptsFailure(makeParam({ typeHint: { type: "unionType", types: [STR, RESULT] } })),
+    ).toBe(true);
+    expect(
+      paramAcceptsFailure(makeParam({ typeHint: { type: "unionType", types: [STR, STR] } })),
+    ).toBe(false);
   });
   it("variadic checks the element type", () => {
     expect(
-      paramAcceptsFailure(makeParam({ variadic: true, typeHint: { type: "arrayType", elementType: ANY } })),
+      paramAcceptsFailure(
+        makeParam({ variadic: true, typeHint: { type: "arrayType", elementType: ANY } }),
+      ),
     ).toBe(true);
     expect(
-      paramAcceptsFailure(makeParam({ variadic: true, typeHint: { type: "arrayType", elementType: STR } })),
+      paramAcceptsFailure(
+        makeParam({ variadic: true, typeHint: { type: "arrayType", elementType: STR } }),
+      ),
     ).toBe(false);
     expect(paramAcceptsFailure(makeParam({ variadic: true }))).toBe(false);
   });

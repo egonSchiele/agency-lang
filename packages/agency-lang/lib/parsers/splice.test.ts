@@ -16,9 +16,7 @@ function parseTemplate(source: string) {
  *  construction lib/utils/holes.ts:findHoles uses — spread, map, filter.
  *  Copy that shape, not a for-loop with an accumulator. */
 function nodesOfType(nodes: AgencyNode[], type: string): AgencyNode[] {
-  return [...walkNodesArray(nodes)]
-    .map((visit) => visit.node)
-    .filter((node) => node.type === type);
+  return [...walkNodesArray(nodes)].map((visit) => visit.node).filter((node) => node.type === type);
 }
 
 function splicesIn(source: string): Splice[] {

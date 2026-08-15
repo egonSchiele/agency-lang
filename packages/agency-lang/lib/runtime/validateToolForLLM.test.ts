@@ -63,9 +63,7 @@ describe("AgencyFunction.validateForLLM (runtime tool backstop)", () => {
   // #38 — ignores optional unbound function-typed params (compile-time
   // warning is the only signal).
   it("does not throw for optional unbound function-typed params", () => {
-    const fn = makeFn([
-      { name: "block", isFunctionTyped: true, hasDefault: true },
-    ]);
+    const fn = makeFn([{ name: "block", isFunctionTyped: true, hasDefault: true }]);
     expect(() => fn.validateForLLM()).not.toThrow();
   });
 
@@ -107,8 +105,6 @@ describe("AgencyFunction.partial — variadic shape backstop", () => {
       ],
       toolDefinition: null,
     });
-    expect(() => fn.partial({ rest: "not-an-array" as any })).toThrow(
-      /must be bound to an array/,
-    );
+    expect(() => fn.partial({ rest: "not-an-array" as any })).toThrow(/must be bound to an array/);
   });
 });

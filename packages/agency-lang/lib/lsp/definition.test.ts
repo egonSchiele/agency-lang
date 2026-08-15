@@ -19,12 +19,7 @@ greet()`;
 describe("handleDefinition", () => {
   it("returns null when cursor is not on an identifier", () => {
     const doc = makeDoc(source);
-    const { semanticIndex } = runDiagnostics(
-      doc,
-      "/test.agency",
-      {},
-      new SymbolTable(),
-    );
+    const { semanticIndex } = runDiagnostics(doc, "/test.agency", {}, new SymbolTable());
     const result = handleDefinition(
       { textDocument: { uri: doc.uri }, position: { line: 1, character: 1 } },
       doc,
@@ -36,12 +31,7 @@ describe("handleDefinition", () => {
 
   it("returns a Location when cursor is on a known local definition name", () => {
     const doc = makeDoc(source);
-    const { semanticIndex } = runDiagnostics(
-      doc,
-      "/test.agency",
-      {},
-      new SymbolTable(),
-    );
+    const { semanticIndex } = runDiagnostics(doc, "/test.agency", {}, new SymbolTable());
     const result = handleDefinition(
       { textDocument: { uri: doc.uri }, position: { line: 3, character: 0 } },
       doc,
@@ -53,20 +43,13 @@ describe("handleDefinition", () => {
   });
 
   it("returns the imported definition location for aliased symbols", () => {
-    const tmpDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), "agency-definition-test-"),
-    );
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-definition-test-"));
     try {
       const helperFile = path.join(tmpDir, "helpers.agency");
       const mainFile = path.join(tmpDir, "main.agency");
       fs.writeFileSync(
         helperFile,
-        [
-          "export def greet(name: string): string {",
-          "  return name",
-          "}",
-          "",
-        ].join("\n"),
+        ["export def greet(name: string): string {", "  return name", "}", ""].join("\n"),
       );
       const mainSource = [
         'import { greet as hello } from "./helpers.agency"',

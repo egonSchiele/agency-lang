@@ -18,19 +18,13 @@ export const DEFAULT_THRESHOLDS: ViewerThresholds = {
 
 export type Magnitude = "fast" | "normal" | "slow" | "cheap" | "expensive";
 
-export function durationMagnitude(
-  ms: number,
-  t: ViewerThresholds = DEFAULT_THRESHOLDS,
-): Magnitude {
+export function durationMagnitude(ms: number, t: ViewerThresholds = DEFAULT_THRESHOLDS): Magnitude {
   if (ms >= t.slowMs) return "slow";
   if (ms < t.fastMs) return "fast";
   return "normal";
 }
 
-export function costMagnitude(
-  usd: number,
-  t: ViewerThresholds = DEFAULT_THRESHOLDS,
-): Magnitude {
+export function costMagnitude(usd: number, t: ViewerThresholds = DEFAULT_THRESHOLDS): Magnitude {
   if (usd >= t.expensiveUsd) return "expensive";
   return "cheap";
 }

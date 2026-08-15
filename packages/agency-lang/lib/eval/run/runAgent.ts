@@ -7,10 +7,30 @@ import type { AgencyConfig } from "@/config.js";
 import type { EvalRecord } from "@/eval/types.js";
 
 import { substituteTask } from "./commandLine.js";
-import { agentRunPaths, makeEvalRecordExtractor, shouldExtractStatelog, type AgentRunPaths, type EvalRecordExtractor } from "./extract.js";
-import { applyOverlay, commandFilesToCopy, compileAgent, copyFiles, filesToCopy, seedFromAgentFile, type AgentSeed } from "./seed.js";
+import {
+  agentRunPaths,
+  makeEvalRecordExtractor,
+  shouldExtractStatelog,
+  type AgentRunPaths,
+  type EvalRecordExtractor,
+} from "./extract.js";
+import {
+  applyOverlay,
+  commandFilesToCopy,
+  compileAgent,
+  copyFiles,
+  filesToCopy,
+  seedFromAgentFile,
+  type AgentSeed,
+} from "./seed.js";
 import { runCommandInSpawn } from "./spawnRunner.js";
-import { costCapFromConfig, limitsFromConfig, makeSubprocessRunner, type EvalInputRunner, type EvalRunnerJob } from "./subprocess.js";
+import {
+  costCapFromConfig,
+  limitsFromConfig,
+  makeSubprocessRunner,
+  type EvalInputRunner,
+  type EvalRunnerJob,
+} from "./subprocess.js";
 
 export type RunAgentOptions = {
   /** The directory for THIS run — records land in <runDir>/agent/, the agent
@@ -113,14 +133,15 @@ class AgentRunner {
       return this.fail(`eval-record extraction failed: ${errMessage(err)}`);
     }
     if (record === undefined) {
-      const commandHint = this.target.kind === "command"
-        ? " If your command passes --log, remove it — the harness sets the statelog path itself. " +
-          "If the command is not an Agency CLI, it cannot produce the statelog eval requires."
-        : "";
+      const commandHint =
+        this.target.kind === "command"
+          ? " If your command passes --log, remove it — the harness sets the statelog path itself. " +
+            "If the command is not an Agency CLI, it cannot produce the statelog eval requires."
+          : "";
       return this.fail(
         "run completed but produced no eval record: no statelog was written " +
-        "(or it landed somewhere unexpected), or the extractor wrote no record file." +
-        commandHint,
+          "(or it landed somewhere unexpected), or the extractor wrote no record file." +
+          commandHint,
       );
     }
     return {
@@ -154,7 +175,8 @@ class AgentRunner {
       return null;
     }
     const base = this.options.seed ?? seedFromAgentFile(this.target.agentFile);
-    const seed = this.options.seedFiles === undefined ? base : { ...base, filesDir: this.options.seedFiles };
+    const seed =
+      this.options.seedFiles === undefined ? base : { ...base, filesDir: this.options.seedFiles };
     const files = filesToCopy(seed);
     copyFiles(this.paths.workdirPath, files);
     applyOverlay(this.paths.workdirPath, this.options.overlayFiles);
@@ -213,7 +235,9 @@ class AgentRunner {
    *  nothing to extract (no/empty statelog, or the extractor wrote no record
    *  file); throws when the extractor itself blows up — a bug in the
    *  extractor, not in the input. */
-  private async extractRecord(runnerStatelogPath: string | undefined): Promise<EvalRecord | undefined> {
+  private async extractRecord(
+    runnerStatelogPath: string | undefined,
+  ): Promise<EvalRecord | undefined> {
     const statelogPath = this.adoptStatelogFallback(runnerStatelogPath);
     if (!shouldExtractStatelog(statelogPath)) {
       return undefined;
@@ -249,7 +273,12 @@ class AgentRunner {
   private fail(errorMessage: string): AgentRun {
     fs.mkdirSync(this.paths.agentDir, { recursive: true });
     fs.writeFileSync(this.paths.errorPath, errorMessage);
-    return { status: "error", errorMessage, runDir: this.options.runDir, workdir: this.paths.workdirPath };
+    return {
+      status: "error",
+      errorMessage,
+      runDir: this.options.runDir,
+      workdir: this.paths.workdirPath,
+    };
   }
 
   /** Append what the workdir contained, so "the agent read a file nobody
@@ -258,9 +287,11 @@ class AgentRunner {
   private withSeedListing(errorMessage: string): string {
     const listed = this.seededFiles.slice(0, MAX_LISTED_SEEDED_FILES).join(", ");
     const truncated = this.seededFiles.length > MAX_LISTED_SEEDED_FILES ? ", …" : "";
-    return `${errorMessage}\n\nWorkdir was seeded with ${this.seededFiles.length} file(s): ${listed}${truncated}\n` +
+    return (
+      `${errorMessage}\n\nWorkdir was seeded with ${this.seededFiles.length} file(s): ${listed}${truncated}\n` +
       `If a data file the test needs is missing, add it to the input's "files". ` +
-      `If a file the AGENT imports is missing, the closure scan missed it — that is a bug worth reporting.`;
+      `If a file the AGENT imports is missing, the closure scan missed it — that is a bug worth reporting.`
+    );
   }
 }
 

@@ -9,10 +9,7 @@ import {
   VariableType,
 } from "../types.js";
 import { SourceLocation } from "../types/base.js";
-import type {
-  ImportedFunctionSignature,
-  ScopedTypeAliases,
-} from "../compilationUnit.js";
+import type { ImportedFunctionSignature, ScopedTypeAliases } from "../compilationUnit.js";
 import type { InterruptEffect, SymbolTable } from "../symbolTable.js";
 import type { InterruptCallGraph } from "./interruptAnalysis.js";
 // Type-only import: diagnostics.ts type-imports TypeCheckError from here, so
@@ -64,7 +61,7 @@ export type ScopeInfo = {
 };
 
 export type BuiltinSignature = {
-  params: (VariableType)[];
+  params: VariableType[];
   returnType: VariableType;
   minParams?: number; // if set, arity is [minParams, params.length]; otherwise exact
   restParam?: VariableType; // if set, accepts unlimited extra args of this type after the fixed params
@@ -112,10 +109,7 @@ export type TypeCheckerContext = {
    *  literal-union annotation (`type C = "a" | "b"`) accepts `"a" => "a"`, and
    *  the error anchors on the offending arm's value. The widened union in
    *  `matchExprTypes` is used only for synthesis (unannotated) positions. */
-  matchExprYieldTypes: Record<
-    number,
-    { type: VariableType; loc: SourceLocation | undefined }[]
-  >;
+  matchExprYieldTypes: Record<number, { type: VariableType; loc: SourceLocation | undefined }[]>;
   config: AgencyConfig;
   /** Optional symbol table threaded through from `buildCompilationUnit`.
    *  Used by the interrupt call-graph analysis to resolve cross-file
@@ -133,8 +127,5 @@ export type TypeCheckerContext = {
   flowEnv?: FlowEnvironment;
   getTypeAliases(): Record<string, TypeAliasEntry>;
   withScope<T>(key: string, fn: () => T): T;
-  inferReturnTypeFor(
-    name: string,
-    def: FunctionDefinition | GraphNodeDefinition,
-  ): VariableType;
+  inferReturnTypeFor(name: string, def: FunctionDefinition | GraphNodeDefinition): VariableType;
 };

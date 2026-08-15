@@ -33,10 +33,24 @@ describe("readAllEvents", () => {
       "blanks.jsonl",
       [
         "",
-        JSON.stringify({ format_version: 1, trace_id: "t", project_id: "p", span_id: null, parent_span_id: null, data: { type: "a", timestamp: "2026-01-01T00:00:00.000Z" } }),
+        JSON.stringify({
+          format_version: 1,
+          trace_id: "t",
+          project_id: "p",
+          span_id: null,
+          parent_span_id: null,
+          data: { type: "a", timestamp: "2026-01-01T00:00:00.000Z" },
+        }),
         "",
         "",
-        JSON.stringify({ format_version: 1, trace_id: "t", project_id: "p", span_id: null, parent_span_id: null, data: { type: "b", timestamp: "2026-01-01T00:00:01.000Z" } }),
+        JSON.stringify({
+          format_version: 1,
+          trace_id: "t",
+          project_id: "p",
+          span_id: null,
+          parent_span_id: null,
+          data: { type: "b", timestamp: "2026-01-01T00:00:01.000Z" },
+        }),
         "",
       ].join("\n"),
     );
@@ -50,7 +64,14 @@ describe("readAllEvents", () => {
     const f = write(
       "bad.jsonl",
       [
-        JSON.stringify({ format_version: 1, trace_id: "t", project_id: "p", span_id: null, parent_span_id: null, data: { type: "a", timestamp: "x" } }),
+        JSON.stringify({
+          format_version: 1,
+          trace_id: "t",
+          project_id: "p",
+          span_id: null,
+          parent_span_id: null,
+          data: { type: "a", timestamp: "x" },
+        }),
         "{not json",
       ].join("\n"),
     );

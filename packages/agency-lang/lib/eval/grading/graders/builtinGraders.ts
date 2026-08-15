@@ -24,7 +24,7 @@ abstract class MatchGrader extends BaseGrader {
   }
 
   validateInput(input: Input): void {
-    resolveMatch(input, this.matchPath(), this.name());   // throws if unresolved
+    resolveMatch(input, this.matchPath(), this.name()); // throws if unresolved
   }
 }
 
@@ -57,7 +57,10 @@ export class ContainsGrader extends MatchGrader {
     if (String(run.output ?? "").includes(needle)) {
       return { score: { kind: "binary", pass: true } };
     }
-    return { score: { kind: "binary", pass: false }, feedback: `output did not contain ${stringify(needle)}` };
+    return {
+      score: { kind: "binary", pass: false },
+      feedback: `output did not contain ${stringify(needle)}`,
+    };
   }
 }
 
@@ -78,7 +81,9 @@ export class SimilarityGrader extends MatchGrader {
 function resolveMatch(input: Input, matchOn: JSONPath, graderName: string): unknown {
   const value = getPath(input, matchOn);
   if (value === undefined) {
-    throw new Error(`${graderName}: matchOn ${stringify(matchOn)} did not resolve on input ${input.id ?? "(no id)"}`);
+    throw new Error(
+      `${graderName}: matchOn ${stringify(matchOn)} did not resolve on input ${input.id ?? "(no id)"}`,
+    );
   }
   return value;
 }
@@ -102,4 +107,3 @@ function deepEqual(a: unknown, b: unknown): boolean {
   if (aKeys.length !== bKeys.length) return false;
   return aKeys.every((k) => Object.hasOwn(bObj, k) && deepEqual(aObj[k], bObj[k]));
 }
-

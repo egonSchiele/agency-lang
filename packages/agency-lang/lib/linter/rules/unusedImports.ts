@@ -1,8 +1,5 @@
 import type { AgencyNode } from "../../types.js";
-import type {
-  ImportStatement,
-  ImportNodeStatement,
-} from "../../types/importStatement.js";
+import type { ImportStatement, ImportNodeStatement } from "../../types/importStatement.js";
 import { getImportedNames } from "../../types/importStatement.js";
 import type { LintContext, LintEdit, LintFinding, LintFix, LintRule } from "../types.js";
 import { lintDiagnostic } from "../diagnostics.js";

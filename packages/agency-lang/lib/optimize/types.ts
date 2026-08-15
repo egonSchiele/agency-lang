@@ -8,9 +8,7 @@ export type MutationProposal = {
   rationale: string;
 };
 
-export type ValidationResult =
-  | { ok: true }
-  | { ok: false; reason: string };
+export type ValidationResult = { ok: true } | { ok: false; reason: string };
 
 export type IterationResult = {
   iter: number;

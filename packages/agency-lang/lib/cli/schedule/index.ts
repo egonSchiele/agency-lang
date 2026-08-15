@@ -194,9 +194,7 @@ export function formatListTable(entries: ListEntry[]): string {
   for (const entry of display) {
     const broken = entry.broken ? " [broken]" : "";
     lines.push(
-      entry.name.padEnd(nameW) +
-        (entry.displayAgent + broken).padEnd(agentW) +
-        entry.schedule,
+      entry.name.padEnd(nameW) + (entry.displayAgent + broken).padEnd(agentW) + entry.schedule,
     );
   }
   return lines.join("\n");

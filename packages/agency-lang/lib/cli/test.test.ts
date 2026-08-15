@@ -31,8 +31,8 @@ describe("partitionByShard", () => {
 
   it("keeps shards disjoint", () => {
     const items = Array.from({ length: 50 }, (_, i) => `f${i}`);
-    const slices = [1, 2, 3, 4, 5].map((index) =>
-      new Set(partitionByShard(items, { index, total: 5 }, id)),
+    const slices = [1, 2, 3, 4, 5].map(
+      (index) => new Set(partitionByShard(items, { index, total: 5 }, id)),
     );
     for (let a = 0; a < slices.length; a++) {
       for (let b = a + 1; b < slices.length; b++) {
@@ -54,18 +54,12 @@ describe("partitionByShard", () => {
     const items = ["m", "a", "z", "c", "b"];
     const shard: Shard = { index: 1, total: 2 };
     const shuffled = ["z", "b", "m", "c", "a"];
-    expect(partitionByShard(items, shard, id)).toEqual(
-      partitionByShard(shuffled, shard, id),
-    );
+    expect(partitionByShard(items, shard, id)).toEqual(partitionByShard(shuffled, shard, id));
   });
 
   it("a single shard of 1 returns everything", () => {
     const items = ["a", "b", "c"];
-    expect(partitionByShard(items, { index: 1, total: 1 }, id).sort()).toEqual([
-      "a",
-      "b",
-      "c",
-    ]);
+    expect(partitionByShard(items, { index: 1, total: 1 }, id).sort()).toEqual(["a", "b", "c"]);
   });
 });
 

@@ -163,16 +163,11 @@ describe("formatValue", () => {
 });
 
 describe("coerceArg", () => {
-  function makeParam(
-    name: string,
-    primType?: string,
-  ): FunctionParameter {
+  function makeParam(name: string, primType?: string): FunctionParameter {
     return {
       type: "functionParameter",
       name,
-      typeHint: primType
-        ? { type: "primitiveType", value: primType } as any
-        : undefined,
+      typeHint: primType ? ({ type: "primitiveType", value: primType } as any) : undefined,
     };
   }
 

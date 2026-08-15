@@ -25,9 +25,7 @@ export type RuntimeContextConstructorArgs = {
 
 let activeRuntimeConfigOverrides: Partial<AgencyConfig> | undefined;
 
-export function setRuntimeConfigOverrides(
-  overrides: Partial<AgencyConfig> | undefined,
-): void {
+export function setRuntimeConfigOverrides(overrides: Partial<AgencyConfig> | undefined): void {
   activeRuntimeConfigOverrides = overrides;
 }
 
@@ -119,10 +117,7 @@ export function applyRuntimeConfigOverridesToContextArgs(
 
   const overrideModules = overrides.client?.providerModules;
   if (overrideModules && overrideModules.length > 0) {
-    merged.providerModules = [
-      ...(args.providerModules ?? []),
-      ...overrideModules,
-    ];
+    merged.providerModules = [...(args.providerModules ?? []), ...overrideModules];
   }
 
   // Let a subprocess inherit the parent's runaway-recursion ceiling.

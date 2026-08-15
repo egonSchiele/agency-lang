@@ -110,10 +110,7 @@ describe("presentSecretError", () => {
 
   it("redacts a newline-containing sensitive value before escaping can split it", () => {
     const value = "two\nline-secret";
-    const presented = presentSecretError(
-      new SecretRequestError(`echo ${value} end`, 200),
-      [value],
-    );
+    const presented = presentSecretError(new SecretRequestError(`echo ${value} end`, 200), [value]);
     expect(presented).not.toContain("line-secret");
     expect(presented).toContain("[redacted]");
   });

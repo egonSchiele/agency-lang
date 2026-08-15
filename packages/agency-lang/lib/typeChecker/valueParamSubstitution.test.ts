@@ -7,14 +7,11 @@ import {
 } from "./valueParamSubstitution.js";
 import type { Expression, Tag, TypeAliasEntry } from "../types.js";
 
-const nm = (n: string): Expression =>
-  ({ type: "number", value: n }) as any;
+const nm = (n: string): Expression => ({ type: "number", value: n }) as any;
 const sc = (s: string): Expression =>
   ({ type: "string", segments: [{ type: "text", value: s }] }) as any;
-const ident = (name: string): Expression =>
-  ({ type: "variableName", value: name }) as any;
-const obj = (entries: any[]): Expression =>
-  ({ type: "agencyObject", entries }) as any;
+const ident = (name: string): Expression => ({ type: "variableName", value: name }) as any;
+const obj = (entries: any[]): Expression => ({ type: "agencyObject", entries }) as any;
 const kv = (key: string, value: Expression) => ({ key, value });
 const splat = (value: Expression) => ({ type: "splat", value });
 const fcall = (name: string, args: any[]): Expression =>
@@ -56,9 +53,7 @@ describe("substituteValueArgsInExpression", () => {
   it("substitutes an identifier inside an object value", () => {
     const e = obj([kv("minimum", ident("low")), kv("format", sc("email"))]);
     const out = substituteValueArgsInExpression(e, { low: nm("0") });
-    expect(out).toEqual(
-      obj([kv("minimum", nm("0")), kv("format", sc("email"))]),
-    );
+    expect(out).toEqual(obj([kv("minimum", nm("0")), kv("format", sc("email"))]));
   });
 
   it("substitutes an identifier inside a spread", () => {
@@ -68,28 +63,15 @@ describe("substituteValueArgsInExpression", () => {
   });
 
   it("substitutes an identifier inside a nested object", () => {
-    const e = obj([
-      kv(
-        "outer",
-        obj([kv("inner", ident("low")), kv("static", sc("k"))]),
-      ),
-    ]);
+    const e = obj([kv("outer", obj([kv("inner", ident("low")), kv("static", sc("k"))]))]);
     const out = substituteValueArgsInExpression(e, { low: nm("42") });
-    expect(out).toEqual(
-      obj([
-        kv("outer", obj([kv("inner", nm("42")), kv("static", sc("k"))])),
-      ]),
-    );
+    expect(out).toEqual(obj([kv("outer", obj([kv("inner", nm("42")), kv("static", sc("k"))]))]));
   });
 
   it("substitutes an identifier inside a PFA .partial(n: low) arg", () => {
-    const e = va(ident("min"), [
-      methodCall("partial", [named("n", ident("low"))]),
-    ]);
+    const e = va(ident("min"), [methodCall("partial", [named("n", ident("low"))])]);
     const out = substituteValueArgsInExpression(e, { low: nm("3") });
-    expect(out).toEqual(
-      va(ident("min"), [methodCall("partial", [named("n", nm("3"))])]),
-    );
+    expect(out).toEqual(va(ident("min"), [methodCall("partial", [named("n", nm("3"))])]));
   });
 
   it("returns equal-but-not-same tree when no substitution applies", () => {
@@ -119,9 +101,7 @@ describe("substituteValueArgsInTag", () => {
       low: nm("0"),
       high: nm("100"),
     });
-    expect(out.arguments).toEqual([
-      obj([kv("minimum", nm("0")), kv("maximum", nm("100"))]),
-    ]);
+    expect(out.arguments).toEqual([obj([kv("minimum", nm("0")), kv("maximum", nm("100"))])]);
     // Original untouched
     expect((tag.arguments[0] as any).entries[0].value).toEqual(ident("low"));
   });
@@ -149,10 +129,7 @@ describe("substituteValueArgsInTag", () => {
 const numType = { type: "primitiveType", value: "number" } as any;
 const strType = { type: "primitiveType", value: "string" } as any;
 
-function entry(opts: {
-  valueParams?: any[];
-  tags?: Tag[];
-}): TypeAliasEntry {
+function entry(opts: { valueParams?: any[]; tags?: Tag[] }): TypeAliasEntry {
   return {
     body: numType,
     valueParams: opts.valueParams,
@@ -174,13 +151,9 @@ describe("applyValueArgs", () => {
       tags: [jsonSchemaTag([kv("minimum", ident("low"))])],
     });
     const out = applyValueArgs(e, [nm("0")], "Age");
-    expect(out.tags).toEqual([
-      jsonSchemaTag([kv("minimum", nm("0"))]),
-    ]);
+    expect(out.tags).toEqual([jsonSchemaTag([kv("minimum", nm("0"))])]);
     // Original entry tags untouched
-    expect(e.tags?.[0].arguments[0]).toEqual(
-      obj([kv("minimum", ident("low"))]),
-    );
+    expect(e.tags?.[0].arguments[0]).toEqual(obj([kv("minimum", ident("low"))]));
   });
 
   it("fills missing tail args from defaults", () => {
@@ -189,17 +162,10 @@ describe("applyValueArgs", () => {
         { name: "low", type: numType, default: nm("0") },
         { name: "high", type: numType, default: nm("150") },
       ],
-      tags: [
-        jsonSchemaTag([
-          kv("minimum", ident("low")),
-          kv("maximum", ident("high")),
-        ]),
-      ],
+      tags: [jsonSchemaTag([kv("minimum", ident("low")), kv("maximum", ident("high"))])],
     });
     const out = applyValueArgs(e, [nm("18")], "Age");
-    expect(out.tags).toEqual([
-      jsonSchemaTag([kv("minimum", nm("18")), kv("maximum", nm("150"))]),
-    ]);
+    expect(out.tags).toEqual([jsonSchemaTag([kv("minimum", nm("18")), kv("maximum", nm("150"))])]);
   });
 
   it("uses all defaults when no args are passed", () => {
@@ -208,9 +174,7 @@ describe("applyValueArgs", () => {
       tags: [jsonSchemaTag([kv("minimum", ident("min"))])],
     });
     const out = applyValueArgs(e, [], "Age");
-    expect(out.tags).toEqual([
-      jsonSchemaTag([kv("minimum", nm("0"))]),
-    ]);
+    expect(out.tags).toEqual([jsonSchemaTag([kv("minimum", nm("0"))])]);
   });
 
   it("errors on too many args", () => {
@@ -226,9 +190,7 @@ describe("applyValueArgs", () => {
     const e = entry({
       valueParams: [{ name: "low", type: numType }],
     });
-    expect(() => applyValueArgs(e, [], "Age")).toThrow(
-      /Age requires 'low': number/,
-    );
+    expect(() => applyValueArgs(e, [], "Age")).toThrow(/Age requires 'low': number/);
   });
 
   it("errors on arg-type mismatch for literals", () => {
@@ -247,9 +209,7 @@ describe("applyValueArgs", () => {
     });
     // Identifier — we can't infer its type, so we accept it.
     const out = applyValueArgs(e, [ident("DEFAULT_AGE")], "Age");
-    expect(out.tags).toEqual([
-      jsonSchemaTag([kv("minimum", ident("DEFAULT_AGE"))]),
-    ]);
+    expect(out.tags).toEqual([jsonSchemaTag([kv("minimum", ident("DEFAULT_AGE"))])]);
   });
 
   it("returns entry unchanged when alias has no tags", () => {
@@ -264,8 +224,6 @@ describe("applyValueArgs", () => {
       tags: [jsonSchemaTag([kv("pattern", ident("pat"))])],
     });
     const out = applyValueArgs(e, [sc("[a-z]+")], "MatchesPattern");
-    expect(out.tags).toEqual([
-      jsonSchemaTag([kv("pattern", sc("[a-z]+"))]),
-    ]);
+    expect(out.tags).toEqual([jsonSchemaTag([kv("pattern", sc("[a-z]+"))])]);
   });
 });

@@ -6,8 +6,7 @@ import { nanoid } from "nanoid";
  *  deepClone: importing it here creates the cycle messageThread → utils →
  *  runtime/index → threadStore → messageThread, which leaves ThreadStore
  *  undefined while bootstrapThreadStore's `extends` evaluates. */
-const cloneQueue = (q: QueuedMessage[]): QueuedMessage[] =>
-  JSON.parse(JSON.stringify(q));
+const cloneQueue = (q: QueuedMessage[]): QueuedMessage[] => JSON.parse(JSON.stringify(q));
 
 export type MessageThreadJSON = {
   messages: smoltalk.MessageJSON[];
@@ -114,9 +113,7 @@ export class MessageThread {
   }
 
   cloneMessages(): smoltalk.Message[] {
-    return this.messages
-      .map((m) => m.toJSON())
-      .map((m) => smoltalk.messageFromJSON(m));
+    return this.messages.map((m) => m.toJSON()).map((m) => smoltalk.messageFromJSON(m));
   }
 
   getMessages(): smoltalk.Message[] {
@@ -133,10 +130,7 @@ export class MessageThread {
    *  outright rather than padded or sliced: the lengths disagreeing means
    *  the source is already wrong, and guessing an alignment would put
    *  real labels on the wrong messages. Unlabeled beats mislabeled. */
-  setMessages(
-    messages: smoltalk.Message[],
-    labels?: (string | null)[],
-  ): void {
+  setMessages(messages: smoltalk.Message[], labels?: (string | null)[]): void {
     this.messages = messages;
     this.messageLabels =
       labels !== undefined && labels.length === messages.length
@@ -210,9 +204,7 @@ export class MessageThread {
     const label = opts.label ?? null;
     if (role === "assistant") {
       if (typeof content !== "string") {
-        throw new Error(
-          "queueMessage: assistant-role queued messages must have string content",
-        );
+        throw new Error("queueMessage: assistant-role queued messages must have string content");
       }
       this.queuedMessages.push({ role, content, label });
       return;
@@ -288,11 +280,7 @@ export class MessageThread {
   }
 
   static fromJSON(
-    json:
-      | MessageThreadJSON
-      | MessageThread
-      | smoltalk.MessageJSON[]
-      | smoltalk.Message[],
+    json: MessageThreadJSON | MessageThread | smoltalk.MessageJSON[] | smoltalk.Message[],
   ): MessageThread {
     if (json instanceof MessageThread) return json;
     const thread = new MessageThread();
@@ -330,9 +318,8 @@ export class MessageThread {
       throw new Error("Invalid input for MessageThread.fromJSON");
     }
 
-    const messagesToJSON = _messages.map(
-      (m: smoltalk.MessageJSON | smoltalk.Message) =>
-        "toJSON" in m ? m.toJSON() : m,
+    const messagesToJSON = _messages.map((m: smoltalk.MessageJSON | smoltalk.Message) =>
+      "toJSON" in m ? m.toJSON() : m,
     );
 
     const smoltalkMessages = messagesToJSON.map((m: smoltalk.MessageJSON) =>
@@ -351,11 +338,7 @@ export class MessageThread {
     // Accept only a real array: persisted JSON containing
     // `queuedMessages: null` (or any non-array) must not throw during
     // resume — it revives as an empty queue, same as the absent key.
-    if (
-      !Array.isArray(json) &&
-      "queuedMessages" in json &&
-      Array.isArray(json.queuedMessages)
-    ) {
+    if (!Array.isArray(json) && "queuedMessages" in json && Array.isArray(json.queuedMessages)) {
       thread.queuedMessages = cloneQueue(json.queuedMessages);
     }
 

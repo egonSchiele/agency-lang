@@ -65,9 +65,7 @@ export function summarize(evt: EventEnvelope): string {
       const head = `forkBranchEnd #${d.branchIndex} (${d.outcome}, ${fmtDuration(d.timeTaken)})`;
       // Show the branch's return value (success only) so you can see what
       // each branch produced without opening raw data.
-      return d.value !== undefined
-        ? `${head} → ${truncate(stringifyValue(d.value), 40)}`
-        : head;
+      return d.value !== undefined ? `${head} → ${truncate(stringifyValue(d.value), 40)}` : head;
     }
     case "forkEnd":
       return `forkEnd ${d.mode} (${fmtDuration(d.timeTaken)})`;
@@ -77,11 +75,7 @@ export function summarize(evt: EventEnvelope): string {
       // `thread(label: "...")`; session is the routing key for
       // `thread(session: "...")`. Either lets the reader see which
       // subagent this thread corresponds to at a glance.
-      const tag = d.label
-        ? ` "${d.label}"`
-        : d.session
-          ? ` session="${d.session}"`
-          : "";
+      const tag = d.label ? ` "${d.label}"` : d.session ? ` session="${d.session}"` : "";
       const hiddenSuffix = d.hidden ? " hidden" : "";
       return `threadCreated ${d.threadType ?? "?"} #${shortId(d.threadId)}${tag}${hiddenSuffix}`;
     }
@@ -129,10 +123,7 @@ export function summarizeTrace(node: TreeNode): string {
 // Local time, friendly format: "May 16, 11:15pm". Chosen for
 // at-a-glance readability over machine parsing — the full ISO
 // timestamp lives in the raw envelope if anyone needs it.
-const MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function fmtTime(ms: number): string {
   const d = new Date(ms);
@@ -164,7 +155,7 @@ function shortId(id?: string): string {
 }
 
 function stringifyValue(v: unknown): string {
-  return typeof v === "string" ? v : JSON.stringify(v ?? null) ?? "undefined";
+  return typeof v === "string" ? v : (JSON.stringify(v ?? null) ?? "undefined");
 }
 
 /** Format the optional `{effect, message, data}` interrupt summary

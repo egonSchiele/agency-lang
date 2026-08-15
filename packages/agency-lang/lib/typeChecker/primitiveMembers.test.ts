@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  lookupPrimitiveMember,
-  resolveSig,
-  resolvePropertyType,
-} from "./primitiveMembers.js";
+import { lookupPrimitiveMember, resolveSig, resolvePropertyType } from "./primitiveMembers.js";
 import { NUMBER_T, STRING_T, BOOLEAN_T } from "./primitives.js";
 import type { VariableType } from "../types.js";
 

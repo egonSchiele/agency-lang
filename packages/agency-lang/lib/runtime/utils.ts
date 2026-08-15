@@ -50,10 +50,7 @@ function stripCodeFence(s: string): string {
  *  unwrap heuristics mirror the shapes providers actually return: the
  *  { response: ... } wrapper for primitive schemas, single-key wrappers,
  *  stringified JSON, and single-element arrays. */
-export function extractStructuredResponse(
-  rawValue: any,
-  schema: any,
-): ResultValue {
+export function extractStructuredResponse(rawValue: any, schema: any): ResultValue {
   // 1. Direct match — try parsing as-is
   const direct = schema.safeParse(rawValue);
   if (direct.success) {
@@ -158,11 +155,14 @@ export function createReturnObject<T>({
   // Note: we're *not* using structuredClone here because structuredClone
   // doesn't call `toJSON`, so it's not cloning our message objects correctly.
   return JSON.parse(
-    JSON.stringify({
-      messages: result.messages,
-      data: result.data,
-      tokens: globals.get(GlobalStore.INTERNAL_MODULE, "__tokenStats"),
-    }, nativeTypeReplacer),
+    JSON.stringify(
+      {
+        messages: result.messages,
+        data: result.data,
+        tokens: globals.get(GlobalStore.INTERNAL_MODULE, "__tokenStats"),
+      },
+      nativeTypeReplacer,
+    ),
     nativeTypeReviver,
   );
 }
@@ -306,7 +306,8 @@ export function updateTokenStats(args: {
     if (!tokenStats.models || Object.getPrototypeOf(tokenStats.models) !== null) {
       tokenStats.models = Object.assign(Object.create(null), tokenStats.models);
     }
-    const m = tokenStats.models[model] ??
+    const m =
+      tokenStats.models[model] ??
       (tokenStats.models[model] = { inputTokens: 0, outputTokens: 0, totalCost: 0 });
     addTo(m, "inputTokens", usage.inputTokens);
     addTo(m, "outputTokens", usage.outputTokens);

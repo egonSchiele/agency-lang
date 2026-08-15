@@ -32,24 +32,18 @@ class ExitSentinel extends Error {
 
 function withMockedProcess<T>(fn: () => T): { ran: boolean; result?: T; capture: ExitCapture } {
   const capture: ExitCapture = { code: undefined, stdout: "", stderr: "" };
-  const stdoutSpy = vi
-    .spyOn(process.stdout, "write")
-    .mockImplementation((chunk: any) => {
-      capture.stdout += String(chunk);
-      return true;
-    });
-  const stderrSpy = vi
-    .spyOn(process.stderr, "write")
-    .mockImplementation((chunk: any) => {
-      capture.stderr += String(chunk);
-      return true;
-    });
-  const exitSpy = vi
-    .spyOn(process, "exit")
-    .mockImplementation(((code?: number) => {
-      capture.code = code;
-      throw new ExitSentinel(capture);
-    }) as never);
+  const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation((chunk: any) => {
+    capture.stdout += String(chunk);
+    return true;
+  });
+  const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation((chunk: any) => {
+    capture.stderr += String(chunk);
+    return true;
+  });
+  const exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+    capture.code = code;
+    throw new ExitSentinel(capture);
+  }) as never);
   try {
     const result = fn();
     return { ran: true, result, capture };
@@ -82,9 +76,7 @@ describe("validateSchema", () => {
 
     it("each flag type", () => {
       for (const type of ["string", "number", "boolean"] as const) {
-        expect(() =>
-          validateSchema({ flags: { f: { type } } }),
-        ).not.toThrow();
+        expect(() => validateSchema({ flags: { f: { type } } })).not.toThrow();
       }
     });
 
@@ -95,15 +87,11 @@ describe("validateSchema", () => {
     });
 
     it("a flag with a short alias", () => {
-      expect(() =>
-        validateSchema(oneFlag({ short: "n" })),
-      ).not.toThrow();
+      expect(() => validateSchema(oneFlag({ short: "n" }))).not.toThrow();
     });
 
     it("choices on a string flag", () => {
-      expect(() =>
-        validateSchema(oneFlag({ choices: ["a", "b"] })),
-      ).not.toThrow();
+      expect(() => validateSchema(oneFlag({ choices: ["a", "b"] }))).not.toThrow();
     });
 
     it("groups referencing declared flags", () => {
@@ -131,21 +119,21 @@ describe("validateSchema", () => {
 
   describe("rejects", () => {
     it("invalid flag name (uppercase)", () => {
-      expect(() =>
-        validateSchema({ flags: { Name: { type: "string" } } }),
-      ).toThrow(/invalid flag name "Name"/);
+      expect(() => validateSchema({ flags: { Name: { type: "string" } } })).toThrow(
+        /invalid flag name "Name"/,
+      );
     });
 
     it("invalid flag name (leading dash)", () => {
-      expect(() =>
-        validateSchema({ flags: { "-name": { type: "string" } } }),
-      ).toThrow(/invalid flag name/);
+      expect(() => validateSchema({ flags: { "-name": { type: "string" } } })).toThrow(
+        /invalid flag name/,
+      );
     });
 
     it("invalid flag name (contains =)", () => {
-      expect(() =>
-        validateSchema({ flags: { "na=me": { type: "string" } } }),
-      ).toThrow(/invalid flag name/);
+      expect(() => validateSchema({ flags: { "na=me": { type: "string" } } })).toThrow(
+        /invalid flag name/,
+      );
     });
 
     it("invalid type", () => {
@@ -159,9 +147,7 @@ describe("validateSchema", () => {
       expect(() => validateSchema(oneFlag({ short: "nn" }))).toThrow(
         /must be exactly one character/,
       );
-      expect(() => validateSchema(oneFlag({ short: "" }))).toThrow(
-        /must be exactly one character/,
-      );
+      expect(() => validateSchema(oneFlag({ short: "" }))).toThrow(/must be exactly one character/);
     });
 
     it("duplicate short aliases", () => {
@@ -176,18 +162,18 @@ describe("validateSchema", () => {
     });
 
     it("default type does not match flag type", () => {
-      expect(() =>
-        validateSchema(oneFlag({ default: 5 })),
-      ).toThrow(/has type "string" but default 5 is a number/);
-      expect(() =>
-        validateSchema({ flags: { p: { type: "number", default: "x" } } }),
-      ).toThrow(/has type "number" but default "x" is a string/);
+      expect(() => validateSchema(oneFlag({ default: 5 }))).toThrow(
+        /has type "string" but default 5 is a number/,
+      );
+      expect(() => validateSchema({ flags: { p: { type: "number", default: "x" } } })).toThrow(
+        /has type "number" but default "x" is a string/,
+      );
     });
 
     it("required and default both set", () => {
-      expect(() =>
-        validateSchema(oneFlag({ required: true, default: "world" })),
-      ).toThrow(/declares both required and default/);
+      expect(() => validateSchema(oneFlag({ required: true, default: "world" }))).toThrow(
+        /declares both required and default/,
+      );
     });
 
     it("choices on a non-string flag", () => {
@@ -199,9 +185,9 @@ describe("validateSchema", () => {
     });
 
     it("boolean default: true", () => {
-      expect(() =>
-        validateSchema({ flags: { v: { type: "boolean", default: true } } }),
-      ).toThrow(/v1 does not support negatable booleans/);
+      expect(() => validateSchema({ flags: { v: { type: "boolean", default: true } } })).toThrow(
+        /v1 does not support negatable booleans/,
+      );
     });
 
     it("short -h on any user flag when auto-help is active", () => {
@@ -450,10 +436,7 @@ describe("preScanArgv", () => {
   });
 
   it("rejects repeated single-value flag (string)", () => {
-    const result = preScanArgv(
-      ["--name", "alice", "--name", "bob"],
-      schema,
-    );
+    const result = preScanArgv(["--name", "alice", "--name", "bob"], schema);
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error).toEqual({ kind: "duplicateFlag", flag: "name" });
@@ -493,16 +476,15 @@ describe("preScanArgv", () => {
   });
 
   it("accepts repeated boolean flag (harmless)", () => {
-    expect(
-      preScanArgv(["--verbose", "--verbose"], schema),
-    ).toEqual({ ok: true, value: undefined });
+    expect(preScanArgv(["--verbose", "--verbose"], schema)).toEqual({ ok: true, value: undefined });
   });
 
   it("duplicate check stops at --", () => {
     // Anything after -- is a positional, not a flag.
-    expect(
-      preScanArgv(["--name", "alice", "--", "--name", "bob"], schema),
-    ).toEqual({ ok: true, value: undefined });
+    expect(preScanArgv(["--name", "alice", "--", "--name", "bob"], schema)).toEqual({
+      ok: true,
+      value: undefined,
+    });
   });
 });
 
@@ -575,8 +557,7 @@ describe("callNodeParse", () => {
   it("returns booleanTakesNoValue for --verbose=foo", () => {
     const r = callNodeParse(["--verbose=foo"], schema);
     expect(r.ok).toBe(false);
-    if (!r.ok)
-      expect(r.error).toEqual({ kind: "booleanTakesNoValue", flag: "verbose" });
+    if (!r.ok) expect(r.error).toEqual({ kind: "booleanTakesNoValue", flag: "verbose" });
   });
 
   it("returns missingValue for --name at end of argv", () => {
@@ -794,9 +775,10 @@ describe("checkGroups", () => {
   });
 
   it("passes when all required-together flags are set", () => {
-    expect(
-      checkGroups({ output: "f.txt", format: "json" }, schema),
-    ).toEqual({ ok: true, value: undefined });
+    expect(checkGroups({ output: "f.txt", format: "json" }, schema)).toEqual({
+      ok: true,
+      value: undefined,
+    });
   });
 
   it("rejects when one required-together flag is set without the other", () => {
@@ -886,9 +868,7 @@ describe("formatHelp", () => {
   });
 
   it("renders version flag when schema.version is set", () => {
-    const help = formatHelp(
-      normalizeSchema({ flags: {}, version: "1.0" }),
-    );
+    const help = formatHelp(normalizeSchema({ flags: {}, version: "1.0" }));
     expect(help).toContain("-V, --version");
   });
 
@@ -943,8 +923,7 @@ describe("formatError", () => {
         raw: "xml",
         choices: ["json", "yaml"],
       },
-      expectedMessage:
-        'invalid value for --format: "xml" (expected one of: json, yaml)',
+      expectedMessage: 'invalid value for --format: "xml" (expected one of: json, yaml)',
     },
     {
       error: { kind: "booleanTakesNoValue", flag: "verbose" },
@@ -952,8 +931,7 @@ describe("formatError", () => {
     },
     {
       error: { kind: "greedyValue", flag: "name", raw: "--verbose" },
-      expectedMessage:
-        "--name expects a value; got --verbose (use --name=--verbose to force)",
+      expectedMessage: "--name expects a value; got --verbose (use --name=--verbose to force)",
     },
     {
       error: {
@@ -961,8 +939,7 @@ describe("formatError", () => {
         raw: "-n=alice",
         suggestion: "-n alice or -nalice",
       },
-      expectedMessage:
-        'invalid short flag syntax in "-n=alice": use -n alice or -nalice',
+      expectedMessage: 'invalid short flag syntax in "-n=alice": use -n alice or -nalice',
     },
     {
       error: { kind: "duplicateFlag", flag: "name" },
@@ -1039,9 +1016,7 @@ describe("_parseArgsWith (end-to-end)", () => {
   });
 
   it("--help short-circuits and exits 0 even when required flag is missing", () => {
-    const { ran, capture } = withMockedProcess(() =>
-      _parseArgsWith(["--help"], greetSchema),
-    );
+    const { ran, capture } = withMockedProcess(() => _parseArgsWith(["--help"], greetSchema));
     expect(ran).toBe(false);
     expect(capture.code).toBe(0);
     expect(capture.stdout).toContain("Usage: greet");
@@ -1049,17 +1024,13 @@ describe("_parseArgsWith (end-to-end)", () => {
   });
 
   it("-h short alias works the same", () => {
-    const { capture } = withMockedProcess(() =>
-      _parseArgsWith(["-h"], greetSchema),
-    );
+    const { capture } = withMockedProcess(() => _parseArgsWith(["-h"], greetSchema));
     expect(capture.code).toBe(0);
     expect(capture.stdout).toContain("Usage: greet");
   });
 
   it("--version short-circuits when schema.version is set", () => {
-    const { capture } = withMockedProcess(() =>
-      _parseArgsWith(["--version"], greetSchema),
-    );
+    const { capture } = withMockedProcess(() => _parseArgsWith(["--version"], greetSchema));
     expect(capture.code).toBe(0);
     expect(capture.stdout).toBe("1.2.3\n");
   });
@@ -1073,9 +1044,7 @@ describe("_parseArgsWith (end-to-end)", () => {
   });
 
   it("missing required flag exits 2 with stderr message + usage", () => {
-    const { capture } = withMockedProcess(() =>
-      _parseArgsWith([], greetSchema),
-    );
+    const { capture } = withMockedProcess(() => _parseArgsWith([], greetSchema));
     expect(capture.code).toBe(2);
     expect(capture.stderr).toContain("missing required flag --out");
     expect(capture.stderr).toContain("Usage: greet");
@@ -1104,10 +1073,7 @@ describe("_parseArgsWith (end-to-end)", () => {
     // null-prototype object regardless. Belt and braces.
     const before = (Object.prototype as any).polluted;
     const { capture } = withMockedProcess(() =>
-      _parseArgsWith(
-        ["--out", "x", "--__proto__", "polluted"],
-        greetSchema,
-      ),
+      _parseArgsWith(["--out", "x", "--__proto__", "polluted"], greetSchema),
     );
     expect(capture.code).toBe(2);
     expect((Object.prototype as any).polluted).toBe(before);
@@ -1119,9 +1085,7 @@ describe("_parseArgsWith (end-to-end)", () => {
         help: { type: "string", description: "help topic" },
       },
     };
-    const { ran, result } = withMockedProcess(() =>
-      _parseArgsWith(["--help", "syntax"], custom),
-    );
+    const { ran, result } = withMockedProcess(() => _parseArgsWith(["--help", "syntax"], custom));
     expect(ran).toBe(true);
     expect(result!.flags.help).toBe("syntax");
   });
@@ -1140,9 +1104,7 @@ describe("_parseArgsWith (end-to-end)", () => {
       flags: { a: { type: "boolean" }, b: { type: "boolean" } },
       groups: { exclusive: [["a", "b"]] },
     };
-    const { capture } = withMockedProcess(() =>
-      _parseArgsWith(["--a", "--b"], s),
-    );
+    const { capture } = withMockedProcess(() => _parseArgsWith(["--a", "--b"], s));
     expect(capture.code).toBe(2);
     expect(capture.stderr).toContain("--a and --b are mutually exclusive");
   });
@@ -1152,9 +1114,7 @@ describe("_parseArgsWith (end-to-end)", () => {
       flags: { output: { type: "string" }, format: { type: "string" } },
       groups: { requiredTogether: [["output", "format"]] },
     };
-    const { capture } = withMockedProcess(() =>
-      _parseArgsWith(["--output", "f.txt"], s),
-    );
+    const { capture } = withMockedProcess(() => _parseArgsWith(["--output", "f.txt"], s));
     expect(capture.code).toBe(2);
     expect(capture.stderr).toContain("--output requires --format");
   });
@@ -1163,39 +1123,27 @@ describe("_parseArgsWith (end-to-end)", () => {
     const s: ArgsSchema = {
       flags: { format: { type: "string", choices: ["json", "yaml"] } },
     };
-    const ok = withMockedProcess(() =>
-      _parseArgsWith(["--format", "json"], s),
-    );
+    const ok = withMockedProcess(() => _parseArgsWith(["--format", "json"], s));
     expect(ok.ran).toBe(true);
     expect(ok.result!.flags.format).toBe("json");
 
-    const bad = withMockedProcess(() =>
-      _parseArgsWith(["--format", "xml"], s),
-    );
+    const bad = withMockedProcess(() => _parseArgsWith(["--format", "xml"], s));
     expect(bad.capture.code).toBe(2);
     expect(bad.capture.stderr).toContain("expected one of: json, yaml");
   });
 
   it("repeated single-value flag exits 2 with reformatted message", () => {
     const { capture } = withMockedProcess(() =>
-      _parseArgsWith(
-        ["--out", "x", "--name", "a", "--name", "b"],
-        greetSchema,
-      ),
+      _parseArgsWith(["--out", "x", "--name", "a", "--name", "b"], greetSchema),
     );
     expect(capture.code).toBe(2);
-    expect(capture.stderr).toContain(
-      "flag --name was provided more than once",
-    );
+    expect(capture.stderr).toContain("flag --name was provided more than once");
   });
 
   it("schema bug throws synchronously (before any argv touched)", () => {
     expect(() =>
       withMockedProcess(() =>
-        _parseArgsWith(
-          [],
-          { flags: { f: { type: "boolean", default: true } } } as ArgsSchema,
-        ),
+        _parseArgsWith([], { flags: { f: { type: "boolean", default: true } } } as ArgsSchema),
       ),
     ).toThrow(/v1 does not support negatable booleans/);
   });
@@ -1212,15 +1160,13 @@ describe("optional (optional-value) flags", () => {
     },
   };
 
-  it("yields \"\" when the flag is the last token (bare)", () => {
-    const { ran, result } = withMockedProcess(() =>
-      _parseArgsWith(["--model"], schema),
-    );
+  it('yields "" when the flag is the last token (bare)', () => {
+    const { ran, result } = withMockedProcess(() => _parseArgsWith(["--model"], schema));
     expect(ran).toBe(true);
     expect(result!.flags.model).toBe("");
   });
 
-  it("yields \"\" when the next token is another flag (bare)", () => {
+  it('yields "" when the next token is another flag (bare)', () => {
     const { ran, result } = withMockedProcess(() =>
       _parseArgsWith(["--model", "--verbose"], schema),
     );
@@ -1229,10 +1175,8 @@ describe("optional (optional-value) flags", () => {
     expect(result!.flags.verbose).toBe(true);
   });
 
-  it("yields \"\" for the explicit-empty --model= form", () => {
-    const { ran, result } = withMockedProcess(() =>
-      _parseArgsWith(["--model="], schema),
-    );
+  it('yields "" for the explicit-empty --model= form', () => {
+    const { ran, result } = withMockedProcess(() => _parseArgsWith(["--model="], schema));
     expect(ran).toBe(true);
     expect(result!.flags.model).toBe("");
   });
@@ -1254,9 +1198,7 @@ describe("optional (optional-value) flags", () => {
   });
 
   it("is absent (not present) when the flag is not passed", () => {
-    const { ran, result } = withMockedProcess(() =>
-      _parseArgsWith(["--verbose"], schema),
-    );
+    const { ran, result } = withMockedProcess(() => _parseArgsWith(["--verbose"], schema));
     expect(ran).toBe(true);
     expect("model" in result!.flags).toBe(false);
   });
@@ -1276,35 +1218,27 @@ describe("optional (optional-value) flags", () => {
   });
 
   // Short aliases behave the same as the long form: bare → "", given → value.
-  it("yields \"\" for a bare short alias at end (-m)", () => {
-    const { ran, result } = withMockedProcess(() =>
-      _parseArgsWith(["-m"], schema),
-    );
+  it('yields "" for a bare short alias at end (-m)', () => {
+    const { ran, result } = withMockedProcess(() => _parseArgsWith(["-m"], schema));
     expect(ran).toBe(true);
     expect(result!.flags.model).toBe("");
   });
 
-  it("yields \"\" for a bare short alias before another flag (-m --verbose)", () => {
-    const { ran, result } = withMockedProcess(() =>
-      _parseArgsWith(["-m", "--verbose"], schema),
-    );
+  it('yields "" for a bare short alias before another flag (-m --verbose)', () => {
+    const { ran, result } = withMockedProcess(() => _parseArgsWith(["-m", "--verbose"], schema));
     expect(ran).toBe(true);
     expect(result!.flags.model).toBe("");
     expect(result!.flags.verbose).toBe(true);
   });
 
   it("yields the value for a short alias with a separate value (-m x)", () => {
-    const { ran, result } = withMockedProcess(() =>
-      _parseArgsWith(["-m", "smollm2-135m"], schema),
-    );
+    const { ran, result } = withMockedProcess(() => _parseArgsWith(["-m", "smollm2-135m"], schema));
     expect(ran).toBe(true);
     expect(result!.flags.model).toBe("smollm2-135m");
   });
 
   it("yields the value for an attached short value (-mVALUE)", () => {
-    const { ran, result } = withMockedProcess(() =>
-      _parseArgsWith(["-msmollm2-135m"], schema),
-    );
+    const { ran, result } = withMockedProcess(() => _parseArgsWith(["-msmollm2-135m"], schema));
     expect(ran).toBe(true);
     expect(result!.flags.model).toBe("smollm2-135m");
   });

@@ -127,8 +127,16 @@ describe("handleKey", () => {
         label: "t",
         summary: "trace t",
         children: [
-          { ...child("a"), parentId: "trace-t", children: [{ ...child("a-child"), parentId: "a" }] },
-          { ...child("b"), parentId: "trace-t", children: [{ ...child("b-child"), parentId: "b" }] },
+          {
+            ...child("a"),
+            parentId: "trace-t",
+            children: [{ ...child("a-child"), parentId: "a" }],
+          },
+          {
+            ...child("b"),
+            parentId: "trace-t",
+            children: [{ ...child("b-child"), parentId: "b" }],
+          },
         ],
       },
     ],
@@ -185,9 +193,30 @@ describe("handleKey", () => {
   it("Tab cycles to the next trace root", () => {
     const state: ViewerState = {
       roots: [
-        { ...child("t1"), id: "t1", nodeKind: "trace", traceId: "t1", parentId: null, summary: "t1" },
-        { ...child("t2"), id: "t2", nodeKind: "trace", traceId: "t2", parentId: null, summary: "t2" },
-        { ...child("t3"), id: "t3", nodeKind: "trace", traceId: "t3", parentId: null, summary: "t3" },
+        {
+          ...child("t1"),
+          id: "t1",
+          nodeKind: "trace",
+          traceId: "t1",
+          parentId: null,
+          summary: "t1",
+        },
+        {
+          ...child("t2"),
+          id: "t2",
+          nodeKind: "trace",
+          traceId: "t2",
+          parentId: null,
+          summary: "t2",
+        },
+        {
+          ...child("t3"),
+          id: "t3",
+          nodeKind: "trace",
+          traceId: "t3",
+          parentId: null,
+          summary: "t3",
+        },
       ],
       expanded: new Set(),
       cursorId: "t1",
@@ -203,8 +232,22 @@ describe("handleKey", () => {
   it("Shift+Tab cycles to the previous trace root", () => {
     const state: ViewerState = {
       roots: [
-        { ...child("t1"), id: "t1", nodeKind: "trace", traceId: "t1", parentId: null, summary: "t1" },
-        { ...child("t2"), id: "t2", nodeKind: "trace", traceId: "t2", parentId: null, summary: "t2" },
+        {
+          ...child("t1"),
+          id: "t1",
+          nodeKind: "trace",
+          traceId: "t1",
+          parentId: null,
+          summary: "t1",
+        },
+        {
+          ...child("t2"),
+          id: "t2",
+          nodeKind: "trace",
+          traceId: "t2",
+          parentId: null,
+          summary: "t2",
+        },
       ],
       expanded: new Set(),
       cursorId: "t1",

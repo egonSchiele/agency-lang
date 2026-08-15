@@ -57,7 +57,9 @@ export async function logsView(
   const onError = deps.onError ?? exitWithError;
 
   if (cliOpts.follow === true && (files.length !== 1 || cliOpts.csv === true)) {
-    onError("--follow needs exactly one statelog file and cannot combine with --csv or directories");
+    onError(
+      "--follow needs exactly one statelog file and cannot combine with --csv or directories",
+    );
     return;
   }
   const soleFile = files.length === 1 ? files[0] : undefined;
@@ -72,7 +74,9 @@ export async function logsView(
     return;
   }
   if (cliOpts.follow === true) {
-    onError("--follow needs exactly one statelog file and cannot combine with --csv or directories");
+    onError(
+      "--follow needs exactly one statelog file and cannot combine with --csv or directories",
+    );
     return;
   }
 
@@ -105,16 +109,19 @@ function labelTraceBaseFrom(cliOpts: LogsViewOpts): LabelTraceBase {
   return {
     datasetDir: resolveDataset({ dataset: cliOpts.dataset }, cliOpts.config ?? {}),
     checklistFile: cliOpts.checklist === undefined ? undefined : path.resolve(cliOpts.checklist),
-    annotator: resolveAnnotator({}, {
-      environment: process.env,
-      osUserName: () => {
-        try {
-          return os.userInfo().username;
-        } catch {
-          return undefined;
-        }
+    annotator: resolveAnnotator(
+      {},
+      {
+        environment: process.env,
+        osUserName: () => {
+          try {
+            return os.userInfo().username;
+          } catch {
+            return undefined;
+          }
+        },
       },
-    }),
+    ),
   };
 }
 
@@ -127,9 +134,11 @@ function exitWithError(message: string): void {
   process.exit(1);
 }
 
-async function runExplorerOnTerminal(
-  options: { sources: Source[]; route: "runTable" | "explorer"; labeling?: LabelTraceBase },
-): Promise<void> {
+async function runExplorerOnTerminal(options: {
+  sources: Source[];
+  route: "runTable" | "explorer";
+  labeling?: LabelTraceBase;
+}): Promise<void> {
   const input = new TerminalInput();
   const output = new TerminalOutput();
   try {

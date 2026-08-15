@@ -29,13 +29,10 @@ export type ResolvedTrace = {
 };
 
 export type TraceResolution =
-  | { kind: "resolved"; trace: ResolvedTrace }
-  | { kind: "rejected"; reason: IngestSkipReason };
+  { kind: "resolved"; trace: ResolvedTrace } | { kind: "rejected"; reason: IngestSkipReason };
 
 export type TaskChoice =
-  | { kind: "keep-default" }
-  | { kind: "replace"; value: JsonValue }
-  | { kind: "omit" };
+  { kind: "keep-default" } | { kind: "replace"; value: JsonValue } | { kind: "omit" };
 
 export type ProjectionContext = {
   source: string;
@@ -44,8 +41,7 @@ export type ProjectionContext = {
 };
 
 export type ProjectionResult =
-  | { kind: "accepted"; occurrence: LoadedOccurrence }
-  | { kind: "skipped"; skip: IngestSkip };
+  { kind: "accepted"; occurrence: LoadedOccurrence } | { kind: "skipped"; skip: IngestSkip };
 
 /**
  * Extract one trace and choose its output: an `evalOutput()` value, else the
@@ -56,7 +52,10 @@ export type ProjectionResult =
  * run-directory ingestion refuses a `failed` input. Pure: no prompting, no
  * writes.
  */
-export function resolveTrace(events: readonly EventEnvelope[], sourcePath: string): TraceResolution {
+export function resolveTrace(
+  events: readonly EventEnvelope[],
+  sourcePath: string,
+): TraceResolution {
   const outcome = terminalOutcome(events);
   if (outcome !== "ok") {
     return { kind: "rejected", reason: outcome === "failed" ? "run-failed" : "trace-unfinished" };
@@ -68,7 +67,11 @@ export function resolveTrace(events: readonly EventEnvelope[], sourcePath: strin
   }
   return {
     kind: "resolved",
-    trace: { output: selection.value, finalOutputIndex: selection.index, taskDefault: taskDefaultFrom(record) },
+    trace: {
+      output: selection.value,
+      finalOutputIndex: selection.index,
+      taskDefault: taskDefaultFrom(record),
+    },
   };
 }
 
@@ -93,7 +96,9 @@ function terminalOutcome(events: readonly EventEnvelope[]): TerminalOutcome {
   if (last.data.result !== undefined && last.data.result !== null) {
     return "ok";
   }
-  const crashed = events.some((e) => e.data.type === "error" && e.data.errorType === "runtimeError");
+  const crashed = events.some(
+    (e) => e.data.type === "error" && e.data.errorType === "runtimeError",
+  );
   return crashed ? "failed" : "ok";
 }
 
@@ -119,7 +124,10 @@ export function projectTrace(
     traceId,
     finalOutputIndex: resolved.finalOutputIndex,
   });
-  return { kind: "accepted", occurrence: { fields: projected.fields, source: context.source, origin } };
+  return {
+    kind: "accepted",
+    occurrence: { fields: projected.fields, source: context.source, origin },
+  };
 }
 
 function taskValueFor(taskChoice: TaskChoice, taskDefault: JsonValue | null): JsonValue | null {
@@ -175,7 +183,9 @@ export function loadStatelog(args: {
 
   const occurrences: LoadedOccurrence[] = [];
   const skips: IngestSkip[] = [];
-  const taskChoice: TaskChoice = args.includeTaskField ? { kind: "keep-default" } : { kind: "omit" };
+  const taskChoice: TaskChoice = args.includeTaskField
+    ? { kind: "keep-default" }
+    : { kind: "omit" };
 
   for (const traceId of args.traceIds) {
     const resolution = resolveTrace(scan.eventsByTrace[traceId], args.path);

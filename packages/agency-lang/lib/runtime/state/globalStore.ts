@@ -2,12 +2,7 @@ import { nativeTypeReplacer, nativeTypeReviver } from "../revivers/index.js";
 // Value import only; redactForStatelog imports GlobalStore type-only, so this is
 // a one-way runtime edge (no cycle). Keeps the default marker single-sourced.
 import { REDACTED } from "../redactForStatelog.js";
-import {
-  canHoldDurableTag,
-  attachTag,
-  detachTag,
-  readTag,
-} from "./tagSymbol.js";
+import { canHoldDurableTag, attachTag, detachTag, readTag } from "./tagSymbol.js";
 
 export type GlobalStoreJSON = {
   store: Record<string, Record<string, any>>;
@@ -42,10 +37,7 @@ export class GlobalStore {
   static readonly REDACT_TAG = "redact";
 
   private isRef(value: unknown): value is object {
-    return (
-      (typeof value === "object" && value !== null) ||
-      typeof value === "function"
-    );
+    return (typeof value === "object" && value !== null) || typeof value === "function";
   }
 
   // A value can carry tags if it is a reference (keyed by identity in the
@@ -78,10 +70,7 @@ export class GlobalStore {
   // object (WeakMap) paths so setTag/getTagsFor share one code path. Records
   // are null-prototype so a user-controlled tag key like "__proto__" is stored
   // as an own data property instead of mutating the prototype chain.
-  private tagsRecordFor(
-    value: unknown,
-    create: boolean,
-  ): Record<string, unknown> | undefined {
+  private tagsRecordFor(value: unknown, create: boolean): Record<string, unknown> | undefined {
     if (this.isRef(value)) {
       // Follow an existing tag wherever it already lives (so an object frozen
       // AFTER tagging still resolves to its on-object record).
@@ -269,10 +258,7 @@ export class GlobalStore {
   /** True when any durable (on-object) tag has been created on or adopted by
    * this store. Serialized under __internal, so it survives clone/fromJSON. */
   hasDurableObjectTagFlag(): boolean {
-    return (
-      this.get(GlobalStore.INTERNAL_MODULE, GlobalStore.DURABLE_FLAG_KEY) ===
-      true
-    );
+    return this.get(GlobalStore.INTERNAL_MODULE, GlobalStore.DURABLE_FLAG_KEY) === true;
   }
 
   /** Set the durable-object-tag presence flag. Monotonic (never reset —
@@ -300,10 +286,16 @@ export class GlobalStore {
   }
 
   toJSON(): GlobalStoreJSON {
-    return JSON.parse(JSON.stringify({
-      store: this.store,
-      initializedModules: [...this.initializedModules],
-    }, nativeTypeReplacer), nativeTypeReviver);
+    return JSON.parse(
+      JSON.stringify(
+        {
+          store: this.store,
+          initializedModules: [...this.initializedModules],
+        },
+        nativeTypeReplacer,
+      ),
+      nativeTypeReviver,
+    );
   }
 
   getTokenStats(): any {

@@ -71,9 +71,7 @@ describe("indexed access parsing", () => {
   });
 
   it("chains left to right", () => {
-    expect(
-      firstParamHint('def f(x: User["address"]["city"]) { x }'),
-    ).toMatchObject({
+    expect(firstParamHint('def f(x: User["address"]["city"]) { x }')).toMatchObject({
       type: "indexedAccessType",
       objectType: {
         type: "indexedAccessType",

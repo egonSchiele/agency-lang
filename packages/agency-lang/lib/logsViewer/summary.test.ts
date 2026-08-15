@@ -1,10 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  summarize,
-  summarizeSpan,
-  summarizeTrace,
-  summarizeSpanStyled,
-} from "./summary.js";
+import { summarize, summarizeSpan, summarizeTrace, summarizeSpanStyled } from "./summary.js";
 import { TreeNode } from "./types.js";
 
 describe("summarize (leaf events)", () => {
@@ -182,7 +177,9 @@ describe("summarizeSpan — identifying detail", () => {
   });
 
   it("nodeExecution shows the node name", () => {
-    const node = spanNode("nodeExecution", [leaf({ type: "enterNode", nodeId: "agent" })], { duration: 5600 });
+    const node = spanNode("nodeExecution", [leaf({ type: "enterNode", nodeId: "agent" })], {
+      duration: 5600,
+    });
     expect(summarizeSpan(node)).toBe('nodeExecution "agent" (5.6s)');
   });
 
@@ -192,26 +189,53 @@ describe("summarizeSpan — identifying detail", () => {
   });
 
   it("toolExecution shows the tool name", () => {
-    const node = spanNode("toolExecution", [leaf({ type: "toolCallStart", toolName: "fib" }), leaf({ type: "toolCall", toolName: "fib" })], { duration: 3000 });
+    const node = spanNode(
+      "toolExecution",
+      [
+        leaf({ type: "toolCallStart", toolName: "fib" }),
+        leaf({ type: "toolCall", toolName: "fib" }),
+      ],
+      { duration: 3000 },
+    );
     expect(summarizeSpan(node)).toBe("toolExecution fib (3.0s)");
   });
 
   it("forkAll shows the branch count", () => {
-    const node = spanNode("forkAll", [leaf({ type: "forkStart", mode: "all", branchCount: 5 })], { duration: 3000 });
+    const node = spanNode("forkAll", [leaf({ type: "forkStart", mode: "all", branchCount: 5 })], {
+      duration: 3000,
+    });
     expect(summarizeSpan(node)).toBe("forkAll 5 branches (3.0s)");
   });
 
   it("subprocessRun shows the node name (and resume mode)", () => {
     const fresh = spanNode(
       "subprocessRun",
-      [leaf({ type: "subprocessStarted", moduleId: "m", node: "main", subprocessSessionId: "s1", mode: "run", depth: 1 })],
+      [
+        leaf({
+          type: "subprocessStarted",
+          moduleId: "m",
+          node: "main",
+          subprocessSessionId: "s1",
+          mode: "run",
+          depth: 1,
+        }),
+      ],
       { duration: 3000 },
     );
     expect(summarizeSpan(fresh)).toBe('subprocessRun "main" (3.0s)');
 
     const resumed = spanNode(
       "subprocessRun",
-      [leaf({ type: "subprocessStarted", moduleId: "m", node: "main", subprocessSessionId: "s1", mode: "resume", depth: 1 })],
+      [
+        leaf({
+          type: "subprocessStarted",
+          moduleId: "m",
+          node: "main",
+          subprocessSessionId: "s1",
+          mode: "resume",
+          depth: 1,
+        }),
+      ],
       { duration: 3000 },
     );
     expect(summarizeSpan(resumed)).toBe('subprocessRun "main" · resume (3.0s)');
@@ -260,7 +284,10 @@ describe("summarizeSpan — identifying detail", () => {
       leaf({
         type: "promptCompletion",
         model: '"gpt-4o-mini"',
-        messages: [{ role: "user", content: "outer request" }, { role: "tool", content: "x" }],
+        messages: [
+          { role: "user", content: "outer request" },
+          { role: "tool", content: "x" },
+        ],
         completion: { output: "final answer" },
       }),
     ]);
@@ -275,7 +302,9 @@ describe("summarizeSpan — identifying detail", () => {
   });
 
   it("styled variant includes the detail too", () => {
-    const node = spanNode("toolExecution", [leaf({ type: "toolCall", toolName: "fib" })], { duration: 3000 });
+    const node = spanNode("toolExecution", [leaf({ type: "toolCall", toolName: "fib" })], {
+      duration: 3000,
+    });
     expect(summarizeSpanStyled(node)).toContain("toolExecution fib");
   });
 });

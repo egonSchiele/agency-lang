@@ -12,14 +12,19 @@ function partialRecord(fields: Partial<EvalRecord>): EvalRecord {
 }
 
 const fakeGrader = (name: string) =>
-  ({ name: () => name, weight: () => 1 } as unknown as InputGrades["grades"][number]["grader"]);
+  ({ name: () => name, weight: () => 1 }) as unknown as InputGrades["grades"][number]["grader"];
 
 function entry(record: EvalRecord): InputGrades {
   return {
     input: { id: "q1", task: { question: "capital of France?" } },
     run: { output: "Paris", recordPath: "", workdir: "", record },
     gatesPassed: true,
-    grades: [{ grader: fakeGrader("goal"), grade: { score: { kind: "scalar", value: 0.4 }, feedback: "too terse" } }],
+    grades: [
+      {
+        grader: fakeGrader("goal"),
+        grade: { score: { kind: "scalar", value: 0.4 }, feedback: "too terse" },
+      },
+    ],
   };
 }
 
@@ -28,8 +33,26 @@ describe("renderInputFeedback", () => {
     const record = partialRecord({
       errors: [{ tMs: 1, errorType: "validationError", message: "missing field x", spanId: null }],
       events: [
-        { kind: "tool_start", tool: "search", argsPreview: "{q:France}", model: null, tMs: 1, threadId: null, spanId: null, parentSpanId: null },
-        { kind: "tool_end", tool: "search", outputPreview: "Paris is the capital", durationMs: 5, tMs: 2, threadId: null, spanId: null, parentSpanId: null },
+        {
+          kind: "tool_start",
+          tool: "search",
+          argsPreview: "{q:France}",
+          model: null,
+          tMs: 1,
+          threadId: null,
+          spanId: null,
+          parentSpanId: null,
+        },
+        {
+          kind: "tool_end",
+          tool: "search",
+          outputPreview: "Paris is the capital",
+          durationMs: 5,
+          tMs: 2,
+          threadId: null,
+          spanId: null,
+          parentSpanId: null,
+        },
       ],
     });
     const text = renderInputFeedback(entry(record));
@@ -47,7 +70,11 @@ describe("renderInputFeedback", () => {
   });
 
   it("degrades to grades-only feedback for an ungraded input with no run (never throws)", () => {
-    const ungraded: InputGrades = { ...entry(EMPTY_RECORD), run: null, ungradedReason: "no output" };
+    const ungraded: InputGrades = {
+      ...entry(EMPTY_RECORD),
+      run: null,
+      ungradedReason: "no output",
+    };
     const text = renderInputFeedback(ungraded);
     expect(text).toContain("too terse");
     expect(text).not.toContain("Tool calls:");

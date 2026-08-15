@@ -67,9 +67,7 @@ export class ScopeManager {
     );
     const idx = blocks.length - 1 - depth;
     if (idx < 0) {
-      throw new Error(
-        `blockFrameVar: depth ${depth} exceeds block nesting (${blocks.length})`,
-      );
+      throw new Error(`blockFrameVar: depth ${depth} exceeds block nesting (${blocks.length})`);
     }
     return `__bframe_${blocks[idx].blockName}`;
   }
@@ -169,24 +167,19 @@ export class ScopeManager {
     // default arm below covers only `global`.
     const owner = [...this.stack]
       .reverse()
-      .find(
-        (scope) =>
-          scope.type !== "block" || scope.declaredYieldType !== undefined,
-      );
+      .find((scope) => scope.type !== "block" || scope.declaredYieldType !== undefined);
     if (owner === undefined) return undefined;
     switch (owner.type) {
       case "block":
         return owner.declaredYieldType;
       case "function":
         return (
-          this.compilationUnit.functionDefinitions[owner.functionName]
-            ?.returnType ?? undefined
+          this.compilationUnit.functionDefinitions[owner.functionName]?.returnType ?? undefined
         );
       case "node":
         return (
-          this.compilationUnit.graphNodes.find(
-            (n) => n.nodeName === owner.nodeName,
-          )?.returnType ?? undefined
+          this.compilationUnit.graphNodes.find((n) => n.nodeName === owner.nodeName)?.returnType ??
+          undefined
         );
       default:
         return undefined; // global scope

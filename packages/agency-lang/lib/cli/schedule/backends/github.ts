@@ -49,9 +49,7 @@ function actionRef(name: string, noPin: boolean): string {
 }
 
 function renderPermissionsBlock(write: boolean): string {
-  return write
-    ? "  contents: write\n  pull-requests: write"
-    : "  contents: read";
+  return write ? "  contents: write\n  pull-requests: write" : "  contents: read";
 }
 
 function renderConcurrencyGroup(): string {
@@ -90,9 +88,7 @@ export class GithubBackend implements ScheduleBackend {
     const target = path.resolve(`${entry.name}.yml`);
 
     if (fs.existsSync(target) && !opts.force) {
-      throw new Error(
-        `File already exists: ${target}. Use --force to overwrite.`,
-      );
+      throw new Error(`File already exists: ${target}. Use --force to overwrite.`);
     }
 
     const yaml = renderGithubWorkflow({
@@ -116,9 +112,7 @@ export class GithubBackend implements ScheduleBackend {
     console.log(`Wrote ${target}`);
     console.log("");
     console.log("Next steps:");
-    console.log(
-      `  1. Move this file into your repo at .github/workflows/${entry.name}.yml`,
-    );
+    console.log(`  1. Move this file into your repo at .github/workflows/${entry.name}.yml`);
     console.log(
       `  2. Open the file and verify the 'file:' line points to your agent's path in the repo (currently set to ${entry.agentFile}).`,
     );

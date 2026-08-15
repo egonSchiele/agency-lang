@@ -15,7 +15,10 @@ describe("sendCallbackToParent", () => {
   it("sends a callback message when in IPC mode", () => {
     vi.stubEnv("AGENCY_IPC", "1");
     const sent: any[] = [];
-    process.send = ((m: any) => { sent.push(m); return true; }) as any;
+    process.send = ((m: any) => {
+      sent.push(m);
+      return true;
+    }) as any;
     sendCallbackToParent("onNodeStart", { nodeName: "n" });
     expect(sent).toEqual([{ type: "callback", name: "onNodeStart", data: { nodeName: "n" } }]);
   });
@@ -40,8 +43,16 @@ describe("sendCallbackToParent", () => {
     // JSON-serializes internally, which is what strips function fields. The
     // sender hands off the object directly (no redundant parse round-trip), so
     // the mock must serialize to reflect the actual wire payload.
-    process.send = ((m: any) => { sent.push(JSON.parse(JSON.stringify(m))); return true; }) as any;
-    sendCallbackToParent("onAgentStart", { nodeName: "n", args: {}, messages: [], cancel: () => {} });
+    process.send = ((m: any) => {
+      sent.push(JSON.parse(JSON.stringify(m)));
+      return true;
+    }) as any;
+    sendCallbackToParent("onAgentStart", {
+      nodeName: "n",
+      args: {},
+      messages: [],
+      cancel: () => {},
+    });
     expect(sent).toEqual([
       { type: "callback", name: "onAgentStart", data: { nodeName: "n", args: {}, messages: [] } },
     ]);
@@ -67,7 +78,9 @@ describe("sendCallbackToParent", () => {
 
   it("swallows a dead-channel send error", () => {
     vi.stubEnv("AGENCY_IPC", "1");
-    process.send = vi.fn(() => { throw new Error("channel closed"); }) as any;
+    process.send = vi.fn(() => {
+      throw new Error("channel closed");
+    }) as any;
     expect(() => sendCallbackToParent("onNodeStart", { nodeName: "n" })).not.toThrow();
   });
 

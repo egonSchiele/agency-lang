@@ -29,7 +29,9 @@ describe("SmoltalkClient.normalizeError", () => {
 
   it("maps typed terminal errors to a kind", () => {
     expect(client.normalizeError(new SmolContentPolicyError("blocked")).kind).toBe("contentPolicy");
-    expect(client.normalizeError(new SmolContextWindowExceededError("too long")).kind).toBe("contextWindow");
+    expect(client.normalizeError(new SmolContextWindowExceededError("too long")).kind).toBe(
+      "contextWindow",
+    );
     expect(client.normalizeError(new SmolTimeoutError("timed out")).kind).toBe("requestTimeout");
     expect(client.normalizeError(new SmolAuthError("bad key")).kind).toBe("auth");
   });

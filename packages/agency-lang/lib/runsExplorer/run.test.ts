@@ -8,7 +8,10 @@ import { ScriptedInput } from "../tui/input/scripted.js";
 import { FrameRecorder } from "../tui/output/recorder.js";
 import { runExplorer, type ExplorerOptions } from "./run.js";
 import {
-  resetFixtureClock, writeGradedRun, writeKilledRun, writeMultiTraceStatelog,
+  resetFixtureClock,
+  writeGradedRun,
+  writeKilledRun,
+  writeMultiTraceStatelog,
 } from "./testFixtures.js";
 
 const viewport = { rows: 24, cols: 120 };
@@ -76,7 +79,9 @@ describe("runExplorer", () => {
 
   it("boots into loading, shows the table when rows land, and quits on q", async () => {
     const runDir = writeGradedRun(tmpDir);
-    const { options, input, recorder } = makeOptions({ sources: [{ kind: "runDir", dir: runDir }] });
+    const { options, input, recorder } = makeOptions({
+      sources: [{ kind: "runDir", dir: runDir }],
+    });
 
     await drive(options, input, recorder, [
       { when: (frame) => frame.includes("regex-log") && frame.includes("[runs]"), key: "q" },
@@ -90,14 +95,20 @@ describe("runExplorer", () => {
   it("q interrupts a large backfill scan mid-load", async () => {
     const runDir = writeKilledRun(tmpDir);
     const statelog = path.join(runDir, "inputs", "t1", "agent", "statelog.jsonl");
-    const bigEvent = JSON.stringify({ format_version: 1, trace_id: "big", data: { type: "note", pad: "x".repeat(512) } });
+    const bigEvent = JSON.stringify({
+      format_version: 1,
+      trace_id: "big",
+      data: { type: "note", pad: "x".repeat(512) },
+    });
     const lines: string[] = [];
     for (let i = 0; i < 20_000; i++) {
       lines.push(bigEvent);
     }
     fs.appendFileSync(statelog, lines.join("\n") + "\n");
 
-    const { options, input, recorder } = makeOptions({ sources: [{ kind: "runDir", dir: runDir }] });
+    const { options, input, recorder } = makeOptions({
+      sources: [{ kind: "runDir", dir: runDir }],
+    });
     await drive(options, input, recorder, [
       // Quit while the row is visible but backfill still pending (…).
       { when: (frame) => frame.includes("…") && frame.includes("[runs]"), key: "q" },
@@ -106,7 +117,9 @@ describe("runExplorer", () => {
 
   it("t cycles runs → compare → trend and Shift+T cycles back", async () => {
     const runDir = writeGradedRun(tmpDir);
-    const { options, input, recorder } = makeOptions({ sources: [{ kind: "runDir", dir: runDir }] });
+    const { options, input, recorder } = makeOptions({
+      sources: [{ kind: "runDir", dir: runDir }],
+    });
 
     await drive(options, input, recorder, [
       { when: (frame) => frame.includes("[runs]") && frame.includes("regex-log"), key: "t" },
@@ -119,7 +132,9 @@ describe("runExplorer", () => {
 
   it("Enter drills into tests, Esc unwinds to runs, Esc at runs is inert", async () => {
     const runDir = writeGradedRun(tmpDir);
-    const { options, input, recorder } = makeOptions({ sources: [{ kind: "runDir", dir: runDir }] });
+    const { options, input, recorder } = makeOptions({
+      sources: [{ kind: "runDir", dir: runDir }],
+    });
 
     await drive(options, input, recorder, [
       { when: (frame) => frame.includes("[runs]") && frame.includes("regex-log"), key: "enter" },

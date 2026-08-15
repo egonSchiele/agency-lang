@@ -43,10 +43,7 @@ describe("ContentAddressableStore", () => {
   it("recurses into nested schema", () => {
     const store = new ContentAddressableStore();
     const schema = { outer: { inner: true } } as const;
-    const { record } = store.process(
-      { outer: { inner: [1, 2, 3], other: "hi" } },
-      schema,
-    );
+    const { record } = store.process({ outer: { inner: [1, 2, 3], other: "hi" } }, schema);
 
     expect(Array.isArray(record.outer.inner)).toBe(true);
     expect(typeof record.outer.inner[0]).toBe("string");
@@ -113,10 +110,7 @@ describe("ContentAddressableStore", () => {
     // Now seed a fresh store with those hashes and confirm process() emits nothing.
     const fresh = new ContentAddressableStore();
     fresh.seedSeenHashes(new Set([hashA, hashB]));
-    const { record, chunks } = fresh.process(
-      { items: { a: { x: 1 }, b: { x: 2 } } },
-      schema,
-    );
+    const { record, chunks } = fresh.process({ items: { a: { x: 1 }, b: { x: 2 } } }, schema);
     expect(record.items.a).toBe(hashA);
     expect(record.items.b).toBe(hashB);
     expect(chunks).toHaveLength(0);

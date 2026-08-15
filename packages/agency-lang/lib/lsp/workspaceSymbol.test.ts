@@ -11,7 +11,10 @@ describe("getWorkspaceSymbols", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-ws-test-"));
     try {
       const file = path.join(tmpDir, "helpers.agency");
-      fs.writeFileSync(file, "export def greet(name: string) {\n  return name\n}\nexport def goodbye() {\n  return 1\n}\n");
+      fs.writeFileSync(
+        file,
+        "export def greet(name: string) {\n  return name\n}\nexport def goodbye() {\n  return 1\n}\n",
+      );
       const symbolTable = SymbolTable.build(file, {});
       const results = getWorkspaceSymbols("greet", symbolTable);
       expect(results).toHaveLength(1);

@@ -8,21 +8,35 @@ import { runViewer } from "./run.js";
 
 const events = [
   { type: "agentStart", timestamp: "2026-05-16T00:00:00.000Z", entryNode: "main" },
-  { type: "threadCreated", timestamp: "2026-05-16T00:00:00.100Z", threadId: "1", label: "mainThread" },
+  {
+    type: "threadCreated",
+    timestamp: "2026-05-16T00:00:00.100Z",
+    threadId: "1",
+    label: "mainThread",
+  },
   { type: "promptStart", timestamp: "2026-05-16T00:00:00.200Z", model: '"m1"', threadId: "1" },
   {
-    type: "promptCompletion", timestamp: "2026-05-16T00:00:01.000Z", model: '"m1"', threadId: "1",
-    timeTaken: 800, usage: { inputTokens: 10, outputTokens: 2 }, cost: { totalCost: 0.01 },
+    type: "promptCompletion",
+    timestamp: "2026-05-16T00:00:01.000Z",
+    model: '"m1"',
+    threadId: "1",
+    timeTaken: 800,
+    usage: { inputTokens: 10, outputTokens: 2 },
+    cost: { totalCost: 0.01 },
     messages: [{ role: "user", content: "add two numbers" }],
     completion: { output: "3" },
   },
   { type: "agentEnd", timestamp: "2026-05-16T00:00:02.000Z", timeTaken: 2000 },
-].map((data, i) => JSON.stringify({
-  format_version: 1, trace_id: "abc", project_id: "p",
-  span_id: data.type.startsWith("prompt") ? "s2" : "s1",
-  parent_span_id: data.type.startsWith("prompt") ? "s1" : null,
-  data,
-}));
+].map((data, i) =>
+  JSON.stringify({
+    format_version: 1,
+    trace_id: "abc",
+    project_id: "p",
+    span_id: data.type.startsWith("prompt") ? "s2" : "s1",
+    parent_span_id: data.type.startsWith("prompt") ? "s1" : null,
+    data,
+  }),
+);
 
 const sample = events.join("\n") + "\n";
 
@@ -83,7 +97,10 @@ describe("the viewer shell", () => {
     const input = new ScriptedInput(["/", "q"]);
     input.feedLine("agentRun");
     await runViewer({
-      jsonl: sample, input, output: out, viewport: { rows: 20, cols: 120 },
+      jsonl: sample,
+      input,
+      output: out,
+      viewport: { rows: 20, cols: 120 },
     });
     expect(out.lastText()).toContain("match 1/");
   });

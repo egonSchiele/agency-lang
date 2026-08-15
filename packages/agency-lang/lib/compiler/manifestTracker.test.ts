@@ -17,7 +17,11 @@ describe("createManifestTracker policy resolution", () => {
     const dir = tmp();
     const tracker = createManifestTracker({}, path.join(dir, "main.agency"), "always");
     expect(tracker).toBe(NOOP_TRACKER);
-    tracker.record(path.join(dir, "main.agency"), path.join(dir, "main.js"), { deps: [], hasPkgImports: false, cacheable: true });
+    tracker.record(path.join(dir, "main.agency"), path.join(dir, "main.js"), {
+      deps: [],
+      hasPkgImports: false,
+      cacheable: true,
+    });
     tracker.flush();
     expect(fs.existsSync(path.join(dir, MANIFEST_DIR_NAME))).toBe(false);
   });
@@ -27,7 +31,11 @@ describe("createManifestTracker policy resolution", () => {
     const entry = path.join(dir, "main.agency");
     const writer = createManifestTracker({}, entry, "incremental");
     expect(writer.isFresh(entry)).toBe(false); // nothing recorded yet
-    writer.record(entry, path.join(dir, "main.js"), { deps: [], hasPkgImports: false, cacheable: true });
+    writer.record(entry, path.join(dir, "main.js"), {
+      deps: [],
+      hasPkgImports: false,
+      cacheable: true,
+    });
     writer.flush();
     const reader = createManifestTracker({}, entry, "incremental");
     expect(reader.isFresh(entry)).toBe(true);
@@ -39,11 +47,19 @@ describe("createManifestTracker policy resolution", () => {
     const dir = tmp();
     const entry = path.join(dir, "main.agency");
     const writer = createManifestTracker({}, entry, "incremental");
-    writer.record(entry, path.join(dir, "main.js"), { deps: [], hasPkgImports: false, cacheable: true });
+    writer.record(entry, path.join(dir, "main.js"), {
+      deps: [],
+      hasPkgImports: false,
+      cacheable: true,
+    });
     writer.flush();
     const forced = createManifestTracker({}, entry, "force");
     expect(forced.isFresh(entry)).toBe(false);
-    forced.record(entry, path.join(dir, "main.js"), { deps: [], hasPkgImports: false, cacheable: true });
+    forced.record(entry, path.join(dir, "main.js"), {
+      deps: [],
+      hasPkgImports: false,
+      cacheable: true,
+    });
     forced.flush();
     expect(loadManifest(dir).entries["main.agency"]).toBeDefined();
   });
@@ -52,7 +68,11 @@ describe("createManifestTracker policy resolution", () => {
     const dir = tmp();
     const entry = path.join(dir, "main.agency");
     const writer = createManifestTracker({}, entry, "incremental");
-    writer.record(entry, path.join(dir, "main.js"), { deps: [], hasPkgImports: false, cacheable: true });
+    writer.record(entry, path.join(dir, "main.js"), {
+      deps: [],
+      hasPkgImports: false,
+      cacheable: true,
+    });
     writer.flush();
     const other = createManifestTracker({ verbose: true }, entry, "incremental");
     expect(other.isFresh(entry)).toBe(false);
@@ -62,7 +82,11 @@ describe("createManifestTracker policy resolution", () => {
     const dir = tmp();
     const entry = path.join(dir, "main.agency");
     const writer = createManifestTracker({}, entry, "incremental");
-    writer.record(entry, path.join(dir, "main.js"), { deps: [], hasPkgImports: true, cacheable: true });
+    writer.record(entry, path.join(dir, "main.js"), {
+      deps: [],
+      hasPkgImports: true,
+      cacheable: true,
+    });
     writer.flush();
     const reader = createManifestTracker({}, entry, "incremental");
     expect(reader.isFresh(entry)).toBe(false);
@@ -78,13 +102,21 @@ describe("createManifestTracker policy resolution", () => {
     const dir = tmp();
     const entry = path.join(dir, "main.agency");
     const w = createManifestTracker({}, entry, "incremental");
-    w.record(entry, path.join(dir, "main.js"), { deps: [], hasPkgImports: false, cacheable: false });
+    w.record(entry, path.join(dir, "main.js"), {
+      deps: [],
+      hasPkgImports: false,
+      cacheable: false,
+    });
     w.flush();
     const r1 = createManifestTracker({}, entry, "incremental");
     expect(r1.isFresh(entry)).toBe(false);
     expect(r1.outputFor(entry)).toBe(path.join(dir, "main.js")); // still recorded
     const w2 = createManifestTracker({}, entry, "incremental");
-    w2.record(entry, path.join(dir, "main.js"), { deps: [], hasPkgImports: false, cacheable: true });
+    w2.record(entry, path.join(dir, "main.js"), {
+      deps: [],
+      hasPkgImports: false,
+      cacheable: true,
+    });
     w2.flush();
     expect(createManifestTracker({}, entry, "incremental").isFresh(entry)).toBe(true);
   });
@@ -95,7 +127,11 @@ describe("malformed manifest resilience", () => {
     const dir = tmp();
     const entry = path.join(dir, "main.agency");
     const writer = createManifestTracker({}, entry, "incremental");
-    writer.record(entry, path.join(dir, "main.js"), { deps: [], hasPkgImports: false, cacheable: true });
+    writer.record(entry, path.join(dir, "main.js"), {
+      deps: [],
+      hasPkgImports: false,
+      cacheable: true,
+    });
     writer.flush();
     const file = path.join(dir, MANIFEST_DIR_NAME, "manifest.json");
     const raw = JSON.parse(fs.readFileSync(file, "utf-8"));
@@ -110,7 +146,11 @@ describe("malformed manifest resilience", () => {
     const dir = tmp();
     const entry = path.join(dir, "main.agency");
     const writer = createManifestTracker({}, entry, "incremental");
-    writer.record(entry, path.join(dir, "main.js"), { deps: [], hasPkgImports: false, cacheable: true });
+    writer.record(entry, path.join(dir, "main.js"), {
+      deps: [],
+      hasPkgImports: false,
+      cacheable: true,
+    });
     writer.flush();
     const file = path.join(dir, MANIFEST_DIR_NAME, "manifest.json");
     const raw = JSON.parse(fs.readFileSync(file, "utf-8"));

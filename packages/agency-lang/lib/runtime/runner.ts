@@ -76,11 +76,7 @@ export function safeStatelogValue(value: unknown): unknown {
   const globals = __globals();
   // Fast path: only consult the redaction table when something is tagged.
   const hasTags = globals !== undefined && globals.hasAnyTags();
-  const replacer = function (
-    this: unknown,
-    key: string,
-    val: unknown,
-  ): unknown {
+  const replacer = function (this: unknown, key: string, val: unknown): unknown {
     if (hasTags && globals) {
       const raw = key === "" ? val : (this as Record<string, unknown>)[key];
       const replacement = globals.redactionReplacement(raw);
@@ -330,12 +326,7 @@ export class Runner {
       // Fall through so cleanup runs. See the abort-taxonomy spec.
       const cause = readCause(this.stack.abortSignal);
       if (cause?.kind === "guardTrip" && cause.delivered) {
-        return (
-          this.halted ||
-          this._break ||
-          this._continue ||
-          this._matchExit !== null
-        );
+        return this.halted || this._break || this._continue || this._matchExit !== null;
       }
       // THE shared trip walk (innermost-first, suspension-aware) — the
       // same one enforceGuards throws from. Routing through it matters:
@@ -350,9 +341,7 @@ export class Runner {
         this.halt(undefined);
       }
     }
-    return (
-      this.halted || this._break || this._continue || this._matchExit !== null
-    );
+    return this.halted || this._break || this._continue || this._matchExit !== null;
   }
 
   /** Step-boundary guard-trip raise (resumable-guards PR 3). The fast
@@ -487,20 +476,14 @@ export class Runner {
    *  into the parent (race losers → parent before winner resumes).
    *  Caller invokes this BEFORE popBranches() or deleteBranch —
    *  otherwise the branch stacks are gone. */
-  private propagateBranchCost(
-    branches: BranchState[],
-    parentStack: StateStack,
-  ): void {
+  private propagateBranchCost(branches: BranchState[], parentStack: StateStack): void {
     // Shared with PromptRunner's tool-dispatch batches (see stateStack.ts).
     propagateBranchCostImpl(branches, parentStack);
   }
 
   // ── Core step method ──
 
-  async step(
-    id: number,
-    callback: (runner: Runner) => Promise<void>,
-  ): Promise<void> {
+  async step(id: number, callback: (runner: Runner) => Promise<void>): Promise<void> {
     this.beforeStep();
     // Guard-trip raise BEFORE shouldSkip: shouldSkip's guard walk both
     // CONSUMES a time trip's one-shot check latch and THROWS it — the
@@ -629,9 +612,7 @@ export class Runner {
     // would dereference an unset local and throw. Evaluating lazily lets the
     // early return win. A bare object is still accepted for direct runtime
     // callers (tests); only a function means "thunk".
-    optsArg:
-      | ThreadStepOpts
-      | (() => ThreadStepOpts | Promise<ThreadStepOpts>),
+    optsArg: ThreadStepOpts | (() => ThreadStepOpts | Promise<ThreadStepOpts>),
     callback: (runner: Runner) => Promise<void>,
   ): Promise<void> {
     // Single canonical signature; `prettyPrint.ts` always emits an
@@ -770,9 +751,7 @@ export class Runner {
       // message list. Use the active id (which is `tid`) to look it
       // up regardless of double-push avoidance.
       const closingThread = threads.get(tid);
-      const messagesSnapshot = closingThread
-        ? closingThread.messages.map((m) => m.toJSON())
-        : [];
+      const messagesSnapshot = closingThread ? closingThread.messages.map((m) => m.toJSON()) : [];
       // Always pop one entry: when we pushed above, this balances
       // that push; when openSession/resumeExisting pushed (so we
       // didn't double-push), this pops the resumed entry the user
@@ -907,9 +886,7 @@ export class Runner {
 
       // Derive condbranch key from current path
       const condKey =
-        this.path.length === 0
-          ? `__condbranch_${id}`
-          : `__condbranch_${this.key()}.${id}`;
+        this.path.length === 0 ? `__condbranch_${id}` : `__condbranch_${this.key()}.${id}`;
 
       // Evaluate condition only once (not on resume). Conditions may call
       // stdlib helpers that read `getRuntimeContext()`, so evaluate inside
@@ -983,9 +960,7 @@ export class Runner {
     const items_ = typeof items === "function" ? await items() : items;
 
     const iterKey =
-      this.path.length === 0
-        ? `__iteration_${id}`
-        : `__iteration_${this.key()}.${id}`;
+      this.path.length === 0 ? `__iteration_${id}` : `__iteration_${this.key()}.${id}`;
 
     this.frame.locals[iterKey] = this.frame.locals[iterKey] ?? 0;
 
@@ -1032,8 +1007,7 @@ export class Runner {
       if (this.halted) return;
 
       // Reset all nested tracking variables for next iteration
-      const pathPrefix =
-        this.path.length === 0 ? `${id}` : `${this.key()}.${id}`;
+      const pathPrefix = this.path.length === 0 ? `${id}` : `${this.key()}.${id}`;
       this.frame.clearLocalsWithPrefix(`__substep_${pathPrefix}`);
       this.frame.clearLocalsWithPrefix(`__condbranch_${pathPrefix}`);
       this.frame.clearLocalsWithPrefix(`__iteration_${pathPrefix}`);
@@ -1072,9 +1046,7 @@ export class Runner {
     this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
     const iterKey =
-      this.path.length === 0
-        ? `__iteration_${id}`
-        : `__iteration_${this.key()}.${id}`;
+      this.path.length === 0 ? `__iteration_${id}` : `__iteration_${this.key()}.${id}`;
 
     this.frame.locals[iterKey] = this.frame.locals[iterKey] ?? 0;
     let currentIter = 0;
@@ -1098,8 +1070,7 @@ export class Runner {
 
       if (this.halted) return;
 
-      const pathPrefix =
-        this.path.length === 0 ? `${id}` : `${this.key()}.${id}`;
+      const pathPrefix = this.path.length === 0 ? `${id}` : `${this.key()}.${id}`;
       this.frame.clearLocalsWithPrefix(`__substep_${pathPrefix}`);
       this.frame.clearLocalsWithPrefix(`__condbranch_${pathPrefix}`);
       this.frame.clearLocalsWithPrefix(`__iteration_${pathPrefix}`);
@@ -1170,11 +1141,7 @@ export class Runner {
   async fork(
     id: number,
     items: any[],
-    blockFn: (
-      item: any,
-      index: number,
-      branchStack: StateStack,
-    ) => Promise<any>,
+    blockFn: (item: any, index: number, branchStack: StateStack) => Promise<any>,
     mode: "all" | "race",
     stateStack: StateStack,
     // When `true`, branches pointer-share the parent's `GlobalStore`
@@ -1198,9 +1165,7 @@ export class Runner {
 
     const forkId = nanoid(12);
     const forkStartTime = performance.now();
-    const forkSpanId = this.ctx.statelogClient.startSpan(
-      mode === "all" ? "forkAll" : "race",
-    );
+    const forkSpanId = this.ctx.statelogClient.startSpan(mode === "all" ? "forkAll" : "race");
     this.ctx.statelogClient.forkStart({
       forkId,
       mode,
@@ -1216,8 +1181,7 @@ export class Runner {
     let winnerIndex: number | undefined = undefined;
     // Read the race winner from this.frame.locals using a key derived from
     // the current path. Safe to call only inside the try block.
-    const readWinner = () =>
-      this.frame.locals[this.raceWinnerKey(id)] as number | undefined;
+    const readWinner = () => this.frame.locals[this.raceWinnerKey(id)] as number | undefined;
     try {
       // Both runForkAll and runRace are now thin adapters over runBatch.
       // The race adapter internally handles "first run" vs. "resume only
@@ -1274,11 +1238,7 @@ export class Runner {
   private async runForkAll(
     id: number,
     items: any[],
-    blockFn: (
-      item: any,
-      index: number,
-      branchStack: StateStack,
-    ) => Promise<any>,
+    blockFn: (item: any, index: number, branchStack: StateStack) => Promise<any>,
     stateStack: StateStack,
     forkId: string,
     shared: boolean,
@@ -1304,8 +1264,7 @@ export class Runner {
         invoke: (branchStack) => blockFn(item, i, branchStack),
       })),
       hooks: {
-        seedBranchCost: (childStack, parentStack) =>
-          this.seedBranchCost(childStack, parentStack),
+        seedBranchCost: (childStack, parentStack) => this.seedBranchCost(childStack, parentStack),
         propagateBranchCost: (branches, parentStack) =>
           this.propagateBranchCost(branches, parentStack),
         onBranchEnd: (_key, branchIndex, outcome, timeTaken, value) => {
@@ -1348,11 +1307,7 @@ export class Runner {
   private async runRace(
     id: number,
     items: any[],
-    blockFn: (
-      item: any,
-      index: number,
-      branchStack: StateStack,
-    ) => Promise<any>,
+    blockFn: (item: any, index: number, branchStack: StateStack) => Promise<any>,
     stateStack: StateStack,
     forkId: string,
     shared: boolean,
@@ -1382,14 +1337,12 @@ export class Runner {
         invoke: (branchStack) => blockFn(item, i, branchStack),
       })),
       hooks: {
-        seedBranchCost: (childStack, parentStack) =>
-          this.seedBranchCost(childStack, parentStack),
+        seedBranchCost: (childStack, parentStack) => this.seedBranchCost(childStack, parentStack),
         // Asymmetric cost-propagation: losers eagerly, winner deferred.
         // Both delegate to the same propagateBranchCost helper — the
         // delta math (branch.localCost - branch.seedCost) is identical;
         // only the timing differs.
-        propagateLoserCost: (losers, parentStack) =>
-          this.propagateBranchCost(losers, parentStack),
+        propagateLoserCost: (losers, parentStack) => this.propagateBranchCost(losers, parentStack),
         propagateWinnerCost: (winner, parentStack) =>
           this.propagateBranchCost([winner], parentStack),
         onBranchEnd: (_key, branchIndex, outcome, timeTaken, value) => {
@@ -1419,20 +1372,14 @@ export class Runner {
   }
 
   private raceWinnerKey(id: number): string {
-    return this.path.length === 0
-      ? `__race_winner_${id}`
-      : `__race_winner_${this.key()}_${id}`;
+    return this.path.length === 0 ? `__race_winner_${id}` : `__race_winner_${this.key()}_${id}`;
   }
 
   private forkBranchKey(id: number, index: number): string {
-    return this.path.length === 0
-      ? `fork_${id}_${index}`
-      : `fork_${this.key()}_${id}_${index}`;
+    return this.path.length === 0 ? `fork_${id}_${index}` : `fork_${this.key()}_${id}_${index}`;
   }
 
   private forkResultKey(id: number): string {
-    return this.path.length === 0
-      ? `__fork_result_${id}`
-      : `__fork_result_${this.key()}_${id}`;
+    return this.path.length === 0 ? `__fork_result_${id}` : `__fork_result_${this.key()}_${id}`;
   }
 }

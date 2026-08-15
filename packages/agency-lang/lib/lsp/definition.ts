@@ -38,18 +38,19 @@ export function handleDefinition(
 
   // Try local variable definition via AST
   if (program && scopes) {
-    const loc = findLocalDefinition(source, params.position.line, params.position.character, program, scopes);
+    const loc = findLocalDefinition(
+      source,
+      params.position.line,
+      params.position.character,
+      program,
+      scopes,
+    );
     if (loc) {
       return { uri: doc.uri, range: { start: loc, end: loc } };
     }
   }
 
-  const result = findDefinition(
-    source,
-    params.position.line,
-    params.position.character,
-    fsPath,
-  );
+  const result = findDefinition(source, params.position.line, params.position.character, fsPath);
   if (!result) return null;
 
   return {

@@ -164,7 +164,6 @@ describe("ifParser", () => {
       },
     },
 
-
     // Index access as conditions
     // TODO fix
     /* {
@@ -205,7 +204,6 @@ describe("ifParser", () => {
       },
     },
 
-
     // Multiple statements in bodies
     {
       input: "if (x) {\n  a = 1\n  b = 2\n  c = 3\n}",
@@ -244,7 +242,6 @@ describe("ifParser", () => {
         },
       },
     },
-
 
     // Whitespace variations
     {
@@ -311,7 +308,6 @@ describe("ifParser", () => {
       },
     },
 
-
     // Failure cases - missing parentheses
     {
       input: "if x {\n  foo = 1\n}",
@@ -342,7 +338,6 @@ describe("ifParser", () => {
       expected: { success: false },
       throws: true,
     },
-
 
     // Failure cases - missing condition
     {

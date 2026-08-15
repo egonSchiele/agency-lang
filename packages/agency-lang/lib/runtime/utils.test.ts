@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { deepFreeze, extractStructuredResponse, normalizeModelUsage, updateTokenStats } from "./utils.js";
+import {
+  deepFreeze,
+  extractStructuredResponse,
+  normalizeModelUsage,
+  updateTokenStats,
+} from "./utils.js";
 import { isSuccess, isFailure } from "./result.js";
 import { z } from "zod";
 import { GlobalStore } from "./state/globalStore.js";
@@ -15,25 +20,33 @@ describe("deepFreeze", () => {
   it("freezes a plain object", () => {
     const obj = deepFreeze({ a: 1, b: "hello" });
     expect(Object.isFrozen(obj)).toBe(true);
-    expect(() => { (obj as any).a = 2; }).toThrow(TypeError);
+    expect(() => {
+      (obj as any).a = 2;
+    }).toThrow(TypeError);
   });
 
   it("freezes nested objects", () => {
     const obj = deepFreeze({ nested: { x: 1 } });
     expect(Object.isFrozen(obj.nested)).toBe(true);
-    expect(() => { (obj.nested as any).x = 2; }).toThrow(TypeError);
+    expect(() => {
+      (obj.nested as any).x = 2;
+    }).toThrow(TypeError);
   });
 
   it("freezes arrays", () => {
     const arr = deepFreeze([1, 2, 3]);
     expect(Object.isFrozen(arr)).toBe(true);
-    expect(() => { (arr as any).push(4); }).toThrow(TypeError);
+    expect(() => {
+      (arr as any).push(4);
+    }).toThrow(TypeError);
   });
 
   it("freezes nested arrays inside objects", () => {
     const obj = deepFreeze({ items: [1, 2] });
     expect(Object.isFrozen(obj.items)).toBe(true);
-    expect(() => { (obj.items as any).push(3); }).toThrow(TypeError);
+    expect(() => {
+      (obj.items as any).push(3);
+    }).toThrow(TypeError);
   });
 
   it("returns primitives as-is", () => {
@@ -108,8 +121,16 @@ describe("updateTokenStats per-model breakdown", () => {
     updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "gpt-5-mini" });
     updateTokenStats({ globals, usage: usage(20, 10), cost: cost(0.03), model: "opus-4.8" });
     const models = globals.getTokenStats().models;
-    expect(models["gpt-5-mini"]).toMatchObject({ inputTokens: 10, outputTokens: 5, totalCost: 0.001 });
-    expect(models["opus-4.8"]).toMatchObject({ inputTokens: 20, outputTokens: 10, totalCost: 0.03 });
+    expect(models["gpt-5-mini"]).toMatchObject({
+      inputTokens: 10,
+      outputTokens: 5,
+      totalCost: 0.001,
+    });
+    expect(models["opus-4.8"]).toMatchObject({
+      inputTokens: 20,
+      outputTokens: 10,
+      totalCost: 0.03,
+    });
   });
 
   it("does not record a model entry when no model name is supplied", () => {
@@ -146,7 +167,11 @@ describe("updateTokenStats per-model breakdown", () => {
     // …and the entry is recorded as a normal own key.
     const models = globals.getTokenStats().models;
     expect(Object.prototype.hasOwnProperty.call(models, "__proto__")).toBe(true);
-    expect(models["__proto__"]).toMatchObject({ inputTokens: 1, outputTokens: 1, totalCost: 0.001 });
+    expect(models["__proto__"]).toMatchObject({
+      inputTokens: 1,
+      outputTokens: 1,
+      totalCost: 0.001,
+    });
   });
 
   it("backfills the models slot for token-stats restored from older checkpoints", () => {
@@ -198,8 +223,7 @@ describe("updateTokenStats cache accounting", () => {
     updateTokenStats({ globals, usage: cachedUsage, cost: cachedCost, model: "sonnet-5" });
     updateTokenStats({ globals, usage: cachedUsage, cost: cachedCost, model: "sonnet-5" });
     const { cost: c } = globals.getTokenStats();
-    const parts =
-      c.inputCost + c.outputCost + c.cachedInputCost + c.cacheCreationInputCost;
+    const parts = c.inputCost + c.outputCost + c.cachedInputCost + c.cacheCreationInputCost;
     expect(parts).toBeCloseTo(c.totalCost, 10);
   });
 
@@ -207,8 +231,7 @@ describe("updateTokenStats cache accounting", () => {
     const globals = GlobalStore.withTokenStats();
     updateTokenStats({ globals, usage: cachedUsage, cost: cachedCost, model: "sonnet-5" });
     const { usage: u } = globals.getTokenStats();
-    const parts =
-      u.inputTokens + u.outputTokens + u.cachedInputTokens + u.cacheCreationInputTokens;
+    const parts = u.inputTokens + u.outputTokens + u.cachedInputTokens + u.cacheCreationInputTokens;
     expect(parts).toBe(u.totalTokens);
   });
 
@@ -295,7 +318,10 @@ describe("extractStructuredResponse — markdown code fences (step 2)", () => {
   });
 
   it("extracts a fenced block with prose AFTER it (real Sonnet triage shape)", () => {
-    const s = "```json\n" + JSON.stringify(value) + "\n```\n\nThis is complex because it needs decomposition.";
+    const s =
+      "```json\n" +
+      JSON.stringify(value) +
+      "\n```\n\nThis is complex because it needs decomposition.";
     const r = extractStructuredResponse(s, schema);
     expect(isSuccess(r)).toBe(true);
     if (isSuccess(r)) expect(r.value).toEqual(value);

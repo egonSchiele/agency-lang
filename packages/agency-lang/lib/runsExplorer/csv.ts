@@ -30,7 +30,9 @@ export function exportCsv(rows: CsvRow[], now: Date): { path: string; content: s
 
 /** The `--csv` shape: every run, newest first, no grouping. */
 export function csvRowsFromRuns(rows: RunRow[]): CsvRow[] {
-  const ordered = [...rows].sort((left, right) => (right.startedAtMs ?? 0) - (left.startedAtMs ?? 0));
+  const ordered = [...rows].sort(
+    (left, right) => (right.startedAtMs ?? 0) - (left.startedAtMs ?? 0),
+  );
   return ordered.map(runCsvRow);
 }
 

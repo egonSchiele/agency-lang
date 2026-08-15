@@ -9,31 +9,22 @@ import {
 
 // Convenience tool-message helper — every test that needs a tool reply
 // uses the same dummy id/name.
-const tm = (content: string) =>
-  toolMessage(content, { tool_call_id: "t1", name: "tool" });
+const tm = (content: string) => toolMessage(content, { tool_call_id: "t1", name: "tool" });
 
 describe("shouldCompact", () => {
   it("returns true when message count exceeds threshold", () => {
-    const messages = Array.from({ length: 20 }, (_, i) =>
-      userMessage(`message ${i}`),
-    );
-    expect(
-      shouldCompact(messages, { trigger: "messages", threshold: 10 })
-    ).toBe(true);
+    const messages = Array.from({ length: 20 }, (_, i) => userMessage(`message ${i}`));
+    expect(shouldCompact(messages, { trigger: "messages", threshold: 10 })).toBe(true);
   });
 
   it("returns false when under threshold", () => {
     const messages = [userMessage("hi")];
-    expect(
-      shouldCompact(messages, { trigger: "messages", threshold: 10 })
-    ).toBe(false);
+    expect(shouldCompact(messages, { trigger: "messages", threshold: 10 })).toBe(false);
   });
 
   it("estimates tokens for token-based trigger", () => {
     const messages = [userMessage("a".repeat(4000))];
-    expect(
-      shouldCompact(messages, { trigger: "token", threshold: 500 })
-    ).toBe(true);
+    expect(shouldCompact(messages, { trigger: "token", threshold: 500 })).toBe(true);
   });
 });
 
@@ -51,10 +42,7 @@ describe("buildCompactionPrompt", () => {
 
 describe("buildMergeSummaryPrompt", () => {
   it("includes both old and new summaries", () => {
-    const prompt = buildMergeSummaryPrompt(
-      "Old summary text",
-      "New summary text"
-    );
+    const prompt = buildMergeSummaryPrompt("Old summary text", "New summary text");
     expect(prompt).toContain("Old summary text");
     expect(prompt).toContain("New summary text");
   });
@@ -117,12 +105,7 @@ describe("findCompactionSplitPoint", () => {
   });
 
   it("returns -1 when only tool replies exist after midpoint", () => {
-    const messages = [
-      userMessage("1"),
-      assistantMessage("2"),
-      tm("3"),
-      tm("4"),
-    ];
+    const messages = [userMessage("1"), assistantMessage("2"), tm("3"), tm("4")];
     // midpoint = 2, everything after is tool replies — no clean boundary
     expect(findCompactionSplitPoint(messages)).toBe(-1);
   });

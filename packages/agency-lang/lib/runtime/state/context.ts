@@ -56,9 +56,7 @@ function getProcessCoverageCollector(): CoverageCollector {
     try {
       collector.write(outDir);
     } catch (err) {
-      console.warn(
-        `[coverage] failed to write to ${outDir}: ${(err as Error).message}`,
-      );
+      console.warn(`[coverage] failed to write to ${outDir}: ${(err as Error).message}`);
     }
   });
   return collector;
@@ -70,10 +68,7 @@ function getProcessCoverageCollector(): CoverageCollector {
  * real classes instead of plain `{}` / `[]`.
  */
 function reviveNative<T>(data: T): T {
-  return JSON.parse(
-    JSON.stringify(data, nativeTypeReplacer),
-    nativeTypeReviver,
-  );
+  return JSON.parse(JSON.stringify(data, nativeTypeReplacer), nativeTypeReviver);
 }
 
 /** The default clock for a run: a FakeClock only when a test opts in via the
@@ -167,8 +162,12 @@ export class RuntimeContext<T> {
   private _llmClient: LLMClient;
   private _interruptResponses: Record<string, { response: InterruptResponse }> = {};
 
-  get llmClient(): LLMClient { return this._llmClient; }
-  setLLMClient(client: LLMClient): void { this._llmClient = client; }
+  get llmClient(): LLMClient {
+    return this._llmClient;
+  }
+  setLLMClient(client: LLMClient): void {
+    this._llmClient = client;
+  }
 
   setInterruptResponses(responses: Record<string, { response: InterruptResponse }>): void {
     this._interruptResponses = responses;
@@ -280,10 +279,7 @@ export class RuntimeContext<T> {
     // per-child) wins per field, env fills the rest. Sequential application
     // also layers nested `log`/`trace` objects rather than clobbering them.
     args = applyRuntimeConfigOverridesToContextArgs(args, readConfigOverrides());
-    args = applyRuntimeConfigOverridesToContextArgs(
-      args,
-      getRuntimeConfigOverrides(),
-    );
+    args = applyRuntimeConfigOverridesToContextArgs(args, getRuntimeConfigOverrides());
     this.clock = args.clock ?? defaultClock();
     const statelogConfig = {
       ...args.statelogConfig,
@@ -395,37 +391,34 @@ export class RuntimeContext<T> {
       ...(config?.host !== undefined ? { host: config.host } : {}),
       ...(config?.apiKey !== undefined ? { apiKey: config.apiKey } : {}),
       ...(config?.projectId !== undefined ? { projectId: config.projectId } : {}),
-      ...(config?.requestTimeoutMs !== undefined ? { requestTimeoutMs: config.requestTimeoutMs } : {}),
+      ...(config?.requestTimeoutMs !== undefined
+        ? { requestTimeoutMs: config.requestTimeoutMs }
+        : {}),
       ...(config?.metadata !== undefined ? { metadata: config.metadata } : {}),
       ...(config?.logFile !== undefined ? { logFile: config.logFile } : {}),
     };
   }
 
-  async createExecutionContext(
-    invocation: ResolvedInvocation,
-  ): Promise<RuntimeContext<T>> {
+  async createExecutionContext(invocation: ResolvedInvocation): Promise<RuntimeContext<T>> {
     const { runId, contextOverride } = invocation;
     // Layer the already-narrowed per-invocation override on top of this frozen
     // parent's config, through the ONE runtime merge. `contextOverride` is
     // undefined for a plain run, in which case `effective` is just the parent's
     // values. The resolver has already projected the allow-list, so this method
     // never re-derives it.
-    const effective: RuntimeContextConstructorArgs =
-      applyRuntimeConfigOverridesToContextArgs(
-        {
-          statelogConfig: this.statelogConfig,
-          smoltalkDefaults: this.smoltalkDefaults,
-          dirname: this.dirname,
-          budget: this.budget,
-          maxCallDepth: this.maxCallDepth,
-          failurePropagation: this.failurePropagation,
-        },
-        contextOverride,
-      );
+    const effective: RuntimeContextConstructorArgs = applyRuntimeConfigOverridesToContextArgs(
+      {
+        statelogConfig: this.statelogConfig,
+        smoltalkDefaults: this.smoltalkDefaults,
+        dirname: this.dirname,
+        budget: this.budget,
+        maxCallDepth: this.maxCallDepth,
+        failurePropagation: this.failurePropagation,
+      },
+      contextOverride,
+    );
 
-    const execCtx = Object.create(
-      RuntimeContext.prototype,
-    ) as RuntimeContext<T>;
+    const execCtx = Object.create(RuntimeContext.prototype) as RuntimeContext<T>;
     execCtx.graph = this.graph;
     execCtx.smoltalkDefaults = this.smoltalkDefaults;
     execCtx.maxToolResultChars = this.maxToolResultChars;
@@ -438,8 +431,7 @@ export class RuntimeContext<T> {
     execCtx.globals = GlobalStore.withTokenStats();
     execCtx.maxRestores = this.maxRestores;
     execCtx.maxCallDepth = effective.maxCallDepth ?? this.maxCallDepth;
-    execCtx.failurePropagation =
-      effective.failurePropagation ?? this.failurePropagation;
+    execCtx.failurePropagation = effective.failurePropagation ?? this.failurePropagation;
     // Non-serialized field — must be copied here (see the class comment) so
     // installRootBudget, which reads execCtx.budget, actually sees the resolved
     // config/override budget. Without this the root budget is a silent no-op.
@@ -714,11 +706,8 @@ export class RuntimeContext<T> {
    */
   cancel(reason?: string, cause?: AbortCause): void {
     if (!this.abortController.signal.aborted) {
-      const resolvedCause =
-        cause ?? makeAbortCause({ kind: "userKill", reason });
-      this.abortController.abort(
-        new AgencyCancelledError(reason, resolvedCause),
-      );
+      const resolvedCause = cause ?? makeAbortCause({ kind: "userKill", reason });
+      this.abortController.abort(new AgencyCancelledError(reason, resolvedCause));
     }
   }
 
@@ -742,10 +731,7 @@ export class RuntimeContext<T> {
   cleanup(): void {
     if (!this.abortController.signal.aborted) {
       this.abortController.abort(
-        new AgencyCancelledError(
-          "cleanup",
-          makeAbortCause({ kind: "cleanup" }),
-        ),
+        new AgencyCancelledError("cleanup", makeAbortCause({ kind: "cleanup" })),
       );
     }
     this.pendingPromises.clear();
@@ -804,9 +790,7 @@ export class RuntimeContext<T> {
     };
   }
   /* Get smoltalk config with missing keys populated with defaults */
-  getSmoltalkConfig(
-    config: Partial<SmolConfig> = {},
-  ): Partial<SmolConfig> {
+  getSmoltalkConfig(config: Partial<SmolConfig> = {}): Partial<SmolConfig> {
     return { ...this.smoltalkDefaults, ...config };
   }
 
@@ -847,5 +831,4 @@ export class RuntimeContext<T> {
   hasTraceWriter(): boolean {
     return this.traceWriter !== null;
   }
-
 }

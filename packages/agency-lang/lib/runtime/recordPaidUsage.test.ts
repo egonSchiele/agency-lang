@@ -27,13 +27,33 @@ function makeCtx() {
 }
 
 function zeroCost(): CostBreakdown {
-  return { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0, currency: "USD" };
+  return {
+    inputCost: 0,
+    outputCost: 0,
+    cachedInputCost: 0,
+    cacheCreationInputCost: 0,
+    hostedToolsCost: 0,
+    totalCost: 0,
+    currency: "USD",
+  };
 }
 function zeroTokens(): TokenBreakdown {
-  return { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 };
+  return {
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    totalTokens: 0,
+  };
 }
 function delta(over: Partial<NormalizedDelta>): NormalizedDelta {
-  return { cost: zeroCost(), tokens: zeroTokens(), unknownCostCallCount: 0, attributionLost: false, ...over };
+  return {
+    cost: zeroCost(),
+    tokens: zeroTokens(),
+    unknownCostCallCount: 0,
+    attributionLost: false,
+    ...over,
+  };
 }
 function sentTypes(send: ReturnType<typeof vi.fn>): string[] {
   return send.mock.calls.map((c) => (c[0] as { type: string }).type);
@@ -82,9 +102,22 @@ describe("recordUsage (provider + manual observations)", () => {
   it("keeps a separate entry per model", () => {
     const ctx = makeCtx();
     const b = new StateStack();
-    recordUsage(ctx, b, { type: "provider", kind: "completion", reportedModel: "opus", cost: { totalCost: 0.1, currency: "USD" } as any });
-    recordUsage(ctx, b, { type: "provider", kind: "completion", reportedModel: "sonnet", cost: { totalCost: 0.2, currency: "USD" } as any });
-    expect(ctx.invocationUsage.snapshot().usage.entries.map((e) => e.model)).toEqual(["opus", "sonnet"]);
+    recordUsage(ctx, b, {
+      type: "provider",
+      kind: "completion",
+      reportedModel: "opus",
+      cost: { totalCost: 0.1, currency: "USD" } as any,
+    });
+    recordUsage(ctx, b, {
+      type: "provider",
+      kind: "completion",
+      reportedModel: "sonnet",
+      cost: { totalCost: 0.2, currency: "USD" } as any,
+    });
+    expect(ctx.invocationUsage.snapshot().usage.entries.map((e) => e.model)).toEqual([
+      "opus",
+      "sonnet",
+    ]);
   });
 });
 
@@ -136,11 +169,15 @@ describe("recordUsageDelta sink: order, suppression, and degrade-once", () => {
     const send = vi.fn(() => true);
     process.send = send as any;
     const ctx = makeCtx();
-    recordNormalizedUsageDelta(ctx, new StateStack(), delta({
-      cost: { ...zeroCost(), totalCost: 0.5 },
-      tokens: { ...zeroTokens(), inputTokens: 1, totalTokens: 1 },
-      attributionLost: true,
-    }));
+    recordNormalizedUsageDelta(
+      ctx,
+      new StateStack(),
+      delta({
+        cost: { ...zeroCost(), totalCost: 0.5 },
+        tokens: { ...zeroTokens(), inputTokens: 1, totalTokens: 1 },
+        attributionLost: true,
+      }),
+    );
     // FIFO preserves the recovered money before degrading the ancestor.
     expect(sentTypes(send)).toEqual(["invocationUsage", "invocationUsageIncomplete"]);
     expect(ctx.invocationUsage.snapshot().usageComplete).toBe(false);
@@ -157,7 +194,11 @@ describe("recordUsageDelta sink: order, suppression, and degrade-once", () => {
   it("outside IPC mode nothing is emitted even for a real delta", () => {
     const send = vi.fn(() => true);
     process.send = send as any;
-    recordNormalizedUsageDelta(makeCtx(), new StateStack(), delta({ cost: { ...zeroCost(), totalCost: 1 } }));
+    recordNormalizedUsageDelta(
+      makeCtx(),
+      new StateStack(),
+      delta({ cost: { ...zeroCost(), totalCost: 1 } }),
+    );
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -167,12 +208,24 @@ describe("recordUsageDelta sink: order, suppression, and degrade-once", () => {
     process.send = send as any;
     const ctx = makeCtx();
     const branch = new StateStack();
-    recordNormalizedUsageDelta(ctx, branch, delta({ tokens: { ...zeroTokens(), inputTokens: MAX, totalTokens: MAX } }));
+    recordNormalizedUsageDelta(
+      ctx,
+      branch,
+      delta({ tokens: { ...zeroTokens(), inputTokens: MAX, totalTokens: MAX } }),
+    );
     send.mockClear();
-    recordNormalizedUsageDelta(ctx, branch, delta({ tokens: { ...zeroTokens(), inputTokens: 1, totalTokens: 1 } }));
+    recordNormalizedUsageDelta(
+      ctx,
+      branch,
+      delta({ tokens: { ...zeroTokens(), inputTokens: 1, totalTokens: 1 } }),
+    );
     expect(sentTypes(send)).toEqual(["invocationUsage", "invocationUsageIncomplete"]);
     send.mockClear();
-    recordNormalizedUsageDelta(ctx, branch, delta({ tokens: { ...zeroTokens(), inputTokens: 1, totalTokens: 1 } }));
+    recordNormalizedUsageDelta(
+      ctx,
+      branch,
+      delta({ tokens: { ...zeroTokens(), inputTokens: 1, totalTokens: 1 } }),
+    );
     expect(sentTypes(send)).toEqual(["invocationUsage"]);
     const s = ctx.invocationUsage.snapshot();
     expect(s.usage.tokens.inputTokens).toBe(MAX);

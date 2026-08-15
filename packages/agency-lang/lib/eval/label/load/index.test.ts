@@ -83,9 +83,17 @@ afterEach(() => {
 describe("loadBatch dispatch", () => {
   it("calls exactly one loader for a run source", () => {
     const { calls, dependencies } = spies();
-    loadBatch(request({
-      source: { path: makeRunDir(), requestedFormat: "auto", includeTaskField: true, recursive: false },
-    }), dependencies);
+    loadBatch(
+      request({
+        source: {
+          path: makeRunDir(),
+          requestedFormat: "auto",
+          includeTaskField: true,
+          recursive: false,
+        },
+      }),
+      dependencies,
+    );
     expect(calls.run).toHaveLength(1);
     expect(calls.files).toHaveLength(0);
     expect(calls.json).toHaveLength(0);
@@ -101,14 +109,17 @@ describe("loadBatch dispatch", () => {
   it("calls exactly one loader for a json source", () => {
     fs.writeFileSync(path.join(root, "answers.json"), "[]");
     const { calls, dependencies } = spies();
-    loadBatch(request({
-      source: {
-        path: path.join(root, "answers.json"),
-        requestedFormat: "auto",
-        includeTaskField: true,
-        recursive: false,
-      },
-    }), dependencies);
+    loadBatch(
+      request({
+        source: {
+          path: path.join(root, "answers.json"),
+          requestedFormat: "auto",
+          includeTaskField: true,
+          recursive: false,
+        },
+      }),
+      dependencies,
+    );
     expect(calls.json).toHaveLength(1);
     expect(calls.files).toHaveLength(0);
   });
@@ -117,17 +128,28 @@ describe("loadBatch dispatch", () => {
 describe("loadBatch normalizes loader arguments", () => {
   it("passes the run's task-field choice through", () => {
     const { calls, dependencies } = spies();
-    loadBatch(request({
-      source: { path: makeRunDir(), requestedFormat: "run", includeTaskField: false, recursive: false },
-    }), dependencies);
+    loadBatch(
+      request({
+        source: {
+          path: makeRunDir(),
+          requestedFormat: "run",
+          includeTaskField: false,
+          recursive: false,
+        },
+      }),
+      dependencies,
+    );
     expect(calls.run[0]).toMatchObject({ includeTaskField: false, source: "agent-v1" });
   });
 
   it("resolves a file selection before calling the files loader", () => {
     const { calls, dependencies } = spies();
-    loadBatch(request({
-      source: { path: root, requestedFormat: "files", includeTaskField: true, recursive: true },
-    }), dependencies);
+    loadBatch(
+      request({
+        source: { path: root, requestedFormat: "files", includeTaskField: true, recursive: true },
+      }),
+      dependencies,
+    );
     expect(calls.selection[0]).toEqual({ source: root, recursive: true });
     expect(calls.files[0]).toMatchObject({ selection: { root } });
   });
@@ -137,14 +159,17 @@ describe("loadBatch normalizes loader arguments", () => {
     // ingested from a different working directory.
     fs.writeFileSync(path.join(root, "answers.json"), "[]");
     const { calls, dependencies } = spies();
-    loadBatch(request({
-      source: {
-        path: path.join(root, "answers.json"),
-        requestedFormat: "json",
-        includeTaskField: true,
-        recursive: false,
-      },
-    }), dependencies);
+    loadBatch(
+      request({
+        source: {
+          path: path.join(root, "answers.json"),
+          requestedFormat: "json",
+          includeTaskField: true,
+          recursive: false,
+        },
+      }),
+      dependencies,
+    );
     expect(calls.json[0]).toMatchObject({ itemKey: "answers.json" });
   });
 
@@ -156,14 +181,19 @@ describe("loadBatch normalizes loader arguments", () => {
 
   it("rejects a json source that does not exist", () => {
     const { dependencies } = spies();
-    expect(() => loadBatch(request({
-      source: {
-        path: path.join(root, "missing.json"),
-        requestedFormat: "json",
-        includeTaskField: true,
-        recursive: false,
-      },
-    }), dependencies)).toThrow(/not found/);
+    expect(() =>
+      loadBatch(
+        request({
+          source: {
+            path: path.join(root, "missing.json"),
+            requestedFormat: "json",
+            includeTaskField: true,
+            recursive: false,
+          },
+        }),
+        dependencies,
+      ),
+    ).toThrow(/not found/);
   });
 });
 
@@ -173,38 +203,62 @@ describe("constant fields cannot collide with a loader's own fields", () => {
     // run, so this check has to live here. The loader's value wins on merge, so
     // the constant would otherwise vanish and change the stored record.
     const { dependencies } = spies();
-    expect(() => loadBatch(request({ constantFields: { output: "constant" } }), dependencies))
-      .toThrow(/already produces "output"/);
+    expect(() =>
+      loadBatch(request({ constantFields: { output: "constant" } }), dependencies),
+    ).toThrow(/already produces "output"/);
   });
 
   it("rejects a constant task for an auto-detected run source", () => {
     const { dependencies } = spies();
-    expect(() => loadBatch(request({
-      source: { path: makeRunDir(), requestedFormat: "auto", includeTaskField: true, recursive: false },
-      constantFields: { task: "constant" },
-    }), dependencies)).toThrow(/Pass --no-task-field/);
+    expect(() =>
+      loadBatch(
+        request({
+          source: {
+            path: makeRunDir(),
+            requestedFormat: "auto",
+            includeTaskField: true,
+            recursive: false,
+          },
+          constantFields: { task: "constant" },
+        }),
+        dependencies,
+      ),
+    ).toThrow(/Pass --no-task-field/);
   });
 
   it("rejects a constant output for an auto-detected json source", () => {
     fs.writeFileSync(path.join(root, "answers.json"), "[]");
     const { dependencies } = spies();
-    expect(() => loadBatch(request({
-      source: {
-        path: path.join(root, "answers.json"),
-        requestedFormat: "auto",
-        includeTaskField: true,
-        recursive: false,
-      },
-      constantFields: { output: "constant" },
-    }), dependencies)).toThrow(/already produces "output"/);
+    expect(() =>
+      loadBatch(
+        request({
+          source: {
+            path: path.join(root, "answers.json"),
+            requestedFormat: "auto",
+            includeTaskField: true,
+            recursive: false,
+          },
+          constantFields: { output: "constant" },
+        }),
+        dependencies,
+      ),
+    ).toThrow(/already produces "output"/);
   });
 
   it("allows replacing a run's task with the explicit combination", () => {
     const { calls, dependencies } = spies();
-    loadBatch(request({
-      source: { path: makeRunDir(), requestedFormat: "auto", includeTaskField: false, recursive: false },
-      constantFields: { task: "a better framing" },
-    }), dependencies);
+    loadBatch(
+      request({
+        source: {
+          path: makeRunDir(),
+          requestedFormat: "auto",
+          includeTaskField: false,
+          recursive: false,
+        },
+        constantFields: { task: "a better framing" },
+      }),
+      dependencies,
+    );
     expect(calls.run).toHaveLength(1);
   });
 
@@ -216,32 +270,49 @@ describe("constant fields cannot collide with a loader's own fields", () => {
 
   it("names the resolved format in the message, not the requested one", () => {
     const { dependencies } = spies();
-    expect(() => loadBatch(request({ constantFields: { output: "x" } }), dependencies))
-      .toThrow(/files loader/);
+    expect(() => loadBatch(request({ constantFields: { output: "x" } }), dependencies)).toThrow(
+      /files loader/,
+    );
   });
 });
 
 describe("statelog dispatch", () => {
   function makeStatelogFile(): string {
     const file = path.join(root, "log.jsonl");
-    fs.writeFileSync(file, JSON.stringify({ format_version: 1, trace_id: "A", data: { type: "agentStart" } }) + "\n");
+    fs.writeFileSync(
+      file,
+      JSON.stringify({ format_version: 1, trace_id: "A", data: { type: "agentStart" } }) + "\n",
+    );
     return file;
   }
 
   it("routes an auto-detected statelog file to loadStatelog with the trace ids", () => {
     const { calls, dependencies } = spies();
-    loadBatch(request({
-      source: { path: makeStatelogFile(), requestedFormat: "auto", includeTaskField: true, recursive: false },
-      selection: { kind: "statelog", request: { traceIds: ["A"] } },
-    }), dependencies);
+    loadBatch(
+      request({
+        source: {
+          path: makeStatelogFile(),
+          requestedFormat: "auto",
+          includeTaskField: true,
+          recursive: false,
+        },
+        selection: { kind: "statelog", request: { traceIds: ["A"] } },
+      }),
+      dependencies,
+    );
     expect(calls.statelog).toHaveLength(1);
     expect(calls.statelog[0]).toMatchObject({ traceIds: ["A"] });
   });
 
   it("rejects a statelog selection on a non-statelog source", () => {
     const { dependencies } = spies();
-    expect(() => loadBatch(request({
-      selection: { kind: "statelog", request: { traceIds: ["A"] } },
-    }), dependencies)).toThrow(/only applies to a statelog source/);
+    expect(() =>
+      loadBatch(
+        request({
+          selection: { kind: "statelog", request: { traceIds: ["A"] } },
+        }),
+        dependencies,
+      ),
+    ).toThrow(/only applies to a statelog source/);
   });
 });

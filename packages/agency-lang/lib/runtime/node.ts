@@ -6,11 +6,7 @@ import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { AgencyFunction } from "./agencyFunction.js";
-import {
-  AgencyCancelledError,
-  CheckpointError,
-  RestoreSignal,
-} from "./errors.js";
+import { AgencyCancelledError, CheckpointError, RestoreSignal } from "./errors.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { __initAllRegistered, __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
@@ -26,10 +22,7 @@ import { createReturnObject } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
 import { nanoid } from "nanoid";
 import { hasInterrupts } from "./interrupts.js";
-import {
-  unwrapServedInvocationOutcome,
-  type ServedInvocationOutcome,
-} from "./invocationUsage.js";
+import { unwrapServedInvocationOutcome, type ServedInvocationOutcome } from "./invocationUsage.js";
 import { finishServedInvocation, type RawOutcome } from "./servedInvocationLifecycle.js";
 
 export function setupNode(args: { state: GraphState }): {
@@ -282,9 +275,13 @@ type RunExportedFunctionArgs = {
 /** The outcome-producing core. The lifecycle boundary starts the moment the
  *  execution context exists (invocation started), so a bootstrap/setup failure
  *  still yields an outcome with usage and still runs cleanup. */
-async function runExportedFunctionCore(
-  { ctx, fn, namedArgs, initializeGlobals, invocation }: RunExportedFunctionArgs,
-): Promise<ServedInvocationOutcome<unknown>> {
+async function runExportedFunctionCore({
+  ctx,
+  fn,
+  namedArgs,
+  initializeGlobals,
+  invocation,
+}: RunExportedFunctionArgs): Promise<ServedInvocationOutcome<unknown>> {
   // Inherit the subprocess run id (as runNodeCore does) so a served function
   // executed in subprocess mode joins the parent's trace instead of minting a
   // new one.
@@ -422,14 +419,12 @@ async function runNodeCore({
     // callbacks that reach for thread/message builtins get a clear error
     // instead of writing into a placeholder. `messages` is still
     // available to the callback via `data.messages`.
-    await runInBootstrapFrame(
-      execCtx,
-      () =>
-        callHook({
-          ctx: execCtx,
-          name: "onAgentStart",
-          data: { nodeName, args: data, messages: messages || [], cancel },
-        }),
+    await runInBootstrapFrame(execCtx, () =>
+      callHook({
+        ctx: execCtx,
+        name: "onAgentStart",
+        data: { nodeName, args: data, messages: messages || [], cancel },
+      }),
     );
 
     agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
@@ -463,7 +458,10 @@ async function runNodeCore({
                 ctx: execCtx,
                 isResume,
               },
-              { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id), statelogClient: execCtx.statelogClient },
+              {
+                onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
+                statelogClient: execCtx.statelogClient,
+              },
             ),
         );
         await execCtx.pendingPromises.awaitAll();

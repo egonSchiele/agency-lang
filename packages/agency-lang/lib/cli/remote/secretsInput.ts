@@ -4,7 +4,6 @@
 // precedence rules and parsing are testable without a terminal. The concrete
 // adapters live in confirmation.ts.
 
-
 export type SecretValueSources = {
   /** --from-env VAR: the NAME of a local environment variable to copy. */
   fromEnv?: string;
@@ -16,9 +15,7 @@ export type SecretValueSources = {
 };
 
 export type SecretValueResult =
-  | { kind: "value"; value: string }
-  | { kind: "canceled" }
-  | { kind: "error"; message: string };
+  { kind: "value"; value: string } | { kind: "canceled" } | { kind: "error"; message: string };
 
 /** Where a secret's value comes from, in precedence order: --from-env wins;
  *  else piped stdin; else the hidden TTY prompt. Never argv. */
@@ -41,7 +38,8 @@ export async function resolveSecretValue(
     if (value === "") {
       return {
         kind: "error",
-        message: "No value on stdin — pipe a non-empty value, or run interactively for a hidden prompt.",
+        message:
+          "No value on stdin — pipe a non-empty value, or run interactively for a hidden prompt.",
       };
     }
     return { kind: "value", value };
@@ -140,18 +138,11 @@ export function terminalSafe(text: string): string {
   let escaped = "";
   for (const character of JSON.stringify(text)) {
     const code = character.codePointAt(0) ?? 0;
-    escaped += isTerminalUnsafe(code)
-      ? `\\u${code.toString(16).padStart(4, "0")}`
-      : character;
+    escaped += isTerminalUnsafe(code) ? `\\u${code.toString(16).padStart(4, "0")}` : character;
   }
   return escaped;
 }
 
 function isTerminalUnsafe(code: number): boolean {
-  return (
-    code < 0x20 ||
-    (code >= 0x7f && code <= 0x9f) ||
-    code === 0x2028 ||
-    code === 0x2029
-  );
+  return code < 0x20 || (code >= 0x7f && code <= 0x9f) || code === 0x2028 || code === 0x2029;
 }

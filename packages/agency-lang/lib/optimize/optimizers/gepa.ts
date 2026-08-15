@@ -10,8 +10,18 @@ import { renderTargetsSection } from "../mutator.js";
 import type { BaseOptimizerConfig } from "../optimizer.js";
 import { formatDiagnostics } from "../reporter.js";
 import { makeRng, sampleWithoutReplacement, type Rng } from "../rng.js";
-import { defaultPreview, type OptimizeAppliedChange, type OptimizeMutationDiagnostic, type OptimizeMutationOperation, type OptimizeMutationPreview } from "../sourceMutator.js";
-import { fileMap, type OptimizeTarget as OptimizeTargetDecl, type OptimizeTargetSet } from "../targets.js";
+import {
+  defaultPreview,
+  type OptimizeAppliedChange,
+  type OptimizeMutationDiagnostic,
+  type OptimizeMutationOperation,
+  type OptimizeMutationPreview,
+} from "../sourceMutator.js";
+import {
+  fileMap,
+  type OptimizeTarget as OptimizeTargetDecl,
+  type OptimizeTargetSet,
+} from "../targets.js";
 import type { MutationProposal, OptimizeDecision, OptimizeResult } from "../types.js";
 import type { CachePartition } from "../workspace.js";
 
@@ -23,7 +33,10 @@ export type GepaConfig = BaseOptimizerConfig & {
 
 export type GepaDeps = BaseOptimizerDeps & {
   propose?: (runAgency: AgencyRunner, sections: ReflectionSections) => Promise<MutationProposal>;
-  preview?: (targetSet: OptimizeTargetSet, operations: OptimizeMutationOperation[]) => OptimizeMutationPreview;
+  preview?: (
+    targetSet: OptimizeTargetSet,
+    operations: OptimizeMutationOperation[],
+  ) => OptimizeMutationPreview;
 };
 
 /** A fully-evaluated point in the search: a workspace + its grading + its target set/files. */
@@ -57,57 +70,94 @@ export class Gepa extends BaseOptimizer {
   readonly name = "gepa";
   private readonly gepaConfig: GepaConfig;
 
-  constructor(config: GepaConfig, private readonly gepaDeps: GepaDeps = {}) {
+  constructor(
+    config: GepaConfig,
+    private readonly gepaDeps: GepaDeps = {},
+  ) {
     super(config, gepaDeps);
     if (!Number.isInteger(config.minibatch) || config.minibatch < 1) {
-      throw new Error(`GEPA requires a positive integer minibatch size; got ${String(config.minibatch)}.`);
+      throw new Error(
+        `GEPA requires a positive integer minibatch size; got ${String(config.minibatch)}.`,
+      );
     }
     this.gepaConfig = config;
   }
 
-  protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult> {
+  protected async optimizeTargets(
+    source: OptimizeTargetSet,
+    inputs: Input[],
+  ): Promise<OptimizeResult> {
     const paretoInputs = this.gepaConfig.paretoSet ?? inputs;
     const rng = makeRng(this.config.seed ?? 0);
 
     const startedAt = Date.now();
     this.reporter.runStarted({
-      optimizer: this.name, runId: this.config.runId,
-      targets: source.targets, inputCount: inputs.length, iterations: this.config.iterations,
+      optimizer: this.name,
+      runId: this.config.runId,
+      targets: source.targets,
+      inputCount: inputs.length,
+      iterations: this.config.iterations,
     });
-    const baseline = await this.makeCandidate("baseline", this.fork(), source, paretoInputs, fileMap(source));
+    const baseline = await this.makeCandidate(
+      "baseline",
+      this.fork(),
+      source,
+      paretoInputs,
+      fileMap(source),
+    );
     this.requireBaselineGatesPass(baseline.scorecard);
     this.reporter.baselineScored({ objective: baseline.scorecard.objective() });
 
     if (this.isMaxObjective(baseline.scorecard)) {
-      this.reporter.note("baseline already scores the maximum objective (1.000) — nothing to optimize");
+      this.reporter.note(
+        "baseline already scores the maximum objective (1.000) — nothing to optimize",
+      );
       return this.finishPointwise(source, [baseline], baseline, [], startedAt);
     }
 
     const pool = new CandidatePool<Candidate>([toPoolCandidate(baseline)]);
     const attempts = await this.evolve(pool, inputs, paretoInputs, rng);
-    const accepted = attempts.filter((a) => a.decision === "accepted" && a.candidate).map((a) => a.candidate!);
+    const accepted = attempts
+      .filter((a) => a.decision === "accepted" && a.candidate)
+      .map((a) => a.candidate!);
     return this.finishPointwise(
-      source, [baseline, ...accepted], pool.best().value,
-      attempts.map((a) => ({ iter: a.iter, decision: a.decision, detail: attemptDetail(a) })), startedAt,
+      source,
+      [baseline, ...accepted],
+      pool.best().value,
+      attempts.map((a) => ({ iter: a.iter, decision: a.decision, detail: attemptDetail(a) })),
+      startedAt,
     );
   }
 
   /** Run the optimization loop, threading the pool. */
-  private async evolve(pool: CandidatePool<Candidate>, inputs: Input[], paretoInputs: Input[], rng: Rng): Promise<Attempt[]> {
+  private async evolve(
+    pool: CandidatePool<Candidate>,
+    inputs: Input[],
+    paretoInputs: Input[],
+    rng: Rng,
+  ): Promise<Attempt[]> {
     const attempts: Attempt[] = [];
     for (let iter = 1; iter <= this.config.iterations; iter += 1) {
       const startedAt = Date.now();
       const parent = pool.sampleParent(rng).value;
       const parentLabel = parent.iter === "baseline" ? "baseline" : `iter ${parent.iter}`;
-      this.reporter.note(`parent: ${parentLabel} (objective ${parent.scorecard.objective().toFixed(3)}, pool size ${pool.size()})`);
+      this.reporter.note(
+        `parent: ${parentLabel} (objective ${parent.scorecard.objective().toFixed(3)}, pool size ${pool.size()})`,
+      );
       const minibatch = sampleWithoutReplacement(inputs, this.gepaConfig.minibatch, rng);
       const attempt = await this.attempt(parent, minibatch, paretoInputs, iter);
-      if (attempt.decision === "accepted" && attempt.candidate) pool.add(toPoolCandidate(attempt.candidate));
+      if (attempt.decision === "accepted" && attempt.candidate)
+        pool.add(toPoolCandidate(attempt.candidate));
       attempts.push(attempt);
       this.reporter.iterationDecided({
-        iter, total: this.config.iterations,
-        decision: attempt.decision, objective: attempt.objective, rationale: attempt.rationale,
-        changes: attempt.changes, diagnostics: attempt.diagnostics, durationMs: Date.now() - startedAt,
+        iter,
+        total: this.config.iterations,
+        decision: attempt.decision,
+        objective: attempt.objective,
+        rationale: attempt.rationale,
+        changes: attempt.changes,
+        diagnostics: attempt.diagnostics,
+        durationMs: Date.now() - startedAt,
       });
       if (this.isMaxObjective(pool.best().value.scorecard)) {
         this.reporter.note("reached the maximum objective (1.000) — stopping early");
@@ -118,34 +168,68 @@ export class Gepa extends BaseOptimizer {
   }
 
   /** One reflective iteration: propose → validate → minibatch filter → (maybe) full eval. */
-  private async attempt(parent: Candidate, minibatch: Input[], paretoInputs: Input[], iter: number): Promise<Attempt> {
+  private async attempt(
+    parent: Candidate,
+    minibatch: Input[],
+    paretoInputs: Input[],
+    iter: number,
+  ): Promise<Attempt> {
     const selected = this.selectTargets(parent.targetSet.targets, iter);
     const feedback = renderReflectionFeedback(this.focus(parent, minibatch));
     const outcome = await this.proposeValidMutation(
-      (diagnostics) => (this.gepaDeps.propose ?? proposeReflective)(this.agencyRunner, {
-        targets: renderTargetsSection(selected),
-        feedback,
-        // Feed validation errors from the previous attempt back so the model corrects itself.
-        history: diagnostics.length === 0 ? "" : `Your previous proposal was rejected:\n${formatDiagnostics(diagnostics)}\nFix these and keep every interpolation placeholder.`,
-      }),
+      (diagnostics) =>
+        (this.gepaDeps.propose ?? proposeReflective)(this.agencyRunner, {
+          targets: renderTargetsSection(selected),
+          feedback,
+          // Feed validation errors from the previous attempt back so the model corrects itself.
+          history:
+            diagnostics.length === 0
+              ? ""
+              : `Your previous proposal was rejected:\n${formatDiagnostics(diagnostics)}\nFix these and keep every interpolation placeholder.`,
+        }),
       (operations) => (this.gepaDeps.preview ?? defaultPreview)(parent.targetSet, operations),
     );
-    if (!outcome.ok) return { iter, decision: "validation-failed", rationale: outcome.rationale, diagnostics: outcome.diagnostics };
+    if (!outcome.ok)
+      return {
+        iter,
+        decision: "validation-failed",
+        rationale: outcome.rationale,
+        diagnostics: outcome.diagnostics,
+      };
     const preview = outcome.preview;
 
     const childWs = this.fork();
     const childMini = await this.evaluate(childWs, preview.targetSet, preview.files, minibatch);
-    const parentMini = await this.evaluate(parent.ws, parent.targetSet, parent.files, minibatch);   // cache hits
+    const parentMini = await this.evaluate(parent.ws, parent.targetSet, parent.files, minibatch); // cache hits
     // TODO(gated-objective): collapse to `childMini.gatedObjective() > parentMini.gatedObjective()`
     // in the follow-up greedy/gepa sweep that the gate-aware Scorecard PR deferred. Parents are
     // always accepted candidates that passed gates here, so the rewrite is behavior-preserving;
     // both call sites (this one and greedyReflective.beats) will move together in one PR.
     if (!(childMini.gatesPassed() && childMini.objective() > parentMini.objective())) {
-      return { iter, decision: "rejected", rationale: outcome.rationale, objective: childMini.objective(), changes: preview.changes };
+      return {
+        iter,
+        decision: "rejected",
+        rationale: outcome.rationale,
+        objective: childMini.objective(),
+        changes: preview.changes,
+      };
     }
     const full = await this.evaluate(childWs, preview.targetSet, preview.files, paretoInputs);
-    const candidate: Candidate = { iter, ws: childWs, scorecard: full, targetSet: preview.targetSet, files: preview.files };
-    return { iter, decision: "accepted", rationale: outcome.rationale, objective: full.objective(), changes: preview.changes, candidate };
+    const candidate: Candidate = {
+      iter,
+      ws: childWs,
+      scorecard: full,
+      targetSet: preview.targetSet,
+      files: preview.files,
+    };
+    return {
+      iter,
+      decision: "accepted",
+      rationale: outcome.rationale,
+      objective: full.objective(),
+      changes: preview.changes,
+      candidate,
+    };
   }
 
   /** Round-robin one target per iteration (SelectModule); `"all"` shows every target. */
@@ -166,7 +250,11 @@ export class Gepa extends BaseOptimizer {
 
   /** Grade a candidate `files` map (the overlay) on `inputs`. */
   private async makeCandidate(
-    iter: number | "baseline", ws: CachePartition, targetSet: OptimizeTargetSet, inputs: Input[], files: Record<string, string>,
+    iter: number | "baseline",
+    ws: CachePartition,
+    targetSet: OptimizeTargetSet,
+    inputs: Input[],
+    files: Record<string, string>,
   ): Promise<Candidate> {
     const scorecard = await this.evaluate(ws, targetSet, files, inputs);
     return { iter, ws, scorecard, targetSet, files };

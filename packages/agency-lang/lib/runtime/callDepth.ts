@@ -83,14 +83,10 @@ export function withCallDepth<T>(name: string, fn: () => T): T {
   const parent = callDepthALS.getStore();
   const limit = parent
     ? parent.limit
-    : agencyStore.getStore()?.ctx?.maxCallDepth ?? DEFAULT_MAX_CALL_DEPTH;
+    : (agencyStore.getStore()?.ctx?.maxCallDepth ?? DEFAULT_MAX_CALL_DEPTH);
   const depth = (parent?.depth ?? 0) + 1;
   if (depth > limit) {
-    throw new CallDepthExceededError(
-      limit,
-      depth,
-      collectRecentFrames(parent ?? null, name),
-    );
+    throw new CallDepthExceededError(limit, depth, collectRecentFrames(parent ?? null, name));
   }
   return callDepthALS.run({ name, depth, limit, parent: parent ?? null }, fn);
 }

@@ -13,9 +13,7 @@ describe("formatter: effect declarations", () => {
   it("formats a single-field declaration", () => {
     // The shared object renderer breaks every non-empty object across lines
     // for stable round-tripping; locking that exact shape here.
-    expect(fmt("effect std::read { dir: string }")).toBe(
-      "effect std::read {\n  dir: string\n}",
-    );
+    expect(fmt("effect std::read { dir: string }")).toBe("effect std::read {\n  dir: string\n}");
   });
 
   it("formats an empty payload", () => {
@@ -26,9 +24,9 @@ describe("formatter: effect declarations", () => {
     // The realistic shape for users — multiple fields. A regression in the
     // shared object renderer (e.g., dropping the indent step) would break
     // this without the single-field test catching it.
-    expect(
-      fmt("effect std::write { dir: string, content: string }"),
-    ).toBe("effect std::write {\n  dir: string;\n  content: string\n}");
+    expect(fmt("effect std::write { dir: string, content: string }")).toBe(
+      "effect std::write {\n  dir: string;\n  content: string\n}",
+    );
   });
 
   it("round-trips: parse → format → parse → format is stable", () => {

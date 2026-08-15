@@ -14,7 +14,14 @@ const BORDER = {
   vertical: "│",
 };
 
-function blitCells(dest: Cell[][], src: Cell[][], startX: number, startY: number, maxW: number, maxH: number): void {
+function blitCells(
+  dest: Cell[][],
+  src: Cell[][],
+  startX: number,
+  startY: number,
+  maxW: number,
+  maxH: number,
+): void {
   for (let y = 0; y < src.length && y < maxH; y++) {
     for (let x = 0; x < src[y].length && x < maxW; x++) {
       dest[startY + y][startX + x] = src[y][x];
@@ -34,7 +41,14 @@ function makeGrid(width: number, height: number, bg?: string): Cell[][] {
   return Array.from({ length: height }, () => makeRow(width, bg));
 }
 
-function renderBorder(grid: Cell[][], width: number, height: number, borderColor?: string, label?: string, labelColor?: string): void {
+function renderBorder(
+  grid: Cell[][],
+  width: number,
+  height: number,
+  borderColor?: string,
+  label?: string,
+  labelColor?: string,
+): void {
   if (height < 2 || width < 2) return;
 
   // Top row
@@ -90,9 +104,7 @@ function renderTextContent(
   // empty `line("", fill: "─")` into a full-width horizontal rule. The
   // standard space-pad is preserved when `fill` is unset.
   const padCell = (): Cell =>
-    fill !== undefined && fill !== ""
-      ? { char: fill, fg, bg }
-      : emptyCell(bg);
+    fill !== undefined && fill !== "" ? { char: fill, fg, bg } : emptyCell(bg);
 
   for (const line of visibleLines) {
     const spans = parseStyledText(line);
@@ -211,8 +223,7 @@ function renderListContent(
   // draw any selection chrome (no row is actually the cursor). Used
   // by `repl()` to keep the latest transcript line in view as the
   // list grows without highlighting it.
-  const followTail =
-    selectedIndex !== undefined && selectedIndex >= items.length;
+  const followTail = selectedIndex !== undefined && selectedIndex >= items.length;
 
   // Auto-scroll: find the first visual row that belongs to the
   // selected item (or the last visual row in follow-tail mode) and
@@ -277,9 +288,7 @@ function renderTextInputContent(
   const text = value ?? "";
   const lines = text.split("\n");
   const visibleStart =
-    innerHeight > 0 && lines.length > innerHeight
-      ? lines.length - innerHeight
-      : 0;
+    innerHeight > 0 && lines.length > innerHeight ? lines.length - innerHeight : 0;
   const visibleLines = lines.slice(visibleStart);
   const grid: Cell[][] = [];
   const lastIdx = visibleLines.length - 1;
@@ -313,8 +322,12 @@ export function render(positioned: PositionedElement, parentScrollOffset = 0): F
   const height = positioned.resolvedHeight;
 
   // Inner area as offsets from the frame's top-left corner.
-  const { x: innerOffsetX, y: innerOffsetY, width: innerWidth, height: innerHeight } =
-    innerArea(style, 0, 0, width, height);
+  const {
+    x: innerOffsetX,
+    y: innerOffsetY,
+    width: innerWidth,
+    height: innerHeight,
+  } = innerArea(style, 0, 0, width, height);
 
   const frameStyle: FrameStyle = {
     border: hasBorder || undefined,
@@ -339,7 +352,10 @@ export function render(positioned: PositionedElement, parentScrollOffset = 0): F
   let innerContent: Cell[][] | undefined;
   const effectiveScrollOffset = style.scrollOffset ?? parentScrollOffset;
 
-  if ((positioned.type === "text" || positioned.type === "box") && positioned.content !== undefined) {
+  if (
+    (positioned.type === "text" || positioned.type === "box") &&
+    positioned.content !== undefined
+  ) {
     innerContent = renderTextContent(
       positioned.content,
       innerWidth,
@@ -378,7 +394,9 @@ export function render(positioned: PositionedElement, parentScrollOffset = 0): F
 
   // Recurse into children, passing scroll offset if this element is scrollable
   const scrollForChildren = style.scrollable ? (style.scrollOffset ?? 0) : 0;
-  const childFrames = ((positioned.children ?? []) as PositionedElement[]).map((child) => render(child, scrollForChildren));
+  const childFrames = ((positioned.children ?? []) as PositionedElement[]).map((child) =>
+    render(child, scrollForChildren),
+  );
 
   const frame = new Frame({
     key: positioned.key,

@@ -137,11 +137,7 @@ function computeLint(doc: TextDocument): CachedLint | null {
  * Build an edit that either merges into an existing import line or inserts a new one.
  * Scans the document for `from "modulePath"` and appends to the existing `{ ... }`.
  */
-function buildImportEdit(
-  symbolName: string,
-  modulePath: string,
-  doc: TextDocument,
-): TextEdit {
+function buildImportEdit(symbolName: string, modulePath: string, doc: TextDocument): TextEdit {
   const lines = doc.getText().split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -152,7 +148,10 @@ function buildImportEdit(
       }
     }
   }
-  return TextEdit.insert({ line: 0, character: 0 }, `import { ${symbolName} } from "${modulePath}"\n`);
+  return TextEdit.insert(
+    { line: 0, character: 0 },
+    `import { ${symbolName} } from "${modulePath}"\n`,
+  );
 }
 
 function suggestMissingImport(
@@ -191,10 +190,7 @@ function suggestMissingImport(
   return null;
 }
 
-function suggestStdlibImport(
-  diagnostic: Diagnostic,
-  doc: TextDocument,
-): CodeAction | null {
+function suggestStdlibImport(diagnostic: Diagnostic, doc: TextDocument): CodeAction | null {
   const match = diagnostic.message.match(/[''](\w+)['']/);
   if (!match) return null;
 
@@ -205,7 +201,13 @@ function suggestStdlibImport(
 
   // Check if symbol is already imported from this module
   const text = doc.getText();
-  if (text.match(new RegExp(`import\\s*\\{[^}]*\\b${symbolName}\\b[^}]*\\}\\s*from\\s*["']${modulePath.replace("::", "::")}["']`))) {
+  if (
+    text.match(
+      new RegExp(
+        `import\\s*\\{[^}]*\\b${symbolName}\\b[^}]*\\}\\s*from\\s*["']${modulePath.replace("::", "::")}["']`,
+      ),
+    )
+  ) {
     return null;
   }
 

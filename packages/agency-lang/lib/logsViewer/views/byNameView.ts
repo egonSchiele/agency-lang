@@ -51,7 +51,7 @@ export class ByNameView implements View {
   }
 
   handleKey(ev: KeyEvent, viewport: Viewport): ViewAction {
-    this.message = "";   // transient, like the tree's message bar
+    this.message = ""; // transient, like the tree's message bar
     const fmt = formatKey(ev);
     const move = (delta: number) => {
       this.cursor = Math.max(0, Math.min(this.rows.length - 1, this.cursor + delta));
@@ -106,12 +106,22 @@ export class ByNameView implements View {
       viewportRows: bodyRows,
       renderItem: (item, isCursor) => this.renderRow(item, isCursor, window, widths),
     });
-    return column({ justifyContent: "flex-start" },
+    return column(
+      { justifyContent: "flex-start" },
       line(this.headerText(window), { fg: "bright-white" }),
-      line(new AxisHeader(widths.gutter).computeText(window, this.viewStart(), widths.bar), { fg: "gray" }),
+      line(new AxisHeader(widths.gutter).computeText(window, this.viewStart(), widths.bar), {
+        fg: "gray",
+      }),
       body,
       line(new SelectionFooter().computeText(this.footerText()), { fg: "bright-white" }),
-      line(bottomHints("t/Esc back to tree  ↑↓ select  Enter occurrences  d detail  o tree  +/- zoom  [ ] pan  0 reset  a admin  / search", "by-name", viewport.cols), { fg: "gray" }),
+      line(
+        bottomHints(
+          "t/Esc back to tree  ↑↓ select  Enter occurrences  d detail  o tree  +/- zoom  [ ] pan  0 reset  a admin  / search",
+          "by-name",
+          viewport.cols,
+        ),
+        { fg: "gray" },
+      ),
     );
   }
 
@@ -183,8 +193,9 @@ export class ByNameView implements View {
 
   private longestOf(rowItem: GroupRow | undefined): TimelineSpan | undefined {
     if (rowItem === undefined || rowItem.spans.length === 0) return undefined;
-    return [...rowItem.spans]
-      .sort((a, b) => (b.extent.end - b.extent.start) - (a.extent.end - a.extent.start))[0];
+    return [...rowItem.spans].sort(
+      (a, b) => b.extent.end - b.extent.start - (a.extent.end - a.extent.start),
+    )[0];
   }
 
   private viewExtent(): Interval {
@@ -214,8 +225,14 @@ export class ByNameView implements View {
     );
     let start = center - newSpan / 2;
     let end = center + newSpan / 2;
-    if (start < full.start) { end += full.start - start; start = full.start; }
-    if (end > full.end) { start -= end - full.end; end = full.end; }
+    if (start < full.start) {
+      end += full.start - start;
+      start = full.start;
+    }
+    if (end > full.end) {
+      start -= end - full.end;
+      end = full.end;
+    }
     const clamped = { start: Math.max(start, full.start), end: Math.min(end, full.end) };
     this.zoom = clamped.start === full.start && clamped.end === full.end ? undefined : clamped;
   }
@@ -269,14 +286,23 @@ export class ByNameView implements View {
     const sel = this.selected();
     if (sel === undefined) return this.message;
     const models = sel.group.models.length > 0 ? `  models: ${sel.group.models.join(", ")}` : "";
-    const base = `${sel.group.key}  ${sel.group.count} call(s)` +
+    const base =
+      `${sel.group.key}  ${sel.group.count} call(s)` +
       `  self-time total ${fmtDuration(sel.group.totalSelfMs, { minutes: true })}` +
       `  ${Math.round(sel.group.share * 100)}% of view${models}`;
     return this.message ? `${base}  ${this.message}` : base;
   }
 
-  private renderRow(item: GroupRow, isCursor: boolean, window: Interval, widths: { gutter: number; bar: number; stats: number }): Element {
-    const label = padCell(clipCell(`${isCursor ? "▶ " : "  "}${item.group.key}`, widths.gutter - 1), widths.gutter);
+  private renderRow(
+    item: GroupRow,
+    isCursor: boolean,
+    window: Interval,
+    widths: { gutter: number; bar: number; stats: number },
+  ): Element {
+    const label = padCell(
+      clipCell(`${isCursor ? "▶ " : "  "}${item.group.key}`, widths.gutter - 1),
+      widths.gutter,
+    );
     const bar = new BarComponent(
       item.spans.flatMap((s) => s.selfIntervals),
       { running: item.spans.some((s) => s.running) },

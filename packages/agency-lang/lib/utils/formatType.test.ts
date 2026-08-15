@@ -42,9 +42,7 @@ describe("formatTypeHint array-element paren rules", () => {
   });
 
   it("leaves a plain element bare: A[]", () => {
-    expect(
-      formatTypeHint({ type: "arrayType", elementType: alias("A") }),
-    ).toBe("A[]");
+    expect(formatTypeHint({ type: "arrayType", elementType: alias("A") })).toBe("A[]");
   });
 });
 

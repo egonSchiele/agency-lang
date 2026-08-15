@@ -6,10 +6,7 @@ import { walkNodes } from "../utils/node.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { findContainingScope } from "./scopeResolution.js";
 
-export function getInlayHints(
-  program: AgencyProgram,
-  scopes: ScopeInfo[],
-): InlayHint[] {
+export function getInlayHints(program: AgencyProgram, scopes: ScopeInfo[]): InlayHint[] {
   const hints: InlayHint[] = [];
 
   for (const { node } of walkNodes(program.nodes)) {

@@ -28,9 +28,7 @@ describe("firstParagraph", () => {
   });
 
   it("stops at an indented code fence (trims before the check)", () => {
-    expect(firstParagraph("\n  First line.\n  ```ts\n  code\n  ```\n")).toBe(
-      "First line.",
-    );
+    expect(firstParagraph("\n  First line.\n  ```ts\n  code\n  ```\n")).toBe("First line.");
   });
 
   it("collapses internal whitespace and newlines to single spaces", () => {
@@ -64,9 +62,7 @@ describe("extractSummaryOverride", () => {
   });
 
   it("does not treat @summaryfoo (no boundary) as an override", () => {
-    const { override, body } = extractSummaryOverride(
-      "\n  @summaryfoo bar\n  Body.\n",
-    );
+    const { override, body } = extractSummaryOverride("\n  @summaryfoo bar\n  Body.\n");
     expect(override).toBeNull();
     expect(body).toContain("@summaryfoo bar");
   });
@@ -74,9 +70,7 @@ describe("extractSummaryOverride", () => {
 
 describe("firstSentence", () => {
   it("takes text up to the first sentence terminator", () => {
-    expect(firstSentence("Fetch URLs. Returns text, JSON, or Markdown.")).toBe(
-      "Fetch URLs.",
-    );
+    expect(firstSentence("Fetch URLs. Returns text, JSON, or Markdown.")).toBe("Fetch URLs.");
   });
 
   it("returns the whole string when there is no terminator", () => {
@@ -116,16 +110,12 @@ describe("sanitizeDescription", () => {
 describe("moduleDescription", () => {
   it("derives the first sentence when there is no @summary", () => {
     expect(
-      moduleDescription(
-        moduleComment("\n  Fetch URLs. Returns text.\n\n  ```ts\n  x\n  ```"),
-      ),
+      moduleDescription(moduleComment("\n  Fetch URLs. Returns text.\n\n  ```ts\n  x\n  ```")),
     ).toBe("Fetch URLs.");
   });
 
   it("prefers an explicit @summary override", () => {
-    expect(
-      moduleDescription(moduleComment("\n  @summary Short.\n  Long prose.")),
-    ).toBe("Short.");
+    expect(moduleDescription(moduleComment("\n  @summary Short.\n  Long prose."))).toBe("Short.");
   });
 
   it("returns null when the comment is missing", () => {
@@ -318,22 +308,14 @@ node main() {
 
     // Check files exist with mirrored structure
     expect(fs.existsSync(path.join(outputDir, "utils.md"))).toBe(true);
-    expect(fs.existsSync(path.join(outputDir, "agents", "chat.md"))).toBe(
-      true,
-    );
+    expect(fs.existsSync(path.join(outputDir, "agents", "chat.md"))).toBe(true);
 
-    const utilsDoc = fs.readFileSync(
-      path.join(outputDir, "utils.md"),
-      "utf-8",
-    );
+    const utilsDoc = fs.readFileSync(path.join(outputDir, "utils.md"), "utf-8");
     expect(utilsDoc).toContain("### helper");
     expect(utilsDoc).toContain("```ts\nhelper(): string\n```");
     expect(utilsDoc).toContain("A helper function.");
 
-    const chatDoc = fs.readFileSync(
-      path.join(outputDir, "agents", "chat.md"),
-      "utf-8",
-    );
+    const chatDoc = fs.readFileSync(path.join(outputDir, "agents", "chat.md"), "utf-8");
     expect(chatDoc).toContain("### main");
     expect(chatDoc).toContain("```ts\nmain()\n```");
   });
@@ -353,10 +335,7 @@ node main() {
     );
 
     generateDoc({}, path.join(inputDir, "nodetonly.agency"), outputDir);
-    const output = fs.readFileSync(
-      path.join(outputDir, "nodetonly.md"),
-      "utf-8",
-    );
+    const output = fs.readFileSync(path.join(outputDir, "nodetonly.md"), "utf-8");
 
     expect(output).toContain("## Nodes");
     expect(output).not.toContain("## Types");
@@ -378,10 +357,7 @@ export def greet(name: string = "world"): string {
     );
 
     generateDoc({}, path.join(inputDir, "defaults.agency"), outputDir);
-    const output = fs.readFileSync(
-      path.join(outputDir, "defaults.md"),
-      "utf-8",
-    );
+    const output = fs.readFileSync(path.join(outputDir, "defaults.md"), "utf-8");
 
     expect(output).toContain('| name | `string` | "world" |');
   });
@@ -404,10 +380,7 @@ node main() {
     );
 
     generateDoc({}, path.join(inputDir, "filedoc.agency"), outputDir);
-    const output = fs.readFileSync(
-      path.join(outputDir, "filedoc.md"),
-      "utf-8",
-    );
+    const output = fs.readFileSync(path.join(outputDir, "filedoc.md"), "utf-8");
 
     expect(output).toContain("# filedoc");
     expect(output).toContain("This file implements email categorization.");
@@ -433,10 +406,7 @@ export def add(a: number, b: number): number {
     );
 
     generateDoc({}, path.join(inputDir, "funcdoc.agency"), outputDir);
-    const output = fs.readFileSync(
-      path.join(outputDir, "funcdoc.md"),
-      "utf-8",
-    );
+    const output = fs.readFileSync(path.join(outputDir, "funcdoc.md"), "utf-8");
 
     expect(output).toContain("Adds two numbers.");
     expect(output).toContain("Extra context for docs.");
@@ -462,10 +432,7 @@ node main() {
     );
 
     generateDoc({}, path.join(inputDir, "nodedoc.agency"), outputDir);
-    const output = fs.readFileSync(
-      path.join(outputDir, "nodedoc.md"),
-      "utf-8",
-    );
+    const output = fs.readFileSync(path.join(outputDir, "nodedoc.md"), "utf-8");
 
     expect(output).toContain("Main entry point.");
     expect(output).toContain("Extra node context.");
@@ -487,10 +454,7 @@ export type Category = "reminder" | "todo"
     );
 
     generateDoc({}, path.join(inputDir, "typedoc.agency"), outputDir);
-    const output = fs.readFileSync(
-      path.join(outputDir, "typedoc.md"),
-      "utf-8",
-    );
+    const output = fs.readFileSync(path.join(outputDir, "typedoc.md"), "utf-8");
 
     expect(output).toContain("Possible message categories.");
     expect(output).toContain("### Category");
@@ -539,10 +503,7 @@ export type Status = "active" | "inactive"
     );
 
     generateDoc({}, path.join(inputDir, "simpletype.agency"), outputDir);
-    const output = fs.readFileSync(
-      path.join(outputDir, "simpletype.md"),
-      "utf-8",
-    );
+    const output = fs.readFileSync(path.join(outputDir, "simpletype.md"), "utf-8");
 
     expect(output).toContain("### Status");
     expect(output).toContain('```ts\nexport type Status = "active" | "inactive"\n```');
@@ -561,10 +522,7 @@ type Internal = "hidden"
     );
 
     generateDoc({}, path.join(inputDir, "internaltype.agency"), outputDir);
-    const output = fs.readFileSync(
-      path.join(outputDir, "internaltype.md"),
-      "utf-8",
-    );
+    const output = fs.readFileSync(path.join(outputDir, "internaltype.md"), "utf-8");
 
     expect(output).not.toContain("### Internal");
     expect(output).not.toContain('type Internal = "hidden"');
@@ -594,24 +552,14 @@ export def getCategory(): Category {
 `,
     );
 
-    generateDoc(
-      { doc: { baseUrl: "https://example.com/src" } },
-      inputDir,
-      outputDir,
-    );
+    generateDoc({ doc: { baseUrl: "https://example.com/src" } }, inputDir, outputDir);
 
-    const funcsOutput = fs.readFileSync(
-      path.join(outputDir, "funcs.md"),
-      "utf-8",
-    );
+    const funcsOutput = fs.readFileSync(path.join(outputDir, "funcs.md"), "utf-8");
 
     // Return type Category is defined in same file — anchor link
     expect(funcsOutput).toContain("[Category](#category)");
 
-    const typesOutput = fs.readFileSync(
-      path.join(outputDir, "types.md"),
-      "utf-8",
-    );
+    const typesOutput = fs.readFileSync(path.join(outputDir, "types.md"), "utf-8");
 
     // Types file should have User with source link
     expect(typesOutput).toContain("### User");
@@ -647,10 +595,7 @@ node main() {
     );
 
     generateDoc({}, path.join(inputDir, "throws.agency"), outputDir);
-    const output = fs.readFileSync(
-      path.join(outputDir, "throws.md"),
-      "utf-8",
-    );
+    const output = fs.readFileSync(path.join(outputDir, "throws.md"), "utf-8");
 
     // Direct interrupt
     expect(output).toMatch(/### deploy[\s\S]*?\*\*Throws:\*\* `myapp::deploy`/);
@@ -662,9 +607,7 @@ node main() {
     expect(safeBlock).not.toBeNull();
     expect(safeBlock![0]).not.toContain("Throws:");
     // Node combines its own + transitive
-    expect(output).toMatch(
-      /### main[\s\S]*?\*\*Throws:\*\* `myapp::confirm`, `myapp::deploy`/,
-    );
+    expect(output).toMatch(/### main[\s\S]*?\*\*Throws:\*\* `myapp::confirm`, `myapp::deploy`/);
   });
 
   it("shows @validate and @jsonSchema annotations on type aliases", () => {
@@ -684,10 +627,7 @@ export type Email = string
     );
 
     generateDoc({}, path.join(inputDir, "annotated.agency"), outputDir);
-    const output = fs.readFileSync(
-      path.join(outputDir, "annotated.md"),
-      "utf-8",
-    );
+    const output = fs.readFileSync(path.join(outputDir, "annotated.md"), "utf-8");
 
     expect(output).toContain(`## Types
 
@@ -726,10 +666,7 @@ const internal = "not exported"
     );
 
     generateDoc({}, path.join(inputDir, "consts.agency"), outputDir);
-    const output = fs.readFileSync(
-      path.join(outputDir, "consts.md"),
-      "utf-8",
-    );
+    const output = fs.readFileSync(path.join(outputDir, "consts.md"), "utf-8");
 
     expect(output).toContain("## Constants");
     expect(output).toContain("### VERSION");
@@ -753,10 +690,7 @@ const internal = "not exported"
     );
 
     generateDoc({}, path.join(inputDir, "test.agency"), outputDir);
-    const output = fs.readFileSync(
-      path.join(outputDir, "test.md"),
-      "utf-8",
-    );
+    const output = fs.readFileSync(path.join(outputDir, "test.md"), "utf-8");
 
     expect(output).not.toContain("[View source]");
     expect(output).not.toContain("[source]");
@@ -766,10 +700,7 @@ const internal = "not exported"
     const inputDir = path.join(tmpDir, "input");
     const outputDir = path.join(tmpDir, "output");
     fs.mkdirSync(inputDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(inputDir, "array.agency"),
-      `def foo(): string { return "x" }\n`,
-    );
+    fs.writeFileSync(path.join(inputDir, "array.agency"), `def foo(): string { return "x" }\n`);
 
     generateDoc({}, path.join(inputDir, "array.agency"), outputDir);
     const output = fs.readFileSync(path.join(outputDir, "array.md"), "utf-8");
@@ -781,10 +712,7 @@ const internal = "not exported"
     const inputDir = path.join(tmpDir, "input");
     const outputDir = path.join(tmpDir, "output");
     fs.mkdirSync(inputDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(inputDir, "shell.agency"),
-      `def bar(): string { return "y" }\n`,
-    );
+    fs.writeFileSync(path.join(inputDir, "shell.agency"), `def bar(): string { return "y" }\n`);
 
     generateDoc({}, path.join(inputDir, "shell.agency"), outputDir);
     const output = fs.readFileSync(path.join(outputDir, "shell.md"), "utf-8");
@@ -798,10 +726,7 @@ const internal = "not exported"
     const inputDir = path.join(tmpDir, "input");
     const outputDir = path.join(tmpDir, "output");
     fs.mkdirSync(inputDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(inputDir, "ui.agency"),
-      `def baz(): string { return "z" }\n`,
-    );
+    fs.writeFileSync(path.join(inputDir, "ui.agency"), `def baz(): string { return "z" }\n`);
 
     generateDoc({}, path.join(inputDir, "ui.agency"), outputDir);
     const output = fs.readFileSync(path.join(outputDir, "ui.md"), "utf-8");
@@ -830,10 +755,7 @@ node main() { print("hi") }
     );
 
     generateDoc({}, path.join(inputDir, "effects.agency"), outputDir);
-    const output = fs.readFileSync(
-      path.join(outputDir, "effects.md"),
-      "utf-8",
-    );
+    const output = fs.readFileSync(path.join(outputDir, "effects.md"), "utf-8");
 
     expect(output).toContain("## Effects");
     expect(output).toContain("### std::read");
@@ -852,14 +774,12 @@ node main() { print("hi") }
       path.join(inputDir, "m.agency"),
       "/** @module\n" +
         "  Fetch URLs from Agency code. Returns text, JSON, or Markdown.\n\n" +
-        "  ```ts\n  import { fetch } from \"std::http\"\n  ```\n*/\n" +
-        "export def f(): string { return \"\" }\n",
+        '  ```ts\n  import { fetch } from "std::http"\n  ```\n*/\n' +
+        'export def f(): string { return "" }\n',
     );
     generateDoc({}, path.join(inputDir, "m.agency"), outputDir);
     const out = fs.readFileSync(path.join(outputDir, "m.md"), "utf-8");
-    expect(out).toContain(
-      'description: "Fetch URLs from Agency code."',
-    );
+    expect(out).toContain('description: "Fetch URLs from Agency code."');
   });
 
   it("removes quotes but keeps colon-space safe (valid for both YAML parsers)", () => {
@@ -869,8 +789,8 @@ node main() { print("hi") }
     fs.writeFileSync(
       path.join(inputDir, "q.agency"),
       "/** @module\n" +
-        "  Builds strings like \"America/New_York\" for callers: timezones and dates.\n*/\n" +
-        "export def f(): string { return \"\" }\n",
+        '  Builds strings like "America/New_York" for callers: timezones and dates.\n*/\n' +
+        'export def f(): string { return "" }\n',
     );
     generateDoc({}, path.join(inputDir, "q.agency"), outputDir);
     const out = fs.readFileSync(path.join(outputDir, "q.md"), "utf-8");
@@ -889,7 +809,7 @@ node main() { print("hi") }
       "/** @module\n" +
         "  @summary Read and write the clipboard.\n" +
         "  The clipboard module exposes copy and paste.\n*/\n" +
-        "export def f(): string { return \"\" }\n",
+        'export def f(): string { return "" }\n',
     );
     generateDoc({}, path.join(inputDir, "s.agency"), outputDir);
     const out = fs.readFileSync(path.join(outputDir, "s.md"), "utf-8");
@@ -902,10 +822,7 @@ node main() { print("hi") }
     const inputDir = path.join(tmpDir, "input-nomod");
     const outputDir = path.join(tmpDir, "output-nomod");
     fs.mkdirSync(inputDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(inputDir, "n.agency"),
-      "export def f(): string { return \"\" }\n",
-    );
+    fs.writeFileSync(path.join(inputDir, "n.agency"), 'export def f(): string { return "" }\n');
     generateDoc({}, path.join(inputDir, "n.agency"), outputDir);
     const out = fs.readFileSync(path.join(outputDir, "n.md"), "utf-8");
     expect(out).not.toContain("description:");
@@ -951,9 +868,15 @@ describe("extractRegistrySymbols", () => {
     // Pins exactly today's pass-1 set (doc.ts registry loops): aliases are
     // registered from the GLOBAL scope regardless of export; constants
     // only when exported.
-    expect(extractRegistrySymbols(program).sort()).toEqual(
-      ["BAR", "Foo", "Unexported", "_guardish", "hidden", "main", "visible"],
-    );
+    expect(extractRegistrySymbols(program).sort()).toEqual([
+      "BAR",
+      "Foo",
+      "Unexported",
+      "_guardish",
+      "hidden",
+      "main",
+      "visible",
+    ]);
   });
 });
 

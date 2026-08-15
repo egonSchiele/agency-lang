@@ -49,7 +49,8 @@ function filesBlock(plan: DeployPlan): string {
   const { bundle } = plan;
   const header = `${color.bold(`Files (${bundle.files.length})`)}   ${color.dim(`entrypoint: ${bundle.entrypoint}`)}`;
   const rows = bundle.files.map(
-    (file) => `  ${color.cyan(file.name)}   ${color.dim(`${Buffer.byteLength(file.contents)} bytes`)}`,
+    (file) =>
+      `  ${color.cyan(file.name)}   ${color.dim(`${Buffer.byteLength(file.contents)} bytes`)}`,
   );
   return section(header, rows);
 }

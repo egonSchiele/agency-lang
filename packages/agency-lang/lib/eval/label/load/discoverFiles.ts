@@ -37,7 +37,7 @@ export function resolveFileSelection(source: string, recursive: boolean): FileSe
   if (!fs.statSync(root).isDirectory()) {
     throw new IngestSourceError(
       `${source} is a file, not a directory. Pass a directory of files, a run directory, or a ` +
-      ".json file holding an array of strings.",
+        ".json file holding an array of strings.",
     );
   }
   return { root, files: walk(root, root, recursive) };
@@ -46,7 +46,8 @@ export function resolveFileSelection(source: string, recursive: boolean): FileSe
 /** Sorted so ingest is deterministic: the order rows are written in is the
  *  order a labeling session presents them. */
 function walk(root: string, dir: string, recursive: boolean): DiscoveredFile[] {
-  const entries = fs.readdirSync(dir, { withFileTypes: true })
+  const entries = fs
+    .readdirSync(dir, { withFileTypes: true })
     .slice()
     .sort((left, right) => compareNames(left.name, right.name));
 

@@ -11,16 +11,8 @@ import { execFile, execFileSync } from "child_process";
 import { promisify } from "util";
 
 export const execFileAsync = promisify(execFile);
-import {
-  AgencyProgram,
-  GraphNodeDefinition,
-  ImportStatement,
-  VariableType,
-} from "@/types.js";
-import {
-  resolveAgencyImportPath,
-  isNonTemplatedStdlib,
-} from "../importPaths.js";
+import { AgencyProgram, GraphNodeDefinition, ImportStatement, VariableType } from "@/types.js";
+import { resolveAgencyImportPath, isNonTemplatedStdlib } from "../importPaths.js";
 import { getImports } from "@/analysis/imports.js";
 import renderEvaluate from "@/templates/cli/evaluate.js";
 import renderJudgeEvaluate from "@/templates/cli/judgeEvaluate.js";
@@ -46,10 +38,7 @@ export async function promptForTarget(): Promise<{
       value: file,
     }));
 
-  const choices = [
-    { title: "📝 Enter custom filename...", value: "__custom__" },
-    ...agencyFiles,
-  ];
+  const choices = [{ title: "📝 Enter custom filename...", value: "__custom__" }, ...agencyFiles];
 
   const response = await prompts(
     {
@@ -102,9 +91,7 @@ export async function pickANode(nodes: GraphNodeDefinition[]): Promise<string> {
   return response.node;
 }
 
-export async function promptForArgs(
-  selectedNode: GraphNodeDefinition,
-): Promise<{
+export async function promptForArgs(selectedNode: GraphNodeDefinition): Promise<{
   hasArgs: boolean;
   argsString: string;
 }> {
@@ -126,9 +113,7 @@ export async function promptForArgs(
     if (confirmArgs.provideArgs) {
       const argValues: string[] = [];
       for (const param of selectedNode.parameters) {
-        const typeLabel = param.typeHint
-          ? ` (${formatTypeHint(param.typeHint)})`
-          : "";
+        const typeLabel = param.typeHint ? ` (${formatTypeHint(param.typeHint)})` : "";
         const argResponse = await prompts(
           {
             type: "text",
@@ -158,10 +143,7 @@ export type InterruptHandler = {
  * Resolve the compiled .js file for an .agency file from a distDir.
  * Throws if the compiled file doesn't exist.
  */
-export function resolveCompiledFile(
-  distDir: string,
-  agencyFile: string,
-): string {
+export function resolveCompiledFile(distDir: string, agencyFile: string): string {
   const basename = path.basename(agencyFile, ".agency") + ".js";
   const compiledPath = path.resolve(distDir, basename);
   if (!fs.existsSync(compiledPath)) {
@@ -303,18 +285,14 @@ export async function runAgencyNode({
     }
 
     const baseName = agencyFile.replace(".agency", "");
-    const evaluateBase = scratchDir
-      ? path.join(scratchDir, path.basename(baseName))
-      : baseName;
+    const evaluateBase = scratchDir ? path.join(scratchDir, path.basename(baseName)) : baseName;
     evaluateFile = `${evaluateBase}.evaluate.js`;
     resultsFile = `${evaluateBase}.evaluate.json`;
     // The template imports via "./${filename}", so compute a relative path
     // from the evaluate script's directory to the compiled module.
     const evaluateDir = fs.realpathSync(path.dirname(evaluateFile));
     const compiledRealPath = fs.realpathSync(compiledPath);
-    let importSpecifier = path
-      .relative(evaluateDir, compiledRealPath)
-      .replace(/\\/g, "/");
+    let importSpecifier = path.relative(evaluateDir, compiledRealPath).replace(/\\/g, "/");
     if (!importSpecifier.startsWith(".")) {
       importSpecifier = `./${importSpecifier}`;
     }
@@ -324,9 +302,7 @@ export async function runAgencyNode({
       hasArgs,
       args: argsString,
       hasInterruptHandlers: !!interruptHandlers,
-      interruptHandlersJSON: interruptHandlers
-        ? JSON.stringify(interruptHandlers)
-        : undefined,
+      interruptHandlersJSON: interruptHandlers ? JSON.stringify(interruptHandlers) : undefined,
       resultsFilename: resultsFile,
     });
     fs.writeFileSync(evaluateFile, evaluateScript);
@@ -371,8 +347,7 @@ export async function executeNodeAsync({
   fakeClock,
   ...rest
 }: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
-  const useDeterministic =
-    !!process.env.AGENCY_USE_TEST_LLM_PROVIDER || !!useTestLLMProvider;
+  const useDeterministic = !!process.env.AGENCY_USE_TEST_LLM_PROVIDER || !!useTestLLMProvider;
   const env: Record<string, string> = useDeterministic
     ? { AGENCY_LLM_MOCKS: JSON.stringify(llmMocks ?? []) }
     : {};
@@ -444,9 +419,7 @@ export function executeNode(args: ExecuteNodeArgs): {
   const evaluateFile = "__evaluate.js";
   // The template imports via "./${filename}", so compute a relative path
   // from the evaluate script's directory to the compiled module.
-  let importSpecifier = path
-    .relative(path.dirname(evaluateFile), compiledPath)
-    .replace(/\\/g, "/");
+  let importSpecifier = path.relative(path.dirname(evaluateFile), compiledPath).replace(/\\/g, "/");
   if (!importSpecifier.startsWith(".")) {
     importSpecifier = `./${importSpecifier}`;
   }
@@ -470,11 +443,7 @@ export function executeNode(args: ExecuteNodeArgs): {
 // Re-exported for backward compatibility. The implementation lives in
 // lib/utils/formatType.ts to avoid pulling in `prompts` (and its CJS
 // readline dependency) when only the typechecker/LSP/codegen need it.
-export {
-  formatTypeHint,
-  formatTypeHintTs,
-  TS_PRIMITIVE_ALIASES,
-} from "../utils/formatType.js";
+export { formatTypeHint, formatTypeHintTs, TS_PRIMITIVE_ALIASES } from "../utils/formatType.js";
 import { formatTypeHint } from "../utils/formatType.js";
 
 function serializeArgValue(value: string): string {
@@ -493,9 +462,7 @@ type ExecuteJudgeArgs = {
 
 type RunAgencyJudgeArgs<TemplateData> = {
   judgeAgencyFile: string;
-  renderRunner: (
-    data: TemplateData & { judgeFilename: string; resultsFilename: string },
-  ) => string;
+  renderRunner: (data: TemplateData & { judgeFilename: string; resultsFilename: string }) => string;
   templateData: TemplateData;
   agencyFileBaseName: string;
 };
@@ -540,12 +507,7 @@ async function runAgencyJudge<TemplateData, RawResult>({
 
 export async function executeJudgeAsync(
   agencyFileBaseName: string,
-  {
-    actualOutput,
-    expectedOutput,
-    judgePrompt,
-    interruptHandlers,
-  }: ExecuteJudgeArgs,
+  { actualOutput, expectedOutput, judgePrompt, interruptHandlers }: ExecuteJudgeArgs,
 ): Promise<{
   score: number;
   reasoning: string;
@@ -571,29 +533,20 @@ export async function executeJudgeAsync(
       expectedOutput: JSON.stringify(expectedOutput),
       judgePrompt: JSON.stringify(judgePrompt),
       hasInterruptHandlers: !!interruptHandlers,
-      interruptHandlersJSON: interruptHandlers
-        ? JSON.stringify(interruptHandlers)
-        : undefined,
+      interruptHandlersJSON: interruptHandlers ? JSON.stringify(interruptHandlers) : undefined,
     },
     agencyFileBaseName,
   });
   return { score: raw.score, reasoning: raw.reasoning, stdout, stderr };
 }
 
-export function getImportsRecursively(
-  filename: string,
-  visited = new Set<string>(),
-): string[] {
+export function getImportsRecursively(filename: string, visited = new Set<string>()): string[] {
   if (visited.has(filename)) {
     return [];
   }
   visited.add(filename);
   const contents = fs.readFileSync(filename, "utf-8");
-  const parsed = parseAgency(
-    contents,
-    { verbose: false },
-    !isNonTemplatedStdlib(filename),
-  );
+  const parsed = parseAgency(contents, { verbose: false }, !isNonTemplatedStdlib(filename));
   if (!parsed.success) {
     console.error(`Error parsing ${filename}:`, parsed);
     return [];
@@ -610,7 +563,5 @@ export function getImportsRecursively(
   }
   return imports;
 }
-
-
 
 // Returns EVERY import in the program, regardless of whether it points to

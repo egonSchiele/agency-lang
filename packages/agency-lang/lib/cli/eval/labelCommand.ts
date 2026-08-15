@@ -44,9 +44,9 @@ export function labelCommandDependencies(
  * `enablePositionalOptions()` would fix it, but only when set on the root
  * program, where it changes option parsing for every command in the CLI.
  *
- * So `--store` is declared once, on `label`, and the subcommands read it from
- * their parent. It works in either position: `label --store x ingest …` and
- * `label ingest … --store x` both reach the parent.
+ * So `--dataset` is declared once, on `label`, and the subcommands read it from
+ * their parent. It works in either position: `label --dataset x ingest …` and
+ * `label ingest … --dataset x` both reach the parent.
  *
  * `label` also takes no positional, which is why ingesting and labelling are
  * always two commands. That is the shape the store wants anyway: you ingest
@@ -60,10 +60,9 @@ export function addLabelCommand(
     .command("label")
     .description("Label the examples in a dataset. Add examples with `label ingest` first")
     .option("--dataset <dir>", "Label dataset directory (default: eval.dataset, else labels/)")
-    .option("--store <dir>", "Deprecated alias for --dataset")
     .option("--checklist <file>", "Checklist JSON: an existing one, or { name, questions }")
     .option("--annotator <id>", "Who is labelling (default: $USER)")
-    .action(async (opts: { checklist?: string; dataset?: string; store?: string; annotator?: string }) => {
+    .action(async (opts: { checklist?: string; dataset?: string; annotator?: string }) => {
       try {
         await dependencies.evalLabel({ ...opts, config: dependencies.getConfig() });
       } catch (error) {
@@ -97,7 +96,7 @@ export function addLabelCommand(
       try {
         await dependencies.evalIngest({
           ...opts,
-          ...datasetOptionsOf(command),
+          dataset: datasetOptionOf(command),
           path: source,
           extraArgs: extra,
           config: dependencies.getConfig(),
@@ -110,11 +109,9 @@ export function addLabelCommand(
   return label;
 }
 
-/** `--dataset`/`--store` live on `label`, so a subcommand asks its parent for
- *  them. Both are forwarded; `resolveDataset` reconciles the alias. */
-function datasetOptionsOf(command: Command): { dataset?: string; store?: string } {
-  const parentOpts = command.parent?.opts() as { dataset?: string; store?: string } | undefined;
-  return { dataset: parentOpts?.dataset, store: parentOpts?.store };
+/** `--dataset` lives on `label`, so a subcommand reads it from its parent. */
+function datasetOptionOf(command: Command): string | undefined {
+  return (command.parent?.opts() as { dataset?: string } | undefined)?.dataset;
 }
 
 /** commander calls this once per repeat of a flag, accumulating the values. */

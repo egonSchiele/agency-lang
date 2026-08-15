@@ -28,7 +28,6 @@ export type LogsViewOpts = {
   /** Local statelog viewing only: enables the tree `l` promote-to-dataset
    *  action. Ignored for stdin and remote logs. */
   dataset?: string;
-  store?: string;
   checklist?: string;
   config?: AgencyConfig;
 };
@@ -104,7 +103,7 @@ export async function logsView(
  *  file viewer and the explorer's drill-in. */
 function promotionBaseFrom(cliOpts: LogsViewOpts): PromotionBase {
   return {
-    datasetDir: resolveDataset({ dataset: cliOpts.dataset, store: cliOpts.store }, cliOpts.config ?? {}),
+    datasetDir: resolveDataset({ dataset: cliOpts.dataset }, cliOpts.config ?? {}),
     checklistFile: cliOpts.checklist === undefined ? undefined : path.resolve(cliOpts.checklist),
     annotator: resolveAnnotator({}, {
       environment: process.env,

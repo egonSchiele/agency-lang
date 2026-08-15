@@ -775,14 +775,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
     follow?: boolean;
     csv?: boolean;
     dataset?: string;
-    store?: string;
     checklist?: string;
   };
   const logsViewOptsFrom = (options: LogsCliOptions): LogsViewOpts => ({
     follow: options.follow,
     csv: options.csv,
     dataset: options.dataset,
-    store: options.store,
     checklist: options.checklist,
     config: getConfig(),
   });
@@ -798,8 +796,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("[files...]", "Statelog files ('-' for stdin), run directories, or directories of runs")
     .option("-f, --follow", "Tail the file — re-read and re-render as new events are appended")
     .option("--csv", "Print the runs table as CSV to stdout instead of opening the explorer")
-    .option("--dataset <dir>", "Local viewing: label dataset the tree 'l' key promotes into (default: eval.dataset, else labels/)")
-    .option("--store <dir>", "Deprecated alias for --dataset")
+    .option("--dataset <dir>", "Local viewing: label dataset the tree 'l' key labels into (default: eval.dataset, else labels/)")
     .option("--checklist <file>", "Local viewing: checklist to label a promoted trace against")
     .action(async (files: string[], options: LogsCliOptions) => {
       if (files.length === 0) {
@@ -813,7 +810,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("view")
     .description("Open an interactive TUI viewer for a statelog JSONL file")
     .argument("<file>", "Path to a .statelog.jsonl file, or '-' for stdin")
-    // -f/--follow, --dataset, --store and --checklist are declared once, on
+    // -f/--follow, --dataset and --checklist are declared once, on
     // `logs`. Commander gives the parent priority wherever the flag sits, so a
     // second declaration here would silently receive undefined (the vendored
     // fork now rejects that shape at registration). The action reads the

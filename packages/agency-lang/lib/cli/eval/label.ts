@@ -9,22 +9,18 @@ import { TerminalOutput } from "@/tui/output/terminal.js";
 import { Screen } from "@/tui/screen.js";
 import type { Annotator } from "@/eval/label/types.js";
 
-const DEFAULT_STORE_DIRECTORY = "labels";
+const DEFAULT_DATASET_DIRECTORY = "labels";
 const FALLBACK_ANNOTATOR_ID = "human";
 
 export type EvalLabelOptions = {
   checklist?: string;
   dataset?: string;
-  store?: string;
   annotator?: string;
   config?: AgencyConfig;
 };
 
-/** The dataset directory can be named two ways at each layer: the preferred
- *  `--dataset`/`eval.dataset` and the deprecated `--store`/`eval.labelStore`. */
 export type DatasetLocationOptions = {
   dataset?: string;
-  store?: string;
 };
 
 /** @internal Injected so the fallback order is testable without a real
@@ -48,42 +44,9 @@ export function resolveDataset(
   options: DatasetLocationOptions,
   config: AgencyConfig,
 ): string {
-  const fromFlags = resolveAliasedValue({
-    preferredName: "--dataset",
-    preferredValue: options.dataset,
-    legacyName: "--store",
-    legacyValue: options.store,
-  });
-  const fromConfig = resolveAliasedValue({
-    preferredName: "eval.dataset",
-    preferredValue: config.eval?.dataset,
-    legacyName: "eval.labelStore",
-    legacyValue: config.eval?.labelStore,
-  });
   // Flags win over config, matching how runsDir and every other CLI override
   // behaves.
-  return path.resolve(fromFlags ?? fromConfig ?? DEFAULT_STORE_DIRECTORY);
-}
-
-type AliasedValue = {
-  preferredName: string;
-  preferredValue?: string;
-  legacyName: string;
-  legacyValue?: string;
-};
-
-/** Two names for one setting. Equal values or only-one-present are fine;
- *  both present and disagreeing is a hard error rather than a silent winner,
- *  because a silent winner is how a run writes to the wrong dataset. */
-function resolveAliasedValue(value: AliasedValue): string | undefined {
-  const bothPresent = value.preferredValue !== undefined && value.legacyValue !== undefined;
-  if (bothPresent && value.preferredValue !== value.legacyValue) {
-    throw new Error(
-      `${value.preferredName} and ${value.legacyName} disagree ` +
-      `(${value.preferredValue} vs ${value.legacyValue}); set only one.`,
-    );
-  }
-  return value.preferredValue ?? value.legacyValue;
+  return path.resolve(options.dataset ?? config.eval?.dataset ?? DEFAULT_DATASET_DIRECTORY);
 }
 
 /** Who is judging. Recorded on every annotation, and part of the fold key, so

@@ -29,7 +29,6 @@ export type EvalIngestOptions = {
   maxBytes?: number;
   trace?: string[];
   dataset?: string;
-  store?: string;
   config?: AgencyConfig;
   /** Extra positional arguments. Non-empty when a shell pattern expanded into
    *  several paths, which is worth saying out loud rather than ignoring. */

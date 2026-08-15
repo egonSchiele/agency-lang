@@ -49,7 +49,7 @@ describe("handleKey", () => {
     expect(next.quit).toBe(true);
   });
 
-  it("l expands a collapsed node with children", () => {
+  it("Enter expands a collapsed node with children", () => {
     // Add children to `a` so it can be expanded.
     const state = initial("a");
     state.roots[0].children[0] = {
@@ -57,7 +57,7 @@ describe("handleKey", () => {
       children: [child("a-child")],
     };
     state.expanded.delete("a");
-    const next = handleKey(state, k("l"));
+    const next = handleKey(state, k("Enter"));
     expect(next.expanded.has("a")).toBe(true);
   });
 
@@ -86,8 +86,8 @@ describe("handleKey", () => {
     expect(next.cursorId).toBe("b");
   });
 
-  it("l on an already-expanded node descends to its first child", () => {
-    const next = handleKey(initial("trace-t"), k("l"));
+  it("Enter on an already-expanded node descends to its first child", () => {
+    const next = handleKey(initial("trace-t"), k("Enter"));
     expect(next.cursorId).toBe("a");
     expect(next.expanded.has("trace-t")).toBe(true);
   });

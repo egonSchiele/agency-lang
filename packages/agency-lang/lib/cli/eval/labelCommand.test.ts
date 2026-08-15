@@ -93,27 +93,22 @@ describe("option shadowing between a parent and its subcommand", () => {
     expect(recorded.ingest[0]).toMatchObject({ source: "handwritten" });
   });
 
-  it("delivers --store to ingest when written after the subcommand", async () => {
-    // --store is declared once, on the parent, and read back from there. When it
-    // was declared on both, the parent silently absorbed it and ingest wrote to
-    // the default store.
-    await run("label", "ingest", "./gold", "--source", "s", "--store", "custom-labels");
-    expect(recorded.ingest[0]).toMatchObject({ store: "custom-labels" });
+  it("delivers --dataset to ingest when written after the subcommand", async () => {
+    // --dataset is declared once, on the parent, and read back from there. When
+    // it was declared on both, the parent silently absorbed it and ingest wrote
+    // to the default dataset.
+    await run("label", "ingest", "./gold", "--source", "s", "--dataset", "custom-labels");
+    expect(recorded.ingest[0]).toMatchObject({ dataset: "custom-labels" });
   });
 
-  it("delivers --store to ingest when written before the subcommand", async () => {
-    await run("label", "--store", "custom-labels", "ingest", "./gold", "--source", "s");
-    expect(recorded.ingest[0]).toMatchObject({ store: "custom-labels" });
+  it("delivers --dataset to ingest when written before the subcommand", async () => {
+    await run("label", "--dataset", "custom-labels", "ingest", "./gold", "--source", "s");
+    expect(recorded.ingest[0]).toMatchObject({ dataset: "custom-labels" });
   });
 
-  it("delivers --dataset to ingest from the parent", async () => {
-    await run("label", "--dataset", "my-dataset", "ingest", "./gold", "--source", "s");
-    expect(recorded.ingest[0]).toMatchObject({ dataset: "my-dataset" });
-  });
-
-  it("leaves store undefined when the flag is absent, so config still decides", async () => {
+  it("leaves dataset undefined when the flag is absent, so config still decides", async () => {
     await run("label", "ingest", "./gold", "--source", "s");
-    expect(recorded.ingest[0]).toMatchObject({ store: undefined });
+    expect(recorded.ingest[0]).toMatchObject({ dataset: undefined });
   });
 });
 

@@ -123,15 +123,12 @@ export class TreeView implements View {
   }
 
   helpLines(): string[] {
-    // `l` is contextual: it promotes when a dataset is configured, and still
-    // expands the focused node otherwise (Right/Enter always expand too).
-    const lKey = this.promotionEnabled
-      ? "l — label this trace (promote into the dataset)"
-      : "l — expand the focused node";
+    // `l` labels the focused trace when a dataset is configured; it does nothing
+    // otherwise. It never expands — Right/Enter do that.
     return [
       "t — timeline views (flame → by-name)",
       "d — full details of the focused span",
-      lKey,
+      ...(this.promotionEnabled ? ["l — label this trace"] : []),
       "",
       ...treeHelpLines(),
     ];

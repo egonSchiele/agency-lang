@@ -50,17 +50,17 @@ function dependencies(over: Partial<EvalLabelDependencies> = {}): EvalLabelDepen
 }
 
 describe("config", () => {
-  it("accepts eval.labelStore", () => {
-    expect(AgencyConfigSchema.safeParse({ eval: { labelStore: "labels" } }).success).toBe(true);
+  it("accepts eval.dataset", () => {
+    expect(AgencyConfigSchema.safeParse({ eval: { dataset: "labels" } }).success).toBe(true);
   });
 
-  it("rejects a non-string labelStore", () => {
-    expect(AgencyConfigSchema.safeParse({ eval: { labelStore: 5 } }).success).toBe(false);
+  it("rejects a non-string dataset", () => {
+    expect(AgencyConfigSchema.safeParse({ eval: { dataset: 5 } }).success).toBe(false);
   });
 });
 
 describe("resolveDataset", () => {
-  it("accepts the preferred flag", () => {
+  it("accepts the flag", () => {
     expect(resolveDataset({ dataset: "new" }, {})).toBe(path.resolve("new"));
   });
 
@@ -69,39 +69,13 @@ describe("resolveDataset", () => {
       .toBe(path.resolve("flag"));
   });
 
-  it("accepts the deprecated --store alias", () => {
-    expect(resolveDataset({ store: "old" }, {})).toBe(path.resolve("old"));
-  });
-
-  it("accepts the deprecated eval.labelStore alias", () => {
-    expect(resolveDataset({}, { eval: { labelStore: "configured" } }))
+  it("reads eval.dataset from config", () => {
+    expect(resolveDataset({}, { eval: { dataset: "configured" } }))
       .toBe(path.resolve(process.cwd(), "configured"));
-  });
-
-  it("reads eval.dataset in preference to eval.labelStore", () => {
-    expect(resolveDataset({}, { eval: { dataset: "c", labelStore: "c" } }))
-      .toBe(path.resolve("c"));
-  });
-
-  it("accepts equal old and new values", () => {
-    expect(resolveDataset(
-      { dataset: "labels", store: "labels" },
-      { eval: { dataset: "labels", labelStore: "labels" } },
-    )).toBe(path.resolve("labels"));
   });
 
   it("defaults to labels/ under the invoking directory, matching runsDir", () => {
     expect(resolveDataset({}, {})).toBe(path.resolve(process.cwd(), "labels"));
-  });
-
-  it("rejects conflicting flag aliases", () => {
-    expect(() => resolveDataset({ dataset: "a", store: "b" }, {}))
-      .toThrow(/--dataset.*--store.*disagree/);
-  });
-
-  it("rejects conflicting config aliases", () => {
-    expect(() => resolveDataset({}, { eval: { dataset: "a", labelStore: "b" } }))
-      .toThrow(/eval\.dataset.*eval\.labelStore.*disagree/);
   });
 });
 
@@ -165,11 +139,11 @@ describe("evalLabel", () => {
   it("runs the host with the resolved dataset, checklist and annotator", async () => {
     const { host, calls } = fakeHost();
     await evalLabel(
-      { checklist: checklistFile, store: path.join(root, "store") },
+      { checklist: checklistFile, dataset: path.join(root, "dataset") },
       dependencies({ makeHost: () => host as never }),
     );
     expect(calls[0]).toEqual({
-      datasetDir: path.resolve(root, "store"),
+      datasetDir: path.resolve(root, "dataset"),
       checklistFile: path.resolve(checklistFile),
       annotator: { kind: "human", id: "adit" },
     });

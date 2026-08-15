@@ -106,6 +106,11 @@ describe("option shadowing between a parent and its subcommand", () => {
     expect(recorded.ingest[0]).toMatchObject({ store: "custom-labels" });
   });
 
+  it("delivers --dataset to ingest from the parent", async () => {
+    await run("label", "--dataset", "my-dataset", "ingest", "./gold", "--source", "s");
+    expect(recorded.ingest[0]).toMatchObject({ dataset: "my-dataset" });
+  });
+
   it("leaves store undefined when the flag is absent, so config still decides", async () => {
     await run("label", "ingest", "./gold", "--source", "s");
     expect(recorded.ingest[0]).toMatchObject({ store: undefined });

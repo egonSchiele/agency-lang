@@ -15,7 +15,7 @@ import { openDataset, type IngestResult, type LabelDataset } from "@/eval/label/
 import { FieldNameSchema, type Fields } from "@/eval/label/types.js";
 import { color } from "@/utils/termcolors.js";
 
-import { resolveLabelStore } from "./label.js";
+import { resolveDataset } from "./label.js";
 
 export type EvalIngestOptions = {
   path: string;
@@ -26,6 +26,7 @@ export type EvalIngestOptions = {
   taskField?: boolean;
   recursive?: boolean;
   maxBytes?: number;
+  dataset?: string;
   store?: string;
   config?: AgencyConfig;
   /** Extra positional arguments. Non-empty when a shell pattern expanded into
@@ -164,7 +165,7 @@ export async function evalIngest(
     throw new EmptyIngestError(`No records to ingest from ${options.path}. ${detail}`);
   }
 
-  const storeDir = resolveLabelStore(options, options.config ?? {});
+  const storeDir = resolveDataset(options, options.config ?? {});
   const lock = acquireStoreLock({
     storeDir,
     reportWarning: (message) => console.warn(message),

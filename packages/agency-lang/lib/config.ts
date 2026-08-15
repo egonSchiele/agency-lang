@@ -113,7 +113,12 @@ export interface AgencyConfig {
 
     /** Where the human-label dataset lives. Outside runsDir on purpose: runs
      *  are disposable and the labels must outlive them. A relative path
-     *  resolves from the invoking working directory, like runsDir. */
+     *  resolves from the invoking working directory, like runsDir. Preferred
+     *  name; `labelStore` is the deprecated alias kept for compatibility. */
+    dataset?: string;
+
+    /** Deprecated alias for `dataset`. Kept because renaming a shipped config
+     *  key is otherwise a breaking change. */
     labelStore?: string;
 
     /** Per-run resource limits for the agent subprocess. Unset fields keep the
@@ -480,6 +485,7 @@ export const AgencyConfigSchema = z
         optimizeRunsDir: z.string(),
         graders: z.string().optional(),
         sourceCacheRoot: z.string().optional(),
+        dataset: z.string().optional(),
         labelStore: z.string().optional(),
         // Positive int only: the value feeds setTimeout (×1000), where 0 and
         // negatives don't mean "no limit" — they fire immediately and fail

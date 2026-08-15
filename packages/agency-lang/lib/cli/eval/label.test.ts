@@ -10,7 +10,7 @@ import type { LabelingSessionController } from "@/eval/label/controller.js";
 import {
   evalLabel,
   resolveAnnotator,
-  resolveLabelStore,
+  resolveDataset,
   terminalDimension,
   type EvalLabelDependencies,
 } from "./label.js";
@@ -63,23 +63,49 @@ describe("config", () => {
   });
 });
 
-describe("resolveLabelStore", () => {
-  it("prefers the explicit flag", () => {
-    expect(resolveLabelStore({ store: "/tmp/explicit" }, {})).toBe(path.resolve("/tmp/explicit"));
+describe("resolveDataset", () => {
+  it("accepts the preferred flag", () => {
+    expect(resolveDataset({ dataset: "new" }, {})).toBe(path.resolve("new"));
   });
 
-  it("falls back to eval.labelStore", () => {
-    expect(resolveLabelStore({}, { eval: { labelStore: "my-labels" } }))
-      .toBe(path.resolve(process.cwd(), "my-labels"));
+  it("prefers a flag over config", () => {
+    expect(resolveDataset({ dataset: "flag" }, { eval: { dataset: "cfg" } }))
+      .toBe(path.resolve("flag"));
+  });
+
+  it("accepts the deprecated --store alias", () => {
+    expect(resolveDataset({ store: "old" }, {})).toBe(path.resolve("old"));
+  });
+
+  it("accepts the deprecated eval.labelStore alias", () => {
+    expect(resolveDataset({}, { eval: { labelStore: "configured" } }))
+      .toBe(path.resolve(process.cwd(), "configured"));
+  });
+
+  it("reads eval.dataset in preference to eval.labelStore", () => {
+    expect(resolveDataset({}, { eval: { dataset: "c", labelStore: "c" } }))
+      .toBe(path.resolve("c"));
+  });
+
+  it("accepts equal old and new values", () => {
+    expect(resolveDataset(
+      { dataset: "labels", store: "labels" },
+      { eval: { dataset: "labels", labelStore: "labels" } },
+    )).toBe(path.resolve("labels"));
   });
 
   it("defaults to labels/ under the invoking directory, matching runsDir", () => {
-    expect(resolveLabelStore({}, {})).toBe(path.resolve(process.cwd(), "labels"));
+    expect(resolveDataset({}, {})).toBe(path.resolve(process.cwd(), "labels"));
   });
 
-  it("resolves a relative configured path from the invoking directory", () => {
-    expect(resolveLabelStore({}, { eval: { labelStore: "./nested/labels" } }))
-      .toBe(path.resolve(process.cwd(), "nested/labels"));
+  it("rejects conflicting flag aliases", () => {
+    expect(() => resolveDataset({ dataset: "a", store: "b" }, {}))
+      .toThrow(/--dataset.*--store.*disagree/);
+  });
+
+  it("rejects conflicting config aliases", () => {
+    expect(() => resolveDataset({}, { eval: { dataset: "a", labelStore: "b" } }))
+      .toThrow(/eval\.dataset.*eval\.labelStore.*disagree/);
   });
 });
 

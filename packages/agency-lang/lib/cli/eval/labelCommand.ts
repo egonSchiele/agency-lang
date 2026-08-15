@@ -58,11 +58,12 @@ export function addLabelCommand(
 ): Command {
   const label = parent
     .command("label")
-    .description("Label the records in a label store. Add records with `label ingest` first")
-    .option("--store <dir>", "Label store directory (default: eval.labelStore, else labels/)")
+    .description("Label the examples in a dataset. Add examples with `label ingest` first")
+    .option("--dataset <dir>", "Label dataset directory (default: eval.dataset, else labels/)")
+    .option("--store <dir>", "Deprecated alias for --dataset")
     .option("--checklist <file>", "Checklist JSON: an existing one, or { name, questions }")
     .option("--annotator <id>", "Who is labelling (default: $USER)")
-    .action(async (opts: { checklist?: string; store?: string; annotator?: string }) => {
+    .action(async (opts: { checklist?: string; dataset?: string; store?: string; annotator?: string }) => {
       try {
         await dependencies.evalLabel({ ...opts, config: dependencies.getConfig() });
       } catch (error) {
@@ -94,7 +95,7 @@ export function addLabelCommand(
       try {
         await dependencies.evalIngest({
           ...opts,
-          store: storeOptionOf(command),
+          ...datasetOptionsOf(command),
           path: source,
           extraArgs: extra,
           config: dependencies.getConfig(),
@@ -107,9 +108,11 @@ export function addLabelCommand(
   return label;
 }
 
-/** `--store` lives on `label`, so a subcommand asks its parent for it. */
-function storeOptionOf(command: Command): string | undefined {
-  return (command.parent?.opts() as { store?: string } | undefined)?.store;
+/** `--dataset`/`--store` live on `label`, so a subcommand asks its parent for
+ *  them. Both are forwarded; `resolveDataset` reconciles the alias. */
+function datasetOptionsOf(command: Command): { dataset?: string; store?: string } {
+  const parentOpts = command.parent?.opts() as { dataset?: string; store?: string } | undefined;
+  return { dataset: parentOpts?.dataset, store: parentOpts?.store };
 }
 
 /** commander calls this once per repeat of a flag, accumulating the values. */

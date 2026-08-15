@@ -323,14 +323,14 @@ node main() {
     throw new Error("--trace-file wrote no trace file");
   }
 
-  // `--store` is declared on `label`, not on `ingest`. The source does not
+  // `--dataset` is declared on `label`, not on `ingest`. The source does not
   // exist, so this fails either way; what matters is which error comes back.
   const parentOption = run(
     dir,
-    "./node_modules/.bin/agency eval label ingest no-such-dir --store label-store 2>&1",
+    "./node_modules/.bin/agency eval label ingest no-such-dir --dataset label-dataset 2>&1",
     { expectFail: true },
   );
-  if (parentOption.includes("unknown option '--store'")) {
+  if (parentOption.includes("unknown option '--dataset'")) {
     throw new Error("parent-command options stopped reaching subcommands");
   }
 

@@ -21,7 +21,7 @@ agency label --checklist <file>                # judge what the store holds
 
 **No option name may appear on both `label` and a subcommand.** Commander gives
 the parent priority wherever the flag sits, so a duplicate is not a conflict
-error — the subcommand silently receives `undefined`. That is why `--store` is
+error — the subcommand silently receives `undefined`. That is why `--dataset` is
 declared once, on `label`, and read back from the parent by the subcommands.
 This page is about the parts that are easy to get wrong: what identifies what,
 which order writes happen in, and why validation here is stricter than anywhere

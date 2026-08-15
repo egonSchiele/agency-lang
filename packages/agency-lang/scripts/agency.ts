@@ -797,7 +797,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("-f, --follow", "Tail the file — re-read and re-render as new events are appended")
     .option("--csv", "Print the runs table as CSV to stdout instead of opening the explorer")
     .option("--dataset <dir>", "Local viewing: label dataset the tree 'l' key labels into (default: eval.dataset, else labels/)")
-    .option("--checklist <file>", "Local viewing: checklist to label a promoted trace against")
+    .option("--checklist <file>", "Local viewing: checklist to label a trace against")
     .action(async (files: string[], options: LogsCliOptions) => {
       if (files.length === 0) {
         logsCmd.help();

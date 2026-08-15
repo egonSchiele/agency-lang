@@ -26,7 +26,7 @@ import { projectArtifactField } from "../eval/label/project.js";
 import type { TaskChoice } from "../eval/label/load/statelog.js";
 import type { Annotator } from "../eval/label/types.js";
 import type { EventEnvelope } from "../statelog/wireTypes.js";
-import { promoteFocusedTrace, promotionServices, type PromotionOutcome, type PromotionUI } from "./promoteTrace.js";
+import { labelTrace, labelTraceServices, type LabelTraceOutcome, type LabelTraceUI } from "./labelTrace.js";
 
 export type RunViewerOpts = {
   // The statelog text. Optional when `followPath` is given — the shell
@@ -52,13 +52,13 @@ export type RunViewerOpts = {
   // resolution tells the host whether the user backed out or quit.
   embedded?: boolean;
   thresholds?: ViewerThresholds;
-  // Enables the tree `l` action: promote the focused trace into this dataset
+  // Enables the tree `l` action: label the focused trace into this dataset
   // and label it. Undefined for remote or stdin sources (no local file).
-  promotion?: PromotionLaunch;
+  labeling?: LabelTraceLaunch;
 };
 
-/** What the shell needs to promote a focused trace into a dataset. */
-export type PromotionLaunch = {
+/** What the shell needs to label a focused trace into a dataset. */
+export type LabelTraceLaunch = {
   datasetDir: string;
   checklistFile?: string;
   sourcePath: string;
@@ -69,10 +69,10 @@ export type ViewerResolution = "quit" | "back";
 
 const SOURCE_NAME_PREVIEW_CHARS = 60;
 
-/** The batch name a promoted occurrence records: the trace's agent name if it
+/** The batch name a labeled occurrence records: the trace's agent name if it
  *  set one, else the statelog file's basename. Keeps "did v2 beat v1"
  *  answerable without asking. */
-function promotionSourceName(events: readonly EventEnvelope[], sourcePath: string): string {
+function traceSourceName(events: readonly EventEnvelope[], sourcePath: string): string {
   // The LAST agentName wins, matching scanStatelog and the extractor: an agent
   // may rename itself during a run, and headless ingestion records the last name.
   let agentName: string | undefined;
@@ -93,19 +93,19 @@ function previewOf(text: string): string {
   return oneLine.length > SOURCE_NAME_PREVIEW_CHARS ? `${oneLine.slice(0, SOURCE_NAME_PREVIEW_CHARS)}…` : oneLine;
 }
 
-/** The promotion flow, factored out of `runViewer` so the shell stays small. It
+/** The labeling flow, factored out of `runViewer` so the shell stays small. It
  *  runs the labeling TUI on the viewer's own `screen`; the caller repaints
  *  afterwards. */
-async function runViewerPromotion(params: {
+async function runTraceLabeling(params: {
   screen: Screen;
-  launch: PromotionLaunch;
+  launch: LabelTraceLaunch;
   traceId: string;
   traceEvents: readonly EventEnvelope[];
   notify: (message: string) => void;
-}): Promise<PromotionOutcome> {
+}): Promise<LabelTraceOutcome> {
   const { screen, launch, traceId, traceEvents, notify } = params;
   const host = createLabelingHost(screen, () => screen.size());
-  const ui: PromotionUI = {
+  const ui: LabelTraceUI = {
     async editTask(defaultTask): Promise<TaskChoice | null> {
       const preview = defaultTask === null ? "(none)" : previewOf(projectArtifactField(defaultTask));
       const answer = await screen.nextLine(`Task [${preview}] — Enter keeps, text replaces, "-" clears: `);
@@ -116,33 +116,33 @@ async function runViewerPromotion(params: {
     },
     notify,
   };
-  return promoteFocusedTrace(
+  return labelTrace(
     {
       traceId,
       events: traceEvents,
-      sourceName: promotionSourceName(traceEvents, launch.sourcePath),
+      sourceName: traceSourceName(traceEvents, launch.sourcePath),
       sourcePath: launch.sourcePath,
       datasetDir: launch.datasetDir,
       annotator: launch.annotator,
       checklistFile: launch.checklistFile,
     },
     ui,
-    promotionServices(host),
+    labelTraceServices(host),
   );
 }
 
-/** Follow watcher handle, named so the promotion handler can pause/resume it. */
+/** Follow watcher handle, named so the labeling handler can pause and resume it. */
 type FollowWatcher = ReturnType<typeof makeFollowWatcher>;
 
 /**
- * The viewer's full promote-a-trace flow, kept at module scope so `runViewer`
+ * The viewer's full label-a-trace flow, kept at module scope so `runViewer`
  * stays small: guard against a partially parsed statelog, pause follow so an
- * append cannot repaint over the labeling UI, run the promotion on the shared
+ * append cannot repaint over the labeling UI, run the labeling on the shared
  * screen, resume follow, repaint, and report.
  */
-async function handleViewerPromotion(args: {
+async function handleTraceLabeling(args: {
   screen: Screen;
-  launch: PromotionLaunch;
+  launch: LabelTraceLaunch;
   traceId: string;
   traceEvents: readonly EventEnvelope[];
   parseErrorCount: number;
@@ -155,15 +155,15 @@ async function handleViewerPromotion(args: {
   if (args.parseErrorCount > 0) {
     // Dataset ingestion must not be built from a partially parsed trace, even
     // though the viewer tolerates malformed lines for display.
-    args.notify(`Cannot promote: the statelog has ${args.parseErrorCount} unparseable line(s); fix or regenerate it.`);
+    args.notify(`Cannot label: the statelog has ${args.parseErrorCount} unparseable line(s); fix or regenerate it.`);
     return;
   }
   if (args.following) {
     args.watcher.stop();
   }
-  let outcome: PromotionOutcome;
+  let outcome: LabelTraceOutcome;
   try {
-    outcome = await runViewerPromotion({
+    outcome = await runTraceLabeling({
       screen: args.screen,
       launch: args.launch,
       traceId: args.traceId,
@@ -205,9 +205,9 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
 
   const thresholds = opts.thresholds ?? DEFAULT_THRESHOLDS;
   const viewport: Viewport = opts.viewport;
-  const treeView = new TreeView(roots, thresholds, viewport, opts.promotion !== undefined);
+  const treeView = new TreeView(roots, thresholds, viewport, opts.labeling !== undefined);
   const stack = makeViewStack(treeView);
-  // Kept alongside `roots` so a promotion can hand the trace's raw events to the
+  // Kept alongside `roots` so a labeling can hand the trace's raw events to the
   // resolver without re-reading the file.
   let allEvents: readonly EventEnvelope[] = parsed.events;
   // The trace timeline views open on: fixed when flame opens from the tree.
@@ -294,10 +294,10 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
       action.onResult(text);
     } else if (action.kind === "copy") {
       copyToClipboard(action.text, (message) => stack.active().notify(message));
-    } else if (action.kind === "promoteTrace" && opts.promotion !== undefined) {
-      await handleViewerPromotion({
+    } else if (action.kind === "labelTrace" && opts.labeling !== undefined) {
+      await handleTraceLabeling({
         screen,
-        launch: opts.promotion,
+        launch: opts.labeling,
         traceId: action.traceId,
         traceEvents: allEvents.filter((event) => event.trace_id === action.traceId),
         parseErrorCount: parseErrors.length,

@@ -28,10 +28,9 @@ export class TreeView implements View {
     roots: TreeNode[],
     private readonly thresholds: ViewerThresholds,
     private readonly viewport: Viewport,
-    /** When true, `l` promotes the focused trace into a dataset instead of
-     *  expanding the focused node (Right/Enter still expand). Off for remote or
-     *  stdin sources where there is no local file to promote. */
-    private readonly promotionEnabled: boolean = false,
+    /** When true, `l` labels the focused trace instead of     *  expanding the focused node (Right/Enter still expand). Off for remote or
+     *  stdin sources where there is no local file to label. */
+    private readonly labelingEnabled: boolean = false,
   ) {
     this.state = {
       roots,
@@ -55,13 +54,13 @@ export class TreeView implements View {
       const id = this.cursorRealId();
       if (id !== undefined) return { kind: "openDetail", spanId: id };
     }
-    // `l` promotes the focused trace when a dataset is configured. Right/Enter
+    // `l` labels the focused trace when a dataset is configured. Right/Enter
     // still expand, so no expand key is lost. Only fire with a real trace id —
     // an empty forest (e.g. an empty file under --follow) has none.
-    if (fmt === "l" && this.promotionEnabled) {
+    if (fmt === "l" && this.labelingEnabled) {
       const traceId = this.cursorTraceId();
       if (traceId !== "") {
-        return { kind: "promoteTrace", traceId };
+        return { kind: "labelTrace", traceId };
       }
     }
     const paged = this.paginate(ev, viewport);
@@ -128,7 +127,7 @@ export class TreeView implements View {
     return [
       "t — timeline views (flame → by-name)",
       "d — full details of the focused span",
-      ...(this.promotionEnabled ? ["l — label this trace"] : []),
+      ...(this.labelingEnabled ? ["l — label this trace"] : []),
       "",
       ...treeHelpLines(),
     ];

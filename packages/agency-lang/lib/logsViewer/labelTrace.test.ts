@@ -4,10 +4,10 @@ import { makeOutputId } from "@/eval/label/ids.js";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
 import {
-  promoteFocusedTrace,
-  type PromotionServices,
-  type PromotionUI,
-} from "./promoteTrace.js";
+  labelTrace,
+  type LabelTraceServices,
+  type LabelTraceUI,
+} from "./labelTrace.js";
 
 let ts = 0;
 function ev(type: string, data: Record<string, unknown> = {}): EventEnvelope {
@@ -22,7 +22,7 @@ function ev(type: string, data: Record<string, unknown> = {}): EventEnvelope {
   };
 }
 
-function ui(over: Partial<PromotionUI> = {}): PromotionUI & { notes: string[] } {
+function ui(over: Partial<LabelTraceUI> = {}): LabelTraceUI & { notes: string[] } {
   const notes: string[] = [];
   return {
     editTask: vi.fn(async () => ({ kind: "keep-default" as const })),
@@ -32,7 +32,7 @@ function ui(over: Partial<PromotionUI> = {}): PromotionUI & { notes: string[] } 
   };
 }
 
-function services(): PromotionServices & { ingested: unknown[]; labeled: unknown[] } {
+function services(): LabelTraceServices & { ingested: unknown[]; labeled: unknown[] } {
   const ingested: unknown[] = [];
   const labeled: unknown[] = [];
   return {
@@ -52,10 +52,10 @@ const baseRequest = {
   checklistFile: "cl.json",
 };
 
-describe("promoteFocusedTrace", () => {
+describe("labelTrace", () => {
   it("ingests then labels a resolved trace, focused on the computed output id", async () => {
     const svc = services();
-    const outcome = await promoteFocusedTrace(
+    const outcome = await labelTrace(
       { ...baseRequest, events: [ev("evalOutputRecorded", { value: "answer" })] },
       ui(),
       svc,
@@ -68,7 +68,7 @@ describe("promoteFocusedTrace", () => {
 
   it("does not ingest and reports when there is nothing to judge", async () => {
     const svc = services();
-    const outcome = await promoteFocusedTrace({ ...baseRequest, events: [ev("agentStart")] }, ui(), svc);
+    const outcome = await labelTrace({ ...baseRequest, events: [ev("agentStart")] }, ui(), svc);
     expect(outcome).toEqual({ kind: "rejected", reason: "no-output" });
     expect(svc.ingested).toHaveLength(0);
     expect(svc.labeled).toHaveLength(0);
@@ -77,7 +77,7 @@ describe("promoteFocusedTrace", () => {
   it("rejects with missing-checklist and does not ingest", async () => {
     const svc = services();
     const theUi = ui();
-    const outcome = await promoteFocusedTrace(
+    const outcome = await labelTrace(
       { ...baseRequest, checklistFile: undefined, events: [ev("evalOutputRecorded", { value: "answer" })] },
       theUi,
       svc,
@@ -89,7 +89,7 @@ describe("promoteFocusedTrace", () => {
 
   it("cancels when the task editor is dismissed", async () => {
     const svc = services();
-    const outcome = await promoteFocusedTrace(
+    const outcome = await labelTrace(
       { ...baseRequest, events: [ev("evalOutputRecorded", { value: "answer" })] },
       ui({ editTask: vi.fn(async () => null) }),
       svc,
@@ -101,7 +101,7 @@ describe("promoteFocusedTrace", () => {
   it("propagates a labeling-host failure after ingesting", async () => {
     const svc = services();
     svc.labelingHost.run = async () => { throw new Error("host boom"); };
-    await expect(promoteFocusedTrace(
+    await expect(labelTrace(
       { ...baseRequest, events: [ev("evalOutputRecorded", { value: "answer" })] },
       ui(),
       svc,

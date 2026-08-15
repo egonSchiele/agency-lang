@@ -10,7 +10,7 @@ import * as path from "path";
 import * as tty from "tty";
 import type { AgencyConfig } from "@/config.js";
 import { resolveAnnotator, resolveDataset } from "@/cli/eval/label.js";
-import { runViewer, type PromotionLaunch } from "@/logsViewer/run.js";
+import { runViewer, type LabelTraceLaunch } from "@/logsViewer/run.js";
 import { csvRowsFromRuns, exportCsv } from "@/runsExplorer/csv.js";
 import { loadAllRuns } from "@/runsExplorer/loader.js";
 import { runExplorer } from "@/runsExplorer/run.js";
@@ -25,7 +25,7 @@ import type { Annotator } from "@/eval/label/types.js";
 export type LogsViewOpts = {
   follow?: boolean;
   csv?: boolean;
-  /** Local statelog viewing only: enables the tree `l` promote-to-dataset
+  /** Local statelog viewing only: enables the tree `l` label-a-trace
    *  action. Ignored for stdin and remote logs. */
   dataset?: string;
   checklist?: string;
@@ -33,14 +33,14 @@ export type LogsViewOpts = {
 };
 
 /** Injectable route targets, so routing is testable without a TTY. */
-export type PromotionBase = { datasetDir: string; checklistFile?: string; annotator: Annotator };
+export type LabelTraceBase = { datasetDir: string; checklistFile?: string; annotator: Annotator };
 
 export type LogsViewDeps = {
   viewFile?: (file: string, opts: LogsViewOpts) => Promise<void>;
   explorer?: (options: {
     sources: Source[];
     route: "runTable" | "explorer";
-    promotion?: PromotionBase;
+    labeling?: LabelTraceBase;
   }) => Promise<void>;
   loadAll?: (sources: Source[]) => RunRow[];
   stdout?: (text: string) => void;
@@ -95,13 +95,13 @@ export async function logsView(
   await explorer({
     sources: discovery.sources,
     route: discovery.route === "runTable" ? "runTable" : "explorer",
-    promotion: promotionBaseFrom(cliOpts),
+    labeling: labelTraceBaseFrom(cliOpts),
   });
 }
 
-/** The dataset/checklist/annotator a promotion targets, shared by the single-
+/** The dataset/checklist/annotator a labeling targets, shared by the single-
  *  file viewer and the explorer's drill-in. */
-function promotionBaseFrom(cliOpts: LogsViewOpts): PromotionBase {
+function labelTraceBaseFrom(cliOpts: LogsViewOpts): LabelTraceBase {
   return {
     datasetDir: resolveDataset({ dataset: cliOpts.dataset }, cliOpts.config ?? {}),
     checklistFile: cliOpts.checklist === undefined ? undefined : path.resolve(cliOpts.checklist),
@@ -128,7 +128,7 @@ function exitWithError(message: string): void {
 }
 
 async function runExplorerOnTerminal(
-  options: { sources: Source[]; route: "runTable" | "explorer"; promotion?: PromotionBase },
+  options: { sources: Source[]; route: "runTable" | "explorer"; labeling?: LabelTraceBase },
 ): Promise<void> {
   const input = new TerminalInput();
   const output = new TerminalOutput();
@@ -136,7 +136,7 @@ async function runExplorerOnTerminal(
     await runExplorer({
       sources: options.sources,
       route: options.route,
-      promotion: options.promotion,
+      labeling: options.labeling,
       input,
       output,
       viewport: {
@@ -156,7 +156,7 @@ export type ViewerTerminalInput = "current-stdin" | "controlling-tty";
  *  or a local file with follow. */
 type ViewerSource =
   | { kind: "text"; jsonl: string; terminalInput: ViewerTerminalInput }
-  | { kind: "file"; followPath: string; initialFollow: boolean; promotion?: PromotionLaunch };
+  | { kind: "file"; followPath: string; initialFollow: boolean; labeling?: LabelTraceLaunch };
 
 type ViewerTerminalDependencies = {
   createInput(): InputSource;
@@ -237,7 +237,7 @@ function viewerOptions(
     viewport,
     followPath: source.followPath,
     initialFollow: source.initialFollow,
-    promotion: source.promotion,
+    labeling: source.labeling,
   };
 }
 
@@ -298,7 +298,7 @@ export function openViewer(opts: {
 }
 
 /** The original single-file viewer path. A LOCAL file additionally enables the
- *  tree `l` promote-to-dataset action; stdin does not (no local file to name). */
+ *  tree `l` label-a-trace action; stdin does not (no local file to name). */
 async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<void> {
   if (file === "-") {
     const chunks: Buffer[] = [];
@@ -308,7 +308,7 @@ async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<vo
       console.error("--follow ignored when reading from stdin");
     }
     // Piped stdin was drained for the data, so keys come from the controlling TTY.
-    // No promotion: stdin has no local path to record as the source.
+    // No labeling: stdin has no local path to record as the source.
     await defaultViewerHost({ kind: "text", jsonl, terminalInput: "controlling-tty" });
     return;
   }
@@ -320,15 +320,15 @@ async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<vo
     kind: "file",
     followPath: file,
     initialFollow: cliOpts.follow ?? false,
-    promotion: promotionFor(file, cliOpts),
+    labeling: labelLaunchFor(file, cliOpts),
   });
 }
 
-/** Build the promote-to-dataset config for a local statelog view. The dataset
+/** Build the label-a-trace config for a local statelog view. The dataset
  *  defaults to `labels/`; a missing `--checklist` still enables the `l` action,
  *  which then asks for one rather than doing nothing silently. */
-function promotionFor(file: string, cliOpts: LogsViewOpts): PromotionLaunch {
-  return { ...promotionBaseFrom(cliOpts), sourcePath: file };
+function labelLaunchFor(file: string, cliOpts: LogsViewOpts): LabelTraceLaunch {
+  return { ...labelTraceBaseFrom(cliOpts), sourcePath: file };
 }
 
 // Open the controlling terminal at /dev/tty and graft it onto

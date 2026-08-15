@@ -7,7 +7,7 @@ import type { Annotator } from "@/eval/label/types.js";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 import type { JsonValue } from "@/utils/canonicalize.js";
 
-export type PromotionRequest = {
+export type LabelTraceRequest = {
   traceId: string;
   events: readonly EventEnvelope[];
   sourceName: string;
@@ -19,41 +19,41 @@ export type PromotionRequest = {
 
 /** The one interactive decision the orchestrator delegates to the surface:
  *  editing the task text. Returns `null` when the user backs out. */
-export type PromotionUI = {
+export type LabelTraceUI = {
   editTask(defaultTask: JsonValue | null): Promise<TaskChoice | null>;
   notify(message: string): void;
 };
 
-export type PromotionServices = {
+export type LabelTraceServices = {
   datasetWriter: DatasetWriter;
   labelingHost: LabelingHost;
 };
 
-export type PromotionOutcome =
+export type LabelTraceOutcome =
   | { kind: "labeled"; outputId: string }
   | { kind: "cancelled" }
   | { kind: "rejected"; reason: IngestSkipReason | "missing-checklist" };
 
 /**
- * Promote one already-scanned trace into a dataset and hand off to labeling.
+ * Label one already-scanned trace and hand off to labeling.
  *
  * Pure of effects beyond the injected services: it resolves the trace, asks the
  * UI for the task text, projects, writes through the DatasetWriter, and labels
  * through the LabelingHost. No file reread, no lock, no controller, no terminal
  * code — those belong to the services it is given.
  */
-export async function promoteFocusedTrace(
-  request: PromotionRequest,
-  ui: PromotionUI,
-  services: PromotionServices,
-): Promise<PromotionOutcome> {
+export async function labelTrace(
+  request: LabelTraceRequest,
+  ui: LabelTraceUI,
+  services: LabelTraceServices,
+): Promise<LabelTraceOutcome> {
   const resolution = resolveTrace(request.events, request.sourcePath);
   if (resolution.kind === "rejected") {
     ui.notify(`Nothing to label for this trace: ${resolution.reason}.`);
     return { kind: "rejected", reason: resolution.reason };
   }
   if (request.checklistFile === undefined) {
-    ui.notify("Pass --checklist <file> to label promoted traces.");
+    ui.notify("Pass --checklist <file> to label a trace.");
     return { kind: "rejected", reason: "missing-checklist" };
   }
 
@@ -91,6 +91,6 @@ export async function promoteFocusedTrace(
 
 /** The production services: the shared writer and a host bound to the viewer's
  *  screen (supplied by the caller, since only it owns the terminal). */
-export function promotionServices(labelingHost: LabelingHost): PromotionServices {
+export function labelTraceServices(labelingHost: LabelingHost): LabelTraceServices {
   return { datasetWriter: defaultDatasetWriter, labelingHost };
 }

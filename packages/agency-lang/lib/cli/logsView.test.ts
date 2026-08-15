@@ -78,18 +78,18 @@ describe("logsView routing", () => {
     expect(seenOpts).toEqual({ dataset: "my-ds", checklist: "cl.json" });
   });
 
-  it("passes the promotion base to the explorer for a run directory", async () => {
+  it("passes the labeling base to the explorer for a run directory", async () => {
     const runDir = writeGradedRun(tmpDir);
-    let seenPromotion: { datasetDir: string; checklistFile?: string } | undefined;
+    let seenLabeling: { datasetDir: string; checklistFile?: string } | undefined;
     await logsView([runDir], { dataset: "my-ds", checklist: "cl.json" }, {
       explorer: async (options) => {
-        seenPromotion = options.promotion === undefined
+        seenLabeling = options.labeling === undefined
           ? undefined
-          : { datasetDir: options.promotion.datasetDir, checklistFile: options.promotion.checklistFile };
+          : { datasetDir: options.labeling.datasetDir, checklistFile: options.labeling.checklistFile };
       },
     });
-    expect(seenPromotion?.datasetDir).toBe(path.resolve("my-ds"));
-    expect(seenPromotion?.checklistFile).toBe(path.resolve("cl.json"));
+    expect(seenLabeling?.datasetDir).toBe(path.resolve("my-ds"));
+    expect(seenLabeling?.checklistFile).toBe(path.resolve("cl.json"));
   });
 
   it("a sole regular file with --follow goes straight to the viewer, even when empty", async () => {

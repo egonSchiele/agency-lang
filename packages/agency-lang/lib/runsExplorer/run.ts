@@ -43,9 +43,9 @@ export type ExplorerOptions = {
   viewport: Viewport;
   /** Injectable for tests; production uses the real logs viewer. */
   runViewerFn?: typeof runViewer;
-  /** When set, a drilled-into statelog enables the tree `l` promote action,
+  /** When set, a drilled-into statelog enables the tree `l` label action,
    *  targeting this dataset. The per-run statelog path becomes the source. */
-  promotion?: { datasetDir: string; checklistFile?: string; annotator: Annotator };
+  labeling?: { datasetDir: string; checklistFile?: string; annotator: Annotator };
 };
 
 export async function runExplorer(options: ExplorerOptions): Promise<void> {
@@ -255,9 +255,9 @@ class ExplorerShell {
         viewport: { rows: this.options.viewport.rows, cols: this.options.viewport.cols },
         followPath: statelogPath,
         embedded: true,
-        promotion: this.options.promotion === undefined
+        labeling: this.options.labeling === undefined
           ? undefined
-          : { ...this.options.promotion, sourcePath: statelogPath },
+          : { ...this.options.labeling, sourcePath: statelogPath },
       });
       if (resolution === "quit") {
         return true;

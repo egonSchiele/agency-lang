@@ -12,8 +12,8 @@ import {
   type LoadedBatch,
   type TracePrintSelections,
 } from "@/eval/label/load/types.js";
-import { acquireStoreLock } from "@/eval/label/lock.js";
-import { openDataset, type IngestResult, type LabelDataset } from "@/eval/label/dataset.js";
+import { datasetWriter, type DatasetWriter } from "@/eval/label/datasetWriter.js";
+import { type IngestResult } from "@/eval/label/dataset.js";
 import { FieldNameSchema, type Fields } from "@/eval/label/types.js";
 import { color } from "@/utils/termcolors.js";
 
@@ -38,16 +38,16 @@ export type EvalIngestOptions = {
   extraArgs?: string[];
 };
 
-/** @internal Injected so the command can be tested without a store or a disk. */
+/** @internal Injected so the command can be tested without a dataset or a disk. */
 export type EvalIngestDependencies = {
   loadBatch: typeof loadBatch;
-  openDataset: typeof openDataset;
+  datasetWriter: DatasetWriter;
   report(message: string): void;
 };
 
 const defaultDependencies: EvalIngestDependencies = {
   loadBatch,
-  openDataset,
+  datasetWriter,
   report: (message) => console.log(message),
 };
 
@@ -213,31 +213,20 @@ export async function evalIngest(
     throw new EmptyIngestError(`No records to ingest from ${options.path}. ${detail}`);
   }
 
-  const storeDir = resolveDataset(options, options.config ?? {});
-  const lock = acquireStoreLock({
-    storeDir,
+  const datasetDir = resolveDataset(options, options.config ?? {});
+  const result: IngestResult = dependencies.datasetWriter.ingest({
+    datasetDir,
+    batch,
     reportWarning: (message) => console.warn(message),
   });
-  let store: LabelDataset | undefined;
-  try {
-    store = dependencies.openDataset({
-      storeDir,
-      lock,
-      reportWarning: (message) => console.warn(message),
-    });
-    const result = store.ingest(batch);
-    for (const message of summarize(result, sourceName)) {
-      dependencies.report(message);
-    }
-    if (result.newFieldNames.length > 0) {
-      dependencies.report(color.yellow(
-        `  note: this batch introduced ${result.newFieldNames.join(", ")}, which the store had ` +
-        "not seen. Records with different field names cannot be judged by the same question.",
-      ));
-    }
-  } finally {
-    store?.close();
-    lock.release();
+  for (const message of summarize(result, sourceName)) {
+    dependencies.report(message);
+  }
+  if (result.newFieldNames.length > 0) {
+    dependencies.report(color.yellow(
+      `  note: this batch introduced ${result.newFieldNames.join(", ")}, which the dataset had ` +
+      "not seen. Records with different field names cannot be judged by the same question.",
+    ));
   }
 }
 

@@ -67,6 +67,7 @@ function ingestRun(source = "agent-v1"): void {
     sourceName: source,
     constantFields: {},
     maxBytes: DEFAULT_MAX_INGEST_BYTES,
+    selection: { kind: "none" },
     reportWarning: (message) => warnings.push(message),
   });
   const lock = acquireStoreLock({

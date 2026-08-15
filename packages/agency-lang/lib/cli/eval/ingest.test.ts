@@ -57,20 +57,24 @@ function batchOf(count: number, skips: LoadedBatch["skips"] = []): LoadedBatch {
   };
 }
 
+function fakeWriter(over: Record<string, unknown> = {}) {
+  return {
+    ingest: () => ({
+      recordsAdded: 1,
+      recordsReplayed: 0,
+      occurrencesAdded: 1,
+      occurrencesReplayed: 0,
+      skips: [],
+      newFieldNames: [],
+      ...over,
+    }),
+  };
+}
+
 function dependencies(over: Partial<EvalIngestDependencies> = {}): EvalIngestDependencies {
   return {
     loadBatch: vi.fn(() => batchOf(1)) as never,
-    openDataset: vi.fn(() => ({
-      ingest: () => ({
-        recordsAdded: 1,
-        recordsReplayed: 0,
-        occurrencesAdded: 1,
-        occurrencesReplayed: 0,
-        skips: [],
-        newFieldNames: [],
-      }),
-      close: () => {},
-    })) as never,
+    datasetWriter: fakeWriter() as never,
     report: (message) => reported.push(message),
     ...over,
   };
@@ -212,17 +216,7 @@ describe("evalIngest", () => {
 
   it("prints one line per skip, naming the item", async () => {
     const deps = dependencies({
-      openDataset: vi.fn(() => ({
-        ingest: () => ({
-          recordsAdded: 1,
-          recordsReplayed: 0,
-          occurrencesAdded: 1,
-          occurrencesReplayed: 0,
-          skips: [{ item: "bad.txt", reason: "empty" as const }],
-          newFieldNames: [],
-        }),
-        close: () => {},
-      })) as never,
+      datasetWriter: fakeWriter({ skips: [{ item: "bad.txt", reason: "empty" as const }] }) as never,
     });
     await evalIngest(options(), deps);
     expect(reported.join("\n")).toContain("bad.txt");
@@ -230,32 +224,16 @@ describe("evalIngest", () => {
 
   it("warns about an unseen field name without refusing the ingest", async () => {
     const deps = dependencies({
-      openDataset: vi.fn(() => ({
-        ingest: () => ({
-          recordsAdded: 1,
-          recordsReplayed: 0,
-          occurrencesAdded: 1,
-          occurrencesReplayed: 0,
-          skips: [],
-          newFieldNames: ["response"],
-        }),
-        close: () => {},
-      })) as never,
+      datasetWriter: fakeWriter({ newFieldNames: ["response"] }) as never,
     });
     await expect(evalIngest(options(), deps)).resolves.toBeUndefined();
     expect(reported.join("\n")).toContain("response");
   });
 
-  it("releases the store lock even when ingesting throws", async () => {
+  it("propagates a writer failure (lock lifecycle is the writer's own concern)", async () => {
     const deps = dependencies({
-      openDataset: vi.fn(() => ({
-        ingest: () => {
-          throw new Error("boom");
-        },
-        close: () => {},
-      })) as never,
+      datasetWriter: { ingest: () => { throw new Error("boom"); } } as never,
     });
     await expect(evalIngest(options(), deps)).rejects.toThrow("boom");
-    expect(fs.existsSync(path.join(storeDir, ".lock"))).toBe(false);
   });
 });

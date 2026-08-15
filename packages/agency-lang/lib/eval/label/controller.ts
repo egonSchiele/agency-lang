@@ -43,6 +43,10 @@ export type OpenLabelingSessionArgs = {
   storeDir: string;
   checklistFile: string;
   annotator: Annotator;
+  /** Start the cursor on this example when present. The viewer sets it to the
+   *  example it just promoted; the CLI omits it and keeps resume behavior. An
+   *  id that is not in the dataset is ignored. */
+  focusOutputId?: string;
   reportWarning(message: string): void;
 };
 
@@ -154,7 +158,13 @@ async function openSession(
       corpus,
     });
     session.open();
-    return session.controller();
+    const controller = session.controller();
+    // Focus a specific example after recovery, so the draft cursor is durably
+    // updated before the caller sees the controller.
+    if (args.focusOutputId !== undefined) {
+      await controller.dispatch({ kind: "focusItem", outputId: args.focusOutputId });
+    }
+    return controller;
   } catch (error) {
     // Any opening failure releases the lock: a store that cannot be opened
     // must not stay locked against the next attempt.

@@ -3,9 +3,7 @@ import * as os from "os";
 import * as path from "path";
 
 import type { AgencyConfig } from "@/config.js";
-import { openLabelingSession, type LabelingSessionController } from "@/eval/label/controller.js";
-import { readFieldOrder } from "@/eval/label/dataset.js";
-import { runLabelTui } from "@/eval/label/labelTui.js";
+import { createLabelingHost, type LabelingHost } from "@/eval/label/labelingHost.js";
 import { TerminalInput } from "@/tui/input/terminal.js";
 import { TerminalOutput } from "@/tui/output/terminal.js";
 import { Screen } from "@/tui/screen.js";
@@ -32,11 +30,10 @@ export type DatasetLocationOptions = {
 /** @internal Injected so the fallback order is testable without a real
  *  environment or terminal. */
 export type EvalLabelDependencies = {
-  openSession: typeof openLabelingSession;
-  runTui: typeof runLabelTui;
-  /** Built here rather than inside the TUI so the terminal lifecycle has one
-   *  owner, alongside the session it must be torn down with. */
+  /** Built here rather than inside the host so the terminal lifecycle has one
+   *  owner: the CLI creates and destroys the screen, the host runs on it. */
   makeScreen(): Screen;
+  makeHost(screen: Screen, currentSize: () => { width: number; height: number }): LabelingHost;
   isInteractive(): boolean;
   environment: NodeJS.ProcessEnv;
   osUserName(): string | undefined;
@@ -126,8 +123,7 @@ export function terminalDimension(value: number | undefined, fallback: number): 
 }
 
 const defaultDependencies: EvalLabelDependencies = {
-  openSession: openLabelingSession,
-  runTui: runLabelTui,
+  makeHost: (screen, currentSize) => createLabelingHost(screen, currentSize),
   makeScreen: () => new Screen({
     input: new TerminalInput({ suppressSigint: true }),
     output: new TerminalOutput(),
@@ -168,34 +164,22 @@ export async function evalLabel(
   }
 
   const config = options.config ?? {};
-  const storeDir = resolveDataset(options, config);
-  const controller: LabelingSessionController = await dependencies.openSession({
-    storeDir,
-    checklistFile: path.resolve(options.checklist),
-    annotator: resolveAnnotator(options, dependencies),
-    reportWarning: (message) => console.warn(message),
-  });
+  const datasetDir = resolveDataset(options, config);
 
-  // The session owns a lock and a draft, and the screen owns raw mode; closing
-  // both is not optional, which is why the CLI holds the finallys rather than
-  // the terminal loop.
+  // The CLI owns the terminal (it created the screen); the labeling host owns
+  // the session lifecycle on it. Destroying the screen stays here.
   const screen = dependencies.makeScreen();
+  const host = dependencies.makeHost(screen, () => ({
+    width: terminalDimension(process.stdout.columns, DEFAULT_COLUMNS),
+    height: terminalDimension(process.stdout.rows, DEFAULT_ROWS),
+  }));
   try {
-    await dependencies.runTui({
-      controller,
-      screen,
-      storeLabel: path.basename(storeDir),
-      fieldOrder: readFieldOrder(storeDir),
-      currentSize: () => ({
-        width: terminalDimension(process.stdout.columns, DEFAULT_COLUMNS),
-        height: terminalDimension(process.stdout.rows, DEFAULT_ROWS),
-      }),
+    await host.run({
+      datasetDir,
+      checklistFile: path.resolve(options.checklist),
+      annotator: resolveAnnotator(options, dependencies),
     });
   } finally {
-    try {
-      screen.destroy();
-    } finally {
-      await controller.close();
-    }
+    screen.destroy();
   }
 }

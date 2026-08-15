@@ -1,8 +1,73 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { _write, _read } from "./builtins.js";
+import { format } from "node:util";
+import { _write, _read, _print, _printJSON } from "./builtins.js";
+import { runInTestContext } from "../runtime/asyncContext.js";
+import { RuntimeContext } from "../runtime/state/context.js";
+import { StateStack } from "../runtime/state/stateStack.js";
+import { ThreadStore } from "../runtime/state/threadStore.js";
+
+function frameWithPrintSpy() {
+  const ctx = new RuntimeContext<any>({
+    statelogConfig: { host: "https://example.com", apiKey: "k", projectId: "p", debugMode: false },
+    smoltalkDefaults: {},
+    dirname: "/tmp",
+  });
+  // Build threads from the real client (it needs threadCreated), then patch the
+  // one method under test in place so the rest of the client stays intact.
+  const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+  const printRecorded = vi.fn(async () => undefined);
+  (ctx.statelogClient as any).printRecorded = printRecorded;
+  return { ctx, threads, printRecorded };
+}
+
+describe("_print / _printJSON statelog recording", () => {
+  it("records the same formatted value that print writes", async () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const { ctx, threads, printRecorded } = frameWithPrintSpy();
+    const object = { answer: 42 };
+
+    await runInTestContext(ctx, new StateStack(), threads, async () => {
+      _print("result", object);
+    });
+
+    expect(spy).toHaveBeenCalledWith("result", object);
+    expect(printRecorded).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "print", value: format("result", object), truncated: false }),
+    );
+    spy.mockRestore();
+  });
+
+  it("preserves printJSON serialization failures: no console write, no event", async () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const { ctx, threads, printRecorded } = frameWithPrintSpy();
+
+    await runInTestContext(ctx, new StateStack(), threads, async () => {
+      expect(() => _printJSON(10n as unknown)).toThrow(TypeError);
+    });
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(printRecorded).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("records top-level undefined the way the console renders it", async () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const { ctx, threads, printRecorded } = frameWithPrintSpy();
+
+    await runInTestContext(ctx, new StateStack(), threads, async () => {
+      _printJSON(undefined);
+    });
+
+    expect(spy).toHaveBeenCalledWith(undefined);
+    expect(printRecorded).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "printJSON", value: "undefined" }),
+    );
+    spy.mockRestore();
+  });
+});
 
 describe("_write mode parameter", () => {
   let dir: string;

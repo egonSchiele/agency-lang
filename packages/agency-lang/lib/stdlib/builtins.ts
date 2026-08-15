@@ -1,5 +1,6 @@
 import * as readline from "readline";
 import process from "process";
+import { format } from "node:util";
 import { readFile, writeFile, appendFile } from "fs/promises";
 import { classifyIterable } from "../utils/iteration.js";
 import { decodeBase64Strict } from "./base64.js";
@@ -15,16 +16,22 @@ import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
 import { abortableSleep } from "./abortable.js";
+import { recordPrint } from "./statelog.js";
 import { acceptsFailures } from "../runtime/failurePropagation.js";
 
 const execFileAsync = promisify(execFile);
 
 export function _print(...messages: any[]): void {
   console.log(...messages);
+  recordPrint("print", format(...messages));
 }
 
 export function _printJSON(obj: any): void {
-  console.log(JSON.stringify(obj, null, 2));
+  // JSON.stringify throws on BigInt/circular data; that throw predates this
+  // recording and must be preserved, so it happens before the console write.
+  const json = JSON.stringify(obj, null, 2);
+  console.log(json);
+  recordPrint("printJSON", format(json));
 }
 
 /**

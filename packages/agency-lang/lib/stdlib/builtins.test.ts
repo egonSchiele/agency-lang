@@ -33,10 +33,26 @@ describe("_print / _printJSON statelog recording", () => {
       _print("result", object);
     });
 
-    expect(spy).toHaveBeenCalledWith("result", object);
+    // Rendered once, and the console gets the same string that is recorded.
+    const rendered = format("result", object);
+    expect(spy).toHaveBeenCalledWith(rendered);
     expect(printRecorded).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: "print", value: format("result", object), truncated: false }),
+      expect.objectContaining({ kind: "print", value: rendered, truncated: false }),
     );
+    spy.mockRestore();
+  });
+
+  it("inspects each argument only once (a stateful inspect hook runs a single time)", async () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const { ctx, threads } = frameWithPrintSpy();
+    let inspectCount = 0;
+    const withHook = { [Symbol.for("nodejs.util.inspect.custom")]: () => { inspectCount += 1; return "<obj>"; } };
+
+    await runInTestContext(ctx, new StateStack(), threads, async () => {
+      _print("v =", withHook);
+    });
+
+    expect(inspectCount).toBe(1);
     spy.mockRestore();
   });
 

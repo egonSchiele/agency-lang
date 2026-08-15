@@ -73,10 +73,16 @@ const SOURCE_NAME_PREVIEW_CHARS = 60;
  *  set one, else the statelog file's basename. Keeps "did v2 beat v1"
  *  answerable without asking. */
 function promotionSourceName(events: readonly EventEnvelope[], sourcePath: string): string {
+  // The LAST agentName wins, matching scanStatelog and the extractor: an agent
+  // may rename itself during a run, and headless ingestion records the last name.
+  let agentName: string | undefined;
   for (const event of events) {
     if (event.data.type === "agentName" && typeof event.data.name === "string") {
-      return event.data.name;
+      agentName = event.data.name;
     }
+  }
+  if (agentName !== undefined) {
+    return agentName;
   }
   const base = sourcePath.split(/[\\/]/).pop();
   return base !== undefined && base.length > 0 ? base : "statelog";
@@ -130,6 +136,56 @@ async function runViewerPromotion(params: {
     ui,
     promotionServices(host),
   );
+}
+
+/** Follow watcher handle, named so the promotion handler can pause/resume it. */
+type FollowWatcher = ReturnType<typeof makeFollowWatcher>;
+
+/**
+ * The viewer's full promote-a-trace flow, kept at module scope so `runViewer`
+ * stays small: guard against a partially parsed statelog, pause follow so an
+ * append cannot repaint over the labeling UI, run the promotion on the shared
+ * screen, resume follow, repaint, and report.
+ */
+async function handleViewerPromotion(args: {
+  screen: Screen;
+  launch: PromotionLaunch;
+  traceId: string;
+  traceEvents: readonly EventEnvelope[];
+  parseErrorCount: number;
+  following: boolean;
+  watcher: FollowWatcher;
+  onNewText: (text: string) => void;
+  render: () => void;
+  notify: (message: string) => void;
+}): Promise<void> {
+  if (args.parseErrorCount > 0) {
+    // Dataset ingestion must not be built from a partially parsed trace, even
+    // though the viewer tolerates malformed lines for display.
+    args.notify(`Cannot promote: the statelog has ${args.parseErrorCount} unparseable line(s); fix or regenerate it.`);
+    return;
+  }
+  if (args.following) {
+    args.watcher.stop();
+  }
+  let outcome: PromotionOutcome;
+  try {
+    outcome = await runViewerPromotion({
+      screen: args.screen,
+      launch: args.launch,
+      traceId: args.traceId,
+      traceEvents: args.traceEvents,
+      notify: args.notify,
+    });
+  } finally {
+    if (args.following) {
+      args.watcher.start(args.onNewText);
+    }
+  }
+  args.render(); // the labeling TUI took over the screen; repaint on return
+  if (outcome.kind === "labeled") {
+    args.notify(`Labeled and stored (${outcome.outputId.slice(0, 12)}…).`);
+  }
 }
 
 export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> {
@@ -246,17 +302,17 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
     } else if (action.kind === "copy") {
       copyToClipboard(action.text, (message) => stack.active().notify(message));
     } else if (action.kind === "promoteTrace" && opts.promotion !== undefined) {
-      const outcome = await runViewerPromotion({
+      await handleViewerPromotion({
         screen,
         launch: opts.promotion,
         traceId: action.traceId,
         traceEvents: allEvents.filter((event) => event.trace_id === action.traceId),
-        notify: (message) => stack.active().notify(message),
-      });
-      render(); // the labeling TUI took over the screen; repaint on return
-      if (outcome.kind === "labeled") {
-        stack.active().notify(`Labeled and stored (${outcome.outputId.slice(0, 12)}…).`);
-      }
+        parseErrorCount: parseErrors.length,
+        following: followOn,
+        watcher,
+        onNewText,
+        render,
+        notify: (message: string) => stack.active().notify(message) });
     }
   };
 

@@ -226,6 +226,15 @@ export function loadStatelog(args: {
       );
     }
   }
+  // A selector for a trace that was not requested is a typo, not a no-op: it
+  // would silently promote something other than what the operator named.
+  for (const selectedTraceId of Object.keys(args.request.printSelections)) {
+    if (!args.request.traceIds.includes(selectedTraceId)) {
+      throw new IngestSourceError(
+        `--output names trace "${selectedTraceId}", which is not among the requested --trace ids.`,
+      );
+    }
+  }
 
   const occurrences: LoadedOccurrence[] = [];
   const skips: IngestSkip[] = [];

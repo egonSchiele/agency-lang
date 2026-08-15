@@ -56,9 +56,13 @@ export class TreeView implements View {
       if (id !== undefined) return { kind: "openDetail", spanId: id };
     }
     // `l` promotes the focused trace when a dataset is configured. Right/Enter
-    // still expand, so no expand key is lost.
+    // still expand, so no expand key is lost. Only fire with a real trace id —
+    // an empty forest (e.g. an empty file under --follow) has none.
     if (fmt === "l" && this.promotionEnabled) {
-      return { kind: "promoteTrace", traceId: this.cursorTraceId() };
+      const traceId = this.cursorTraceId();
+      if (traceId !== "") {
+        return { kind: "promoteTrace", traceId };
+      }
     }
     const paged = this.paginate(ev, viewport);
     if (paged !== undefined) {
@@ -119,10 +123,15 @@ export class TreeView implements View {
   }
 
   helpLines(): string[] {
+    // `l` is contextual: it promotes when a dataset is configured, and still
+    // expands the focused node otherwise (Right/Enter always expand too).
+    const lKey = this.promotionEnabled
+      ? "l — label this trace (promote into the dataset)"
+      : "l — expand the focused node";
     return [
       "t — timeline views (flame → by-name)",
       "d — full details of the focused span",
-      ...(this.promotionEnabled ? ["l — label this trace (promote into the dataset)"] : []),
+      lKey,
       "",
       ...treeHelpLines(),
     ];

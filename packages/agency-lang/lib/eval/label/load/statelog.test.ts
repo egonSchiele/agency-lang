@@ -240,6 +240,11 @@ describe("loadStatelog", () => {
     expect(() => load(request({ traceIds: ["B"], printSelections: { B: 9 } }))).toThrow(/no printed value at index 9/);
   });
 
+  it("rejects a --output selector for a trace that was not requested", () => {
+    expect(() => load(request({ traceIds: ["A"], printSelections: { B: 0 } })))
+      .toThrow(/names trace "B", which is not among the requested/);
+  });
+
   it("throws IngestSourceError for a bad selection", () => {
     expect(() => load(request({ traceIds: ["ZZ"] }))).toThrow(IngestSourceError);
   });

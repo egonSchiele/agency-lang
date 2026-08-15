@@ -67,9 +67,14 @@ export function resolveFormat(
 }
 
 const SNIFF_CHUNK_BYTES = 65_536;
+/** A statelog line can legitimately be large (a promptCompletion carries full
+ *  messages), so the first line is read up to this cap — well past a chunk —
+ *  rather than assuming it fits in one read. */
+const MAX_FIRST_LINE_BYTES = 16 * 1024 * 1024;
 
 /** True when the file's first non-empty line is a statelog event envelope. Reads
- *  only a bounded prefix, so a large statelog is not slurped just to classify. */
+ *  through the first newline (bounded), so a large first event is still
+ *  classified correctly rather than parsed from a truncated prefix. */
 function looksLikeStatelog(resolved: string): boolean {
   const firstLine = firstNonEmptyLine(resolved);
   return firstLine !== undefined && isStatelogEnvelope(firstLine);
@@ -78,15 +83,28 @@ function looksLikeStatelog(resolved: string): boolean {
 function firstNonEmptyLine(resolved: string): string | undefined {
   const fd = fs.openSync(resolved, "r");
   try {
-    const buffer = Buffer.alloc(SNIFF_CHUNK_BYTES);
-    const bytesRead = fs.readSync(fd, buffer, 0, buffer.length, 0);
-    const text = buffer.subarray(0, bytesRead).toString("utf8");
-    for (const line of text.split("\n")) {
-      if (line.trim() !== "") {
-        return line;
+    // Accumulate BYTES (not per-chunk strings) so a multi-byte char split across
+    // a chunk boundary decodes correctly. Stop at the first newline byte or the
+    // cap, whichever comes first.
+    const chunk = Buffer.alloc(SNIFF_CHUNK_BYTES);
+    const collected: Buffer[] = [];
+    let total = 0;
+    let offset = 0;
+    let newlineFound = false;
+    while (total < MAX_FIRST_LINE_BYTES && !newlineFound) {
+      const bytesRead = fs.readSync(fd, chunk, 0, chunk.length, offset);
+      if (bytesRead === 0) {
+        break; // EOF before any newline
       }
+      offset += bytesRead;
+      const newlineAt = chunk.subarray(0, bytesRead).indexOf(0x0a);
+      const end = newlineAt === -1 ? bytesRead : newlineAt;
+      collected.push(Buffer.from(chunk.subarray(0, end)));
+      total += end;
+      newlineFound = newlineAt !== -1;
     }
-    return undefined;
+    const text = Buffer.concat(collected).toString("utf8");
+    return text.split("\n").find((line) => line.trim() !== "");
   } finally {
     fs.closeSync(fd);
   }

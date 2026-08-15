@@ -44,6 +44,14 @@ describe("statelog auto-detection", () => {
     fs.writeFileSync(file, JSON.stringify(["a", "b"]));
     expect(auto(file)).toBe("json");
   });
+
+  it("classifies a statelog whose first event is larger than one read chunk", () => {
+    const file = path.join(root, "big-first.jsonl");
+    const bigContent = "x".repeat(200_000); // well over the 64 KiB sniff chunk
+    const first = JSON.stringify({ format_version: 1, trace_id: "T", data: { type: "promptCompletion", content: bigContent } });
+    fs.writeFileSync(file, first + "\n" + JSON.stringify({ format_version: 1, trace_id: "T", data: { type: "agentEnd" } }) + "\n");
+    expect(auto(file)).toBe("statelog");
+  });
 });
 
 describe("parseFormat", () => {

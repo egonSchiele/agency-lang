@@ -264,7 +264,7 @@ export type AnnotationRow = z.infer<typeof AnnotationRowSchema>;
  *  recovery is exercised at every point a crash could actually land. Declared
  *  here rather than in store.ts because checklist publication needs to signal
  *  them and must not import the store that imports it. */
-export type LabelStoreFaultPoint =
+export type LabelDatasetFaultPoint =
   | "after-record-append"
   | "after-occurrence-append"
   | "after-revision-temp-write"
@@ -273,4 +273,4 @@ export type LabelStoreFaultPoint =
   | "after-external-definition-sync"
   | "after-annotation-append";
 
-export type FaultHook = (point: LabelStoreFaultPoint) => void;
+export type FaultHook = (point: LabelDatasetFaultPoint) => void;

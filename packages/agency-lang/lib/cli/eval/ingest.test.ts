@@ -41,7 +41,7 @@ function batchOf(count: number, skips: LoadedBatch["skips"] = []): LoadedBatch {
 function dependencies(over: Partial<EvalIngestDependencies> = {}): EvalIngestDependencies {
   return {
     loadBatch: vi.fn(() => batchOf(1)) as never,
-    openStore: vi.fn(() => ({
+    openDataset: vi.fn(() => ({
       ingest: () => ({
         recordsAdded: 1,
         recordsReplayed: 0,
@@ -193,7 +193,7 @@ describe("evalIngest", () => {
 
   it("prints one line per skip, naming the item", async () => {
     const deps = dependencies({
-      openStore: vi.fn(() => ({
+      openDataset: vi.fn(() => ({
         ingest: () => ({
           recordsAdded: 1,
           recordsReplayed: 0,
@@ -211,7 +211,7 @@ describe("evalIngest", () => {
 
   it("warns about an unseen field name without refusing the ingest", async () => {
     const deps = dependencies({
-      openStore: vi.fn(() => ({
+      openDataset: vi.fn(() => ({
         ingest: () => ({
           recordsAdded: 1,
           recordsReplayed: 0,
@@ -229,7 +229,7 @@ describe("evalIngest", () => {
 
   it("releases the store lock even when ingesting throws", async () => {
     const deps = dependencies({
-      openStore: vi.fn(() => ({
+      openDataset: vi.fn(() => ({
         ingest: () => {
           throw new Error("boom");
         },

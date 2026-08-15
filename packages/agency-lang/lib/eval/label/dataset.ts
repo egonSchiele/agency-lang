@@ -32,22 +32,22 @@ import {
   type CorpusRow,
   type DeepReadonly,
   type FaultHook,
-  type LabelStoreFaultPoint,
+  type LabelDatasetFaultPoint,
   type Manifest,
   type OccurrenceRow,
 } from "./types.js";
 
-export type { LabelStoreFaultPoint };
+export type { LabelDatasetFaultPoint };
 
-export class StoreValidationError extends Error {}
+export class DatasetValidationError extends Error {}
 
-/** A store this build does not understand. Separate from StoreValidationError
+/** A store this build does not understand. Separate from DatasetValidationError
  *  so the CLI can tell "wrong format" from "corrupt". */
-export class StoreVersionError extends Error {}
+export class DatasetVersionError extends Error {}
 
-export const CURRENT_STORE_VERSION = 2;
+export const CURRENT_DATASET_VERSION = 2;
 
-export type OpenStoreArgs = {
+export type OpenDatasetArgs = {
   storeDir: string;
   lock: StoreLock;
   reportWarning(message: string): void;
@@ -77,15 +77,15 @@ export type IngestResult = {
  */
 /** What one session needs to reconstruct itself: the completed history, an
  *  O(1) replay index, and its own in-progress draft if there is one. */
-export type LabelStoreSnapshot = {
+export type LabelDatasetSnapshot = {
   draft: DeepReadonly<Draft> | null;
   annotations: readonly DeepReadonly<AnnotationRow>[];
   annotationIds: Readonly<Record<string, true>>;
 };
 
-export type LabelStore = {
+export type LabelDataset = {
   ingest(batch: LoadedBatch): IngestResult;
-  readSession(sessionId: string): DeepReadonly<LabelStoreSnapshot>;
+  readSession(sessionId: string): DeepReadonly<LabelDatasetSnapshot>;
   saveDraft(draft: Draft): void;
   corpusSnapshot(): readonly DeepReadonly<CorpusRow>[];
   checklistSnapshot(checklistId: string, version?: number): DeepReadonly<ChecklistRevision>;
@@ -109,15 +109,15 @@ export function manifestPath(storeDir: string): string {
  * case: it is the one artifact nothing can regenerate, so a broken reference
  * stops the session rather than being labelled around.
  */
-export function openStore(args: OpenStoreArgs): LabelStore {
+export function openDataset(args: OpenDatasetArgs): LabelDataset {
   fs.mkdirSync(args.storeDir, { recursive: true });
-  assertStoreVersion(args.storeDir);
+  assertDatasetVersion(args.storeDir);
   let manifest = ensureManifest(args.storeDir);
 
   const corpus = openCorpusLog(args.storeDir);
   const occurrences = openOccurrenceLog(args.storeDir);
   const annotations = openAnnotationLog(args.storeDir);
-  validateStore(args.storeDir, corpus, occurrences, annotations, manifest, args.reportWarning);
+  validateDataset(args.storeDir, corpus, occurrences, annotations, manifest, args.reportWarning);
 
   // Built once, then kept current by captureSource, so grounding an annotation
   // is O(1) rather than a scan of the whole corpus per append.
@@ -129,7 +129,7 @@ export function openStore(args: OpenStoreArgs): LabelStore {
   let open = true;
   const assertOpen = (): void => {
     if (!open) {
-      throw new StoreValidationError("This label store has been closed");
+      throw new DatasetValidationError("This label store has been closed");
     }
   };
 
@@ -201,7 +201,7 @@ export function openStore(args: OpenStoreArgs): LabelStore {
       };
     },
 
-    readSession(sessionId: string): DeepReadonly<LabelStoreSnapshot> {
+    readSession(sessionId: string): DeepReadonly<LabelDatasetSnapshot> {
       assertOpen();
       const rows = annotations.rows();
       const annotationIds: Record<string, true> = {};
@@ -229,7 +229,7 @@ export function openStore(args: OpenStoreArgs): LabelStore {
       assertOpen();
       const resolved = version ?? readCurrentPointer(args.storeDir, checklistId)?.version;
       if (resolved === undefined) {
-        throw new StoreValidationError(`Checklist "${checklistId}" has no published revision`);
+        throw new DatasetValidationError(`Checklist "${checklistId}" has no published revision`);
       }
       return readRevision(args.storeDir, checklistId, resolved);
     },
@@ -277,7 +277,7 @@ export function openStore(args: OpenStoreArgs): LabelStore {
  * validation error deep inside a file, which reads as corruption rather than as
  * "this store predates the current format".
  */
-function assertStoreVersion(storeDir: string): void {
+function assertDatasetVersion(storeDir: string): void {
   const file = manifestPath(storeDir);
   if (!fs.existsSync(file)) {
     return;
@@ -286,18 +286,18 @@ function assertStoreVersion(storeDir: string): void {
   try {
     parsed = JSON.parse(fs.readFileSync(file, "utf8")) as { schemaVersion?: unknown };
   } catch (error) {
-    throw new StoreValidationError(`${file} is not valid JSON: ${(error as Error).message}`);
+    throw new DatasetValidationError(`${file} is not valid JSON: ${(error as Error).message}`);
   }
   const found = parsed.schemaVersion;
-  if (found === CURRENT_STORE_VERSION) {
+  if (found === CURRENT_DATASET_VERSION) {
     return;
   }
   // Rebuilding cannot help with a store from the FUTURE, so the two cases need
   // different advice.
-  if (typeof found === "number" && found > CURRENT_STORE_VERSION) {
-    throw new StoreVersionError(
+  if (typeof found === "number" && found > CURRENT_DATASET_VERSION) {
+    throw new DatasetVersionError(
       `${storeDir} uses label store format ${found}, which is newer than this build ` +
-      `understands (${CURRENT_STORE_VERSION}). Upgrade Agency to read it.`,
+      `understands (${CURRENT_DATASET_VERSION}). Upgrade Agency to read it.`,
     );
   }
   // No migration exists, deliberately. Version 1 identified an output by the
@@ -305,9 +305,9 @@ function assertStoreVersion(storeDir: string): void {
   // derived data — the eval runs it came from are still on disk, so re-ingesting
   // rebuilds it. Refusing to open one is the part that matters: silently
   // misreading an old file is the only outcome worth preventing.
-  throw new StoreVersionError(
+  throw new DatasetVersionError(
     `${storeDir} uses label store format ${String(found)}; this build writes ` +
-    `format ${CURRENT_STORE_VERSION}. That store predates content-derived record ids, so its ` +
+    `format ${CURRENT_DATASET_VERSION}. That store predates content-derived record ids, so its ` +
     `labels cannot be carried across.\n\n` +
     `  Delete ${storeDir} and rebuild it with \`agency label ingest\`.\n`,
   );
@@ -327,13 +327,13 @@ export function readFieldOrder(storeDir: string): readonly string[] {
 function ensureManifest(storeDir: string): Manifest {
   const file = manifestPath(storeDir);
   if (!fs.existsSync(file)) {
-    const fresh: Manifest = { schemaVersion: CURRENT_STORE_VERSION, fieldOrder: [] };
+    const fresh: Manifest = { schemaVersion: CURRENT_DATASET_VERSION, fieldOrder: [] };
     atomicWriteValidated({ targetPath: file, value: fresh, schema: ManifestSchema });
     return fresh;
   }
   const parsed = ManifestSchema.safeParse(JSON.parse(fs.readFileSync(file, "utf8")));
   if (!parsed.success) {
-    throw new StoreValidationError(
+    throw new DatasetValidationError(
       `${file} is not a label store manifest this build understands. Refusing to touch the ` +
       `store rather than risk a dataset written by a different version.`,
     );
@@ -342,7 +342,7 @@ function ensureManifest(storeDir: string): Manifest {
 }
 
 /** Every cross-file invariant, checked once at open. */
-function validateStore(
+function validateDataset(
   storeDir: string,
   corpus: OpenedCorpusLog,
   occurrences: OpenedOccurrenceLog,
@@ -357,7 +357,7 @@ function validateStore(
     // and every label on it would then describe text nobody can reconstruct.
     const expected = makeOutputId(row.fields);
     if (row.outputId !== expected) {
-      throw new StoreValidationError(
+      throw new DatasetValidationError(
         `Corpus row "${row.outputId}" does not match the hash of its own fields (${expected}). ` +
         `An output id is derived from its content and cannot be edited independently.`,
       );
@@ -372,13 +372,13 @@ function validateStore(
       origin: row.origin,
     });
     if (row.occurrenceId !== expected) {
-      throw new StoreValidationError(
+      throw new DatasetValidationError(
         `Occurrence "${row.occurrenceId}" does not match the hash of its own identity ` +
         `(${expected}).`,
       );
     }
     if (corpusById[row.outputId] === undefined) {
-      throw new StoreValidationError(
+      throw new DatasetValidationError(
         `Occurrence "${row.occurrenceId}" refers to output "${row.outputId}", which is not in ` +
         `the corpus. Records are always written before the occurrences that reference them.`,
       );
@@ -388,7 +388,7 @@ function validateStore(
   const seenFieldNames: Record<string, true> = Object.create(null);
   for (const name of manifest.fieldOrder) {
     if (seenFieldNames[name] === true) {
-      throw new StoreValidationError(
+      throw new DatasetValidationError(
         `The manifest lists field "${name}" more than once in fieldOrder.`,
       );
     }
@@ -408,7 +408,7 @@ function validateStore(
 
   for (const row of annotations.rows() as readonly AnnotationRow[]) {
     if (corpusById[row.outputId] === undefined) {
-      throw new StoreValidationError(
+      throw new DatasetValidationError(
         `Annotation "${row.annotationId}" refers to output "${row.outputId}", which is not in ` +
         `the corpus. Outputs are always captured before they can be labelled.`,
       );
@@ -417,13 +417,13 @@ function validateStore(
     try {
       revision = readCached(row.checklistId, row.checklistVersion);
     } catch (error) {
-      throw new StoreValidationError(
+      throw new DatasetValidationError(
         `Annotation "${row.annotationId}" refers to checklist revision ` +
         `${row.checklistId}@${row.checklistVersion}, which is missing: ${(error as Error).message}`,
       );
     }
     if (revision.hash !== row.checklistHash) {
-      throw new StoreValidationError(
+      throw new DatasetValidationError(
         `Annotation "${row.annotationId}" records checklist hash ${row.checklistHash}, but ` +
         `revision ${row.checklistId}@${row.checklistVersion} hashes to ${revision.hash}.`,
       );
@@ -460,23 +460,23 @@ function validateLineages(
     try {
       validateLineageContinuity(storeDir, checklistId, versions);
     } catch (error) {
-      throw new StoreValidationError((error as Error).message);
+      throw new DatasetValidationError((error as Error).message);
     }
     const pointer = readCurrentPointer(storeDir, checklistId);
     if (pointer === undefined) {
-      throw new StoreValidationError(
+      throw new DatasetValidationError(
         `Checklist "${checklistId}" has ${versions.length} revision(s) but no current pointer.`,
       );
     }
     const newest = versions[versions.length - 1];
     if (pointer.version > newest) {
-      throw new StoreValidationError(
+      throw new DatasetValidationError(
         `Checklist "${checklistId}" current points at version ${pointer.version}, which has no ` +
         `stored revision. The newest is ${newest}.`,
       );
     }
     if (pointer.hash !== readCached(checklistId, pointer.version).hash) {
-      throw new StoreValidationError(
+      throw new DatasetValidationError(
         `Checklist "${checklistId}" current records hash ${pointer.hash}, which does not match ` +
         `revision ${pointer.version}.`,
       );
@@ -509,13 +509,13 @@ function assertAnswersCoverExactly(row: AnnotationRow, revision: ChecklistRevisi
   }
   for (const questionId of row.coveredQuestionIds) {
     if (known[questionId] !== true) {
-      throw new StoreValidationError(
+      throw new DatasetValidationError(
         `Annotation "${row.annotationId}" covers question "${questionId}", which revision ` +
         `${row.checklistId}@${row.checklistVersion} does not define.`,
       );
     }
     if (typeof row.answers[questionId] !== "boolean") {
-      throw new StoreValidationError(
+      throw new DatasetValidationError(
         `Annotation "${row.annotationId}" covers question "${questionId}" but records no answer. ` +
         `A covered question carries an explicit true or false; a missing answer means "not judged" ` +
         `and must not be listed as covered.`,
@@ -525,7 +525,7 @@ function assertAnswersCoverExactly(row: AnnotationRow, revision: ChecklistRevisi
   const covered = new Set(row.coveredQuestionIds);
   for (const questionId of Object.keys(row.answers)) {
     if (!covered.has(questionId)) {
-      throw new StoreValidationError(
+      throw new DatasetValidationError(
         `Annotation "${row.annotationId}" answers question "${questionId}" without covering it.`,
       );
     }
@@ -545,14 +545,14 @@ function assertAnnotationIsGrounded(
 ): void {
   const present = knownOutputIds[row.outputId] === true;
   if (!present) {
-    throw new StoreValidationError(
+    throw new DatasetValidationError(
       `Cannot record a judgement of output "${row.outputId}": it is not in the corpus. ` +
       `Capture the source before labelling it.`,
     );
   }
   const revision = readRevision(storeDir, row.checklistId, row.checklistVersion);
   if (revision.hash !== row.checklistHash) {
-    throw new StoreValidationError(
+    throw new DatasetValidationError(
       `Annotation "${row.annotationId}" records checklist hash ${row.checklistHash}, but ` +
       `revision ${row.checklistId}@${row.checklistVersion} hashes to ${revision.hash}.`,
     );

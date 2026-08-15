@@ -4,7 +4,7 @@ import * as path from "path";
 
 import type { AgencyConfig } from "@/config.js";
 import { openLabelingSession, type LabelingSessionController } from "@/eval/label/controller.js";
-import { readFieldOrder } from "@/eval/label/store.js";
+import { readFieldOrder } from "@/eval/label/dataset.js";
 import { runLabelTui } from "@/eval/label/labelTui.js";
 import { TerminalInput } from "@/tui/input/terminal.js";
 import { TerminalOutput } from "@/tui/output/terminal.js";

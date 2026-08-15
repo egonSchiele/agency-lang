@@ -11,7 +11,7 @@ import {
   type LoadedBatch,
 } from "@/eval/label/load/types.js";
 import { acquireStoreLock } from "@/eval/label/lock.js";
-import { openStore, type IngestResult, type LabelStore } from "@/eval/label/store.js";
+import { openDataset, type IngestResult, type LabelDataset } from "@/eval/label/dataset.js";
 import { FieldNameSchema, type Fields } from "@/eval/label/types.js";
 import { color } from "@/utils/termcolors.js";
 
@@ -36,13 +36,13 @@ export type EvalIngestOptions = {
 /** @internal Injected so the command can be tested without a store or a disk. */
 export type EvalIngestDependencies = {
   loadBatch: typeof loadBatch;
-  openStore: typeof openStore;
+  openDataset: typeof openDataset;
   report(message: string): void;
 };
 
 const defaultDependencies: EvalIngestDependencies = {
   loadBatch,
-  openStore,
+  openDataset,
   report: (message) => console.log(message),
 };
 
@@ -169,9 +169,9 @@ export async function evalIngest(
     storeDir,
     reportWarning: (message) => console.warn(message),
   });
-  let store: LabelStore | undefined;
+  let store: LabelDataset | undefined;
   try {
-    store = dependencies.openStore({
+    store = dependencies.openDataset({
       storeDir,
       lock,
       reportWarning: (message) => console.warn(message),

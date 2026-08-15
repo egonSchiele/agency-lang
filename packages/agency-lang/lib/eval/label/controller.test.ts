@@ -15,7 +15,7 @@ import { writeRunFixture } from "./runFixture.js";
 import { loadBatch } from "./load/index.js";
 import { DEFAULT_MAX_INGEST_BYTES } from "./load/types.js";
 import { acquireStoreLock } from "./lock.js";
-import { openStore } from "./store.js";
+import { openDataset } from "./dataset.js";
 import { readCurrentPointer } from "./checklist.js";
 import type { AnnotationRow } from "./types.js";
 
@@ -73,7 +73,7 @@ function ingestRun(source = "agent-v1"): void {
     storeDir,
     reportWarning: (message) => warnings.push(message),
   });
-  const store = openStore({
+  const store = openDataset({
     storeDir,
     lock,
     reportWarning: (message) => warnings.push(message),

@@ -5,11 +5,34 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { normalizeDefinition, prepareRevision, publishPendingRevision } from "./checklist.js";
+import { corpusPath } from "./corpus.js";
 import { checklistHashOf, makeOccurrenceId, makeOutputId } from "./ids.js";
 import type { LoadedBatch } from "./load/types.js";
 import { acquireStoreLock } from "./lock.js";
-import { openStore, StoreValidationError, StoreVersionError } from "./store.js";
+import { openDataset, DatasetValidationError, DatasetVersionError } from "./dataset.js";
+import { CorpusRowSchema } from "./types.js";
 import type { AnnotationRow, ChecklistRevision, CorpusRow } from "./types.js";
+
+// The rename from "store" to "dataset" is a TypeScript-symbol change ONLY. This
+// guard fails loudly if a durable name ever drifts: ids keep the `out_` prefix,
+// corpus rows keep `outputId`, and the corpus file stays `outputs.jsonl`.
+describe("durable vocabulary is preserved across the dataset rename", () => {
+  it("keeps the version 2 durable vocabulary", () => {
+    const fields = { output: "answer" };
+    const outputId = makeOutputId(fields);
+
+    expect(outputId).toMatch(/^out_[a-f0-9]{64}$/);
+    expect(
+      CorpusRowSchema.parse({
+        schemaVersion: 2,
+        outputId,
+        capturedAt: "2026-08-15T00:00:00.000Z",
+        fields,
+      }).outputId,
+    ).toBe(outputId);
+    expect(path.basename(corpusPath("labels"))).toBe("outputs.jsonl");
+  });
+});
 
 let storeDir: string;
 let definitionPath: string;
@@ -37,7 +60,7 @@ afterEach(() => {
 
 function open() {
   const lock = acquireStoreLock({ storeDir, reportWarning: (m) => warnings.push(m) });
-  return openStore({ storeDir, lock, reportWarning: (m) => warnings.push(m) });
+  return openDataset({ storeDir, lock, reportWarning: (m) => warnings.push(m) });
 }
 
 function corpusRow(over: Partial<CorpusRow> = {}): CorpusRow {
@@ -114,7 +137,7 @@ function annotationRow(revision: ChecklistRevision, over: Partial<AnnotationRow>
   };
 }
 
-describe("openStore", () => {
+describe("openDataset", () => {
   it("opens an empty store and writes a manifest", () => {
     const store = open();
     expect(store.readSession(SESSION_ID).annotations).toEqual([]);
@@ -126,7 +149,7 @@ describe("openStore", () => {
   it("refuses a manifest from a newer schema rather than risking the dataset", () => {
     fs.mkdirSync(storeDir, { recursive: true });
     fs.writeFileSync(path.join(storeDir, "manifest.json"), JSON.stringify({ schemaVersion: 3 }));
-    expect(() => open()).toThrow(StoreVersionError);
+    expect(() => open()).toThrow(DatasetVersionError);
   });
 
   it("refuses a version 1 store and says how to rebuild it", () => {
@@ -155,7 +178,7 @@ describe("openStore", () => {
     fs.mkdirSync(storeDir, { recursive: true });
     fs.writeFileSync(path.join(storeDir, "manifest.json"),
       JSON.stringify({ schemaVersion: 2, fieldOrder: [], extra: true }));
-    expect(() => open()).toThrow(StoreValidationError);
+    expect(() => open()).toThrow(DatasetValidationError);
   });
 
   it("refuses a corpus row whose id is not the hash of its own fields", () => {

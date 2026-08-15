@@ -23,7 +23,7 @@ import {
   type SessionSnapshot,
   type SessionState,
 } from "./session.js";
-import { openStore, type LabelStore } from "./store.js";
+import { openDataset, type LabelDataset } from "./dataset.js";
 import type { PrepareChecklistResult } from "./checklist.js";
 import {
   AnnotationRowSchema,
@@ -32,7 +32,7 @@ import {
   type Annotator,
   type ChecklistRevision,
   type FaultHook,
-  type LabelStoreFaultPoint,
+  type LabelDatasetFaultPoint,
 } from "./types.js";
 
 export type MonotonicClock = { elapsedMs(): number };
@@ -48,7 +48,7 @@ export type OpenLabelingSessionArgs = {
 
 /** @internal */
 export type ControllerFaultPoint =
-  | LabelStoreFaultPoint
+  | LabelDatasetFaultPoint
   | "after-pending-revision-save"
   | "after-draft-rebind"
   | "after-pending-annotation-save"
@@ -119,9 +119,9 @@ async function openSession(
   );
 
   const lock = acquireStoreLock({ storeDir: args.storeDir, reportWarning: args.reportWarning });
-  let store: LabelStore | undefined;
+  let store: LabelDataset | undefined;
   try {
-    store = openStore({
+    store = openDataset({
       storeDir: args.storeDir,
       lock,
       reportWarning: args.reportWarning,
@@ -186,7 +186,7 @@ function syncChecklistDefinitionIds(checklistFile: string, definition: Normalize
 type SessionConstruction = {
   args: OpenLabelingSessionArgs;
   dependencies: ControllerDependencies;
-  store: LabelStore;
+  store: LabelDataset;
   lock: StoreLock;
   sessionId: string;
   outputIds: string[];

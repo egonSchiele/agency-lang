@@ -23,6 +23,7 @@ pnpm run preprocess <file>     # Parse .agency, run preprocessor, and print the 
 pnpm run fmt <file>     # Format .agency file using the AgencyGenerator
 make fixtures           # Rebuild all integration test fixtures
 pnpm run lint:structure # Run structural linter
+pnpm run fmt:ts         # Format TypeScript with prettier (CI fails if you skip this)
 ```
 
 ## The full pipeline
@@ -100,6 +101,7 @@ packages/agency-lang/docs/dev/anti-patterns.md
 
 Read these before starting work:
 - `docs/dev/coding-standards.md` — Banned patterns and style rules. Enforced by the structural linter.
+- `docs/dev/formatting.md` — Prettier for hand-written TypeScript: `pnpm run fmt:ts`, what is ignored and why, the VS Code wiring, and the CI check
 - `docs/dev/anti-patterns.md` — Common mistakes with before/after examples.
 - `docs/dev/adding-features.md` — Step-by-step guides for adding AST nodes, CLI commands, etc.
 

@@ -53,6 +53,50 @@ export async function _setAgentName(name: string): Promise<void> {
   await frame.ctx.statelogClient.agentName({ name: String(name) });
 }
 
+/** A printed value larger than this (in UTF-8 bytes) is more likely a mistake
+ *  than a labelable output, and is not worth storing as training data. Matches
+ *  the label ingest size cap so "labelable" means the same thing everywhere. */
+export const PRINT_VALUE_MAX_BYTES = 1_048_576;
+
+/** What an oversized print records instead of its value. A fixed placeholder,
+ *  not a prefix: a clipped prefix of a tagged/secret string could slip past
+ *  redaction, which matches whole tagged values. */
+export const TRUNCATED_PRINT_VALUE = `[print omitted: value exceeded ${PRINT_VALUE_MAX_BYTES} bytes]`;
+
+type PreparedPrintValue = {
+  value: string;
+  truncated: boolean;
+};
+
+function preparePrintValue(value: string): PreparedPrintValue {
+  if (Buffer.byteLength(value, "utf8") > PRINT_VALUE_MAX_BYTES) {
+    return { value: TRUNCATED_PRINT_VALUE, truncated: true };
+  }
+  return { value, truncated: false };
+}
+
+/**
+ * Record a console print in the statelog. No-op outside an execution frame.
+ *
+ * Fire-and-forget on purpose: logging must not change whether `print` itself
+ * succeeds, and it must not await remote I/O on the print path. `post()` owns
+ * and reports sink failures, so the returned promise never rejects and needs
+ * no `.catch`.
+ */
+export function recordPrint(kind: "print" | "printJSON", value: string): void {
+  const frame = agencyStore.getStore();
+  if (!frame) {
+    return;
+  }
+  const prepared = preparePrintValue(value);
+  void frame.ctx.statelogClient.printRecorded({
+    kind,
+    value: prepared.value,
+    truncated: prepared.truncated,
+    threadId: frame.threads.activeId() ?? null,
+  });
+}
+
 export async function _evalValue(value: unknown): Promise<void> {
   const prepared = prepareEvalEvent(value);
   if (!prepared) return;

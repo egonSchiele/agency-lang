@@ -18,6 +18,9 @@ import {
   _evalRecord,
   _finalEvalOutput,
   _setAgentName,
+  recordPrint,
+  PRINT_VALUE_MAX_BYTES,
+  TRUNCATED_PRINT_VALUE,
 } from "./statelog.js";
 
 let ts = 0;
@@ -61,13 +64,15 @@ function spyClient(ctx: RuntimeContext<any>) {
   const evalValueRecorded = vi.fn(async () => undefined);
   const evalOutputRecorded = vi.fn(async () => undefined);
   const agentName = vi.fn(async () => undefined);
+  const printRecorded = vi.fn(async () => undefined);
   ctx.statelogClient = {
     ...ctx.statelogClient,
     evalValueRecorded,
     evalOutputRecorded,
     agentName,
+    printRecorded,
   } as any;
-  return { evalValueRecorded, evalOutputRecorded, agentName };
+  return { evalValueRecorded, evalOutputRecorded, agentName, printRecorded };
 }
 
 async function withFrame(
@@ -123,6 +128,62 @@ describe("std::statelog eval annotations", () => {
 
   it("setAgentName outside an Agency frame is a no-op", async () => {
     await expect(_setAgentName("gcode-v2")).resolves.toBeUndefined();
+  });
+
+  describe("recordPrint", () => {
+    it("is a no-op outside an execution frame and never throws", () => {
+      expect(() => recordPrint("print", "hi")).not.toThrow();
+    });
+
+    it("records with the active thread id", async () => {
+      const ctx = makeCtx();
+      const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+      const threadId = threads.activeId();
+      const spies = spyClient(ctx);
+
+      await runInTestContext(ctx, new StateStack(), threads, async () => {
+        recordPrint("print", "hello");
+      });
+
+      expect(spies.printRecorded).toHaveBeenCalledOnce();
+      expect(spies.printRecorded).toHaveBeenCalledWith({
+        kind: "print",
+        value: "hello",
+        truncated: false,
+        threadId,
+      });
+    });
+
+    it("replaces an oversized value with the placeholder instead of a prefix", async () => {
+      const ctx = makeCtx();
+      const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+      const spies = spyClient(ctx);
+
+      await runInTestContext(ctx, new StateStack(), threads, async () => {
+        recordPrint("print", "secret".repeat(200_000));
+      });
+
+      const call = spies.printRecorded.mock.calls[0][0];
+      expect(call.value).toBe(TRUNCATED_PRINT_VALUE);
+      expect(call.truncated).toBe(true);
+      expect(call.value).not.toContain("secret");
+    });
+
+    it("retains no partial UTF-8 prefix for an oversized multi-byte value", async () => {
+      const ctx = makeCtx();
+      const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+      const spies = spyClient(ctx);
+
+      // "😀" is 4 UTF-8 bytes; well over the cap in total.
+      const big = "😀".repeat(PRINT_VALUE_MAX_BYTES);
+      await runInTestContext(ctx, new StateStack(), threads, async () => {
+        recordPrint("printJSON", big);
+      });
+
+      const call = spies.printRecorded.mock.calls[0][0];
+      expect(call.value).toBe(TRUNCATED_PRINT_VALUE);
+      expect(call.value).not.toContain("😀");
+    });
   });
 
   it("round-trips plain objects before recording", async () => {

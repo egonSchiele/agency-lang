@@ -4,29 +4,29 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { acquireStoreLock } from "./lock.js";
+import { acquireDatasetLock } from "./lock.js";
 
-let storeDir: string;
+let datasetDir: string;
 const warnings: string[] = [];
 
 function acquire() {
-  return acquireStoreLock({ storeDir, reportWarning: (message) => warnings.push(message) });
+  return acquireDatasetLock({ datasetDir, reportWarning: (message) => warnings.push(message) });
 }
 
 function lockPath(): string {
-  return path.join(storeDir, ".lock");
+  return path.join(datasetDir, ".lock");
 }
 
 beforeEach(() => {
-  storeDir = fs.mkdtempSync(path.join(os.tmpdir(), "label-lock-"));
+  datasetDir = fs.mkdtempSync(path.join(os.tmpdir(), "label-lock-"));
   warnings.length = 0;
 });
 
 afterEach(() => {
-  fs.rmSync(storeDir, { recursive: true, force: true });
+  fs.rmSync(datasetDir, { recursive: true, force: true });
 });
 
-describe("acquireStoreLock", () => {
+describe("acquireDatasetLock", () => {
   it("creates the lock file and reports the holder", () => {
     const lock = acquire();
     expect(lock.holder.pid).toBe(process.pid);

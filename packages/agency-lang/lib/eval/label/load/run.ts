@@ -136,7 +136,7 @@ export function loadRun(args: LoadRunArgs): LoadedBatch {
     }
     const fields = projected.fields;
 
-    // Parsed with the durable schema HERE, not left for the store. `record` is
+    // Parsed with the durable schema HERE, not left for the dataset. `record` is
     // `any`, so a metrics block like `{ models: [42] }` would otherwise type
     // through as string[] and only fail inside ingest — after the corpus row
     // had already been appended, leaving an orphan record behind.

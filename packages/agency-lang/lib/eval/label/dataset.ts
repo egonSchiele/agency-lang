@@ -24,7 +24,7 @@ import { loadDraftFile, saveDraftFile, type Draft } from "./draft.js";
 import { makeOccurrenceId, makeOutputId } from "./ids.js";
 import { atomicWriteValidated, type OpenedJsonl } from "./jsonl.js";
 import { openOccurrenceLog, type OpenedOccurrenceLog } from "./occurrences.js";
-import type { StoreLock } from "./lock.js";
+import type { DatasetLock } from "./lock.js";
 import {
   ManifestSchema,
   type AnnotationRow,
@@ -41,15 +41,15 @@ export type { LabelDatasetFaultPoint };
 
 export class DatasetValidationError extends Error {}
 
-/** A store this build does not understand. Separate from DatasetValidationError
+/** A dataset this build does not understand. Separate from DatasetValidationError
  *  so the CLI can tell "wrong format" from "corrupt". */
 export class DatasetVersionError extends Error {}
 
 export const CURRENT_DATASET_VERSION = 2;
 
 export type OpenDatasetArgs = {
-  storeDir: string;
-  lock: StoreLock;
+  datasetDir: string;
+  lock: DatasetLock;
   reportWarning(message: string): void;
   /** @internal Test-only interruption points inside multi-file operations. */
   fault?: FaultHook;
@@ -61,14 +61,14 @@ export type IngestResult = {
   occurrencesAdded: number;
   occurrencesReplayed: number;
   skips: readonly IngestSkip[];
-  /** Field names this batch introduced that the store had never seen. The CLI
+  /** Field names this batch introduced that the dataset had never seen. The CLI
    *  warns about them: two batches using `output` and `response` produce
    *  disjoint record shapes that no question can span. */
   newFieldNames: readonly string[];
 };
 
 /**
- * Everything the controller may do to the store, and nothing more.
+ * Everything the controller may do to the dataset, and nothing more.
  *
  * The facade deliberately exposes no file paths, no mutable rows, no JSONL
  * handles and no unrestricted append: those are how the ordering guarantees
@@ -96,12 +96,12 @@ export type LabelDataset = {
   close(): void;
 };
 
-export function manifestPath(storeDir: string): string {
-  return path.join(storeDir, "manifest.json");
+export function manifestPath(datasetDir: string): string {
+  return path.join(datasetDir, "manifest.json");
 }
 
 /**
- * Open a store, validating everything in it before returning.
+ * Open a dataset, validating everything in it before returning.
  *
  * Validation is total and fatal. `lib/eval/readRun.ts` degrades a bad file and
  * warns, because grading runs after every agent has been paid for and one
@@ -110,14 +110,14 @@ export function manifestPath(storeDir: string): string {
  * stops the session rather than being labelled around.
  */
 export function openDataset(args: OpenDatasetArgs): LabelDataset {
-  fs.mkdirSync(args.storeDir, { recursive: true });
-  assertDatasetVersion(args.storeDir);
-  let manifest = ensureManifest(args.storeDir);
+  fs.mkdirSync(args.datasetDir, { recursive: true });
+  assertDatasetVersion(args.datasetDir);
+  let manifest = ensureManifest(args.datasetDir);
 
-  const corpus = openCorpusLog(args.storeDir);
-  const occurrences = openOccurrenceLog(args.storeDir);
-  const annotations = openAnnotationLog(args.storeDir);
-  validateDataset(args.storeDir, corpus, occurrences, annotations, manifest, args.reportWarning);
+  const corpus = openCorpusLog(args.datasetDir);
+  const occurrences = openOccurrenceLog(args.datasetDir);
+  const annotations = openAnnotationLog(args.datasetDir);
+  validateDataset(args.datasetDir, corpus, occurrences, annotations, manifest, args.reportWarning);
 
   // Built once, then kept current by captureSource, so grounding an annotation
   // is O(1) rather than a scan of the whole corpus per append.
@@ -129,7 +129,7 @@ export function openDataset(args: OpenDatasetArgs): LabelDataset {
   let open = true;
   const assertOpen = (): void => {
     if (!open) {
-      throw new DatasetValidationError("This label store has been closed");
+      throw new DatasetValidationError("This label dataset has been closed");
     }
   };
 
@@ -185,7 +185,7 @@ export function openDataset(args: OpenDatasetArgs): LabelDataset {
       if (newFieldNames.length > 0) {
         manifest = { ...manifest, fieldOrder: [...manifest.fieldOrder, ...newFieldNames] };
         atomicWriteValidated({
-          targetPath: manifestPath(args.storeDir),
+          targetPath: manifestPath(args.datasetDir),
           value: manifest,
           schema: ManifestSchema,
         });
@@ -209,7 +209,7 @@ export function openDataset(args: OpenDatasetArgs): LabelDataset {
         annotationIds[row.annotationId] = true;
       }
       return Object.freeze({
-        draft: loadDraftFile(args.storeDir, sessionId) ?? null,
+        draft: loadDraftFile(args.datasetDir, sessionId) ?? null,
         annotations: rows,
         annotationIds: Object.freeze(annotationIds),
       });
@@ -217,7 +217,7 @@ export function openDataset(args: OpenDatasetArgs): LabelDataset {
 
     saveDraft(draft: Draft): void {
       assertOpen();
-      saveDraftFile(args.storeDir, draft);
+      saveDraftFile(args.datasetDir, draft);
     },
 
     corpusSnapshot(): readonly DeepReadonly<CorpusRow>[] {
@@ -227,19 +227,19 @@ export function openDataset(args: OpenDatasetArgs): LabelDataset {
 
     checklistSnapshot(checklistId: string, version?: number): DeepReadonly<ChecklistRevision> {
       assertOpen();
-      const resolved = version ?? readCurrentPointer(args.storeDir, checklistId)?.version;
+      const resolved = version ?? readCurrentPointer(args.datasetDir, checklistId)?.version;
       if (resolved === undefined) {
         throw new DatasetValidationError(`Checklist "${checklistId}" has no published revision`);
       }
-      return readRevision(args.storeDir, checklistId, resolved);
+      return readRevision(args.datasetDir, checklistId, resolved);
     },
 
     prepareChecklist(definition: NormalizedDefinition): PrepareChecklistResult {
       assertOpen();
-      const pointer = readCurrentPointer(args.storeDir, definition.checklistId);
+      const pointer = readCurrentPointer(args.datasetDir, definition.checklistId);
       const current = pointer === undefined
         ? undefined
-        : readRevision(args.storeDir, definition.checklistId, pointer.version);
+        : readRevision(args.datasetDir, definition.checklistId, pointer.version);
       return prepareRevision({ definition, current });
     },
 
@@ -251,13 +251,13 @@ export function openDataset(args: OpenDatasetArgs): LabelDataset {
     publishRevision(pending: PendingRevision, definitionPath: string): PublishRevisionResult {
       assertOpen();
       return publishPendingRevision({
-        storeDir: args.storeDir, pending, definitionPath, fault: args.fault,
+        datasetDir: args.datasetDir, pending, definitionPath, fault: args.fault,
       });
     },
 
     appendAnnotation(row: AnnotationRow): "appended" | "replayed" {
       assertOpen();
-      assertAnnotationIsGrounded(args.storeDir, knownOutputIds, row);
+      assertAnnotationIsGrounded(args.datasetDir, knownOutputIds, row);
       const outcome = annotations.appendExact(row);
       args.fault?.("after-annotation-append");
       return outcome;
@@ -271,14 +271,14 @@ export function openDataset(args: OpenDatasetArgs): LabelDataset {
 }
 
 /**
- * Reject an older store BEFORE opening any log.
+ * Reject an older dataset BEFORE opening any log.
  *
  * Order matters: parsing a version 1 log against a version 2 schema produces a
  * validation error deep inside a file, which reads as corruption rather than as
- * "this store predates the current format".
+ * "this dataset predates the current format".
  */
-function assertDatasetVersion(storeDir: string): void {
-  const file = manifestPath(storeDir);
+function assertDatasetVersion(datasetDir: string): void {
+  const file = manifestPath(datasetDir);
   if (!fs.existsSync(file)) {
     return;
   }
@@ -292,31 +292,31 @@ function assertDatasetVersion(storeDir: string): void {
   if (found === CURRENT_DATASET_VERSION) {
     return;
   }
-  // Rebuilding cannot help with a store from the FUTURE, so the two cases need
+  // Rebuilding cannot help with a dataset from the FUTURE, so the two cases need
   // different advice.
   if (typeof found === "number" && found > CURRENT_DATASET_VERSION) {
     throw new DatasetVersionError(
-      `${storeDir} uses label store format ${found}, which is newer than this build ` +
+      `${datasetDir} uses label dataset format ${found}, which is newer than this build ` +
       `understands (${CURRENT_DATASET_VERSION}). Upgrade Agency to read it.`,
     );
   }
   // No migration exists, deliberately. Version 1 identified an output by the
-  // run that produced it, so every id would change; and a label store is
+  // run that produced it, so every id would change; and a label dataset is
   // derived data — the eval runs it came from are still on disk, so re-ingesting
   // rebuilds it. Refusing to open one is the part that matters: silently
   // misreading an old file is the only outcome worth preventing.
   throw new DatasetVersionError(
-    `${storeDir} uses label store format ${String(found)}; this build writes ` +
-    `format ${CURRENT_DATASET_VERSION}. That store predates content-derived record ids, so its ` +
+    `${datasetDir} uses label dataset format ${String(found)}; this build writes ` +
+    `format ${CURRENT_DATASET_VERSION}. That dataset predates content-derived record ids, so its ` +
     `labels cannot be carried across.\n\n` +
-    `  Delete ${storeDir} and rebuild it with \`agency label ingest\`.\n`,
+    `  Delete ${datasetDir} and rebuild it with \`agency label ingest\`.\n`,
   );
 }
 
-/** The display order a renderer needs, without opening the whole store. Absent
+/** The display order a renderer needs, without opening the whole dataset. Absent
  *  or unreadable is an empty order, not an error: this only affects layout. */
-export function readFieldOrder(storeDir: string): readonly string[] {
-  const file = manifestPath(storeDir);
+export function readFieldOrder(datasetDir: string): readonly string[] {
+  const file = manifestPath(datasetDir);
   if (!fs.existsSync(file)) {
     return [];
   }
@@ -324,8 +324,8 @@ export function readFieldOrder(storeDir: string): readonly string[] {
   return parsed.success ? parsed.data.fieldOrder : [];
 }
 
-function ensureManifest(storeDir: string): Manifest {
-  const file = manifestPath(storeDir);
+function ensureManifest(datasetDir: string): Manifest {
+  const file = manifestPath(datasetDir);
   if (!fs.existsSync(file)) {
     const fresh: Manifest = { schemaVersion: CURRENT_DATASET_VERSION, fieldOrder: [] };
     atomicWriteValidated({ targetPath: file, value: fresh, schema: ManifestSchema });
@@ -334,8 +334,8 @@ function ensureManifest(storeDir: string): Manifest {
   const parsed = ManifestSchema.safeParse(JSON.parse(fs.readFileSync(file, "utf8")));
   if (!parsed.success) {
     throw new DatasetValidationError(
-      `${file} is not a label store manifest this build understands. Refusing to touch the ` +
-      `store rather than risk a dataset written by a different version.`,
+      `${file} is not a label dataset manifest this build understands. Refusing to touch the ` +
+      `dataset rather than risk a dataset written by a different version.`,
     );
   }
   return parsed.data;
@@ -343,7 +343,7 @@ function ensureManifest(storeDir: string): Manifest {
 
 /** Every cross-file invariant, checked once at open. */
 function validateDataset(
-  storeDir: string,
+  datasetDir: string,
   corpus: OpenedCorpusLog,
   occurrences: OpenedOccurrenceLog,
   annotations: OpenedJsonl<AnnotationRow>,
@@ -399,12 +399,12 @@ function validateDataset(
   const readCached = (checklistId: string, version: number): ChecklistRevision => {
     const key = `${checklistId}@${version}`;
     if (revisionCache[key] === undefined) {
-      revisionCache[key] = readRevision(storeDir, checklistId, version);
+      revisionCache[key] = readRevision(datasetDir, checklistId, version);
     }
     return revisionCache[key];
   };
 
-  validateLineages(storeDir, annotations, readCached, reportWarning);
+  validateLineages(datasetDir, annotations, readCached, reportWarning);
 
   for (const row of annotations.rows() as readonly AnnotationRow[]) {
     if (corpusById[row.outputId] === undefined) {
@@ -433,7 +433,7 @@ function validateDataset(
 }
 
 function validateLineages(
-  storeDir: string,
+  datasetDir: string,
   annotations: OpenedJsonl<AnnotationRow>,
   readCached: (checklistId: string, version: number) => ChecklistRevision,
   reportWarning: (message: string) => void,
@@ -442,7 +442,7 @@ function validateLineages(
   for (const row of annotations.rows() as readonly AnnotationRow[]) {
     checklistIds.add(row.checklistId);
   }
-  const checklistsDir = path.join(storeDir, "checklists");
+  const checklistsDir = path.join(datasetDir, "checklists");
   if (fs.existsSync(checklistsDir)) {
     for (const entry of fs.readdirSync(checklistsDir)) {
       checklistIds.add(entry);
@@ -450,7 +450,7 @@ function validateLineages(
   }
 
   for (const checklistId of checklistIds) {
-    const versions = listRevisionVersions(storeDir, checklistId);
+    const versions = listRevisionVersions(datasetDir, checklistId);
     if (versions.length === 0) {
       continue;
     }
@@ -458,11 +458,11 @@ function validateLineages(
     // validateLineageContinuity proves the chain is contiguous and that every
     // adjacent pair obeys the same evolution rules publication enforces.
     try {
-      validateLineageContinuity(storeDir, checklistId, versions);
+      validateLineageContinuity(datasetDir, checklistId, versions);
     } catch (error) {
       throw new DatasetValidationError((error as Error).message);
     }
-    const pointer = readCurrentPointer(storeDir, checklistId);
+    const pointer = readCurrentPointer(datasetDir, checklistId);
     if (pointer === undefined) {
       throw new DatasetValidationError(
         `Checklist "${checklistId}" has ${versions.length} revision(s) but no current pointer.`,
@@ -485,7 +485,7 @@ function validateLineages(
     // crash between the immutable rename and the pointer update leaves behind,
     // and the revisions past it are complete and immutable. Refusing to open
     // here would make that state permanently unrepairable, since recovery runs
-    // after the store opens. Report it and let the session advance the pointer.
+    // after the dataset opens. Report it and let the session advance the pointer.
     if (pointer.version < newest) {
       reportWarning(
         `Checklist "${checklistId}" has revisions up to ${newest} but current points at ` +
@@ -539,7 +539,7 @@ function assertAnswersCoverExactly(row: AnnotationRow, revision: ChecklistRevisi
  *  linear scan per append would make grounding O(annotations × corpus rows)
  *  over a session, when the log is already indexed by identity. */
 function assertAnnotationIsGrounded(
-  storeDir: string,
+  datasetDir: string,
   knownOutputIds: Record<string, true>,
   row: AnnotationRow,
 ): void {
@@ -550,7 +550,7 @@ function assertAnnotationIsGrounded(
       `Capture the source before labelling it.`,
     );
   }
-  const revision = readRevision(storeDir, row.checklistId, row.checklistVersion);
+  const revision = readRevision(datasetDir, row.checklistId, row.checklistVersion);
   if (revision.hash !== row.checklistHash) {
     throw new DatasetValidationError(
       `Annotation "${row.annotationId}" records checklist hash ${row.checklistHash}, but ` +
@@ -561,7 +561,7 @@ function assertAnnotationIsGrounded(
 }
 
 /** Re-exported so callers do not need a second import for the common path of
- *  turning a raw definition into one the store accepts. */
+ *  turning a raw definition into one the dataset accepts. */
 export { normalizeDefinition };
 
 /** Canonical form of a stored revision, for tests and diagnostics. */

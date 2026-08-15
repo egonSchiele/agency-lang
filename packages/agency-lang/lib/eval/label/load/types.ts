@@ -1,6 +1,6 @@
 import type { Fields, OccurrenceOrigin } from "../types.js";
 
-/** What a loader produces. No store paths, no JSONL, no ids: a loader describes
+/** What a loader produces. No dataset paths, no JSONL, no ids: a loader describes
  *  candidates and knows nothing about durability. */
 export type LoadedOccurrence = {
   fields: Fields;

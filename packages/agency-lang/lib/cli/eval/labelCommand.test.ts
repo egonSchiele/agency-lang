@@ -44,7 +44,7 @@ beforeEach(() => {
 });
 
 describe("agency label", () => {
-  it("labels whatever the store holds", async () => {
+  it("labels whatever the dataset holds", async () => {
     await run("label", "--checklist", "news.json");
     expect(recorded.label).toEqual([expect.objectContaining({ checklist: "news.json" })]);
   });

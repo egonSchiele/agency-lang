@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createDatasetWriter } from "./datasetWriter.js";
 import type { IngestResult, LabelDataset } from "./dataset.js";
 import type { LoadedBatch } from "./load/types.js";
-import type { StoreLock } from "./lock.js";
+import type { DatasetLock } from "./lock.js";
 
 const BATCH: LoadedBatch = { occurrences: [], skips: [] };
 const RESULT = {
@@ -15,9 +15,9 @@ const RESULT = {
   newFieldNames: [],
 } as unknown as IngestResult;
 
-function fakeLock(): StoreLock & { released: () => number } {
+function fakeLock(): DatasetLock & { released: () => number } {
   let count = 0;
-  return { release: () => { count += 1; }, released: () => count } as StoreLock & { released: () => number };
+  return { release: () => { count += 1; }, released: () => count } as DatasetLock & { released: () => number };
 }
 
 function fakeDataset(over: Partial<LabelDataset> = {}): LabelDataset & { closed: () => number } {

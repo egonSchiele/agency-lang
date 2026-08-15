@@ -14,12 +14,12 @@ import {
 } from "./ingest.js";
 
 let root: string;
-let storeDir: string;
+let datasetDir: string;
 const reported: string[] = [];
 
 beforeEach(() => {
   root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "label-ingest-cli-")));
-  storeDir = path.join(root, "labels");
+  datasetDir = path.join(root, "labels");
   reported.length = 0;
 });
 
@@ -62,7 +62,7 @@ function dependencies(over: Partial<EvalIngestDependencies> = {}): EvalIngestDep
 }
 
 function options(over: Partial<EvalIngestOptions> = {}): EvalIngestOptions {
-  return { path: root, source: "handwritten", store: storeDir, ...over };
+  return { path: root, source: "handwritten", dataset: datasetDir, ...over };
 }
 
 describe("parseFieldArgs", () => {
@@ -112,7 +112,7 @@ describe("parseFieldArgs field names", () => {
     expect(() => parseFieldArgs({ field: ["__proto__=x"] })).toThrow(/not a valid field name/);
   });
 
-  it("rejects a name the store's schema would refuse", () => {
+  it("rejects a name the dataset's schema would refuse", () => {
     expect(() => parseFieldArgs({ field: ["Output=x"] })).toThrow(/not a valid field name/);
     expect(() => parseFieldArgs({ field: ["2nd=x"] })).toThrow(/not a valid field name/);
     expect(() => parseFieldArgs({ field: ["bad{name}=x"] })).toThrow(/not a valid field name/);
@@ -146,7 +146,7 @@ describe("evalIngest", () => {
   });
 
   it("errors when a source yields zero records rather than succeeding quietly", async () => {
-    // A silent zero-record success is how you end up labelling an empty store
+    // A silent zero-record success is how you end up labelling an empty dataset
     // and wondering where everything went.
     const deps = dependencies({ loadBatch: vi.fn(() => batchOf(0)) as never });
     await expect(evalIngest(options(), deps)).rejects.toThrow(/No records to ingest/);

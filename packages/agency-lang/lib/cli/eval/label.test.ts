@@ -151,13 +151,13 @@ describe("evalLabel", () => {
 
   it("propagates a host failure after destroying the screen", async () => {
     const destroyed = vi.fn();
-    const { host } = fakeHost(async () => { throw new Error("store is locked"); });
+    const { host } = fakeHost(async () => { throw new Error("dataset is locked"); });
     const deps = dependencies({
       makeHost: () => host as never,
       makeScreen: () => ({ destroy: destroyed }) as never,
     });
     await expect(evalLabel({ checklist: checklistFile }, deps))
-      .rejects.toThrow(/store is locked/);
+      .rejects.toThrow(/dataset is locked/);
     expect(destroyed).toHaveBeenCalled();
   });
 });

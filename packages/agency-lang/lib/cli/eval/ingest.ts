@@ -103,7 +103,7 @@ function buildSelection(options: { trace?: string[] }): IngestSelection {
   return { kind: "statelog", request: { traceIds } };
 }
 
-/** Reject a bad name here rather than letting the store's schema fail later:
+/** Reject a bad name here rather than letting the dataset's schema fail later:
  *  the message can name the flag that caused it. */
 function assertFieldName(name: string): void {
   if (!FieldNameSchema.safeParse(name).success) {
@@ -168,7 +168,7 @@ export async function evalIngest(
     reportWarning: (message) => console.warn(message),
   });
 
-  // A silent zero-record success is how you end up labelling an empty store and
+  // A silent zero-record success is how you end up labelling an empty dataset and
   // wondering where everything went.
   if (batch.occurrences.length === 0) {
     const detail = batch.skips.length === 0

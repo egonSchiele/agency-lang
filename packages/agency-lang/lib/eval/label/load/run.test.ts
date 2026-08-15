@@ -230,7 +230,7 @@ describe("loadRun skips", () => {
   });
 });
 
-describe("a malformed record is rejected by the loader, not by the store", () => {
+describe("a malformed record is rejected by the loader, not by the dataset", () => {
   it("skips a record whose models are not strings", () => {
     // `record` is `any`. Without parsing here, [42] types through as string[]
     // and only fails inside ingest, AFTER the corpus row has been appended —

@@ -9,15 +9,15 @@ import {
   type ChecklistRevision,
 } from "./types.js";
 
-export function annotationsPath(storeDir: string): string {
-  return path.join(storeDir, "labels.jsonl");
+export function annotationsPath(datasetDir: string): string {
+  return path.join(datasetDir, "labels.jsonl");
 }
 
-/** Private to the store: annotations may only be appended through the
+/** Private to the dataset: annotations may only be appended through the
  *  facade's transaction methods, which guarantee the corpus row exists first. */
-export function openAnnotationLog(storeDir: string): OpenedJsonl<AnnotationRow> {
+export function openAnnotationLog(datasetDir: string): OpenedJsonl<AnnotationRow> {
   return openJsonlStrict({
-    filePath: annotationsPath(storeDir),
+    filePath: annotationsPath(datasetDir),
     schema: AnnotationRowSchema,
     identityOf: (row) => row.annotationId,
   });
@@ -82,7 +82,7 @@ export function effectiveAnswers(
     }
     for (const questionId of row.coveredQuestionIds) {
       const answer = row.answers[questionId];
-      // Covered without an answer is a malformed row, rejected as a store
+      // Covered without an answer is a malformed row, rejected as a dataset
       // invariant. Treating it as `false` here would launder the corruption.
       if (typeof answer !== "boolean") {
         continue;

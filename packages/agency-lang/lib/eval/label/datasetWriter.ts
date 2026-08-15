@@ -1,6 +1,6 @@
 import { openDataset, type IngestResult, type LabelDataset } from "./dataset.js";
 import type { LoadedBatch } from "./load/types.js";
-import { acquireStoreLock } from "./lock.js";
+import { acquireDatasetLock } from "./lock.js";
 
 export type DatasetWriteRequest = {
   datasetDir: string;
@@ -17,12 +17,12 @@ export type DatasetWriter = {
 
 /** @internal Injected so lifecycle tests can force open/ingest failures. */
 export type DatasetWriterDependencies = {
-  acquireLock: typeof acquireStoreLock;
+  acquireLock: typeof acquireDatasetLock;
   openDataset: typeof openDataset;
 };
 
 const defaultDependencies: DatasetWriterDependencies = {
-  acquireLock: acquireStoreLock,
+  acquireLock: acquireDatasetLock,
   openDataset,
 };
 
@@ -32,13 +32,13 @@ export function createDatasetWriter(
   return {
     ingest(request: DatasetWriteRequest): IngestResult {
       const lock = dependencies.acquireLock({
-        storeDir: request.datasetDir,
+        datasetDir: request.datasetDir,
         reportWarning: request.reportWarning,
       });
       let dataset: LabelDataset | undefined;
       try {
         dataset = dependencies.openDataset({
-          storeDir: request.datasetDir,
+          datasetDir: request.datasetDir,
           lock,
           reportWarning: request.reportWarning,
         });

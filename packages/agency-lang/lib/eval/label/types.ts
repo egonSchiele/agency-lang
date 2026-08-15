@@ -4,7 +4,7 @@ import type { JsonValue } from "@/utils/canonicalize.js";
 
 export type { JsonValue };
 
-/** Recursively readonly. The store hands these out so a caller cannot mutate
+/** Recursively readonly. The dataset hands these out so a caller cannot mutate
  *  loaded rows and silently desynchronise them from what is on disk. */
 export type DeepReadonly<Value> =
   Value extends (infer Element)[] ? readonly DeepReadonly<Element>[] :
@@ -82,7 +82,7 @@ export type SessionIdentity = {
 
 export const ManifestSchema = z.object({
   schemaVersion: z.literal(2),
-  /** Display order for fields. A store-level property so the same field means
+  /** Display order for fields. A dataset-level property so the same field means
    *  the same thing everywhere and order can never leak into identity. */
   fieldOrder: z.array(FieldNameSchema),
 }).strict();
@@ -262,7 +262,7 @@ export const AnnotationRowSchema = z.object({
     { message: "coveredQuestionIds must not repeat a question" },
   ),
   /** An explicit boolean per covered question. A missing key means "not
-   *  judged" and is rejected as a store invariant, not here, because that
+   *  judged" and is rejected as a dataset invariant, not here, because that
    *  check is cross-field. */
   answers: z.record(QuestionIdSchema, z.boolean()),
   note: z.string(),
@@ -270,11 +270,11 @@ export const AnnotationRowSchema = z.object({
 
 export type AnnotationRow = z.infer<typeof AnnotationRowSchema>;
 
-/** @internal Named durable boundaries inside the store's multi-file
+/** @internal Named durable boundaries inside the dataset's multi-file
  *  operations. Tests interrupt execution at one of these and reopen, so
  *  recovery is exercised at every point a crash could actually land. Declared
- *  here rather than in store.ts because checklist publication needs to signal
- *  them and must not import the store that imports it. */
+ *  here rather than in dataset.ts because checklist publication needs to signal
+ *  them and must not import the dataset that imports it. */
 export type LabelDatasetFaultPoint =
   | "after-record-append"
   | "after-occurrence-append"

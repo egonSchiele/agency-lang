@@ -8,7 +8,7 @@ import { canonicalize } from "@/utils/canonicalize.js";
 import type { DeepReadonly } from "./types.js";
 
 /**
- * Corruption in the label store is a hard failure, never a warning.
+ * Corruption in the label dataset is a hard failure, never a warning.
  *
  * `lib/eval/readRun.ts` degrades one bad file and continues, because grading
  * happens after every agent has already been paid for and one unreadable
@@ -188,7 +188,7 @@ function parseLine<Value>(args: OpenJsonlArgs<Value>, line: string, lineNumber: 
  *
  * `appendFileSync` returns once the write reaches the OS page cache, not the
  * device. Without the fsync, a power loss can lose an annotation the tool
- * already told the person was recorded — and this store exists precisely
+ * already told the person was recorded — and this dataset exists precisely
  * because those judgements cannot be regenerated.
  */
 export function appendDurably(filePath: string, line: string): void {

@@ -62,7 +62,7 @@ function frameText(over: Partial<SessionSnapshot> = {}, size = { width: 100, hei
   });
   screen.render(labelScreen({
     snapshot: snapshot(over),
-    storeLabel: "labels",
+    datasetLabel: "labels",
     width: size.width,
     height: size.height,
     scroll: 0,

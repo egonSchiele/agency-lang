@@ -19,8 +19,16 @@ export type StatelogScan = {
   traces: readonly TraceSummary[];
 };
 
-/** How much of a first message to show when listing available traces. */
-const TRACE_PREVIEW_CHARS = 60;
+/** How much of a value to show in a one-line preview (trace listing, task edit).
+ *  One constant so every preview truncates to the same width. */
+export const PREVIEW_CHARS = 60;
+
+/** Collapse whitespace to one line and truncate to `PREVIEW_CHARS` with an
+ *  ellipsis. Shared by everything that previews a value. */
+export function previewLine(text: string): string {
+  const oneLine = text.replace(/\s+/g, " ").trim();
+  return oneLine.length > PREVIEW_CHARS ? `${oneLine.slice(0, PREVIEW_CHARS)}…` : oneLine;
+}
 
 /**
  * Parse a statelog once and group its events by trace.
@@ -81,13 +89,8 @@ function summarizeTrace(traceId: string, events: readonly EventEnvelope[]): Trac
 export function describeAvailableTraces(scan: StatelogScan): string {
   const lines = scan.traces.map((trace) => {
     const label = trace.agentName ?? "(unnamed)";
-    const preview = trace.firstUserMessage === null ? "" : `  ${truncatePreview(trace.firstUserMessage)}`;
+    const preview = trace.firstUserMessage === null ? "" : `  ${previewLine(trace.firstUserMessage)}`;
     return `  ${trace.traceId}  [${label}]  $${trace.costUsd.toFixed(4)}${preview}`;
   });
   return `Available traces:\n${lines.join("\n")}`;
-}
-
-function truncatePreview(text: string): string {
-  const oneLine = text.replace(/\s+/g, " ").trim();
-  return oneLine.length > TRACE_PREVIEW_CHARS ? `${oneLine.slice(0, TRACE_PREVIEW_CHARS)}…` : oneLine;
 }

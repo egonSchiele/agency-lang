@@ -19,14 +19,14 @@ const SESSION_ID = `session_${"c".repeat(64)}`;
 const OUT_A = `out_${"a".repeat(64)}`;
 const OUT_B = `out_${"b".repeat(64)}`;
 
-let storeDir: string;
+let datasetDir: string;
 
 beforeEach(() => {
-  storeDir = fs.mkdtempSync(path.join(os.tmpdir(), "label-draft-"));
+  datasetDir = fs.mkdtempSync(path.join(os.tmpdir(), "label-draft-"));
 });
 
 afterEach(() => {
-  fs.rmSync(storeDir, { recursive: true, force: true });
+  fs.rmSync(datasetDir, { recursive: true, force: true });
 });
 
 function draft(over: Partial<Draft> = {}): Draft {
@@ -53,31 +53,31 @@ function draft(over: Partial<Draft> = {}): Draft {
 
 describe("draft persistence", () => {
   it("round-trips", () => {
-    saveDraftFile(storeDir, draft());
-    expect(loadDraftFile(storeDir, SESSION_ID)?.binding.outputIds).toEqual([OUT_A, OUT_B]);
+    saveDraftFile(datasetDir, draft());
+    expect(loadDraftFile(datasetDir, SESSION_ID)?.binding.outputIds).toEqual([OUT_A, OUT_B]);
   });
 
   it("returns undefined when there is no draft", () => {
-    expect(loadDraftFile(storeDir, SESSION_ID)).toBeUndefined();
+    expect(loadDraftFile(datasetDir, SESSION_ID)).toBeUndefined();
   });
 
   it("writes atomically, leaving no temporary file", () => {
-    saveDraftFile(storeDir, draft());
-    const dir = path.dirname(draftPath(storeDir, SESSION_ID));
+    saveDraftFile(datasetDir, draft());
+    const dir = path.dirname(draftPath(datasetDir, SESSION_ID));
     expect(fs.readdirSync(dir).filter((name) => name.includes(".tmp"))).toEqual([]);
   });
 
   it("replaces the previous draft rather than appending", () => {
-    saveDraftFile(storeDir, draft());
-    saveDraftFile(storeDir, draft({ currentIndex: 1 }));
-    expect(loadDraftFile(storeDir, SESSION_ID)?.currentIndex).toBe(1);
+    saveDraftFile(datasetDir, draft());
+    saveDraftFile(datasetDir, draft({ currentIndex: 1 }));
+    expect(loadDraftFile(datasetDir, SESSION_ID)?.currentIndex).toBe(1);
   });
 
   it("rejects a draft file with unknown fields", () => {
-    const file = draftPath(storeDir, SESSION_ID);
+    const file = draftPath(datasetDir, SESSION_ID);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, JSON.stringify({ ...draft(), surprise: true }));
-    expect(() => loadDraftFile(storeDir, SESSION_ID)).toThrow(/not a valid labelling draft/i);
+    expect(() => loadDraftFile(datasetDir, SESSION_ID)).toThrow(/not a valid labelling draft/i);
   });
 
   it("rejects an unsafe session id", () => {

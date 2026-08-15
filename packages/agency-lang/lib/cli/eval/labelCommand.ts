@@ -49,7 +49,7 @@ export function labelCommandDependencies(
  * `label ingest … --dataset x` both reach the parent.
  *
  * `label` also takes no positional, which is why ingesting and labelling are
- * always two commands. That is the shape the store wants anyway: you ingest
+ * always two commands. That is the shape the dataset wants anyway: you ingest
  * several sources, then label once.
  */
 export function addLabelCommand(

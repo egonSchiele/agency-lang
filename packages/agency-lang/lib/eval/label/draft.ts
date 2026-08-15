@@ -65,20 +65,20 @@ export const DraftSchema = z.object({
 
 export type Draft = z.infer<typeof DraftSchema>;
 
-export function draftPath(storeDir: string, sessionId: string): string {
-  return path.join(storeDir, "drafts", `${sessionId}.json`);
+export function draftPath(datasetDir: string, sessionId: string): string {
+  return path.join(datasetDir, "drafts", `${sessionId}.json`);
 }
 
-export function saveDraftFile(storeDir: string, draft: Draft): void {
+export function saveDraftFile(datasetDir: string, draft: Draft): void {
   atomicWriteValidated({
-    targetPath: draftPath(storeDir, draft.sessionId),
+    targetPath: draftPath(datasetDir, draft.sessionId),
     value: draft,
     schema: DraftSchema,
   });
 }
 
-export function loadDraftFile(storeDir: string, sessionId: string): Draft | undefined {
-  const file = draftPath(storeDir, sessionId);
+export function loadDraftFile(datasetDir: string, sessionId: string): Draft | undefined {
+  const file = draftPath(datasetDir, sessionId);
   if (!fs.existsSync(file)) {
     return undefined;
   }

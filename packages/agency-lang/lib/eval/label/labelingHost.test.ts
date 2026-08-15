@@ -40,7 +40,7 @@ describe("labelingHost", () => {
     await createLabelingHost(SCREEN, SIZE, dependencies).run(request);
 
     expect(dependencies.openSession).toHaveBeenCalledWith(expect.objectContaining({
-      storeDir: "/tmp/ds",
+      datasetDir: "/tmp/ds",
       checklistFile: "/tmp/cl.json",
       annotator: { kind: "human", id: "adit" },
       focusOutputId: "out_abc",

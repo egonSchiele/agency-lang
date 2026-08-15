@@ -36,7 +36,7 @@ export type EvalLabelDependencies = {
 };
 
 /**
- * A relative store resolves from the invoking working directory, matching how
+ * A relative dataset resolves from the invoking working directory, matching how
  * `runSuite` resolves `runsDir` — the two are sibling notions of "where this
  * project keeps its eval artifacts".
  */

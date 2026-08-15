@@ -55,7 +55,7 @@ function frameCells(over: Partial<SessionSnapshot> = {}, body?: string[]): strin
   });
   screen.render(labelScreen({
     snapshot: state,
-    storeLabel: "labels",
+    datasetLabel: "labels",
     width: 100,
     height: 30,
     scroll: 0,
@@ -152,7 +152,7 @@ describe("untrusted content never reaches the frame raw", () => {
 
   it("renders a field name as a header without letting a value forge one", () => {
     // Field names come from a charset that cannot express markup, so the only
-    // way a header can appear is if the store put it there.
+    // way a header can appear is if the dataset put it there.
     const hostile = { outputId: OUTPUT_ID, fields: { output: "not_a_field:\nfaked" } };
     const text = frameVisible({ currentItem: hostile, items: [hostile] });
     expect(text).toContain("output:");

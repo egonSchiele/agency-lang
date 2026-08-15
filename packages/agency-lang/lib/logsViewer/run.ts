@@ -24,6 +24,7 @@ import type { TreeNode } from "./types.js";
 import { createLabelingHost } from "../eval/label/labelingHost.js";
 import { projectArtifactField } from "../eval/label/project.js";
 import type { TaskChoice } from "../eval/label/load/statelog.js";
+import { previewLine } from "../eval/label/load/statelogScan.js";
 import type { Annotator } from "../eval/label/types.js";
 import type { EventEnvelope } from "../statelog/wireTypes.js";
 import { labelTrace, labelTraceServices, type LabelTraceOutcome, type LabelTraceUI } from "./labelTrace.js";
@@ -52,8 +53,8 @@ export type RunViewerOpts = {
   // resolution tells the host whether the user backed out or quit.
   embedded?: boolean;
   thresholds?: ViewerThresholds;
-  // Enables the tree `l` action: label the focused trace into this dataset
-  // and label it. Undefined for remote or stdin sources (no local file).
+  // Enables the tree `l` action: label the focused trace into this dataset.
+  // Undefined for remote or stdin sources (no local file).
   labeling?: LabelTraceLaunch;
 };
 
@@ -66,8 +67,6 @@ export type LabelTraceLaunch = {
 };
 
 export type ViewerResolution = "quit" | "back";
-
-const SOURCE_NAME_PREVIEW_CHARS = 60;
 
 /** The batch name a labeled occurrence records: the trace's agent name if it
  *  set one, else the statelog file's basename. Keeps "did v2 beat v1"
@@ -88,11 +87,6 @@ function traceSourceName(events: readonly EventEnvelope[], sourcePath: string): 
   return base !== undefined && base.length > 0 ? base : "statelog";
 }
 
-function previewOf(text: string): string {
-  const oneLine = text.replace(/\s+/g, " ").trim();
-  return oneLine.length > SOURCE_NAME_PREVIEW_CHARS ? `${oneLine.slice(0, SOURCE_NAME_PREVIEW_CHARS)}…` : oneLine;
-}
-
 /** The labeling flow, factored out of `runViewer` so the shell stays small. It
  *  runs the labeling TUI on the viewer's own `screen`; the caller repaints
  *  afterwards. */
@@ -107,7 +101,7 @@ async function runTraceLabeling(params: {
   const host = createLabelingHost(screen, () => screen.size());
   const ui: LabelTraceUI = {
     async editTask(defaultTask): Promise<TaskChoice | null> {
-      const preview = defaultTask === null ? "(none)" : previewOf(projectArtifactField(defaultTask));
+      const preview = defaultTask === null ? "(none)" : previewLine(projectArtifactField(defaultTask));
       const answer = await screen.nextLine(`Task [${preview}] — Enter keeps, text replaces, "-" clears: `);
       const trimmed = answer.trim();
       if (trimmed === "") return { kind: "keep-default" };

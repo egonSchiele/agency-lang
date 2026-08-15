@@ -22,7 +22,7 @@ export type LabelingHost = {
   run(request: LabelingRequest): Promise<void>;
 };
 
-/** @internal Injected so lifecycle tests need no real store or terminal. */
+/** @internal Injected so lifecycle tests need no real dataset or terminal. */
 export type LabelingHostDependencies = {
   openSession: typeof openLabelingSession;
   runTui: typeof runLabelTui;
@@ -43,7 +43,7 @@ export function createLabelingHost(
   return {
     async run(request: LabelingRequest): Promise<void> {
       const controller = await dependencies.openSession({
-        storeDir: request.datasetDir,
+        datasetDir: request.datasetDir,
         checklistFile: request.checklistFile,
         annotator: request.annotator,
         focusOutputId: request.focusOutputId,
@@ -53,7 +53,7 @@ export function createLabelingHost(
         await dependencies.runTui({
           controller,
           screen,
-          storeLabel: path.basename(request.datasetDir),
+          datasetLabel: path.basename(request.datasetDir),
           fieldOrder: dependencies.readFieldOrder(request.datasetDir),
           currentSize,
         });

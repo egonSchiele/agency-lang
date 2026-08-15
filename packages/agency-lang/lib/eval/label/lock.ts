@@ -15,17 +15,17 @@ export type LockHolder = {
 };
 
 export type AcquireStoreLockArgs = {
-  storeDir: string;
+  datasetDir: string;
   reportWarning(message: string): void;
 };
 
-export type StoreLock = {
+export type DatasetLock = {
   holder: DeepReadonly<LockHolder>;
   release(): void;
 };
 
 /**
- * One writer at a time for a label store.
+ * One writer at a time for a label dataset.
  *
  * This is integrity protection, not collaboration. Sign-off touches several
  * files in an order that matters, and two sessions interleaving could publish
@@ -33,12 +33,12 @@ export type StoreLock = {
  * annotator" does not stop that annotator opening two terminals.
  *
  * A stale lock is never taken over automatically. Guessing that a holder is
- * dead and stealing the store is exactly the move that turns a crash into
+ * dead and stealing the dataset is exactly the move that turns a crash into
  * corrupted data, so an abandoned lock is reported and left for a person.
  */
-export function acquireStoreLock(args: AcquireStoreLockArgs): StoreLock {
-  fs.mkdirSync(args.storeDir, { recursive: true });
-  const lockFile = path.join(args.storeDir, LOCK_BASENAME);
+export function acquireDatasetLock(args: AcquireStoreLockArgs): DatasetLock {
+  fs.mkdirSync(args.datasetDir, { recursive: true });
+  const lockFile = path.join(args.datasetDir, LOCK_BASENAME);
   const holder: LockHolder = {
     pid: process.pid,
     token: nanoid(LOCK_TOKEN_LENGTH),
@@ -63,7 +63,7 @@ export function acquireStoreLock(args: AcquireStoreLockArgs): StoreLock {
     releaseOwnedLock(lockFile, holder, args.reportWarning);
   };
 
-  // Registered so a crash still frees the store, and removed on release so a
+  // Registered so a crash still frees the dataset, and removed on release so a
   // long-lived process does not accumulate listeners per session.
   const onExit = (): void => {
     release();
@@ -96,7 +96,7 @@ function describeExistingHolder(lockFile: string): string {
  * Remove the lock only after proving we still hold it.
  *
  * `safeDelete` is not used here: it is oriented at the project root, and a
- * store can be configured anywhere. Instead this checks the exact basename and
+ * dataset can be configured anywhere. Instead this checks the exact basename and
  * the recorded ownership token, so the only file it can ever unlink is a lock
  * this process wrote.
  */

@@ -59,9 +59,12 @@ describe("runLocalLock", () => {
     const ctx = makeCtx();
 
     await expect(
-      runLocalLock(ctx, "resource", async () =>
-        runLocalLock(ctx, "resource", async () => "nested", { ownerId: "same-owner" }),
-      { ownerId: "same-owner" }),
+      runLocalLock(
+        ctx,
+        "resource",
+        async () => runLocalLock(ctx, "resource", async () => "nested", { ownerId: "same-owner" }),
+        { ownerId: "same-owner" },
+      ),
     ).rejects.toThrow(/already holds lock 'resource'/);
   });
 
@@ -69,9 +72,12 @@ describe("runLocalLock", () => {
     const ctx = makeCtx();
 
     await expect(
-      runLocalLock(ctx, "a", async () =>
-        runLocalLock(ctx, "b", async () => "nested", { ownerId: "same-owner" }),
-      { ownerId: "same-owner" }),
+      runLocalLock(
+        ctx,
+        "a",
+        async () => runLocalLock(ctx, "b", async () => "nested", { ownerId: "same-owner" }),
+        { ownerId: "same-owner" },
+      ),
     ).resolves.toBe("nested");
   });
 

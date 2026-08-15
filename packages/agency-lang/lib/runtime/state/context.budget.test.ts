@@ -15,7 +15,9 @@ function makeContext(budget?: { maxCost?: number; maxTimeMs?: number }) {
 
 describe("createExecutionContext budget propagation", () => {
   it("copies the resolved budget onto the execution context", async () => {
-    const execCtx = await makeContext({ maxCost: 0.5, maxTimeMs: 1000 }).createExecutionContext({ runId: "run-1" });
+    const execCtx = await makeContext({ maxCost: 0.5, maxTimeMs: 1000 }).createExecutionContext({
+      runId: "run-1",
+    });
     expect(execCtx.budget).toEqual({ maxCost: 0.5, maxTimeMs: 1000 });
   });
 

@@ -9,7 +9,10 @@ import { typeCheck } from "./index.js";
 import type { TypeCheckError } from "./types.js";
 
 function warningsFrom(source: string): TypeCheckError[] {
-  const file = path.join(os.tmpdir(), `tc-int-${Date.now()}-${Math.random().toString(36).slice(2)}.agency`);
+  const file = path.join(
+    os.tmpdir(),
+    `tc-int-${Date.now()}-${Math.random().toString(36).slice(2)}.agency`,
+  );
   writeFileSync(file, source);
   try {
     const absPath = path.resolve(file);
@@ -172,11 +175,14 @@ describe("interrupt kind warnings", () => {
         deploy()
       }
     `;
-    writeFileSync(libFile, `
+    writeFileSync(
+      libFile,
+      `
       export def deploy() {
         interrupt myapp::deploy("Deploy?")
       }
-    `);
+    `,
+    );
     writeFileSync(mainFile, mainSource);
     try {
       const absPath = path.resolve(mainFile);
@@ -204,11 +210,14 @@ describe("interrupt kind warnings", () => {
         return checkout()
       }
     `;
-    writeFileSync(libFile, `
+    writeFileSync(
+      libFile,
+      `
       export node checkout() {
         interrupt payment::charge("Charge?")
       }
-    `);
+    `,
+    );
     writeFileSync(mainFile, mainSource);
     try {
       const absPath = path.resolve(mainFile);
@@ -236,11 +245,14 @@ describe("interrupt kind warnings", () => {
         d()
       }
     `;
-    writeFileSync(libFile, `
+    writeFileSync(
+      libFile,
+      `
       export def deploy() {
         interrupt myapp::deploy("Deploy?")
       }
-    `);
+    `,
+    );
     writeFileSync(mainFile, mainSource);
     try {
       const absPath = path.resolve(mainFile);
@@ -288,7 +300,10 @@ describe("interrupt kind warnings", () => {
   });
 
   it("produces error when .preapprove() is called with arguments", () => {
-    const file = path.join(os.tmpdir(), `tc-preapprove-${Date.now()}-${Math.random().toString(36).slice(2)}.agency`);
+    const file = path.join(
+      os.tmpdir(),
+      `tc-preapprove-${Date.now()}-${Math.random().toString(36).slice(2)}.agency`,
+    );
     const source = `
       def deploy() {
         interrupt myapp::deploy("Deploy?")

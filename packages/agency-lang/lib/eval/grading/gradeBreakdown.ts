@@ -28,7 +28,7 @@ function gradeRow({ grader, grade }: GraderGrade): GradeRow {
 /** A serializable, human-renderable view of a Scorecard: per input, the output
  *  plus each grader's score and feedback. Used by the champion artifact and report. */
 export function breakdown(scorecard: Scorecard): InputBreakdown[] {
-  const objectives = scorecard.inputScores();   // reuse the canonical gate→0 rule; don't re-derive it
+  const objectives = scorecard.inputScores(); // reuse the canonical gate→0 rule; don't re-derive it
   return scorecard.perInput.map((i, idx) => ({
     inputId: i.input.id ?? "(no id)",
     output: i.run?.output ?? null,
@@ -97,14 +97,18 @@ export function formatGrading(objective: number, perInput: InputBreakdown[]): st
   // reader scans for. ttyColor: plain text when piped.
   const objectiveText = objective.toFixed(3);
   const coloredObjective =
-    objective === 0 ? ttyColor.red(objectiveText)
-    : objective === 1 ? ttyColor.green(objectiveText)
-    : objectiveText;
+    objective === 0
+      ? ttyColor.red(objectiveText)
+      : objective === 1
+        ? ttyColor.green(objectiveText)
+        : objectiveText;
   return [
     `objective  ${coloredObjective}`,
     ...summarizeGraders(perInput).map(formatGraderSummary),
-    ...ungradedInputs(perInput).map((entry) =>
-      `  ${ttyColor.green(entry.inputId)}  ${ttyColor.red(`not graded — ${entry.reason}`)}`),
+    ...ungradedInputs(perInput).map(
+      (entry) =>
+        `  ${ttyColor.green(entry.inputId)}  ${ttyColor.red(`not graded — ${entry.reason}`)}`,
+    ),
   ];
 }
 

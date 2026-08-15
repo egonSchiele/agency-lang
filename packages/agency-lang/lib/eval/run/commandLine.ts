@@ -1,11 +1,21 @@
-import { failure, many1, many1WithJoin, map, noneOf, oneOf, or, quotedString, sepBy1, type Parser } from "tarsec";
+import {
+  failure,
+  many1,
+  many1WithJoin,
+  map,
+  noneOf,
+  oneOf,
+  or,
+  quotedString,
+  sepBy1,
+  type Parser,
+} from "tarsec";
 
 export const TASK_PLACEHOLDER = "{task}";
 
 /** One message, used by both the early check (resolveEvalTarget) and the
  *  invariant guard (substituteTask), so the two cannot drift. */
-export const MISSING_TASK_PLACEHOLDER_ERROR =
-  `--agent-cmd must contain ${TASK_PLACEHOLDER} — the command never receives the input's task without it`;
+export const MISSING_TASK_PLACEHOLDER_ERROR = `--agent-cmd must contain ${TASK_PLACEHOLDER} — the command never receives the input's task without it`;
 
 // The grammar: a command is tokens separated by whitespace; a token is one
 // or more adjacent chunks; a chunk is a double-quoted span, a single-quoted

@@ -37,9 +37,7 @@ describe("_search", () => {
 
     const [url] = mockFetch.mock.calls[0];
     const parsed = new URL(url);
-    expect(parsed.origin + parsed.pathname).toBe(
-      "https://api.search.brave.com/res/v1/web/search",
-    );
+    expect(parsed.origin + parsed.pathname).toBe("https://api.search.brave.com/res/v1/web/search");
     expect(parsed.searchParams.get("q")).toBe("test query");
     expect(parsed.searchParams.get("count")).toBe("5");
   });
@@ -107,14 +105,9 @@ describe("_search", () => {
   });
 
   it("throws on non-200 response with status and body", async () => {
-    globalThis.fetch = mockFetchResponse(
-      { message: "Rate limit exceeded" },
-      429,
-    );
+    globalThis.fetch = mockFetchResponse({ message: "Rate limit exceeded" }, 429);
 
-    await expect(_search("test")).rejects.toThrow(
-      "Brave Search API error (429)",
-    );
+    await expect(_search("test")).rejects.toThrow("Brave Search API error (429)");
   });
 
   it("includes optional params in URL when provided", async () => {
@@ -255,9 +248,7 @@ describe("_tavilySearch", () => {
   it("throws on non-200 response with status and body", async () => {
     globalThis.fetch = mockFetchResponse({ detail: "Unauthorized" }, 401);
 
-    await expect(_tavilySearch("test")).rejects.toThrow(
-      "Tavily Search API error (401)",
-    );
+    await expect(_tavilySearch("test")).rejects.toThrow("Tavily Search API error (401)");
   });
 
   it("includes optional params in the body when provided", async () => {

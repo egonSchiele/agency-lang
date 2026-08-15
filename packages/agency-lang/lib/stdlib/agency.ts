@@ -1,4 +1,9 @@
-import { compileSource, typeCheckSource, getEffectsFromSource, TypeCheckReport } from "../compiler/compile.js";
+import {
+  compileSource,
+  typeCheckSource,
+  getEffectsFromSource,
+  TypeCheckReport,
+} from "../compiler/compile.js";
 import { writeFileSync, readFileSync, realpathSync, existsSync } from "fs";
 import { resolve, sep } from "path";
 import { parseAgency, replaceBlankLines } from "../parser.js";
@@ -13,18 +18,11 @@ import type { ExportFromStatement, NamedExportBody } from "../types.js";
 import { variableTypeToString } from "../backends/typescriptGenerator/typeToString.js";
 import { declaredName } from "../types/hole.js";
 import { deepCopy } from "../utils.js";
-import {
-  ImportKind,
-  ImportPolicy,
-  isImportAllowed,
-} from "../importPaths.js";
+import { ImportKind, ImportPolicy, isImportAllowed } from "../importPaths.js";
 import type { AgencyMultiLineComment, AgencyProgram, AgencyNode } from "../types.js";
 import type { ImportStatement } from "../types/importStatement.js";
 import { _write } from "./builtins.js";
-import {
-  VALID_CALLBACK_NAMES,
-  type CallbackName,
-} from "../types/function.js";
+import { VALID_CALLBACK_NAMES, type CallbackName } from "../types/function.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { AgencyFunction } from "../runtime/agencyFunction.js";
 
@@ -56,9 +54,7 @@ const VALID_CALLBACK_NAME_SET: ReadonlySet<string> = new Set(VALID_CALLBACK_NAME
 // `getRuntimeContext()` finds an active ALS frame.
 export function _callbackImpl(name: string, fn: unknown): void {
   if (!VALID_CALLBACK_NAME_SET.has(name)) {
-    throw new Error(
-      `Unknown callback '${name}'. Valid: ${VALID_CALLBACK_NAMES.join(", ")}`,
-    );
+    throw new Error(`Unknown callback '${name}'. Valid: ${VALID_CALLBACK_NAMES.join(", ")}`);
   }
   if (typeof fn !== "function" && !AgencyFunction.isAgencyFunction(fn)) {
     throw new Error(
@@ -161,10 +157,7 @@ export function resolveInSandbox(
 // stdlib-only restriction as _compile. The (dir, filename) split mirrors
 // std::read / std::write so callers can use partial application to bind
 // `dir` to a sandbox path: `runFile.bind(dir: "/safe/dir")`.
-export function _compileFile(
-  dir: string,
-  filename: string,
-): { moduleId: string; code: string } {
+export function _compileFile(dir: string, filename: string): { moduleId: string; code: string } {
   const source = readFileSync(resolveInSandbox(dir, filename), "utf-8");
   return compileToProgram(source);
 }
@@ -395,10 +388,8 @@ function resolveNamedReExports(
         name: localName,
         reexportedFrom: from,
         // Re-export sites may add tool markers the source did not have.
-        destructive:
-          base.destructive || (body.destructiveNames ?? []).includes(sourceName),
-        idempotent:
-          base.idempotent || (body.idempotentNames ?? []).includes(sourceName),
+        destructive: base.destructive || (body.destructiveNames ?? []).includes(sourceName),
+        idempotent: base.idempotent || (body.idempotentNames ?? []).includes(sourceName),
       },
     ];
   });
@@ -537,10 +528,7 @@ export function _walkAST(ast: AgencyProgram): {
 // convenience wrappers delegate to _getNodesOfType — do NOT reimplement
 // the parse-and-walk dance per wrapper.
 
-export function _getNodesOfType(
-  source: string,
-  types: string[],
-): AgencyNode[] {
+export function _getNodesOfType(source: string, types: string[]): AgencyNode[] {
   const ast = _parseAST(source);
   const wanted = new Set(types);
   return walkNodesArray(ast.nodes)
@@ -577,8 +565,7 @@ export function _filterImports(
   const originalCount = ast.nodes.length;
   ast.nodes = ast.nodes.filter(
     (n) =>
-      !(n.type === "importStatement") ||
-      isImportAllowed((n as ImportStatement).modulePath, policy),
+      !(n.type === "importStatement") || isImportAllowed((n as ImportStatement).modulePath, policy),
   );
   const filtered = ast.nodes.length !== originalCount;
   return { source: generateAgency(ast), filtered };

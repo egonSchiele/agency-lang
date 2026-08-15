@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Input } from "@/eval/runTypes.js";
 import { splitInputs } from "./validationSplit.js";
 
-const inputs = (n: number): Input[] => Array.from({ length: n }, (_u, i) => ({ id: `i${i}`, task: "t" }));
+const inputs = (n: number): Input[] =>
+  Array.from({ length: n }, (_u, i) => ({ id: `i${i}`, task: "t" }));
 
 describe("splitInputs", () => {
   it("holds out floor(ratio * n) inputs for validation", () => {

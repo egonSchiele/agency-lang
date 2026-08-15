@@ -217,9 +217,10 @@ export async function _readNote(id: string, folder?: string): Promise<NoteConten
   assertFolder(meta, folder);
   assertNotLocked(meta);
 
-  const raw = folder == null
-    ? await runNotesScript(READ_UNSCOPED_SCRIPT, [id])
-    : await runNotesScript(READ_SCOPED_SCRIPT, [id, folder]);
+  const raw =
+    folder == null
+      ? await runNotesScript(READ_UNSCOPED_SCRIPT, [id])
+      : await runNotesScript(READ_SCOPED_SCRIPT, [id, folder]);
   const parts = raw.split(FIELD_DELIM);
   if (parts.length !== 2) {
     throw new Error(`Notes returned an unexpected reply for note ${id}.`);
@@ -261,9 +262,10 @@ const LIST_ALL_SCRIPT = withTimeout(renderListAll({ noteRow: NOTE_ROW }));
 const LIST_IN_FOLDER_SCRIPT = withTimeout(renderListInFolder({ noteRow: NOTE_ROW }));
 
 export async function _listNotes(folder?: string): Promise<NoteMeta[]> {
-  const raw = folder == null
-    ? await runNotesScript(LIST_ALL_SCRIPT, [])
-    : await runNotesScript(LIST_IN_FOLDER_SCRIPT, [folder]);
+  const raw =
+    folder == null
+      ? await runNotesScript(LIST_ALL_SCRIPT, [])
+      : await runNotesScript(LIST_IN_FOLDER_SCRIPT, [folder]);
   return parseNoteRows(raw);
 }
 
@@ -274,9 +276,10 @@ const SEARCH_ALL_SCRIPT = withTimeout(renderSearchAll({ noteRow: NOTE_ROW }));
 const SEARCH_IN_FOLDER_SCRIPT = withTimeout(renderSearchInFolder({ noteRow: NOTE_ROW }));
 
 export async function _searchNotes(query: string, folder?: string): Promise<NoteMeta[]> {
-  const raw = folder == null
-    ? await runNotesScript(SEARCH_ALL_SCRIPT, [query])
-    : await runNotesScript(SEARCH_IN_FOLDER_SCRIPT, [query, folder]);
+  const raw =
+    folder == null
+      ? await runNotesScript(SEARCH_ALL_SCRIPT, [query])
+      : await runNotesScript(SEARCH_IN_FOLDER_SCRIPT, [query, folder]);
   return parseNoteRows(raw);
 }
 
@@ -327,11 +330,7 @@ const CREATE_SCRIPT = withTimeout(renderCreate({ accountWalk: ACCOUNT_WALK }));
 
 /** Create a note. `html` is HTML, already rendered — this layer does not know
  *  about markdown. The Agency module does the conversion. */
-export async function _createNote(
-  title: string,
-  html: string,
-  folder: string,
-): Promise<NoteMeta> {
+export async function _createNote(title: string, html: string, folder: string): Promise<NoteMeta> {
   const raw = await runNotesScript(CREATE_SCRIPT, [title, html, folder]);
   const rows = parseNoteRows(raw);
   if (rows.length !== 1) {
@@ -361,18 +360,15 @@ const APPEND_UNSCOPED_SCRIPT = withTimeout(renderAppendUnscoped({ appendBody: AP
  *  The interrupt payload the approver saw reflects the pre-approval
  *  pre-flight. This second pre-flight is the authoritative one for the
  *  write. */
-export async function _appendToNote(
-  id: string,
-  html: string,
-  folder?: string,
-): Promise<NoteMeta> {
+export async function _appendToNote(id: string, html: string, folder?: string): Promise<NoteMeta> {
   const meta = await _preflightNote(id);
   assertFolder(meta, folder);
   assertNotLocked(meta);
 
-  const raw = folder == null
-    ? await runNotesScript(APPEND_UNSCOPED_SCRIPT, [id, html])
-    : await runNotesScript(APPEND_SCOPED_SCRIPT, [id, html, folder]);
+  const raw =
+    folder == null
+      ? await runNotesScript(APPEND_UNSCOPED_SCRIPT, [id, html])
+      : await runNotesScript(APPEND_SCOPED_SCRIPT, [id, html, folder]);
 
   const rows = parseNoteRows(raw);
   if (rows.length !== 1) {

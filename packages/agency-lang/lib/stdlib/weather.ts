@@ -47,15 +47,11 @@ export async function _geocode(location: string): Promise<GeoResult> {
   const data = await response.json();
   const results = data.results;
   if (!results || results.length === 0) {
-    throw new Error(
-      `No location found for "${location}". Try a different city name or zip code.`,
-    );
+    throw new Error(`No location found for "${location}". Try a different city name or zip code.`);
   }
   const place = results[0];
   if (typeof place.latitude !== "number" || typeof place.longitude !== "number") {
-    throw new Error(
-      `Geocoding returned invalid coordinates for "${location}".`,
-    );
+    throw new Error(`Geocoding returned invalid coordinates for "${location}".`);
   }
   return {
     name: place.name ?? location,
@@ -81,7 +77,8 @@ export type WeatherResult = {
   units: "metric" | "imperial";
 };
 
-const CURRENT_VARS = "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,cloud_cover";
+const CURRENT_VARS =
+  "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,cloud_cover";
 
 export async function _weather(
   location: string,
@@ -113,9 +110,7 @@ export async function _weather(
   const data = await response.json();
   const current = data.current;
   if (!current) {
-    throw new Error(
-      `Weather API returned no current data for "${location}".`,
-    );
+    throw new Error(`Weather API returned no current data for "${location}".`);
   }
 
   const weatherCode: number = current.weather_code ?? 0;

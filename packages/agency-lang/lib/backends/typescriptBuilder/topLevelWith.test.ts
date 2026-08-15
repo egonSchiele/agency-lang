@@ -26,14 +26,16 @@ function compileSource(src: string): string {
  */
 describe("issue #229: top-level bare `with` modifier", () => {
   it("compiles `foo() with approve` at module scope without crashing", () => {
-    const src = `def foo(): number { return 42 }\n` +
+    const src =
+      `def foo(): number { return 42 }\n` +
       `foo() with approve\n` +
       `node main() { print("ok") }\n`;
     expect(() => compileSource(src)).not.toThrow();
   });
 
   it("emits a pushHandler/popHandler wrapper inside __initializeGlobals", () => {
-    const src = `def foo(): number { return 42 }\n` +
+    const src =
+      `def foo(): number { return 42 }\n` +
       `foo() with approve\n` +
       `node main() { print("ok") }\n`;
     const out = compileSource(src);
@@ -53,7 +55,8 @@ describe("issue #229: top-level bare `with` modifier", () => {
   });
 
   it("still compiles when the handler is a user-defined function name", () => {
-    const src = `def myHandler(): void { }\n` +
+    const src =
+      `def myHandler(): void { }\n` +
       `def foo(): number { return 42 }\n` +
       `foo() with myHandler\n` +
       `node main() { print("ok") }\n`;

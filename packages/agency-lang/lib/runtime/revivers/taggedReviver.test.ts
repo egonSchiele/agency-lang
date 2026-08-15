@@ -46,8 +46,6 @@ describe("TaggedReviver (via deepClone)", () => {
     const when = new Date("2026-01-01T00:00:00.000Z");
     const cloned = deepClone(tagged({ a: 1 }, { when }));
     expect(readTag(cloned)!.when).toBeInstanceOf(Date);
-    expect((readTag(cloned)!.when as Date).toISOString()).toBe(
-      "2026-01-01T00:00:00.000Z",
-    );
+    expect((readTag(cloned)!.when as Date).toISOString()).toBe("2026-01-01T00:00:00.000Z");
   });
 });

@@ -35,20 +35,12 @@ function typeSym(name: string): TypeSymbol {
     aliasedType: { type: "primitiveType", value: "string" },
   };
 }
-import type {
-  ImportStatement,
-  ImportNodeStatement,
-} from "../types/importStatement.js";
+import type { ImportStatement, ImportNodeStatement } from "../types/importStatement.js";
 
-function makeImportStatement(
-  names: string[],
-  modulePath: string,
-): ImportStatement {
+function makeImportStatement(names: string[], modulePath: string): ImportStatement {
   return {
     type: "importStatement",
-    importedNames: [
-      { type: "namedImport", importedNames: names, aliases: {} },
-    ],
+    importedNames: [{ type: "namedImport", importedNames: names, aliases: {} }],
     modulePath,
     isAgencyImport: modulePath.endsWith(".agency"),
   };
@@ -116,9 +108,7 @@ describe("resolveImports", () => {
   it("splits mixed imports: nodes separate, functions+types combined", () => {
     const program: AgencyProgram = {
       type: "agencyProgram",
-      nodes: [
-        makeImportStatement(["greet", "add", "Config"], "./mixed.agency"),
-      ],
+      nodes: [makeImportStatement(["greet", "add", "Config"], "./mixed.agency")],
     };
     const symbolTable = table({
       "/project/mixed.agency": {
@@ -254,9 +244,9 @@ describe("resolveImports", () => {
         helper: fn("helper"),
       },
     });
-    expect(() =>
-      resolveImports(program, symbolTable, "/project/main.agency"),
-    ).toThrow("Function 'helper' in './utils.agency' is not exported");
+    expect(() => resolveImports(program, symbolTable, "/project/main.agency")).toThrow(
+      "Function 'helper' in './utils.agency' is not exported",
+    );
   });
 
   it("throws on undefined symbols", () => {
@@ -267,9 +257,9 @@ describe("resolveImports", () => {
     const symbolTable = table({
       "/project/other.agency": {},
     });
-    expect(() =>
-      resolveImports(program, symbolTable, "/project/main.agency"),
-    ).toThrow("Symbol 'missing' is not defined in './other.agency'");
+    expect(() => resolveImports(program, symbolTable, "/project/main.agency")).toThrow(
+      "Symbol 'missing' is not defined in './other.agency'",
+    );
   });
 
   it("onUnresolvable drops a bad import and reports it instead of throwing", () => {
@@ -286,9 +276,7 @@ describe("resolveImports", () => {
     });
     // The unresolvable name produces no rewritten node, and it is reported.
     expect(result.nodes).toHaveLength(0);
-    expect(reported).toEqual([
-      "Symbol 'missing' is not defined in './other.agency'",
-    ]);
+    expect(reported).toEqual(["Symbol 'missing' is not defined in './other.agency'"]);
   });
 
   it("onUnresolvable resolves good imports even when another is bad", () => {
@@ -314,9 +302,7 @@ describe("resolveImports", () => {
     if (good.importedNames[0].type === "namedImport") {
       expect(good.importedNames[0].importedNames).toEqual(["add"]);
     }
-    expect(reported).toEqual([
-      "Symbol 'missing' is not defined in './other.agency'",
-    ]);
+    expect(reported).toEqual(["Symbol 'missing' is not defined in './other.agency'"]);
   });
 
   it("onUnresolvable keeps good names in a mixed single statement", () => {
@@ -337,17 +323,13 @@ describe("resolveImports", () => {
     if (good.importedNames[0].type === "namedImport") {
       expect(good.importedNames[0].importedNames).toEqual(["add"]);
     }
-    expect(reported).toEqual([
-      "Symbol 'missing' is not defined in './utils.agency'",
-    ]);
+    expect(reported).toEqual(["Symbol 'missing' is not defined in './utils.agency'"]);
   });
 
   it("leaves non-.agency imports untouched", () => {
     const tsImport: ImportStatement = {
       type: "importStatement",
-      importedNames: [
-        { type: "namedImport", importedNames: ["foo"], aliases: {} },
-      ],
+      importedNames: [{ type: "namedImport", importedNames: ["foo"], aliases: {} }],
       modulePath: "./utils.js",
       isAgencyImport: false,
     };
@@ -397,9 +379,9 @@ describe("resolveImports", () => {
     const symbolTable = table({
       "/project/other.agency": { greet: nodeSym("greet") },
     });
-    expect(() =>
-      resolveImports(program, symbolTable, "/project/main.agency"),
-    ).toThrow(/marker.*cannot be applied to node 'greet'/);
+    expect(() => resolveImports(program, symbolTable, "/project/main.agency")).toThrow(
+      /marker.*cannot be applied to node 'greet'/,
+    );
   });
 
   it("onUnresolvable surfaces a retry-safety marker on a node (not silent)", () => {
@@ -489,9 +471,9 @@ describe("resolveImports", () => {
       "/project/utils.agency": { helper: fn("helper", { exported: false }) },
     });
     // 3-arg call: no opts at all — pins the default-deny security property.
-    expect(() =>
-      resolveImports(program, symbolTable, "/project/main.agency"),
-    ).toThrow(/only allowed under the test harness/);
+    expect(() => resolveImports(program, symbolTable, "/project/main.agency")).toThrow(
+      /only allowed under the test harness/,
+    );
   });
 
   it("import test is rejected for pkg:: imports even in test mode", () => {
@@ -528,9 +510,9 @@ describe("resolveImports", () => {
       nodes: [testImport(["debounce"], "lodash")],
     };
     const symbolTable = table({});
-    expect(() =>
-      resolveImports(program, symbolTable, "/project/main.agency"),
-    ).toThrow(/cannot be used with TypeScript or npm imports/);
+    expect(() => resolveImports(program, symbolTable, "/project/main.agency")).toThrow(
+      /cannot be used with TypeScript or npm imports/,
+    );
   });
 
   it("onUnresolvable surfaces an import-test gate on a TS module (not silent)", () => {

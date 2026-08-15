@@ -3,9 +3,7 @@ import { typecheckSource } from "./testUtils.js";
 
 // Errors from the raises / effect-set diagnostics only.
 function capErrors(src: string) {
-  return typecheckSource(src).filter((e) =>
-    /raises effect|not an effect set/.test(e.message),
-  );
+  return typecheckSource(src).filter((e) => /raises effect|not an effect set/.test(e.message));
 }
 
 const hasEffectError = (errs: { message: string }[], effect: string) =>

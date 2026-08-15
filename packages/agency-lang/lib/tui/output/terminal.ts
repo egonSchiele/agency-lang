@@ -78,8 +78,14 @@ export class TerminalOutput implements OutputTarget {
   // (e.g. from a foreign SIGSTOP), so the resume path must be idempotent.
   private sigtstpInstalled = false;
   private exitHandler = () => this.destroy();
-  private sigintHandler = () => { this.destroy(); process.exit(130); };
-  private sigtermHandler = () => { this.destroy(); process.exit(143); };
+  private sigintHandler = () => {
+    this.destroy();
+    process.exit(130);
+  };
+  private sigtermHandler = () => {
+    this.destroy();
+    process.exit(143);
+  };
   private sigtstpHandler = () => {
     // Remove our handler before re-raising so the default handler can
     // actually suspend the process; otherwise we'd recurse into ourselves.
@@ -122,9 +128,10 @@ export class TerminalOutput implements OutputTarget {
       this.init();
     }
     const grid = flatten(frame, frame.width, frame.height);
-    const ansi = this.previousGrid && sameGridSize(this.previousGrid, grid)
-      ? diffToANSI(this.previousGrid, grid)
-      : CURSOR_HOME + gridToANSI(grid);
+    const ansi =
+      this.previousGrid && sameGridSize(this.previousGrid, grid)
+        ? diffToANSI(this.previousGrid, grid)
+        : CURSOR_HOME + gridToANSI(grid);
     this.previousGrid = grid;
     if (ansi.length === 0) return;
     // Wrap the full-frame write in BSU/ESU so supporting terminals

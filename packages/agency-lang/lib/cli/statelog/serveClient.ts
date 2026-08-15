@@ -130,7 +130,11 @@ export function createServeClient(address: ServeAddress, apiKey: string): ServeC
     return error instanceof Error ? error.message : String(error);
   }
 
-  async function requestJson(url: string, method: "GET" | "POST", body?: unknown): Promise<unknown> {
+  async function requestJson(
+    url: string,
+    method: "GET" | "POST",
+    body?: unknown,
+  ): Promise<unknown> {
     return request(url, method, body, false);
   }
 

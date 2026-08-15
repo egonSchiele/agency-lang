@@ -50,12 +50,18 @@ describe("BUILTIN_FUNCTION_TYPES — reserved callables", () => {
 
   it("checkpoint takes no args", () => {
     expect(errorsFrom(`node main() { let id = checkpoint() }`).filter(arityErr)).toHaveLength(0);
-    expect(errorsFrom(`node main() { let id = checkpoint(1) }`).filter(arityErr).length).toBeGreaterThan(0);
+    expect(
+      errorsFrom(`node main() { let id = checkpoint(1) }`).filter(arityErr).length,
+    ).toBeGreaterThan(0);
   });
 
   it("getCheckpoint requires exactly 1 numeric arg", () => {
     expect(errorsFrom(`node main() { let v = getCheckpoint(1) }`).filter(arityErr)).toHaveLength(0);
-    expect(errorsFrom(`node main() { let v = getCheckpoint() }`).filter(arityErr).length).toBeGreaterThan(0);
-    expect(errorsFrom(`node main() { let v = getCheckpoint(1, 2) }`).filter(arityErr).length).toBeGreaterThan(0);
+    expect(
+      errorsFrom(`node main() { let v = getCheckpoint() }`).filter(arityErr).length,
+    ).toBeGreaterThan(0);
+    expect(
+      errorsFrom(`node main() { let v = getCheckpoint(1, 2) }`).filter(arityErr).length,
+    ).toBeGreaterThan(0);
   });
 });

@@ -13,27 +13,35 @@ function flat(el: Element): string[] {
 }
 
 function llmForest() {
-  const call = span("llmCall", [
-    leaf("promptCompletion", 1_000, {
-      model: '"claude-sonnet-5"',
-      timeTaken: 400,
-      usage: { inputTokens: 120, outputTokens: 30 },
-      cost: { totalCost: 0.0123 },
-      messages: [
-        { role: "system", content: "be terse" },
-        { role: "user", content: "what is 2+2" },
-      ],
-      completion: { output: "4", toolCalls: [] },
-    }),
-  ], { id: "L1" });
+  const call = span(
+    "llmCall",
+    [
+      leaf("promptCompletion", 1_000, {
+        model: '"claude-sonnet-5"',
+        timeTaken: 400,
+        usage: { inputTokens: 120, outputTokens: 30 },
+        cost: { totalCost: 0.0123 },
+        messages: [
+          { role: "system", content: "be terse" },
+          { role: "user", content: "what is 2+2" },
+        ],
+        completion: { output: "4", toolCalls: [] },
+      }),
+    ],
+    { id: "L1" },
+  );
   return [trace([call])];
 }
 
 function toolForest() {
-  const call = span("toolExecution", [
-    leaf("toolCallStart", 100, { toolName: "bash", args: { command: "x".repeat(300) } }),
-    leaf("toolCall", 200, { toolName: "bash" }),
-  ], { id: "T1" });
+  const call = span(
+    "toolExecution",
+    [
+      leaf("toolCallStart", 100, { toolName: "bash", args: { command: "x".repeat(300) } }),
+      leaf("toolCall", 200, { toolName: "bash" }),
+    ],
+    { id: "T1" },
+  );
   return [trace([call])];
 }
 

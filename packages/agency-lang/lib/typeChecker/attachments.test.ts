@@ -19,12 +19,7 @@ function errorsFrom(source: string): TypeCheckError[] {
     const symbolTable = SymbolTable.build(absPath, {});
     const parseResult = parseAgency(source, {});
     if (!parseResult.success) throw new Error("Parse failed");
-    const info = buildCompilationUnit(
-      parseResult.result,
-      symbolTable,
-      absPath,
-      source,
-    );
+    const info = buildCompilationUnit(parseResult.result, symbolTable, absPath, source);
     return typeCheck(parseResult.result, {}, info).errors;
   } finally {
     unlinkSync(file);
@@ -35,9 +30,7 @@ const IMPORT = `import { image, file } from "std::thread"\n`;
 
 describe("llm() multimodal first-arg typing", () => {
   it("accepts a plain string", () => {
-    expect(
-      errorsFrom(`node main() { let r: string = llm("hi")\n print(r) }`),
-    ).toHaveLength(0);
+    expect(errorsFrom(`node main() { let r: string = llm("hi")\n print(r) }`)).toHaveLength(0);
   });
 
   it("accepts a mixed text + attachment array", () => {
@@ -72,9 +65,8 @@ describe("llm() multimodal first-arg typing", () => {
 
   it("rejects a number element on userMessage()", () => {
     expect(
-      errorsFrom(
-        `import { userMessage } from "std::thread"\nnode main() { userMessage([42]) }`,
-      ).length,
+      errorsFrom(`import { userMessage } from "std::thread"\nnode main() { userMessage([42]) }`)
+        .length,
     ).toBeGreaterThan(0);
   });
 

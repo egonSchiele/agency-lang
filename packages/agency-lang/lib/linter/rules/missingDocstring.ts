@@ -10,9 +10,7 @@ import { buildLineIndex, nameRange, statementSpan } from "./util.js";
  *  sibling node and docComment is never populated (that field is filled by
  *  the TypescriptPreprocessor, which the linter does not run), so the
  *  docString check is the complete test. */
-function undocumentedExports(
-  ctx: LintContext,
-): (FunctionDefinition & { functionName: string })[] {
+function undocumentedExports(ctx: LintContext): (FunctionDefinition & { functionName: string })[] {
   return ctx.program.nodes.filter(
     (node): node is FunctionDefinition & { functionName: string } =>
       node.type === "function" &&

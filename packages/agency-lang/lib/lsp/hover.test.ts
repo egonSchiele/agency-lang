@@ -22,12 +22,7 @@ describe("handleHover", () => {
 }
 greet("world")`;
     const doc = makeDoc(source);
-    const { semanticIndex } = runDiagnostics(
-      doc,
-      "/test.agency",
-      {},
-      new SymbolTable(),
-    );
+    const { semanticIndex } = runDiagnostics(doc, "/test.agency", {}, new SymbolTable());
     const result = handleHover(
       { textDocument: { uri: doc.uri }, position: { line: 4, character: 0 } },
       doc,
@@ -49,12 +44,7 @@ greet("world")`;
       const mainFile = path.join(tmpDir, "main.agency");
       fs.writeFileSync(
         helperFile,
-        [
-          "export def greet(name: string): string {",
-          "  return name",
-          "}",
-          "",
-        ].join("\n"),
+        ["export def greet(name: string): string {", "  return name", "}", ""].join("\n"),
       );
       const source = [
         'import { greet as hello } from "./helpers.agency"',
@@ -182,14 +172,9 @@ greet("world")`;
   });
 
   it("returns hover info for a language primitive (success)", () => {
-    const source = 'node main() {\n  let r = success(1)\n}';
+    const source = "node main() {\n  let r = success(1)\n}";
     const doc = makeDoc(source);
-    const { semanticIndex } = runDiagnostics(
-      doc,
-      "/test.agency",
-      {},
-      new SymbolTable(),
-    );
+    const { semanticIndex } = runDiagnostics(doc, "/test.agency", {}, new SymbolTable());
     // Hover over "success"
     const result = handleHover(
       { textDocument: { uri: doc.uri }, position: { line: 1, character: 12 } },
@@ -205,12 +190,7 @@ greet("world")`;
   it("returns hover info for a flat JS global (parseInt)", () => {
     const source = 'node main() {\n  let n = parseInt("42")\n}';
     const doc = makeDoc(source);
-    const { semanticIndex } = runDiagnostics(
-      doc,
-      "/test.agency",
-      {},
-      new SymbolTable(),
-    );
+    const { semanticIndex } = runDiagnostics(doc, "/test.agency", {}, new SymbolTable());
     const result = handleHover(
       { textDocument: { uri: doc.uri }, position: { line: 1, character: 12 } },
       doc,
@@ -225,12 +205,7 @@ greet("world")`;
   it("returns hover info for a JS namespace member (JSON.parse)", () => {
     const source = 'node main() {\n  let x = JSON.parse("{}")\n}';
     const doc = makeDoc(source);
-    const { semanticIndex } = runDiagnostics(
-      doc,
-      "/test.agency",
-      {},
-      new SymbolTable(),
-    );
+    const { semanticIndex } = runDiagnostics(doc, "/test.agency", {}, new SymbolTable());
     // Hover over "parse" in JSON.parse
     const result = handleHover(
       { textDocument: { uri: doc.uri }, position: { line: 1, character: 17 } },
@@ -246,12 +221,7 @@ greet("world")`;
   it("returns hover info for a JS namespace base (JSON)", () => {
     const source = 'node main() {\n  let x = JSON.parse("{}")\n}';
     const doc = makeDoc(source);
-    const { semanticIndex } = runDiagnostics(
-      doc,
-      "/test.agency",
-      {},
-      new SymbolTable(),
-    );
+    const { semanticIndex } = runDiagnostics(doc, "/test.agency", {}, new SymbolTable());
     // Hover over "JSON"
     const result = handleHover(
       { textDocument: { uri: doc.uri }, position: { line: 1, character: 11 } },
@@ -266,12 +236,7 @@ greet("world")`;
 
   it("returns null when not on an identifier", () => {
     const doc = makeDoc("let x: number = 5");
-    const { semanticIndex } = runDiagnostics(
-      doc,
-      "/test.agency",
-      {},
-      new SymbolTable(),
-    );
+    const { semanticIndex } = runDiagnostics(doc, "/test.agency", {}, new SymbolTable());
     const result = handleHover(
       { textDocument: { uri: doc.uri }, position: { line: 0, character: 3 } },
       doc,

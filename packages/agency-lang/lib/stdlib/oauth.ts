@@ -25,10 +25,14 @@ const refreshLocks: Record<string, Promise<string> | undefined> = {};
 
 function requireHttps(url: string, label: string): void {
   const parsed = new URL(url);
-  if (parsed.protocol !== "https:" && parsed.hostname !== "localhost" && parsed.hostname !== "127.0.0.1") {
+  if (
+    parsed.protocol !== "https:" &&
+    parsed.hostname !== "localhost" &&
+    parsed.hostname !== "127.0.0.1"
+  ) {
     throw new Error(
       `${label} must use HTTPS (got "${parsed.protocol}//"). ` +
-      `HTTP is only allowed for localhost during development.`
+        `HTTP is only allowed for localhost during development.`,
     );
   }
 }
@@ -55,7 +59,7 @@ type StoredTokens = {
 function getTokenPath(name: string): string {
   if (!VALID_NAME_PATTERN.test(name)) {
     throw new Error(
-      `Invalid OAuth provider name: "${name}". Use only letters, numbers, dots, hyphens, and underscores.`
+      `Invalid OAuth provider name: "${name}". Use only letters, numbers, dots, hyphens, and underscores.`,
     );
   }
   return path.join(getTokenDir(), `${name}.json`);
@@ -70,7 +74,11 @@ function generateCodeChallenge(verifier: string): string {
 }
 
 function escapeHtml(str: string): string {
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function parseExtraParams(str: string): Record<string, string> {
@@ -140,7 +148,7 @@ function waitForCallback(
       settled = true;
       res.writeHead(200, { "Content-Type": "text/html" });
       res.end(
-        "<h1>Authorization successful!</h1><p>You can close this tab and return to your terminal.</p>"
+        "<h1>Authorization successful!</h1><p>You can close this tab and return to your terminal.</p>",
       );
       cleanup();
       resolve({ code, state });
@@ -206,12 +214,9 @@ async function exchangeCodeForTokens(
 
     if (!response.ok) {
       const responseBody = await response.text();
-      const truncated = responseBody.length > 200
-        ? responseBody.slice(0, 200) + "..."
-        : responseBody;
-      throw new Error(
-        `OAuth token exchange failed (${response.status}): ${truncated}`
-      );
+      const truncated =
+        responseBody.length > 200 ? responseBody.slice(0, 200) + "..." : responseBody;
+      throw new Error(`OAuth token exchange failed (${response.status}): ${truncated}`);
     }
 
     const data = (await response.json()) as Record<string, unknown>;
@@ -282,15 +287,13 @@ async function authorizeImpl(
   requireHttps(config.authUrl, "authUrl");
   requireHttps(config.tokenUrl, "tokenUrl");
 
-  const port = (config.port && config.port > 0) ? config.port : DEFAULT_PORT;
+  const port = config.port && config.port > 0 ? config.port : DEFAULT_PORT;
   const redirectUri = `http://127.0.0.1:${port}/oauth/callback`;
   const state = crypto.randomBytes(16).toString("hex");
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
 
-  const scopes = Array.isArray(config.scopes)
-    ? config.scopes.join(" ")
-    : config.scopes;
+  const scopes = Array.isArray(config.scopes) ? config.scopes.join(" ") : config.scopes;
 
   const authorizationUrl = new URL(config.authUrl);
   authorizationUrl.searchParams.set("client_id", config.clientId);
@@ -302,9 +305,10 @@ async function authorizeImpl(
   authorizationUrl.searchParams.set("code_challenge_method", "S256");
 
   if (config.extraAuthParams) {
-    const params = typeof config.extraAuthParams === "string"
-      ? parseExtraParams(config.extraAuthParams)
-      : config.extraAuthParams;
+    const params =
+      typeof config.extraAuthParams === "string"
+        ? parseExtraParams(config.extraAuthParams)
+        : config.extraAuthParams;
     for (const [key, value] of Object.entries(params)) {
       authorizationUrl.searchParams.set(key, value);
     }
@@ -370,23 +374,15 @@ export async function __internal_authorize(
  * internal stdlib callers like `calendar.ts`'s `_authorizeCalendar`)
  * get full cancellation without needing to thread params.
  */
-export async function _authorize(
-  name: string,
-  config: OAuthConfig,
-): Promise<{ success: boolean }> {
+export async function _authorize(name: string, config: OAuthConfig): Promise<{ success: boolean }> {
   const { ctx, stack } = getRuntimeContext();
   return authorizeImpl(name, config, ctx.getAbortSignal(stack));
 }
 
-async function getAccessTokenImpl(
-  name: string,
-  signal: AbortSignal | undefined,
-): Promise<string> {
+async function getAccessTokenImpl(name: string, signal: AbortSignal | undefined): Promise<string> {
   const tokens = await loadTokens(name);
   if (!tokens) {
-    throw new Error(
-      `No OAuth tokens found for "${name}". Run authorize() first.`
-    );
+    throw new Error(`No OAuth tokens found for "${name}". Run authorize() first.`);
   }
 
   if (Date.now() < tokens.expires_at - EXPIRY_BUFFER_MS) {
@@ -395,7 +391,7 @@ async function getAccessTokenImpl(
 
   if (!tokens.refresh_token) {
     throw new Error(
-      `OAuth token for "${name}" has expired and no refresh token is available. Run authorize() again.`
+      `OAuth token for "${name}" has expired and no refresh token is available. Run authorize() again.`,
     );
   }
 

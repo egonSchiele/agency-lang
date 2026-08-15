@@ -26,9 +26,7 @@ export function goToNode<T>(to: string, data: T): GoToNode<T> {
 }
 
 export class SimpleMachine<T> {
-  private nodes: Partial<
-    Record<string, (data: T) => Promise<T | GoToNode<T>>>
-  > = {};
+  private nodes: Partial<Record<string, (data: T) => Promise<T | GoToNode<T>>>> = {};
   private edges: Partial<Record<string, Edge<T, string>>> = {};
   private config: SimpleMachineConfig<T>;
   private statelogClient: StatelogClient | null = null;
@@ -46,7 +44,6 @@ export class SimpleMachine<T> {
       });
     }
   }
-
 
   node(id: string, func: (data: T) => Promise<T | GoToNode<T>>): void {
     this.nodes[id] = func;
@@ -87,13 +84,15 @@ export class SimpleMachine<T> {
     //this.statelogClient?.debug(message, data || {});
   }
 
-  async run(startId: string, input: T, options?: { onNodeEnter?: (id: string) => void; statelogClient?: StatelogClient }): Promise<T> {
+  async run(
+    startId: string,
+    input: T,
+    options?: { onNodeEnter?: (id: string) => void; statelogClient?: StatelogClient },
+  ): Promise<T> {
     const client = options?.statelogClient ?? this.statelogClient;
     const jsonEdges: Record<string, JSONEdge> = {};
     for (const from in this.edges) {
-      jsonEdges[from] = edgeToJSON(
-        this.edges[from as keyof typeof this.edges]!,
-      );
+      jsonEdges[from] = edgeToJSON(this.edges[from as keyof typeof this.edges]!);
     }
     client?.graph({
       nodes: Object.keys(this.nodes),
@@ -107,9 +106,7 @@ export class SimpleMachine<T> {
       const nodeFunc = this.nodes[currentId];
 
       if (!nodeFunc) {
-        throw new SimpleMachineError(
-          `Node function for ${currentId} not found.`,
-        );
+        throw new SimpleMachineError(`Node function for ${currentId} not found.`);
       }
 
       if (this.config.hooks?.beforeNode) {
@@ -180,10 +177,7 @@ export class SimpleMachine<T> {
           isConditionalEdge: false,
           data,
         });
-        this.debug(
-          `Following goto edge to: ${color.green(nextNode as string)}`,
-          data,
-        );
+        this.debug(`Following goto edge to: ${color.green(nextNode as string)}`, data);
         currentId = nextNode;
         continue;
       }
@@ -205,10 +199,7 @@ export class SimpleMachine<T> {
             isConditionalEdge: true,
             data,
           });
-          this.debug(
-            `Following conditional edge to: ${color.green(nextId)}`,
-            data,
-          );
+          this.debug(`Following conditional edge to: ${color.green(nextId)}`, data);
           currentId = nextId;
         } else {
           this.debug(`Exiting graph from node: ${color.green(currentId)}`);
@@ -292,9 +283,7 @@ export class SimpleMachine<T> {
   merge(another: SimpleMachine<T>): void {
     for (const nodeId in another.nodes) {
       if (this.nodes[nodeId as keyof typeof this.nodes]) {
-        throw new SimpleMachineError(
-          `Node ${nodeId} already exists in the current SimpleMachine.`,
-        );
+        throw new SimpleMachineError(`Node ${nodeId} already exists in the current SimpleMachine.`);
       }
       this.nodes[nodeId as keyof typeof this.nodes] =
         another.nodes[nodeId as keyof typeof another.nodes];

@@ -24,9 +24,7 @@ function nonJsonResponse(status: number, body = "<!doctype html><p>oops</p>"): R
   } as unknown as Response;
 }
 
-function rawProject(
-  overrides: Partial<Record<string, unknown>> = {},
-): Record<string, unknown> {
+function rawProject(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
   return {
     id: "db-project-1",
     project_id: "public-project",
@@ -292,7 +290,10 @@ describe("accountClient id-map safety", () => {
   it("resolves a project id like __proto__ without a prototype-chain collision", async () => {
     fetchMock
       .mockResolvedValueOnce(
-        response(200, { success: true, value: [rawProject({ id: "__proto__", project_id: "polluted" })] }),
+        response(200, {
+          success: true,
+          value: [rawProject({ id: "__proto__", project_id: "polluted" })],
+        }),
       )
       .mockResolvedValueOnce(
         response(200, { success: true, value: [rawProjectKey({ projectId: "__proto__" })] }),
@@ -303,34 +304,113 @@ describe("accountClient id-map safety", () => {
 });
 
 describe("accountClient.getAccountSpend", () => {
-  const usd = { inputCost: 0.3, outputCost: 0.2, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0.5, currency: "USD" };
-  const tok = { inputTokens: 10, outputTokens: 2, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 12 };
-  const validSpend = { cost: usd, tokens: tok, invocationCount: 3, unpricedCallCount: 0, pricingComplete: true, usageComplete: true, breakdown: [], breakdownTruncated: false, otherSpend: { cost: { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0, currency: "USD" }, tokens: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 } } };
-  const okRows = { success: true, value: [{ projectSlug: "p", deletedAt: null, spend: validSpend }] };
+  const usd = {
+    inputCost: 0.3,
+    outputCost: 0.2,
+    cachedInputCost: 0,
+    cacheCreationInputCost: 0,
+    hostedToolsCost: 0,
+    totalCost: 0.5,
+    currency: "USD",
+  };
+  const tok = {
+    inputTokens: 10,
+    outputTokens: 2,
+    cachedInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    totalTokens: 12,
+  };
+  const validSpend = {
+    cost: usd,
+    tokens: tok,
+    invocationCount: 3,
+    unpricedCallCount: 0,
+    pricingComplete: true,
+    usageComplete: true,
+    breakdown: [],
+    breakdownTruncated: false,
+    otherSpend: {
+      cost: {
+        inputCost: 0,
+        outputCost: 0,
+        cachedInputCost: 0,
+        cacheCreationInputCost: 0,
+        hostedToolsCost: 0,
+        totalCost: 0,
+        currency: "USD",
+      },
+      tokens: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cachedInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        totalTokens: 0,
+      },
+    },
+  };
+  const okRows = {
+    success: true,
+    value: [{ projectSlug: "p", deletedAt: null, spend: validSpend }],
+  };
 
   it("GETs /api/spend with both bounds, omitting null ones", async () => {
     fetchMock.mockResolvedValue(response(200, okRows));
     const rows = await client.getAccountSpend({ from: 1000, to: 2000 });
-    expect(fetchMock).toHaveBeenCalledWith("https://host.example/api/spend?from=1000&to=2000", expect.any(Object));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://host.example/api/spend?from=1000&to=2000",
+      expect.any(Object),
+    );
     expect(rows[0]?.projectSlug).toBe("p");
     await client.getAccountSpend({ from: null, to: null });
-    expect(fetchMock).toHaveBeenLastCalledWith("https://host.example/api/spend", expect.any(Object));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "https://host.example/api/spend",
+      expect.any(Object),
+    );
   });
 
   it("rejects a malformed row as an AccountRequestError", async () => {
-    fetchMock.mockResolvedValue(response(200, { success: true, value: [{ projectSlug: "p", deletedAt: null, spend: { ...validSpend, cost: { ...usd, totalCost: -1 } } }] }));
-    await expect(client.getAccountSpend({ from: null, to: null })).rejects.toBeInstanceOf(AccountRequestError);
+    fetchMock.mockResolvedValue(
+      response(200, {
+        success: true,
+        value: [
+          {
+            projectSlug: "p",
+            deletedAt: null,
+            spend: { ...validSpend, cost: { ...usd, totalCost: -1 } },
+          },
+        ],
+      }),
+    );
+    await expect(client.getAccountSpend({ from: null, to: null })).rejects.toBeInstanceOf(
+      AccountRequestError,
+    );
   });
 
   it("reports an unsupported host for a spend-route 404 (JSON and non-JSON)", async () => {
     fetchMock.mockResolvedValue(response(404, { error: "Not Found" }));
-    await expect(client.getAccountSpend({ from: null, to: null })).rejects.toThrow(/does not support the spend API/);
-    fetchMock.mockResolvedValue({ ok: false, status: 404, url: "", text: vi.fn().mockResolvedValue("<html>bad</html>") } as unknown as Response);
-    await expect(client.getAccountSpend({ from: null, to: null })).rejects.toThrow(/does not support the spend API/);
+    await expect(client.getAccountSpend({ from: null, to: null })).rejects.toThrow(
+      /does not support the spend API/,
+    );
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 404,
+      url: "",
+      text: vi.fn().mockResolvedValue("<html>bad</html>"),
+    } as unknown as Response);
+    await expect(client.getAccountSpend({ from: null, to: null })).rejects.toThrow(
+      /does not support the spend API/,
+    );
   });
 
   it("leaves a non-JSON 5xx as a server error", async () => {
-    fetchMock.mockResolvedValue({ ok: false, status: 503, url: "", text: vi.fn().mockResolvedValue("<html>bad</html>") } as unknown as Response);
-    await expect(client.getAccountSpend({ from: null, to: null })).rejects.toThrow("statelog request failed (HTTP 503)");
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 503,
+      url: "",
+      text: vi.fn().mockResolvedValue("<html>bad</html>"),
+    } as unknown as Response);
+    await expect(client.getAccountSpend({ from: null, to: null })).rejects.toThrow(
+      "statelog request failed (HTTP 503)",
+    );
   });
 });

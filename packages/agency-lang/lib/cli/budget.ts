@@ -9,17 +9,15 @@ export { parseDurationMs };
  *  values the child reads. Cost stays as dollars; time becomes milliseconds.
  *  Negative/zero pass through — the runtime install applies the disable rule
  *  (cost < 0 disables; time <= 0 disables). */
-export function resolveBudget(opts: {
+export function resolveBudget(opts: { maxCost?: string; maxTime?: string }): {
   maxCost?: string;
   maxTime?: string;
-}): { maxCost?: string; maxTime?: string } {
+} {
   const out: { maxCost?: string; maxTime?: string } = {};
   if (opts.maxCost !== undefined) {
     const n = Number(opts.maxCost);
     if (!Number.isFinite(n)) {
-      throw new Error(
-        `--max-cost: expected a number of dollars (got "${opts.maxCost}")`,
-      );
+      throw new Error(`--max-cost: expected a number of dollars (got "${opts.maxCost}")`);
     }
     out.maxCost = String(n);
   }

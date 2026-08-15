@@ -20,7 +20,10 @@ describe("genModelHashes helpers", () => {
     ).toBe("Model-Q4_K_M.gguf");
     // sharded → more than one match → null (no pin)
     expect(
-      pickSingleQuantFile(["m-Q4_K_M-00001-of-00002.gguf", "m-Q4_K_M-00002-of-00002.gguf"], "Q4_K_M"),
+      pickSingleQuantFile(
+        ["m-Q4_K_M-00001-of-00002.gguf", "m-Q4_K_M-00002-of-00002.gguf"],
+        "Q4_K_M",
+      ),
     ).toBeNull();
     expect(pickSingleQuantFile(["only-Q8_0.gguf"], "Q4_K_M")).toBeNull();
   });

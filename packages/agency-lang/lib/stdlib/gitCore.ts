@@ -77,9 +77,7 @@ export function hardenPositional(value: string, label: string): string {
     throw new Error(`git: empty ${label} is not allowed`);
   }
   if (value.startsWith("-")) {
-    throw new Error(
-      `git: ${label} "${value}" may not start with "-" (looks like a flag)`,
-    );
+    throw new Error(`git: ${label} "${value}" may not start with "-" (looks like a flag)`);
   }
   return value;
 }
@@ -97,8 +95,10 @@ export function assertBranchAllowed(branch: string, protectedBranches: string[])
 
 /** Config flags prepended to every git invocation (before the subcommand). */
 export const GIT_HARDENING_FLAGS: string[] = [
-  "-c", "core.pager=cat",
-  "-c", "core.fsmonitor=false",
+  "-c",
+  "core.pager=cat",
+  "-c",
+  "core.fsmonitor=false",
   "--no-optional-locks",
 ];
 
@@ -136,9 +136,7 @@ export function scrubEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const scrubbed: NodeJS.ProcessEnv = { ...base };
   for (const key of Object.keys(scrubbed)) {
     for (const rule of SCRUB_ENV_KEYS) {
-      const matches = rule.endsWith("*")
-        ? key.startsWith(rule.slice(0, -1))
-        : key === rule;
+      const matches = rule.endsWith("*") ? key.startsWith(rule.slice(0, -1)) : key === rule;
       if (matches) {
         delete scrubbed[key];
         break;
@@ -165,7 +163,11 @@ export function statusArgs(): string[] {
 }
 
 export function logArgs(opts: {
-  count: number; oneline: boolean; path: string; ref: string; author: string;
+  count: number;
+  oneline: boolean;
+  path: string;
+  ref: string;
+  author: string;
 }): string[] {
   const args: string[] = ["log"];
   if (opts.count > 0) {
@@ -189,7 +191,10 @@ export function logArgs(opts: {
 }
 
 export function diffArgs(opts: {
-  ref: string; ref2: string; staged: boolean; path: string;
+  ref: string;
+  ref2: string;
+  staged: boolean;
+  path: string;
 }): string[] {
   const args: string[] = ["diff", "--patch", "-M"];
   if (opts.staged) {
@@ -285,7 +290,9 @@ export function branchCreateArgs(opts: { branch: string }): string[] {
 }
 
 export function branchDeleteArgs(opts: {
-  branch: string; force: boolean; protectedBranches: string[];
+  branch: string;
+  force: boolean;
+  protectedBranches: string[];
 }): string[] {
   assertBranchAllowed(opts.branch, opts.protectedBranches);
   const flag = opts.force ? "-D" : "-d";

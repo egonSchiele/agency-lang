@@ -90,9 +90,7 @@ export function mergeJsonSchemaArgs(tags: Tag[]): Expression[] {
     if (!t.arguments || t.arguments.length === 0) {
       const loc = t.loc;
       const where = loc ? ` (line ${loc.line}, col ${loc.col})` : "";
-      throw new Error(
-        `@jsonSchema(...) requires at least one object-literal argument${where}.`,
-      );
+      throw new Error(`@jsonSchema(...) requires at least one object-literal argument${where}.`);
     }
     for (const arg of t.arguments) {
       if (arg.type !== "agencyObject") {
@@ -179,9 +177,7 @@ function readLiteralString(expr: Expression): string | undefined {
  * the carrier literal's `type` (`string` vs `multiLineString`) follow
  * the first description's node.
  */
-function collapseLiteralDescriptions(
-  entries: Array<AgencyObjectKV | SplatExpression>,
-): void {
+function collapseLiteralDescriptions(entries: Array<AgencyObjectKV | SplatExpression>): void {
   const indices: number[] = [];
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];

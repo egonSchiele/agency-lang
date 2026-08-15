@@ -15,9 +15,9 @@ describe("stack-carried handler execution mark", () => {
   it("throws when handlers are registered but no stack is passed", async () => {
     const ctx = makeCtx();
     ctx.handlers = [{ fn: async () => ({ type: "approve" }), liveGuardIds: [] }];
-    await expect(
-      interruptWithHandlers("std::x", "m", {}, "o", ctx, undefined),
-    ).rejects.toThrow(/no StateStack/);
+    await expect(interruptWithHandlers("std::x", "m", {}, "o", ctx, undefined)).rejects.toThrow(
+      /no StateStack/,
+    );
   });
 
   it("marks the stack for the duration of a handler body", async () => {
@@ -117,7 +117,12 @@ describe("stack-carried handler execution mark", () => {
     const stack = new StateStack();
     let preSettled = false;
     ctx.pendingPromises.add(
-      new Promise<void>((r) => setTimeout(() => { preSettled = true; r(); }, 30)),
+      new Promise<void>((r) =>
+        setTimeout(() => {
+          preSettled = true;
+          r();
+        }, 30),
+      ),
     );
     ctx.handlers = [{ fn: async () => ({ type: "approve" }), liveGuardIds: [] }];
     await interruptWithHandlers("kickoff", "m", {}, "o", ctx, stack);

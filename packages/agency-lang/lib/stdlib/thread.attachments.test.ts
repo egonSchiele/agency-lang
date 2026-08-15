@@ -51,9 +51,7 @@ describe("_imageAttachment", () => {
   });
 
   it("throws on a data: URI that is not base64-encoded", () => {
-    expect(() => _imageAttachment("data:text/plain,hello", "", false)).toThrow(
-      /base64/i,
-    );
+    expect(() => _imageAttachment("data:text/plain,hello", "", false)).toThrow(/base64/i);
   });
 });
 
@@ -67,9 +65,7 @@ describe("_fileAttachment", () => {
   });
 
   it("derives filename from a URL, stripping query/hash", () => {
-    expect(
-      _fileAttachment("https://x.com/a/report.pdf?v=2", "", "", false),
-    ).toEqual({
+    expect(_fileAttachment("https://x.com/a/report.pdf?v=2", "", "", false)).toEqual({
       type: "file",
       source: { kind: "url", url: "https://x.com/a/report.pdf?v=2" },
       filename: "report.pdf",

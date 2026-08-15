@@ -58,8 +58,7 @@ export type ReplaceTypeDefinitionOperation = {
 /** One declarative source edit, discriminated by target kind. This is the
  *  shape LLM mutation proposals carry. */
 export type OptimizeMutationOperation =
-  | ReplaceVariableInitializerOperation
-  | ReplaceTypeDefinitionOperation;
+  ReplaceVariableInitializerOperation | ReplaceTypeDefinitionOperation;
 
 /**
  * A structured reason an operation was rejected, fed back into the mutator
@@ -137,8 +136,7 @@ type ResolvedOperation = {
 };
 
 type ValidationOutcome =
-  | { diagnostic: OptimizeMutationDiagnostic }
-  | { resolved: ResolvedOperation };
+  { diagnostic: OptimizeMutationDiagnostic } | { resolved: ResolvedOperation };
 
 /**
  * Applies declarative mutation operations to a discovered optimize target
@@ -172,11 +170,13 @@ export class OptimizeSourceMutator {
   mutate(target: string, value: string): OptimizeMutationPreview {
     const known = this.targetsById[target];
     if (!known) {
-      return this.abortedPreview([{
-        target,
-        code: "unknown-target",
-        message: `Unknown optimize target ${target}. Known targets: ${this.targetSet.targets.map((candidate) => candidate.id).join(", ")}`,
-      }]);
+      return this.abortedPreview([
+        {
+          target,
+          code: "unknown-target",
+          message: `Unknown optimize target ${target}. Known targets: ${this.targetSet.targets.map((candidate) => candidate.id).join(", ")}`,
+        },
+      ]);
     }
     return this.preview([operationForTarget(known, value)]);
   }
@@ -236,13 +236,21 @@ export class OptimizeSourceMutator {
       if ("diagnostic" in outcome) return this.abortedPreview([outcome.diagnostic]);
 
       files[file] = outcome.rendered;
-      updatedFiles[file] = { ...sourceFile, source: outcome.rendered, sha256: sha256Text(outcome.rendered) };
+      updatedFiles[file] = {
+        ...sourceFile,
+        source: outcome.rendered,
+        sha256: sha256Text(outcome.rendered),
+      };
       updatedTargets = updatedTargets
         .filter((target) => target.file !== file)
         .concat(outcome.refreshedTargets);
       changes.push(...fileOperations.map((entry) => appliedChange(entry)));
       fileDiffs.push(
-        [`--- ${file}`, `+++ ${file}`, formatDiff(sourceFile.source, outcome.rendered, { colorize: false })].join("\n"),
+        [
+          `--- ${file}`,
+          `+++ ${file}`,
+          formatDiff(sourceFile.source, outcome.rendered, { colorize: false }),
+        ].join("\n"),
       );
     }
 
@@ -274,14 +282,23 @@ export class OptimizeSourceMutator {
     for (const entry of fileOperations) entriesById[entry.target.id] = entry;
 
     let replacedCount = 0;
-    for (const { target, assignment } of collectTargets(program, file, sourceFile.absoluteFile, this.targetSet.typeAliases, this.targetsById)) {
+    for (const { target, assignment } of collectTargets(
+      program,
+      file,
+      sourceFile.absoluteFile,
+      this.targetSet.typeAliases,
+      this.targetsById,
+    )) {
       const entry = entriesById[target.id];
       if (!entry) continue;
       assignment.value = entry.replacement;
       replacedCount += 1;
     }
     if (replacedCount !== fileOperations.length) {
-      return errorDiagnostic(file, `Discovered targets no longer match the parsed source of ${file}.`);
+      return errorDiagnostic(
+        file,
+        `Discovered targets no longer match the parsed source of ${file}.`,
+      );
     }
 
     const rendered = generateAgency(program);
@@ -290,10 +307,18 @@ export class OptimizeSourceMutator {
     // targets from it refreshes the catalog exactly as disk discovery would.
     const reparsed = parseAgency(rendered, {}, false);
     if (!reparsed.success) {
-      return errorDiagnostic(file, `Rendered candidate for ${file} does not parse: ${reparsed.message ?? "parse error"}`);
+      return errorDiagnostic(
+        file,
+        `Rendered candidate for ${file} does not parse: ${reparsed.message ?? "parse error"}`,
+      );
     }
-    const refreshedTargets = collectTargets(reparsed.result, file, sourceFile.absoluteFile, this.targetSet.typeAliases, this.targetsById)
-      .map((entry) => entry.target);
+    const refreshedTargets = collectTargets(
+      reparsed.result,
+      file,
+      sourceFile.absoluteFile,
+      this.targetSet.typeAliases,
+      this.targetsById,
+    ).map((entry) => entry.target);
 
     return { rendered, refreshedTargets };
   }
@@ -340,19 +365,40 @@ export class OptimizeSourceMutator {
     const operationOp: string = operation.op;
 
     if (operationKind === "type" && (!target || targetKind === "type")) {
-      return diagnostic({ operation, code: "unsupported-operation", message: "`optimize type` targets are not supported in v1. Only variable initializer replacement is available." });
+      return diagnostic({
+        operation,
+        code: "unsupported-operation",
+        message:
+          "`optimize type` targets are not supported in v1. Only variable initializer replacement is available.",
+      });
     }
     if (!target) {
-      return diagnostic({ operation, code: "unknown-target", message: `Unknown optimize target ${operation.target}. Known targets: ${this.targetSet.targets.map((known) => known.id).join(", ")}` });
+      return diagnostic({
+        operation,
+        code: "unknown-target",
+        message: `Unknown optimize target ${operation.target}. Known targets: ${this.targetSet.targets.map((known) => known.id).join(", ")}`,
+      });
     }
     if (targetKind !== operationKind) {
-      return diagnostic({ operation, code: "kind-mismatch", message: `Operation kind ${operationKind} does not match target ${operation.target} of kind ${targetKind}.` });
+      return diagnostic({
+        operation,
+        code: "kind-mismatch",
+        message: `Operation kind ${operationKind} does not match target ${operation.target} of kind ${targetKind}.`,
+      });
     }
     if (operationOp !== "replaceInitializer") {
-      return diagnostic({ operation, code: "unsupported-operation", message: `Operation ${operationOp} is not supported for ${operationKind} targets. Use replaceInitializer.` });
+      return diagnostic({
+        operation,
+        code: "unsupported-operation",
+        message: `Operation ${operationOp} is not supported for ${operationKind} targets. Use replaceInitializer.`,
+      });
     }
     if (operation.expected !== undefined && operation.expected !== target.value) {
-      return diagnostic({ operation, code: "expected-mismatch", message: `Expected value does not match the current value of ${operation.target}: ${JSON.stringify(target.value)}.` });
+      return diagnostic({
+        operation,
+        code: "expected-mismatch",
+        message: `Expected value does not match the current value of ${operation.target}: ${JSON.stringify(target.value)}.`,
+      });
     }
     return this.resolveReplacementValue(operation as ReplaceVariableInitializerOperation, target);
   }
@@ -376,9 +422,10 @@ export class OptimizeSourceMutator {
     if (!parsed.success || parsed.rest.trim() !== "") {
       // Keep the text-target message prescriptive — it is retry feedback the
       // mutator LLM acts on, and "send a quoted string" is the actual fix.
-      const message = target.valueKind === "literal"
-        ? `Replacement value for ${operation.target} did not parse as an Agency expression. Received: ${JSON.stringify(operation.value)}`
-        : `Replacement value for ${operation.target} must be a quoted Agency string literal (e.g. "new prompt"), but it did not parse as one even after wrapping it in quotes. Received: ${JSON.stringify(operation.value)}`;
+      const message =
+        target.valueKind === "literal"
+          ? `Replacement value for ${operation.target} did not parse as an Agency expression. Received: ${JSON.stringify(operation.value)}`
+          : `Replacement value for ${operation.target} must be a quoted Agency string literal (e.g. "new prompt"), but it did not parse as one even after wrapping it in quotes. Received: ${JSON.stringify(operation.value)}`;
       return diagnostic({ operation, code: "invalid-replacement-syntax", message });
     }
     let replacement = parsed.result;
@@ -386,12 +433,20 @@ export class OptimizeSourceMutator {
     if (isFreeformText) {
       // Today's freeform path, byte-identical behavior.
       if (replacement.type !== "string" && replacement.type !== "multiLineString") {
-        return diagnostic({ operation, code: "unsupported-value-domain", message: `Replacement value for ${operation.target} must be a string or multiline string expression; got ${replacement.type}.` });
+        return diagnostic({
+          operation,
+          code: "unsupported-value-domain",
+          message: `Replacement value for ${operation.target} must be a string or multiline string expression; got ${replacement.type}.`,
+        });
       }
       const newValue = promptSegmentsToString(replacement.segments);
       const validation = validateOptimizedStringValue(target.value, newValue);
       if (!validation.ok) {
-        return diagnostic({ operation, code: "interpolation-mismatch", message: `Replacement value for ${operation.target} is invalid: ${validation.reason}` });
+        return diagnostic({
+          operation,
+          code: "interpolation-mismatch",
+          message: `Replacement value for ${operation.target} is invalid: ${validation.reason}`,
+        });
       }
       return { resolved: { operation, target, replacement, newValue } };
     }
@@ -400,7 +455,11 @@ export class OptimizeSourceMutator {
     // identifiers exist at the declaration site, and the probe's
     // undefined-variable pass does not descend into interpolation segments.
     if (hasInterpolation(replacement)) {
-      return diagnostic({ operation, code: "type-mismatch", message: `Replacement value for ${operation.target} contains interpolations (\${...}); interpolated strings are not supported in typed optimize values.` });
+      return diagnostic({
+        operation,
+        code: "type-mismatch",
+        message: `Replacement value for ${operation.target} contains interpolations (\${...}); interpolated strings are not supported in typed optimize values.`,
+      });
     }
 
     // Literal gate, recursive. The probe cannot enforce this — an unknown
@@ -411,8 +470,17 @@ export class OptimizeSourceMutator {
     if (!isLiteralExpression(replacement)) {
       const quoted = replacement.type === "variableName" ? `"${operation.value.trim()}"` : null;
       const reparsed = quoted === null ? null : exprParser(quoted);
-      if (!reparsed || !reparsed.success || reparsed.rest.trim() !== "" || reparsed.result.type !== "string") {
-        return diagnostic({ operation, code: "unsupported-value-domain", message: `Replacement value for ${operation.target} must be a literal (string, number, boolean, null, object, or array) with no variable references; got ${replacement.type}.` });
+      if (
+        !reparsed ||
+        !reparsed.success ||
+        reparsed.rest.trim() !== "" ||
+        reparsed.result.type !== "string"
+      ) {
+        return diagnostic({
+          operation,
+          code: "unsupported-value-domain",
+          message: `Replacement value for ${operation.target} must be a literal (string, number, boolean, null, object, or array) with no variable references; got ${replacement.type}.`,
+        });
       }
       replacement = reparsed.result;
     }
@@ -426,15 +494,20 @@ export class OptimizeSourceMutator {
     if (target.declaredType !== null) {
       const check = checkProposal(target.declaredType, proposalText, this.targetSet.typeAliases);
       if (!check.ok) {
-        return diagnostic({ operation, code: "type-mismatch", message: `Replacement value for ${operation.target} does not fit its type ${target.declaredType}: ${check.reason}` });
+        return diagnostic({
+          operation,
+          code: "type-mismatch",
+          message: `Replacement value for ${operation.target} does not fit its type ${target.declaredType}: ${check.reason}`,
+        });
       }
     }
     // declaredType === null with valueKind "literal": unconstrained — any
     // parsed literal passes through.
 
-    const newValue = (replacement.type === "string" || replacement.type === "multiLineString")
-      ? promptSegmentsToString(replacement.segments)
-      : proposalText;
+    const newValue =
+      replacement.type === "string" || replacement.type === "multiLineString"
+        ? promptSegmentsToString(replacement.segments)
+        : proposalText;
     return { resolved: { operation, target, replacement, newValue } };
   }
 }
@@ -478,7 +551,10 @@ function operationForTarget(target: OptimizeTarget, value: string): OptimizeMuta
 }
 
 /** Preview a set of operations against a target set. Shared by greedy and GEPA. */
-export function defaultPreview(targetSet: OptimizeTargetSet, operations: OptimizeMutationOperation[]): OptimizeMutationPreview {
+export function defaultPreview(
+  targetSet: OptimizeTargetSet,
+  operations: OptimizeMutationOperation[],
+): OptimizeMutationPreview {
   return new OptimizeSourceMutator({ targetSet }).preview(operations);
 }
 

@@ -43,7 +43,12 @@ function startWarnTimer(
   }, warnAfterMs);
 }
 
-function rememberReleaser(ctx: RuntimeContext<any>, name: string, ownerId: string, release: LockRelease): void {
+function rememberReleaser(
+  ctx: RuntimeContext<any>,
+  name: string,
+  ownerId: string,
+  release: LockRelease,
+): void {
   ctx.lockReleasers[lockReleaserKey(name, ownerId)] = release;
 }
 
@@ -97,12 +102,7 @@ export async function acquireLocalLock(
     releaseCurrent();
   };
 
-  const warnTimer = startWarnTimer(
-    ctx,
-    name,
-    ownerId,
-    opts.warnAfterMs ?? DEFAULT_WARN_AFTER_MS,
-  );
+  const warnTimer = startWarnTimer(ctx, name, ownerId, opts.warnAfterMs ?? DEFAULT_WARN_AFTER_MS);
 
   try {
     const waitForPrevious = previous.catch(() => undefined);

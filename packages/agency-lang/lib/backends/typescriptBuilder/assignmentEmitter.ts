@@ -143,9 +143,7 @@ export class AssignmentEmitter {
     const base = this.lhs(scope, varName, baseChain, blockDepth);
 
     const startNode = sliceEl.start ? this.deps.processNode(sliceEl.start) : ts.raw("0");
-    const endNode = sliceEl.end
-      ? this.deps.processNode(sliceEl.end)
-      : ts.prop(base, "length");
+    const endNode = sliceEl.end ? this.deps.processNode(sliceEl.end) : ts.prop(base, "length");
     const deleteCount = ts.binOp(endNode, "-", startNode);
 
     return $(base)

@@ -12,10 +12,7 @@ import {
   resolveInputSources,
   run,
 } from "@/cli/commands.js";
-import {
-  classifyInstall,
-  installDirFromUrl,
-} from "@/cli/installLocation.js";
+import { classifyInstall, installDirFromUrl } from "@/cli/installLocation.js";
 import { pack } from "@/cli/pack.js";
 import { resolveModelFlag } from "@/cli/modelFlag.js";
 import { resolveLocalRunFlag } from "@/cli/localFlag.js";
@@ -48,10 +45,7 @@ import {
 } from "@/cli/remote/commands/logsMode.js";
 import type { RemoteLogsMode } from "@/cli/remote/commands/logsMode.js";
 import { failProjectCommand } from "@/cli/remote/commands/util.js";
-import type {
-  AccountCommandOptions,
-  ProjectCommandOptions,
-} from "@/cli/remote/commands/util.js";
+import type { AccountCommandOptions, ProjectCommandOptions } from "@/cli/remote/commands/util.js";
 import type { RemoteCommandContext } from "@/cli/remote/commands/util.js";
 import { lintSource } from "@/linter/registry.js";
 import { formatFindings } from "@/cli/lint.js";
@@ -70,12 +64,7 @@ import { evalRun, totalRunCostUsd } from "@/cli/eval/run.js";
 import { formatGrading } from "@/eval/grading/gradeBreakdown.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
 import { renderDiagnosticText, renderDiagnosticList } from "@/cli/explain.js";
-import {
-  AgencyConfig,
-  applyCliFlags,
-  type CliFlags,
-  redactConfigSecrets,
-} from "@/config.js";
+import { AgencyConfig, applyCliFlags, type CliFlags, redactConfigSecrets } from "@/config.js";
 import * as path from "path";
 import { parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
@@ -122,11 +111,7 @@ import { debug } from "@/cli/debug.js";
 import { generateDoc } from "@/cli/doc.js";
 import { generateLiterate } from "@/cli/literate.js";
 import { watchAndCompile } from "@/cli/watch.js";
-import {
-  setupAgentLsp,
-  SUPPORTED_AGENT_LSP_TARGETS,
-  type AgentLspTarget,
-} from "@/lsp/setup.js";
+import { setupAgentLsp, SUPPORTED_AGENT_LSP_TARGETS, type AgentLspTarget } from "@/lsp/setup.js";
 import { setupCodexMcp, codexConfigPath } from "@/mcp/setup.js";
 import { startServer } from "@/lsp/index.js";
 import { startMcpServer } from "@/mcp/server.js";
@@ -210,10 +195,8 @@ function printAstResults(results: { file: string; program: unknown }[]): void {
 }
 
 export function createProgram(deps: CliDependencies = {}): Command {
-  const loadLspStartServer =
-    deps.loadLspStartServer ?? defaultLoadLspStartServer;
-  const loadMcpStartServer =
-    deps.loadMcpStartServer ?? defaultLoadMcpStartServer;
+  const loadLspStartServer = deps.loadLspStartServer ?? defaultLoadLspStartServer;
+  const loadMcpStartServer = deps.loadMcpStartServer ?? defaultLoadMcpStartServer;
   const resolveMcpCommand = deps.resolveMcpCommand ?? defaultResolveMcpCommand;
   const program = new Command();
 
@@ -243,9 +226,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   async function runWithOptions(input: string, options: RunOptions, nodeArgs: string[] = []) {
     if (options.local !== undefined && options.model !== undefined) {
-      console.error(
-        "Error: Pass either --model (hosted) or --local (local), not both.",
-      );
+      console.error("Error: Pass either --model (hosted) or --local (local), not both.");
       process.exit(2);
     }
     if (options.local !== undefined) {
@@ -340,8 +321,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
           // compile passes (lib/cli/util.ts). Set by lib/cli/test.ts on the
           // child it spawns for `expectedCompileError` files; nothing else
           // sets it, so the default stays deny.
-          const allowTestImports =
-            process.env.AGENCY_ALLOW_TEST_IMPORTS === "1";
+          const allowTestImports = process.env.AGENCY_ALLOW_TEST_IMPORTS === "1";
           for (const input of inputs) {
             compile(config, input, undefined, {
               ts: opts.ts,
@@ -371,76 +351,66 @@ export function createProgram(deps: CliDependencies = {}): Command {
     );
 
   function addRunOptions(cmd: Command) {
-    return cmd
-      .option(
-        "--resume <statefile>",
-        "Resume execution from a saved state file",
-      )
-      // Two flags rather than `--trace [file]`: an optional-valued option
-      // swallows the next word, so `agency run --trace greet.agency` reads the
-      // filename as the trace path and then reports the input missing. That was
-      // broken before the position rule too; splitting it makes both spellings
-      // work.
-      .option("--trace", "Write an execution trace to <input>.trace")
-      .option("--trace-file <path>", "Write an execution trace to this path")
-      .option(
-        "--log-file <path>",
-        "Append statelog events (one JSON object per line) to this file for this run",
-      )
-      .option(
-        "--observability",
-        "Enable statelog observability for this run (use with a configured host, or --log-file)",
-      )
-      .option(
-        "--strict",
-        "Fail the run on any fatal type error (typechecker.strict)",
-      )
-      .option(
-        "--max-tool-call-rounds <n>",
-        "Max LLM tool-call rounds before halting a tool loop (default 10; overrides agency.json)",
-        parsePositiveInt,
-      )
-      .option(
-        "--max-tool-result-chars <n>",
-        "Max chars of a single tool result fed back to the model (0 disables; default 100000; overrides agency.json)",
-        parseNonNegativeInt,
-      )
-      .option(
-        "--model <name>",
-        "Model for this run's LLM calls, as `model` or `provider/model` (e.g. gpt-4o-mini, openrouter/anthropic/claude-sonnet-4)",
-        // Adapter, not decoration: commander calls a parser with
-        // (value, previous), and `previous` would land in the resolver's
-        // catalogNames parameter when --model is repeated.
-        (value: string) => resolveModelFlag(value),
-      )
-      .option(
-        "--local <model>",
-        "Run every LLM call on a local model: a curated name, an alias, an hf: URI, or a .gguf path (see: agency local list)",
-      )
-      .option(
-        "--policy <name|path>",
-        "Interrupt policy: a built-in (recommended|minimal|with-writes|approve-all) or a policy JSON file",
-      )
-      .option(
-        "--approve <effects>",
-        "Comma-separated interrupt effects to auto-approve",
-      )
-      .option(
-        "--reject <effects>",
-        "Comma-separated interrupt effects to auto-reject",
-      )
-      .option(
-        "-i, --interactive",
-        "Prompt on interrupts that surface unhandled (default: reject them)",
-      )
-      .option(
-        "--max-cost <dollars>",
-        "Abort if the run's LLM spend exceeds this many dollars (e.g. 0.50). 0 = no paid spend (local models only); negative = no limit",
-      )
-      .option(
-        "--max-time <duration>",
-        "Abort if the run's working time exceeds this duration (e.g. 30s, 5m, 1h, 2d). Waiting on a human is not counted; zero/negative = no limit",
-      );
+    return (
+      cmd
+        .option("--resume <statefile>", "Resume execution from a saved state file")
+        // Two flags rather than `--trace [file]`: an optional-valued option
+        // swallows the next word, so `agency run --trace greet.agency` reads the
+        // filename as the trace path and then reports the input missing. That was
+        // broken before the position rule too; splitting it makes both spellings
+        // work.
+        .option("--trace", "Write an execution trace to <input>.trace")
+        .option("--trace-file <path>", "Write an execution trace to this path")
+        .option(
+          "--log-file <path>",
+          "Append statelog events (one JSON object per line) to this file for this run",
+        )
+        .option(
+          "--observability",
+          "Enable statelog observability for this run (use with a configured host, or --log-file)",
+        )
+        .option("--strict", "Fail the run on any fatal type error (typechecker.strict)")
+        .option(
+          "--max-tool-call-rounds <n>",
+          "Max LLM tool-call rounds before halting a tool loop (default 10; overrides agency.json)",
+          parsePositiveInt,
+        )
+        .option(
+          "--max-tool-result-chars <n>",
+          "Max chars of a single tool result fed back to the model (0 disables; default 100000; overrides agency.json)",
+          parseNonNegativeInt,
+        )
+        .option(
+          "--model <name>",
+          "Model for this run's LLM calls, as `model` or `provider/model` (e.g. gpt-4o-mini, openrouter/anthropic/claude-sonnet-4)",
+          // Adapter, not decoration: commander calls a parser with
+          // (value, previous), and `previous` would land in the resolver's
+          // catalogNames parameter when --model is repeated.
+          (value: string) => resolveModelFlag(value),
+        )
+        .option(
+          "--local <model>",
+          "Run every LLM call on a local model: a curated name, an alias, an hf: URI, or a .gguf path (see: agency local list)",
+        )
+        .option(
+          "--policy <name|path>",
+          "Interrupt policy: a built-in (recommended|minimal|with-writes|approve-all) or a policy JSON file",
+        )
+        .option("--approve <effects>", "Comma-separated interrupt effects to auto-approve")
+        .option("--reject <effects>", "Comma-separated interrupt effects to auto-reject")
+        .option(
+          "-i, --interactive",
+          "Prompt on interrupts that surface unhandled (default: reject them)",
+        )
+        .option(
+          "--max-cost <dollars>",
+          "Abort if the run's LLM spend exceeds this many dollars (e.g. 0.50). 0 = no paid spend (local models only); negative = no limit",
+        )
+        .option(
+          "--max-time <duration>",
+          "Abort if the run's working time exceeds this duration (e.g. 30s, 5m, 1h, 2d). Waiting on a human is not counted; zero/negative = no limit",
+        )
+    );
   }
 
   addRunOptions(
@@ -456,22 +426,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
         "[nodeArgs...]",
         "Arguments after the filename go to the program; read them with std::args",
       ),
-  ).action(
-    async (input: string, nodeArgs: string[], options: RunOptions, command: Command) => {
-      const warning = warnMisplacedAgencyFlags(command, input);
-      if (warning !== undefined) console.warn(warning);
-      if (
-        command.invokedAsFallback() &&
-        !input.endsWith(".agency") &&
-        !fs.existsSync(input)
-      ) {
-        // `agency typo` may be a mistyped command, which plain run can never
-        // be; the diagnostic suggests near-miss command names.
-        command.unknownFallbackOperand(input);
-      }
-      await runWithOptions(input, options, nodeArgs);
-    },
-  );
+  ).action(async (input: string, nodeArgs: string[], options: RunOptions, command: Command) => {
+    const warning = warnMisplacedAgencyFlags(command, input);
+    if (warning !== undefined) console.warn(warning);
+    if (command.invokedAsFallback() && !input.endsWith(".agency") && !fs.existsSync(input)) {
+      // `agency typo` may be a mistyped command, which plain run can never
+      // be; the diagnostic suggests near-miss command names.
+      command.unknownFallbackOperand(input);
+    }
+    await runWithOptions(input, options, nodeArgs);
+  });
 
   program
     .command("pack")
@@ -484,24 +448,20 @@ export function createProgram(deps: CliDependencies = {}): Command {
     // explicitly if they prefer that extension.
     .option("-o, --output <file>", "Output file path", "agent.mjs")
     .option("--target <target>", "Output target (currently only 'node')", "node")
-    .action(
-      async (input: string, opts: { output: string; target: string }) => {
-        if (opts.target !== "node") {
-          console.error(
-            `Unsupported pack target: ${opts.target} (supported: node)`,
-          );
-          process.exit(1);
-        }
-        const config = getConfig();
-        await pack({
-          config,
-          inputFile: input,
-          outputFile: opts.output,
-          target: "node",
-        });
-        console.log(`Packed ${input} -> ${opts.output}`);
-      },
-    );
+    .action(async (input: string, opts: { output: string; target: string }) => {
+      if (opts.target !== "node") {
+        console.error(`Unsupported pack target: ${opts.target} (supported: node)`);
+        process.exit(1);
+      }
+      const config = getConfig();
+      await pack({
+        config,
+        inputFile: input,
+        outputFile: opts.output,
+        target: "node",
+      });
+      console.log(`Packed ${input} -> ${opts.output}`);
+    });
 
   // Hidden while the hosted feature matures. Every "how" (HTTP, interrupts,
   // binding, arg coercion, prompts, browser launch) sits behind the modules in
@@ -525,7 +485,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--api-key-env <name>", "env var to read the API key from (default: STATELOG_API_KEY)")
     .option("--dry-run", "preview the deploy without uploading")
     .action(
-      async (file: string, opts: { host?: string; project?: string; apiKeyEnv?: string; dryRun?: boolean }) => {
+      async (
+        file: string,
+        opts: { host?: string; project?: string; apiKeyEnv?: string; dryRun?: boolean },
+      ) => {
         await runDeploy(file, opts, getConfigContext());
       },
     );
@@ -637,7 +600,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--by-kind", "group the breakdown by operation kind")
     .option(HOST_OPTION, HOST_DESC)
     .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
-    .action((project: string | undefined, opts: SpendOptions) => runSpend(project, opts, getConfigContext()));
+    .action((project: string | undefined, opts: SpendOptions) =>
+      runSpend(project, opts, getConfigContext()),
+    );
 
   const PROJECT_OPTION = "--project <slug>";
   const PROJECT_DESC = "project slug (default: the linked project)";
@@ -744,18 +709,13 @@ export function createProgram(deps: CliDependencies = {}): Command {
       },
     );
 
-  const traceCmd = program
-    .command("trace")
-    .description("Trace-related commands");
+  const traceCmd = program.command("trace").description("Trace-related commands");
 
   traceCmd
     .command("run", { isDefault: true })
     .description("Compile and run .agency file, generating a trace")
     .argument("<input>", "Path to .agency input file")
-    .option(
-      "-o, --output <file>",
-      "Output trace file path (default: <input>.trace)",
-    )
+    .option("-o, --output <file>", "Output trace file path (default: <input>.trace)")
     .option("--resume <statefile>", "Resume execution from a saved state file")
     .action(async (input: string, options: { output?: string; resume?: string }) => {
       const traceFile = options.output || input.replace(/\.agency$/, ".trace");
@@ -793,10 +753,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
     // directories of run directories, or several paths open the
     // cross-run explorer instead. The argument is optional so bare
     // `agency logs` (no subcommand, no paths) falls through to help.
-    .argument("[files...]", "Statelog files ('-' for stdin), run directories, or directories of runs")
+    .argument(
+      "[files...]",
+      "Statelog files ('-' for stdin), run directories, or directories of runs",
+    )
     .option("-f, --follow", "Tail the file — re-read and re-render as new events are appended")
     .option("--csv", "Print the runs table as CSV to stdout instead of opening the explorer")
-    .option("--dataset <dir>", "Local viewing: label dataset the tree 'l' key labels into (default: eval.dataset, else labels/)")
+    .option(
+      "--dataset <dir>",
+      "Local viewing: label dataset the tree 'l' key labels into (default: eval.dataset, else labels/)",
+    )
     .option("--checklist <file>", "Local viewing: checklist to label a trace against")
     .action(async (files: string[], options: LogsCliOptions) => {
       if (files.length === 0) {
@@ -819,9 +785,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       await logsView(file, logsViewOptsFrom((command.parent?.opts() ?? {}) as LogsCliOptions));
     });
 
-  const evalCmd = program
-    .command("eval")
-    .description("Evaluate agent runs against task fixtures");
+  const evalCmd = program.command("eval").description("Evaluate agent runs against task fixtures");
 
   evalCmd
     .command("run")
@@ -830,11 +794,14 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option(
       "--agent-cmd <command>",
       "Run this command as the agent; {task} is replaced with each input's task. " +
-      "Mutually exclusive with --agent. Agency CLIs only — the command's process " +
-      "must write the statelog the harness points it at, and it must run headless " +
-      "and one-shot (e.g. agency agent --policy approve-all -p -- {task})",
+        "Mutually exclusive with --agent. Agency CLIs only — the command's process " +
+        "must write the statelog the harness points it at, and it must run headless " +
+        "and one-shot (e.g. agency agent --policy approve-all -p -- {task})",
     )
-    .option("--inputs <source>", "Input suite: a JSON file, a directory, or a git source (URL[//subdir][?ref=...])")
+    .option(
+      "--inputs <source>",
+      "Input suite: a JSON file, a directory, or a git source (URL[//subdir][?ref=...])",
+    )
     .option("--goal <text>", "Run one inline input with this goal")
     .option("--run-id <id>", "Run id / output subdirectory")
     .option("--runs-dir <path>", "Runs output directory")
@@ -857,90 +824,87 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "Max chars of a single tool result fed back to the model (0 disables; default 100000; overrides agency.json)",
       parseNonNegativeInt,
     )
-    .option(
-      "--strict",
-      "Fail the run on any fatal type error (typechecker.strict)",
-    )
-    .action(async (opts: {
-      agent?: string;
-      agentCmd?: string;
-      inputs?: string;
-      goal?: string;
-      runId?: string;
-      runsDir?: string;
-      continueOnError?: boolean;
-      graders?: string;
-      grade?: boolean;
-      parallel?: number;
-      maxToolCallRounds?: number;
-      maxToolResultChars?: number;
-      strict?: boolean;
-    }) => {
-      // The three flags below are compile-time: they are baked into the
-      // compiled program, and a command target compiles nothing — the
-      // equivalent flags belong inside the command itself.
-      if (opts.agentCmd && (opts.maxToolCallRounds !== undefined || opts.maxToolResultChars !== undefined || opts.strict)) {
-        console.error(
-          "Error: --max-tool-call-rounds, --max-tool-result-chars and --strict are compile-time flags " +
-          "and a command target compiles nothing — put the equivalent flags inside the command",
-        );
-        process.exit(2);
-      }
-      // Eval compiles each FILE agent inside its seeded workdir with THIS
-      // config (all three flags are baked in via applyCliFlags), so folding
-      // them onto the config here is the whole implementation.
-      const config = applyCliFlags(getConfig(), {
-        maxToolCallRounds: opts.maxToolCallRounds,
-        maxToolResultChars: opts.maxToolResultChars,
-        strict: opts.strict,
-      });
-      const result = await evalRun({ ...opts, config });
-      console.log(`Run ${result.runId} completed: ${result.okCount}/${result.inputs.length} inputs ok`);
-      if (result.grading) {
-        for (const line of formatGrading(result.grading.objective, result.grading.perInput)) {
-          console.log(line);
+    .option("--strict", "Fail the run on any fatal type error (typechecker.strict)")
+    .action(
+      async (opts: {
+        agent?: string;
+        agentCmd?: string;
+        inputs?: string;
+        goal?: string;
+        runId?: string;
+        runsDir?: string;
+        continueOnError?: boolean;
+        graders?: string;
+        grade?: boolean;
+        parallel?: number;
+        maxToolCallRounds?: number;
+        maxToolResultChars?: number;
+        strict?: boolean;
+      }) => {
+        // The three flags below are compile-time: they are baked into the
+        // compiled program, and a command target compiles nothing — the
+        // equivalent flags belong inside the command itself.
+        if (
+          opts.agentCmd &&
+          (opts.maxToolCallRounds !== undefined ||
+            opts.maxToolResultChars !== undefined ||
+            opts.strict)
+        ) {
+          console.error(
+            "Error: --max-tool-call-rounds, --max-tool-result-chars and --strict are compile-time flags " +
+              "and a command target compiles nothing — put the equivalent flags inside the command",
+          );
+          process.exit(2);
         }
-      }
-      const costUsd = totalRunCostUsd(result);
-      if (costUsd !== undefined) {
-        console.log(`total LLM cost: $${costUsd.toFixed(2)}`);
-      }
-      console.log(path.join(result.runDir, "summary.json"));
-      if (result.grading && !result.grading.gatesPassed) {
-        process.exit(2);
-      }
-      if (result.errorCount > 0 && opts.continueOnError === false) {
-        process.exit(2);
-      }
-    });
+        // Eval compiles each FILE agent inside its seeded workdir with THIS
+        // config (all three flags are baked in via applyCliFlags), so folding
+        // them onto the config here is the whole implementation.
+        const config = applyCliFlags(getConfig(), {
+          maxToolCallRounds: opts.maxToolCallRounds,
+          maxToolResultChars: opts.maxToolResultChars,
+          strict: opts.strict,
+        });
+        const result = await evalRun({ ...opts, config });
+        console.log(
+          `Run ${result.runId} completed: ${result.okCount}/${result.inputs.length} inputs ok`,
+        );
+        if (result.grading) {
+          for (const line of formatGrading(result.grading.objective, result.grading.perInput)) {
+            console.log(line);
+          }
+        }
+        const costUsd = totalRunCostUsd(result);
+        if (costUsd !== undefined) {
+          console.log(`total LLM cost: $${costUsd.toFixed(2)}`);
+        }
+        console.log(path.join(result.runDir, "summary.json"));
+        if (result.grading && !result.grading.gatesPassed) {
+          process.exit(2);
+        }
+        if (result.errorCount > 0 && opts.continueOnError === false) {
+          process.exit(2);
+        }
+      },
+    );
 
   evalCmd
     .command("extract")
     .description(
       "Extract a structured eval record from a statelog file. " +
-      "Use this on the trace of one agent run to produce a JSON " +
-      "artifact you can grade with an LLM judge or compare against " +
-      "another run.",
+        "Use this on the trace of one agent run to produce a JSON " +
+        "artifact you can grade with an LLM judge or compare against " +
+        "another run.",
     )
     .argument("<file>", "Path to a .statelog.jsonl file")
-    .option(
-      "-o, --out <path>",
-      "Output JSON path (default: <file>.eval.json)",
-    )
+    .option("-o, --out <path>", "Output JSON path (default: <file>.eval.json)")
     .option(
       "--preview-chars <n>",
       "Max chars for tool args/output previews (default: 200, 0 for full)",
       (v) => parseInt(v, 10),
     )
-    .option(
-      "--compact",
-      "Emit compact JSON instead of pretty-printed (pipelines / diffs)",
-    )
+    .option("--compact", "Emit compact JSON instead of pretty-printed (pipelines / diffs)")
     .action(
-      async (
-        file: string,
-        opts: { out?: string; previewChars?: number; compact?: boolean },
-      ) => {
+      async (file: string, opts: { out?: string; previewChars?: number; compact?: boolean }) => {
         await evalExtract(file, {
           out: opts.out,
           previewChars: opts.previewChars,
@@ -959,7 +923,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
       // A whole run without --input opens the explorer's per-test
       // table; --input (or an input dir / statelog file) keeps the
       // straight-to-viewer path.
-      if (opts.input === undefined && fs.existsSync(path.join(path.resolve(runDir), "summary.json"))) {
+      if (
+        opts.input === undefined &&
+        fs.existsSync(path.join(path.resolve(runDir), "summary.json"))
+      ) {
         await logsView([runDir], { follow: opts.follow });
         return;
       }
@@ -997,7 +964,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Compare two eval records or eval run directories")
     .argument("<inputA>", "Path to first eval record (.eval.json) or run directory")
     .argument("<inputB>", "Path to second eval record (.eval.json) or run directory")
-    .option("--goal <text>", "Goal used to judge responses (record files only; run directories carry their own goals)")
+    .option(
+      "--goal <text>",
+      "Goal used to judge responses (record files only; run directories carry their own goals)",
+    )
     .option("--samples <n>", "Judge samples per input", parseInt)
     .option("--confidence-threshold <n>", "Minimum confidence counted as a win", parseInt)
     .option("--margin-threshold <n>", "Suite win margin required", parseInt)
@@ -1024,44 +994,64 @@ export function createProgram(deps: CliDependencies = {}): Command {
   const addOptimizeCommand = (parent: Command): void => {
     parent
       .command("optimize")
-      .description("Optimize marked Agency declarations against an eval goal or input suite (file agents only — the optimizer mutates agent files, so there is no --agent-cmd here)")
+      .description(
+        "Optimize marked Agency declarations against an eval goal or input suite (file agents only — the optimizer mutates agent files, so there is no --agent-cmd here)",
+      )
       .argument("<agent>", "Agency file target: file.agency[:node]")
       .option("--goal <text>", "Goal to optimize for")
       .option("--inputs <fileOrDir>", "Input suite JSON file or directory")
       .option("--graders <file>", "TypeScript grading module (default-exports graders)")
       .option("--validation-inputs <fileOrDir>", "Held-out validation input suite")
-      .option("--validation-split <ratio>", "Hold out this fraction of inputs for validation", (v) => parseFloat(v))
+      .option(
+        "--validation-split <ratio>",
+        "Hold out this fraction of inputs for validation",
+        (v) => parseFloat(v),
+      )
       .option("--iterations <n>", "Maximum candidate iterations", (v) => parseInt(v, 10))
       .option("--run-id <id>", "Run id / output subdirectory")
       .option("--runs-dir <path>", "Optimizer runs output directory")
       .option("--no-writeback", "Do not write the champion back to source files")
       .option("--mutator-model <model>", "Model to use for proposing mutations")
-      .option("--optimizer <nameOrPath>", "Optimization strategy: a built-in name (greedy, gepa, example) or a path to an optimizer module (.ts/.js/.mjs, or any path containing /)")
-      .option("--minibatch <n>", "GEPA minibatch size (gepa optimizer only)", (v) => parseInt(v, 10))
-      .option("--seed <n>", "RNG seed for reproducible search (gepa optimizer)", (v) => parseInt(v, 10))
+      .option(
+        "--optimizer <nameOrPath>",
+        "Optimization strategy: a built-in name (greedy, gepa, example) or a path to an optimizer module (.ts/.js/.mjs, or any path containing /)",
+      )
+      .option("--minibatch <n>", "GEPA minibatch size (gepa optimizer only)", (v) =>
+        parseInt(v, 10),
+      )
+      .option("--seed <n>", "RNG seed for reproducible search (gepa optimizer)", (v) =>
+        parseInt(v, 10),
+      )
       .option("--silent", "Print nothing; artifacts are still written")
-      .action(async (agent: string, opts: {
-        goal?: string;
-        inputs?: string;
-        graders?: string;
-        validationInputs?: string;
-        validationSplit?: number;
-        iterations?: number;
-        runId?: string;
-        runsDir?: string;
-        writeback: boolean;
-        mutatorModel?: string;
-        optimizer?: string;
-        minibatch?: number;
-        seed?: number;
-        silent?: boolean;
-      }) => {
-        const result = await evalOptimize({ ...opts, agent, config: getConfig() });
-        if (!opts.silent) {
-          console.log(`Optimize ${result.runId} completed: ${result.acceptedCount} accepted, ${result.rejectedCount} rejected`);
-          console.log(path.join(result.runDir, "summary.json"));
-        }
-      });
+      .action(
+        async (
+          agent: string,
+          opts: {
+            goal?: string;
+            inputs?: string;
+            graders?: string;
+            validationInputs?: string;
+            validationSplit?: number;
+            iterations?: number;
+            runId?: string;
+            runsDir?: string;
+            writeback: boolean;
+            mutatorModel?: string;
+            optimizer?: string;
+            minibatch?: number;
+            seed?: number;
+            silent?: boolean;
+          },
+        ) => {
+          const result = await evalOptimize({ ...opts, agent, config: getConfig() });
+          if (!opts.silent) {
+            console.log(
+              `Optimize ${result.runId} completed: ${result.acceptedCount} accepted, ${result.rejectedCount} rejected`,
+            );
+            console.log(path.join(result.runDir, "summary.json"));
+          }
+        },
+      );
   };
   addOptimizeCommand(evalCmd);
   addOptimizeCommand(program);
@@ -1069,9 +1059,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
   program
     .command("format")
     .alias("fmt")
-    .description(
-      "Format .agency file(s) or directory(s) (reads from stdin if no input)",
-    )
+    .description("Format .agency file(s) or directory(s) (reads from stdin if no input)")
     .argument("[inputs...]", "Paths to .agency input files or directories")
     .option("-i, --in-place", "Format file(s) in-place")
     .action(async (inputs: string[], opts: { inPlace?: boolean }) => {
@@ -1090,9 +1078,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
   program
     .command("ast")
     .alias("parse")
-    .description(
-      "Parse .agency file(s) and show AST (reads from stdin if no input)",
-    )
+    .description("Parse .agency file(s) and show AST (reads from stdin if no input)")
     .argument("[inputs...]", "Paths to .agency input files")
     .action(async (inputs: string[]) => {
       const config = getConfig();
@@ -1118,11 +1104,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       const preprocessInput = (contents: string): unknown => {
         const parsedProgram = parse(contents, config);
         const info = buildCompilationUnit(parsedProgram);
-        const preprocessor = new TypescriptPreprocessor(
-          parsedProgram,
-          config,
-          info,
-        );
+        const preprocessor = new TypescriptPreprocessor(parsedProgram, config, info);
         preprocessor.preprocess();
         return preprocessor.program;
       };
@@ -1146,13 +1128,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
     if (slowTests.length === 0) return;
     const sorted = [...slowTests].sort((a, b) => b.durationMs - a.durationMs);
     const top = sorted.slice(0, count);
-    console.log(
-      color.yellow(`\n Slowest ${Math.min(count, top.length)} tests:`),
-    );
+    console.log(color.yellow(`\n Slowest ${Math.min(count, top.length)} tests:`));
     for (const t of top) {
-      console.log(
-        `   ${color.yellow(formatDuration(t.durationMs))}  ${t.name}`,
-      );
+      console.log(`   ${color.yellow(formatDuration(t.durationMs))}  ${t.name}`);
     }
   }
 
@@ -1164,11 +1142,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("run", { isDefault: true })
     .description("Run Agency test files")
     .argument("[inputs...]", "Paths to .test.json files or directories")
-    .option(
-      "-p, --parallel <number>",
-      "Number of test files to run in parallel",
-      parseInt,
-    )
+    .option("-p, --parallel <number>", "Number of test files to run in parallel", parseInt)
     .option("--coverage", "Enable coverage collection and report")
     .option("--accumulate", "Preserve existing coverage data (use with --coverage)")
     .option(
@@ -1179,65 +1153,72 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "--collect-only",
       "With --coverage, write the raw coverage data but skip the report. Used by sharded CI runs, which merge the shards and report once elsewhere; generating a per-shard report would wastefully recompile every source file for its source map.",
     )
-    .action(async (testFile: string[], opts: { parallel?: number; coverage?: boolean; accumulate?: boolean; shard?: string; collectOnly?: boolean }) => {
-      const config = getConfig();
-      if (opts.coverage) {
-        process.env.AGENCY_COVERAGE = "1";
-        // Resolve to an absolute path so subprocesses spawned with a different
-        // cwd (e.g., `test js` uses execFileAsync({ cwd: dir })) all write to
-        // the same `.coverage/` directory.
-        process.env.AGENCY_COVERAGE_OUTDIR = path.resolve(config.coverage?.outDir ?? ".coverage");
-        if (!opts.accumulate) {
-          cleanCoverage(config);
-        }
-      }
-      const shard = opts.shard ? parseShardSpec(opts.shard) : undefined;
-      const parallel = opts.parallel ?? config.test?.parallel ?? 1;
-      const totals = await test(config, testFile, parallel, shard);
-      const totalFiles = totals.filesPassed + totals.filesFailed;
-      const totalTests = totals.passed + totals.failed;
-      if (totalFiles > 0) {
-        const filesStatus = [
-          totals.filesFailed > 0 ? `${totals.filesFailed} failed` : "",
-          `${totals.filesPassed} passed`,
-        ]
-          .filter(Boolean)
-          .join(" | ");
-        const testsStatus = [
-          totals.failed > 0 ? `${totals.failed} failed` : "",
-          `${totals.passed} passed`,
-        ]
-          .filter(Boolean)
-          .join(" | ");
-        if (totals.failedFiles.length > 0) {
-          console.log("");
-          for (const file of totals.failedFiles) {
-            console.log(color.red(` FAIL  ${file}`));
+    .action(
+      async (
+        testFile: string[],
+        opts: {
+          parallel?: number;
+          coverage?: boolean;
+          accumulate?: boolean;
+          shard?: string;
+          collectOnly?: boolean;
+        },
+      ) => {
+        const config = getConfig();
+        if (opts.coverage) {
+          process.env.AGENCY_COVERAGE = "1";
+          // Resolve to an absolute path so subprocesses spawned with a different
+          // cwd (e.g., `test js` uses execFileAsync({ cwd: dir })) all write to
+          // the same `.coverage/` directory.
+          process.env.AGENCY_COVERAGE_OUTDIR = path.resolve(config.coverage?.outDir ?? ".coverage");
+          if (!opts.accumulate) {
+            cleanCoverage(config);
           }
         }
-        const colorFn = totals.failed > 0 ? color.red : color.green;
-        console.log(colorFn(`\n Test Files  ${filesStatus} (${totalFiles})`));
-        console.log(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
-      }
-      printSlowestTests(totals.slowTests);
-      if (opts.coverage && !opts.collectOnly) {
-        const reportTargets = testFile.length > 0 ? testFile : ["."];
-        await generateReport(config, reportTargets);
-      }
-      if (totals.failed > 0) {
-        process.exit(1);
-      }
-    });
+        const shard = opts.shard ? parseShardSpec(opts.shard) : undefined;
+        const parallel = opts.parallel ?? config.test?.parallel ?? 1;
+        const totals = await test(config, testFile, parallel, shard);
+        const totalFiles = totals.filesPassed + totals.filesFailed;
+        const totalTests = totals.passed + totals.failed;
+        if (totalFiles > 0) {
+          const filesStatus = [
+            totals.filesFailed > 0 ? `${totals.filesFailed} failed` : "",
+            `${totals.filesPassed} passed`,
+          ]
+            .filter(Boolean)
+            .join(" | ");
+          const testsStatus = [
+            totals.failed > 0 ? `${totals.failed} failed` : "",
+            `${totals.passed} passed`,
+          ]
+            .filter(Boolean)
+            .join(" | ");
+          if (totals.failedFiles.length > 0) {
+            console.log("");
+            for (const file of totals.failedFiles) {
+              console.log(color.red(` FAIL  ${file}`));
+            }
+          }
+          const colorFn = totals.failed > 0 ? color.red : color.green;
+          console.log(colorFn(`\n Test Files  ${filesStatus} (${totalFiles})`));
+          console.log(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
+        }
+        printSlowestTests(totals.slowTests);
+        if (opts.coverage && !opts.collectOnly) {
+          const reportTargets = testFile.length > 0 ? testFile : ["."];
+          await generateReport(config, reportTargets);
+        }
+        if (totals.failed > 0) {
+          process.exit(1);
+        }
+      },
+    );
 
   testCmd
     .command("js")
     .description("Run JavaScript integration tests")
     .argument("[inputs...]", "Paths to test directories")
-    .option(
-      "-p, --parallel <number>",
-      "Number of test dirs to run in parallel",
-      parseInt,
-    )
+    .option("-p, --parallel <number>", "Number of test dirs to run in parallel", parseInt)
     .option("--coverage", "Enable coverage collection and report")
     .option("--accumulate", "Preserve existing coverage data (use with --coverage)")
     .option(
@@ -1248,23 +1229,34 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "--collect-only",
       "With --coverage, write the raw coverage data but skip the report. Used by sharded CI runs, which merge the shards and report once elsewhere; generating a per-shard report would wastefully recompile every source file for its source map.",
     )
-    .action(async (testFile: string[], opts: { parallel?: number; coverage?: boolean; accumulate?: boolean; shard?: string; collectOnly?: boolean }) => {
-      const config = getConfig();
-      if (opts.coverage) {
-        process.env.AGENCY_COVERAGE = "1";
-        process.env.AGENCY_COVERAGE_OUTDIR = path.resolve(config.coverage?.outDir ?? ".coverage");
-        if (!opts.accumulate) {
-          cleanCoverage(config);
+    .action(
+      async (
+        testFile: string[],
+        opts: {
+          parallel?: number;
+          coverage?: boolean;
+          accumulate?: boolean;
+          shard?: string;
+          collectOnly?: boolean;
+        },
+      ) => {
+        const config = getConfig();
+        if (opts.coverage) {
+          process.env.AGENCY_COVERAGE = "1";
+          process.env.AGENCY_COVERAGE_OUTDIR = path.resolve(config.coverage?.outDir ?? ".coverage");
+          if (!opts.accumulate) {
+            cleanCoverage(config);
+          }
         }
-      }
-      const shard = opts.shard ? parseShardSpec(opts.shard) : undefined;
-      const parallel = opts.parallel ?? config.test?.parallel ?? 1;
-      await testTs(config, testFile, parallel, shard);
-      if (opts.coverage && !opts.collectOnly) {
-        const reportTargets = testFile.length > 0 ? testFile : ["."];
-        await generateReport(config, reportTargets);
-      }
-    });
+        const shard = opts.shard ? parseShardSpec(opts.shard) : undefined;
+        const parallel = opts.parallel ?? config.test?.parallel ?? 1;
+        await testTs(config, testFile, parallel, shard);
+        if (opts.coverage && !opts.collectOnly) {
+          const reportTargets = testFile.length > 0 ? testFile : ["."];
+          await generateReport(config, reportTargets);
+        }
+      },
+    );
 
   testCmd
     .command("fixtures")
@@ -1274,9 +1266,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       await fixtures(getConfig(), target);
     });
 
-  const coverageCmd = program
-    .command("coverage")
-    .description("View test coverage reports");
+  const coverageCmd = program.command("coverage").description("View test coverage reports");
 
   coverageCmd
     .command("report")
@@ -1323,14 +1313,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   program
     .command("definition")
-    .description(
-      "Find the definition of the symbol at the given cursor position",
-    )
+    .description("Find the definition of the symbol at the given cursor position")
     .requiredOption("--line <line>", "0-indexed line number of the cursor")
-    .requiredOption(
-      "--column <column>",
-      "0-indexed column number of the cursor",
-    )
+    .requiredOption("--column <column>", "0-indexed column number of the cursor")
     .option("--file <file>", "Filename to report in output", "")
     .action(async (opts: { line: string; column: string; file: string }) => {
       const { findDefinition } = await import("@/cli/definition.js");
@@ -1385,19 +1370,14 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(async (inputs: string[], opts: { strict?: boolean }) => {
       const config = getConfig();
       let hasErrors = false;
-      const runTypeCheck = (
-        contents: string,
-        filePath?: string,
-        symbolTable?: SymbolTable,
-      ) => {
+      const runTypeCheck = (contents: string, filePath?: string, symbolTable?: SymbolTable) => {
         const parsed = parse(contents, config);
         const absPath = filePath ? path.resolve(filePath) : undefined;
         // Expand `$( ... )` first, or every name a splice generates checks
         // as undefined. This command has its own pipeline and does not go
         // through runCheckerPipeline. Stdin has no path to resolve a
         // generator against, so splices are left alone there.
-        const expanded =
-          absPath === undefined ? null : expandSplices(parsed, absPath, config);
+        const expanded = absPath === undefined ? null : expandSplices(parsed, absPath, config);
         if (expanded !== null && !expanded.ok) {
           console.error(formatSpliceDiagnostic(expanded.diagnostic, absPath));
           hasErrors = true;
@@ -1434,12 +1414,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
       // metadata is dropped. Seeding from every file makes typechecking of the
       // whole directory complete. The symbol table stays file-keyed, so adding
       // more entrypoints never merges or pollutes across files.
-      const filePaths = sources
-        .filter((s) => s.kind === "file")
-        .map((s) => path.resolve(s.path));
-      const symbolTable = filePaths.length
-        ? SymbolTable.build(filePaths, config)
-        : undefined;
+      const filePaths = sources.filter((s) => s.kind === "file").map((s) => path.resolve(s.path));
+      const symbolTable = filePaths.length ? SymbolTable.build(filePaths, config) : undefined;
       for (const src of sources) {
         const contents = await readSource(src);
         if (src.kind === "stdin") {
@@ -1538,8 +1514,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("-o, --output <file>", "Output bundle file path")
     .action((source: string, trace: string, options: { output?: string }) => {
       const parsed = path.parse(source);
-      const output =
-        options.output || path.join(parsed.dir, parsed.name + ".bundle");
+      const output = options.output || path.join(parsed.dir, parsed.name + ".bundle");
       createBundle(source, trace, output);
       console.log(`Bundle created: ${output}`);
     });
@@ -1577,10 +1552,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Render .agency file(s) as markdown")
     .argument("<input>", "Path to .agency file or directory")
     .option("-o, --output <dir>", "Output directory", "literate")
-    .option(
-      "--ignore <dirs...>",
-      "Directory names to ignore when scanning recursively",
-    )
+    .option("--ignore <dirs...>", "Directory names to ignore when scanning recursively")
     .option("--lang <name>", "Code-fence language tag", "agency")
     .option("--base-url <url>", "Base URL for a 'View source' link at the top")
     .action(
@@ -1594,45 +1566,75 @@ export function createProgram(deps: CliDependencies = {}): Command {
         },
       ) => {
         const config = getConfig();
-        generateLiterate(
-          config,
-          input,
-          opts.output,
-          opts.ignore || [],
-          opts.lang,
-          opts.baseUrl,
-        );
+        generateLiterate(config, input, opts.output, opts.ignore || [], opts.lang, opts.baseUrl);
       },
     );
 
   const localCmd = program.command("local").description("Manage and run local models");
-  localCmd.command("list").description("List local models: the full catalog, with downloaded models marked")
+  localCmd
+    .command("list")
+    .description("List local models: the full catalog, with downloaded models marked")
     .option("-l, --long", "Show each model's description on its own line")
     .action((opts: { long?: boolean }) => localList(opts.long === true));
-  localCmd.command("download").description("Download a model (curated name, alias, or hf: URI); no argument opens a picker")
-    .argument("[value]").action(localDownload);
-  localCmd.command("remove").description("Delete a downloaded model").argument("<name>")
+  localCmd
+    .command("download")
+    .description("Download a model (curated name, alias, or hf: URI); no argument opens a picker")
+    .argument("[value]")
+    .action(localDownload);
+  localCmd
+    .command("remove")
+    .description("Delete a downloaded model")
+    .argument("<name>")
     .action(localRemove);
-  localCmd.command("resolve").description("Show what a name/alias resolves to").argument("<value>")
+  localCmd
+    .command("resolve")
+    .description("Show what a name/alias resolves to")
+    .argument("<value>")
     .action(localResolve);
-  localCmd.command("refresh").description("Refresh the model catalog from the remote source")
-    .argument("[url]", "Override the catalog URL (else env/config/default)").action(localRefresh);
+  localCmd
+    .command("refresh")
+    .description("Refresh the model catalog from the remote source")
+    .argument("[url]", "Override the catalog URL (else env/config/default)")
+    .action(localRefresh);
   const aliasCmd = localCmd.command("alias").description("Manage model name aliases");
-  aliasCmd.command("list").description("List usable short names (curated + aliases)").action(localAliasList);
-  aliasCmd.command("add").description("Add a short-name alias").argument("<name>").argument("<uri>")
+  aliasCmd
+    .command("list")
+    .description("List usable short names (curated + aliases)")
+    .action(localAliasList);
+  aliasCmd
+    .command("add")
+    .description("Add a short-name alias")
+    .argument("<name>")
+    .argument("<uri>")
     .action(localAliasAdd);
-  aliasCmd.command("remove").description("Remove a short-name alias").argument("<name>")
+  aliasCmd
+    .command("remove")
+    .description("Remove a short-name alias")
+    .argument("<name>")
     .action(localAliasRemove);
 
   const modelsCmd = program.command("models").description("Browse the hosted model catalog");
-  modelsCmd.command("list").description("List hosted models (filterable)")
-    .argument("[files...]", "Model-data JSON files to also load and include (as printed by `agency models refresh`)")
+  modelsCmd
+    .command("list")
+    .description("List hosted models (filterable)")
+    .argument(
+      "[files...]",
+      "Model-data JSON files to also load and include (as printed by `agency models refresh`)",
+    )
     .option("--provider <name>", "Only this provider")
     .option("--max-price <usd>", "Max input $/1M tokens", parseFloat)
     .option("--min-context <tokens>", "Min context window", parseInt)
-    .action((files: string[], opts: { provider?: string; maxPrice?: number; minContext?: number }) => modelsList(opts, files));
-  modelsCmd.command("refresh").description("Fetch the latest model data and print it as JSON (redirect to a file, then load with std::llm.loadModelData)")
-    .argument("[url]", "Optional URL to fetch model data from (defaults to the built-in source)").action((url?: string) => modelsRefresh(url));
+    .action(
+      (files: string[], opts: { provider?: string; maxPrice?: number; minContext?: number }) =>
+        modelsList(opts, files),
+    );
+  modelsCmd
+    .command("refresh")
+    .description(
+      "Fetch the latest model data and print it as JSON (redirect to a file, then load with std::llm.loadModelData)",
+    )
+    .argument("[url]", "Optional URL to fetch model data from (defaults to the built-in source)")
+    .action((url?: string) => modelsRefresh(url));
 
   // Full delegation: the agent command owns ZERO flags and its whole tail is
   // the agent's. The agent's own parseArgs schema is the single source of
@@ -1641,7 +1643,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
   program
     .command("agent")
     .passThroughOptions({ boundary: "immediate" })
-    .description("Launch the Agency language assistant agent (run `agency agent --help` for agent flags)")
+    .description(
+      "Launch the Agency language assistant agent (run `agency agent --help` for agent flags)",
+    )
     .argument("[args...]", "Arguments forwarded to the agent")
     .helpOption(false)
     .action((args: string[]) => {
@@ -1662,10 +1666,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--trace [file]", "Write an execution trace of the diagnosis to this file")
     .option("--log-file <path>", "Append statelog events from the diagnosis to this file")
     .action(
-      (
-        file: string,
-        opts: { symptom?: string; trace?: string | boolean; logFile?: string },
-      ) => {
+      (file: string, opts: { symptom?: string; trace?: string | boolean; logFile?: string }) => {
         const config = getConfig();
         doctor(config, file, {
           symptom: opts.symptom,
@@ -1675,9 +1676,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       },
     );
 
-  const configCmd = program
-    .command("config")
-    .description("Inspect Agency configuration");
+  const configCmd = program.command("config").description("Inspect Agency configuration");
 
   configCmd
     .command("show")
@@ -1688,13 +1687,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     )
     .action((opts: { showSecrets?: boolean }) => {
       const config = getConfig();
-      console.log(
-        JSON.stringify(
-          opts.showSecrets ? config : redactConfigSecrets(config),
-          null,
-          2,
-        ),
-      );
+      console.log(JSON.stringify(opts.showSecrets ? config : redactConfigSecrets(config), null, 2));
     });
 
   program
@@ -1706,9 +1699,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       review(config, file);
     });
 
-  const scheduleCmd = program
-    .command("schedule")
-    .description("Manage scheduled agent runs");
+  const scheduleCmd = program.command("schedule").description("Manage scheduled agent runs");
 
   // A flag the selected backend cannot honor must fail loudly, not be
   // silently ignored — in BOTH directions (remote-only flags on the
@@ -1753,10 +1744,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "Schedule preset: minute, hourly, daily, weekdays, weekends (Sat+Sun), weekly, monthly — singular forms (hour, day, weekday, weekend, week, month) also accepted",
     )
     .option("--cron <expression>", "Cron expression (5 fields)")
-    .option(
-      "--name <name>",
-      "Schedule name (default: derived from filename)",
-    )
+    .option("--name <name>", "Schedule name (default: derived from filename)")
     .option("--env-file <path>", "Path to .env file")
     .option(
       "--backend <type>",
@@ -1768,14 +1756,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
       (value: string, prev: string[] = []) => [...prev, value],
       [] as string[],
     )
-    .option(
-      "--write",
-      "github backend: grant contents: write + pull-requests: write permissions",
-    )
-    .option(
-      "--no-pin",
-      "github backend: emit @<tag> instead of @<sha> for action references",
-    )
+    .option("--write", "github backend: grant contents: write + pull-requests: write permissions")
+    .option("--no-pin", "github backend: emit @<tag> instead of @<sha> for action references")
     .option("--node <name>", "remote backend: the exported node to schedule")
     .option("--function <name>", "remote backend: the exported function to schedule")
     .option(
@@ -1853,18 +1835,14 @@ export function createProgram(deps: CliDependencies = {}): Command {
         try {
           scheduleAdd(addOpts);
           const name = opts.name || path.basename(file, ".agency");
-          console.log(
-            color.green(`Schedule "${name}" added successfully.`),
-          );
+          console.log(color.green(`Schedule "${name}" added successfully.`));
         } catch (err: any) {
           if (err instanceof ScheduleExistsError && process.stdin.isTTY) {
             const confirmed = await promptScheduleOverwrite(err.scheduleName);
             if (confirmed) {
               try {
                 scheduleAdd({ ...addOpts, force: true });
-                console.log(
-                  color.green("Schedule overwritten successfully."),
-                );
+                console.log(color.green("Schedule overwritten successfully."));
               } catch (overwriteErr: any) {
                 console.error(color.red(overwriteErr.message));
                 process.exit(1);
@@ -1988,39 +1966,25 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   scheduleCmd
     .command("test")
-    .description(
-      "Verify cron functionality by scheduling a test agent that runs every minute",
-    )
+    .description("Verify cron functionality by scheduling a test agent that runs every minute")
     .action(() => {
       try {
         const result = scheduleTest();
-        console.log(
-          color.green(`Schedule "${result.name}" added successfully.`),
-        );
+        console.log(color.green(`Schedule "${result.name}" added successfully.`));
         console.log("");
         console.log(`Wrote test agent: ${result.agentFile}`);
-        console.log(
-          `It will run every minute and write the current time to:`,
-        );
+        console.log(`It will run every minute and write the current time to:`);
         console.log(`  ${result.outputFile}`);
         console.log("");
-        console.log(
-          "Wait at least one minute, then check that file. If it contains a",
-        );
+        console.log("Wait at least one minute, then check that file. If it contains a");
         console.log("recent timestamp, cron is working.");
         console.log("");
-        console.log(
-          "If the file is missing, check the run logs for errors:",
-        );
+        console.log("If the file is missing, check the run logs for errors:");
         console.log(`  ${result.logDir}`);
         if (process.platform === "darwin") {
           console.log("");
-          console.log(
-            "On macOS, scheduled jobs may need Full Disk Access. If logs show",
-          );
-          console.log(
-            "permission errors, grant access to /bin/bash in System Settings →",
-          );
+          console.log("On macOS, scheduled jobs may need Full Disk Access. If logs show");
+          console.log("permission errors, grant access to /bin/bash in System Settings →");
           console.log("Privacy & Security → Full Disk Access.");
         }
         console.log("");
@@ -2043,16 +2007,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
   lspCmd
     .command("setup")
     .description("Scaffold coding-agent LSP configuration for this project")
-    .argument(
-      "<targets...>",
-      `One or more targets: ${SUPPORTED_AGENT_LSP_TARGETS.join(", ")}`,
-    )
+    .argument("<targets...>", `One or more targets: ${SUPPORTED_AGENT_LSP_TARGETS.join(", ")}`)
     .action((targets: string[]) => {
       let failed = false;
       for (const rawTarget of targets) {
-        if (
-          !SUPPORTED_AGENT_LSP_TARGETS.includes(rawTarget as AgentLspTarget)
-        ) {
+        if (!SUPPORTED_AGENT_LSP_TARGETS.includes(rawTarget as AgentLspTarget)) {
           console.error(
             `Unsupported target '${rawTarget}'. Expected one of: ${SUPPORTED_AGENT_LSP_TARGETS.join(", ")}`,
           );
@@ -2131,19 +2090,14 @@ export function createProgram(deps: CliDependencies = {}): Command {
       console.log(`  command: ${resolveMcpCommand().join(" ")}`);
     });
 
-  const serveCmd = program
-    .command("serve")
-    .description("Serve Agency code over MCP or HTTP");
+  const serveCmd = program.command("serve").description("Serve Agency code over MCP or HTTP");
 
   serveCmd
     .command("mcp")
     .description("Start an MCP server (stdio by default; --transport http for Streamable HTTP)")
     .argument("<file>", "Agency file to serve")
     .option("--name <name>", "Server name (defaults to filename)")
-    .option(
-      "--transport <transport>",
-      "Transport: 'stdio' (default) or 'http' (Streamable HTTP)",
-    )
+    .option("--transport <transport>", "Transport: 'stdio' (default) or 'http' (Streamable HTTP)")
     .option("--port <port>", "HTTP port (http transport only, default: 3545)")
     .option(
       "--host <host>",
@@ -2263,7 +2217,5 @@ const isMain =
 if (isMain) {
   await runCli();
 } else {
-  console.warn(
-    "Not executing Agency CLI because it was imported as a module.",
-  );
+  console.warn("Not executing Agency CLI because it was imported as a module.");
 }

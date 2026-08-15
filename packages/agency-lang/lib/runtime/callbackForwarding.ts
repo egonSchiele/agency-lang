@@ -66,7 +66,9 @@ export function sendCallbackToParent(
   try {
     serialized = JSON.stringify({ type: "callback", name, data });
   } catch (err) {
-    ipcChildDebug(`callback_unserializable ${name} ${err instanceof Error ? err.message : String(err)}`);
+    ipcChildDebug(
+      `callback_unserializable ${name} ${err instanceof Error ? err.message : String(err)}`,
+    );
     return;
   }
   if (Buffer.byteLength(serialized, "utf8") > maxBytes) {
@@ -83,6 +85,8 @@ export function sendCallbackToParent(
     process.send({ type: "callback", name, data } as IpcCallbackMessage);
   } catch (err) {
     // Channel gone — parent died; the watchdog will reap this process.
-    ipcChildDebug(`callback_send_failed ${name} ${err instanceof Error ? err.message : String(err)}`);
+    ipcChildDebug(
+      `callback_send_failed ${name} ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }

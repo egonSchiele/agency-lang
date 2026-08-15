@@ -310,13 +310,15 @@ function program(src: string) {
 
 describe("inline block arrow", () => {
   it("accepts => in an inline block", () => {
-    expect(program(`node main() { const ys = map(xs, \\n => n * 2) }`))
-      .toEqualWithoutLoc(program(`node main() { const ys = map(xs, \\n -> n * 2) }`));
+    expect(program(`node main() { const ys = map(xs, \\n => n * 2) }`)).toEqualWithoutLoc(
+      program(`node main() { const ys = map(xs, \\n -> n * 2) }`),
+    );
   });
 
   it("accepts => with multiple parenthesized params", () => {
-    expect(program(`node main() { const ys = mapWithIndex(xs, \\(n, i) => n * i) }`))
-      .toEqualWithoutLoc(program(`node main() { const ys = mapWithIndex(xs, \\(n, i) -> n * i) }`));
+    expect(
+      program(`node main() { const ys = mapWithIndex(xs, \\(n, i) => n * i) }`),
+    ).toEqualWithoutLoc(program(`node main() { const ys = mapWithIndex(xs, \\(n, i) -> n * i) }`));
   });
 
   it("normalizes => to -> when formatted", () => {

@@ -29,7 +29,13 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
 
   const makeCtx = (handlers: any[]): RuntimeContext<any> => {
     const ctx = new RuntimeContext({
-      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
@@ -43,11 +49,14 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
     process.send = vi.fn((msg: any) => {
       if (msg.type === "interrupt") {
         setImmediate(() => {
-          process.emit("message" as any, {
-            type: "decision",
-            interruptId: msg.interruptId,
-            outcome,
-          } as any);
+          process.emit(
+            "message" as any,
+            {
+              type: "decision",
+              interruptId: msg.interruptId,
+              outcome,
+            } as any,
+          );
         });
       }
       return true;
@@ -98,11 +107,11 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
 
   it("a surfaced interrupt records outcome propagated when a handler sent it up", async () => {
     const ctx = makeCtx([async () => ({ type: "propagate" })]);
-    ctx.runId = "run-test";   // the surfaced Interrupt carries the runId
+    ctx.runId = "run-test"; // the surfaced Interrupt carries the runId
     const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
 
     const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
-    expect(Array.isArray(verdict)).toBe(true);   // surfaced as Interrupt[]
+    expect(Array.isArray(verdict)).toBe(true); // surfaced as Interrupt[]
     expect(resolved).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: "propagated", resolvedBy: null }),
     );
@@ -157,7 +166,13 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
 describe("interruptWithHandlers expectsValue", () => {
   const makeCtx = (handlers: any[]): RuntimeContext<any> => {
     const ctx = new RuntimeContext({
-      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
@@ -170,7 +185,12 @@ describe("interruptWithHandlers expectsValue", () => {
 
   it("a surfaced assignment-position interrupt carries expectsValue", async () => {
     const verdict = await interruptWithHandlers(
-      "unknown", "Question for user", {}, "o", makeCtx([]), undefined,
+      "unknown",
+      "Question for user",
+      {},
+      "o",
+      makeCtx([]),
+      undefined,
       { expectsValue: true },
     );
     expect(Array.isArray(verdict)).toBe(true);
@@ -178,9 +198,7 @@ describe("interruptWithHandlers expectsValue", () => {
   });
 
   it("a statement-position interrupt does NOT carry expectsValue", async () => {
-    const verdict = await interruptWithHandlers(
-      "std::error", "m", {}, "o", makeCtx([]),
-    );
+    const verdict = await interruptWithHandlers("std::error", "m", {}, "o", makeCtx([]));
     expect(Array.isArray(verdict)).toBe(true);
     expect((verdict as any)[0].expectsValue).toBeUndefined();
   });
@@ -194,7 +212,12 @@ describe("interruptWithHandlers expectsValue", () => {
       },
     ]);
     const verdict = await interruptWithHandlers(
-      "unknown", "Question for user", {}, "o", ctx, new StateStack(),
+      "unknown",
+      "Question for user",
+      {},
+      "o",
+      ctx,
+      new StateStack(),
       { expectsValue: true },
     );
     expect(verdict).toEqual({ type: "approve", value: "Adit" });
@@ -250,7 +273,11 @@ describe("hasInterrupts", () => {
   });
 
   it("returns true for a single-element array", () => {
-    expect(hasInterrupts([interrupt({ effect: "unknown", message: "test", data: {}, origin: "", runId: "run1" })])).toBe(true);
+    expect(
+      hasInterrupts([
+        interrupt({ effect: "unknown", message: "test", data: {}, origin: "", runId: "run1" }),
+      ]),
+    ).toBe(true);
   });
 
   it("returns false for null/undefined", () => {
@@ -279,9 +306,7 @@ describe("reportUnhandledInterrupts", () => {
 
   it("does nothing when the result has no interrupts", () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exit = vi
-      .spyOn(process, "exit")
-      .mockImplementation(() => undefined as never);
+    const exit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
 
     reportUnhandledInterrupts({ data: "the answer" });
 
@@ -291,9 +316,7 @@ describe("reportUnhandledInterrupts", () => {
 
   it("prints a helpful message and exits non-zero for an unhandled interrupt", () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exit = vi
-      .spyOn(process, "exit")
-      .mockImplementation(() => undefined as never);
+    const exit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
 
     reportUnhandledInterrupts({
       data: [
@@ -336,7 +359,13 @@ describe("reportUnhandledInterrupts", () => {
 describe("pass()", () => {
   const makeCtx = (handlers: any[]): RuntimeContext<any> => {
     const ctx = new RuntimeContext({
-      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
@@ -350,17 +379,14 @@ describe("pass()", () => {
   it("a handler returning pass() defers to the next handler", async () => {
     const ctx = makeCtx([
       async () => ({ type: "approve", value: "outer" }), // outer (walked last)
-      async () => pass(),                                // inner (walked first)
+      async () => pass(), // inner (walked first)
     ]);
     const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
     expect(verdict).toEqual({ type: "approve", value: "outer" });
   });
 
   it("a handler returning undefined still defers (back-compat)", async () => {
-    const ctx = makeCtx([
-      async () => ({ type: "approve", value: "outer" }),
-      async () => undefined,
-    ]);
+    const ctx = makeCtx([async () => ({ type: "approve", value: "outer" }), async () => undefined]);
     const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
     expect(verdict).toEqual({ type: "approve", value: "outer" });
   });

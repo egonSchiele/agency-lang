@@ -17,11 +17,7 @@ import type { DebuggerCommand, DebuggerIO } from "./types.js";
 import { UIState } from "./uiState.js";
 import { coerceArg, formatValue, parseCommandInput } from "./util.js";
 import { syntaxHighlight } from "@/stdlib/syntax.js";
-import {
-  showRewindSelector,
-  showCheckpointsPanel,
-  type OverlayContext,
-} from "./overlays.js";
+import { showRewindSelector, showCheckpointsPanel, type OverlayContext } from "./overlays.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -131,15 +127,9 @@ export class DebuggerUI implements DebuggerIO {
 
   // --- Formatting helpers ---
 
-  private formatKeyVal(
-    key: string,
-    value: unknown,
-    opts: { highlight?: boolean } = {},
-  ): string {
+  private formatKeyVal(key: string, value: unknown, opts: { highlight?: boolean } = {}): string {
     const formatted = `${escapeStyleTags(key)} = ${escapeStyleTags(formatValue(value))}`;
-    return opts.highlight
-      ? `{yellow-fg}${formatted}{/yellow-fg}`
-      : formatted;
+    return opts.highlight ? `{yellow-fg}${formatted}{/yellow-fg}` : formatted;
   }
 
   // --- Pane definitions ---
@@ -171,11 +161,36 @@ export class DebuggerUI implements DebuggerIO {
     }
 
     panes.push(
-      { name: "locals", color: "green", label: " locals ", content: () => this.buildLocalsContent() },
-      { name: "globals", color: "green", label: " globals ", content: () => this.buildGlobalsContent() },
-      { name: "callStack", color: "magenta", label: " call stack ", content: () => this.buildCallStackContent() },
-      { name: "activity", color: "yellow", label: " activity ", content: () => this.buildActivityContent() },
-      { name: "stdout", color: "blue", label: " stdout ", content: () => this.buildStdoutContent() },
+      {
+        name: "locals",
+        color: "green",
+        label: " locals ",
+        content: () => this.buildLocalsContent(),
+      },
+      {
+        name: "globals",
+        color: "green",
+        label: " globals ",
+        content: () => this.buildGlobalsContent(),
+      },
+      {
+        name: "callStack",
+        color: "magenta",
+        label: " call stack ",
+        content: () => this.buildCallStackContent(),
+      },
+      {
+        name: "activity",
+        color: "yellow",
+        label: " activity ",
+        content: () => this.buildActivityContent(),
+      },
+      {
+        name: "stdout",
+        color: "blue",
+        label: " stdout ",
+        content: () => this.buildStdoutContent(),
+      },
     );
 
     return panes;
@@ -186,8 +201,7 @@ export class DebuggerUI implements DebuggerIO {
   private buildSourceContent(): string {
     const moduleId = this.state.getModuleId();
     const currentLine = this.state.getCurrentLine();
-    const filePath =
-      this.state.resolveModulePath(moduleId, [".agency"]) ?? moduleId;
+    const filePath = this.state.resolveModulePath(moduleId, [".agency"]) ?? moduleId;
     const lines = readHighlightedSourceLines(filePath);
 
     const windowSize = 20;
@@ -195,18 +209,21 @@ export class DebuggerUI implements DebuggerIO {
     const start = Math.max(0, center - Math.floor(windowSize / 2));
     const end = Math.min(lines.length, start + windowSize);
 
-    return lines.slice(start, end).map((line, i) => {
-      const lineNum = start + i + 1;
-      const numStr = String(lineNum).padStart(4, " ");
-      // The highlighted line already contains ANSI escapes for styling.
-      // escapeStyleTags only escapes literal `{` / `}` characters; ANSI
-      // sequences (which contain `[` and `m`, not braces) pass through
-      // unchanged and are picked up by the renderer's ANSI parser.
-      const lineText = escapeStyleTags(line);
-      return currentLine !== null && lineNum === currentLine
-        ? `{magenta-bg}{bold}> ${numStr}  ${lineText}{/bold}{/magenta-bg}`
-        : `  ${numStr}  ${lineText}`;
-    }).join("\n");
+    return lines
+      .slice(start, end)
+      .map((line, i) => {
+        const lineNum = start + i + 1;
+        const numStr = String(lineNum).padStart(4, " ");
+        // The highlighted line already contains ANSI escapes for styling.
+        // escapeStyleTags only escapes literal `{` / `}` characters; ANSI
+        // sequences (which contain `[` and `m`, not braces) pass through
+        // unchanged and are picked up by the renderer's ANSI parser.
+        const lineText = escapeStyleTags(line);
+        return currentLine !== null && lineNum === currentLine
+          ? `{magenta-bg}{bold}> ${numStr}  ${lineText}{/bold}{/magenta-bg}`
+          : `  ${numStr}  ${lineText}`;
+      })
+      .join("\n");
   }
 
   private buildThreadsContent(): string {
@@ -215,9 +232,8 @@ export class DebuggerUI implements DebuggerIO {
     const isZoomed = this.zoomedPane === "threads";
     return threadData.messages
       .map((m) => {
-        const display = isZoomed || m.content.length <= 200
-          ? m.content
-          : m.content.slice(0, 197) + "...";
+        const display =
+          isZoomed || m.content.length <= 200 ? m.content : m.content.slice(0, 197) + "...";
         return `  {bold}[${escapeStyleTags(m.role)}]{/bold} ${escapeStyleTags(display)}`;
       })
       .join("\n");
@@ -309,13 +325,9 @@ export class DebuggerUI implements DebuggerIO {
     if (this.inputPrompt !== null) {
       content = `${this.inputPrompt} ${escapeStyleTags(this.inputValue)}\u2588`;
     } else {
-      content =
-        this.commandBarOverride || this.spinnerText || COMMAND_BAR_CONTENT;
+      content = this.commandBarOverride || this.spinnerText || COMMAND_BAR_CONTENT;
     }
-    return box(
-      { height: 3, border: true, borderColor: "white", key: "commandBar" },
-      text(content),
-    );
+    return box({ height: 3, border: true, borderColor: "white", key: "commandBar" }, text(content));
   }
 
   private buildStatsBar(): Element {
@@ -335,15 +347,25 @@ export class DebuggerUI implements DebuggerIO {
       row(
         { height: "40%" },
         this.renderPane(source, focusedName, threads ? { width: "65%" } : { flex: 1 }),
-        ...(threads
-          ? [this.renderPane(threads, focusedName, { width: "35%" })]
-          : []),
+        ...(threads ? [this.renderPane(threads, focusedName, { width: "35%" })] : []),
       ),
       row(
         { height: "25%" },
-        this.renderPane(panes.find((p) => p.name === "locals")!, focusedName, { width: "40%" }),
-        this.renderPane(panes.find((p) => p.name === "globals")!, focusedName, { width: "40%" }),
-        this.renderPane(panes.find((p) => p.name === "callStack")!, focusedName, { flex: 1 }),
+        this.renderPane(
+          panes.find((p) => p.name === "locals")!,
+          focusedName,
+          { width: "40%" },
+        ),
+        this.renderPane(
+          panes.find((p) => p.name === "globals")!,
+          focusedName,
+          { width: "40%" },
+        ),
+        this.renderPane(
+          panes.find((p) => p.name === "callStack")!,
+          focusedName,
+          { flex: 1 },
+        ),
       ),
     ];
   }
@@ -368,8 +390,16 @@ export class DebuggerUI implements DebuggerIO {
       ...this.buildTopRows(panes, focusedName),
       row(
         { flex: 1 },
-        this.renderPane(panes.find((p) => p.name === "activity")!, focusedName, { width: "50%" }),
-        this.renderPane(panes.find((p) => p.name === "stdout")!, focusedName, { flex: 1 }),
+        this.renderPane(
+          panes.find((p) => p.name === "activity")!,
+          focusedName,
+          { width: "50%" },
+        ),
+        this.renderPane(
+          panes.find((p) => p.name === "stdout")!,
+          focusedName,
+          { flex: 1 },
+        ),
       ),
       this.buildStatsBar(),
       this.buildCommandBar(),
@@ -395,20 +425,22 @@ export class DebuggerUI implements DebuggerIO {
 
   // --- Spinner ---
 
-  private static SPINNER_FRAMES = [
-    "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏",
-  ];
+  private static SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
   private static SPINNER_PHRASES = [
-    "thinking", "pondering", "reasoning", "working",
-    "executing", "processing", "contemplating", "computing",
+    "thinking",
+    "pondering",
+    "reasoning",
+    "working",
+    "executing",
+    "processing",
+    "contemplating",
+    "computing",
   ];
 
   startSpinner(): void {
     if (this.spinnerInterval) return;
     let frameIdx = 0;
-    let phraseIdx = Math.floor(
-      Math.random() * DebuggerUI.SPINNER_PHRASES.length,
-    );
+    let phraseIdx = Math.floor(Math.random() * DebuggerUI.SPINNER_PHRASES.length);
     let ticksSincePhrase = 0;
 
     const update = () => {
@@ -458,17 +490,13 @@ export class DebuggerUI implements DebuggerIO {
     }
   }
 
-  private async handleInteractiveKey(
-    keyEvent: KeyEvent,
-  ): Promise<DebuggerCommand | null> {
+  private async handleInteractiveKey(keyEvent: KeyEvent): Promise<DebuggerCommand | null> {
     const panes = this.getPanes();
     const focusedName = panes[this.focusIndex]?.name;
 
     switch (keyEvent.key) {
       case "k": {
-        const label = await this.enterTextInput(
-          "checkpoint label (enter to skip)>",
-        );
+        const label = await this.enterTextInput("checkpoint label (enter to skip)>");
         return { type: "checkpoint", label: label?.trim() || undefined };
       }
       case "p": {
@@ -496,13 +524,12 @@ export class DebuggerUI implements DebuggerIO {
         this.renderUI();
         return null;
       case "z":
-        this.zoomedPane = this.zoomedPane ? null : (focusedName || null);
+        this.zoomedPane = this.zoomedPane ? null : focusedName || null;
         this.renderUI();
         return null;
       case "[":
       case "]":
-        this.threadDisplayIndex =
-          (this.threadDisplayIndex ?? 0) + (keyEvent.key === "]" ? 1 : -1);
+        this.threadDisplayIndex = (this.threadDisplayIndex ?? 0) + (keyEvent.key === "]" ? 1 : -1);
         this.renderUI();
         return null;
       default:
@@ -591,14 +618,10 @@ export class DebuggerUI implements DebuggerIO {
     });
   }
 
-  async promptForNodeArgs(
-    parameters: FunctionParameter[],
-  ): Promise<unknown[]> {
+  async promptForNodeArgs(parameters: FunctionParameter[]): Promise<unknown[]> {
     const args: unknown[] = [];
     for (const param of parameters) {
-      const typeLabel = param.typeHint
-        ? ` (${formatTypeHint(param.typeHint)})`
-        : "";
+      const typeLabel = param.typeHint ? ` (${formatTypeHint(param.typeHint)})` : "";
       const raw = await this.promptForInput(`${param.name}${typeLabel}:`);
       args.push(coerceArg(raw, param));
     }
@@ -630,14 +653,9 @@ export class DebuggerUI implements DebuggerIO {
     };
   }
 
-  async showRewindSelector(
-    checkpoints: Checkpoint[],
-  ): Promise<number | null> {
+  async showRewindSelector(checkpoints: Checkpoint[]): Promise<number | null> {
     this.prevState = this.state.clone();
-    const result = await showRewindSelector(
-      this.overlayContext(),
-      checkpoints,
-    );
+    const result = await showRewindSelector(this.overlayContext(), checkpoints);
     this.state = this.prevState!.clone();
     this.prevState = null;
     await this.render();
@@ -645,10 +663,7 @@ export class DebuggerUI implements DebuggerIO {
   }
 
   async showCheckpointsPanel(checkpoints: Checkpoint[]): Promise<void> {
-    const selected = await showCheckpointsPanel(
-      this.overlayContext(),
-      checkpoints,
-    );
+    const selected = await showCheckpointsPanel(this.overlayContext(), checkpoints);
     if (selected) {
       await this.render(selected);
     } else {

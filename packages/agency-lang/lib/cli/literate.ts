@@ -10,9 +10,7 @@ import * as path from "path";
 
 type Kind = "prose" | "empty" | "code";
 type Tagged = { kind: "prose" | "code"; node: AgencyNode };
-type Segment =
-  | { kind: "prose"; text: string }
-  | { kind: "code"; nodes: AgencyNode[] };
+type Segment = { kind: "prose"; text: string } | { kind: "code"; nodes: AgencyNode[] };
 
 // --- classification pipeline (declarative) -------------------------------
 
@@ -24,11 +22,7 @@ function kindOf(node: AgencyNode): Kind {
 }
 
 /** Nearest non-empty neighbor in `dir` direction. */
-function neighbor(
-  nodes: AgencyNode[],
-  from: number,
-  dir: 1 | -1,
-): AgencyNode | undefined {
+function neighbor(nodes: AgencyNode[], from: number, dir: 1 | -1): AgencyNode | undefined {
   for (let i = from + dir; i >= 0 && i < nodes.length; i += dir) {
     if (kindOf(nodes[i]) !== "empty") return nodes[i];
   }
@@ -45,25 +39,19 @@ function resolveEmpty(nodes: AgencyNode[]): Tagged[] {
     if (k === "prose" || k === "code") return [{ kind: k, node }];
     const prev = neighbor(nodes, i, -1);
     const next = neighbor(nodes, i, +1);
-    const sandwichedByCode =
-      !!prev && !!next && kindOf(prev) === "code" && kindOf(next) === "code";
+    const sandwichedByCode = !!prev && !!next && kindOf(prev) === "code" && kindOf(next) === "code";
     return sandwichedByCode ? [{ kind: "code", node }] : [];
   });
 }
 
 /** Collapse consecutive same-kind items into runs. */
-function groupRuns(
-  items: Tagged[],
-): { kind: "prose" | "code"; items: Tagged[] }[] {
-  return items.reduce<{ kind: "prose" | "code"; items: Tagged[] }[]>(
-    (runs, item) => {
-      const last = runs[runs.length - 1];
-      if (last && last.kind === item.kind) last.items.push(item);
-      else runs.push({ kind: item.kind, items: [item] });
-      return runs;
-    },
-    [],
-  );
+function groupRuns(items: Tagged[]): { kind: "prose" | "code"; items: Tagged[] }[] {
+  return items.reduce<{ kind: "prose" | "code"; items: Tagged[] }[]>((runs, item) => {
+    const last = runs[runs.length - 1];
+    if (last && last.kind === item.kind) last.items.push(item);
+    else runs.push({ kind: item.kind, items: [item] });
+    return runs;
+  }, []);
 }
 
 /**
@@ -98,11 +86,7 @@ function classify(program: AgencyProgram): Segment[] {
       return {
         kind: "prose",
         text: run.items
-          .map((it) =>
-            stripJsdocStars(
-              (it.node as AgencyMultiLineComment).content,
-            ).trim(),
-          )
+          .map((it) => stripJsdocStars((it.node as AgencyMultiLineComment).content).trim())
           .join("\n\n"),
       };
     }
@@ -181,10 +165,7 @@ function renderSegment(seg: Segment, lang: string): string {
   // than hoisting them to the top of the segment and sorting them. We
   // need this for literate output to faithfully reproduce the file in
   // source order.
-  const code = generateAgency(
-    { type: "agencyProgram", nodes: seg.nodes },
-    { preserveOrder: true },
-  );
+  const code = generateAgency({ type: "agencyProgram", nodes: seg.nodes }, { preserveOrder: true });
   return weaveComments(code, lang);
 }
 
@@ -240,12 +221,7 @@ export function generateLiterate(
   // Trailing slashes are stripped so we can join with `/` unconditionally.
   const baseUrl = baseUrlOverride?.replace(/\/+$/, "");
   if (fs.statSync(inputPath).isDirectory()) {
-    for (const { path: filePath } of findRecursively(
-      inputPath,
-      ".agency",
-      [],
-      ignoreDirs,
-    )) {
+    for (const { path: filePath } of findRecursively(inputPath, ".agency", [], ignoreDirs)) {
       const relPath = path.relative(inputPath, filePath);
       const rel = relPath.replace(/\.agency$/, ".md");
       weaveFile(

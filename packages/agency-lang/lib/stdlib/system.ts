@@ -41,9 +41,7 @@ export function _setEnv(name: string, value: string): void {
     throw new Error("setEnv: name must not be empty");
   }
   if (name.includes("=") || name.includes("\0")) {
-    throw new Error(
-      `setEnv: name must not contain '=' or NUL bytes (got ${JSON.stringify(name)})`,
-    );
+    throw new Error(`setEnv: name must not contain '=' or NUL bytes (got ${JSON.stringify(name)})`);
   }
   if (value.includes("\0")) {
     throw new Error("setEnv: value must not contain NUL bytes");
@@ -69,7 +67,7 @@ async function openUrlImpl(
   } else {
     throw new Error(
       `openUrl is currently only supported on macOS (detected: ${platform}). ` +
-      `Cross-platform support will be added in a future release.`,
+        `Cross-platform support will be added in a future release.`,
     );
   }
 }
@@ -117,20 +115,28 @@ async function screenshotImpl(
 
   if (platform === "macos") {
     if (hasRegion) {
-      await abortableExec("screencapture", ["-R", `${x},${y},${width},${height}`, resolvedPath], signal);
+      await abortableExec(
+        "screencapture",
+        ["-R", `${x},${y},${width},${height}`, resolvedPath],
+        signal,
+      );
     } else {
       await abortableExec("screencapture", ["-x", resolvedPath], signal);
     }
   } else if (platform === "linux") {
     if (hasRegion) {
-      await abortableExec("import", ["-crop", `${width}x${height}+${x}+${y}`, "-window", "root", resolvedPath], signal);
+      await abortableExec(
+        "import",
+        ["-crop", `${width}x${height}+${x}+${y}`, "-window", "root", resolvedPath],
+        signal,
+      );
     } else {
       await abortableExec("import", ["-window", "root", resolvedPath], signal);
     }
   } else {
     console.error(
       `screenshot is not supported on platform: ${platform}. ` +
-      `Supported platforms: macOS, Linux.`
+        `Supported platforms: macOS, Linux.`,
     );
   }
 }

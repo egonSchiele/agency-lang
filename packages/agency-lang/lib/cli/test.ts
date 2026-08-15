@@ -135,12 +135,8 @@ const TIMEOUT_CEILINGS = {
 
 const DEFAULT_PER_TEST_MS = 2 * 60 * 1000; // 2 minutes
 
-function resolveTimeoutMs(
-  testCase: TestCase | undefined,
-  fileDefaults: Tests,
-): number {
-  const requested =
-    testCase?.timeoutMs ?? fileDefaults.defaultTimeoutMs ?? DEFAULT_PER_TEST_MS;
+function resolveTimeoutMs(testCase: TestCase | undefined, fileDefaults: Tests): number {
+  const requested = testCase?.timeoutMs ?? fileDefaults.defaultTimeoutMs ?? DEFAULT_PER_TEST_MS;
   // Clamp to >= 1ms: Node treats `timeout: 0` (and negative) as "no
   // timeout", which would defeat the entire defensive-timeout goal.
   // Clamp to <= ceiling so a stray huge value can't escape the cap.
@@ -281,12 +277,7 @@ export async function fixtures(config: AgencyConfig, target?: string) {
   const contents = readFile(filename);
   const parsed = parseAgency(contents);
   if (!parsed.success) {
-    console.error(
-      "Could not parse agency code in file",
-      filename,
-      "error:",
-      parsed.message,
-    );
+    console.error("Could not parse agency code in file", filename, "error:", parsed.message);
     return;
   }
   const agencyProgram = parsed.result;
@@ -321,11 +312,7 @@ export async function fixtures(config: AgencyConfig, target?: string) {
   // Handle interrupt discovery
   const interruptHandlers: InterruptHandler[] = [];
 
-  while (
-    json.data &&
-    typeof json.data === "object" &&
-    json.data.type === "interrupt"
-  ) {
+  while (json.data && typeof json.data === "object" && json.data.type === "interrupt") {
     console.log(`\n⚠️  Interrupt detected: "${json.data.data}"`);
 
     const actionResponse = await prompts(
@@ -533,8 +520,7 @@ type Logger = (msg: string, stream?: "stdout" | "stderr") => void;
 function createBufferedLogger(): { log: Logger; flush: () => void } {
   const lines: { msg: string; stream: "stdout" | "stderr" }[] = [];
   return {
-    log: (msg: string, stream: "stdout" | "stderr" = "stdout") =>
-      lines.push({ msg, stream }),
+    log: (msg: string, stream: "stdout" | "stderr" = "stdout") => lines.push({ msg, stream }),
     flush: () => {
       for (const line of lines) {
         if (line.stream === "stderr") {
@@ -548,9 +534,7 @@ function createBufferedLogger(): { log: Logger; flush: () => void } {
 }
 
 function sanitizeParallel(parallel: number): number {
-  return Number.isFinite(parallel) && Number.isInteger(parallel) && parallel > 0
-    ? parallel
-    : 1;
+  return Number.isFinite(parallel) && Number.isInteger(parallel) && parallel > 0 ? parallel : 1;
 }
 
 // One slice of the test suite, as passed via `--shard i/N`. `index` is
@@ -562,19 +546,13 @@ export type Shard = { index: number; total: number };
 export function parseShardSpec(spec: string): Shard {
   const match = /^(\d+)\/(\d+)$/.exec(spec.trim());
   if (!match) {
-    console.error(
-      color.red(`Invalid --shard value "${spec}". Expected "i/N" (e.g. "2/4").`),
-    );
+    console.error(color.red(`Invalid --shard value "${spec}". Expected "i/N" (e.g. "2/4").`));
     process.exit(1);
   }
   const index = Number(match[1]);
   const total = Number(match[2]);
   if (total < 1 || index < 1 || index > total) {
-    console.error(
-      color.red(
-        `Invalid --shard value "${spec}". Require 1 <= i <= N and N >= 1.`,
-      ),
-    );
+    console.error(color.red(`Invalid --shard value "${spec}". Require 1 <= i <= N and N >= 1.`));
     process.exit(1);
   }
   return { index, total };
@@ -586,11 +564,7 @@ export function parseShardSpec(spec: string): Shard {
 // mod N, so it lands in exactly one shard. No item is ever dropped or run
 // twice, even when the count does not divide evenly (13 items / 4 shards
 // splits 4,3,3,3). The union of all N shards equals the input set.
-export function partitionByShard<T>(
-  items: T[],
-  shard: Shard,
-  key: (item: T) => string,
-): T[] {
+export function partitionByShard<T>(items: T[], shard: Shard, key: (item: T) => string): T[] {
   const sorted = [...items].sort((left, right) => {
     const leftKey = key(left);
     const rightKey = key(right);
@@ -598,9 +572,7 @@ export function partitionByShard<T>(
     if (leftKey > rightKey) return 1;
     return 0;
   });
-  return sorted.filter(
-    (_item, position) => position % shard.total === shard.index - 1,
-  );
+  return sorted.filter((_item, position) => position % shard.total === shard.index - 1);
 }
 
 // Returns `(R | undefined)[]` (not `R[]`) because workers can exit
@@ -634,10 +606,7 @@ async function runWithConcurrency<T, R>(
     }
   }
 
-  const workers = Array.from(
-    { length: Math.min(concurrency, items.length) },
-    () => worker(),
-  );
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
   await Promise.all(workers);
   return results;
 }
@@ -887,9 +856,7 @@ async function runExpectedCompileError(
   // this is where it gets its clear per-fixture failure.
   if (typeof expected !== "string") {
     suite.completed.push(testFile);
-    return fail(
-      `'expectedCompileError' must be a string, got: ${JSON.stringify(expected)}`,
-    );
+    return fail(`'expectedCompileError' must be a string, got: ${JSON.stringify(expected)}`);
   }
 
   const incompatible = findIncompatibleField(tests);
@@ -992,11 +959,7 @@ async function runTestFile(
     // TypeError; passing silently as "0/0" would be quieter than either.
     // (An explicit empty `tests: []` keeps its longstanding 0/0 pass.)
     if (!Array.isArray(tests.tests)) {
-      log(
-        color.red(
-          `  ✗ ${testFile} has no 'tests' array and no 'expectedCompileError'`,
-        ),
-      );
+      log(color.red(`  ✗ ${testFile} has no 'tests' array and no 'expectedCompileError'`));
       suite.completed.push(testFile);
       return {
         passed: 0,
@@ -1049,8 +1012,7 @@ async function runTestFile(
       // gets a clear `skipped` rather than a confusing "no mock provided"
       // failure.
       if (
-        (process.env.AGENCY_USE_TEST_LLM_PROVIDER ||
-          testCase.useTestLLMProvider) &&
+        (process.env.AGENCY_USE_TEST_LLM_PROVIDER || testCase.useTestLLMProvider) &&
         testCase.evaluationCriteria.some((c) => c.type === "llmJudge")
       ) {
         log(color.yellow(`  ⊘ Skipped (LLM-as-judge requires real client)`));
@@ -1152,9 +1114,7 @@ export async function test(
   // Slice to this shard before compiling, so each shard only compiles and
   // runs its own files — that is what makes sharding cut wall-clock rather
   // than just splitting the run phase.
-  const testFiles = shard
-    ? partitionByShard(collected, shard, (f) => f)
-    : collected;
+  const testFiles = shard ? partitionByShard(collected, shard, (f) => f) : collected;
   if (shard) {
     console.log(
       color.cyan(
@@ -1304,7 +1264,9 @@ async function runTsTestDir(
 
     // Remove stale result file from previous runs
     const resultFile = path.join(dir, "__result.json");
-    try { fs.unlinkSync(resultFile); } catch { }
+    try {
+      fs.unlinkSync(resultFile);
+    } catch {}
 
     // Under deterministic mode, look for an optional llmMocks.json next
     // to fixture.json. Pass its contents to the subprocess via the
@@ -1327,9 +1289,7 @@ async function runTsTestDir(
     let mocksEnv: Record<string, string> = {};
     let agentHomeCleanup: (() => void) | undefined;
     if (useDeterministic) {
-      const mocks = fs.existsSync(mocksFile)
-        ? fs.readFileSync(mocksFile, "utf-8")
-        : "[]";
+      const mocks = fs.existsSync(mocksFile) ? fs.readFileSync(mocksFile, "utf-8") : "[]";
       mocksEnv = { AGENCY_LLM_MOCKS: mocks };
       // Same agent-home sandbox as executeNodeAsync (issue #469).
       const agentHome = fs.mkdtempSync(path.join(os.tmpdir(), "agency-agent-home-"));
@@ -1396,10 +1356,9 @@ async function runTsTestDir(
       return { success: true, dir };
     } else {
       log(color.red(`  ✗ Fixture match failed`));
-      log(formatDiff(
-        JSON.stringify(expectedParsed, null, 2),
-        JSON.stringify(resultParsed, null, 2),
-      ));
+      log(
+        formatDiff(JSON.stringify(expectedParsed, null, 2), JSON.stringify(resultParsed, null, 2)),
+      );
       return { success: false, dir };
     }
   } finally {
@@ -1417,16 +1376,12 @@ export async function testTs(
   for (const inputPath of inputPaths) {
     const testDirs = findTsTestDirs(inputPath);
     if (testDirs.length === 0) {
-      console.log(
-        color.yellow(`No TypeScript test directories found in ${inputPath}`),
-      );
+      console.log(color.yellow(`No TypeScript test directories found in ${inputPath}`));
     } else {
       collectedDirs.push(...testDirs);
     }
   }
-  const allDirs = shard
-    ? partitionByShard(collectedDirs, shard, (d) => d)
-    : collectedDirs;
+  const allDirs = shard ? partitionByShard(collectedDirs, shard, (d) => d) : collectedDirs;
   if (shard) {
     console.log(
       color.cyan(
@@ -1457,9 +1412,7 @@ export async function testTs(
       console.log(color.red(` FAIL  ${dir}`));
     }
   }
-  console.log(
-    `\n${successes.length}/${results.length} TS tests passed`,
-  );
+  console.log(`\n${successes.length}/${results.length} TS tests passed`);
   if (failures.length > 0) {
     process.exit(1);
   }

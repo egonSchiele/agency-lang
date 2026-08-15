@@ -19,10 +19,7 @@ import fs from "fs";
 import path from "path";
 import { AgencyConfig } from "../config.js";
 import { loadConfig } from "./commands.js";
-import {
-  createBuildSession,
-  type CompileGroup,
-} from "../compiler/buildSession.js";
+import { createBuildSession, type CompileGroup } from "../compiler/buildSession.js";
 
 const BASE_GROUP_LABEL = "<base config>";
 
@@ -61,9 +58,7 @@ export function groupTestSources(
   // house pattern on string-keyed registries).
   const groups: Record<string, CompileGroup> = Object.create(null);
   for (const testJsonFile of testJsonFiles) {
-    const sourceFile = path
-      .resolve(testJsonFile)
-      .replace(/\.test\.json$/, ".agency");
+    const sourceFile = path.resolve(testJsonFile).replace(/\.test\.json$/, ".agency");
     if (!fs.existsSync(sourceFile)) continue;
     if (isExcludedFromPrecompile(testJsonFile)) continue;
 

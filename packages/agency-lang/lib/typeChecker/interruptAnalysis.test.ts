@@ -186,11 +186,14 @@ describe("interrupt analysis via type checker", () => {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const libFile = path.join(os.tmpdir(), `int-lib-${suffix}.agency`);
     const mainFile = path.join(os.tmpdir(), `int-main-${suffix}.agency`);
-    writeFileSync(libFile, `
+    writeFileSync(
+      libFile,
+      `
       export def deploy() {
         interrupt myapp::deploy("Deploy?")
       }
-    `);
+    `,
+    );
     const mainSource = `
       import { deploy } from "${libFile}"
       def main() {

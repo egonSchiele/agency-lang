@@ -25,7 +25,9 @@ describe("getDocumentSymbols", () => {
   it("returns type alias symbols", () => {
     const program = parse("type Name = string");
     const symbols = getDocumentSymbols(program);
-    expect(symbols.some((s) => s.name === "Name" && s.kind === SymbolKind.TypeParameter)).toBe(true);
+    expect(symbols.some((s) => s.name === "Name" && s.kind === SymbolKind.TypeParameter)).toBe(
+      true,
+    );
   });
 
   it("includes location info on symbols", () => {

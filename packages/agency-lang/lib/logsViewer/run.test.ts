@@ -52,24 +52,43 @@ describe("runViewer", () => {
       input: new ScriptedInput(["l", "q"]),
       output: out,
       viewport: { rows: 12, cols: 80 },
-      labeling: { datasetDir: "/tmp/does-not-matter", sourcePath: "log.jsonl", annotator: { kind: "human", id: "t" } },
+      labeling: {
+        datasetDir: "/tmp/does-not-matter",
+        sourcePath: "log.jsonl",
+        annotator: { kind: "human", id: "t" },
+      },
     });
     expect(out.lastText()).toMatch(/Nothing to label|no-output/);
   });
 
   it("l asks for a checklist when labeling is enabled but none is configured", async () => {
-    const withOutput = [
-      sampleEvents[0],
-      { ...sampleEvents[1], data: { type: "evalOutputRecorded", timestamp: "2026-05-16T00:00:01.000Z", value: "the answer", threadId: "0" } },
-      sampleEvents[1], // a terminal agentEnd, as a real completed run emits
-    ].map((e) => JSON.stringify(e)).join("\n") + "\n";
+    const withOutput =
+      [
+        sampleEvents[0],
+        {
+          ...sampleEvents[1],
+          data: {
+            type: "evalOutputRecorded",
+            timestamp: "2026-05-16T00:00:01.000Z",
+            value: "the answer",
+            threadId: "0",
+          },
+        },
+        sampleEvents[1], // a terminal agentEnd, as a real completed run emits
+      ]
+        .map((e) => JSON.stringify(e))
+        .join("\n") + "\n";
     const out = new FrameRecorder();
     await runViewer({
       jsonl: withOutput,
       input: new ScriptedInput(["l", "q"]),
       output: out,
       viewport: { rows: 12, cols: 80 },
-      labeling: { datasetDir: "/tmp/does-not-matter", sourcePath: "log.jsonl", annotator: { kind: "human", id: "t" } },
+      labeling: {
+        datasetDir: "/tmp/does-not-matter",
+        sourcePath: "log.jsonl",
+        annotator: { kind: "human", id: "t" },
+      },
     });
     expect(out.lastText()).toMatch(/--checklist/);
   });
@@ -99,12 +118,7 @@ describe("runViewer", () => {
     }));
     const jsonl = many.map((e) => JSON.stringify(e)).join("\n") + "\n";
     // Enter: expand span. j × 20: scroll far down. h: collapse it. q.
-    const keys = [
-      "Enter",
-      ...Array.from({ length: 20 }, () => "j"),
-      "h",
-      "q",
-    ];
+    const keys = ["Enter", ...Array.from({ length: 20 }, () => "j"), "h", "q"];
     const out = new FrameRecorder();
     await runViewer({
       jsonl,

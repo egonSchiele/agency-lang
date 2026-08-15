@@ -59,21 +59,13 @@ describe("prunePreludeShadows", () => {
   it("leaves the import untouched when nothing is shadowed", () => {
     const program = {
       type: "agencyProgram",
-      nodes: [
-        preludeImport(),
-        { type: "graphNode", nodeName: "main", parameters: [], body: [] },
-      ],
+      nodes: [preludeImport(), { type: "graphNode", nodeName: "main", parameters: [], body: [] }],
     } as unknown as AgencyProgram;
 
     prunePreludeShadows(program);
 
     const imp = program.nodes.find((n) => n.type === "importStatement") as any;
-    expect(imp.importedNames[0].importedNames).toEqual([
-      "map",
-      "filter",
-      "count",
-      "range",
-    ]);
+    expect(imp.importedNames[0].importedNames).toEqual(["map", "filter", "count", "range"]);
   });
 
   it("does not prune imports from modules other than std::index", () => {

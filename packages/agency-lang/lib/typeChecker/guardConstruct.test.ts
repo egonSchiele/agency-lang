@@ -100,8 +100,7 @@ node main() { return f() }`,
 });
 
 describe("guard construct — std::guard in the raises analysis (spec decisions 4, 5, 8)", () => {
-  const exceeds = (src: string) =>
-    typecheckSource(src).filter((e) => /exceeds/.test(e.message));
+  const exceeds = (src: string) => typecheckSource(src).filter((e) => /exceeds/.test(e.message));
 
   it("an annotated def containing a guard must list std::guard (hard-require)", () => {
     const src = `def f(): number raises <> {
@@ -163,9 +162,7 @@ node main() { return _guard(1) }`,
   const r = guard(cost: $1) { return 1 }
   return "x"
 }`;
-    const warns = typecheckSource(src).filter((e) =>
-      /handler/i.test(e.message),
-    );
+    const warns = typecheckSource(src).filter((e) => /handler/i.test(e.message));
     expect(warns.length).toBeGreaterThan(0);
   });
 
@@ -178,9 +175,7 @@ node main() { return _guard(1) }`,
     return reject()
   }
 }`;
-    const warns = typecheckSource(src).filter((e) =>
-      /handler/i.test(e.message),
-    );
+    const warns = typecheckSource(src).filter((e) => /handler/i.test(e.message));
     expect(warns).toHaveLength(0);
   });
 });

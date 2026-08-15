@@ -11,9 +11,10 @@ export function toArgs(body: unknown): Record<string, unknown> {
 
 import { MAX_BODY_BYTES } from "./constants.js";
 
-export function parseJsonBody(
-  req: { on: (event: string, cb: (...args: any[]) => void) => void; destroy?: () => void },
-): Promise<unknown> {
+export function parseJsonBody(req: {
+  on: (event: string, cb: (...args: any[]) => void) => void;
+  destroy?: () => void;
+}): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let bytes = 0;

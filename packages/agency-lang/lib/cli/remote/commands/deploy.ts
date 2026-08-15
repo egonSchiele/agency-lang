@@ -32,7 +32,9 @@ export async function runDeploy(
   const counts = tryCountExports(file, context.config);
   if (counts && counts.nodes === 0 && counts.functions === 0) {
     console.log(
-      color.yellow("This agent exports no nodes or functions, so it would have no callable endpoints.") +
+      color.yellow(
+        "This agent exports no nodes or functions, so it would have no callable endpoints.",
+      ) +
         "\n" +
         color.dim("Nodes and functions must be marked 'export' to be served."),
     );

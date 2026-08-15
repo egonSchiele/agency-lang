@@ -136,11 +136,8 @@ describe("safeStatelogValue", () => {
     const secret = { apiKey: "sk-oversized-secret" };
     gs.setTag(secret, "redact", true);
     const ctx: any = { globals: gs };
-    const out = runInTestContext(
-      ctx,
-      new StateStack(),
-      new ThreadStore(),
-      () => safeStatelogValue({ secret, filler: "x".repeat(5000) }),
+    const out = runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+      safeStatelogValue({ secret, filler: "x".repeat(5000) }),
     );
     expect(typeof out).toBe("string");
     expect(out).toMatch(/…\[truncated\]$/);
@@ -153,11 +150,8 @@ describe("safeStatelogValue", () => {
     const secret = { apiKey: "sk-small-secret" };
     gs.setTag(secret, "redact", true);
     const ctx: any = { globals: gs };
-    const out = runInTestContext(
-      ctx,
-      new StateStack(),
-      new ThreadStore(),
-      () => safeStatelogValue({ secret, other: 1 }),
+    const out = runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+      safeStatelogValue({ secret, other: 1 }),
     ) as Record<string, unknown>;
     expect(out.secret).toBe("[REDACTED]");
     expect(out.other).toBe(1);
@@ -418,9 +412,7 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
 
       await runner.step(3, async (runner) => {
-        await runner.ifElse(0, [
-          { condition: () => true, body: async () => {} },
-        ]);
+        await runner.ifElse(0, [{ condition: () => true, body: async () => {} }]);
       });
 
       // condbranch key should include the parent path
@@ -487,13 +479,9 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       const collected: string[] = [];
 
-      await runner.loop(
-        0,
-        { alice: "approve", bob: "reject" },
-        async (key) => {
-          collected.push(key);
-        },
-      );
+      await runner.loop(0, { alice: "approve", bob: "reject" }, async (key) => {
+        collected.push(key);
+      });
 
       expect(collected.sort()).toEqual(["alice", "bob"]);
     });
@@ -503,13 +491,9 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       const pairs: [string, unknown][] = [];
 
-      await runner.loop(
-        0,
-        { a: 1, b: 2, c: 3 },
-        async (key, value) => {
-          pairs.push([key, value]);
-        },
-      );
+      await runner.loop(0, { a: 1, b: 2, c: 3 }, async (key, value) => {
+        pairs.push([key, value]);
+      });
 
       expect(pairs).toEqual([
         ["a", 1],
@@ -555,16 +539,12 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       const collected: string[] = [];
 
-      await runner.loop(
-        0,
-        { a: 1, b: 2, c: 3 },
-        async (key, _i, runner) => {
-          collected.push(key);
-          if (key === "b") {
-            runner.halt("stopped");
-          }
-        },
-      );
+      await runner.loop(0, { a: 1, b: 2, c: 3 }, async (key, _i, runner) => {
+        collected.push(key);
+        if (key === "b") {
+          runner.halt("stopped");
+        }
+      });
 
       expect(runner.halted).toBe(true);
       // Object.keys order is insertion order for string keys -> a, b, c
@@ -698,8 +678,12 @@ describe("Runner", () => {
       const ctx = makeMockCtx();
       const events: Array<{ kind: string; data: any }> = [];
       ctx.callbacks = {
-        onThreadStart: (data: any) => { events.push({ kind: "start", data }); },
-        onThreadEnd: (data: any) => { events.push({ kind: "end", data }); },
+        onThreadStart: (data: any) => {
+          events.push({ kind: "start", data });
+        },
+        onThreadEnd: (data: any) => {
+          events.push({ kind: "end", data });
+        },
       };
       // makeMockCtx returns "tid-1" from create(). Override get() to
       // surface a non-empty message list so we can assert the snapshot.
@@ -710,14 +694,9 @@ describe("Runner", () => {
 
       const runner = new Runner(ctx, frame, { threads: ctx.threads });
 
-      await runner.thread(
-        0,
-        "create",
-        { label: "coding task", summarize: true },
-        async () => {
-          /* body */
-        },
-      );
+      await runner.thread(0, "create", { label: "coding task", summarize: true }, async () => {
+        /* body */
+      });
 
       expect(events.length).toBe(2);
       expect(events[0].kind).toBe("start");
@@ -960,7 +939,14 @@ describe("match exit propagation", () => {
     const ran: string[] = [];
     await runner.ifElse(
       2,
-      [{ condition: async () => true, body: async () => { ran.push("inner"); } }],
+      [
+        {
+          condition: async () => true,
+          body: async () => {
+            ran.push("inner");
+          },
+        },
+      ],
       undefined,
       { matchId: 2 },
     );
@@ -1148,10 +1134,7 @@ describe("thread() — abandoned-turn repair on reopen", () => {
 
   // One thread() entry with its own fresh frame — the shape of a NEW
   // turn. Returns the opened thread id.
-  async function openFresh(
-    threads: ThreadStore,
-    opts: Record<string, unknown>,
-  ): Promise<string> {
+  async function openFresh(threads: ThreadStore, opts: Record<string, unknown>): Promise<string> {
     let tid = "";
     const runner = new Runner(makeMockCtx(), makeFrame(), { threads });
     await runner.thread(0, "create", opts, async () => {
@@ -1237,10 +1220,7 @@ describe("custom redaction markers across both statelog paths", () => {
     const secret = { value: `${SECRET_PREFIX}value` };
     runtimeContext.globals.markRedacted(secret, replacement);
 
-    const ordinaryOutput = JSON.stringify(
-      { secret },
-      makeRedactReplacer(runtimeContext.globals),
-    );
+    const ordinaryOutput = JSON.stringify({ secret }, makeRedactReplacer(runtimeContext.globals));
     if (ordinaryOutput === undefined) {
       throw new Error("Expected the redaction fixture to serialize");
     }
@@ -1276,10 +1256,7 @@ describe("custom redaction markers across both statelog paths", () => {
     const runtimeContext = makeMockCtx();
     const secret = { value: `${SECRET_PREFIX}plain` };
     runtimeContext.globals.markRedacted(secret);
-    const output = JSON.stringify(
-      { secret },
-      makeRedactReplacer(runtimeContext.globals),
-    );
+    const output = JSON.stringify({ secret }, makeRedactReplacer(runtimeContext.globals));
     expect(JSON.parse(output as string)).toEqual({ secret: "[REDACTED]" });
   });
 });

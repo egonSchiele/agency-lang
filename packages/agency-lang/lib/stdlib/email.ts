@@ -31,11 +31,7 @@ function validateRecipients(
   recipients.push(...toArray(params.to));
   if (params.cc) recipients.push(...toArray(params.cc));
   if (params.bcc) recipients.push(...toArray(params.bcc));
-  const error = checkRecipients(
-    recipients,
-    options?.allowList ?? [],
-    options?.blockList ?? [],
-  );
+  const error = checkRecipients(recipients, options?.allowList ?? [], options?.blockList ?? []);
   if (error) throw new Error(error);
 }
 
@@ -49,15 +45,13 @@ export type ResendOptions = {
 
 export async function _sendWithResend(
   params: EmailParams,
-  options?: ResendOptions
+  options?: ResendOptions,
 ): Promise<EmailResult> {
   validateRecipients(params, options);
 
   const apiKey = options?.apiKey || process.env.RESEND_API_KEY;
   if (!apiKey) {
-    throw new Error(
-      "Missing Resend API key. Set RESEND_API_KEY env var or pass apiKey option."
-    );
+    throw new Error("Missing Resend API key. Set RESEND_API_KEY env var or pass apiKey option.");
   }
 
   const body: Record<string, unknown> = {
@@ -75,7 +69,7 @@ export async function _sendWithResend(
   const response = await fetch(RESEND_URL, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -86,7 +80,7 @@ export async function _sendWithResend(
     throw new Error(`Resend API error (${response.status}): ${responseBody}`);
   }
 
-  const data = await response.json() as { id: string };
+  const data = (await response.json()) as { id: string };
   return { id: data.id, provider: "resend" };
 }
 
@@ -100,14 +94,14 @@ export type SendGridOptions = {
 
 export async function _sendWithSendGrid(
   params: EmailParams,
-  options?: SendGridOptions
+  options?: SendGridOptions,
 ): Promise<EmailResult> {
   validateRecipients(params, options);
 
   const apiKey = options?.apiKey || process.env.SENDGRID_API_KEY;
   if (!apiKey) {
     throw new Error(
-      "Missing SendGrid API key. Set SENDGRID_API_KEY env var or pass apiKey option."
+      "Missing SendGrid API key. Set SENDGRID_API_KEY env var or pass apiKey option.",
     );
   }
 
@@ -140,7 +134,7 @@ export async function _sendWithSendGrid(
   const response = await fetch(SENDGRID_URL, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -167,31 +161,25 @@ export type MailgunOptions = {
 
 export async function _sendWithMailgun(
   params: EmailParams,
-  options?: MailgunOptions
+  options?: MailgunOptions,
 ): Promise<EmailResult> {
   validateRecipients(params, options);
 
   const apiKey = options?.apiKey || process.env.MAILGUN_API_KEY;
   if (!apiKey) {
-    throw new Error(
-      "Missing Mailgun API key. Set MAILGUN_API_KEY env var or pass apiKey option."
-    );
+    throw new Error("Missing Mailgun API key. Set MAILGUN_API_KEY env var or pass apiKey option.");
   }
 
   const domain = options?.domain || process.env.MAILGUN_DOMAIN;
   if (!domain) {
-    throw new Error(
-      "Missing Mailgun domain. Set MAILGUN_DOMAIN env var or pass domain option."
-    );
+    throw new Error("Missing Mailgun domain. Set MAILGUN_DOMAIN env var or pass domain option.");
   }
   if (domain.includes("/") || domain.includes("\\")) {
     throw new Error("Invalid Mailgun domain: must not contain path separators.");
   }
 
   const region = options?.region || process.env.MAILGUN_REGION || "us";
-  const baseUrl = region === "eu"
-    ? "https://api.eu.mailgun.net"
-    : "https://api.mailgun.net";
+  const baseUrl = region === "eu" ? "https://api.eu.mailgun.net" : "https://api.mailgun.net";
 
   const formData = new URLSearchParams();
   formData.set("from", params.from);
@@ -209,7 +197,7 @@ export async function _sendWithMailgun(
   const response = await fetch(`${baseUrl}/v3/${domain}/messages`, {
     method: "POST",
     headers: {
-      "Authorization": `Basic ${credentials}`,
+      Authorization: `Basic ${credentials}`,
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: formData.toString(),
@@ -220,6 +208,6 @@ export async function _sendWithMailgun(
     throw new Error(`Mailgun API error (${response.status}): ${responseBody}`);
   }
 
-  const data = await response.json() as { id: string };
+  const data = (await response.json()) as { id: string };
   return { id: data.id, provider: "mailgun" };
 }

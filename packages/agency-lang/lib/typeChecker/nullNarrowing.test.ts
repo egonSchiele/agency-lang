@@ -23,9 +23,9 @@ describe("narrowUnionByPresence", () => {
   });
 
   it("present: true on a 3-member union drops only null (string | number | null → string | number)", () => {
-    expect(
-      narrowUnionByPresence(union(STRING_T, NUMBER_T, NULL_T), true, {}),
-    ).toEqual(union(STRING_T, NUMBER_T));
+    expect(narrowUnionByPresence(union(STRING_T, NUMBER_T, NULL_T), true, {})).toEqual(
+      union(STRING_T, NUMBER_T),
+    );
   });
 
   it("present: true with no null member → null (no narrowing)", () => {
@@ -59,21 +59,25 @@ function check(source: string): string[] {
 
 describe("null / truthiness narrowing (e2e)", () => {
   it("if (x != null): strips null so x type-checks against string", () => {
-    expect(check(`
+    expect(
+      check(`
 def f(x: string | null): void {
   if (x != null) {
     let s: string = x
   }
-}`)).toEqual([]);
+}`),
+    ).toEqual([]);
   });
 
   it("if (x): truthiness strips null in the then-branch", () => {
-    expect(check(`
+    expect(
+      check(`
 def f(x: string | null): void {
   if (x) {
     let s: string = x
   }
-}`)).toEqual([]);
+}`),
+    ).toEqual([]);
   });
 
   it("SOUNDNESS: if (x) else-branch is NOT narrowed to null (falsy may be non-null)", () => {
@@ -128,37 +132,43 @@ def f(x: string | null, y: string | null): void {
   });
 
   it("&& of bare truthiness narrows both operands to non-null in the then-branch", () => {
-    expect(check(`
+    expect(
+      check(`
 def f(x: string | null, y: string | null): void {
   if (x && y) {
     let s: string = x
     let t: string = y
   }
-}`)).toEqual([]);
+}`),
+    ).toEqual([]);
   });
 
   it("if (x == null) else: the else-branch is narrowed to non-null", () => {
-    expect(check(`
+    expect(
+      check(`
 def f(x: string | null): void {
   if (x == null) {
   } else {
     let s: string = x
   }
-}`)).toEqual([]);
+}`),
+    ).toEqual([]);
   });
 
   it("if (x == null) / else: then narrows to null, else to string (both sides)", () => {
     // Pin the exact narrowed type on BOTH sides. `let s: null = x` in the
     // then-branch type-checks ONLY if x narrowed to null; `let t: string = x`
     // in the else ONLY if x narrowed to string.
-    expect(check(`
+    expect(
+      check(`
 def f(x: string | null): void {
   if (x == null) {
     let s: null = x
   } else {
     let t: string = x
   }
-}`)).toEqual([]);
+}`),
+    ).toEqual([]);
   });
 
   it("truthiness strips ONLY null, keeping every non-null member", () => {
@@ -166,39 +176,47 @@ def f(x: string | null): void {
     // wrongly dropped a non-null member, `let t: "a" | "b" = s` would fail. (The
     // unit suite pins the same property structurally: `string | number | null`
     // narrows to `string | number`, not to a single member.)
-    expect(check(`
+    expect(
+      check(`
 def f(s: "a" | "b" | null): void {
   if (s) {
     let t: "a" | "b" = s
   }
-}`)).toEqual([]);
+}`),
+    ).toEqual([]);
   });
 
   it("non-optional value in if (x != null): no narrowing, no error (sound no-op)", () => {
-    expect(check(`
+    expect(
+      check(`
 def f(x: string): void {
   if (x != null) {
     let s: string = x
   }
-}`)).toEqual([]);
+}`),
+    ).toEqual([]);
   });
 
   it("non-optional value in if (x == null): x stays string, no narrow-to-never", () => {
-    expect(check(`
+    expect(
+      check(`
 def f(x: string): void {
   if (x == null) {
     let s: string = x
   }
-}`)).toEqual([]);
+}`),
+    ).toEqual([]);
   });
 
   it("&& composes: (x != null && other) narrows x in the then-branch", () => {
-    expect(check(`
+    expect(
+      check(`
 def f(x: string | null, other: boolean): void {
   if (x != null && other) {
     let s: string = x
   }
-}`)).toEqual([]);
+}`),
+    ).toEqual([]);
   });
 
   // (No `!` composition test: Agency's `!` does not prefix a parenthesized
@@ -208,24 +226,28 @@ def f(x: string | null, other: boolean): void {
   // Result narrowing tests via `!isSuccess(r)`.)
 
   it("|| composes: if (x == null || y == null) {} else {…} narrows both in else", () => {
-    expect(check(`
+    expect(
+      check(`
 def f(x: string | null, y: string | null): void {
   if (x == null || y == null) {
   } else {
     let s: string = x
     let t: string = y
   }
-}`)).toEqual([]);
+}`),
+    ).toEqual([]);
   });
 
   it("early return: code after if (x == null) { return } sees x as non-null", () => {
-    expect(check(`
+    expect(
+      check(`
 def f(x: string | null): void {
   if (x == null) {
     return
   }
   let s: string = x
-}`)).toEqual([]);
+}`),
+    ).toEqual([]);
   });
 
   it("reassignment inside the narrowed branch invalidates the narrowing", () => {
@@ -243,17 +265,20 @@ def f(x: string | null): void {
   });
 
   it("aliased optional: type Maybe<T> = T | null narrows under if (x != null)", () => {
-    expect(check(`
+    expect(
+      check(`
 type Maybe<T> = T | null
 def f(x: Maybe<string>): void {
   if (x != null) {
     let s: string = x
   }
-}`)).toEqual([]);
+}`),
+    ).toEqual([]);
   });
 
   it("object union with null: presence then discriminant compose", () => {
-    expect(check(`
+    expect(
+      check(`
 def f(x: { kind: "a", a: string } | { kind: "b", b: number } | null): void {
   if (x != null) {
     if (x.kind == "a") {
@@ -262,11 +287,13 @@ def f(x: { kind: "a", a: string } | { kind: "b", b: number } | null): void {
       let n: number = x.b
     }
   }
-}`)).toEqual([]);
+}`),
+    ).toEqual([]);
   });
 
   it("nested presence guards narrow independently", () => {
-    expect(check(`
+    expect(
+      check(`
 def f(x: string | null, y: string | null): void {
   if (x != null) {
     if (y != null) {
@@ -274,6 +301,7 @@ def f(x: string | null, y: string | null): void {
       let t: string = y
     }
   }
-}`)).toEqual([]);
+}`),
+    ).toEqual([]);
   });
 });

@@ -5,11 +5,7 @@ import path from "path";
 import { agencyStore } from "../runtime/asyncContext.js";
 import { InvocationUsageMeter } from "../runtime/invocationUsage.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
-import {
-  _transcribe,
-  _synthesizeSpeech,
-  publishSpeechOutput,
-} from "./speech.js";
+import { _transcribe, _synthesizeSpeech, publishSpeechOutput } from "./speech.js";
 
 // Each test gets a unique disposable root; nothing touches $HOME, the repo, or a
 // shared /tmp path (see plan §12j).
@@ -35,12 +31,8 @@ function makeStack() {
   return stack;
 }
 
-type TranscribeImpl = NonNullable<
-  (input: any, config: any, signal: AbortSignal) => Promise<any>
->;
-type SpeakImpl = NonNullable<
-  (text: string, config: any, signal: AbortSignal) => Promise<any>
->;
+type TranscribeImpl = NonNullable<(input: any, config: any, signal: AbortSignal) => Promise<any>>;
+type SpeakImpl = NonNullable<(text: string, config: any, signal: AbortSignal) => Promise<any>>;
 
 async function withClient(
   client: { transcribe?: TranscribeImpl; speak?: SpeakImpl },
@@ -130,7 +122,11 @@ describe("_transcribe", () => {
   it("statelog carries a projected transcript preview, never audio bytes/raw", async () => {
     const filepath = await makeAudioFile();
     const transcribe: TranscribeImpl = async () =>
-      trOk({ text: "secret words", raw: { audio: "xxx" }, usage: { totalTokens: 7, inputAudioTokens: 4 } });
+      trOk({
+        text: "secret words",
+        raw: { audio: "xxx" },
+        usage: { totalTokens: 7, inputAudioTokens: 4 },
+      });
     await withClient({ transcribe }, async ({ transcription }) => {
       await _transcribe(filepath, "", [root], "whisper-1", "", "", "", "");
       const arg = transcription.mock.calls[0][0];
@@ -159,9 +155,9 @@ describe("_transcribe", () => {
   it("throws a clear error when the client has no transcribe() support", async () => {
     const filepath = await makeAudioFile();
     await withClient({}, async () => {
-      await expect(
-        _transcribe(filepath, "", [root], "whisper-1", "", "", "", ""),
-      ).rejects.toThrow(/does not support transcription/);
+      await expect(_transcribe(filepath, "", [root], "whisper-1", "", "", "", "")).rejects.toThrow(
+        /does not support transcription/,
+      );
     });
   });
 
@@ -169,9 +165,9 @@ describe("_transcribe", () => {
     const filepath = await makeAudioFile();
     const transcribe: TranscribeImpl = async () => ({ success: false, error: "boom" });
     await withClient({ transcribe }, async ({ stack, transcription, meter }) => {
-      await expect(
-        _transcribe(filepath, "", [root], "whisper-1", "", "", "", ""),
-      ).rejects.toThrow(/transcribe failed: boom/);
+      await expect(_transcribe(filepath, "", [root], "whisper-1", "", "", "", "")).rejects.toThrow(
+        /transcribe failed: boom/,
+      );
       const { usage } = meter.snapshot();
       expect(usage.unknownCostCallCount).toBe(1);
       expect(usage.pricingComplete).toBe(false);
@@ -197,9 +193,9 @@ describe("_transcribe", () => {
     await withClient({ transcribe: transcribe as any }, async ({ controller, meter }) => {
       const reason = new AgencyCancelledError("cancelled early");
       controller.abort(reason);
-      await expect(
-        _transcribe(filepath, "", [root], "whisper-1", "", "", "", ""),
-      ).rejects.toBe(reason);
+      await expect(_transcribe(filepath, "", [root], "whisper-1", "", "", "", "")).rejects.toBe(
+        reason,
+      );
       expect(transcribe).not.toHaveBeenCalled();
       expect(meter.snapshot().usage.unknownCostCallCount).toBe(0);
     });
@@ -214,9 +210,9 @@ describe("_transcribe", () => {
       throw reason;
     };
     await withClient({ transcribe }, async ({ meter, transcription }) => {
-      await expect(
-        _transcribe(filepath, "", [root], "whisper-1", "", "", "", ""),
-      ).rejects.toBe(reason);
+      await expect(_transcribe(filepath, "", [root], "whisper-1", "", "", "", "")).rejects.toBe(
+        reason,
+      );
       const { usage } = meter.snapshot();
       expect(usage.unknownCostCallCount).toBe(1); // meteredDispatch records it
       expect(usage.pricingComplete).toBe(false);
@@ -230,7 +226,17 @@ describe("_synthesizeSpeech", () => {
     const out = path.join(root, "out.mp3");
     const speak: SpeakImpl = async () => speakOk();
     await withClient({ speak }, async ({ stack, speechSynthesis, meter }) => {
-      const returned = await _synthesizeSpeech("hi", out, "alloy", "tts-1", "", "mp3", 1, [root], "");
+      const returned = await _synthesizeSpeech(
+        "hi",
+        out,
+        "alloy",
+        "tts-1",
+        "",
+        "mp3",
+        1,
+        [root],
+        "",
+      );
       expect(returned).toBe(out);
       expect(new Uint8Array(await readFile(out))).toEqual(new Uint8Array([9, 8, 7, 6]));
       expect(stack.localCost).toBeCloseTo(0.015);
@@ -315,7 +321,17 @@ describe("argument validation + preflight (before any paid dispatch)", () => {
     const speak = vi.fn();
     await withClient({ speak: speak as any }, async ({ meter }) => {
       await expect(
-        _synthesizeSpeech("hi", path.join(root, "o.mp3"), "alloy", "tts-1", "", "bogus", 1, [root], ""),
+        _synthesizeSpeech(
+          "hi",
+          path.join(root, "o.mp3"),
+          "alloy",
+          "tts-1",
+          "",
+          "bogus",
+          1,
+          [root],
+          "",
+        ),
       ).rejects.toThrow(/unsupported format/);
       expect(speak).not.toHaveBeenCalled();
       expect(meter.snapshot().usage.unknownCostCallCount).toBe(0);
@@ -326,10 +342,30 @@ describe("argument validation + preflight (before any paid dispatch)", () => {
     const speak = vi.fn();
     await withClient({ speak: speak as any }, async () => {
       await expect(
-        _synthesizeSpeech("hi", path.join(root, "o.mp3"), "alloy", "tts-1", "", "mp3", 9, [root], ""),
+        _synthesizeSpeech(
+          "hi",
+          path.join(root, "o.mp3"),
+          "alloy",
+          "tts-1",
+          "",
+          "mp3",
+          9,
+          [root],
+          "",
+        ),
       ).rejects.toThrow(/speed/);
       await expect(
-        _synthesizeSpeech("hi", path.join(root, "o2.mp3"), "alloy", "tts-1", "", "mp3", NaN, [root], ""),
+        _synthesizeSpeech(
+          "hi",
+          path.join(root, "o2.mp3"),
+          "alloy",
+          "tts-1",
+          "",
+          "mp3",
+          NaN,
+          [root],
+          "",
+        ),
       ).rejects.toThrow(/speed/);
       expect(speak).not.toHaveBeenCalled();
     });
@@ -401,9 +437,7 @@ describe("publishSpeechOutput", () => {
     const out = path.join(root, "taken.mp3");
     await writeFile(out, Buffer.from([42])); // simulate a racing writer
     const signal = new AbortController().signal;
-    await expect(
-      publishSpeechOutput(out, new Uint8Array([1, 2, 3]), signal),
-    ).rejects.toThrow();
+    await expect(publishSpeechOutput(out, new Uint8Array([1, 2, 3]), signal)).rejects.toThrow();
     // original content preserved, no staging left behind
     expect(new Uint8Array(await readFile(out))).toEqual(new Uint8Array([42]));
     const leftovers = (await import("fs/promises")).readdir(root);

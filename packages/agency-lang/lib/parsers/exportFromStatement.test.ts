@@ -3,9 +3,7 @@ import { exportFromStatementParser } from "./parsers.js";
 
 describe("exportFromStatementParser", () => {
   it("parses a simple named re-export", () => {
-    const result = exportFromStatementParser(
-      'export { foo } from "./tools.agency"',
-    );
+    const result = exportFromStatementParser('export { foo } from "./tools.agency"');
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.result).toMatchObject({
@@ -77,9 +75,7 @@ describe("exportFromStatementParser", () => {
   });
 
   it("parses per-name `destructive` modifier", () => {
-    const result = exportFromStatementParser(
-      'export { destructive rm } from "./fs-utils.agency"',
-    );
+    const result = exportFromStatementParser('export { destructive rm } from "./fs-utils.agency"');
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.result.body).toEqual({
@@ -91,9 +87,7 @@ describe("exportFromStatementParser", () => {
   });
 
   it("parses a star re-export", () => {
-    const result = exportFromStatementParser(
-      'export * from "std::wikipedia"',
-    );
+    const result = exportFromStatementParser('export * from "std::wikipedia"');
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.result).toMatchObject({
@@ -105,16 +99,12 @@ describe("exportFromStatementParser", () => {
   });
 
   it("rejects malformed export-from (missing from)", () => {
-    const result = exportFromStatementParser(
-      'export { foo } "./x.agency"',
-    );
+    const result = exportFromStatementParser('export { foo } "./x.agency"');
     expect(result.success).toBe(false);
   });
 
   it("rejects malformed export-from (missing braces)", () => {
-    const result = exportFromStatementParser(
-      'export foo from "./x.agency"',
-    );
+    const result = exportFromStatementParser('export foo from "./x.agency"');
     expect(result.success).toBe(false);
   });
 });

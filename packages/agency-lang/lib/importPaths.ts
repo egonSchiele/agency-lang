@@ -41,10 +41,7 @@ export function findFileUp(
  * directories above the starting point contain unrelated package.jsons
  * (workspaces, nested tooling configs, etc.).
  */
-export function findPackageRoot(
-  startDir: string,
-  packageName?: string,
-): string {
+export function findPackageRoot(startDir: string, packageName?: string): string {
   const found = findFileUp(startDir, "package.json", (pkgJsonPath) => {
     if (packageName === undefined) {
       return true;
@@ -263,11 +260,7 @@ export function isPkgImport(importPath: string): boolean {
  * should follow and process (relative .agency files, std:: imports, or pkg:: imports).
  */
 export function isAgencyImport(importPath: string): boolean {
-  return (
-    importPath.endsWith(".agency") ||
-    isStdlibImport(importPath) ||
-    isPkgImport(importPath)
-  );
+  return importPath.endsWith(".agency") || isStdlibImport(importPath) || isPkgImport(importPath);
 }
 
 export type AgencyImportTargetsOptions = {
@@ -307,18 +300,16 @@ function importedModulePath(node: AgencyProgram["nodes"][number]): string | null
 export function nonAgencyLocalImportTargets(program: AgencyProgram): string[] {
   return program.nodes
     .map(importedModulePath)
-    .filter((modulePath): modulePath is string =>
-      modulePath !== null && isLocalImportTarget(modulePath) && !isAgencyImport(modulePath));
+    .filter(
+      (modulePath): modulePath is string =>
+        modulePath !== null && isLocalImportTarget(modulePath) && !isAgencyImport(modulePath),
+    );
 }
 
 function isLocalImportTarget(modulePath: string): boolean {
   return (
     importKind(modulePath) === "local" &&
-    (
-      modulePath.startsWith("./") ||
-      modulePath.startsWith("../") ||
-      modulePath.startsWith("/")
-    )
+    (modulePath.startsWith("./") || modulePath.startsWith("../") || modulePath.startsWith("/"))
   );
 }
 
@@ -347,15 +338,11 @@ function validatePkgRelativePath(value: string, context: string): void {
     throw new Error(`${context}: absolute paths are not allowed ('${value}').`);
   }
   if (value.includes("\\")) {
-    throw new Error(
-      `${context}: path must not contain backslashes ('${value}').`,
-    );
+    throw new Error(`${context}: path must not contain backslashes ('${value}').`);
   }
   const segments = value.split("/");
   if (segments.some((seg) => !seg || seg === "." || seg === "..")) {
-    throw new Error(
-      `${context}: path must not contain empty, '.' or '..' segments ('${value}').`,
-    );
+    throw new Error(`${context}: path must not contain empty, '.' or '..' segments ('${value}').`);
   }
 }
 
@@ -374,9 +361,7 @@ export function parsePkgImport(importPath: string): {
 } {
   const bare = normalizePkgPath(importPath);
   if (!bare) {
-    throw new Error(
-      `Invalid pkg:: import "${importPath}": package specifier must not be empty.`,
-    );
+    throw new Error(`Invalid pkg:: import "${importPath}": package specifier must not be empty.`);
   }
 
   let packageName: string;
@@ -428,10 +413,7 @@ function findPkgDir(
     const pkgJsonPath = req.resolve(`${packageName}/package.json`);
     return { pkgJsonPath, pkgDir: path.dirname(pkgJsonPath) };
   } catch (e: any) {
-    if (
-      e?.code === "ERR_PACKAGE_PATH_NOT_EXPORTED" ||
-      e?.code === "MODULE_NOT_FOUND"
-    ) {
+    if (e?.code === "ERR_PACKAGE_PATH_NOT_EXPORTED" || e?.code === "MODULE_NOT_FOUND") {
       const entryPath = req.resolve(packageName);
       const pkgDir = findPackageRoot(path.dirname(entryPath));
       const pkgJsonPath = path.join(pkgDir, "package.json");
@@ -452,10 +434,7 @@ function findPkgDir(
  * package via Node's module resolution, then reads its package.json "agency"
  * field for the entry point.
  */
-export function resolvePkgAgencyPath(
-  importPath: string,
-  fromFile: string,
-): string {
+export function resolvePkgAgencyPath(importPath: string, fromFile: string): string {
   const { packageName, subpath } = parsePkgImport(importPath);
   const req = createRequire(fromFile);
   const { pkgJsonPath, pkgDir } = findPkgDir(packageName, req);
@@ -481,10 +460,7 @@ export function resolvePkgAgencyPath(
   }
   // Strip leading ./ (common in package.json paths) before validation
   const normalizedEntry = agencyEntry.replace(/^\.\//, "");
-  validatePkgRelativePath(
-    normalizedEntry,
-    `Package '${packageName}' has an invalid "agency" path`,
-  );
+  validatePkgRelativePath(normalizedEntry, `Package '${packageName}' has an invalid "agency" path`);
   if (!agencyEntry.endsWith(".agency")) {
     throw new Error(
       `Package '${packageName}' has an "agency" path '${agencyEntry}' that does not end with ".agency".`,
@@ -510,15 +486,9 @@ export function resolvePkgAgencyPath(
  * - "./foo.agency"   -> resolved relative to the importing file
  * - "./foo.js"       -> resolved relative to the importing file (non-agency, kept as-is)
  */
-export function resolveAgencyImportPath(
-  importPath: string,
-  fromFile: string,
-): string {
+export function resolveAgencyImportPath(importPath: string, fromFile: string): string {
   if (isStdlibImport(importPath)) {
-    return path.join(
-      getStdlibDir(),
-      normalizeStdlibPath(importPath) + ".agency",
-    );
+    return path.join(getStdlibDir(), normalizeStdlibPath(importPath) + ".agency");
   }
   if (isPkgImport(importPath)) {
     return resolvePkgAgencyPath(importPath, fromFile);
@@ -538,10 +508,7 @@ export function resolveAgencyImportPath(
  *   Used to compute relative paths for stdlib imports. If not provided,
  *   falls back to absolute paths.
  */
-export function toCompiledImportPath(
-  importPath: string,
-  fromFile?: string,
-): string {
+export function toCompiledImportPath(importPath: string, fromFile?: string): string {
   if (isStdlibImport(importPath)) {
     return "agency-lang/stdlib/" + normalizeStdlibPath(importPath) + ".js";
   }

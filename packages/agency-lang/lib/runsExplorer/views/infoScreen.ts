@@ -50,7 +50,8 @@ export class InfoScreen implements ExplorerView {
   render(viewport: Viewport): Element {
     const row = this.row;
     const lines = row === null ? [`no data for ${this.rowKey}`] : this.infoLines(row);
-    return column({ justifyContent: "flex-start" },
+    return column(
+      { justifyContent: "flex-start" },
       line(`RUN INFO  ${this.rowKey}`, { height: 1, fg: "bright-white" }),
       ...lines.slice(0, Math.max(1, viewport.rows - 3)).map((text) => line(text, { height: 1 })),
       line(this.message, { height: 1, fg: "gray" }),
@@ -74,7 +75,9 @@ export class InfoScreen implements ExplorerView {
     if (row.tests.length > 0) {
       lines.push("tests:");
       for (const test of row.tests) {
-        lines.push(`  ${test.inputId}: ${test.status}  ${fmtScore(test.score)}  ${test.statelogPath ?? ""}`);
+        lines.push(
+          `  ${test.inputId}: ${test.status}  ${fmtScore(test.score)}  ${test.statelogPath ?? ""}`,
+        );
       }
     }
     if (row.warnings.length > 0) {

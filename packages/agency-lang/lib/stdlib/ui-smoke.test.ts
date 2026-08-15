@@ -114,9 +114,12 @@ describe.skip("std::ui — REPL state machine (Agency-driven)", () => {
     const submits: string[] = [];
     await invokeRepl(
       [
-        { key: "a" }, { key: "enter" },
-        { key: "b" }, { key: "enter" },
-        { key: "up" }, { key: "enter" },
+        { key: "a" },
+        { key: "enter" },
+        { key: "b" },
+        { key: "enter" },
+        { key: "up" },
+        { key: "enter" },
       ],
       {
         onSubmit: (p: string) => {
@@ -133,9 +136,10 @@ describe.skip("std::ui — REPL state machine (Agency-driven)", () => {
     await invokeRepl(
       [
         { key: "/" },
-        { key: "e" }, { key: "x" },
-        { key: "enter" },   // selects /exit into buffer (does not submit)
-        { key: "enter" },   // submits /exit
+        { key: "e" },
+        { key: "x" },
+        { key: "enter" }, // selects /exit into buffer (does not submit)
+        { key: "enter" }, // submits /exit
       ],
       {
         onSubmit: (p: string) => {
@@ -155,9 +159,14 @@ describe.skip("std::ui — REPL state machine (Agency-driven)", () => {
     const submits: string[] = [];
     await invokeRepl(
       [
-        { key: "j" }, { key: "u" }, { key: "n" }, { key: "k" },
+        { key: "j" },
+        { key: "u" },
+        { key: "n" },
+        { key: "k" },
         { key: "u", ctrl: true },
-        { key: "o" }, { key: "k" }, { key: "enter" },
+        { key: "o" },
+        { key: "k" },
+        { key: "enter" },
       ],
       {
         onSubmit: (p: string) => {
@@ -175,18 +184,12 @@ describe.skip("std::ui — REPL state machine (Agency-driven)", () => {
     // the whole payload at once — including newlines — rather than
     // treating embedded `\n` as Enter.
     const submits: string[] = [];
-    await invokeRepl(
-      [
-        { key: "paste", text: "hello\nworld" } as any,
-        { key: "enter" },
-      ],
-      {
-        onSubmit: (p: string) => {
-          submits.push(p);
-          return false;
-        },
+    await invokeRepl([{ key: "paste", text: "hello\nworld" } as any, { key: "enter" }], {
+      onSubmit: (p: string) => {
+        submits.push(p);
+        return false;
       },
-    );
+    });
     expect(submits).toEqual(["hello\nworld"]);
   });
 
@@ -198,12 +201,7 @@ describe.skip("std::ui — REPL state machine (Agency-driven)", () => {
     // submits the multi-line result.
     const submits: string[] = [];
     await invokeRepl(
-      [
-        { key: "a" },
-        { key: "enter", shift: true } as any,
-        { key: "b" },
-        { key: "enter" },
-      ],
+      [{ key: "a" }, { key: "enter", shift: true } as any, { key: "b" }, { key: "enter" }],
       {
         onSubmit: (p: string) => {
           submits.push(p);
@@ -221,9 +219,11 @@ describe.skip("std::ui — REPL state machine (Agency-driven)", () => {
     const submits: string[] = [];
     await invokeRepl(
       [
-        { key: "enter" },                // empty — no-op
-        { key: "enter" },                // empty — no-op
-        { key: "o" }, { key: "k" }, { key: "enter" }, // real submit
+        { key: "enter" }, // empty — no-op
+        { key: "enter" }, // empty — no-op
+        { key: "o" },
+        { key: "k" },
+        { key: "enter" }, // real submit
       ],
       {
         onSubmit: (p: string) => {
@@ -241,9 +241,7 @@ describe.skip("std::ui — REPL state machine (Agency-driven)", () => {
     // keys are fed from inside onSubmit so they don't race past the
     // not-yet-open modal.
     const picks: string[] = [];
-    const scripted = new ScriptedInput([
-      { key: "g" }, { key: "o" }, { key: "enter" },
-    ]);
+    const scripted = new ScriptedInput([{ key: "g" }, { key: "o" }, { key: "enter" }]);
     _setInputSource(scripted);
     _setOutputTarget(new FrameRecorder());
     _setSize(80, 24);
@@ -292,9 +290,7 @@ describe.skip("std::ui — REPL state machine (Agency-driven)", () => {
 
   it("chooseOption resolves with the first item on plain Enter", async () => {
     const picks: string[] = [];
-    const scripted = new ScriptedInput([
-      { key: "g" }, { key: "enter" },
-    ]);
+    const scripted = new ScriptedInput([{ key: "g" }, { key: "enter" }]);
     _setInputSource(scripted);
     _setOutputTarget(new FrameRecorder());
     _setSize(80, 24);
@@ -340,9 +336,7 @@ describe.skip("std::ui — REPL state machine (Agency-driven)", () => {
     // record (not a JS exception), so `await chooseOption(...)` returns
     // a `{ success: false, error }` value when the user hits Escape.
     const replies: any[] = [];
-    const scripted = new ScriptedInput([
-      { key: "g" }, { key: "enter" },
-    ]);
+    const scripted = new ScriptedInput([{ key: "g" }, { key: "enter" }]);
     _setInputSource(scripted);
     _setOutputTarget(new FrameRecorder());
     _setSize(80, 24);
@@ -384,15 +378,12 @@ describe.skip("std::ui — REPL state machine (Agency-driven)", () => {
 
   it("exits when onSubmit returns false", async () => {
     let onSubmitCalls = 0;
-    await invokeRepl(
-      [{ key: "x" }, { key: "enter" }],
-      {
-        onSubmit: () => {
-          onSubmitCalls += 1;
-          return false;
-        },
+    await invokeRepl([{ key: "x" }, { key: "enter" }], {
+      onSubmit: () => {
+        onSubmitCalls += 1;
+        return false;
       },
-    );
+    });
     expect(onSubmitCalls).toBe(1);
   });
 
@@ -403,9 +394,7 @@ describe.skip("std::ui — REPL state machine (Agency-driven)", () => {
     // with that filter text — used by std::policy to collapse the
     // "pick (r), then type reason" two-step into a single keystroke.
     const picks: string[] = [];
-    const scripted = new ScriptedInput([
-      { key: "g" }, { key: "enter" },
-    ]);
+    const scripted = new ScriptedInput([{ key: "g" }, { key: "enter" }]);
     _setInputSource(scripted);
     _setOutputTarget(new FrameRecorder());
     _setSize(80, 24);
@@ -460,9 +449,7 @@ describe.skip("std::ui — REPL state machine (Agency-driven)", () => {
     // key-pick path. A filter that narrows to a single item resolves
     // with that item's key on Enter, exactly like the default mode.
     const picks: string[] = [];
-    const scripted = new ScriptedInput([
-      { key: "g" }, { key: "enter" },
-    ]);
+    const scripted = new ScriptedInput([{ key: "g" }, { key: "enter" }]);
     _setInputSource(scripted);
     _setOutputTarget(new FrameRecorder());
     _setSize(80, 24);
@@ -517,9 +504,8 @@ describe.skip("std::ui — chooseOption line-mode (prompts-backed)", () => {
     spoofTty(true);
     prompts.inject(["a"]);
     const ctx = makeTestCtx();
-    const answer = await runInTestContext(
-      ctx, new StateStack(), new ThreadStore(),
-      () => __call(chooseOption, {
+    const answer = await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+      __call(chooseOption, {
         type: "named",
         positionalArgs: [],
         namedArgs: {
@@ -548,9 +534,8 @@ describe.skip("std::ui — chooseOption line-mode (prompts-backed)", () => {
     spoofTty(true);
     prompts.inject(["__FREETEXT__:please don't delete that"]);
     const ctx = makeTestCtx();
-    const answer = await runInTestContext(
-      ctx, new StateStack(), new ThreadStore(),
-      () => __call(chooseOption, {
+    const answer = await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+      __call(chooseOption, {
         type: "named",
         positionalArgs: [],
         namedArgs: {
@@ -573,9 +558,8 @@ describe.skip("std::ui — chooseOption line-mode (prompts-backed)", () => {
     spoofTty(true);
     prompts.inject([null, "a"]);
     const ctx = makeTestCtx();
-    const answer = await runInTestContext(
-      ctx, new StateStack(), new ThreadStore(),
-      () => __call(chooseOption, {
+    const answer = await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+      __call(chooseOption, {
         type: "named",
         positionalArgs: [],
         namedArgs: {
@@ -597,9 +581,8 @@ describe.skip("std::ui — chooseOption line-mode (prompts-backed)", () => {
     // chooseOption loop didn't break out on non-cancel failures.
     spoofTty(false);
     const ctx = makeTestCtx();
-    const result: any = await runInTestContext(
-      ctx, new StateStack(), new ThreadStore(),
-      () => __call(chooseOption, {
+    const result: any = await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+      __call(chooseOption, {
         type: "named",
         positionalArgs: [],
         namedArgs: {
@@ -621,9 +604,9 @@ describe.skip("std::ui — _promptsAutocomplete bridge guards", () => {
 
   it("throws when stdout is not a TTY", async () => {
     spoofTty(false);
-    await expect(
-      _promptsAutocomplete("pick", [{ key: "a", label: "A" }], false),
-    ).rejects.toThrow(/requires a TTY/);
+    await expect(_promptsAutocomplete("pick", [{ key: "a", label: "A" }], false)).rejects.toThrow(
+      /requires a TTY/,
+    );
   });
 
   it("throws when a repl() owns the screen", async () => {
@@ -633,9 +616,7 @@ describe.skip("std::ui — _promptsAutocomplete bridge guards", () => {
     // `_promptsAutocomplete` from inside a running repl's `onSubmit`
     // callback — same shape as the modal-path test above.
     const errors: unknown[] = [];
-    const scripted = new ScriptedInput([
-      { key: "g" }, { key: "o" }, { key: "enter" },
-    ]);
+    const scripted = new ScriptedInput([{ key: "g" }, { key: "o" }, { key: "enter" }]);
     _setInputSource(scripted);
     _setOutputTarget(new FrameRecorder());
     _setSize(80, 24);
@@ -649,11 +630,7 @@ describe.skip("std::ui — _promptsAutocomplete bridge guards", () => {
             status: () => ({ left: "", right: "" }),
             onSubmit: async (_p: string) => {
               try {
-                await _promptsAutocomplete(
-                  "pick",
-                  [{ key: "a", label: "A" }],
-                  false,
-                );
+                await _promptsAutocomplete("pick", [{ key: "a", label: "A" }], false);
               } catch (e) {
                 errors.push(e);
               }
@@ -669,9 +646,7 @@ describe.skip("std::ui — _promptsAutocomplete bridge guards", () => {
       _uninstallConsoleCapture();
     }
     expect(errors).toHaveLength(1);
-    expect((errors[0] as Error).message).toMatch(
-      /cannot be used inside an active repl/,
-    );
+    expect((errors[0] as Error).message).toMatch(/cannot be used inside an active repl/);
   });
 });
 
@@ -695,22 +670,14 @@ describe.skip("std::ui — _promptsAutocomplete happy path", () => {
 
   it("returns failure('cancelled') when the user cancels", async () => {
     prompts.inject([null]);
-    const result = await _promptsAutocomplete(
-      "pick",
-      [{ key: "a", label: "Approve" }],
-      false,
-    );
+    const result = await _promptsAutocomplete("pick", [{ key: "a", label: "Approve" }], false);
     expect(result.success).toBe(false);
     expect(result.error).toBe("cancelled");
   });
 
   it("decodes the __FREETEXT__: prefix on resolve", async () => {
     prompts.inject(["__FREETEXT__:please don't delete that"]);
-    const result = await _promptsAutocomplete(
-      "pick",
-      [{ key: "a", label: "Approve" }],
-      true,
-    );
+    const result = await _promptsAutocomplete("pick", [{ key: "a", label: "Approve" }], true);
     expect(result.success).toBe(true);
     expect(result.value).toBe("please don't delete that");
   });
@@ -728,28 +695,22 @@ describe.skip("std::ui — _promptsAutocomplete happy path", () => {
     ];
 
     // `r` matches only the row whose key contains "r".
-    expect(
-      (await __suggestForTest("r", items, false)).map((m) => m.value),
-    ).toEqual(["r"]);
+    expect((await __suggestForTest("r", items, false)).map((m) => m.value)).toEqual(["r"]);
 
     // `a` matches every key containing "a" (case-insensitive).
-    expect(
-      (await __suggestForTest("A", items, false)).map((m) => m.value),
-    ).toEqual(["a", "aa", "ap"]);
+    expect((await __suggestForTest("A", items, false)).map((m) => m.value)).toEqual([
+      "a",
+      "aa",
+      "ap",
+    ]);
 
     // Pure-label substring does NOT match — "App" would match
     // "Approve" if we were filtering by label, but we're not.
-    expect(
-      (await __suggestForTest("App", items, false)).map((m) => m.value),
-    ).toEqual([]);
+    expect((await __suggestForTest("App", items, false)).map((m) => m.value)).toEqual([]);
   });
 
   it("suggest() appends synthetic free-text row only when allowFreeText && input && no real match", async () => {
-    const noMatch = await __suggestForTest(
-      "xyz",
-      [{ key: "a", label: "Approve" }],
-      true,
-    );
+    const noMatch = await __suggestForTest("xyz", [{ key: "a", label: "Approve" }], true);
     expect(noMatch).toHaveLength(1);
     expect(noMatch[0].value).toBe("__FREETEXT__:xyz");
     expect(noMatch[0].title).toContain("→");
@@ -757,31 +718,15 @@ describe.skip("std::ui — _promptsAutocomplete happy path", () => {
 
     // A typed key prefix that matches an existing key returns the
     // real item (no synthetic row appended).
-    const withMatch = await __suggestForTest(
-      "a",
-      [{ key: "a", label: "Approve" }],
-      true,
-    );
+    const withMatch = await __suggestForTest("a", [{ key: "a", label: "Approve" }], true);
     expect(withMatch).toHaveLength(1);
     expect(withMatch[0].value).toBe("a");
 
-    const empty = await __suggestForTest(
-      "",
-      [{ key: "a", label: "A" }],
-      true,
-    );
-    expect(
-      empty.some((m) => String(m.value).startsWith("__FREETEXT__")),
-    ).toBe(false);
+    const empty = await __suggestForTest("", [{ key: "a", label: "A" }], true);
+    expect(empty.some((m) => String(m.value).startsWith("__FREETEXT__"))).toBe(false);
 
-    const off = await __suggestForTest(
-      "xyz",
-      [{ key: "a", label: "A" }],
-      false,
-    );
-    expect(
-      off.some((m) => String(m.value).startsWith("__FREETEXT__")),
-    ).toBe(false);
+    const off = await __suggestForTest("xyz", [{ key: "a", label: "A" }], false);
+    expect(off.some((m) => String(m.value).startsWith("__FREETEXT__"))).toBe(false);
   });
 });
 
@@ -796,9 +741,9 @@ describe.skip("std::ui — _promptsSelect", () => {
 
   it("throws on non-TTY", async () => {
     spoofTty(false);
-    await expect(
-      _promptsSelect("pick", [{ key: "a", label: "A" }], false),
-    ).rejects.toThrow(/requires a TTY/);
+    await expect(_promptsSelect("pick", [{ key: "a", label: "A" }], false)).rejects.toThrow(
+      /requires a TTY/,
+    );
   });
 
   it("returns success with the picked key", async () => {
@@ -819,11 +764,7 @@ describe.skip("std::ui — _promptsSelect", () => {
   it("returns failure('cancelled') on cancel", async () => {
     spoofTty(true);
     prompts.inject([null]);
-    const result = await _promptsSelect(
-      "pick",
-      [{ key: "a", label: "A" }],
-      false,
-    );
+    const result = await _promptsSelect("pick", [{ key: "a", label: "A" }], false);
     expect(result.success).toBe(false);
   });
 
@@ -831,11 +772,7 @@ describe.skip("std::ui — _promptsSelect", () => {
     spoofTty(true);
     // Queue two answers: the sentinel pick, then the typed text.
     prompts.inject(["__FREETEXT__", "my custom reason"]);
-    const result = await _promptsSelect(
-      "pick",
-      [{ key: "a", label: "Approve" }],
-      true,
-    );
+    const result = await _promptsSelect("pick", [{ key: "a", label: "Approve" }], true);
     expect(result.success).toBe(true);
     expect(result.value).toBe("my custom reason");
   });
@@ -843,11 +780,7 @@ describe.skip("std::ui — _promptsSelect", () => {
   it("with allowFreeText=true, ignores the follow-up when a real key is picked", async () => {
     spoofTty(true);
     prompts.inject(["a"]);
-    const result = await _promptsSelect(
-      "pick",
-      [{ key: "a", label: "Approve" }],
-      true,
-    );
+    const result = await _promptsSelect("pick", [{ key: "a", label: "Approve" }], true);
     expect(result.success).toBe(true);
     expect(result.value).toBe("a");
   });

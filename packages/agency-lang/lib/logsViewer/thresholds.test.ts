@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  DEFAULT_THRESHOLDS,
-  durationMagnitude,
-  costMagnitude,
-} from "./thresholds.js";
+import { DEFAULT_THRESHOLDS, durationMagnitude, costMagnitude } from "./thresholds.js";
 
 describe("durationMagnitude", () => {
   it("returns 'slow' at or above the slow threshold", () => {

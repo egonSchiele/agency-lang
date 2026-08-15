@@ -40,10 +40,7 @@ export function formatRequiredUnboundError(
 }
 
 /** Runtime backstop diagnostic — same canonical clause, slightly different framing. */
-export function formatRequiredUnboundRuntimeError(
-  toolName: string,
-  paramName: string,
-): string {
+export function formatRequiredUnboundRuntimeError(toolName: string, paramName: string): string {
   return (
     `Tool '${toolName}' cannot be passed to llm(): ${formatUnboundClause(paramName)}. ` +
     `Use ${toolName}.partial(${paramName}: <value>) before passing.`
@@ -51,10 +48,7 @@ export function formatRequiredUnboundRuntimeError(
 }
 
 /** One aggregated warning per llm(...) site listing all optional drops. */
-export function formatOptionalUnboundWarning(
-  toolName: string,
-  paramNames: string[],
-): string {
+export function formatOptionalUnboundWarning(toolName: string, paramNames: string[]): string {
   // "Optional" here means the param declares a default value. When the
   // LLM omits it, the normal defaulting path fills in that declared
   // default (often `null`), not `undefined` — so the body must be ready

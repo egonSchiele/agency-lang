@@ -21,8 +21,7 @@ export async function _copy(text: string): Promise<void> {
     await spawnWithInput("xclip", ["-selection", "clipboard"], text);
   } else {
     console.error(
-      `copy is not supported on platform: ${platform}. ` +
-      `Supported platforms: macOS, Linux.`
+      `copy is not supported on platform: ${platform}. ` + `Supported platforms: macOS, Linux.`,
     );
   }
 }
@@ -37,8 +36,7 @@ export async function _paste(): Promise<string> {
     return stdout;
   } else {
     console.error(
-      `paste is not supported on platform: ${platform}. ` +
-      `Supported platforms: macOS, Linux.`
+      `paste is not supported on platform: ${platform}. ` + `Supported platforms: macOS, Linux.`,
     );
     return "";
   }

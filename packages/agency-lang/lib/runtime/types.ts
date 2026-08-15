@@ -2,7 +2,6 @@ import { CostEstimate, TokenUsage } from "smoltalk";
 import { RuntimeContext, ThreadStore } from "./index.js";
 import { ThreadStoreJSON } from "./state/threadStore.js";
 
-
 export type GraphState = {
   messages?: ThreadStore;
   data: any; //Record<string, any>;
@@ -37,17 +36,15 @@ export type Approved = { type: "approve"; value?: any };
 export type Propagated = { type: "propagate" };
 export type Passed = { type: "pass" };
 
-export type HandlerFn = (
-  interrupt: {
-    effect: string;
-    message: string;
-    data: any;
-    origin: string;
-    // True for assignment-position raises (`const x = raise …`) — an
-    // approval value is expected. See Interrupt.expectsValue.
-    expectsValue?: boolean;
-  },
-) => Promise<Approved | Rejected | Propagated | Passed | undefined>;
+export type HandlerFn = (interrupt: {
+  effect: string;
+  message: string;
+  data: any;
+  origin: string;
+  // True for assignment-position raises (`const x = raise …`) — an
+  // approval value is expected. See Interrupt.expectsValue.
+  expectsValue?: boolean;
+}) => Promise<Approved | Rejected | Propagated | Passed | undefined>;
 
 /** One registered handler on `ctx.handlers`. A handler belongs to the
  *  scope where it was registered: `liveGuardIds` records which guards

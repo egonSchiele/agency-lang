@@ -31,10 +31,7 @@ function requiresReturn(rt: VariableType | null | undefined): boolean {
  * `exit`. So the terminal is exact for match-containing functions.
  * Config-gated via `typechecker.definiteReturns` (ships at `warn`).
  */
-export function checkDefiniteReturns(
-  scopes: ScopeInfo[],
-  ctx: TypeCheckerContext,
-): void {
+export function checkDefiniteReturns(scopes: ScopeInfo[], ctx: TypeCheckerContext): void {
   const severity = (ctx.config.typechecker?.definiteReturns ?? "warn") as Severity;
   if (severity === "silent") return;
   const terminals = ctx.flowEnv?.scopeTerminals;
@@ -47,9 +44,7 @@ export function checkDefiniteReturns(
     // A template's function may get its only `return` from a statements
     // hole. The completed program is checked in full when it runs, so a
     // genuinely missing return is caught there rather than here.
-    if (
-      findHoles(info.body).some((hole) => hole.sort === "statements")
-    ) {
+    if (findHoles(info.body).some((hole) => hole.sort === "statements")) {
       continue;
     }
     const terminal = terminals[info.scopeKey];

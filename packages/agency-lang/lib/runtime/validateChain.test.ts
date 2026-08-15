@@ -31,9 +31,7 @@ describe("__validateChain", () => {
   });
 
   it("short-circuits on first validator failure", async () => {
-    const later = vi.fn(
-      async (v: unknown) => success(v),
-    ) as unknown as AgencyValidator;
+    const later = vi.fn(async (v: unknown) => success(v)) as unknown as AgencyValidator;
     const r = await __validateChain(-1, z.number(), [isPos, later]);
     expect(isFailure(r)).toBe(true);
     expect(later).not.toHaveBeenCalled();
@@ -43,9 +41,9 @@ describe("__validateChain", () => {
     // 2 -> double -> 4 -> halve -> 2. An end-of-chain identity check would
     // see the input come back and pass; the per-validator check must throw
     // at the first link.
-    await expect(
-      __validateChain(2, z.number(), [doubleIt, halveIt]),
-    ).rejects.toThrow(/validator 'doubleIt' modified the value/);
+    await expect(__validateChain(2, z.number(), [doubleIt, halveIt])).rejects.toThrow(
+      /validator 'doubleIt' modified the value/,
+    );
   });
 
   it("forwards an incoming failure unchanged", async () => {
@@ -84,12 +82,8 @@ describe("__validateChainRecursive", () => {
         x: { kind: "leaf", schema: z.number(), validators: [isEven] },
       },
     };
-    expect(isSuccess(await __validateChainRecursive({ x: 4 }, desc))).toBe(
-      true,
-    );
-    expect(isFailure(await __validateChainRecursive({ x: 5 }, desc))).toBe(
-      true,
-    );
+    expect(isSuccess(await __validateChainRecursive({ x: 4 }, desc))).toBe(true);
+    expect(isFailure(await __validateChainRecursive({ x: 5 }, desc))).toBe(true);
   });
 
   it("dispatches union to matching branch only", async () => {
@@ -135,9 +129,7 @@ describe("__validateChainRecursive", () => {
         validators: [inner as unknown as AgencyValidator],
       },
     };
-    expect(
-      isSuccess(await __validateChainRecursive(null, desc)),
-    ).toBe(true);
+    expect(isSuccess(await __validateChainRecursive(null, desc))).toBe(true);
     expect(inner).not.toHaveBeenCalled();
   });
 
@@ -158,7 +150,9 @@ describe("__validateChainRecursive", () => {
 
     const r = await __validateChainRecursive(v, desc, { maxDepth: 3 });
     expect(isFailure(r)).toBe(true);
-    const err = (r as { error: { reason: string; limit: number; kind: string; valuePreview: unknown } }).error;
+    const err = (
+      r as { error: { reason: string; limit: number; kind: string; valuePreview: unknown } }
+    ).error;
     expect(err.reason).toMatch(/recursion depth/);
     expect(err.limit).toBe(3);
     expect(err.kind).toBe("array");
@@ -173,9 +167,7 @@ describe("ref descriptors (deferred reads for recursive/forward aliases)", () =>
     // completed descriptor — the eager-read emission this replaced saw
     // `undefined` mid-assignment and nested validation vanished.
     const isPositive: AgencyValidator = async (v) =>
-      typeof v === "number" && v > 0
-        ? success(v)
-        : failure("must be positive");
+      typeof v === "number" && v > 0 ? success(v) : failure("must be positive");
     const treeSchema: z.ZodType = z.object({
       value: z.number(),
       children: z.array(z.lazy(() => treeSchema)),
@@ -285,9 +277,9 @@ describe("record descriptor kind (#630)", () => {
       validators: [],
       value: { kind: "leaf", schema: z.number(), validators: [doubleIt] },
     };
-    await expect(
-      __validateChainRecursive({ a: 1, b: 2 }, doublingDesc),
-    ).rejects.toThrow(/validator 'doubleIt' modified the value/);
+    await expect(__validateChainRecursive({ a: 1, b: 2 }, doublingDesc)).rejects.toThrow(
+      /validator 'doubleIt' modified the value/,
+    );
   });
 
   it("nested records validate through both levels", async () => {
@@ -353,23 +345,23 @@ describe("the predicate contract (validators may not modify the value)", () => {
   });
 
   it("a modifying validator throws, naming it", async () => {
-    await expect(
-      __validateChain(2, z.number(), [doubleIt]),
-    ).rejects.toThrow(/validator 'doubleIt' modified the value/);
+    await expect(__validateChain(2, z.number(), [doubleIt])).rejects.toThrow(
+      /validator 'doubleIt' modified the value/,
+    );
   });
 
   it("a rebuilt-equal object counts as modification (identity, not equality)", async () => {
     const rebuild: AgencyValidator = async (v) => success({ ...(v as object) });
-    await expect(
-      __validateChain({ a: 1 }, z.any(), [rebuild]),
-    ).rejects.toThrow(/modified the value/);
+    await expect(__validateChain({ a: 1 }, z.any(), [rebuild])).rejects.toThrow(
+      /modified the value/,
+    );
   });
 
   it("success() with no value counts as modification", async () => {
     const emptyHanded: AgencyValidator = async () => success(undefined);
-    await expect(
-      __validateChain(1, z.number(), [emptyHanded]),
-    ).rejects.toThrow(/modified the value/);
+    await expect(__validateChain(1, z.number(), [emptyHanded])).rejects.toThrow(
+      /modified the value/,
+    );
   });
 
   it("a NaN pass-through does NOT throw (Object.is, not !==)", async () => {

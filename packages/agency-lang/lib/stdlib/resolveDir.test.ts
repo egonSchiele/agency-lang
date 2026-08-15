@@ -53,9 +53,7 @@ describe("resolveDir", () => {
   it("throws when the resolved path is outside the allow-list", async () => {
     const allowed = path.join(tmpRoot, "allowed-root");
     fs.mkdirSync(allowed, { recursive: true });
-    await expect(
-      resolveDir(path.join(tmpRoot, "outside"), [allowed]),
-    ).rejects.toThrow(/not under/);
+    await expect(resolveDir(path.join(tmpRoot, "outside"), [allowed])).rejects.toThrow(/not under/);
   });
 
   it("stays cwd-anchored inside an active ALS frame", async () => {

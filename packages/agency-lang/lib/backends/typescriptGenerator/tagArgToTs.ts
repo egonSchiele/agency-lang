@@ -27,15 +27,16 @@ import type {
  * we want it to fail loudly rather than emit a bogus reference to an
  * out-of-scope name.
  */
-export function tagArgToTs(
-  expr: Expression,
-  valueParamNames?: ReadonlyArray<string>,
-): string {
+export function tagArgToTs(expr: Expression, valueParamNames?: ReadonlyArray<string>): string {
   switch (expr.type) {
     case "string":
     case "multiLineString": {
       const lit = expr as Literal & {
-        segments: Array<{ type: "text" | "interpolation"; value?: string; expression?: Expression }>;
+        segments: Array<{
+          type: "text" | "interpolation";
+          value?: string;
+          expression?: Expression;
+        }>;
         loc?: { line: number; col: number };
       };
       // Tag-arg strings accept identifier-only `${name}` interpolation
@@ -59,9 +60,7 @@ export function tagArgToTs(
       // e.g. a top-level static const, which we do not currently
       // support (tag args are emitted inside node-body schema chains
       // where module-level consts aren't bound to JS identifiers).
-      const loc = lit.loc
-        ? ` at line ${lit.loc.line}, col ${lit.loc.col}`
-        : "";
+      const loc = lit.loc ? ` at line ${lit.loc.line}, col ${lit.loc.col}` : "";
       const offending = lit.segments.find((s) => s.type === "interpolation");
       const inner = offending?.expression as Expression | undefined;
       const name =
@@ -132,10 +131,7 @@ export function tagArgToTs(
   }
 }
 
-function functionCallArgsToTs(
-  fc: FunctionCall,
-  valueParamNames?: ReadonlyArray<string>,
-): string {
+function functionCallArgsToTs(fc: FunctionCall, valueParamNames?: ReadonlyArray<string>): string {
   return (fc.arguments ?? [])
     .map((a) =>
       a.type === "namedArgument"
@@ -166,28 +162,19 @@ function renderChainElement(
   if (el.kind === "methodCall") {
     const fc = el.functionCall;
     const args = fc.arguments ?? [];
-    const allNamed =
-      args.length > 0 && args.every((a) => a.type === "namedArgument");
+    const allNamed = args.length > 0 && args.every((a) => a.type === "namedArgument");
     const argStr = allNamed
       ? `{ ${args
-          .map(
-            (a) =>
-              `${(a as any).name}: ${tagArgToTs((a as any).value, valueParamNames)}`,
-          )
+          .map((a) => `${(a as any).name}: ${tagArgToTs((a as any).value, valueParamNames)}`)
           .join(", ")} }`
       : functionCallArgsToTs(fc, valueParamNames);
     const dot = el.optional ? "?." : ".";
     return `${dot}${fc.functionName}(${argStr})`;
   }
-  throw new Error(
-    `tagArgToTs: unsupported access chain element "${(el as any).kind}"`,
-  );
+  throw new Error(`tagArgToTs: unsupported access chain element "${(el as any).kind}"`);
 }
 
-function arrayLiteralToTs(
-  arr: AgencyArray,
-  valueParamNames?: ReadonlyArray<string>,
-): string {
+function arrayLiteralToTs(arr: AgencyArray, valueParamNames?: ReadonlyArray<string>): string {
   const items = arr.items.map((item) => {
     if (item.type === "splat") {
       const sp = item as SplatExpression;
@@ -198,22 +185,15 @@ function arrayLiteralToTs(
   return `[${items.join(", ")}]`;
 }
 
-function objectLiteralToTs(
-  obj: AgencyObject,
-  valueParamNames?: ReadonlyArray<string>,
-): string {
+function objectLiteralToTs(obj: AgencyObject, valueParamNames?: ReadonlyArray<string>): string {
   const entries = obj.entries.map((entry) => {
     if ("key" in entry) {
       const kv = entry as AgencyObjectKV;
       if (kv.computedKey) {
-        throw new Error(
-          "Computed object keys are not supported in @tag arguments.",
-        );
+        throw new Error("Computed object keys are not supported in @tag arguments.");
       }
       // Quote keys with non-identifier characters; bare identifiers stay bare.
-      const key = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(kv.key)
-        ? kv.key
-        : JSON.stringify(kv.key);
+      const key = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(kv.key) ? kv.key : JSON.stringify(kv.key);
       return `${key}: ${tagArgToTs(kv.value, valueParamNames)}`;
     }
     const sp = entry as SplatExpression;

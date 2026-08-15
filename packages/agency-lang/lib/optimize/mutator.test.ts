@@ -41,7 +41,7 @@ const proposalJson = {
       target: "foo.agency:bar:prompt",
       kind: "variable",
       op: "replaceInitializer",
-      value: "\"Classify carefully ${text}\"",
+      value: '"Classify carefully ${text}"',
       rationale: "Asks for care.",
     },
   ],
@@ -99,7 +99,11 @@ describe("buildMutatorSections", () => {
       inputs,
       history: "",
       diagnostics: [
-        { target: "foo.agency:bar:prompt", code: "interpolation-mismatch", message: "you removed an interpolation" },
+        {
+          target: "foo.agency:bar:prompt",
+          code: "interpolation-mismatch",
+          message: "you removed an interpolation",
+        },
       ],
     });
 
@@ -140,13 +144,15 @@ describe("proposeMutation", () => {
   });
 
   it("throws a validation-friendly error for malformed structured output", async () => {
-    await expect(proposeMutation({
-      config: {},
-      targets,
-      inputs,
-      history: "",
-      callModel: async () => ({ prompt: "legacy shape", rationale: "nope" }),
-    })).rejects.toThrow(/malformed/i);
+    await expect(
+      proposeMutation({
+        config: {},
+        targets,
+        inputs,
+        history: "",
+        callModel: async () => ({ prompt: "legacy shape", rationale: "nope" }),
+      }),
+    ).rejects.toThrow(/malformed/i);
   });
 
   it("runs the bundled mutator agent independently of caller distDir", async () => {

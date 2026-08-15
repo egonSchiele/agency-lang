@@ -27,7 +27,9 @@ export async function recordGrading(
   try {
     summary = JSON.parse(fs.readFileSync(summaryPath, "utf-8")) as EvalRunResult;
   } catch (error) {
-    throw new Error(`could not read ${summaryPath}: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `could not read ${summaryPath}: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
   summary.grading = grading;
   writeVerifierGrading(runDir, grading);

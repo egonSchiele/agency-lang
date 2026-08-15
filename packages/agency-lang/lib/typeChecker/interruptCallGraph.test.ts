@@ -7,10 +7,7 @@ import { SymbolTable } from "../symbolTable.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { liftCallbackBlocks } from "../preprocessors/liftCallbacks.js";
 import { typeCheck } from "./index.js";
-import type {
-  CallGraphFunction,
-  InterruptCallGraph,
-} from "./interruptAnalysis.js";
+import type { CallGraphFunction, InterruptCallGraph } from "./interruptAnalysis.js";
 
 function callGraphFrom(source: string) {
   const file = path.join(
@@ -38,7 +35,11 @@ function callGraphFrom(source: string) {
 function entry(cg: InterruptCallGraph, name: string): CallGraphFunction {
   const matches = Object.values(cg).filter((e) => e.name === name);
   if (matches.length === 0) {
-    throw new Error(`No call graph entry for '${name}' (have: ${Object.values(cg).map((e) => e.name).join(", ")})`);
+    throw new Error(
+      `No call graph entry for '${name}' (have: ${Object.values(cg)
+        .map((e) => e.name)
+        .join(", ")})`,
+    );
   }
   if (matches.length > 1) {
     throw new Error(`Multiple call graph entries for '${name}'`);

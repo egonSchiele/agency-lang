@@ -9,19 +9,31 @@ import { ScriptedInput } from "../tui/input/scripted.js";
 import { FrameRecorder } from "../tui/output/recorder.js";
 import { runViewer } from "./run.js";
 
-function envelope(spanId: string, type: string, at: number, extra: Record<string, unknown> = {}): string {
-  return JSON.stringify({
-    format_version: 1, trace_id: "abc", project_id: "p",
-    span_id: spanId, parent_span_id: null,
-    data: { type, timestamp: new Date(at).toISOString(), ...extra },
-  }) + "\n";
+function envelope(
+  spanId: string,
+  type: string,
+  at: number,
+  extra: Record<string, unknown> = {},
+): string {
+  return (
+    JSON.stringify({
+      format_version: 1,
+      trace_id: "abc",
+      project_id: "p",
+      span_id: spanId,
+      parent_span_id: null,
+      data: { type, timestamp: new Date(at).toISOString(), ...extra },
+    }) + "\n"
+  );
 }
 
 const bootLine = envelope("s1", "agentStart", 0, { entryNode: "main" });
 
 function toolLines(spanId: string, name: string, at: number): string {
-  return envelope(spanId, "toolCallStart", at, { toolName: name })
-    + envelope(spanId, "toolCall", at + 100, { toolName: name });
+  return (
+    envelope(spanId, "toolCallStart", at, { toolName: name }) +
+    envelope(spanId, "toolCall", at + 100, { toolName: name })
+  );
 }
 
 async function until(check: () => boolean, ms = 2_000): Promise<void> {
@@ -71,11 +83,11 @@ describe("follow mode", () => {
     const input = new ScriptedInput([]);
     const out = new FrameRecorder();
     const done = start(input, out);
-    input.feedKey({ key: "f" });                                   // follow on
+    input.feedKey({ key: "f" }); // follow on
     fs.appendFileSync(file, toolLines("s2", "earlyTool", 1_000));
     await until(() => out.frames.length > 0 && out.lastText().includes("earlyTool"));
-    input.feedKey({ key: "f" });                                   // off
-    input.feedKey({ key: "f" });                                   // on again
+    input.feedKey({ key: "f" }); // off
+    input.feedKey({ key: "f" }); // on again
     fs.appendFileSync(file, toolLines("s3", "lateTool", 2_000));
     await until(() => out.frames.length > 0 && out.lastText().includes("lateTool"));
     input.feedKey({ key: "q" });

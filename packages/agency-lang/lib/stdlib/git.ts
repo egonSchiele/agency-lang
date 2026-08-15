@@ -46,17 +46,13 @@ export async function gitRunImpl(
   const env = scrubEnv(opts?.env ?? process.env);
   // Bound stdout in abortableSpawn (UTF-8 bytes, kills the child once
   // exceeded) so an auto-approved read can't buffer unbounded memory.
-  const res = await abortableSpawn(
-    "git",
-    [...GIT_HARDENING_FLAGS, ...args],
-    {
-      cwd,
-      env,
-      signal: opts?.signal,
-      timeout: opts?.timeoutMs ?? DEFAULT_GIT_TIMEOUT_MS,
-      maxOutputBytes: opts?.maxBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
-    },
-  );
+  const res = await abortableSpawn("git", [...GIT_HARDENING_FLAGS, ...args], {
+    cwd,
+    env,
+    signal: opts?.signal,
+    timeout: opts?.timeoutMs ?? DEFAULT_GIT_TIMEOUT_MS,
+    maxOutputBytes: opts?.maxBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
+  });
   if (res.exitCode !== 0) {
     const stderr = res.stderr.trim();
     // Normalize the most common failure — running any git tool outside a repo —

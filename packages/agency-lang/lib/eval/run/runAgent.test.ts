@@ -26,11 +26,16 @@ function tmp(): string {
 function makeAgentProject(): { agentPath: string; baseDir: string } {
   const baseDir = tmp();
   fs.mkdirSync(path.join(baseDir, "lib"), { recursive: true });
-  fs.writeFileSync(path.join(baseDir, "lib", "helper.agency"), "export def helper(): string { return \"hi\" }\n");
-  fs.writeFileSync(path.join(baseDir, "agent.agency"), "import { helper } from \"./lib/helper.agency\"\nnode main() {}\n");
+  fs.writeFileSync(
+    path.join(baseDir, "lib", "helper.agency"),
+    'export def helper(): string { return "hi" }\n',
+  );
+  fs.writeFileSync(
+    path.join(baseDir, "agent.agency"),
+    'import { helper } from "./lib/helper.agency"\nnode main() {}\n',
+  );
   return { agentPath: path.join(baseDir, "agent.agency"), baseDir };
 }
-
 
 /** File target for a test agent — the label is never load-bearing here. */
 function fileTarget(agentPath: string): EvalTarget {
@@ -40,7 +45,10 @@ function fileTarget(agentPath: string): EvalTarget {
 /** Writes the record grading would read, with one output value. */
 function recordWritingExtractor(output: unknown) {
   return async ({ outPath }: { outPath: string }) => {
-    fs.writeFileSync(outPath, JSON.stringify({ evalOutputs: [{ value: output, threadId: "0", tMs: 1 }] }));
+    fs.writeFileSync(
+      outPath,
+      JSON.stringify({ evalOutputs: [{ value: output, threadId: "0", tMs: 1 }] }),
+    );
   };
 }
 
@@ -50,16 +58,23 @@ describe("runAgent", () => {
     const runDir = path.join(tmp(), "run-1");
     let observedCwd = "";
 
-    const run = await runAgent(fileTarget(agentPath), "t", {
-      runDir, config: {}, extractor: recordWritingExtractor("New Delhi"),
-    }, {
-      runner: async (job: EvalRunnerJob) => {
-        const { cwd, statelogPath } = job as { cwd: string; statelogPath: string };
-        observedCwd = cwd;
-        fs.writeFileSync(statelogPath, "{}\n");
-        return { ok: true };
+    const run = await runAgent(
+      fileTarget(agentPath),
+      "t",
+      {
+        runDir,
+        config: {},
+        extractor: recordWritingExtractor("New Delhi"),
       },
-    });
+      {
+        runner: async (job: EvalRunnerJob) => {
+          const { cwd, statelogPath } = job as { cwd: string; statelogPath: string };
+          observedCwd = cwd;
+          fs.writeFileSync(statelogPath, "{}\n");
+          return { ok: true };
+        },
+      },
+    );
 
     expect(run.status).toBe("success");
     if (run.status === "success") {
@@ -76,9 +91,14 @@ describe("runAgent", () => {
     fs.writeFileSync(path.join(seedFiles, "hint.txt"), "Paris");
     const runDir = path.join(tmp(), "run-2");
 
-    const run = await runAgent(fileTarget(agentPath), "t", { runDir, config: {}, seedFiles }, {
-      runner: async () => ({ ok: false, errorMessage: "boom" }),
-    });
+    const run = await runAgent(
+      fileTarget(agentPath),
+      "t",
+      { runDir, config: {}, seedFiles },
+      {
+        runner: async () => ({ ok: false, errorMessage: "boom" }),
+      },
+    );
 
     expect(run.status).toBe("error");
     if (run.status === "error") {
@@ -93,7 +113,11 @@ describe("runAgent", () => {
     const seedFiles = tmp();
     fs.writeFileSync(path.join(seedFiles, "agent.agency"), "node main() {}\n");
 
-    const run = await runAgent(fileTarget(agentPath), "t", { runDir: path.join(tmp(), "run-3"), config: {}, seedFiles });
+    const run = await runAgent(fileTarget(agentPath), "t", {
+      runDir: path.join(tmp(), "run-3"),
+      config: {},
+      seedFiles,
+    });
 
     expect(run.status).toBe("error");
     if (run.status === "error") {
@@ -105,9 +129,14 @@ describe("runAgent", () => {
     const run4Dir = path.join(tmp(), "run-4");
     const { agentPath } = makeAgentProject();
 
-    const run = await runAgent(fileTarget(agentPath), "t", { runDir: run4Dir, config: {} }, {
-      runner: async () => ({ ok: true }),
-    });
+    const run = await runAgent(
+      fileTarget(agentPath),
+      "t",
+      { runDir: run4Dir, config: {} },
+      {
+        runner: async () => ({ ok: true }),
+      },
+    );
 
     expect(run.status).toBe("error");
     if (run.status === "error") {
@@ -119,16 +148,24 @@ describe("runAgent", () => {
   it("an extractor crash is an error carrying the extractor's message, not 'no statelog'", async () => {
     const { agentPath } = makeAgentProject();
 
-    const run = await runAgent(fileTarget(agentPath), "t", {
-      runDir: path.join(tmp(), "run-5"), config: {},
-      extractor: async () => { throw new Error("extractor exploded"); },
-    }, {
-      runner: async (job: EvalRunnerJob) => {
-        const { statelogPath } = job as { statelogPath: string };
-        fs.writeFileSync(statelogPath, "{}\n");
-        return { ok: true };
+    const run = await runAgent(
+      fileTarget(agentPath),
+      "t",
+      {
+        runDir: path.join(tmp(), "run-5"),
+        config: {},
+        extractor: async () => {
+          throw new Error("extractor exploded");
+        },
       },
-    });
+      {
+        runner: async (job: EvalRunnerJob) => {
+          const { statelogPath } = job as { statelogPath: string };
+          fs.writeFileSync(statelogPath, "{}\n");
+          return { ok: true };
+        },
+      },
+    );
 
     expect(run.status).toBe("error");
     if (run.status === "error") {
@@ -139,15 +176,22 @@ describe("runAgent", () => {
   it("an extractor that runs but writes no record file is an error too", async () => {
     const { agentPath } = makeAgentProject();
 
-    const run = await runAgent(fileTarget(agentPath), "t", {
-      runDir: path.join(tmp(), "run-6"), config: {}, extractor: async () => {},
-    }, {
-      runner: async (job: EvalRunnerJob) => {
-        const { statelogPath } = job as { statelogPath: string };
-        fs.writeFileSync(statelogPath, "{}\n");
-        return { ok: true };
+    const run = await runAgent(
+      fileTarget(agentPath),
+      "t",
+      {
+        runDir: path.join(tmp(), "run-6"),
+        config: {},
+        extractor: async () => {},
       },
-    });
+      {
+        runner: async (job: EvalRunnerJob) => {
+          const { statelogPath } = job as { statelogPath: string };
+          fs.writeFileSync(statelogPath, "{}\n");
+          return { ok: true };
+        },
+      },
+    );
 
     expect(run.status).toBe("error");
     if (run.status === "error") {
@@ -159,18 +203,27 @@ describe("runAgent", () => {
     const run7Dir = path.join(tmp(), "run-7");
     const { agentPath } = makeAgentProject();
 
-    const run = await runAgent(fileTarget(agentPath), "t", {
-      runDir: run7Dir, config: {}, extractor: recordWritingExtractor("partial work"),
-    }, {
-      runner: async (job: EvalRunnerJob) => {
-        const { statelogPath } = job as { statelogPath: string };
-        fs.writeFileSync(statelogPath, "{}\n");
-        return { ok: false, errorMessage: "died late" };
+    const run = await runAgent(
+      fileTarget(agentPath),
+      "t",
+      {
+        runDir: run7Dir,
+        config: {},
+        extractor: recordWritingExtractor("partial work"),
       },
-    });
+      {
+        runner: async (job: EvalRunnerJob) => {
+          const { statelogPath } = job as { statelogPath: string };
+          fs.writeFileSync(statelogPath, "{}\n");
+          return { ok: false, errorMessage: "died late" };
+        },
+      },
+    );
 
     expect(run.status).toBe("error");
-    const salvaged = JSON.parse(fs.readFileSync(path.join(run7Dir, "agent", "eval-record.json"), "utf8"));
+    const salvaged = JSON.parse(
+      fs.readFileSync(path.join(run7Dir, "agent", "eval-record.json"), "utf8"),
+    );
     expect(salvaged.evalOutputs[0].value).toBe("partial work");
   });
 
@@ -178,18 +231,30 @@ describe("runAgent", () => {
     const runDir = path.join(tmp(), "run-cmd");
     const filesDir = tmp();
     fs.writeFileSync(path.join(filesDir, "data.txt"), "fixture");
-    const target = { kind: "command" as const, tokens: ["node", "run.js", "-p", "{task}"], label: "node run.js -p {task}" };
+    const target = {
+      kind: "command" as const,
+      tokens: ["node", "run.js", "-p", "{task}"],
+      label: "node run.js -p {task}",
+    };
     let job: unknown;
 
-    const run = await runAgent(target, "do the thing", {
-      runDir, config: {}, seedFiles: filesDir, extractor: recordWritingExtractor("done"),
-    }, {
-      runner: async (j: EvalRunnerJob) => {
-        job = j;
-        fs.writeFileSync((j as { statelogPath: string }).statelogPath, "{}\n");
-        return { ok: true };
+    const run = await runAgent(
+      target,
+      "do the thing",
+      {
+        runDir,
+        config: {},
+        seedFiles: filesDir,
+        extractor: recordWritingExtractor("done"),
       },
-    });
+      {
+        runner: async (j: EvalRunnerJob) => {
+          job = j;
+          fs.writeFileSync((j as { statelogPath: string }).statelogPath, "{}\n");
+          return { ok: true };
+        },
+      },
+    );
 
     expect(run.status).toBe("success");
     expect(job).toMatchObject({
@@ -200,16 +265,26 @@ describe("runAgent", () => {
     expect((job as { traceId: string }).traceId).toBeTruthy();
     expect(fs.readFileSync(path.join(runDir, "workdir", "data.txt"), "utf8")).toBe("fixture");
     // nothing compiled: only the fixture landed in the workdir
-    expect(fs.readdirSync(path.join(runDir, "workdir")).filter((f) => f.endsWith(".js") || f.endsWith(".agency"))).toEqual([]);
+    expect(
+      fs
+        .readdirSync(path.join(runDir, "workdir"))
+        .filter((f) => f.endsWith(".js") || f.endsWith(".agency")),
+    ).toEqual([]);
   });
 
   it("command targets: a missing statelog error names the --log clobber cause", async () => {
     const target = { kind: "command" as const, tokens: ["x", "{task}"], label: "x {task}" };
-    const run = await runAgent(target, "t", {
-      runDir: path.join(tmp(), "run-cmd-nolog"), config: {},
-    }, {
-      runner: async () => ({ ok: true }),   // "succeeds" but writes no statelog
-    });
+    const run = await runAgent(
+      target,
+      "t",
+      {
+        runDir: path.join(tmp(), "run-cmd-nolog"),
+        config: {},
+      },
+      {
+        runner: async () => ({ ok: true }), // "succeeds" but writes no statelog
+      },
+    );
 
     expect(run.status).toBe("error");
     if (run.status === "error") {
@@ -218,10 +293,15 @@ describe("runAgent", () => {
   });
 
   it("command targets: an oversized substituted task is an error result naming the size", async () => {
-    const target = { kind: "command" as const, tokens: ["node", "-e", "{task}"], label: "node -e {task}" };
+    const target = {
+      kind: "command" as const,
+      tokens: ["node", "-e", "{task}"],
+      label: "node -e {task}",
+    };
     const run = await runAgent(target, "x".repeat(128 * 1024 + 1), {
-      runDir: path.join(tmp(), "run-cmd-big"), config: {},
-    });   // real runner: the size check fires before any spawn
+      runDir: path.join(tmp(), "run-cmd-big"),
+      config: {},
+    }); // real runner: the size check fires before any spawn
 
     expect(run.status).toBe("error");
     if (run.status === "error") {

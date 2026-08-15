@@ -18,16 +18,14 @@ export type JSONPath = (string | number)[];
  *  EXECUTING. Built from the run's `EvalRunInputResult`, so `record` is parsed
  *  exactly once per input. */
 export type LoadedRun = {
-  output: JSON;         // the agent's return value
-  recordPath: string;   // path to the full execution trace (eval record)
-  workdir: string;      // the isolated directory the agent ran in
-  record: EvalRecord;   // that trace, parsed
+  output: JSON; // the agent's return value
+  recordPath: string; // path to the full execution trace (eval record)
+  workdir: string; // the isolated directory the agent ran in
+  record: EvalRecord; // that trace, parsed
 };
 
 /** A grader's score: pass/fail or a continuous value. */
-export type Score =
-  | { kind: "binary"; pass: boolean }
-  | { kind: "scalar"; value: number };
+export type Score = { kind: "binary"; pass: boolean } | { kind: "scalar"; value: number };
 
 /** A grader's output: a score plus optional natural-language feedback. */
 export type Grade = { score: Score; feedback?: string };
@@ -37,18 +35,18 @@ export type GraderScope = { tag: string } | { ids: string[] };
 
 /** Options common to every grader; subclasses extend this with their own fields. */
 export type GraderOptions = {
-  mustPass?: boolean;            // gate: failure fails the whole iteration for this input
-  threshold?: number;            // scalar passing bar (binary reads `pass`)
-  weight?: number;               // contribution to the scalarized objective (default 1)
-  samples?: number;              // k repetitions (default 1; must be a positive integer)
-  aggregate?: "any" | "all";     // binary only; scalar always averages
-  inputScope?: GraderScope;      // restrict to a subset of inputs (default: all)
-  name?: string;                 // overrides the grader's defaultName
+  mustPass?: boolean; // gate: failure fails the whole iteration for this input
+  threshold?: number; // scalar passing bar (binary reads `pass`)
+  weight?: number; // contribution to the scalarized objective (default 1)
+  samples?: number; // k repetitions (default 1; must be a positive integer)
+  aggregate?: "any" | "all"; // binary only; scalar always averages
+  inputScope?: GraderScope; // restrict to a subset of inputs (default: all)
+  name?: string; // overrides the grader's defaultName
 };
 
 /** What a grader's `_run` receives. */
 export type GraderInput = {
   input: Input;
   run: LoadedRun;
-  runAgency: AgencyRunner;   // capability to invoke a judge .agency file
+  runAgency: AgencyRunner; // capability to invoke a judge .agency file
 };

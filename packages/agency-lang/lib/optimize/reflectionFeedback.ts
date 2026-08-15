@@ -9,12 +9,17 @@ const DEFAULT_MAX_CHARS = 2000;
 
 /** One graded input rendered as a GEPA feedback block: input, output, errors, a compact
  *  tool-call trace, and graders' natural-language feedback. Bounded. */
-export function renderInputFeedback(entry: InputGrades, opts: ReflectionRenderOptions = {}): string {
+export function renderInputFeedback(
+  entry: InputGrades,
+  opts: ReflectionRenderOptions = {},
+): string {
   const maxChars = opts.maxChars ?? DEFAULT_MAX_CHARS;
   const record = entry.run?.record ?? null;
   const lines: string[] = [];
   const objective = inputObjective(entry.grades).toFixed(3);
-  lines.push(`### Input ${entry.input.id ?? "(no id)"} — objective ${objective}${entry.gatesPassed ? "" : " (GATE FAILED)"}`);
+  lines.push(
+    `### Input ${entry.input.id ?? "(no id)"} — objective ${objective}${entry.gatesPassed ? "" : " (GATE FAILED)"}`,
+  );
   // stringifyOutput, not JSON.stringify: a string task must reach the
   // proposer LLM as readable multi-line text, not one escaped line.
   lines.push(`Task: ${preview(stringifyOutput(entry.input.task), 400)}`);
@@ -35,13 +40,18 @@ export function renderInputFeedback(entry: InputGrades, opts: ReflectionRenderOp
   }
   lines.push("Feedback:");
   for (const g of entry.grades) {
-    lines.push(`  - ${g.grader.name()} = ${formatScore(g.grade.score)}${g.grade.feedback ? `: ${preview(g.grade.feedback, 400)}` : ""}`);
+    lines.push(
+      `  - ${g.grader.name()} = ${formatScore(g.grade.score)}${g.grade.feedback ? `: ${preview(g.grade.feedback, 400)}` : ""}`,
+    );
   }
   return clamp(lines.join("\n"), maxChars);
 }
 
 /** Render an already-sorted (weakest-first) set of focus inputs as one feedback section. */
-export function renderReflectionFeedback(focus: InputGrades[], opts: ReflectionRenderOptions = {}): string {
+export function renderReflectionFeedback(
+  focus: InputGrades[],
+  opts: ReflectionRenderOptions = {},
+): string {
   return focus.map((entry) => renderInputFeedback(entry, opts)).join("\n\n");
 }
 

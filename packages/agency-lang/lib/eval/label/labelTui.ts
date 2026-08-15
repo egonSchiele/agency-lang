@@ -168,10 +168,13 @@ export function renderChecklist(snapshot: SessionSnapshot, width: number): Check
     }
   });
   out.push("");
-  out.push(`${color.bold.blue("note")} ${snapshot.note.length === 0 ? color.brightBlack("—") : ""}`);
-  const noteLines = snapshot.note.length === 0
-    ? []
-    : wrapText(sanitizeUntrusted(snapshot.note), Math.max(8, width - 2));
+  out.push(
+    `${color.bold.blue("note")} ${snapshot.note.length === 0 ? color.brightBlack("—") : ""}`,
+  );
+  const noteLines =
+    snapshot.note.length === 0
+      ? []
+      : wrapText(sanitizeUntrusted(snapshot.note), Math.max(8, width - 2));
   for (const noteLine of noteLines) {
     out.push(` ${noteLine}`);
   }
@@ -189,12 +192,13 @@ function statusChip(status: string): string {
 }
 
 function headerLine(snapshot: SessionSnapshot, datasetLabel: string): string {
-  const stale = snapshot.progress.stale > 0
-    ? `  ${color.yellow(`⟳ ${snapshot.progress.stale} stale`)}`
-    : "";
-  return ` ${color.bgBlue.bold(" eval label ")} ${color.brightBlack(sanitizeUntrusted(datasetLabel))}  ` +
+  const stale =
+    snapshot.progress.stale > 0 ? `  ${color.yellow(`⟳ ${snapshot.progress.stale} stale`)}` : "";
+  return (
+    ` ${color.bgBlue.bold(" eval label ")} ${color.brightBlack(sanitizeUntrusted(datasetLabel))}  ` +
     `${color.bold.green(String(snapshot.progress.reviewed))}` +
-    `${color.dim(`/${snapshot.progress.total} reviewed`)}${stale}`;
+    `${color.dim(`/${snapshot.progress.total} reviewed`)}${stale}`
+  );
 }
 
 function itemLine(snapshot: SessionSnapshot): string {
@@ -203,12 +207,15 @@ function itemLine(snapshot: SessionSnapshot): string {
     return "";
   }
   const score = snapshot.scores[item.outputId];
-  const scoreText = score === null || score === undefined
-    ? color.brightBlack("—")
-    : scoreStyle(score)(score.toFixed(2));
-  return ` ${color.bold.cyan(item.outputId.slice(0, 12))} ` +
+  const scoreText =
+    score === null || score === undefined
+      ? color.brightBlack("—")
+      : scoreStyle(score)(score.toFixed(2));
+  return (
+    ` ${color.bold.cyan(item.outputId.slice(0, 12))} ` +
     `${color.brightBlack(`${snapshot.itemIndex + 1}/${snapshot.items.length}`)}  ` +
-    `${statusChip(snapshot.statuses[item.outputId] ?? "untouched")}  ${scoreText}`;
+    `${statusChip(snapshot.statuses[item.outputId] ?? "untouched")}  ${scoreText}`
+  );
 }
 
 function footerLines(snapshot: SessionSnapshot): string[] {
@@ -229,8 +236,8 @@ function footerLines(snapshot: SessionSnapshot): string[] {
   const deleteLabel = snapshot.currentQuestion?.deleted === true ? "undelete" : "delete";
   return [
     ` ${key("space", "toggle")}  ${key("↑↓", "question")}  ${key("←→", "item")}  ` +
-    `${key("enter", "reviewed+next")}  ${key("a", "add")}  ${key("d", deleteLabel)}  ` +
-    `${key("m", "note")}  ${key("^f/^b", "scroll")}  ${key("q", "quit")}`,
+      `${key("enter", "reviewed+next")}  ${key("a", "add")}  ${key("d", deleteLabel)}  ` +
+      `${key("m", "note")}  ${key("^f/^b", "scroll")}  ${key("q", "quit")}`,
   ];
 }
 
@@ -338,16 +345,26 @@ export function actionForKey(event: KeyEvent, editing: boolean): SessionAction |
     return null;
   }
   switch (event.key) {
-    case "up": return { kind: "previousQuestion" };
-    case "down": return { kind: "nextQuestion" };
-    case "left": return { kind: "previousItem" };
-    case "right": return { kind: "nextItem" };
-    case "enter": return { kind: "signOff" };
-    case " ": return { kind: "toggleAnswer" };
-    case "a": return { kind: "beginQuestion" };
-    case "d": return { kind: "toggleQuestionDeleted" };
-    case "m": return { kind: "beginNote" };
-    default: return null;
+    case "up":
+      return { kind: "previousQuestion" };
+    case "down":
+      return { kind: "nextQuestion" };
+    case "left":
+      return { kind: "previousItem" };
+    case "right":
+      return { kind: "nextItem" };
+    case "enter":
+      return { kind: "signOff" };
+    case " ":
+      return { kind: "toggleAnswer" };
+    case "a":
+      return { kind: "beginQuestion" };
+    case "d":
+      return { kind: "toggleQuestionDeleted" };
+    case "m":
+      return { kind: "beginNote" };
+    default:
+      return null;
   }
 }
 
@@ -380,10 +397,7 @@ export function isQuitKey(event: KeyEvent): boolean {
  * alphabetically rather than in object-key order, so the layout does not depend
  * on which loader happened to build the record.
  */
-export function orderFieldNames(
-  fields: Fields,
-  fieldOrder: readonly string[],
-): string[] {
+export function orderFieldNames(fields: Fields, fieldOrder: readonly string[]): string[] {
   const present = Object.keys(fields);
   const known = fieldOrder.filter((name) => present.includes(name));
   const rest = present.filter((name) => !known.includes(name)).sort();

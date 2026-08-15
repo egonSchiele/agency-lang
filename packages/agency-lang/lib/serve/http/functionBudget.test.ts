@@ -50,7 +50,13 @@ describe("a served function respects the baked root budget", () => {
 
   function makeCtx(budget?: { maxCost?: number; maxTimeMs?: number }): RuntimeContext<GraphState> {
     return new RuntimeContext<GraphState>({
-      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
       smoltalkDefaults: {},
       dirname: process.cwd(),
       budget,
@@ -68,7 +74,8 @@ describe("a served function respects the baked root budget", () => {
       },
     } as unknown as AgencyFunction;
     return {
-      kind: "function", ...unusedPublicInvoke,
+      kind: "function",
+      ...unusedPublicInvoke,
       name: "spend",
       description: "charges $1",
       parameters: [],

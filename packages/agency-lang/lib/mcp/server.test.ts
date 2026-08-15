@@ -48,8 +48,12 @@ describe("handleMcpMessage", () => {
       method: "tools/list",
     });
 
-    expect(response?.result?.tools.some((tool: any) => tool.name === "agency_diagnostics")).toBe(true);
-    expect(response?.result?.tools.some((tool: any) => tool.name === "agency_definition")).toBe(true);
+    expect(response?.result?.tools.some((tool: any) => tool.name === "agency_diagnostics")).toBe(
+      true,
+    );
+    expect(response?.result?.tools.some((tool: any) => tool.name === "agency_definition")).toBe(
+      true,
+    );
   });
 
   it("runs diagnostics tool", () => {
@@ -104,12 +108,7 @@ describe("handleMcpMessage", () => {
     const helperFile = path.join(tmpDir, "helpers.agency");
     fs.writeFileSync(
       helperFile,
-      [
-        "export def greet(name: string): string {",
-        "  return name",
-        "}",
-        "",
-      ].join("\n"),
+      ["export def greet(name: string): string {", "  return name", "}", ""].join("\n"),
     );
     fs.writeFileSync(
       agencyFile,
@@ -142,7 +141,9 @@ describe("handleMcpMessage", () => {
       },
     });
 
-    expect(hoverResponse?.result?.structuredContent?.hover).toContain("Imported from `./helpers.agency` as `greet`");
+    expect(hoverResponse?.result?.structuredContent?.hover).toContain(
+      "Imported from `./helpers.agency` as `greet`",
+    );
     expect(definitionResponse?.result?.structuredContent?.definition?.file_path).toBe(helperFile);
   });
 

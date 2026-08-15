@@ -21,10 +21,7 @@ import { NEVER_T } from "./primitives.js";
  */
 type Resolve = (t: VariableType) => VariableType;
 
-export function evalKeyof(
-  operand: VariableType,
-  resolve: Resolve,
-): VariableType {
+export function evalKeyof(operand: VariableType, resolve: Resolve): VariableType {
   const obj = resolveObjectArg("keyof", operand, resolve);
   const keys: VariableType[] = obj.properties.map((p) => ({
     type: "stringLiteralType",
@@ -79,21 +76,13 @@ export function evalIntersection(
   resolve: Resolve,
   typesEqual: TypeEquals,
 ): VariableType {
-  const objects = members.map((m) =>
-    resolveObjectArg("intersection", m, resolve),
-  );
+  const objects = members.map((m) => resolveObjectArg("intersection", m, resolve));
   return mergeObjects(objects, resolve, typesEqual);
 }
 
-function mergeObjects(
-  objects: ObjectType[],
-  resolve: Resolve,
-  typesEqual: TypeEquals,
-): ObjectType {
+function mergeObjects(objects: ObjectType[], resolve: Resolve, typesEqual: TypeEquals): ObjectType {
   const groups = groupPropertiesByKey(objects);
-  const properties = groups.map((group) =>
-    combineGroup(group, resolve, typesEqual),
-  );
+  const properties = groups.map((group) => combineGroup(group, resolve, typesEqual));
   return { type: "objectType", properties };
 }
 
@@ -138,13 +127,7 @@ function combineGroup(
 ): ObjectProperty {
   return group.reduce((left, right) => ({
     ...left,
-    value: intersectPropertyValues(
-      left.key,
-      left.value,
-      right.value,
-      resolve,
-      typesEqual,
-    ),
+    value: intersectPropertyValues(left.key, left.value, right.value, resolve, typesEqual),
     tags: mergeTagSets(left.tags, right.tags),
   }));
 }

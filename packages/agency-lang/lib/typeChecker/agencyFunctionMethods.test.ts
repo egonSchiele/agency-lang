@@ -46,9 +46,7 @@ def main() {
 `);
     expect(
       errs.some(
-        (e) =>
-          e.includes(".rename()") &&
-          e.includes("not assignable to parameter type 'string'"),
+        (e) => e.includes(".rename()") && e.includes("not assignable to parameter type 'string'"),
       ),
     ).toBe(true);
   });
@@ -60,9 +58,9 @@ def main() {
   const t = add.rename("a", "b")
 }
 `);
-    expect(
-      errs.some((e) => e.includes("Method '.rename()' expects 1 argument(s), got 2")),
-    ).toBe(true);
+    expect(errs.some((e) => e.includes("Method '.rename()' expects 1 argument(s), got 2"))).toBe(
+      true,
+    );
   });
 
   it("composes with partial and describe", () => {
@@ -93,9 +91,7 @@ def main() { const t = add.describe(5) }
 `);
     expect(
       bad.some(
-        (e) =>
-          e.includes(".describe()") &&
-          e.includes("not assignable to parameter type 'string'"),
+        (e) => e.includes(".describe()") && e.includes("not assignable to parameter type 'string'"),
       ),
     ).toBe(true);
   });
@@ -111,8 +107,8 @@ def main() { const t = add.preapprove() }
 def add(a: number): number { return a }
 def main() { const t = add.preapprove("x") }
 `);
-    expect(
-      bad.some((e) => e.includes("Method '.preapprove()' expects 0 argument(s), got 1")),
-    ).toBe(true);
+    expect(bad.some((e) => e.includes("Method '.preapprove()' expects 0 argument(s), got 1"))).toBe(
+      true,
+    );
   });
 });

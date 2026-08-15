@@ -25,11 +25,7 @@ import {
   type SpeakFormat,
 } from "../runtime/audioFormats.js";
 import { PROMPT_PREVIEW_MAX } from "../statelogClient.js";
-import type {
-  AudioInput,
-  SpeakConfig,
-  TranscribeConfig,
-} from "../runtime/llmClient.js";
+import type { AudioInput, SpeakConfig, TranscribeConfig } from "../runtime/llmClient.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 
@@ -78,12 +74,13 @@ async function speakImpl(
       }
       await abortableExec("say", args, ctx.getAbortSignal(stack));
     } finally {
-      try { await unlink(tmpFile); } catch {}
+      try {
+        await unlink(tmpFile);
+      } catch {}
     }
   } else {
     console.error(
-      `speak is not supported on platform: ${platform}. ` +
-      `Supported platforms: macOS.`
+      `speak is not supported on platform: ${platform}. ` + `Supported platforms: macOS.`,
     );
   }
 }
@@ -118,7 +115,7 @@ async function recordImpl(
   if (silenceTimeout <= 0 && !isTTY) {
     throw new Error(
       "record() with silenceTimeout=0 requires an interactive terminal (TTY) " +
-      "so that Enter can stop the recording. Either run in a TTY or set a positive silenceTimeout."
+        "so that Enter can stop the recording. Either run in a TTY or set a positive silenceTimeout.",
     );
   }
 
@@ -169,10 +166,12 @@ async function recordImpl(
       signal.removeEventListener("abort", onAbort);
       cleanupStdin(onData);
       if (!outputFile) unlink(outPath).catch(() => {});
-      reject(new Error(
-        `Failed to start 'rec' command: ${err.message}. ` +
-        `Make sure SoX is installed (e.g. 'brew install sox' on macOS, 'apt install sox' on Linux).`
-      ));
+      reject(
+        new Error(
+          `Failed to start 'rec' command: ${err.message}. ` +
+            `Make sure SoX is installed (e.g. 'brew install sox' on macOS, 'apt install sox' on Linux).`,
+        ),
+      );
     });
 
     proc.on("close", (code) => {
@@ -387,10 +386,7 @@ export async function publishSpeechOutput(
   signal: AbortSignal,
 ): Promise<void> {
   const dir = path.dirname(finalPath);
-  const stage = path.join(
-    dir,
-    `.${path.basename(finalPath)}.agency-tts-${nanoid()}.part`,
-  );
+  const stage = path.join(dir, `.${path.basename(finalPath)}.agency-tts-${nanoid()}.part`);
   // Open with "wx" FIRST and only mark ownership once the exclusive create
   // SUCCEEDS. A failed open (e.g. an EEXIST collision on an unowned path) must
   // never lead cleanup to delete a path we do not own. A create that succeeds

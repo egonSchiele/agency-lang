@@ -3,7 +3,11 @@ import * as path from "path";
 
 import { nanoid } from "nanoid";
 
-import { assertEvalEntryNodeTakesOneParameter, resolveEvalTarget, type EvalTarget } from "@/agentTarget.js";
+import {
+  assertEvalEntryNodeTakesOneParameter,
+  resolveEvalTarget,
+  type EvalTarget,
+} from "@/agentTarget.js";
 import { ttyColor } from "@/utils/termcolors.js";
 
 import { makeStatelogCostTailer } from "./costTail.js";
@@ -31,7 +35,10 @@ import type { EvalInputRunner } from "./subprocess.js";
  *  `seed` omitted, runSuite computes ONE closure walk for the whole suite and
  *  passes it to every run — never one walk per input (RunAgentOptions.seed's
  *  own doc describes the single-run case). */
-export type PerRunOptions = Pick<RunAgentOptions, "seed" | "overlayFiles" | "pipeOutput" | "extractor">;
+export type PerRunOptions = Pick<
+  RunAgentOptions,
+  "seed" | "overlayFiles" | "pipeOutput" | "extractor"
+>;
 
 /** Options for running a LOADED suite: parsed Input[], resolved values.
  *  The raw-flags side lives in the evalRun command (EvalRunCliOptions). */
@@ -68,10 +75,12 @@ export type RunSuiteDeps = { runner?: EvalInputRunner };
  * per-input artifacts, provenance, summary. Executes only — grading reads
  * the finished directory separately (docs/dev/eval-grading.md).
  */
-export async function runSuite(opts: RunSuiteOptions, deps: RunSuiteDeps = {}): Promise<EvalRunResult> {
-  const target: EvalTarget = typeof opts.agent === "string"
-    ? resolveEvalTarget({ agent: opts.agent })
-    : opts.agent;
+export async function runSuite(
+  opts: RunSuiteOptions,
+  deps: RunSuiteDeps = {},
+): Promise<EvalRunResult> {
+  const target: EvalTarget =
+    typeof opts.agent === "string" ? resolveEvalTarget({ agent: opts.agent }) : opts.agent;
   if (target.kind === "file") {
     // Before any workdir is seeded or agent compiled: a mis-shaped entry
     // node is a configuration error, not a per-input run failure. The
@@ -79,9 +88,7 @@ export async function runSuite(opts: RunSuiteOptions, deps: RunSuiteDeps = {}): 
     assertEvalEntryNodeTakesOneParameter(target.agentFile, target.node);
   }
 
-  const runsDir = path.resolve(
-    opts.runsDir ?? opts.config?.eval?.runsDir ?? "runs",
-  );
+  const runsDir = path.resolve(opts.runsDir ?? opts.config?.eval?.runsDir ?? "runs");
   const runId = opts.runId ?? defaultRunId();
   const continueOnError = opts.continueOnError ?? true;
   const config = opts.config ?? {};
@@ -89,16 +96,20 @@ export async function runSuite(opts: RunSuiteOptions, deps: RunSuiteDeps = {}): 
 
   // One closure walk per suite; never per input. Command targets have no
   // closure and nothing to compile.
-  const defaultSeed = target.kind === "file"
-    ? (perRun.seed ?? seedFromAgentFile(target.agentFile))
-    : undefined;
+  const defaultSeed =
+    target.kind === "file" ? (perRun.seed ?? seedFromAgentFile(target.agentFile)) : undefined;
 
   const provenance: EvalRunProvenance = buildProvenance({
     inputsSource: opts.provenance?.inputsSource ?? { source: "unspecified" },
     files: opts.provenance?.files ?? {},
-    agent: defaultSeed !== undefined
-      ? { kind: "file", seed: defaultSeed }
-      : { kind: "command", command: target.label, cliVersion: commandCliVersion((target as { tokens: string[] }).tokens) },
+    agent:
+      defaultSeed !== undefined
+        ? { kind: "file", seed: defaultSeed }
+        : {
+            kind: "command",
+            command: target.label,
+            cliVersion: commandCliVersion((target as { tokens: string[] }).tokens),
+          },
   });
 
   const state = initializeEvalRun({
@@ -125,7 +136,7 @@ export async function runSuite(opts: RunSuiteOptions, deps: RunSuiteDeps = {}): 
     interrupted = true;
     console.warn(
       "\neval run interrupted — salvaging the in-flight input and writing a " +
-      "partial summary; press Ctrl-C again to force quit",
+        "partial summary; press Ctrl-C again to force quit",
     );
   };
   process.once("SIGINT", onSigint);
@@ -150,16 +161,21 @@ export async function runSuite(opts: RunSuiteOptions, deps: RunSuiteDeps = {}): 
       return { result: recordInputPrepareFailure(input.id ?? "", message) };
     }
     onPrepared?.(prepared);
-    const run = await runAgent(target, input.task, {
-      runDir: prepared.inputDir,
-      config,
-      seedFiles: input.files,
-      overlayFiles: perRun.overlayFiles,
-      seed: defaultSeed,
-      pipeOutput,
-      extractor: perRun.extractor,
-      timeoutSec: input.timeoutSec,
-    }, { runner: deps.runner });
+    const run = await runAgent(
+      target,
+      input.task,
+      {
+        runDir: prepared.inputDir,
+        config,
+        seedFiles: input.files,
+        overlayFiles: perRun.overlayFiles,
+        seed: defaultSeed,
+        pipeOutput,
+        extractor: perRun.extractor,
+        timeoutSec: input.timeoutSec,
+      },
+      { runner: deps.runner },
+    );
     return { result: toInputResult(input, prepared, run), prepared };
   };
 
@@ -184,7 +200,8 @@ export async function runSuite(opts: RunSuiteOptions, deps: RunSuiteDeps = {}): 
           if (ticker !== undefined) clearInterval(ticker);
         }
         if (progress) {
-          const status = outcome.result.status === "error" ? ttyColor.red("error") : outcome.result.status;
+          const status =
+            outcome.result.status === "error" ? ttyColor.red("error") : outcome.result.status;
           console.error(`[${inputLabel}] ${status} in ${formatElapsed(Date.now() - startedAt)}`);
         }
         results.push(outcome.result);
@@ -299,7 +316,8 @@ function defaultRunId(): string {
  *  failures are swallowed — provenance must never fail a run. */
 function commandCliVersion(tokens: string[]): string | undefined {
   const first = tokens[0] ?? "";
-  const invokesAgency = path.basename(first) === "agency" ||
+  const invokesAgency =
+    path.basename(first) === "agency" ||
     first.endsWith("agency.js") ||
     (first === "node" && (tokens[1] ?? "").endsWith("agency.js"));
   if (!invokesAgency) return undefined;

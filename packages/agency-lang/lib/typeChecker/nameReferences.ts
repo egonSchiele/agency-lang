@@ -14,9 +14,7 @@ import type { WalkAncestor } from "../utils/node.js";
  *
  *  Those bodies have their own scope, so the top-level walk skips them or
  *  every name in them fires twice. */
-export function hasFunctionOrNodeAncestor(
-  ancestors: readonly unknown[],
-): boolean {
+export function hasFunctionOrNodeAncestor(ancestors: readonly unknown[]): boolean {
   for (const ancestor of ancestors) {
     const type = (ancestor as AgencyNode | undefined)?.type;
     if (type === "function" || type === "graphNode") {

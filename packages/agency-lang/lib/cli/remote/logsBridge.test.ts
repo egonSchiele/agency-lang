@@ -5,8 +5,18 @@ import { normalizeTraceLogs, traceLogsToJsonl } from "./logsBridge.js";
 describe("traceLogsToJsonl", () => {
   it("emits lines the real viewer parser accepts", () => {
     const logs = [
-      { traceId: "t1", spanId: "s1", parentSpanId: null, data: { type: "enterNode", nodeId: "main" } },
-      { traceId: "t1", spanId: "s2", parentSpanId: "s1", data: { type: "toolCall", toolName: "x", args: {}, output: 1 } },
+      {
+        traceId: "t1",
+        spanId: "s1",
+        parentSpanId: null,
+        data: { type: "enterNode", nodeId: "main" },
+      },
+      {
+        traceId: "t1",
+        spanId: "s2",
+        parentSpanId: "s1",
+        data: { type: "toolCall", toolName: "x", args: {}, output: 1 },
+      },
     ];
     const parsed = parseStatelogJsonl(traceLogsToJsonl(logs));
     expect(parsed.errors).toEqual([]);
@@ -24,8 +34,10 @@ describe("traceLogsToJsonl", () => {
     const logs = [
       { traceId: "t1", spanId: "s1", parentSpanId: null, data: { type: "debug", message: "x" } },
     ];
-    expect(traceLogsToJsonl(logs).split("\n").map((line) => JSON.parse(line))).toEqual(
-      normalizeTraceLogs(logs),
-    );
+    expect(
+      traceLogsToJsonl(logs)
+        .split("\n")
+        .map((line) => JSON.parse(line)),
+    ).toEqual(normalizeTraceLogs(logs));
   });
 });

@@ -153,9 +153,7 @@ export class GuardScope {
    *  resumable-guards plan). Returns the token endSuspension needs. */
   suspendForDecision(stack: StateStack): string[] {
     const memberIds = this.memberIds();
-    const firstMemberIndex = stack.guards.findIndex((g) =>
-      memberIds.includes(g.guardId),
-    );
+    const firstMemberIndex = stack.guards.findIndex((g) => memberIds.includes(g.guardId));
     const visible = stack.guards
       .slice(0, firstMemberIndex === -1 ? stack.guards.length : firstMemberIndex)
       .map((g) => g.guardId);
@@ -172,4 +170,3 @@ export class GuardApproveError extends Error {
     this.name = "GuardApproveError";
   }
 }
-

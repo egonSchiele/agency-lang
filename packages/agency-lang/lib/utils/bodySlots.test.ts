@@ -22,12 +22,7 @@ describe("bodySlots — guardBlock", () => {
 
 describe("codeLiteral is not a body-bearing node", () => {
   it("quoted code stays quoted: no body slots, and the walker never yields body nodes", () => {
-    const parsed = parseAgency(
-      `node main() {\n  const t = [| print(1) |]\n}\n`,
-      {},
-      false,
-      false,
-    );
+    const parsed = parseAgency(`node main() {\n  const t = [| print(1) |]\n}\n`, {}, false, false);
     if (!parsed.success) throw new Error(parsed.message);
     const yielded = walkNodesArray(parsed.result.nodes).map((visit) => visit.node);
     const lit = yielded.find((node) => node.type === "codeLiteral");

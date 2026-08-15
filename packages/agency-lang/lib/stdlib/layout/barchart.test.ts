@@ -38,10 +38,16 @@ describe("baselineColumn", () => {
 
 describe("dataRange", () => {
   test("stacked ranges over row sums and includes zero", () => {
-    expect(dataRange([{ label: "a", values: [120, 80, 30] }], "stacked")).toEqual({ min: 0, max: 230 });
+    expect(dataRange([{ label: "a", values: [120, 80, 30] }], "stacked")).toEqual({
+      min: 0,
+      max: 230,
+    });
   });
   test("grouped ranges over individual values", () => {
-    expect(dataRange([{ label: "a", values: [82, -41] }], "grouped")).toEqual({ min: -41, max: 82 });
+    expect(dataRange([{ label: "a", values: [82, -41] }], "grouped")).toEqual({
+      min: -41,
+      max: 82,
+    });
   });
 });
 

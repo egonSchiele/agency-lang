@@ -1,12 +1,6 @@
 import type { VariableType } from "../types.js";
 import type { BuiltinSignature } from "./types.js";
-import {
-  ANY_T,
-  BOOLEAN_T,
-  NUMBER_T,
-  REGEX_T,
-  STRING_T,
-} from "./primitives.js";
+import { ANY_T, BOOLEAN_T, NUMBER_T, REGEX_T, STRING_T } from "./primitives.js";
 
 /**
  * Built-in members of primitive Agency types (string, array, …) — analogous
@@ -26,17 +20,12 @@ import {
  * Callback-taking methods (`map`/`filter`/`reduce`/…) need to wire a
  * functionRefType param — Phase 2.
  */
-type SigOrThunk =
-  | BuiltinSignature
-  | ((receiver: VariableType) => BuiltinSignature);
+type SigOrThunk = BuiltinSignature | ((receiver: VariableType) => BuiltinSignature);
 
-type TypeOrThunk =
-  | VariableType
-  | ((receiver: VariableType) => VariableType);
+type TypeOrThunk = VariableType | ((receiver: VariableType) => VariableType);
 
 export type PrimitiveMember =
-  | { kind: "property"; type: TypeOrThunk }
-  | { kind: "method"; sig: SigOrThunk };
+  { kind: "property"; type: TypeOrThunk } | { kind: "method"; sig: SigOrThunk };
 
 const stringArray: VariableType = { type: "arrayType", elementType: STRING_T };
 
@@ -50,117 +39,230 @@ const STRING_MEMBERS: Record<string, PrimitiveMember> = {
   // Case / whitespace
   toUpperCase: { kind: "method", sig: { params: [], returnType: STRING_T } },
   toLowerCase: { kind: "method", sig: { params: [], returnType: STRING_T } },
-  trim:        { kind: "method", sig: { params: [], returnType: STRING_T } },
-  trimStart:   { kind: "method", sig: { params: [], returnType: STRING_T } },
-  trimEnd:     { kind: "method", sig: { params: [], returnType: STRING_T } },
+  trim: { kind: "method", sig: { params: [], returnType: STRING_T } },
+  trimStart: { kind: "method", sig: { params: [], returnType: STRING_T } },
+  trimEnd: { kind: "method", sig: { params: [], returnType: STRING_T } },
 
   // Search
-  indexOf:     { kind: "method", sig: {
-    params: [STRING_T, NUMBER_T], minParams: 1, returnType: NUMBER_T,
-  } },
-  lastIndexOf: { kind: "method", sig: {
-    params: [STRING_T, NUMBER_T], minParams: 1, returnType: NUMBER_T,
-  } },
-  includes:    { kind: "method", sig: {
-    params: [STRING_T, NUMBER_T], minParams: 1, returnType: BOOLEAN_T,
-  } },
-  startsWith:  { kind: "method", sig: {
-    params: [STRING_T, NUMBER_T], minParams: 1, returnType: BOOLEAN_T,
-  } },
-  endsWith:    { kind: "method", sig: {
-    params: [STRING_T, NUMBER_T], minParams: 1, returnType: BOOLEAN_T,
-  } },
+  indexOf: {
+    kind: "method",
+    sig: {
+      params: [STRING_T, NUMBER_T],
+      minParams: 1,
+      returnType: NUMBER_T,
+    },
+  },
+  lastIndexOf: {
+    kind: "method",
+    sig: {
+      params: [STRING_T, NUMBER_T],
+      minParams: 1,
+      returnType: NUMBER_T,
+    },
+  },
+  includes: {
+    kind: "method",
+    sig: {
+      params: [STRING_T, NUMBER_T],
+      minParams: 1,
+      returnType: BOOLEAN_T,
+    },
+  },
+  startsWith: {
+    kind: "method",
+    sig: {
+      params: [STRING_T, NUMBER_T],
+      minParams: 1,
+      returnType: BOOLEAN_T,
+    },
+  },
+  endsWith: {
+    kind: "method",
+    sig: {
+      params: [STRING_T, NUMBER_T],
+      minParams: 1,
+      returnType: BOOLEAN_T,
+    },
+  },
 
   // Slicing
-  slice:       { kind: "method", sig: {
-    params: [NUMBER_T, NUMBER_T], minParams: 0, returnType: STRING_T,
-  } },
-  substring:   { kind: "method", sig: {
-    params: [NUMBER_T, NUMBER_T], minParams: 1, returnType: STRING_T,
-  } },
-  charAt:      { kind: "method", sig: { params: [NUMBER_T], returnType: STRING_T } },
-  charCodeAt:  { kind: "method", sig: { params: [NUMBER_T], returnType: NUMBER_T } },
-  repeat:      { kind: "method", sig: { params: [NUMBER_T], returnType: STRING_T } },
+  slice: {
+    kind: "method",
+    sig: {
+      params: [NUMBER_T, NUMBER_T],
+      minParams: 0,
+      returnType: STRING_T,
+    },
+  },
+  substring: {
+    kind: "method",
+    sig: {
+      params: [NUMBER_T, NUMBER_T],
+      minParams: 1,
+      returnType: STRING_T,
+    },
+  },
+  charAt: { kind: "method", sig: { params: [NUMBER_T], returnType: STRING_T } },
+  charCodeAt: { kind: "method", sig: { params: [NUMBER_T], returnType: NUMBER_T } },
+  repeat: { kind: "method", sig: { params: [NUMBER_T], returnType: STRING_T } },
 
   // Replace / split — second arg of replace can be a function in JS, but
   // we don't model that yet; type as string for now.
-  split:       { kind: "method", sig: {
-    params: [{ type: "unionType", types: [STRING_T, REGEX_T] }],
-    returnType: stringArray,
-  } },
-  replace:     { kind: "method", sig: {
-    params: [{ type: "unionType", types: [STRING_T, REGEX_T] }, STRING_T],
-    returnType: STRING_T,
-  } },
-  replaceAll:  { kind: "method", sig: {
-    params: [{ type: "unionType", types: [STRING_T, REGEX_T] }, STRING_T],
-    returnType: STRING_T,
-  } },
+  split: {
+    kind: "method",
+    sig: {
+      params: [{ type: "unionType", types: [STRING_T, REGEX_T] }],
+      returnType: stringArray,
+    },
+  },
+  replace: {
+    kind: "method",
+    sig: {
+      params: [{ type: "unionType", types: [STRING_T, REGEX_T] }, STRING_T],
+      returnType: STRING_T,
+    },
+  },
+  replaceAll: {
+    kind: "method",
+    sig: {
+      params: [{ type: "unionType", types: [STRING_T, REGEX_T] }, STRING_T],
+      returnType: STRING_T,
+    },
+  },
 
   // Padding / concat
-  padStart:    { kind: "method", sig: {
-    params: [NUMBER_T, STRING_T], minParams: 1, returnType: STRING_T,
-  } },
-  padEnd:      { kind: "method", sig: {
-    params: [NUMBER_T, STRING_T], minParams: 1, returnType: STRING_T,
-  } },
-  concat:      { kind: "method", sig: {
-    params: [], restParam: STRING_T, returnType: STRING_T,
-  } },
+  padStart: {
+    kind: "method",
+    sig: {
+      params: [NUMBER_T, STRING_T],
+      minParams: 1,
+      returnType: STRING_T,
+    },
+  },
+  padEnd: {
+    kind: "method",
+    sig: {
+      params: [NUMBER_T, STRING_T],
+      minParams: 1,
+      returnType: STRING_T,
+    },
+  },
+  concat: {
+    kind: "method",
+    sig: {
+      params: [],
+      restParam: STRING_T,
+      returnType: STRING_T,
+    },
+  },
 
   // Regex
-  match:       { kind: "method", sig: {
-    params: [REGEX_T], returnType: { type: "unionType", types: [stringArray, { type: "primitiveType", value: "null" }] },
-  } },
+  match: {
+    kind: "method",
+    sig: {
+      params: [REGEX_T],
+      returnType: {
+        type: "unionType",
+        types: [stringArray, { type: "primitiveType", value: "null" }],
+      },
+    },
+  },
 };
 
 const ARRAY_MEMBERS: Record<string, PrimitiveMember> = {
   length: { kind: "property", type: NUMBER_T },
 
   // Search — element-typed param.
-  indexOf:     { kind: "method", sig: (r) => ({
-    params: [elementOf(r), NUMBER_T], minParams: 1, returnType: NUMBER_T,
-  }) },
-  lastIndexOf: { kind: "method", sig: (r) => ({
-    params: [elementOf(r), NUMBER_T], minParams: 1, returnType: NUMBER_T,
-  }) },
-  includes:    { kind: "method", sig: (r) => ({
-    params: [elementOf(r), NUMBER_T], minParams: 1, returnType: BOOLEAN_T,
-  }) },
+  indexOf: {
+    kind: "method",
+    sig: (r) => ({
+      params: [elementOf(r), NUMBER_T],
+      minParams: 1,
+      returnType: NUMBER_T,
+    }),
+  },
+  lastIndexOf: {
+    kind: "method",
+    sig: (r) => ({
+      params: [elementOf(r), NUMBER_T],
+      minParams: 1,
+      returnType: NUMBER_T,
+    }),
+  },
+  includes: {
+    kind: "method",
+    sig: (r) => ({
+      params: [elementOf(r), NUMBER_T],
+      minParams: 1,
+      returnType: BOOLEAN_T,
+    }),
+  },
 
   // Joining
-  join:        { kind: "method", sig: {
-    params: [STRING_T], minParams: 0, returnType: STRING_T,
-  } },
+  join: {
+    kind: "method",
+    sig: {
+      params: [STRING_T],
+      minParams: 0,
+      returnType: STRING_T,
+    },
+  },
 
   // Slice / concat preserve receiver type.
-  slice:       { kind: "method", sig: (r) => ({
-    params: [NUMBER_T, NUMBER_T], minParams: 0, returnType: r,
-  }) },
-  concat:      { kind: "method", sig: (r) => ({
-    params: [r], returnType: r,
-  }) },
+  slice: {
+    kind: "method",
+    sig: (r) => ({
+      params: [NUMBER_T, NUMBER_T],
+      minParams: 0,
+      returnType: r,
+    }),
+  },
+  concat: {
+    kind: "method",
+    sig: (r) => ({
+      params: [r],
+      returnType: r,
+    }),
+  },
 
   // Mutation — push/unshift return new length, pop/shift return element|undefined.
-  push:        { kind: "method", sig: (r) => ({
-    params: [], restParam: elementOf(r), returnType: NUMBER_T,
-  }) },
-  unshift:     { kind: "method", sig: (r) => ({
-    params: [], restParam: elementOf(r), returnType: NUMBER_T,
-  }) },
-  pop:         { kind: "method", sig: (r) => ({
-    params: [], returnType: {
-      type: "unionType",
-      types: [elementOf(r), { type: "primitiveType", value: "null" }],
-    },
-  }) },
-  shift:       { kind: "method", sig: (r) => ({
-    params: [], returnType: {
-      type: "unionType",
-      types: [elementOf(r), { type: "primitiveType", value: "null" }],
-    },
-  }) },
-  reverse:     { kind: "method", sig: (r) => ({ params: [], returnType: r }) },
+  push: {
+    kind: "method",
+    sig: (r) => ({
+      params: [],
+      restParam: elementOf(r),
+      returnType: NUMBER_T,
+    }),
+  },
+  unshift: {
+    kind: "method",
+    sig: (r) => ({
+      params: [],
+      restParam: elementOf(r),
+      returnType: NUMBER_T,
+    }),
+  },
+  pop: {
+    kind: "method",
+    sig: (r) => ({
+      params: [],
+      returnType: {
+        type: "unionType",
+        types: [elementOf(r), { type: "primitiveType", value: "null" }],
+      },
+    }),
+  },
+  shift: {
+    kind: "method",
+    sig: (r) => ({
+      params: [],
+      returnType: {
+        type: "unionType",
+        types: [elementOf(r), { type: "primitiveType", value: "null" }],
+      },
+    }),
+  },
+  reverse: { kind: "method", sig: (r) => ({ params: [], returnType: r }) },
 };
 
 /**
@@ -175,10 +277,7 @@ const ARRAY_MEMBERS: Record<string, PrimitiveMember> = {
  * Other shapes (number, boolean, object, …) return null for now — the
  * caller falls back to its existing "property does not exist" error.
  */
-export function lookupPrimitiveMember(
-  type: VariableType,
-  name: string,
-): PrimitiveMember | null {
+export function lookupPrimitiveMember(type: VariableType, name: string): PrimitiveMember | null {
   // Own-property lookup — `name in obj` walks the prototype chain, so
   // names like `toString` / `constructor` would falsely resolve against
   // these plain-object registries.
@@ -198,18 +297,12 @@ export function lookupPrimitiveMember(
 }
 
 /** Resolve a `SigOrThunk` against a concrete receiver type. */
-export function resolveSig(
-  sig: SigOrThunk,
-  receiver: VariableType,
-): BuiltinSignature {
+export function resolveSig(sig: SigOrThunk, receiver: VariableType): BuiltinSignature {
   return typeof sig === "function" ? sig(receiver) : sig;
 }
 
 /** Resolve a `TypeOrThunk` against a concrete receiver type. */
-export function resolvePropertyType(
-  type: TypeOrThunk,
-  receiver: VariableType,
-): VariableType {
+export function resolvePropertyType(type: TypeOrThunk, receiver: VariableType): VariableType {
   return typeof type === "function" ? type(receiver) : type;
 }
 
@@ -248,9 +341,7 @@ export type ArrayCallbackKind =
   (typeof ARRAY_CALLBACK_METHOD_KINDS)[keyof typeof ARRAY_CALLBACK_METHOD_KINDS];
 
 /** Look up an array callback method, or null if `name` isn't a known one. */
-export function lookupArrayCallbackMethod(
-  name: string,
-): ArrayCallbackKind | null {
+export function lookupArrayCallbackMethod(name: string): ArrayCallbackKind | null {
   return Object.prototype.hasOwnProperty.call(ARRAY_CALLBACK_METHOD_KINDS, name)
     ? ARRAY_CALLBACK_METHOD_KINDS[name as keyof typeof ARRAY_CALLBACK_METHOD_KINDS]
     : null;

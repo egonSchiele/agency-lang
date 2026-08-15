@@ -27,7 +27,12 @@ import type { TaskChoice } from "../eval/label/load/statelog.js";
 import { previewLine } from "../eval/label/load/statelogScan.js";
 import type { Annotator } from "../eval/label/types.js";
 import type { EventEnvelope } from "../statelog/wireTypes.js";
-import { labelTrace, labelTraceServices, type LabelTraceOutcome, type LabelTraceUI } from "./labelTrace.js";
+import {
+  labelTrace,
+  labelTraceServices,
+  type LabelTraceOutcome,
+  type LabelTraceUI,
+} from "./labelTrace.js";
 
 export type RunViewerOpts = {
   // The statelog text. Optional when `followPath` is given — the shell
@@ -101,8 +106,11 @@ async function runTraceLabeling(params: {
   const host = createLabelingHost(screen, () => screen.size());
   const ui: LabelTraceUI = {
     async editTask(defaultTask): Promise<TaskChoice | null> {
-      const preview = defaultTask === null ? "(none)" : previewLine(projectArtifactField(defaultTask));
-      const answer = await screen.nextLine(`Task [${preview}] — Enter keeps, text replaces, "-" clears: `);
+      const preview =
+        defaultTask === null ? "(none)" : previewLine(projectArtifactField(defaultTask));
+      const answer = await screen.nextLine(
+        `Task [${preview}] — Enter keeps, text replaces, "-" clears: `,
+      );
       const trimmed = answer.trim();
       if (trimmed === "") return { kind: "keep-default" };
       if (trimmed === "-") return { kind: "omit" };
@@ -149,7 +157,9 @@ async function handleTraceLabeling(args: {
   if (args.parseErrorCount > 0) {
     // Dataset ingestion must not be built from a partially parsed trace, even
     // though the viewer tolerates malformed lines for display.
-    args.notify(`Cannot label: the statelog has ${args.parseErrorCount} unparseable line(s); fix or regenerate it.`);
+    args.notify(
+      `Cannot label: the statelog has ${args.parseErrorCount} unparseable line(s); fix or regenerate it.`,
+    );
     return;
   }
   if (args.traceEvents.length === 0) {
@@ -178,6 +188,16 @@ async function handleTraceLabeling(args: {
   if (outcome.kind === "labeled") {
     args.notify(`Labeled and stored (${outcome.outputId.slice(0, 12)}…).`);
   }
+}
+
+function helpScreen(helpLines: readonly string[]): Element {
+  return lines(["Keybindings", "─────────────", ...helpLines, "", "Press any key to close."]);
+}
+
+function parseErrorFooter(parseErrors: ReadonlyArray<{ line: number }>): Element {
+  return line(`${parseErrors.length} parse error(s) — first: line ${parseErrors[0].line}`, {
+    fg: "bright-red",
+  });
 }
 
 export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> {
@@ -247,17 +267,11 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
 
   const render = (): void => {
     if (helpOpen) {
-      screen.render(lines(["Keybindings", "─────────────", ...stack.active().helpLines(), "", "Press any key to close."]));
+      screen.render(helpScreen(stack.active().helpLines()));
       return;
     }
-    const body = stack.active().render(viewport);
-    const parts: Element[] = [body];
-    if (parseErrors.length > 0) {
-      parts.push(line(
-        `${parseErrors.length} parse error(s) — first: line ${parseErrors[0].line}`,
-        { fg: "bright-red" },
-      ));
-    }
+    const parts: Element[] = [stack.active().render(viewport)];
+    if (parseErrors.length > 0) parts.push(parseErrorFooter(parseErrors));
     screen.render(column({ justifyContent: "flex-start" }, ...parts));
   };
 
@@ -306,7 +320,8 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
         watcher,
         onNewText,
         render,
-        notify: (message: string) => stack.active().notify(message) });
+        notify: (message: string) => stack.active().notify(message),
+      });
     }
   };
 
@@ -321,8 +336,12 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
       }
       // Esc backs out, never quits: with nothing left to pop or clear,
       // an embedded viewer hands control back to its host.
-      if (opts.embedded && fmt === "Escape"
-          && stack.all().length === 1 && !treeView.hasActiveSearch()) {
+      if (
+        opts.embedded &&
+        fmt === "Escape" &&
+        stack.all().length === 1 &&
+        !treeView.hasActiveSearch()
+      ) {
         return "back";
       }
       if (helpOpen) {
@@ -358,9 +377,11 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
  * file that SHRANK was rotated/truncated: start over from offset 0 with
  * an empty accumulator; view setData cursor-fallback absorbs it.
  */
-function makeFollowWatcher(
-  opts: RunViewerOpts,
-): { bootText: string; start(onText: (accum: string) => void): void; stop(): void } {
+function makeFollowWatcher(opts: RunViewerOpts): {
+  bootText: string;
+  start(onText: (accum: string) => void): void;
+  stop(): void;
+} {
   let reader = opts.followPath !== undefined ? makeAppendReader(opts.followPath, 0) : undefined;
   let lastSize = opts.followPath !== undefined ? currentFileSize(opts.followPath) : 0;
   let accum = reader !== undefined ? reader.read() : (opts.jsonl ?? "");

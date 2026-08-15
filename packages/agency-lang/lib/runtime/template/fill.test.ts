@@ -54,15 +54,13 @@ describe("fillHoles: lifting", () => {
     // A `__proto__` key in a JS object literal sets the prototype even
     // when quoted; a lifted record must never smuggle that in.
     const poisoned = JSON.parse('{"__proto__": {"polluted": true}}');
-    expect(() =>
-      fillHoles(load(`node main() {\n  const x = #v\n}\n`), { v: poisoned }),
-    ).toThrow(/__proto__/);
+    expect(() => fillHoles(load(`node main() {\n  const x = #v\n}\n`), { v: poisoned })).toThrow(
+      /__proto__/,
+    );
   });
 
   it("lifts null", () => {
-    expect(fillAndPrint(`node main() {\n  const x = #v\n}\n`, { v: null })).toContain(
-      "= null",
-    );
+    expect(fillAndPrint(`node main() {\n  const x = #v\n}\n`, { v: null })).toContain("= null");
   });
 
   it("fills every occurrence of a repeated name", () => {
@@ -71,9 +69,7 @@ describe("fillHoles: lifting", () => {
   });
 
   it("rejects a value for a hole that does not exist", () => {
-    expect(() => fillHoles(load(`node main() {\n  return 1\n}\n`), { nope: 1 })).toThrow(
-      /nope/,
-    );
+    expect(() => fillHoles(load(`node main() {\n  return 1\n}\n`), { nope: 1 })).toThrow(/nope/);
   });
 
   it("allows a partial fill, leaving other holes in place", () => {
@@ -143,15 +139,14 @@ describe("fillHoles: fragment kinds", () => {
   it("decl holes still reject expr and statements fragments", () => {
     const declTemplate = `#helpers\n\nnode main() {\n  return 1\n}\n`;
     expect(() => fillHoles(load(declTemplate), { helpers: _parseExpr("1") })).toThrow(/decl/);
-    expect(() =>
-      fillHoles(load(declTemplate), { helpers: _parseStatements("print(1)") }),
-    ).toThrow(/decl/);
+    expect(() => fillHoles(load(declTemplate), { helpers: _parseStatements("print(1)") })).toThrow(
+      /decl/,
+    );
   });
 
   it("rejects a statements fragment in an expr hole", () => {
-    expect(() =>
-      fillHoles(load(exprTemplate), { v: _parseStatements("const x = 1") }),
-    ).toThrow(/expr.*statements|statements.*expr/,
+    expect(() => fillHoles(load(exprTemplate), { v: _parseStatements("const x = 1") })).toThrow(
+      /expr.*statements|statements.*expr/,
     );
   });
 
@@ -163,9 +158,7 @@ describe("fillHoles: fragment kinds", () => {
   });
 
   it("rejects a kind-less Code value in an expr hole, naming program", () => {
-    expect(() => fillHoles(load(exprTemplate), { v: _parseAST("const x = 1") })).toThrow(
-      /program/,
-    );
+    expect(() => fillHoles(load(exprTemplate), { v: _parseAST("const x = 1") })).toThrow(/program/);
   });
 });
 
@@ -221,18 +214,14 @@ describe("fill-time type checking", () => {
   });
 
   it("lets an unknowable fragment through — validation, not a guarantee", () => {
-    expect(fillAndPrint(t, { text: _parseExpr("getGreeting()") })).toContain(
-      "getGreeting()",
-    );
+    expect(fillAndPrint(t, { text: _parseExpr("getGreeting()") })).toContain("getGreeting()");
   });
 
   it("treats an interpolated string literal as unknowable, not as string", () => {
     // `"${x}"` could evaluate to anything a formatter renders; the guard
     // in certainTypeOf must return null for it in BOTH directions.
     const numberHole = `node main() {\n  const n: number = #v\n  return n\n}\n`;
-    expect(() =>
-      fillHoles(load(numberHole), { v: _parseExpr('"${getCount()}"') }),
-    ).not.toThrow();
+    expect(() => fillHoles(load(numberHole), { v: _parseExpr('"${getCount()}"') })).not.toThrow();
   });
 
   it("validates against the FIRST position when a name appears twice", () => {
@@ -324,15 +313,11 @@ describe("fillHoles: identifier holes", () => {
   });
 
   it("rejects a leading digit", () => {
-    expect(() => fillHoles(load(template), { tool: "1st" })).toThrow(
-      /not a legal identifier/,
-    );
+    expect(() => fillHoles(load(template), { tool: "1st" })).toThrow(/not a legal identifier/);
   });
 
   it("rejects a non-string", () => {
-    expect(() => fillHoles(load(template), { tool: 42 })).toThrow(
-      /not a legal identifier/,
-    );
+    expect(() => fillHoles(load(template), { tool: 42 })).toThrow(/not a legal identifier/);
   });
 
   it("rejects a reserved word", () => {
@@ -343,12 +328,9 @@ describe("fillHoles: identifier holes", () => {
     expect(() => fillHoles(load(template), { tool: "function" })).toThrow(/reserved word/);
   });
 
-  it.each(["interface", "elif"])(
-    "rejects `%s`, a keyword the grammar now consumes",
-    (kw) => {
-      expect(() => fillHoles(load(template), { tool: kw })).toThrow(/reserved word/);
-    },
-  );
+  it.each(["interface", "elif"])("rejects `%s`, a keyword the grammar now consumes", (kw) => {
+    expect(() => fillHoles(load(template), { tool: kw })).toThrow(/reserved word/);
+  });
 
   it("rejects the hygiene prefix", () => {
     expect(() => fillHoles(load(template), { tool: "__hyg1_x" })).toThrow(/reserved/);
@@ -376,9 +358,7 @@ describe("filling splices", () => {
   });
 
   it("rejects a non-array for a splice", () => {
-    expect(() => fillHoles(load(importTpl), { imports: "readFile" })).toThrow(
-      /needs an array/,
-    );
+    expect(() => fillHoles(load(importTpl), { imports: "readFile" })).toThrow(/needs an array/);
   });
 
   it("splices statements into a statement list", () => {
@@ -465,9 +445,7 @@ describe("fill-time type checking: records and aliases", () => {
   });
 
   it("accepts a complete record", () => {
-    expect(fillAndPrint(personTemplate, { person: { name: "Alice", age: 30 } })).toContain(
-      "Alice",
-    );
+    expect(fillAndPrint(personTemplate, { person: { name: "Alice", age: 30 } })).toContain("Alice");
   });
 
   it("resolves an alias for a primitive", () => {
@@ -500,9 +478,9 @@ describe("fill-time type checking: records and aliases", () => {
       "}",
       "",
     ].join("\n");
-    expect(() =>
-      fillHoles(load(nested), { person: { name: "A", address: {} } }),
-    ).toThrow(/expects/);
+    expect(() => fillHoles(load(nested), { person: { name: "A", address: {} } })).toThrow(
+      /expects/,
+    );
   });
 
   it("checks an array of records", () => {
@@ -518,9 +496,9 @@ describe("fill-time type checking: records and aliases", () => {
       "}",
       "",
     ].join("\n");
-    expect(() =>
-      fillHoles(load(list), { people: [{ name: "A", age: 1 }, { name: "B" }] }),
-    ).toThrow(/expects/);
+    expect(() => fillHoles(load(list), { people: [{ name: "A", age: 1 }, { name: "B" }] })).toThrow(
+      /expects/,
+    );
     expect(fillAndPrint(list, { people: [{ name: "A", age: 1 }] })).toContain("A");
   });
 
@@ -571,13 +549,9 @@ describe("fill-time type checking: records and aliases", () => {
   it("rejects a number against a union of number literals, as the compile does", () => {
     // synthType widens numbers, so `const n: 1 | 2 = 1` does NOT compile.
     // Fill agreeing with that is the invariant working in both directions.
-    const numeric = [
-      "node main(): number {",
-      "  const n: 1 | 2 = #n",
-      "  return n",
-      "}",
-      "",
-    ].join("\n");
+    const numeric = ["node main(): number {", "  const n: 1 | 2 = #n", "  return n", "}", ""].join(
+      "\n",
+    );
     expect(() => fillHoles(load(numeric), { n: 1 })).toThrow(/expects/);
   });
 
@@ -629,9 +603,9 @@ describe("fill-time type checking: records and aliases", () => {
   });
 
   it("still lets an unknowable fragment through", () => {
-    expect(
-      fillAndPrint(personTemplate, { person: _parseExpr("buildPerson()") }),
-    ).toContain("buildPerson()");
+    expect(fillAndPrint(personTemplate, { person: _parseExpr("buildPerson()") })).toContain(
+      "buildPerson()",
+    );
   });
 
   it("still rejects a literal fragment of the wrong primitive", () => {
@@ -769,9 +743,7 @@ describe("fill-time type checking: splices check one element at a time", () => {
       "}",
       "",
     ].join("\n");
-    expect(() =>
-      fillHoles(load(arrayAnnotated), { people: [{ name: "A", age: 1 }] }),
-    ).toThrow();
+    expect(() => fillHoles(load(arrayAnnotated), { people: [{ name: "A", age: 1 }] })).toThrow();
   });
 });
 
@@ -820,9 +792,9 @@ describe("fill-time type checking: the error says what is wrong", () => {
       "}",
       "",
     ].join("\n");
-    expect(() =>
-      fillHoles(load(nested), { person: { name: "A", address: {} } }),
-    ).toThrow(/address\.city/);
+    expect(() => fillHoles(load(nested), { person: { name: "A", address: {} } })).toThrow(
+      /address\.city/,
+    );
   });
 
   it("blames the right property when another one is aliased", () => {
@@ -886,9 +858,9 @@ describe("fill-time type checking: the error says what is wrong", () => {
       "}",
       "",
     ].join("\n");
-    expect(() =>
-      fillHoles(load(arrayAnnotated), { people: [{ name: "A", age: 1 }] }),
-    ).toThrow(/describes one element/);
+    expect(() => fillHoles(load(arrayAnnotated), { people: [{ name: "A", age: 1 }] })).toThrow(
+      /describes one element/,
+    );
   });
 
   it("does not give that hint when the array annotation is correct", () => {
@@ -915,9 +887,7 @@ describe("fill-time type checking: review follow-ups", () => {
       "",
     ].join("\n");
     expect(fillAndPrint(literals, { mode: _parseExpr('"fast"') })).toContain('"fast"');
-    expect(() => fillHoles(load(literals), { mode: _parseExpr('"medium"') })).toThrow(
-      /expects/,
-    );
+    expect(() => fillHoles(load(literals), { mode: _parseExpr('"medium"') })).toThrow(/expects/);
   });
 
   it("checks a hole typed with a generic alias", () => {
@@ -943,15 +913,8 @@ describe("fill-time type checking: review follow-ups", () => {
     // The hint's evidence must use the same inference the acceptance
     // decision got: `"fast"` fits `"fast" | "slow"` literally, so this is
     // one-level-off evidence even though the widened description is not.
-    const modes = [
-      "node main() {",
-      '  f(#...modes: ("fast" | "slow")[])',
-      "}",
-      "",
-    ].join("\n");
-    expect(() => fillHoles(load(modes), { modes: ["fast"] })).toThrow(
-      /describes one element/,
-    );
+    const modes = ["node main() {", '  f(#...modes: ("fast" | "slow")[])', "}", ""].join("\n");
+    expect(() => fillHoles(load(modes), { modes: ["fast"] })).toThrow(/describes one element/);
   });
 
   it("records what isAssignable does with extra properties", () => {
@@ -969,8 +932,8 @@ describe("fill-time type checking: review follow-ups", () => {
       "}",
       "",
     ].join("\n");
-    expect(
-      fillAndPrint(person, { person: { name: "A", age: 1, nickname: "Al" } }),
-    ).toContain("nickname");
+    expect(fillAndPrint(person, { person: { name: "A", age: 1, nickname: "Al" } })).toContain(
+      "nickname",
+    );
   });
 });

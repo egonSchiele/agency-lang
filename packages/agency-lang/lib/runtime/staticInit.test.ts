@@ -15,9 +15,9 @@ describe("__readStatic", () => {
   });
 
   it("throws on sentinel", () => {
-    expect(() =>
-      __readStatic(__UNINIT_STATIC as any, "barStatic", "bar.agency"),
-    ).toThrow(/Tried to read static `barStatic` from bar\.agency/);
+    expect(() => __readStatic(__UNINIT_STATIC as any, "barStatic", "bar.agency")).toThrow(
+      /Tried to read static `barStatic` from bar\.agency/,
+    );
   });
 
   it("error message includes diagnostic context", () => {
@@ -49,9 +49,7 @@ describe("__readStatic", () => {
 
   it("does not confuse sentinel with other symbols or falsy values", () => {
     // sentinel is a unique Symbol — must not collide
-    expect(__readStatic(Symbol("uninit"), "x", "f.agency")).not.toBe(
-      __UNINIT_STATIC,
-    );
+    expect(__readStatic(Symbol("uninit"), "x", "f.agency")).not.toBe(__UNINIT_STATIC);
     // Other falsy / quirky values pass through normally
     expect(() => __readStatic(0 as any, "x", "f.agency")).not.toThrow();
     expect(() => __readStatic("" as any, "x", "f.agency")).not.toThrow();

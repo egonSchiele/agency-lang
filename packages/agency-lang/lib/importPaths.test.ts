@@ -26,46 +26,30 @@ describe("findPackageRoot", () => {
     const root = findPackageRoot(__dirname);
     expect(root).toBe(path.resolve(__dirname, ".."));
     // Verify package.json exists there
-    expect(
-      require("fs").existsSync(path.join(root, "package.json")),
-    ).toBe(true);
+    expect(require("fs").existsSync(path.join(root, "package.json"))).toBe(true);
   });
 });
 
 describe("resolveAgencyImportPath", () => {
   it("should resolve relative imports against the importing file's directory", () => {
-    const result = resolveAgencyImportPath(
-      "./utils.agency",
-      "/project/src/main.agency",
-    );
+    const result = resolveAgencyImportPath("./utils.agency", "/project/src/main.agency");
     expect(result).toBe("/project/src/utils.agency");
   });
 
   it("should resolve std:: imports to the stdlib directory", () => {
-    const result = resolveAgencyImportPath(
-      "std::math",
-      "/project/src/main.agency",
-    );
+    const result = resolveAgencyImportPath("std::math", "/project/src/main.agency");
     const root = findPackageRoot(__dirname);
     expect(result).toBe(path.join(root, "stdlib", "math.agency"));
   });
 
   it("should resolve std:: imports with subdirectories", () => {
-    const result = resolveAgencyImportPath(
-      "std::collections/queue",
-      "/project/src/main.agency",
-    );
+    const result = resolveAgencyImportPath("std::collections/queue", "/project/src/main.agency");
     const root = findPackageRoot(__dirname);
-    expect(result).toBe(
-      path.join(root, "stdlib", "collections", "queue.agency"),
-    );
+    expect(result).toBe(path.join(root, "stdlib", "collections", "queue.agency"));
   });
 
   it("should leave non-agency, non-std imports unchanged", () => {
-    const result = resolveAgencyImportPath(
-      "./utils.js",
-      "/project/src/main.agency",
-    );
+    const result = resolveAgencyImportPath("./utils.js", "/project/src/main.agency");
     expect(result).toBe("/project/src/utils.js");
   });
 });
@@ -124,7 +108,8 @@ describe("isAgencyImport", () => {
 describe("agencyImportTargets", () => {
   it("returns Agency import edges from import, import node, and export-from statements", () => {
     const absoluteImport = path.join(os.tmpdir(), "absolute.agency");
-    const parsed = parseAgency(`
+    const parsed = parseAgency(
+      `
 import { helper } from "./helper.agency"
 import { read } from "std::fs"
 import { pkgHelper } from "pkg::helpers"
@@ -134,7 +119,10 @@ import node { worker } from "../nodes/worker.agency"
 export { prompt } from "./prompt.agency"
 export * from "${absoluteImport}"
 node main() {}
-`, {}, false);
+`,
+      {},
+      false,
+    );
     if (!parsed.success) throw new Error(parsed.message ?? "parse failed");
 
     expect(agencyImportTargets(parsed.result)).toEqual([
@@ -296,9 +284,9 @@ describe("pkg:: resolution with fixture package", () => {
     const fromFile = path.join(tmpDir, "main.agency");
     fs.writeFileSync(fromFile, "");
 
-    expect(() =>
-      resolvePkgAgencyPath("pkg::no-agency-field", fromFile),
-    ).toThrow(/does not have a valid "agency" field/);
+    expect(() => resolvePkgAgencyPath("pkg::no-agency-field", fromFile)).toThrow(
+      /does not have a valid "agency" field/,
+    );
 
     // Clean up
     fs.rmSync(tmpDir, { recursive: true });
@@ -535,8 +523,12 @@ describe("getStdlibFiles recursion", () => {
 
 describe("findFileUp", () => {
   let dir: string;
-  beforeEach(() => { dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "fu-"))); });
-  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+  beforeEach(() => {
+    dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "fu-")));
+  });
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
 
   it("returns the path of the nearest matching file, walking up", () => {
     const nested = path.join(dir, "a", "b", "c");
@@ -551,8 +543,11 @@ describe("findFileUp", () => {
     fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "wrong" }));
     fs.writeFileSync(path.join(nested, "package.json"), JSON.stringify({ name: "right" }));
     const found = findFileUp(nested, "package.json", (p) => {
-      try { return JSON.parse(fs.readFileSync(p, "utf-8")).name === "right"; }
-      catch { return false; }
+      try {
+        return JSON.parse(fs.readFileSync(p, "utf-8")).name === "right";
+      } catch {
+        return false;
+      }
     });
     expect(found).toBe(path.join(nested, "package.json"));
   });

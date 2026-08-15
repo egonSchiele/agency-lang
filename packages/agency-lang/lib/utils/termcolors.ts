@@ -19,8 +19,7 @@ export const colors = {
   brightMagenta: "\x1b[95m",
   brightCyan: "\x1b[96m",
   brightWhite: "\x1b[97m",
-  darkBlack: "\x1b[38;5;232m"
-
+  darkBlack: "\x1b[38;5;232m",
 } as const;
 
 // Background color codes
@@ -80,17 +79,9 @@ function parseHex(value: string): [number, number, number] {
   }
   const h = value.slice(1);
   if (h.length === 3) {
-    return [
-      parseInt(h[0] + h[0], 16),
-      parseInt(h[1] + h[1], 16),
-      parseInt(h[2] + h[2], 16),
-    ];
+    return [parseInt(h[0] + h[0], 16), parseInt(h[1] + h[1], 16), parseInt(h[2] + h[2], 16)];
   }
-  return [
-    parseInt(h.slice(0, 2), 16),
-    parseInt(h.slice(2, 4), 16),
-    parseInt(h.slice(4, 6), 16),
-  ];
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
 }
 
 function clampByte(n: number): number {
@@ -189,9 +180,7 @@ function createNoopColorFunction(): ColorFunction {
  * console.log(ttyColor.green("colored on a terminal, plain when piped"));
  * ```
  */
-export const ttyColor: ColorFunction = process.stdout.isTTY
-  ? color
-  : createNoopColorFunction();
+export const ttyColor: ColorFunction = process.stdout.isTTY ? color : createNoopColorFunction();
 
 /**
  * Resolve whether to emit ANSI color for an `"auto"` setting, following the

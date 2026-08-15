@@ -12,10 +12,7 @@ const anyType: VariableType = { type: "primitiveType", value: "any" };
 
 describe("resolveType: built-in generic Array", () => {
   it("normalizes Array<string> to arrayType", () => {
-    const result = resolveType(
-      { type: "genericType", name: "Array", typeArgs: [stringType] },
-      {},
-    );
+    const result = resolveType({ type: "genericType", name: "Array", typeArgs: [stringType] }, {});
     expect(result).toEqual({ type: "arrayType", elementType: stringType });
   });
 
@@ -35,9 +32,9 @@ describe("resolveType: built-in generic Array", () => {
   });
 
   it("throws on wrong arity", () => {
-    expect(() =>
-      resolveType({ type: "genericType", name: "Array", typeArgs: [] }, {}),
-    ).toThrow(/Array expects 1 type argument/);
+    expect(() => resolveType({ type: "genericType", name: "Array", typeArgs: [] }, {})).toThrow(
+      /Array expects 1 type argument/,
+    );
     expect(() =>
       resolveType(
         {
@@ -53,10 +50,7 @@ describe("resolveType: built-in generic Array", () => {
 
 describe("resolveType: built-in generic Schema", () => {
   it("normalizes Schema<T> to schemaType", () => {
-    const result = resolveType(
-      { type: "genericType", name: "Schema", typeArgs: [stringType] },
-      {},
-    );
+    const result = resolveType({ type: "genericType", name: "Schema", typeArgs: [stringType] }, {});
     expect(result).toEqual({ type: "schemaType", inner: stringType });
   });
 
@@ -103,10 +97,7 @@ describe("resolveType: built-in generic Record", () => {
       name: "Record",
       typeArgs: [stringType, numberType],
       // Written args keep the alias identity that resolution erases (#630).
-      writtenTypeArgs: [
-        stringType,
-        { type: "typeAliasVariable", aliasName: "N" },
-      ],
+      writtenTypeArgs: [stringType, { type: "typeAliasVariable", aliasName: "N" }],
     });
   });
 
@@ -127,10 +118,7 @@ describe("resolveType: built-in generic Record", () => {
       {
         type: "genericType",
         name: "Record",
-        typeArgs: [
-          { type: "stringLiteralType", value: "ok" },
-          stringType,
-        ],
+        typeArgs: [{ type: "stringLiteralType", value: "ok" }, stringType],
       },
       {},
     );
@@ -175,10 +163,7 @@ describe("resolveType: built-in generic Record", () => {
         {
           type: "genericType",
           name: "Record",
-          typeArgs: [
-            { type: "objectType", properties: [] },
-            stringType,
-          ],
+          typeArgs: [{ type: "objectType", properties: [] }, stringType],
         },
         {},
       ),
@@ -187,10 +172,7 @@ describe("resolveType: built-in generic Record", () => {
 
   it("throws on wrong arity", () => {
     expect(() =>
-      resolveType(
-        { type: "genericType", name: "Record", typeArgs: [stringType] },
-        {},
-      ),
+      resolveType({ type: "genericType", name: "Record", typeArgs: [stringType] }, {}),
     ).toThrow(/Record expects 2 type arguments/);
   });
 });
@@ -200,10 +182,7 @@ describe("resolveType: typeAliasVariable resolution still works", () => {
     const aliases: Record<string, TypeAliasEntry> = {
       MyStr: { body: stringType },
     };
-    const result = resolveType(
-      { type: "typeAliasVariable", aliasName: "MyStr" },
-      aliases,
-    );
+    const result = resolveType({ type: "typeAliasVariable", aliasName: "MyStr" }, aliases);
     expect(result).toEqual(stringType);
   });
 
@@ -212,18 +191,12 @@ describe("resolveType: typeAliasVariable resolution still works", () => {
       A: { body: { type: "typeAliasVariable", aliasName: "B" } },
       B: { body: stringType },
     };
-    const result = resolveType(
-      { type: "typeAliasVariable", aliasName: "A" },
-      aliases,
-    );
+    const result = resolveType({ type: "typeAliasVariable", aliasName: "A" }, aliases);
     expect(result).toEqual(stringType);
   });
 
   it("returns the alias unchanged when not in registry", () => {
-    const result = resolveType(
-      { type: "typeAliasVariable", aliasName: "Unknown" },
-      {},
-    );
+    const result = resolveType({ type: "typeAliasVariable", aliasName: "Unknown" }, {});
     expect(result).toEqual({
       type: "typeAliasVariable",
       aliasName: "Unknown",
@@ -270,18 +243,12 @@ describe("resolveType: user-defined generic aliases", () => {
         body: {
           type: "genericType",
           name: "Record",
-          typeArgs: [
-            stringType,
-            { type: "typeAliasVariable", aliasName: "V" },
-          ],
+          typeArgs: [stringType, { type: "typeAliasVariable", aliasName: "V" }],
         },
         typeParams: [{ name: "V", default: anyType }],
       },
     };
-    const result = resolveType(
-      { type: "typeAliasVariable", aliasName: "StringMap" },
-      aliases,
-    );
+    const result = resolveType({ type: "typeAliasVariable", aliasName: "StringMap" }, aliases);
     expect(result).toEqual({
       type: "genericType",
       name: "Record",
@@ -402,10 +369,7 @@ describe("resolveType: user-defined generic aliases", () => {
       },
     };
     expect(() =>
-      resolveType(
-        { type: "genericType", name: "Pair", typeArgs: [stringType] },
-        aliases,
-      ),
+      resolveType({ type: "genericType", name: "Pair", typeArgs: [stringType] }, aliases),
     ).toThrow(/requires at least 2/);
   });
 
@@ -417,10 +381,7 @@ describe("resolveType: user-defined generic aliases", () => {
       },
     };
     expect(() =>
-      resolveType(
-        { type: "typeAliasVariable", aliasName: "Container" },
-        aliases,
-      ),
+      resolveType({ type: "typeAliasVariable", aliasName: "Container" }, aliases),
     ).toThrow(/Container requires type arguments/);
   });
 
@@ -429,19 +390,13 @@ describe("resolveType: user-defined generic aliases", () => {
       Plain: { body: stringType },
     };
     expect(() =>
-      resolveType(
-        { type: "genericType", name: "Plain", typeArgs: [stringType] },
-        aliases,
-      ),
+      resolveType({ type: "genericType", name: "Plain", typeArgs: [stringType] }, aliases),
     ).toThrow(/Plain is not a generic type/);
   });
 
   it("throws when referencing an unknown generic type", () => {
     expect(() =>
-      resolveType(
-        { type: "genericType", name: "Ghost", typeArgs: [stringType] },
-        {},
-      ),
+      resolveType({ type: "genericType", name: "Ghost", typeArgs: [stringType] }, {}),
     ).toThrow(/Unknown generic type Ghost/);
   });
 });
@@ -611,9 +566,7 @@ describe("resolveTypeDeep: nested generic resolution", () => {
     };
     const input: VariableType = {
       type: "objectType",
-      properties: [
-        { key: "a", value: { type: "typeAliasVariable", aliasName: "Coords" } },
-      ],
+      properties: [{ key: "a", value: { type: "typeAliasVariable", aliasName: "Coords" } }],
     };
     const result = resolveTypeDeep(input, aliases);
     expect(result).toEqual(input);
@@ -637,10 +590,7 @@ describe("resolveType: nested unions", () => {
       B: { body: { type: "objectType", properties: [{ key: "y", value: stringType }] } },
       C: { body: { type: "objectType", properties: [{ key: "z", value: booleanType }] } },
     };
-    const result = resolveType(
-      { type: "unionType", types: [alias("AB"), alias("C")] },
-      aliases,
-    );
+    const result = resolveType({ type: "unionType", types: [alias("AB"), alias("C")] }, aliases);
     // Members stay unresolved, so error messages keep saying `A`, not `{x: number}`.
     expect(result).toEqual({
       type: "unionType",
@@ -653,10 +603,7 @@ describe("resolveType: nested unions", () => {
       Outer: { body: { type: "unionType", types: [alias("Inner"), stringType] } },
       Inner: { body: { type: "unionType", types: [numberType, booleanType] } },
     };
-    const result = resolveType(
-      { type: "unionType", types: [alias("Outer"), anyType] },
-      aliases,
-    );
+    const result = resolveType({ type: "unionType", types: [alias("Outer"), anyType] }, aliases);
     expect(result).toEqual({
       type: "unionType",
       types: [numberType, booleanType, stringType, anyType],
@@ -696,10 +643,7 @@ describe("resolveType: nested unions", () => {
       B: { body: stringType },
       C: { body: booleanType },
     };
-    const result = resolveType(
-      { type: "unionType", types: [alias("AB"), alias("C")] },
-      aliases,
-    );
+    const result = resolveType({ type: "unionType", types: [alias("AB"), alias("C")] }, aliases);
     expect(result).toEqual({
       type: "unionType",
       types: [

@@ -1,11 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { AbortedResult, isAborted, previewForLog } from "./abortedResult.js";
-import {
-  AgencyCancelledError,
-  makeAbortCause,
-  readCause,
-  type AbortCause,
-} from "./errors.js";
+import { AgencyCancelledError, makeAbortCause, readCause, type AbortCause } from "./errors.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { runInTestContext } from "./asyncContext.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -57,22 +52,13 @@ function withStubStatelog<T>(fn: () => T): {
     },
   };
   const ctx = { statelogClient: client } as any;
-  const result = runInTestContext(
-    ctx,
-    new StateStack(),
-    new ThreadStore(),
-    fn,
-  );
+  const result = runInTestContext(ctx, new StateStack(), new ThreadStore(), fn);
   return { result, events, spans };
 }
 
 describe("AbortedResult.fromError (the frame-boundary conversion)", () => {
   it("carries the frame's saved draft as the partial", () => {
-    const aborted = AbortedResult.fromError(
-      abortError(),
-      frameWithDraft("draft-v"),
-      "code",
-    );
+    const aborted = AbortedResult.fromError(abortError(), frameWithDraft("draft-v"), "code");
     expect(aborted.partial).toEqual({ value: "draft-v" });
   });
 
@@ -83,11 +69,7 @@ describe("AbortedResult.fromError (the frame-boundary conversion)", () => {
 
   it("keeps the cause object by identity, so the delivered flag still de-dups", () => {
     const cause = tripCause();
-    const aborted = AbortedResult.fromError(
-      abortError(cause),
-      new State(),
-      "code",
-    );
+    const aborted = AbortedResult.fromError(abortError(cause), new State(), "code");
     expect(aborted.cause).toBe(cause);
     const rebuilt = aborted.toError();
     expect(readCause(rebuilt)).toBe(cause);
@@ -123,33 +105,21 @@ describe("AbortedResult.fromError (the frame-boundary conversion)", () => {
   });
 
   it("works with no statelog client and no ALS frame at all", () => {
-    const aborted = AbortedResult.fromError(
-      abortError(),
-      frameWithDraft("draft-v"),
-      "code",
-    );
+    const aborted = AbortedResult.fromError(abortError(), frameWithDraft("draft-v"), "code");
     expect(aborted.partial).toEqual({ value: "draft-v" });
   });
 });
 
 describe("AbortedResult.carryThrough (a caller stopping after its callee aborted)", () => {
   it("replaces the callee's partial with the caller's own draft", () => {
-    const inner = AbortedResult.fromError(
-      abortError(),
-      frameWithDraft("inner"),
-      "verify",
-    );
+    const inner = AbortedResult.fromError(abortError(), frameWithDraft("inner"), "verify");
     const outer = inner.carryThrough(frameWithDraft("outer"), "code");
     expect(outer.partial).toEqual({ value: "outer" });
   });
 
   it("drops the callee's partial when the caller has no draft, and logs the loss", () => {
     const { result, events } = withStubStatelog(() => {
-      const inner = AbortedResult.fromError(
-        abortError(),
-        frameWithDraft("inner"),
-        "verify",
-      );
+      const inner = AbortedResult.fromError(abortError(), frameWithDraft("inner"), "verify");
       return inner.carryThrough(new State(), "code");
     });
     expect(result.partial).toBeUndefined();
@@ -166,11 +136,7 @@ describe("AbortedResult.carryThrough (a caller stopping after its callee aborted
   });
 
   it("does not mutate the original (every hop is a new instance)", () => {
-    const inner = AbortedResult.fromError(
-      abortError(),
-      frameWithDraft("inner"),
-      "verify",
-    );
+    const inner = AbortedResult.fromError(abortError(), frameWithDraft("inner"), "verify");
     inner.carryThrough(new State(), "code");
     expect(inner.partial).toEqual({ value: "inner" });
   });
@@ -179,19 +145,12 @@ describe("AbortedResult.carryThrough (a caller stopping after its callee aborted
 describe("AbortedResult boundary drops", () => {
   it("droppedAtArgPosition removes the partial and logs it", () => {
     const { result, events } = withStubStatelog(() => {
-      const aborted = AbortedResult.fromError(
-        abortError(),
-        frameWithDraft("g-partial"),
-        "g",
-      );
+      const aborted = AbortedResult.fromError(abortError(), frameWithDraft("g-partial"), "g");
       return aborted.droppedAtArgPosition();
     });
     expect(result.partial).toBeUndefined();
     expect(result.cause.kind).toBe("guardTrip");
-    expect(events.map((e) => e.action)).toEqual([
-      "carried",
-      "droppedAtArgPosition",
-    ]);
+    expect(events.map((e) => e.action)).toEqual(["carried", "droppedAtArgPosition"]);
   });
 
   it("atForkBoundary removes the partial and logs it", () => {
@@ -221,11 +180,7 @@ describe("AbortedResult boundary drops", () => {
 describe("AbortedResult.deliver (the guard salvaging)", () => {
   it("returns the partial and emits 'delivered'", () => {
     const { result, events } = withStubStatelog(() => {
-      const aborted = AbortedResult.fromError(
-        abortError(),
-        frameWithDraft("save-me"),
-        "block",
-      );
+      const aborted = AbortedResult.fromError(abortError(), frameWithDraft("save-me"), "block");
       return aborted.deliver();
     });
     expect(result).toEqual({ value: "save-me" });
@@ -264,20 +219,12 @@ describe("previewForLog", () => {
 
 describe("AbortedResult.partialValueOrNull", () => {
   it("returns the partial's value", () => {
-    const aborted = AbortedResult.fromError(
-      abortError(),
-      frameWithDraft("d"),
-      "code",
-    );
+    const aborted = AbortedResult.fromError(abortError(), frameWithDraft("d"), "code");
     expect(aborted.partialValueOrNull()).toBe("d");
   });
 
   it("returns a saved null (a real partial)", () => {
-    const aborted = AbortedResult.fromError(
-      abortError(),
-      frameWithDraft(null),
-      "code",
-    );
+    const aborted = AbortedResult.fromError(abortError(), frameWithDraft(null), "code");
     expect(aborted.partialValueOrNull()).toBe(null);
   });
 
@@ -289,11 +236,7 @@ describe("AbortedResult.partialValueOrNull", () => {
 
 describe("withFinalize passes the draft (finalize as draft)", () => {
   it("the finalize receives the partial this instance holds", async () => {
-    const aborted = AbortedResult.fromError(
-      abortError(),
-      frameWithDraft("the-draft"),
-      "code",
-    );
+    const aborted = AbortedResult.fromError(abortError(), frameWithDraft("the-draft"), "code");
     let received: unknown = "not-called";
     await aborted.withFinalize(async (draft) => {
       received = draft;
@@ -314,11 +257,7 @@ describe("withFinalize passes the draft (finalize as draft)", () => {
 
   it("a throwing finalize still returns `this` — the same draft is the fallback", async () => {
     const { result } = withStubStatelog(async () => {
-      const aborted = AbortedResult.fromError(
-        abortError(),
-        frameWithDraft("the-draft"),
-        "code",
-      );
+      const aborted = AbortedResult.fromError(abortError(), frameWithDraft("the-draft"), "code");
       const finalized = await aborted.withFinalize(async () => {
         throw new Error("boom");
       }, "code");
@@ -333,33 +272,21 @@ describe("withFinalize passes the draft (finalize as draft)", () => {
 describe("AbortedResult.withFinalize", () => {
   it("replaces the partial with the finalize's return, cause by identity", async () => {
     const cause = tripCause();
-    const aborted = AbortedResult.fromError(
-      abortError(cause),
-      frameWithDraft("draft"),
-      "code",
-    );
+    const aborted = AbortedResult.fromError(abortError(cause), frameWithDraft("draft"), "code");
     const finalized = await aborted.withFinalize(async () => "finalized", "code");
     expect(finalized.partialValueOrNull()).toBe("finalized");
     expect(finalized.cause).toBe(cause);
   });
 
   it("a finalize returning null is a real partial", async () => {
-    const aborted = AbortedResult.fromError(
-      abortError(),
-      frameWithDraft("draft"),
-      "code",
-    );
+    const aborted = AbortedResult.fromError(abortError(), frameWithDraft("draft"), "code");
     const finalized = await aborted.withFinalize(async () => null, "code");
     expect(finalized.partial).toEqual({ value: null });
   });
 
   it("falls back to the saved draft when the finalize throws, and logs", async () => {
     const { result, events } = withStubStatelog(async () => {
-      const aborted = AbortedResult.fromError(
-        abortError(),
-        frameWithDraft("draft"),
-        "code",
-      );
+      const aborted = AbortedResult.fromError(abortError(), frameWithDraft("draft"), "code");
       return aborted.withFinalize(async () => {
         throw new Error("boom");
       }, "code");
@@ -385,11 +312,7 @@ describe("AbortedResult.withFinalize", () => {
   });
 
   it("treats an interrupting finalize result as a failure (backstop)", async () => {
-    const aborted = AbortedResult.fromError(
-      abortError(),
-      frameWithDraft("draft"),
-      "code",
-    );
+    const aborted = AbortedResult.fromError(abortError(), frameWithDraft("draft"), "code");
     const fakeInterrupts = [
       { type: "interrupt", interruptId: "i1", effect: "std::x", message: "m" },
     ];
@@ -398,11 +321,7 @@ describe("AbortedResult.withFinalize", () => {
   });
 
   it("treats an aborted finalize result as a failure (backstop)", async () => {
-    const aborted = AbortedResult.fromError(
-      abortError(),
-      frameWithDraft("draft"),
-      "code",
-    );
+    const aborted = AbortedResult.fromError(abortError(), frameWithDraft("draft"), "code");
     const nested = AbortedResult.fromError(abortError(), new State(), "inner");
     const finalized = await aborted.withFinalize(async () => nested, "code");
     expect(finalized.partialValueOrNull()).toBe("draft");

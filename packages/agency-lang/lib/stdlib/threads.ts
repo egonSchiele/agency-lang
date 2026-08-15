@@ -60,7 +60,9 @@ export function _contentToString(content: smoltalk.MessageJSON["content"]): stri
           return "[image attachment]";
         }
         if (typedPart.type === "file") {
-          return typedPart.filename ? `[file attachment: ${typedPart.filename}]` : "[file attachment]";
+          return typedPart.filename
+            ? `[file attachment: ${typedPart.filename}]`
+            : "[file attachment]";
         }
         // Defense in depth: a part kind this function doesn't know yet
         // (a future smoltalk modality) but that carries a `source` field
@@ -185,9 +187,7 @@ export async function _eagerSummarizeIfNeeded(evt: {
   // earlier in the same run). Re-summarizing would waste cost.
   const store = agency.thread.storeMaybe();
   if (!store) return;
-  const rawId = /^t\d+$/.test(evt.threadId)
-    ? evt.threadId.slice(1)
-    : evt.threadId;
+  const rawId = /^t\d+$/.test(evt.threadId) ? evt.threadId.slice(1) : evt.threadId;
   const thread = store.threads[rawId];
   if (!thread) return;
   // Idempotency: any non-null cached summary (including an empty

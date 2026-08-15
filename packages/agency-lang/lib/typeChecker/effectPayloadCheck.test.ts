@@ -31,27 +31,19 @@ describe("effect data checking", () => {
 
   it("errors on a missing required field", () => {
     const errs = typecheckSource(
-      "effect app::read { dir: string }\n" +
-        'node main() { raise app::read("m", {}) }',
+      "effect app::read { dir: string }\n" + 'node main() { raise app::read("m", {}) }',
     );
     expect(
-      errs.find((e) =>
-        /Effect 'app::read' data field 'dir' is missing/.test(e.message),
-      ),
+      errs.find((e) => /Effect 'app::read' data field 'dir' is missing/.test(e.message)),
     ).toBeDefined();
   });
 
   it("errors on a wrong field type", () => {
     const errs = typecheckSource(
-      "effect app::read { dir: string }\n" +
-        'node main() { raise app::read("m", { dir: 5 }) }',
+      "effect app::read { dir: string }\n" + 'node main() { raise app::read("m", { dir: 5 }) }',
     );
     expect(
-      errs.find((e) =>
-        /Effect 'app::read' data field 'dir' has the wrong type/.test(
-          e.message,
-        ),
-      ),
+      errs.find((e) => /Effect 'app::read' data field 'dir' has the wrong type/.test(e.message)),
     ).toBeDefined();
   });
 
@@ -66,36 +58,23 @@ describe("effect data checking", () => {
 
   it("errors when required data is omitted entirely", () => {
     const errs = typecheckSource(
-      "effect app::read { dir: string }\n" +
-        'node main() { raise app::read("m") }',
+      "effect app::read { dir: string }\n" + 'node main() { raise app::read("m") }',
     );
-    expect(
-      errs.find((e) => /Effect 'app::read' expects data/.test(e.message)),
-    ).toBeDefined();
+    expect(errs.find((e) => /Effect 'app::read' expects data/.test(e.message))).toBeDefined();
   });
 
   it("empty data declaration permits a raise with no data", () => {
-    expect(
-      dataErrors(
-        'effect std::ping {}\nnode main() { raise std::ping("m") }',
-      ),
-    ).toHaveLength(0);
+    expect(dataErrors('effect std::ping {}\nnode main() { raise std::ping("m") }')).toHaveLength(0);
   });
 
   it("empty data declaration tolerates extras (structural)", () => {
     expect(
-      dataErrors(
-        'effect std::ping {}\nnode main() { raise std::ping("m", { junk: 1 }) }',
-      ),
+      dataErrors('effect std::ping {}\nnode main() { raise std::ping("m", { junk: 1 }) }'),
     ).toHaveLength(0);
   });
 
   it("does not check undeclared effects", () => {
-    expect(
-      dataErrors(
-        'node main() { raise app::read("m", { anything: 1 }) }',
-      ),
-    ).toHaveLength(0);
+    expect(dataErrors('node main() { raise app::read("m", { anything: 1 }) }')).toHaveLength(0);
   });
 
   it("checks both interrupt and raise forms", () => {
@@ -104,11 +83,7 @@ describe("effect data checking", () => {
         'def f() { return interrupt app::read("m", { dir: 5 }) }',
     );
     expect(
-      errs.find((e) =>
-        /Effect 'app::read' data field 'dir' has the wrong type/.test(
-          e.message,
-        ),
-      ),
+      errs.find((e) => /Effect 'app::read' data field 'dir' has the wrong type/.test(e.message)),
     ).toBeDefined();
   });
 
@@ -118,9 +93,7 @@ describe("effect data checking", () => {
         "effect app::read { path: number }\n" +
         'node main() { print("hi") }',
     );
-    expect(
-      errs.find((e) => /[Cc]onflicting.*app::read/.test(e.message)),
-    ).toBeDefined();
+    expect(errs.find((e) => /[Cc]onflicting.*app::read/.test(e.message))).toBeDefined();
   });
 
   it("does not also flag raise sites of a conflicting effect", () => {
@@ -129,12 +102,8 @@ describe("effect data checking", () => {
         "effect app::read { path: number }\n" +
         'node main() { raise app::read("m", { totally: "wrong" }) }',
     );
-    const conflictErrs = errs.filter((e) =>
-      /[Cc]onflicting.*app::read/.test(e.message),
-    );
-    const siteErrs = errs.filter((e) =>
-      /Effect 'app::read' data/.test(e.message),
-    );
+    const conflictErrs = errs.filter((e) => /[Cc]onflicting.*app::read/.test(e.message));
+    const siteErrs = errs.filter((e) => /Effect 'app::read' data/.test(e.message));
     expect(conflictErrs).toHaveLength(1);
     expect(siteErrs).toHaveLength(0);
   });
@@ -146,11 +115,7 @@ describe("effect data checking", () => {
         'node main() { raise app::read("m", data: { dir: "/tmp" }) }',
     );
     expect(
-      errs.find((e) =>
-        /Named arguments are not allowed on 'raise'\/'interrupt'/.test(
-          e.message,
-        ),
-      ),
+      errs.find((e) => /Named arguments are not allowed on 'raise'\/'interrupt'/.test(e.message)),
     ).toBeDefined();
   });
 
@@ -170,10 +135,10 @@ describe("effect data checking", () => {
     // can't trust the static positional alignment.
     const errs = dataErrors(
       "effect app::read { dir: string }\n" +
-        'node main() {\n' +
-        '  const extras = [1, 2, 3]\n' +
+        "node main() {\n" +
+        "  const extras = [1, 2, 3]\n" +
         '  raise app::read("m", { dir: "/tmp" }, ...extras)\n' +
-        '}',
+        "}",
     );
     expect(errs).toHaveLength(0);
   });
@@ -188,9 +153,7 @@ describe("effect data checking", () => {
         "effect app::read { path: number }\n" +
         'node main() { print("hi") }',
     );
-    const dup = errs.find((e) =>
-      /Effect 'app::read' is declared more than once/.test(e.message),
-    );
+    const dup = errs.find((e) => /Effect 'app::read' is declared more than once/.test(e.message));
     const conflict = errs.find((e) =>
       /Conflicting payload types for effect 'app::read'/.test(e.message),
     );
@@ -205,8 +168,8 @@ describe("effect data checking", () => {
     const errs = typecheckSource(
       "effect dup::e { a: number }\n" +
         "effect dup::e { a: string }\n" +
-        "def risky() { raise dup::e(\"m\", { a: 1 }) }\n" +
-        "node main() { handle { risky() } with (e) { match (e.effect) { \"dup::e\" => 1 } } }",
+        'def risky() { raise dup::e("m", { a: 1 }) }\n' +
+        'node main() { handle { risky() } with (e) { match (e.effect) { "dup::e" => 1 } } }',
     ).filter((x) => /Conflicting payload types for effect 'dup::e'/.test(x.message));
     expect(errs).toHaveLength(1);
   });
@@ -215,8 +178,7 @@ describe("effect data checking", () => {
 function typecheckImporter(files: Record<string, string>, entry: string) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-effimp-"));
   try {
-    for (const [name, src] of Object.entries(files))
-      fs.writeFileSync(path.join(dir, name), src);
+    for (const [name, src] of Object.entries(files)) fs.writeFileSync(path.join(dir, name), src);
     const entryPath = path.join(dir, entry);
     const parsed = parseAgency(files[entry]);
     if (!parsed.success) throw new Error("parse failed");
@@ -232,8 +194,7 @@ describe("effect payload checking — ambient across imports", () => {
   it("checks a raise against an effect declared in an imported module", () => {
     const errs = typecheckImporter(
       {
-        "lib.agency":
-          "export def noop() { return 1 }\neffect app::read { dir: string }\n",
+        "lib.agency": "export def noop() { return 1 }\neffect app::read { dir: string }\n",
         "main.agency":
           'import { noop } from "./lib.agency"\n' +
           'node main() { raise app::read("m", { dir: 5 }) }\n',
@@ -241,11 +202,7 @@ describe("effect payload checking — ambient across imports", () => {
       "main.agency",
     );
     expect(
-      errs.find((e) =>
-        /Effect 'app::read' data field 'dir' has the wrong type/.test(
-          e.message,
-        ),
-      ),
+      errs.find((e) => /Effect 'app::read' data field 'dir' has the wrong type/.test(e.message)),
     ).toBeDefined();
   });
 
@@ -255,8 +212,7 @@ describe("effect payload checking — ambient across imports", () => {
     // to compare AST identity) and pass every other test.
     const errs = typecheckImporter(
       {
-        "a.agency":
-          "effect app::read { dir: string }\nexport def x() { return 1 }",
+        "a.agency": "effect app::read { dir: string }\nexport def x() { return 1 }",
         "main.agency":
           'import { x } from "./a.agency"\n' +
           "effect app::read { dir: string }\n" +
@@ -264,9 +220,7 @@ describe("effect payload checking — ambient across imports", () => {
       },
       "main.agency",
     );
-    const offenders = errs.filter((e) =>
-      /declared more than once|[Cc]onflicting/.test(e.message),
-    );
+    const offenders = errs.filter((e) => /declared more than once|[Cc]onflicting/.test(e.message));
     expect(offenders).toHaveLength(0);
   });
 
@@ -309,9 +263,7 @@ describe("effect data checking — fallback paths", () => {
         "}",
     );
     expect(
-      errs.find((e) =>
-        /Effect 'app::read' data does not match/.test(e.message),
-      ),
+      errs.find((e) => /Effect 'app::read' data does not match/.test(e.message)),
     ).toBeDefined();
   });
 

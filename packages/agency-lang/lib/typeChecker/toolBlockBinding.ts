@@ -22,12 +22,7 @@
  * (`AgencyFunction.validateForLLM`) covers them at request time.
  */
 import { diagnostic } from "./diagnostics.js";
-import {
-  AgencyNode,
-  AgencyProgram,
-  FunctionParameter,
-  ValueAccess,
-} from "../types.js";
+import { AgencyNode, AgencyProgram, FunctionParameter, ValueAccess } from "../types.js";
 import { walkNodes } from "../utils/node.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { isFunctionTyped } from "./utils.js";
@@ -115,10 +110,7 @@ function paramsOfTool(
 }
 
 /** Per-param classifier — required vs optional vs already-bound. */
-function classifyToolParam(
-  param: FunctionParameter,
-  toolExpr: AgencyNode,
-): ParamClassification {
+function classifyToolParam(param: FunctionParameter, toolExpr: AgencyNode): ParamClassification {
   if (isBound(toolExpr, param.name)) return { kind: "ok", param };
   // "Optional" === has a default value (the function body can run without
   // an LLM-supplied value). A variadic without an explicit default is
@@ -152,10 +144,7 @@ function findToolsOption(llmCall: AgencyNode): AgencyNode | undefined {
 }
 
 /** Walk the program, emit diagnostics for each llm() call's tools array. */
-export function checkToolBlockBindings(
-  program: AgencyProgram,
-  ctx: TypeCheckerContext,
-): void {
+export function checkToolBlockBindings(program: AgencyProgram, ctx: TypeCheckerContext): void {
   for (const { node: llmCall } of walkNodes(program.nodes)) {
     if (llmCall.type !== "functionCall" || llmCall.functionName !== "llm") {
       continue;
@@ -190,9 +179,7 @@ function emitDiagnostics(
   const optionalDropped: string[] = [];
   for (const cls of classifications) {
     if (cls.kind === "required-unbound") {
-      const typeStr = cls.param.typeHint
-        ? formatTypeHint(cls.param.typeHint)
-        : undefined;
+      const typeStr = cls.param.typeHint ? formatTypeHint(cls.param.typeHint) : undefined;
       // Two entries (typed/untyped) — conditional phrasing per the registry
       // rule. A cross-check test locks the template text to the runtime's
       // shared formatUnboundClause so the canonical clause cannot drift.

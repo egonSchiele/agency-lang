@@ -160,8 +160,17 @@ describe("dependencyFingerprint failure contract", () => {
   // The TEST'S oracle, independent of the production classifier: if
   // production drops a code, its row stays here and fails.
   const EXPECTED_DISCOVERY_FS_CODES = [
-    "ENOENT", "EACCES", "EPERM", "EIO", "EBUSY", "EMFILE", "ENFILE", "EISDIR",
-    "ENOTDIR", "ELOOP", "ESTALE",
+    "ENOENT",
+    "EACCES",
+    "EPERM",
+    "EIO",
+    "EBUSY",
+    "EMFILE",
+    "ENFILE",
+    "EISDIR",
+    "ENOTDIR",
+    "ELOOP",
+    "ESTALE",
   ] as const;
 
   test.each(EXPECTED_DISCOVERY_FS_CODES)("thrown %s is absorbed ⇒ cacheable false", (code) => {

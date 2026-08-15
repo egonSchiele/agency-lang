@@ -101,7 +101,11 @@ describe("validateBundleCompiles", () => {
       entrypoint: "v-main.agency",
       files: [
         { name: "v-helpers.agency", contents: HELPERS, absPath: helpersPath },
-        { name: "v-main.agency", contents: IMPORTS_HELPER.replace("helpers", "v-helpers"), absPath: mainPath },
+        {
+          name: "v-main.agency",
+          contents: IMPORTS_HELPER.replace("helpers", "v-helpers"),
+          absPath: mainPath,
+        },
       ],
     };
     expect(validateBundleCompiles(bundle, {})).toEqual({ ok: true });

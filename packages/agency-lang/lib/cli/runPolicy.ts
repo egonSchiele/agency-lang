@@ -1,10 +1,7 @@
 import { existsSync, readFileSync } from "fs";
 import type { Policy, PolicyRule } from "@/runtime/policy.js";
 import { validatePolicy } from "@/runtime/policy.js";
-import {
-  builtinPolicy,
-  builtinPolicyNames,
-} from "@/runtime/builtinPolicies.js";
+import { builtinPolicy, builtinPolicyNames } from "@/runtime/builtinPolicies.js";
 
 export type RunPolicyFlags = {
   policy?: string;
@@ -67,8 +64,7 @@ export type ResolvedRunPolicy = {
 };
 
 export function resolveRunPolicy(flags: RunPolicyFlags): ResolvedRunPolicy | null {
-  const hasAny =
-    !!flags.policy || !!flags.approve || !!flags.reject || !!flags.interactive;
+  const hasAny = !!flags.policy || !!flags.approve || !!flags.reject || !!flags.interactive;
   if (!hasAny) return null;
 
   const policy = loadBase(flags.policy, flags.cwd);
@@ -83,9 +79,7 @@ export function resolveRunPolicy(flags: RunPolicyFlags): ResolvedRunPolicy | nul
   // you cannot break it by reordering statements.
   const rejectRule: PolicyRule = { action: "reject" };
   const approveRule: PolicyRule = { action: "approve" };
-  const affected = [...approved, ...rejected].filter(
-    (e, i, a) => a.indexOf(e) === i,
-  );
+  const affected = [...approved, ...rejected].filter((e, i, a) => a.indexOf(e) === i);
   for (const effect of affected) {
     policy[effect] = [
       ...(rejected.includes(effect) ? [rejectRule] : []),

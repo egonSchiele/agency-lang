@@ -16,7 +16,10 @@ import { cleanupFakeRuns, fakeRun } from "../testUtils.js";
 class OutputScoreGrader extends BaseGrader {
   protected readonly defaultName = "output-score";
   protected _run({ run }: GraderInput): Promise<Grade> {
-    return Promise.resolve({ score: { kind: "scalar", value: Number(run.output) }, feedback: "fb" });
+    return Promise.resolve({
+      score: { kind: "scalar", value: Number(run.output) },
+      feedback: "fb",
+    });
   }
 }
 
@@ -30,22 +33,41 @@ describe("Gepa (reflective Pareto optimizer)", () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "gepa-"));
     src = path.join(root, "src");
     fs.mkdirSync(src);
-    fs.writeFileSync(path.join(src, "agent.agency"), 'optimize const prompt = "hi"\n\nnode main() {}\n');
+    fs.writeFileSync(
+      path.join(src, "agent.agency"),
+      'optimize const prompt = "hi"\n\nnode main() {}\n',
+    );
     recordFile = path.join(root, "rec.json");
     fs.writeFileSync(recordFile, JSON.stringify({ errors: [], events: [] }));
   });
-  afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+  afterEach(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
 
   const target = (id: string): OptimizeTargetSet["targets"][number] => ({
-    id, kind: "variable", file: "agent.agency", absoluteFile: path.join(src, "agent.agency"),
-    scope: "global", name: id, valueKind: "string", value: `"${id}"`, declaredType: null,
+    id,
+    kind: "variable",
+    file: "agent.agency",
+    absoluteFile: path.join(src, "agent.agency"),
+    scope: "global",
+    name: id,
+    valueKind: "string",
+    value: `"${id}"`,
+    declaredType: null,
   });
 
   const fakeSource = (): OptimizeTargetSet => ({
     baseDir: src,
     entryFile: "agent.agency",
     typeAliases: {},
-    files: { "agent.agency": { file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), source: "x", sha256: "x" } },
+    files: {
+      "agent.agency": {
+        file: "agent.agency",
+        absoluteFile: path.join(src, "agent.agency"),
+        source: "x",
+        sha256: "x",
+      },
+    },
     targets: [target("t-alpha"), target("t-beta")],
   });
 
@@ -62,22 +84,55 @@ describe("Gepa (reflective Pareto optimizer)", () => {
     return {
       runInput,
       discover: () => fakeSource(),
-      propose: propose ?? (async () => ({ rationale: "r", operations: [{ target: "t-alpha", kind: "variable", op: "replaceInitializer", value: '"x"', rationale: "c" }] })),
-      preview: (targetSet): OptimizeMutationPreview => ({ files: { "agent.agency": "x" }, changes: [], diff: "", diagnostics: [], targetSet }),
+      propose:
+        propose ??
+        (async () => ({
+          rationale: "r",
+          operations: [
+            {
+              target: "t-alpha",
+              kind: "variable",
+              op: "replaceInitializer",
+              value: '"x"',
+              rationale: "c",
+            },
+          ],
+        })),
+      preview: (targetSet): OptimizeMutationPreview => ({
+        files: { "agent.agency": "x" },
+        changes: [],
+        diff: "",
+        diagnostics: [],
+        targetSet,
+      }),
     };
   }
 
   const config = (over: Partial<GepaConfig>): GepaConfig => ({
-    graders: [new OutputScoreGrader()], iterations: 3, minibatch: 2, seed: 1,
-    config: {}, runsDir: root, runId: "r", writeback: false, ...over,
+    graders: [new OutputScoreGrader()],
+    iterations: 3,
+    minibatch: 2,
+    seed: 1,
+    config: {},
+    runsDir: root,
+    runId: "r",
+    writeback: false,
+    ...over,
   });
 
-  const threeInputs = [{ id: "a", task: "t" }, { id: "b", task: "t" }, { id: "c", task: "t" }];
+  const threeInputs = [
+    { id: "a", task: "t" },
+    { id: "b", task: "t" },
+    { id: "c", task: "t" },
+  ];
 
   it("exits early without iterating when the baseline is already optimal", async () => {
     const runInput = vi.fn(scoredRunner([1.0])); // baseline scores the max objective
     const opt = new Gepa(config({ runId: "perfect" }), deps(runInput));
-    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: threeInputs });
+    const result = await opt.optimize({
+      agent: path.join(src, "agent.agency"),
+      inputs: threeInputs,
+    });
     expect(result.championIter).toBe("baseline");
     expect(result.acceptedCount).toBe(0);
     expect(result.iterations).toHaveLength(1); // baseline only
@@ -86,7 +141,10 @@ describe("Gepa (reflective Pareto optimizer)", () => {
   it("stops early once a candidate reaches the maximum objective", async () => {
     const runInput = vi.fn(scoredRunner([0.0, 1.0, 1.0, 1.0])); // baseline 0, first child 1.0
     const opt = new Gepa(config({ runId: "stop", iterations: 5 }), deps(runInput));
-    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: threeInputs });
+    const result = await opt.optimize({
+      agent: path.join(src, "agent.agency"),
+      inputs: threeInputs,
+    });
     expect(result.acceptedCount).toBe(1);
     expect(result.iterations).toHaveLength(2); // baseline + 1 accepted, then stop (not all 5)
   });
@@ -100,10 +158,24 @@ describe("Gepa (reflective Pareto optimizer)", () => {
 
   it("admits the baseline and grows the pool when children improve on the minibatch", async () => {
     const runInput = vi.fn(scoredRunner([0.1, 0.2, 0.3, 0.4])); // baseline 0.1, each child strictly better
-    const proposeSpy = vi.fn<NonNullable<GepaDeps["propose"]>>(async () => ({ rationale: "r", operations: [{ target: "t-alpha", kind: "variable", op: "replaceInitializer", value: '"x"', rationale: "c" }] }));
+    const proposeSpy = vi.fn<NonNullable<GepaDeps["propose"]>>(async () => ({
+      rationale: "r",
+      operations: [
+        {
+          target: "t-alpha",
+          kind: "variable",
+          op: "replaceInitializer",
+          value: '"x"',
+          rationale: "c",
+        },
+      ],
+    }));
     const opt = new Gepa(config({ runId: "accept" }), deps(runInput, proposeSpy));
 
-    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: threeInputs });
+    const result = await opt.optimize({
+      agent: path.join(src, "agent.agency"),
+      inputs: threeInputs,
+    });
 
     expect(result.acceptedCount).toBe(3);
     expect(result.rejectedCount).toBe(0);
@@ -124,8 +196,10 @@ describe("Gepa (reflective Pareto optimizer)", () => {
     const events: string[] = [];
     const reporter = {
       gradingSetup: () => {},
-      runStarted: (a: { optimizer: string; iterations: number }) => events.push(`start ${a.optimizer} x${a.iterations}`),
-      baselineScored: (a: { objective: number }) => events.push(`baseline ${a.objective.toFixed(1)}`),
+      runStarted: (a: { optimizer: string; iterations: number }) =>
+        events.push(`start ${a.optimizer} x${a.iterations}`),
+      baselineScored: (a: { objective: number }) =>
+        events.push(`baseline ${a.objective.toFixed(1)}`),
       iterationDecided: (a: { iter: number; decision: string; durationMs?: number }) =>
         events.push(`iter ${a.iter} ${a.decision} timed=${typeof a.durationMs === "number"}`),
       note: () => events.push("note"),
@@ -139,7 +213,9 @@ describe("Gepa (reflective Pareto optimizer)", () => {
     expect(events[1]).toBe("baseline 0.1");
     expect(events).toContain("note"); // GEPA notes the sampled Pareto parent each iteration
     expect(events.filter((e) => e.startsWith("iter"))).toEqual([
-      "iter 1 accepted timed=true", "iter 2 accepted timed=true", "iter 3 accepted timed=true",
+      "iter 1 accepted timed=true",
+      "iter 2 accepted timed=true",
+      "iter 3 accepted timed=true",
     ]);
     expect(events.at(-1)).toBe("finished");
   });
@@ -148,7 +224,10 @@ describe("Gepa (reflective Pareto optimizer)", () => {
     const runInput = vi.fn(scoredRunner([0.9, 0.1, 0.1, 0.1])); // baseline 0.9, children 0.1 → always rejected
     const opt = new Gepa(config({ runId: "reject" }), deps(runInput));
 
-    const result = await opt.optimize({ agent: path.join(src, "agent.agency"), inputs: threeInputs });
+    const result = await opt.optimize({
+      agent: path.join(src, "agent.agency"),
+      inputs: threeInputs,
+    });
 
     expect(result.acceptedCount).toBe(0);
     expect(result.rejectedCount).toBe(3);
@@ -168,7 +247,7 @@ describe("Gepa (reflective Pareto optimizer)", () => {
       inputs: threeInputs,
       validationInputs: [{ id: "v", task: "t" }],
     });
-    expect(result.championBreakdown?.length).toBeGreaterThan(0);   // #2: breakdown now emitted
-    expect(typeof result.validationObjective).toBe("number");      // #3: champion picked by validation
+    expect(result.championBreakdown?.length).toBeGreaterThan(0); // #2: breakdown now emitted
+    expect(typeof result.validationObjective).toBe("number"); // #3: champion picked by validation
   });
 });

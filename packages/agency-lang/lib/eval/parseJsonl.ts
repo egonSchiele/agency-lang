@@ -23,9 +23,7 @@ export async function* readEvents(file: string): AsyncIterable<EventEnvelope> {
     try {
       yield JSON.parse(line) as EventEnvelope;
     } catch (err) {
-      throw new Error(
-        `Malformed JSON on line ${lineNo}: ${(err as Error).message}`,
-      );
+      throw new Error(`Malformed JSON on line ${lineNo}: ${(err as Error).message}`);
     }
   }
 }
@@ -52,9 +50,7 @@ export function readAllEventsSync(file: string): EventEnvelope[] {
     try {
       out.push(JSON.parse(line) as EventEnvelope);
     } catch (err) {
-      throw new Error(
-        `Malformed JSON on line ${index + 1}: ${(err as Error).message}`,
-      );
+      throw new Error(`Malformed JSON on line ${index + 1}: ${(err as Error).message}`);
     }
   }
   return out;

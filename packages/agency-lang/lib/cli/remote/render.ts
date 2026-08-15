@@ -6,11 +6,7 @@ import { color } from "@/utils/termcolors.js";
 import type { ServeManifest } from "../statelog/serveClient.js";
 import type { TraceSummary } from "../statelog/projectClient.js";
 import type { RemoteBinding } from "./binding.js";
-import type {
-  ProjectSummary,
-  KeySummary,
-  CreatedKey,
-} from "../statelog/accountClient.js";
+import type { ProjectSummary, KeySummary, CreatedKey } from "../statelog/accountClient.js";
 import type {
   ProjectSpend,
   AccountSpendRow,
@@ -29,11 +25,15 @@ export function renderManifest(manifest: ServeManifest, binding: RemoteBinding):
     color.bold("Nodes"),
   ];
   for (const node of manifest.nodes) {
-    lines.push(`  ${color.cyan(node.name)}(${node.parameters.join(", ")})${effectsSuffix(node.interruptEffects)}`);
+    lines.push(
+      `  ${color.cyan(node.name)}(${node.parameters.join(", ")})${effectsSuffix(node.interruptEffects)}`,
+    );
   }
   lines.push("", color.bold("Functions"));
   for (const fn of manifest.functions) {
-    lines.push(`  ${color.cyan(fn.name)}(${fn.parameters.join(", ")})${effectsSuffix(fn.interruptEffects)}`);
+    lines.push(
+      `  ${color.cyan(fn.name)}(${fn.parameters.join(", ")})${effectsSuffix(fn.interruptEffects)}`,
+    );
     if (fn.description) {
       lines.push(`    ${color.dim(fn.description)}`);
     }
@@ -59,10 +59,9 @@ function effectsSuffix(interruptEffects: string[]): string {
 }
 
 export function renderWhoami(userId: string, origin: string): string {
-  return [
-    `${color.bold("User:")} ${userId}`,
-    `${color.bold("Host:")} ${color.dim(origin)}`,
-  ].join("\n");
+  return [`${color.bold("User:")} ${userId}`, `${color.bold("Host:")} ${color.dim(origin)}`].join(
+    "\n",
+  );
 }
 
 export function renderProjects(projects: ProjectSummary[]): string {
@@ -210,7 +209,13 @@ export type SpendGrouping = { byModel: boolean; byKind: boolean };
 // Token counters accumulate as bigint: a grouping can collapse many individually
 // safe breakdown rows, and the sum can cross Number.MAX_SAFE_INTEGER. Cost is a
 // float total (money, not an integer count), so it stays a number.
-type SpendGroup = { model: string | null; kind: UsageKind | null; totalCost: number; inputTokens: bigint; outputTokens: bigint };
+type SpendGroup = {
+  model: string | null;
+  kind: UsageKind | null;
+  totalCost: number;
+  inputTokens: bigint;
+  outputTokens: bigint;
+};
 
 /** Fold the raw `(model, kind)` breakdown into the requested grouping. Both
  *  flags → one group per pair; one flag → collapse the other axis; the caller
@@ -252,7 +257,11 @@ function renderGroupTable(groups: SpendGroup[], grouping: SpendGrouping): string
     const cells: string[] = [];
     if (grouping.byModel) cells.push(modelLabel(group.model ?? ""));
     if (grouping.byKind) cells.push(group.kind ?? "");
-    cells.push(formatUsd(group.totalCost), formatCount(group.inputTokens), formatCount(group.outputTokens));
+    cells.push(
+      formatUsd(group.totalCost),
+      formatCount(group.inputTokens),
+      formatCount(group.outputTokens),
+    );
     return cells;
   });
   return formatStaticTable(headers, tableRows);
@@ -281,7 +290,11 @@ export function renderProjectSpend(
     if (spend.breakdownTruncated) {
       // The host caps the breakdown to its top spenders; the rest is summed into
       // `otherSpend` (the grouped rows above therefore omit it).
-      lines.push(color.dim(`  top ${formatCount(spend.breakdown.length)} (model, kind) shown; ${formatUsd(spend.otherSpend.cost.totalCost)} more across other groups`));
+      lines.push(
+        color.dim(
+          `  top ${formatCount(spend.breakdown.length)} (model, kind) shown; ${formatUsd(spend.otherSpend.cost.totalCost)} more across other groups`,
+        ),
+      );
     }
   }
   lines.push(...trustNotes(spend, "  "));
@@ -299,7 +312,11 @@ function trustNotes(
     notes.push(color.dim(`${indent}(lower bound — some telemetry incomplete)`));
   }
   if (spend.unpricedCallCount > 0) {
-    notes.push(color.dim(`${indent}${formatCount(spend.unpricedCallCount)} unpriced call(s) — cost may be understated`));
+    notes.push(
+      color.dim(
+        `${indent}${formatCount(spend.unpricedCallCount)} unpriced call(s) — cost may be understated`,
+      ),
+    );
   }
   return notes;
 }
@@ -327,7 +344,15 @@ function spendTotals(rows: AccountSpendRow[]): SpendTotals {
       usageComplete: totals.usageComplete && row.spend.usageComplete,
       pricingComplete: totals.pricingComplete && row.spend.pricingComplete,
     }),
-    { totalCost: 0, inputTokens: 0n, outputTokens: 0n, invocationCount: 0n, unpricedCallCount: 0n, usageComplete: true, pricingComplete: true },
+    {
+      totalCost: 0,
+      inputTokens: 0n,
+      outputTokens: 0n,
+      invocationCount: 0n,
+      unpricedCallCount: 0n,
+      usageComplete: true,
+      pricingComplete: true,
+    },
   );
 }
 
@@ -385,7 +410,11 @@ export function renderAccountSpend(rows: AccountSpendRow[], description: string)
     lines.push(color.dim("Some projects have incomplete telemetry; totals are lower bounds."));
   }
   if (totals.unpricedCallCount > 0n) {
-    lines.push(color.dim(`${formatCount(totals.unpricedCallCount)} unpriced call(s) total — cost may be understated.`));
+    lines.push(
+      color.dim(
+        `${formatCount(totals.unpricedCallCount)} unpriced call(s) total — cost may be understated.`,
+      ),
+    );
   }
   return lines.join("\n");
 }
@@ -397,7 +426,10 @@ function formatStaticTable(headers: string[], rows: string[][]): string {
   });
   return [headers, ...rows]
     .map((row) =>
-      row.map((value, index) => value.padEnd(widths[index] ?? 0)).join("  ").trimEnd(),
+      row
+        .map((value, index) => value.padEnd(widths[index] ?? 0))
+        .join("  ")
+        .trimEnd(),
     )
     .join("\n");
 }

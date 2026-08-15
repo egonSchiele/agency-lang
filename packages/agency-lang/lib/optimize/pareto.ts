@@ -7,7 +7,9 @@ export type Scored<T> = { item: T; scores: number[] };
 export function paretoFrontier<T>(pool: Scored<T>[]): { item: T; wins: number }[] {
   if (pool.length === 0) return [];
   const inputCount = pool[0].scores.length;
-  const best = Array.from({ length: inputCount }, (_unused, i) => Math.max(...pool.map((c) => c.scores[i])));
+  const best = Array.from({ length: inputCount }, (_unused, i) =>
+    Math.max(...pool.map((c) => c.scores[i])),
+  );
   return pool
     .map((c) => ({ item: c.item, wins: best.filter((b, i) => c.scores[i] >= b).length }))
     .filter((m) => m.wins > 0);
@@ -16,5 +18,8 @@ export function paretoFrontier<T>(pool: Scored<T>[]): { item: T; wins: number }[
 /** Sample a frontier member weighted by how many inputs it wins. */
 export function sampleFrontier<T>(pool: Scored<T>[], rng: Rng): T {
   const members = paretoFrontier(pool);
-  return weightedPick(members.map((m) => ({ item: m.item, weight: m.wins })), rng);
+  return weightedPick(
+    members.map((m) => ({ item: m.item, weight: m.wins })),
+    rng,
+  );
 }

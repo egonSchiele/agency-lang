@@ -18,13 +18,7 @@ import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.j
 import { buildCompilationUnit, GLOBAL_SCOPE_KEY } from "@/compilationUnit.js";
 import { typeCheck } from "@/typeChecker/index.js";
 import type { InterruptEffect } from "@/symbolTable.js";
-import {
-  heading,
-  codeFence,
-  bold,
-  markdownTable,
-  section,
-} from "@/utils/markdown.js";
+import { heading, codeFence, bold, markdownTable, section } from "@/utils/markdown.js";
 import { docStringText } from "@/utils/docStringText.js";
 import {
   OwnedPathError,
@@ -105,14 +99,9 @@ export function generateDoc(
       // external file overwritten.
       const resolved = resolveOwnedOutputPath(outDirReal, baseName);
       if (resolved.leafIsSymlink) {
-        throw new OwnedPathError(
-          `refusing to write documentation through a symlink: ${baseName}`,
-        );
+        throw new OwnedPathError(`refusing to write documentation through a symlink: ${baseName}`);
       }
-      const program = preprocessProgram(
-        parseDocSource(readFile(inputPath), config),
-        config,
-      );
+      const program = preprocessProgram(parseDocSource(readFile(inputPath), config), config);
       generateDocForFile(
         inputPath,
         resolved.abs,
@@ -350,10 +339,7 @@ export function extractRegistrySymbols(program: AgencyProgram): string[] {
   return out;
 }
 
-function preprocessProgram(
-  program: AgencyProgram,
-  config: AgencyConfig,
-): AgencyProgram {
+function preprocessProgram(program: AgencyProgram, config: AgencyConfig): AgencyProgram {
   const preprocessor = new TypescriptPreprocessor(program, config);
   preprocessor.attachDocComments();
   // Attach `@validate(...)` / `@jsonSchema(...)` / other tags onto their
@@ -450,18 +436,10 @@ function generateDocForFile(
   if (constantSection) sections.push(constantSection);
 
   const functions = Object.values(info.functionDefinitions);
-  const functionSection = generateFunctionSection(
-    functions,
-    ctx,
-    interruptEffectsByFunction,
-  );
+  const functionSection = generateFunctionSection(functions, ctx, interruptEffectsByFunction);
   if (functionSection) sections.push(functionSection);
 
-  const nodeSection = generateNodeSection(
-    info.graphNodes,
-    ctx,
-    interruptEffectsByFunction,
-  );
+  const nodeSection = generateNodeSection(info.graphNodes, ctx, interruptEffectsByFunction);
   if (nodeSection) sections.push(nodeSection);
   const generatedOutput = postprocessDoc(sections.join("\n\n") + "\n");
   fs.writeFileSync(outputPath, generatedOutput);
@@ -485,10 +463,7 @@ function formatType(type: VariableType | undefined | null): string {
     .trim();
 }
 
-export function formatTypeLinked(
-  type: VariableType | undefined | null,
-  ctx: DocContext,
-): string {
+export function formatTypeLinked(type: VariableType | undefined | null, ctx: DocContext): string {
   if (!type) return "";
   const plain = formatType(type);
   if (type.type !== "typeAliasVariable") return "`" + plain + "`";
@@ -511,10 +486,7 @@ export function formatTypeLinked(
   return `[${name}](${toPosixPath(rel)}#${name.toLowerCase()})`;
 }
 
-function sourceLink(
-  loc: { line: number } | undefined,
-  ctx: DocContext,
-): string {
+function sourceLink(loc: { line: number } | undefined, ctx: DocContext): string {
   if (!ctx.baseUrl || !ctx.sourceRelPath || !loc) return "";
   return `([source](${ctx.baseUrl}/${toPosixPath(ctx.sourceRelPath)}#L${loc.line + 1}))`;
 }
@@ -530,10 +502,7 @@ function formatDefaultValue(node: FunctionParameter["defaultValue"]): string {
   return generator.processNode(node).trim();
 }
 
-function generateParamTable(
-  params: FunctionParameter[],
-  ctx: DocContext,
-): string | null {
+function generateParamTable(params: FunctionParameter[], ctx: DocContext): string | null {
   if (params.length === 0) return null;
   const rows = params.map((p) => [
     p.name,
@@ -559,10 +528,13 @@ export {
 import { extractSummaryOverride, moduleDescription } from "../utils/moduleDoc.js";
 
 function formatTypeAlias(alias: TypeAlias, ctx: DocContext): string {
-  const code = generateAgency({
-    type: "agencyProgram",
-    nodes: [alias],
-  }, { debug: false });
+  const code = generateAgency(
+    {
+      type: "agencyProgram",
+      nodes: [alias],
+    },
+    { debug: false },
+  );
   return section(
     heading(3, alias.aliasName),
     alias.docComment ? formatDocComment(alias.docComment) : null,
@@ -572,25 +544,22 @@ function formatTypeAlias(alias: TypeAlias, ctx: DocContext): string {
   );
 }
 
-function generateTypeSection(
-  aliases: TypeAlias[],
-  ctx: DocContext,
-): string | null {
+function generateTypeSection(aliases: TypeAlias[], ctx: DocContext): string | null {
   if (aliases.length === 0) return null;
   return section(
     heading(2, "Types"),
-    ...aliases.filter(a => a.exported).map((a) => formatTypeAlias(a, ctx)),
+    ...aliases.filter((a) => a.exported).map((a) => formatTypeAlias(a, ctx)),
   );
 }
 
-function formatEffectDeclaration(
-  decl: EffectDeclaration,
-  ctx: DocContext,
-): string {
-  const code = generateAgency({
-    type: "agencyProgram",
-    nodes: [decl],
-  }, { debug: false });
+function formatEffectDeclaration(decl: EffectDeclaration, ctx: DocContext): string {
+  const code = generateAgency(
+    {
+      type: "agencyProgram",
+      nodes: [decl],
+    },
+    { debug: false },
+  );
   return section(
     heading(3, decl.effect),
     decl.docComment ? formatDocComment(decl.docComment) : null,
@@ -599,15 +568,9 @@ function formatEffectDeclaration(
   );
 }
 
-function generateEffectSection(
-  decls: EffectDeclaration[],
-  ctx: DocContext,
-): string | null {
+function generateEffectSection(decls: EffectDeclaration[], ctx: DocContext): string | null {
   if (decls.length === 0) return null;
-  return section(
-    heading(2, "Effects"),
-    ...decls.map((d) => formatEffectDeclaration(d, ctx)),
-  );
+  return section(heading(2, "Effects"), ...decls.map((d) => formatEffectDeclaration(d, ctx)));
 }
 
 /**
@@ -646,11 +609,7 @@ function formatValidatorsAndSchema(tags: Tag[] | undefined): string | null {
 function collectExportedConstants(program: AgencyProgram): Assignment[] {
   const out: Assignment[] = [];
   for (const node of program.nodes) {
-    if (
-      node.type === "assignment" &&
-      node.exported &&
-      node.declKind === "const"
-    ) {
+    if (node.type === "assignment" && node.exported && node.declKind === "const") {
       out.push(node as Assignment);
     }
   }
@@ -661,37 +620,30 @@ function formatConstant(c: Assignment, ctx: DocContext): string {
   // Render the declaration via the agency generator so it picks up any
   // attached `@validate(...)` / `@jsonSchema(...)` tags and the doc
   // comment.
-  const code = generateAgency({
-    type: "agencyProgram",
-    nodes: [c],
-  }, { debug: false });
+  const code = generateAgency(
+    {
+      type: "agencyProgram",
+      nodes: [c],
+    },
+    { debug: false },
+  );
   return section(
     heading(3, c.variableName),
     codeFence(code),
-    c.typeHint
-      ? `${bold("Type:")} ${formatTypeLinked(c.typeHint, ctx)}`
-      : null,
+    c.typeHint ? `${bold("Type:")} ${formatTypeLinked(c.typeHint, ctx)}` : null,
     formatValidatorsAndSchema(c.tags),
     sourceLink(c.loc, ctx),
   );
 }
 
-function generateConstantSection(
-  constants: Assignment[],
-  ctx: DocContext,
-): string | null {
+function generateConstantSection(constants: Assignment[], ctx: DocContext): string | null {
   if (constants.length === 0) return null;
-  return section(
-    heading(2, "Constants"),
-    ...constants.map((c) => formatConstant(c, ctx)),
-  );
+  return section(heading(2, "Constants"), ...constants.map((c) => formatConstant(c, ctx)));
 }
 
 function formatThrows(kinds: InterruptEffect[] | undefined): string | null {
   if (!kinds || kinds.length === 0) return null;
-  const formatted = kinds
-    .map((k) => "`" + (k.effect || "unknown") + "`")
-    .join(", ");
+  const formatted = kinds.map((k) => "`" + (k.effect || "unknown") + "`").join(", ");
   return `${bold("Throws:")} ${formatted}`;
 }
 
@@ -714,9 +666,7 @@ function generateFunctionSection(
       fn.docString ? docStringText(fn.docString) : null,
       fn.docComment ? formatDocComment(fn.docComment) : null,
       generateParamTable(fn.parameters, ctx),
-      fn.returnType
-        ? `${bold("Returns:")} ${formatTypeLinked(fn.returnType, ctx)}`
-        : null,
+      fn.returnType ? `${bold("Returns:")} ${formatTypeLinked(fn.returnType, ctx)}` : null,
       formatThrows(interruptEffectsByFunction[declaredName(fn.functionName)]),
       sourceLink(fn.loc, ctx),
     );
@@ -739,9 +689,7 @@ function generateNodeSection(
       node.docString ? docStringText(node.docString) : null,
       node.docComment ? formatDocComment(node.docComment) : null,
       generateParamTable(node.parameters, ctx),
-      node.returnType
-        ? `${bold("Returns:")} ${formatTypeLinked(node.returnType, ctx)}`
-        : null,
+      node.returnType ? `${bold("Returns:")} ${formatTypeLinked(node.returnType, ctx)}` : null,
       formatThrows(interruptEffectsByFunction[declaredName(node.nodeName)]),
       sourceLink(node.loc, ctx),
     );

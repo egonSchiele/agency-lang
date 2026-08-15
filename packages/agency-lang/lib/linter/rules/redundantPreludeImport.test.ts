@@ -27,33 +27,40 @@ function applied(source: string, f: LintFinding): string {
 
 describe("redundant-prelude-import rule", () => {
   it("flags a prelude name imported from std::index (used or not — redundancy is not usage)", () => {
-    expect(names(`import { map } from "std::index"\nnode main() { return 1 }\n`))
-      .toEqual(["map"]);
+    expect(names(`import { map } from "std::index"\nnode main() { return 1 }\n`)).toEqual(["map"]);
   });
 
   it("flags each redundant name when a statement has two", () => {
-    expect(names(`import { map, filter } from "std::index"\nnode main() { return 1 }\n`))
-      .toEqual(["map", "filter"]);
+    expect(names(`import { map, filter } from "std::index"\nnode main() { return 1 }\n`)).toEqual([
+      "map",
+      "filter",
+    ]);
   });
 
   it("keeps a std::index name that is NOT in the prelude (types like WriteMode)", () => {
-    expect(names(`import { WriteMode } from "std::index"\ndef pick(m: WriteMode): WriteMode { return m }\n`))
-      .toEqual([]);
+    expect(
+      names(
+        `import { WriteMode } from "std::index"\ndef pick(m: WriteMode): WriteMode { return m }\n`,
+      ),
+    ).toEqual([]);
   });
 
   it("keeps an aliased prelude import (the alias binds a new name)", () => {
-    expect(names(`import { map as arrMap } from "std::index"\nnode main() { return 1 }\n`))
-      .toEqual([]);
+    expect(names(`import { map as arrMap } from "std::index"\nnode main() { return 1 }\n`)).toEqual(
+      [],
+    );
   });
 
   it("keeps a destructive-marked prelude import (the marker changes retry behavior)", () => {
-    expect(names(`import { destructive write } from "std::index"\nnode main() { return 1 }\n`))
-      .toEqual([]);
+    expect(
+      names(`import { destructive write } from "std::index"\nnode main() { return 1 }\n`),
+    ).toEqual([]);
   });
 
   it("keeps an idempotent-marked prelude import", () => {
-    expect(names(`import { idempotent write } from "std::index"\nnode main() { return 1 }\n`))
-      .toEqual([]);
+    expect(
+      names(`import { idempotent write } from "std::index"\nnode main() { return 1 }\n`),
+    ).toEqual([]);
   });
 
   it("skips non-std::index imports and testOnly imports", () => {
@@ -82,7 +89,11 @@ describe("redundant-prelude-import rule", () => {
   });
 
   it("surfaces through lintSource end to end", () => {
-    const findings = lintSource(`import { map } from "std::index"\nnode main() { return 1 }\n`, "/t.agency", {});
+    const findings = lintSource(
+      `import { map } from "std::index"\nnode main() { return 1 }\n`,
+      "/t.agency",
+      {},
+    );
     expect(findings.map((x) => x.code)).toContain("AL0003");
   });
 });

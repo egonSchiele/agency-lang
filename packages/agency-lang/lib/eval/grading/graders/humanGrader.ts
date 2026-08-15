@@ -10,9 +10,9 @@ export type HumanReviewResponse = { rating?: number; pass?: boolean; note?: stri
 export type HumanRead = (request: HumanReviewRequest) => Promise<HumanReviewResponse>;
 
 type HumanGraderOptions = GraderOptions & {
-  prompt?: string;     // shown above the artifact
-  scale?: Scale;       // omit → binary pass/fail
-  read?: HumanRead;    // defaults to the terminal reader; inject in tests / web harnesses
+  prompt?: string; // shown above the artifact
+  scale?: Scale; // omit → binary pass/fail
+  read?: HumanRead; // defaults to the terminal reader; inject in tests / web harnesses
 };
 
 /** A grader that pauses for a human rating. Configured entirely by constructor settings. */
@@ -21,11 +21,16 @@ export class HumanGrader extends BaseGrader {
   // Distinct name so it doesn't shadow BaseGrader.options, whose samples is forced to 1.
   private readonly humanOptions: HumanGraderOptions;
   constructor(options: HumanGraderOptions = {}) {
-    super({ ...options, samples: 1 });   // a human is asked exactly once
+    super({ ...options, samples: 1 }); // a human is asked exactly once
     this.humanOptions = options;
     const { scale } = options;
-    if (scale && !(Number.isFinite(scale.min) && Number.isFinite(scale.max) && scale.max > scale.min)) {
-      throw new Error(`HumanGrader: scale must have finite min < max, got ${globalThis.JSON.stringify(scale)}`);
+    if (
+      scale &&
+      !(Number.isFinite(scale.min) && Number.isFinite(scale.max) && scale.max > scale.min)
+    ) {
+      throw new Error(
+        `HumanGrader: scale must have finite min < max, got ${globalThis.JSON.stringify(scale)}`,
+      );
     }
   }
 
@@ -45,10 +50,20 @@ export class HumanGrader extends BaseGrader {
       return { score: { kind: "binary", pass: response.pass }, ...note };
     }
     const rating = response.rating;
-    if (rating === undefined || !Number.isFinite(rating) || rating < scale.min || rating > scale.max) {
-      throw new Error(`HumanGrader (${this.name()}): expected a rating in [${scale.min}, ${scale.max}], got ${rating}`);
+    if (
+      rating === undefined ||
+      !Number.isFinite(rating) ||
+      rating < scale.min ||
+      rating > scale.max
+    ) {
+      throw new Error(
+        `HumanGrader (${this.name()}): expected a rating in [${scale.min}, ${scale.max}], got ${rating}`,
+      );
     }
-    return { score: { kind: "scalar", value: (rating - scale.min) / (scale.max - scale.min) }, ...note };
+    return {
+      score: { kind: "scalar", value: (rating - scale.min) / (scale.max - scale.min) },
+      ...note,
+    };
   }
 }
 
@@ -76,14 +91,18 @@ export const terminalRead: HumanRead = async (request) => {
   if (!process.stdin.isTTY) {
     throw new Error(
       "HumanGrader needs an interactive terminal but stdin is not a TTY (e.g. CI). " +
-      "Run interactively or remove the human grader for this run.",
+        "Run interactively or remove the human grader for this run.",
     );
   }
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   try {
     process.stdout.write(`\n${request.prompt}\n${request.artifact}\n`);
     if (request.scale) {
-      return parseScalarAnswer(await rl.question(`Rating (${request.scale.min}-${request.scale.max}), optional note after a space: `));
+      return parseScalarAnswer(
+        await rl.question(
+          `Rating (${request.scale.min}-${request.scale.max}), optional note after a space: `,
+        ),
+      );
     }
     return parseBinaryAnswer(await rl.question("Pass? (y/n), optional note after a space: "));
   } finally {

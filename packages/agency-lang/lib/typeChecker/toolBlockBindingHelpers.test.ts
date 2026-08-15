@@ -18,11 +18,7 @@ const blockNumberToNumber: VariableType = {
   returnType: num,
 };
 
-const param = (
-  name: string,
-  typeHint?: VariableType,
-  variadic = false,
-): FunctionParameter => ({
+const param = (name: string, typeHint?: VariableType, variadic = false): FunctionParameter => ({
   type: "functionParameter",
   name,
   variadic,
@@ -36,20 +32,14 @@ describe("isFunctionTyped", () => {
 
   it("returns true for a union containing a function arm", () => {
     expect(
-      isFunctionTyped(
-        param("block", { type: "unionType", types: [blockNumberToNumber, str] }),
-      ),
+      isFunctionTyped(param("block", { type: "unionType", types: [blockNumberToNumber, str] })),
     ).toBe(true);
   });
 
   it("returns true for a variadic whose element type is a function", () => {
     expect(
       isFunctionTyped(
-        param(
-          "handlers",
-          { type: "arrayType", elementType: blockNumberToNumber },
-          true,
-        ),
+        param("handlers", { type: "arrayType", elementType: blockNumberToNumber }, true),
       ),
     ).toBe(true);
   });
@@ -59,11 +49,7 @@ describe("isFunctionTyped", () => {
   });
 
   it("returns false for a plain variadic of numbers", () => {
-    expect(
-      isFunctionTyped(
-        param("xs", { type: "arrayType", elementType: num }, true),
-      ),
-    ).toBe(false);
+    expect(isFunctionTyped(param("xs", { type: "arrayType", elementType: num }, true))).toBe(false);
   });
 
   it("returns false for `any` (documented limitation)", () => {
@@ -79,10 +65,7 @@ describe("isFunctionTyped", () => {
       isFunctionTyped(
         param("block", {
           type: "unionType",
-          types: [
-            { type: "unionType", types: [blockNumberToNumber, num] },
-            str,
-          ],
+          types: [{ type: "unionType", types: [blockNumberToNumber, num] }, str],
         }),
       ),
     ).toBe(true);

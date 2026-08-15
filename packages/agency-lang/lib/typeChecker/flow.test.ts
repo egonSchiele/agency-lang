@@ -33,7 +33,9 @@ describe("referenceKey", () => {
     expect(referenceKey({ variable: "x", chain: [] })).toBe("x");
   });
   it("dotted-joins a non-empty chain", () => {
-    expect(referenceKey({ variable: "u", chain: [prop("profile"), prop("email")] })).toBe("u.profile.email");
+    expect(referenceKey({ variable: "u", chain: [prop("profile"), prop("email")] })).toBe(
+      "u.profile.email",
+    );
   });
 });
 
@@ -338,14 +340,21 @@ describe("typeAt — property paths (M1)", () => {
     };
     const t = typeAt(pathRef("box", "r"), narrow, env(s));
     expect(typeof t === "object" && t.type).toBe("objectType");
-    const succ = (t as { properties: { key: string; value: VariableType }[] }).properties.find((p) => p.key === "success");
+    const succ = (t as { properties: { key: string; value: VariableType }[] }).properties.find(
+      (p) => p.key === "success",
+    );
     expect(succ?.value).toEqual({ type: "booleanLiteralType", value: "true" });
   });
 
   it("join: unites a narrowed-path predecessor with an un-narrowed one", () => {
     const s = boxScope();
     const start: FlowNode = { kind: "start", scope: s };
-    const narrowed: FlowNode = { kind: "narrow", prev: start, ref: pathRef("box", "r"), refine: successRefine };
+    const narrowed: FlowNode = {
+      kind: "narrow",
+      prev: start,
+      ref: pathRef("box", "r"),
+      refine: successRefine,
+    };
     const join: FlowNode = { kind: "join", prev: [narrowed, start] };
     const t = typeAt(pathRef("box", "r"), join, env(s));
     expect(typeof t === "object" && t.type).toBe("unionType");
@@ -362,7 +371,12 @@ describe("typeAt — path prefix invalidation (M1)", () => {
 
   it("reassigning the base var (box) drops the box.r narrowing → un-narrowed Result", () => {
     const s = boxScope();
-    const reassigned: FlowNode = { kind: "assign", prev: narrowedBoxR(s), ref: pathRef("box"), type: boxType };
+    const reassigned: FlowNode = {
+      kind: "assign",
+      prev: narrowedBoxR(s),
+      ref: pathRef("box"),
+      type: boxType,
+    };
     const after = typeAt(pathRef("box", "r"), reassigned, env(s));
     // Pin to the SPECIFIC type: after reassigning box, box.r is the un-narrowed
     // Result (a resultType), not the success object member. A regression to "any"
@@ -372,13 +386,23 @@ describe("typeAt — path prefix invalidation (M1)", () => {
 
   it("reassigning the path itself (box.r) drops its narrowing (exact-key branch)", () => {
     const s = boxScope();
-    const reassigned: FlowNode = { kind: "assign", prev: narrowedBoxR(s), ref: pathRef("box", "r"), type: RESULT };
+    const reassigned: FlowNode = {
+      kind: "assign",
+      prev: narrowedBoxR(s),
+      ref: pathRef("box", "r"),
+      type: RESULT,
+    };
     expect(typeAt(pathRef("box", "r"), reassigned, env(s))).toEqual(RESULT);
   });
 
   it("sibling assignment (box.q) leaves box.r narrowed (the foot-gun)", () => {
     const s = boxScope();
-    const assignSibling: FlowNode = { kind: "assign", prev: narrowedBoxR(s), ref: pathRef("box", "q"), type: NUM };
+    const assignSibling: FlowNode = {
+      kind: "assign",
+      prev: narrowedBoxR(s),
+      ref: pathRef("box", "q"),
+      type: NUM,
+    };
     const t = typeAt(pathRef("box", "r"), assignSibling, env(s));
     expect(typeof t === "object" && t.type).toBe("objectType");
   });
@@ -386,7 +410,12 @@ describe("typeAt — path prefix invalidation (M1)", () => {
   it("disjoint variable assignment (other) leaves box.r narrowed", () => {
     const s = boxScope();
     s.declare("other", NUM);
-    const assignOther: FlowNode = { kind: "assign", prev: narrowedBoxR(s), ref: pathRef("other"), type: STR };
+    const assignOther: FlowNode = {
+      kind: "assign",
+      prev: narrowedBoxR(s),
+      ref: pathRef("other"),
+      type: STR,
+    };
     const t = typeAt(pathRef("box", "r"), assignOther, env(s));
     expect(typeof t === "object" && t.type).toBe("objectType");
   });
@@ -394,7 +423,12 @@ describe("typeAt — path prefix invalidation (M1)", () => {
   it("multi-hop (M2-ready): reassigning box.r invalidates box.r.value", () => {
     const s = boxScope();
     // box.r narrowed to success; then box.r reassigned to a fresh Result.
-    const reassigned: FlowNode = { kind: "assign", prev: narrowedBoxR(s), ref: pathRef("box", "r"), type: RESULT };
+    const reassigned: FlowNode = {
+      kind: "assign",
+      prev: narrowedBoxR(s),
+      ref: pathRef("box", "r"),
+      type: RESULT,
+    };
     // box.r.value re-resolves from the reassigned (un-narrowed) Result → success
     // member's `.value` is gone; structural resolve of `.value` on a resultType
     // is "any" (diagnostic-free resolvePath).
@@ -415,7 +449,12 @@ describe("typeAt — path prefix invalidation (M1)", () => {
     // The flow LAYER already handles a path-keyed assign (referenceKey + isPrefixOf
     // are generic); Task 4 only makes flowBuilder EMIT this node for `box.r = …`.
     const s = boxScope();
-    const write: FlowNode = { kind: "assign", prev: narrowedBoxR(s), ref: pathRef("box", "r"), type: RESULT };
+    const write: FlowNode = {
+      kind: "assign",
+      prev: narrowedBoxR(s),
+      ref: pathRef("box", "r"),
+      type: RESULT,
+    };
     expect(flowHasNarrowFor(pathRef("box", "r"), write)).toBe(false);
     expect(typeAt(pathRef("box", "r"), write, env(s))).toEqual(RESULT);
   });
@@ -424,7 +463,12 @@ describe("typeAt — path prefix invalidation (M1)", () => {
 describe("flowHasNarrowFor (M1 strict gate)", () => {
   it("true when a narrow for the exact path applies", () => {
     const s = boxScope();
-    const narrow: FlowNode = { kind: "narrow", prev: { kind: "start", scope: s }, ref: pathRef("box", "r"), refine: successRefine };
+    const narrow: FlowNode = {
+      kind: "narrow",
+      prev: { kind: "start", scope: s },
+      ref: pathRef("box", "r"),
+      refine: successRefine,
+    };
     expect(flowHasNarrowFor(pathRef("box", "r"), narrow)).toBe(true);
   });
 
@@ -435,14 +479,29 @@ describe("flowHasNarrowFor (M1 strict gate)", () => {
 
   it("false after the base var is reassigned (prefix rebind resets it)", () => {
     const s = boxScope();
-    const narrow: FlowNode = { kind: "narrow", prev: { kind: "start", scope: s }, ref: pathRef("box", "r"), refine: successRefine };
-    const reassigned: FlowNode = { kind: "assign", prev: narrow, ref: pathRef("box"), type: boxType };
+    const narrow: FlowNode = {
+      kind: "narrow",
+      prev: { kind: "start", scope: s },
+      ref: pathRef("box", "r"),
+      refine: successRefine,
+    };
+    const reassigned: FlowNode = {
+      kind: "assign",
+      prev: narrow,
+      ref: pathRef("box"),
+      type: boxType,
+    };
     expect(flowHasNarrowFor(pathRef("box", "r"), reassigned)).toBe(false);
   });
 
   it("true through a sibling assignment (box.q does not reset box.r)", () => {
     const s = boxScope();
-    const narrow: FlowNode = { kind: "narrow", prev: { kind: "start", scope: s }, ref: pathRef("box", "r"), refine: successRefine };
+    const narrow: FlowNode = {
+      kind: "narrow",
+      prev: { kind: "start", scope: s },
+      ref: pathRef("box", "r"),
+      refine: successRefine,
+    };
     const sibling: FlowNode = { kind: "assign", prev: narrow, ref: pathRef("box", "q"), type: NUM };
     expect(flowHasNarrowFor(pathRef("box", "r"), sibling)).toBe(true);
   });
@@ -450,9 +509,18 @@ describe("flowHasNarrowFor (M1 strict gate)", () => {
   it("requires the narrow on ALL join predecessors", () => {
     const s = boxScope();
     const start: FlowNode = { kind: "start", scope: s };
-    const narrowed: FlowNode = { kind: "narrow", prev: start, ref: pathRef("box", "r"), refine: successRefine };
-    expect(flowHasNarrowFor(pathRef("box", "r"), { kind: "join", prev: [narrowed, narrowed] })).toBe(true);
-    expect(flowHasNarrowFor(pathRef("box", "r"), { kind: "join", prev: [narrowed, start] })).toBe(false);
+    const narrowed: FlowNode = {
+      kind: "narrow",
+      prev: start,
+      ref: pathRef("box", "r"),
+      refine: successRefine,
+    };
+    expect(
+      flowHasNarrowFor(pathRef("box", "r"), { kind: "join", prev: [narrowed, narrowed] }),
+    ).toBe(true);
+    expect(flowHasNarrowFor(pathRef("box", "r"), { kind: "join", prev: [narrowed, start] })).toBe(
+      false,
+    );
   });
 });
 
@@ -480,7 +548,9 @@ describe("PathSegment helpers + index resolution (M2)", () => {
     expect(referenceKey({ variable: "box", chain: [prop("r")] })).toBe("box.r");
     expect(referenceKey({ variable: "arr", chain: [idx(0)] })).toBe("arr.[0]");
     expect(referenceKey({ variable: "x", chain: [] })).toBe("x");
-    expect(referenceKey({ variable: "m", chain: [prop("a"), idx(2), prop("b")] })).toBe("m.a.[2].b");
+    expect(referenceKey({ variable: "m", chain: [prop("a"), idx(2), prop("b")] })).toBe(
+      "m.a.[2].b",
+    );
   });
 
   it("segKey distinguishes a numeric property from an index", () => {
@@ -490,10 +560,27 @@ describe("PathSegment helpers + index resolution (M2)", () => {
   });
 
   it("isPrefixOf compares segments structurally (prop vs index do not alias)", () => {
-    expect(isPrefixOf({ variable: "arr", chain: [] }, { variable: "arr", chain: [idx(0)] })).toBe(true);
-    expect(isPrefixOf({ variable: "arr", chain: [idx(0)] }, { variable: "arr", chain: [idx(0), prop("value")] })).toBe(true);
-    expect(isPrefixOf({ variable: "arr", chain: [idx(0)] }, { variable: "arr", chain: [idx(1), prop("value")] })).toBe(false);
-    expect(isPrefixOf({ variable: "arr", chain: [prop("0")] }, { variable: "arr", chain: [idx(0), prop("v")] })).toBe(false);
+    expect(isPrefixOf({ variable: "arr", chain: [] }, { variable: "arr", chain: [idx(0)] })).toBe(
+      true,
+    );
+    expect(
+      isPrefixOf(
+        { variable: "arr", chain: [idx(0)] },
+        { variable: "arr", chain: [idx(0), prop("value")] },
+      ),
+    ).toBe(true);
+    expect(
+      isPrefixOf(
+        { variable: "arr", chain: [idx(0)] },
+        { variable: "arr", chain: [idx(1), prop("value")] },
+      ),
+    ).toBe(false);
+    expect(
+      isPrefixOf(
+        { variable: "arr", chain: [prop("0")] },
+        { variable: "arr", chain: [idx(0), prop("v")] },
+      ),
+    ).toBe(false);
   });
 
   // resolvePath is module-private (declaredPathType is the public seam); exercise
@@ -534,8 +621,18 @@ describe("PathSegment helpers + index resolution (M2)", () => {
     const s = new Scope("t");
     s.declare("arr", { type: "arrayType", elementType: RESULT });
     const start: FlowNode = { kind: "start", scope: s };
-    const narrowed: FlowNode = { kind: "narrow", prev: start, ref: { variable: "arr", chain: [idx(0)] }, refine: successRefine };
-    const reassigned: FlowNode = { kind: "assign", prev: narrowed, ref: { variable: "arr", chain: [idx(0)] }, type: RESULT };
+    const narrowed: FlowNode = {
+      kind: "narrow",
+      prev: start,
+      ref: { variable: "arr", chain: [idx(0)] },
+      refine: successRefine,
+    };
+    const reassigned: FlowNode = {
+      kind: "assign",
+      prev: narrowed,
+      ref: { variable: "arr", chain: [idx(0)] },
+      type: RESULT,
+    };
     const after = typeAt({ variable: "arr", chain: [idx(0)] }, reassigned, env(s));
     expect(typeof after === "object" && after.type).toBe("resultType");
   });

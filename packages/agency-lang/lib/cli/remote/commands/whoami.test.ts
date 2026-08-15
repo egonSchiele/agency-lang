@@ -8,7 +8,12 @@ const hoisted = vi.hoisted(() => {
   class AccountRequestError extends Error {}
   class AccountScopeError extends AccountRequestError {}
   const client = { whoami: vi.fn() };
-  return { AccountRequestError, AccountScopeError, client, createAccountClient: vi.fn(() => client) };
+  return {
+    AccountRequestError,
+    AccountScopeError,
+    client,
+    createAccountClient: vi.fn(() => client),
+  };
 });
 
 vi.mock("../../statelog/accountClient.js", () => ({

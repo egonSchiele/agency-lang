@@ -14,7 +14,9 @@ export type EvalRecordExtractor = (args: {
  *  `warnMissingValue: true` warns when the run recorded no `evalValue()`;
  *  the optimizer passes false because its inputs come from the input spec,
  *  so a run without `evalValue()` is normal there, not a mistake. */
-export function makeEvalRecordExtractor(options: { warnMissingValue: boolean }): EvalRecordExtractor {
+export function makeEvalRecordExtractor(options: {
+  warnMissingValue: boolean;
+}): EvalRecordExtractor {
   return async ({ statelogPath, outPath }) => {
     const record = new StatelogParser(statelogPath, options).evalRecord();
     fs.writeFileSync(outPath, JSON.stringify(record, null, 2));

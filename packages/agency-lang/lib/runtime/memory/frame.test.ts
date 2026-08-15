@@ -22,9 +22,7 @@ describe("MemoryFrame", () => {
   it("resolves a relative dir against process.cwd() and mkdir-p's it", () => {
     const frame = new MemoryFrame({ dir: "./relmem" });
     // realpath canonicalizes the tmp root too (on macOS /tmp -> /private/tmp).
-    expect(frame.configKey).toBe(
-      fs.realpathSync(path.resolve(tmpRoot, "relmem")),
-    );
+    expect(frame.configKey).toBe(fs.realpathSync(path.resolve(tmpRoot, "relmem")));
     expect(fs.existsSync(frame.configKey)).toBe(true);
   });
 
@@ -72,9 +70,7 @@ describe("MemoryFrame", () => {
       const frame = new MemoryFrame({ dir: "~/agency-mem-test" });
       // configKey is realpath-resolved, so compare against the
       // realpath of $HOME.
-      expect(frame.configKey).toBe(
-        path.join(realFakeHome, "agency-mem-test"),
-      );
+      expect(frame.configKey).toBe(path.join(realFakeHome, "agency-mem-test"));
       // No literal `~` directory should have been created under cwd.
       expect(fs.existsSync(path.join(tmpRoot, "~"))).toBe(false);
     } finally {

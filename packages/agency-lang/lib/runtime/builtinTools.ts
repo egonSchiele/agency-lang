@@ -15,4 +15,3 @@ Returns:
   schema: z.object({ filepath: z.string() }),
 };
 export const readSkillToolParams = ["filepath"];
-

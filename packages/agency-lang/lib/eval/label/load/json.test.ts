@@ -21,7 +21,9 @@ describe("loadJsonArray", () => {
 
   it("keys each occurrence by its index, so equal strings stay separate observations", () => {
     const batch = load({ text: '["same","same"]' });
-    const indices = batch.occurrences.map((o) => (o.origin.kind === "json" ? o.origin.itemIndex : -1));
+    const indices = batch.occurrences.map((o) =>
+      o.origin.kind === "json" ? o.origin.itemIndex : -1,
+    );
     expect(indices).toEqual([0, 1]);
   });
 
@@ -35,8 +37,10 @@ describe("loadJsonArray", () => {
   });
 
   it("merges constant fields into every record", () => {
-    expect(load({ constantFields: { task: "Summarize" } }).occurrences[0].fields)
-      .toEqual({ task: "Summarize", output: "a" });
+    expect(load({ constantFields: { task: "Summarize" } }).occurrences[0].fields).toEqual({
+      task: "Summarize",
+      output: "a",
+    });
   });
 
   it("applies the same eligibility policy as files", () => {
@@ -51,8 +55,9 @@ describe("loadJsonArray", () => {
   });
 
   it("skips an element over the cap", () => {
-    expect(load({ text: '["xxxxxxxxxx"]', maxBytes: 2 }).skips)
-      .toEqual([{ item: "answers.json[0]", reason: "too-large" }]);
+    expect(load({ text: '["xxxxxxxxxx"]', maxBytes: 2 }).skips).toEqual([
+      { item: "answers.json[0]", reason: "too-large" },
+    ]);
   });
 
   it("rejects a non-string element by index rather than coercing it", () => {

@@ -64,10 +64,7 @@ export class FinalizeCodegen {
     private readonly moduleId: string,
     /** TypeScriptBuilder.processBodyAsParts — compiles statements with
      *  step ids starting at `stepBase`. */
-    private readonly compileBody: (
-      body: AgencyNode[],
-      stepBase: number,
-    ) => TsNode[],
+    private readonly compileBody: (body: AgencyNode[], stepBase: number) => TsNode[],
   ) {}
 
   /**
@@ -90,9 +87,7 @@ export class FinalizeCodegen {
     // Defensive split: extras beyond the first finalize are dropped here
     // but already rejected by AG6032.
     const rest = args.body.filter((n) => n.type !== "finalizeBlock");
-    const finalize = args.body.find(
-      (n): n is FinalizeBlock => n.type === "finalizeBlock",
-    );
+    const finalize = args.body.find((n): n is FinalizeBlock => n.type === "finalizeBlock");
     this.presence.push(finalize !== undefined);
     const bodyCode = args.compileBodyRest(rest);
     const decl = finalize ? this.closure(finalize, args.scopeName) : undefined;
@@ -101,11 +96,7 @@ export class FinalizeCodegen {
       bodyCode,
       decl,
       declText: decl !== undefined ? printTs(decl, 0) + "\n" : "",
-      abortReturn: this.abortReturn(
-        args.scopeName,
-        args.errorVar,
-        finalize !== undefined,
-      ),
+      abortReturn: this.abortReturn(args.scopeName, args.errorVar, finalize !== undefined),
     };
   }
 
@@ -137,16 +128,10 @@ export class FinalizeCodegen {
    *  aborted result stops here and runs the finalize — pass-through would
    *  silently skip it. Nothing binds into a local: the value was headed
    *  for the return. */
-  interceptedReturn(
-    valueNode: TsNode,
-    emit: (value: TsNode) => TsNode,
-  ): TsNode {
+  interceptedReturn(valueNode: TsNode, emit: (value: TsNode) => TsNode): TsNode {
     return ts.statements([
       ts.constDecl("__returnTemp", valueNode),
-      ts.if(
-        ts.raw("isAborted(__returnTemp)"),
-        ts.statements(this.stopScope("__returnTemp")),
-      ),
+      ts.if(ts.raw("isAborted(__returnTemp)"), ts.statements(this.stopScope("__returnTemp"))),
       emit(ts.id("__returnTemp")),
     ]);
   }
@@ -171,9 +156,7 @@ export class FinalizeCodegen {
     const binder = finalize.params[0];
     let binderParam = "";
     if (binder !== undefined) {
-      const tsType = binder.typeHint
-        ? `${formatTypeHintTs(binder.typeHint)} | null`
-        : "any";
+      const tsType = binder.typeHint ? `${formatTypeHintTs(binder.typeHint)} | null` : "any";
       binderParam = `${binder.name}: ${tsType}`;
     }
     return ts.raw(
@@ -189,11 +172,7 @@ export class FinalizeCodegen {
     );
   }
 
-  private abortReturn(
-    scopeName: string,
-    errorVar: string,
-    hasFinalize: boolean,
-  ): string {
+  private abortReturn(scopeName: string, errorVar: string, hasFinalize: boolean): string {
     const scope = JSON.stringify(scopeName);
     const fromError = `AbortedResult.fromError(${errorVar}, ${this.frameVar()}, ${scope})`;
     return hasFinalize

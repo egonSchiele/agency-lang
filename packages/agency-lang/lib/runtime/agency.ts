@@ -36,10 +36,7 @@ import {
   type CallsiteLocation,
 } from "./asyncContext.js";
 import { addCost, addTokens } from "./cost.js";
-import {
-  interrupt,
-  type InterruptOpts,
-} from "./agencyInterrupt.js";
+import { interrupt, type InterruptOpts } from "./agencyInterrupt.js";
 import { llm as _llm } from "./agencyLlm.js";
 import {
   checkpoint as _checkpoint,
@@ -53,10 +50,7 @@ import {
   type ResumableScope,
   type ResumableScopeOpts,
 } from "./resumableScope.js";
-import {
-  withLockOnCtx,
-  type WithLockOptions,
-} from "./lock.js";
+import { withLockOnCtx, type WithLockOptions } from "./lock.js";
 import { isIpcMode, sendLockAcquireToParent } from "./ipc.js";
 import type { Checkpoint } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -107,8 +101,7 @@ const global_ = <T = unknown>(name: string, moduleId = ""): T =>
 // ---- Thread subnamespace ----------------------------------------------
 
 /** Active `MessageThread`, creating one if none is active yet. */
-const threadCurrent = (): MessageThread =>
-  getRuntimeContext().threads.getOrCreateActive();
+const threadCurrent = (): MessageThread => getRuntimeContext().threads.getOrCreateActive();
 
 /** Push a user-role message onto the active thread. */
 const threadUser = (content: string): void => {
@@ -134,10 +127,7 @@ const threadStoreMaybe = (): ThreadStore | undefined => agencyStore.getStore()?.
 /** Run `fn` with `threadId` pushed as the active thread; pop the
  *  active stack (including on throw) when `fn` returns. Accepts a
  *  sync or async callback. */
-const threadWith = async <T>(
-  threadId: string,
-  fn: () => T | Promise<T>,
-): Promise<T> => {
+const threadWith = async <T>(threadId: string, fn: () => T | Promise<T>): Promise<T> => {
   const store = threadStore();
   store.pushActive(threadId);
   try {
@@ -184,8 +174,7 @@ const toSlug = (rawId: string): string => `t${rawId}`;
  *  that happen to start with `t`) pass through unchanged. Mirrors
  *  `stripSlug` in runner.ts so both call sites treat slugs the
  *  same way. */
-const fromSlug = (slug: string): string =>
-  /^t\d+$/.test(slug) ? slug.slice(1) : slug;
+const fromSlug = (slug: string): string => (/^t\d+$/.test(slug) ? slug.slice(1) : slug);
 
 /** Return every thread in the run's registry as plain records.
  *  Threads created with `thread(hidden: true) { ... }` are filtered
@@ -227,11 +216,7 @@ const threadsList = (): ThreadInfoTS[] => {
  *  50, matching the Agency-side `getThread` signature.
  *
  *  Throws when called outside any Agency frame. */
-const threadsGet = (
-  id: string,
-  offset = 0,
-  limit = 50,
-): smoltalk.MessageJSON[] => {
+const threadsGet = (id: string, offset = 0, limit = 50): smoltalk.MessageJSON[] => {
   const store = threadStoreMaybe();
   if (!store) {
     throw new Error(
@@ -243,9 +228,7 @@ const threadsGet = (
   const rawId = fromSlug(id);
   const thread = store.threads[rawId];
   if (!thread) return [];
-  return thread.messages
-    .slice(offset, offset + limit)
-    .map((m) => m.toJSON());
+  return thread.messages.slice(offset, offset + limit).map((m) => m.toJSON());
 };
 
 /** Slug form of the currently active thread id, or `undefined` outside
@@ -267,10 +250,8 @@ const getCheckpoint = (id: number): Checkpoint => _getCheckpoint(id);
 
 /** Restore execution to a prior checkpoint. Throws `RestoreSignal`;
  *  the surrounding runtime catches it and rewinds. */
-const restore = (
-  idOrCp: number | Checkpoint,
-  opts: RestoreOptions = {},
-): void => _restore(idOrCp, opts);
+const restore = (idOrCp: number | Checkpoint, opts: RestoreOptions = {}): void =>
+  _restore(idOrCp, opts);
 
 /** Run `fn` with a custom `callsite` (`{moduleId, scopeName, stepPath}`)
  *  installed on the active ALS frame; restore the prior callsite when
@@ -289,8 +270,7 @@ const restore = (
  *  Most TS helpers will never need this — the auto-seeded callsite
  *  from the surrounding step is the right answer. Throws if no
  *  Agency frame is installed. */
-const withCallsite = <T>(loc: CallsiteLocation, fn: () => T): T =>
-  _withCallsite(loc, fn);
+const withCallsite = <T>(loc: CallsiteLocation, fn: () => T): T => _withCallsite(loc, fn);
 
 // ---- Handlers / guards ------------------------------------------------
 
@@ -298,10 +278,8 @@ const withCallsite = <T>(loc: CallsiteLocation, fn: () => T): T =>
  *  finally. Thin wrapper over the shared `withPushedHandler` primitive
  *  in `asyncContext.ts` so user code and `AgencyFunction`'s preapprove
  *  factory go through the same encapsulated combinator. */
-const withHandler = <T>(
-  handler: HandlerFn,
-  fn: () => Promise<T>,
-): Promise<T> => withPushedHandler(ctx(), handler, fn);
+const withHandler = <T>(handler: HandlerFn, fn: () => Promise<T>): Promise<T> =>
+  withPushedHandler(ctx(), handler, fn);
 
 /** Install a `CostGuard(maxCost)` on the active branch's `StateStack.guards`
  *  for the duration of `fn`; pop in finally.
@@ -310,10 +288,7 @@ const withHandler = <T>(
  *  per-branch stack — NOT `ctx().stateStack` (which is the top-level
  *  stack). Inside a fork/race branch the two stacks differ; pushing
  *  on the wrong one would leak the guard into sibling branches. */
-const withCostGuard = async <T>(
-  maxCost: number,
-  fn: () => Promise<T>,
-): Promise<T> => {
+const withCostGuard = async <T>(maxCost: number, fn: () => Promise<T>): Promise<T> => {
   const stack = getRuntimeContext().stack;
   stack.pushGuard(new CostGuard(maxCost));
   try {
@@ -326,10 +301,7 @@ const withCostGuard = async <T>(
 /** Install a `TimeGuard(maxMs)` on the active branch's stack for the
  *  duration of `fn`; pop in finally. Same ALS-stack semantics as
  *  `withCostGuard`. */
-const withTimeGuard = async <T>(
-  maxMs: number,
-  fn: () => Promise<T>,
-): Promise<T> => {
+const withTimeGuard = async <T>(maxMs: number, fn: () => Promise<T>): Promise<T> => {
   const stack = getRuntimeContext().stack;
   stack.pushGuard(new TimeGuard(maxMs));
   try {
@@ -388,8 +360,7 @@ function lockOwnerIdForActiveStack(): string {
 /** Push a memory frame onto the active branch's stateStack. See
  *  `stdlib/memory.agency`'s `enableMemory` for the user-facing
  *  contract — same dir as top is a no-op, different dir stacks. */
-const memoryEnable = (config: MemoryConfig): Promise<void> =>
-  _enableMemory(config);
+const memoryEnable = (config: MemoryConfig): Promise<void> => _enableMemory(config);
 
 /** Pop the top memory frame on the active branch's stateStack.
  *  Pops the JSON-seeded bottom frame too — library authors should

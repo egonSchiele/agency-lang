@@ -20,22 +20,28 @@ beforeEach(() => {
   aliasFile = path.join(dir, "agency.json");
   fs.writeFileSync(aliasFile, "{}");
 });
-afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+afterEach(() => {
+  fs.rmSync(dir, { recursive: true, force: true });
+});
 
 describe("agency local CLI helpers", () => {
   it("alias add/list/remove round-trips through agency.json and prints the file", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
       aliasAdd("my7b", "hf:org/repo:Q4_K_M", aliasFile);
-      expect(JSON.parse(fs.readFileSync(aliasFile, "utf-8")).client.modelAliases.my7b)
-        .toBe("hf:org/repo:Q4_K_M");
+      expect(JSON.parse(fs.readFileSync(aliasFile, "utf-8")).client.modelAliases.my7b).toBe(
+        "hf:org/repo:Q4_K_M",
+      );
       expect(log.mock.calls.flat().some((s) => String(s).includes(aliasFile))).toBe(true);
 
-      expect(aliasList(aliasFile).some((m) => m.name === "my7b" && m.source === "alias")).toBe(true);
+      expect(aliasList(aliasFile).some((m) => m.name === "my7b" && m.source === "alias")).toBe(
+        true,
+      );
 
       aliasRemove("my7b", aliasFile);
-      expect(JSON.parse(fs.readFileSync(aliasFile, "utf-8")).client.modelAliases.my7b)
-        .toBeUndefined();
+      expect(
+        JSON.parse(fs.readFileSync(aliasFile, "utf-8")).client.modelAliases.my7b,
+      ).toBeUndefined();
     } finally {
       log.mockRestore();
     }
@@ -67,7 +73,13 @@ describe("runList", () => {
 describe("downloadChoices", () => {
   it("labels entries with params and size and appends the custom option", () => {
     const choices = downloadChoices([
-      { name: "tiny", target: "hf:o/t:Q4", source: "curated", params: "135M", sizeBytes: 100_000_000 },
+      {
+        name: "tiny",
+        target: "hf:o/t:Q4",
+        source: "curated",
+        params: "135M",
+        sizeBytes: 100_000_000,
+      },
       { name: "plain-alias", target: "hf:x/y:Q4", source: "alias" },
     ]);
     expect(choices[0]).toEqual({ title: "tiny  (135M, 0.10 GB)", value: "tiny" });

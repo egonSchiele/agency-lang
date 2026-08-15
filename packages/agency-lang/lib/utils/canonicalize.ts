@@ -1,11 +1,6 @@
 /** A value that survives a JSON round trip unchanged. */
 export type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+  null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
 /**
  * JSON with object keys sorted at every depth, so two structurally equal

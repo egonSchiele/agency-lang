@@ -39,7 +39,9 @@ describe("definite-return checking", () => {
   });
 
   it("accepts if/else where both branches return", () => {
-    expect(misses(`def f(x: number): number { if (x > 0) { return 1 } else { return 0 } }`)).toBe(false);
+    expect(misses(`def f(x: number): number { if (x > 0) { return 1 } else { return 0 } }`)).toBe(
+      false,
+    );
   });
 
   it("accepts a straight-line return", () => {
@@ -75,7 +77,9 @@ describe("definite-return checking", () => {
   });
 
   it("flags a statement match with no trailing return", () => {
-    expect(misses(`def f(x: string): number { match (x) { "a" => print("hi")  _ => print("no") } }`)).toBe(true);
+    expect(
+      misses(`def f(x: string): number { match (x) { "a" => print("hi")  _ => print("no") } }`),
+    ).toBe(true);
   });
 
   it("flags a conditional return after a Result expression match (genuine fall-through)", () => {
@@ -100,7 +104,9 @@ def f(): number {
 
   it("accepts a returned match expression (literal arms)", () => {
     // `return match(...)` lowers to the match region + a real trailing return.
-    expect(misses(`def f(x: bool): number { return match (x) { true => 1  false => 2 } }`)).toBe(false);
+    expect(misses(`def f(x: bool): number { return match (x) { true => 1  false => 2 } }`)).toBe(
+      false,
+    );
   });
 
   it("accepts a returned match expression (pattern arms — the old idiomatic Result tail)", () => {
@@ -147,7 +153,9 @@ def f(): number {
     // Every arm "returns" (yields), but the match value is assigned and the
     // function then falls through.
     expect(
-      misses(`def f(x: bool): number { const out = match (x) { true => { return 1 }  false => 2 } }`),
+      misses(
+        `def f(x: bool): number { const out = match (x) { true => { return 1 }  false => 2 } }`,
+      ),
     ).toBe(true);
   });
 
@@ -242,17 +250,23 @@ def f(x: bool): number {
 
   // --- config knob ---
   it("silent suppresses the diagnostic", () => {
-    expect(misses(`def f(): number { let x = 1 }`, { typechecker: { definiteReturns: "silent" } })).toBe(false);
+    expect(
+      misses(`def f(): number { let x = 1 }`, { typechecker: { definiteReturns: "silent" } }),
+    ).toBe(false);
   });
 
   it("warn demotes to a warning", () => {
-    const d = drDiags(`def f(): number { let x = 1 }`, { typechecker: { definiteReturns: "warn" } });
+    const d = drDiags(`def f(): number { let x = 1 }`, {
+      typechecker: { definiteReturns: "warn" },
+    });
     expect(d.length).toBe(1);
     expect(d[0].severity).toBe("warning");
   });
 
   it("error emits a hard error", () => {
-    const d = drDiags(`def f(): number { let x = 1 }`, { typechecker: { definiteReturns: "error" } });
+    const d = drDiags(`def f(): number { let x = 1 }`, {
+      typechecker: { definiteReturns: "error" },
+    });
     expect(d.length).toBe(1);
     expect(d[0].severity ?? "error").toBe("error");
   });

@@ -20,7 +20,9 @@ describe("confirmDeployWithoutExports", () => {
 
   it("prompts on an interactive TTY and returns its answer", async () => {
     expect(await confirmDeployWithoutExports({ isTty: true, prompt: async () => true })).toBe(true);
-    expect(await confirmDeployWithoutExports({ isTty: true, prompt: async () => false })).toBe(false);
+    expect(await confirmDeployWithoutExports({ isTty: true, prompt: async () => false })).toBe(
+      false,
+    );
   });
 });
 

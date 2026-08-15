@@ -194,7 +194,10 @@ export class TreeView implements View {
     else return undefined;
     const rows = flattenVisibleRows(this.state);
     if (rows.length === 0) return this.state;
-    const curIdx = Math.max(0, rows.findIndex((r) => r.node.id === this.state.cursorId));
+    const curIdx = Math.max(
+      0,
+      rows.findIndex((r) => r.node.id === this.state.cursorId),
+    );
     const nextIdx = Math.min(rows.length - 1, Math.max(0, curIdx + delta));
     return { ...this.state, cursorId: rows[nextIdx].node.id };
   }
@@ -204,9 +207,7 @@ export class TreeView implements View {
     const cursorIdx = rows.findIndex((r) => r.node.id === state.cursorId);
     const visible = this.paneRows(viewport, state);
     const clamped = clampScroll(state.scrollTop, rows.length, visible);
-    const scrollTop = cursorIdx >= 0
-      ? followCursor(clamped, cursorIdx, visible)
-      : clamped;
+    const scrollTop = cursorIdx >= 0 ? followCursor(clamped, cursorIdx, visible) : clamped;
     return scrollTop === state.scrollTop ? state : { ...state, scrollTop };
   }
 
@@ -258,16 +259,15 @@ export class TreeView implements View {
     return Math.max(1, viewport.rows - 1);
   }
 
-
   private renderStatusBar(viewport: Viewport): Element {
     const state = this.state;
     const parts: string[] = [];
     if (state.query && state.matches !== undefined) {
       const total = state.matches.length;
       const idx = (state.matchIdx ?? 0) + 1;
-      parts.push(total > 0
-        ? `match ${idx}/${total} — "${state.query}"`
-        : `no matches — "${state.query}"`);
+      parts.push(
+        total > 0 ? `match ${idx}/${total} — "${state.query}"` : `no matches — "${state.query}"`,
+      );
     }
     if (state.followOn) parts.push("[FOLLOW]");
     if (state.messageBar) parts.push(state.messageBar);

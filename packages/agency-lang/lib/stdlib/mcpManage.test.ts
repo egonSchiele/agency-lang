@@ -44,7 +44,10 @@ describe("_addMcpServer", () => {
   });
 
   it("preserves other top-level keys", async () => {
-    fs.writeFileSync(file, JSON.stringify({ model: { pin: "x" }, mcpServers: { a: { command: "a" } } }));
+    fs.writeFileSync(
+      file,
+      JSON.stringify({ model: { pin: "x" }, mcpServers: { a: { command: "a" } } }),
+    );
     await _addMcpServer("b", { type: "http", url: "https://x" }, file);
     const raw = readRaw();
     expect(raw.model).toEqual({ pin: "x" });

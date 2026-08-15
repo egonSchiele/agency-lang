@@ -31,10 +31,7 @@ import { unionTypes } from "./inference.js";
  * ref to "any" (the table was empty then), so without this patch a downstream
  * `const y = x` would see `x` as "any".
  */
-export function computeMatchExprTypes(
-  scopes: ScopeInfo[],
-  ctx: TypeCheckerContext,
-): void {
+export function computeMatchExprTypes(scopes: ScopeInfo[], ctx: TypeCheckerContext): void {
   // ORDERING ASSERTION (load-bearing — see TypeChecker.check()): yield
   // synthesis must see flow-narrowed bindings, and this pass patches the
   // eagerly-snapshotted matchConsumerAssignFlows nodes — both require the
@@ -80,7 +77,6 @@ export function computeMatchExprTypes(
           ? ANY_T
           : unionTypes(types.map((t) => widenType(t)));
       }
-
     });
   }
 

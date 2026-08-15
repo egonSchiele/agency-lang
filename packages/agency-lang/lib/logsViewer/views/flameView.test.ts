@@ -18,25 +18,46 @@ function frame(view: FlameView, vp = viewport): string {
 }
 
 function fixtureForest(): TreeNode[] {
-  const bash = span("toolExecution", [
-    leaf("toolCallStart", 2_000, { toolName: "bash", args: { command: "pip install matplotlib" } }),
-    leaf("toolCall", 6_000, { toolName: "bash" }),
-  ], { id: "bash1" });
-  const innerLlm = span("llmCall", [
-    leaf("promptCompletion", 60_000, {
-      model: '"claude-sonnet-5"', threadId: "5", timeTaken: 59_000,
-      messages: [{ role: "user", content: "solve the gcode puzzle" }],
-    }),
-    bash,
-  ], { id: "llm1" });
+  const bash = span(
+    "toolExecution",
+    [
+      leaf("toolCallStart", 2_000, {
+        toolName: "bash",
+        args: { command: "pip install matplotlib" },
+      }),
+      leaf("toolCall", 6_000, { toolName: "bash" }),
+    ],
+    { id: "bash1" },
+  );
+  const innerLlm = span(
+    "llmCall",
+    [
+      leaf("promptCompletion", 60_000, {
+        model: '"claude-sonnet-5"',
+        threadId: "5",
+        timeTaken: 59_000,
+        messages: [{ role: "user", content: "solve the gcode puzzle" }],
+      }),
+      bash,
+    ],
+    { id: "llm1" },
+  );
   const admin = span("handlerChain", [leaf("handlerDecision", 2_500)], { id: "admin1" });
-  const agent = span("toolExecution", [
-    leaf("toolCallStart", 500, { toolName: "codeAgent", args: { userMsg: "do the task" } }),
-    admin,
-    innerLlm,
-    leaf("toolCall", 61_000, { toolName: "codeAgent" }),
-  ], { id: "agent1" });
-  const root = span("agentRun", [leaf("agentStart", 0, { entryNode: "main" }), agent, leaf("agentEnd", 61_500)], { id: "root1" });
+  const agent = span(
+    "toolExecution",
+    [
+      leaf("toolCallStart", 500, { toolName: "codeAgent", args: { userMsg: "do the task" } }),
+      admin,
+      innerLlm,
+      leaf("toolCall", 61_000, { toolName: "codeAgent" }),
+    ],
+    { id: "agent1" },
+  );
+  const root = span(
+    "agentRun",
+    [leaf("agentStart", 0, { entryNode: "main" }), agent, leaf("agentEnd", 61_500)],
+    { id: "root1" },
+  );
   return [trace([leaf("threadCreated", 0, { threadId: "5", label: "codingAgent" }), root])];
 }
 
@@ -60,8 +81,8 @@ describe("FlameView", () => {
 
   it("drill re-roots on the selected span with breadcrumbs; ← climbs out", () => {
     const view = new FlameView(fixtureForest(), "T", DEFAULT_THRESHOLDS);
-    view.handleKey({ key: "down" }, viewport);       // → codeAgent row
-    view.handleKey({ key: "enter" }, viewport);      // drill in
+    view.handleKey({ key: "down" }, viewport); // → codeAgent row
+    view.handleKey({ key: "enter" }, viewport); // drill in
     const drilled = frame(view);
     expect(drilled).toContain("» codeAgent");
     expect(drilled).not.toContain("agentRun");
@@ -71,7 +92,7 @@ describe("FlameView", () => {
 
   it("Enter on a leaf opens the detail screen for that span", () => {
     const view = new FlameView(fixtureForest(), "T", DEFAULT_THRESHOLDS);
-    view.handleKey({ key: "G" }, viewport);           // last row = bash (leaf)
+    view.handleKey({ key: "G" }, viewport); // last row = bash (leaf)
     const action = view.handleKey({ key: "enter" }, viewport);
     expect(action).toEqual({ kind: "openDetail", spanId: "bash1" });
   });
@@ -79,8 +100,10 @@ describe("FlameView", () => {
   it("o returns focusInTree with the cursor span id", () => {
     const view = new FlameView(fixtureForest(), "T", DEFAULT_THRESHOLDS);
     view.handleKey({ key: "down" }, viewport);
-    expect(view.handleKey({ key: "o" }, viewport))
-      .toEqual({ kind: "focusInTree", spanId: "agent1" });
+    expect(view.handleKey({ key: "o" }, viewport)).toEqual({
+      kind: "focusInTree",
+      spanId: "agent1",
+    });
   });
 
   it("zoom halves the window around the cursor span; 0 resets; pan clamps", () => {
@@ -100,8 +123,8 @@ describe("FlameView", () => {
   it("total/self appears only when they differ", () => {
     const view = new FlameView(fixtureForest(), "T", DEFAULT_THRESHOLDS);
     const text = frame(view);
-    expect(text).toMatch(/1m0[12]s\/\d+m?\d*/);       // wrapping span shows total/self
-    expect(text).toMatch(/ 4\.0s(?!\/)/);              // leaf bash shows plain total
+    expect(text).toMatch(/1m0[12]s\/\d+m?\d*/); // wrapping span shows total/self
+    expect(text).toMatch(/ 4\.0s(?!\/)/); // leaf bash shows plain total
   });
 
   it("search jumps the cursor; n advances; a miss reports via the footer", () => {
@@ -113,7 +136,7 @@ describe("FlameView", () => {
     const miss = view.handleKey({ key: "/" }, viewport);
     if (miss.kind === "promptLine") miss.onResult("zzz-nothing");
     expect(frame(view)).toContain('no matches for "zzz-nothing"');
-    view.handleKey({ key: "down" }, viewport);   // any key clears it, like the tree
+    view.handleKey({ key: "down" }, viewport); // any key clears it, like the tree
     expect(frame(view)).not.toContain("zzz-nothing");
   });
 
@@ -137,10 +160,14 @@ describe("FlameView", () => {
     const keptId = view.cursorSpanId();
     const grown = fixtureForest();
     grown[0].children.push(
-      span("toolExecution", [
-        leaf("toolCallStart", 70_000, { toolName: "write" }),
-        leaf("toolCall", 90_000, { toolName: "write" }),
-      ], { id: "late1" }),
+      span(
+        "toolExecution",
+        [
+          leaf("toolCallStart", 70_000, { toolName: "write" }),
+          leaf("toolCall", 90_000, { toolName: "write" }),
+        ],
+        { id: "late1" },
+      ),
     );
     view.setData(grown);
     expect(view.cursorSpanId()).toBe(keptId);
@@ -153,10 +180,14 @@ describe("FlameView", () => {
     const zoomed = view.currentWindow();
     const grown = fixtureForest();
     grown[0].children.push(
-      span("toolExecution", [
-        leaf("toolCallStart", 70_000, { toolName: "write" }),
-        leaf("toolCall", 90_000, { toolName: "write" }),
-      ], { id: "late1" }),
+      span(
+        "toolExecution",
+        [
+          leaf("toolCallStart", 70_000, { toolName: "write" }),
+          leaf("toolCall", 90_000, { toolName: "write" }),
+        ],
+        { id: "late1" },
+      ),
     );
     view.setData(grown);
     expect(view.currentWindow()).toEqual(zoomed);

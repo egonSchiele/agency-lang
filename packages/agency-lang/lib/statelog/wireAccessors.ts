@@ -12,9 +12,7 @@ import type { EventEnvelope } from "./wireTypes.js";
 
 /** Group events by their `data.type`. One pass; produces a plain
  *  object (per AGENTS.md: prefer objects over Maps). */
-export function groupByType(
-  events: EventEnvelope[],
-): Record<string, EventEnvelope[]> {
+export function groupByType(events: EventEnvelope[]): Record<string, EventEnvelope[]> {
   const out: Record<string, EventEnvelope[]> = {};
   for (const ev of events) {
     const k = ev.data.type;
@@ -87,9 +85,7 @@ export function toolsOf(ev: EventEnvelope): string[] {
  *  The "user message" is appended to the message thread after any
  *  system prompt(s), so the LAST user-role entry in the first-turn
  *  messages is the prompt the user just typed. */
-export function userMessageOf(
-  promptCompletion: EventEnvelope,
-): string | null {
+export function userMessageOf(promptCompletion: EventEnvelope): string | null {
   const msgs = promptCompletion.data.messages;
   if (!Array.isArray(msgs)) return null;
   const userMsgs = msgs.filter((m: any) => m?.role === "user");
@@ -99,9 +95,7 @@ export function userMessageOf(
   // smoltalk messages can also carry an array-of-parts content shape;
   // best-effort: concatenate any string parts.
   if (Array.isArray(last.content)) {
-    const text = last.content
-      .map((p: any) => (typeof p?.text === "string" ? p.text : ""))
-      .join("");
+    const text = last.content.map((p: any) => (typeof p?.text === "string" ? p.text : "")).join("");
     return text.length > 0 ? text : null;
   }
   return null;
@@ -109,9 +103,7 @@ export function userMessageOf(
 
 /** Assistant's reply text on a promptCompletion. Returns null when
  *  the completion is empty or absent. */
-export function completionOf(
-  promptCompletion: EventEnvelope,
-): string | null {
+export function completionOf(promptCompletion: EventEnvelope): string | null {
   const c = promptCompletion.data.completion;
   // smoltalk `PromptResult` exposes the reply at `.output` (a string)
   // and the model echoes the same as `.choices[0].message.content`.

@@ -169,10 +169,7 @@ describe("tool-position binding check (compile-time)", () => {
   it("errors on imported function as tool with unbound required block", () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), "tbb-imp-"));
     const libFile = path.join(dir, "lib.agency");
-    writeFileSync(
-      libFile,
-      `export def deploy(block: () => void): void {}\n`,
-    );
+    writeFileSync(libFile, `export def deploy(block: () => void): void {}\n`);
     const mainFile = path.join(dir, "main.agency");
     const mainSource =
       `import { deploy } from "./lib.agency"\n` +
@@ -185,12 +182,7 @@ describe("tool-position binding check (compile-time)", () => {
       const parseResult = parseAgency(mainSource, {});
       if (!parseResult.success) throw new Error(parseResult.message);
       const program = parseResult.result;
-      const info = buildCompilationUnit(
-        program,
-        symbolTable,
-        mainFile,
-        mainSource,
-      );
+      const info = buildCompilationUnit(program, symbolTable, mainFile, mainSource);
       const errs = errorsOnly(typeCheck(program, {}, info).errors);
       const e = findContaining(errs, "deploy", "block", ".partial(");
       expect(e).toBeDefined();
@@ -237,7 +229,9 @@ describe("tool-position binding check (compile-time)", () => {
     `);
     // Validator must NOT fire — runtime backstop owns this case.
     const errs = errorsOnly(diags);
-    expect(errs.some((e) => e.message.includes("validate") && e.message.includes("block"))).toBe(false);
+    expect(errs.some((e) => e.message.includes("validate") && e.message.includes("block"))).toBe(
+      false,
+    );
   });
 
   // #23 — identifier-as-tools is also deferred.
@@ -250,7 +244,9 @@ describe("tool-position binding check (compile-time)", () => {
       }
     `);
     const errs = errorsOnly(diags);
-    expect(errs.some((e) => e.message.includes("validate") && e.message.includes("block"))).toBe(false);
+    expect(errs.some((e) => e.message.includes("validate") && e.message.includes("block"))).toBe(
+      false,
+    );
   });
 
   // #24 — error + warning coexist for a function with both unbound kinds.

@@ -79,11 +79,13 @@ function corpusRow(over: Partial<CorpusRow> = {}): CorpusRow {
 /** One loaded candidate, as a loader would hand it to the dataset. */
 function batchOf(fields = DEFAULT_FIELDS, source = "agent-v1"): LoadedBatch {
   return {
-    occurrences: [{
-      fields,
-      source,
-      origin: { kind: "file", itemKey: "a.txt" },
-    }],
+    occurrences: [
+      {
+        fields,
+        source,
+        origin: { kind: "file", itemKey: "a.txt" },
+      },
+    ],
     skips: [],
   };
 }
@@ -101,7 +103,6 @@ function publishChecklist(): ChecklistRevision {
   return publishPendingRevision({ datasetDir, pending: prepared.pending, definitionPath }).revision;
 }
 
-
 /** Write a revision file with a correctly recomputed hash, so tests exercise
  *  the invariant under test rather than tripping the hash check. */
 function writeRevisionFile(revision: ChecklistRevision): void {
@@ -118,7 +119,10 @@ function writeRevisionFile(revision: ChecklistRevision): void {
   fs.writeFileSync(path.join(dir, `${revision.version}.json`), JSON.stringify(sealed));
 }
 
-function annotationRow(revision: ChecklistRevision, over: Partial<AnnotationRow> = {}): AnnotationRow {
+function annotationRow(
+  revision: ChecklistRevision,
+  over: Partial<AnnotationRow> = {},
+): AnnotationRow {
   const questionId = revision.questions[0].id;
   return {
     schemaVersion: 1,
@@ -141,8 +145,10 @@ describe("openDataset", () => {
   it("opens an empty dataset and writes a manifest", () => {
     const dataset = open();
     expect(dataset.readSession(SESSION_ID).annotations).toEqual([]);
-    expect(JSON.parse(fs.readFileSync(path.join(datasetDir, "manifest.json"), "utf8")))
-      .toEqual({ schemaVersion: 2, fieldOrder: [] });
+    expect(JSON.parse(fs.readFileSync(path.join(datasetDir, "manifest.json"), "utf8"))).toEqual({
+      schemaVersion: 2,
+      fieldOrder: [],
+    });
     dataset.close();
   });
 
@@ -160,9 +166,7 @@ describe("openDataset", () => {
     // One call, then assert on its message. Calling open() twice leaves the
     // first lock held, so the second failure is about the lock and any further
     // assertion passes or fails for the wrong reason.
-    expect(() => open()).toThrow(
-      /predates content-derived record ids[\s\S]*agency label ingest/,
-    );
+    expect(() => open()).toThrow(/predates content-derived record ids[\s\S]*agency label ingest/);
   });
 
   it("checks the manifest BEFORE parsing any log", () => {
@@ -170,14 +174,19 @@ describe("openDataset", () => {
     // if the version gate ran second.
     fs.mkdirSync(datasetDir, { recursive: true });
     fs.writeFileSync(path.join(datasetDir, "manifest.json"), JSON.stringify({ schemaVersion: 1 }));
-    fs.writeFileSync(path.join(datasetDir, "outputs.jsonl"), '{"schemaVersion":1,"nonsense":true}\n');
+    fs.writeFileSync(
+      path.join(datasetDir, "outputs.jsonl"),
+      '{"schemaVersion":1,"nonsense":true}\n',
+    );
     expect(() => open()).toThrow(/predates content-derived record ids/);
   });
 
   it("refuses a manifest with unknown keys", () => {
     fs.mkdirSync(datasetDir, { recursive: true });
-    fs.writeFileSync(path.join(datasetDir, "manifest.json"),
-      JSON.stringify({ schemaVersion: 2, fieldOrder: [], extra: true }));
+    fs.writeFileSync(
+      path.join(datasetDir, "manifest.json"),
+      JSON.stringify({ schemaVersion: 2, fieldOrder: [], extra: true }),
+    );
     expect(() => open()).toThrow(DatasetValidationError);
   });
 
@@ -190,7 +199,9 @@ describe("openDataset", () => {
     appendRaw("occurrences.jsonl", {
       schemaVersion: 1,
       occurrenceId: makeOccurrenceId({
-        outputId: UNGROUNDED_OUTPUT_ID, source: "s", origin: { kind: "file", itemKey: "a.txt" },
+        outputId: UNGROUNDED_OUTPUT_ID,
+        source: "s",
+        origin: { kind: "file", itemKey: "a.txt" },
       }),
       outputId: UNGROUNDED_OUTPUT_ID,
       source: "s",
@@ -202,8 +213,10 @@ describe("openDataset", () => {
 
   it("refuses a manifest listing a field twice", () => {
     fs.mkdirSync(datasetDir, { recursive: true });
-    fs.writeFileSync(path.join(datasetDir, "manifest.json"),
-      JSON.stringify({ schemaVersion: 2, fieldOrder: ["output", "output"] }));
+    fs.writeFileSync(
+      path.join(datasetDir, "manifest.json"),
+      JSON.stringify({ schemaVersion: 2, fieldOrder: ["output", "output"] }),
+    );
     expect(() => open()).toThrow(/more than once/);
   });
 
@@ -254,9 +267,13 @@ describe("dataset invariants across files", () => {
   it("rejects an annotation covering a question the revision does not define", () => {
     const revision = publishChecklist();
     appendRaw("outputs.jsonl", corpusRow());
-    appendRaw("labels.jsonl", annotationRow(revision, {
-      coveredQuestionIds: ["q_unknown"], answers: { q_unknown: true },
-    }));
+    appendRaw(
+      "labels.jsonl",
+      annotationRow(revision, {
+        coveredQuestionIds: ["q_unknown"],
+        answers: { q_unknown: true },
+      }),
+    );
     expect(() => open()).toThrow(/does not define/i);
   });
 
@@ -270,9 +287,13 @@ describe("dataset invariants across files", () => {
   it("rejects an answer for a question that was not covered", () => {
     const revision = publishChecklist();
     appendRaw("outputs.jsonl", corpusRow());
-    appendRaw("labels.jsonl", annotationRow(revision, {
-      coveredQuestionIds: [], answers: { [revision.questions[0].id]: true },
-    }));
+    appendRaw(
+      "labels.jsonl",
+      annotationRow(revision, {
+        coveredQuestionIds: [],
+        answers: { [revision.questions[0].id]: true },
+      }),
+    );
     expect(() => open()).toThrow(/without covering/i);
   });
 
@@ -290,7 +311,12 @@ describe("dataset invariants across files", () => {
     const revision = publishChecklist();
     fs.writeFileSync(
       path.join(datasetDir, "checklists", revision.checklistId, "current.json"),
-      JSON.stringify({ schemaVersion: 1, checklistId: revision.checklistId, version: 9, hash: revision.hash }),
+      JSON.stringify({
+        schemaVersion: 1,
+        checklistId: revision.checklistId,
+        version: 9,
+        hash: revision.hash,
+      }),
     );
     expect(() => open()).toThrow(/has no stored revision/i);
   });
@@ -365,8 +391,9 @@ describe("appendAnnotation", () => {
     appendRaw("outputs.jsonl", corpusRow());
     const dataset = open();
     dataset.appendAnnotation(annotationRow(revision));
-    expect(() => dataset.appendAnnotation(annotationRow(revision, { note: "changed" })))
-      .toThrow(/different content/i);
+    expect(() => dataset.appendAnnotation(annotationRow(revision, { note: "changed" }))).toThrow(
+      /different content/i,
+    );
     dataset.close();
   });
 

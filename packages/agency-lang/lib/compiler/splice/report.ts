@@ -12,10 +12,7 @@ import type { SpliceDiagnostic } from "./types.js";
  * formatting, and `agency explain` prose.
  */
 
-export function toTypeCheckError(
-  found: SpliceDiagnostic,
-  file?: string,
-): TypeCheckError {
+export function toTypeCheckError(found: SpliceDiagnostic, file?: string): TypeCheckError {
   const error = diagnostic(
     found.diagnostic,
     // SpliceDiagnostic carries plain string params, because the diagnostic
@@ -26,9 +23,6 @@ export function toTypeCheckError(
   return file === undefined ? error : { ...error, file };
 }
 
-export function formatSpliceDiagnostic(
-  found: SpliceDiagnostic,
-  file?: string,
-): string {
+export function formatSpliceDiagnostic(found: SpliceDiagnostic, file?: string): string {
   return formatErrors([toTypeCheckError(found, file)]);
 }

@@ -1,9 +1,4 @@
-import type {
-  Entity,
-  Observation,
-  Relation,
-  MemoryGraphData,
-} from "./types.js";
+import type { Entity, Observation, Relation, MemoryGraphData } from "./types.js";
 
 export class MemoryGraph {
   private entities: Entity[] = [];
@@ -66,12 +61,7 @@ export class MemoryGraph {
     }
   }
 
-  addRelation(
-    fromId: string,
-    toId: string,
-    type: string,
-    source: string
-  ): Relation {
+  addRelation(fromId: string, toId: string, type: string, source: string): Relation {
     const rel: Relation = {
       id: this.genId("rel"),
       from: fromId,
@@ -106,15 +96,11 @@ export class MemoryGraph {
   }
 
   getRelationsFrom(entityId: string): Relation[] {
-    return this.relations.filter(
-      (r) => r.from === entityId && r.validTo === null
-    );
+    return this.relations.filter((r) => r.from === entityId && r.validTo === null);
   }
 
   getRelationsTo(entityId: string): Relation[] {
-    return this.relations.filter(
-      (r) => r.to === entityId && r.validTo === null
-    );
+    return this.relations.filter((r) => r.to === entityId && r.validTo === null);
   }
 
   toCompactIndex(): string {

@@ -60,10 +60,7 @@ export type AnalysisResult = {
 // Declarative pipeline: load → collect sites → propagate → union → render.
 // Each phase is a named helper; this function is the "what".
 
-export function analyzeInterrupts(
-  rootFile: string,
-  config: AgencyConfig,
-): AnalysisResult {
+export function analyzeInterrupts(rootFile: string, config: AgencyConfig): AnalysisResult {
   const cg = loadCallGraph(rootFile, config);
   const sites = collectAllSites(cg);
   const reachableHandlers = propagateHandlers(cg);
@@ -124,9 +121,7 @@ function siteKey(file: string, site: InterruptStatement): SiteId {
 
 function collectAllSites(cg: InterruptCallGraph): Map<SiteId, SiteRecord> {
   const entries = Object.values(cg).flatMap((fn) => fn.interruptSites);
-  return new Map(
-    entries.map((e) => [siteKey(e.file, e.site), { site: e.site, file: e.file }]),
-  );
+  return new Map(entries.map((e) => [siteKey(e.file, e.site), { site: e.site, file: e.file }]));
 }
 
 // -- Phase 3: Fixed-point handler propagation --

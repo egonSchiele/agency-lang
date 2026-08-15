@@ -79,8 +79,8 @@ export function openJsonlStrict<Value>(args: OpenJsonlArgs<Value>): OpenedJsonl<
     if (existing !== undefined) {
       throw new LabelDatasetCorruptionError(
         `${args.filePath}: line ${index + 1} repeats identity "${identity}" ` +
-        `${existing === canonical ? "with identical content" : "with different content"}. ` +
-        `Each identity may appear once; remove the later line.`,
+          `${existing === canonical ? "with identical content" : "with different content"}. ` +
+          `Each identity may appear once; remove the later line.`,
       );
     }
     canonicalById[identity] = canonical;
@@ -118,7 +118,7 @@ export function openJsonlStrict<Value>(args: OpenJsonlArgs<Value>): OpenedJsonl<
         }
         throw new LabelDatasetCorruptionError(
           `${args.filePath}: "${identity}" already exists with different content. ` +
-          `An identity may be reused only to replay an identical row.`,
+            `An identity may be reused only to replay an identical row.`,
         );
       }
 
@@ -145,7 +145,7 @@ function readAll<Value>(args: OpenJsonlArgs<Value>): Value[] {
   if (!raw.endsWith("\n")) {
     throw new LabelDatasetCorruptionError(
       `${args.filePath}: the file does not end in a newline, which means an append was ` +
-      `interrupted. The last line is incomplete — remove it and every earlier row is intact.`,
+        `interrupted. The last line is incomplete — remove it and every earlier row is intact.`,
     );
   }
 
@@ -168,7 +168,7 @@ function parseLine<Value>(args: OpenJsonlArgs<Value>, line: string, lineNumber: 
   } catch (error) {
     throw new LabelDatasetCorruptionError(
       `${args.filePath}: line ${lineNumber} is not valid JSON (${(error as Error).message}). ` +
-      `Repair it by hand — this file holds human judgements and nothing regenerates them.`,
+        `Repair it by hand — this file holds human judgements and nothing regenerates them.`,
     );
   }
   const result = args.schema.safeParse(parsed);
@@ -263,7 +263,7 @@ export function atomicWriteValidated<Value>(args: AtomicWriteArgs<Value>): void 
     } catch (cleanupError) {
       throw new Error(
         `Failed to write ${args.targetPath} (${(renameError as Error).message}) and failed to ` +
-        `remove ${temporaryPath} (${(cleanupError as Error).message})`,
+          `remove ${temporaryPath} (${(cleanupError as Error).message})`,
       );
     }
     throw renameError;

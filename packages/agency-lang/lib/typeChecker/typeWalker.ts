@@ -13,10 +13,7 @@ import type { VariableType } from "../types.js";
  * tree" operation. Encapsulates the recursion so callers express the
  * "what" (a single-node transform) without re-walking every variant.
  */
-export function mapTypes(
-  t: VariableType,
-  fn: (t: VariableType) => VariableType,
-): VariableType {
+export function mapTypes(t: VariableType, fn: (t: VariableType) => VariableType): VariableType {
   switch (t.type) {
     case "arrayType":
       return fn({ ...t, elementType: mapTypes(t.elementType, fn) });
@@ -79,10 +76,7 @@ export function mapTypes(
  * and propagates `true` back to the caller (used for short-circuiting
  * "does any nested type satisfy P?" predicates).
  */
-export function visitTypes(
-  t: VariableType,
-  visit: (t: VariableType) => boolean | void,
-): boolean {
+export function visitTypes(t: VariableType, visit: (t: VariableType) => boolean | void): boolean {
   if (visit(t) === true) return true;
   switch (t.type) {
     case "arrayType":
@@ -94,9 +88,7 @@ export function visitTypes(
       for (const p of t.properties) if (visitTypes(p.value, visit)) return true;
       return false;
     case "resultType":
-      return (
-        visitTypes(t.successType, visit) || visitTypes(t.failureType, visit)
-      );
+      return visitTypes(t.successType, visit) || visitTypes(t.failureType, visit);
     case "schemaType":
       return visitTypes(t.inner, visit);
     case "keyofType":
@@ -108,8 +100,7 @@ export function visitTypes(
       if (visitTypes(t.objectType, visit)) return true;
       return visitTypes(t.index, visit);
     case "blockType":
-      for (const p of t.params)
-        if (visitTypes(p.typeAnnotation, visit)) return true;
+      for (const p of t.params) if (visitTypes(p.typeAnnotation, visit)) return true;
       return visitTypes(t.returnType, visit);
     case "functionRefType":
       for (const p of t.params) {

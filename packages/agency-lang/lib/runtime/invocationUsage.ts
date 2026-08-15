@@ -21,12 +21,7 @@ type SmoltalkTokens = NonNullable<
   PromptResult["usage"] | EmbedResult["tokenUsage"] | ImageGenResult["tokenUsage"]
 >;
 
-export type ProviderUsageKind =
-  | "completion"
-  | "embedding"
-  | "image"
-  | "transcription"
-  | "speech";
+export type ProviderUsageKind = "completion" | "embedding" | "image" | "transcription" | "speech";
 export type UsageKind = ProviderUsageKind | "manual";
 const USAGE_KINDS: readonly UsageKind[] = [
   "completion",
@@ -135,10 +130,24 @@ function costComponent(value: unknown): number {
 }
 
 function zeroCost(): CostBreakdown {
-  return { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0, currency: "USD" };
+  return {
+    inputCost: 0,
+    outputCost: 0,
+    cachedInputCost: 0,
+    cacheCreationInputCost: 0,
+    hostedToolsCost: 0,
+    totalCost: 0,
+    currency: "USD",
+  };
 }
 function zeroTokens(): TokenBreakdown {
-  return { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 };
+  return {
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    totalTokens: 0,
+  };
 }
 function copyCost(cost: CostBreakdown): CostBreakdown {
   return { ...cost };
@@ -174,7 +183,10 @@ function buildCost(raw: unknown): { cost: CostBreakdown; priced: boolean } {
 /** One token counter. Absent (undefined/null) is a benign 0; a present malformed
  *  value is 0 AND flags malformed (for `attributionLost`). `absentDegrades`
  *  distinguishes trusted providers (absent OK) from untrusted IPC (absent bad). */
-function tokenCounter(value: unknown, absentDegrades: boolean): { value: number; malformed: boolean } {
+function tokenCounter(
+  value: unknown,
+  absentDegrades: boolean,
+): { value: number; malformed: boolean } {
   if (value === undefined || value === null) {
     return { value: 0, malformed: absentDegrades };
   }
@@ -187,10 +199,19 @@ function tokenCounter(value: unknown, absentDegrades: boolean): { value: number;
 /** Kind-specific total-token fallback when the provider omits/malforms it.
  *  completion normalizes cached vs ordinary input into disjoint buckets (add all);
  *  embedding/image cached counts may overlap input (add input+output only). */
-function fallbackTotalTokens(kind: UsageKind, t: { inputTokens: number; outputTokens: number; cachedInputTokens: number; cacheCreationInputTokens: number }): { value: number; saturated: boolean } {
-  const parts = kind === "completion"
-    ? [t.inputTokens, t.outputTokens, t.cachedInputTokens, t.cacheCreationInputTokens]
-    : [t.inputTokens, t.outputTokens];
+function fallbackTotalTokens(
+  kind: UsageKind,
+  t: {
+    inputTokens: number;
+    outputTokens: number;
+    cachedInputTokens: number;
+    cacheCreationInputTokens: number;
+  },
+): { value: number; saturated: boolean } {
+  const parts =
+    kind === "completion"
+      ? [t.inputTokens, t.outputTokens, t.cachedInputTokens, t.cacheCreationInputTokens]
+      : [t.inputTokens, t.outputTokens];
   let acc = 0;
   let saturated = false;
   for (const part of parts) {
@@ -219,7 +240,11 @@ export function projectProviderTokenUsage(
   return { usage: tokens, attributionLost: malformed };
 }
 
-function buildTokens(raw: unknown, kind: UsageKind, absentDegrades: boolean): { tokens: TokenBreakdown; malformed: boolean } {
+function buildTokens(
+  raw: unknown,
+  kind: UsageKind,
+  absentDegrades: boolean,
+): { tokens: TokenBreakdown; malformed: boolean } {
   const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : undefined;
   const input = tokenCounter(obj?.inputTokens, absentDegrades);
   const output = tokenCounter(obj?.outputTokens, absentDegrades);
@@ -231,7 +256,8 @@ function buildTokens(raw: unknown, kind: UsageKind, absentDegrades: boolean): { 
     cachedInputTokens: cachedInput.value,
     cacheCreationInputTokens: cacheCreation.value,
   };
-  let malformed = input.malformed || output.malformed || cachedInput.malformed || cacheCreation.malformed;
+  let malformed =
+    input.malformed || output.malformed || cachedInput.malformed || cacheCreation.malformed;
 
   // Audio tokens (gpt-audio-1.5 chat) are collapsed into `totalTokens` and never
   // surface as their own fields (see plan §7a option A). When the provider's
@@ -288,7 +314,8 @@ function buildIpcTokens(raw: unknown): { tokens: TokenBreakdown; malformed: bool
   const output = ipcCounter(obj?.outputTokens);
   const cachedInput = ipcCounter(obj?.cachedInputTokens);
   const cacheCreation = ipcCounter(obj?.cacheCreationInputTokens);
-  let malformed = input.malformed || output.malformed || cachedInput.malformed || cacheCreation.malformed;
+  let malformed =
+    input.malformed || output.malformed || cachedInput.malformed || cacheCreation.malformed;
 
   let totalTokens: number;
   if (isSafeCount(obj?.totalTokens)) {
@@ -324,17 +351,32 @@ function anyToken(tokens: TokenBreakdown): boolean {
  *  malformation/saturation — never by pricing (which uses unknownCostCallCount). */
 export function normalizeObservation(observation: UsageObservation): NormalizedDelta {
   if (observation.type === "attempt") {
-    return { cost: zeroCost(), tokens: zeroTokens(), unknownCostCallCount: 1, attributionLost: false };
+    return {
+      cost: zeroCost(),
+      tokens: zeroTokens(),
+      unknownCostCallCount: 1,
+      attributionLost: false,
+    };
   }
   if (observation.type === "manual") {
     const cost: CostBreakdown = { ...zeroCost(), totalCost: observation.amount };
-    const entry: UsageEntry = { kind: "manual", model: "", cost: copyCost(cost), tokens: zeroTokens() };
+    const entry: UsageEntry = {
+      kind: "manual",
+      model: "",
+      cost: copyCost(cost),
+      tokens: zeroTokens(),
+    };
     return { entry, cost, tokens: zeroTokens(), unknownCostCallCount: 0, attributionLost: false };
   }
   const model = resolveCompletionModel(observation.reportedModel, observation.configuredModel);
   const { cost, priced } = buildCost(observation.cost);
   const { tokens, malformed } = buildTokens(observation.tokens, observation.kind, false);
-  const entry: UsageEntry = { kind: observation.kind, model, cost: copyCost(cost), tokens: copyTokens(tokens) };
+  const entry: UsageEntry = {
+    kind: observation.kind,
+    model,
+    cost: copyCost(cost),
+    tokens: copyTokens(tokens),
+  };
   return { entry, cost, tokens, unknownCostCallCount: priced ? 0 : 1, attributionLost: malformed };
 }
 
@@ -409,15 +451,17 @@ function recoverIpcEntry(raw: unknown): IpcEntryRecovery {
   }
   const kind = obj.kind;
   const model = obj.model;
-  const modelOk = kind === "manual"
-    ? model === ""
-    : typeof model === "string" && model.length > 0;
+  const modelOk = kind === "manual" ? model === "" : typeof model === "string" && model.length > 0;
   if (!modelOk) {
     return { status: "invalid" };
   }
   const { cost, priced } = buildCost(obj.cost);
   const { tokens, malformed } = buildIpcTokens(obj.tokens);
-  return { status: "ok", entry: { kind, model: model as string, cost, tokens }, malformed: !priced || malformed };
+  return {
+    status: "ok",
+    entry: { kind, model: model as string, cost, tokens },
+    malformed: !priced || malformed,
+  };
 }
 
 /** A fresh, non-serialized accumulator for one invocation/leg. Buckets attribution
@@ -462,7 +506,12 @@ export class InvocationUsageMeter {
     if (existing !== undefined) {
       return this.entries[existing];
     }
-    const fresh: UsageEntry = { kind: entry.kind, model: entry.model, cost: zeroCost(), tokens: zeroTokens() };
+    const fresh: UsageEntry = {
+      kind: entry.kind,
+      model: entry.model,
+      cost: zeroCost(),
+      tokens: zeroTokens(),
+    };
     perModel[entry.model] = this.entries.length;
     this.entries.push(fresh);
     return fresh;
@@ -479,7 +528,13 @@ export class InvocationUsageMeter {
 
   private addTokensInto(target: TokenBreakdown, add: TokenBreakdown): boolean {
     let saturated = false;
-    for (const key of ["inputTokens", "outputTokens", "cachedInputTokens", "cacheCreationInputTokens", "totalTokens"] as const) {
+    for (const key of [
+      "inputTokens",
+      "outputTokens",
+      "cachedInputTokens",
+      "cacheCreationInputTokens",
+      "totalTokens",
+    ] as const) {
       const next = checkedAddCount(target[key], add[key]);
       target[key] = next.value;
       saturated = saturated || next.saturated;
@@ -505,7 +560,12 @@ export class InvocationUsageMeter {
         tokens: copyTokens(this.tokens),
         unknownCostCallCount: this.unknownCostCallCount,
         pricingComplete: this.unknownCostCallCount === 0,
-        entries: this.entries.map((entry) => ({ kind: entry.kind, model: entry.model, cost: copyCost(entry.cost), tokens: copyTokens(entry.tokens) })),
+        entries: this.entries.map((entry) => ({
+          kind: entry.kind,
+          model: entry.model,
+          cost: copyCost(entry.cost),
+          tokens: copyTokens(entry.tokens),
+        })),
       },
       usageComplete: this.usageComplete,
     };

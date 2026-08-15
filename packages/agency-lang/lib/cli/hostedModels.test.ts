@@ -20,15 +20,37 @@ import { _fetchModelData, _loadModelData } from "../stdlib/llm.js";
 import type { HostedModelInfo } from "../stdlib/llm.js";
 
 const catalog: HostedModelInfo[] = [
-  { name: "cheap-oss", provider: "openrouter", openWeights: true, inputCost: 0.1, outputCost: 0.2, contextWindow: 32000, family: "x" },
-  { name: "pricey", provider: "anthropic", openWeights: false, inputCost: 15, outputCost: 75, contextWindow: 200000, family: "y" },
+  {
+    name: "cheap-oss",
+    provider: "openrouter",
+    openWeights: true,
+    inputCost: 0.1,
+    outputCost: 0.2,
+    contextWindow: 32000,
+    family: "x",
+  },
+  {
+    name: "pricey",
+    provider: "anthropic",
+    openWeights: false,
+    inputCost: 15,
+    outputCost: 75,
+    contextWindow: 200000,
+    family: "y",
+  },
 ];
 
 describe("agency models selection", () => {
   it("filters by provider, price, and minContext", () => {
-    expect(selectHostedModels(catalog, { provider: "anthropic" }).map((model) => model.name)).toEqual(["pricey"]);
-    expect(selectHostedModels(catalog, { maxPrice: 1 }).map((model) => model.name)).toEqual(["cheap-oss"]);
-    expect(selectHostedModels(catalog, { minContext: 100000 }).map((model) => model.name)).toEqual(["pricey"]);
+    expect(
+      selectHostedModels(catalog, { provider: "anthropic" }).map((model) => model.name),
+    ).toEqual(["pricey"]);
+    expect(selectHostedModels(catalog, { maxPrice: 1 }).map((model) => model.name)).toEqual([
+      "cheap-oss",
+    ]);
+    expect(selectHostedModels(catalog, { minContext: 100000 }).map((model) => model.name)).toEqual([
+      "pricey",
+    ]);
     expect(selectHostedModels(catalog, {}).length).toBe(2);
     // maxPrice/minContext must use `!== undefined`, NOT a truthy check: 0 is a
     // real bound (excludes everything here), not "no filter". Guards against a
@@ -97,7 +119,11 @@ describe("agency models refresh", () => {
 
   it("prints the fetched JSON to stdout and nothing to stderr on success", async () => {
     const blob = { schemaVersion: 1, models: [{ modelName: "x" }] };
-    vi.mocked(_fetchModelData).mockResolvedValue({ ok: true, json: JSON.stringify(blob, null, 2), error: "" });
+    vi.mocked(_fetchModelData).mockResolvedValue({
+      ok: true,
+      json: JSON.stringify(blob, null, 2),
+      error: "",
+    });
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     await modelsRefresh();

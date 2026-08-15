@@ -1,12 +1,6 @@
 import { describe, it, expect } from "vitest";
-import {
-  functionCallParser,
-} from "./parsers.js";
-import {
-  valueAccessParser,
-  asyncValueAccessParser,
-  syncValueAccessParser,
-} from "./parsers.js";
+import { functionCallParser } from "./parsers.js";
+import { valueAccessParser, asyncValueAccessParser, syncValueAccessParser } from "./parsers.js";
 
 describe("functionCallParser", () => {
   const testCases = [
@@ -380,9 +374,9 @@ describe("functionCallParser", () => {
       });
     } else {
       it(`should fail to parse "${input}"`, () => {
-          const result = functionCallParser(input);
-          expect(result.success).toBe(false);
-        });
+        const result = functionCallParser(input);
+        expect(result.success).toBe(false);
+      });
     }
   });
 });

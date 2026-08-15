@@ -28,7 +28,11 @@ export function envelope(traceId: string, data: EnvelopeData): Record<string, un
   };
 }
 
-export function promptCompletion(traceId: string, model: string, totalCost: number): Record<string, unknown> {
+export function promptCompletion(
+  traceId: string,
+  model: string,
+  totalCost: number,
+): Record<string, unknown> {
   return envelope(traceId, {
     type: "promptCompletion",
     model: `"${model}"`,
@@ -114,18 +118,26 @@ export function writeRunDir(baseDir: string, run: FixtureRun): string {
   }
   fs.writeFileSync(path.join(runDir, "summary.json"), JSON.stringify(summary, null, 2));
 
-  fs.writeFileSync(path.join(runDir, "config.json"), JSON.stringify({
-    runId: run.runId,
-    agentLabel: run.agentLabel ?? "agent.agency:main",
-    startedAt: run.startedAt ?? new Date(FIXTURE_EPOCH_MS).toISOString(),
-    provenance: {
-      inputsSource: { source: run.inputsSource ?? "unspecified" },
-      files: {},
-      agent: run.agentCommand !== undefined
-        ? { command: run.agentCommand, harnessVersion: "0.0.0-fixture" }
-        : { entry: "agent.agency", closure: [] },
-    },
-  }, null, 2));
+  fs.writeFileSync(
+    path.join(runDir, "config.json"),
+    JSON.stringify(
+      {
+        runId: run.runId,
+        agentLabel: run.agentLabel ?? "agent.agency:main",
+        startedAt: run.startedAt ?? new Date(FIXTURE_EPOCH_MS).toISOString(),
+        provenance: {
+          inputsSource: { source: run.inputsSource ?? "unspecified" },
+          files: {},
+          agent:
+            run.agentCommand !== undefined
+              ? { command: run.agentCommand, harnessVersion: "0.0.0-fixture" }
+              : { entry: "agent.agency", closure: [] },
+        },
+      },
+      null,
+      2,
+    ),
+  );
 
   return runDir;
 }
@@ -141,11 +153,23 @@ export function writeGradedRun(baseDir: string, runId: string = "graded-run"): s
     inputs: [
       {
         inputId: "t1",
-        metrics: { costUsd: 1.25, durationMs: 60_000, startedAtMs: FIXTURE_EPOCH_MS + 1_000, models: ["sonnet"], agentName: "regex-log" },
+        metrics: {
+          costUsd: 1.25,
+          durationMs: 60_000,
+          startedAtMs: FIXTURE_EPOCH_MS + 1_000,
+          models: ["sonnet"],
+          agentName: "regex-log",
+        },
       },
       {
         inputId: "t2",
-        metrics: { costUsd: 0.75, durationMs: 120_000, startedAtMs: FIXTURE_EPOCH_MS + 30_000, models: ["sonnet", "opus"], agentName: "regex-log" },
+        metrics: {
+          costUsd: 0.75,
+          durationMs: 120_000,
+          startedAtMs: FIXTURE_EPOCH_MS + 30_000,
+          models: ["sonnet", "opus"],
+          agentName: "regex-log",
+        },
       },
     ],
     grading: {
@@ -220,7 +244,10 @@ export function writeCorruptRun(baseDir: string, runId: string = "corrupt-run"):
 }
 
 /** Two traces in one file; the second names itself via setAgentName. */
-export function writeMultiTraceStatelog(baseDir: string, name: string = "multi-trace.jsonl"): string {
+export function writeMultiTraceStatelog(
+  baseDir: string,
+  name: string = "multi-trace.jsonl",
+): string {
   return writeStatelog(path.join(baseDir, name), [
     envelope("trace-a", { type: "threadCreated", threadId: "0" }),
     promptCompletion("trace-a", "haiku", 0.05),

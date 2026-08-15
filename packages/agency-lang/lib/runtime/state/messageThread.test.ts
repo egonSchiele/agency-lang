@@ -85,10 +85,7 @@ describe("MessageThread per-message labels", () => {
   it("a constructor-seeded thread stays aligned when pushed to", () => {
     // Without a constructor seed, messageLabels would be [] against 2
     // messages, and this push would put "late" at index 0.
-    const t = new MessageThread([
-      smoltalk.userMessage("a"),
-      smoltalk.userMessage("b"),
-    ]);
+    const t = new MessageThread([smoltalk.userMessage("a"), smoltalk.userMessage("b")]);
     t.push(smoltalk.userMessage("c"), "late");
     expect(t.labelAt(0)).toBe(null);
     expect(t.labelAt(1)).toBe(null);
@@ -154,10 +151,7 @@ describe("MessageThread label-preserving edits", () => {
 
   it("setMessages takes labels when the caller has them", () => {
     const t = new MessageThread();
-    t.setMessages([smoltalk.userMessage("a"), smoltalk.userMessage("b")], [
-      null,
-      "kept",
-    ]);
+    t.setMessages([smoltalk.userMessage("a"), smoltalk.userMessage("b")], [null, "kept"]);
     expect(t.labelAt(0)).toBe(null);
     expect(t.labelAt(1)).toBe("kept");
   });
@@ -166,9 +160,7 @@ describe("MessageThread label-preserving edits", () => {
     // Unlabeled beats mislabeled: a length disagreement means the source
     // is already wrong, so do not guess an alignment.
     const t = new MessageThread();
-    t.setMessages([smoltalk.userMessage("a"), smoltalk.userMessage("b")], [
-      "only-one",
-    ]);
+    t.setMessages([smoltalk.userMessage("a"), smoltalk.userMessage("b")], ["only-one"]);
     expect(t.messageLabels).toEqual([null, null]);
   });
 
@@ -250,18 +242,16 @@ describe("MessageThread.queueMessage", () => {
     restored.queueMessage("pending across resume");
     const alias = new MessageThread();
     alias.adoptFrom(restored);
-    expect(alias.takeQueuedMessages().map((m) => m.content)).toEqual([
-      "pending across resume",
-    ]);
+    expect(alias.takeQueuedMessages().map((m) => m.content)).toEqual(["pending across resume"]);
   });
 });
 
 describe("queueMessage validation and copy semantics (PR 651 review)", () => {
   it("rejects an invalid role at enqueue time", () => {
     const t = new MessageThread();
-    expect(() =>
-      t.queueMessage("x", { role: "system" as never }),
-    ).toThrow(/role must be "user" or "assistant"/);
+    expect(() => t.queueMessage("x", { role: "system" as never })).toThrow(
+      /role must be "user" or "assistant"/,
+    );
   });
 
   it("rejects assistant-role content that is not a string", () => {

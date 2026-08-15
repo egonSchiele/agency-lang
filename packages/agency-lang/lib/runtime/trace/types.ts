@@ -48,22 +48,14 @@ export type TraceStaticState = {
 };
 
 export type TraceLine =
-  | TraceHeader
-  | TraceStaticState
-  | TraceSource
-  | TraceChunk
-  | TraceManifest
-  | TraceFooter;
+  TraceHeader | TraceStaticState | TraceSource | TraceChunk | TraceManifest | TraceFooter;
 
 export type TraceEvent = {
   runId: string;
   line: TraceLine;
 };
 
-export type TraceCallback = (event: {
-  runId: string;
-  line: TraceLine;
-}) => void | Promise<void>;
+export type TraceCallback = (event: { runId: string; line: TraceLine }) => void | Promise<void>;
 
 export type TraceConfig = {
   program?: string;

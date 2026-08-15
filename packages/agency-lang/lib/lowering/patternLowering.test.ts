@@ -9,14 +9,7 @@
 import { describe, it, expect } from "vitest";
 import { lowerPatterns, PatternLoweringError } from "./patternLowering.js";
 import { parseAgency } from "../parser.js";
-import type {
-  AgencyNode,
-  Assignment,
-  ForLoop,
-  IfElse,
-  MatchBlock,
-  WhileLoop,
-} from "../types.js";
+import type { AgencyNode, Assignment, ForLoop, IfElse, MatchBlock, WhileLoop } from "../types.js";
 import type { BinOpExpression } from "../types/binop.js";
 import type { ValueAccess } from "../types/access.js";
 import { walkNodesArray } from "../utils/node.js";
@@ -76,7 +69,9 @@ describe("array destructuring", () => {
     expect(aBind.variableName).toBe("a");
     expect(aBind.declKind).toBe("let");
     expect(aBind.value.type).toBe("valueAccess");
-    expect(((aBind.value as ValueAccess).chain[0] as { kind: string; index: { value: string } })).toMatchObject({
+    expect(
+      (aBind.value as ValueAccess).chain[0] as { kind: string; index: { value: string } },
+    ).toMatchObject({
       kind: "index",
       index: { type: "number", value: "0" },
     });
@@ -144,19 +139,28 @@ describe("object destructuring", () => {
   });
 
   it("lowers object rest to a __objectRest call (handled by TS builder)", () => {
-    const lowered = lower(`const person = { name: "B", age: 30, city: "NY" }\nconst { name, ...rest } = person`);
+    const lowered = lower(
+      `const person = { name: "B", age: 30, city: "NY" }\nconst { name, ...rest } = person`,
+    );
     // [person, __tmp, name, rest]
     expect(lowered).toHaveLength(4);
     const restBind = lowered[3] as Assignment;
     expect(restBind.variableName).toBe("rest");
     expect(restBind.value.type).toBe("functionCall");
-    const call = restBind.value as { type: "functionCall"; functionName: string; arguments: unknown[] };
+    const call = restBind.value as {
+      type: "functionCall";
+      functionName: string;
+      arguments: unknown[];
+    };
     expect(call.functionName).toBe("__objectRest");
     expect(call.arguments).toHaveLength(2);
     // First arg is the source (varRef to __tmp_X)
     expect((call.arguments[0] as { type: string; value: string }).type).toBe("variableName");
     // Second arg is the array of excluded keys
-    const keysArr = call.arguments[1] as { type: string; items: { segments: { value: string }[] }[] };
+    const keysArr = call.arguments[1] as {
+      type: string;
+      items: { segments: { value: string }[] }[];
+    };
     expect(keysArr.type).toBe("agencyArray");
     expect(keysArr.items[0].segments[0].value).toBe("name");
   });
@@ -180,7 +184,7 @@ describe("object destructuring", () => {
 // ---------------------------------------------------------------------------
 
 describe("`is` operator in boolean context", () => {
-  it("lowers `const r = x is { type: \"foo\" }` to a shape check AND an equality check", () => {
+  it('lowers `const r = x is { type: "foo" }` to a shape check AND an equality check', () => {
     const lowered = lower(`let x = { type: "foo" }\nconst r = x is { type: "foo" }`);
     // [x, r = ((x != null && isObject(x)) && x.type == "foo")]
     expect(lowered).toHaveLength(2);
@@ -204,9 +208,9 @@ describe("`is` operator in boolean context", () => {
   });
 
   it("throws on shorthand binder in pure-boolean `is` context", () => {
-    expect(() => lower(`let x = { type: "foo", val: 1 }\nconst r = x is { type: "foo", val }`)).toThrow(
-      PatternLoweringError,
-    );
+    expect(() =>
+      lower(`let x = { type: "foo", val: 1 }\nconst r = x is { type: "foo", val }`),
+    ).toThrow(PatternLoweringError);
   });
 });
 
@@ -216,7 +220,9 @@ describe("`is` operator in boolean context", () => {
 
 describe("if with `is`", () => {
   it("emits condition + bindings in then-body", () => {
-    const lowered = lower(`let x = { type: "foo", val: 1 }\nif (x is { type: "foo", val }) { print(val) }`);
+    const lowered = lower(
+      `let x = { type: "foo", val: 1 }\nif (x is { type: "foo", val }) { print(val) }`,
+    );
     // [x, ifElse]
     expect(lowered).toHaveLength(2);
     const ifNode = lowered[1] as IfElse;
@@ -253,7 +259,9 @@ describe("while with `is`", () => {
 
 describe("match block lowering", () => {
   it("binds scrutinee once and emits if/else chain for object pattern arms", () => {
-    const lowered = lower(`let x = { type: "a", v: 1 }\nmatch(x) { { type: "a", v } => print(v); _ => print(0) }`);
+    const lowered = lower(
+      `let x = { type: "a", v: 1 }\nmatch(x) { { type: "a", v } => print(v); _ => print(0) }`,
+    );
     // [x, scrutineeAssign, ifElse]
     expect(lowered).toHaveLength(3);
     const scrutinee = lowered[1] as Assignment;
@@ -285,7 +293,9 @@ describe("match block lowering", () => {
   });
 
   it("lowers match arm with guard", () => {
-    const lowered = lower(`let x = { v: 10 }\nmatch(x) { { v } if (v > 5) => print(v); _ => print(0) }`);
+    const lowered = lower(
+      `let x = { v: 10 }\nmatch(x) { { v } if (v > 5) => print(v); _ => print(0) }`,
+    );
     expect(lowered).toHaveLength(3);
     const ifNode = lowered[2] as IfElse;
     expect(ifNode.type).toBe("ifElse");
@@ -381,8 +391,12 @@ describe("match block lowering", () => {
     });
 
     const inside = headGuard.thenBody;
-    const sIdx = inside.findIndex((n) => n.type === "assignment" && (n as Assignment).variableName === "s");
-    const bIdx = inside.findIndex((n) => n.type === "assignment" && (n as Assignment).variableName === "b");
+    const sIdx = inside.findIndex(
+      (n) => n.type === "assignment" && (n as Assignment).variableName === "s",
+    );
+    const bIdx = inside.findIndex(
+      (n) => n.type === "assignment" && (n as Assignment).variableName === "b",
+    );
     expect(sIdx).toBeGreaterThan(-1);
     expect(bIdx).toBeGreaterThan(sIdx);
     const ifNode = inside[inside.length - 1] as IfElse;
@@ -411,7 +425,9 @@ describe("for loop with destructuring", () => {
   });
 
   it("lowers for ({ name, age } in users) similarly", () => {
-    const lowered = lower(`let users = [{ name: "a", age: 1 }]\nfor ({ name, age } in users) { print(name) }`);
+    const lowered = lower(
+      `let users = [{ name: "a", age: 1 }]\nfor ({ name, age } in users) { print(name) }`,
+    );
     expect(lowered).toHaveLength(2);
     const forNode = lowered[1] as ForLoop;
     expect(typeof forNode.itemVar).toBe("string");
@@ -493,7 +509,9 @@ describe("recursion into bodies", () => {
   });
 
   it("lowers patterns inside for-loop bodies", () => {
-    const lowered = lower(`let outer = [1, 2]\nlet inners = [[3, 4]]\nfor (item in inners) { let [x, y] = item }`);
+    const lowered = lower(
+      `let outer = [1, 2]\nlet inners = [[3, 4]]\nfor (item in inners) { let [x, y] = item }`,
+    );
     const forNode = lowered.find((n) => n.type === "forLoop") as ForLoop;
     expect(forNode).toBeDefined();
     // body should now contain the lowered destructuring
@@ -551,9 +569,7 @@ describe("result patterns", () => {
 
   describe("is operator — binding context (if)", () => {
     it("lowers `if (r is success(v))` to isSuccess(r) guard + `const v = r.value` binding", () => {
-      const lowered = lower(
-        `let r = success(1)\nif (r is success(v)) {\n  print(v)\n}`,
-      );
+      const lowered = lower(`let r = success(1)\nif (r is success(v)) {\n  print(v)\n}`);
       expect(lowered).toHaveLength(2);
       const ifNode = lowered[1] as IfElse;
       expect(ifNode.type).toBe("ifElse");
@@ -579,9 +595,7 @@ describe("result patterns", () => {
     });
 
     it("lowers `if (r is failure(e))` to isFailure(r) guard + `const e = r.error` binding", () => {
-      const lowered = lower(
-        `let r = failure("oops")\nif (r is failure(e)) {\n  print(e)\n}`,
-      );
+      const lowered = lower(`let r = failure("oops")\nif (r is failure(e)) {\n  print(e)\n}`);
       expect(lowered).toHaveLength(2);
       const ifNode = lowered[1] as IfElse;
       expect(ifNode.condition.type).toBe("functionCall");
@@ -605,16 +619,12 @@ describe("result patterns", () => {
 
   describe("is operator — binding context (while)", () => {
     it("lowers `while (r is success(v))` to isSuccess guard + binding prepended to body", () => {
-      const lowered = lower(
-        `let r = success(1)\nwhile (r is success(v)) {\n  print(v)\n}`,
-      );
+      const lowered = lower(`let r = success(1)\nwhile (r is success(v)) {\n  print(v)\n}`);
       expect(lowered).toHaveLength(2);
       const whileNode = lowered[1] as WhileLoop;
       expect(whileNode.type).toBe("whileLoop");
       expect(whileNode.condition.type).toBe("functionCall");
-      expect(
-        (whileNode.condition as { functionName: string }).functionName,
-      ).toBe("isSuccess");
+      expect((whileNode.condition as { functionName: string }).functionName).toBe("isSuccess");
       const vBind = whileNode.body[0] as Assignment;
       expect(vBind.variableName).toBe("v");
       expect(vBind.declKind).toBe("const");
@@ -644,15 +654,15 @@ describe("result patterns", () => {
 
   describe("is operator — binding in pure-boolean context is an error", () => {
     it("rejects `let x = r is success(v)`", () => {
-      expect(() =>
-        lower(`let r = success(1)\nlet x = r is success(v)`),
-      ).toThrow(PatternLoweringError);
+      expect(() => lower(`let r = success(1)\nlet x = r is success(v)`)).toThrow(
+        PatternLoweringError,
+      );
     });
 
     it("rejects `let x = r is failure(e)`", () => {
-      expect(() =>
-        lower(`let r = failure("e")\nlet x = r is failure(e)`),
-      ).toThrow(PatternLoweringError);
+      expect(() => lower(`let r = failure("e")\nlet x = r is failure(e)`)).toThrow(
+        PatternLoweringError,
+      );
     });
   });
 
@@ -760,9 +770,7 @@ match ((r is success) && y) {
   failure(e) => print("f")
 }
 `);
-    const survived = walkNodesArray(lowered).some(
-      ({ node }) => node.type === "isExpression",
-    );
+    const survived = walkNodesArray(lowered).some(({ node }) => node.type === "isExpression");
     expect(survived).toBe(false);
   });
 
@@ -777,9 +785,7 @@ match (words) {
   _ => print("no")
 }
 `);
-    const survived = walkNodesArray(lowered).some(
-      ({ node }) => node.type === "isExpression",
-    );
+    const survived = walkNodesArray(lowered).some(({ node }) => node.type === "isExpression");
     expect(survived).toBe(false);
   });
 
@@ -793,9 +799,7 @@ match (obj is { v, name }) {
   _ => print("no")
 }
 `);
-    const survived = walkNodesArray(lowered).some(
-      ({ node }) => node.type === "isExpression",
-    );
+    const survived = walkNodesArray(lowered).some(({ node }) => node.type === "isExpression");
     expect(survived).toBe(false);
   });
 
@@ -839,9 +843,7 @@ thread {
   }
 }
 `);
-    const survived = walkNodesArray(lowered).some(
-      ({ node }) => node.type === "isExpression",
-    );
+    const survived = walkNodesArray(lowered).some(({ node }) => node.type === "isExpression");
     expect(survived).toBe(false);
   });
 });
@@ -855,9 +857,7 @@ describe("lowering inside with-wrapped statements", () => {
 let r = foo()
 print(r is success) with approve
 `);
-    const survived = walkNodesArray(lowered).some(
-      ({ node }) => node.type === "isExpression",
-    );
+    const survived = walkNodesArray(lowered).some(({ node }) => node.type === "isExpression");
     expect(survived).toBe(false);
   });
 });
@@ -889,10 +889,7 @@ describe("type pattern lowering", () => {
       `const x: any = 1\nmatch (x) {\ns: string => print(s)\n_ => print("no")\n}`,
     );
     const lowered = lowerPatterns(body);
-    const assigns = findAll(
-      lowered,
-      (n) => n.type === "assignment" && n.variableName === "s",
-    );
+    const assigns = findAll(lowered, (n) => n.type === "assignment" && n.variableName === "s");
     expect(assigns.length).toBe(1);
     // Bound from the scrutinee temp variable, not from any validation result.
     expect(assigns[0].value.type).toBe("variableName");
@@ -903,10 +900,7 @@ describe("type pattern lowering", () => {
       `const x: any = 1\nmatch (x) {\n{name}: Person => print(name)\n_ => print("no")\n}`,
     );
     const lowered = lowerPatterns(body);
-    const assigns = findAll(
-      lowered,
-      (n) => n.type === "assignment" && n.variableName === "name",
-    );
+    const assigns = findAll(lowered, (n) => n.type === "assignment" && n.variableName === "name");
     expect(assigns.length).toBe(1);
     expect(assigns[0].value.type).toBe("valueAccess");
     const tests = findAll(lowered, (n) => n.type === "typeTestExpression");
@@ -918,9 +912,9 @@ describe("type pattern lowering", () => {
       `const x: any = 1\nmatch (x) {\n[a, b]: number[] => print(a)\n_ => print("no")\n}`,
     );
     const lowered = lowerPatterns(body);
-    expect(
-      findAll(lowered, (n) => n.type === "assignment" && n.variableName === "a").length,
-    ).toBe(1);
+    expect(findAll(lowered, (n) => n.type === "assignment" && n.variableName === "a").length).toBe(
+      1,
+    );
     expect(findAll(lowered, (n) => n.type === "typeTestExpression").length).toBeGreaterThan(0);
   });
 
@@ -931,9 +925,9 @@ describe("type pattern lowering", () => {
     const lowered = lowerPatterns(body);
     const scrutinees = findAll(lowered, (n) => n.type === "assignment" && n.matchSource);
     expect(scrutinees.length).toBe(1);
-    expect(
-      scrutinees[0].matchSource.some((m: any) => m.caseValue?.type === "typePattern"),
-    ).toBe(true);
+    expect(scrutinees[0].matchSource.some((m: any) => m.caseValue?.type === "typePattern")).toBe(
+      true,
+    );
   });
 
   it("is Type as a plain boolean stays legal (no binders to reject)", () => {

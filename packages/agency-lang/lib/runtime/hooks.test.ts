@@ -26,11 +26,21 @@ describe("callHook", () => {
     const calls: string[] = [];
     const outer = new State();
     outer.scopedCallbacks = [
-      { name: "onNodeStart", fn: () => { calls.push("outer"); } },
+      {
+        name: "onNodeStart",
+        fn: () => {
+          calls.push("outer");
+        },
+      },
     ];
     const inner = new State();
     inner.scopedCallbacks = [
-      { name: "onNodeStart", fn: () => { calls.push("inner"); } },
+      {
+        name: "onNodeStart",
+        fn: () => {
+          calls.push("inner");
+        },
+      },
     ];
     const ctx = ctxWithStack([outer, inner]);
     await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
@@ -41,18 +51,25 @@ describe("callHook", () => {
     const calls: string[] = [];
     const inner = new State();
     inner.scopedCallbacks = [
-      { name: "onNodeStart", fn: () => { calls.push("scoped"); } },
+      {
+        name: "onNodeStart",
+        fn: () => {
+          calls.push("scoped");
+        },
+      },
     ];
-    const ctx = ctxWithStack([inner], { onNodeStart: () => { calls.push("ts"); } });
+    const ctx = ctxWithStack([inner], {
+      onNodeStart: () => {
+        calls.push("ts");
+      },
+    });
     await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
     expect(calls).toEqual(["scoped", "ts"]);
   });
 
   it("ignores callback return values", async () => {
     const inner = new State();
-    inner.scopedCallbacks = [
-      { name: "onLLMCallEnd", fn: () => ["whatever"] },
-    ];
+    inner.scopedCallbacks = [{ name: "onLLMCallEnd", fn: () => ["whatever"] }];
     const ctx = ctxWithStack([inner]);
     const result = await callHook({
       ctx,
@@ -67,8 +84,18 @@ describe("callHook", () => {
     const calls: string[] = [];
     const inner = new State();
     inner.scopedCallbacks = [
-      { name: "onNodeStart", fn: () => { throw new Error("boom"); } },
-      { name: "onNodeStart", fn: () => { calls.push("after"); } },
+      {
+        name: "onNodeStart",
+        fn: () => {
+          throw new Error("boom");
+        },
+      },
+      {
+        name: "onNodeStart",
+        fn: () => {
+          calls.push("after");
+        },
+      },
     ];
     const ctx = ctxWithStack([inner]);
     await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
@@ -81,7 +108,12 @@ describe("callHook", () => {
     const signal = new RestoreSignal({ id: 1 } as any);
     const inner = new State();
     inner.scopedCallbacks = [
-      { name: "onNodeStart", fn: () => { throw signal; } },
+      {
+        name: "onNodeStart",
+        fn: () => {
+          throw signal;
+        },
+      },
     ];
     const ctx = ctxWithStack([inner]);
     await expect(
@@ -93,7 +125,12 @@ describe("callHook", () => {
     const cancelled = new AgencyCancelledError("user cancelled");
     const inner = new State();
     inner.scopedCallbacks = [
-      { name: "onNodeStart", fn: () => { throw cancelled; } },
+      {
+        name: "onNodeStart",
+        fn: () => {
+          throw cancelled;
+        },
+      },
     ];
     const ctx = ctxWithStack([inner]);
     await expect(
@@ -105,12 +142,28 @@ describe("callHook", () => {
     const calls: string[] = [];
     const inner = new State();
     inner.scopedCallbacks = [
-      { name: "onNodeStart", fn: () => { calls.push("scoped"); } },
+      {
+        name: "onNodeStart",
+        fn: () => {
+          calls.push("scoped");
+        },
+      },
     ];
     const ctx = ctxWithStack(
       [inner],
-      { onNodeStart: () => { calls.push("ts"); } },
-      [{ name: "onNodeStart", fn: () => { calls.push("topLevel"); } }],
+      {
+        onNodeStart: () => {
+          calls.push("ts");
+        },
+      },
+      [
+        {
+          name: "onNodeStart",
+          fn: () => {
+            calls.push("topLevel");
+          },
+        },
+      ],
     );
     await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
     expect(calls).toEqual(["scoped", "topLevel", "ts"]);
@@ -118,14 +171,20 @@ describe("callHook", () => {
 
   it("filters topLevelCallbacks by name", async () => {
     const calls: string[] = [];
-    const ctx = ctxWithStack(
-      [new State()],
-      {},
-      [
-        { name: "onNodeStart", fn: () => { calls.push("matching"); } },
-        { name: "onNodeEnd", fn: () => { calls.push("other"); } },
-      ],
-    );
+    const ctx = ctxWithStack([new State()], {}, [
+      {
+        name: "onNodeStart",
+        fn: () => {
+          calls.push("matching");
+        },
+      },
+      {
+        name: "onNodeEnd",
+        fn: () => {
+          calls.push("other");
+        },
+      },
+    ]);
     await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
     expect(calls).toEqual(["matching"]);
   });
@@ -133,9 +192,15 @@ describe("callHook", () => {
   it("multiple distinct callbacks for the same event all fire in order", async () => {
     const calls: string[] = [];
     const frame = new State();
-    frame.addScopedCallback("onNodeStart", () => { calls.push("a"); });
-    frame.addScopedCallback("onNodeStart", () => { calls.push("b"); });
-    frame.addScopedCallback("onNodeStart", () => { calls.push("c"); });
+    frame.addScopedCallback("onNodeStart", () => {
+      calls.push("a");
+    });
+    frame.addScopedCallback("onNodeStart", () => {
+      calls.push("b");
+    });
+    frame.addScopedCallback("onNodeStart", () => {
+      calls.push("c");
+    });
     const ctx = ctxWithStack([frame]);
     await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
     expect(calls).toEqual(["a", "b", "c"]);
@@ -164,7 +229,9 @@ describe("callHook", () => {
 describe("registerGlobalHook", () => {
   it("fires registered global hooks", async () => {
     const calls: string[] = [];
-    registerGlobalHook("onEmit", (_data) => { calls.push("global"); });
+    registerGlobalHook("onEmit", (_data) => {
+      calls.push("global");
+    });
     const ctx = fakeCtx();
     await callHook({ ctx, name: "onEmit", data: "hello" as any });
     expect(calls).toContain("global");
@@ -182,9 +249,17 @@ describe("invokeCallbacks subprocess forwarding", () => {
   it("forwards the event to the parent when in IPC mode", async () => {
     vi.stubEnv("AGENCY_IPC", "1");
     const sent: any[] = [];
-    process.send = ((m: any) => { sent.push(m); return true; }) as any;
+    process.send = ((m: any) => {
+      sent.push(m);
+      return true;
+    }) as any;
     const ctx: any = { callbacks: {}, topLevelCallbacks: [], stateStack: new StateStack() };
-    await invokeCallbacks({ ctx, name: "onNodeStart", data: { nodeName: "x" }, stateStack: ctx.stateStack });
+    await invokeCallbacks({
+      ctx,
+      name: "onNodeStart",
+      data: { nodeName: "x" },
+      stateStack: ctx.stateStack,
+    });
     expect(sent).toEqual([{ type: "callback", name: "onNodeStart", data: { nodeName: "x" } }]);
   });
 
@@ -192,7 +267,12 @@ describe("invokeCallbacks subprocess forwarding", () => {
     const send = vi.fn(() => true);
     process.send = send as any;
     const ctx: any = { callbacks: {}, topLevelCallbacks: [], stateStack: new StateStack() };
-    await invokeCallbacks({ ctx, name: "onNodeStart", data: { nodeName: "x" }, stateStack: ctx.stateStack });
+    await invokeCallbacks({
+      ctx,
+      name: "onNodeStart",
+      data: { nodeName: "x" },
+      stateStack: ctx.stateStack,
+    });
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -202,10 +282,17 @@ describe("invokeCallbacks subprocess forwarding", () => {
     // must BOTH fire locally AND be forwarded.
     vi.stubEnv("AGENCY_IPC", "1");
     const sent: any[] = [];
-    process.send = ((m: any) => { sent.push(m); return true; }) as any;
+    process.send = ((m: any) => {
+      sent.push(m);
+      return true;
+    }) as any;
     const fired: any[] = [];
     const stack = new StateStack();
-    const ctx: any = { callbacks: { onNodeStart: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    const ctx: any = {
+      callbacks: { onNodeStart: (d: any) => fired.push(d) },
+      topLevelCallbacks: [],
+      stateStack: stack,
+    };
     await invokeCallbacks({ ctx, name: "onNodeStart", data: { nodeName: "x" }, stateStack: stack });
     expect(fired).toEqual([{ nodeName: "x" }]); // local callback still fired
     expect(sent).toEqual([{ type: "callback", name: "onNodeStart", data: { nodeName: "x" } }]); // and forwarded

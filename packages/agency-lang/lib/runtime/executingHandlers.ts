@@ -36,10 +36,7 @@ import type { HandlerEntry } from "./types.js";
 const executingHandlersALS = new AsyncLocalStorage<HandlerEntry[]>();
 
 /** Run a handler body, recording its entry as executing for the duration. */
-export function runAsHandler<T>(
-  entry: HandlerEntry,
-  fn: () => Promise<T>,
-): Promise<T> {
+export function runAsHandler<T>(entry: HandlerEntry, fn: () => Promise<T>): Promise<T> {
   const current = executingHandlersALS.getStore() ?? [];
   return executingHandlersALS.run([...current, entry], fn);
 }

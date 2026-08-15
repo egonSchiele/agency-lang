@@ -1,9 +1,19 @@
 import { describe, it, expect } from "vitest";
 import { typeCheck } from "./index.js";
-import { AgencyProgram, UnitLiteral, TimeUnitLiteral, CostUnitLiteral, ByteUnitLiteral } from "../types.js";
+import {
+  AgencyProgram,
+  UnitLiteral,
+  TimeUnitLiteral,
+  CostUnitLiteral,
+  ByteUnitLiteral,
+} from "../types.js";
 import { Operator } from "../types/binop.js";
 
-function timeLit(value: string, unit: TimeUnitLiteral["unit"], canonicalValue: number): TimeUnitLiteral {
+function timeLit(
+  value: string,
+  unit: TimeUnitLiteral["unit"],
+  canonicalValue: number,
+): TimeUnitLiteral {
   return { type: "unitLiteral", value, unit, canonicalValue, dimension: "time" };
 }
 
@@ -11,7 +21,11 @@ function costLit(value: string, canonicalValue: number): CostUnitLiteral {
   return { type: "unitLiteral", value, unit: "$", canonicalValue, dimension: "cost" };
 }
 
-function bytesLit(value: string, unit: ByteUnitLiteral["unit"], canonicalValue: number): ByteUnitLiteral {
+function bytesLit(
+  value: string,
+  unit: ByteUnitLiteral["unit"],
+  canonicalValue: number,
+): ByteUnitLiteral {
   return { type: "unitLiteral", value, unit, canonicalValue, dimension: "bytes" };
 }
 
@@ -54,7 +68,10 @@ describe("dimension mismatch detection", () => {
   });
 
   it("allows time * plain number (no check)", () => {
-    const program = programWithBinOp("*", timeLit("30", "s", 30000), { type: "number", value: "2" });
+    const program = programWithBinOp("*", timeLit("30", "s", 30000), {
+      type: "number",
+      value: "2",
+    });
     const { errors } = typeCheck(program);
     expect(errors).toHaveLength(0);
   });
@@ -73,7 +90,11 @@ describe("dimension mismatch detection", () => {
 
   describe("bytes dimension", () => {
     it("allows same-dimension byte operations", () => {
-      const program = programWithBinOp("+", bytesLit("1", "mb", 1048576), bytesLit("100", "kb", 102400));
+      const program = programWithBinOp(
+        "+",
+        bytesLit("1", "mb", 1048576),
+        bytesLit("100", "kb", 102400),
+      );
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(0);
     });
@@ -92,7 +113,10 @@ describe("dimension mismatch detection", () => {
     });
 
     it("allows bytes * plain number (no check)", () => {
-      const program = programWithBinOp("*", bytesLit("1", "mb", 1048576), { type: "number", value: "2" });
+      const program = programWithBinOp("*", bytesLit("1", "mb", 1048576), {
+        type: "number",
+        value: "2",
+      });
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(0);
     });

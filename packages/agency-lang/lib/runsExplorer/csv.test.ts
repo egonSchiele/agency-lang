@@ -11,10 +11,13 @@ describe("exportCsv", () => {
   });
 
   it("emits a header from the union of keys, quotes commas and quotes, and blanks nulls", () => {
-    const { content } = exportCsv([
-      { agent: "a,b", note: 'say "hi"', score: null },
-      { agent: "plain", note: "x", score: 0.5 },
-    ], new Date());
+    const { content } = exportCsv(
+      [
+        { agent: "a,b", note: 'say "hi"', score: null },
+        { agent: "plain", note: "x", score: 0.5 },
+      ],
+      new Date(),
+    );
 
     const [header, first, second] = content.trimEnd().split("\n");
     expect(header).toBe("agent,note,score");
@@ -43,13 +46,22 @@ describe("csvRowsFromProjection", () => {
       runRow("a2", { agent: "agent-a", score: 0.7 }),
       runRow("b1", { agent: "agent-b", score: 0.5 }),
     ];
-    const state = { ...initialTableState(), sort: "score" as const, group: "agent" as const, expandedGroupKeys: ["group:agent:agent-a"] };
+    const state = {
+      ...initialTableState(),
+      sort: "score" as const,
+      group: "agent" as const,
+      expandedGroupKeys: ["group:agent:agent-a"],
+    };
     const projection = projectTable(runs, state);
 
     const rows = csvRowsFromProjection(projection, runs);
 
     expect(rows.map((r) => r.key)).toEqual([
-      "group:agent:agent-a", "a1", "a2", "group:agent:agent-b", "b1",
+      "group:agent:agent-a",
+      "a1",
+      "a2",
+      "group:agent:agent-b",
+      "b1",
     ]);
     expect(rows[0].type).toBe("group");
     expect(rows[0].count).toBe(2);

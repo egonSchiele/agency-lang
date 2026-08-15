@@ -64,7 +64,9 @@ function formatEvent(raw: Record<string, unknown>): CalendarEvent {
   };
 }
 
-function buildEventTime(datetime: string): { dateTime: string; timeZone?: string } | { date: string } {
+function buildEventTime(
+  datetime: string,
+): { dateTime: string; timeZone?: string } | { date: string } {
   // If it looks like a date-only string (YYYY-MM-DD), use date field
   if (/^\d{4}-\d{2}-\d{2}$/.test(datetime)) {
     return { date: datetime };
@@ -74,7 +76,7 @@ function buildEventTime(datetime: string): { dateTime: string; timeZone?: string
 
 export async function _authorizeCalendar(
   clientId: string,
-  clientSecret: string
+  clientSecret: string,
 ): Promise<{ success: boolean }> {
   return _authorize(PROVIDER_NAME, {
     authUrl: AUTH_URL,
@@ -86,9 +88,7 @@ export async function _authorizeCalendar(
   });
 }
 
-export async function _listEvents(
-  params?: ListEventsParams
-): Promise<CalendarEvent[]> {
+export async function _listEvents(params?: ListEventsParams): Promise<CalendarEvent[]> {
   const token = await getToken();
   const calendarId = params?.calendarId || "primary";
 
@@ -109,7 +109,7 @@ export async function _listEvents(
   }
 
   const response = await fetch(url.toString(), {
-    headers: { "Authorization": `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}` },
   });
 
   if (!response.ok) {
@@ -117,13 +117,11 @@ export async function _listEvents(
     throw new Error(`Google Calendar API error (${response.status}): ${errBody.slice(0, 200)}`);
   }
 
-  const data = await response.json() as { items?: Record<string, unknown>[] };
+  const data = (await response.json()) as { items?: Record<string, unknown>[] };
   return (data.items || []).map(formatEvent);
 }
 
-export async function _createEvent(
-  params: CreateEventParams
-): Promise<CalendarEvent> {
+export async function _createEvent(params: CreateEventParams): Promise<CalendarEvent> {
   const token = await getToken();
   const calendarId = params.calendarId || "primary";
 
@@ -144,25 +142,25 @@ export async function _createEvent(
     {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
-    }
+    },
   );
 
   if (!response.ok) {
     const responseBody = await response.text();
-    throw new Error(`Google Calendar API error (${response.status}): ${responseBody.slice(0, 200)}`);
+    throw new Error(
+      `Google Calendar API error (${response.status}): ${responseBody.slice(0, 200)}`,
+    );
   }
 
-  const data = await response.json() as Record<string, unknown>;
+  const data = (await response.json()) as Record<string, unknown>;
   return formatEvent(data);
 }
 
-export async function _updateEvent(
-  params: UpdateEventParams
-): Promise<CalendarEvent> {
+export async function _updateEvent(params: UpdateEventParams): Promise<CalendarEvent> {
   const token = await getToken();
   const calendarId = params.calendarId || "primary";
 
@@ -178,25 +176,27 @@ export async function _updateEvent(
     {
       method: "PATCH",
       headers: {
-        "Authorization": `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
-    }
+    },
   );
 
   if (!response.ok) {
     const responseBody = await response.text();
-    throw new Error(`Google Calendar API error (${response.status}): ${responseBody.slice(0, 200)}`);
+    throw new Error(
+      `Google Calendar API error (${response.status}): ${responseBody.slice(0, 200)}`,
+    );
   }
 
-  const data = await response.json() as Record<string, unknown>;
+  const data = (await response.json()) as Record<string, unknown>;
   return formatEvent(data);
 }
 
 export async function _deleteEvent(
   eventId: string,
-  calendarId?: string
+  calendarId?: string,
 ): Promise<{ deleted: boolean }> {
   const token = await getToken();
   const cal = calendarId || "primary";
@@ -205,13 +205,15 @@ export async function _deleteEvent(
     `${CALENDAR_API}/calendars/${encodeURIComponent(cal)}/events/${encodeURIComponent(eventId)}`,
     {
       method: "DELETE",
-      headers: { "Authorization": `Bearer ${token}` },
-    }
+      headers: { Authorization: `Bearer ${token}` },
+    },
   );
 
   if (!response.ok && response.status !== 410) {
     const responseBody = await response.text();
-    throw new Error(`Google Calendar API error (${response.status}): ${responseBody.slice(0, 200)}`);
+    throw new Error(
+      `Google Calendar API error (${response.status}): ${responseBody.slice(0, 200)}`,
+    );
   }
 
   return { deleted: true };

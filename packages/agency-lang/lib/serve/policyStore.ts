@@ -35,7 +35,8 @@ export class PolicyStore {
       throw new Error(`Invalid action: '${rule.action}'. Must be 'approve' or 'reject'.`);
     }
     if (rule.match !== undefined) {
-      if (typeof rule.match !== "object" || rule.match === null) throw new Error("match must be an object");
+      if (typeof rule.match !== "object" || rule.match === null)
+        throw new Error("match must be an object");
       for (const v of Object.values(rule.match)) {
         if (typeof v !== "string") throw new Error("match values must be strings (glob patterns)");
       }
@@ -75,7 +76,9 @@ export class PolicyStore {
       if (result.success) {
         this.policy = parsed;
       } else {
-        console.error(`Invalid policy file at ${this.filePath}: ${result.error}. Using empty policy.`);
+        console.error(
+          `Invalid policy file at ${this.filePath}: ${result.error}. Using empty policy.`,
+        );
       }
     } catch {
       console.error(`Failed to parse policy file at ${this.filePath}. Using empty policy.`);

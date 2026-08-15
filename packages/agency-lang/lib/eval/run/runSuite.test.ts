@@ -10,16 +10,34 @@ import { runSuite } from "./runSuite.js";
 /** Writes the eval record grading reads, with one output value. */
 function recordExtractor(output: unknown): EvalRecordExtractor {
   return async ({ outPath }) => {
-    fs.writeFileSync(outPath, JSON.stringify({
-      traceId: "t", recordVersion: 2, formatVersion: 1, durationMs: 1, source: "s",
-      evalValues: [], evalOutputs: [{ value: output, threadId: "0", tMs: 1 }],
-      threads: [], events: [], interrupts: [], errors: [], incomplete: [],
-      metrics: {
-        llmCalls: 0, toolStarts: 0, toolEnds: 0, models: [],
-        tokensInTotal: 0, tokensOutTotal: 0, costUsdTotal: 0, toolCounts: {},
-      },
-      warnings: [],
-    }));
+    fs.writeFileSync(
+      outPath,
+      JSON.stringify({
+        traceId: "t",
+        recordVersion: 2,
+        formatVersion: 1,
+        durationMs: 1,
+        source: "s",
+        evalValues: [],
+        evalOutputs: [{ value: output, threadId: "0", tMs: 1 }],
+        threads: [],
+        events: [],
+        interrupts: [],
+        errors: [],
+        incomplete: [],
+        metrics: {
+          llmCalls: 0,
+          toolStarts: 0,
+          toolEnds: 0,
+          models: [],
+          tokensInTotal: 0,
+          tokensOutTotal: 0,
+          costUsdTotal: 0,
+          toolCounts: {},
+        },
+        warnings: [],
+      }),
+    );
   };
 }
 
@@ -38,10 +56,12 @@ describe("runSuite", () => {
   it("module-dir == cwd: compiled entry lives inside each input's workdir", async () => {
     const runsDir = path.join(proj, "runs");
     const seen: { compiledEntryPath: string; cwd: string }[] = [];
-    const runner = vi.fn(async (args: { kind: string; compiledEntryPath?: string; cwd: string }) => {
-      seen.push({ compiledEntryPath: args.compiledEntryPath as string, cwd: args.cwd });
-      return { ok: true as const };
-    });
+    const runner = vi.fn(
+      async (args: { kind: string; compiledEntryPath?: string; cwd: string }) => {
+        seen.push({ compiledEntryPath: args.compiledEntryPath as string, cwd: args.cwd });
+        return { ok: true as const };
+      },
+    );
 
     const result = await runSuite(
       {
@@ -79,7 +99,11 @@ describe("runSuite", () => {
         config: {},
         perRun: {
           pipeOutput: false,
-          seed: { baseDir: proj, agentRelPath: "agent.agency", closureFiles: [path.join(proj, "agent.agency")] },
+          seed: {
+            baseDir: proj,
+            agentRelPath: "agent.agency",
+            closureFiles: [path.join(proj, "agent.agency")],
+          },
           overlayFiles: { "config.txt": "patched\n" },
         },
       },
@@ -160,7 +184,11 @@ describe("runSuite", () => {
 
     const result = await runSuite(
       {
-        agent: { kind: "command", tokens: ["some-agent", "-p", "{task}"], label: "some-agent -p {task}" },
+        agent: {
+          kind: "command",
+          tokens: ["some-agent", "-p", "{task}"],
+          label: "some-agent -p {task}",
+        },
         inputs: [
           { id: "a", goal: "g", task: "first task" },
           { id: "b", goal: "g", task: "second task" },
@@ -194,7 +222,11 @@ describe("runSuite", () => {
 
     await runSuite(
       {
-        agent: { kind: "command", tokens: [fakeAgency, "agent", "-p", "{task}"], label: `${fakeAgency} agent -p {task}` },
+        agent: {
+          kind: "command",
+          tokens: [fakeAgency, "agent", "-p", "{task}"],
+          label: `${fakeAgency} agent -p {task}`,
+        },
         inputs: [{ id: "a", goal: "g", task: "t" }],
         runsDir: path.join(proj, "runs"),
         runId: "r-cliv",
@@ -204,7 +236,9 @@ describe("runSuite", () => {
       { runner },
     );
 
-    const config = JSON.parse(fs.readFileSync(path.join(proj, "runs", "r-cliv", "config.json"), "utf8"));
+    const config = JSON.parse(
+      fs.readFileSync(path.join(proj, "runs", "r-cliv", "config.json"), "utf8"),
+    );
     expect(config.provenance.agent.cliVersion).toBe("9.9.9-test");
   });
 
@@ -305,8 +339,9 @@ describe("runSuite", () => {
       },
       { runner },
     );
-    const inputJson = JSON.parse(fs.readFileSync(
-      path.join(proj, "runs", "r-timeout", "inputs", "a", "input.json"), "utf8"));
+    const inputJson = JSON.parse(
+      fs.readFileSync(path.join(proj, "runs", "r-timeout", "inputs", "a", "input.json"), "utf8"),
+    );
     expect(inputJson.timeoutSec).toBe(1200);
     expect(result.okCount).toBe(1);
   });
@@ -364,7 +399,9 @@ describe("runSuite", () => {
     // The in-flight input finished and was recorded; the rest never ran.
     expect(runner).toHaveBeenCalledTimes(1);
     expect(result.inputs.map((i) => i.inputId)).toEqual(["input-1"]);
-    const summary = JSON.parse(fs.readFileSync(path.join(runsDir, "r-sigint", "summary.json"), "utf8"));
+    const summary = JSON.parse(
+      fs.readFileSync(path.join(runsDir, "r-sigint", "summary.json"), "utf8"),
+    );
     expect(summary.inputs).toHaveLength(1);
     // The listener does not outlive the suite.
     expect(process.listeners("SIGINT")).toEqual(before);

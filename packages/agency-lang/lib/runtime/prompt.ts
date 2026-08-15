@@ -1,10 +1,5 @@
 import * as smoltalk from "smoltalk";
-import {
-  PromptResult,
-  ToolCallJSON,
-  UserContentInput,
-  redactAttachments,
-} from "smoltalk";
+import { PromptResult, ToolCallJSON, UserContentInput, redactAttachments } from "smoltalk";
 import { createLogger } from "../logger.js";
 import { AgencyFunction, type FuncParam } from "./agencyFunction.js";
 import { agencyStore, getRuntimeContext, __threads } from "./asyncContext.js";
@@ -20,27 +15,15 @@ import {
   runGateAndFeedback,
   type BoundaryContext,
 } from "./turnBoundary.js";
-import {
-  AgencyCancelledError,
-  isAbortError,
-  readCause,
-} from "./errors.js";
+import { AgencyCancelledError, isAbortError, readCause } from "./errors.js";
 import { recordCompletionUsage } from "./recordPaidUsage.js";
 import { projectProviderTokenUsage } from "./invocationUsage.js";
 import { resolveCompletionModel } from "./modelIdentity.js";
 import { decideValidationRetry, resolveRetryPolicy } from "./llmRetry.js";
 import type { RetryPolicy, RetryConfig } from "./llmRetry.js";
 // See docs/dev/promptRunner.md — the dispatch + retry driver lives next door.
-import {
-  armCallTimeout,
-  dispatchWithRetry,
-  runWithRetry,
-} from "./llmDispatch.js";
-import {
-  markThreadCancelled,
-  needsThreadRepair,
-  restoreThreadForResume,
-} from "./threadRepair.js";
+import { armCallTimeout, dispatchWithRetry, runWithRetry } from "./llmDispatch.js";
+import { markThreadCancelled, needsThreadRepair, restoreThreadForResume } from "./threadRepair.js";
 import { isGuardExceededError } from "./guard.js";
 import { callHook, invokeCallbacks } from "./hooks.js";
 import { hasInterrupts, isRejected } from "./interrupts.js";
@@ -48,30 +31,15 @@ import type { PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
 // See docs/dev/promptRunner.md for the control-flow abstraction used here.
 import { PromptBailout, PromptRunner } from "./promptRunner.js";
-import {
-  findIntrinsic,
-  partitionIntrinsicCalls,
-  runIntrinsicCall,
-} from "./intrinsicTools.js";
+import { findIntrinsic, partitionIntrinsicCalls, runIntrinsicCall } from "./intrinsicTools.js";
 import type { RunBatchResult } from "./runBatch.js";
 import { warnOnOversizedToolSchemas } from "./toolSchemaSize.js";
-import {
-  GuardTripRetry,
-  raiseGuardTripsUntilClear,
-} from "./guardTripInterrupt.js";
-import {
-  failure,
-  isFailure,
-  isSuccess,
-  markDestructiveWork,
-} from "./result.js";
+import { GuardTripRetry, raiseGuardTripsUntilClear } from "./guardTripInterrupt.js";
+import { failure, isFailure, isSuccess, markDestructiveWork } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { LlmDefaults } from "../stdlib/llm.js";
-import {
-  MessageThread,
-  type MessageThreadJSON,
-} from "./state/messageThread.js";
+import { MessageThread, type MessageThreadJSON } from "./state/messageThread.js";
 import { StateStack, claimFrameForScope } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { GraphState } from "./types.js";
@@ -109,12 +77,8 @@ export function promptText(p: string | UserContentInput): string {
  *  `JSON.stringify` would emit — so wire consumers like
  *  `wireAccessors.userMessageOf` keep working. Redaction only shortens base64
  *  string values, so the result is still structurally `MessageJSON[]`. */
-export function redactMessagesForLog(
-  messages: MessageThread,
-): smoltalk.MessageJSON[] {
-  return redactAttachments(
-    messages.toJSON().messages,
-  ) as smoltalk.MessageJSON[];
+export function redactMessagesForLog(messages: MessageThread): smoltalk.MessageJSON[] {
+  return redactAttachments(messages.toJSON().messages) as smoltalk.MessageJSON[];
 }
 
 /** A thread's redacted messages for statelog, each carrying its debug
@@ -138,9 +102,7 @@ export function withMessageLabels(
 
 /** A prompt with attachment payloads redacted, preserving its string-or-array
  *  shape, for statelog / hook data. */
-export function redactPromptForLog(
-  p: string | UserContentInput,
-): string | UserContentInput {
+export function redactPromptForLog(p: string | UserContentInput): string | UserContentInput {
   return redactAttachments(p) as string | UserContentInput;
 }
 
@@ -196,9 +158,7 @@ function stringifyToolResult(result: any): string {
  *  defensively. */
 function unwrapToolResultForLlm(result: any, toolName: string): any {
   if (!isSuccess(result)) return result;
-  return (
-    result.value ?? `${toolName} ran successfully but did not return a value`
-  );
+  return result.value ?? `${toolName} ran successfully but did not return a value`;
 }
 
 /** Render a failure Result's error for the model. String errors pass
@@ -246,10 +206,7 @@ function capToolResultForLlm(result: any, cap: number): any {
   if (!Number.isFinite(cap) || cap <= 0) return result;
   const text = stringifyToolResult(result);
   if (text.length <= cap) return result;
-  return (
-    text.slice(0, cap) +
-    `\n\n[tool result truncated: showing ${cap} of ${text.length} chars]`
-  );
+  return text.slice(0, cap) + `\n\n[tool result truncated: showing ${cap} of ${text.length} chars]`;
 }
 
 /** Provider APIs (Anthropic, OpenAI) reject an LLM request whose tool list
@@ -425,9 +382,7 @@ async function runPostTurnMemory(
   targetStack: StateStack,
   messages: MessageThread,
 ): Promise<void> {
-  const memoryManager = targetStack.anyGuardOverBudget()
-    ? null
-    : ctx.getActiveMemoryManager();
+  const memoryManager = targetStack.anyGuardOverBudget() ? null : ctx.getActiveMemoryManager();
   if (!memoryManager) return;
   try {
     const original = messages.getMessages();
@@ -444,9 +399,7 @@ async function runPostTurnMemory(
     }
   } catch (err) {
     if (isGuardExceededError(err)) throw err;
-    createLogger(ctx.logLevel).warn(
-      `[memory] post-turn hook failed: ${(err as Error).message}`,
-    );
+    createLogger(ctx.logLevel).warn(`[memory] post-turn hook failed: ${(err as Error).message}`);
   }
 }
 
@@ -548,15 +501,9 @@ async function _runPrompt({
 
   const endTime = performance.now();
 
-  const modelName = resolveCompletionModel(
-    completion.model,
-    clientConfig.model,
-  );
+  const modelName = resolveCompletionModel(completion.model, clientConfig.model);
 
-  const projectedUsage = projectProviderTokenUsage(
-    completion.usage,
-    "completion",
-  ).usage;
+  const projectedUsage = projectProviderTokenUsage(completion.usage, "completion").usage;
 
   ctx.statelogClient.promptCompletion({
     messages: withMessageLabels(messages),
@@ -569,8 +516,7 @@ async function _runPrompt({
     responseFormat,
     usage: projectedUsage,
     cost: completion.cost,
-    finishReason:
-      (completion as any).finishReason ?? (completion as any).finish_reason,
+    finishReason: (completion as any).finishReason ?? (completion as any).finish_reason,
     stream,
     threadId: __threads()?.activeId() ?? null,
   });
@@ -645,12 +591,7 @@ export async function runPrompt(args: {
   draftSchema?: unknown;
   checkpointInfo?: SourceLocationOpts;
 }): Promise<any> {
-  const {
-    prompt,
-    responseFormat,
-    maxToolCallRounds = 10,
-    checkpointInfo,
-  } = args;
+  const { prompt, responseFormat, maxToolCallRounds = 10, checkpointInfo } = args;
 
   // bail early on empty strings
   // they cause local models to spiral
@@ -705,14 +646,12 @@ export async function runPrompt(args: {
   const toolErrorCounts: Record<string, number> = self.toolErrorCounts;
   // The calling function's locals, for decision 8. Read from `args` (not the
   // frame) because it belongs to the CALLER, not to runPrompt's own frame.
-  const destructiveSink: { __destructiveRan?: boolean } | undefined =
-    args.destructiveSink;
+  const destructiveSink: { __destructiveRan?: boolean } | undefined = args.destructiveSink;
 
   const rawTools: any[] = args.clientConfig?.tools || [];
   const agencyFunctions: AgencyFunction[] = rawTools.map((entry: any) => {
     if (!AgencyFunction.isAgencyFunction(entry)) {
-      const receivedType =
-        entry === null ? "null" : Array.isArray(entry) ? "array" : typeof entry;
+      const receivedType = entry === null ? "null" : Array.isArray(entry) ? "array" : typeof entry;
       throw new TypeError(
         `Invalid tool in clientConfig.tools. Expected an AgencyFunction instance, but received ${receivedType}.`,
       );
@@ -722,9 +661,7 @@ export async function runPrompt(args: {
   // Drop removed tools first — they're never exposed to the LLM, so they
   // shouldn't block the call with a backstop error for an unbound block
   // they wouldn't have been asked to invoke anyway.
-  const exposedFunctions = agencyFunctions.filter(
-    (fn) => !removedTools.includes(fn.name),
-  );
+  const exposedFunctions = agencyFunctions.filter((fn) => !removedTools.includes(fn.name));
   // Runtime backstop for compile-time-undetectable cases (dynamic tool
   // assembly, hand-written TS). Runs once per exposed tool — before the
   // LLM ever sees the schema — so failures surface at registration time,
@@ -797,8 +734,7 @@ export async function runPrompt(args: {
     backoff: ccBackoff,
     validationRetries: ccValidationRetries,
   };
-  const branchRetryDefaults =
-    (stateStack?.other?.llmDefaults as RetryConfig | undefined) ?? {};
+  const branchRetryDefaults = (stateStack?.other?.llmDefaults as RetryConfig | undefined) ?? {};
   const retryPolicy = resolveRetryPolicy(perCallRetry, branchRetryDefaults);
 
   // Run-wide LLM defaults set at runtime via `std::llm`
@@ -807,8 +743,7 @@ export async function runPrompt(args: {
   // parent at fork time). Layer them BETWEEN the baked
   // `smoltalkDefaults` and the per-call options, so precedence is
   // baked agency.json < stack defaults < per-call `llm({...})`.
-  const stackDefaults: Partial<LlmDefaults> =
-    stateStack?.other?.llmDefaults ?? {};
+  const stackDefaults: Partial<LlmDefaults> = stateStack?.other?.llmDefaults ?? {};
   const {
     maxToolResultChars: stackMaxToolResultChars,
     maxToolCallRounds: stackMaxToolCallRounds,
@@ -817,8 +752,7 @@ export async function runPrompt(args: {
   // maxToolCallRounds precedence: a branch default (setLlmOptions) overrides the
   // baked per-call value (agency.json → codegen literal, default 10). Kept out
   // of stackSmolDefaults above — it isn't a smoltalk config field.
-  const effectiveMaxToolCallRounds =
-    stackMaxToolCallRounds ?? maxToolCallRounds;
+  const effectiveMaxToolCallRounds = stackMaxToolCallRounds ?? maxToolCallRounds;
   const clientConfig = ctx.getSmoltalkConfig({
     ...stackSmolDefaults,
     ...restClientConfig,
@@ -1001,9 +935,7 @@ export async function runPrompt(args: {
       const recallManager = ctx.getActiveMemoryManager();
       if (memoryOption && recallManager) {
         try {
-          const facts = await recallManager.recallForInjection(
-            promptText(prompt),
-          );
+          const facts = await recallManager.recallForInjection(promptText(prompt));
           if (facts) {
             injectedFactsContent = `Relevant context from memory:\n${facts}`;
             messages.push(smoltalk.systemMessage(injectedFactsContent));
@@ -1039,9 +971,7 @@ export async function runPrompt(args: {
         if (injectedFactsContent !== null) {
           const injectedIndex = messages
             .getMessages()
-            .findLastIndex(
-              (m) => m.role === "system" && m.content === injectedFactsContent,
-            );
+            .findLastIndex((m) => m.role === "system" && m.content === injectedFactsContent);
           if (injectedIndex !== -1) {
             // removeAt, not setMessages: this edits ONE message out of
             // the thread, so it must not reset the labels of all the
@@ -1069,12 +999,7 @@ export async function runPrompt(args: {
       branchStack: StateStack;
     }): Promise<{
       toolResult: any;
-      invokeOutcome:
-        | "success"
-        | "failed"
-        | "rejected"
-        | "interrupted"
-        | "crashed";
+      invokeOutcome: "success" | "failed" | "rejected" | "interrupted" | "crashed";
       interrupts?: any[];
     }> => {
       const { handler, toolCall, namedArgs, branchKey, branchStack } = args;
@@ -1113,10 +1038,7 @@ export async function runPrompt(args: {
             namedArgs,
           });
         toolResult = parentFrame
-          ? await agencyStore.run(
-              { ...parentFrame, threads: freshThreads },
-              invokeAsTool,
-            )
+          ? await agencyStore.run({ ...parentFrame, threads: freshThreads }, invokeAsTool)
           : await invokeAsTool();
       } catch (error: unknown) {
         // A cancellation (user pressed Esc, race-loser, timeout) is not a
@@ -1129,16 +1051,14 @@ export async function runPrompt(args: {
           stack.deleteBranch(branchKey);
           throw error;
         }
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
         // Keep the crash visible in the terminal, then convert to a failure
         // and fall through to the unified failure branch below. The tool
         // STAYS callable (the old remove-on-crash policy is abolished): a
         // pre-execution tag (argument binding failed → body never ran) maps
         // to the neverStarted tier; any other crash is neutral.
         console.error(`Tool call "${handler.name}" crashed: ${errorMessage}`);
-        const preExecution = !!(error as { preExecution?: boolean })
-          ?.preExecution;
+        const preExecution = !!(error as { preExecution?: boolean })?.preExecution;
         toolResult = failure(errorMessage, { neverStarted: preExecution });
       } finally {
         ctx.exitToolCall();
@@ -1174,11 +1094,8 @@ export async function runPrompt(args: {
       if (isFailure(toolResult)) {
         const errorMessage = toolErrorMessage(toolResult.error);
         // Cap only what the LLM sees; statelog keeps the full message.
-        const cappedError = String(
-          capToolResultForLlm(errorMessage, toolResultCap),
-        );
-        toolErrorCounts[handler.name] =
-          (toolErrorCounts[handler.name] || 0) + 1;
+        const cappedError = String(capToolResultForLlm(errorMessage, toolResultCap));
+        toolErrorCounts[handler.name] = (toolErrorCounts[handler.name] || 0) + 1;
         ctx.statelogClient.error({
           errorType: "toolError",
           message: errorMessage,
@@ -1199,9 +1116,7 @@ export async function runPrompt(args: {
           pushMessage(TIER_SUFFIX.destructive);
           removedTools.push(handler.name);
         } else if (toolErrorCounts[handler.name] >= MAX_TOOL_FAILURES) {
-          pushMessage(
-            "This tool has failed too many times and can no longer be called.",
-          );
+          pushMessage("This tool has failed too many times and can no longer be called.");
           removedTools.push(handler.name);
         } else {
           pushMessage(TIER_SUFFIX[tier]);
@@ -1212,9 +1127,7 @@ export async function runPrompt(args: {
 
       if (isRejected(toolResult)) {
         const message =
-          typeof toolResult.value === "string"
-            ? toolResult.value
-            : "Tool call rejected by policy";
+          typeof toolResult.value === "string" ? toolResult.value : "Tool call rejected by policy";
         messages.push(
           smoltalk.toolMessage(capToolResultForLlm(message, toolResultCap), {
             tool_call_id: toolCall.id,
@@ -1246,9 +1159,7 @@ export async function runPrompt(args: {
       // value via unwrapToolResultForLlm inside the push helper.
       // Nullish, NOT ||: legitimate falsy returns (false, 0, "") must
       // reach the model and the branch cache as-is.
-      toolResult =
-        toolResult ??
-        `${handler.name} ran successfully but did not return a value`;
+      toolResult = toolResult ?? `${handler.name} ran successfully but did not return a value`;
       stack.setResultOnBranch(branchKey, toolResult);
       pushSuccessToolMessage({ toolResult, toolCall, handler, branchStack });
       return { toolResult, invokeOutcome: "success" };
@@ -1286,10 +1197,7 @@ export async function runPrompt(args: {
           // returns `any` (an under-cap structured result passes through
           // unstringified) and ToolMessage accepts it at runtime.
           appendReplyMarker(
-            capToolResultForLlm(
-              unwrapToolResultForLlm(toolResult, handler.name),
-              toolResultCap,
-            ),
+            capToolResultForLlm(unwrapToolResultForLlm(toolResult, handler.name), toolResultCap),
             replyMarker,
             stringifyToolResult,
           ) as any,
@@ -1320,10 +1228,7 @@ export async function runPrompt(args: {
 
         // Partition the round once: intrinsic calls handle inline (in
         // order, below); everything else dispatches concurrently.
-        const { intrinsicCalls, dispatchCalls } = partitionIntrinsicCalls(
-          toolCalls,
-          toolFunctions,
-        );
+        const { intrinsicCalls, dispatchCalls } = partitionIntrinsicCalls(toolCalls, toolFunctions);
 
         // Ordered interception (partials-ergonomics spec Part 2):
         // intrinsic calls run inline at their call-list position, so
@@ -1396,39 +1301,31 @@ export async function runPrompt(args: {
               // byte-for-byte unchanged.
               const callSlug = `${index}_${toolCall.id}`;
 
-              const handler = toolFunctions.find(
-                (fn) => fn.name === toolCall.name,
-              );
+              const handler = toolFunctions.find((fn) => fn.name === toolCall.name);
               if (!handler) {
-                await b.step(
-                  `round.${round}.tool.${callSlug}.unhandled`,
-                  async () => {
-                    console.error(
-                      `No handler found for tool call: ${toolCall.name}. This error will be sent back to the LLM.`,
-                    );
-                    messages.push(
-                      smoltalk.toolMessage(
-                        `Error: No handler found for tool call ${toolCall.name}`,
-                        { tool_call_id: toolCall.id, name: toolCall.name },
-                      ),
-                    );
-                  },
-                );
+                await b.step(`round.${round}.tool.${callSlug}.unhandled`, async () => {
+                  console.error(
+                    `No handler found for tool call: ${toolCall.name}. This error will be sent back to the LLM.`,
+                  );
+                  messages.push(
+                    smoltalk.toolMessage(`Error: No handler found for tool call ${toolCall.name}`, {
+                      tool_call_id: toolCall.id,
+                      name: toolCall.name,
+                    }),
+                  );
+                });
                 return;
               }
 
               if (self.toolCallRound >= effectiveMaxToolCallRounds) {
-                await b.step(
-                  `round.${round}.tool.${callSlug}.tooManyRounds`,
-                  async () => {
-                    messages.push(
-                      smoltalk.toolMessage(
-                        `Error: Maximum number of tool call rounds (${effectiveMaxToolCallRounds}) exceeded. This tool call will not be executed.`,
-                        { tool_call_id: toolCall.id, name: toolCall.name },
-                      ),
-                    );
-                  },
-                );
+                await b.step(`round.${round}.tool.${callSlug}.tooManyRounds`, async () => {
+                  messages.push(
+                    smoltalk.toolMessage(
+                      `Error: Maximum number of tool call rounds (${effectiveMaxToolCallRounds}) exceeded. This tool call will not be executed.`,
+                      { tool_call_id: toolCall.id, name: toolCall.name },
+                    ),
+                  );
+                });
                 return;
               }
 
@@ -1437,17 +1334,14 @@ export async function runPrompt(args: {
               // sibling in this round that pushed first), skip with a
               // notice toolMessage.
               if (removedTools.includes(handler.name)) {
-                await b.step(
-                  `round.${round}.tool.${callSlug}.removed`,
-                  async () => {
-                    messages.push(
-                      smoltalk.toolMessage(
-                        `Error: Handler for tool call ${handler.name} has been removed already due to previous errors, and will not be executed.`,
-                        { tool_call_id: toolCall.id, name: toolCall.name },
-                      ),
-                    );
-                  },
-                );
+                await b.step(`round.${round}.tool.${callSlug}.removed`, async () => {
+                  messages.push(
+                    smoltalk.toolMessage(
+                      `Error: Handler for tool call ${handler.name} has been removed already due to previous errors, and will not be executed.`,
+                      { tool_call_id: toolCall.id, name: toolCall.name },
+                    ),
+                  );
+                });
                 return;
               }
 
@@ -1457,37 +1351,27 @@ export async function runPrompt(args: {
               // uniformly by completedSteps inside b.step (start/invoke/end
               // each get marked done on success and skipped on resume).
               const branchStack = stack.getOrCreateBranch(branchKey).stack;
-              const namedArgs = dropNullDefaultedArgs(
-                toolCall.arguments,
-                handler.params,
-              );
+              const namedArgs = dropNullDefaultedArgs(toolCall.arguments, handler.params);
 
-              await b.step(
-                `round.${round}.tool.${callSlug}.start`,
-                async () => {
-                  // Pass `branchStack` so scoped callbacks registered inside
-                  // the branch's frame chain are discovered by
-                  // `gatherCallbacks`. Callback bodies cannot interrupt
-                  // (typechecker-enforced), so this is purely about scope
-                  // discovery, not interrupt routing.
-                  await invokeCallbacks({
-                    ctx,
-                    name: "onToolCallStart",
-                    data: { toolName: handler.name, args: namedArgs },
-                    stateStack: branchStack,
-                  });
-                },
-              );
+              await b.step(`round.${round}.tool.${callSlug}.start`, async () => {
+                // Pass `branchStack` so scoped callbacks registered inside
+                // the branch's frame chain are discovered by
+                // `gatherCallbacks`. Callback bodies cannot interrupt
+                // (typechecker-enforced), so this is purely about scope
+                // discovery, not interrupt routing.
+                await invokeCallbacks({
+                  ctx,
+                  name: "onToolCallStart",
+                  data: { toolName: handler.name, args: namedArgs },
+                  stateStack: branchStack,
+                });
+              });
               if (b.interrupts) return;
 
               const toolSpanId = ctx.statelogClient.startSpan("toolExecution");
               let toolResult: any;
-              let invokeOutcome:
-                | "success"
-                | "failed"
-                | "rejected"
-                | "interrupted"
-                | "crashed" = "success";
+              let invokeOutcome: "success" | "failed" | "rejected" | "interrupted" | "crashed" =
+                "success";
 
               // Persist the measured tool execution duration in
               // self.runnerState so resume (where the invoke step is
@@ -1508,42 +1392,35 @@ export async function runPrompt(args: {
                 // duplicate the event. Designed to leave a trace of every
                 // tool that began even when the run is killed before it
                 // completes (the matching toolCall event won't fire).
-                await b.step(
-                  `round.${round}.tool.${callSlug}.logStart`,
-                  async () => {
-                    ctx.statelogClient.toolCallStart({
-                      toolName: handler.name,
-                      args: namedArgs,
-                      model: JSON.stringify(clientConfig.model),
-                      threadId: __threads()?.activeId() ?? null,
-                    });
-                  },
-                );
+                await b.step(`round.${round}.tool.${callSlug}.logStart`, async () => {
+                  ctx.statelogClient.toolCallStart({
+                    toolName: handler.name,
+                    args: namedArgs,
+                    model: JSON.stringify(clientConfig.model),
+                    threadId: __threads()?.activeId() ?? null,
+                  });
+                });
                 // Invoke step: returns the interrupts when the tool halts
                 // with them so BranchRunner.step can collect. All other
                 // outcomes (success, failure, reject, crash) update outer
                 // state in place via runInvokeStep; the step completes
                 // (returns void unless interrupted) and is marked done so
                 // resume skips this whole block.
-                await b.step(
-                  `round.${round}.tool.${callSlug}.invoke`,
-                  async () => {
-                    const outcome = await runInvokeStep({
-                      handler,
-                      toolCall,
-                      namedArgs,
-                      branchKey,
-                      branchStack,
-                    });
-                    toolResult = outcome.toolResult;
-                    invokeOutcome = outcome.invokeOutcome;
-                    if (outcome.invokeOutcome === "success") {
-                      self.runnerState.toolTimings[callSlug] =
-                        performance.now() - toolCallStartTime;
-                    }
-                    return outcome.interrupts;
-                  },
-                );
+                await b.step(`round.${round}.tool.${callSlug}.invoke`, async () => {
+                  const outcome = await runInvokeStep({
+                    handler,
+                    toolCall,
+                    namedArgs,
+                    branchKey,
+                    branchStack,
+                  });
+                  toolResult = outcome.toolResult;
+                  invokeOutcome = outcome.invokeOutcome;
+                  if (outcome.invokeOutcome === "success") {
+                    self.runnerState.toolTimings[callSlug] = performance.now() - toolCallStartTime;
+                  }
+                  return outcome.interrupts;
+                });
 
                 if (b.interrupts || invokeOutcome !== "success") return;
 
@@ -1558,41 +1435,34 @@ export async function runPrompt(args: {
                 // Reuse the persisted duration so onToolCallEnd /
                 // statelogClient.toolCall always report the real exec time,
                 // not the resume pass's overhead.
-                const timeTaken: number =
-                  self.runnerState.toolTimings[callSlug] ?? 0;
-                await b.step(
-                  `round.${round}.tool.${callSlug}.end`,
-                  async () => {
-                    // Same scope-discovery rationale as the .start hook.
-                    await invokeCallbacks({
-                      ctx,
-                      name: "onToolCallEnd",
-                      data: {
-                        toolName: handler.name,
-                        result: toolResult,
-                        timeTaken,
-                      },
-                      stateStack: branchStack,
-                    });
-                  },
-                );
+                const timeTaken: number = self.runnerState.toolTimings[callSlug] ?? 0;
+                await b.step(`round.${round}.tool.${callSlug}.end`, async () => {
+                  // Same scope-discovery rationale as the .start hook.
+                  await invokeCallbacks({
+                    ctx,
+                    name: "onToolCallEnd",
+                    data: {
+                      toolName: handler.name,
+                      result: toolResult,
+                      timeTaken,
+                    },
+                    stateStack: branchStack,
+                  });
+                });
                 // Wrap the toolCall log in its own b.step so it's idempotent
                 // when pr.parallel re-runs a fully-completed branch on resume
                 // (e.g. after a later `nextLlmCall` step bails). Without this
                 // guard, every re-entry would emit a duplicate toolCall event.
-                await b.step(
-                  `round.${round}.tool.${callSlug}.log`,
-                  async () => {
-                    ctx.statelogClient.toolCall({
-                      toolName: handler.name,
-                      args: namedArgs,
-                      output: toolResult,
-                      model: JSON.stringify(clientConfig.model),
-                      timeTaken,
-                      threadId: __threads()?.activeId() ?? null,
-                    });
-                  },
-                );
+                await b.step(`round.${round}.tool.${callSlug}.log`, async () => {
+                  ctx.statelogClient.toolCall({
+                    toolName: handler.name,
+                    args: namedArgs,
+                    output: toolResult,
+                    model: JSON.stringify(clientConfig.model),
+                    timeTaken,
+                    threadId: __threads()?.activeId() ?? null,
+                  });
+                });
               } finally {
                 ctx.statelogClient.endSpan(toolSpanId);
               }
@@ -1616,9 +1486,7 @@ export async function runPrompt(args: {
         // branchFn-level cleanup added new branches mid-flight.
         stack.popBranches();
         tools = tools.filter((t) => !removedTools.includes(t.name));
-        toolFunctions = toolFunctions.filter(
-          (fn) => !removedTools.includes(fn.name),
-        );
+        toolFunctions = toolFunctions.filter((fn) => !removedTools.includes(fn.name));
 
         // The round boundary: after ALL tool results (provider adjacency
         // rules require the assistant's tool calls to be answered by
@@ -1635,29 +1503,26 @@ export async function runPrompt(args: {
         // span stays open across rounds (one span per llm() call), so we
         // do NOT close/reopen it here — this round's promptCompletion
         // nests under the same span as the first round's.
-        await requestStepWithTripRetry(
-          `round.${round}.nextLlmCall`,
-          async () => {
-            const nextResult = await _runPrompt({
-              ctx,
-              messages,
-              tools: tools || [],
-              prompt,
-              responseFormat,
-              clientConfig,
-              stateStack,
-              retryPolicy,
-              callLabel,
-            });
-            messages = nextResult.messages;
-            toolCalls = nextResult.toolCalls;
-            // Increment the round counter only after a successful LLM round,
-            // so resume after a tool-batch interrupt re-enters the SAME round.
-            self.toolCallRound = round + 1;
-            self.messagesJSON = snapshotThread();
-            self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
-          },
-        );
+        await requestStepWithTripRetry(`round.${round}.nextLlmCall`, async () => {
+          const nextResult = await _runPrompt({
+            ctx,
+            messages,
+            tools: tools || [],
+            prompt,
+            responseFormat,
+            clientConfig,
+            stateStack,
+            retryPolicy,
+            callLabel,
+          });
+          messages = nextResult.messages;
+          toolCalls = nextResult.toolCalls;
+          // Increment the round counter only after a successful LLM round,
+          // so resume after a tool-batch interrupt re-enters the SAME round.
+          self.toolCallRound = round + 1;
+          self.messagesJSON = snapshotThread();
+          self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
+        });
       }
       // Tool calls are drained. No schema means nothing to validate; the
       // plain-content return after the finally handles it — but first,
@@ -1676,10 +1541,7 @@ export async function runPrompt(args: {
       const lastAssistant = [...messages.getMessages()]
         .reverse()
         .find((m) => m.role === "assistant");
-      const validationExtract = extractStructuredResponse(
-        lastAssistant?.content,
-        responseFormat,
-      );
+      const validationExtract = extractStructuredResponse(lastAssistant?.content, responseFormat);
       const validationAttempt = self.validationAttempt as number;
       const decision = decideValidationRetry(
         validationExtract,
@@ -1739,30 +1601,27 @@ export async function runPrompt(args: {
         `validation.${validationAttempt}.guardFeedback`,
         boundaryCtx(),
       );
-      await requestStepWithTripRetry(
-        `validation.${validationAttempt}.llmCall`,
-        async () => {
-          const nextResult = await _runPrompt({
-            ctx,
-            messages,
-            tools: tools || [],
-            prompt,
-            responseFormat,
-            clientConfig,
-            stateStack,
-            retryPolicy,
-            callLabel,
-          });
-          messages = nextResult.messages;
-          toolCalls = nextResult.toolCalls;
-          // Advance ONLY here, like nextLlmCall advances toolCallRound: a
-          // bailout before this step completes leaves the counter unchanged,
-          // so resume re-enters the SAME attempt with the same step keys.
-          self.validationAttempt = validationAttempt + 1;
-          self.messagesJSON = snapshotThread();
-          self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
-        },
-      );
+      await requestStepWithTripRetry(`validation.${validationAttempt}.llmCall`, async () => {
+        const nextResult = await _runPrompt({
+          ctx,
+          messages,
+          tools: tools || [],
+          prompt,
+          responseFormat,
+          clientConfig,
+          stateStack,
+          retryPolicy,
+          callLabel,
+        });
+        messages = nextResult.messages;
+        toolCalls = nextResult.toolCalls;
+        // Advance ONLY here, like nextLlmCall advances toolCallRound: a
+        // bailout before this step completes leaves the counter unchanged,
+        // so resume re-enters the SAME attempt with the same step keys.
+        self.validationAttempt = validationAttempt + 1;
+        self.messagesJSON = snapshotThread();
+        self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
+      });
       // Loop: the retry response may itself contain tool calls; the inner
       // loop drains them before validation runs again.
     }

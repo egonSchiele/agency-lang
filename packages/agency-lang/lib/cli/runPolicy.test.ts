@@ -63,10 +63,7 @@ describe("resolveRunPolicy", () => {
     });
     const p = JSON.parse(r!.policyJson);
     // reject rule prepended ahead of the built-in's approve rule
-    expect(p["std::read"]).toEqual([
-      { action: "reject" },
-      { action: "approve" },
-    ]);
+    expect(p["std::read"]).toEqual([{ action: "reject" }, { action: "approve" }]);
   });
 
   it("rejects on overlap: reject rule sits ahead of approve", () => {
@@ -89,9 +86,7 @@ describe("resolveRunPolicy", () => {
   it("threads cwd into the 'with-writes' base scope", () => {
     const r = resolveRunPolicy({ policy: "with-writes", cwd: "/work" });
     const p = JSON.parse(r!.policyJson);
-    expect(p["std::write"]).toEqual([
-      { match: { dir: "{/work,/work/**}" }, action: "approve" },
-    ]);
+    expect(p["std::write"]).toEqual([{ match: { dir: "{/work,/work/**}" }, action: "approve" }]);
   });
 
   it("leaves base rules for unaffected effects untouched", () => {

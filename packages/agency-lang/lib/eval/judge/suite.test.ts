@@ -47,7 +47,10 @@ describe("judge suite pure helpers", () => {
     const verdict = reduceSamples({
       inputId: "task-1",
       goal: "Return Paris",
-      inputs: [{ path: "a.json", status: "ok" }, { path: "b.json", status: "ok" }],
+      inputs: [
+        { path: "a.json", status: "ok" },
+        { path: "b.json", status: "ok" },
+      ],
       samples: [
         { winner: "A", confidence: 80, reasoning: "first A", order: "AB" },
         { winner: "A", confidence: 70, reasoning: "swapped A", order: "BA" },
@@ -64,11 +67,12 @@ describe("judge suite pure helpers", () => {
   });
 
   it("aggregates low-confidence input verdicts as ties", () => {
-    expect(aggregateSuite([
-      inputVerdict("a", "A", 90),
-      inputVerdict("b", "B", 90),
-      inputVerdict("low", "B", 20),
-    ], policy)).toMatchObject({
+    expect(
+      aggregateSuite(
+        [inputVerdict("a", "A", 90), inputVerdict("b", "B", 90), inputVerdict("low", "B", 20)],
+        policy,
+      ),
+    ).toMatchObject({
       verdictVersion: 2,
       winsA: 1,
       winsB: 1,
@@ -83,11 +87,12 @@ describe("judge suite pure helpers", () => {
   });
 
   it("requires the configured suite margin threshold", () => {
-    expect(aggregateSuite([
-      inputVerdict("a", "A", 90),
-      inputVerdict("b", "A", 80),
-      inputVerdict("c", "B", 90),
-    ], { ...policy, marginThreshold: 2 })).toMatchObject({
+    expect(
+      aggregateSuite(
+        [inputVerdict("a", "A", 90), inputVerdict("b", "A", 80), inputVerdict("c", "B", 90)],
+        { ...policy, marginThreshold: 2 },
+      ),
+    ).toMatchObject({
       winsA: 2,
       winsB: 1,
       winner: "tie",
@@ -112,11 +117,13 @@ describe("judge suite pure helpers", () => {
       winsB: 0,
       ties: 0,
       winner: "A",
-      perInput: [{
-        inputId: "task-1",
-        winner: "A",
-        inputs: [{ status: "ok" }, { status: "missing" }],
-      }],
+      perInput: [
+        {
+          inputId: "task-1",
+          winner: "A",
+          inputs: [{ status: "ok" }, { status: "missing" }],
+        },
+      ],
     });
   });
 
@@ -133,20 +140,29 @@ describe("judge suite pure helpers", () => {
       winsB: 0,
       ties: 1,
       winner: "tie",
-      perInput: [{
-        inputId: "task-1",
-        winner: "tie",
-        inputs: [{ status: "failed", errorMessage: "boom" }, { status: "missing" }],
-      }],
+      perInput: [
+        {
+          inputId: "task-1",
+          winner: "tie",
+          inputs: [{ status: "failed", errorMessage: "boom" }, { status: "missing" }],
+        },
+      ],
     });
   });
 });
 
-function inputVerdict(inputId: string, winner: "A" | "B" | "tie", confidence: number): InputVerdict {
+function inputVerdict(
+  inputId: string,
+  winner: "A" | "B" | "tie",
+  confidence: number,
+): InputVerdict {
   return {
     inputId,
     goal: "Return Paris",
-    inputs: [{ path: `${inputId}-a.json`, status: "ok" }, { path: `${inputId}-b.json`, status: "ok" }],
+    inputs: [
+      { path: `${inputId}-a.json`, status: "ok" },
+      { path: `${inputId}-b.json`, status: "ok" },
+    ],
     winner,
     confidence,
     reasoning: `${winner} wins`,
@@ -166,24 +182,33 @@ function writeRunDir(args: {
   dirs.push(runDir);
   const inputDir = path.join(runDir, "inputs", args.inputId);
   fs.mkdirSync(path.join(inputDir, "agent"), { recursive: true });
-  fs.writeFileSync(path.join(inputDir, "input.json"),
-    JSON.stringify({ id: args.inputId, goal: "Return Paris", args: {} }));
+  fs.writeFileSync(
+    path.join(inputDir, "input.json"),
+    JSON.stringify({ id: args.inputId, goal: "Return Paris", args: {} }),
+  );
   const recordPath = path.join(inputDir, "agent", "eval-record.json");
   if (args.status === "ok") {
     fs.writeFileSync(recordPath, JSON.stringify({ evalOutputs: [{ value: "x", tMs: 1 }] }));
   }
-  fs.writeFileSync(path.join(runDir, "summary.json"), JSON.stringify({
-    runId: "r", runDir, agentLabel: "a:main",
-    inputs: [{
-      inputId: args.inputId,
-      status: args.status === "failed" ? "error" : "success",
-      evalRecordPath: recordPath,
-      statelogPath: "",
-      workdirPath: path.join(inputDir, "workdir"),
-      errorMessage: args.errorMessage,
-    }],
-    okCount: args.status === "ok" ? 1 : 0,
-    errorCount: args.status === "failed" ? 1 : 0,
-  }));
+  fs.writeFileSync(
+    path.join(runDir, "summary.json"),
+    JSON.stringify({
+      runId: "r",
+      runDir,
+      agentLabel: "a:main",
+      inputs: [
+        {
+          inputId: args.inputId,
+          status: args.status === "failed" ? "error" : "success",
+          evalRecordPath: recordPath,
+          statelogPath: "",
+          workdirPath: path.join(inputDir, "workdir"),
+          errorMessage: args.errorMessage,
+        },
+      ],
+      okCount: args.status === "ok" ? 1 : 0,
+      errorCount: args.status === "failed" ? 1 : 0,
+    }),
+  );
   return runDir;
 }

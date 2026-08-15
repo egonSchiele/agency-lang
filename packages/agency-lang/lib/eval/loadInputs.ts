@@ -31,7 +31,11 @@ export function inputFromGoal(goal: string): Input {
   return { id: "input-1", task: goal, goal };
 }
 
-export function loadInputs(sourcePath: string, makeId: MakeId = nanoid, options: LoadOptions = {}): Input[] {
+export function loadInputs(
+  sourcePath: string,
+  makeId: MakeId = nanoid,
+  options: LoadOptions = {},
+): Input[] {
   const stat = fs.statSync(sourcePath);
   const inputs = stat.isDirectory()
     ? loadInputsFromDirectory(sourcePath, makeId, options)
@@ -46,23 +50,37 @@ export function loadInputs(sourcePath: string, makeId: MakeId = nanoid, options:
   return inputs;
 }
 
-export function loadInputsFromFile(filePath: string, makeId: MakeId = nanoid, options: LoadOptions = {}): Input[] {
+export function loadInputsFromFile(
+  filePath: string,
+  makeId: MakeId = nanoid,
+  options: LoadOptions = {},
+): Input[] {
   const parsed = readJson(filePath);
   if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as any).inputs)) {
     throw new Error(`Input suite ${filePath} must contain a top-level inputs array`);
   }
   return validateInputs(
-    (parsed as any).inputs.map((raw: unknown) => normalizeInput(raw, path.dirname(filePath), makeId, options)),
+    (parsed as any).inputs.map((raw: unknown) =>
+      normalizeInput(raw, path.dirname(filePath), makeId, options),
+    ),
   );
 }
 
 /** A parsed json file whose top-level shape is the suite-file wrapper. */
 function isWrapperFile(filePath: string): boolean {
   const parsed = readJson(filePath);
-  return typeof parsed === "object" && parsed !== null && Array.isArray((parsed as Record<string, unknown>).inputs);
+  return (
+    typeof parsed === "object" &&
+    parsed !== null &&
+    Array.isArray((parsed as Record<string, unknown>).inputs)
+  );
 }
 
-function loadInputsFromDirectory(directoryPath: string, makeId: MakeId, options: LoadOptions): Input[] {
+function loadInputsFromDirectory(
+  directoryPath: string,
+  makeId: MakeId,
+  options: LoadOptions,
+): Input[] {
   // A directory that itself contains test.json IS a single test — pointing
   // --inputs at one test of a suite must keep the test-directory sugar
   // (id from the directory name, files/, graders.ts auto-discovery).
@@ -70,9 +88,15 @@ function loadInputsFromDirectory(directoryPath: string, makeId: MakeId, options:
     return validateInputs([loadTestDir(directoryPath, makeId, options)]);
   }
   const entries = fs.readdirSync(directoryPath, { withFileTypes: true });
-  const jsonFiles = entries.filter((entry) => entry.isFile() && entry.name.endsWith(".json")).map((entry) => entry.name).sort();
+  const jsonFiles = entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+    .map((entry) => entry.name)
+    .sort();
   const testDirs = entries
-    .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(directoryPath, entry.name, "test.json")))
+    .filter(
+      (entry) =>
+        entry.isDirectory() && fs.existsSync(path.join(directoryPath, entry.name, "test.json")),
+    )
     .map((entry) => entry.name)
     .sort();
   const wrapperFiles = jsonFiles.filter((name) => isWrapperFile(path.join(directoryPath, name)));
@@ -82,21 +106,27 @@ function loadInputsFromDirectory(directoryPath: string, makeId: MakeId, options:
   if (shapes.length > 1) {
     throw new Error(
       `Input directory ${directoryPath} mixes suite shapes ` +
-      `(${shapes.map((group) => group[0]).join(", ")}). Use one form per directory: ` +
-      `a single inputs file with an "inputs" array, one-input .json files, or test directories.`,
+        `(${shapes.map((group) => group[0]).join(", ")}). Use one form per directory: ` +
+        `a single inputs file with an "inputs" array, one-input .json files, or test directories.`,
     );
   }
   if (wrapperFiles.length > 1) {
-    throw new Error(`Input directory ${directoryPath} has multiple suite files: ${wrapperFiles.join(", ")}`);
+    throw new Error(
+      `Input directory ${directoryPath} has multiple suite files: ${wrapperFiles.join(", ")}`,
+    );
   }
   if (wrapperFiles.length === 1) {
     return loadInputsFromFile(path.join(directoryPath, wrapperFiles[0]), makeId, options);
   }
   if (testDirs.length > 0) {
-    return validateInputs(testDirs.map((name) => loadTestDir(path.join(directoryPath, name), makeId, options)));
+    return validateInputs(
+      testDirs.map((name) => loadTestDir(path.join(directoryPath, name), makeId, options)),
+    );
   }
   return validateInputs(
-    looseFiles.map((name) => normalizeInput(readJson(path.join(directoryPath, name)), directoryPath, makeId, options)),
+    looseFiles.map((name) =>
+      normalizeInput(readJson(path.join(directoryPath, name)), directoryPath, makeId, options),
+    ),
   );
 }
 
@@ -130,16 +160,21 @@ function readJson(filePath: string): unknown {
   }
 }
 
-function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: LoadOptions): Input {
+function normalizeInput(
+  raw: unknown,
+  baseDir: string,
+  makeId: MakeId,
+  options: LoadOptions,
+): Input {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("Eval input must be a JSON object");
   }
   const spec = raw as Record<string, unknown>;
   if (spec.args !== undefined || spec.node !== undefined) {
     throw new Error(
-      "Eval inputs no longer take \"args\" or \"node\" — tests describe the task, not the agent. " +
-      "Put what the agent is told in \"task\" (a string or a JSON object); " +
-      "pick the node with --agent file.agency:node.",
+      'Eval inputs no longer take "args" or "node" — tests describe the task, not the agent. ' +
+        'Put what the agent is told in "task" (a string or a JSON object); ' +
+        "pick the node with --agent file.agency:node.",
     );
   }
   if (spec.goal !== undefined && spec.rubric !== undefined) {
@@ -169,8 +204,12 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   if (spec.graders !== undefined && typeof spec.graders !== "string") {
     throw new Error("Eval input graders must be a path string when provided");
   }
-  if (spec.timeoutSec !== undefined &&
-      (typeof spec.timeoutSec !== "number" || !Number.isFinite(spec.timeoutSec) || spec.timeoutSec <= 0)) {
+  if (
+    spec.timeoutSec !== undefined &&
+    (typeof spec.timeoutSec !== "number" ||
+      !Number.isFinite(spec.timeoutSec) ||
+      spec.timeoutSec <= 0)
+  ) {
     throw new Error("Eval input timeoutSec must be a positive number of seconds when provided");
   }
   if (spec.metadata !== undefined && !isPlainObject(spec.metadata)) {
@@ -179,11 +218,13 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   const out: Input = {
     id: typeof spec.id === "string" ? spec.id : makeId(),
     task: spec.task as string | Record<string, any>,
-    expected: spec.expected,   // any JSON; absent stays undefined
+    expected: spec.expected, // any JSON; absent stays undefined
   };
   if (typeof spec.goal === "string") out.goal = spec.goal;
-  if (typeof spec.files === "string") out.files = resolveFilesDir(spec.files, baseDir, options, out.id ?? "");
-  if (typeof spec.graders === "string") out.graders = resolveGradersFile(spec.graders, baseDir, out.id ?? "");
+  if (typeof spec.files === "string")
+    out.files = resolveFilesDir(spec.files, baseDir, options, out.id ?? "");
+  if (typeof spec.graders === "string")
+    out.graders = resolveGradersFile(spec.graders, baseDir, out.id ?? "");
   if (typeof spec.timeoutSec === "number") out.timeoutSec = spec.timeoutSec;
   if (isPlainObject(spec.metadata)) out.metadata = spec.metadata as Record<string, any>;
   return out;
@@ -191,13 +232,18 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
 
 /** Resolve a files entry — a local directory or a git source — to an absolute
  *  directory, recording provenance when the caller collects it. */
-function resolveFilesDir(raw: string, baseDir: string, options: LoadOptions, inputId: string): string {
+function resolveFilesDir(
+  raw: string,
+  baseDir: string,
+  options: LoadOptions,
+  inputId: string,
+): string {
   const parsed = parseSource(raw, baseDir);
   if (parsed.kind === "git") {
     if (options.forbidGitFiles) {
       throw new Error(
         `Input ${inputId}: files "${raw}" is a git source, but this suite was itself loaded from git. ` +
-        `Sources resolve one level deep — vendor the fixtures into the suite repo instead.`,
+          `Sources resolve one level deep — vendor the fixtures into the suite repo instead.`,
       );
     }
     const resolved = resolveSource(parsed, { cacheRoot: options.sourceCacheRoot });
@@ -207,7 +253,9 @@ function resolveFilesDir(raw: string, baseDir: string, options: LoadOptions, inp
     return resolved.dir;
   }
   if (!fs.existsSync(parsed.path) || !fs.statSync(parsed.path).isDirectory()) {
-    throw new Error(`Eval input files must name a directory (got ${raw}, resolved to ${parsed.path})`);
+    throw new Error(
+      `Eval input files must name a directory (got ${raw}, resolved to ${parsed.path})`,
+    );
   }
   if (options.filesProvenance) {
     options.filesProvenance[inputId] = { source: raw };
@@ -221,7 +269,9 @@ function resolveFilesDir(raw: string, baseDir: string, options: LoadOptions, inp
 function resolveGradersFile(raw: string, baseDir: string, inputId: string): string {
   const abs = path.resolve(baseDir, raw);
   if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
-    throw new Error(`Input ${inputId}: graders must name a TypeScript file (got ${raw}, resolved to ${abs})`);
+    throw new Error(
+      `Input ${inputId}: graders must name a TypeScript file (got ${raw}, resolved to ${abs})`,
+    );
   }
   return abs;
 }

@@ -6,11 +6,7 @@ import type {
 } from "../types/importStatement.js";
 import type { SourceLocation } from "../types/base.js";
 import type { SymbolTable, SymbolInfo, FileSymbols } from "../symbolTable.js";
-import {
-  resolveAgencyImportPath,
-  isAgencyImport,
-  isPkgImport,
-} from "../importPaths.js";
+import { resolveAgencyImportPath, isAgencyImport, isPkgImport } from "../importPaths.js";
 
 /**
  * An import that cannot be resolved (unknown symbol, non-exported symbol, a
@@ -71,10 +67,7 @@ function asImportResolutionError(
   loc: SourceLocation | undefined,
 ): ImportResolutionError {
   if (err instanceof ImportResolutionError) return err;
-  return new ImportResolutionError(
-    err instanceof Error ? err.message : String(err),
-    loc,
-  );
+  return new ImportResolutionError(err instanceof Error ? err.message : String(err), loc);
 }
 
 export function resolveImports(
@@ -101,13 +94,7 @@ export function resolveImports(
       continue;
     }
     newNodes.push(
-      ...resolveImportStatement(
-        node,
-        symbolTable,
-        currentFile,
-        allowTestImports,
-        onUnresolvable,
-      ),
+      ...resolveImportStatement(node, symbolTable, currentFile, allowTestImports, onUnresolvable),
     );
   }
 
@@ -138,10 +125,7 @@ function classifyImportedName(
 ): void {
   switch (symbol.kind) {
     case "node":
-      if (
-        nameType.destructiveNames?.includes(name) ||
-        nameType.idempotentNames?.includes(name)
-      ) {
+      if (nameType.destructiveNames?.includes(name) || nameType.idempotentNames?.includes(name)) {
         throw new ImportResolutionError(
           `A retry-safety marker (destructive/idempotent) cannot be applied to node '${name}' from '${node.modulePath}'. ` +
             `Markers are only meaningful for functions; nodes do not carry them.`,
@@ -155,16 +139,10 @@ function classifyImportedName(
       buckets.functionNames.push(name);
       // A marker propagates when the defining function carries it OR this
       // import explicitly marked the name.
-      if (
-        symbol.markers?.destructive ||
-        (nameType.destructiveNames?.includes(name) ?? false)
-      ) {
+      if (symbol.markers?.destructive || (nameType.destructiveNames?.includes(name) ?? false)) {
         buckets.destructiveFunctionNames.push(name);
       }
-      if (
-        symbol.markers?.idempotent ||
-        (nameType.idempotentNames?.includes(name) ?? false)
-      ) {
+      if (symbol.markers?.idempotent || (nameType.idempotentNames?.includes(name) ?? false)) {
         buckets.idempotentFunctionNames.push(name);
       }
       break;
@@ -188,10 +166,7 @@ function classifyImportedName(
  * silent no-op — and before symbol lookup, so a pkg:: rejection does not
  * depend on the package resolving.
  */
-function assertTestOnlyImportable(
-  node: ImportStatement,
-  allowTestImports: boolean,
-): void {
+function assertTestOnlyImportable(node: ImportStatement, allowTestImports: boolean): void {
   if (!node.testOnly) return;
   if (isPkgImport(node.modulePath)) {
     throw new ImportResolutionError(

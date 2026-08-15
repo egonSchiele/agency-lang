@@ -50,7 +50,10 @@ export function reduceSamples(args: {
   };
 }
 
-export function aggregateSuite(perInput: InputVerdict[], policy: JudgeAggregationPolicy): SuiteVerdict {
+export function aggregateSuite(
+  perInput: InputVerdict[],
+  policy: JudgeAggregationPolicy,
+): SuiteVerdict {
   let winsA = 0;
   let winsB = 0;
   let ties = 0;
@@ -117,12 +120,14 @@ export async function judgeSuite(args: JudgeSuiteArgs): Promise<SuiteVerdict> {
       });
       samples.push(...verdict.samples);
     }
-    perInput.push(reduceSamples({
-      inputId: id,
-      goal: spec.goal ?? "",
-      samples,
-      inputs: [verdictSideOf(inputA), verdictSideOf(inputB)],
-    }));
+    perInput.push(
+      reduceSamples({
+        inputId: id,
+        goal: spec.goal ?? "",
+        samples,
+        inputs: [verdictSideOf(inputA), verdictSideOf(inputB)],
+      }),
+    );
   }
 
   return aggregateSuite(perInput, args.policy);
@@ -151,7 +156,11 @@ function missingInput(inputId: string): ReadEvalRunInput {
   return { inputId, status: "missing" };
 }
 
-function missingDataVerdict(input: Input, inputA: ReadEvalRunInput, inputB: ReadEvalRunInput): InputVerdict {
+function missingDataVerdict(
+  input: Input,
+  inputA: ReadEvalRunInput,
+  inputB: ReadEvalRunInput,
+): InputVerdict {
   const winner = missingDataWinner(inputA.status, inputB.status);
   return {
     inputId: input.id ?? "",
@@ -161,7 +170,9 @@ function missingDataVerdict(input: Input, inputA: ReadEvalRunInput, inputB: Read
     confidence: 100,
     reasoning: `A status: ${inputA.status}; B status: ${inputB.status}`,
     unjudgeable: true,
-    samples: [{ winner, confidence: 100, reasoning: "deterministic missing-data verdict", order: "AB" }],
+    samples: [
+      { winner, confidence: 100, reasoning: "deterministic missing-data verdict", order: "AB" },
+    ],
     generatedAt: new Date().toISOString(),
   };
 }
@@ -169,7 +180,11 @@ function missingDataVerdict(input: Input, inputA: ReadEvalRunInput, inputB: Read
 /** Neither side can win an unjudgeable input; ties never count toward a
  *  suite winner, so a goal-less input degrades loudly in perInput without
  *  skewing the aggregate. */
-function noGoalVerdict(inputId: string, inputA: ReadEvalRunInput, inputB: ReadEvalRunInput): InputVerdict {
+function noGoalVerdict(
+  inputId: string,
+  inputA: ReadEvalRunInput,
+  inputB: ReadEvalRunInput,
+): InputVerdict {
   // "no goal recorded", not "no goal in its input.json": this branch also
   // fires when input.json is missing or unparseable (the loader degrades
   // those to a spec-less input while the records stay judgeable).
@@ -187,7 +202,10 @@ function noGoalVerdict(inputId: string, inputA: ReadEvalRunInput, inputB: ReadEv
   };
 }
 
-function missingDataWinner(statusA: ReadEvalRunInput["status"], statusB: ReadEvalRunInput["status"]): JudgeWinner {
+function missingDataWinner(
+  statusA: ReadEvalRunInput["status"],
+  statusB: ReadEvalRunInput["status"],
+): JudgeWinner {
   if (statusA === "ok" && statusB !== "ok") return "A";
   if (statusB === "ok" && statusA !== "ok") return "B";
   return "tie";

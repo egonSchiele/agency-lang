@@ -11,7 +11,7 @@ export function splitInputs(inputs: Input[], ratio: number, seed = 0): Split {
     throw new Error(`--validation-split must be a finite number between 0 and 1, got ${ratio}`);
   }
   const clamped = Math.max(0, Math.min(1, ratio));
-  const maxHoldout = Math.max(0, inputs.length - 1);          // always keep ≥1 for training
+  const maxHoldout = Math.max(0, inputs.length - 1); // always keep ≥1 for training
   const holdout = Math.min(maxHoldout, Math.floor(clamped * inputs.length));
   const validation = sampleWithoutReplacement(inputs, holdout, makeRng(seed));
   const train = inputs.filter((input) => !validation.includes(input));

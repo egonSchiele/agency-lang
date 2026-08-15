@@ -39,11 +39,11 @@ export function presetToCron(preset: string): string {
 // --- Cron validation ---
 
 const FIELD_BOUNDS: [number, number][] = [
-  [0, 59],  // minute
-  [0, 23],  // hour
-  [1, 31],  // day of month
-  [1, 12],  // month
-  [0, 7],   // day of week (0 and 7 both mean Sunday)
+  [0, 59], // minute
+  [0, 23], // hour
+  [1, 31], // day of month
+  [1, 12], // month
+  [0, 7], // day of week (0 and 7 both mean Sunday)
 ];
 
 const FIELD_PATTERN =
@@ -69,10 +69,10 @@ export function validateCron(expr: string): boolean {
 
 // --- Resolution ---
 
-export function resolveCron(opts: {
-  every?: string;
-  cron?: string;
-}): { cron: string; preset: string } {
+export function resolveCron(opts: { every?: string; cron?: string }): {
+  cron: string;
+  preset: string;
+} {
   if (opts.every) {
     const preset = canonicalPreset(opts.every);
     return { cron: presetToCron(preset), preset };

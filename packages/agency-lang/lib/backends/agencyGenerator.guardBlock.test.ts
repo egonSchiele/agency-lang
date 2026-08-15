@@ -24,9 +24,7 @@ describe("AgencyGenerator — guardBlock", () => {
     );
     expect(reordered).toContain("guard(time: 5m, cost: $1) {");
 
-    const empty = gen(
-      "node main() {\n  const r = guard() {\n    return 1\n  }\n  return r\n}\n",
-    );
+    const empty = gen("node main() {\n  const r = guard() {\n    return 1\n  }\n  return r\n}\n");
     expect(empty).toContain("guard() {");
   });
 

@@ -224,9 +224,7 @@ export class UIState {
   }
 
   removeWithFuncName(functionName: string) {
-    this.callStack = this.callStack.filter(
-      (entry) => entry.functionName !== functionName,
-    );
+    this.callStack = this.callStack.filter((entry) => entry.functionName !== functionName);
   }
 
   getCallStack() {

@@ -2,7 +2,9 @@ import type { Cell, Style } from "./elements.js";
 
 export type Edges = { top: number; bottom: number; left: number; right: number };
 
-export function resolveEdges(value: number | { top?: number; bottom?: number; left?: number; right?: number } | undefined): Edges {
+export function resolveEdges(
+  value: number | { top?: number; bottom?: number; left?: number; right?: number } | undefined,
+): Edges {
   if (value === undefined) return { top: 0, bottom: 0, left: 0, right: 0 };
   if (typeof value === "number") return { top: value, bottom: value, left: value, right: value };
   return {

@@ -80,8 +80,10 @@ describe("wrapText", () => {
   });
 
   test("keeps ANSI sequences attached while measuring visual width", () => {
-    expect(_internal.wrapText("\x1b[31mhello\x1b[0m world", 5))
-      .toEqual(["\x1b[31mhello\x1b[0m", "world"]);
+    expect(_internal.wrapText("\x1b[31mhello\x1b[0m world", 5)).toEqual([
+      "\x1b[31mhello\x1b[0m",
+      "world",
+    ]);
   });
 
   test("breaks a long colored word at the column boundary, self-closing each line", () => {
@@ -116,10 +118,7 @@ describe("wrapText", () => {
       "three",
     ]);
     // Empty-params reset `\x1b[m` also clears.
-    expect(_internal.wrapText("\x1b[31mfoo\x1b[m bar", 3)).toEqual([
-      "\x1b[31mfoo\x1b[m",
-      "bar",
-    ]);
+    expect(_internal.wrapText("\x1b[31mfoo\x1b[m bar", 3)).toEqual(["\x1b[31mfoo\x1b[m", "bar"]);
   });
 
   test("carries style across a literal newline boundary too", () => {
@@ -134,10 +133,7 @@ describe("wrapText", () => {
   test("non-SGR CSI (cursor/erase) passes through inline and is never reopened", () => {
     // \x1b[2K is a CSI but not an SGR (ends in K). It must not enter the
     // active-style state or be replayed on later lines.
-    expect(_internal.wrapText("\x1b[2Kfoo bar", 3)).toEqual([
-      "\x1b[2Kfoo",
-      "bar",
-    ]);
+    expect(_internal.wrapText("\x1b[2Kfoo bar", 3)).toEqual(["\x1b[2Kfoo", "bar"]);
   });
 
   test("a blank line inside an active style span is self-contained", () => {
@@ -186,19 +182,14 @@ describe("resolveSizes", () => {
   });
 
   test("wraps text to constrained box inner width", () => {
-    const tree = node("box", { width: 30 }, [
-      node("text", { content: "the quick brown fox" }),
-    ]);
+    const tree = node("box", { width: 30 }, [node("text", { content: "the quick brown fox" })]);
     const resolved = _internal.resolveSizes(tree, { cols: 80, rows: 24 });
     expect(resolved.children[0].attrs.wrapWidth).toBe(28);
   });
 
   test("unsized container inherits constrained parent context", () => {
     const tree = node("box", { width: "full" }, [
-      node("row", {}, [
-        node("box", { width: "50%" }, []),
-        node("box", { width: "50%" }, []),
-      ]),
+      node("row", {}, [node("box", { width: "50%" }, []), node("box", { width: "50%" }, [])]),
     ]);
     const resolved = _internal.resolveSizes(tree, { cols: 42, rows: 24 });
     const row = resolved.children[0];
@@ -266,23 +257,27 @@ describe("resolveSizes", () => {
   });
 
   test("uses clamped integer padding and gap when resolving child width", () => {
-    const padded = _internal.resolveSizes(node("box", { width: 20, padding: 1.9 }, [
-      node("text", { content: "inside" }),
-    ]), { cols: 80, rows: 24 });
+    const padded = _internal.resolveSizes(
+      node("box", { width: 20, padding: 1.9 }, [node("text", { content: "inside" })]),
+      { cols: 80, rows: 24 },
+    );
     expect(padded.children[0].attrs.wrapWidth).toBe(16);
 
-    const negativeGap = _internal.resolveSizes(node("row", { width: 20, gap: -5 }, [
-      node("box", { width: "50%" }, []),
-      node("box", { width: "50%" }, []),
-    ]), { cols: 80, rows: 24 });
+    const negativeGap = _internal.resolveSizes(
+      node("row", { width: 20, gap: -5 }, [
+        node("box", { width: "50%" }, []),
+        node("box", { width: "50%" }, []),
+      ]),
+      { cols: 80, rows: 24 },
+    );
     expect(negativeGap.children.map((child) => child.attrs.resolvedWidth)).toEqual([10, 10]);
   });
 
   test("treats full and 100% as the same — at root, in children, anywhere", () => {
     // At the root, both `"full"` and `"100%"` fill the viewport.
-    const full    = node("box", { width: "full" });
+    const full = node("box", { width: "full" });
     const hundred = node("box", { width: "100%" });
-    expect(_internal.resolveSizes(full,    { cols: 80, rows: 24 }).attrs.resolvedWidth).toBe(80);
+    expect(_internal.resolveSizes(full, { cols: 80, rows: 24 }).attrs.resolvedWidth).toBe(80);
     expect(_internal.resolveSizes(hundred, { cols: 80, rows: 24 }).attrs.resolvedWidth).toBe(80);
 
     // A nested `width: "full"` fills the parent's inner space (same as
@@ -297,10 +292,7 @@ describe("resolveSizes", () => {
     expect(nested.children[0].attrs.resolvedWidth).toBe(8);
 
     // Percentages at root resolve against the viewport.
-    const halfRoot = _internal.resolveSizes(
-      node("box", { width: "50%" }),
-      { cols: 100, rows: 24 },
-    );
+    const halfRoot = _internal.resolveSizes(node("box", { width: "50%" }), { cols: 100, rows: 24 });
     expect(halfRoot.attrs.resolvedWidth).toBe(50);
   });
 
@@ -308,10 +300,10 @@ describe("resolveSizes", () => {
     // Percent inside an unsized box has no basis to take a percentage
     // of (the outer box does not itself have a resolved width).
     expect(() =>
-      _internal.resolveSizes(
-        node("box", {}, [node("box", { width: "50%" })]),
-        { cols: 80, rows: 24 },
-      ),
+      _internal.resolveSizes(node("box", {}, [node("box", { width: "50%" })]), {
+        cols: 80,
+        rows: 24,
+      }),
     ).toThrow(/requires a sized ancestor/);
   });
 
@@ -332,9 +324,7 @@ describe("resolveSizes", () => {
   });
 
   test("box padding subtracts both sides from inner width", () => {
-    const tree = node("box", { width: 20, padding: 2 }, [
-      node("text", { content: "inside" }),
-    ]);
+    const tree = node("box", { width: 20, padding: 2 }, [node("text", { content: "inside" })]);
     const resolved = _internal.resolveSizes(tree, { cols: 80, rows: 24 });
     // inner = 20 - 2 border - (2 padding * 2 sides) = 14.
     expect(resolved.children[0].attrs.wrapWidth).toBe(14);
@@ -371,8 +361,7 @@ describe("sgr", () => {
   });
   test("multiple attributes combine", () => {
     // bold + fg=red
-    expect(sgr({ bold: true, fgColor: "red" }))
-      .toBe("\x1b[1;38;2;205;49;49m");
+    expect(sgr({ bold: true, fgColor: "red" })).toBe("\x1b[1;38;2;205;49;49m");
   });
 });
 
@@ -417,16 +406,13 @@ describe("pad", () => {
     expect(pad(Block.of("hello"), 3, 1, "start").toString()).toBe("hello");
   });
   test("add rows below, vAlign=start", () => {
-    expect(pad(Block.of("hi"), 2, 3, "start", "start").toString())
-      .toBe("hi\n  \n  ");
+    expect(pad(Block.of("hi"), 2, 3, "start", "start").toString()).toBe("hi\n  \n  ");
   });
   test("add rows above, vAlign=end", () => {
-    expect(pad(Block.of("hi"), 2, 3, "start", "end").toString())
-      .toBe("  \n  \nhi");
+    expect(pad(Block.of("hi"), 2, 3, "start", "end").toString()).toBe("  \n  \nhi");
   });
   test("center vertically", () => {
-    expect(pad(Block.of("hi"), 2, 3, "start", "center").toString())
-      .toBe("  \nhi\n  ");
+    expect(pad(Block.of("hi"), 2, 3, "start", "center").toString()).toBe("  \nhi\n  ");
   });
 });
 
@@ -450,17 +436,14 @@ describe("beside", () => {
   });
   test("auto-pads shorter (right) to match height", () => {
     // left: 2 lines, right: 1 line → right gets a blank row appended
-    expect(beside(Block.of(["a", "b"]), Block.of("c")).toString())
-      .toBe("ac\nb ");
+    expect(beside(Block.of(["a", "b"]), Block.of("c")).toString()).toBe("ac\nb ");
   });
   test("auto-pads shorter (left) to match height", () => {
-    expect(beside(Block.of("a"), Block.of(["b", "c"])).toString())
-      .toBe("ab\n c");
+    expect(beside(Block.of("a"), Block.of(["b", "c"])).toString()).toBe("ab\n c");
   });
   test("aligns widths within each block before concat", () => {
     // left "aa\nb": width=2, right "x": width=1
-    expect(beside(Block.of(["aa", "b"]), Block.of("x")).toString())
-      .toBe("aax\nb  ");
+    expect(beside(Block.of(["aa", "b"]), Block.of("x")).toString()).toBe("aax\nb  ");
   });
   test("empty left → right", () => {
     expect(beside(Block.empty(), Block.of("hi")).toString()).toBe("hi");
@@ -472,21 +455,25 @@ describe("beside", () => {
 
 describe("bordered (no title)", () => {
   test("rounded border around single line", () => {
-    expect(bordered(Block.of("hi"), { borderStyle: "rounded" }).toString())
-      .toBe(["╭──╮", "│hi│", "╰──╯"].join("\n"));
+    expect(bordered(Block.of("hi"), { borderStyle: "rounded" }).toString()).toBe(
+      ["╭──╮", "│hi│", "╰──╯"].join("\n"),
+    );
   });
   test("light border by default if unknown style resolved", () => {
     // explicit "light" (the default fallback)
-    expect(bordered(Block.of("hi"), { borderStyle: "light" }).toString())
-      .toBe(["┌──┐", "│hi│", "└──┘"].join("\n"));
+    expect(bordered(Block.of("hi"), { borderStyle: "light" }).toString()).toBe(
+      ["┌──┐", "│hi│", "└──┘"].join("\n"),
+    );
   });
   test("heavy border", () => {
-    expect(bordered(Block.of("a"), { borderStyle: "heavy" }).toString())
-      .toBe(["┏━┓", "┃a┃", "┗━┛"].join("\n"));
+    expect(bordered(Block.of("a"), { borderStyle: "heavy" }).toString()).toBe(
+      ["┏━┓", "┃a┃", "┗━┛"].join("\n"),
+    );
   });
   test("double border", () => {
-    expect(bordered(Block.of("a"), { borderStyle: "double" }).toString())
-      .toBe(["╔═╗", "║a║", "╚═╝"].join("\n"));
+    expect(bordered(Block.of("a"), { borderStyle: "double" }).toString()).toBe(
+      ["╔═╗", "║a║", "╚═╝"].join("\n"),
+    );
   });
   test("padding adds space around content (center align)", () => {
     // padding 1 → content width 2 → inner 4, height 1 → inner 3
@@ -494,15 +481,7 @@ describe("bordered (no title)", () => {
       borderStyle: "rounded",
       padding: 1,
     }).toString();
-    expect(out).toBe(
-      [
-        "╭────╮",
-        "│    │",
-        "│ hi │",
-        "│    │",
-        "╰────╯",
-      ].join("\n"),
-    );
+    expect(out).toBe(["╭────╮", "│    │", "│ hi │", "│    │", "╰────╯"].join("\n"));
   });
   test("borderColor wraps every border segment with SGR", () => {
     const out = bordered(Block.of("a"), {
@@ -518,14 +497,16 @@ describe("bordered (no title)", () => {
     }
   });
   test("multi-line content", () => {
-    expect(
-      bordered(Block.of(["aa", "b"]), { borderStyle: "light" }).toString(),
-    ).toBe(["┌──┐", "│aa│", "│b │", "└──┘"].join("\n"));
+    expect(bordered(Block.of(["aa", "b"]), { borderStyle: "light" }).toString()).toBe(
+      ["┌──┐", "│aa│", "│b │", "└──┘"].join("\n"),
+    );
   });
   test("unknown borderStyle falls back to light + warns once", () => {
     const warns: string[] = [];
     const orig = console.warn;
-    console.warn = (msg: string) => { warns.push(msg); };
+    console.warn = (msg: string) => {
+      warns.push(msg);
+    };
     try {
       const out = bordered(Block.of("a"), { borderStyle: "round" as any }).toString();
       // Falls back to "light" — `┌─┐` corner row.
@@ -546,9 +527,7 @@ describe("bordered (no title)", () => {
     const orig = console.warn;
     console.warn = () => {};
     try {
-      expect(() =>
-        bordered(Block.of("a"), { borderStyle: "__proto__" as any }),
-      ).not.toThrow();
+      expect(() => bordered(Block.of("a"), { borderStyle: "__proto__" as any })).not.toThrow();
       const out = bordered(Block.of("a"), {
         borderStyle: "__proto__" as any,
       }).toString();
@@ -631,12 +610,10 @@ describe("leaf renderers", () => {
   // extra is left-biased ("b " for width 2), matching the existing
   // `pad` test at the top of this file.
   test("text — align=center pads each line to block width", () => {
-    expect(render(node("text", { content: "aaa\nb", align: "center" })))
-      .toBe("aaa\n b ");
+    expect(render(node("text", { content: "aaa\nb", align: "center" }))).toBe("aaa\n b ");
   });
   test("text — align=end right-aligns ragged lines", () => {
-    expect(render(node("text", { content: "aa\nb", align: "end" })))
-      .toBe("aa\n b");
+    expect(render(node("text", { content: "aa\nb", align: "end" }))).toBe("aa\n b");
   });
   test("text — align=start leaves ragged lines unpadded (height preserved)", () => {
     // start-align is the default; padding adds trailing spaces so all
@@ -646,8 +623,7 @@ describe("leaf renderers", () => {
     expect(b.lines).toEqual(["aa", "b "]);
   });
   test("raw — align=center pads to block width", () => {
-    expect(render(node("raw", { content: "aaa\nb", align: "center" })))
-      .toBe("aaa\n b ");
+    expect(render(node("raw", { content: "aaa\nb", align: "center" }))).toBe("aaa\n b ");
   });
   test("raw — no styling applied", () => {
     // raw content with embedded SGR survives untouched.
@@ -680,10 +656,7 @@ describe("leaf renderers", () => {
 
 describe("row renderer", () => {
   test("simple row of two text children", () => {
-    const tree = node("row", {}, [
-      node("text", { content: "a" }),
-      node("text", { content: "b" }),
-    ]);
+    const tree = node("row", {}, [node("text", { content: "a" }), node("text", { content: "b" })]);
     expect(render(tree)).toBe("ab");
   });
   test("row height grows to tallest child", () => {
@@ -815,9 +788,7 @@ describe("stretchy line + space resolution", () => {
     expect(render(tree)).toBe("a\n \n \nb");
   });
   test("row of only a stretchy vline → length 1", () => {
-    const tree = node("row", {}, [
-      node("vline", { char: "│" }),
-    ]);
+    const tree = node("row", {}, [node("vline", { char: "│" })]);
     expect(render(tree)).toBe("│");
   });
   test("vline with explicit length is NOT clobbered by row's measured height", () => {
@@ -849,14 +820,10 @@ describe("box renderer", () => {
       node("text", { content: "hello" }),
       node("text", { content: "x" }),
     ]);
-    expect(render(tree)).toBe(
-      ["╭─────╮", "│hello│", "│x    │", "╰─────╯"].join("\n"),
-    );
+    expect(render(tree)).toBe(["╭─────╮", "│hello│", "│x    │", "╰─────╯"].join("\n"));
   });
   test("box with title", () => {
-    const tree = node("box", { title: "T" }, [
-      node("text", { content: "hello world" }),
-    ]);
+    const tree = node("box", { title: "T" }, [node("text", { content: "hello world" })]);
     const out = render(tree);
     expect(out.split("\n")[0]).toBe("╭─ T ───────╮");
   });
@@ -891,20 +858,14 @@ describe("box renderer", () => {
   });
   test("box with padding=1", () => {
     const tree = node("box", { padding: 1 }, [node("text", { content: "x" })]);
-    expect(render(tree)).toBe(
-      ["╭───╮", "│   │", "│ x │", "│   │", "╰───╯"].join("\n"),
-    );
+    expect(render(tree)).toBe(["╭───╮", "│   │", "│ x │", "│   │", "╰───╯"].join("\n"));
   });
   test("box with heavy border", () => {
-    const tree = node("box", { borderStyle: "heavy" }, [
-      node("text", { content: "a" }),
-    ]);
+    const tree = node("box", { borderStyle: "heavy" }, [node("text", { content: "a" })]);
     expect(render(tree)).toBe(["┏━┓", "┃a┃", "┗━┛"].join("\n"));
   });
   test("box with double border", () => {
-    const tree = node("box", { borderStyle: "double" }, [
-      node("text", { content: "a" }),
-    ]);
+    const tree = node("box", { borderStyle: "double" }, [node("text", { content: "a" })]);
     expect(render(tree)).toBe(["╔═╗", "║a║", "╚═╝"].join("\n"));
   });
   test("empty box renders a 1x1 frame (no children)", () => {
@@ -943,10 +904,12 @@ describe('_render color: "auto"', () => {
   //
   // We save and restore the env across each test so the suite stays
   // hermetic — other tests shouldn't see leaked overrides.
-  const savedNoColor    = process.env.NO_COLOR;
+  const savedNoColor = process.env.NO_COLOR;
   const savedForceColor = process.env.FORCE_COLOR;
   const styled: LayoutNode = node("text", {
-    content: "hi", fgColor: "red", bold: true,
+    content: "hi",
+    fgColor: "red",
+    bold: true,
   });
 
   beforeEach(() => {
@@ -954,7 +917,7 @@ describe('_render color: "auto"', () => {
     delete process.env.FORCE_COLOR;
   });
   afterEach(() => {
-    if (savedNoColor    === undefined) delete process.env.NO_COLOR;
+    if (savedNoColor === undefined) delete process.env.NO_COLOR;
     else process.env.NO_COLOR = savedNoColor;
     if (savedForceColor === undefined) delete process.env.FORCE_COLOR;
     else process.env.FORCE_COLOR = savedForceColor;
@@ -982,17 +945,17 @@ describe('_render color: "auto"', () => {
   });
 
   test("NO_COLOR wins over FORCE_COLOR (precedence)", () => {
-    process.env.NO_COLOR    = "1";
+    process.env.NO_COLOR = "1";
     process.env.FORCE_COLOR = "1";
     expect(_render(styled, "auto")).not.toMatch(/\x1b\[/);
   });
 
-  test('explicit color: true ignores env vars', () => {
+  test("explicit color: true ignores env vars", () => {
     process.env.NO_COLOR = "1";
     expect(_render(styled, true)).toMatch(/\x1b\[/);
   });
 
-  test('explicit color: false ignores env vars', () => {
+  test("explicit color: false ignores env vars", () => {
     process.env.FORCE_COLOR = "1";
     expect(_render(styled, false)).not.toMatch(/\x1b\[/);
   });
@@ -1134,52 +1097,52 @@ describe("table — width resolution", () => {
 
 describe("table — composeTable rendering", () => {
   test("2-col header + 2-row body, default settings", () => {
-    expect(renderTablePlain({
-      header: ["A", "B"],
-      body: [["1", "2"], ["3", "4"]],
-    })).toBe(
-      "╭───────╮\n" +
-      "│ A │ B │\n" +
-      "├───┼───┤\n" +
-      "│ 1 │ 2 │\n" +
-      "│ 3 │ 4 │\n" +
-      "╰───────╯",
+    expect(
+      renderTablePlain({
+        header: ["A", "B"],
+        body: [
+          ["1", "2"],
+          ["3", "4"],
+        ],
+      }),
+    ).toBe(
+      "╭───────╮\n" + "│ A │ B │\n" + "├───┼───┤\n" + "│ 1 │ 2 │\n" + "│ 3 │ 4 │\n" + "╰───────╯",
     );
   });
 
   test("body alone (no header / no footer)", () => {
-    expect(renderTablePlain({
-      body: [["1", "2"], ["3", "4"]],
-    })).toBe(
-      "╭───────╮\n" +
-      "│ 1 │ 2 │\n" +
-      "│ 3 │ 4 │\n" +
-      "╰───────╯",
-    );
+    expect(
+      renderTablePlain({
+        body: [
+          ["1", "2"],
+          ["3", "4"],
+        ],
+      }),
+    ).toBe("╭───────╮\n" + "│ 1 │ 2 │\n" + "│ 3 │ 4 │\n" + "╰───────╯");
   });
 
   test("header only — no header divider drawn (nothing follows it)", () => {
     expect(renderTablePlain({ header: ["A", "B"] })).toBe(
-      "╭───────╮\n" +
-      "│ A │ B │\n" +
-      "╰───────╯",
+      "╭───────╮\n" + "│ A │ B │\n" + "╰───────╯",
     );
   });
 
   test("wider cell forces both body rows to align", () => {
-    expect(renderTablePlain({
-      header: ["ID", "Name"],
-      body: [
-        ["1", "Alice"],
-        ["22", "Bob"],
-      ],
-    })).toBe(
+    expect(
+      renderTablePlain({
+        header: ["ID", "Name"],
+        body: [
+          ["1", "Alice"],
+          ["22", "Bob"],
+        ],
+      }),
+    ).toBe(
       "╭────────────╮\n" +
-      "│ ID │ Name  │\n" +
-      "├────┼───────┤\n" +
-      "│ 1  │ Alice │\n" +
-      "│ 22 │ Bob   │\n" +
-      "╰────────────╯",
+        "│ ID │ Name  │\n" +
+        "├────┼───────┤\n" +
+        "│ 1  │ Alice │\n" +
+        "│ 22 │ Bob   │\n" +
+        "╰────────────╯",
     );
   });
 
@@ -1195,12 +1158,12 @@ describe("table — composeTable rendering", () => {
     // inner width = (11+2) + 1 + (3+2) = 19.
     expect(out).toBe(
       "╭───────────────────╮\n" +
-      "│ k           │ v   │\n" +
-      "├─────────────┼─────┤\n" +
-      "│ x           │ 1   │\n" +
-      "├─────────────┼─────┤\n" +
-      "│ GRAND TOTAL │ 999 │\n" +
-      "╰───────────────────╯",
+        "│ k           │ v   │\n" +
+        "├─────────────┼─────┤\n" +
+        "│ x           │ 1   │\n" +
+        "├─────────────┼─────┤\n" +
+        "│ GRAND TOTAL │ 999 │\n" +
+        "╰───────────────────╯",
     );
   });
 
@@ -1208,44 +1171,39 @@ describe("table — composeTable rendering", () => {
     const out = renderTablePlain({
       columns: [{ align: "end" }, { align: "start" }],
       header: ["ID", "Name"],
-      body: [["1", "Alice"], ["22", "Bob"]],
+      body: [
+        ["1", "Alice"],
+        ["22", "Bob"],
+      ],
     });
     expect(out).toBe(
       "╭────────────╮\n" +
-      "│ ID │ Name  │\n" +
-      "├────┼───────┤\n" +
-      "│  1 │ Alice │\n" +
-      "│ 22 │ Bob   │\n" +
-      "╰────────────╯",
+        "│ ID │ Name  │\n" +
+        "├────┼───────┤\n" +
+        "│  1 │ Alice │\n" +
+        "│ 22 │ Bob   │\n" +
+        "╰────────────╯",
     );
   });
 
   test("columnDividers: false drops the │ between cells", () => {
-    expect(renderTablePlain({
-      columnDividers: false,
-      header: ["A", "B"],
-      body: [["1", "2"]],
-    })).toBe(
-      "╭──────╮\n" +
-      "│ A  B │\n" +
-      "├──────┤\n" +
-      "│ 1  2 │\n" +
-      "╰──────╯",
-    );
+    expect(
+      renderTablePlain({
+        columnDividers: false,
+        header: ["A", "B"],
+        body: [["1", "2"]],
+      }),
+    ).toBe("╭──────╮\n" + "│ A  B │\n" + "├──────┤\n" + "│ 1  2 │\n" + "╰──────╯");
   });
 
   test("cellPadding: 0 produces a tight table", () => {
-    expect(renderTablePlain({
-      cellPadding: 0,
-      header: ["A", "B"],
-      body: [["1", "2"]],
-    })).toBe(
-      "╭───╮\n" +
-      "│A│B│\n" +
-      "├─┼─┤\n" +
-      "│1│2│\n" +
-      "╰───╯",
-    );
+    expect(
+      renderTablePlain({
+        cellPadding: 0,
+        header: ["A", "B"],
+        body: [["1", "2"]],
+      }),
+    ).toBe("╭───╮\n" + "│A│B│\n" + "├─┼─┤\n" + "│1│2│\n" + "╰───╯");
   });
 
   test("borderStyle: heavy uses thick chars on outer border", () => {
@@ -1261,11 +1219,13 @@ describe("table — composeTable rendering", () => {
   });
 
   test("caption renders dim + centered below the bottom border", () => {
-    const colored = render(tableNode({
-      caption: "ok",
-      header: ["A", "B"],
-      body: [["1", "2"]],
-    }));
+    const colored = render(
+      tableNode({
+        caption: "ok",
+        header: ["A", "B"],
+        body: [["1", "2"]],
+      }),
+    );
     // The plain caption text appears below the closing corner.
     const plain = stripAnsi(colored);
     const lines = plain.split("\n");
@@ -1275,18 +1235,12 @@ describe("table — composeTable rendering", () => {
   });
 
   test("rowDividers: true draws a divider between body rows", () => {
-    expect(renderTablePlain({
-      rowDividers: true,
-      body: [["1"], ["2"], ["3"]],
-    })).toBe(
-      "╭───╮\n" +
-      "│ 1 │\n" +
-      "├───┤\n" +
-      "│ 2 │\n" +
-      "├───┤\n" +
-      "│ 3 │\n" +
-      "╰───╯",
-    );
+    expect(
+      renderTablePlain({
+        rowDividers: true,
+        body: [["1"], ["2"], ["3"]],
+      }),
+    ).toBe("╭───╮\n" + "│ 1 │\n" + "├───┤\n" + "│ 2 │\n" + "├───┤\n" + "│ 3 │\n" + "╰───╯");
   });
 
   test("rowDividers: true does NOT carve up multi-row footers", () => {
@@ -1294,53 +1248,48 @@ describe("table — composeTable rendering", () => {
     // ["", "Total", "50"], ["", "VAT", "10"]) expects them to render
     // flush, with only the body-rows / footer separator carrying a
     // section divider. rowDividers applies to body rows only.
-    expect(renderTablePlain({
-      rowDividers: true,
-      body:   [["1"], ["2"]],
-      footer: [["a"], ["b"]],
-    })).toBe(
-      "╭───╮\n" +
-      "│ 1 │\n" +
-      "├───┤\n" +
-      "│ 2 │\n" +
-      "├───┤\n" +
-      "│ a │\n" +
-      "│ b │\n" +
-      "╰───╯",
+    expect(
+      renderTablePlain({
+        rowDividers: true,
+        body: [["1"], ["2"]],
+        footer: [["a"], ["b"]],
+      }),
+    ).toBe(
+      "╭───╮\n" + "│ 1 │\n" + "├───┤\n" + "│ 2 │\n" + "├───┤\n" + "│ a │\n" + "│ b │\n" + "╰───╯",
     );
   });
 
   test("cellPadding < 0 is clamped to 0", () => {
     // A negative cellPadding would otherwise shrink dividers below the
     // cell grid and misalign the right border.
-    expect(renderTablePlain({
-      cellPadding: -3,
-      header: ["A", "B"],
-      body: [["1", "2"]],
-    })).toBe(
-      "╭───╮\n" +
-      "│A│B│\n" +
-      "├─┼─┤\n" +
-      "│1│2│\n" +
-      "╰───╯",
-    );
+    expect(
+      renderTablePlain({
+        cellPadding: -3,
+        header: ["A", "B"],
+        body: [["1", "2"]],
+      }),
+    ).toBe("╭───╮\n" + "│A│B│\n" + "├─┼─┤\n" + "│1│2│\n" + "╰───╯");
   });
 
   test("cellPadding 1.7 is floored to 1", () => {
     // Fractional cellPadding would otherwise break `" ".repeat(...)`
     // (which rejects non-integers).
-    expect(() => renderTablePlain({
-      cellPadding: 1.7,
-      header: ["A"],
-      body: [["1"]],
-    })).not.toThrow();
+    expect(() =>
+      renderTablePlain({
+        cellPadding: 1.7,
+        header: ["A"],
+        body: [["1"]],
+      }),
+    ).not.toThrow();
   });
 
   test("header cells are auto-bolded (text-typed only)", () => {
-    const colored = render(tableNode({
-      header: ["Hi"],
-      body: [["x"]],
-    }));
+    const colored = render(
+      tableNode({
+        header: ["Hi"],
+        body: [["x"]],
+      }),
+    );
     // Bold SGR (code 1) wraps "Hi" but NOT "x".
     expect(colored).toMatch(/\x1b\[1mHi\x1b\[0m/);
     expect(colored).not.toMatch(/\x1b\[1mx\x1b\[0m/);
@@ -1353,10 +1302,12 @@ describe("table — composeTable rendering", () => {
     // would. The auto-bold treats `bold === false` the same as unset.
     // Any *other* explicit modifier on the leaf (italic / dim /
     // underline / fgColor / bgColor / explicit `bold: true`) opts out.
-    const colored = render(tableNode({
-      header: [{ type: "text", attrs: { content: "Hi", bold: false }, children: [] }],
-      body: [["x"]],
-    }));
+    const colored = render(
+      tableNode({
+        header: [{ type: "text", attrs: { content: "Hi", bold: false }, children: [] }],
+        body: [["x"]],
+      }),
+    );
     expect(colored).toMatch(/\x1b\[1mHi\x1b\[0m/);
   });
 
@@ -1364,15 +1315,19 @@ describe("table — composeTable rendering", () => {
     // A text leaf carrying italic / dim / underline / fgColor / bgColor
     // is treated as "the caller already styled this" and the auto-bold
     // is skipped.
-    const withItalic = render(tableNode({
-      header: [{ type: "text", attrs: { content: "Hi", italic: true }, children: [] }],
-      body: [["x"]],
-    }));
+    const withItalic = render(
+      tableNode({
+        header: [{ type: "text", attrs: { content: "Hi", italic: true }, children: [] }],
+        body: [["x"]],
+      }),
+    );
     expect(withItalic).not.toMatch(/\x1b\[1mHi/);
-    const withFg = render(tableNode({
-      header: [{ type: "text", attrs: { content: "Hi", fgColor: "red" }, children: [] }],
-      body: [["x"]],
-    }));
+    const withFg = render(
+      tableNode({
+        header: [{ type: "text", attrs: { content: "Hi", fgColor: "red" }, children: [] }],
+        body: [["x"]],
+      }),
+    );
     expect(withFg).not.toMatch(/\x1b\[1mHi/);
   });
 
@@ -1384,10 +1339,10 @@ describe("table — composeTable rendering", () => {
     });
     expect(out).toBe(
       "╭────────────╮\n" +
-      "│ A      │ B │\n" +
-      "├────────┼───┤\n" +
-      "│ 1      │ 2 │\n" +
-      "╰────────────╯",
+        "│ A      │ B │\n" +
+        "├────────┼───┤\n" +
+        "│ 1      │ 2 │\n" +
+        "╰────────────╯",
     );
   });
 
@@ -1398,12 +1353,12 @@ describe("table — composeTable rendering", () => {
     });
     expect(out).toBe(
       "╭───────────╮\n" +
-      "│ k │ v     │\n" +
-      "├───┼───────┤\n" +
-      "│ a │ line1 │\n" +
-      "│   │ line2 │\n" +
-      "│   │ line3 │\n" +
-      "╰───────────╯",
+        "│ k │ v     │\n" +
+        "├───┼───────┤\n" +
+        "│ a │ line1 │\n" +
+        "│   │ line2 │\n" +
+        "│   │ line3 │\n" +
+        "╰───────────╯",
     );
   });
 
@@ -1445,12 +1400,7 @@ describe("table — composeTable rendering", () => {
     const lines = out.split("\n");
     // No header divider drawn (nothing follows the header), but the
     // caption still appears centred below the bottom border.
-    expect(lines).toEqual([
-      "╭───────╮",
-      "│ A │ B │",
-      "╰───────╯",
-      " (empty)",
-    ]);
+    expect(lines).toEqual(["╭───────╮", "│ A │ B │", "╰───────╯", " (empty)"]);
   });
 
   test("centered caption has no trailing whitespace", () => {
@@ -1467,11 +1417,13 @@ describe("table — composeTable rendering", () => {
   });
 
   test("borderColor wraps section-divider lines, not just the outer frame", () => {
-    const colored = render(tableNode({
-      borderColor: "red",
-      header: ["A", "B"],
-      body: [["1", "2"]],
-    }));
+    const colored = render(
+      tableNode({
+        borderColor: "red",
+        header: ["A", "B"],
+        body: [["1", "2"]],
+      }),
+    );
     const lines = colored.split("\n");
     const red = "\x1b[38;2;205;49;49m";
     // Every border-bearing line — top edge, header row sides, the
@@ -1511,7 +1463,9 @@ describe("table — _coerceCell", () => {
     expect(() => _coerceCell({ foo: "bar" })).toThrow(/cell must be string or LayoutNode/);
   });
   test("object whose `type` is not a string throws", () => {
-    expect(() => _coerceCell({ type: 42, children: [] })).toThrow(/cell must be string or LayoutNode/);
+    expect(() => _coerceCell({ type: 42, children: [] })).toThrow(
+      /cell must be string or LayoutNode/,
+    );
   });
   test("object missing `children` array throws", () => {
     expect(() => _coerceCell({ type: "text" })).toThrow(/cell must be string or LayoutNode/);
@@ -1519,12 +1473,15 @@ describe("table — _coerceCell", () => {
   test("object missing own `attrs` object throws (boundary error, not later TypeError)", () => {
     // Without the attrs check, a malformed LayoutNode-like would slip
     // through and crash inside the text renderer at `n.attrs.content`.
-    expect(() => _coerceCell({ type: "text", children: [] }))
-      .toThrow(/cell must be string or LayoutNode/);
-    expect(() => _coerceCell({ type: "text", attrs: null, children: [] }))
-      .toThrow(/cell must be string or LayoutNode/);
-    expect(() => _coerceCell({ type: "text", attrs: "not-an-object", children: [] }))
-      .toThrow(/cell must be string or LayoutNode/);
+    expect(() => _coerceCell({ type: "text", children: [] })).toThrow(
+      /cell must be string or LayoutNode/,
+    );
+    expect(() => _coerceCell({ type: "text", attrs: null, children: [] })).toThrow(
+      /cell must be string or LayoutNode/,
+    );
+    expect(() => _coerceCell({ type: "text", attrs: "not-an-object", children: [] })).toThrow(
+      /cell must be string or LayoutNode/,
+    );
   });
   test("inherited `type` (prototype) is not accepted", () => {
     const proto = { type: "text", children: [] };
@@ -1563,7 +1520,12 @@ describe("table — _validateTable", () => {
     expect(v.header).toEqual([]);
   });
   test("body alone is fine", () => {
-    const v = _validateTable({ body: [["1", "2"], ["3", "4"]] });
+    const v = _validateTable({
+      body: [
+        ["1", "2"],
+        ["3", "4"],
+      ],
+    });
     expect(v.columnCount).toBe(2);
     expect(v.body.length).toBe(2);
   });
@@ -1579,59 +1541,74 @@ describe("table — _validateTable", () => {
     expect(v.columnCount).toBe(3);
   });
   test("columns disagreeing with header throws", () => {
-    expect(() => _validateTable({
-      columns: [{}, {}],
-      header: ["A", "B", "C"],
-    })).toThrow(/header has 3 cells, expected 2/);
+    expect(() =>
+      _validateTable({
+        columns: [{}, {}],
+        header: ["A", "B", "C"],
+      }),
+    ).toThrow(/header has 3 cells, expected 2/);
   });
   test("body row column-count mismatch throws with row index", () => {
-    expect(() => _validateTable({
-      header: ["A", "B", "C"],
-      body: [["1", "2", "3"], ["1", "2"]],
-    })).toThrow(/body row 1 has 2 cells, expected 3/);
+    expect(() =>
+      _validateTable({
+        header: ["A", "B", "C"],
+        body: [
+          ["1", "2", "3"],
+          ["1", "2"],
+        ],
+      }),
+    ).toThrow(/body row 1 has 2 cells, expected 3/);
   });
   test("footer row mismatch throws", () => {
-    expect(() => _validateTable({
-      header: ["A", "B"],
-      footer: [["x", "y", "z"]],
-    })).toThrow(/footer row 0 has 3 cells, expected 2/);
+    expect(() =>
+      _validateTable({
+        header: ["A", "B"],
+        footer: [["x", "y", "z"]],
+      }),
+    ).toThrow(/footer row 0 has 3 cells, expected 2/);
   });
   test("empty `columns: []` does NOT override; falls through to header", () => {
     const v = _validateTable({ columns: [], header: ["A", "B"] });
     expect(v.columnCount).toBe(2);
   });
   test("header that is not an array throws a clear shape error", () => {
-    expect(() => _validateTable({ header: "abc" as unknown as unknown[] }))
-      .toThrow(/header must be an array of cells, got string/);
+    expect(() => _validateTable({ header: "abc" as unknown as unknown[] })).toThrow(
+      /header must be an array of cells, got string/,
+    );
   });
   test("body that is not an array throws a clear shape error", () => {
-    expect(() => _validateTable({ body: "oops" as unknown as unknown[][] }))
-      .toThrow(/body must be an array of rows, got string/);
+    expect(() => _validateTable({ body: "oops" as unknown as unknown[][] })).toThrow(
+      /body must be an array of rows, got string/,
+    );
   });
   test("body row that is not an array throws with row index", () => {
-    expect(() => _validateTable({ header: ["A"], body: ["not a row" as unknown as unknown[]] }))
-      .toThrow(/body row 0 must be an array of cells, got string/);
+    expect(() =>
+      _validateTable({ header: ["A"], body: ["not a row" as unknown as unknown[]] }),
+    ).toThrow(/body row 0 must be an array of cells, got string/);
   });
   test("footer that is not an array throws", () => {
-    expect(() => _validateTable({ header: ["A"], footer: 42 as unknown as unknown[][] }))
-      .toThrow(/footer must be an array of rows, got number/);
+    expect(() => _validateTable({ header: ["A"], footer: 42 as unknown as unknown[][] })).toThrow(
+      /footer must be an array of rows, got number/,
+    );
   });
   test("columns that is not an array throws a clear shape error", () => {
-    expect(() => _validateTable({
-      columns: "bad" as unknown as undefined,
-      header: ["A"],
-    })).toThrow(/columns must be an array, got string/);
+    expect(() =>
+      _validateTable({
+        columns: "bad" as unknown as undefined,
+        header: ["A"],
+      }),
+    ).toThrow(/columns must be an array, got string/);
   });
   test("empty header with no other content is the empty table, not an error", () => {
     expect(_validateTable({ header: [] }).columnCount).toBe(0);
   });
   test("zero-column table (empty body row) throws — content present but degenerate", () => {
-    expect(() => _validateTable({ body: [[]] }))
-      .toThrow(/at least one column is required/);
+    expect(() => _validateTable({ body: [[]] })).toThrow(/at least one column is required/);
   });
   test("empty header alongside real body rows still throws the column mismatch", () => {
-    expect(() => _validateTable({ header: [], body: [["1", "2"]] }))
-      .toThrow(/at least one column is required/);
+    expect(() => _validateTable({ header: [], body: [["1", "2"]] })).toThrow(
+      /at least one column is required/,
+    );
   });
   test("cells are coerced in the returned sections", () => {
     const v = _validateTable({
@@ -1669,9 +1646,7 @@ describe("raw", () => {
 
   test("raw wraps content to the box exactly like text, adding no styling", () => {
     const out = render(
-      node("box", { width: 12, padding: 1 }, [
-        node("raw", { content: "the quick brown fox" }),
-      ]),
+      node("box", { width: 12, padding: 1 }, [node("raw", { content: "the quick brown fox" })]),
       { cols: 80, rows: 24 },
     );
     expect(out).toBe(
@@ -1692,7 +1667,9 @@ describe("raw", () => {
     const colored = "\x1b[31malpha beta gamma delta epsilon\x1b[0m";
     const out = _render(
       node("box", { width: 16, padding: 1 }, [node("raw", { content: colored })]),
-      true, 80, 24,
+      true,
+      80,
+      24,
     );
     // Colors survive (kills a "strip all ANSI" render bug).
     expect(out).toContain("\x1b[31m");
@@ -1715,7 +1692,9 @@ describe("raw", () => {
       node("box", { width: 16, padding: 1 }, [
         node("raw", { content: "\x1b[41malpha beta gamma delta epsilon\x1b[0m" }),
       ]),
-      true, 80, 24,
+      true,
+      80,
+      24,
     );
     expect(bg).toContain("\x1b[41m");
     for (const line of bg.split("\n")) expect(openAtEnd(line)).toBe("");
@@ -1723,9 +1702,7 @@ describe("raw", () => {
 
   test("raw right-aligns short wrapped lines when align:end", () => {
     const out = render(
-      node("box", { width: 10, padding: 0 }, [
-        node("raw", { content: "a\nbbbb", align: "end" }),
-      ]),
+      node("box", { width: 10, padding: 0 }, [node("raw", { content: "a\nbbbb", align: "end" })]),
       { cols: 80, rows: 24 },
     );
     // "a" is padded on the LEFT to line up under "bbbb" (right alignment).

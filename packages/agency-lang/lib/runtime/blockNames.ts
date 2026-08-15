@@ -12,9 +12,7 @@ export function makeBlockName(counter: number): string {
   // shape — otherwise this file's whole reason to exist (the two sides
   // cannot desync) would be false for non-integer input.
   if (!Number.isInteger(counter) || counter < 0) {
-    throw new Error(
-      `makeBlockName: counter must be a non-negative integer (got ${counter})`,
-    );
+    throw new Error(`makeBlockName: counter must be a non-negative integer (got ${counter})`);
   }
   return `__block_${counter}`;
 }

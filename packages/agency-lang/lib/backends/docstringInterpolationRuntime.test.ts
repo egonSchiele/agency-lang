@@ -18,10 +18,7 @@ import { compile } from "../compiler/defaultSession.js";
 // repo are gitignored, but we still clean up the artifact in afterAll.
 describe("doc string interpolation — runtime resolution", () => {
   const repoRoot = path.resolve(__dirname, "../..");
-  const agencyFile = path.join(
-    repoRoot,
-    "tests/agency/docstring-interpolation.agency",
-  );
+  const agencyFile = path.join(repoRoot, "tests/agency/docstring-interpolation.agency");
   const jsFile = agencyFile.replace(/\.agency$/, ".js");
 
   beforeAll(() => {
@@ -68,8 +65,6 @@ describe("doc string interpolation — runtime resolution", () => {
       (t) => t?.name === "versionedGreet",
     );
     expect(tool).toBeDefined();
-    expect(tool.toolDefinition.description).toBe(
-      "Greets someone. Tool version: 2.0.",
-    );
+    expect(tool.toolDefinition.description).toBe("Greets someone. Tool version: 2.0.");
   });
 });

@@ -21,10 +21,7 @@ export function canHoldDurableTag(value: unknown): boolean {
 // Attach the tag record as a non-enumerable Symbol property. Forces the record
 // null-proto so a user/LLM-controlled "__proto__" tag key is plain data (the
 // same invariant GlobalStore establishes on creation and must survive revive).
-export function attachTag(
-  target: object,
-  tags: Record<string, unknown>,
-): void {
+export function attachTag(target: object, tags: Record<string, unknown>): void {
   Object.setPrototypeOf(tags, null);
   Object.defineProperty(target, TAG_SYMBOL, {
     value: tags,
@@ -46,13 +43,8 @@ export function detachTag(target: object): boolean {
 }
 
 export function readTag(value: unknown): Record<string, unknown> | undefined {
-  if (
-    value === null ||
-    (typeof value !== "object" && typeof value !== "function")
-  ) {
+  if (value === null || (typeof value !== "object" && typeof value !== "function")) {
     return undefined;
   }
-  return (value as Record<symbol, Record<string, unknown> | undefined>)[
-    TAG_SYMBOL
-  ];
+  return (value as Record<symbol, Record<string, unknown> | undefined>)[TAG_SYMBOL];
 }

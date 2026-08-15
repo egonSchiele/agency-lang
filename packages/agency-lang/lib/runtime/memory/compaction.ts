@@ -10,18 +10,14 @@ export type CompactionConfig = {
 function estimateTokens(messages: smoltalk.Message[]): number {
   let chars = 0;
   for (const msg of messages) {
-    const content =
-      typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
+    const content = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
     chars += content.length;
   }
   // rough estimate: 1 token ≈ 4 characters
   return Math.ceil(chars / 4);
 }
 
-export function shouldCompact(
-  messages: smoltalk.Message[],
-  config: CompactionConfig
-): boolean {
+export function shouldCompact(messages: smoltalk.Message[], config: CompactionConfig): boolean {
   if (config.trigger === "messages") {
     return messages.length > config.threshold;
   }
@@ -57,16 +53,12 @@ export function findCompactionSplitPoint(messages: smoltalk.Message[]): number {
 export function buildCompactionPrompt(messages: smoltalk.Message[]): string {
   const conversationText = messages
     .map(
-      (m) =>
-        `${m.role}: ${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`,
+      (m) => `${m.role}: ${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`,
     )
     .join("\n");
   return compactionTemplate({ conversationText });
 }
 
-export function buildMergeSummaryPrompt(
-  existingSummary: string,
-  newSummary: string,
-): string {
+export function buildMergeSummaryPrompt(existingSummary: string, newSummary: string): string {
   return mergeSummaryTemplate({ existingSummary, newSummary });
 }

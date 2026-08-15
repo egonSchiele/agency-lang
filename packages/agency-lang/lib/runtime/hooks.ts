@@ -61,10 +61,10 @@ export type CallbackMap = {
   };
   onLLMTimeout: { limitMs: number; attempt: number };
   onStream:
-  | { type: "text"; text: string }
-  | { type: "tool_call"; toolCall: ToolCallJSON }
-  | { type: "done"; result: PromptResult }
-  | { type: "error"; error: any };
+    | { type: "text"; text: string }
+    | { type: "tool_call"; toolCall: ToolCallJSON }
+    | { type: "done"; result: PromptResult }
+    | { type: "error"; error: any };
   onTrace: TraceEvent;
   onOAuthRequired: {
     serverName: string;
@@ -74,22 +74,26 @@ export type CallbackMap = {
   };
   onEmit: unknown;
   onThreadStart: {
-    threadId: string;                          // slug form ("t3")
+    threadId: string; // slug form ("t3")
     threadType: "thread" | "subthread";
-    parentThreadId?: string;                   // slug form when present
-    label?: string;                            // from thread(label: "...") {}
-    isResumption?: boolean;                    // true when entered via continue/session
+    parentThreadId?: string; // slug form when present
+    label?: string; // from thread(label: "...") {}
+    isResumption?: boolean; // true when entered via continue/session
   };
   onThreadEnd: {
-    threadId: string;                          // slug form
+    threadId: string; // slug form
     label?: string;
-    eagerSummarize: boolean;                   // from thread(summarize: true)
-    messages: MessageJSON[];                   // snapshot at close
+    eagerSummarize: boolean; // from thread(summarize: true)
+    messages: MessageJSON[]; // snapshot at close
   };
 };
 
 // Compile-time guard: ensures VALID_CALLBACK_NAMES stays in sync with CallbackMap.
-type _AssertNamesMatchMap = CallbackName extends keyof CallbackMap ? keyof CallbackMap extends CallbackName ? true : false : false;
+type _AssertNamesMatchMap = CallbackName extends keyof CallbackMap
+  ? keyof CallbackMap extends CallbackName
+    ? true
+    : false
+  : false;
 const _callbackNamesInSync: _AssertNamesMatchMap = true;
 
 /** All callbacks (scoped + top-level + TS-passed) return `void`. Callback
@@ -99,9 +103,7 @@ const _callbackNamesInSync: _AssertNamesMatchMap = true;
 export type CallbackReturn<K extends keyof CallbackMap> = void;
 
 export type AgencyCallbacks = {
-  [K in keyof CallbackMap]?: (
-    data: CallbackMap[K],
-  ) => void | Promise<void>;
+  [K in keyof CallbackMap]?: (data: CallbackMap[K]) => void | Promise<void>;
 };
 
 // Recursion guard: prevents a callback that triggers helper functions
@@ -173,9 +175,7 @@ async function invokeCallback(
     const desc = { type: "positional" as const, args: [data] };
     const parent = agencyStore.getStore();
     if (stateStack && parent) {
-      await agencyStore.run({ ...parent, stack: stateStack }, () =>
-        af.invoke(desc),
-      );
+      await agencyStore.run({ ...parent, stack: stateStack }, () => af.invoke(desc));
     } else {
       await af.invoke(desc);
     }
@@ -204,9 +204,7 @@ async function fireWithGuard(
   const active = new Set<object>(inherited);
   active.add(key);
   try {
-    await _activeCallbacksALS.run(active, () =>
-      invokeCallback(fn, data, ctx, stateStack),
-    );
+    await _activeCallbacksALS.run(active, () => invokeCallback(fn, data, ctx, stateStack));
   } catch (error) {
     // Never swallow real control-flow exceptions used by the runtime.
     // AgencyAbort covers BOTH a cancellation and a guard trip — a guard trip

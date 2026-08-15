@@ -38,7 +38,11 @@ export type GradingContext = {
  * A suite needs mixed results, not an abort. The optimizer still refuses a
  * baseline in this state, via `requireBaselineGatesPass`.
  */
-async function gradeInput(entry: Entry, ctx: GradingContext, graders: BaseGrader[]): Promise<InputGrades> {
+async function gradeInput(
+  entry: Entry,
+  ctx: GradingContext,
+  graders: BaseGrader[],
+): Promise<InputGrades> {
   const input = entry.input;
   const lookup = lookUpOutput(entry.recordPath, entry.workdir);
   if ("reason" in lookup) {
@@ -128,7 +132,9 @@ async function effectiveGraders(
 /** One esbuild+import per module path per call, however many inputs share a
  *  grading module. Exported so the run CLI's pre-run validation loads
  *  through the same path grading does. */
-export function makeGraderModuleCache(config: AgencyConfig): (modulePath: string) => Promise<BaseGrader[]> {
+export function makeGraderModuleCache(
+  config: AgencyConfig,
+): (modulePath: string) => Promise<BaseGrader[]> {
   // Null prototype: modulePath comes from suite content (input.graders), and
   // a key like "__proto__" on a normal object would corrupt the cache.
   const loads: Record<string, Promise<BaseGrader[]>> = Object.create(null);
@@ -149,7 +155,11 @@ type Entry = {
 };
 
 /** Grade one entry, or score it 0 when there is nothing gradable. */
-async function gradeEntry(entry: Entry, ctx: GradingContext, graders: BaseGrader[]): Promise<InputGrades> {
+async function gradeEntry(
+  entry: Entry,
+  ctx: GradingContext,
+  graders: BaseGrader[],
+): Promise<InputGrades> {
   if (entry.ungradedReason !== undefined) {
     return ungraded(entry.input, entry.ungradedReason);
   }

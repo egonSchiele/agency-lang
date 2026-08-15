@@ -103,11 +103,7 @@ export async function addRemote(
 ): Promise<void> {
   let resolved: ResolvedScheduleAdd;
   try {
-    resolved = resolveScheduleAdd(
-      file,
-      options,
-      Intl.DateTimeFormat().resolvedOptions().timeZone,
-    );
+    resolved = resolveScheduleAdd(file, options, Intl.DateTimeFormat().resolvedOptions().timeZone);
   } catch (error) {
     fail(errorMessage(error));
   }
@@ -126,10 +122,7 @@ export async function addRemote(
   try {
     schedule = await client.create(resolved.input);
   } catch (error) {
-    if (
-      resolved.deployMode === "if-missing" &&
-      isAgentNotFound(error, resolved.input.fileName)
-    ) {
+    if (resolved.deployMode === "if-missing" && isAgentNotFound(error, resolved.input.fileName)) {
       await deployForSchedule(file, target, context);
       try {
         schedule = await client.create(resolved.input);
@@ -156,9 +149,7 @@ export async function addRemote(
 /** Exactly the schedules route's missing-file answer for THIS agent — a
  *  broader match could deploy in response to an unrelated failure. */
 function isAgentNotFound(error: unknown, fileName: string): boolean {
-  return (
-    error instanceof ScheduleRequestError && error.message === `Agent '${fileName}' not found`
-  );
+  return error instanceof ScheduleRequestError && error.message === `Agent '${fileName}' not found`;
 }
 
 /** Deploy against the SAME resolved target as the schedule request — never

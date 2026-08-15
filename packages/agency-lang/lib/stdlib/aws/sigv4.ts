@@ -86,9 +86,8 @@ export function signRequest(input: SignInput): Record<string, string> {
 
   const sortedNames = Object.keys(headers).sort();
   const canonicalHeaders =
-    sortedNames
-      .map((name) => `${name}:${headers[name].trim().replace(/\s+/g, " ")}`)
-      .join("\n") + "\n";
+    sortedNames.map((name) => `${name}:${headers[name].trim().replace(/\s+/g, " ")}`).join("\n") +
+    "\n";
   const signedHeaders = sortedNames.join(";");
 
   const canonicalRequest = [

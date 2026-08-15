@@ -48,7 +48,9 @@ describe("Debugger threads panel", () => {
   });
 
   afterAll(() => {
-    try { fs.unlinkSync(threadTestCompiled); } catch { }
+    try {
+      fs.unlinkSync(threadTestCompiled);
+    } catch {}
   });
 
   it("shows thread messages after each LLM call", async () => {

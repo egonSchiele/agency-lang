@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { _listEvents, _createEvent, _updateEvent, _deleteEvent, _isCalendarAuthorized, _authorizeCalendar } from "../calendar.js";
+import {
+  _listEvents,
+  _createEvent,
+  _updateEvent,
+  _deleteEvent,
+  _isCalendarAuthorized,
+  _authorizeCalendar,
+} from "../calendar.js";
 
 // Mock the oauth module
 const mockAuthorize = vi.fn().mockResolvedValue({ success: true });
@@ -181,10 +188,7 @@ describe("_createEvent", () => {
 
     const [, init] = mockFetch.mock.calls[0];
     const body = JSON.parse(init.body);
-    expect(body.attendees).toEqual([
-      { email: "alice@example.com" },
-      { email: "bob@example.com" },
-    ]);
+    expect(body.attendees).toEqual([{ email: "alice@example.com" }, { email: "bob@example.com" }]);
   });
 });
 
@@ -234,7 +238,9 @@ describe("_deleteEvent", () => {
   });
 
   it("treats 410 Gone as success", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 410, text: async () => "Gone" });
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue({ ok: false, status: 410, text: async () => "Gone" });
     const result = await _deleteEvent("evt-gone");
     expect(result).toEqual({ deleted: true });
   });

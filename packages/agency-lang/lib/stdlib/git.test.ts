@@ -5,9 +5,21 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import {
-  gitRunImpl, assertPathsContained, assertAllNotRestricted,
-  statusArgs, parseStatus, logArgs, parseLog, commitArgs,
-  diffArgs, parseDiff, showArgs, branchListArgs, parseBranchList, blameArgs, parseBlame,
+  gitRunImpl,
+  assertPathsContained,
+  assertAllNotRestricted,
+  statusArgs,
+  parseStatus,
+  logArgs,
+  parseLog,
+  commitArgs,
+  diffArgs,
+  parseDiff,
+  showArgs,
+  branchListArgs,
+  parseBranchList,
+  blameArgs,
+  parseBlame,
 } from "./git.js";
 
 const pexec = promisify(execFile);
@@ -25,8 +37,12 @@ async function seedRepo(): Promise<string> {
 
 describe("gitRunImpl explicit-cwd contract", () => {
   let repo: string;
-  beforeAll(async () => { repo = await seedRepo(); });
-  afterAll(async () => { await fs.rm(repo, { recursive: true, force: true }); });
+  beforeAll(async () => {
+    repo = await seedRepo();
+  });
+  afterAll(async () => {
+    await fs.rm(repo, { recursive: true, force: true });
+  });
 
   it("runs against an explicit repo and returns stdout", async () => {
     const status = parseStatus(await gitRunImpl(repo, statusArgs()));
@@ -36,10 +52,14 @@ describe("gitRunImpl explicit-cwd contract", () => {
     await expect(gitRunImpl("", statusArgs())).rejects.toThrow(/absolute|repo directory/i);
   });
   it("THROWS on a relative cwd", async () => {
-    await expect(gitRunImpl("relative/dir", statusArgs())).rejects.toThrow(/absolute|repo directory/i);
+    await expect(gitRunImpl("relative/dir", statusArgs())).rejects.toThrow(
+      /absolute|repo directory/i,
+    );
   });
   it("THROWS on a non-existent cwd", async () => {
-    await expect(gitRunImpl(path.join(repo, "nope"), statusArgs())).rejects.toThrow(/exist|repo directory/i);
+    await expect(gitRunImpl(path.join(repo, "nope"), statusArgs())).rejects.toThrow(
+      /exist|repo directory/i,
+    );
   });
   it("THROWS on a git error surfacing stderr", async () => {
     const nonRepo = await fs.mkdtemp(path.join(os.tmpdir(), "notrepo-"));
@@ -53,8 +73,12 @@ describe("gitRunImpl explicit-cwd contract", () => {
 
 describe("format/parser round-trips against real git", () => {
   let repo: string;
-  beforeAll(async () => { repo = await seedRepo(); });
-  afterAll(async () => { await fs.rm(repo, { recursive: true, force: true }); });
+  beforeAll(async () => {
+    repo = await seedRepo();
+  });
+  afterAll(async () => {
+    await fs.rm(repo, { recursive: true, force: true });
+  });
 
   it("status", async () => {
     const s = parseStatus(await gitRunImpl(repo, statusArgs()));
@@ -62,7 +86,9 @@ describe("format/parser round-trips against real git", () => {
     expect(s.branch.length).toBeGreaterThan(0);
   });
   it("log", async () => {
-    const log = parseLog(await gitRunImpl(repo, logArgs({ count: 10, oneline: false, path: "", ref: "", author: "" })));
+    const log = parseLog(
+      await gitRunImpl(repo, logArgs({ count: 10, oneline: false, path: "", ref: "", author: "" })),
+    );
     expect(log.commits[0].subject).toBe("seed subject");
     expect(log.commits[0].sha.length).toBeGreaterThanOrEqual(7);
   });
@@ -70,20 +96,29 @@ describe("format/parser round-trips against real git", () => {
     await fs.writeFile(path.join(repo, "b.txt"), "more\n");
     await pexec("git", ["add", "b.txt"], { cwd: repo });
     await gitRunImpl(repo, commitArgs({ message: "add b" }));
-    const log = parseLog(await gitRunImpl(repo, logArgs({ count: 10, oneline: false, path: "", ref: "", author: "" })));
+    const log = parseLog(
+      await gitRunImpl(repo, logArgs({ count: 10, oneline: false, path: "", ref: "", author: "" })),
+    );
     expect(log.commits[0].subject).toBe("add b");
   });
   it("diff (staged edit -> parseDiff counts)", async () => {
     await fs.writeFile(path.join(repo, "a.txt"), "one\ntwo\nthree\n");
     await pexec("git", ["add", "a.txt"], { cwd: repo });
-    const diff = parseDiff(await gitRunImpl(repo, diffArgs({ ref: "", ref2: "", staged: true, path: "" })));
+    const diff = parseDiff(
+      await gitRunImpl(repo, diffArgs({ ref: "", ref2: "", staged: true, path: "" })),
+    );
     const file = diff.files.find((f) => f.path === "a.txt");
     expect(file).toBeTruthy();
     expect(file!.additions).toBe(1);
     expect(file!.deletions).toBe(0);
   });
   it("log with a path filter (exercises --end-of-options -- <path>)", async () => {
-    const log = parseLog(await gitRunImpl(repo, logArgs({ count: 10, oneline: false, path: "a.txt", ref: "", author: "" })));
+    const log = parseLog(
+      await gitRunImpl(
+        repo,
+        logArgs({ count: 10, oneline: false, path: "a.txt", ref: "", author: "" }),
+      ),
+    );
     expect(log.commits.length).toBeGreaterThanOrEqual(1);
   });
   it("branchList", async () => {
@@ -111,7 +146,9 @@ describe("gitRunImpl output cap (bytes, not code units)", () => {
     await pexec("git", ["add", "big.txt"], { cwd: repo });
     await pexec("git", ["commit", "-q", "-m", "big"], { cwd: repo });
   });
-  afterAll(async () => { await fs.rm(repo, { recursive: true, force: true }); });
+  afterAll(async () => {
+    await fs.rm(repo, { recursive: true, force: true });
+  });
 
   it("truncates by UTF-8 bytes and still succeeds", async () => {
     // `git show HEAD` includes the big.txt diff (~10 KB of multi-byte "é").
@@ -134,8 +171,13 @@ describe("assertAllNotRestricted (gitAdd -A + allowedPaths bypass)", () => {
 describe("env-scrub integration (the safety control end-to-end)", () => {
   let repo: string;
   let sentinel: string;
-  beforeAll(async () => { repo = await seedRepo(); sentinel = path.join(repo, "PWNED"); });
-  afterAll(async () => { await fs.rm(repo, { recursive: true, force: true }); });
+  beforeAll(async () => {
+    repo = await seedRepo();
+    sentinel = path.join(repo, "PWNED");
+  });
+  afterAll(async () => {
+    await fs.rm(repo, { recursive: true, force: true });
+  });
 
   it("GIT_EXTERNAL_DIFF passed to gitRunImpl does NOT execute", async () => {
     // If scrubEnv were not applied, git would run this external diff driver.
@@ -153,7 +195,9 @@ describe("assertPathsContained (symlink-aware, shared helper)", () => {
     await fs.mkdir(path.join(repo, "src"), { recursive: true });
     await fs.writeFile(path.join(repo, "src", "a.ts"), "x");
   });
-  afterAll(async () => { await fs.rm(repo, { recursive: true, force: true }); });
+  afterAll(async () => {
+    await fs.rm(repo, { recursive: true, force: true });
+  });
 
   it("no-ops when allowedPaths empty", async () => {
     await expect(assertPathsContained(["anything"], [], repo)).resolves.toBeUndefined();

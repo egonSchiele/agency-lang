@@ -102,9 +102,7 @@ describe("cronToOnCalendar", () => {
     expect(cronToOnCalendar("0 9 * * *")).toBe("*-*-* 09:00:00");
   });
   it("converts weekdays at 9am", () => {
-    expect(cronToOnCalendar("0 9 * * 1-5")).toBe(
-      "Mon,Tue,Wed,Thu,Fri *-*-* 09:00:00",
-    );
+    expect(cronToOnCalendar("0 9 * * 1-5")).toBe("Mon,Tue,Wed,Thu,Fri *-*-* 09:00:00");
   });
   it("converts hourly", () => {
     expect(cronToOnCalendar("0 * * * *")).toBe("*-*-* *:00:00");

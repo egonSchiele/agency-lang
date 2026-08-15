@@ -14,7 +14,14 @@ import {
  *  entry to fork and invoke over IPC, or a substituted command argv to
  *  spawn. */
 export type EvalRunnerJob =
-  | { kind: "file"; compiledEntryPath: string; node: string; task: string | Record<string, any>; cwd: string; statelogPath: string }
+  | {
+      kind: "file";
+      compiledEntryPath: string;
+      node: string;
+      task: string | Record<string, any>;
+      cwd: string;
+      statelogPath: string;
+    }
   | { kind: "command"; argv: string[]; cwd: string; statelogPath: string; traceId: string };
 
 /** How to actually run one job. The default dispatches by kind (fork for
@@ -45,7 +52,8 @@ const DEFAULT_EVAL_RUN_LIMITS: RunLimits = {
 export function limitsFromConfig(config: AgencyConfig, timeoutSecOverride?: number): RunLimits {
   // Per-test override (the input's timeoutSec) beats the suite-level config.
   const wallClockSec = timeoutSecOverride ?? config.eval?.limits?.wallClockSec;
-  const valid = typeof wallClockSec === "number" && Number.isFinite(wallClockSec) && wallClockSec > 0;
+  const valid =
+    typeof wallClockSec === "number" && Number.isFinite(wallClockSec) && wallClockSec > 0;
   return {
     ...DEFAULT_EVAL_RUN_LIMITS,
     ...(valid ? { wallClock: wallClockSec * 1000 } : {}),
@@ -92,7 +100,10 @@ export function makeCostCapTracker(capUsd: number): {
  *  targets get their trace id from their own run, and inheriting one would
  *  merge unrelated runs into a single trace. Same precedent as run()
  *  clearing AGENCY_RUN_POLICY (lib/cli/commands.ts). Exported for tests. */
-export function evalForkOptions(limits: RunLimits, cwd: string): ReturnType<typeof buildForkOptions> {
+export function evalForkOptions(
+  limits: RunLimits,
+  cwd: string,
+): ReturnType<typeof buildForkOptions> {
   const options = buildForkOptions({ limits, cwd });
   delete (options.env as Record<string, string | undefined>)[TRACE_ID_ENV];
   return options;
@@ -105,7 +116,10 @@ export function makeSubprocessRunner(
 ): EvalInputRunner {
   return async (job) => {
     if (job.kind !== "file") {
-      return { ok: false, errorMessage: "the fork runner only runs file jobs; command jobs go to runCommandInSpawn" };
+      return {
+        ok: false,
+        errorMessage: "the fork runner only runs file jobs; command jobs go to runCommandInSpawn",
+      };
     }
     return runCompiledAgentInSubprocess({
       compiledPath: job.compiledEntryPath,
@@ -131,11 +145,7 @@ async function runCompiledAgentInSubprocess(args: {
   maxCostUsd: number;
 }): Promise<{ ok: true } | { ok: false; errorMessage: string }> {
   const limits = args.limits;
-  const child = fork(
-    subprocessBootstrapPath,
-    [],
-    evalForkOptions(limits, args.cwd),
-  );
+  const child = fork(subprocessBootstrapPath, [], evalForkOptions(limits, args.cwd));
   const instruction = buildRunInstruction({
     scriptPath: args.compiledPath,
     node: args.node,
@@ -157,9 +167,7 @@ async function runCompiledAgentInSubprocess(args: {
       child.kill("SIGINT");
     };
     process.once("SIGINT", forwardSigint);
-    const settle = (
-      value: { ok: true } | { ok: false; errorMessage: string },
-    ) => {
+    const settle = (value: { ok: true } | { ok: false; errorMessage: string }) => {
       if (settled) return;
       settled = true;
       process.removeListener("SIGINT", forwardSigint);

@@ -1,11 +1,6 @@
 import { ANY_T } from "./primitives.js";
 import { diagnostic } from "./diagnostics.js";
-import {
-  AgencyNode,
-  FunctionCall,
-  FunctionParameter,
-  VariableType,
-} from "../types.js";
+import { AgencyNode, FunctionCall, FunctionParameter, VariableType } from "../types.js";
 import { walkNodes, isInsideBlock, type WalkAncestor } from "../utils/node.js";
 import { parseMatchValId } from "../matchVal.js";
 import { GLOBAL_SCOPE_KEY, scopeKey as getScopeKey } from "../compilationUnit.js";
@@ -46,9 +41,7 @@ import { isSchemaTypeHint } from "../utils/schemaParam.js";
  * is a `T`; if the typeHint isn't an arrayType (e.g. untyped `...args`),
  * fall back to its raw hint or "any".
  */
-function variadicElementType(
-  param: FunctionParameter,
-): VariableType | undefined {
+function variadicElementType(param: FunctionParameter): VariableType | undefined {
   if (param.typeHint?.type === "arrayType") return param.typeHint.elementType;
   return param.typeHint ?? ANY_T;
 }
@@ -63,9 +56,7 @@ function variadicElementType(
  * Returns `undefined` when the param is untyped — the caller treats that
  * as `any`.
  */
-function variadicNamedSlotType(
-  typeHint: VariableType | undefined,
-): VariableType | undefined {
+function variadicNamedSlotType(typeHint: VariableType | undefined): VariableType | undefined {
   if (!typeHint) return undefined;
   if (typeHint.type === "arrayType") return typeHint;
   return { type: "arrayType", elementType: typeHint };
@@ -78,9 +69,7 @@ export type ParamSlot = {
   name?: string;
 };
 
-export type SlotRequest =
-  | { kind: "positional"; index: number }
-  | { kind: "named"; name: string };
+export type SlotRequest = { kind: "positional"; index: number } | { kind: "named"; name: string };
 
 export type ParamSignature = {
   minArgs: number;
@@ -104,10 +93,7 @@ export type ParamSignature = {
   resolveSlot(req: SlotRequest): ParamSlot | undefined;
 };
 
-export function paramListSignature(
-  params: FunctionParameter[],
-  argCount: number,
-): ParamSignature {
+export function paramListSignature(params: FunctionParameter[], argCount: number): ParamSignature {
   const lastParam = params[params.length - 1];
   const hasRest = lastParam?.variadic === true;
   // Schema<...> parameters are injection-eligible: the preprocessor's
@@ -115,10 +101,7 @@ export function paramListSignature(
   // (LHS annotation or enclosing return type) when omitted, so they are
   // effectively optional from the type checker's perspective.
   const minArgs = params.filter(
-    (p) =>
-      p.defaultValue === undefined &&
-      !p.variadic &&
-      !isSchemaTypeHint(p.typeHint),
+    (p) => p.defaultValue === undefined && !p.variadic && !isSchemaTypeHint(p.typeHint),
   ).length;
   const maxArgs = hasRest ? Infinity : params.length;
 
@@ -167,10 +150,7 @@ export function paramListSignature(
   };
 }
 
-export function checkScopes(
-  scopes: ScopeInfo[],
-  ctx: TypeCheckerContext,
-): void {
+export function checkScopes(scopes: ScopeInfo[], ctx: TypeCheckerContext): void {
   for (const scope of scopes) {
     ctx.withScope(scope.scopeKey, () => {
       checkFunctionCallsInScope(scope, ctx);
@@ -230,10 +210,7 @@ export function isInScope(scopes: WalkScope[], info: ScopeInfo): boolean {
   return false;
 }
 
-function checkFunctionCallsInScope(
-  info: ScopeInfo,
-  ctx: TypeCheckerContext,
-): void {
+function checkFunctionCallsInScope(info: ScopeInfo, ctx: TypeCheckerContext): void {
   for (const { node, ancestors, scopes } of walkNodes(info.body)) {
     if (!isInScope(scopes, info)) continue;
     if (node.type === "functionCall") {
@@ -257,11 +234,7 @@ function checkFunctionCallsInScope(
  *  Only a scope with no inferred/declared return type (`info.returnType`
  *  undefined) is skipped. Name-keyed: aliasing `saveDraft` (`const s = saveDraft;
  *  s(v)`) escapes the check (documented v1 limitation). */
-function checkSaveDraftCall(
-  call: FunctionCall,
-  info: ScopeInfo,
-  ctx: TypeCheckerContext,
-): void {
+function checkSaveDraftCall(call: FunctionCall, info: ScopeInfo, ctx: TypeCheckerContext): void {
   if (call.functionName !== "saveDraft") return;
   // Only the stdlib saveDraft carries the draft contract. Stand down when
   // the name resolves to anything the user wrote: a local def or node, or
@@ -304,7 +277,6 @@ function isStdlibSaveDraftOrigin(originFile: string | undefined): boolean {
   return /[\\/]stdlib[\\/]index\.agency$/.test(originFile);
 }
 
-
 /** User-facing spelling for a callee in diagnostics. The guard
  *  construct desugars to `_guard` before checking (guardDesugar.ts);
  *  users wrote `guard`, so messages should too. */
@@ -320,11 +292,7 @@ export function isInsideHandler(ancestors: WalkAncestor[]): boolean {
   });
 }
 
-function checkSingleFunctionCall(
-  call: FunctionCall,
-  scope: Scope,
-  ctx: TypeCheckerContext,
-): void {
+function checkSingleFunctionCall(call: FunctionCall, scope: Scope, ctx: TypeCheckerContext): void {
   // A splat can expand to any number of positional args, so skip arity
   // checking when one is present. The splat element-type check still runs.
   const hasSplatArg = call.arguments.some((a) => a.type === "splat");
@@ -332,8 +300,7 @@ function checkSingleFunctionCall(
   // Resolution order: local definition → imported (cross-file) → builtin
   // fallback. Importeds take precedence over builtins so a real stdlib
   // function shadows a hardcoded signature when SymbolTable info is wired in.
-  const def =
-    ctx.functionDefs[call.functionName] ?? ctx.nodeDefs[call.functionName];
+  const def = ctx.functionDefs[call.functionName] ?? ctx.nodeDefs[call.functionName];
   const importedSig = ctx.importedFunctions[call.functionName];
   const params = def?.parameters ?? importedSig?.parameters;
 
@@ -346,12 +313,7 @@ function checkSingleFunctionCall(
     return;
   }
 
-  if (
-    Object.prototype.hasOwnProperty.call(
-      BUILTIN_FUNCTION_TYPES,
-      call.functionName,
-    )
-  ) {
+  if (Object.prototype.hasOwnProperty.call(BUILTIN_FUNCTION_TYPES, call.functionName)) {
     checkCallAgainstBuiltinSig(
       call,
       BUILTIN_FUNCTION_TYPES[call.functionName],
@@ -374,13 +336,7 @@ function checkSingleFunctionCall(
     }
     // A namespace global may also be directly callable (e.g. `String(x)`).
     if (entry.kind === "namespace" && entry.callableSig) {
-      checkCallAgainstBuiltinSig(
-        call,
-        entry.callableSig,
-        scope,
-        ctx,
-        hasSplatArg,
-      );
+      checkCallAgainstBuiltinSig(call, entry.callableSig, scope, ctx, hasSplatArg);
     }
   }
 }
@@ -490,9 +446,7 @@ function checkCallAgainstBuiltinSig(
       ? call
       : {
           ...call,
-          arguments: call.arguments.filter(
-            (a) => a.type !== "namedArgument",
-          ),
+          arguments: call.arguments.filter((a) => a.type !== "namedArgument"),
         };
   if (!checkArity(positionalCall, minArgs, maxArgs, hasSplatArg, ctx)) return;
   const slots: ParamSlot[] = sig.params.map((type) => ({
@@ -581,11 +535,7 @@ function checkBlockArgShape(
   const lastParam = params[params.length - 1];
   if (lastParam) {
     const hint = lastParam.typeHint;
-    if (
-      hint === undefined ||
-      hint.type === "blockType" ||
-      isAnyType(hint)
-    ) {
+    if (hint === undefined || hint.type === "blockType" || isAnyType(hint)) {
       return true;
     }
   }
@@ -612,9 +562,7 @@ function checkNamedArgStructure(
   params: FunctionParameter[],
   ctx: TypeCheckerContext,
 ): boolean {
-  const namedStartIdx = call.arguments.findIndex(
-    (a) => a.type === "namedArgument",
-  );
+  const namedStartIdx = call.arguments.findIndex((a) => a.type === "namedArgument");
   if (namedStartIdx < 0) return true;
 
   let ok = true;
@@ -747,20 +695,12 @@ function checkArity(
   const arity = { fn: displayFunctionName(call.functionName), count: argCount };
   const arityLoc = call.loc ?? null;
   if (maxArgs === Infinity) {
-    ctx.errors.push(
-      diagnostic("callArityAtLeast", { ...arity, min: minArgs }, arityLoc),
-    );
+    ctx.errors.push(diagnostic("callArityAtLeast", { ...arity, min: minArgs }, arityLoc));
   } else if (minArgs === maxArgs) {
-    ctx.errors.push(
-      diagnostic("callArityExact", { ...arity, expected: minArgs }, arityLoc),
-    );
+    ctx.errors.push(diagnostic("callArityExact", { ...arity, expected: minArgs }, arityLoc));
   } else {
     ctx.errors.push(
-      diagnostic(
-        "callArityRange",
-        { ...arity, min: minArgs, max: maxArgs },
-        arityLoc,
-      ),
+      diagnostic("callArityRange", { ...arity, min: minArgs, max: maxArgs }, arityLoc),
     );
   }
   return false;
@@ -786,14 +726,7 @@ function checkArgsAgainstParams(
   for (let argIndex = 0; argIndex < call.arguments.length; argIndex++) {
     const arg = call.arguments[argIndex];
     if (arg.type === "splat") {
-      checkSplatAgainstRemainingParams(
-        call,
-        arg.value,
-        argIndex,
-        sig,
-        scope,
-        ctx,
-      );
+      checkSplatAgainstRemainingParams(call, arg.value, argIndex, sig, scope, ctx);
       return;
     }
     let slot: ParamSlot | undefined;
@@ -831,12 +764,7 @@ function checkArgsAgainstParams(
       );
     }
     if (innerArg.type === "agencyObject") {
-      checkExcessObjectProperties(
-        innerArg,
-        paramType,
-        `call to '${call.functionName}'`,
-        ctx,
-      );
+      checkExcessObjectProperties(innerArg, paramType, `call to '${call.functionName}'`, ctx);
     }
   }
 }
@@ -890,10 +818,7 @@ function checkSplatAgainstRemainingParams(
   }
 }
 
-function checkReturnTypesInScope(
-  info: ScopeInfo,
-  ctx: TypeCheckerContext,
-): void {
+function checkReturnTypesInScope(info: ScopeInfo, ctx: TypeCheckerContext): void {
   if (!info.returnType) return;
 
   for (const { node, ancestors, scopes } of walkNodes(info.body)) {
@@ -910,22 +835,10 @@ function checkReturnTypesInScope(
     // for the `__matchval_` ref would falsely reject such returns.
     const matchId = matchvalRefId(node.value);
     if (matchId !== undefined) {
-      checkMatchExprYields(
-        matchId,
-        info.returnType,
-        `return in '${info.name}'`,
-        ctx,
-        node.loc,
-      );
+      checkMatchExprYields(matchId, info.returnType, `return in '${info.name}'`, ctx, node.loc);
       continue;
     }
-    checkType(
-      node.value,
-      info.returnType,
-      info.scope,
-      `return in '${info.name}'`,
-      ctx,
-    );
+    checkType(node.value, info.returnType, info.scope, `return in '${info.name}'`, ctx);
   }
 }
 
@@ -956,10 +869,7 @@ function findEnclosingBlockSlot(
   return undefined;
 }
 
-function checkExpressionsInScope(
-  info: ScopeInfo,
-  ctx: TypeCheckerContext,
-): void {
+function checkExpressionsInScope(info: ScopeInfo, ctx: TypeCheckerContext): void {
   const shadowing = collectProgramShadowing(ctx.programNodes);
   for (const { node, ancestors, scopes } of walkNodes(info.body)) {
     if (!isInScope(scopes, info)) continue;
@@ -973,13 +883,7 @@ function checkExpressionsInScope(
       // function already excludes block returns — see inference.ts.)
       const blockSlot = findEnclosingBlockSlot(ancestors, ctx);
       if (blockSlot) {
-        checkType(
-          node.value,
-          blockSlot.returnType,
-          info.scope,
-          "block return",
-          ctx,
-        );
+        checkType(node.value, blockSlot.returnType, info.scope, "block return", ctx);
       } else {
         synthType(node.value, info.scope, ctx);
       }
@@ -1019,8 +923,7 @@ function validatePipeArg(
 
   const leftType = synthType(expr.left, scope, ctx);
   if (isAnyType(leftType)) return;
-  const flowingType =
-    leftType.type === "resultType" ? leftType.successType : leftType;
+  const flowingType = leftType.type === "resultType" ? leftType.successType : leftType;
   if (isAnyType(flowingType)) return;
 
   if (!isAssignable(flowingType, slotType, ctx.getTypeAliases())) {
@@ -1037,10 +940,7 @@ function validatePipeArg(
   }
 }
 
-function pipeRhsSlotType(
-  rhs: AgencyNode,
-  ctx: TypeCheckerContext,
-): VariableType | undefined {
+function pipeRhsSlotType(rhs: AgencyNode, ctx: TypeCheckerContext): VariableType | undefined {
   if (rhs.type === "variableName") {
     const params = getParamsForNodeOrFunc(rhs.value, ctx);
     return params?.[0]?.typeHint;

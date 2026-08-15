@@ -86,12 +86,8 @@ export function rawDataChildren(toggle: TreeNode): TreeNode[] {
 // common tool-calling completion has `output: null` and a non-empty
 // `toolCalls` array, and `formatConversation` already renders an
 // assistant message's `toolCalls`, so we just pass them through.
-function assembleTranscript(
-  event: NonNullable<TreeNode["event"]>,
-): any[] {
-  const messages = Array.isArray(event.data.messages)
-    ? event.data.messages
-    : [];
+function assembleTranscript(event: NonNullable<TreeNode["event"]>): any[] {
+  const messages = Array.isArray(event.data.messages) ? event.data.messages : [];
   const completion = event.data.completion;
   const completionMessage: any[] = [];
   if (completion?.output || completion?.toolCalls?.length) {
@@ -132,11 +128,7 @@ function convoLineNodes(
   }));
 }
 
-function rawDataToggleNode(
-  id: string,
-  parent: TreeNode,
-  event: TreeNode["event"],
-): TreeNode {
+function rawDataToggleNode(id: string, parent: TreeNode, event: TreeNode["event"]): TreeNode {
   return {
     id,
     traceId: parent.traceId,
@@ -149,11 +141,7 @@ function rawDataToggleNode(
   };
 }
 
-function promptCompletionChildren(
-  leaf: TreeNode,
-  childDepth = 0,
-  cols?: number,
-): TreeNode[] {
+function promptCompletionChildren(leaf: TreeNode, childDepth = 0, cols?: number): TreeNode[] {
   const convoLines = formatConversation(assembleTranscript(leaf.event!));
   const available = availableWidth(childDepth, cols);
   const convoNodes: TreeNode[] = [];
@@ -176,14 +164,8 @@ function promptCompletionChildren(
 // recursively when its tool execution is expanded.
 //
 // Exported so search.ts walks the same rows the renderer shows.
-export function llmCallSpanChildren(
-  span: TreeNode,
-  childDepth = 0,
-  cols?: number,
-): TreeNode[] {
-  const pcLeaves = span.children.filter(
-    (c) => c.event?.data.type === "promptCompletion",
-  );
+export function llmCallSpanChildren(span: TreeNode, childDepth = 0, cols?: number): TreeNode[] {
+  const pcLeaves = span.children.filter((c) => c.event?.data.type === "promptCompletion");
   // No promptCompletion under this span (e.g. the call errored before a
   // response). Fall back to the raw children so nothing is hidden.
   if (pcLeaves.length === 0) return span.children;
@@ -191,9 +173,7 @@ export function llmCallSpanChildren(
   // Under an llmCall span the only child SPANS are tool executions, so
   // match on nodeKind (robust to how the span happened to be labeled).
   const toolExecs = span.children.filter((c) => c.nodeKind === "span");
-  const others = span.children.filter(
-    (c) => !pcLeaves.includes(c) && !toolExecs.includes(c),
-  );
+  const others = span.children.filter((c) => !pcLeaves.includes(c) && !toolExecs.includes(c));
 
   const last = pcLeaves[pcLeaves.length - 1];
   const transcript = assembleTranscript(last.event!);
@@ -244,10 +224,7 @@ export function wrapLine(text: string, width: number): string[] {
 // Pretty-print the leaf event payload and turn it into one synthetic
 // TreeNode per line, so the visible-rows pipeline can fold them into
 // the same scroll/cursor model used for real tree rows.
-function jsonLineChildren(
-  parent: TreeNode,
-  envelope: NonNullable<TreeNode["event"]>,
-): TreeNode[] {
+function jsonLineChildren(parent: TreeNode, envelope: NonNullable<TreeNode["event"]>): TreeNode[] {
   const text = JSON.stringify(envelope, null, 2);
   const lines = text.split("\n");
   return lines.map((line, i) => ({
@@ -261,18 +238,11 @@ function jsonLineChildren(
   }));
 }
 
-export function renderViewerLines(
-  state: ViewerState,
-  viewport: Viewport,
-): string[] {
+export function renderViewerLines(state: ViewerState, viewport: Viewport): string[] {
   const rows = flattenVisibleRows(state);
   const slice = rows.slice(state.scrollTop, state.scrollTop + viewport.rows);
   return slice.map((row) =>
-    renderRowText(
-      row,
-      state.cursorId === row.node.id,
-      state.expanded.has(row.node.id),
-    ),
+    renderRowText(row, state.cursorId === row.node.id, state.expanded.has(row.node.id)),
   );
 }
 
@@ -287,9 +257,7 @@ export function renderRowText(
   if (row.node.nodeKind === "jsonLine" || row.node.nodeKind === "convoLine") {
     // No glyph; the raw text line *is* the summary. Highlight
     // matches per the active search.
-    const text = opts.query
-      ? highlightInline(row.node.summary, opts.query)
-      : row.node.summary;
+    const text = opts.query ? highlightInline(row.node.summary, opts.query) : row.node.summary;
     return `${marker}${indent}${text}`;
   }
   const glyph = chooseGlyph(row.node, isExpanded);
@@ -303,9 +271,7 @@ export function renderRowText(
       : row.node.nodeKind === "trace"
         ? summarizeTraceStyled(row.node, t)
         : row.node.summary;
-  const withHighlight = opts.query
-    ? highlightInline(styledSummary, opts.query)
-    : styledSummary;
+  const withHighlight = opts.query ? highlightInline(styledSummary, opts.query) : styledSummary;
   // Over-long lines are clipped centrally by the TUI renderer; no
   // need to slice here.
   return `${marker}${indent}${glyph} ${withHighlight}`;

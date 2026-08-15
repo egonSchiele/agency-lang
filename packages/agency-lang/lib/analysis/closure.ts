@@ -3,7 +3,11 @@ import path from "path";
 
 import { buildSync } from "esbuild";
 
-import { agencyImportTargets, nonAgencyLocalImportTargets, resolveAgencyImportPath } from "@/importPaths.js";
+import {
+  agencyImportTargets,
+  nonAgencyLocalImportTargets,
+  resolveAgencyImportPath,
+} from "@/importPaths.js";
 import { parseAgency } from "@/parser.js";
 import type { AgencyProgram } from "@/types.js";
 
@@ -85,7 +89,8 @@ export function agentClosure(entryFile: string): { baseDir: string; files: strin
   const agencyFiles = parsedFiles.map((parsed) => parsed.absoluteFile);
   const interopEntries = parsedFiles.flatMap((parsed) =>
     nonAgencyLocalImportTargets(parsed.program).map((specifier) =>
-      resolveInteropEntry(path.dirname(parsed.absoluteFile), specifier)),
+      resolveInteropEntry(path.dirname(parsed.absoluteFile), specifier),
+    ),
   );
   const interopFiles = interopEntries.flatMap((interopEntry) => transitiveTsFiles(interopEntry));
 
@@ -100,7 +105,7 @@ function resolveInteropEntry(fromDir: string, specifier: string): string {
   if (fs.existsSync(asWritten)) return asWritten;
   const asTs = asWritten.replace(/\.js$/, ".ts");
   if (fs.existsSync(asTs)) return asTs;
-  return asWritten;   // let esbuild produce the resolution error, which names the importer
+  return asWritten; // let esbuild produce the resolution error, which names the importer
 }
 
 /** The transitive local file set of one TS/JS entry, from esbuild's metafile.

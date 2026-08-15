@@ -4,8 +4,15 @@ import { substituteTask, tokenizeCommand } from "./commandLine.js";
 
 describe("tokenizeCommand", () => {
   it("splits on whitespace and honors single and double quotes", () => {
-    expect(tokenizeCommand(`agency agent --policy approve-all -p -- {task}`))
-      .toEqual(["agency", "agent", "--policy", "approve-all", "-p", "--", "{task}"]);
+    expect(tokenizeCommand(`agency agent --policy approve-all -p -- {task}`)).toEqual([
+      "agency",
+      "agent",
+      "--policy",
+      "approve-all",
+      "-p",
+      "--",
+      "{task}",
+    ]);
     expect(tokenizeCommand(`run "a b" 'c d' e`)).toEqual(["run", "a b", "c d", "e"]);
   });
 
@@ -28,8 +35,11 @@ describe("tokenizeCommand", () => {
 
 describe("substituteTask", () => {
   it("replaces every occurrence, inside tokens too", () => {
-    expect(substituteTask(["-p", "{task}", "--again={task}"], "do it"))
-      .toEqual(["-p", "do it", "--again=do it"]);
+    expect(substituteTask(["-p", "{task}", "--again={task}"], "do it")).toEqual([
+      "-p",
+      "do it",
+      "--again=do it",
+    ]);
   });
 
   it("serializes an object task as JSON", () => {

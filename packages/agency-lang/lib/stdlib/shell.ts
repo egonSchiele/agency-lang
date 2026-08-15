@@ -2,28 +2,12 @@ import process from "process";
 import fs from "fs/promises";
 import { constants as fsConstants } from "fs";
 import path from "path";
-import {
-  anyChar,
-  capture,
-  char,
-  many,
-  map,
-  noneOf,
-  or,
-  Parser,
-  sepBy,
-  seqC,
-  str,
-} from "tarsec";
+import { anyChar, capture, char, many, map, noneOf, or, Parser, sepBy, seqC, str } from "tarsec";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
-import {
-  abortableSpawn,
-  AbortableSpawnOptions,
-  SpawnResult,
-} from "./abortable.js";
+import { abortableSpawn, AbortableSpawnOptions, SpawnResult } from "./abortable.js";
 import { checkAllowBlockList } from "./allowBlockList.js";
 import { assertContained } from "./assertContained.js";
 import { resolveDir } from "./resolveDir.js";
@@ -76,10 +60,7 @@ function rejectCorruptedCwd(cwd: string): void {
   );
 }
 
-async function resolveSpawnCwd(
-  cwd: string,
-  allowedPaths: string[],
-): Promise<string> {
+async function resolveSpawnCwd(cwd: string, allowedPaths: string[]): Promise<string> {
   if (!cwd) return "";
   rejectCorruptedCwd(cwd);
   const resolved = await resolveDir(cwd, allowedPaths);
@@ -225,7 +206,11 @@ async function bashImpl(
   // See `execImpl` for the cwd-resolution rationale.
   const cwdResolved = await resolveSpawnCwd(cwd, options?.allowedPaths ?? []);
   const signal = ctx.getAbortSignal(stack);
-  return abortableSpawn("sh", ["-c", command], buildSpawnOptions(cwdResolved, timeout, stdin, signal));
+  return abortableSpawn(
+    "sh",
+    ["-c", command],
+    buildSpawnOptions(cwdResolved, timeout, stdin, signal),
+  );
 }
 
 /** Deprecated context-injected wrapper kept during the ALS migration;
@@ -349,14 +334,7 @@ export type GrepMatch = {
   text: string;
 };
 
-const SKIP_DIRS = new Set([
-  "node_modules",
-  ".git",
-  "dist",
-  "build",
-  ".next",
-  ".cache",
-]);
+const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "build", ".next", ".cache"]);
 
 type Visitor = (fullPath: string, stat: Awaited<ReturnType<typeof fs.lstat>>) => Promise<boolean>;
 
@@ -456,9 +434,7 @@ function globToRegExp(glob: string): RegExp {
     if (c === "{") {
       depth++;
       if (depth > 1) {
-        throw new Error(
-          `invalid glob pattern: nested braces are not supported in ${glob}`,
-        );
+        throw new Error(`invalid glob pattern: nested braces are not supported in ${glob}`);
       }
     } else if (c === "}") {
       depth--;
@@ -486,16 +462,10 @@ const doubleStar: Parser<string> = map(or(str("**/"), str("**")), () => ".*");
 const singleStar: Parser<string> = map(char("*"), () => "[^/]*");
 const questionMark: Parser<string> = map(char("?"), () => "[^/]");
 
-const braceAlt: Parser<string> = map(many(noneOf(",}")), (chars: string[]) =>
-  chars.join(""),
-);
+const braceAlt: Parser<string> = map(many(noneOf(",}")), (chars: string[]) => chars.join(""));
 
 const braceGroup: Parser<string> = map(
-  seqC(
-    char("{"),
-    capture(sepBy(char(","), braceAlt), "alts"),
-    char("}"),
-  ),
+  seqC(char("{"), capture(sepBy(char(","), braceAlt), "alts"), char("}")),
   ({ alts }) => "(?:" + alts.map(escapeRegex).join("|") + ")",
 );
 
@@ -509,9 +479,7 @@ const globElement: Parser<string> = or(
   literalChar,
 );
 
-const globParser: Parser<string> = map(many(globElement), (parts: string[]) =>
-  parts.join(""),
-);
+const globParser: Parser<string> = map(many(globElement), (parts: string[]) => parts.join(""));
 
 export type StatInfo = {
   exists: boolean;
@@ -603,9 +571,7 @@ export async function _which(command: string): Promise<string> {
   const pathEnv = process.env.PATH ?? "";
   const dirs = pathEnv.split(path.delimiter).filter((d) => d.length > 0);
   const isWindows = process.platform === "win32";
-  const extensions = isWindows
-    ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";")
-    : [""];
+  const extensions = isWindows ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";") : [""];
   for (const dir of dirs) {
     for (const ext of extensions) {
       const candidate = path.resolve(dir, command + ext);

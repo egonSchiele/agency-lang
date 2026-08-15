@@ -4,10 +4,7 @@ import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { discoverOptimizeTargets, type OptimizeTarget, type OptimizeTargetSet } from "./targets.js";
-import {
-  OptimizeSourceMutator,
-  type OptimizeMutationOperation,
-} from "./sourceMutator.js";
+import { OptimizeSourceMutator, type OptimizeMutationOperation } from "./sourceMutator.js";
 
 const tempDirs: string[] = [];
 
@@ -113,7 +110,7 @@ const validOperation: OptimizeMutationOperation = {
   target: "foo.agency:bar:prompt",
   kind: "variable",
   op: "replaceInitializer",
-  value: "\"new prompt\"",
+  value: '"new prompt"',
 };
 
 describe("OptimizeSourceMutator operation validation", () => {
@@ -152,9 +149,7 @@ describe("OptimizeSourceMutator operation validation", () => {
       [{ ...validOperation, target: "foo.agency:ResultType" }],
       makeTargetSet([typeTarget]),
     );
-    expect(diagnostics).toMatchObject([
-      { code: "kind-mismatch", target: "foo.agency:ResultType" },
-    ]);
+    expect(diagnostics).toMatchObject([{ code: "kind-mismatch", target: "foo.agency:ResultType" }]);
   });
 
   it("rejects unsupported operations for the target kind", () => {
@@ -162,7 +157,7 @@ describe("OptimizeSourceMutator operation validation", () => {
       target: "foo.agency:bar:prompt",
       kind: "variable",
       op: "replaceTypeDefinition",
-      value: "\"new prompt\"",
+      value: '"new prompt"',
     } as unknown as OptimizeMutationOperation;
     expect(previewDiagnostics([operation])).toMatchObject([
       { code: "unsupported-operation", target: "foo.agency:bar:prompt" },
@@ -172,7 +167,7 @@ describe("OptimizeSourceMutator operation validation", () => {
   it("rejects duplicate operations for the same target", () => {
     const diagnostics = previewDiagnostics([
       validOperation,
-      { ...validOperation, value: "\"other prompt\"" },
+      { ...validOperation, value: '"other prompt"' },
     ]);
     expect(diagnostics).toMatchObject([
       { code: "duplicate-target-operation", target: "foo.agency:bar:prompt" },
@@ -180,9 +175,7 @@ describe("OptimizeSourceMutator operation validation", () => {
   });
 
   it("rejects stale expected values", () => {
-    const diagnostics = previewDiagnostics([
-      { ...validOperation, expected: "stale value" },
-    ]);
+    const diagnostics = previewDiagnostics([{ ...validOperation, expected: "stale value" }]);
     expect(diagnostics).toMatchObject([
       { code: "expected-mismatch", target: "foo.agency:bar:prompt" },
     ]);
@@ -223,7 +216,7 @@ describe("OptimizeSourceMutator replacement value validation", () => {
         target: "foo.agency:global:greeting",
         kind: "variable",
         op: "replaceInitializer",
-        value: "\"welcome, ${name}!\"",
+        value: '"welcome, ${name}!"',
       },
     ]);
     expect(diagnostics).toEqual([]);
@@ -235,7 +228,7 @@ describe("OptimizeSourceMutator replacement value validation", () => {
         target: "foo.agency:global:greeting",
         kind: "variable",
         op: "replaceInitializer",
-        value: "\"welcome!\"",
+        value: '"welcome!"',
       },
     ]);
     expect(diagnostics).toMatchObject([
@@ -244,9 +237,7 @@ describe("OptimizeSourceMutator replacement value validation", () => {
   });
 
   it("rejects replacement values that are not valid Agency expressions", () => {
-    const diagnostics = previewDiagnostics([
-      { ...validOperation, value: "\"unterminated" },
-    ]);
+    const diagnostics = previewDiagnostics([{ ...validOperation, value: '"unterminated' }]);
     expect(diagnostics).toMatchObject([
       { code: "invalid-replacement-syntax", target: "foo.agency:bar:prompt" },
     ]);
@@ -269,18 +260,14 @@ describe("OptimizeSourceMutator replacement value validation", () => {
   });
 
   it("still rejects unquoted text with embedded quotes that cannot be wrapped cleanly", () => {
-    const diagnostics = previewDiagnostics([
-      { ...validOperation, value: 'Say "hi" to them' },
-    ]);
+    const diagnostics = previewDiagnostics([{ ...validOperation, value: 'Say "hi" to them' }]);
     expect(diagnostics).toMatchObject([
       { code: "invalid-replacement-syntax", target: "foo.agency:bar:prompt" },
     ]);
   });
 
   it("rejects replacement values with trailing content after the expression", () => {
-    const diagnostics = previewDiagnostics([
-      { ...validOperation, value: "\"ok\" trailing" },
-    ]);
+    const diagnostics = previewDiagnostics([{ ...validOperation, value: '"ok" trailing' }]);
     expect(diagnostics).toMatchObject([
       { code: "invalid-replacement-syntax", target: "foo.agency:bar:prompt" },
     ]);
@@ -295,7 +282,7 @@ describe("OptimizeSourceMutator replacement value validation", () => {
 
   it("accepts multiline string replacements", () => {
     const diagnostics = previewDiagnostics([
-      { ...validOperation, value: "\"\"\"\n  a longer prompt\n  \"\"\"" },
+      { ...validOperation, value: '"""\n  a longer prompt\n  """' },
     ]);
     expect(diagnostics).toEqual([]);
   });
@@ -311,14 +298,14 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "foo.agency:bar:prompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: "\"new prompt\"",
+        value: '"new prompt"',
         rationale: "clearer instruction",
       },
     ]);
 
     expect(preview.diagnostics).toEqual([]);
-    expect(preview.files["foo.agency"]).toContain("optimize const prompt = \"new prompt\"");
-    expect(preview.files["foo.agency"]).toContain("optimize static const systemPrompt = \"old\"");
+    expect(preview.files["foo.agency"]).toContain('optimize const prompt = "new prompt"');
+    expect(preview.files["foo.agency"]).toContain('optimize static const systemPrompt = "old"');
     expect(preview.files["foo.agency"]).toContain("llm(prompt)");
     expect(preview.files["helpers/prompts.agency"]).toBe(HELPER_SOURCE);
     expect(preview.changes).toEqual([
@@ -342,13 +329,15 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "foo.agency:global:systemPrompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: "\"brand new\"",
+        value: '"brand new"',
       },
     ]);
 
     expect(preview.diagnostics).toEqual([]);
-    expect(preview.files["foo.agency"]).toContain("optimize static const systemPrompt = \"brand new\"");
-    expect(preview.files["foo.agency"]).toContain("optimize const prompt = \"xyz\"");
+    expect(preview.files["foo.agency"]).toContain(
+      'optimize static const systemPrompt = "brand new"',
+    );
+    expect(preview.files["foo.agency"]).toContain('optimize const prompt = "xyz"');
   });
 
   it("produces an uncolored human-readable diff naming the changed file", () => {
@@ -360,7 +349,7 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "foo.agency:bar:prompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: "\"new prompt\"",
+        value: '"new prompt"',
       },
     ]);
 
@@ -380,7 +369,7 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "foo.agency:bar:prompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: "\"new prompt\"",
+        value: '"new prompt"',
       },
     ]);
 
@@ -393,8 +382,12 @@ describe("OptimizeSourceMutator.preview", () => {
       (target) => target.id === "helpers/prompts.agency:global:importedPrompt",
     );
     expect(unchangedTarget?.value).toBe("imported");
-    expect(updated.files["helpers/prompts.agency"]).toEqual(targetSet.files["helpers/prompts.agency"]);
-    expect(updated.targets.map((target) => target.id)).toEqual(targetSet.targets.map((target) => target.id));
+    expect(updated.files["helpers/prompts.agency"]).toEqual(
+      targetSet.files["helpers/prompts.agency"],
+    );
+    expect(updated.targets.map((target) => target.id)).toEqual(
+      targetSet.targets.map((target) => target.id),
+    );
   });
 
   it("applies two operations on different targets in the same file", () => {
@@ -406,19 +399,21 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "foo.agency:bar:prompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: "\"new prompt\"",
+        value: '"new prompt"',
       },
       {
         target: "foo.agency:global:systemPrompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: "\"new system\"",
+        value: '"new system"',
       },
     ]);
 
     expect(preview.diagnostics).toEqual([]);
-    expect(preview.files["foo.agency"]).toContain("optimize const prompt = \"new prompt\"");
-    expect(preview.files["foo.agency"]).toContain("optimize static const systemPrompt = \"new system\"");
+    expect(preview.files["foo.agency"]).toContain('optimize const prompt = "new prompt"');
+    expect(preview.files["foo.agency"]).toContain(
+      'optimize static const systemPrompt = "new system"',
+    );
     expect(preview.changes).toHaveLength(2);
     expect(preview.targetSet.targets.map((target) => target.value).sort()).toEqual([
       "imported",
@@ -429,7 +424,11 @@ describe("OptimizeSourceMutator.preview", () => {
 
   it("replaces a multiline string target with a single-line string", () => {
     const dir = makeTempDir();
-    const entry = writeAgency(dir, "multi.agency", "optimize const big = \"\"\"\nline one\nline two\n\"\"\"\n\nnode main() {\n  return big\n}\n");
+    const entry = writeAgency(
+      dir,
+      "multi.agency",
+      'optimize const big = """\nline one\nline two\n"""\n\nnode main() {\n  return big\n}\n',
+    );
     const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
     expect(targetSet.targets[0].valueKind).toBe("multilineString");
     const mutator = new OptimizeSourceMutator({ targetSet });
@@ -439,13 +438,15 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "multi.agency:global:big",
         kind: "variable",
         op: "replaceInitializer",
-        value: "\"now short\"",
+        value: '"now short"',
       },
     ]);
 
     expect(preview.diagnostics).toEqual([]);
-    expect(preview.files["multi.agency"]).toContain("optimize const big = \"now short\"");
-    const updated = preview.targetSet.targets.find((target) => target.id === "multi.agency:global:big");
+    expect(preview.files["multi.agency"]).toContain('optimize const big = "now short"');
+    const updated = preview.targetSet.targets.find(
+      (target) => target.id === "multi.agency:global:big",
+    );
     expect(updated?.valueKind).toBe("string");
     expect(updated?.value).toBe("now short");
   });
@@ -459,19 +460,21 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "foo.agency:bar:prompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: "\"new prompt\"",
+        value: '"new prompt"',
       },
       {
         target: "helpers/prompts.agency:global:importedPrompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: "\"refreshed\"",
+        value: '"refreshed"',
       },
     ]);
 
     expect(preview.diagnostics).toEqual([]);
-    expect(preview.files["foo.agency"]).toContain("\"new prompt\"");
-    expect(preview.files["helpers/prompts.agency"]).toContain("optimize const importedPrompt = \"refreshed\"");
+    expect(preview.files["foo.agency"]).toContain('"new prompt"');
+    expect(preview.files["helpers/prompts.agency"]).toContain(
+      'optimize const importedPrompt = "refreshed"',
+    );
     expect(preview.changes).toHaveLength(2);
   });
 
@@ -484,13 +487,13 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "foo.agency:bar:prompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: "\"new prompt\"",
+        value: '"new prompt"',
       },
       {
         target: "foo.agency:bar:missing",
         kind: "variable",
         op: "replaceInitializer",
-        value: "\"whatever\"",
+        value: '"whatever"',
       },
     ]);
 
@@ -520,7 +523,7 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "foo.agency:bar:prompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: "\"new prompt\"",
+        value: '"new prompt"',
       },
     ]);
 
@@ -537,12 +540,12 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "foo.agency:global:systemPrompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: "\"\"\"\nfirst line\nsecond line\n\"\"\"",
+        value: '"""\nfirst line\nsecond line\n"""',
       },
     ]);
 
     expect(preview.diagnostics).toEqual([]);
-    expect(preview.files["foo.agency"]).toContain("\"\"\"");
+    expect(preview.files["foo.agency"]).toContain('"""');
     expect(preview.files["foo.agency"]).toContain("first line");
     const changed = preview.targetSet.targets.find(
       (target) => target.id === "foo.agency:global:systemPrompt",
@@ -555,19 +558,19 @@ describe("OptimizeSourceMutator.mutate", () => {
   it("infers replaceInitializer for variable targets", () => {
     const mutator = new OptimizeSourceMutator({ targetSet: discoverFixture() });
 
-    const preview = mutator.mutate("foo.agency:bar:prompt", "\"new\"");
+    const preview = mutator.mutate("foo.agency:bar:prompt", '"new"');
 
     expect(preview.diagnostics).toEqual([]);
     expect(preview.changes).toMatchObject([
       { target: "foo.agency:bar:prompt", op: "replaceInitializer", newValue: "new" },
     ]);
-    expect(preview.files["foo.agency"]).toContain("optimize const prompt = \"new\"");
+    expect(preview.files["foo.agency"]).toContain('optimize const prompt = "new"');
   });
 
   it("rejects unknown targets", () => {
     const mutator = new OptimizeSourceMutator({ targetSet: discoverFixture() });
 
-    const preview = mutator.mutate("foo.agency:bar:missing", "\"new\"");
+    const preview = mutator.mutate("foo.agency:bar:missing", '"new"');
 
     expect(preview.diagnostics).toMatchObject([
       { code: "unknown-target", target: "foo.agency:bar:missing" },
@@ -598,19 +601,23 @@ describe("OptimizeSourceMutator.mutate", () => {
 describe("OptimizeSourceMutator.apply", () => {
   it("writes the full candidate file set under a destination directory", () => {
     const mutator = new OptimizeSourceMutator({ targetSet: discoverFixture() });
-    const preview = mutator.mutate("foo.agency:bar:prompt", "\"new prompt\"");
+    const preview = mutator.mutate("foo.agency:bar:prompt", '"new prompt"');
     const destination = path.join(makeTempDir(), "agent");
 
     mutator.apply(preview, destination);
 
-    expect(fs.readFileSync(path.join(destination, "foo.agency"), "utf8")).toBe(preview.files["foo.agency"]);
-    expect(fs.readFileSync(path.join(destination, "helpers/prompts.agency"), "utf8")).toBe(HELPER_SOURCE);
+    expect(fs.readFileSync(path.join(destination, "foo.agency"), "utf8")).toBe(
+      preview.files["foo.agency"],
+    );
+    expect(fs.readFileSync(path.join(destination, "helpers/prompts.agency"), "utf8")).toBe(
+      HELPER_SOURCE,
+    );
   });
 
   it("writes changed files back to their source paths when no destination is given", () => {
     const targetSet = discoverFixture();
     const mutator = new OptimizeSourceMutator({ targetSet });
-    const preview = mutator.mutate("foo.agency:bar:prompt", "\"new prompt\"");
+    const preview = mutator.mutate("foo.agency:bar:prompt", '"new prompt"');
     const helperPath = targetSet.files["helpers/prompts.agency"].absoluteFile;
     const helperStatBefore = fs.statSync(helperPath);
 
@@ -624,7 +631,7 @@ describe("OptimizeSourceMutator.apply", () => {
 
   it("refuses to apply a preview with diagnostics", () => {
     const mutator = new OptimizeSourceMutator({ targetSet: discoverFixture() });
-    const preview = mutator.mutate("foo.agency:bar:missing", "\"new\"");
+    const preview = mutator.mutate("foo.agency:bar:missing", '"new"');
     const destination = path.join(makeTempDir(), "agent");
 
     expect(() => mutator.apply(preview, destination)).toThrow(/diagnostics/);
@@ -640,31 +647,41 @@ describe("typed target shape checking", () => {
   }
 
   it("accepts in-shape and rejects out-of-shape union values", () => {
-    const set = setup(`type Status = "pass" | "fail"\noptimize const status: Status = "pass"\nnode main() {}\n`);
+    const set = setup(
+      `type Status = "pass" | "fail"\noptimize const status: Status = "pass"\nnode main() {}\n`,
+    );
     const mutator = new OptimizeSourceMutator({ targetSet: set });
 
     const ok = mutator.mutate("a.agency:global:status", `"fail"`);
     expect(ok.diagnostics).toEqual([]);
     expect(ok.files["a.agency"]).toContain(`"fail"`);
 
-    expect(mutator.mutate("a.agency:global:status", `"exploded"`).diagnostics[0]?.code).toBe("type-mismatch");
+    expect(mutator.mutate("a.agency:global:status", `"exploded"`).diagnostics[0]?.code).toBe(
+      "type-mismatch",
+    );
   });
 
   it("recovers an unquoted bare-word proposal for a string-y constraint", () => {
-    const set = setup(`type Status = "pass" | "fail"\noptimize const status: Status = "pass"\nnode main() {}\n`);
+    const set = setup(
+      `type Status = "pass" | "fail"\noptimize const status: Status = "pass"\nnode main() {}\n`,
+    );
     const mutator = new OptimizeSourceMutator({ targetSet: set });
 
     expect(mutator.mutate("a.agency:global:status", `fail`).diagnostics).toEqual([]);
   });
 
   it("handles boolean and nullable-number targets", () => {
-    const set = setup(`optimize const enabled: boolean = false\noptimize const n: number | null = 5\nnode main() {}\n`);
+    const set = setup(
+      `optimize const enabled: boolean = false\noptimize const n: number | null = 5\nnode main() {}\n`,
+    );
     const mutator = new OptimizeSourceMutator({ targetSet: set });
 
     expect(mutator.mutate("a.agency:global:enabled", `true`).diagnostics).toEqual([]);
     expect(mutator.mutate("a.agency:global:n", `null`).diagnostics).toEqual([]);
     expect(mutator.mutate("a.agency:global:n", `6`).diagnostics).toEqual([]);
-    expect(mutator.mutate("a.agency:global:enabled", `"yes"`).diagnostics[0]?.code).toBe("type-mismatch");
+    expect(mutator.mutate("a.agency:global:enabled", `"yes"`).diagnostics[0]?.code).toBe(
+      "type-mismatch",
+    );
     expect(mutator.mutate("a.agency:global:n", `"six"`).diagnostics[0]?.code).toBe("type-mismatch");
   });
 
@@ -676,12 +693,18 @@ node main() {}
     const mutator = new OptimizeSourceMutator({ targetSet: set });
 
     expect(mutator.mutate("a.agency:global:p", `{ name: "b" }`).diagnostics).toEqual([]);
-    expect(mutator.mutate("a.agency:global:p", `{ name: 5 }`).diagnostics[0]?.code).toBe("type-mismatch");
-    expect(mutator.mutate("a.agency:global:p", `{ name: "b", zzz: 1 }`).diagnostics[0]?.code).toBe("type-mismatch");
+    expect(mutator.mutate("a.agency:global:p", `{ name: 5 }`).diagnostics[0]?.code).toBe(
+      "type-mismatch",
+    );
+    expect(mutator.mutate("a.agency:global:p", `{ name: "b", zzz: 1 }`).diagnostics[0]?.code).toBe(
+      "type-mismatch",
+    );
   });
 
   it("rejects interpolated strings in typed values with an honest message", () => {
-    const set = setup(`type Status = "pass" | "fail"\noptimize const status: Status = "pass"\nnode main() {}\n`);
+    const set = setup(
+      `type Status = "pass" | "fail"\noptimize const status: Status = "pass"\nnode main() {}\n`,
+    );
     const mutator = new OptimizeSourceMutator({ targetSet: set });
 
     const diagnostic = mutator.mutate("a.agency:global:status", `"pass \${x}"`).diagnostics[0];
@@ -694,11 +717,15 @@ node main() {}
     const mutator = new OptimizeSourceMutator({ targetSet: set });
 
     expect(mutator.mutate("a.agency:global:x", `"anything"`).diagnostics).toEqual([]);
-    expect(mutator.mutate("a.agency:global:x", `{{{`).diagnostics[0]?.code).toBe("invalid-replacement-syntax");
+    expect(mutator.mutate("a.agency:global:x", `{{{`).diagnostics[0]?.code).toBe(
+      "invalid-replacement-syntax",
+    );
   });
 
   it("writes a typed replacement into the rendered candidate", () => {
-    const set = setup(`optimize const enabled: boolean = false\nnode main() {\n  return enabled\n}\n`);
+    const set = setup(
+      `optimize const enabled: boolean = false\nnode main() {\n  return enabled\n}\n`,
+    );
     const mutator = new OptimizeSourceMutator({ targetSet: set });
 
     const preview = mutator.mutate("a.agency:global:enabled", `true`);
@@ -717,7 +744,9 @@ describe("review fixes: checked value must equal written value", () => {
   }
 
   it("rejects an unquoted multi-word non-member (quote-recovery must probe the recovered value)", () => {
-    const set = setup(`type Status = "pass" | "fail"\noptimize const status: Status = "pass"\nnode main() {}\n`);
+    const set = setup(
+      `type Status = "pass" | "fail"\noptimize const status: Status = "pass"\nnode main() {}\n`,
+    );
     const mutator = new OptimizeSourceMutator({ targetSet: set });
 
     // Unquoted multi-word: parses partially ("totally" + rest), recovery wraps
@@ -730,7 +759,9 @@ describe("review fixes: checked value must equal written value", () => {
   });
 
   it("accepts an unquoted multi-word proposal that IS a union member (mirror case)", () => {
-    const set = setup(`type Status = "pass" | "totally bogus"\noptimize const status: Status = "pass"\nnode main() {}\n`);
+    const set = setup(
+      `type Status = "pass" | "totally bogus"\noptimize const status: Status = "pass"\nnode main() {}\n`,
+    );
     const mutator = new OptimizeSourceMutator({ targetSet: set });
 
     const preview = mutator.mutate("a.agency:global:status", `totally bogus`);
@@ -746,8 +777,12 @@ node main() {}
 `);
     const mutator = new OptimizeSourceMutator({ targetSet: set });
 
-    expect(mutator.mutate("a.agency:global:nums", `[x, y]`).diagnostics[0]?.code).toBe("unsupported-value-domain");
-    expect(mutator.mutate("a.agency:global:p", `{ n: someVar }`).diagnostics[0]?.code).toBe("unsupported-value-domain");
+    expect(mutator.mutate("a.agency:global:nums", `[x, y]`).diagnostics[0]?.code).toBe(
+      "unsupported-value-domain",
+    );
+    expect(mutator.mutate("a.agency:global:p", `{ n: someVar }`).diagnostics[0]?.code).toBe(
+      "unsupported-value-domain",
+    );
     // Nested literals still pass.
     expect(mutator.mutate("a.agency:global:nums", `[3, 4]`).diagnostics).toEqual([]);
     expect(mutator.mutate("a.agency:global:p", `{ n: 2 }`).diagnostics).toEqual([]);
@@ -765,7 +800,10 @@ node main() {}
 
     // Iter 2 against the refreshed set: a number proposal must still be
     // accepted — the target must not have silently become a freeform string.
-    const second = new OptimizeSourceMutator({ targetSet: first.targetSet }).mutate("a.agency:global:x", `7`);
+    const second = new OptimizeSourceMutator({ targetSet: first.targetSet }).mutate(
+      "a.agency:global:x",
+      `7`,
+    );
     expect(second.diagnostics).toEqual([]);
   });
 });

@@ -40,9 +40,13 @@ describe("withThreadEndHooksEvents", () => {
   it("posts the end event and closes the span even when fn throws, propagating the error", async () => {
     const client = recordingClient();
     await expect(
-      withThreadEndHooksEvents(client as any, { ...PAYLOAD, threadId: "t2", eagerSummarize: false }, async () => {
-        throw new Error("hook boom");
-      }),
+      withThreadEndHooksEvents(
+        client as any,
+        { ...PAYLOAD, threadId: "t2", eagerSummarize: false },
+        async () => {
+          throw new Error("hook boom");
+        },
+      ),
     ).rejects.toThrow("hook boom");
     expect(client.calls).toEqual([
       "startSpan:threadEndHooks",

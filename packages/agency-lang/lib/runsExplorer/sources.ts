@@ -7,9 +7,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
-export type Source =
-  | { kind: "runDir"; dir: string }
-  | { kind: "statelog"; file: string };
+export type Source = { kind: "runDir"; dir: string } | { kind: "statelog"; file: string };
 
 export type Discovery = {
   sources: Source[];
@@ -56,10 +54,17 @@ function routeFor(paths: string[], sources: Source[]): Discovery["route"] {
   return "explorer";
 }
 
-function classifyFile(resolved: string, rawPath: string, sources: Source[], errors: string[]): void {
+function classifyFile(
+  resolved: string,
+  rawPath: string,
+  sources: Source[],
+  errors: string[],
+): void {
   const sniff = sniffFirstLine(resolved);
   if (sniff.kind === "line-too-long") {
-    errors.push(`${rawPath}: first line exceeds ${MAX_SOURCE_SNIFF_LINE_BYTES} bytes — ${ACCEPTED_KINDS}`);
+    errors.push(
+      `${rawPath}: first line exceeds ${MAX_SOURCE_SNIFF_LINE_BYTES} bytes — ${ACCEPTED_KINDS}`,
+    );
     return;
   }
   if (sniff.kind === "empty") {
@@ -72,15 +77,23 @@ function classifyFile(resolved: string, rawPath: string, sources: Source[], erro
     sources.push({ kind: "statelog", file: resolved });
     return;
   }
-  errors.push(`${rawPath}: not statelog JSONL (first line is not an enveloped event) — ${ACCEPTED_KINDS}`);
+  errors.push(
+    `${rawPath}: not statelog JSONL (first line is not an enveloped event) — ${ACCEPTED_KINDS}`,
+  );
 }
 
-function classifyDirectory(resolved: string, rawPath: string, sources: Source[], errors: string[]): void {
+function classifyDirectory(
+  resolved: string,
+  rawPath: string,
+  sources: Source[],
+  errors: string[],
+): void {
   if (fs.existsSync(path.join(resolved, "summary.json"))) {
     sources.push({ kind: "runDir", dir: resolved });
     return;
   }
-  const childRuns = fs.readdirSync(resolved)
+  const childRuns = fs
+    .readdirSync(resolved)
     .map((child) => path.join(resolved, child))
     .filter((child) => fs.existsSync(path.join(child, "summary.json")));
   if (childRuns.length === 0) {
@@ -93,9 +106,7 @@ function classifyDirectory(resolved: string, rawPath: string, sources: Source[],
 }
 
 type FirstLineSniff =
-  | { kind: "line"; line: string }
-  | { kind: "empty" }
-  | { kind: "line-too-long" };
+  { kind: "line"; line: string } | { kind: "empty" } | { kind: "line-too-long" };
 
 /** Read chunks until the first complete nonblank line arrives, without
  *  ever loading the file. A "complete" line ends in a newline or EOF. */

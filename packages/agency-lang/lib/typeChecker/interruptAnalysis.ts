@@ -164,9 +164,7 @@ function collectFromBody(
     ]),
     calleeKeys: unique([
       ...facts.callees,
-      ...facts.calls.flatMap((call) =>
-        functionRefsInArgs(call.arguments, scope, ctx),
-      ),
+      ...facts.calls.flatMap((call) => functionRefsInArgs(call.arguments, scope, ctx)),
     ]),
   };
 }
@@ -325,10 +323,7 @@ function makeCalleeResolver(
  *  file they live in (always the enclosing function's file). `walkNodes`
  *  yields `WalkAncestor[]` (a union including `BlockArgument`), so the
  *  filter narrows by `type === "handleBlock"`. */
-function enclosingHandleBlocks(
-  ancestors: WalkAncestor[],
-  file: string,
-): TaggedHandler[] {
+function enclosingHandleBlocks(ancestors: WalkAncestor[], file: string): TaggedHandler[] {
   const out: TaggedHandler[] = [];
   for (const a of ancestors) {
     if (a.type === "handleBlock") {
@@ -377,11 +372,7 @@ export function checkUnhandledInterruptWarnings(
       // warning names the construct, not the internal impl.
       const displayName = called === "_guard" ? "guard" : called;
       ctx.errors.push(
-        diagnostic(
-          "unhandledInterrupts",
-          { fn: displayName, effects: kindList },
-          node.loc ?? null,
-        ),
+        diagnostic("unhandledInterrupts", { fn: displayName, effects: kindList }, node.loc ?? null),
       );
     }
   }
@@ -478,11 +469,7 @@ export function checkCallbackBodyInterrupts(
 
       const kindList = kinds.map((ik) => ik.effect).join(", ");
       ctx.errors.push(
-        diagnostic(
-          "interruptInCallback",
-          { hook: hookName, effects: kindList },
-          node.loc ?? null,
-        ),
+        diagnostic("interruptInCallback", { hook: hookName, effects: kindList }, node.loc ?? null),
       );
     }
   }

@@ -29,17 +29,13 @@ export function discoverAgencyFiles(fixtureDir: string): AgencyFile[] {
 
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
-      const relPath = relativePath
-        ? `${relativePath}/${entry.name}`
-        : entry.name;
+      const relPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
 
       if (entry.isDirectory()) {
         scanDirectory(fullPath, relPath);
       } else if (entry.isFile() && entry.name.endsWith(".agency")) {
         const baseName = entry.name.replace(".agency", "");
-        const nameWithoutExt = relativePath
-          ? `${relativePath}/${baseName}`
-          : baseName;
+        const nameWithoutExt = relativePath ? `${relativePath}/${baseName}` : baseName;
         files.push({ name: nameWithoutExt, filePath: fullPath });
       }
     }
@@ -54,10 +50,7 @@ export function discoverAgencyFiles(fixtureDir: string): AgencyFile[] {
  * (e.g. .mjs or .json) in a directory. Only returns pairs where both
  * files exist.
  */
-export function discoverFixturePairs(
-  fixtureDir: string,
-  companionExt: string,
-): FixturePair[] {
+export function discoverFixturePairs(fixtureDir: string, companionExt: string): FixturePair[] {
   const fixtures: FixturePair[] = [];
 
   for (const { name, filePath } of discoverAgencyFiles(fixtureDir)) {
@@ -82,9 +75,7 @@ export function discoverFixturePairs(
         );
       }
     } else {
-      console.warn(
-        `Warning: No corresponding ${companionExt} file for ${filePath}`,
-      );
+      console.warn(`Warning: No corresponding ${companionExt} file for ${filePath}`);
     }
   }
 

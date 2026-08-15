@@ -42,8 +42,7 @@ export type StatelogRequestOptions = {
 };
 
 export type StatelogRequestResult =
-  | { ok: true; value: unknown; status: number }
-  | { ok: false; failure: StatelogFailure };
+  { ok: true; value: unknown; status: number } | { ok: false; failure: StatelogFailure };
 
 export async function statelogRequest(
   options: StatelogRequestOptions,

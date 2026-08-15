@@ -19,10 +19,7 @@ import { CHECKPOINT_SCHEMA } from "./types.js";
  *   any shared state.
  * - Neither set: returns null (no file output; callback-only or disabled).
  */
-export function resolveTraceFilePath(
-  traceConfig: TraceConfig,
-  runId: string,
-): string | null {
+export function resolveTraceFilePath(traceConfig: TraceConfig, runId: string): string | null {
   if (traceConfig.traceFile) return traceConfig.traceFile;
   if (traceConfig.traceDir) return path.join(traceConfig.traceDir, `${runId}.agencytrace`);
   return null;
@@ -188,8 +185,6 @@ export class TraceWriter {
     }
   }
 
-
-
   static async create({
     runId,
     traceConfig,
@@ -218,12 +213,10 @@ export class TraceWriter {
       ? await scanExistingTraceFile(filePath)
       : { hasHeader: false, chunkHashes: new Set<string>() };
 
-    const writer = new TraceWriter(
-      runId,
-      traceConfig.program || "unknown.agency",
-      sinks,
-      { seenHashes: scan.chunkHashes, headerWritten: scan.hasHeader },
-    );
+    const writer = new TraceWriter(runId, traceConfig.program || "unknown.agency", sinks, {
+      seenHashes: scan.chunkHashes,
+      headerWritten: scan.hasHeader,
+    });
     await writer.writeHeader();
     return writer;
   }

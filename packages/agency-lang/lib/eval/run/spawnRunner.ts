@@ -153,16 +153,18 @@ export function runCommandInSpawn(args: {
     const costTail = makeStatelogCostTailer(args.statelogPath);
     const costCap = makeCostCapTracker(args.maxCostUsd);
     let billedTotal = 0;
-    intervals.push(setInterval(() => {
-      if (costCapped) return;
-      const total = costTail.poll();
-      const tripped = costCap.add(total - billedTotal);
-      billedTotal = total;
-      if (!tripped) return;
-      costCapped = true;
-      killTree("SIGTERM");
-      timers.push(setTimeout(() => killTree("SIGKILL"), KILL_GRACE_MS));
-    }, 1_000));
+    intervals.push(
+      setInterval(() => {
+        if (costCapped) return;
+        const total = costTail.poll();
+        const tripped = costCap.add(total - billedTotal);
+        billedTotal = total;
+        if (!tripped) return;
+        costCapped = true;
+        killTree("SIGTERM");
+        timers.push(setTimeout(() => killTree("SIGKILL"), KILL_GRACE_MS));
+      }, 1_000),
+    );
 
     // Deliberate divergence from the fork runner: the fork path FAILS the
     // run at the stdout limit (lib/runtime/ipc.ts settleWithLimitFailure),
@@ -187,16 +189,17 @@ export function runCommandInSpawn(args: {
       }
     });
 
-    timers.push(setTimeout(() => {
-      timedOut = true;
-      killTree("SIGTERM");
-      timers.push(setTimeout(() => killTree("SIGKILL"), KILL_GRACE_MS));
-    }, args.limits.wallClock));
+    timers.push(
+      setTimeout(() => {
+        timedOut = true;
+        killTree("SIGTERM");
+        timers.push(setTimeout(() => killTree("SIGKILL"), KILL_GRACE_MS));
+      }, args.limits.wallClock),
+    );
 
     child.on("error", (err: NodeJS.ErrnoException) => {
-      const detail = err.code === "ENOENT"
-        ? `command not found: ${JSON.stringify(args.argv[0])}`
-        : err.message;
+      const detail =
+        err.code === "ENOENT" ? `command not found: ${JSON.stringify(args.argv[0])}` : err.message;
       settle({ ok: false, errorMessage: detail });
     });
 

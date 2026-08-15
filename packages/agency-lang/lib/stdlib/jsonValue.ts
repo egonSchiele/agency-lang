@@ -10,7 +10,5 @@ export function _isJsonValue(value: unknown): ResultValue {
   if (check.ok) {
     return success(value);
   }
-  return failure(
-    check.path === "" ? check.reason : `${check.reason} at ${check.path}`,
-  );
+  return failure(check.path === "" ? check.reason : `${check.reason} at ${check.path}`);
 }

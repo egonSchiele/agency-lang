@@ -18,10 +18,7 @@ import type { AgencyConfig } from "../config.js";
  * `Array<string, number>` would throw a raw `TypeError` out of
  * `resolveType` and propagate up through the synthesizer.
  */
-function errorsFrom(
-  source: string,
-  config: AgencyConfig = {},
-): TypeCheckError[] {
+function errorsFrom(source: string, config: AgencyConfig = {}): TypeCheckError[] {
   const file = path.join(
     os.tmpdir(),
     `tc-genvalid-${Date.now()}-${Math.random().toString(36).slice(2)}.agency`,
@@ -31,8 +28,7 @@ function errorsFrom(
     const absPath = path.resolve(file);
     const symbolTable = SymbolTable.build(absPath, config);
     const parseResult = parseAgency(source, config);
-    if (!parseResult.success)
-      throw new Error("Parse failed: " + parseResult.message);
+    if (!parseResult.success) throw new Error("Parse failed: " + parseResult.message);
     const program = parseResult.result;
     const info = buildCompilationUnit(program, symbolTable, absPath, source);
     return typeCheck(program, config, info).errors;
@@ -51,9 +47,7 @@ node main() {
 `;
     const errs = errorsFrom(src);
     expect(errs.length).toBeGreaterThan(0);
-    expect(
-      errs.some((e) => /Array expects 1 type argument/.test(e.message)),
-    ).toBe(true);
+    expect(errs.some((e) => /Array expects 1 type argument/.test(e.message))).toBe(true);
   });
 
   it("flags Schema with the wrong arity", () => {
@@ -64,9 +58,7 @@ node main() {
 }
 `;
     const errs = errorsFrom(src);
-    expect(
-      errs.some((e) => /Schema expects 1 type argument/.test(e.message)),
-    ).toBe(true);
+    expect(errs.some((e) => /Schema expects 1 type argument/.test(e.message))).toBe(true);
   });
 
   it("flags Record with the wrong arity", () => {
@@ -77,9 +69,7 @@ node main() {
 }
 `;
     const errs = errorsFrom(src);
-    expect(
-      errs.some((e) => /Record expects 2 type arguments/.test(e.message)),
-    ).toBe(true);
+    expect(errs.some((e) => /Record expects 2 type arguments/.test(e.message))).toBe(true);
   });
 
   it("flags an unknown generic name", () => {
@@ -90,9 +80,7 @@ node main() {
 }
 `;
     const errs = errorsFrom(src);
-    expect(errs.some((e) => /Unknown generic type 'Ghost'/.test(e.message))).toBe(
-      true,
-    );
+    expect(errs.some((e) => /Unknown generic type 'Ghost'/.test(e.message))).toBe(true);
   });
 
   it("flags applying type args to a non-generic alias", () => {
@@ -105,9 +93,7 @@ node main() {
 }
 `;
     const errs = errorsFrom(src);
-    expect(
-      errs.some((e) => /Type 'Plain' is not a generic type/.test(e.message)),
-    ).toBe(true);
+    expect(errs.some((e) => /Type 'Plain' is not a generic type/.test(e.message))).toBe(true);
   });
 
   it("flags a missing required generic arg", () => {
@@ -120,9 +106,7 @@ node main() {
 }
 `;
     const errs = errorsFrom(src);
-    expect(
-      errs.some((e) => /Pair requires at least 2 type arguments/.test(e.message)),
-    ).toBe(true);
+    expect(errs.some((e) => /Pair requires at least 2 type arguments/.test(e.message))).toBe(true);
   });
 
   it("flags too many generic args", () => {
@@ -135,9 +119,7 @@ node main() {
 }
 `;
     const errs = errorsFrom(src);
-    expect(
-      errs.some((e) => /Box expects at most 1 type argument/.test(e.message)),
-    ).toBe(true);
+    expect(errs.some((e) => /Box expects at most 1 type argument/.test(e.message))).toBe(true);
   });
 
   it("flags bare reference to a generic alias with no defaults", () => {
@@ -151,9 +133,7 @@ node main() {
 `;
     const errs = errorsFrom(src);
     expect(
-      errs.some((e) =>
-        /Generic type 'Container' requires type arguments/.test(e.message),
-      ),
+      errs.some((e) => /Generic type 'Container' requires type arguments/.test(e.message)),
     ).toBe(true);
   });
 

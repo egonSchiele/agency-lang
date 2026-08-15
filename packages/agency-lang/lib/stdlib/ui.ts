@@ -31,7 +31,6 @@ import { color } from "@/utils/termcolors.js";
 // defaults to `TerminalInput` / `TerminalOutput` at the actual TTY size.
 // ---------------------------------------------------------------------------
 
-
 // `bridgeInputSource` / `bridgeOutputTarget` / `bridgeWidth` /
 // `bridgeHeight` are intentionally process-wide: there is exactly one
 // TTY per process, and the test injection points (`_setInputSource`
@@ -207,8 +206,7 @@ const RENDER_TRIGGER_KEY: TuiKeyEvent = { key: "__render__" };
 export function _triggerRender(): void {
   if (!bridgeActiveScreen) return;
   const source = bridgeInputSource as
-    | (InputSource & { feedKey?: (key: TuiKeyEvent) => void })
-    | null;
+    (InputSource & { feedKey?: (key: TuiKeyEvent) => void }) | null;
   if (source && typeof source.feedKey === "function") {
     source.feedKey(RENDER_TRIGGER_KEY);
   }
@@ -293,7 +291,7 @@ function formatConsoleArgs(args: unknown[]): string {
       typeof arg === "string"
         ? arg
         : arg instanceof Error
-          ? arg.stack ?? arg.message
+          ? (arg.stack ?? arg.message)
           : (() => {
               try {
                 return JSON.stringify(arg);
@@ -361,12 +359,9 @@ export function _installConsoleCapture(messages: string[]): void {
     debug: console.debug,
   };
 
-  console.log = (...args: unknown[]) =>
-    pushCaptured("", formatConsoleArgs(args));
-  console.info = (...args: unknown[]) =>
-    pushCaptured("", formatConsoleArgs(args));
-  console.debug = (...args: unknown[]) =>
-    pushCaptured("", formatConsoleArgs(args));
+  console.log = (...args: unknown[]) => pushCaptured("", formatConsoleArgs(args));
+  console.info = (...args: unknown[]) => pushCaptured("", formatConsoleArgs(args));
+  console.debug = (...args: unknown[]) => pushCaptured("", formatConsoleArgs(args));
   console.warn = (...args: unknown[]) =>
     pushCaptured("{yellow-fg}warn{/yellow-fg}", truncateForTui(formatConsoleArgs(args)));
   console.error = (...args: unknown[]) =>
@@ -448,11 +443,7 @@ export function _resetReplExitSignal(): void {
   getUiState().replExitSignaled = false;
 }
 
-export function _beginSubmit(
-  state: SubmitTargetState,
-  submitted: string,
-  onSubmit: unknown,
-): void {
+export function _beginSubmit(state: SubmitTargetState, submitted: string, onSubmit: unknown): void {
   state.transcript.messages.push(`{bright-blue-fg}You{/bright-blue-fg} ${submitted}`);
   if (state.submit) {
     state.submit.busy = true;
@@ -746,11 +737,7 @@ async function _runPrompt(question: prompts.PromptObject): Promise<any> {
   // Wrap any caller-supplied `onState` so we always get a shot at
   // detecting Escape, without clobbering custom state hooks.
   const userOnState = (question as any).onState;
-  (question as any).onState = (state: {
-    value: unknown;
-    aborted: boolean;
-    exited: boolean;
-  }) => {
+  (question as any).onState = (state: { value: unknown; aborted: boolean; exited: boolean }) => {
     // `exited` = Escape; `aborted` = Ctrl+C / Ctrl+D. Either way the
     // user said "back out", so don't return the currently-highlighted
     // choice.
@@ -942,10 +929,7 @@ export async function _promptsText(
   return success(String(result.value));
 }
 
-export async function _promptsConfirm(
-  message: string,
-  initial: boolean,
-): Promise<any> {
+export async function _promptsConfirm(message: string, initial: boolean): Promise<any> {
   _assertLineModeAvailable("confirm");
   const result = await _runPrompt({
     type: "toggle",
@@ -992,9 +976,7 @@ export function _openChoicePrompt(request: ChoiceRequest): Promise<string> {
   const ui = getUiState();
   if (ui.pendingChoice) {
     return Promise.reject(
-      new Error(
-        "_openChoicePrompt: a choice prompt is already open; serialize callers",
-      ),
+      new Error("_openChoicePrompt: a choice prompt is already open; serialize callers"),
     );
   }
   ui.pendingChoiceRequest = {

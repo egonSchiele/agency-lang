@@ -38,10 +38,14 @@ export async function loadOptimizerModule(filePath: string): Promise<OptimizerFa
     const mod = await import(pathToFileURL(out).href);
     const factory = mod.default;
     if (factory === undefined) {
-      throw new Error(`Optimizer module ${absolute} must default-export a factory function (config) => Optimizer.`);
+      throw new Error(
+        `Optimizer module ${absolute} must default-export a factory function (config) => Optimizer.`,
+      );
     }
     if (typeof factory !== "function") {
-      throw new Error(`Optimizer module ${absolute} must default-export a factory function, got ${typeof factory}.`);
+      throw new Error(
+        `Optimizer module ${absolute} must default-export a factory function, got ${typeof factory}.`,
+      );
     }
     return factory as OptimizerFactory;
   } finally {

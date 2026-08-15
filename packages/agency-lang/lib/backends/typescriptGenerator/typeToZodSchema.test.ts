@@ -90,10 +90,7 @@ describe("mapTypeToValidationSchema", () => {
   });
 
   it("maps the regex primitive to z.instanceof(RegExp)", () => {
-    const result = mapTypeToValidationSchema(
-      { type: "primitiveType", value: "regex" },
-      {},
-    );
+    const result = mapTypeToValidationSchema({ type: "primitiveType", value: "regex" }, {});
     expect(result).toBe("z.instanceof(RegExp)");
   });
 
@@ -162,9 +159,7 @@ describe("mapTypeToZodSchema: Record<K, V>", () => {
       },
       {},
     );
-    expect(result).toBe(
-      "z.record(z.string(), z.record(z.string(), z.number()))",
-    );
+    expect(result).toBe("z.record(z.string(), z.record(z.string(), z.number()))");
   });
 
   it("emits doubly-nested z.record for Record<string, Record<string, Record<string, boolean>>>", () => {
@@ -224,8 +219,7 @@ describe("appendMeta", () => {
     type: "string" as const,
     segments: [{ type: "text" as const, value: s }],
   });
-  const tag = (name: string, args: any[]): Tag =>
-    ({ type: "tag", name, arguments: args }) as Tag;
+  const tag = (name: string, args: any[]): Tag => ({ type: "tag", name, arguments: args }) as Tag;
 
   it("returns the schema unchanged when no @jsonSchema tag is present", () => {
     expect(appendMeta("z.string()", undefined)).toBe("z.string()");

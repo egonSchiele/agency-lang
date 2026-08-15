@@ -16,7 +16,8 @@ function typecheckImporter(files: Record<string, string>, entry: string) {
     const entryPath = path.join(dir, entry);
     const src = files[entry];
     const parsed = parseAgency(src);
-    if (!parsed.success) throw new Error(`parse failed: ${(parsed as { message?: string }).message}`);
+    if (!parsed.success)
+      throw new Error(`parse failed: ${(parsed as { message?: string }).message}`);
     const symbols = SymbolTable.build(entryPath);
     const info = buildCompilationUnit(parsed.result, symbols, entryPath, src);
     return typeCheck(parsed.result, {}, info).errors;

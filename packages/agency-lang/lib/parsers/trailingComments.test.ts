@@ -24,9 +24,7 @@ describe("complete-construct trailing comment attachment", () => {
   });
 
   it("attaches to a body statement instead of adding a sibling", () => {
-    const body = mainBody(
-      `node main() {\n  const x = 5 // explains x\n  const y = 6\n}\n`,
-    );
+    const body = mainBody(`node main() {\n  const x = 5 // explains x\n  const y = 6\n}\n`);
     expect(body).toHaveLength(2);
     expect(body[0].trailingComment?.content).toBe(" explains x");
   });
@@ -38,17 +36,13 @@ describe("complete-construct trailing comment attachment", () => {
     ["call", `print(1)`],
     ["block", `if (true) {\n    print(1)\n  }`],
   ])("does not attach a standalone comment after %s", (_name, statement) => {
-    const body = mainBody(
-      `node main() {\n  ${statement}\n  // standalone\n  print(2)\n}\n`,
-    );
+    const body = mainBody(`node main() {\n  ${statement}\n  // standalone\n  print(2)\n}\n`);
     expect(body[0].trailingComment).toBeUndefined();
     expect(body.some((node) => node.type === "comment")).toBe(true);
   });
 
   it("does not attach to a blank-line node", () => {
-    const body = mainBody(
-      `node main() {\n  print(1)\n\n  // standalone\n  print(2)\n}\n`,
-    );
+    const body = mainBody(`node main() {\n  print(1)\n\n  // standalone\n  print(2)\n}\n`);
     const blank = body.find((node) => node.type === "newLine");
     expect(blank?.trailingComment).toBeUndefined();
     expect(body.some((node) => node.type === "comment")).toBe(true);
@@ -65,18 +59,14 @@ describe("complete-construct trailing comment attachment", () => {
     const body = mainBody(
       `node main() {\n  match (x) {\n    1 => "one" // first\n    2 => "two"\n  }\n}\n`,
     );
-    const cases = body[0].cases.filter(
-      (entry: any) => entry.type === "matchBlockCase",
-    );
+    const cases = body[0].cases.filter((entry: any) => entry.type === "matchBlockCase");
     expect(cases).toHaveLength(2);
     expect(cases[0].trailingComment?.content).toBe(" first");
     expect(cases[1].trailingComment).toBeUndefined();
   });
 
   it("does not attach a block comment", () => {
-    const body = mainBody(
-      `node main() {\n  const x = 5 /* why */\n  const y = 6\n}\n`,
-    );
+    const body = mainBody(`node main() {\n  const x = 5 /* why */\n  const y = 6\n}\n`);
     expect(body[0].trailingComment).toBeUndefined();
   });
 });

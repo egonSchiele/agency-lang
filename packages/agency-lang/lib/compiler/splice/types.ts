@@ -21,6 +21,4 @@ export type SpliceDiagnostic = {
  * `SpliceDiagnostic | null`; if it PRODUCES, it returns `SpliceResult<T>`.
  * Do not add a third.
  */
-export type SpliceResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; diagnostic: SpliceDiagnostic };
+export type SpliceResult<T> = { ok: true; value: T } | { ok: false; diagnostic: SpliceDiagnostic };

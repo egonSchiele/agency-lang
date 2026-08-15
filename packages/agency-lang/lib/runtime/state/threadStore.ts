@@ -130,8 +130,7 @@ export class ThreadStore {
     // Alias the shared registry. Casting through `unknown` avoids
     // declaring `registry` as readonly-public; the field stays
     // private to the class while letting us share by reference.
-    (view as unknown as { registry: ThreadRegistry }).registry =
-      this.registry;
+    (view as unknown as { registry: ThreadRegistry }).registry = this.registry;
 
     const parentActiveId = this.activeId();
     if (parentActiveId !== undefined) {
@@ -164,8 +163,7 @@ export class ThreadStore {
    */
   restoreBranchView(activeStack: MessageThreadID[]): ThreadStore {
     const view = new ThreadStore();
-    (view as unknown as { registry: ThreadRegistry }).registry =
-      this.registry;
+    (view as unknown as { registry: ThreadRegistry }).registry = this.registry;
     view.activeStack = [...activeStack];
     return view;
   }
@@ -186,7 +184,11 @@ export class ThreadStore {
    *  `threadCreated` statelog event (so log consumers can identify
    *  which subagent each thread corresponds to without fingerprinting). */
   // Create a new empty thread, return its ID
-  create(meta?: { label?: string | null; session?: string | null; hidden?: boolean }): MessageThreadID {
+  create(meta?: {
+    label?: string | null;
+    session?: string | null;
+    hidden?: boolean;
+  }): MessageThreadID {
     const id = (this.counter++).toString();
     const thread = new MessageThread();
     if (meta?.label !== undefined && meta.label !== null) thread.label = meta.label;

@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { costCapFromConfig, evalForkOptions, limitsFromConfig, makeCostCapTracker } from "./subprocess.js";
+import {
+  costCapFromConfig,
+  evalForkOptions,
+  limitsFromConfig,
+  makeCostCapTracker,
+} from "./subprocess.js";
 
 describe("limitsFromConfig", () => {
   it("keeps the built-in defaults when the config sets nothing", () => {

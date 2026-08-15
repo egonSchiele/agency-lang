@@ -3,8 +3,14 @@ import { describe, expect, it } from "vitest";
 import { aggregateGrades } from "./aggregate.js";
 import type { Grade } from "./types.js";
 
-const scalar = (value: number, feedback?: string): Grade => ({ score: { kind: "scalar", value }, feedback });
-const binary = (pass: boolean, feedback?: string): Grade => ({ score: { kind: "binary", pass }, feedback });
+const scalar = (value: number, feedback?: string): Grade => ({
+  score: { kind: "scalar", value },
+  feedback,
+});
+const binary = (pass: boolean, feedback?: string): Grade => ({
+  score: { kind: "binary", pass },
+  feedback,
+});
 
 describe("aggregateGrades", () => {
   it("averages scalar trials", () => {
@@ -14,13 +20,25 @@ describe("aggregateGrades", () => {
   });
 
   it("binary 'all' passes only when every trial passes", () => {
-    expect(aggregateGrades([binary(true), binary(true)], "all").score).toEqual({ kind: "binary", pass: true });
-    expect(aggregateGrades([binary(true), binary(false)], "all").score).toEqual({ kind: "binary", pass: false });
+    expect(aggregateGrades([binary(true), binary(true)], "all").score).toEqual({
+      kind: "binary",
+      pass: true,
+    });
+    expect(aggregateGrades([binary(true), binary(false)], "all").score).toEqual({
+      kind: "binary",
+      pass: false,
+    });
   });
 
   it("binary 'any' passes when at least one trial passes", () => {
-    expect(aggregateGrades([binary(false), binary(true)], "any").score).toEqual({ kind: "binary", pass: true });
-    expect(aggregateGrades([binary(false), binary(false)], "any").score).toEqual({ kind: "binary", pass: false });
+    expect(aggregateGrades([binary(false), binary(true)], "any").score).toEqual({
+      kind: "binary",
+      pass: true,
+    });
+    expect(aggregateGrades([binary(false), binary(false)], "any").score).toEqual({
+      kind: "binary",
+      pass: false,
+    });
   });
 
   it("concatenates non-empty feedback across trials", () => {

@@ -41,7 +41,9 @@ export function policyGen(
 
   const outputPath = path.resolve(options.output ?? "policy.json");
   if (existsSync(outputPath) && outputPath !== path.resolve(options.existing ?? "")) {
-    console.error(`Output file already exists: ${outputPath}. Use -p to edit an existing policy, or -o to specify a different output path.`);
+    console.error(
+      `Output file already exists: ${outputPath}. Use -p to edit an existing policy, or -o to specify a different output path.`,
+    );
     process.exit(1);
   }
 

@@ -35,8 +35,14 @@ function recordJson(outputs: unknown[]): string {
     errors: [],
     incomplete: [],
     metrics: {
-      llmCalls: 1, toolStarts: 0, toolEnds: 0, models: [],
-      tokensInTotal: 0, tokensOutTotal: 0, costUsdTotal: 0.01, toolCounts: {},
+      llmCalls: 1,
+      toolStarts: 0,
+      toolEnds: 0,
+      models: [],
+      tokensInTotal: 0,
+      tokensOutTotal: 0,
+      costUsdTotal: 0.01,
+      toolCounts: {},
     },
     warnings: [],
   });
@@ -76,26 +82,39 @@ function makeRun(args: { id: string; output?: unknown; status?: "success" | "err
     workdirPath: workdir,
     errorMessage: status === "error" ? "boom" : undefined,
   };
-  fs.writeFileSync(path.join(runDir, "summary.json"), globalThis.JSON.stringify({
-    runId: "r", runDir, agentLabel: "a:main", inputs: [result],
-    okCount: status === "success" ? 1 : 0,
-    errorCount: status === "error" ? 1 : 0,
-  }));
+  fs.writeFileSync(
+    path.join(runDir, "summary.json"),
+    globalThis.JSON.stringify({
+      runId: "r",
+      runDir,
+      agentLabel: "a:main",
+      inputs: [result],
+      okCount: status === "success" ? 1 : 0,
+      errorCount: status === "error" ? 1 : 0,
+    }),
+  );
   return { runDir, result, input };
 }
 
 function ctx(graders: ReturnType<typeof grader>[]): GradingContext {
-  return { suiteGraders: { mode: "override", graders }, runAgency: new AgencyRunner({}), config: {} };
+  return {
+    suiteGraders: { mode: "override", graders },
+    runAgency: new AgencyRunner({}),
+    config: {},
+  };
 }
 
 describe("grading one input (through gradeRun on a suite of one)", () => {
   it("gives a grader the output, workdir, and parsed record", async () => {
     const { runDir } = makeRun({ id: "a", output: "New Delhi" });
     let seen: { output?: unknown; workdir?: string; record?: any } = {};
-    const spy = grader((context) => {
-      seen = context;
-      return 1;
-    }, { name: "spy" });
+    const spy = grader(
+      (context) => {
+        seen = context;
+        return 1;
+      },
+      { name: "spy" },
+    );
 
     const card = await gradeRun(runDir, ctx([spy]));
 
@@ -108,21 +127,26 @@ describe("grading one input (through gradeRun on a suite of one)", () => {
   it("runs mustPass gates before advisory graders and short-circuits on failure", async () => {
     const { runDir } = makeRun({ id: "a", output: "x" });
     const order: string[] = [];
-    const gate = grader(() => {
-      order.push("gate");
-      return false;
-    }, { name: "gate", mustPass: true });
-    const advisory = grader(() => {
-      order.push("advisory");
-      return 1;
-    }, { name: "advisory" });
+    const gate = grader(
+      () => {
+        order.push("gate");
+        return false;
+      },
+      { name: "gate", mustPass: true },
+    );
+    const advisory = grader(
+      () => {
+        order.push("advisory");
+        return 1;
+      },
+      { name: "advisory" },
+    );
 
     const card = await gradeRun(runDir, ctx([advisory, gate]));
 
     expect(order).toEqual(["gate"]);
     expect(card.perInput[0].gatesPassed).toBe(false);
   });
-
 });
 
 describe("gradeRun", () => {
@@ -154,12 +178,15 @@ describe("gradeRun", () => {
     // Command agents (agency CLI under --agent-cmd) emit no output event;
     // terminal-bench-style graders read the workdir, not the reply. A real
     // agent once PASSED a task and was scored ungraded over this.
-    const { runDir } = makeRun({ id: "a" });   // record present, evalOutputs empty
+    const { runDir } = makeRun({ id: "a" }); // record present, evalOutputs empty
     let sawOutput: unknown = "unset";
-    const disk = grader(({ output }) => {
-      sawOutput = output;
-      return 1;
-    }, { name: "disk-grader" });
+    const disk = grader(
+      ({ output }) => {
+        sawOutput = output;
+        return 1;
+      },
+      { name: "disk-grader" },
+    );
 
     const card = await gradeRun(runDir, ctx([disk]));
 
@@ -182,10 +209,13 @@ describe("gradeRun", () => {
     const { runDir, result } = makeRun({ id: "a", status: "error" });
     fs.writeFileSync(result.evalRecordPath, recordJson(["plausible answer"]));
     let graderRan = false;
-    const spy = grader(() => {
-      graderRan = true;
-      return 1;
-    }, { name: "spy" });
+    const spy = grader(
+      () => {
+        graderRan = true;
+        return 1;
+      },
+      { name: "spy" },
+    );
 
     const card = await gradeRun(runDir, ctx([spy]));
 
@@ -198,11 +228,14 @@ describe("gradeRun", () => {
     const { runDir } = makeRun({ id: "a", output: "hello" });
     let seenGoal: unknown = "not-read";
     let seenExpected: unknown = "not-read";
-    const spy = grader(({ input }) => {
-      seenGoal = input.goal;
-      seenExpected = input.expected;
-      return 1;
-    }, { name: "spy" });
+    const spy = grader(
+      ({ input }) => {
+        seenGoal = input.goal;
+        seenExpected = input.expected;
+        return 1;
+      },
+      { name: "spy" },
+    );
 
     await gradeRun(runDir, ctx([spy]));
 

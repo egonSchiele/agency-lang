@@ -59,15 +59,8 @@ describe("findOversizedTools", () => {
   });
 
   it("sorts the worst offender first", () => {
-    const tools = [
-      toolOfSize("medium", 3000),
-      toolOfSize("worst", 20000),
-      toolOfSize("fine", 50),
-    ];
-    expect(findOversizedTools(tools, 2000).map((t) => t.name)).toEqual([
-      "worst",
-      "medium",
-    ]);
+    const tools = [toolOfSize("medium", 3000), toolOfSize("worst", 20000), toolOfSize("fine", 50)];
+    expect(findOversizedTools(tools, 2000).map((t) => t.name)).toEqual(["worst", "medium"]);
   });
 
   it("treats a threshold of 0 as disabled", () => {
@@ -100,7 +93,9 @@ describe("the default threshold", () => {
     // Measured against the stdlib at the time this was written: the largest
     // well-formed tool schema was ~1,100 chars, and `syntax::highlight` with
     // an open theme object was ~17,800.
-    expect(findOversizedTools([toolOfSize("normal", 1100)], DEFAULT_MAX_TOOL_SCHEMA_CHARS)).toEqual([]);
+    expect(findOversizedTools([toolOfSize("normal", 1100)], DEFAULT_MAX_TOOL_SCHEMA_CHARS)).toEqual(
+      [],
+    );
     expect(
       findOversizedTools([toolOfSize("bloated", 17800)], DEFAULT_MAX_TOOL_SCHEMA_CHARS),
     ).toHaveLength(1);

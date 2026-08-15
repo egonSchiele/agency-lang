@@ -23,9 +23,7 @@ describe("if-expression lowering (stepped, match-expression machinery)", () => {
   const label = if c then "yes" else "no"
   return label
 }`);
-    const ifNode = body.find(
-      (n: any) => n.type === "ifElse" && n.matchExprId !== undefined,
-    );
+    const ifNode = body.find((n: any) => n.type === "ifElse" && n.matchExprId !== undefined);
     expect(ifNode).toBeDefined();
     // Each branch ends in a matchYield into the owning id (via a temp binding,
     // so a branch call is compiled at statement position — see fixture).
@@ -36,9 +34,7 @@ describe("if-expression lowering (stepped, match-expression machinery)", () => {
 
     // The consumer reads the __matchval_<id> temp and is tagged matchExprSource
     // so the type checker union-types it.
-    const decl = body.find(
-      (n: any) => n.type === "assignment" && n.variableName === "label",
-    );
+    const decl = body.find((n: any) => n.type === "assignment" && n.variableName === "label");
     expect(decl.value.value).toBe(`__matchval_${ifNode.matchExprId}`);
     expect(decl.matchExprSource.matchId).toBe(ifNode.matchExprId);
   });
@@ -49,9 +45,7 @@ node main(c: boolean) {
   const x = if c then f() else 0
   return x
 }`);
-    const ifNode = body.find(
-      (n: any) => n.type === "ifElse" && n.matchExprId !== undefined,
-    );
+    const ifNode = body.find((n: any) => n.type === "ifElse" && n.matchExprId !== undefined);
     // then-branch: a temp binding (statement) THEN a yield of that temp — not a
     // bare `matchYield(f())`, which would swallow an interrupt from f().
     expect(ifNode.thenBody[0].type).toBe("assignment");
@@ -63,9 +57,7 @@ node main(c: boolean) {
     const body = bodyOf(`def f(x: boolean): string {
   return if x then "yes" else "no"
 }`);
-    const ifNode = body.find(
-      (n: any) => n.type === "ifElse" && n.matchExprId !== undefined,
-    );
+    const ifNode = body.find((n: any) => n.type === "ifElse" && n.matchExprId !== undefined);
     const ret = body[body.length - 1];
     expect(ret.type).toBe("returnStatement");
     expect(ret.value.value).toBe(`__matchval_${ifNode.matchExprId}`);

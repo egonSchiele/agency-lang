@@ -4,7 +4,6 @@ import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { StateStackJSON, StateJSON } from "../runtime/state/stateStack.js";
 import type { GlobalStoreJSON } from "../runtime/state/globalStore.js";
 
-
 function makeStackJSON(frames: Partial<StateJSON>[] = []): StateStackJSON {
   return {
     stack: frames.map((f) => ({
@@ -22,20 +21,14 @@ function makeStackJSON(frames: Partial<StateJSON>[] = []): StateStackJSON {
   };
 }
 
-function makeGlobalsJSON(
-  store: Record<string, Record<string, any>> = {},
-): GlobalStoreJSON {
+function makeGlobalsJSON(store: Record<string, Record<string, any>> = {}): GlobalStoreJSON {
   return { store, initializedModules: Object.keys(store) };
 }
 
-function makeCheckpoint(
-  overrides: Partial<ConstructorParameters<typeof Checkpoint>[0]> = {},
-) {
+function makeCheckpoint(overrides: Partial<ConstructorParameters<typeof Checkpoint>[0]> = {}) {
   return new Checkpoint({
     id: 0,
-    stack: makeStackJSON([
-      { args: { input: "hello" }, locals: { x: 42 }, step: 2 },
-    ]),
+    stack: makeStackJSON([{ args: { input: "hello" }, locals: { x: 42 }, step: 2 }]),
     globals: makeGlobalsJSON({
       "mod.agency": { count: 10, name: "test" },
     }),
@@ -74,12 +67,8 @@ describe("UIState", () => {
       const ui = new UIState();
       await ui.setCheckpoint(makeCheckpoint());
 
-      expect(ui.getArgs()).toEqual([
-        { key: "input", value: "hello", override: undefined },
-      ]);
-      expect(ui.getLocals()).toEqual([
-        { key: "x", value: 42, override: undefined },
-      ]);
+      expect(ui.getArgs()).toEqual([{ key: "input", value: "hello", override: undefined }]);
+      expect(ui.getLocals()).toEqual([{ key: "x", value: 42, override: undefined }]);
       expect(ui.getGlobals()).toEqual([
         { key: "count", value: 10, override: undefined },
         { key: "name", value: "test", override: undefined },
@@ -99,12 +88,8 @@ describe("UIState", () => {
         }),
       );
 
-      expect(ui.getArgs()).toEqual([
-        { key: "visible", value: "keep", override: undefined },
-      ]);
-      expect(ui.getLocals()).toEqual([
-        { key: "y", value: 1, override: undefined },
-      ]);
+      expect(ui.getArgs()).toEqual([{ key: "visible", value: "keep", override: undefined }]);
+      expect(ui.getLocals()).toEqual([{ key: "y", value: 1, override: undefined }]);
     });
 
     it("should include pending overrides in populated values", async () => {
@@ -113,9 +98,7 @@ describe("UIState", () => {
       ui.setOverride("count", 99);
       await ui.setCheckpoint(makeCheckpoint());
 
-      expect(ui.getArgs()).toEqual([
-        { key: "input", value: "hello", override: "overridden" },
-      ]);
+      expect(ui.getArgs()).toEqual([{ key: "input", value: "hello", override: "overridden" }]);
       expect(ui.getGlobals()).toContainEqual({
         key: "count",
         value: 10,
@@ -158,9 +141,7 @@ describe("UIState", () => {
                     ],
                   },
                   "1": {
-                    messages: [
-                      { role: "user", content: "Other thread" },
-                    ],
+                    messages: [{ role: "user", content: "Other thread" }],
                   },
                 },
                 counter: 2,
@@ -244,9 +225,7 @@ describe("UIState", () => {
         line: 10,
       });
       ui.removeWithFuncName("main");
-      expect(ui.getCallStack()).toEqual([
-        { functionName: "helper", moduleId: "mod", line: 10 },
-      ]);
+      expect(ui.getCallStack()).toEqual([{ functionName: "helper", moduleId: "mod", line: 10 }]);
     });
 
     it("should reset call stack", () => {

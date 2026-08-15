@@ -65,11 +65,7 @@ describe("SymbolTable.build scaling", () => {
 
     expectPerf(
       "symbolTable:build",
-      growthFactor(
-        (n) => buildFor(manyFunctions(n), `flat-${n}`),
-        SMALL,
-        LARGE,
-      ),
+      growthFactor((n) => buildFor(manyFunctions(n), `flat-${n}`), SMALL, LARGE),
       GROWTH_BOUND,
     );
   });
@@ -77,11 +73,7 @@ describe("SymbolTable.build scaling", () => {
   it("scales linearly when one effect travels a long call chain", () => {
     expectPerf(
       "symbolTable:build-chained",
-      growthFactor(
-        (n) => buildFor(chainedFunctions(n), `chain-${n}`),
-        SMALL,
-        LARGE,
-      ),
+      growthFactor((n) => buildFor(chainedFunctions(n), `chain-${n}`), SMALL, LARGE),
       GROWTH_BOUND,
     );
   });

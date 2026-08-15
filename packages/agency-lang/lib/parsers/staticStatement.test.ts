@@ -38,9 +38,7 @@ describe("staticStatementParser", () => {
     const result = parseAgency("static foo = 1", {}, false);
     expect(result.success).toBe(false);
     if (result.success) return;
-    expect(result.errorData?.message).toMatch(
-      /`static <name> = \.\.\.` is not allowed/,
-    );
+    expect(result.errorData?.message).toMatch(/`static <name> = \.\.\.` is not allowed/);
   });
 
   it("declines a bare `static` keyword followed by nothing", () => {

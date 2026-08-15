@@ -91,7 +91,7 @@ describe("sendWithResend", () => {
 
     await _sendWithResend(
       { from: "a@b.com", to: "c@d.com", subject: "x", text: "y" },
-      { apiKey: "re_override" }
+      { apiKey: "re_override" },
     );
 
     const [, init] = mockFetch.mock.calls[0];
@@ -101,14 +101,14 @@ describe("sendWithResend", () => {
   it("throws when no API key available", async () => {
     delete process.env.RESEND_API_KEY;
     await expect(
-      _sendWithResend({ from: "a@b.com", to: "c@d.com", subject: "x", text: "y" })
+      _sendWithResend({ from: "a@b.com", to: "c@d.com", subject: "x", text: "y" }),
     ).rejects.toThrow("RESEND_API_KEY");
   });
 
   it("throws on error response", async () => {
     globalThis.fetch = mockFetchResponse({ message: "Invalid API key" }, 401);
     await expect(
-      _sendWithResend({ from: "a@b.com", to: "c@d.com", subject: "x", text: "y" })
+      _sendWithResend({ from: "a@b.com", to: "c@d.com", subject: "x", text: "y" }),
     ).rejects.toThrow("Resend API error (401)");
   });
 });
@@ -183,14 +183,14 @@ describe("sendWithSendGrid", () => {
   it("throws when no API key available", async () => {
     delete process.env.SENDGRID_API_KEY;
     await expect(
-      _sendWithSendGrid({ from: "a@b.com", to: "c@d.com", subject: "x", text: "y" })
+      _sendWithSendGrid({ from: "a@b.com", to: "c@d.com", subject: "x", text: "y" }),
     ).rejects.toThrow("SENDGRID_API_KEY");
   });
 
   it("throws on error response", async () => {
     globalThis.fetch = mockFetchResponse({ errors: [{ message: "Forbidden" }] }, 403);
     await expect(
-      _sendWithSendGrid({ from: "a@b.com", to: "c@d.com", subject: "x", text: "y" })
+      _sendWithSendGrid({ from: "a@b.com", to: "c@d.com", subject: "x", text: "y" }),
     ).rejects.toThrow("SendGrid API error (403)");
   });
 });
@@ -276,7 +276,7 @@ describe("sendWithMailgun", () => {
 
     await _sendWithMailgun(
       { from: "a@b.com", to: "c@d.com", subject: "x", text: "y" },
-      { region: "eu" }
+      { region: "eu" },
     );
 
     const [url] = mockFetch.mock.calls[0];
@@ -299,21 +299,21 @@ describe("sendWithMailgun", () => {
   it("throws when no API key available", async () => {
     delete process.env.MAILGUN_API_KEY;
     await expect(
-      _sendWithMailgun({ from: "a@b.com", to: "c@d.com", subject: "x", text: "y" })
+      _sendWithMailgun({ from: "a@b.com", to: "c@d.com", subject: "x", text: "y" }),
     ).rejects.toThrow("MAILGUN_API_KEY");
   });
 
   it("throws when no domain available", async () => {
     delete process.env.MAILGUN_DOMAIN;
     await expect(
-      _sendWithMailgun({ from: "a@b.com", to: "c@d.com", subject: "x", text: "y" })
+      _sendWithMailgun({ from: "a@b.com", to: "c@d.com", subject: "x", text: "y" }),
     ).rejects.toThrow("MAILGUN_DOMAIN");
   });
 
   it("throws on error response", async () => {
     globalThis.fetch = mockFetchResponse({ message: "Forbidden" }, 401);
     await expect(
-      _sendWithMailgun({ from: "a@b.com", to: "c@d.com", subject: "x", text: "y" })
+      _sendWithMailgun({ from: "a@b.com", to: "c@d.com", subject: "x", text: "y" }),
     ).rejects.toThrow("Mailgun API error (401)");
   });
 });

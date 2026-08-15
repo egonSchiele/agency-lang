@@ -1,9 +1,4 @@
-import {
-  Expression,
-  AgencyComment,
-  AgencyMultiLineComment,
-  NewLine,
-} from "../types.js";
+import { Expression, AgencyComment, AgencyMultiLineComment, NewLine } from "../types.js";
 import { BaseNode, LineComment } from "./base.js";
 
 /** A single comment or blank-line node preserved as trivia. */
@@ -38,9 +33,7 @@ export type ListTrivia = BeforeListTrivia | TrailingListTrivia;
 /** Long-standing name for the same thing. */
 export type Trivia = ListTrivia;
 
-export function isTrailingListTrivia(
-  entry: ListTrivia,
-): entry is TrailingListTrivia {
+export function isTrailingListTrivia(entry: ListTrivia): entry is TrailingListTrivia {
   return entry.placement === "trailing";
 }
 

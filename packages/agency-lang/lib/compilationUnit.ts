@@ -12,10 +12,7 @@ import type {
   ValueParam,
   VariableType,
 } from "./types.js";
-import type {
-  ImportNodeStatement,
-  ImportStatement,
-} from "./types/importStatement.js";
+import type { ImportNodeStatement, ImportStatement } from "./types/importStatement.js";
 import { getImportedNames } from "./types/importStatement.js";
 import type { SymbolTable, InterruptEffect } from "./symbolTable.js";
 import { collectTypeAliasTags } from "./symbolTable.js";
@@ -260,9 +257,7 @@ export function buildCompilationUnit(
   for (const { node, scopes } of walkNodes(program.nodes)) {
     const key = scopeKey(scopes[scopes.length - 1]);
     if (node.type === "typeAlias") {
-      const tags = node.tags && node.tags.length > 0
-        ? node.tags
-        : localAliasTags[node.aliasName];
+      const tags = node.tags && node.tags.length > 0 ? node.tags : localAliasTags[node.aliasName];
       unit.typeAliases.add(
         key,
         node.aliasName,
@@ -296,10 +291,7 @@ export function buildCompilationUnit(
           // the time a value crosses the import boundary it really is a
           // Result<T, string> — the typechecker just needs to agree.
           const returnType = r.symbol.returnType
-            ? resultTypeForValidation(
-                r.symbol.returnType,
-                r.symbol.returnTypeValidated,
-              )
+            ? resultTypeForValidation(r.symbol.returnType, r.symbol.returnTypeValidated)
             : r.symbol.returnType;
           unit.importedFunctions[r.localName] = {
             parameters: r.symbol.parameters,
@@ -350,7 +342,10 @@ export function buildCompilationUnit(
     }
     for (const stmt of unit.importStatements) {
       for (const r of symbolTable.resolveImport(stmt, fromFile)) {
-        if ((r.symbol.kind === "function" || r.symbol.kind === "node") && r.symbol.interruptEffects) {
+        if (
+          (r.symbol.kind === "function" || r.symbol.kind === "node") &&
+          r.symbol.interruptEffects
+        ) {
           interruptEffectsByFunction[r.localName] = r.symbol.interruptEffects;
         }
       }
@@ -434,7 +429,15 @@ function resolveTypeFromFile(
   symbolTable: SymbolTable,
   name: string,
   preferFile: string | undefined,
-): { aliasedType: VariableType; typeParams?: TypeParam[]; valueParams?: ValueParam[]; tags?: Tag[]; file: string } | undefined {
+):
+  | {
+      aliasedType: VariableType;
+      typeParams?: TypeParam[];
+      valueParams?: ValueParam[];
+      tags?: Tag[];
+      file: string;
+    }
+  | undefined {
   if (preferFile) {
     const fileSym = symbolTable.getFile(preferFile)?.[name];
     if (fileSym?.kind === "type") {

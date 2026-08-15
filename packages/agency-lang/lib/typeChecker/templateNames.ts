@@ -16,12 +16,7 @@ import { collectProgramShadowing } from "./shadowing.js";
 import { validateTypeReferences } from "./validate.js";
 import { ANY_T } from "./primitives.js";
 import type { AgencyConfig } from "../config.js";
-import type {
-  AgencyNode,
-  AgencyProgram,
-  CodeLiteral,
-  TypeAliasEntry,
-} from "../types.js";
+import type { AgencyNode, AgencyProgram, CodeLiteral, TypeAliasEntry } from "../types.js";
 import type { SourceLocation } from "../types/base.js";
 import type { FunctionDefinition } from "../types/function.js";
 import type { GraphNodeDefinition } from "../types/graphNode.js";
@@ -102,9 +97,7 @@ export function findUndefinedTemplateNames(
 }
 
 /** The unknown-type findings among diagnostics, by their recorded name. */
-function unknownTypesIn(
-  errors: readonly TypeCheckError[],
-): UndefinedTemplateName[] {
+function unknownTypesIn(errors: readonly TypeCheckError[]): UndefinedTemplateName[] {
   return errors
     .filter((error) => error.name === "unknownTypeAlias")
     .map((error) => ({
@@ -136,22 +129,10 @@ function undefinedSignatureTypes(
     const signature = node as FunctionDefinition | GraphNodeDefinition;
     for (const parameter of signature.parameters) {
       if (!parameter.typeHint) continue;
-      validateTypeReferences(
-        parameter.typeHint,
-        parameter.name,
-        aliases,
-        errors,
-        node.loc,
-      );
+      validateTypeReferences(parameter.typeHint, parameter.name, aliases, errors, node.loc);
     }
     if (signature.returnType) {
-      validateTypeReferences(
-        signature.returnType,
-        "return",
-        aliases,
-        errors,
-        node.loc,
-      );
+      validateTypeReferences(signature.returnType, "return", aliases, errors, node.loc);
     }
   }
   return unknownTypesIn(errors);
@@ -184,10 +165,7 @@ export function checkTemplateNames(ctx: TypeCheckerContext): void {
       continue;
     }
     const literal = visit.node as CodeLiteral;
-    reportTemplateNameFindings(
-      findUndefinedTemplateNames(literal.nodes, ctx.config),
-      ctx,
-    );
+    reportTemplateNameFindings(findUndefinedTemplateNames(literal.nodes, ctx.config), ctx);
   }
 }
 
@@ -196,9 +174,7 @@ function reportTemplateNameFindings(
   ctx: TypeCheckerContext,
 ): void {
   for (const finding of findings) {
-    ctx.errors.push(
-      diagnostic("templateNameNotDefined", { name: finding.name }, finding.loc),
-    );
+    ctx.errors.push(diagnostic("templateNameNotDefined", { name: finding.name }, finding.loc));
   }
 }
 
@@ -210,10 +186,7 @@ function reportTemplateNameFindings(
  * reject `def greet(name: string) { return name }`, because a parameter
  * lives in its definition's own scope.
  */
-function templateNameScopes(
-  nodes: AgencyNode[],
-  context: TypeCheckerContext,
-): TemplateNameScope[] {
+function templateNameScopes(nodes: AgencyNode[], context: TypeCheckerContext): TemplateNameScope[] {
   // `walkScopeBody` has no `importNodeStatement` case, so an `import node`
   // the template makes itself has no lexical-scope fallback. Collect those
   // names here or a template-local imported node looks undefined.
@@ -255,9 +228,7 @@ function templateNameScopes(
  * here too: a template writing `const x: edit = …` goes unreported. That
  * costs a message the compile of the generated program still gives.
  */
-function importedTypeStubs(
-  nodes: AgencyNode[],
-): Record<string, TypeAliasEntry> {
+function importedTypeStubs(nodes: AgencyNode[]): Record<string, TypeAliasEntry> {
   const stubs: Record<string, TypeAliasEntry> = Object.create(null);
   for (const node of nodes) {
     if (node.type !== "importStatement") continue;
@@ -267,9 +238,7 @@ function importedTypeStubs(
         if (typeof name !== "string") continue;
         // Own-property only: `import { toString }` would otherwise read the
         // alias map's prototype and key the stub by a function.
-        const local = Object.hasOwn(entry.aliases, name)
-          ? entry.aliases[name]
-          : name;
+        const local = Object.hasOwn(entry.aliases, name) ? entry.aliases[name] : name;
         stubs[local] = { body: ANY_T };
       }
     }
@@ -289,10 +258,7 @@ function importedTypeStubs(
  * import in the lexical scope, so an imported name still resolves through
  * `scope.has`. Do not copy the host's imports to compensate.
  */
-function isolatedContext(
-  program: AgencyProgram,
-  config: AgencyConfig,
-): TypeCheckerContext {
+function isolatedContext(program: AgencyProgram, config: AgencyConfig): TypeCheckerContext {
   const unit = buildCompilationUnit(program);
   const nodeDefs = Object.fromEntries(
     unit.graphNodes.map((node) => [declaredName(node.nodeName), node]),

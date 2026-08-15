@@ -5,15 +5,8 @@ import type { AgencyNode, FunctionCall } from "../types.js";
 import type { ValueAccess, AccessChainElement } from "../types/access.js";
 import { walkNodes } from "../utils/node.js";
 import { holeNames } from "../utils/holes.js";
-import {
-  hasFunctionOrNodeAncestor,
-  isResolvableBareCall,
-} from "./nameReferences.js";
-import {
-  resolveCall,
-  lookupJsMember,
-  isJsGlobalBase,
-} from "./resolveCall.js";
+import { hasFunctionOrNodeAncestor, isResolvableBareCall } from "./nameReferences.js";
+import { resolveCall, lookupJsMember, isJsGlobalBase } from "./resolveCall.js";
 import { collectProgramShadowing } from "./shadowing.js";
 
 /**
@@ -29,10 +22,7 @@ import { collectProgramShadowing } from "./shadowing.js";
  * in resolveCall.ts) — this module just walks the AST and translates "didn't
  * resolve" into a diagnostic.
  */
-export function checkUndefinedFunctions(
-  scopes: ScopeInfo[],
-  ctx: TypeCheckerContext,
-): void {
+export function checkUndefinedFunctions(scopes: ScopeInfo[], ctx: TypeCheckerContext): void {
   // Default is "warn" — the registries (BUILTIN_FUNCTION_TYPES,
   // importedFunctions via SymbolTable, JS_GLOBALS) are now accurate enough
   // that false positives are rare. Users can opt back into silence with
@@ -70,7 +60,6 @@ export function checkUndefinedFunctions(
   }
 }
 
-
 // --- Internal helpers ---
 
 // Reserved block keywords that the parser turns into their own AST node
@@ -84,7 +73,6 @@ export function checkUndefinedFunctions(
 // The hint text lives in the diagnostic registry (reservedBlockKeyword);
 // this is just the set of keywords that trigger it.
 const RESERVED_BLOCK_KEYWORDS = ["thread", "subthread"];
-
 
 function checkBareCall(
   call: FunctionCall,
@@ -105,21 +93,13 @@ function checkBareCall(
   const severity = mode === "warn" ? ("warning" as const) : ("error" as const);
   if (RESERVED_BLOCK_KEYWORDS.includes(call.functionName)) {
     ctx.errors.push(
-      diagnostic(
-        "reservedBlockKeyword",
-        { keyword: call.functionName },
-        call.loc ?? null,
-        { severity },
-      ),
+      diagnostic("reservedBlockKeyword", { keyword: call.functionName }, call.loc ?? null, {
+        severity,
+      }),
     );
   } else {
     ctx.errors.push(
-      diagnostic(
-        "undefinedFunction",
-        { name: call.functionName },
-        call.loc ?? null,
-        { severity },
-      ),
+      diagnostic("undefinedFunction", { name: call.functionName }, call.loc ?? null, { severity }),
     );
   }
 }
@@ -170,10 +150,7 @@ function checkAccessChain(
  * chain contains anything we can't statically follow (computed lookup,
  * call-on-call, etc.) — caller bails out in that case.
  */
-function collectNamePath(
-  chain: AccessChainElement[],
-  baseName: string,
-): string[] | null {
+function collectNamePath(chain: AccessChainElement[], baseName: string): string[] | null {
   const path = [baseName];
   for (const access of chain) {
     if (access.kind === "property") {

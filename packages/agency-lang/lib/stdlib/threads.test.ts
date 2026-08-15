@@ -47,14 +47,12 @@ describe("_eagerSummarizeIfNeeded", () => {
     const spy = runPrompt as unknown as ReturnType<typeof vi.fn>;
     spy.mockClear();
 
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      () =>
-        _eagerSummarizeIfNeeded({
-          threadId: `t${id}`,
-          eagerSummarize: true,
-          messages: [{ role: "user", content: "hello" } as any],
-        }),
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, () =>
+      _eagerSummarizeIfNeeded({
+        threadId: `t${id}`,
+        eagerSummarize: true,
+        messages: [{ role: "user", content: "hello" } as any],
+      }),
     );
 
     expect(spy).toHaveBeenCalledTimes(1);
@@ -68,14 +66,12 @@ describe("_eagerSummarizeIfNeeded", () => {
     const spy = runPrompt as unknown as ReturnType<typeof vi.fn>;
     spy.mockClear();
 
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      () =>
-        _eagerSummarizeIfNeeded({
-          threadId: `t${id}`,
-          eagerSummarize: true,
-          messages: [{ role: "user", content: "x" } as any],
-        }),
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, () =>
+      _eagerSummarizeIfNeeded({
+        threadId: `t${id}`,
+        eagerSummarize: true,
+        messages: [{ role: "user", content: "x" } as any],
+      }),
     );
 
     // The thread passed to runPrompt must be a fresh standalone
@@ -96,14 +92,12 @@ describe("_eagerSummarizeIfNeeded", () => {
     const spy = runPrompt as unknown as ReturnType<typeof vi.fn>;
     spy.mockClear();
 
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      () =>
-        _eagerSummarizeIfNeeded({
-          threadId: `t${id}`,
-          eagerSummarize: false,
-          messages: [{ role: "user", content: "x" } as any],
-        }),
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, () =>
+      _eagerSummarizeIfNeeded({
+        threadId: `t${id}`,
+        eagerSummarize: false,
+        messages: [{ role: "user", content: "x" } as any],
+      }),
     );
 
     expect(spy).not.toHaveBeenCalled();
@@ -117,14 +111,12 @@ describe("_eagerSummarizeIfNeeded", () => {
     const spy = runPrompt as unknown as ReturnType<typeof vi.fn>;
     spy.mockClear();
 
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      () =>
-        _eagerSummarizeIfNeeded({
-          threadId: `t${id}`,
-          eagerSummarize: true,
-          messages: [],
-        }),
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, () =>
+      _eagerSummarizeIfNeeded({
+        threadId: `t${id}`,
+        eagerSummarize: true,
+        messages: [],
+      }),
     );
 
     expect(spy).not.toHaveBeenCalled();
@@ -139,14 +131,12 @@ describe("_eagerSummarizeIfNeeded", () => {
     const spy = runPrompt as unknown as ReturnType<typeof vi.fn>;
     spy.mockClear();
 
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      () =>
-        _eagerSummarizeIfNeeded({
-          threadId: `t${id}`,
-          eagerSummarize: true,
-          messages: [{ role: "user", content: "x" } as any],
-        }),
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, () =>
+      _eagerSummarizeIfNeeded({
+        threadId: `t${id}`,
+        eagerSummarize: true,
+        messages: [{ role: "user", content: "x" } as any],
+      }),
     );
 
     expect(spy).not.toHaveBeenCalled();
@@ -165,14 +155,12 @@ describe("_eagerSummarizeIfNeeded", () => {
     const spy = runPrompt as unknown as ReturnType<typeof vi.fn>;
     spy.mockClear();
 
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      () =>
-        _eagerSummarizeIfNeeded({
-          threadId: `t${id}`,
-          eagerSummarize: true,
-          messages: [{ role: "user", content: "x" } as any],
-        }),
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, () =>
+      _eagerSummarizeIfNeeded({
+        threadId: `t${id}`,
+        eagerSummarize: true,
+        messages: [{ role: "user", content: "x" } as any],
+      }),
     );
 
     expect(spy).not.toHaveBeenCalled();
@@ -193,19 +181,17 @@ describe("_eagerSummarizeIfNeeded", () => {
       threadEndHookError: statelogSpy,
     } as any;
 
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      () =>
-        // Should NOT throw — the eager hook must never propagate
-        // its errors up to the caller's `Runner.thread` finally
-        // block (it would mask the user's real exception).
-        expect(
-          _eagerSummarizeIfNeeded({
-            threadId: `t${id}`,
-            eagerSummarize: true,
-            messages: [{ role: "user", content: "x" } as any],
-          }),
-        ).resolves.toBeUndefined(),
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, () =>
+      // Should NOT throw — the eager hook must never propagate
+      // its errors up to the caller's `Runner.thread` finally
+      // block (it would mask the user's real exception).
+      expect(
+        _eagerSummarizeIfNeeded({
+          threadId: `t${id}`,
+          eagerSummarize: true,
+          messages: [{ role: "user", content: "x" } as any],
+        }),
+      ).resolves.toBeUndefined(),
     );
 
     expect(threads.get(id).summary).toBe(null);
@@ -228,19 +214,17 @@ describe("_eagerSummarizeIfNeeded", () => {
     const spy = runPrompt as unknown as ReturnType<typeof vi.fn>;
     spy.mockClear();
 
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      () =>
-        _eagerSummarizeIfNeeded({
-          threadId: `t${id}`,
-          eagerSummarize: true,
-          messages: [
-            { role: "system", content: "GIANT SYSTEM PROMPT" } as any,
-            { role: "developer", content: "DEV INSTRUCTIONS" } as any,
-            { role: "user", content: "say hello" } as any,
-            { role: "assistant", content: "Hello!" } as any,
-          ],
-        }),
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, () =>
+      _eagerSummarizeIfNeeded({
+        threadId: `t${id}`,
+        eagerSummarize: true,
+        messages: [
+          { role: "system", content: "GIANT SYSTEM PROMPT" } as any,
+          { role: "developer", content: "DEV INSTRUCTIONS" } as any,
+          { role: "user", content: "say hello" } as any,
+          { role: "assistant", content: "Hello!" } as any,
+        ],
+      }),
     );
 
     expect(spy).toHaveBeenCalledTimes(1);
@@ -258,14 +242,12 @@ describe("_eagerSummarizeIfNeeded", () => {
     const spy = runPrompt as unknown as ReturnType<typeof vi.fn>;
     spy.mockClear();
 
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      () =>
-        _eagerSummarizeIfNeeded({
-          threadId: `t${id}`,
-          eagerSummarize: true,
-          messages: [{ role: "system", content: "only system" } as any],
-        }),
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, () =>
+      _eagerSummarizeIfNeeded({
+        threadId: `t${id}`,
+        eagerSummarize: true,
+        messages: [{ role: "system", content: "only system" } as any],
+      }),
     );
 
     expect(spy).not.toHaveBeenCalled();
@@ -283,14 +265,12 @@ describe("_eagerSummarizeIfNeeded", () => {
     const spy = runPrompt as unknown as ReturnType<typeof vi.fn>;
     spy.mockClear();
 
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      () =>
-        _eagerSummarizeIfNeeded({
-          threadId: `t${id}`,
-          eagerSummarize: true,
-          messages: [{ role: "user", content: "hello" } as any],
-        }),
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, () =>
+      _eagerSummarizeIfNeeded({
+        threadId: `t${id}`,
+        eagerSummarize: true,
+        messages: [{ role: "user", content: "hello" } as any],
+      }),
     );
 
     expect(spy).toHaveBeenCalledTimes(1);
@@ -306,14 +286,12 @@ describe("_eagerSummarizeIfNeeded", () => {
     const spy = runPrompt as unknown as ReturnType<typeof vi.fn>;
     spy.mockClear();
 
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      () =>
-        _eagerSummarizeIfNeeded({
-          threadId: "custom-id",
-          eagerSummarize: true,
-          messages: [{ role: "user", content: "x" } as any],
-        }),
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, () =>
+      _eagerSummarizeIfNeeded({
+        threadId: "custom-id",
+        eagerSummarize: true,
+        messages: [{ role: "user", content: "x" } as any],
+      }),
     );
 
     expect(spy).toHaveBeenCalledTimes(1);
@@ -330,7 +308,11 @@ describe("_contentToString", () => {
     const content = [
       { type: "text", text: "look at this" },
       { type: "image", source: { kind: "base64", base64: "AAAA", mimeType: "image/png" } },
-      { type: "file", filename: "report.pdf", source: { kind: "base64", base64: "BBBB", mimeType: "application/pdf" } },
+      {
+        type: "file",
+        filename: "report.pdf",
+        source: { kind: "base64", base64: "BBBB", mimeType: "application/pdf" },
+      },
     ];
     expect(_contentToString(content as any)).toBe(
       "look at this [image attachment] [file attachment: report.pdf]",
@@ -350,7 +332,9 @@ describe("_contentToString", () => {
   });
 
   it("renders a file part without filename generically", () => {
-    const content = [{ type: "file", source: { kind: "base64", base64: "CCCC", mimeType: "application/pdf" } }];
+    const content = [
+      { type: "file", source: { kind: "base64", base64: "CCCC", mimeType: "application/pdf" } },
+    ];
     expect(_contentToString(content as any)).toBe("[file attachment]");
   });
 

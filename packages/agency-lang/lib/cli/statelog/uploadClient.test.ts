@@ -8,7 +8,10 @@ const bundle = {
 };
 
 function mockFetch(handler: (url: string, init?: { method?: string }) => unknown): void {
-  vi.spyOn(globalThis, "fetch").mockImplementation((async (url: unknown, init?: { method?: string }) => {
+  vi.spyOn(globalThis, "fetch").mockImplementation((async (
+    url: unknown,
+    init?: { method?: string },
+  ) => {
     const body = handler(String(url), init);
     return {
       ok: true,
@@ -29,7 +32,12 @@ describe("uploadBundle", () => {
     };
     mockFetch((url) => {
       if (url.endsWith("/upload")) {
-        return { success: true, value: { endpointUrls: ["/serve/u/proj/greeter/list", "/serve/u/proj/greeter/node/main"] } };
+        return {
+          success: true,
+          value: {
+            endpointUrls: ["/serve/u/proj/greeter/list", "/serve/u/proj/greeter/node/main"],
+          },
+        };
       }
       return manifest;
     });
@@ -113,7 +121,10 @@ describe("uploadBundle", () => {
     let listFetched = false;
     mockFetch((url) => {
       if (url.endsWith("/upload")) {
-        return { success: true, value: { endpointUrls: ["https://evil.example/serve/u/p/g/list"] } };
+        return {
+          success: true,
+          value: { endpointUrls: ["https://evil.example/serve/u/p/g/list"] },
+        };
       }
       listFetched = true;
       return {};

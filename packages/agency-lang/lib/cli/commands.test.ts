@@ -81,9 +81,7 @@ describe("resolveInputSources", () => {
     const dir = makeTempDir();
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(resolveInputSources([dir])).toBeNull();
-    expect(err).toHaveBeenCalledWith(
-      expect.stringContaining("No .agency files found"),
-    );
+    expect(err).toHaveBeenCalledWith(expect.stringContaining("No .agency files found"));
   });
 
   it("exits on a missing path", () => {

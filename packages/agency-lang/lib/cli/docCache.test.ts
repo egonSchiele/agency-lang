@@ -51,7 +51,8 @@ function mdSnapshot(dir: string): Record<string, string> {
       const abs = path.join(current, entry.name);
       if (entry.name.startsWith(".agency-doc")) continue;
       if (entry.isDirectory()) walk(abs);
-      else if (entry.name.endsWith(".md")) out[path.relative(dir, abs)] = fs.readFileSync(abs, "utf-8");
+      else if (entry.name.endsWith(".md"))
+        out[path.relative(dir, abs)] = fs.readFileSync(abs, "utf-8");
     }
   };
   if (fs.existsSync(dir)) walk(dir);
@@ -92,10 +93,7 @@ function runMutation(
   return { rewritten, incremental, cold: mdSnapshot(cold) };
 }
 
-function assertMutation(
-  r: MutationResult,
-  expectedRewrites: string[],
-): void {
+function assertMutation(r: MutationResult, expectedRewrites: string[]): void {
   expect(r.rewritten).toEqual(expectedRewrites.sort());
   expect(r.incremental).toEqual(r.cold);
 }
@@ -133,7 +131,11 @@ describe("freshness behavior (exact rewrite sets + cold parity)", () => {
 
   test("docstring edit rewrites exactly that page", () => {
     const { inputDir, out } = baseFixture();
-    writeSource(inputDir, "b.agency", `/** Disconnected, edited. */\nexport def b(): number { return 2 }\n`);
+    writeSource(
+      inputDir,
+      "b.agency",
+      `/** Disconnected, edited. */\nexport def b(): number { return 2 }\n`,
+    );
     assertMutation(runMutation(inputDir, out), ["b.md"]);
   });
 
@@ -214,7 +216,11 @@ describe("freshness behavior (exact rewrite sets + cold parity)", () => {
 
   test("splice-containing file renders every run, never skips", () => {
     const inputDir = tmp("agency-doccache-in-");
-    writeSource(inputDir, "s.agency", `const x = $( gen() )\nexport def s(): number { return 1 }\n`);
+    writeSource(
+      inputDir,
+      "s.agency",
+      `const x = $( gen() )\nexport def s(): number { return 1 }\n`,
+    );
     const out = tmp("agency-doccache-out-");
     generateDoc({}, inputDir, out, []);
     const r = runMutation(inputDir, out);
@@ -224,8 +230,16 @@ describe("freshness behavior (exact rewrite sets + cold parity)", () => {
 
   test("pkg:: (direct and transitive) renders every run", () => {
     const inputDir = tmp("agency-doccache-in-");
-    writeSource(inputDir, "direct.agency", `import { x } from "pkg::toolbox"\nexport def d(): number { return 1 }\n`);
-    writeSource(inputDir, "via.agency", `import { d } from "./direct.agency"\nexport def v(): number { return d() }\n`);
+    writeSource(
+      inputDir,
+      "direct.agency",
+      `import { x } from "pkg::toolbox"\nexport def d(): number { return 1 }\n`,
+    );
+    writeSource(
+      inputDir,
+      "via.agency",
+      `import { d } from "./direct.agency"\nexport def v(): number { return d() }\n`,
+    );
     writeSource(inputDir, "clean.agency", `export def c(): number { return 1 }\n`);
     const out = tmp("agency-doccache-out-");
     generateDoc({}, inputDir, out, []);
@@ -236,7 +250,11 @@ describe("freshness behavior (exact rewrite sets + cold parity)", () => {
 
   test("unresolvable import still renders and never skips", () => {
     const inputDir = tmp("agency-doccache-in-");
-    writeSource(inputDir, "broken.agency", `import { gone } from "./gone.agency"\nexport def br(): number { return 1 }\n`);
+    writeSource(
+      inputDir,
+      "broken.agency",
+      `import { gone } from "./gone.agency"\nexport def br(): number { return 1 }\n`,
+    );
     const out = tmp("agency-doccache-out-");
     generateDoc({}, inputDir, out, []);
     expect(mdSnapshot(out)["broken.md"]).toBeDefined();
@@ -256,7 +274,11 @@ describe("freshness behavior (exact rewrite sets + cold parity)", () => {
 
   test("registrySymbols fidelity: links identical whether the target page's contribution came from cache or parse", () => {
     const inputDir = tmp("agency-doccache-in-");
-    writeSource(inputDir, "types.agency", `export type Foo = { a: number }\ndef _internal(): number { return 0 }\n`);
+    writeSource(
+      inputDir,
+      "types.agency",
+      `export type Foo = { a: number }\ndef _internal(): number { return 0 }\n`,
+    );
     writeSource(
       inputDir,
       "user.agency",
@@ -279,7 +301,11 @@ describe("freshness behavior (exact rewrite sets + cold parity)", () => {
     const { inputDir, out } = baseFixture();
     // Stale one page while the disconnected one stays cached; both must
     // equal a cold run byte-for-byte (catches accidental table sharing).
-    writeSource(inputDir, "b.agency", `/** Disconnected v2. */\nexport def b(): number { return 2 }\n`);
+    writeSource(
+      inputDir,
+      "b.agency",
+      `/** Disconnected v2. */\nexport def b(): number { return 2 }\n`,
+    );
     const r = runMutation(inputDir, out);
     assertMutation(r, ["b.md"]);
     expect(r.incremental["a.md"]).toContain("docs::alpha");
@@ -321,7 +347,11 @@ describe("ownership, transitions, and deletion safety", () => {
   test("root → nested input over one output: obsolete pages removed, tree matches cold", () => {
     const inputDir = tmp("agency-doccache-in-");
     writeSource(inputDir, "top.agency", `export def t(): number { return 1 }\n`);
-    writeSource(inputDir, path.join("sub", "inner.agency"), `export def i(): number { return 2 }\n`);
+    writeSource(
+      inputDir,
+      path.join("sub", "inner.agency"),
+      `export def i(): number { return 2 }\n`,
+    );
     const out = tmp("agency-doccache-out-");
     generateDoc({}, inputDir, out, []);
     expect(fs.existsSync(path.join(out, "top.md"))).toBe(true);
@@ -337,7 +367,11 @@ describe("ownership, transitions, and deletion safety", () => {
   test("no-ignore → ignore over one output: newly excluded owned pages removed", () => {
     const inputDir = tmp("agency-doccache-in-");
     writeSource(inputDir, "keep.agency", `export def k(): number { return 1 }\n`);
-    writeSource(inputDir, path.join("skipme", "gone.agency"), `export def g(): number { return 2 }\n`);
+    writeSource(
+      inputDir,
+      path.join("skipme", "gone.agency"),
+      `export def g(): number { return 2 }\n`,
+    );
     const out = tmp("agency-doccache-out-");
     generateDoc({}, inputDir, out, []);
     expect(fs.existsSync(path.join(out, "skipme", "gone.md"))).toBe(true);

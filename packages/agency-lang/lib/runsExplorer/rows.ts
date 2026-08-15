@@ -58,7 +58,8 @@ export type BuiltRunRow = {
 
 export function buildRunRow(phaseOne: EvalRunPhaseOne, source: Source): BuiltRunRow {
   const summary = phaseOne.summary;
-  const gradeByInput: Record<string, { objective: number; gatesPassed: boolean }> = Object.create(null);
+  const gradeByInput: Record<string, { objective: number; gatesPassed: boolean }> =
+    Object.create(null);
   for (const grade of summary.grading?.perInput ?? []) {
     const entry = grade as unknown as { inputId: string; objective: number; gatesPassed: boolean };
     gradeByInput[entry.inputId] = entry;
@@ -104,7 +105,8 @@ export function buildRunRow(phaseOne: EvalRunPhaseOne, source: Source): BuiltRun
     agentLabel: summary.agentLabel,
     suite: suite.suite,
     score: typeof summary.grading?.objective === "number" ? summary.grading.objective : null,
-    gatesPassed: typeof summary.grading?.gatesPassed === "boolean" ? summary.grading.gatesPassed : null,
+    gatesPassed:
+      typeof summary.grading?.gatesPassed === "boolean" ? summary.grading.gatesPassed : null,
     status: "failed",
     costUsd: null,
     wallMs: null,
@@ -217,14 +219,15 @@ export function recomputeRunAggregates(row: RunRow): void {
   const tests = row.tests;
 
   const knownCosts = tests.filter((test) => test.costUsd !== null);
-  row.costUsd = knownCosts.length === 0
-    ? null
-    : knownCosts.reduce((sum, test) => sum + (test.costUsd ?? 0), 0);
+  row.costUsd =
+    knownCosts.length === 0 ? null : knownCosts.reduce((sum, test) => sum + (test.costUsd ?? 0), 0);
 
   const started = tests.filter((test) => test.startedAtMs !== null);
   if (started.length > 0) {
     const minStart = Math.min(...started.map((test) => test.startedAtMs ?? 0));
-    const maxEnd = Math.max(...started.map((test) => (test.startedAtMs ?? 0) + (test.durationMs ?? 0)));
+    const maxEnd = Math.max(
+      ...started.map((test) => (test.startedAtMs ?? 0) + (test.durationMs ?? 0)),
+    );
     row.startedAtMs = minStart;
     row.wallMs = maxEnd - minStart;
   }

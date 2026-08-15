@@ -3,8 +3,7 @@
 // these; recipes receive the discriminated mode and never reinterpret booleans.
 
 export type RemoteLogsMode =
-  | { kind: "list"; json: boolean }
-  | { kind: "fetch"; traceId?: string; output: "viewer" | "json" };
+  { kind: "list"; json: boolean } | { kind: "fetch"; traceId?: string; output: "viewer" | "json" };
 
 export type RemoteLogsEnvironment = {
   stdinIsTTY: boolean;

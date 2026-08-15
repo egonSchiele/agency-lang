@@ -59,9 +59,7 @@ function toExportedFunction(
     description: fn.toolDefinition!.description,
     // Only unbound params are caller-facing — bound params are filled at
     // definition time and rejected if sent. Matches `logRoutes` in adapter.ts.
-    parameters: fn.params
-      .filter((param) => !param.isBound)
-      .map((param) => ({ name: param.name })),
+    parameters: fn.params.filter((param) => !param.isBound).map((param) => ({ name: param.name })),
     agencyFunction: fn,
     interruptEffects,
     invoke: makeRawInvoker(fn, moduleInvoke),
@@ -110,31 +108,47 @@ const RECOMPILE_HINT =
   "served bundles must be recompiled to report per-invocation usage.";
 
 export function discoverExports(options: DiscoverOptions): ServedExportedItem[] {
-  const { toolRegistry, moduleExports, moduleId, exportedNodeNames = [], interruptEffectsByName = {} } = options;
+  const {
+    toolRegistry,
+    moduleExports,
+    moduleId,
+    exportedNodeNames = [],
+    interruptEffectsByName = {},
+  } = options;
 
   const moduleInvoke = moduleExports.__invokeFunction as ModuleInvokeFunction | undefined;
   const serveFn = moduleExports.__invokeFunctionForServe as ServeFunctionInvoker | undefined;
   const serveNode = moduleExports.__invokeNodeForServe as ServeNodeInvoker | undefined;
 
-  const exportedFns = Object.values(toolRegistry).filter((fn) => isExportedFromModule(fn, moduleId));
+  const exportedFns = Object.values(toolRegistry).filter((fn) =>
+    isExportedFromModule(fn, moduleId),
+  );
 
   // Require each serve invoker ONLY for the kind actually present, so a
   // node-only bundle need not carry the function invoker (and vice versa). A
   // bundle that predates the seam for a kind it exports fails fast rather than
   // serving that kind uncounted.
   if (exportedFns.length > 0 && !serveFn) {
-    throw new Error(`This agent bundle predates the serve cost seam (no __invokeFunctionForServe). ${RECOMPILE_HINT}`);
+    throw new Error(
+      `This agent bundle predates the serve cost seam (no __invokeFunctionForServe). ${RECOMPILE_HINT}`,
+    );
   }
-  const presentNodes = exportedNodeNames.filter((name) => typeof moduleExports[name] === "function");
+  const presentNodes = exportedNodeNames.filter(
+    (name) => typeof moduleExports[name] === "function",
+  );
   if (presentNodes.length > 0 && !serveNode) {
-    throw new Error(`This agent bundle predates the serve cost seam (no __invokeNodeForServe). ${RECOMPILE_HINT}`);
+    throw new Error(
+      `This agent bundle predates the serve cost seam (no __invokeNodeForServe). ${RECOMPILE_HINT}`,
+    );
   }
 
   const functions = exportedFns.map((fn) =>
     toExportedFunction(fn, interruptEffectsByName[fn.name] ?? [], moduleInvoke, serveFn!),
   );
   const nodes = exportedNodeNames
-    .map((name) => toExportedNode(name, moduleExports, interruptEffectsByName[name] ?? [], serveNode!))
+    .map((name) =>
+      toExportedNode(name, moduleExports, interruptEffectsByName[name] ?? [], serveNode!),
+    )
     .filter((n): n is ServedExportedNode => n !== null);
 
   return [...functions, ...nodes];

@@ -28,16 +28,24 @@ afterEach(() => {
 describe("discoverOptimizeTargets default base dir", () => {
   it("defaults to the closure's common ancestor when it lies outside cwd", () => {
     const dir = fs.realpathSync(makeTempDir());
-    const entry = writeAgency(dir, "app/agent.agency", `
+    const entry = writeAgency(
+      dir,
+      "app/agent.agency",
+      `
 import { helper } from "../shared/prompts.agency"
 node main() {}
-`);
-    writeAgency(dir, "shared/prompts.agency", `
+`,
+    );
+    writeAgency(
+      dir,
+      "shared/prompts.agency",
+      `
 optimize const prompt = "shared"
 def helper() {
   return prompt
 }
-`);
+`,
+    );
 
     const targetSet = discoverOptimizeTargets(entry);
 
@@ -51,7 +59,11 @@ def helper() {
 
   it("defaults to cwd when the closure sits inside it", () => {
     const dir = fs.realpathSync(makeTempDir());
-    const entry = writeAgency(dir, "nested/agent.agency", "optimize const prompt = \"hi\"\nnode main() {}\n");
+    const entry = writeAgency(
+      dir,
+      "nested/agent.agency",
+      'optimize const prompt = "hi"\nnode main() {}\n',
+    );
     const originalCwd = process.cwd();
     process.chdir(dir);
     try {
@@ -68,7 +80,10 @@ def helper() {
 describe("discoverOptimizeTargets", () => {
   it("finds root, function-local, node-local, and imported optimize targets", () => {
     const dir = makeTempDir();
-    const entry = writeAgency(dir, "foo.agency", `
+    const entry = writeAgency(
+      dir,
+      "foo.agency",
+      `
 import { helper } from "./helpers/prompts.agency"
 
 optimize static const systemPrompt = "system"
@@ -80,13 +95,18 @@ def bar() {
 node main() {
   optimize const nodePrompt = "node prompt"
 }
-`);
-    writeAgency(dir, "helpers/prompts.agency", `
+`,
+    );
+    writeAgency(
+      dir,
+      "helpers/prompts.agency",
+      `
 optimize const importedPrompt = "imported"
 def helper() {
   return importedPrompt
 }
-`);
+`,
+    );
 
     const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
 
@@ -105,15 +125,15 @@ def helper() {
       valueKind: "string",
       value: "function prompt",
     });
-    expect(Object.keys(targetSet.files).sort()).toEqual([
-      "foo.agency",
-      "helpers/prompts.agency",
-    ]);
+    expect(Object.keys(targetSet.files).sort()).toEqual(["foo.agency", "helpers/prompts.agency"]);
   });
 
   it("sorts targets by deterministic id", () => {
     const dir = makeTempDir();
-    const entry = writeAgency(dir, "foo.agency", `
+    const entry = writeAgency(
+      dir,
+      "foo.agency",
+      `
 node zed() {
   optimize const z = "z"
 }
@@ -123,7 +143,8 @@ optimize const a = "a"
 def alpha() {
   optimize const b = "b"
 }
-`);
+`,
+    );
 
     const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
 
@@ -136,7 +157,10 @@ def alpha() {
 
   it("skips std, pkg, js, ts, and bare imports", () => {
     const dir = makeTempDir();
-    const entry = writeAgency(dir, "foo.agency", `
+    const entry = writeAgency(
+      dir,
+      "foo.agency",
+      `
 import { read } from "std::fs"
 import { helper } from "pkg::prompts"
 import { jsHelper } from "./helper.js"
@@ -144,26 +168,33 @@ import { tsHelper } from "./helper.ts"
 import { bare } from "bare.agency"
 
 optimize const prompt = "root"
-`);
+`,
+    );
 
     const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
 
-    expect(targetSet.targets.map((target) => target.id)).toEqual([
-      "foo.agency:global:prompt",
-    ]);
+    expect(targetSet.targets.map((target) => target.id)).toEqual(["foo.agency:global:prompt"]);
     expect(Object.keys(targetSet.files)).toEqual(["foo.agency"]);
   });
 
   it("handles import cycles once", () => {
     const dir = makeTempDir();
-    const entry = writeAgency(dir, "a.agency", `
+    const entry = writeAgency(
+      dir,
+      "a.agency",
+      `
 import { b } from "./b.agency"
 optimize const aPrompt = "a"
-`);
-    writeAgency(dir, "b.agency", `
+`,
+    );
+    writeAgency(
+      dir,
+      "b.agency",
+      `
 import { a } from "./a.agency"
 optimize const bPrompt = "b"
-`);
+`,
+    );
 
     const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
 
@@ -175,16 +206,28 @@ optimize const bPrompt = "b"
 
   it("follows local named re-exports", () => {
     const dir = makeTempDir();
-    const entry = writeAgency(dir, "main.agency", `
+    const entry = writeAgency(
+      dir,
+      "main.agency",
+      `
 import { prompt } from "./lib.agency"
 optimize const rootPrompt = "root"
-`);
-    writeAgency(dir, "lib.agency", `
+`,
+    );
+    writeAgency(
+      dir,
+      "lib.agency",
+      `
 export { prompt } from "./prompts.agency"
-`);
-    writeAgency(dir, "prompts.agency", `
+`,
+    );
+    writeAgency(
+      dir,
+      "prompts.agency",
+      `
 optimize const prompt = "exported"
-`);
+`,
+    );
 
     const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
 
@@ -201,33 +244,51 @@ optimize const prompt = "exported"
 
   it("follows local star re-exports", () => {
     const dir = makeTempDir();
-    const entry = writeAgency(dir, "main.agency", `
+    const entry = writeAgency(
+      dir,
+      "main.agency",
+      `
 import { prompt } from "./lib.agency"
-`);
-    writeAgency(dir, "lib.agency", `
+`,
+    );
+    writeAgency(
+      dir,
+      "lib.agency",
+      `
 export * from "./prompts.agency"
-`);
-    writeAgency(dir, "prompts.agency", `
+`,
+    );
+    writeAgency(
+      dir,
+      "prompts.agency",
+      `
 optimize const prompt = "exported"
-`);
+`,
+    );
 
     const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
 
-    expect(targetSet.targets.map((target) => target.id)).toEqual([
-      "prompts.agency:global:prompt",
-    ]);
+    expect(targetSet.targets.map((target) => target.id)).toEqual(["prompts.agency:global:prompt"]);
   });
 
   it("collapses duplicate import spellings by canonical path", () => {
     const dir = makeTempDir();
-    const entry = writeAgency(dir, "foo.agency", `
+    const entry = writeAgency(
+      dir,
+      "foo.agency",
+      `
 import { a } from "./shared.agency"
 import { b } from "./nested/../shared.agency"
 optimize const rootPrompt = "root"
-`);
-    writeAgency(dir, "shared.agency", `
+`,
+    );
+    writeAgency(
+      dir,
+      "shared.agency",
+      `
 optimize const sharedPrompt = "shared"
-`);
+`,
+    );
 
     const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
 
@@ -239,13 +300,17 @@ optimize const sharedPrompt = "shared"
 
   it("rejects nested-block optimize declarations", () => {
     const dir = makeTempDir();
-    const entry = writeAgency(dir, "foo.agency", `
+    const entry = writeAgency(
+      dir,
+      "foo.agency",
+      `
 node main(flag: boolean) {
   if (flag) {
     optimize const prompt = "nested"
   }
 }
-`);
+`,
+    );
 
     expect(() => discoverOptimizeTargets(entry, { baseDir: dir })).toThrow(
       /nested block scopes are unsupported/i,
@@ -254,12 +319,16 @@ node main(flag: boolean) {
 
   it("rejects duplicate target ids", () => {
     const dir = makeTempDir();
-    const entry = writeAgency(dir, "foo.agency", `
+    const entry = writeAgency(
+      dir,
+      "foo.agency",
+      `
 node main() {
   optimize const prompt = "first"
   optimize const prompt = "second"
 }
-`);
+`,
+    );
 
     expect(() => discoverOptimizeTargets(entry, { baseDir: dir })).toThrow(
       /duplicate optimize target id foo\.agency:main:prompt/i,
@@ -268,11 +337,15 @@ node main() {
 
   it("requires an annotation for non-string literal initializers (v1)", () => {
     const dir = makeTempDir();
-    const entry = writeAgency(dir, "foo.agency", `
+    const entry = writeAgency(
+      dir,
+      "foo.agency",
+      `
 node main() {
   optimize const temperature = 0.2
 }
-`);
+`,
+    );
 
     expect(() => discoverOptimizeTargets(entry, { baseDir: dir })).toThrow(
       /needs a type annotation/i,
@@ -281,27 +354,33 @@ node main() {
 
   it("rejects non-literal initializers", () => {
     const dir = makeTempDir();
-    const entry = writeAgency(dir, "foo.agency", `
+    const entry = writeAgency(
+      dir,
+      "foo.agency",
+      `
 def f(): number {
   return 1
 }
 optimize const x = f()
 node main() {}
-`);
-
-    expect(() => discoverOptimizeTargets(entry, { baseDir: dir })).toThrow(
-      /must be a literal/i,
+`,
     );
+
+    expect(() => discoverOptimizeTargets(entry, { baseDir: dir })).toThrow(/must be a literal/i);
   });
 
   it("exposes aliases from the whole import closure, including imported ones", () => {
     const dir = fs.realpathSync(makeTempDir());
     writeAgency(dir, "types.agency", `export type Status = "pass" | "fail"\n`);
-    const entry = writeAgency(dir, "agent.agency", `
+    const entry = writeAgency(
+      dir,
+      "agent.agency",
+      `
 import { Status } from "./types.agency"
 optimize const status: Status = "pass"
 node main() {}
-`);
+`,
+    );
 
     const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
 
@@ -331,7 +410,11 @@ node main() {}
 
   it("constrains an annotated boolean; value is the exact source text", () => {
     const dir = fs.realpathSync(makeTempDir());
-    const entry = writeAgency(dir, "a.agency", `optimize const enabled: boolean = false\nnode main() {}\n`);
+    const entry = writeAgency(
+      dir,
+      "a.agency",
+      `optimize const enabled: boolean = false\nnode main() {}\n`,
+    );
 
     const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
     const target = targetSet.targets.find((candidate) => candidate.name === "enabled")!;
@@ -343,10 +426,14 @@ node main() {}
 
   it("preserves quotes in a record target's value (formatter-exact rendering)", () => {
     const dir = fs.realpathSync(makeTempDir());
-    const entry = writeAgency(dir, "a.agency", `type Person = { name: string; age: number }
+    const entry = writeAgency(
+      dir,
+      "a.agency",
+      `type Person = { name: string; age: number }
 optimize const person: Person = { name: "foo", age: 0 }
 node main() {}
-`);
+`,
+    );
 
     const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
     const target = targetSet.targets.find((candidate) => candidate.name === "person")!;
@@ -360,7 +447,11 @@ node main() {}
 
   it("accepts a null initializer (variableName representation)", () => {
     const dir = fs.realpathSync(makeTempDir());
-    const entry = writeAgency(dir, "a.agency", `optimize const x: number | null = null\nnode main() {}\n`);
+    const entry = writeAgency(
+      dir,
+      "a.agency",
+      `optimize const x: number | null = null\nnode main() {}\n`,
+    );
 
     const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
     const target = targetSet.targets.find((candidate) => candidate.name === "x")!;
@@ -374,7 +465,11 @@ node main() {}
     // `NotDefined` is not in the closure — the original value cannot pass
     // the probe, so the target must become unconstrained rather than
     // un-mutatable. literal + null constraint = unconstrained, NOT freeform.
-    const entry = writeAgency(dir, "a.agency", `optimize const x: NotDefined = 5\nnode main() {}\n`);
+    const entry = writeAgency(
+      dir,
+      "a.agency",
+      `optimize const x: NotDefined = 5\nnode main() {}\n`,
+    );
 
     const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
     const target = targetSet.targets.find((candidate) => candidate.name === "x")!;
@@ -385,12 +480,16 @@ node main() {}
 
   it("rejects legacy @optimize tags", () => {
     const dir = makeTempDir();
-    const entry = writeAgency(dir, "foo.agency", `
+    const entry = writeAgency(
+      dir,
+      "foo.agency",
+      `
 node main() {
   @optimize
   const result = llm("hello")
 }
-`);
+`,
+    );
 
     expect(() => discoverOptimizeTargets(entry, { baseDir: dir })).toThrow(
       /@optimize\(\.\.\.\).*no longer supported/i,

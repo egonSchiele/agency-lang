@@ -9,7 +9,6 @@ export { BUILTIN_THEME_NAMES } from "./syntax-themes.js";
 import { _parseMarkdown, _renderMarkdownForCli } from "./markdown.js";
 import { Block, CodeBlock, List } from "tarsec/parsers/markdown";
 
-
 // Dim backgrounds for changed lines (RGB).
 const DIM_RED: [number, number, number] = [60, 0, 0];
 const DIM_GREEN: [number, number, number] = [0, 45, 0];
@@ -100,7 +99,7 @@ function highlightMarkdown(code: string): string {
   if (!parsed.success) {
     console.error(
       `[std::syntax.highlight] Markdown parse failed; returning raw text. ` +
-      `error=${JSON.stringify(parsed.error)}`,
+        `error=${JSON.stringify(parsed.error)}`,
     );
     return code;
   }
@@ -113,8 +112,8 @@ function highlightMarkdown(code: string): string {
     const preview = parsed.rest.slice(0, 80).replace(/\n/g, "\\n");
     console.error(
       `[std::syntax.highlight] Markdown parser left ${parsed.rest.length} ` +
-      `chars unconsumed; returning raw text to avoid truncating output. ` +
-      `Trigger preview: ${JSON.stringify(preview)}`,
+        `chars unconsumed; returning raw text to avoid truncating output. ` +
+        `Trigger preview: ${JSON.stringify(preview)}`,
     );
     return code;
   }
@@ -123,28 +122,21 @@ function highlightMarkdown(code: string): string {
 }
 
 function mapMarkdownBlock(block: Block): Block {
-  if (
-    block != null &&
-    typeof block === "object"
-
-  ) {
-    const someBlock = (block as Record<string, unknown>)
+  if (block != null && typeof block === "object") {
+    const someBlock = block as Record<string, unknown>;
     if (someBlock.type === "code-block") {
       const codeBlock = block as CodeBlock;
       return {
         ...codeBlock,
-        content: syntaxHighlight(
-          codeBlock.content ?? "",
-          codeBlock.language ?? "plaintext",
-        ),
+        content: syntaxHighlight(codeBlock.content ?? "", codeBlock.language ?? "plaintext"),
       };
     } else if (someBlock.type === "list") {
       const listBlock = block as List;
       const items = listBlock.items.map((listItem) => {
         return {
           ...listItem,
-          content: listItem.content.map(mapMarkdownBlock)
-        }
+          content: listItem.content.map(mapMarkdownBlock),
+        };
       });
       return {
         ...listBlock,
@@ -178,8 +170,7 @@ export function _diff(
   const resolved = language && colored ? resolveTheme(theme) : undefined;
   // For "auto", detect the language once on the full text so every line is
   // highlighted with the same language (per-line detection would be inconsistent).
-  const lineLanguage =
-    language === "auto" ? detectLanguage(oldText + "\n" + newText) : language;
+  const lineLanguage = language === "auto" ? detectLanguage(oldText + "\n" + newText) : language;
   const renderBody =
     language && colored && resolved
       ? (code: string, kind: "context" | "delete" | "insert", width: number) =>

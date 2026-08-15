@@ -30,9 +30,7 @@ const CODE_ATTEMPT_PATTERN = /^ag\d+$/i;
  * than intended).
  */
 function parseIgnoreRule(directiveTail: string): "all" | string[] {
-  const tokens = directiveTail
-    .split(/[\s,]+/)
-    .filter((token) => token.length > 0);
+  const tokens = directiveTail.split(/[\s,]+/).filter((token) => token.length > 0);
   const codes = tokens.filter((token) => CODE_PATTERN.test(token));
   const malformedAttempt = tokens.some(
     (token) => !CODE_PATTERN.test(token) && CODE_ATTEMPT_PATTERN.test(token),

@@ -596,7 +596,7 @@ describe("binOpParser", () => {
       }
     });
 
-    it('should parse ?? with lower precedence than comparison', () => {
+    it("should parse ?? with lower precedence than comparison", () => {
       const result = binOpParser("a == b ?? c");
       expect(result.success).toBe(true);
       if (result.success) {
@@ -665,7 +665,7 @@ describe("binOpParser", () => {
       }
     });
 
-    it('should parse ** with higher precedence than *', () => {
+    it("should parse ** with higher precedence than *", () => {
       const result = binOpParser("2 * 3 ** 4");
       expect(result.success).toBe(true);
       if (result.success) {
@@ -862,7 +862,7 @@ describe("binOpParser", () => {
   describe("regex match operators", () => {
     const testCases = [
       {
-        input: 'foo =~ re/bar/',
+        input: "foo =~ re/bar/",
         expected: {
           success: true,
           result: {
@@ -874,7 +874,7 @@ describe("binOpParser", () => {
         },
       },
       {
-        input: 'foo !~ re/bar/i',
+        input: "foo !~ re/bar/i",
         expected: {
           success: true,
           result: {
@@ -886,7 +886,7 @@ describe("binOpParser", () => {
         },
       },
       {
-        input: 'name =~ re/^hello/',
+        input: "name =~ re/^hello/",
         expected: {
           success: true,
           result: {

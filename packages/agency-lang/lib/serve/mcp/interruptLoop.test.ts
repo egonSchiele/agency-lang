@@ -5,7 +5,10 @@ import { mkdtempSync, rmSync } from "fs";
 import path from "path";
 import os from "os";
 
-function makeTmpStore(policy: Record<string, any> = {}): { store: PolicyStore; cleanup: () => void } {
+function makeTmpStore(policy: Record<string, any> = {}): {
+  store: PolicyStore;
+  cleanup: () => void;
+} {
   const tmpDir = mkdtempSync(path.join(os.tmpdir(), "interrupt-loop-test-"));
   const store = new PolicyStore("test", tmpDir);
   if (Object.keys(policy).length > 0) store.set(policy);
@@ -13,7 +16,15 @@ function makeTmpStore(policy: Record<string, any> = {}): { store: PolicyStore; c
 }
 
 function makeInterrupt(effect: string, data: Record<string, any> = {}): any {
-  return { type: "interrupt", effect, message: "", data, origin: "test", interruptId: "test-id", runId: "test-run" };
+  return {
+    type: "interrupt",
+    effect,
+    message: "",
+    data,
+    origin: "test",
+    interruptId: "test-id",
+    runId: "test-run",
+  };
 }
 
 const isInterrupts = (data: unknown) =>
@@ -23,11 +34,10 @@ describe("runWithPolicy", () => {
   it("returns result directly when no interrupts", async () => {
     const { store, cleanup } = makeTmpStore();
     try {
-      const result = await runWithPolicy(
-        async () => "hello",
-        store,
-        { hasInterrupts: isInterrupts, respondToInterrupts: async () => "done" },
-      );
+      const result = await runWithPolicy(async () => "hello", store, {
+        hasInterrupts: isInterrupts,
+        respondToInterrupts: async () => "done",
+      });
       expect(result).toBe("hello");
     } finally {
       cleanup();
@@ -40,19 +50,15 @@ describe("runWithPolicy", () => {
     });
     try {
       let callCount = 0;
-      const result = await runWithPolicy(
-        async () => [makeInterrupt("test::greet")],
-        store,
-        {
-          hasInterrupts: isInterrupts,
-          respondToInterrupts: async (_interrupts, responses) => {
-            callCount++;
-            expect(responses).toHaveLength(1);
-            expect((responses[0] as any).type).toBe("approve");
-            return "approved-result";
-          },
+      const result = await runWithPolicy(async () => [makeInterrupt("test::greet")], store, {
+        hasInterrupts: isInterrupts,
+        respondToInterrupts: async (_interrupts, responses) => {
+          callCount++;
+          expect(responses).toHaveLength(1);
+          expect((responses[0] as any).type).toBe("approve");
+          return "approved-result";
         },
-      );
+      });
       expect(result).toBe("approved-result");
       expect(callCount).toBe(1);
     } finally {
@@ -63,17 +69,13 @@ describe("runWithPolicy", () => {
   it("rejects interrupts not covered by policy (default reject)", async () => {
     const { store, cleanup } = makeTmpStore(); // empty policy
     try {
-      const result = await runWithPolicy(
-        async () => [makeInterrupt("test::greet")],
-        store,
-        {
-          hasInterrupts: isInterrupts,
-          respondToInterrupts: async (_interrupts, responses) => {
-            expect((responses[0] as any).type).toBe("reject");
-            return "rejected-result";
-          },
+      const result = await runWithPolicy(async () => [makeInterrupt("test::greet")], store, {
+        hasInterrupts: isInterrupts,
+        respondToInterrupts: async (_interrupts, responses) => {
+          expect((responses[0] as any).type).toBe("reject");
+          return "rejected-result";
         },
-      );
+      });
       expect(result).toBe("rejected-result");
     } finally {
       cleanup();
@@ -87,20 +89,16 @@ describe("runWithPolicy", () => {
     });
     try {
       let round = 0;
-      const result = await runWithPolicy(
-        async () => [makeInterrupt("test::step1")],
-        store,
-        {
-          hasInterrupts: isInterrupts,
-          respondToInterrupts: async () => {
-            round++;
-            if (round === 1) {
-              return [makeInterrupt("test::step2")];
-            }
-            return "final";
-          },
+      const result = await runWithPolicy(async () => [makeInterrupt("test::step1")], store, {
+        hasInterrupts: isInterrupts,
+        respondToInterrupts: async () => {
+          round++;
+          if (round === 1) {
+            return [makeInterrupt("test::step2")];
+          }
+          return "final";
         },
-      );
+      });
       expect(result).toBe("final");
       expect(round).toBe(2);
     } finally {
@@ -114,14 +112,12 @@ describe("runWithPolicy", () => {
     });
     try {
       await expect(
-        runWithPolicy(
-          async () => [makeInterrupt("test::x")],
-          store,
-          {
-            hasInterrupts: isInterrupts,
-            respondToInterrupts: async () => { throw new Error("agent crashed"); },
+        runWithPolicy(async () => [makeInterrupt("test::x")], store, {
+          hasInterrupts: isInterrupts,
+          respondToInterrupts: async () => {
+            throw new Error("agent crashed");
           },
-        ),
+        }),
       ).rejects.toThrow("agent crashed");
     } finally {
       cleanup();

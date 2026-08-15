@@ -308,7 +308,9 @@ export function renderDiff(hunks: Hunk[], opts: RenderDiffOpts = {}): string {
 
   for (const h of hunks) {
     if (opts.hunkHeaders) {
-      out.push(paint(color.cyan, `@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`));
+      out.push(
+        paint(color.cyan, `@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`),
+      );
     }
     if (useHighlight) {
       for (const line of h.lines) {

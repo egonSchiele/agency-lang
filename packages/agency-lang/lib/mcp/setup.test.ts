@@ -40,12 +40,12 @@ describe("setupCodexMcp", () => {
     fs.writeFileSync(
       configPath,
       [
-        '[mcp_servers.agency]',
+        "[mcp_servers.agency]",
         'command = "old"',
-        '',
-        '[mcp_servers.other]',
+        "",
+        "[mcp_servers.other]",
         'command = "other"',
-        '',
+        "",
       ].join("\n"),
     );
 
@@ -54,6 +54,6 @@ describe("setupCodexMcp", () => {
     const config = fs.readFileSync(configPath, "utf-8");
     expect(config).toContain('command = "node"');
     expect(config).not.toContain('command = "old"');
-    expect(config).toContain('[mcp_servers.other]');
+    expect(config).toContain("[mcp_servers.other]");
   });
 });

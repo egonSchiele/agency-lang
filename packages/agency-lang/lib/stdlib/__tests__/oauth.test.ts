@@ -39,18 +39,13 @@ const mockServerInstance = {
 vi.mock("http", () => ({
   default: {
     createServer: vi.fn((handler: (req: unknown, res: unknown) => void) => {
-      (mockServerInstance as unknown as { _handler: typeof handler })._handler =
-        handler;
+      (mockServerInstance as unknown as { _handler: typeof handler })._handler = handler;
       return mockServerInstance;
     }),
   },
 }));
 
-import {
-  _getAccessToken,
-  _isAuthorized,
-  _revokeAuth,
-} from "../oauth.js";
+import { _getAccessToken, _isAuthorized, _revokeAuth } from "../oauth.js";
 import { runInTestContext } from "../../runtime/asyncContext.js";
 import { RuntimeContext } from "../../runtime/state/context.js";
 import { StateStack } from "../../runtime/state/stateStack.js";
@@ -108,7 +103,7 @@ describe("_isAuthorized", () => {
         token_url: "https://example.com/token",
         client_id: "id",
         client_secret: "secret",
-      })
+      }),
     );
     expect(await _isAuthorized("test-provider")).toBe(true);
   });
@@ -123,11 +118,14 @@ describe("_revokeAuth", () => {
 
   it("deletes token file and returns revoked:true", async () => {
     await fs.mkdir(TOKEN_DIR, { recursive: true });
-    await fs.writeFile(testTokenPath, JSON.stringify({
-      access_token: "x",
-      token_url: "https://example.com/token",
-      client_id: "id",
-    }));
+    await fs.writeFile(
+      testTokenPath,
+      JSON.stringify({
+        access_token: "x",
+        token_url: "https://example.com/token",
+        client_id: "id",
+      }),
+    );
     expect(await _revokeAuth("revoke-test")).toEqual({ revoked: true });
     expect(fsSync.existsSync(testTokenPath)).toBe(false);
   });
@@ -143,7 +141,7 @@ describe("_getAccessToken", () => {
 
   it("throws when no tokens exist", async () => {
     await expect(withCtx(() => _getAccessToken("no-such-provider"))).rejects.toThrow(
-      "No OAuth tokens found"
+      "No OAuth tokens found",
     );
   });
 
@@ -158,7 +156,7 @@ describe("_getAccessToken", () => {
         token_url: "https://example.com/token",
         client_id: "id",
         client_secret: "secret",
-      })
+      }),
     );
 
     const token = await withCtx(() => _getAccessToken("token-test"));
@@ -176,7 +174,7 @@ describe("_getAccessToken", () => {
         token_url: "https://example.com/token",
         client_id: "id",
         client_secret: "secret",
-      })
+      }),
     );
 
     globalThis.fetch = mockFetchResponse({
@@ -204,7 +202,7 @@ describe("_getAccessToken", () => {
         token_url: "https://example.com/token",
         client_id: "id",
         client_secret: "secret",
-      })
+      }),
     );
 
     globalThis.fetch = mockFetchResponse({
@@ -229,7 +227,7 @@ describe("_getAccessToken", () => {
         token_url: "https://auth.example.com/token",
         client_id: "my-client",
         client_secret: "my-secret",
-      })
+      }),
     );
 
     const mockFetch = mockFetchResponse({
@@ -260,13 +258,13 @@ describe("_getAccessToken", () => {
         token_url: "https://example.com/token",
         client_id: "id",
         client_secret: "secret",
-      })
+      }),
     );
 
     globalThis.fetch = mockFetchResponse({ error: "invalid_grant" }, 400);
 
     await expect(withCtx(() => _getAccessToken("token-test"))).rejects.toThrow(
-      "OAuth token exchange failed (400)"
+      "OAuth token exchange failed (400)",
     );
   });
 
@@ -281,12 +279,10 @@ describe("_getAccessToken", () => {
         token_url: "https://example.com/token",
         client_id: "id",
         client_secret: "secret",
-      })
+      }),
     );
 
-    await expect(withCtx(() => _getAccessToken("token-test"))).rejects.toThrow(
-      "no refresh token"
-    );
+    await expect(withCtx(() => _getAccessToken("token-test"))).rejects.toThrow("no refresh token");
   });
 
   it("deduplicates concurrent refresh requests", async () => {
@@ -300,7 +296,7 @@ describe("_getAccessToken", () => {
         token_url: "https://example.com/token",
         client_id: "id",
         client_secret: "secret",
-      })
+      }),
     );
 
     let fetchCallCount = 0;

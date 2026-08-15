@@ -38,9 +38,7 @@ describe("in-handler guard trips refuse to surface", () => {
     const { ctx, stack, time, err } = arrangeTrippedInHandler();
     const key = `__guardTrip_${time.guardId}#time@${time.currentLimit()}`;
     stack.other[key] = "stale-interrupt-id"; // open question, no recorded answer
-    await expect(
-      raiseGuardTripsUntilClear(ctx, stack, () => err),
-    ).rejects.toBe(err);
+    await expect(raiseGuardTripsUntilClear(ctx, stack, () => err)).rejects.toBe(err);
     expect(guardTripKeys(stack)).toEqual([]); // stale key dropped, nothing new persisted
   });
 
@@ -50,9 +48,7 @@ describe("in-handler guard trips refuse to surface", () => {
     // The stack is marked but there is deliberately no ALS scope: this is
     // the lost-ALS shape from the issue-616 investigation. The stack-read
     // refusal must hold on its own.
-    await expect(
-      raiseGuardTripsUntilClear(ctx, stack, () => err),
-    ).rejects.toBe(err);
+    await expect(raiseGuardTripsUntilClear(ctx, stack, () => err)).rejects.toBe(err);
     expect(guardTripKeys(stack)).toEqual([]);
     expect(ctx.checkpoints.getSorted()).toEqual([]);
   });

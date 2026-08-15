@@ -46,7 +46,13 @@ describe("readBinding", () => {
 });
 
 describe("writeBinding", () => {
-  const binding = { serveUrl: SERVE_URL, origin: HOST, userId: "u", projectId: "proj", filename: "agent.agency" };
+  const binding = {
+    serveUrl: SERVE_URL,
+    origin: HOST,
+    userId: "u",
+    projectId: "proj",
+    filename: "agent.agency",
+  };
 
   it("adds remote.serveUrl and preserves unrelated keys", () => {
     fs.writeFileSync(configPath, JSON.stringify({ log: { host: HOST }, custom: 1 }));

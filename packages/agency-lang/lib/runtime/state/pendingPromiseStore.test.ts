@@ -23,7 +23,9 @@ describe("PendingPromiseStore", () => {
     it("resolves specific promises and calls setters", async () => {
       const store = new PendingPromiseStore();
       let resolved: any = null;
-      const key = store.add(Promise.resolve("hello"), (v) => { resolved = v; });
+      const key = store.add(Promise.resolve("hello"), (v) => {
+        resolved = v;
+      });
       await store.awaitPending([key]);
       expect(resolved).toBe("hello");
     });
@@ -31,7 +33,9 @@ describe("PendingPromiseStore", () => {
     it("removes awaited entries from the store", async () => {
       const store = new PendingPromiseStore();
       let callCount = 0;
-      const key = store.add(Promise.resolve(99), () => { callCount++; });
+      const key = store.add(Promise.resolve(99), () => {
+        callCount++;
+      });
       await store.awaitPending([key]);
       // After awaiting, awaitPending on the same key should be a no-op (entry gone),
       // so the setter should not be invoked again.
@@ -77,7 +81,9 @@ describe("PendingPromiseStore", () => {
       await store.awaitAll();
       // Adding a new entry and awaiting all should only process the new one
       let callCount = 0;
-      store.add(Promise.resolve(1), () => { callCount++; });
+      store.add(Promise.resolve(1), () => {
+        callCount++;
+      });
       await store.awaitAll();
       expect(callCount).toBe(1);
     });
@@ -108,7 +114,9 @@ describe("PendingPromiseStore", () => {
     it("removes all entries without awaiting", async () => {
       const store = new PendingPromiseStore();
       let called = false;
-      store.add(Promise.resolve(1), () => { called = true; });
+      store.add(Promise.resolve(1), () => {
+        called = true;
+      });
       store.clear();
       await store.awaitAll();
       expect(called).toBe(false);
@@ -138,7 +146,14 @@ describe("PendingPromiseStore watermark", () => {
   it("awaitPending(keysSince(mark)) leaves pre-mark promises alone", async () => {
     const store = new PendingPromiseStore();
     let preSettled = false;
-    store.add(new Promise<void>((r) => setTimeout(() => { preSettled = true; r(); }, 5)));
+    store.add(
+      new Promise<void>((r) =>
+        setTimeout(() => {
+          preSettled = true;
+          r();
+        }, 5),
+      ),
+    );
     const mark = store.watermark();
     store.add(Promise.resolve("post"));
     await store.awaitPending(store.keysSince(mark));
@@ -150,18 +165,17 @@ describe("awaitPending rejectInterrupts", () => {
   it("throws ConcurrentInterruptError for an interrupt-shaped result when opted in", async () => {
     const store = new PendingPromiseStore();
     const k = store.add(Promise.resolve([{ type: "interrupt", interruptId: "x" }]));
-    await expect(
-      store.awaitPending([k], { rejectInterrupts: true }),
-    ).rejects.toBeInstanceOf(ConcurrentInterruptError);
+    await expect(store.awaitPending([k], { rejectInterrupts: true })).rejects.toBeInstanceOf(
+      ConcurrentInterruptError,
+    );
   });
 
   it("passes interrupt-shaped results through when not opted in", async () => {
     const store = new PendingPromiseStore();
     let resolved: any = null;
-    const k = store.add(
-      Promise.resolve([{ type: "interrupt", interruptId: "x" }]),
-      (v) => { resolved = v; },
-    );
+    const k = store.add(Promise.resolve([{ type: "interrupt", interruptId: "x" }]), (v) => {
+      resolved = v;
+    });
     await store.awaitPending([k]);
     expect(resolved).toEqual([{ type: "interrupt", interruptId: "x" }]);
   });

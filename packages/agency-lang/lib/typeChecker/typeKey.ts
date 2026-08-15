@@ -23,10 +23,7 @@ import { safeResolveType } from "./assignability.js";
  * - Union members sort by canonical form (`A | B` keys equal `B | A`);
  *   object properties sort by key.
  */
-export function typeKey(
-  t: VariableType,
-  aliases: Record<string, TypeAliasEntry>,
-): string {
+export function typeKey(t: VariableType, aliases: Record<string, TypeAliasEntry>): string {
   return canonical(safeResolveType(t, aliases));
 }
 
@@ -36,9 +33,7 @@ export function typeKey(
  * stable, if verbose; the subset is small and rarely deep.
  */
 function canonicalExpr(e: Expression): string {
-  return JSON.stringify(e, (key, value) =>
-    key === "loc" ? undefined : value,
-  );
+  return JSON.stringify(e, (key, value) => (key === "loc" ? undefined : value));
 }
 
 function canonicalValueArgs(valueArgs: Expression[] | undefined): string {
@@ -93,9 +88,7 @@ function canonical(t: VariableType): string {
       // VariableType variant fails compilation here instead of silently
       // returning undefined.
       const exhausted: never = t;
-      throw new Error(
-        `typeKey: unhandled type variant ${JSON.stringify(exhausted)}`,
-      );
+      throw new Error(`typeKey: unhandled type variant ${JSON.stringify(exhausted)}`);
     }
   }
 }

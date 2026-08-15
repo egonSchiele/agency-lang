@@ -91,9 +91,7 @@ describe("Schema<T> type synthesis", () => {
     );
     // Should not raise a type-mismatch error from synth (the method is
     // unknown, so currentType becomes "any" and downstream is silent).
-    const mismatch = errors.filter(
-      (e) => e.message.includes("not assignable"),
-    );
+    const mismatch = errors.filter((e) => e.message.includes("not assignable"));
     expect(mismatch).toEqual([]);
   });
 

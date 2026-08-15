@@ -19,12 +19,8 @@ function run(source: string, config: Partial<AgencyConfig> = {}) {
 function check(source: string, config: Partial<AgencyConfig> = {}) {
   const result = run(source, config);
   return {
-    errors: result.errors
-      .filter((e) => (e.severity ?? "error") === "error")
-      .map((e) => e.message),
-    warnings: result.errors
-      .filter((e) => e.severity === "warning")
-      .map((e) => e.message),
+    errors: result.errors.filter((e) => (e.severity ?? "error") === "error").map((e) => e.message),
+    warnings: result.errors.filter((e) => e.severity === "warning").map((e) => e.message),
   };
 }
 
@@ -143,9 +139,7 @@ def f(u: U): void {
   let x = u.v
 }`;
     const result = run(src, { typechecker: { strictMemberAccess: "error" } });
-    const diag = result.errors.find((e) =>
-      e.message.includes(STRICT_UNION_PHRASE),
-    );
+    const diag = result.errors.find((e) => e.message.includes(STRICT_UNION_PHRASE));
     // loc.line is 0-indexed (docs/dev/locations.md); the `let x = u.v` access
     // is the 4th physical line → line 3.
     expect(diag?.loc?.line).toBe(3);
@@ -258,11 +252,9 @@ node main() {
     );
     // PR5 scope: the per-arm isSuccess/isFailure narrowing (from match lowering)
     // means no strict-access diagnostic is added on match arms.
-    expect(
-      errors.some(
-        (e) => e.includes(RESULT_PHRASE) || e.includes(STRICT_UNION_PHRASE),
-      ),
-    ).toBe(false);
+    expect(errors.some((e) => e.includes(RESULT_PHRASE) || e.includes(STRICT_UNION_PHRASE))).toBe(
+      false,
+    );
     // NOTE: match-over-Result currently also emits a PRE-EXISTING, mode-
     // independent "Property 'value' does not exist …" (reproduces at silent,
     // from code paths untouched by this PR — the existing narrowing.test.ts

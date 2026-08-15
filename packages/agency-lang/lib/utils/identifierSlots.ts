@@ -86,9 +86,7 @@ type SlotExtractor<K extends AgencyNode["type"]> = (
  * file. `semanticTokens.test.ts` has a tripwire test that fails at that
  * moment.
  */
-function located<T extends { loc?: SourceLocation }>(
-  node: T,
-): node is T & { loc: SourceLocation } {
+function located<T extends { loc?: SourceLocation }>(node: T): node is T & { loc: SourceLocation } {
   return node.loc !== undefined;
 }
 
@@ -233,9 +231,7 @@ export function identifierSlots(node: AgencyNode): IdentifierSlot[] {
   // The one cast in this file. TypeScript cannot see that REGISTRY[k]
   // and a node of kind k agree, though the mapped type guarantees it;
   // the extractors themselves stay fully typed, which is the point.
-  const extractor = REGISTRY[node.type] as
-    | ((node: AgencyNode) => IdentifierSlot[])
-    | undefined;
+  const extractor = REGISTRY[node.type] as ((node: AgencyNode) => IdentifierSlot[]) | undefined;
   // Unreachable while the registry type-checks. A runtime guard for AST
   // nodes synthesized outside the union (templates, tests).
   if (!extractor) return [];

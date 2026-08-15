@@ -50,9 +50,10 @@ export function startStatusBoard(ids: string[]): {
     } else if (entry.status === "done") {
       statusColor = paint?.green;
     }
-    const elapsed = entry.startedAt === undefined
-      ? ""
-      : formatElapsed((entry.endedAt ?? Date.now()) - entry.startedAt);
+    const elapsed =
+      entry.startedAt === undefined
+        ? ""
+        : formatElapsed((entry.endedAt ?? Date.now()) - entry.startedAt);
     const cost = entry.costUsd > 0 ? `$${entry.costUsd.toFixed(2)}` : "";
 
     let remaining = isTty ? (process.stderr.columns ?? 80) : Number.MAX_SAFE_INTEGER;

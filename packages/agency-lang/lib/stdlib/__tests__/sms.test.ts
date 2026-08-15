@@ -39,9 +39,7 @@ describe("_sendSms", () => {
     await _sendSms("+15559876543", "Hello!");
 
     const [url, init] = mockFetch.mock.calls[0];
-    expect(url).toBe(
-      "https://api.twilio.com/2010-04-01/Accounts/AC_test_sid/Messages.json"
-    );
+    expect(url).toBe("https://api.twilio.com/2010-04-01/Accounts/AC_test_sid/Messages.json");
     expect(init.method).toBe("POST");
   });
 
@@ -97,30 +95,22 @@ describe("_sendSms", () => {
 
   it("throws when no account SID", async () => {
     delete process.env.TWILIO_ACCOUNT_SID;
-    await expect(_sendSms("+15559876543", "Hi")).rejects.toThrow(
-      "TWILIO_ACCOUNT_SID"
-    );
+    await expect(_sendSms("+15559876543", "Hi")).rejects.toThrow("TWILIO_ACCOUNT_SID");
   });
 
   it("throws when no auth token", async () => {
     delete process.env.TWILIO_AUTH_TOKEN;
-    await expect(_sendSms("+15559876543", "Hi")).rejects.toThrow(
-      "TWILIO_AUTH_TOKEN"
-    );
+    await expect(_sendSms("+15559876543", "Hi")).rejects.toThrow("TWILIO_AUTH_TOKEN");
   });
 
   it("throws when no from number", async () => {
     delete process.env.TWILIO_FROM_NUMBER;
-    await expect(_sendSms("+15559876543", "Hi")).rejects.toThrow(
-      "TWILIO_FROM_NUMBER"
-    );
+    await expect(_sendSms("+15559876543", "Hi")).rejects.toThrow("TWILIO_FROM_NUMBER");
   });
 
   it("throws on error response", async () => {
     globalThis.fetch = mockFetchResponse({ message: "Invalid number" }, 400);
-    await expect(_sendSms("+15559876543", "Hi")).rejects.toThrow(
-      "Twilio API error (400)"
-    );
+    await expect(_sendSms("+15559876543", "Hi")).rejects.toThrow("Twilio API error (400)");
   });
 
   it("throws when to is empty", async () => {

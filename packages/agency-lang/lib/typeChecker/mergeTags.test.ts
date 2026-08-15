@@ -52,9 +52,7 @@ describe("mergeTagSets", () => {
         obj({ minimum: { type: "number", value: "0" }, format: stringLit("alias-fmt") }),
       ]),
     ];
-    const useSiteTags = [
-      tag("jsonSchema", [obj({ format: stringLit("use-site-fmt") })]),
-    ];
+    const useSiteTags = [tag("jsonSchema", [obj({ format: stringLit("use-site-fmt") })])];
     const merged = mergeTagSets(aliasTags, useSiteTags);
     expect(merged).toHaveLength(1);
     const mergedObj = merged?.[0].arguments[0] as any;
@@ -71,15 +69,11 @@ describe("mergeTagSets", () => {
         obj({ description: stringLit("alias desc"), format: stringLit("email") }),
       ]),
     ];
-    const useSiteTags = [
-      tag("jsonSchema", [obj({ description: stringLit("use-site extra") })]),
-    ];
+    const useSiteTags = [tag("jsonSchema", [obj({ description: stringLit("use-site extra") })])];
     const merged = mergeTagSets(aliasTags, useSiteTags);
     const entries = (merged?.[0].arguments[0] as any).entries as any[];
     const byKey = Object.fromEntries(entries.map((e) => [e.key, e.value]));
-    expect(byKey.description.segments[0].value).toBe(
-      "alias desc\nuse-site extra",
-    );
+    expect(byKey.description.segments[0].value).toBe("alias desc\nuse-site extra");
     // Other keys still merge with use-site-wins semantics.
     expect(byKey.format.segments[0].value).toBe("email");
     // The merged `description` keeps the first occurrence's slot, so it
@@ -88,14 +82,10 @@ describe("mergeTagSets", () => {
   });
 
   it("falls back to last-write-wins when a description is not a plain literal", () => {
-    const aliasTags = [
-      tag("jsonSchema", [obj({ description: stringLit("alias desc") })]),
-    ];
+    const aliasTags = [tag("jsonSchema", [obj({ description: stringLit("alias desc") })])];
     // A non-literal description (here: an identifier reference) blocks
     // the concat path; the use-site override wins as before.
-    const useSiteTags = [
-      tag("jsonSchema", [obj({ description: ident("dynamicDesc") })]),
-    ];
+    const useSiteTags = [tag("jsonSchema", [obj({ description: ident("dynamicDesc") })])];
     const merged = mergeTagSets(aliasTags, useSiteTags);
     const entries = (merged?.[0].arguments[0] as any).entries as any[];
     const byKey = Object.fromEntries(entries.map((e) => [e.key, e.value]));
@@ -143,9 +133,7 @@ describe("mergeTagSets", () => {
 
   it("throws on a malformed @jsonSchema whose argument is not an object literal", () => {
     const aliasTags = [tag("jsonSchema", [stringLit("not an object")])];
-    expect(() => mergeTagSets(aliasTags, undefined)).toThrow(
-      /must be object literals/,
-    );
+    expect(() => mergeTagSets(aliasTags, undefined)).toThrow(/must be object literals/);
   });
 
   it("throws on an @jsonSchema with no arguments at all", () => {

@@ -1,17 +1,7 @@
-import {
-  AgencyNode,
-  ArrayType,
-  Hole,
-  TypeAliasEntry,
-  VariableType,
-} from "../../types.js";
+import { AgencyNode, ArrayType, Hole, TypeAliasEntry, VariableType } from "../../types.js";
 import { SourceLocation } from "../../types/base.js";
 import { LEGAL_IDENTIFIER, RESERVED_WORDS } from "../../parsers/parsers.js";
-import {
-  findHoles,
-  holeNames,
-  positionInferredVariableTypes,
-} from "../../utils/holes.js";
+import { findHoles, holeNames, positionInferredVariableTypes } from "../../utils/holes.js";
 import { variableTypeToString } from "../../backends/typescriptGenerator/typeToString.js";
 import { isAssignable, safeResolveType } from "../../typeChecker/assignability.js";
 import { visitTypes } from "../../typeChecker/typeWalker.js";
@@ -22,12 +12,7 @@ import { explainMismatch } from "./explainMismatch.js";
 import { Code, isCode, kindOf } from "./code.js";
 import { kindFitsSort, stampOrigin } from "./origin.js";
 import { liftValue } from "./lift.js";
-import {
-  RESERVED_PREFIX,
-  applyRenames,
-  applyScopedRenames,
-  computeRenames,
-} from "./hygiene.js";
+import { RESERVED_PREFIX, applyRenames, applyScopedRenames, computeRenames } from "./hygiene.js";
 
 /** Attribution for errors that anchor to a node carried in by a graft:
  *  its loc.origin (stamped by stampOrigin) names the fill the node most
@@ -149,11 +134,7 @@ function substituteInArray(
 
 /** Single-value positions (an assignment's value, a declaration's name):
  *  a fill must produce exactly one item here. */
-function substituteAny(
-  value: unknown,
-  values: Record<string, unknown>,
-  types: FillTypes,
-): unknown {
+function substituteAny(value: unknown, values: Record<string, unknown>, types: FillTypes): unknown {
   if (Array.isArray(value)) return substituteInArray(value, values, types);
   if (value === null || typeof value !== "object") return value;
   if (isFillableHole(value, values)) {
@@ -174,11 +155,7 @@ function substituteAny(
   return out;
 }
 
-function fillOne(
-  hole: Hole,
-  value: unknown,
-  types: FillTypes,
-): string | AgencyNode | AgencyNode[] {
+function fillOne(hole: Hole, value: unknown, types: FillTypes): string | AgencyNode | AgencyNode[] {
   if (hole.sort === "identifier") return identifierFillFor(hole, value);
   // An inline annotation on the hole wins over the type its position
   // supplies; neither is required.
@@ -281,17 +258,9 @@ function assertFillerType(
   if (
     hole.splice &&
     resolvedExpected.type === "arrayType" &&
-    isAssignable(
-      literalAccurate ?? actual,
-      (resolvedExpected as ArrayType).elementType,
-      aliases,
-    )
+    isAssignable(literalAccurate ?? actual, (resolvedExpected as ArrayType).elementType, aliases)
   ) {
-    const element = variableTypeToString(
-      (resolvedExpected as ArrayType).elementType,
-      {},
-      true,
-    );
+    const element = variableTypeToString((resolvedExpected as ArrayType).elementType, {}, true);
     throw new Error(
       `The splice \`#...${hole.name}\` describes one element, not the array — its type should be \`${element}\`, not \`${printedExpected}\`${originSuffix(hole.loc)}.`,
     );
@@ -392,4 +361,3 @@ function identifierFillFor(hole: Hole, value: unknown): string {
 function fillerLoc(hole: Hole): SourceLocation {
   return { ...hole.loc, origin: { kind: "filler", name: hole.name } };
 }
-

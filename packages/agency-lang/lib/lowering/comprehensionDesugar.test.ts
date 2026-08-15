@@ -6,12 +6,7 @@ import { desugarComprehensionsInBody } from "./comprehensionDesugar.js";
  *  pipeline would already have desugared it. The prelude import is
  *  nodes[0], so find the node definition by its runtime tag "graphNode". */
 function desugarExpr(src: string): any {
-  const result = parseAgency(
-    `node main() {\n  const r = ${src}\n}`,
-    {},
-    true,
-    false,
-  );
+  const result = parseAgency(`node main() {\n  const r = ${src}\n}`, {}, true, false);
   if (!result.success) {
     throw new Error("parse failed");
   }
@@ -189,12 +184,7 @@ describe("comprehensionDesugar", () => {
   });
 
   it("is idempotent", () => {
-    const result = parseAgency(
-      "node main() {\n  const r = [f(x) for x in xs]\n}",
-      {},
-      true,
-      false,
-    );
+    const result = parseAgency("node main() {\n  const r = [f(x) for x in xs]\n}", {}, true, false);
     const nodes = (result as any).result.nodes;
     desugarComprehensionsInBody(nodes);
     const first = JSON.stringify(nodes);

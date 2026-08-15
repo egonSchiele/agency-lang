@@ -25,15 +25,13 @@ export function loadJsonArray(args: LoadJsonArrayArgs): LoadedBatch {
   try {
     parsed = JSON.parse(args.text);
   } catch (error) {
-    throw new IngestSourceError(
-      `${args.itemKey} is not valid JSON: ${(error as Error).message}`,
-    );
+    throw new IngestSourceError(`${args.itemKey} is not valid JSON: ${(error as Error).message}`);
   }
 
   if (!Array.isArray(parsed)) {
     throw new IngestSourceError(
       `${args.itemKey} must hold a top-level array of strings, one per output. ` +
-      `Found ${describeJsonType(parsed)}.`,
+        `Found ${describeJsonType(parsed)}.`,
     );
   }
 
@@ -47,7 +45,7 @@ export function loadJsonArray(args: LoadJsonArrayArgs): LoadedBatch {
     if (typeof element !== "string") {
       throw new IngestSourceError(
         `${args.itemKey}: element ${index} is ${describeJsonType(element)}, but every ` +
-        "element must be a string holding one output.",
+          "element must be a string holding one output.",
       );
     }
 

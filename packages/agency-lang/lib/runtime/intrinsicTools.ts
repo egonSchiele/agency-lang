@@ -73,9 +73,7 @@ export function partitionIntrinsicCalls<
     const intrinsic = intrinsicOf(toolCall);
     return intrinsic !== undefined ? [{ toolCall, callIndex, intrinsic }] : [];
   });
-  const dispatchCalls = toolCalls.filter(
-    (toolCall) => intrinsicOf(toolCall) === undefined,
-  );
+  const dispatchCalls = toolCalls.filter((toolCall) => intrinsicOf(toolCall) === undefined);
   return { intrinsicCalls, dispatchCalls };
 }
 

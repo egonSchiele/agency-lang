@@ -50,10 +50,7 @@ import type { Assignment } from "../types.js";
 import type { SourceLocation } from "../types/base.js";
 import type { FunctionDefinition } from "../types/function.js";
 import type { SymbolTable } from "../symbolTable.js";
-import {
-  isAgencyImport,
-  resolveAgencyImportPath,
-} from "../importPaths.js";
+import { isAgencyImport, resolveAgencyImportPath } from "../importPaths.js";
 import { walkNodes } from "../utils/node.js";
 
 export type InitVarKind = "static" | "global";
@@ -136,10 +133,7 @@ export type BuildInitDepGraphsResult = {
  * a lookup is O(1) after first use per module.
  */
 export type FunctionDefLookup = {
-  find(
-    name: string,
-    inModuleId: string,
-  ): { moduleId: string; def: FunctionDefinition } | null;
+  find(name: string, inModuleId: string): { moduleId: string; def: FunctionDefinition } | null;
   findNamespaceMember(
     prefix: string,
     member: string,
@@ -164,14 +158,9 @@ export function makeFunctionDefLookup(
   resolver: ImportAliasResolver,
   symbolTable: SymbolTable | undefined,
 ): FunctionDefLookup {
-  const localDefsByModule: Record<
-    string,
-    Record<string, FunctionDefinition>
-  > = {};
+  const localDefsByModule: Record<string, Record<string, FunctionDefinition>> = {};
 
-  function localDefsFor(
-    moduleId: string,
-  ): Record<string, FunctionDefinition> {
+  function localDefsFor(moduleId: string): Record<string, FunctionDefinition> {
     const cached = localDefsByModule[moduleId];
     if (cached) return cached;
     const map: Record<string, FunctionDefinition> = {};
@@ -226,16 +215,12 @@ export function makeFunctionDefLookup(
     return null;
   }
 
-  const cache: Record<
-    string,
-    Record<string, { moduleId: string; def: FunctionDefinition }>
-  > = {};
+  const cache: Record<string, Record<string, { moduleId: string; def: FunctionDefinition }>> = {};
 
   function buildFor(
     inModuleId: string,
   ): Record<string, { moduleId: string; def: FunctionDefinition }> {
-    const map: Record<string, { moduleId: string; def: FunctionDefinition }> =
-      {};
+    const map: Record<string, { moduleId: string; def: FunctionDefinition }> = {};
     // Local defs win — same-file `def foo` is reachable as bare `foo`.
     for (const [name, def] of Object.entries(localDefsFor(inModuleId))) {
       map[name] = { moduleId: inModuleId, def };
@@ -251,14 +236,10 @@ export function makeFunctionDefLookup(
           for (const original of nameType.importedNames.map(declaredName)) {
             // Walk through the local alias the importer uses, not the
             // original name — that's how the importer references it.
-            const localAlias =
-              (nameType.aliases && nameType.aliases[original]) ?? original;
+            const localAlias = (nameType.aliases && nameType.aliases[original]) ?? original;
             const aliased = resolver.resolve(localAlias, inModuleId);
             if (!aliased) continue;
-            const ultimate = resolveToUltimateDef(
-              aliased.sourceModuleId,
-              aliased.sourceName,
-            );
+            const ultimate = resolveToUltimateDef(aliased.sourceModuleId, aliased.sourceName);
             if (!ultimate) continue;
             map[localAlias] = ultimate;
           }
@@ -270,8 +251,7 @@ export function makeFunctionDefLookup(
 
   return {
     find(name, inModuleId) {
-      const moduleCache =
-        cache[inModuleId] ?? (cache[inModuleId] = buildFor(inModuleId));
+      const moduleCache = cache[inModuleId] ?? (cache[inModuleId] = buildFor(inModuleId));
       return moduleCache[name] ?? null;
     },
     findNamespaceMember(prefix, member, inModuleId) {
@@ -337,30 +317,20 @@ export type ImportAliasResolver = {
     localName: string,
     inModuleId: string,
   ): { sourceModuleId: string; sourceName: string } | null;
-  resolveNamespace(
-    prefix: string,
-    inModuleId: string,
-  ): { sourceModuleId: string } | null;
+  resolveNamespace(prefix: string, inModuleId: string): { sourceModuleId: string } | null;
 };
 
 export function makeImportAliasResolver(
   programs: Record<string, AgencyProgram>,
   symbolTable: SymbolTable | undefined,
 ): ImportAliasResolver {
-  const cache: Record<
-    string,
-    Record<string, { sourceModuleId: string; sourceName: string }>
-  > = {};
+  const cache: Record<string, Record<string, { sourceModuleId: string; sourceName: string }>> = {};
   const nsCache: Record<string, Record<string, { sourceModuleId: string }>> = {};
 
-  function buildFor(moduleId: string): Record<
-    string,
-    { sourceModuleId: string; sourceName: string }
-  > {
-    const map: Record<
-      string,
-      { sourceModuleId: string; sourceName: string }
-    > = {};
+  function buildFor(
+    moduleId: string,
+  ): Record<string, { sourceModuleId: string; sourceName: string }> {
+    const map: Record<string, { sourceModuleId: string; sourceName: string }> = {};
     const program = programs[moduleId];
     if (!program || !symbolTable) return map;
     for (const node of program.nodes) {
@@ -383,9 +353,7 @@ export function makeImportAliasResolver(
     return map;
   }
 
-  function buildNamespaceFor(
-    moduleId: string,
-  ): Record<string, { sourceModuleId: string }> {
+  function buildNamespaceFor(moduleId: string): Record<string, { sourceModuleId: string }> {
     const map: Record<string, { sourceModuleId: string }> = {};
     const program = programs[moduleId];
     if (!program) return map;
@@ -404,14 +372,12 @@ export function makeImportAliasResolver(
 
   return {
     resolve(localName, inModuleId) {
-      const moduleCache =
-        cache[inModuleId] ?? (cache[inModuleId] = buildFor(inModuleId));
+      const moduleCache = cache[inModuleId] ?? (cache[inModuleId] = buildFor(inModuleId));
       return moduleCache[localName] ?? null;
     },
     resolveNamespace(prefix, inModuleId) {
       const moduleCache =
-        nsCache[inModuleId] ??
-        (nsCache[inModuleId] = buildNamespaceFor(inModuleId));
+        nsCache[inModuleId] ?? (nsCache[inModuleId] = buildNamespaceFor(inModuleId));
       return moduleCache[prefix] ?? null;
     },
   };
@@ -461,22 +427,12 @@ export function buildInitDepGraphs(
   //       initializer expression for free identifier references —
   //       plus PR-2.5 depth-1 expansion through direct function calls.
   const staticEdges = computeEdges(staticNodes, resolver, functionDefs);
-  const globalEdges = computeEdgesGlobal(
-    globalNodes,
-    staticNodes,
-    resolver,
-    functionDefs,
-  );
+  const globalEdges = computeEdgesGlobal(globalNodes, staticNodes, resolver, functionDefs);
 
   // ── 3. Phase-coupling validation: a static reading a global is a
   //       compile error. (Global reading static is fine — handled in
   //       computeEdgesGlobal which skips static refs as deps.)
-  rejectStaticReferencesGlobal(
-    staticNodes,
-    globalNodes,
-    resolver,
-    functionDefs,
-  );
+  rejectStaticReferencesGlobal(staticNodes, globalNodes, resolver, functionDefs);
 
   return {
     staticGraph: { nodes: staticNodes, edges: staticEdges },
@@ -500,11 +456,7 @@ function nodeFromTopLevel(
   depthBase: number,
 ): InitVarNode | null {
   const { stmt: afterApprove, withApprove } = unwrapWithApprove(node);
-  const {
-    stmt,
-    isStaticBare,
-    wrapperLoc: staticWrapperLoc,
-  } = unwrapStaticStatement(afterApprove);
+  const { stmt, isStaticBare, wrapperLoc: staticWrapperLoc } = unwrapStaticStatement(afterApprove);
 
   if (stmt.type === "assignment") {
     const line = stmt.loc?.line ?? 0;
@@ -651,13 +603,7 @@ function computeEdgesGlobal(
 ): Record<InitVarKey, InitVarKey[]> {
   const edges: Record<InitVarKey, InitVarKey[]> = {};
   for (const [key, node] of Object.entries(globalNodes)) {
-    edges[key] = depsFor(
-      node,
-      globalNodes,
-      resolver,
-      functionDefs,
-      staticNodes,
-    );
+    edges[key] = depsFor(node, globalNodes, resolver, functionDefs, staticNodes);
   }
   return edges;
 }
@@ -709,11 +655,7 @@ function depsFor(
   // that resolves to a top-level Agency function we have AST for,
   // contribute the deps from one walk of the function's body. Inner
   // refs resolve in the function's home module.
-  for (const fnMatch of collectDirectCalls(
-    node.initExpr,
-    node.moduleId,
-    functionDefs,
-  )) {
+  for (const fnMatch of collectDirectCalls(node.initExpr, node.moduleId, functionDefs)) {
     for (const innerRef of collectFunctionBodyFreeRefs(fnMatch.def)) {
       addRef(resolveFreeRef(innerRef, fnMatch.moduleId, resolver));
     }
@@ -769,11 +711,7 @@ function rejectStaticReferencesGlobal(
     // Agency function whose body reads a global also makes the
     // enclosing static reference that global. Same rejection rule
     // applies.
-    for (const fnMatch of collectDirectCalls(
-      node.initExpr,
-      node.moduleId,
-      functionDefs,
-    )) {
+    for (const fnMatch of collectDirectCalls(node.initExpr, node.moduleId, functionDefs)) {
       for (const innerRef of collectFunctionBodyFreeRefs(fnMatch.def)) {
         check(resolveFreeRef(innerRef, fnMatch.moduleId, resolver));
       }
@@ -807,11 +745,7 @@ export function collectDirectCalls(
 ): { moduleId: string; def: FunctionDefinition }[] {
   const out: { moduleId: string; def: FunctionDefinition }[] = [];
   for (const { node, ancestors } of walkNodes([expr as AgencyNode])) {
-    if (
-      ancestors.some(
-        (a) => a.type === "function" || a.type === "graphNode",
-      )
-    ) {
+    if (ancestors.some((a) => a.type === "function" || a.type === "graphNode")) {
       continue;
     }
     if (node.type === "functionCall") {
@@ -891,8 +825,7 @@ export function collectFunctionBodyFreeRefs(def: FunctionDefinition): FreeRef[] 
  *     member accesses (`person.name`) produce no edge.
  */
 export type FreeRef =
-  | { kind: "name"; name: string }
-  | { kind: "member"; prefix: string; member: string };
+  { kind: "name"; name: string } | { kind: "member"; prefix: string; member: string };
 
 /**
  * Collect every free reference in `expr`, declaratively, via the
@@ -912,16 +845,10 @@ export type FreeRef =
  * cross-phase await dependencies that aren't representable as edges in
  * either single-phase graph.
  */
-export function collectFreeIdentifiers(
-  expr: Expression | AgencyNode,
-): FreeRef[] {
+export function collectFreeIdentifiers(expr: Expression | AgencyNode): FreeRef[] {
   const out: FreeRef[] = [];
   for (const { node, ancestors } of walkNodes([expr as AgencyNode])) {
-    if (
-      ancestors.some(
-        (a) => a.type === "function" || a.type === "graphNode",
-      )
-    ) {
+    if (ancestors.some((a) => a.type === "function" || a.type === "graphNode")) {
       continue;
     }
     if (
@@ -972,10 +899,9 @@ function computeSequenceHintBase(
   const modules = new Set<string>([entryModuleId]);
   for (const moduleId of Object.keys(programs)) modules.add(moduleId);
   for (const moduleId of modules) {
-    fileImports[moduleId] = agencyImportTargets(
-      programs[moduleId],
-      moduleId,
-    ).filter((m) => modules.has(m));
+    fileImports[moduleId] = agencyImportTargets(programs[moduleId], moduleId).filter((m) =>
+      modules.has(m),
+    );
   }
 
   // Kahn over the reversed DAG: leaves (no imports) come first.
@@ -1017,10 +943,7 @@ function computeSequenceHintBase(
   return out;
 }
 
-function agencyImportTargets(
-  program: AgencyProgram | undefined,
-  moduleId: string,
-): string[] {
+function agencyImportTargets(program: AgencyProgram | undefined, moduleId: string): string[] {
   if (!program) return [];
   const out: string[] = [];
   for (const node of program.nodes) {
@@ -1038,10 +961,7 @@ function agencyImportTarget(node: AgencyNode): string | null {
   if (node.type === "importNodeStatement") {
     return node.agencyFile;
   }
-  if (
-    node.type === "exportFromStatement" &&
-    isAgencyImport(node.modulePath)
-  ) {
+  if (node.type === "exportFromStatement" && isAgencyImport(node.modulePath)) {
     return node.modulePath;
   }
   return null;

@@ -1,10 +1,4 @@
-import type {
-  Message,
-  PromptResult,
-  Result,
-  SmolConfig,
-  StreamChunk,
-} from "smoltalk";
+import type { Message, PromptResult, Result, SmolConfig, StreamChunk } from "smoltalk";
 import * as smoltalk from "smoltalk";
 import type { ZodType } from "zod";
 import { DEFAULT_EMBEDDING_MODEL, DEFAULT_IMAGE_MODEL } from "../constants.js";
@@ -88,10 +82,7 @@ export type SpeechResult = smoltalk.SpeechResult;
 /** A source for audio bytes: a local path, a URL, or inline bytes/base64. */
 export type AudioInput = smoltalk.BlobRef;
 
-export type TranscribeConfig = Omit<
-  smoltalk.TranscribeOptions,
-  "model" | "abortSignal"
-> & {
+export type TranscribeConfig = Omit<smoltalk.TranscribeOptions, "model" | "abortSignal"> & {
   model: string;
 };
 export type SpeakConfig = Omit<
@@ -157,16 +148,10 @@ export type LLMClient = {
   /** Generate embeddings for one or more inputs. Returning a failure
    *  Result lets callers (e.g. memory Tier 2) silently skip rather
    *  than crash when a client doesn't support embeddings. */
-  embed(
-    input: string | string[],
-    config?: Partial<EmbedConfig>,
-  ): Promise<Result<EmbedResult>>;
+  embed(input: string | string[], config?: Partial<EmbedConfig>): Promise<Result<EmbedResult>>;
   /** Generate an image. Optional — clients that don't support it omit the
    *  method; callers (std::image) surface a failure Result. */
-  image?(
-    input: ImageInput,
-    config?: Partial<ImageConfig>,
-  ): Promise<Result<ImageGenResult>>;
+  image?(input: ImageInput, config?: Partial<ImageConfig>): Promise<Result<ImageGenResult>>;
   /** Speech-to-text. Optional — clients that don't support it omit the method;
    *  the std::speech wrapper throws a clear "unsupported client" error. `config`
    *  is COMPLETE (model required — see TranscribeConfig); the client must not
@@ -180,11 +165,7 @@ export type LLMClient = {
   ): Promise<Result<TranscriptionResult>>;
   /** Text-to-speech. Optional — same contract as `transcribe`: complete config
    *  (model/voice/format required), `signal` the sole cancellation channel. */
-  speak?(
-    text: string,
-    config: SpeakConfig,
-    signal: AbortSignal,
-  ): Promise<Result<SpeechResult>>;
+  speak?(text: string, config: SpeakConfig, signal: AbortSignal): Promise<Result<SpeechResult>>;
   /** Translate an error this client threw into provider-neutral fields for
    *  agency's retry classifier. Optional — agency falls back to `{ message }`
    *  when omitted, which still works (message-pattern matching) but loses
@@ -245,10 +226,7 @@ export class SmoltalkClient implements LLMClient {
     });
   }
 
-  async image(
-    input: ImageInput,
-    config?: Partial<ImageConfig>,
-  ): Promise<Result<ImageGenResult>> {
+  async image(input: ImageInput, config?: Partial<ImageConfig>): Promise<Result<ImageGenResult>> {
     // `model` first so an explicit config.model overrides the default.
     return smoltalk.image(input, {
       model: DEFAULT_IMAGE_MODEL,
@@ -330,7 +308,6 @@ export class SmoltalkClient implements LLMClient {
     }
     return normalized;
   }
-
 }
 
 /** True when an LLM result carries nothing a caller could use — no visible
@@ -368,17 +345,34 @@ function rejectIfAborted(signal: AbortSignal | undefined): void {
  *  only the provider slots it names. */
 export function toSmolConfig(config: PromptConfig): Omit<SmolConfig, "stream"> {
   const {
-    messages, tools, responseFormat, abortSignal,
-    model, apiKey, maxTokens, temperature, provider,
-    thinking, reasoningEffort, metadata, hostedTools,
+    messages,
+    tools,
+    responseFormat,
+    abortSignal,
+    model,
+    apiKey,
+    maxTokens,
+    temperature,
+    provider,
+    thinking,
+    reasoningEffort,
+    metadata,
+    hostedTools,
   } = config;
 
-  const metaApiKey = (metadata as { apiKey?: SmolConfig["apiKey"] } | undefined)
-    ?.apiKey;
+  const metaApiKey = (metadata as { apiKey?: SmolConfig["apiKey"] } | undefined)?.apiKey;
   return {
     ...metadata,
-    messages, tools, responseFormat, abortSignal,
-    model, maxTokens, temperature, provider, thinking, reasoningEffort,
+    messages,
+    tools,
+    responseFormat,
+    abortSignal,
+    model,
+    maxTokens,
+    temperature,
+    provider,
+    thinking,
+    reasoningEffort,
     hostedTools,
     ...(apiKey ? { apiKey: { ...metaApiKey, ...apiKey } } : {}),
   } as Omit<SmolConfig, "stream">;

@@ -47,11 +47,7 @@ function appendCommitted(detail: string, committed: string[]): string {
 
 /** Preflight the whole pull. Completes before any mutation; throws on any
  *  violation so no file is written when a conflict or unsafe name exists. */
-export function planSourcePull(
-  files: SourceFile[],
-  outputDir: string,
-  force: boolean,
-): PullPlan {
+export function planSourcePull(files: SourceFile[], outputDir: string, force: boolean): PullPlan {
   const resolvedOut = path.resolve(outputDir);
 
   const outStat = lstatOrNull(resolvedOut);
@@ -94,9 +90,7 @@ export function planSourcePull(
   }
 
   if (conflicts.length > 0) {
-    throw new Error(
-      `refusing to overwrite existing files (pass --force): ${conflicts.join(", ")}`,
-    );
+    throw new Error(`refusing to overwrite existing files (pass --force): ${conflicts.join(", ")}`);
   }
   return { outputDir: resolvedOut, files: planned };
 }
@@ -221,7 +215,9 @@ function describePullFailure(
   cleanupError: string | undefined,
 ): string {
   const base = `pull failed writing ${file.name}: ${message(error)}`;
-  return cleanupError !== undefined ? `${base} (also could not remove its temp: ${cleanupError})` : base;
+  return cleanupError !== undefined
+    ? `${base} (also could not remove its temp: ${cleanupError})`
+    : base;
 }
 
 function combineErrors(primary: unknown, secondary: unknown): Error {

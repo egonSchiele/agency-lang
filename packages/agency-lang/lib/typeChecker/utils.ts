@@ -3,11 +3,7 @@ import { AgencyNode, FunctionParameter, VariableType } from "../types.js";
 import type { SourceLocation } from "../types/base.js";
 import type { BlockType } from "../types/typeHints.js";
 import { formatTypeHint } from "../utils/formatType.js";
-import {
-  isAssignable,
-  isOptionalType,
-  safeResolveType,
-} from "./assignability.js";
+import { isAssignable, isOptionalType, safeResolveType } from "./assignability.js";
 import { BOOLEAN_T } from "./primitives.js";
 import { synthType } from "./synthesizer.js";
 import { TypeCheckerContext } from "./types.js";
@@ -23,8 +19,7 @@ export function getParamsForNodeOrFunc(
   name: string,
   ctx: TypeCheckerContext,
 ): FunctionParameter[] | undefined {
-  const def =
-    ctx.functionDefs[name] ?? ctx.nodeDefs[name] ?? ctx.importedFunctions[name];
+  const def = ctx.functionDefs[name] ?? ctx.nodeDefs[name] ?? ctx.importedFunctions[name];
   return def?.parameters;
 }
 
@@ -34,10 +29,7 @@ export function getParamsForNodeOrFunc(
  * whose block param is untyped, `any`, or absent (block bodies in those cases
  * keep their literal annotations and aren't checked against a contract).
  */
-export function getBlockSlot(
-  name: string,
-  ctx: TypeCheckerContext,
-): BlockType | undefined {
+export function getBlockSlot(name: string, ctx: TypeCheckerContext): BlockType | undefined {
   const params = getParamsForNodeOrFunc(name, ctx);
   if (!params || params.length === 0) return undefined;
   const last = params[params.length - 1];
@@ -145,17 +137,12 @@ function rejectRegexInLlmType(
   ctx: TypeCheckerContext,
 ): void {
   if (containsRegex(t)) {
-    ctx.errors.push(
-      diagnostic("regexInStructuredOutput", { context }, loc ?? null),
-    );
+    ctx.errors.push(diagnostic("regexInStructuredOutput", { context }, loc ?? null));
   }
 }
 
 function containsRegex(t: VariableType): boolean {
-  return visitTypes(
-    t,
-    (n) => n.type === "primitiveType" && n.value === "regex",
-  );
+  return visitTypes(t, (n) => n.type === "primitiveType" && n.value === "regex");
 }
 
 /**

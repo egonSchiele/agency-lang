@@ -6,14 +6,7 @@ import { AWS_OBJECT_BYTE_LIMIT } from "../../constants.js";
 import { type ResultFailure } from "../../runtime/result.js";
 import { safeStatelogValue } from "../../runtime/runner.js";
 import { makeRedactReplacer } from "../../runtime/redactForStatelog.js";
-import {
-  _s3Get,
-  _s3GetBinary,
-  _s3Put,
-  _s3PutBinary,
-  _createBucket,
-  _s3PresignGet,
-} from "./s3.js";
+import { _s3Get, _s3GetBinary, _s3Put, _s3PutBinary, _createBucket, _s3PresignGet } from "./s3.js";
 
 // The presign path bypasses sendAwsRequest, so nothing structural forces it
 // through the final hostname defense. This partial mock lets one test inject a
@@ -24,9 +17,8 @@ vi.mock("./client.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./client.js")>();
   return {
     ...actual,
-    hostOutsidePartitionFailure: (
-      ...args: Parameters<typeof actual.hostOutsidePartitionFailure>
-    ) => hostCheck.override ?? actual.hostOutsidePartitionFailure(...args),
+    hostOutsidePartitionFailure: (...args: Parameters<typeof actual.hostOutsidePartitionFailure>) =>
+      hostCheck.override ?? actual.hostOutsidePartitionFailure(...args),
   };
 });
 
@@ -49,7 +41,10 @@ async function withCtx<T>(fn: () => Promise<T>): Promise<T> {
   return runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), fn);
 }
 
-function mockFetch(body: BodyInit | null = new Uint8Array(0), init: ResponseInit = { status: 200 }) {
+function mockFetch(
+  body: BodyInit | null = new Uint8Array(0),
+  init: ResponseInit = { status: 200 },
+) {
   return vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(body, init));
 }
 
@@ -119,15 +114,13 @@ describe("S3 addressing across partitions", () => {
 });
 
 describe("S3 key safety", () => {
-  it.each(["a/./b", "a/../b", ".", ".."])(
-    "rejects the unsafe key %s before fetching",
-    (key) =>
-      withCtx(async () => {
-        const spy = mockFetch();
-        const result = await _s3Get("abc", key, "us-east-1");
-        expect(typeof result === "object" && "error" in (result as object)).toBe(true);
-        expect(spy).not.toHaveBeenCalled();
-      }),
+  it.each(["a/./b", "a/../b", ".", ".."])("rejects the unsafe key %s before fetching", (key) =>
+    withCtx(async () => {
+      const spy = mockFetch();
+      const result = await _s3Get("abc", key, "us-east-1");
+      expect(typeof result === "object" && "error" in (result as object)).toBe(true);
+      expect(spy).not.toHaveBeenCalled();
+    }),
   );
 
   it("demonstrates why: fetch would normalize `a/../b` to `/b`", () => {
@@ -192,7 +185,13 @@ describe("S3 binary codecs and redaction", () => {
   it("_s3PutBinary rejects malformed base64 before fetching", () =>
     withCtx(async () => {
       const spy = mockFetch();
-      const result = await _s3PutBinary("abc", "k", "not*base64", "us-east-1", "application/octet-stream");
+      const result = await _s3PutBinary(
+        "abc",
+        "k",
+        "not*base64",
+        "us-east-1",
+        "application/octet-stream",
+      );
       expect("error" in (result as object)).toBe(true);
       expect(spy).not.toHaveBeenCalled();
     }));
@@ -217,7 +216,13 @@ describe("S3 upload size cap", () => {
     withCtx(async () => {
       const spy = mockFetch();
       const oversized = Buffer.alloc(AWS_OBJECT_BYTE_LIMIT + 1).toString("base64");
-      const result = await _s3PutBinary("abc", "k", oversized, "us-east-1", "application/octet-stream");
+      const result = await _s3PutBinary(
+        "abc",
+        "k",
+        oversized,
+        "us-east-1",
+        "application/octet-stream",
+      );
       expect("error" in (result as object)).toBe(true);
       expect(spy).not.toHaveBeenCalled();
     }));
@@ -256,9 +261,7 @@ describe("S3 presigned URLs", () => {
       );
 
       const safe = safeStatelogValue(email);
-      expect(safe).toBe(
-        "Good morning! Today's image: [presigned S3 URL redacted] — enjoy.",
-      );
+      expect(safe).toBe("Good morning! Today's image: [presigned S3 URL redacted] — enjoy.");
     }));
 
   it.each([0, -5, 1.5, NaN, 604800001])(
@@ -279,7 +282,8 @@ describe("S3 presigned URLs", () => {
       const result = await _s3PresignGet("my-bucket", "k", expiresMs, "us-east-1");
       expect(typeof result).toBe("string");
       expect(result).toContain(`X-Amz-Expires=${seconds}&`);
-    }));
+    }),
+  );
 
   it("signs the session token into the query when present", () =>
     withCtx(async () => {

@@ -34,7 +34,7 @@ describe("getCodeActions", () => {
     // `mapValues` lives in std::object and is not auto-imported, so it needs
     // an explicit import suggestion. (Array helpers like `map` are now
     // auto-imported from std::index, so they never need this action.)
-    const doc = makeDoc('node main() {\n  mapValues({})\n}');
+    const doc = makeDoc("node main() {\n  mapValues({})\n}");
     const symbolTable = new SymbolTable();
     const params = {
       textDocument: { uri: doc.uri },
@@ -58,8 +58,7 @@ describe("getCodeActions", () => {
   });
 
   it("merges into existing stdlib import", () => {
-    const source =
-      'import { keys } from "std::object"\nnode main() {\n  mapValues({})\n}';
+    const source = 'import { keys } from "std::object"\nnode main() {\n  mapValues({})\n}';
     const doc = makeDoc(source);
     const symbolTable = new SymbolTable();
     const params = {
@@ -113,7 +112,10 @@ describe("unused-import code actions", () => {
     for (const e of [...edits].sort(
       (a, b) => doc.offsetAt(b.range.start) - doc.offsetAt(a.range.start),
     )) {
-      out = out.slice(0, doc.offsetAt(e.range.start)) + e.newText + out.slice(doc.offsetAt(e.range.end));
+      out =
+        out.slice(0, doc.offsetAt(e.range.start)) +
+        e.newText +
+        out.slice(doc.offsetAt(e.range.end));
     }
     return out;
   }
@@ -155,9 +157,7 @@ describe("unused-import code actions", () => {
   it("offers the batch under both source kinds", () => {
     const source = `import { a } from "./x.agency"\nnode main() { return 1 }\n`;
     const { actions } = actionsFor(source);
-    const kinds = actions
-      .filter((a) => a.title === "Remove all unused imports")
-      .map((a) => a.kind);
+    const kinds = actions.filter((a) => a.title === "Remove all unused imports").map((a) => a.kind);
     expect(kinds).toContain("source.fixAll");
     expect(kinds).toContain("source.removeUnusedImports");
   });

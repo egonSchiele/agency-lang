@@ -99,10 +99,7 @@ export class PromptRunner {
    * `stepPath` and the checkpoint store could not tell them apart on
    * resume.
    */
-  async step(
-    key: string,
-    body: () => Promise<Interrupt[] | void>,
-  ): Promise<void> {
+  async step(key: string, body: () => Promise<Interrupt[] | void>): Promise<void> {
     if (this.opts.self.runnerState.completedSteps.includes(key)) return;
     const result = await body();
     if (result && hasInterrupts(result)) {
@@ -110,15 +107,11 @@ export class PromptRunner {
       const basePath = this.opts.checkpointInfo?.stepPath ?? "";
       const stepPath = basePath ? `${basePath}/${key}` : key;
       this.opts.stateStack.assertNoExecutingHandlers();
-      const cpId = this.opts.ctx.checkpoints.create(
-        this.opts.stateStack,
-        this.opts.ctx,
-        {
-          moduleId: this.opts.checkpointInfo?.moduleId ?? "",
-          scopeName: this.opts.checkpointInfo?.scopeName ?? "",
-          stepPath,
-        },
-      );
+      const cpId = this.opts.ctx.checkpoints.create(this.opts.stateStack, this.opts.ctx, {
+        moduleId: this.opts.checkpointInfo?.moduleId ?? "",
+        scopeName: this.opts.checkpointInfo?.scopeName ?? "",
+        stepPath,
+      });
       const cp = this.opts.ctx.checkpoints.get(cpId)!;
       for (const intr of result) {
         intr.checkpoint = cp;
@@ -224,10 +217,8 @@ export class PromptRunner {
         // idempotent across interrupt/resume; propagate fires only on the
         // no-interrupt completion path (runBatch.ts), and the delta math
         // is correct across resume because the seed baseline is per-branch.
-        seedBranchCost: (childStack, parentStack) =>
-          seedBranchCost(childStack, parentStack),
-        propagateBranchCost: (branches, parentStack) =>
-          propagateBranchCost(branches, parentStack),
+        seedBranchCost: (childStack, parentStack) => seedBranchCost(childStack, parentStack),
+        propagateBranchCost: (branches, parentStack) => propagateBranchCost(branches, parentStack),
         // Snapshot the message thread INTO `self.messagesJSON` BEFORE
         // runBatch calls `ctx.checkpoints.create`. The checkpoint deep-
         // clones `self.locals` synchronously, so mutating messagesJSON
@@ -288,10 +279,7 @@ export class BranchRunner {
     this.self.runnerState.completedSteps ??= [];
   }
 
-  async step(
-    key: string,
-    body: () => Promise<Interrupt[] | void>,
-  ): Promise<void> {
+  async step(key: string, body: () => Promise<Interrupt[] | void>): Promise<void> {
     if (this.interrupts) return;
     if (this.self.runnerState.completedSteps.includes(key)) return;
     const result = await body();

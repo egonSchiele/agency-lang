@@ -6,10 +6,7 @@ import {
   setRuntimeConfigOverrides,
   withRuntimeConfigOverrides,
 } from "./configOverrides.js";
-import {
-  CONFIG_OVERRIDES_ENV,
-  serializeConfigOverrides,
-} from "../config.js";
+import { CONFIG_OVERRIDES_ENV, serializeConfigOverrides } from "../config.js";
 import { RuntimeContext } from "./state/context.js";
 import { resolveAgentLaunchArgs } from "../cli/runBundledAgent.js";
 
@@ -58,10 +55,7 @@ describe("runtime config overrides", () => {
       { client: { providerModules: ["/abs/parent.mjs"] } },
     );
 
-    expect(result.providerModules).toEqual([
-      "/baked/a.mjs",
-      "/abs/parent.mjs",
-    ]);
+    expect(result.providerModules).toEqual(["/baked/a.mjs", "/abs/parent.mjs"]);
   });
 
   it("leaves providerModules untouched when overrides carry none", () => {
@@ -140,8 +134,12 @@ describe("applyRuntimeConfigOverridesToContextArgs — trace overrides", () => {
   });
 
   it("is a no-op when overrides are empty/undefined", () => {
-    expect(applyRuntimeConfigOverridesToContextArgs(baseArgs(), {}).traceConfig?.traceFile).toBeUndefined();
-    expect(applyRuntimeConfigOverridesToContextArgs(baseArgs(), undefined).traceConfig?.program).toBe("agent");
+    expect(
+      applyRuntimeConfigOverridesToContextArgs(baseArgs(), {}).traceConfig?.traceFile,
+    ).toBeUndefined();
+    expect(
+      applyRuntimeConfigOverridesToContextArgs(baseArgs(), undefined).traceConfig?.program,
+    ).toBe("agent");
   });
 });
 
@@ -157,13 +155,21 @@ describe("RuntimeContext honors AGENCY_CONFIG_OVERRIDES at construction", () => 
       log: { logFile: "/tmp/wired.jsonl" },
     });
     const ctx = new RuntimeContext({
-      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
       smoltalkDefaults: {},
       dirname: "/project",
     });
-    const sc = (ctx as unknown as {
-      statelogConfig: { logFile?: string; observability?: boolean };
-    }).statelogConfig;
+    const sc = (
+      ctx as unknown as {
+        statelogConfig: { logFile?: string; observability?: boolean };
+      }
+    ).statelogConfig;
     expect(sc.logFile).toBe("/tmp/wired.jsonl");
     expect(sc.observability).toBe(true);
   });
@@ -178,13 +184,21 @@ describe("RuntimeContext honors AGENCY_CONFIG_OVERRIDES at construction", () => 
     setRuntimeConfigOverrides({ maxCallDepth: 7 });
     try {
       const ctx = new RuntimeContext({
-        statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+        statelogConfig: {
+          host: "",
+          apiKey: "",
+          projectId: "",
+          debugMode: false,
+          observability: false,
+        },
         smoltalkDefaults: {},
         dirname: "/project",
       });
-      const sc = (ctx as unknown as {
-        statelogConfig: { logFile?: string; observability?: boolean };
-      }).statelogConfig;
+      const sc = (
+        ctx as unknown as {
+          statelogConfig: { logFile?: string; observability?: boolean };
+        }
+      ).statelogConfig;
       expect(sc.logFile).toBe("/tmp/tree.jsonl");
       expect(sc.observability).toBe(true);
     } finally {
@@ -196,13 +210,24 @@ describe("RuntimeContext honors AGENCY_CONFIG_OVERRIDES at construction", () => 
 describe("writer→reader override contract", () => {
   it("resolveAgentLaunchArgs configOverrides apply cleanly through the runtime merge", () => {
     const base = {
-      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
       smoltalkDefaults: {},
       dirname: "/p",
       traceConfig: { program: "agent" },
     };
     // The exact object runBundledAgent serializes into AGENCY_CONFIG_OVERRIDES.
-    const overrides = resolveAgentLaunchArgs(["--trace", "t.trace", "--log", "l.jsonl"]).configOverrides;
+    const overrides = resolveAgentLaunchArgs([
+      "--trace",
+      "t.trace",
+      "--log",
+      "l.jsonl",
+    ]).configOverrides;
     const r = applyRuntimeConfigOverridesToContextArgs(base, overrides);
     expect(r.traceConfig?.traceFile).toBe("t.trace");
     expect(r.statelogConfig.logFile).toBe("l.jsonl");
@@ -246,7 +271,13 @@ describe("withRuntimeConfigOverrides", () => {
 describe("failurePropagation override", () => {
   it("inherits failurePropagation from overrides through the runtime merge", () => {
     const base = {
-      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
       smoltalkDefaults: {},
       dirname: "/p",
     };
@@ -258,7 +289,13 @@ describe("failurePropagation override", () => {
 
   it("leaves failurePropagation unset when the override omits it", () => {
     const base = {
-      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
       smoltalkDefaults: {},
       dirname: "/p",
     };

@@ -22,10 +22,7 @@ export type AwsRequestTarget = {
  * a canonical URI that does not start with `/` or that contains query/fragment
  * delimiters.
  */
-export function createAwsRequestTarget(
-  origin: string,
-  canonicalUri: string,
-): AwsRequestTarget {
+export function createAwsRequestTarget(origin: string, canonicalUri: string): AwsRequestTarget {
   let url: URL;
   try {
     url = new URL(origin);
@@ -127,10 +124,7 @@ export async function sendAwsRequest(
       headers,
       // Node's fetch accepts a Uint8Array body at runtime; the cast sidesteps
       // TS 5.x's ArrayBufferLike-vs-ArrayBuffer strictness on BufferSource.
-      body:
-        request.method === "GET"
-          ? undefined
-          : (request.body as BodyInit | undefined),
+      body: request.method === "GET" ? undefined : (request.body as BodyInit | undefined),
       signal,
     });
     const bytes = await readBodyBytesCapped(response, wireUrl, signal);

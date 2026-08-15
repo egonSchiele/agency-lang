@@ -21,11 +21,15 @@ describe("validateOptimizedStringValue", () => {
   });
 
   it("rejects an added placeholder", () => {
-    expect(validateOptimizedStringValue("hello ${name}", "hi ${name} ${extra}")).toMatchObject({ ok: false });
+    expect(validateOptimizedStringValue("hello ${name}", "hi ${name} ${extra}")).toMatchObject({
+      ok: false,
+    });
   });
 
   it("compares placeholders by canonical rendered expression", () => {
-    expect(validateOptimizedStringValue("call ${foo(1,2)}", "ring ${foo(1, 2)}")).toEqual({ ok: true });
+    expect(validateOptimizedStringValue("call ${foo(1,2)}", "ring ${foo(1, 2)}")).toEqual({
+      ok: true,
+    });
   });
 
   it("rejects an empty replacement value", () => {
@@ -43,7 +47,9 @@ describe("validateMutationPrompt", () => {
   });
 
   it("rejects a prompt that adds an interpolation", () => {
-    expect(validateMutationPrompt("hello ${name}", "hi ${name} ${extra}")).toMatchObject({ ok: false });
+    expect(validateMutationPrompt("hello ${name}", "hi ${name} ${extra}")).toMatchObject({
+      ok: false,
+    });
   });
 
   it("compares duplicate interpolations as a multiset", () => {

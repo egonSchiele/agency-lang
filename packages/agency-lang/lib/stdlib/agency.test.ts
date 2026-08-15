@@ -54,25 +54,29 @@ describe("_compileFile sandbox containment", () => {
       "utf-8",
     );
     outsideFile = join(sandbox, "..", "outside.agency");
-    writeFileSync(
-      outsideFile,
-      `node main() { return "should not be reachable" }`,
-      "utf-8",
-    );
+    writeFileSync(outsideFile, `node main() { return "should not be reachable" }`, "utf-8");
     siblingDir = `${sandbox}-evil`;
     mkdirSync(siblingDir);
     siblingFile = join(siblingDir, "sneaky.agency");
-    writeFileSync(
-      siblingFile,
-      `node main() { return "should not be reachable" }`,
-      "utf-8",
-    );
+    writeFileSync(siblingFile, `node main() { return "should not be reachable" }`, "utf-8");
   });
 
   afterAll(() => {
-    try { rmSync(sandbox, { recursive: true }); } catch (_) { /* best effort */ }
-    try { rmSync(outsideFile); } catch (_) { /* best effort */ }
-    try { rmSync(siblingDir, { recursive: true }); } catch (_) { /* best effort */ }
+    try {
+      rmSync(sandbox, { recursive: true });
+    } catch (_) {
+      /* best effort */
+    }
+    try {
+      rmSync(outsideFile);
+    } catch (_) {
+      /* best effort */
+    }
+    try {
+      rmSync(siblingDir, { recursive: true });
+    } catch (_) {
+      /* best effort */
+    }
   });
 
   it("compiles a file that lives inside the sandbox dir, and produces JS derived from THAT file", () => {
@@ -85,15 +89,11 @@ describe("_compileFile sandbox containment", () => {
   });
 
   it("rejects a filename containing .. that escapes the sandbox", () => {
-    expect(() => _compileFile(sandbox, "../outside.agency")).toThrowError(
-      /Sandbox violation/,
-    );
+    expect(() => _compileFile(sandbox, "../outside.agency")).toThrowError(/Sandbox violation/);
   });
 
   it("rejects an absolute filename outside the sandbox", () => {
-    expect(() => _compileFile(sandbox, outsideFile)).toThrowError(
-      /Sandbox violation/,
-    );
+    expect(() => _compileFile(sandbox, outsideFile)).toThrowError(/Sandbox violation/);
   });
 
   it("rejects a sibling directory whose path shares a prefix with the sandbox", () => {
@@ -119,9 +119,7 @@ describe("_compileFile sandbox containment", () => {
       ctx.skip();
       return;
     }
-    expect(() => _compileFile(sandbox, "evil.agency")).toThrowError(
-      /Sandbox violation/,
-    );
+    expect(() => _compileFile(sandbox, "evil.agency")).toThrowError(/Sandbox violation/);
   });
 
   it("calls compileSource with stdlib-only import policy (subprocess code can't import 'fs')", () => {
@@ -186,7 +184,11 @@ describe("_writeAST / _format / _formatFile", () => {
   });
 
   afterEach(() => {
-    try { rmSync(dir, { recursive: true }); } catch (_) { /* best effort */ }
+    try {
+      rmSync(dir, { recursive: true });
+    } catch (_) {
+      /* best effort */
+    }
   });
 
   it("_format is idempotent on already-formatted source", () => {
@@ -254,9 +256,7 @@ describe("_writeAST / _format / _formatFile", () => {
   it("_writeAST with overwrite=false fails when the file already exists", async () => {
     writeFileSync(join(dir, "exists.agency"), `node x() {}`, "utf-8");
     const ast = _parseAST(`node main() { return 1 }`);
-    await expect(_writeAST(ast, dir, "exists.agency", false)).rejects.toThrow(
-      /already exists/,
-    );
+    await expect(_writeAST(ast, dir, "exists.agency", false)).rejects.toThrow(/already exists/);
   });
 
   it("_writeAST allows upward traversal via .. segments", async () => {
@@ -309,11 +309,13 @@ describe("_writeAST / _format / _formatFile", () => {
     const outsidePath = join(dir, "..", "outside.agency");
     writeFileSync(outsidePath, `node x() {}`, "utf-8");
     try {
-      expect(() => _formatFile(dir, "../outside.agency")).toThrowError(
-        /Sandbox violation/,
-      );
+      expect(() => _formatFile(dir, "../outside.agency")).toThrowError(/Sandbox violation/);
     } finally {
-      try { rmSync(outsidePath); } catch (_) { /* best effort */ }
+      try {
+        rmSync(outsidePath);
+      } catch (_) {
+        /* best effort */
+      }
     }
   });
 });
@@ -438,9 +440,7 @@ node aux() {
   it("getNodesOfType(['importStatement']) returns all importStatement nodes", () => {
     const imports = _getNodesOfType(fixture, ["importStatement"]);
     expect(imports.length).toBe(2);
-    const paths = imports
-      .map((n) => (n as ImportStatement).modulePath)
-      .sort();
+    const paths = imports.map((n) => (n as ImportStatement).modulePath).sort();
     expect(paths).toEqual(["./bar.agency", "std::shell"]);
   });
 
@@ -500,13 +500,7 @@ node main() { return 1 }`;
   });
 
   it("allowedPackages exact-list passes only matching imports", () => {
-    const result = _filterImports(
-      fixture,
-      ["std::shell", "pkg::wikipedia"],
-      [],
-      [],
-      [],
-    );
+    const result = _filterImports(fixture, ["std::shell", "pkg::wikipedia"], [], [], []);
     expect(result.filtered).toBe(true);
     expect(result.source).toContain("std::shell");
     expect(result.source).toContain("pkg::wikipedia");
@@ -526,13 +520,7 @@ node main() { return 1 }`;
   });
 
   it("union semantics: allowKinds + allowedPackages both pass", () => {
-    const result = _filterImports(
-      fixture,
-      ["pkg::wikipedia"],
-      [],
-      ["stdlib"],
-      [],
-    );
+    const result = _filterImports(fixture, ["pkg::wikipedia"], [], ["stdlib"], []);
     expect(result.filtered).toBe(true);
     expect(result.source).toContain("std::shell");
     expect(result.source).toContain("pkg::wikipedia");
@@ -576,14 +564,14 @@ describe("_describe (reify)", () => {
     "",
     "/** Fetches one article. */",
     "export idempotent def fetchArticle(url: string): string {",
-    "  \"\"\"",
+    '  """',
     "  Fetch one article body by URL.",
-    "  \"\"\"",
-    "  return \"body\"",
+    '  """',
+    '  return "body"',
     "}",
     "",
     "export destructive def saveNote(text: string) {",
-    "  write(\"notes.txt\", text)",
+    '  write("notes.txt", text)',
     "}",
     "",
     "def helper(): number {",
@@ -601,7 +589,7 @@ describe("_describe (reify)", () => {
     "}",
     "",
     "export node main(): string {",
-    "  return fetchArticle(\"x\")",
+    '  return fetchArticle("x")',
     "}",
     "",
   ].join("\n");
@@ -738,9 +726,7 @@ describe("_describe (reify): re-exports, consts, module summary", () => {
   });
 
   it("unresolvable re-exports come back thin with the unknown sentinel, markers applied", () => {
-    const info = _describe(
-      'export { helper, destructive rmrf } from "./local.agency"\n',
-    );
+    const info = _describe('export { helper, destructive rmrf } from "./local.agency"\n');
     expect(info.exports.map((e) => [e.name, e.kind])).toEqual([
       ["helper", "reexport"],
       ["rmrf", "reexport"],

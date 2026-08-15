@@ -36,8 +36,14 @@ import type { TreeNode } from "../types.js";
 import type { View, ViewAction, Viewport } from "./view.js";
 
 export const GROUP_PALETTE = [
-  "bright-cyan", "bright-magenta", "bright-yellow", "bright-green",
-  "bright-blue", "bright-red", "cyan", "magenta",
+  "bright-cyan",
+  "bright-magenta",
+  "bright-yellow",
+  "bright-green",
+  "bright-blue",
+  "bright-red",
+  "cyan",
+  "magenta",
 ];
 
 type FlameRow = { span: TimelineSpan; node: TreeNode; color: string | undefined };
@@ -71,7 +77,7 @@ export class FlameView implements View {
   }
 
   handleKey(ev: KeyEvent, viewport: Viewport): ViewAction {
-    this.message = "";   // transient, like the tree's message bar
+    this.message = ""; // transient, like the tree's message bar
     const fmt = formatKey(ev);
     const move = (delta: number) => {
       this.cursor = Math.max(0, Math.min(this.rows.length - 1, this.cursor + delta));
@@ -124,12 +130,22 @@ export class FlameView implements View {
       viewportRows: bodyRows,
       renderItem: (item, isCursor) => this.renderRow(item, isCursor, window, widths),
     });
-    return column({ justifyContent: "flex-start" },
+    return column(
+      { justifyContent: "flex-start" },
       line(this.headerText(window), { fg: "bright-white" }),
-      line(new AxisHeader(widths.gutter).computeText(window, this.viewStart(), widths.bar), { fg: "gray" }),
+      line(new AxisHeader(widths.gutter).computeText(window, this.viewStart(), widths.bar), {
+        fg: "gray",
+      }),
       body,
       line(new SelectionFooter().computeText(this.footerText()), { fg: "bright-white" }),
-      line(bottomHints("t view  ↑↓ select  Enter/→ drill  ← out  d detail  o tree  +/- zoom  [ ] pan  0 reset  a admin  / search  Esc back", "flame", viewport.cols), { fg: "gray" }),
+      line(
+        bottomHints(
+          "t view  ↑↓ select  Enter/→ drill  ← out  d detail  o tree  +/- zoom  [ ] pan  0 reset  a admin  / search  Esc back",
+          "flame",
+          viewport.cols,
+        ),
+        { fg: "gray" },
+      ),
     );
   }
 
@@ -183,9 +199,8 @@ export class FlameView implements View {
     const index = buildTreeIndex(trace);
     this.index = index;
     this.drillPath = this.drillPath.filter((id) => index.byId[id] !== undefined);
-    const rootNode = this.drillPath.length > 0
-      ? index.byId[this.drillPath[this.drillPath.length - 1]]
-      : trace;
+    const rootNode =
+      this.drillPath.length > 0 ? index.byId[this.drillPath[this.drillPath.length - 1]] : trace;
     const spans = timelineSpans(rootNode, { hideKinds: this.hideAdmin ? ADMIN_KINDS : [] });
     const groups = groupSpans(spans, trace, index);
     const colorByKey = rankColors(groups);
@@ -199,7 +214,8 @@ export class FlameView implements View {
       color: colorByKey[keyBySpanId[span.id] ?? ""],
     }));
     const restored = this.rows.findIndex((r) => r.span.id === cursorId);
-    this.cursor = restored !== -1 ? restored : Math.min(this.cursor, Math.max(0, this.rows.length - 1));
+    this.cursor =
+      restored !== -1 ? restored : Math.min(this.cursor, Math.max(0, this.rows.length - 1));
   }
 
   private selected(): FlameRow | undefined {
@@ -251,17 +267,24 @@ export class FlameView implements View {
     const current = this.window();
     const full = this.viewExtent();
     const sel = this.selected();
-    const center = sel !== undefined
-      ? (sel.span.extent.start + sel.span.extent.end) / 2
-      : (current.start + current.end) / 2;
+    const center =
+      sel !== undefined
+        ? (sel.span.extent.start + sel.span.extent.end) / 2
+        : (current.start + current.end) / 2;
     const newSpan = Math.min(
       Math.max((current.end - current.start) * factor, 1),
       full.end - full.start,
     );
     let start = center - newSpan / 2;
     let end = center + newSpan / 2;
-    if (start < full.start) { end += full.start - start; start = full.start; }
-    if (end > full.end) { start -= end - full.end; end = full.end; }
+    if (start < full.start) {
+      end += full.start - start;
+      start = full.start;
+    }
+    if (end > full.end) {
+      start -= end - full.end;
+      end = full.end;
+    }
     const clamped = { start: Math.max(start, full.start), end: Math.min(end, full.end) };
     this.zoom = clamped.start === full.start && clamped.end === full.end ? undefined : clamped;
   }
@@ -318,7 +341,8 @@ export class FlameView implements View {
   private footerText(): string {
     const sel = this.selected();
     if (sel === undefined) return this.message;
-    const base = `${sel.node.summary}  ·  start +${fmtOffset(sel.span.extent.start - this.viewStart())}` +
+    const base =
+      `${sel.node.summary}  ·  start +${fmtOffset(sel.span.extent.start - this.viewStart())}` +
       `  self ${fmtDuration(sel.span.selfMs, { minutes: true })}`;
     return this.message ? `${base}  ${this.message}` : base;
   }
@@ -327,13 +351,21 @@ export class FlameView implements View {
     return new RowLabel(item.node).computeText();
   }
 
-  private renderRow(item: FlameRow, isCursor: boolean, window: Interval, widths: { gutter: number; bar: number; stats: number }): Element {
+  private renderRow(
+    item: FlameRow,
+    isCursor: boolean,
+    window: Interval,
+    widths: { gutter: number; bar: number; stats: number },
+  ): Element {
     const indent = "  ".repeat(Math.min(item.span.depth, 10));
-    const label = padCell(clipCell(`${isCursor ? "▶ " : "  "}${indent}${this.rowText(item)}`, widths.gutter - 1), widths.gutter);
-    const bar = new BarComponent(
-      [item.span.extent],
-      { running: item.span.running },
-    ).computeCells(window, widths.bar);
+    const label = padCell(
+      clipCell(`${isCursor ? "▶ " : "  "}${indent}${this.rowText(item)}`, widths.gutter - 1),
+      widths.gutter,
+    );
+    const bar = new BarComponent([item.span.extent], { running: item.span.running }).computeCells(
+      window,
+      widths.bar,
+    );
     const stats = new DurationCell(this.thresholds).computeText(item.span, widths.stats);
     const identity = isCursor ? "bright-white" : item.color;
     return row(
@@ -353,7 +385,8 @@ export class RowLabel {
     if (this.node.label === "llmCall") {
       const pc = childEvent(this.node, "promptCompletion");
       const asked = pc !== undefined ? lastUserMessage(pc) : undefined;
-      const head = asked !== undefined ? `llm · ${truncate(asked.replace(/\s+/g, " "), 60)}` : "llm";
+      const head =
+        asked !== undefined ? `llm · ${truncate(asked.replace(/\s+/g, " "), 60)}` : "llm";
       const cost = this.llmCost();
       return cost !== "" ? `${head} · ${cost}` : head;
     }
@@ -389,9 +422,10 @@ export class DurationCell {
   computeText(span: TimelineSpan, width: number): { text: string; color: string | undefined } {
     const total = span.extent.end - span.extent.start;
     const totalText = fmtDuration(total, { minutes: true });
-    const text = span.selfMs < total * 0.95
-      ? `${totalText}/${fmtDuration(span.selfMs, { minutes: true })}`
-      : totalText;
+    const text =
+      span.selfMs < total * 0.95
+        ? `${totalText}/${fmtDuration(span.selfMs, { minutes: true })}`
+        : totalText;
     return {
       text: text.padStart(width),
       color: durationColor(total, this.thresholds),
@@ -399,7 +433,9 @@ export class DurationCell {
   }
 }
 
-export function rankColors(groups: { key: string; totalSelfMs: number }[]): Record<string, string | undefined> {
+export function rankColors(
+  groups: { key: string; totalSelfMs: number }[],
+): Record<string, string | undefined> {
   const ranked = [...groups].sort((a, b) => b.totalSelfMs - a.totalSelfMs);
   const colors: Record<string, string | undefined> = {};
   ranked.forEach((group, i) => {
@@ -407,4 +443,3 @@ export function rankColors(groups: { key: string; totalSelfMs: number }[]): Reco
   });
   return colors;
 }
-

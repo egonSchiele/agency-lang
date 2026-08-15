@@ -13,10 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const fixturesDir = path.join(__dirname, "../../tests/typescriptGenerator");
-const preprocessorFixturesDir = path.join(
-  __dirname,
-  "../../tests/typescriptPreprocessor"
-);
+const preprocessorFixturesDir = path.join(__dirname, "../../tests/typescriptPreprocessor");
 const builderFixturesDir = path.join(__dirname, "../../tests/typescriptBuilder");
 
 type Transform = (ast: any, fileName: string) => { content: string; ext: string };
@@ -74,12 +71,9 @@ regenerate(builderFixturesDir, generatorTransform);
 function regenerateInterruptFixtures(): void {
   const interruptsDir = path.join(
     __dirname,
-    "../../tests/integration/cli-main/fixtures/interrupts"
+    "../../tests/integration/cli-main/fixtures/interrupts",
   );
-  const expectedDir = path.join(
-    __dirname,
-    "../../tests/integration/cli-main/fixtures/expected"
-  );
+  const expectedDir = path.join(__dirname, "../../tests/integration/cli-main/fixtures/expected");
   // Each entry: { name (for expected/<name>.txt), entryFile (relative to interruptsDir) }
   const cases = [
     { name: "single-file", entryFile: "single-file.agency" },

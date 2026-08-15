@@ -43,8 +43,7 @@ export const BANNED_BUILTINS_IN_STATIC_INIT: Record<string, string> = {
   llm: "`llm()` requires a per-run execution context",
   chat: "`chat()` requires a per-run execution context",
   interrupt: "`interrupt(...)` pauses the per-run execution stack",
-  respondToInterrupts:
-    "`respondToInterrupts()` operates on per-run interrupt state",
+  respondToInterrupts: "`respondToInterrupts()` operates on per-run interrupt state",
   rewindFrom: "`rewindFrom()` operates on per-run checkpoint state",
   runBatch: "`runBatch()` schedules per-run agent invocations",
   callback: "`callback(...)` binds a hook into the per-run callback table",
@@ -72,11 +71,7 @@ export function checkBannedBuiltinCalls(
 ): TypeCheckError[] {
   const errors: TypeCheckError[] = [];
   for (const { node, ancestors } of walkNodes([expr as AgencyNode])) {
-    if (
-      ancestors.some(
-        (a) => a.type === "function" || a.type === "graphNode",
-      )
-    ) {
+    if (ancestors.some((a) => a.type === "function" || a.type === "graphNode")) {
       continue;
     }
     if (node.type === "functionCall") {
@@ -92,9 +87,7 @@ export function checkBannedBuiltinCalls(
         if (staticName !== undefined) {
           params.staticName = staticName;
         }
-        errors.push(
-          diagnostic("bannedBuiltinInStaticInit", params, node.loc ?? null),
-        );
+        errors.push(diagnostic("bannedBuiltinInStaticInit", params, node.loc ?? null));
       }
       continue;
     }
@@ -103,9 +96,7 @@ export function checkBannedBuiltinCalls(
       if (staticName !== undefined) {
         params.staticName = staticName;
       }
-      errors.push(
-        diagnostic("interruptInStaticInit", params, node.loc ?? null),
-      );
+      errors.push(diagnostic("interruptInStaticInit", params, node.loc ?? null));
     }
   }
   return errors;
@@ -168,11 +159,7 @@ export function checkStaticMutation(
   if (node.type === "assignment") {
     if (node.declKind) return null;
     if (!staticNames[node.variableName]) return null;
-    return diagnostic(
-      "staticReassignedAtTopLevel",
-      { name: node.variableName },
-      node.loc ?? null,
-    );
+    return diagnostic("staticReassignedAtTopLevel", { name: node.variableName }, node.loc ?? null);
   }
   // Method-call shape: `x.push(...)` at top level.
   if (node.type === "valueAccess") {
@@ -183,11 +170,7 @@ export function checkStaticMutation(
       if (elem.kind !== "methodCall") continue;
       const methodName = elem.functionCall.functionName;
       if (!MUTATING_METHODS[methodName]) continue;
-      return diagnostic(
-        "staticMutatedViaMethod",
-        { name, method: methodName },
-        node.loc ?? null,
-      );
+      return diagnostic("staticMutatedViaMethod", { name, method: methodName }, node.loc ?? null);
     }
   }
   return null;

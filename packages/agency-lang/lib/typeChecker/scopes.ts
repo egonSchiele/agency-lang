@@ -44,10 +44,7 @@ export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
     file: "",
   });
 
-  for (const def of [
-    ...Object.values(ctx.functionDefs),
-    ...Object.values(ctx.nodeDefs),
-  ]) {
+  for (const def of [...Object.values(ctx.functionDefs), ...Object.values(ctx.nodeDefs)]) {
     scopes.push(buildDefScope(def, topLevelScope, ctx));
   }
 
@@ -97,33 +94,19 @@ function buildDefScope(
  * needs the scope state as it was at this point in the program, not the
  * final state after all declarations.
  */
-export function declareVariable(
-  node: AgencyNode,
-  scope: Scope,
-  ctx: TypeCheckerContext,
-): void {
+export function declareVariable(node: AgencyNode, scope: Scope, ctx: TypeCheckerContext): void {
   if (node.type !== "assignment") return;
 
   if (node.exported && !(node.static && node.declKind === "const")) {
     ctx.errors.push(
-      diagnostic(
-        "exportRequiresStaticConst",
-        { name: node.variableName },
-        node.loc ?? null,
-      ),
+      diagnostic("exportRequiresStaticConst", { name: node.variableName }, node.loc ?? null),
     );
   }
 
   // Reassignment to a const binding (no accessChain — property writes on
   // const objects are allowed, matching JS semantics).
-  if (
-    !node.declKind &&
-    !node.accessChain &&
-    scope.isConst(node.variableName)
-  ) {
-    ctx.errors.push(
-      diagnostic("reassignToConst", { name: node.variableName }, node.loc ?? null),
-    );
+  if (!node.declKind && !node.accessChain && scope.isConst(node.variableName)) {
+    ctx.errors.push(diagnostic("reassignToConst", { name: node.variableName }, node.loc ?? null));
   }
 
   const newType = node.typeHint;
@@ -138,32 +121,16 @@ export function declareVariable(
   const isConst = node.declKind === "const";
 
   if (newType) {
-    validateTypeReferences(
-      newType,
-      node.variableName,
-      ctx.getTypeAliases(),
-      ctx.errors,
-      node.loc,
-    );
+    validateTypeReferences(newType, node.variableName, ctx.getTypeAliases(), ctx.errors, node.loc);
     if (existingType) {
-      reportNotAssignable(
-        ctx,
-        node.variableName,
-        newType,
-        existingType,
-        node.loc,
-      );
+      reportNotAssignable(ctx, node.variableName, newType, existingType, node.loc);
     }
     // The value-vs-annotation check (checkType) now runs in the flow-aware
     // checkAssignmentsInScope (Phase B) — see checkAssignmentValue.
     // The runtime wraps validated values in Result<T, string>, so the
     // declared scope type must match — otherwise downstream property accesses
     // see `T` instead of the actual `Result<T, string>` and silently miscompile.
-    scope.declare(
-      node.variableName,
-      resultTypeForValidation(newType, node.validated),
-      isConst,
-    );
+    scope.declare(node.variableName, resultTypeForValidation(newType, node.validated), isConst);
     return;
   }
 
@@ -186,11 +153,7 @@ export function declareVariable(
 
   if (ctx.config.typechecker?.strictTypes) {
     ctx.errors.push(
-      diagnostic(
-        "missingAnnotationStrictMode",
-        { name: node.variableName },
-        node.loc ?? null,
-      ),
+      diagnostic("missingAnnotationStrictMode", { name: node.variableName }, node.loc ?? null),
     );
   }
   const inferred = synthType(node.value, scope, ctx);
@@ -240,14 +203,7 @@ export function checkAssignmentValue(
     // declared type (matches declareVariable). Property/index writes against
     // the chain target are only checked when the assignment is *un-annotated*
     // (the accessChain branch below).
-    checkType(
-      node.value,
-      newType,
-      scope,
-      `assignment to '${node.variableName}'`,
-      ctx,
-      node.loc,
-    );
+    checkType(node.value, newType, scope, `assignment to '${node.variableName}'`, ctx, node.loc);
     return;
   }
   const existingType = scope.lookup(node.variableName);
@@ -342,9 +298,7 @@ function reportNotAssignable(
 // Operators that mutate their left operand. Compound assigns (`+=` etc.)
 // and postfix `++`/`--` all desugar to writes back to the left side, so a
 // const target is just as illegal as bare reassignment.
-const MUTATING_OPERATORS = [
-  "+=", "-=", "*=", "/=", "&&=", "||=", "??=", "++", "--",
-];
+const MUTATING_OPERATORS = ["+=", "-=", "*=", "/=", "&&=", "||=", "??=", "++", "--"];
 
 // Recursively walks `node` and reports any binOpExpression that mutates a
 // const variable. Catches nested cases like `return x++`, `if (x++ > 0)`,
@@ -365,9 +319,7 @@ function checkConstMutations(
     node.left.type === "variableName" &&
     scope.isConst(node.left.value)
   ) {
-    ctx.errors.push(
-      diagnostic("reassignToConst", { name: node.left.value }, node.loc ?? null),
-    );
+    ctx.errors.push(diagnostic("reassignToConst", { name: node.left.value }, node.loc ?? null));
   }
 
   // Recurse via the shared expressionChildren walker (lib/utils/node.ts) — the
@@ -395,10 +347,7 @@ const hasOwn = (obj: object, name: string): boolean =>
  * use an own-property check so a name like `toString` is not mistaken for a
  * prototype method on these plain-object registries.
  */
-function importedValueType(
-  name: string,
-  ctx: TypeCheckerContext,
-): VariableType {
+function importedValueType(name: string, ctx: TypeCheckerContext): VariableType {
   if (hasOwn(ctx.jsImportedNames, name)) return ANY_T;
   if (!hasOwn(ctx.importedFunctions, name)) return ANY_T;
   const imported = ctx.importedFunctions[name];
@@ -415,11 +364,7 @@ function importedValueType(
  * Recurses into nested blocks using the same scope, which preserves today's
  * function-scoped semantics — declarations leak out of nested blocks.
  */
-export function walkScopeBody(
-  nodes: AgencyNode[],
-  scope: Scope,
-  ctx: TypeCheckerContext,
-): void {
+export function walkScopeBody(nodes: AgencyNode[], scope: Scope, ctx: TypeCheckerContext): void {
   for (let i = 0; i < nodes.length; i++) {
     const raw = nodes[i];
     checkConstMutations(raw, scope, ctx);
@@ -458,10 +403,7 @@ export function walkScopeBody(
         // Typed `any` (an explicit `: any` annotation, or an `is success(v)`
         // binder over a bare `Result`) is as unknowable as the "any" string —
         // treat both as "could be any iterable" rather than rejecting.
-        const recordLike =
-          isAnyType(iterableType)
-            ? undefined
-            : recordLikeKeyValue(iterableType);
+        const recordLike = isAnyType(iterableType) ? undefined : recordLikeKeyValue(iterableType);
         if (isAnyType(iterableType)) {
           itemType = ANY_T;
           // Iterable kind is unknown, so the second var could be either an
@@ -545,14 +487,9 @@ export function walkScopeBody(
         walkScopeBody(node.body, scope, ctx);
         if (node.handler.kind === "inline") {
           if (node.handler.param.validated) {
-            ctx.errors.push(
-              diagnostic("handlerParamValidated", {}, node.loc ?? null),
-            );
+            ctx.errors.push(diagnostic("handlerParamValidated", {}, node.loc ?? null));
           }
-          scope.declare(
-            node.handler.param.name,
-            node.handler.param.typeHint ?? ANY_T,
-          );
+          scope.declare(node.handler.param.name, node.handler.param.typeHint ?? ANY_T);
           walkScopeBody(node.handler.body, scope, ctx);
         }
         break;
@@ -566,10 +503,7 @@ export function walkScopeBody(
           const slot = getBlockSlot(node.functionName, ctx);
           node.block.params.forEach((param, i) => {
             const slotType = slot?.params[i]?.typeAnnotation;
-            scope.declare(
-              param.name,
-              param.typeHint ?? slotType ?? ANY_T,
-            );
+            scope.declare(param.name, param.typeHint ?? slotType ?? ANY_T);
           });
           walkScopeBody(node.block.body, scope, ctx);
         }

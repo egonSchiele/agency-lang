@@ -2,14 +2,7 @@ import { describe, it, expect } from "vitest";
 import { runInTestContext } from "../runtime/asyncContext.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
-import {
-  _tag,
-  _setTags,
-  _getTags,
-  _redact,
-  _removeTag,
-  _removeAllTags,
-} from "./tag.js";
+import { _tag, _setTags, _getTags, _redact, _removeTag, _removeAllTags } from "./tag.js";
 
 function makeCtx() {
   return new RuntimeContext({

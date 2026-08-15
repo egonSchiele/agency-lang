@@ -67,15 +67,8 @@ describe("checkpoint()", () => {
 
   it("records location from the active callsite slot", async () => {
     const ctx = makeMockCtx();
-    const id = await runInTestContext(
-      ctx,
-      ctx.stateStack,
-      new ThreadStore(),
-      () =>
-        withCallsite(
-          { moduleId: "modA", scopeName: "scopeB", stepPath: "1.2" },
-          () => checkpoint(),
-        ),
+    const id = await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
+      withCallsite({ moduleId: "modA", scopeName: "scopeB", stepPath: "1.2" }, () => checkpoint()),
     );
     const cp = ctx.checkpoints.get(id)!;
     expect(cp.moduleId).toBe("modA");
@@ -175,7 +168,7 @@ describe("restore()", () => {
     const id = await wrap(ctx, () => checkpoint());
 
     // Add a pending promise after checkpoint
-    ctx.pendingPromises.add(new Promise(() => { })); // never resolves
+    ctx.pendingPromises.add(new Promise(() => {})); // never resolves
 
     try {
       wrap(ctx, () => restore(id, {}));
@@ -209,7 +202,11 @@ describe("restore()", () => {
   it("should track restores (infinite loop protection)", async () => {
     const ctx = makeMockCtx();
     ctx.checkpoints = new CheckpointStore(2); // max 2 restores
-    const id = ctx.checkpoints.create(ctx.stateStack, ctx, { moduleId: "", scopeName: "", stepPath: "" });
+    const id = ctx.checkpoints.create(ctx.stateStack, ctx, {
+      moduleId: "",
+      scopeName: "",
+      stepPath: "",
+    });
 
     try {
       wrap(ctx, () => restore(id, {}));

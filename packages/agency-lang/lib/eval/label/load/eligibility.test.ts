@@ -56,8 +56,17 @@ describe("describeIngestSkip", () => {
 
   it("has a description for every reason, so no skip prints as undefined", () => {
     const reasons = [
-      "empty", "too-large", "not-utf8", "symlink", "run-failed", "record-unreadable",
-      "legacy-record", "missing-trace-id", "invalid-task", "no-output", "truncated-output",
+      "empty",
+      "too-large",
+      "not-utf8",
+      "symlink",
+      "run-failed",
+      "record-unreadable",
+      "legacy-record",
+      "missing-trace-id",
+      "invalid-task",
+      "no-output",
+      "truncated-output",
     ] as const;
     for (const reason of reasons) {
       expect(describeIngestSkip({ item: "x", reason })).not.toContain("undefined");

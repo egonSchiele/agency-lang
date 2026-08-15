@@ -28,10 +28,7 @@ import type { NameClassifier } from "./nameClassifier.js";
 export class DestructiveTracking {
   constructor(
     private readonly names: NameClassifier,
-    private readonly compilationUnit: Pick<
-      CompilationUnit,
-      "destructiveFunctions"
-    >,
+    private readonly compilationUnit: Pick<CompilationUnit, "destructiveFunctions">,
   ) {}
 
   /** `__self.__destructiveRan = __self.__destructiveRan ?? false` — emitted
@@ -52,7 +49,6 @@ export class DestructiveTracking {
         : ts.binOp(ts.self("__destructiveRan"), "??", ts.bool(false)),
     );
   }
-
 
   /** `stampFailureBoundary(runner.haltResult, __self.__destructiveRan)` — the
    *  expression the function-exit halt check embeds to fold this activation's
@@ -84,9 +80,7 @@ export class DestructiveTracking {
     if (outcomeVar) {
       return { post: this.outcomeFlip(outcomeVar) };
     }
-    return this.names.containsDestructiveCall(stmt)
-      ? { pre: this.markDestructiveRan() }
-      : {};
+    return this.names.containsDestructiveCall(stmt) ? { pre: this.markDestructiveRan() } : {};
   }
 
   /** `__self.__destructiveRan = true` — sets the activation's destructive-ran
@@ -135,10 +129,7 @@ export class DestructiveTracking {
     let call: { type?: string; functionName?: string } | undefined;
     if (value?.type === "functionCall") {
       call = value;
-    } else if (
-      value?.type === "tryExpression" &&
-      value.call?.type === "functionCall"
-    ) {
+    } else if (value?.type === "tryExpression" && value.call?.type === "functionCall") {
       call = value.call;
     }
     if (!call?.functionName) return null;
@@ -146,10 +137,7 @@ export class DestructiveTracking {
     // object, so a call to a function named `toString` / `constructor` would
     // otherwise resolve an inherited prototype member as truthy and be
     // misclassified as destructive.
-    return Object.hasOwn(
-      this.compilationUnit.destructiveFunctions,
-      call.functionName,
-    )
+    return Object.hasOwn(this.compilationUnit.destructiveFunctions, call.functionName)
       ? asn.variableName
       : null;
   }

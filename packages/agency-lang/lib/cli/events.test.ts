@@ -24,9 +24,7 @@ describe("traceLog integration", () => {
     const tracePath = path.join(tmpDir, "test.agencytrace");
     const outputPath = path.join(tmpDir, "events.json");
 
-    const writer = new TraceWriter(RUN_ID, "test.agency", [
-      new FileSink(tracePath),
-    ]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
     await writer.writeCheckpoint(
       new Checkpoint({
         id: 0,
@@ -101,9 +99,7 @@ describe("traceLog integration", () => {
     const outputPath = path.join(tmpDir, "events.json");
 
     // TraceWriter writes header on construction; no checkpoints added
-    const writer = new TraceWriter(RUN_ID, "test.agency", [
-      new FileSink(tracePath),
-    ]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
     await writer.close();
 
     traceLog(tracePath, outputPath);

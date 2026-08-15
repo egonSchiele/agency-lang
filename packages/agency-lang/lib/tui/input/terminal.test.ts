@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  parseKeypress,
-  readBracketed,
-  readEscapeSequence,
-} from "./terminal.js";
+import { parseKeypress, readBracketed, readEscapeSequence } from "./terminal.js";
 
 // Bracketed-paste markers — repeated locally so test failures don't
 // drag in `terminal.ts` module internals just to read the constants.
@@ -35,9 +31,7 @@ describe("readBracketed", () => {
     // Open marker exists later in the string but not at `pos` — still
     // null, because the contract is "is this position the start of a
     // bracketed region", not "find one anywhere."
-    expect(
-      readBracketed(`xx${PASTE_START}body${PASTE_END}`, 0, PASTE_START, PASTE_END),
-    ).toBeNull();
+    expect(readBracketed(`xx${PASTE_START}body${PASTE_END}`, 0, PASTE_START, PASTE_END)).toBeNull();
   });
 
   it("returns a complete read when both markers are present", () => {

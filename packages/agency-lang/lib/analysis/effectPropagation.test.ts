@@ -66,7 +66,6 @@ describe("effect propagation across files", () => {
     expect(effectsOf(main, "caller")).toEqual(["std::read"]);
   });
 
-
   it("carries std::guard out of a helper that uses a guard block", () => {
     write(
       "helper.agency",
@@ -83,10 +82,7 @@ describe("effect propagation across files", () => {
     // _guard has no `interrupt` in its body; its label comes from the seed
     // table. Recomputing direct effects from a body walk would erase it and
     // silently remove cost caps from every consumer.
-    const main = write(
-      "main.agency",
-      `export def caller(): string {\n  return "hi"\n}\n`,
-    );
+    const main = write("main.agency", `export def caller(): string {\n  return "hi"\n}\n`);
     const table = SymbolTable.build(main, {});
     const stdlib = table
       .filePaths()
@@ -110,10 +106,7 @@ describe("effect propagation across files", () => {
   });
 
   it("follows an imported node", () => {
-    write(
-      "worker.agency",
-      `node work() {\n  const x = read("data.txt")\n}\n`,
-    );
+    write("worker.agency", `node work() {\n  const x = read("data.txt")\n}\n`);
     const main = write(
       "main.agency",
       `import node { work } from "./worker.agency"\nnode main() {\n  goto work()\n}\n`,
@@ -144,9 +137,7 @@ describe("effect propagation across files", () => {
       `import { clean } from "./helper.agency"\n` +
         `export def risky(): string {\n  read("x")\n  return clean()\n}\n`,
     );
-    expect(effectsIn(main, path.join(dir, "helper.agency"), "clean")).toEqual(
-      [],
-    );
+    expect(effectsIn(main, path.join(dir, "helper.agency"), "clean")).toEqual([]);
   });
 
   it("terminates on an import cycle and still propagates", () => {
@@ -240,10 +231,7 @@ describe("re-exported names", () => {
     // buildCompilationUnit seeds from the barrel's symbols when a file imports
     // from it, so the barrel's copy has to be right, not only the origin's.
     write("helper.agency", RISKY);
-    const barrel = write(
-      "barrel.agency",
-      `export { h } from "./helper.agency"\n`,
-    );
+    const barrel = write("barrel.agency", `export { h } from "./helper.agency"\n`);
     expect(effectsOf(barrel, "h")).toEqual(["std::read"]);
   });
 });

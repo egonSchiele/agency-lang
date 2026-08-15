@@ -1,8 +1,4 @@
-import {
-  AgencyCancelledError,
-  isAbortError,
-  readCause,
-} from "../runtime/errors.js";
+import { AgencyCancelledError, isAbortError, readCause } from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { failure, type ResultFailure } from "../runtime/result.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
@@ -12,17 +8,13 @@ import { AWS_OBJECT_BYTE_LIMIT } from "../constants.js";
 
 // Cancellation is best-effort cleanup; a cancel error must never replace the
 // primary abort or size-cap error we are about to throw.
-function cancelReaderBestEffort(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-): void {
+function cancelReaderBestEffort(reader: ReadableStreamDefaultReader<Uint8Array>): void {
   reader.cancel().catch(() => {});
 }
 
 // Releasing the lock can throw if the reader is mid-read; that must not mask the
 // real outcome we are returning or throwing from the surrounding `finally`.
-function releaseReaderBestEffort(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-): void {
+function releaseReaderBestEffort(reader: ReadableStreamDefaultReader<Uint8Array>): void {
   try {
     reader.releaseLock();
   } catch {
@@ -67,9 +59,7 @@ export async function readBodyBytesCapped(
       total += value.byteLength;
       if (total > AWS_OBJECT_BYTE_LIMIT) {
         cancelReaderBestEffort(reader);
-        throw new Error(
-          `Response from ${url} exceeds ${AWS_OBJECT_BYTE_LIMIT} bytes`,
-        );
+        throw new Error(`Response from ${url} exceeds ${AWS_OBJECT_BYTE_LIMIT} bytes`);
       }
       chunks.push(value);
     }
@@ -96,11 +86,7 @@ async function readBodyCapped(
   return new TextDecoder("utf-8").decode(bytes);
 }
 
-function validateUrl(
-  baseUrl: string,
-  urlPath: string,
-  allowedDomains: string[],
-): string {
+function validateUrl(baseUrl: string, urlPath: string, allowedDomains: string[]): string {
   const url = resolveUrl(baseUrl, urlPath);
   const domainError = checkAllowedDomains(url, allowedDomains);
   if (domainError) throw new Error(domainError);
@@ -148,17 +134,12 @@ function buildInit(
  * body is already read (and size-capped); the snippet is whitespace-collapsed
  * and truncated so the message stays stable and log-friendly.
  */
-function httpStatusFailure(
-  result: Response,
-  url: string,
-  body: string,
-): ResultFailure | null {
+function httpStatusFailure(result: Response, url: string, body: string): ResultFailure | null {
   if (result.ok) return null;
   const snippet = normalizeSnippet(body);
   const statusText = result.statusText ? ` ${result.statusText}` : "";
   const message =
-    `HTTP ${result.status}${statusText} from ${url}` +
-    (snippet ? `: ${snippet}` : "");
+    `HTTP ${result.status}${statusText} from ${url}` + (snippet ? `: ${snippet}` : "");
   return failure({
     status: result.status,
     statusText: result.statusText,
@@ -412,13 +393,10 @@ function htmlToMarkdown(html: string): string {
     return `- ${stripTags(inner).trim()}\n`;
   });
 
-  s = s.replace(
-    /<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi,
-    (_m, href, inner) => {
-      const text = stripTags(inner).trim();
-      return text ? `[${text}](${href})` : href;
-    },
-  );
+  s = s.replace(/<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_m, href, inner) => {
+    const text = stripTags(inner).trim();
+    return text ? `[${text}](${href})` : href;
+  });
 
   s = s.replace(/<(strong|b)[^>]*>([\s\S]*?)<\/\1>/gi, "**$2**");
   s = s.replace(/<(em|i)[^>]*>([\s\S]*?)<\/\1>/gi, "*$2*");
@@ -450,10 +428,7 @@ export function resolveUrl(baseUrl: string, path: string): string {
   return base + p;
 }
 
-export function checkAllowedDomains(
-  url: string,
-  allowedDomains: string[],
-): string | null {
+export function checkAllowedDomains(url: string, allowedDomains: string[]): string | null {
   if (allowedDomains.length === 0) return null;
   try {
     const hostname = new URL(url).hostname.toLowerCase();

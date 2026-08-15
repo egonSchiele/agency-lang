@@ -17,9 +17,7 @@ function readTrace(filePath: string) {
     .map((line) => JSON.parse(line));
 }
 
-function makeCheckpoint(
-  overrides: Partial<Record<string, any>> = {},
-): Checkpoint {
+function makeCheckpoint(overrides: Partial<Record<string, any>> = {}): Checkpoint {
   return new Checkpoint({
     id: 0,
     nodeId: "start",
@@ -57,9 +55,7 @@ describe("TraceWriter", () => {
   });
 
   it("writes a header as the first line", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [
-      new FileSink(tracePath),
-    ]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
     await writer.close();
 
     const lines = readTrace(tracePath);
@@ -71,9 +67,7 @@ describe("TraceWriter", () => {
   });
 
   it("writes chunks before their manifest", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [
-      new FileSink(tracePath),
-    ]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
     await writer.writeCheckpoint(makeCheckpoint());
     await writer.close();
 
@@ -88,9 +82,7 @@ describe("TraceWriter", () => {
   });
 
   it("deduplicates identical globals across checkpoints", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [
-      new FileSink(tracePath),
-    ]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
 
     await writer.writeCheckpoint(makeCheckpoint({ id: 0, stepPath: "0" }));
     await writer.writeCheckpoint(
@@ -115,12 +107,8 @@ describe("TraceWriter", () => {
   });
 
   it("manifest contains checkpoint metadata alongside hashed fields", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [
-      new FileSink(tracePath),
-    ]);
-    await writer.writeCheckpoint(
-      makeCheckpoint({ label: "test-label", pinned: true }),
-    );
+    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
+    await writer.writeCheckpoint(makeCheckpoint({ label: "test-label", pinned: true }));
     await writer.close();
 
     const lines = readTrace(tracePath);
@@ -138,9 +126,7 @@ describe("TraceWriter", () => {
   });
 
   it("emits footer on close with correct counts", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [
-      new FileSink(tracePath),
-    ]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
     await writer.writeCheckpoint(makeCheckpoint());
     await writer.close();
 
@@ -157,10 +143,7 @@ describe("TraceWriter", () => {
     const callbackSink = new CallbackSink("test-id", (event) => {
       callbackLines.push(event.line);
     });
-    const writer = new TraceWriter(RUN_ID, "test.agency", [
-      new FileSink(tracePath),
-      callbackSink,
-    ]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath), callbackSink]);
     await writer.writeCheckpoint(makeCheckpoint());
     await writer.close();
 
@@ -179,10 +162,7 @@ describe("TraceWriter", () => {
     const goodSink = new CallbackSink("test-id", (event) => {
       callbackLines.push(event.line);
     });
-    const writer = new TraceWriter(RUN_ID, "test.agency", [
-      errorSink,
-      goodSink,
-    ]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [errorSink, goodSink]);
     await writer.writeCheckpoint(makeCheckpoint());
     await writer.close();
 
@@ -191,9 +171,7 @@ describe("TraceWriter", () => {
   });
 
   it("writes static-state line", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [
-      new FileSink(tracePath),
-    ]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
     await writer.writeStaticState({ prompt: "hello", count: 42 });
     await writer.writeCheckpoint(makeCheckpoint());
     await writer.close();
@@ -205,9 +183,7 @@ describe("TraceWriter", () => {
   });
 
   it("writeHeader is idempotent within a single writer", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [
-      new FileSink(tracePath),
-    ]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
     await writer.writeHeader();
     await writer.writeHeader();
     await writer.writeCheckpoint(makeCheckpoint()); // also calls writeHeader internally
@@ -233,9 +209,7 @@ describe("scanExistingTraceFile", () => {
   });
 
   it("returns empty result for a non-existent file", async () => {
-    const result = await scanExistingTraceFile(
-      path.join(tmpDir, "missing.agencytrace"),
-    );
+    const result = await scanExistingTraceFile(path.join(tmpDir, "missing.agencytrace"));
     expect(result.hasHeader).toBe(false);
     expect(result.chunkHashes.size).toBe(0);
   });
@@ -248,9 +222,7 @@ describe("scanExistingTraceFile", () => {
   });
 
   it("detects an existing header and collects chunk hashes", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [
-      new FileSink(tracePath),
-    ]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
     await writer.writeCheckpoint(makeCheckpoint());
     await writer.pause();
 
@@ -260,17 +232,13 @@ describe("scanExistingTraceFile", () => {
 
     // Sanity-check: every chunk hash in the file appears in the scan.
     const lines = readTrace(tracePath);
-    const fileHashes = lines
-      .filter((l: any) => l.type === "chunk")
-      .map((l: any) => l.hash);
+    const fileHashes = lines.filter((l: any) => l.type === "chunk").map((l: any) => l.hash);
     for (const h of fileHashes) expect(result.chunkHashes.has(h)).toBe(true);
   });
 
   it("skips malformed lines without bailing on later valid ones", async () => {
     // Build: a header, a chunk, a malformed line, another chunk.
-    const writer = new TraceWriter(RUN_ID, "test.agency", [
-      new FileSink(tracePath),
-    ]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
     await writer.writeCheckpoint(makeCheckpoint());
     await writer.pause();
 
@@ -341,9 +309,7 @@ describe("TraceWriter.create cross-segment dedup", () => {
     await w1!.pause();
 
     const linesAfterFirst = readTrace(tracePath);
-    const chunksAfterFirst = linesAfterFirst.filter(
-      (l: any) => l.type === "chunk",
-    ).length;
+    const chunksAfterFirst = linesAfterFirst.filter((l: any) => l.type === "chunk").length;
     expect(chunksAfterFirst).toBeGreaterThan(0);
 
     // Second writer writes IDENTICAL checkpoint contents — every chunk hash
@@ -356,14 +322,10 @@ describe("TraceWriter.create cross-segment dedup", () => {
     await w2!.pause();
 
     const linesAfterSecond = readTrace(tracePath);
-    const chunksAfterSecond = linesAfterSecond.filter(
-      (l: any) => l.type === "chunk",
-    ).length;
+    const chunksAfterSecond = linesAfterSecond.filter((l: any) => l.type === "chunk").length;
     expect(chunksAfterSecond).toBe(chunksAfterFirst);
     // Manifest count went up though.
-    const manifestsAfterSecond = linesAfterSecond.filter(
-      (l: any) => l.type === "manifest",
-    ).length;
+    const manifestsAfterSecond = linesAfterSecond.filter((l: any) => l.type === "manifest").length;
     expect(manifestsAfterSecond).toBe(2);
   });
 

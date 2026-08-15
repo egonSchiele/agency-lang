@@ -184,9 +184,9 @@ describe("_renderMarkdownForHtml", () => {
     it("renders a table with alignment", () => {
       const html = md2html("| a | b |\n| :-- | --: |\n| 1 | 2 |");
       expect(html).toContain("<table>");
-      expect(html).toContain("<th style=\"text-align:left\">a</th>");
-      expect(html).toContain("<th style=\"text-align:right\">b</th>");
-      expect(html).toContain("<td style=\"text-align:left\">1</td>");
+      expect(html).toContain('<th style="text-align:left">a</th>');
+      expect(html).toContain('<th style="text-align:right">b</th>');
+      expect(html).toContain('<td style="text-align:left">1</td>');
     });
 
     it("escapes table cell content", () => {
@@ -210,87 +210,105 @@ describe("_renderMarkdownForHtml", () => {
   // acting on model-influenced content can set any field to any value.
   describe("malicious ASTs", () => {
     it("does not let table alignment escape its attribute", () => {
-      const html = _renderMarkdownForHtml([{
-        type: "table",
-        headers: ["a"],
-        rows: [["1"]],
-        alignments: ['left" onmouseover="alert(1)'],
-      }]);
+      const html = _renderMarkdownForHtml([
+        {
+          type: "table",
+          headers: ["a"],
+          rows: [["1"]],
+          alignments: ['left" onmouseover="alert(1)'],
+        },
+      ]);
       expect(html).not.toContain("onmouseover");
       expect(html).toContain("<th>a</th>");
     });
 
     it("keeps the known alignments while rejecting the rest", () => {
-      const html = _renderMarkdownForHtml([{
-        type: "table",
-        headers: ["a", "b"],
-        rows: [],
-        alignments: ["center", "bogus"],
-      }]);
+      const html = _renderMarkdownForHtml([
+        {
+          type: "table",
+          headers: ["a", "b"],
+          rows: [],
+          alignments: ["center", "bogus"],
+        },
+      ]);
       expect(html).toContain('<th style="text-align:center">a</th>');
       expect(html).toContain("<th>b</th>");
     });
 
     it("does not let an ordered list's start escape its attribute", () => {
-      const html = _renderMarkdownForHtml([{
-        type: "list",
-        ordered: true,
-        start: '2"><script>alert(1)</script><ol x="',
-        items: [{ content: [{ type: "paragraph", content: [{ type: "inline-text", content: "hi" }] }] }],
-      }]);
+      const html = _renderMarkdownForHtml([
+        {
+          type: "list",
+          ordered: true,
+          start: '2"><script>alert(1)</script><ol x="',
+          items: [
+            { content: [{ type: "paragraph", content: [{ type: "inline-text", content: "hi" }] }] },
+          ],
+        },
+      ]);
       expect(html).not.toContain("<script");
       expect(html).not.toContain("alert(1)");
       expect(html).toBe("<ol><li>hi</li></ol>");
     });
 
     it("does not let a heading level escape its tag", () => {
-      const html = _renderMarkdownForHtml([{
-        type: "heading",
-        level: '1 onload="alert(1)"',
-        content: [{ type: "inline-text", content: "x" }],
-      }]);
+      const html = _renderMarkdownForHtml([
+        {
+          type: "heading",
+          level: '1 onload="alert(1)"',
+          content: [{ type: "inline-text", content: "x" }],
+        },
+      ]);
       expect(html).not.toContain("onload");
       expect(html).toBe("<h1>x</h1>");
     });
 
     it("clamps an out-of-range heading level", () => {
-      expect(_renderMarkdownForHtml([{ type: "heading", level: 99, content: [] }]))
-        .toBe("<h6></h6>");
-      expect(_renderMarkdownForHtml([{ type: "heading", level: -5, content: [] }]))
-        .toBe("<h1></h1>");
+      expect(_renderMarkdownForHtml([{ type: "heading", level: 99, content: [] }])).toBe(
+        "<h6></h6>",
+      );
+      expect(_renderMarkdownForHtml([{ type: "heading", level: -5, content: [] }])).toBe(
+        "<h1></h1>",
+      );
     });
 
     it("does not throw on non-string text content", () => {
       // The renderer's contract is to skip junk, not to throw.
       expect(() =>
-        _renderMarkdownForHtml([{
-          type: "paragraph",
-          content: [{ type: "inline-text", content: 42 }],
-        }])
+        _renderMarkdownForHtml([
+          {
+            type: "paragraph",
+            content: [{ type: "inline-text", content: 42 }],
+          },
+        ]),
       ).not.toThrow();
     });
 
     it("does not throw on a non-string code block body", () => {
       expect(() =>
-        _renderMarkdownForHtml([{ type: "code-block", content: 42, language: null }])
+        _renderMarkdownForHtml([{ type: "code-block", content: 42, language: null }]),
       ).not.toThrow();
     });
 
     it("does not throw on a non-string url", () => {
       expect(() =>
-        _renderMarkdownForHtml([{
-          type: "paragraph",
-          content: [{ type: "inline-link", url: 42, content: [] }],
-        }])
+        _renderMarkdownForHtml([
+          {
+            type: "paragraph",
+            content: [{ type: "inline-link", url: 42, content: [] }],
+          },
+        ]),
       ).not.toThrow();
     });
 
     it("escapes a coerced non-string body rather than emitting it raw", () => {
-      const html = _renderMarkdownForHtml([{
-        type: "code-block",
-        content: { toString: () => "<script>alert(1)</script>" },
-        language: null,
-      }]);
+      const html = _renderMarkdownForHtml([
+        {
+          type: "code-block",
+          content: { toString: () => "<script>alert(1)</script>" },
+          language: null,
+        },
+      ]);
       expect(html).not.toContain("<script>");
       expect(html).toContain("&lt;script&gt;");
     });
@@ -314,9 +332,7 @@ describe("_renderMarkdownForHtml", () => {
 
   describe("documents", () => {
     it("renders a realistic agent-written note", () => {
-      const html = md2html(
-        "## Findings\n\nThe **key** result.\n\n- one\n- two\n",
-      );
+      const html = md2html("## Findings\n\nThe **key** result.\n\n- one\n- two\n");
       expect(html).toContain("<h2>Findings</h2>");
       expect(html).toContain("<p>The <strong>key</strong> result.</p>");
       expect(html).toContain("<ul><li>one</li><li>two</li></ul>");

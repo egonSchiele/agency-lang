@@ -17,7 +17,9 @@ import { cleanupFakeRuns, fakeRun } from "../testUtils.js";
 class QueueGrader extends BaseGrader {
   protected readonly defaultName = "queue";
   private i = 0;
-  constructor(private readonly scores: number[]) { super({}); }
+  constructor(private readonly scores: number[]) {
+    super({});
+  }
   protected _run(_input: GraderInput): Promise<Grade> {
     return Promise.resolve({ score: { kind: "scalar", value: this.scores[this.i++] ?? 0 } });
   }
@@ -32,16 +34,40 @@ describe("ExampleOptimizer", () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "example-opt-"));
     src = path.join(root, "src");
     fs.mkdirSync(src);
-    fs.writeFileSync(path.join(src, "agent.agency"), 'optimize const prompt = "hi"\n\nnode main() {}\n');
+    fs.writeFileSync(
+      path.join(src, "agent.agency"),
+      'optimize const prompt = "hi"\n\nnode main() {}\n',
+    );
   });
-  afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+  afterEach(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
 
   const fakeSource = (): OptimizeTargetSet => ({
     baseDir: src,
     entryFile: "agent.agency",
     typeAliases: {},
-    files: { "agent.agency": { file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), source: "x", sha256: "x" } },
-    targets: [{ id: "agent.agency:global:prompt", kind: "variable", file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), scope: "global", name: "prompt", valueKind: "string", value: "hi", declaredType: null }],
+    files: {
+      "agent.agency": {
+        file: "agent.agency",
+        absoluteFile: path.join(src, "agent.agency"),
+        source: "x",
+        sha256: "x",
+      },
+    },
+    targets: [
+      {
+        id: "agent.agency:global:prompt",
+        kind: "variable",
+        file: "agent.agency",
+        absoluteFile: path.join(src, "agent.agency"),
+        scope: "global",
+        name: "prompt",
+        valueKind: "string",
+        value: "hi",
+        declaredType: null,
+      },
+    ],
   });
 
   const runInput: RunInput = async (_ws, _source, _files, input, id) => fakeRun(id, "out", input);
@@ -51,13 +77,25 @@ describe("ExampleOptimizer", () => {
       runInput,
       discover: () => fakeSource(),
       propose: async () => ({ rationale: "tighten", operations: [] }),
-      preview: (targetSet): OptimizeMutationPreview => ({ files: { "agent.agency": "x" }, changes: [], diff: "", diagnostics: [], targetSet }),
+      preview: (targetSet): OptimizeMutationPreview => ({
+        files: { "agent.agency": "x" },
+        changes: [],
+        diff: "",
+        diagnostics: [],
+        targetSet,
+      }),
       ...over,
     };
   }
 
-  const config = (graders: BaseGrader[], runId: string): BaseOptimizerConfig =>
-    ({ graders, iterations: 1, config: {}, runsDir: root, runId, writeback: false });
+  const config = (graders: BaseGrader[], runId: string): BaseOptimizerConfig => ({
+    graders,
+    iterations: 1,
+    config: {},
+    runsDir: root,
+    runId,
+    writeback: false,
+  });
 
   const run = (opt: ExampleOptimizer) =>
     opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", task: "t" }] });
@@ -67,11 +105,14 @@ describe("ExampleOptimizer", () => {
     const result = await run(opt);
     expect(result.championIter).toBe(1);
     expect(result.acceptedCount).toBe(1);
-    expect(result.championBreakdown?.length).toBeGreaterThan(0);   // breakdown now emitted
+    expect(result.championBreakdown?.length).toBeGreaterThan(0); // breakdown now emitted
   });
 
   it("reports a validation objective and breakdown when a validation set is given", async () => {
-    const opt = new ExampleOptimizer(config([new QueueGrader([0.2, 0.9, 0.5, 0.6])], "val"), deps());
+    const opt = new ExampleOptimizer(
+      config([new QueueGrader([0.2, 0.9, 0.5, 0.6])], "val"),
+      deps(),
+    );
     const result = await opt.optimize({
       agent: path.join(src, "agent.agency"),
       inputs: [{ id: "a", task: "t" }],
@@ -89,9 +130,23 @@ describe("ExampleOptimizer", () => {
   });
 
   it("keeps the baseline when the proposed mutation fails validation", async () => {
-    const preview = (targetSet: OptimizeTargetSet): OptimizeMutationPreview =>
-      ({ files: {}, changes: [], diff: "", diagnostics: [{ target: "agent.agency:global:prompt", code: "invalid-replacement-syntax", message: "bad" }], targetSet });
-    const opt = new ExampleOptimizer(config([new QueueGrader([0.5])], "invalid"), deps({ preview }));
+    const preview = (targetSet: OptimizeTargetSet): OptimizeMutationPreview => ({
+      files: {},
+      changes: [],
+      diff: "",
+      diagnostics: [
+        {
+          target: "agent.agency:global:prompt",
+          code: "invalid-replacement-syntax",
+          message: "bad",
+        },
+      ],
+      targetSet,
+    });
+    const opt = new ExampleOptimizer(
+      config([new QueueGrader([0.5])], "invalid"),
+      deps({ preview }),
+    );
     const result = await run(opt);
     expect(result.championIter).toBe("baseline");
   });

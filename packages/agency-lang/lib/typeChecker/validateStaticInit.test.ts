@@ -27,11 +27,7 @@ def setup() { llm("hello") }
 static llm("startup")
 node main() { return 1 }
 `);
-    expect(
-      errs.some((m) =>
-        /Static bare statement cannot call .*llm/.test(m),
-      ),
-    ).toBe(true);
+    expect(errs.some((m) => /Static bare statement cannot call .*llm/.test(m))).toBe(true);
   });
 
   it("rejects `interrupt()` inside a static const initializer", () => {
@@ -39,9 +35,7 @@ node main() { return 1 }
 static const x = interrupt("foo")
 node main() { return x }
 `);
-    expect(
-      errs.some((m) => /Static const .*x.* cannot \\?\`?interrupt/.test(m)),
-    ).toBe(true);
+    expect(errs.some((m) => /Static const .*x.* cannot \\?\`?interrupt/.test(m))).toBe(true);
   });
 
   it("does NOT flag `llm()` inside a node body", () => {
@@ -74,9 +68,7 @@ static const x = 1
 x = 2
 node main() { return x }
 `);
-    expect(
-      errs.some((m) => /Cannot reassign static .*x.* at module top level/.test(m)),
-    ).toBe(true);
+    expect(errs.some((m) => /Cannot reassign static .*x.* at module top level/.test(m))).toBe(true);
   });
 
   it("rejects top-level `.push(...)` on a static array", () => {
@@ -85,11 +77,7 @@ static const items = [1, 2, 3]
 items.push(4)
 node main() { return items }
 `);
-    expect(
-      errs.some((m) =>
-        /Cannot mutate static .*items.* via .*push.*/.test(m),
-      ),
-    ).toBe(true);
+    expect(errs.some((m) => /Cannot mutate static .*items.* via .*push.*/.test(m))).toBe(true);
   });
 
   it("does NOT flag a `let` reassignment of a non-static", () => {

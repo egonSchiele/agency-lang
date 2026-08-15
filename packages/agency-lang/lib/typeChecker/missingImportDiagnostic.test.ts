@@ -31,8 +31,9 @@ describe("checkMissingImports", () => {
   it("errors on a name the target file does not define", () => {
     const errors = check(
       {
-        "lib.agency": "export def realFn(): string {\n  return \"x\"\n}\n",
-        "use.agency": 'import { missingFn } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
+        "lib.agency": 'export def realFn(): string {\n  return "x"\n}\n',
+        "use.agency":
+          'import { missingFn } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
       },
       "use.agency",
     );
@@ -44,8 +45,9 @@ describe("checkMissingImports", () => {
   it("names the original name for an aliased import", () => {
     const errors = check(
       {
-        "lib.agency": "export def realFn(): string {\n  return \"x\"\n}\n",
-        "use.agency": 'import { missingFn as m } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
+        "lib.agency": 'export def realFn(): string {\n  return "x"\n}\n',
+        "use.agency":
+          'import { missingFn as m } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
       },
       "use.agency",
     );
@@ -56,8 +58,9 @@ describe("checkMissingImports", () => {
   it("errors on a missing node import", () => {
     const errors = check(
       {
-        "lib.agency": "export def realFn(): string {\n  return \"x\"\n}\n",
-        "use.agency": 'import node { ghostNode } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
+        "lib.agency": 'export def realFn(): string {\n  return "x"\n}\n',
+        "use.agency":
+          'import node { ghostNode } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
       },
       "use.agency",
     );
@@ -85,7 +88,8 @@ describe("checkMissingImports", () => {
     const errors = check(
       {
         "broken.agency": "def def def { { { <<< not valid agency\n",
-        "use.agency": 'import { anything } from "./broken.agency"\n\nnode u(): string {\n  return "y"\n}\n',
+        "use.agency":
+          'import { anything } from "./broken.agency"\n\nnode u(): string {\n  return "y"\n}\n',
       },
       "use.agency",
     );
@@ -96,8 +100,9 @@ describe("checkMissingImports", () => {
   it("accepts a real cross-file import", () => {
     const errors = check(
       {
-        "lib.agency": "export def realFn(): string {\n  return \"x\"\n}\n",
-        "use.agency": 'import { realFn } from "./lib.agency"\n\nnode u(): string {\n  return realFn()\n}\n',
+        "lib.agency": 'export def realFn(): string {\n  return "x"\n}\n',
+        "use.agency":
+          'import { realFn } from "./lib.agency"\n\nnode u(): string {\n  return realFn()\n}\n',
       },
       "use.agency",
     );
@@ -110,7 +115,8 @@ describe("checkMissingImports", () => {
     // read a .js file's exports. Remove the guard and this .js import gets flagged.
     const errors = check(
       {
-        "use.agency": 'import { anything } from "./helper.js"\n\nnode u(): string {\n  return "y"\n}\n',
+        "use.agency":
+          'import { anything } from "./helper.js"\n\nnode u(): string {\n  return "y"\n}\n',
       },
       "use.agency",
     );
@@ -123,8 +129,9 @@ describe("checkMissingImports", () => {
     // looked up in the right place (FileSymbols keyed by node name).
     const errors = check(
       {
-        "lib.agency": "export node helperNode(): string {\n  return \"n\"\n}\n",
-        "use.agency": 'import node { helperNode } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
+        "lib.agency": 'export node helperNode(): string {\n  return "n"\n}\n',
+        "use.agency":
+          'import node { helperNode } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
       },
       "use.agency",
     );
@@ -135,8 +142,9 @@ describe("checkMissingImports", () => {
   it("reports only the missing name in a mixed import", () => {
     const errors = check(
       {
-        "lib.agency": "export def realFn(): string {\n  return \"x\"\n}\n",
-        "use.agency": 'import { realFn, missingFn } from "./lib.agency"\n\nnode u(): string {\n  return realFn()\n}\n',
+        "lib.agency": 'export def realFn(): string {\n  return "x"\n}\n',
+        "use.agency":
+          'import { realFn, missingFn } from "./lib.agency"\n\nnode u(): string {\n  return realFn()\n}\n',
       },
       "use.agency",
     );
@@ -149,7 +157,8 @@ describe("checkMissingImports", () => {
   it("reports exactly one module error for a multi-name missing module", () => {
     const errors = check(
       {
-        "use.agency": 'import { a, b } from "./ghost.agency"\n\nnode u(): string {\n  return "y"\n}\n',
+        "use.agency":
+          'import { a, b } from "./ghost.agency"\n\nnode u(): string {\n  return "y"\n}\n',
       },
       "use.agency",
     );
@@ -161,9 +170,10 @@ describe("checkMissingImports", () => {
     // during build. A regression in the merge would false-positive here.
     const errors = check(
       {
-        "real.agency": "export def deep(): string {\n  return \"d\"\n}\n",
+        "real.agency": 'export def deep(): string {\n  return "d"\n}\n',
         "barrel.agency": 'export { deep } from "./real.agency"\n',
-        "use.agency": 'import { deep } from "./barrel.agency"\n\nnode u(): string {\n  return deep()\n}\n',
+        "use.agency":
+          'import { deep } from "./barrel.agency"\n\nnode u(): string {\n  return deep()\n}\n',
       },
       "use.agency",
     );
@@ -188,8 +198,9 @@ describe("checkMissingImports", () => {
   it("errors when importing a defined-but-not-exported name", () => {
     const errors = check(
       {
-        "lib.agency": "def privateFn(): string {\n  return \"p\"\n}\n",
-        "use.agency": 'import { privateFn } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
+        "lib.agency": 'def privateFn(): string {\n  return "p"\n}\n',
+        "use.agency":
+          'import { privateFn } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
       },
       "use.agency",
     );
@@ -202,8 +213,9 @@ describe("checkMissingImports", () => {
     const errors = check(
       {
         // plain `node`, no `export` keyword
-        "lib.agency": "node plainNode(): string {\n  return \"n\"\n}\n",
-        "use.agency": 'import node { plainNode } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
+        "lib.agency": 'node plainNode(): string {\n  return "n"\n}\n',
+        "use.agency":
+          'import node { plainNode } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
       },
       "use.agency",
     );
@@ -214,8 +226,9 @@ describe("checkMissingImports", () => {
   it("lets `import test { }` see a non-exported name", () => {
     const errors = check(
       {
-        "lib.agency": "def privateFn(): string {\n  return \"p\"\n}\n",
-        "use.agency": 'import test { privateFn } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
+        "lib.agency": 'def privateFn(): string {\n  return "p"\n}\n',
+        "use.agency":
+          'import test { privateFn } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
       },
       "use.agency",
     );
@@ -226,7 +239,8 @@ describe("checkMissingImports", () => {
     const errors = check(
       {
         "lib.agency": "type Secret = number\n",
-        "use.agency": 'import { Secret } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
+        "use.agency":
+          'import { Secret } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
       },
       "use.agency",
     );
@@ -240,8 +254,9 @@ describe("checkMissingImports", () => {
     // `import node { }` — importResolver rewrites this to a node import.
     const errors = check(
       {
-        "lib.agency": "node plainNode(): string {\n  return \"n\"\n}\n",
-        "use.agency": 'import { plainNode } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
+        "lib.agency": 'node plainNode(): string {\n  return "n"\n}\n',
+        "use.agency":
+          'import { plainNode } from "./lib.agency"\n\nnode u(): string {\n  return "y"\n}\n',
       },
       "use.agency",
     );

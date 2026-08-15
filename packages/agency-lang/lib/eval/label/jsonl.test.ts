@@ -7,10 +7,12 @@ import { z } from "zod";
 
 import { atomicWriteValidated, openJsonlStrict } from "./jsonl.js";
 
-const RowSchema = z.object({
-  id: z.string().min(1),
-  n: z.number().int(),
-}).strict();
+const RowSchema = z
+  .object({
+    id: z.string().min(1),
+    n: z.number().int(),
+  })
+  .strict();
 
 type Row = z.infer<typeof RowSchema>;
 
@@ -44,7 +46,11 @@ describe("openJsonlStrict", () => {
 
   it("reads rows in append order", () => {
     fs.writeFileSync(file, '{"id":"a","n":1}\n{"id":"b","n":2}\n');
-    expect(open().rows().map((row) => row.id)).toEqual(["a", "b"]);
+    expect(
+      open()
+        .rows()
+        .map((row) => row.id),
+    ).toEqual(["a", "b"]);
   });
 
   it("names the line number when a middle row is not JSON", () => {
@@ -149,9 +155,13 @@ describe("atomicWriteValidated", () => {
 
   it("rejects an invalid value without touching the target", () => {
     const target = path.join(dir, "x.json");
-    expect(() => atomicWriteValidated({
-      targetPath: target, value: { value: 5 } as never, schema: TargetSchema,
-    })).toThrow();
+    expect(() =>
+      atomicWriteValidated({
+        targetPath: target,
+        value: { value: 5 } as never,
+        schema: TargetSchema,
+      }),
+    ).toThrow();
     expect(fs.existsSync(target)).toBe(false);
   });
 
@@ -161,9 +171,13 @@ describe("atomicWriteValidated", () => {
     const target = path.join(dir, "as-a-directory");
     fs.mkdirSync(target);
     fs.writeFileSync(path.join(target, "occupant"), "x");
-    expect(() => atomicWriteValidated({
-      targetPath: target, value: { value: "hi" }, schema: TargetSchema,
-    })).toThrow();
+    expect(() =>
+      atomicWriteValidated({
+        targetPath: target,
+        value: { value: "hi" },
+        schema: TargetSchema,
+      }),
+    ).toThrow();
     expect(fs.readdirSync(dir).filter((name) => name.includes(".tmp"))).toEqual([]);
   });
 });

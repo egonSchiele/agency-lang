@@ -1,8 +1,4 @@
-import {
-  isAssignable,
-  isOptionalType,
-  safeResolveType,
-} from "../../typeChecker/assignability.js";
+import { isAssignable, isOptionalType, safeResolveType } from "../../typeChecker/assignability.js";
 import { variableTypeToString } from "../../backends/typescriptGenerator/typeToString.js";
 import { synthesizeType } from "./synthesizeType.js";
 import type { ObjectType, TypeAliasEntry, VariableType } from "../../types.js";

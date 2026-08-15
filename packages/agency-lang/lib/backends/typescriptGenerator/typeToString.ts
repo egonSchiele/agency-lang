@@ -27,9 +27,7 @@ function valueArgExprToString(expr: Expression): string {
     case "multiLineString": {
       const body = expr.segments
         .map((seg) =>
-          seg.type === "text"
-            ? seg.value
-            : `\${${valueArgExprToString(seg.expression)}}`,
+          seg.type === "text" ? seg.value : `\${${valueArgExprToString(seg.expression)}}`,
         )
         .join("");
       return `"${body}"`;
@@ -51,9 +49,7 @@ function valueArgExprToString(expr: Expression): string {
                 if ("name" in arg && arg.name && arg.type !== "hole") {
                   return `${arg.name}: ${valueArgExprToString(arg.value as Expression)}`;
                 }
-                return valueArgExprToString(
-                  ("value" in arg ? arg.value : arg) as Expression,
-                );
+                return valueArgExprToString(("value" in arg ? arg.value : arg) as Expression);
               })
               .join(", ");
             code += `.${fc.functionName}(${args})`;
@@ -87,9 +83,7 @@ function valueArgExprToString(expr: Expression): string {
     case "unitLiteral":
       // Round-trip the source form (`30s`, `$5`, `100KB`, ...). `$`
       // is the only prefix unit; everything else is a suffix.
-      return expr.unit === "$"
-        ? `$${expr.value}`
-        : `${expr.value}${expr.unit}`;
+      return expr.unit === "$" ? `$${expr.value}` : `${expr.value}${expr.unit}`;
     default:
       return "";
   }
@@ -170,12 +164,7 @@ export function variableTypeToString(
     // Recursively build array type string. Parenthesize a union element so
     // `(a | b)[]` does not render as the ambiguous `a | b[]` (which reads as
     // `a | (b[])`).
-    const inner = variableTypeToString(
-      variableType.elementType,
-      typeAliases,
-      forFormatting,
-      hooks,
-    );
+    const inner = variableTypeToString(variableType.elementType, typeAliases, forFormatting, hooks);
     if (
       variableType.elementType.type === "unionType" ||
       variableType.elementType.type === "keyofType" ||
@@ -225,21 +214,11 @@ export function variableTypeToString(
     const arrow = forFormatting ? "->" : "=>";
     const params = variableType.params
       .map((p) => {
-        const t = variableTypeToString(
-          p.typeAnnotation,
-          typeAliases,
-          forFormatting,
-          hooks,
-        );
+        const t = variableTypeToString(p.typeAnnotation, typeAliases, forFormatting, hooks);
         return p.name ? `${p.name}: ${t}` : t;
       })
       .join(", ");
-    const ret = variableTypeToString(
-      variableType.returnType,
-      typeAliases,
-      forFormatting,
-      hooks,
-    );
+    const ret = variableTypeToString(variableType.returnType, typeAliases, forFormatting, hooks);
     // `raises` is Agency-only surface syntax; never emit it into TS codegen (`=>`).
     const raisesStr =
       forFormatting && variableType.raises
@@ -247,18 +226,8 @@ export function variableTypeToString(
         : "";
     return `(${params}) ${arrow} ${ret}${raisesStr}`;
   } else if (variableType.type === "resultType") {
-    const s = variableTypeToString(
-      variableType.successType,
-      typeAliases,
-      forFormatting,
-      hooks,
-    );
-    const f = variableTypeToString(
-      variableType.failureType,
-      typeAliases,
-      forFormatting,
-      hooks,
-    );
+    const s = variableTypeToString(variableType.successType, typeAliases, forFormatting, hooks);
+    const f = variableTypeToString(variableType.failureType, typeAliases, forFormatting, hooks);
     if (s === "any" && f === "any") return "Result";
     if (f === "string") return `Result<${s}>`;
     return `Result<${s}, ${f}>`;
@@ -275,12 +244,7 @@ export function variableTypeToString(
       })
       .join(" & ");
   } else if (variableType.type === "keyofType") {
-    const op = variableTypeToString(
-      variableType.operand,
-      typeAliases,
-      forFormatting,
-      hooks,
-    );
+    const op = variableTypeToString(variableType.operand, typeAliases, forFormatting, hooks);
     // Parenthesize union AND intersection operands: `keyof (A | B)` /
     // `keyof (A & B)` must not print bare (wrong re-parse precedence).
     return variableType.operand.type === "unionType" ||
@@ -288,24 +252,14 @@ export function variableTypeToString(
       ? `keyof (${op})`
       : `keyof ${op}`;
   } else if (variableType.type === "indexedAccessType") {
-    const obj = variableTypeToString(
-      variableType.objectType,
-      typeAliases,
-      forFormatting,
-      hooks,
-    );
+    const obj = variableTypeToString(variableType.objectType, typeAliases, forFormatting, hooks);
     const wrapped =
       variableType.objectType.type === "keyofType" ||
       variableType.objectType.type === "unionType" ||
       variableType.objectType.type === "intersectionType"
         ? `(${obj})`
         : obj;
-    const index = variableTypeToString(
-      variableType.index,
-      typeAliases,
-      forFormatting,
-      hooks,
-    );
+    const index = variableTypeToString(variableType.index, typeAliases, forFormatting, hooks);
     return `${wrapped}[${index}]`;
   }
   return "unknown";

@@ -75,8 +75,7 @@ function scanLaunchValues(args: readonly string[]): Record<string, string> {
     const nextIsValue =
       next !== undefined &&
       next !== "--" &&
-      (!next.startsWith("-") ||
-        (policy.acceptsNegativeNumber && NEGATIVE_NUMBER.test(next)));
+      (!next.startsWith("-") || (policy.acceptsNegativeNumber && NEGATIVE_NUMBER.test(next)));
     if (nextIsValue) {
       values[name] = next;
       index += 1;
@@ -134,9 +133,7 @@ const DEFAULT_RUN_BUNDLED_AGENT_DEPENDENCIES: RunBundledAgentDependencies = {
  * state, and the input array is never modified — the child always receives
  * the original argv.
  */
-export function resolveAgentLaunchArgs(
-  args: readonly string[],
-): ResolvedAgentLaunch {
+export function resolveAgentLaunchArgs(args: readonly string[]): ResolvedAgentLaunch {
   const scanned = scanLaunchValues(args);
   const flags: CliFlags = {};
   if (scanned.trace !== undefined) {
@@ -222,10 +219,7 @@ export function runBundledAgent(
   // Inherited overrides matter: an eval harness hands this process its
   // statelog path via this env var, and flags must layer on top, not
   // replace it.
-  const merged = mergeConfigOverrides(
-    readConfigOverrides(env),
-    launchArgs.configOverrides,
-  );
+  const merged = mergeConfigOverrides(readConfigOverrides(env), launchArgs.configOverrides);
   if (Object.keys(merged).length > 0) {
     env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(merged);
   }

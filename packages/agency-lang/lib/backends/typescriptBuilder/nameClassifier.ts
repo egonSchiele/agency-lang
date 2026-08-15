@@ -10,10 +10,20 @@ import { walkNodesArray } from "../../utils/node.js";
  * the interrupt-checking machinery.
  */
 export const DIRECT_CALL_FUNCTIONS: ReadonlySet<string> = new Set([
-  "approve", "reject", "propagate",
-  "success", "failure",
-  "isInterrupt", "hasInterrupts", "isDebugger", "isRejected", "isApproved",
-  "isSuccess", "isFailure", "setLLMClient", "registerTools",
+  "approve",
+  "reject",
+  "propagate",
+  "success",
+  "failure",
+  "isInterrupt",
+  "hasInterrupts",
+  "isDebugger",
+  "isRejected",
+  "isApproved",
+  "isSuccess",
+  "isFailure",
+  "setLLMClient",
+  "registerTools",
 ]);
 
 /**
@@ -23,9 +33,14 @@ export const DIRECT_CALL_FUNCTIONS: ReadonlySet<string> = new Set([
  * access to `__ctx`.
  */
 export const TOP_LEVEL_DECLARATION_TYPES: ReadonlySet<string> = new Set([
-  "graphNode", "function", "typeAlias",
-  "importStatement", "importNodeStatement",
-  "comment", "multiLineComment", "newLine",
+  "graphNode",
+  "function",
+  "typeAlias",
+  "importStatement",
+  "importNodeStatement",
+  "comment",
+  "multiLineComment",
+  "newLine",
 ]);
 
 /**
@@ -49,9 +64,7 @@ export class NameClassifier {
     this.plainTsImportNames = new Set<string>();
     this.agencyImportNames = new Set<string>();
     for (const stmt of compilationUnit.importStatements) {
-      const targetSet = stmt.isAgencyImport
-        ? this.agencyImportNames
-        : this.plainTsImportNames;
+      const targetSet = stmt.isAgencyImport ? this.agencyImportNames : this.plainTsImportNames;
       for (const nameType of stmt.importedNames) {
         for (const name of getImportedNames(nameType)) {
           targetSet.add(name);
@@ -118,8 +131,7 @@ export class NameClassifier {
     }
     if (
       subNode.type === "tryExpression" &&
-      (subNode as { call?: { type?: string; functionName?: string } }).call
-        ?.type === "functionCall"
+      (subNode as { call?: { type?: string; functionName?: string } }).call?.type === "functionCall"
     ) {
       return (subNode as { call: { functionName: string } }).call.functionName;
     }
@@ -135,10 +147,7 @@ export class NameClassifier {
       // Object.hasOwn, not a truthy index: a call to a function named
       // `toString`/`constructor` would otherwise match an inherited prototype
       // member on the plain destructiveFunctions object.
-      if (
-        name !== undefined &&
-        Object.hasOwn(this.compilationUnit.destructiveFunctions, name)
-      ) {
+      if (name !== undefined && Object.hasOwn(this.compilationUnit.destructiveFunctions, name)) {
         return true;
       }
     }

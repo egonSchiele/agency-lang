@@ -190,11 +190,13 @@ describe("valueAccessParser", () => {
         expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "arr" },
-          chain: [{
-            kind: "slice",
-            start: { type: "number", value: "1" },
-            end: { type: "number", value: "3" },
-          }],
+          chain: [
+            {
+              kind: "slice",
+              start: { type: "number", value: "1" },
+              end: { type: "number", value: "3" },
+            },
+          ],
         });
       }
     });
@@ -206,10 +208,12 @@ describe("valueAccessParser", () => {
         expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "arr" },
-          chain: [{
-            kind: "slice",
-            start: { type: "number", value: "1" },
-          }],
+          chain: [
+            {
+              kind: "slice",
+              start: { type: "number", value: "1" },
+            },
+          ],
         });
       }
     });
@@ -221,10 +225,12 @@ describe("valueAccessParser", () => {
         expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "arr" },
-          chain: [{
-            kind: "slice",
-            end: { type: "number", value: "3" },
-          }],
+          chain: [
+            {
+              kind: "slice",
+              end: { type: "number", value: "3" },
+            },
+          ],
         });
       }
     });
@@ -248,10 +254,12 @@ describe("valueAccessParser", () => {
         expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "arr" },
-          chain: [{
-            kind: "slice",
-            start: { type: "number", value: "-2" },
-          }],
+          chain: [
+            {
+              kind: "slice",
+              start: { type: "number", value: "-2" },
+            },
+          ],
         });
       }
     });
@@ -263,12 +271,14 @@ describe("valueAccessParser", () => {
         expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "arr" },
-          chain: [{
-            kind: "slice",
-            start: { type: "number", value: "1" },
-            end: { type: "number", value: "3" },
-            optional: true,
-          }],
+          chain: [
+            {
+              kind: "slice",
+              start: { type: "number", value: "1" },
+              end: { type: "number", value: "3" },
+              optional: true,
+            },
+          ],
         });
       }
     });
@@ -303,10 +313,12 @@ describe("valueAccessParser", () => {
         expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "arr" },
-          chain: [{
-            kind: "slice",
-            start: { type: "variableName", value: "n" },
-          }],
+          chain: [
+            {
+              kind: "slice",
+              start: { type: "variableName", value: "n" },
+            },
+          ],
         });
       }
     });
@@ -564,11 +576,13 @@ describe("valueAccessParser", () => {
         expect(result.result).toEqualWithoutLoc({
           type: "valueAccess",
           base: { type: "variableName", value: "obj" },
-          chain: [{
-            kind: "methodCall",
-            functionCall: { type: "functionCall", functionName: "method", arguments: [] },
-            optional: true,
-          }],
+          chain: [
+            {
+              kind: "methodCall",
+              functionCall: { type: "functionCall", functionName: "method", arguments: [] },
+              optional: true,
+            },
+          ],
         });
       }
     });

@@ -44,10 +44,7 @@ export async function __internal_systemMessage(
 /** ALS-reading replacement for `__internal_systemMessage`. `label` is an
  *  observability-only debug tag shown in statelog; "" means unlabeled and
  *  is normalized to null. Never sent to the provider. */
-export async function _systemMessage(
-  msg: string,
-  label: string = "",
-): Promise<void> {
+export async function _systemMessage(msg: string, label: string = ""): Promise<void> {
   const { threads } = getRuntimeContext();
   threads.getOrCreateActive().push(smoltalk.systemMessage(msg), label || null);
 }
@@ -93,25 +90,18 @@ export async function _toolMessage(
   try {
     argsRecord = JSON.parse(JSON.stringify(args ?? {}));
   } catch (e) {
-    throw new Error(
-      `toolMessage: args for "${name}" could not be serialized to JSON`,
-      { cause: e },
-    );
+    throw new Error(`toolMessage: args for "${name}" could not be serialized to JSON`, {
+      cause: e,
+    });
   }
   // Arguments must be a JSON object (a record), which every real tool call is.
   // A bare number, string, or array round-trips cleanly but violates that
   // contract (consumers like dropNullDefaultedArgs expect a record) and a
   // provider may reject the thread. Enforce it here so the docstring's "as an
   // object" is real.
-  if (
-    typeof argsRecord !== "object" ||
-    argsRecord === null ||
-    Array.isArray(argsRecord)
-  ) {
+  if (typeof argsRecord !== "object" || argsRecord === null || Array.isArray(argsRecord)) {
     const got = Array.isArray(argsRecord) ? "array" : typeof argsRecord;
-    throw new Error(
-      `toolMessage: args for "${name}" must be a JSON object, got ${got}`,
-    );
+    throw new Error(`toolMessage: args for "${name}" must be a JSON object, got ${got}`);
   }
 
   const id = nanoid();
@@ -124,10 +114,7 @@ export async function _toolMessage(
     }),
     label || null,
   );
-  thread.push(
-    smoltalk.toolMessage(result, { tool_call_id: id, name }),
-    label || null,
-  );
+  thread.push(smoltalk.toolMessage(result, { tool_call_id: id, name }), label || null);
 }
 
 export async function __internal_assistantMessage(
@@ -141,14 +128,9 @@ export async function __internal_assistantMessage(
 
 /** ALS-reading replacement for `__internal_assistantMessage`. `label` is
  *  an observability-only debug tag (see `_systemMessage`). */
-export async function _assistantMessage(
-  msg: string,
-  label: string = "",
-): Promise<void> {
+export async function _assistantMessage(msg: string, label: string = ""): Promise<void> {
   const { threads } = getRuntimeContext();
-  threads
-    .getOrCreateActive()
-    .push(smoltalk.assistantMessage(msg), label || null);
+  threads.getOrCreateActive().push(smoltalk.assistantMessage(msg), label || null);
 }
 
 // --- Multimodal attachment builders -------------------------------------
@@ -202,20 +184,14 @@ export function classifySource(
   }
   if (base64) {
     if (!mimeType) {
-      throw new Error(
-        "attachment source: base64 sources require an explicit mimeType",
-      );
+      throw new Error("attachment source: base64 sources require an explicit mimeType");
     }
     return { kind: "base64", base64: source, mimeType };
   }
   if (source.startsWith("http://") || source.startsWith("https://")) {
-    return mimeType
-      ? { kind: "url", url: source, mimeType }
-      : { kind: "url", url: source };
+    return mimeType ? { kind: "url", url: source, mimeType } : { kind: "url", url: source };
   }
-  return mimeType
-    ? { kind: "path", path: source, mimeType }
-    : { kind: "path", path: source };
+  return mimeType ? { kind: "path", path: source, mimeType } : { kind: "path", path: source };
 }
 
 export function _imageAttachment(
@@ -243,9 +219,7 @@ export function _fileAttachment(
   if (!name && (src.kind === "path" || src.kind === "url")) {
     name = basename(source);
   }
-  return name
-    ? { type: "file", source: src, filename: name }
-    : { type: "file", source: src };
+  return name ? { type: "file", source: src, filename: name } : { type: "file", source: src };
 }
 
 export function _audioAttachment(
@@ -259,9 +233,7 @@ export function _audioAttachment(
   if (!name && (src.kind === "path" || src.kind === "url")) {
     name = basename(source);
   }
-  return name
-    ? { type: "audio", source: src, filename: name }
-    : { type: "audio", source: src };
+  return name ? { type: "audio", source: src, filename: name } : { type: "audio", source: src };
 }
 
 /** Backs `std::thread.attachToReply`. Queues an attachment on the CALLING
@@ -279,8 +251,7 @@ export function _attachToReply(attachment: unknown): void {
   if (!frame.ctx?.isInsideToolCall()) {
     frame.ctx?.statelogClient?.error({
       errorType: "toolError",
-      message:
-        "attachToReply called outside a tool invocation; attachment dropped",
+      message: "attachToReply called outside a tool invocation; attachment dropped",
       functionName: "attachToReply",
     });
     return;
@@ -368,9 +339,7 @@ function pushGuardImpl(
   label?: string | null,
 ): string[] {
   if (costLimit == null && timeLimit == null) {
-    throw new Error(
-      "guard() requires at least one of: cost, time",
-    );
+    throw new Error("guard() requires at least one of: cost, time");
   }
   // Return the pushed guards' ids (innermost-last) so the caller can scope a
   // `try` to convert ONLY its own guards' trips (C2 ownedGuardIds). The array
@@ -482,10 +451,7 @@ export async function _saveDraft(value: unknown): Promise<void> {
  * functionName, args }) so a guard failure keeps its checkpoint / functionName
  * / args (retry + reporting depend on them) — only `ownedGuardIds` is added.
  */
-export async function _runGuarded(
-  ids: string[],
-  block: unknown,
-): Promise<ResultValue> {
+export async function _runGuarded(ids: string[], block: unknown): Promise<ResultValue> {
   const { ctx, stack } = getRuntimeContext();
   try {
     // Invoke the block through __call (NOT a plain block()) so it runs through
@@ -494,15 +460,12 @@ export async function _runGuarded(
     // guardTrip cause instead of a generic error. `stack.lastFrame()` is
     // guard()'s own frame here (a TS call pushes no agency frame), so `.args`
     // matches what the codegen `try block()` captured via `__stack.args`.
-    return await __tryCall(
-      () => __call(block, { type: "positional", args: [] }),
-      {
-        ownedGuardIds: ids,
-        checkpoint: ctx.getResultCheckpoint(),
-        functionName: "guard",
-        args: stack.lastFrame()?.args,
-      },
-    );
+    return await __tryCall(() => __call(block, { type: "positional", args: [] }), {
+      ownedGuardIds: ids,
+      checkpoint: ctx.getResultCheckpoint(),
+      functionName: "guard",
+      args: stack.lastFrame()?.args,
+    });
   } finally {
     // The block has exited and the Result (or a rethrown outer trip) is
     // this guard()'s answer, whatever it is. Between here and _popGuard

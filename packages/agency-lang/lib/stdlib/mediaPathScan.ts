@@ -44,8 +44,7 @@ const MEDIA_EXT_HINT = /\.(png|jpe?g|gif|webp|pdf)/i;
  *  boundary, and the content ends in a media extension. Anything else
  *  (apostrophes in prose, quoted non-media text) falls through to plain
  *  word tokenization. Content excludes quotes and newlines. */
-const QUOTED_MEDIA_SPAN =
-  /(?:^|(?<=\s))(['"])([^'"\n]+?\.(?:png|jpe?g|gif|webp|pdf))\1(?=\s|$)/gi;
+const QUOTED_MEDIA_SPAN = /(?:^|(?<=\s))(['"])([^'"\n]+?\.(?:png|jpe?g|gif|webp|pdf))\1(?=\s|$)/gi;
 
 /** Sentinel standing in for a backslash-escaped space inside an unquoted token
  *  (`my\ file.png`) so it survives whitespace splitting; NUL cannot

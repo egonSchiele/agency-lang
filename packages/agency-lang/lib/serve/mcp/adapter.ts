@@ -66,37 +66,60 @@ const POLICY_TOOL_NAMES = {
 const POLICY_TOOL_DEFINITIONS = [
   {
     name: POLICY_TOOL_NAMES.GET,
-    description: "Get the current interrupt policy for this agent. Returns a JSON object keyed by interrupt effect, where each effect maps to an ordered array of rules.",
+    description:
+      "Get the current interrupt policy for this agent. Returns a JSON object keyed by interrupt effect, where each effect maps to an ordered array of rules.",
     inputSchema: { type: "object" as const, properties: {} },
   },
   {
     name: POLICY_TOOL_NAMES.ADD_RULE,
-    description: "Add a rule to the interrupt policy. Rules control which actions the agent can take autonomously. Each tool lists its interrupt effects — use those as the 'effect' parameter. Rules are evaluated in order; the first match wins. A rule with no 'match' field is a catch-all.",
+    description:
+      "Add a rule to the interrupt policy. Rules control which actions the agent can take autonomously. Each tool lists its interrupt effects — use those as the 'effect' parameter. Rules are evaluated in order; the first match wins. A rule with no 'match' field is a catch-all.",
     inputSchema: {
       type: "object" as const,
       properties: {
-        effect: { type: "string" as const, description: "The interrupt effect to add a rule for (e.g. 'email::send')" },
-        action: { type: "string" as const, enum: ["approve", "reject"], description: "What to do when this rule matches" },
-        match: { type: "object" as const, additionalProperties: { type: "string" as const }, description: "Optional. Keys are interrupt data field names, values are glob patterns (e.g. '*@company.com'). If omitted, the rule is a catch-all." },
+        effect: {
+          type: "string" as const,
+          description: "The interrupt effect to add a rule for (e.g. 'email::send')",
+        },
+        action: {
+          type: "string" as const,
+          enum: ["approve", "reject"],
+          description: "What to do when this rule matches",
+        },
+        match: {
+          type: "object" as const,
+          additionalProperties: { type: "string" as const },
+          description:
+            "Optional. Keys are interrupt data field names, values are glob patterns (e.g. '*@company.com'). If omitted, the rule is a catch-all.",
+        },
       },
       required: ["effect", "action"],
     },
   },
   {
     name: POLICY_TOOL_NAMES.REMOVE_RULE,
-    description: "Remove a rule from the interrupt policy by index. Use agencyGetPolicy to see current rules and their indices.",
+    description:
+      "Remove a rule from the interrupt policy by index. Use agencyGetPolicy to see current rules and their indices.",
     inputSchema: {
       type: "object" as const,
       properties: {
-        effect: { type: "string" as const, description: "The interrupt effect to remove a rule from" },
-        ruleIndex: { type: "integer" as const, minimum: 0, description: "Zero-based index of the rule to remove" },
+        effect: {
+          type: "string" as const,
+          description: "The interrupt effect to remove a rule from",
+        },
+        ruleIndex: {
+          type: "integer" as const,
+          minimum: 0,
+          description: "Zero-based index of the rule to remove",
+        },
       },
       required: ["effect", "ruleIndex"],
     },
   },
   {
     name: POLICY_TOOL_NAMES.CLEAR,
-    description: "Clear the entire interrupt policy, resetting to reject-all. After clearing, all interrupt-producing actions will be rejected until new rules are added.",
+    description:
+      "Clear the entire interrupt policy, resetting to reject-all. After clearing, all interrupt-producing actions will be rejected until new rules are added.",
     inputSchema: { type: "object" as const, properties: {} },
   },
 ];
@@ -108,18 +131,30 @@ function handlePolicyTool(
 ): { content: Array<{ type: string; text: string }>; isError: boolean } | null {
   switch (name) {
     case POLICY_TOOL_NAMES.GET:
-      return { content: [{ type: "text", text: JSON.stringify(policyStore.get(), null, 2) }], isError: false };
+      return {
+        content: [{ type: "text", text: JSON.stringify(policyStore.get(), null, 2) }],
+        isError: false,
+      };
     case POLICY_TOOL_NAMES.ADD_RULE:
       try {
-        policyStore.addRule(args.effect, { action: args.action, ...(args.match && { match: args.match }) });
-        return { content: [{ type: "text", text: `Rule added for '${args.effect}'.` }], isError: false };
+        policyStore.addRule(args.effect, {
+          action: args.action,
+          ...(args.match && { match: args.match }),
+        });
+        return {
+          content: [{ type: "text", text: `Rule added for '${args.effect}'.` }],
+          isError: false,
+        };
       } catch (err) {
         return { content: [{ type: "text", text: errorMessage(err) }], isError: true };
       }
     case POLICY_TOOL_NAMES.REMOVE_RULE:
       try {
         policyStore.removeRule(args.effect, args.ruleIndex);
-        return { content: [{ type: "text", text: `Rule removed from '${args.effect}'.` }], isError: false };
+        return {
+          content: [{ type: "text", text: `Rule removed from '${args.effect}'.` }],
+          isError: false,
+        };
       } catch (err) {
         return { content: [{ type: "text", text: errorMessage(err) }], isError: true };
       }
@@ -259,9 +294,7 @@ function buildToolsListPayload(config: McpConfig): ToolEntry[] {
  */
 function describeToolSchema(inputSchema: unknown): string {
   const s = inputSchema as
-    | { properties?: Record<string, unknown>; required?: string[] }
-    | null
-    | undefined;
+    { properties?: Record<string, unknown>; required?: string[] } | null | undefined;
   const names = Object.keys(s?.properties ?? {});
   if (names.length === 0) return "";
   const required = s?.required ?? [];
@@ -359,10 +392,7 @@ function processLine(line: string, handler: McpHandler): void {
  */
 const MAX_STDIO_LINE_BYTES = 10 * 1024 * 1024; // 10 MB
 
-export function startStdioServer(
-  handler: McpHandler,
-  toolSummary?: string[],
-): void {
+export function startStdioServer(handler: McpHandler, toolSummary?: string[]): void {
   // stdout is the JSON-RPC channel for the stdio transport, so the tool
   // listing must go to stderr (the MCP-conventional log channel) to avoid
   // corrupting the protocol stream.

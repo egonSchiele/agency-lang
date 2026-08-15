@@ -32,9 +32,7 @@ describe("GuardExceededError", () => {
 
 describe("isGuardExceededError", () => {
   it("returns true for a GuardExceededError instance", () => {
-    expect(
-      isGuardExceededError(new GuardExceededError("cost", 1, 2)),
-    ).toBe(true);
+    expect(isGuardExceededError(new GuardExceededError("cost", 1, 2))).toBe(true);
   });
 
   it("returns false for a plain Error", () => {
@@ -126,9 +124,7 @@ describe("CostGuard", () => {
     // {costLimit, costAtPush} (no `spent`). Restoring them silently
     // would set spent=undefined → check() compares undefined > limit
     // → false → guard never trips. Fail loudly instead.
-    expect(() =>
-      CostGuard.fromJSON({ costLimit: 2.0, costAtPush: 0.5 } as any),
-    ).toThrow(/spent/);
+    expect(() => CostGuard.fromJSON({ costLimit: 2.0, costAtPush: 0.5 } as any)).toThrow(/spent/);
   });
 });
 
@@ -353,10 +349,7 @@ describe("TimeGuard", () => {
     // would double-apply the grant at the join.
     const g = new TimeGuard(1_000);
     g.extendBudget(5_000);
-    const clone = g.cloneForBranch(
-      new StateStack(),
-      new StateStack(),
-    ) as TimeGuard;
+    const clone = g.cloneForBranch(new StateStack(), new StateStack()) as TimeGuard;
     expect(clone.grantedTotal()).toBe(0);
   });
 
@@ -611,7 +604,7 @@ describe("detectTrippedGuard — the one suspension-aware walk", () => {
     const g = new CostGuard(0.5);
     const stack = new StateStack();
     stack.pushGuard(g);
-    stack.chargeGuards(1.0);                       // over budget
+    stack.chargeGuards(1.0); // over budget
     expect(stack.detectTrippedGuard()).not.toBeNull();
 
     const token = stack.beginSuspension([]);

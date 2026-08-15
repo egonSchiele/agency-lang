@@ -42,9 +42,7 @@ describe("DeterministicClient", () => {
   });
 
   it("returns an object return mock as JSON string", async () => {
-    const client = new DeterministicClient([
-      { return: { category: "reminder" } },
-    ]);
+    const client = new DeterministicClient([{ return: { category: "reminder" } }]);
     const result = await client.text(baseConfig);
     expect(result.success).toBe(true);
     if (result.success) {
@@ -53,9 +51,7 @@ describe("DeterministicClient", () => {
   });
 
   it("returns a tool call mock", async () => {
-    const client = new DeterministicClient([
-      { toolCall: { name: "add", args: { a: 5, b: 3 } } },
-    ]);
+    const client = new DeterministicClient([{ toolCall: { name: "add", args: { a: 5, b: 3 } } }]);
     const result = await client.text(baseConfig);
     expect(result.success).toBe(true);
     if (result.success) {
@@ -67,9 +63,7 @@ describe("DeterministicClient", () => {
   });
 
   it("returns multiple tool calls with synthetic ids by default", async () => {
-    const client = new DeterministicClient([
-      { toolCalls: [{ name: "a" }, { name: "b" }] },
-    ]);
+    const client = new DeterministicClient([{ toolCalls: [{ name: "a" }, { name: "b" }] }]);
     const result = await client.text(baseConfig);
     expect(result.success).toBe(true);
     if (result.success) {
@@ -86,7 +80,12 @@ describe("DeterministicClient", () => {
     // (nullish default, not `||`), which is what the agency-js
     // parallel-tools-no-ids regression relies on.
     const client = new DeterministicClient([
-      { toolCalls: [{ name: "a", id: "" }, { name: "b", id: "" }] },
+      {
+        toolCalls: [
+          { name: "a", id: "" },
+          { name: "b", id: "" },
+        ],
+      },
     ]);
     const result = await client.text(baseConfig);
     expect(result.success).toBe(true);
@@ -98,10 +97,7 @@ describe("DeterministicClient", () => {
   });
 
   it("consumes mocks in order", async () => {
-    const client = new DeterministicClient([
-      { return: "first" },
-      { return: "second" },
-    ]);
+    const client = new DeterministicClient([{ return: "first" }, { return: "second" }]);
     const r1 = await client.text(baseConfig);
     const r2 = await client.text(baseConfig);
     expect(r1.success && r1.value.output).toBe("first");
@@ -111,24 +107,18 @@ describe("DeterministicClient", () => {
   it("throws when mocks are exhausted", async () => {
     const client = new DeterministicClient([{ return: "only one" }]);
     await client.text(baseConfig);
-    await expect(client.text(baseConfig)).rejects.toThrow(
-      "no mock provided for llm() call #2"
-    );
+    await expect(client.text(baseConfig)).rejects.toThrow("no mock provided for llm() call #2");
   });
 
   it("throws when no mocks provided and llm() is called", async () => {
     const client = new DeterministicClient([]);
-    await expect(client.text(baseConfig)).rejects.toThrow(
-      "no mock provided for llm() call #1"
-    );
+    await expect(client.text(baseConfig)).rejects.toThrow("no mock provided for llm() call #1");
   });
 
   it("defaults missing tool call args to an empty object", async () => {
     // Args are optional in the mock so callers don't have to write
     // `args: {}` for tools that take no arguments. See `deterministicClient.ts`.
-    const client = new DeterministicClient([
-      { toolCall: { name: "add" } },
-    ]);
+    const client = new DeterministicClient([{ toolCall: { name: "add" } }]);
     const result = await client.text(baseConfig);
     expect(result.success).toBe(true);
     if (result.success) {
@@ -156,7 +146,9 @@ describe("DeterministicClient scoped mocks", () => {
       "*": [{ return: "from fallback" }],
     });
 
-    const result = await inModule("lib/agents/optimize/mutatePrompt.agency", () => client.text(baseConfig));
+    const result = await inModule("lib/agents/optimize/mutatePrompt.agency", () =>
+      client.text(baseConfig),
+    );
 
     expect(result.success && result.value.output).toBe("from mutator queue");
   });
@@ -167,7 +159,9 @@ describe("DeterministicClient scoped mocks", () => {
       "*": [{ return: "from fallback" }],
     });
 
-    const result = await inModule("lib/agents/optimize/mutatePrompt.agency", () => client.text(baseConfig));
+    const result = await inModule("lib/agents/optimize/mutatePrompt.agency", () =>
+      client.text(baseConfig),
+    );
 
     expect(result.success && result.value.output).toBe("from mutator queue");
   });
@@ -197,10 +191,18 @@ describe("DeterministicClient scoped mocks", () => {
       judgePairwise: [{ return: "j1" }, { return: "j2" }],
     });
 
-    const m1 = await inModule("lib/agents/optimize/mutatePrompt.agency", () => client.text(baseConfig));
-    const j1 = await inModule("lib/agents/eval/judgePairwise.agency", () => client.text(baseConfig));
-    const m2 = await inModule("lib/agents/optimize/mutatePrompt.agency", () => client.text(baseConfig));
-    const j2 = await inModule("lib/agents/eval/judgePairwise.agency", () => client.text(baseConfig));
+    const m1 = await inModule("lib/agents/optimize/mutatePrompt.agency", () =>
+      client.text(baseConfig),
+    );
+    const j1 = await inModule("lib/agents/eval/judgePairwise.agency", () =>
+      client.text(baseConfig),
+    );
+    const m2 = await inModule("lib/agents/optimize/mutatePrompt.agency", () =>
+      client.text(baseConfig),
+    );
+    const j2 = await inModule("lib/agents/eval/judgePairwise.agency", () =>
+      client.text(baseConfig),
+    );
 
     expect(m1.success && m1.value.output).toBe("m1");
     expect(j1.success && j1.value.output).toBe("j1");
@@ -247,7 +249,11 @@ describe("DeterministicClient scoped mocks", () => {
 
     it("transcribe returns the fixed transcript + fixed cost, no invented model field", async () => {
       const client = new DeterministicClient([]);
-      const r = await client.transcribe({ kind: "path", path: "a.wav" }, { model: "whisper-1" }, neverAbort);
+      const r = await client.transcribe(
+        { kind: "path", path: "a.wav" },
+        { model: "whisper-1" },
+        neverAbort,
+      );
       expect(r.success).toBe(true);
       if (r.success) {
         expect(r.value.text).toBe(DETERMINISTIC_TRANSCRIPT);
@@ -258,7 +264,11 @@ describe("DeterministicClient scoped mocks", () => {
 
     it("speak returns the fixed bytes + a MIME matching the requested format", async () => {
       const client = new DeterministicClient([]);
-      const r = await client.speak("hi", { model: "tts-1", voice: "alloy", format: "mp3" }, neverAbort);
+      const r = await client.speak(
+        "hi",
+        { model: "tts-1", voice: "alloy", format: "mp3" },
+        neverAbort,
+      );
       expect(r.success).toBe(true);
       if (r.success) {
         expect(Array.from(r.value.audio)).toEqual([...DETERMINISTIC_SPEECH_BYTES]);
@@ -273,7 +283,11 @@ describe("DeterministicClient scoped mocks", () => {
       const reason = new AgencyCancelledError("already gone");
       controller.abort(reason);
       await expect(
-        client.transcribe({ kind: "path", path: "a.wav" }, { model: "whisper-1" }, controller.signal),
+        client.transcribe(
+          { kind: "path", path: "a.wav" },
+          { model: "whisper-1" },
+          controller.signal,
+        ),
       ).rejects.toBe(reason);
       await expect(
         client.speak("hi", { model: "tts-1", voice: "alloy", format: "mp3" }, controller.signal),
@@ -281,11 +295,22 @@ describe("DeterministicClient scoped mocks", () => {
     });
 
     it("honors a mid-request abort via the configured delay, rejecting with the reason", async () => {
-      const client = new DeterministicClient([], { transcriptionDelayMs: 10_000, speechDelayMs: 10_000 });
+      const client = new DeterministicClient([], {
+        transcriptionDelayMs: 10_000,
+        speechDelayMs: 10_000,
+      });
       const controller = new AbortController();
       const reason = new AgencyCancelledError("time guard");
-      const trPromise = client.transcribe({ kind: "path", path: "a.wav" }, { model: "whisper-1" }, controller.signal);
-      const spPromise = client.speak("hi", { model: "tts-1", voice: "alloy", format: "mp3" }, controller.signal);
+      const trPromise = client.transcribe(
+        { kind: "path", path: "a.wav" },
+        { model: "whisper-1" },
+        controller.signal,
+      );
+      const spPromise = client.speak(
+        "hi",
+        { model: "tts-1", voice: "alloy", format: "mp3" },
+        controller.signal,
+      );
       controller.abort(reason);
       await expect(trPromise).rejects.toBe(reason);
       await expect(spPromise).rejects.toBe(reason);

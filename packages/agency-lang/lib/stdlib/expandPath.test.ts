@@ -25,9 +25,7 @@ describe("expandPath", () => {
   });
 
   it("expands ~/nested/path", () => {
-    expect(expandPath("~/.agency/memory")).toBe(
-      path.join(os.homedir(), ".agency/memory"),
-    );
+    expect(expandPath("~/.agency/memory")).toBe(path.join(os.homedir(), ".agency/memory"));
   });
 
   it("returns input unchanged when there is no ~", () => {

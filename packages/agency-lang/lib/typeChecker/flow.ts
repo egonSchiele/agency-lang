@@ -163,10 +163,7 @@ export type FlowEnvironment = {
  * ignores property order and non-semantic metadata, and keys recursive
  * references nominally — the gaps raw `JSON.stringify` keying had.
  */
-export function uniteTypes(
-  types: ScopeType[],
-  aliases: Record<string, TypeAliasEntry>,
-): ScopeType {
+export function uniteTypes(types: ScopeType[], aliases: Record<string, TypeAliasEntry>): ScopeType {
   if (types.some((t) => isAnyType(t))) return ANY_T;
   const concrete = (types as VariableType[]).filter((t) => !isNever(t));
   if (concrete.length === 0) return NEVER_T;
@@ -226,12 +223,7 @@ export function typeAt(ref: Reference, at: FlowNode, env: FlowEnvironment): Scop
   return result;
 }
 
-function computeTypeAt(
-  ref: Reference,
-  key: string,
-  at: FlowNode,
-  env: FlowEnvironment,
-): ScopeType {
+function computeTypeAt(ref: Reference, key: string, at: FlowNode, env: FlowEnvironment): ScopeType {
   switch (at.kind) {
     case "start": {
       const base = at.scope.lookup(ref.variable) ?? ANY_T;
@@ -256,7 +248,10 @@ function computeTypeAt(
       return applyRefine(base, at.refine, env.typeAliases) ?? base;
     }
     case "join":
-      return uniteTypes(at.prev.map((p) => typeAt(ref, p, env)), env.typeAliases);
+      return uniteTypes(
+        at.prev.map((p) => typeAt(ref, p, env)),
+        env.typeAliases,
+      );
     case "loop":
       // Own-property check: `at.widened` may be a plain object, so a ref named
       // "__proto__" / "toString" must not read from Object.prototype.
@@ -267,10 +262,7 @@ function computeTypeAt(
       // widens) invalidates this path: re-resolve from the widened base rather
       // than trusting the (possibly narrowed) pre-loop flow. Otherwise
       // `while (…) { box = …; box.r.value }` would trust a stale narrowing.
-      if (
-        ref.chain.length > 0 &&
-        Object.prototype.hasOwnProperty.call(at.widened, ref.variable)
-      ) {
+      if (ref.chain.length > 0 && Object.prototype.hasOwnProperty.call(at.widened, ref.variable)) {
         return resolvePath(at.widened[ref.variable], ref.chain, env.typeAliases);
       }
       return typeAt(ref, at.prev, env);

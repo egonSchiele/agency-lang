@@ -18,10 +18,7 @@ import type { AgencyConfig } from "../config.js";
  * Writes to a temp .agency file because SymbolTable.build resolves imports
  * by path. The programs here import nothing, so os.tmpdir() is fine.
  */
-export function typecheckSource(
-  src: string,
-  config: AgencyConfig = {},
-): TypeCheckError[] {
+export function typecheckSource(src: string, config: AgencyConfig = {}): TypeCheckError[] {
   const parsed = parseAgency(src);
   if (!parsed.success) {
     throw new Error(`parse failed: ${(parsed as { message?: string }).message ?? "unknown"}`);

@@ -16,15 +16,28 @@ class StubGrader extends BaseGrader {
 }
 
 const input = (id: string): Input => ({ id, task: "t" });
-const scalarGrade = (grader: BaseGrader, value: number): GraderGrade => ({ grader, grade: { score: { kind: "scalar", value } } });
+const scalarGrade = (grader: BaseGrader, value: number): GraderGrade => ({
+  grader,
+  grade: { score: { kind: "scalar", value } },
+});
 
 describe("Scorecard", () => {
   it("objective is the weighted mean of non-gating scalar grades, averaged across inputs", () => {
     const advisory = new StubGrader({ weight: 1 });
     const weighted = new StubGrader({ weight: 3 });
     const perInput: InputGrades[] = [
-      { input: input("a"), run: loadedRun(null), gatesPassed: true, grades: [scalarGrade(advisory, 1), scalarGrade(weighted, 0)] },
-      { input: input("b"), run: loadedRun(null), gatesPassed: true, grades: [scalarGrade(advisory, 1), scalarGrade(weighted, 1)] },
+      {
+        input: input("a"),
+        run: loadedRun(null),
+        gatesPassed: true,
+        grades: [scalarGrade(advisory, 1), scalarGrade(weighted, 0)],
+      },
+      {
+        input: input("b"),
+        run: loadedRun(null),
+        gatesPassed: true,
+        grades: [scalarGrade(advisory, 1), scalarGrade(weighted, 1)],
+      },
     ];
     // input a: (1*1 + 3*0)/4 = 0.25 ; input b: (1*1 + 3*1)/4 = 1.0 ; mean = 0.625
     expect(new Scorecard(perInput).objective()).toBeCloseTo(0.625, 10);
@@ -51,10 +64,20 @@ describe("Scorecard", () => {
   it("a binary-only grader (e.g. ExactMatch) yields a meaningful objective = accuracy", () => {
     const exact = new StubGrader({ weight: 1 });
     const perInput: InputGrades[] = [
-      { input: input("a"), run: loadedRun(null), gatesPassed: true, grades: [{ grader: exact, grade: { score: { kind: "binary", pass: true } } }] },
-      { input: input("b"), run: loadedRun(null), gatesPassed: true, grades: [{ grader: exact, grade: { score: { kind: "binary", pass: false } } }] },
+      {
+        input: input("a"),
+        run: loadedRun(null),
+        gatesPassed: true,
+        grades: [{ grader: exact, grade: { score: { kind: "binary", pass: true } } }],
+      },
+      {
+        input: input("b"),
+        run: loadedRun(null),
+        gatesPassed: true,
+        grades: [{ grader: exact, grade: { score: { kind: "binary", pass: false } } }],
+      },
     ];
-    expect(new Scorecard(perInput).objective()).toBeCloseTo(0.5, 10);   // mean(1, 0)
+    expect(new Scorecard(perInput).objective()).toBeCloseTo(0.5, 10); // mean(1, 0)
   });
 
   it("a passing binary gate (mustPass) still contributes 1.0 to the objective", () => {
@@ -93,8 +116,18 @@ describe("Scorecard", () => {
   it("a gate-failed input scores 0 and drags the objective down", () => {
     const advisory = new StubGrader({ weight: 1 });
     const perInput: InputGrades[] = [
-      { input: input("a"), run: loadedRun(null), gatesPassed: false, grades: [scalarGrade(advisory, 1)] },
-      { input: input("b"), run: loadedRun(null), gatesPassed: true, grades: [scalarGrade(advisory, 1)] },
+      {
+        input: input("a"),
+        run: loadedRun(null),
+        gatesPassed: false,
+        grades: [scalarGrade(advisory, 1)],
+      },
+      {
+        input: input("b"),
+        run: loadedRun(null),
+        gatesPassed: true,
+        grades: [scalarGrade(advisory, 1)],
+      },
     ];
     const sc = new Scorecard(perInput);
     expect(sc.inputScores()).toEqual([0, 1]);
@@ -103,8 +136,18 @@ describe("Scorecard", () => {
 
   it("gatesPassed is true only when every input passed its gates", () => {
     const advisory = new StubGrader({ weight: 1 });
-    const passing: InputGrades = { input: input("a"), run: loadedRun(null), gatesPassed: true, grades: [scalarGrade(advisory, 1)] };
-    const failing: InputGrades = { input: input("b"), run: loadedRun(null), gatesPassed: false, grades: [scalarGrade(advisory, 1)] };
+    const passing: InputGrades = {
+      input: input("a"),
+      run: loadedRun(null),
+      gatesPassed: true,
+      grades: [scalarGrade(advisory, 1)],
+    };
+    const failing: InputGrades = {
+      input: input("b"),
+      run: loadedRun(null),
+      gatesPassed: false,
+      grades: [scalarGrade(advisory, 1)],
+    };
     expect(new Scorecard([passing]).gatesPassed()).toBe(true);
     expect(new Scorecard([passing, failing]).gatesPassed()).toBe(false);
   });

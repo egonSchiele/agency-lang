@@ -61,10 +61,7 @@ export function line(content: string, style?: Style): Element {
 // stops the layout engine from distributing leftover space between
 // the children if their combined height is less than the viewport.
 export function lines(strings: string[], style?: Style): Element {
-  return column(
-    { justifyContent: "flex-start", ...style },
-    ...strings.map((s) => line(s)),
-  );
+  return column({ justifyContent: "flex-start", ...style }, ...strings.map((s) => line(s)));
 }
 
 export function list(style: StyleProps, items: string[], selectedIndex?: number): Element {

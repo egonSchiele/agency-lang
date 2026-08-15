@@ -51,7 +51,8 @@ function resolveWithin(root: string, rel: string): string {
 
 /** Every file under `dir`, as dir-relative paths, sorted. */
 function listFilesRecursive(dir: string): string[] {
-  return fs.readdirSync(dir, { recursive: true, withFileTypes: true })
+  return fs
+    .readdirSync(dir, { recursive: true, withFileTypes: true })
     .filter((entry) => entry.isFile())
     .map((entry) => path.relative(dir, path.join(entry.parentPath, entry.name)))
     .sort();
@@ -62,16 +63,22 @@ function listFilesRecursive(dir: string): string[] {
  *  the path and both sources. */
 export function filesToCopy(seed: AgentSeed): Record<string, SeedEntry> {
   const agentEntries: Record<string, SeedEntry> = Object.fromEntries([
-    ...seed.closureFiles.map((abs): [string, SeedEntry] =>
-      [path.relative(seed.baseDir, abs), { sourceAbs: abs, origin: "agent" }]),
-    ...PROJECT_CONFIG_FILES
-      .filter((name) => fs.existsSync(path.join(seed.baseDir, name)))
-      .map((name): [string, SeedEntry] =>
-        [name, { sourceAbs: path.join(seed.baseDir, name), origin: "agent" }]),
+    ...seed.closureFiles.map((abs): [string, SeedEntry] => [
+      path.relative(seed.baseDir, abs),
+      { sourceAbs: abs, origin: "agent" },
+    ]),
+    ...PROJECT_CONFIG_FILES.filter((name) => fs.existsSync(path.join(seed.baseDir, name))).map(
+      (name): [string, SeedEntry] => [
+        name,
+        { sourceAbs: path.join(seed.baseDir, name), origin: "agent" },
+      ],
+    ),
   ]);
   const testEntries: Record<string, SeedEntry> = Object.fromEntries(
-    (seed.filesDir ? listFilesRecursive(seed.filesDir) : []).map((rel): [string, SeedEntry] =>
-      [rel, { sourceAbs: path.join(seed.filesDir as string, rel), origin: "test files" }]),
+    (seed.filesDir ? listFilesRecursive(seed.filesDir) : []).map((rel): [string, SeedEntry] => [
+      rel,
+      { sourceAbs: path.join(seed.filesDir as string, rel), origin: "test files" },
+    ]),
   );
 
   // Object.hasOwn, not a truthiness lookup: a fixture file named "toString"
@@ -81,8 +88,8 @@ export function filesToCopy(seed: AgentSeed): Record<string, SeedEntry> {
     const rel = collisions[0];
     throw new Error(
       `Seed collision at "${rel}": provided by both the test files (${testEntries[rel].sourceAbs}) ` +
-      `and the agent (${agentEntries[rel].sourceAbs}). Tests must not ship agent files — ` +
-      `the agent is seeded separately so one suite can grade any agent.`,
+        `and the agent (${agentEntries[rel].sourceAbs}). Tests must not ship agent files — ` +
+        `the agent is seeded separately so one suite can grade any agent.`,
     );
   }
   return { ...agentEntries, ...testEntries };
@@ -96,14 +103,18 @@ export function filesToCopy(seed: AgentSeed): Record<string, SeedEntry> {
  *  test sees the invoking project's agency.json, eval.* settings included. */
 export function commandFilesToCopy(filesDir: string | undefined): Record<string, SeedEntry> {
   const configEntries: Record<string, SeedEntry> = Object.fromEntries(
-    PROJECT_CONFIG_FILES
-      .filter((name) => fs.existsSync(path.join(process.cwd(), name)))
-      .map((name): [string, SeedEntry] =>
-        [name, { sourceAbs: path.join(process.cwd(), name), origin: "agent" }]),
+    PROJECT_CONFIG_FILES.filter((name) => fs.existsSync(path.join(process.cwd(), name))).map(
+      (name): [string, SeedEntry] => [
+        name,
+        { sourceAbs: path.join(process.cwd(), name), origin: "agent" },
+      ],
+    ),
   );
   const testEntries: Record<string, SeedEntry> = Object.fromEntries(
-    (filesDir ? listFilesRecursive(filesDir) : []).map((rel): [string, SeedEntry] =>
-      [rel, { sourceAbs: path.join(filesDir as string, rel), origin: "test files" }]),
+    (filesDir ? listFilesRecursive(filesDir) : []).map((rel): [string, SeedEntry] => [
+      rel,
+      { sourceAbs: path.join(filesDir as string, rel), origin: "test files" },
+    ]),
   );
   return { ...configEntries, ...testEntries };
 }
@@ -120,7 +131,10 @@ export function copyFiles(workdirPath: string, files: Record<string, SeedEntry>)
 
 /** Write optimizer candidate edits over the seeded copy. Applied last, so a
  *  candidate wins over both ingredients. */
-export function applyOverlay(workdirPath: string, overlayFiles: Record<string, string> | undefined): void {
+export function applyOverlay(
+  workdirPath: string,
+  overlayFiles: Record<string, string> | undefined,
+): void {
   for (const [rel, source] of Object.entries(overlayFiles ?? {})) {
     const dest = resolveWithin(workdirPath, rel);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
@@ -130,7 +144,11 @@ export function applyOverlay(workdirPath: string, overlayFiles: Record<string, s
 
 /** Compile the seeded agent inside its workdir, so module-dir == cwd ==
  *  workdir and all resolution stays inside the sandbox. */
-export function compileAgent(workdirPath: string, agentRelPath: string, config: AgencyConfig): string {
+export function compileAgent(
+  workdirPath: string,
+  agentRelPath: string,
+  config: AgencyConfig,
+): string {
   const entryAgency = resolveWithin(workdirPath, agentRelPath);
   const compiledEntryPath = compile(config, entryAgency, undefined, {
     importStrategy: new RunStrategy(),

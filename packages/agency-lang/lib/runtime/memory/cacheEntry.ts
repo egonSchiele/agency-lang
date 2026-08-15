@@ -2,10 +2,7 @@ import { MemoryGraph } from "./graph.js";
 import { EmbeddingManager } from "./embeddings.js";
 import { applyExtractionResult } from "./extraction.js";
 import type { ExtractionResult, NewObservation } from "./extraction.js";
-import type {
-  ConversationSummary,
-  MemoryStore as MemoryStoreType,
-} from "./types.js";
+import type { ConversationSummary, MemoryStore as MemoryStoreType } from "./types.js";
 
 export type ExtractionOutcome = {
   newObservations: NewObservation[];

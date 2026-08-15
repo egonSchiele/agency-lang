@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  runAsHandler,
-  executingHandlers,
-  insideHandlerFunction,
-} from "./executingHandlers.js";
+import { runAsHandler, executingHandlers, insideHandlerFunction } from "./executingHandlers.js";
 import type { HandlerEntry } from "./types.js";
 
 const entryA: HandlerEntry = { fn: async () => undefined, liveGuardIds: [] };

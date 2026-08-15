@@ -15,9 +15,7 @@ import { AgencyNode, AgencyProgram, GraphNodeDefinition } from "@/types.js";
 function parse(src: string): AgencyProgram {
   const result = parseAgency(src);
   if (!result.success) {
-    throw new Error(
-      `parse failed: ${result.message ?? "unknown"}\n${result.rest}`,
-    );
+    throw new Error(`parse failed: ${result.message ?? "unknown"}\n${result.rest}`);
   }
   return result.result;
 }
@@ -25,17 +23,14 @@ function parse(src: string): AgencyProgram {
 function getMainBody(src: string): AgencyNode[] {
   const program = parse(src);
   const main = program.nodes.find(
-    (n): n is GraphNodeDefinition =>
-      n.type === "graphNode" && n.nodeName === "main",
+    (n): n is GraphNodeDefinition => n.type === "graphNode" && n.nodeName === "main",
   );
   if (!main) throw new Error("no `main` node found in test source");
   return main.body;
 }
 
 function findParallelBlock(body: AgencyNode[]): ParallelBlock {
-  const pb = body.find((n) => n.type === "parallelBlock") as
-    | ParallelBlock
-    | undefined;
+  const pb = body.find((n) => n.type === "parallelBlock") as ParallelBlock | undefined;
   if (!pb) throw new Error("no parallel block found in body");
   return pb;
 }

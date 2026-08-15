@@ -21,47 +21,55 @@ import {
  *  session can never be bound to nothing. */
 export const ChecklistBindingSchema = z.union([
   z.object({ kind: z.literal("unpublished") }).strict(),
-  z.object({
-    kind: z.literal("published"),
-    version: z.number().int().positive(),
-    hash: ContentHashSchema,
-  }).strict(),
+  z
+    .object({
+      kind: z.literal("published"),
+      version: z.number().int().positive(),
+      hash: ContentHashSchema,
+    })
+    .strict(),
 ]);
 
 export type ChecklistBinding = z.infer<typeof ChecklistBindingSchema>;
 
-export const SessionBindingSchema = z.object({
-  outputIds: z.array(OutputIdSchema),
-  checklistId: ChecklistIdSchema,
-  checklist: ChecklistBindingSchema,
-  annotator: AnnotatorSchema,
-}).strict();
+export const SessionBindingSchema = z
+  .object({
+    outputIds: z.array(OutputIdSchema),
+    checklistId: ChecklistIdSchema,
+    checklist: ChecklistBindingSchema,
+    annotator: AnnotatorSchema,
+  })
+  .strict();
 
 export type SessionBinding = z.infer<typeof SessionBindingSchema>;
 
-export const PendingRevisionSchema = z.object({
-  revision: ChecklistRevisionSchema,
-  expectedParentVersion: z.number().int().positive().nullable(),
-  expectedParentHash: ContentHashSchema.nullable(),
-}).strict();
+export const PendingRevisionSchema = z
+  .object({
+    revision: ChecklistRevisionSchema,
+    expectedParentVersion: z.number().int().positive().nullable(),
+    expectedParentHash: ContentHashSchema.nullable(),
+  })
+  .strict();
 
-export const DraftSchema = z.object({
-  schemaVersion: z.literal(1),
-  sessionId: SessionIdSchema,
-  binding: SessionBindingSchema,
-  currentIndex: z.number().int().nonnegative(),
-  answersByOutputId: z.record(OutputIdSchema, z.record(QuestionIdSchema, z.boolean())),
-  notesByOutputId: z.record(OutputIdSchema, z.string()),
-  reviewedByOutputId: z.record(OutputIdSchema, z.array(QuestionIdSchema)),
-  stagedQuestions: z.array(ChecklistQuestionSchema).nullable(),
-  pendingRevision: PendingRevisionSchema.nullable(),
-  /** The complete annotation, written here before it is appended, so a crash
-   *  between the two is repaired by replaying the same id. */
-  pendingAnnotation: AnnotationRowSchema.nullable(),
-  /** Accumulated interaction time per output. Never a monotonic anchor: a
-   *  stored anchor would count the hours a paused session spent closed. */
-  activeMsByOutputId: z.record(OutputIdSchema, z.number().finite().nonnegative()),
-}).strict();
+export const DraftSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    sessionId: SessionIdSchema,
+    binding: SessionBindingSchema,
+    currentIndex: z.number().int().nonnegative(),
+    answersByOutputId: z.record(OutputIdSchema, z.record(QuestionIdSchema, z.boolean())),
+    notesByOutputId: z.record(OutputIdSchema, z.string()),
+    reviewedByOutputId: z.record(OutputIdSchema, z.array(QuestionIdSchema)),
+    stagedQuestions: z.array(ChecklistQuestionSchema).nullable(),
+    pendingRevision: PendingRevisionSchema.nullable(),
+    /** The complete annotation, written here before it is appended, so a crash
+     *  between the two is repaired by replaying the same id. */
+    pendingAnnotation: AnnotationRowSchema.nullable(),
+    /** Accumulated interaction time per output. Never a monotonic anchor: a
+     *  stored anchor would count the hours a paused session spent closed. */
+    activeMsByOutputId: z.record(OutputIdSchema, z.number().finite().nonnegative()),
+  })
+  .strict();
 
 export type Draft = z.infer<typeof DraftSchema>;
 
@@ -110,7 +118,7 @@ export function assertDraftMatches(draft: Draft, expected: DraftBindingCheck): v
   if (draft.binding.checklistId !== expected.checklistId) {
     throw new Error(
       `Draft ${draft.sessionId} belongs to checklist "${draft.binding.checklistId}", not ` +
-      `"${expected.checklistId}".`,
+        `"${expected.checklistId}".`,
     );
   }
   if (
@@ -119,15 +127,16 @@ export function assertDraftMatches(draft: Draft, expected: DraftBindingCheck): v
   ) {
     throw new Error(
       `Draft ${draft.sessionId} belongs to ${draft.binding.annotator.kind} ` +
-      `"${draft.binding.annotator.id}", not ${expected.annotator.kind} "${expected.annotator.id}".`,
+        `"${draft.binding.annotator.id}", not ${expected.annotator.kind} "${expected.annotator.id}".`,
     );
   }
-  const sameOrder = draft.binding.outputIds.length === expected.outputIds.length &&
+  const sameOrder =
+    draft.binding.outputIds.length === expected.outputIds.length &&
     draft.binding.outputIds.every((outputId, index) => outputId === expected.outputIds[index]);
   if (!sameOrder) {
     throw new Error(
       `Draft ${draft.sessionId} was made against a different set or order of outputs. ` +
-      `Resuming it would attach answers to the wrong outputs.`,
+        `Resuming it would attach answers to the wrong outputs.`,
     );
   }
 }
@@ -139,10 +148,14 @@ export function assertBindingIsCoherent(draft: Draft): void {
     return;
   }
   const pending = draft.pendingRevision;
-  if (pending === null || pending.expectedParentVersion !== null || pending.expectedParentHash !== null) {
+  if (
+    pending === null ||
+    pending.expectedParentVersion !== null ||
+    pending.expectedParentHash !== null
+  ) {
     throw new Error(
       `Draft ${draft.sessionId} has an unpublished checklist binding without a version-1 pending ` +
-      `revision. Only a session that has not yet published its first revision may be unbound.`,
+        `revision. Only a session that has not yet published its first revision may be unbound.`,
     );
   }
 }

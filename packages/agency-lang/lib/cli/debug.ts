@@ -51,10 +51,7 @@ export async function debug(
         console.error("Error: Bundle has invalid program path.");
         process.exit(1);
       }
-      const timestamp = new Date()
-        .toISOString()
-        .replace(/[:.]/g, "-")
-        .slice(0, 19);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
       tempDir = path.resolve(`.tmp/bundle/${timestamp}`);
       fs.mkdirSync(tempDir, { recursive: true });
       reader.writeSourcesToDisk(tempDir);
@@ -88,9 +85,7 @@ export async function debug(
 
     if (options.checkpoint) {
       if (!fs.existsSync(options.checkpoint)) {
-        console.error(
-          `Error: Checkpoint file not found: ${options.checkpoint}`,
-        );
+        console.error(`Error: Checkpoint file not found: ${options.checkpoint}`);
         process.exit(1);
       }
       const json = JSON.parse(fs.readFileSync(options.checkpoint, "utf-8"));
@@ -122,7 +117,7 @@ export async function debug(
       if (sourceMtime > compiledMtime) {
         console.warn(
           `Warning: ${inputFile} is newer than ${compiledPath}.\n` +
-          `You may need to recompile before debugging.`,
+            `You may need to recompile before debugging.`,
         );
       }
 
@@ -130,7 +125,9 @@ export async function debug(
     } else {
       // Normal mode: compile the .agency file to .js on the fly
       const debugConfig: AgencyConfig = { ...config, debugger: true };
-      const outputFile = compile(debugConfig, inputFile, undefined, { importStrategy: new RunStrategy() });
+      const outputFile = compile(debugConfig, inputFile, undefined, {
+        importStrategy: new RunStrategy(),
+      });
       if (outputFile === null) {
         console.error("Error: No output file generated.");
         process.exit(1);
@@ -152,7 +149,7 @@ export async function debug(
     if (distDir && Object.keys(sourceMap).length === 0) {
       console.warn(
         "Warning: The compiled module has an empty source map. Was it compiled with instrument: false?\n" +
-        "The debugger may not be able to step through code.",
+          "The debugger may not be able to step through code.",
       );
     }
 
@@ -163,10 +160,7 @@ export async function debug(
       console.error("Error: Could not parse Agency file.");
       process.exit(1);
     }
-    const nodes = getNodesOfType(
-      parseResult.result.nodes,
-      "graphNode",
-    ) as GraphNodeDefinition[];
+    const nodes = getNodesOfType(parseResult.result.nodes, "graphNode") as GraphNodeDefinition[];
 
     if (nodes.length === 0) {
       console.error("Error: No graph nodes found in the Agency file.");
@@ -212,12 +206,14 @@ export async function debug(
         // readline/prompts, which would conflict with TerminalInput's raw mode.
         process.stdin.removeAllListeners("data");
         delete (process.stdin as any)[Symbol.for("nodejs.readline.KEYPRESS_DECODER")];
-        return new DebuggerUI(new Screen({
-          input: new TerminalInput(),
-          output: new TerminalOutput(),
-          width: process.stdout.columns || 80,
-          height: process.stdout.rows || 24,
-        }));
+        return new DebuggerUI(
+          new Screen({
+            input: new TerminalInput(),
+            output: new TerminalOutput(),
+            width: process.stdout.columns || 80,
+            height: process.stdout.rows || 24,
+          }),
+        );
       })(),
       checkpoints: traceCheckpoints,
       traceHeader,
@@ -230,9 +226,7 @@ export async function debug(
     const callbacks = driver.getCallbacks();
 
     // Find the selected node's definition to get parameter info
-    const selectedNode = nodes.find(
-      (n: GraphNodeDefinition) => n.nodeName === nodeName,
-    )!;
+    const selectedNode = nodes.find((n: GraphNodeDefinition) => n.nodeName === nodeName)!;
 
     // Prompt for node arguments if the node has parameters
     let args: unknown[] = [];
@@ -242,9 +236,7 @@ export async function debug(
 
     if (traceCheckpoints) {
       if (!traceHeader) {
-        console.error(
-          "Error: Trace checkpoints found but no header information.",
-        );
+        console.error("Error: Trace checkpoints found but no header information.");
         process.exit(1);
       }
 
@@ -255,12 +247,7 @@ export async function debug(
 
       // Trace mode: start at the last checkpoint as if the program just finished
       const lastCp = traceCheckpoints[traceCheckpoints.length - 1];
-      const interrupt = createDebugInterrupt(
-        undefined,
-        lastCp.id,
-        lastCp,
-        traceHeader.runId,
-      );
+      const interrupt = createDebugInterrupt(undefined, lastCp.id, lastCp, traceHeader.runId);
       await driver.run({ data: interrupt });
     } else {
       // Normal mode: run the node, it will pause at the first debugStep()

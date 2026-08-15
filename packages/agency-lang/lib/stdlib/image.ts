@@ -20,9 +20,7 @@ function omitEmpty<T extends Record<string, unknown>>(obj: T): Partial<T> {
 /** Build a smoltalk ImageInput from a prompt + input image source strings. */
 function buildInput(prompt: string, images: string[]): ImageInput {
   if (images.length === 0) return prompt;
-  const refs: ImageRef[] = images.map(
-    (s) => classifySource(s, "", false) as ImageRef,
-  );
+  const refs: ImageRef[] = images.map((s) => classifySource(s, "", false) as ImageRef);
   return { prompt, images: refs };
 }
 
@@ -103,10 +101,7 @@ export async function _generateImage(
       model: gen.model,
       timeTaken,
       usage: gen.tokenUsage,
-      cost:
-        gen.costEstimate === undefined
-          ? undefined
-          : { totalCost: gen.costEstimate.totalCost },
+      cost: gen.costEstimate === undefined ? undefined : { totalCost: gen.costEstimate.totalCost },
     });
   }
   stack.enforceGuards();

@@ -32,11 +32,15 @@ describe("withParentStatelog", () => {
 
   it("an explicit child logFile always wins", () => {
     const overrides = { observability: true, log: { logFile: "child.jsonl" } };
-    expect(withParentStatelog(overrides, { observability: true, logFile: "log.jsonl" })).toBe(overrides);
+    expect(withParentStatelog(overrides, { observability: true, logFile: "log.jsonl" })).toBe(
+      overrides,
+    );
   });
 
   it("forwards nothing when the parent has observability off", () => {
-    expect(withParentStatelog(undefined, { observability: false, logFile: "log.jsonl" })).toBeUndefined();
+    expect(
+      withParentStatelog(undefined, { observability: false, logFile: "log.jsonl" }),
+    ).toBeUndefined();
   });
 
   it("forwards observability alone when the parent has no file sink", () => {
@@ -67,7 +71,12 @@ describe("withParentStatelog", () => {
   it("the parent's effective sink wins over the child's own log fields", () => {
     const out = withParentStatelog(
       { observability: true, log: { host: "https://child", apiKey: "child-key" } },
-      { observability: true, host: "https://parent", apiKey: "parent-key", projectId: "parent-proj" },
+      {
+        observability: true,
+        host: "https://parent",
+        apiKey: "parent-key",
+        projectId: "parent-proj",
+      },
     );
     expect(out).toEqual({
       observability: true,
@@ -107,13 +116,26 @@ describe("subprocess run info", () => {
   it("defaults to depth 0 and round-trips", () => {
     expect(getSubprocessRunInfo()).toEqual({ depth: 0 });
     setSubprocessRunInfo({ runId: "r1", subprocessSessionId: "s1", parentSpanId: "sp1", depth: 1 });
-    expect(getSubprocessRunInfo()).toEqual({ runId: "r1", subprocessSessionId: "s1", parentSpanId: "sp1", depth: 1 });
+    expect(getSubprocessRunInfo()).toEqual({
+      runId: "r1",
+      subprocessSessionId: "s1",
+      parentSpanId: "sp1",
+      depth: 1,
+    });
   });
 
   it("serializeInterruptsForIpc echoes the seeded session id", () => {
     setSubprocessRunInfo({ runId: "r1", subprocessSessionId: "sess-42", depth: 1 });
     const msg = serializeInterruptsForIpc([
-      { type: "interrupt", interruptId: "i1", runId: "r1", effect: "e", message: "m", data: {}, origin: "o" } as any,
+      {
+        type: "interrupt",
+        interruptId: "i1",
+        runId: "r1",
+        effect: "e",
+        message: "m",
+        data: {},
+        origin: "o",
+      } as any,
     ]);
     expect(msg.subprocessSessionId).toBe("sess-42");
   });
@@ -123,8 +145,28 @@ describe("serializeInterruptsForIpc", () => {
   it("strips per-interrupt checkpoints and hoists the shared one", () => {
     const cp = { id: 1, nodeId: "main", stack: [] };
     const interrupts = [
-      { type: "interrupt", interruptId: "i1", runId: "r", effect: "std::bash", message: "m", data: {}, origin: "o", checkpoint: cp, checkpointId: 1 },
-      { type: "interrupt", interruptId: "i2", runId: "r", effect: "std::bash", message: "m", data: {}, origin: "o", checkpoint: cp, checkpointId: 1 },
+      {
+        type: "interrupt",
+        interruptId: "i1",
+        runId: "r",
+        effect: "std::bash",
+        message: "m",
+        data: {},
+        origin: "o",
+        checkpoint: cp,
+        checkpointId: 1,
+      },
+      {
+        type: "interrupt",
+        interruptId: "i2",
+        runId: "r",
+        effect: "std::bash",
+        message: "m",
+        data: {},
+        origin: "o",
+        checkpoint: cp,
+        checkpointId: 1,
+      },
     ] as any[];
     const msg = serializeInterruptsForIpc(interrupts as any);
     expect(msg.type).toBe("interrupted");
@@ -202,7 +244,14 @@ describe("clampLimits", () => {
  * silently). Suites layer their specifics via `overrides`. */
 const makeSession = (overrides: Record<string, any> = {}): any => ({
   sessionId: "test-session",
-  child: { stdout: null, stderr: null, on: () => {}, send: () => true, connected: true, kill: () => true },
+  child: {
+    stdout: null,
+    stderr: null,
+    on: () => {},
+    send: () => true,
+    connected: true,
+    kill: () => true,
+  },
   limits: { wallClock: 1000, memory: 1, ipcPayload: 1, stdout: 1 },
   ctx: { lockReleasers: {}, invocationUsage: new InvocationUsageMeter() },
   stateStack: {},
@@ -230,7 +279,9 @@ describe("wall-clock timer is per execution segment", () => {
       child: {
         stdout: null,
         stderr: null,
-        on: (evt: string, cb: (arg: any) => void) => { listeners[evt] = cb; },
+        on: (evt: string, cb: (arg: any) => void) => {
+          listeners[evt] = cb;
+        },
         send: () => true,
         connected: true,
         kill: () => true,
@@ -239,13 +290,19 @@ describe("wall-clock timer is per execution segment", () => {
     };
   };
 
-  const makeSegmentSession = (child: any, outcomes: any[]): any => makeSession({
-    sessionId: "seg-test",
-    child,
-    limits: { wallClock: 5000, memory: 1, ipcPayload: 1024 * 1024 * 1024, stdout: 1024 * 1024 * 1024 },
-    resolvePromise: (v: any) => outcomes.push({ kind: "resolve", v }),
-    rejectPromise: (e: any) => outcomes.push({ kind: "reject", e }),
-  });
+  const makeSegmentSession = (child: any, outcomes: any[]): any =>
+    makeSession({
+      sessionId: "seg-test",
+      child,
+      limits: {
+        wallClock: 5000,
+        memory: 1,
+        ipcPayload: 1024 * 1024 * 1024,
+        stdout: 1024 * 1024 * 1024,
+      },
+      resolvePromise: (v: any) => outcomes.push({ kind: "resolve", v }),
+      rejectPromise: (e: any) => outcomes.push({ kind: "reject", e }),
+    });
 
   it("arms on session start and is cleared when the child pauses; never fires afterward", async () => {
     vi.useFakeTimers();
@@ -259,7 +316,12 @@ describe("wall-clock timer is per execution segment", () => {
 
       // Child pauses (self-checkpointed): the segment is over — its
       // remaining budget must die with it.
-      listeners["message"]({ type: "interrupted", interrupts: [], checkpoint: {}, subprocessSessionId: "s" });
+      listeners["message"]({
+        type: "interrupted",
+        interrupts: [],
+        checkpoint: {},
+        subprocessSessionId: "s",
+      });
       await vi.advanceTimersByTimeAsync(0);
       expect(session.settled).toBe(true);
       expect(session.wallClockTimer).toBeNull();
@@ -301,14 +363,26 @@ describe("wall-clock timer is per execution segment", () => {
       const firstOutcomes: any[] = [];
       const s1 = makeSegmentSession(first.child, firstOutcomes);
       attachSessionHandlers(s1, { type: "run", scriptPath: "/x.js", node: "main", args: {} });
-      first.listeners["message"]({ type: "interrupted", interrupts: [], checkpoint: {}, subprocessSessionId: "s" });
+      first.listeners["message"]({
+        type: "interrupted",
+        interrupts: [],
+        checkpoint: {},
+        subprocessSessionId: "s",
+      });
 
       // A resume segment (second session) gets its own full budget,
       // independent of how much the first segment used.
       const second = makeFakeChild();
       const secondOutcomes: any[] = [];
       const s2 = makeSegmentSession(second.child, secondOutcomes);
-      attachSessionHandlers(s2, { type: "resume", scriptPath: "/x.js", node: "main", checkpoint: {}, interrupts: [], responses: [] });
+      attachSessionHandlers(s2, {
+        type: "resume",
+        scriptPath: "/x.js",
+        node: "main",
+        checkpoint: {},
+        interrupts: [],
+        responses: [],
+      });
       expect(s2.wallClockTimer).not.toBeNull();
       expect(s2.wallClockTimer).not.toBe(s1.wallClockTimer);
     } finally {
@@ -324,8 +398,22 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
     vi.unstubAllEnvs();
   });
 
-  const fullCost = { inputCost: 0.3, outputCost: 0.2, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0.5, currency: "USD" };
-  const fullTokens = { inputTokens: 100, outputTokens: 20, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 120 };
+  const fullCost = {
+    inputCost: 0.3,
+    outputCost: 0.2,
+    cachedInputCost: 0,
+    cacheCreationInputCost: 0,
+    hostedToolsCost: 0,
+    totalCost: 0.5,
+    currency: "USD",
+  };
+  const fullTokens = {
+    inputTokens: 100,
+    outputTokens: 20,
+    cachedInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    totalTokens: 120,
+  };
 
   const makeUsageSession = () => {
     const stack = new StateStack();
@@ -335,8 +423,16 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
     const session = makeSession({
       ctx,
       stateStack: stack,
-      child: { kill: (sig: string) => { kills.push(sig); return true; }, connected: true },
-      rejectPromise: (err: any) => { rejections.push(err); },
+      child: {
+        kill: (sig: string) => {
+          kills.push(sig);
+          return true;
+        },
+        connected: true,
+      },
+      rejectPromise: (err: any) => {
+        rejections.push(err);
+      },
     });
     return { session, ctx, stack, rejections, kills };
   };
@@ -344,7 +440,10 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
   it("merges a recovered delta into the parent meter, bills the stack, and buckets the entry", () => {
     const { session, ctx, stack } = makeUsageSession();
     handleInvocationUsageMessage(session, {
-      type: "invocationUsage", cost: fullCost, tokens: fullTokens, unknownCostCallCount: 0,
+      type: "invocationUsage",
+      cost: fullCost,
+      tokens: fullTokens,
+      unknownCostCallCount: 0,
       entry: { kind: "completion", model: "opus-4.8", cost: fullCost, tokens: fullTokens },
     });
     expect(stack.localCost).toBeCloseTo(0.5);
@@ -358,21 +457,42 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
     const first = makeUsageSession();
     const second = makeUsageSession();
     handleInvocationUsageMessage(first.session, {
-      type: "invocationUsage", cost: { totalCost: 0.1, currency: "USD" }, unknownCostCallCount: 0,
-      entry: { kind: "completion", model: "opus", cost: { totalCost: 0.1, currency: "USD" }, tokens: fullTokens },
+      type: "invocationUsage",
+      cost: { totalCost: 0.1, currency: "USD" },
+      unknownCostCallCount: 0,
+      entry: {
+        kind: "completion",
+        model: "opus",
+        cost: { totalCost: 0.1, currency: "USD" },
+        tokens: fullTokens,
+      },
     });
     handleInvocationUsageMessage(second.session, {
-      type: "invocationUsage", cost: { totalCost: 0.2, currency: "USD" }, unknownCostCallCount: 0,
-      entry: { kind: "completion", model: "haiku", cost: { totalCost: 0.2, currency: "USD" }, tokens: fullTokens },
+      type: "invocationUsage",
+      cost: { totalCost: 0.2, currency: "USD" },
+      unknownCostCallCount: 0,
+      entry: {
+        kind: "completion",
+        model: "haiku",
+        cost: { totalCost: 0.2, currency: "USD" },
+        tokens: fullTokens,
+      },
     });
-    expect(first.ctx.invocationUsage.snapshot().usage.entries.map((e) => e.model)).toEqual(["opus"]);
-    expect(second.ctx.invocationUsage.snapshot().usage.entries.map((e) => e.model)).toEqual(["haiku"]);
+    expect(first.ctx.invocationUsage.snapshot().usage.entries.map((e) => e.model)).toEqual([
+      "opus",
+    ]);
+    expect(second.ctx.invocationUsage.snapshot().usage.entries.map((e) => e.model)).toEqual([
+      "haiku",
+    ]);
   });
 
   it("recovers flat money but omits an unusable entry and degrades usageComplete", () => {
     const { session, ctx } = makeUsageSession();
     handleInvocationUsageMessage(session, {
-      type: "invocationUsage", cost: fullCost, tokens: fullTokens, unknownCostCallCount: 0,
+      type: "invocationUsage",
+      cost: fullCost,
+      tokens: fullTokens,
+      unknownCostCallCount: 0,
       entry: { kind: "nope", model: "x", cost: fullCost, tokens: fullTokens },
     });
     const s = ctx.invocationUsage.snapshot();
@@ -390,8 +510,18 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
 
   it("accumulates exact totals across multiple child messages (one-child)", () => {
     const { session, ctx } = makeUsageSession();
-    handleInvocationUsageMessage(session, { type: "invocationUsage", cost: { totalCost: 0.1, currency: "USD" }, tokens: { inputTokens: 5, outputTokens: 1, totalTokens: 6 }, unknownCostCallCount: 0 });
-    handleInvocationUsageMessage(session, { type: "invocationUsage", cost: { totalCost: 0.2, currency: "USD" }, tokens: { inputTokens: 7, outputTokens: 2, totalTokens: 9 }, unknownCostCallCount: 1 });
+    handleInvocationUsageMessage(session, {
+      type: "invocationUsage",
+      cost: { totalCost: 0.1, currency: "USD" },
+      tokens: { inputTokens: 5, outputTokens: 1, totalTokens: 6 },
+      unknownCostCallCount: 0,
+    });
+    handleInvocationUsageMessage(session, {
+      type: "invocationUsage",
+      cost: { totalCost: 0.2, currency: "USD" },
+      tokens: { inputTokens: 7, outputTokens: 2, totalTokens: 9 },
+      unknownCostCallCount: 1,
+    });
     const s = ctx.invocationUsage.snapshot();
     expect(s.usage.cost.totalCost).toBeCloseTo(0.3);
     expect(s.usage.tokens.inputTokens).toBe(12);
@@ -405,9 +535,18 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
     const send = vi.fn(() => true);
     process.send = send as any;
     const { session } = makeUsageSession();
-    const wireTokens = { inputTokens: 3, outputTokens: 1, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 4 };
+    const wireTokens = {
+      inputTokens: 3,
+      outputTokens: 1,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      totalTokens: 4,
+    };
     handleInvocationUsageMessage(session, {
-      type: "invocationUsage", cost: fullCost, tokens: wireTokens, unknownCostCallCount: 0,
+      type: "invocationUsage",
+      cost: fullCost,
+      tokens: wireTokens,
+      unknownCostCallCount: 0,
       entry: { kind: "completion", model: "opus", cost: fullCost, tokens: wireTokens },
     });
     // A fully well-formed message recovers cleanly, so exactly the usage delta is
@@ -418,7 +557,12 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
 
   it("recovers an invalid cost as an unknown-cost call without dropping tokens", () => {
     const { session, ctx, stack } = makeUsageSession();
-    handleInvocationUsageMessage(session, { type: "invocationUsage", cost: { totalCost: -1, currency: "USD" }, tokens: { inputTokens: 9, outputTokens: 3, totalTokens: 12 }, unknownCostCallCount: 0 });
+    handleInvocationUsageMessage(session, {
+      type: "invocationUsage",
+      cost: { totalCost: -1, currency: "USD" },
+      tokens: { inputTokens: 9, outputTokens: 3, totalTokens: 12 },
+      unknownCostCallCount: 0,
+    });
     expect(stack.localCost).toBe(0);
     const s = ctx.invocationUsage.snapshot();
     expect(s.usage.tokens.inputTokens).toBe(9);
@@ -428,7 +572,12 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
   it("a guard trip from a usage message kills+rejects the session", () => {
     const { session, stack, rejections, kills } = makeUsageSession();
     stack.guards.push(new CostGuard(0.1));
-    handleInvocationUsageMessage(session, { type: "invocationUsage", cost: { totalCost: 0.2, currency: "USD" }, tokens: fullTokens, unknownCostCallCount: 0 });
+    handleInvocationUsageMessage(session, {
+      type: "invocationUsage",
+      cost: { totalCost: 0.2, currency: "USD" },
+      tokens: fullTokens,
+      unknownCostCallCount: 0,
+    });
     expect(kills).toEqual(["SIGKILL"]);
     expect(rejections).toHaveLength(1);
     expect(isGuardExceededError(rejections[0])).toBe(true);
@@ -438,7 +587,11 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
   it("post-settle usage still merges (lower bound) but does not enforce", () => {
     const { session, ctx, stack } = makeUsageSession();
     session.settled = true;
-    handleInvocationUsageMessage(session, { type: "invocationUsage", cost: { totalCost: 0.2, currency: "USD" }, unknownCostCallCount: 0 });
+    handleInvocationUsageMessage(session, {
+      type: "invocationUsage",
+      cost: { totalCost: 0.2, currency: "USD" },
+      unknownCostCallCount: 0,
+    });
     expect(stack.localCost).toBeCloseTo(0.2);
     expect(ctx.invocationUsage.snapshot().usage.cost.totalCost).toBeCloseTo(0.2);
   });
@@ -446,7 +599,10 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
 
 describe("handleInvocationUsageIncompleteMessage", () => {
   const originalSend = process.send;
-  afterEach(() => { process.send = originalSend; vi.unstubAllEnvs(); });
+  afterEach(() => {
+    process.send = originalSend;
+    vi.unstubAllEnvs();
+  });
 
   it("marks the invocation incomplete and relays the marker once when a child", () => {
     vi.stubEnv("AGENCY_IPC", "1");
@@ -467,10 +623,22 @@ describe("handleCallbackMessage", () => {
   it("fires the parent's registered callback with the forwarded data", async () => {
     const fired: any[] = [];
     const stack = new StateStack();
-    const ctx: any = { callbacks: { onNodeStart: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
-    const session = makeSession({ ctx, stateStack: stack, limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 } });
+    const ctx: any = {
+      callbacks: { onNodeStart: (d: any) => fired.push(d) },
+      topLevelCallbacks: [],
+      stateStack: stack,
+    };
+    const session = makeSession({
+      ctx,
+      stateStack: stack,
+      limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 },
+    });
 
-    handleCallbackMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "childNode" } });
+    handleCallbackMessage(session, {
+      type: "callback",
+      name: "onNodeStart",
+      data: { nodeName: "childNode" },
+    });
     await flush();
 
     expect(fired).toEqual([{ nodeName: "childNode" }]);
@@ -490,9 +658,17 @@ describe("handleCallbackMessage", () => {
     fullStack.stack = [frame];
     const ctx: any = { callbacks: {}, topLevelCallbacks: [], stateStack: fullStack };
     // A DIFFERENT, empty slice — mimics the run() call-site slice.
-    const session = makeSession({ ctx, stateStack: new StateStack(), limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 } });
+    const session = makeSession({
+      ctx,
+      stateStack: new StateStack(),
+      limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 },
+    });
 
-    handleCallbackMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "child" } });
+    handleCallbackMessage(session, {
+      type: "callback",
+      name: "onNodeStart",
+      data: { nodeName: "child" },
+    });
     await flush();
 
     expect(fired).toEqual([{ nodeName: "child" }]);
@@ -505,7 +681,11 @@ describe("handleCallbackMessage", () => {
     // (registering it under a valid name would pass either way — false confidence).
     const fired: any[] = [];
     const stack = new StateStack();
-    const ctx: any = { callbacks: { onBogus: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    const ctx: any = {
+      callbacks: { onBogus: (d: any) => fired.push(d) },
+      topLevelCallbacks: [],
+      stateStack: stack,
+    };
     const session = makeSession({ ctx, stateStack: stack });
 
     handleCallbackMessage(session, { type: "callback", name: "onBogus" as any, data: { x: 1 } });
@@ -517,10 +697,18 @@ describe("handleCallbackMessage", () => {
   it("drops a callback that arrives after the session settled", async () => {
     const fired: any[] = [];
     const stack = new StateStack();
-    const ctx: any = { callbacks: { onNodeStart: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    const ctx: any = {
+      callbacks: { onNodeStart: (d: any) => fired.push(d) },
+      topLevelCallbacks: [],
+      stateStack: stack,
+    };
     const session = makeSession({ ctx, stateStack: stack, settled: true });
 
-    handleCallbackMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "late" } });
+    handleCallbackMessage(session, {
+      type: "callback",
+      name: "onNodeStart",
+      data: { nodeName: "late" },
+    });
     await flush();
 
     expect(fired).toEqual([]);
@@ -538,8 +726,16 @@ describe("handleCallbackMessage", () => {
     const session = makeSession({
       ctx,
       stateStack: stack,
-      child: { kill: (sig: string) => { kills.push(sig); return true; }, connected: true },
-      rejectPromise: (err: any) => { rejections.push(err); },
+      child: {
+        kill: (sig: string) => {
+          kills.push(sig);
+          return true;
+        },
+        connected: true,
+      },
+      rejectPromise: (err: any) => {
+        rejections.push(err);
+      },
     });
 
     handleCallbackMessage(session, {
@@ -564,19 +760,35 @@ describe("handleCallbackMessage", () => {
     const stack = new StateStack();
     const abort = new AgencyCancelledError("callback tripped a guard"); // an AgencyAbort
     const ctx: any = {
-      callbacks: { onNodeStart: () => { throw abort; } },
+      callbacks: {
+        onNodeStart: () => {
+          throw abort;
+        },
+      },
       topLevelCallbacks: [],
       stateStack: stack,
     };
     const session = makeSession({
       ctx,
       stateStack: stack,
-      child: { kill: (sig: string) => { kills.push(sig); return true; }, connected: true },
-      rejectPromise: (e: any) => { rejections.push(e); },
+      child: {
+        kill: (sig: string) => {
+          kills.push(sig);
+          return true;
+        },
+        connected: true,
+      },
+      rejectPromise: (e: any) => {
+        rejections.push(e);
+      },
       limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 },
     });
 
-    handleCallbackMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "n" } });
+    handleCallbackMessage(session, {
+      type: "callback",
+      name: "onNodeStart",
+      data: { nodeName: "n" },
+    });
     await flush();
 
     expect(kills).toEqual(["SIGKILL"]);
@@ -594,18 +806,35 @@ describe("handleCallbackMessage", () => {
     vi.stubEnv("AGENCY_IPC", "1");
     const originalSend = process.send;
     const sent: any[] = [];
-    process.send = ((m: any) => { sent.push(m); return true; }) as any;
+    process.send = ((m: any) => {
+      sent.push(m);
+      return true;
+    }) as any;
     try {
       const fired: any[] = [];
       const stack = new StateStack();
-      const ctx: any = { callbacks: { onNodeStart: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
-      const session = makeSession({ ctx, stateStack: stack, limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 } });
+      const ctx: any = {
+        callbacks: { onNodeStart: (d: any) => fired.push(d) },
+        topLevelCallbacks: [],
+        stateStack: stack,
+      };
+      const session = makeSession({
+        ctx,
+        stateStack: stack,
+        limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 },
+      });
 
-      handleCallbackMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "grandNode" } });
+      handleCallbackMessage(session, {
+        type: "callback",
+        name: "onNodeStart",
+        data: { nodeName: "grandNode" },
+      });
       await flush();
 
       expect(fired).toEqual([{ nodeName: "grandNode" }]); // mid-tier's own callback fired
-      expect(sent).toEqual([{ type: "callback", name: "onNodeStart", data: { nodeName: "grandNode" } }]); // and re-forwarded upward
+      expect(sent).toEqual([
+        { type: "callback", name: "onNodeStart", data: { nodeName: "grandNode" } },
+      ]); // and re-forwarded upward
     } finally {
       process.send = originalSend;
     }
@@ -617,10 +846,18 @@ describe("handleCallbackMessage", () => {
     // version-skewed child could fire a broken (function-stripped) callback.
     const fired: any[] = [];
     const stack = new StateStack();
-    const ctx: any = { callbacks: { onStream: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    const ctx: any = {
+      callbacks: { onStream: (d: any) => fired.push(d) },
+      topLevelCallbacks: [],
+      stateStack: stack,
+    };
     const session = makeSession({ ctx, stateStack: stack });
 
-    handleCallbackMessage(session, { type: "callback", name: "onStream" as any, data: { type: "text", text: "x" } });
+    handleCallbackMessage(session, {
+      type: "callback",
+      name: "onStream" as any,
+      data: { type: "text", text: "x" },
+    });
     await flush();
 
     expect(fired).toEqual([]);
@@ -633,9 +870,17 @@ describe("handleChildMessage oversize handling", () => {
     const stack = new StateStack();
     const ctx: any = { callbacks: {}, topLevelCallbacks: [], stateStack: stack };
     // makeSession default ipcPayload is 1 byte, so any callback payload is oversize.
-    const session = makeSession({ ctx, stateStack: stack, rejectPromise: (e: any) => rejections.push(e) });
+    const session = makeSession({
+      ctx,
+      stateStack: stack,
+      rejectPromise: (e: any) => rejections.push(e),
+    });
 
-    await handleChildMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "big" } });
+    await handleChildMessage(session, {
+      type: "callback",
+      name: "onNodeStart",
+      data: { nodeName: "big" },
+    });
 
     expect(session.settled).toBe(false);
     expect(rejections).toEqual([]);
@@ -658,7 +903,11 @@ describe("handleChildMessage oversize handling", () => {
     const rejections: any[] = [];
     const stack = new StateStack();
     const ctx: any = { lockReleasers: {}, stateStack: stack };
-    const session = makeSession({ ctx, stateStack: stack, rejectPromise: (e: any) => rejections.push(e) });
+    const session = makeSession({
+      ctx,
+      stateStack: stack,
+      rejectPromise: (e: any) => rejections.push(e),
+    });
 
     await expect(handleChildMessage(session, undefined as any)).resolves.toBeUndefined();
 
@@ -672,7 +921,8 @@ describe("handleChildMessage oversize handling", () => {
     const stack = new StateStack();
     const ctx: any = { callbacks: {}, topLevelCallbacks: [], stateStack: stack };
     const session = makeSession({
-      ctx, stateStack: stack,
+      ctx,
+      stateStack: stack,
       limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 }, // large, so oversize is NOT the cause
       rejectPromise: (e: any) => rejections.push(e),
     });
@@ -693,13 +943,22 @@ describe("handleChildMessage oversize handling", () => {
     // dispatch case would leave `fired` empty here.
     const fired: any[] = [];
     const stack = new StateStack();
-    const ctx: any = { callbacks: { onNodeStart: (d: any) => fired.push(d) }, topLevelCallbacks: [], stateStack: stack };
+    const ctx: any = {
+      callbacks: { onNodeStart: (d: any) => fired.push(d) },
+      topLevelCallbacks: [],
+      stateStack: stack,
+    };
     const session = makeSession({
-      ctx, stateStack: stack,
+      ctx,
+      stateStack: stack,
       limits: { wallClock: 1000, memory: 1, ipcPayload: 1e9, stdout: 1 },
     });
 
-    await handleChildMessage(session, { type: "callback", name: "onNodeStart", data: { nodeName: "routed" } });
+    await handleChildMessage(session, {
+      type: "callback",
+      name: "onNodeStart",
+      data: { nodeName: "routed" },
+    });
     await flush(); // handleCallbackMessage void-invokes invokeCallbacks; let the microtask chain drain
 
     expect(fired).toEqual([{ nodeName: "routed" }]);
@@ -708,14 +967,16 @@ describe("handleChildMessage oversize handling", () => {
 
 describe("resolveNodeCallArgs", () => {
   it("delivers a string task to a one-parameter node, whatever the parameter is named", () => {
-    expect(resolveNodeCallArgs({ node: "main", args: {}, task: "do it" }, ["prompt"]))
-      .toEqual({ args: ["do it"] });
+    expect(resolveNodeCallArgs({ node: "main", args: {}, task: "do it" }, ["prompt"])).toEqual({
+      args: ["do it"],
+    });
   });
 
   it("delivers an object task as the single argument", () => {
     const task = { rows: [1, 2], mode: "fast" };
-    expect(resolveNodeCallArgs({ node: "main", args: {}, task }, ["data"]))
-      .toEqual({ args: [task] });
+    expect(resolveNodeCallArgs({ node: "main", args: {}, task }, ["data"])).toEqual({
+      args: [task],
+    });
   });
 
   it("errors when the node takes no parameters", () => {
@@ -734,7 +995,8 @@ describe("resolveNodeCallArgs", () => {
   });
 
   it("without a task, maps named args positionally as before", () => {
-    expect(resolveNodeCallArgs({ node: "main", args: { b: 2, a: 1 } }, ["a", "b"]))
-      .toEqual({ args: [1, 2] });
+    expect(resolveNodeCallArgs({ node: "main", args: { b: 2, a: 1 } }, ["a", "b"])).toEqual({
+      args: [1, 2],
+    });
   });
 });

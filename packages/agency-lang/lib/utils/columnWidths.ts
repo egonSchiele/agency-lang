@@ -6,18 +6,16 @@
 // imports stdlib internals.
 
 export type PlannedWidth =
-  | { kind: "cells"; value: number }
-  | { kind: "percent"; value: number }
-  | { kind: "full" };
+  { kind: "cells"; value: number } | { kind: "percent"; value: number } | { kind: "full" };
 
 // A single column's sizing inputs, gathered up front so the
 // width-distribution logic can read them as data rather than re-deriving
 // from the raw column specs mid-loop.
 export type ColumnPlan = {
   index: number;
-  parsed: PlannedWidth | null;   // null = natural content width
-  natural: number;               // caller-measured content width
-  minWidth: number;              // explicit floor
+  parsed: PlannedWidth | null; // null = natural content width
+  natural: number; // caller-measured content width
+  minWidth: number; // explicit floor
 };
 
 // Compute the final width of every column.
@@ -37,9 +35,9 @@ export function resolveColumnWidths(
 ): number[] {
   assertPercentsHaveBasis(plan, available, errorContext);
 
-  const fixed    = plan.map(fixedWidthFor);
-  const claimed  = fixed.reduce<number>((sum, w) => sum + (w ?? 0), 0);
-  const remain   = Math.max(0, (available ?? Infinity) - claimed);
+  const fixed = plan.map(fixedWidthFor);
+  const claimed = fixed.reduce<number>((sum, w) => sum + (w ?? 0), 0);
+  const remain = Math.max(0, (available ?? Infinity) - claimed);
   const totalPct = sumPercentages(plan);
 
   return plan.map((col, i) => {
@@ -58,8 +56,8 @@ function assertPercentsHaveBasis(
   if (percentCol === undefined) return;
   throw new Error(
     `${errorContext}: column[${percentCol.index}] uses a percentage width ` +
-    `but the table has no resolved width to take a percentage of. ` +
-    `Set width: on the table or one of its ancestors.`,
+      `but the table has no resolved width to take a percentage of. ` +
+      `Set width: on the table or one of its ancestors.`,
   );
 }
 
@@ -67,8 +65,8 @@ function assertPercentsHaveBasis(
 // space: fixed cells (declared count) or unsized (natural content
 // width). Returns null for percent/full columns, which are sized later.
 function fixedWidthFor(col: ColumnPlan): number | null {
-  if (col.parsed === null)            return col.natural;
-  if (col.parsed.kind === "cells")    return col.parsed.value;
+  if (col.parsed === null) return col.natural;
+  if (col.parsed.kind === "cells") return col.parsed.value;
   return null;
 }
 
@@ -84,7 +82,7 @@ function isPercentLike(w: PlannedWidth | null): boolean {
 
 function pctValue(w: PlannedWidth | null): number {
   if (w?.kind === "percent") return w.value;
-  if (w?.kind === "full")    return 100;
+  if (w?.kind === "full") return 100;
   return 0;
 }
 

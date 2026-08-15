@@ -57,18 +57,14 @@ export function holeNames(nodes: AgencyNode[]): string[] {
  *  name appears in positions of DIFFERENT types, fill-time validation
  *  checks against the first only, and a mismatch at the second position
  *  falls through to the completed program's run-time check. */
-export function positionInferredVariableTypes(
-  nodes: AgencyNode[],
-): Record<string, VariableType> {
+export function positionInferredVariableTypes(nodes: AgencyNode[]): Record<string, VariableType> {
   // Null-prototype: keyed by user-controlled hole names.
   const inferred: Record<string, VariableType> = Object.create(null);
   for (const visit of walkNodesArray(nodes)) {
     if (visit.node.type !== "hole") continue;
     const hole = visit.node as Hole;
     if (hole.typeAnnotation || inferred[hole.name]) continue;
-    const parent = visit.ancestors[visit.ancestors.length - 1] as
-      | AgencyNode
-      | undefined;
+    const parent = visit.ancestors[visit.ancestors.length - 1] as AgencyNode | undefined;
     if (parent && parent.type === "assignment" && parent.typeHint) {
       inferred[hole.name] = parent.typeHint;
     }

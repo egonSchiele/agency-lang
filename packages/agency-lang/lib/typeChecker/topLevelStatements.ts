@@ -14,8 +14,7 @@ export function checkTopLevelStatements(ctx: TypeCheckerContext): void {
     if (isLegalAtTopLevel(node)) continue;
     // `static interrupt(...)` should say "interrupt", not "staticStatement":
     // the predicate defers to the inner node, so the message must too.
-    const offender =
-      node.type === "staticStatement" ? (node as StaticStatement).statement : node;
+    const offender = node.type === "staticStatement" ? (node as StaticStatement).statement : node;
     ctx.errors.push(
       diagnostic(
         offender.type === "handleBlock"

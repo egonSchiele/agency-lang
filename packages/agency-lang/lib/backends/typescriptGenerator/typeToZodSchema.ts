@@ -3,10 +3,7 @@ import { Tag, TypeAliasEntry, VariableType } from "../../types.js";
 import { escape } from "../../utils.js";
 import { tagArgToTs } from "./tagArgToTs.js";
 import { mergeJsonSchemaArgs, mergeTagSets } from "@/typeChecker/mergeTags.js";
-import {
-  applyValueArgs,
-  isValueParamInstantiation,
-} from "@/typeChecker/valueParamSubstitution.js";
+import { applyValueArgs, isValueParamInstantiation } from "@/typeChecker/valueParamSubstitution.js";
 
 export const DEFAULT_SCHEMA = "z.string()";
 
@@ -72,7 +69,14 @@ function mapTypeToSchema(
   pendingAliases?: Set<string>,
 ): string {
   return appendMeta(
-    mapTypeToSchemaInner(variableType, typeAliases, resultHandler, typeAliasesFull, optionalKeyMode, pendingAliases),
+    mapTypeToSchemaInner(
+      variableType,
+      typeAliases,
+      resultHandler,
+      typeAliasesFull,
+      optionalKeyMode,
+      pendingAliases,
+    ),
     variableType.tags,
   );
 }
@@ -87,14 +91,19 @@ function mapTypeToSchemaInner(
 ): string {
   const recurse = (vt: VariableType) =>
     appendMeta(
-      mapTypeToSchemaInner(vt, typeAliases, resultHandler, typeAliasesFull, optionalKeyMode, pendingAliases),
+      mapTypeToSchemaInner(
+        vt,
+        typeAliases,
+        resultHandler,
+        typeAliasesFull,
+        optionalKeyMode,
+        pendingAliases,
+      ),
       vt.tags,
     );
 
   if (!variableType) {
-    throw new Error(
-      `Received undefined variableType. typeAliases: ${JSON.stringify(typeAliases)}`,
-    );
+    throw new Error(`Received undefined variableType. typeAliases: ${JSON.stringify(typeAliases)}`);
   }
   if (variableType.type === "primitiveType") {
     switch (variableType.value.toLowerCase()) {
@@ -188,9 +197,7 @@ function mapTypeToSchemaInner(
         // final call in the chain (Zod drops metadata otherwise).
         const isNullableProp =
           prop.value.type === "unionType" &&
-          prop.value.types.some(
-            (t) => t.type === "primitiveType" && t.value === "null",
-          );
+          prop.value.types.some((t) => t.type === "primitiveType" && t.value === "null");
         if (optionalKeyMode === "optional-coalesce" && isNullableProp) {
           inner2 += `.optional().default(null)`;
         }
@@ -247,9 +254,7 @@ function mapTypeToSchemaInner(
     }
     // Array/Schema should have been normalized by resolveType before reaching
     // codegen; user-defined generics likewise. A leftover here is a bug.
-    throw new Error(
-      `Unresolved generic type at codegen: ${variableType.name}`,
-    );
+    throw new Error(`Unresolved generic type at codegen: ${variableType.name}`);
   }
 
   return "z.string()";
@@ -289,11 +294,7 @@ export function mapTypeToValidationSchema(
     variableType,
     typeAliases,
     (vt, ta) => {
-      const successSchema = mapTypeToValidationSchema(
-        (vt as any).successType,
-        ta,
-        typeAliasesFull,
-      );
+      const successSchema = mapTypeToValidationSchema((vt as any).successType, ta, typeAliasesFull);
       return `z.union([z.object({ __type: z.literal("resultType"), success: z.literal(true), value: ${successSchema} }), z.object({ __type: z.literal("resultType"), success: z.literal(false), error: z.any() })])`;
     },
     typeAliasesFull,

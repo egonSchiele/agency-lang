@@ -11,9 +11,7 @@ function check(source: string, config: Partial<AgencyConfig> = {}) {
   }
   const info = buildCompilationUnit(parsed.result, undefined, undefined, source);
   const result = typeCheck(parsed.result, config, info);
-  return result.errors
-    .filter((e) => (e.severity ?? "error") === "error")
-    .map((e) => e.message);
+  return result.errors.filter((e) => (e.severity ?? "error") === "error").map((e) => e.message);
 }
 
 describe("saveDraft argument type-check", () => {
@@ -98,16 +96,12 @@ describe("saveDraft check — import-origin gating", () => {
     }
     const info = buildCompilationUnit(parsed.result, undefined, undefined, source);
     info.importedFunctions["saveDraft"] = {
-      parameters: [
-        { name: "value", typeHint: { type: "primitiveType", value: "any" } },
-      ] as any,
+      parameters: [{ name: "value", typeHint: { type: "primitiveType", value: "any" } }] as any,
       returnType: null,
       originFile,
     };
     const result = typeCheck(parsed.result, {}, info);
-    return result.errors
-      .filter((e) => (e.severity ?? "error") === "error")
-      .map((e) => e.message);
+    return result.errors.filter((e) => (e.severity ?? "error") === "error").map((e) => e.message);
   }
 
   const source = `
@@ -123,10 +117,7 @@ describe("saveDraft check — import-origin gating", () => {
   });
 
   it("still fires for the stdlib prelude's saveDraft", () => {
-    const errors = checkWithImport(
-      source,
-      "/Users/someone/agency-lang/stdlib/index.agency",
-    );
+    const errors = checkWithImport(source, "/Users/someone/agency-lang/stdlib/index.agency");
     expect(errors.length).toBeGreaterThan(0);
   });
 });

@@ -11,7 +11,7 @@ describe("formatSource", () => {
   it("does not inject stdlib imports when formatting user source", () => {
     const formatted = formatSource("node main(){print(1)}\n");
     expect(formatted).toContain("node main()");
-    expect(formatted).not.toContain('import {');
+    expect(formatted).not.toContain("import {");
     expect(formatted).not.toContain('"std::index"');
   });
 
@@ -32,7 +32,7 @@ describe("formatSource", () => {
     const input = 'node main() {\n  print("a")\n\n\n\n  print("b")\n}\n';
     const formatted = formatSource(input);
     expect(formatted).toContain('print("a")\n\n  print("b")');
-    expect(formatted).not.toContain('\n\n\n');
+    expect(formatted).not.toContain("\n\n\n");
   });
 
   it("output ends with exactly one trailing newline", () => {
@@ -51,13 +51,14 @@ describe("formatSource", () => {
   });
 
   it("keeps short function signatures on one line", () => {
-    const input = 'def add(a: number, b: number): number {\n  return a + b\n}\n';
+    const input = "def add(a: number, b: number): number {\n  return a + b\n}\n";
     const formatted = formatSource(input);
     expect(formatted).toContain("def add(a: number, b: number): number {");
   });
 
   it("wraps long function signatures to multi-line", () => {
-    const input = 'def processData(inputFile: string, outputFile: string, format: string, verbose: boolean) {\n  return 1\n}\n';
+    const input =
+      "def processData(inputFile: string, outputFile: string, format: string, verbose: boolean) {\n  return 1\n}\n";
     const formatted = formatSource(input);
     expect(formatted).toContain("def processData(\n");
     expect(formatted).toContain("  inputFile: string,\n");
@@ -66,7 +67,8 @@ describe("formatSource", () => {
   });
 
   it("wraps long node signatures to multi-line", () => {
-    const input = 'node handleRequest(message: string, context: string, options: string, verbose: boolean) {\n  return 1\n}\n';
+    const input =
+      "node handleRequest(message: string, context: string, options: string, verbose: boolean) {\n  return 1\n}\n";
     const formatted = formatSource(input);
     expect(formatted).toContain("node handleRequest(\n");
     expect(formatted).toContain(") {");
@@ -79,14 +81,16 @@ describe("formatSource", () => {
   });
 
   it("wraps long function call arguments to multi-line", () => {
-    const input = 'node main() {\n  someFunction("a very long argument", "another long argument", "yet another", "and more")\n}\n';
+    const input =
+      'node main() {\n  someFunction("a very long argument", "another long argument", "yet another", "and more")\n}\n';
     const formatted = formatSource(input);
     expect(formatted).toContain("someFunction(\n");
     expect(formatted).toContain('"a very long argument",');
   });
 
   it("wraps long call arguments with trailing as block", () => {
-    const input = 'node main() {\n  const result = longFunctionName("very long first argument string here", "second long argument string") as item {\n    return item\n  }\n}\n';
+    const input =
+      'node main() {\n  const result = longFunctionName("very long first argument string here", "second long argument string") as item {\n    return item\n  }\n}\n';
     const formatted = formatSource(input);
     expect(formatted).toContain("longFunctionName(\n");
     expect(formatted).toContain(") as item {");
@@ -99,7 +103,8 @@ describe("formatSource", () => {
   });
 
   it("wraps long named imports to multi-line", () => {
-    const input = 'import { alpha, bravo, charlie, delta, echo, foxtrot, golf } from "./utils.agency"\nnode main() {\n  print(1)\n}\n';
+    const input =
+      'import { alpha, bravo, charlie, delta, echo, foxtrot, golf } from "./utils.agency"\nnode main() {\n  print(1)\n}\n';
     const formatted = formatSource(input);
     expect(formatted).toContain("import {\n");
     expect(formatted).toContain("  alpha,\n");
@@ -107,32 +112,34 @@ describe("formatSource", () => {
   });
 
   it("preserves a marker and alias in wrapped imports", () => {
-    const input = 'import { idempotent alpha, bravo as b, charlie, delta, echo, foxtrot } from "./utils.agency"\nnode main() {\n  print(1)\n}\n';
+    const input =
+      'import { idempotent alpha, bravo as b, charlie, delta, echo, foxtrot } from "./utils.agency"\nnode main() {\n  print(1)\n}\n';
     const formatted = formatSource(input);
     expect(formatted).toContain("  idempotent alpha,");
     expect(formatted).toContain("  bravo as b,");
   });
 
   it("sorts imports into groups: stdlib, packages, relative", () => {
-    const input = [
-      'import { bar } from "./bar.agency"',
-      'import { bash } from "std::shell"',
-      'import { foo } from "./foo.js"',
-      'import { mcp } from "pkg::@agency-lang/mcp"',
-      'node main() {',
-      '  print(1)',
-      '}',
-    ].join("\n") + "\n";
+    const input =
+      [
+        'import { bar } from "./bar.agency"',
+        'import { bash } from "std::shell"',
+        'import { foo } from "./foo.js"',
+        'import { mcp } from "pkg::@agency-lang/mcp"',
+        "node main() {",
+        "  print(1)",
+        "}",
+      ].join("\n") + "\n";
     const formatted = formatSource(input);
     const lines = formatted!.split("\n");
     // stdlib first
     expect(lines[0]).toBe('import { bash } from "std::shell"');
     // blank line
-    expect(lines[1]).toBe('');
+    expect(lines[1]).toBe("");
     // packages
     expect(lines[2]).toBe('import { mcp } from "pkg::@agency-lang/mcp"');
     // blank line
-    expect(lines[3]).toBe('');
+    expect(lines[3]).toBe("");
     // relative (alphabetized)
     expect(lines[4]).toBe('import { bar } from "./bar.agency"');
     expect(lines[5]).toBe('import { foo } from "./foo.js"');
@@ -151,19 +158,19 @@ describe("formatSource", () => {
     // turn a validated rule into an unvalidated one.
     const input = [
       "node main() {",
-      "  const w = [\"cat\", \"f.txt\"]",
+      '  const w = ["cat", "f.txt"]',
       "  const r = match (w) {",
-      "    [\"echo\", s: string] => s",
-      "    [\"cat\", p: SafePath] => p",
-      "    [{ cmd: \"echo\" }: Word, ...rest] => \"word\"",
+      '    ["echo", s: string] => s',
+      '    ["cat", p: SafePath] => p',
+      '    [{ cmd: "echo" }: Word, ...rest] => "word"',
       // A wildcard with a suffix has no binder, so it takes formatPattern's
       // `pattern === null` branch — the branch written for after-`is`, where
       // the operator is already on the page. Printed bare in element position
       // it would come back as a BINDER named SafePath that matches anything,
       // silently turning a validated rule into an unvalidated one.
-      "    [\"cat\", _: SafePath] => \"anon\"",
-      "    { path: SafePath } => \"anon obj\"",
-      "    _ => \"other\"",
+      '    ["cat", _: SafePath] => "anon"',
+      '    { path: SafePath } => "anon obj"',
+      '    _ => "other"',
       "  }",
       "  print(r)",
       "}",
@@ -173,10 +180,10 @@ describe("formatSource", () => {
     // formatSource returns null when the source does not parse, so a parse
     // failure must not read as a silently-skipped assertion.
     expect(formatted).not.toBeNull();
-    expect(formatted!).toContain("[\"echo\", s: string] =>");
-    expect(formatted!).toContain("[\"cat\", p: SafePath] =>");
-    expect(formatted!).toContain("[{ cmd: \"echo\" }: Word, ...rest] =>");
-    expect(formatted!).toContain("[\"cat\", _: SafePath] =>");
+    expect(formatted!).toContain('["echo", s: string] =>');
+    expect(formatted!).toContain('["cat", p: SafePath] =>');
+    expect(formatted!).toContain('[{ cmd: "echo" }: Word, ...rest] =>');
+    expect(formatted!).toContain('["cat", _: SafePath] =>');
     expect(formatted!).toContain("{ path: SafePath } =>");
     // Formatting the output again changes nothing.
     expect(formatSource(formatted!)).toBe(formatted);
@@ -197,8 +204,7 @@ describe("formatSource", () => {
   // common leading indent only, so the relative structure of code
   // fences / sub-bullets survives a round-trip.
   it("docstrings: preserves indentation inside ```code``` fences", () => {
-    const input =
-`def example() {
+    const input = `def example() {
   """
   Example:
 
@@ -212,7 +218,7 @@ describe("formatSource", () => {
 }
 `;
     const formatted = formatSource(input);
-    expect(formatted).toContain("    print(\"hi\")");
+    expect(formatted).toContain('    print("hi")');
     expect(formatted).toContain("  if (true) {");
     // Idempotent.
     expect(formatSource(formatted!)).toBe(formatted);
@@ -223,14 +229,12 @@ describe("formatSource", () => {
   // exactly as below so users can rely on `fmt` to silently migrate
   // legacy `=>` arrows and surface param names in formatted output.
   it("block-types: migrates `=>` to `->` and surfaces param names", () => {
-    const input =
-`type AgentSpec = {
+    const input = `type AgentSpec = {
   agent: (userMsg: string) => string;
   cb: (string) => void
 }
 `;
-    const expected =
-`type AgentSpec = {
+    const expected = `type AgentSpec = {
   agent: (userMsg: string) -> string;
   cb: (string) -> void
 }
@@ -259,44 +263,38 @@ describe("formatSource", () => {
 
   describe("comments inside record types", () => {
     it("preserves a leading // comment before the first property", () => {
-      const input =
-        "type Foo = {\n  // leading\n  name: string,\n  age: number\n}\n";
+      const input = "type Foo = {\n  // leading\n  name: string,\n  age: number\n}\n";
       const formatted = formatSource(input);
       expect(formatted).toContain("// leading\n  name: string");
     });
 
     it("preserves a // comment between two properties", () => {
-      const input =
-        "type Foo = {\n  name: string,\n  // between\n  age: number\n}\n";
+      const input = "type Foo = {\n  name: string,\n  // between\n  age: number\n}\n";
       const formatted = formatSource(input);
       expect(formatted).toContain("// between\n  age: number");
     });
 
     it("preserves a trailing // comment after the last property", () => {
-      const input =
-        "type Foo = {\n  name: string,\n  age: number,\n  // trailing\n}\n";
+      const input = "type Foo = {\n  name: string,\n  age: number,\n  // trailing\n}\n";
       const formatted = formatSource(input);
       expect(formatted).toMatch(/age: number\s*\n\s*\/\/ trailing\s*\n}/);
     });
 
     it("preserves a /* */ block comment", () => {
-      const input =
-        "type Foo = {\n  /* block leading */\n  name: string\n}\n";
+      const input = "type Foo = {\n  /* block leading */\n  name: string\n}\n";
       const formatted = formatSource(input);
       expect(formatted).toContain("/* block leading */\n  name: string");
     });
 
     it("preserves multiple consecutive comments without converting syntax", () => {
-      const input =
-        "type Foo = {\n  // first\n  /* second */\n  name: string\n}\n";
+      const input = "type Foo = {\n  // first\n  /* second */\n  name: string\n}\n";
       const formatted = formatSource(input);
       expect(formatted).toContain("// first\n");
       expect(formatted).toContain("/* second */\n");
     });
 
     it("preserves a blank line between properties", () => {
-      const input =
-        "type Foo = {\n  name: string,\n\n  age: number\n}\n";
+      const input = "type Foo = {\n  name: string,\n\n  age: number\n}\n";
       const formatted = formatSource(input);
       expect(formatted).toMatch(/name: string;\s*\n\n\s*age: number/);
     });
@@ -346,7 +344,10 @@ describe("syntax variations are a fixed point after one format", () => {
   const variations: [string, string][] = [
     ["function keyword", `function add(a: number, b: number): number { return a + b }`],
     ["arrow return type", `def f() -> string { return "x" }`],
-    ["thin arrow in a match arm", `node main() { match (1) { 1 -> print("one") _ -> print("no") } }`],
+    [
+      "thin arrow in a match arm",
+      `node main() { match (1) { 1 -> print("one") _ -> print("no") } }`,
+    ],
     ["fat arrow in an inline block", `node main() { const ys = map(xs, \\n => n * 2) }`],
   ];
 
@@ -404,14 +405,23 @@ describe("trailing comments in every body owner", () => {
     ["subthread", `node main() {\n  subthread {\n    print(1) // c\n  }\n}\n`],
     ["guard", `node main() {\n  guard() {\n    print(1) // c\n  }\n}\n`],
     ["handle", `node main() {\n  handle {\n    print(1) // c\n  } with approve\n}\n`],
-    ["inline handler", `node main() {\n  handle {\n    print(2)\n  } with (answer) {\n    print(1) // c\n  }\n}\n`],
+    [
+      "inline handler",
+      `node main() {\n  handle {\n    print(2)\n  } with (answer) {\n    print(1) // c\n  }\n}\n`,
+    ],
     ["finalize", `node main() {\n  finalize {\n    print(1) // c\n  }\n}\n`],
     ["parallel", `node main() {\n  parallel {\n    print(1) // c\n  }\n}\n`],
     ["seq", `node main() {\n  seq {\n    print(1) // c\n  }\n}\n`],
     ["destructive", `node main() {\n  destructive {\n    print(1) // c\n  }\n}\n`],
-    ["block match arm", `node main() {\n  match (x) {\n    1 => {\n      print(1) // c\n    }\n  }\n}\n`],
+    [
+      "block match arm",
+      `node main() {\n  match (x) {\n    1 => {\n      print(1) // c\n    }\n  }\n}\n`,
+    ],
     ["block argument", `node main() {\n  each(xs) as item {\n    print(1) // c\n  }\n}\n`],
-    ["statement code literal", `def f(): Code {\n  return [| node main(): number {\n    print(1) // c\n    return 1\n  } |]\n}\n`],
+    [
+      "statement code literal",
+      `def f(): Code {\n  return [| node main(): number {\n    print(1) // c\n    return 1\n  } |]\n}\n`,
+    ],
   ])("preserves a trailing comment in a %s body", (_name, source) => {
     const once = formatSource(source);
     expect(once).toContain("print(1) // c");
@@ -447,11 +457,7 @@ function multilineStringValues(source: string): string[] {
     }
     const node = value as { type?: unknown; segments?: unknown };
     if (node.type === "multiLineString" && Array.isArray(node.segments)) {
-      values.push(
-        node.segments
-          .map((segment: { value?: string }) => segment.value ?? "")
-          .join(""),
-      );
+      values.push(node.segments.map((segment: { value?: string }) => segment.value ?? "").join(""));
     }
     Object.values(value as Record<string, unknown>).forEach(walk);
   };
@@ -465,9 +471,7 @@ describe("a multi-line item inside a wrapped list", () => {
   it("indents an object literal's continuation lines with the list", () => {
     const source = `def f() {\n  return _bash(\n    command,\n    cwd,\n    timeout,\n    stdin,\n    {\n      blockedCommands: blockedCommands\n    },\n  )\n}\n`;
     const once = formatSource(source);
-    expect(once).toContain(
-      "    {\n      blockedCommands: blockedCommands\n    },",
-    );
+    expect(once).toContain("    {\n      blockedCommands: blockedCommands\n    },");
     expect(parseAgency(once as string, {}, false, false).success).toBe(true);
     expect(formatSource(once as string)).toBe(once);
   });
@@ -486,9 +490,7 @@ describe("a multi-line item inside a wrapped list", () => {
   it("indents an item inside an array that wraps by itself", () => {
     const source = `def f() {\n  return [\n    firstArgument,\n    secondArgument,\n    thirdArgument,\n    {\n      blockedCommands: blockedCommands\n    },\n  ]\n}\n`;
     const once = formatSource(source) as string;
-    expect(once).toContain(
-      "    {\n      blockedCommands: blockedCommands\n    },",
-    );
+    expect(once).toContain("    {\n      blockedCommands: blockedCommands\n    },");
     expect(parseAgency(once, {}, false, false).success).toBe(true);
     expect(formatSource(once)).toBe(once);
   });

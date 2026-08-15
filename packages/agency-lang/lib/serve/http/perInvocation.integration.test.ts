@@ -25,7 +25,10 @@ describe("per-invocation telemetry isolation", () => {
   });
 
   function installFetchMock(posts: Post[]): void {
-    globalThis.fetch = (async (url: unknown, init: { headers?: Record<string, string>; body?: string } = {}) => {
+    globalThis.fetch = (async (
+      url: unknown,
+      init: { headers?: Record<string, string>; body?: string } = {},
+    ) => {
       const target = String(url);
       if (!target.endsWith("/api/logs")) {
         throw new Error(`unexpected fetch to ${target}`);
@@ -71,7 +74,8 @@ describe("per-invocation telemetry isolation", () => {
       },
     } as unknown as AgencyFunction;
     return {
-      kind: "function", ...unusedPublicInvoke,
+      kind: "function",
+      ...unusedPublicInvoke,
       name: "run",
       description: "run",
       parameters: [],
@@ -101,10 +105,15 @@ describe("per-invocation telemetry isolation", () => {
     installFetchMock(posts);
     const handler = handlerFor(makeCtx());
 
-    const res = await handler("POST", "/function/run", {}, {
-      traceId: "injected-trace",
-      config: override("call-key"),
-    });
+    const res = await handler(
+      "POST",
+      "/function/run",
+      {},
+      {
+        traceId: "injected-trace",
+        config: override("call-key"),
+      },
+    );
 
     expect(res.traceId).toBe("injected-trace");
     expect(posts.every((p) => p.traceId === "injected-trace")).toBe(true);
@@ -129,7 +138,9 @@ describe("per-invocation telemetry isolation", () => {
     // Barrier: neither body emits until BOTH have arrived, forcing real overlap.
     let arrived = 0;
     let release!: () => void;
-    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const barrier = async () => {
       arrived += 1;
       if (arrived === 2) release();

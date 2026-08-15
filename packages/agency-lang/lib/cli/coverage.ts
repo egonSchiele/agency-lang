@@ -58,9 +58,7 @@ function loadCoverageData(outDir: string): CoverageData {
     } catch (err) {
       // A subprocess killed mid-write can leave a corrupt file; skip with a
       // warning so a single bad file does not tank the whole report.
-      console.warn(
-        `[coverage] skipping invalid coverage file ${file}: ${(err as Error).message}`,
-      );
+      console.warn(`[coverage] skipping invalid coverage file ${file}: ${(err as Error).message}`);
       continue;
     }
     for (const [scope, steps] of Object.entries(data)) {
@@ -73,10 +71,7 @@ function loadCoverageData(outDir: string): CoverageData {
   return merged;
 }
 
-async function getSourceMap(
-  config: AgencyConfig,
-  agencyFile: string,
-): Promise<SourceMap | null> {
+async function getSourceMap(config: AgencyConfig, agencyFile: string): Promise<SourceMap | null> {
   try {
     const compiled = compile(config, agencyFile, undefined, {
       importStrategy: new RunStrategy(),
@@ -116,11 +111,7 @@ function computeUncoveredRanges(
   return ranges;
 }
 
-function computeFileCoverage(
-  file: string,
-  sourceMap: SourceMap,
-  hits: CoverageData,
-): FileCoverage {
+function computeFileCoverage(file: string, sourceMap: SourceMap, hits: CoverageData): FileCoverage {
   let totalSteps = 0;
   let coveredSteps = 0;
   const lineStatus: Record<number, "covered" | "uncovered"> = {};
@@ -192,9 +183,9 @@ export async function generateReport(
   const targets = Array.isArray(target) ? target : [target];
   const exclude = config.coverage?.exclude ?? [];
   const isExcluded = makeExcludeMatcher(exclude);
-  const agencyFiles = Array.from(
-    new Set(targets.flatMap(findAgencyFiles)),
-  ).filter((f) => !isExcluded(f));
+  const agencyFiles = Array.from(new Set(targets.flatMap(findAgencyFiles))).filter(
+    (f) => !isExcluded(f),
+  );
 
   const results: FileCoverage[] = [];
   for (const file of agencyFiles) {
@@ -253,9 +244,7 @@ function checkThresholds(
   const perFile = opts?.perFileThreshold ?? config.coverage?.perFileThreshold;
 
   const failingFiles =
-    perFile === undefined
-      ? []
-      : results.filter((r) => r.percentage < perFile).map((r) => r.file);
+    perFile === undefined ? [] : results.filter((r) => r.percentage < perFile).map((r) => r.file);
   const overallFails = overall !== undefined && totalPercentage < overall;
   const passed = !overallFails && failingFiles.length === 0;
 
@@ -270,9 +259,7 @@ function checkThresholds(
     }
     if (failingFiles.length > 0 && perFile !== undefined) {
       console.log(
-        ttyColor.red(
-          `✗ ${failingFiles.length} file(s) below per-file threshold ${perFile}%:`,
-        ),
+        ttyColor.red(`✗ ${failingFiles.length} file(s) below per-file threshold ${perFile}%:`),
       );
       for (const f of failingFiles) console.log(ttyColor.red(`    ${f}`));
     }
@@ -301,7 +288,9 @@ function printSummaryReport(results: FileCoverage[]): void {
   for (const r of results) {
     const pctStr = r.percentage.toFixed(1).padStart(5);
     const counts = `(${r.coveredSteps}/${r.totalSteps} steps)`;
-    console.log(`${r.file.padEnd(40)} ${colorPct(r.percentage, pctStr + "%")}  ${ttyColor.dim(counts)}`);
+    console.log(
+      `${r.file.padEnd(40)} ${colorPct(r.percentage, pctStr + "%")}  ${ttyColor.dim(counts)}`,
+    );
     totalSteps += r.totalSteps;
     totalCovered += r.coveredSteps;
   }
@@ -315,9 +304,7 @@ function printSummaryReport(results: FileCoverage[]): void {
 }
 
 function formatRanges(ranges: [number, number][]): string {
-  return ranges
-    .map(([a, b]) => (a === b ? String(a) : `${a}-${b}`))
-    .join(", ");
+  return ranges.map(([a, b]) => (a === b ? String(a) : `${a}-${b}`)).join(", ");
 }
 
 /**
@@ -340,10 +327,7 @@ function printDetailReport(results: FileCoverage[]): void {
   }
 }
 
-function generateHtmlReport(
-  config: AgencyConfig,
-  results: FileCoverage[],
-): void {
+function generateHtmlReport(config: AgencyConfig, results: FileCoverage[]): void {
   const outDir = getCoverageOutDir(config);
   const reportDir = path.join(outDir, "report");
   fs.mkdirSync(reportDir, { recursive: true });

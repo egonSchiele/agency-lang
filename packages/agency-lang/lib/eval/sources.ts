@@ -17,8 +17,12 @@ const CACHE_KEY_LENGTH = 24;
 const DEFAULT_CACHE_ROOT = path.join(os.homedir(), ".agency", "cache", "git");
 
 function looksLikeGitUrl(candidate: string): boolean {
-  return candidate.startsWith("git@") || candidate.includes("://")
-    || /^github\.com\//.test(candidate) || candidate.endsWith(".git");
+  return (
+    candidate.startsWith("git@") ||
+    candidate.includes("://") ||
+    /^github\.com\//.test(candidate) ||
+    candidate.endsWith(".git")
+  );
 }
 
 /** Peel `?ref=<rev>` off the end. */
@@ -71,7 +75,11 @@ export function parseSource(raw: string, baseDir: string): ParsedSource {
  *  (this path must stay synchronous for loadInputs) and stdlib support code
  *  should not be imported upward into the eval layer. */
 function git(args: string[], cwd?: string): string {
-  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  return execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
 }
 
 function looksLikeSha(ref: string): boolean {
@@ -83,13 +91,17 @@ function looksLikeSha(ref: string): boolean {
  * sources. One checkout per (url, ref) under cacheRoot: a sha entry never
  * refetches; a branch/tag/default entry re-fetches per call.
  */
-export function resolveSource(parsed: ParsedSource, opts: { cacheRoot?: string } = {}): ResolvedSource {
+export function resolveSource(
+  parsed: ParsedSource,
+  opts: { cacheRoot?: string } = {},
+): ResolvedSource {
   if (parsed.kind === "local") {
     return { dir: parsed.path, display: parsed.path };
   }
 
   const cacheRoot = opts.cacheRoot ?? DEFAULT_CACHE_ROOT;
-  const cacheKey = crypto.createHash("sha256")
+  const cacheKey = crypto
+    .createHash("sha256")
     .update(`${parsed.url}\n${parsed.ref ?? ""}`)
     .digest("hex")
     .slice(0, CACHE_KEY_LENGTH);
@@ -110,14 +122,20 @@ export function resolveSource(parsed: ParsedSource, opts: { cacheRoot?: string }
   const sha = git(["rev-parse", "HEAD"], cacheDir);
   const dir = parsed.subdir ? path.join(cacheDir, parsed.subdir) : cacheDir;
   if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
-    throw new Error(`Source ${parsed.display}: subdir "${parsed.subdir}" does not exist at ${sha.slice(0, 12)}`);
+    throw new Error(
+      `Source ${parsed.display}: subdir "${parsed.subdir}" does not exist at ${sha.slice(0, 12)}`,
+    );
   }
   return { dir, sha, display: parsed.display };
 }
 
 /** Clone into a temp sibling, then atomically rename into place. Two runs
  *  racing on the same (url, ref) both succeed: the loser discards its clone. */
-function materialize(parsed: ParsedSource & { kind: "git" }, cacheDir: string, cacheRoot: string): void {
+function materialize(
+  parsed: ParsedSource & { kind: "git" },
+  cacheDir: string,
+  cacheRoot: string,
+): void {
   fs.mkdirSync(cacheRoot, { recursive: true });
   const tempDir = `${cacheDir}.tmp-${process.pid}-${Date.now()}`;
   try {
@@ -131,8 +149,10 @@ function materialize(parsed: ParsedSource & { kind: "git" }, cacheDir: string, c
         // Some servers refuse arbitrary-sha fetches (GitHub allows them).
         // Fall back to a full fetch — but keep the original reason visible in
         // case the full fetch fails for the same underlying problem.
-        console.warn(`[sources] shallow sha fetch failed for ${parsed.display}; retrying with a full fetch ` +
-          `(${shallowErr instanceof Error ? shallowErr.message.split("\n")[0] : String(shallowErr)})`);
+        console.warn(
+          `[sources] shallow sha fetch failed for ${parsed.display}; retrying with a full fetch ` +
+            `(${shallowErr instanceof Error ? shallowErr.message.split("\n")[0] : String(shallowErr)})`,
+        );
         git(["fetch", "origin"], tempDir);
       }
       git(["checkout", "-q", parsed.ref], tempDir);
@@ -158,5 +178,7 @@ function materialize(parsed: ParsedSource & { kind: "git" }, cacheDir: string, c
 
 function sourceError(parsed: ParsedSource & { kind: "git" }, err: unknown): Error {
   const detail = err instanceof Error ? err.message : String(err);
-  return new Error(`Failed to resolve source ${parsed.display} (url=${parsed.url}, ref=${parsed.ref ?? "(default)"}): ${detail}`);
+  return new Error(
+    `Failed to resolve source ${parsed.display} (url=${parsed.url}, ref=${parsed.ref ?? "(default)"}): ${detail}`,
+  );
 }

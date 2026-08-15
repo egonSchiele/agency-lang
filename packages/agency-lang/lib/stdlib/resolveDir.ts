@@ -30,10 +30,7 @@ export function resolveCwdPath(target: string): string {
  * the policy at one site, so future rules added to `expandPath` /
  * `resolveDir` propagate everywhere automatically.
  */
-export async function resolveDir(
-  dir: string,
-  allowedPaths: string[] = [],
-): Promise<string> {
+export async function resolveDir(dir: string, allowedPaths: string[] = []): Promise<string> {
   const root = resolveCwdPath(dir);
   await assertContained(root, allowedPaths, process.cwd());
   return root;

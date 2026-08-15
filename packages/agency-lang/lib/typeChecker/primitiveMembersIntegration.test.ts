@@ -34,16 +34,12 @@ const typeErr = (e: TypeCheckError) => /not assignable to parameter type/.test(e
 
 describe("primitive members — string", () => {
   it("accepts s.length without error", () => {
-    const errors = errorsFrom(
-      `node main() { let s = "hi"\n let n = s.length\n print(n) }`,
-    );
+    const errors = errorsFrom(`node main() { let s = "hi"\n let n = s.length\n print(n) }`);
     expect(errors.filter(propMissing)).toHaveLength(0);
   });
 
   it("accepts s.toUpperCase()", () => {
-    const errors = errorsFrom(
-      `node main() { let s = "hi"\n let u = s.toUpperCase()\n print(u) }`,
-    );
+    const errors = errorsFrom(`node main() { let s = "hi"\n let u = s.toUpperCase()\n print(u) }`);
     expect(errors.filter(propMissing)).toHaveLength(0);
     expect(errors.filter(arityErr)).toHaveLength(0);
   });
@@ -65,20 +61,16 @@ describe("primitive members — string", () => {
   });
 
   it("rejects s.indexOf with no args (arity)", () => {
-    const errors = errorsFrom(
-      `node main() { let s = "hi"\n let i = s.indexOf() }`,
-    );
+    const errors = errorsFrom(`node main() { let s = "hi"\n let i = s.indexOf() }`);
     expect(errors.filter(arityErr).length).toBeGreaterThan(0);
   });
 
   it("rejects s.indexOf with a number arg (type)", () => {
-    const errors = errorsFrom(
-      `node main() { let s = "hi"\n let i = s.indexOf(42) }`,
-    );
+    const errors = errorsFrom(`node main() { let s = "hi"\n let i = s.indexOf(42) }`);
     expect(errors.filter(typeErr).length).toBeGreaterThan(0);
   });
 
-  it("accepts s.includes(\"x\") and threads boolean through", () => {
+  it('accepts s.includes("x") and threads boolean through', () => {
     const errors = errorsFrom(
       `def expectBool(b: boolean): boolean { return b }\n` +
         `node main() { let s = "hi"\n expectBool(s.includes("h")) }\n`,
@@ -86,7 +78,7 @@ describe("primitive members — string", () => {
     expect(errors.filter(typeErr)).toHaveLength(0);
   });
 
-  it("accepts s.split(\",\") returning string[]", () => {
+  it('accepts s.split(",") returning string[]', () => {
     const errors = errorsFrom(
       `def expectStrs(xs: string[]): string[] { return xs }\n` +
         `node main() { let s = "a,b,c"\n expectStrs(s.split(",")) }\n`,
@@ -95,18 +87,14 @@ describe("primitive members — string", () => {
   });
 
   it("rejects unknown member s.bogus", () => {
-    const errors = errorsFrom(
-      `node main() { let s = "hi"\n print(s.bogus) }`,
-    );
+    const errors = errorsFrom(`node main() { let s = "hi"\n print(s.bogus) }`);
     expect(errors.some((e) => e.message.includes("'bogus'"))).toBe(true);
   });
 });
 
 describe("primitive members — array", () => {
   it("accepts xs.length", () => {
-    const errors = errorsFrom(
-      `node main() { let xs = [1, 2, 3]\n print(xs.length) }`,
-    );
+    const errors = errorsFrom(`node main() { let xs = [1, 2, 3]\n print(xs.length) }`);
     expect(errors.filter(propMissing)).toHaveLength(0);
   });
 
@@ -127,9 +115,7 @@ describe("primitive members — array", () => {
   });
 
   it("xs.indexOf rejects a wrong-type arg", () => {
-    const errors = errorsFrom(
-      `node main() { let xs = [1, 2, 3]\n let i = xs.indexOf("a") }`,
-    );
+    const errors = errorsFrom(`node main() { let xs = [1, 2, 3]\n let i = xs.indexOf("a") }`);
     expect(errors.filter(typeErr).length).toBeGreaterThan(0);
   });
 
@@ -150,9 +136,7 @@ describe("primitive members — array", () => {
   });
 
   it("rejects unknown member xs.bogus", () => {
-    const errors = errorsFrom(
-      `node main() { let xs = [1, 2, 3]\n print(xs.bogus) }`,
-    );
+    const errors = errorsFrom(`node main() { let xs = [1, 2, 3]\n print(xs.bogus) }`);
     expect(errors.some((e) => e.message.includes("'bogus'"))).toBe(true);
   });
 });
@@ -250,8 +234,6 @@ describe("primitive members — array callback methods (Phase 2)", () => {
         `}\n`,
       { typechecker: { undefinedVariables: "warn" } },
     );
-    expect(
-      errors.some((e) => /Variable 'x' is not defined/.test(e.message)),
-    ).toBe(true);
+    expect(errors.some((e) => /Variable 'x' is not defined/.test(e.message))).toBe(true);
   });
 });

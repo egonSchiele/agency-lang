@@ -67,21 +67,25 @@ function makeExports(): {
 
   const exports: ServedExportedItem[] = [
     {
-      kind: "function", ...unusedPublicInvoke,
+      kind: "function",
+      ...unusedPublicInvoke,
       name: "add",
       description: "Add two numbers",
       parameters: [{ name: "a" }, { name: "b" }],
       agencyFunction: addFn,
       interruptEffects: [],
-      invokeServed: async (namedArgs) => returnedOutcome(await addFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+      invokeServed: async (namedArgs) =>
+        returnedOutcome(await addFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
     },
     {
-      kind: "node", ...unusedPublicInvoke,
+      kind: "node",
+      ...unusedPublicInvoke,
       name: "main",
       parameters: [{ name: "message" }],
       // Serve node invoke: named args as a data object; value is the
       // caller-facing data (discovery would have unwrapped RunNodeResult.data).
-      invokeServed: async (data) => returnedOutcome({ echo: (data as { message?: unknown }).message }),
+      invokeServed: async (data) =>
+        returnedOutcome({ echo: (data as { message?: unknown }).message }),
       interruptEffects: [],
     },
   ];
@@ -187,14 +191,17 @@ describe("HTTP adapter", () => {
         ["plainFn", undefined],
       ] as const
     ).map(([name, markers]) => ({
-      kind: "function", ...unusedPublicInvoke,
+      kind: "function",
+      ...unusedPublicInvoke,
       name,
       description: name,
       parameters: [],
       agencyFunction: mk(name, markers),
       interruptEffects: [],
       invokeServed: async (namedArgs: Record<string, unknown>) =>
-        returnedOutcome(await mk(name, markers).invoke({ type: "named", positionalArgs: [], namedArgs })),
+        returnedOutcome(
+          await mk(name, markers).invoke({ type: "named", positionalArgs: [], namedArgs }),
+        ),
     }));
     const h = createHttpHandler({
       exports,
@@ -253,10 +260,46 @@ describe("HTTP adapter", () => {
     // interrupt execution, so a real meter is unnecessary here (that path is
     // covered by serveCostSeam.integration.test.ts).
     const breakdownUsage = {
-      cost: { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0.03, currency: "USD" as const },
-      tokens: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 },
-      unknownCostCallCount: 0, pricingComplete: true,
-      entries: [{ kind: "manual" as const, model: "", cost: { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0.03, currency: "USD" as const }, tokens: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 } }],
+      cost: {
+        inputCost: 0,
+        outputCost: 0,
+        cachedInputCost: 0,
+        cacheCreationInputCost: 0,
+        hostedToolsCost: 0,
+        totalCost: 0.03,
+        currency: "USD" as const,
+      },
+      tokens: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cachedInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        totalTokens: 0,
+      },
+      unknownCostCallCount: 0,
+      pricingComplete: true,
+      entries: [
+        {
+          kind: "manual" as const,
+          model: "",
+          cost: {
+            inputCost: 0,
+            outputCost: 0,
+            cachedInputCost: 0,
+            cacheCreationInputCost: 0,
+            hostedToolsCost: 0,
+            totalCost: 0.03,
+            currency: "USD" as const,
+          },
+          tokens: {
+            inputTokens: 0,
+            outputTokens: 0,
+            cachedInputTokens: 0,
+            cacheCreationInputTokens: 0,
+            totalTokens: 0,
+          },
+        },
+      ],
     };
     const pausedValue = { paused: true };
     const { exports } = makeExports();
@@ -267,7 +310,8 @@ describe("HTTP adapter", () => {
       exports,
       logger: createLogger("error"),
       hasInterrupts: (data) => data === pausedValue,
-      respondToInterrupts: async () => returnedOutcome({ data: "resumed" }, { usage: breakdownUsage }),
+      respondToInterrupts: async () =>
+        returnedOutcome({ data: "resumed" }, { usage: breakdownUsage }),
     });
 
     const paused = await handler("POST", "/node/main", {});
@@ -380,13 +424,17 @@ describe("HTTP adapter", () => {
     const h = createHttpHandler({
       exports: [
         {
-          kind: "function", ...unusedPublicInvoke,
+          kind: "function",
+          ...unusedPublicInvoke,
           name: "deploy",
           description: "Deploy",
           parameters: [],
           agencyFunction: deployFn,
           interruptEffects: [{ effect: "myapp::deploy" }],
-          invokeServed: async (namedArgs) => returnedOutcome(await deployFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+          invokeServed: async (namedArgs) =>
+            returnedOutcome(
+              await deployFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
+            ),
         },
       ],
       logger: createLogger("error"),
@@ -500,13 +548,15 @@ describe("startHttpServer auth and host validation", () => {
     const exportsWithFail: ServedExportedItem[] = [
       ...exports,
       {
-        kind: "function", ...unusedPublicInvoke,
+        kind: "function",
+        ...unusedPublicInvoke,
         name: "fail",
         description: "",
         parameters: [],
         agencyFunction: failFn,
         interruptEffects: [],
-        invokeServed: async (namedArgs) => returnedOutcome(await failFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+        invokeServed: async (namedArgs) =>
+          returnedOutcome(await failFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
       },
     ];
     await withServer(baseConfig({ exports: exportsWithFail }), async (port) => {
@@ -569,7 +619,8 @@ describe("root-budget trips surface as a typed budgetExceeded", () => {
 
   function handlerFor(invoke: () => Promise<unknown>): ReturnType<typeof createHttpHandler> {
     const node: ServedExportedItem = {
-      kind: "node", ...unusedPublicInvoke,
+      kind: "node",
+      ...unusedPublicInvoke,
       name: "run",
       parameters: [],
       interruptEffects: [],

@@ -22,9 +22,7 @@ describe("tagParser", () => {
     const arg = result.result.arguments[0];
     expect(arg.type).toBe("string");
     if (arg.type === "string") {
-      expect(arg.segments).toEqual([
-        { type: "text", value: "Suggest good gifts" },
-      ]);
+      expect(arg.segments).toEqual([{ type: "text", value: "Suggest good gifts" }]);
     }
   });
 
@@ -57,9 +55,7 @@ describe("tagParser", () => {
   });
 
   it("parses a tag with PFA arguments", () => {
-    const result = tagParser(
-      "@validate(min.partial(n: 0), max.partial(n: 150))",
-    );
+    const result = tagParser("@validate(min.partial(n: 0), max.partial(n: 150))");
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.result.name).toBe("validate");
@@ -106,9 +102,7 @@ describe("tagParser", () => {
   });
 
   it("parses a tag with an object literal containing spread", () => {
-    const result = tagParser(
-      '@jsonSchema({ ...emailFormat, description: "work" })',
-    );
+    const result = tagParser('@jsonSchema({ ...emailFormat, description: "work" })');
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.result.arguments[0].type).toBe("agencyObject");
@@ -193,9 +187,7 @@ describe("tagParser", () => {
       if (arg && arg.type === "string") {
         // It must be the plain "hi" (one text segment) — never the
         // concatenated expression.
-        expect((arg as any).segments).toEqual([
-          { type: "text", value: "hi" },
-        ]);
+        expect((arg as any).segments).toEqual([{ type: "text", value: "hi" }]);
       }
     }
   });

@@ -89,7 +89,7 @@ describe("_authorize", () => {
         clientSecret: "test-client-secret",
         scopes: "read write",
         port: TEST_PORT,
-      })
+      }),
     );
 
     // Wait for the callback server to start
@@ -107,9 +107,7 @@ describe("_authorize", () => {
     expect(authParams.get("scope")).toBe("read write");
     expect(authParams.get("code_challenge_method")).toBe("S256");
     expect(authParams.get("code_challenge")).toBeTruthy();
-    expect(authParams.get("redirect_uri")).toBe(
-      `http://127.0.0.1:${TEST_PORT}/oauth/callback`
-    );
+    expect(authParams.get("redirect_uri")).toBe(`http://127.0.0.1:${TEST_PORT}/oauth/callback`);
 
     // Simulate the browser callback
     await new Promise<void>((resolve, reject) => {
@@ -118,7 +116,7 @@ describe("_authorize", () => {
         (res) => {
           expect(res.statusCode).toBe(200);
           resolve();
-        }
+        },
       );
       req.on("error", reject);
     });
@@ -132,9 +130,7 @@ describe("_authorize", () => {
     const [fetchUrl, fetchOpts] = (globalThis.fetch as any).mock.calls[0];
     expect(fetchUrl).toBe("https://localhost/token");
     expect(fetchOpts.method).toBe("POST");
-    expect(fetchOpts.headers["Content-Type"]).toBe(
-      "application/x-www-form-urlencoded"
-    );
+    expect(fetchOpts.headers["Content-Type"]).toBe("application/x-www-form-urlencoded");
 
     // Verify token exchange body has all required fields
     const body = new URLSearchParams(fetchOpts.body);
@@ -143,9 +139,7 @@ describe("_authorize", () => {
     expect(body.get("client_id")).toBe("test-client-id");
     expect(body.get("client_secret")).toBe("test-client-secret");
     expect(body.get("code_verifier")).toBeTruthy();
-    expect(body.get("redirect_uri")).toBe(
-      `http://127.0.0.1:${TEST_PORT}/oauth/callback`
-    );
+    expect(body.get("redirect_uri")).toBe(`http://127.0.0.1:${TEST_PORT}/oauth/callback`);
 
     // Tokens should be stored and retrievable
     expect(await _isAuthorized("test-provider")).toBe(true);
@@ -161,8 +155,8 @@ describe("_authorize", () => {
           clientId: "id",
           clientSecret: "secret",
           scopes: "read",
-        })
-      )
+        }),
+      ),
     ).rejects.toThrow("must use HTTPS");
   });
 
@@ -175,8 +169,8 @@ describe("_authorize", () => {
           clientId: "id",
           clientSecret: "secret",
           scopes: "read",
-        })
-      )
+        }),
+      ),
     ).rejects.toThrow("must use HTTPS");
   });
 });

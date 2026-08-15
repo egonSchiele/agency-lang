@@ -30,14 +30,9 @@ import { compile, resetCompilationCache } from "@/compiler/defaultSession.js";
  *     closure is rebuilt with the new fixture.
  */
 
-const FIXTURES_ROOT = path.resolve(
-  __dirname,
-  "../../.agency-tmp/init-worked-examples",
-);
+const FIXTURES_ROOT = path.resolve(__dirname, "../../.agency-tmp/init-worked-examples");
 
-type CompileOutcome =
-  | { kind: "ok"; mod: any }
-  | { kind: "compileError"; message: string };
+type CompileOutcome = { kind: "ok"; mod: any } | { kind: "compileError"; message: string };
 
 let currentDir: string;
 
@@ -200,17 +195,13 @@ describe("agent-init-design.md worked examples", () => {
       "static-references-global",
       {
         "main.agency":
-          `const g = "hello"\n` +
-          `static const s = g + "!"\n` +
-          `node main() { return s }\n`,
+          `const g = "hello"\n` + `static const s = g + "!"\n` + `node main() { return s }\n`,
       },
       "main.agency",
     );
     expect(outcome.kind).toBe("compileError");
     if (outcome.kind !== "compileError") return;
-    expect(outcome.message).toMatch(
-      /static const '?s'?.*references global '?g'?/,
-    );
+    expect(outcome.message).toMatch(/static const '?s'?.*references global '?g'?/);
   });
 
   it("global reading an imported static (cross-phase OK)", async () => {
@@ -258,8 +249,7 @@ describe("agent-init-design.md worked examples", () => {
       "multi-entry-point",
       {
         "bar.agency":
-          `export static const barStatic = "hello"\n` +
-          `node main() { return barStatic }\n`,
+          `export static const barStatic = "hello"\n` + `node main() { return barStatic }\n`,
       },
       "bar.agency",
     );

@@ -27,9 +27,7 @@ export type CycleError = {
   cycle: InitVarNode[];
 };
 
-export type TopSortResult =
-  | { kind: "ok"; order: InitVarKey[] }
-  | CycleError;
+export type TopSortResult = { kind: "ok"; order: InitVarKey[] } | CycleError;
 
 export function topSortInitGraph(graph: InitDepGraph): TopSortResult {
   const { reverse, inDegree } = reverseEdges(graph);
@@ -120,10 +118,7 @@ function kahn(
  * Restricting selection this way keeps the walk inside the cycle and
  * out of the DAG portion already drained by Kahn.
  */
-function traceCycleFrom(
-  graph: InitDepGraph,
-  remaining: Record<InitVarKey, number>,
-): InitVarNode[] {
+function traceCycleFrom(graph: InitDepGraph, remaining: Record<InitVarKey, number>): InitVarNode[] {
   const start = Object.keys(remaining).find((k) => remaining[k] > 0);
   if (!start) return [];
 

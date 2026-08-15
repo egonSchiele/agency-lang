@@ -116,8 +116,7 @@ export const approveAllPolicy: Policy = {
 export const BUILTIN_POLICIES: { name: string; description: string }[] = [
   {
     name: "recommended",
-    description:
-      "Auto-approve reads and web/search; prompt for writes, shell, and git changes.",
+    description: "Auto-approve reads and web/search; prompt for writes, shell, and git changes.",
   },
   {
     name: "minimal",

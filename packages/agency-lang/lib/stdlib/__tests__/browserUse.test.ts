@@ -26,17 +26,8 @@ function makeMockCtx(): RuntimeContext<any> {
 /** Adapter so the existing test bodies stay readable: build a fresh
  *  ctx/stack/threads per call and forward the user-visible args to
  *  the context-injected impl. */
-function browserUse(
-  task: string,
-  options?: BrowserUseOptions,
-): Promise<BrowserUseResult> {
-  return __internal_browserUse(
-    makeMockCtx(),
-    new StateStack(),
-    new ThreadStore(),
-    task,
-    options,
-  );
+function browserUse(task: string, options?: BrowserUseOptions): Promise<BrowserUseResult> {
+  return __internal_browserUse(makeMockCtx(), new StateStack(), new ThreadStore(), task, options);
 }
 
 function mockFetchResponse(body: unknown, status = 200) {
@@ -199,14 +190,9 @@ describe("browserUse", () => {
   });
 
   it("throws on non-200 response", async () => {
-    globalThis.fetch = mockFetchResponse(
-      { message: "Unauthorized" },
-      401
-    );
+    globalThis.fetch = mockFetchResponse({ message: "Unauthorized" }, 401);
 
-    await expect(browserUse("test")).rejects.toThrow(
-      "Browser Use API error (401)"
-    );
+    await expect(browserUse("test")).rejects.toThrow("Browser Use API error (401)");
   });
 
   it("returns empty output when session has no output", async () => {

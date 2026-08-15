@@ -17,13 +17,9 @@ import { AgencyFunction } from "./agencyFunction.js";
  * `ctx` arg to thread through.
  */
 export type AgencyValidator =
-  | ((value: unknown) => Promise<ResultValue> | ResultValue)
-  | AgencyFunction;
+  ((value: unknown) => Promise<ResultValue> | ResultValue) | AgencyFunction;
 
-async function callValidator(
-  v: AgencyValidator,
-  value: unknown,
-): Promise<ResultValue> {
+async function callValidator(v: AgencyValidator, value: unknown): Promise<ResultValue> {
   if (AgencyFunction.isAgencyFunction(v)) {
     return (await (v as AgencyFunction).invoke({
       type: "positional",
@@ -36,10 +32,7 @@ async function callValidator(
 /** Call a validator AND enforce the predicate contract: a success must carry
  *  THIS call's input — the parsed value, or the previous link's identical
  *  hand-through. */
-async function runValidator(
-  v: AgencyValidator,
-  value: unknown,
-): Promise<ResultValue> {
+async function runValidator(v: AgencyValidator, value: unknown): Promise<ResultValue> {
   const outcome = await callValidator(v, value);
   assertNotModified(v, value, outcome);
   return outcome;
@@ -49,11 +42,7 @@ async function runValidator(
  *  must not be punished for it. Identity, not equality: `success(value)`
  *  passing the same reference through is the stdlib idiom; rebuilding an
  *  equal object counts as modification — the error is the feature. */
-function assertNotModified(
-  v: AgencyValidator,
-  value: unknown,
-  outcome: ResultValue,
-): void {
+function assertNotModified(v: AgencyValidator, value: unknown, outcome: ResultValue): void {
   if (!isSuccess(outcome)) {
     return;
   }
@@ -236,11 +225,7 @@ async function walk(
   }
 
   // Step 1: parse + own validators at this node.
-  const own = await __validateChain(
-    value,
-    descriptor.schema,
-    descriptor.validators,
-  );
+  const own = await __validateChain(value, descriptor.schema, descriptor.validators);
   if (!isSuccess(own)) return own;
   const parsed = (own as { value: unknown }).value;
 

@@ -19,9 +19,7 @@ const BACKENDS: { cmd: string; args: string[] }[] = [
 // spawn a probe on every paste.
 let cached: Clipboard | null | undefined;
 
-export function detectClipboard(
-  spawn: typeof spawnSync = spawnSync,
-): Clipboard | null {
+export function detectClipboard(spawn: typeof spawnSync = spawnSync): Clipboard | null {
   if (cached !== undefined) return cached;
   for (const backend of BACKENDS) {
     if (isRunnable(backend.cmd, spawn)) {
@@ -55,11 +53,7 @@ function isRunnable(cmd: string, spawn: typeof spawnSync): boolean {
   }
 }
 
-function makeBackend(
-  cmd: string,
-  args: string[],
-  spawn: typeof spawnSync,
-): Clipboard {
+function makeBackend(cmd: string, args: string[], spawn: typeof spawnSync): Clipboard {
   return {
     write(text: string): void {
       const r = spawn(cmd, args, {
@@ -69,9 +63,7 @@ function makeBackend(
       } satisfies SpawnSyncOptions);
       if (r.error) throw r.error;
       if (r.status !== 0 && r.status !== null) {
-        throw new Error(
-          `${cmd} exited with status ${r.status}: ${r.stderr?.toString() ?? ""}`,
-        );
+        throw new Error(`${cmd} exited with status ${r.status}: ${r.stderr?.toString() ?? ""}`);
       }
     },
   };

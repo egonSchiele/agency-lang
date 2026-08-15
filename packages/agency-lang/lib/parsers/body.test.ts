@@ -133,9 +133,7 @@ describe("declarations are not legal in a body", () => {
       const result = bodyParser(source);
       expect(result.success, source).toBe(false);
       if (result.success) return;
-      expect(result.message, source).toContain(
-        "only legal at the top level of a file",
-      );
+      expect(result.message, source).toContain("only legal at the top level of a file");
     });
   }
 });
@@ -182,9 +180,7 @@ describe("the body-declaration message reaches a whole-file parse", () => {
       const result = parseAgency(source, {}, false);
       expect(result.success, label).toBe(false);
       if (result.success) return;
-      expect(result.message, label).toContain(
-        "only legal at the top level of a file",
-      );
+      expect(result.message, label).toContain("only legal at the top level of a file");
     });
   }
 });

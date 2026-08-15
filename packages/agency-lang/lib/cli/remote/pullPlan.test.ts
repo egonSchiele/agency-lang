@@ -20,7 +20,9 @@ afterEach(() => {
 });
 
 function leftoverTempSiblings(target: string): string[] {
-  return fs.readdirSync(target).filter((name) => name.startsWith(".pull-") && name.endsWith(".tmp"));
+  return fs
+    .readdirSync(target)
+    .filter((name) => name.startsWith(".pull-") && name.endsWith(".tmp"));
 }
 
 describe("planSourcePull", () => {
@@ -33,7 +35,14 @@ describe("planSourcePull", () => {
 
   it("rejects NFC-lowercased duplicate names", () => {
     expect(() =>
-      planSourcePull([{ name: "A.agency", contents: "1" }, { name: "a.agency", contents: "2" }], dir, false),
+      planSourcePull(
+        [
+          { name: "A.agency", contents: "1" },
+          { name: "a.agency", contents: "2" },
+        ],
+        dir,
+        false,
+      ),
     ).toThrow();
   });
 
@@ -41,7 +50,14 @@ describe("planSourcePull", () => {
     fs.writeFileSync(path.join(dir, "a.agency"), "old");
     fs.writeFileSync(path.join(dir, "b.agency"), "old");
     expect(() =>
-      planSourcePull([{ name: "a.agency", contents: "n" }, { name: "b.agency", contents: "n" }], dir, false),
+      planSourcePull(
+        [
+          { name: "a.agency", contents: "n" },
+          { name: "b.agency", contents: "n" },
+        ],
+        dir,
+        false,
+      ),
     ).toThrow(/a\.agency[\s\S]*b\.agency|b\.agency[\s\S]*a\.agency/);
     expect(fs.readFileSync(path.join(dir, "a.agency"), "utf8")).toBe("old");
   });
@@ -61,7 +77,9 @@ describe("planSourcePull", () => {
     fs.mkdirSync(realDir);
     const symlinkDir = path.join(dir, "linked");
     fs.symlinkSync(realDir, symlinkDir);
-    expect(() => planSourcePull([{ name: "a.agency", contents: "x" }], symlinkDir, false)).toThrow();
+    expect(() =>
+      planSourcePull([{ name: "a.agency", contents: "x" }], symlinkDir, false),
+    ).toThrow();
     const file = path.join(dir, "not-a-directory");
     fs.writeFileSync(file, "x");
     expect(() => planSourcePull([{ name: "a.agency", contents: "x" }], file, false)).toThrow();
@@ -93,7 +111,10 @@ describe("applySourcePull", () => {
 
   it("reports earlier commits when a later destination races", () => {
     const plan = planSourcePull(
-      [{ name: "a.agency", contents: "first" }, { name: "b.agency", contents: "second" }],
+      [
+        { name: "a.agency", contents: "first" },
+        { name: "b.agency", contents: "second" },
+      ],
       dir,
       false,
     );
@@ -104,9 +125,7 @@ describe("applySourcePull", () => {
     } catch (error) {
       caught = error;
     }
-    expect(caught).toEqual(
-      expect.objectContaining({ committed: [path.join(dir, "a.agency")] }),
-    );
+    expect(caught).toEqual(expect.objectContaining({ committed: [path.join(dir, "a.agency")] }));
     // The message is self-contained: a caller that prints only error.message
     // still discloses the already-written a.agency.
     expect((caught as Error).message).toContain("b.agency");

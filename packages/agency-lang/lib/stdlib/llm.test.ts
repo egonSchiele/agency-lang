@@ -8,7 +8,16 @@ import { agencyStore } from "../runtime/asyncContext.js";
 // llm.hostedCatalog.integration.test.ts.
 const { FIXTURE_MODELS } = vi.hoisted(() => ({
   FIXTURE_MODELS: [
-    { type: "text", modelName: "fixture-text", provider: "openai", openWeights: false, inputTokenCost: 0.15, outputTokenCost: 0.6, maxInputTokens: 128000, family: "gpt-mini" },
+    {
+      type: "text",
+      modelName: "fixture-text",
+      provider: "openai",
+      openWeights: false,
+      inputTokenCost: 0.15,
+      outputTokenCost: 0.6,
+      maxInputTokens: 128000,
+      family: "gpt-mini",
+    },
     // A text model with every optional field absent → exercises the ?? defaults.
     { type: "text", modelName: "fixture-bare" },
     { type: "embeddings", modelName: "fixture-embed", provider: "openai" },
@@ -48,9 +57,7 @@ describe("_setLlmOptions", () => {
 
   it("merges multiple fields and leaves existing ones intact", () => {
     const stack = { other: { llmDefaults: { model: "old", temperature: 0.1 } } as any };
-    withStack(stack, () =>
-      _setLlmOptions({ model: "m2", reasoningEffort: "high", maxTokens: 42 }),
-    );
+    withStack(stack, () => _setLlmOptions({ model: "m2", reasoningEffort: "high", maxTokens: 42 }));
     expect(stack.other.llmDefaults).toEqual({
       model: "m2",
       temperature: 0.1,
@@ -106,7 +113,10 @@ describe("hosted catalog accessor (over a fixture)", () => {
   it("excludes non-text models", () => {
     // fixture-embed (embeddings) must not appear; if the `type === "text"`
     // filter regressed it would leak in here.
-    expect(_listHostedModels().map((model) => model.name)).toEqual(["fixture-text", "fixture-bare"]);
+    expect(_listHostedModels().map((model) => model.name)).toEqual([
+      "fixture-text",
+      "fixture-bare",
+    ]);
   });
   it("_hostedModelInfo returns a text model, or null for unknown/non-text", () => {
     expect(_hostedModelInfo("fixture-text")?.provider).toBe("openai");

@@ -80,12 +80,7 @@ describe("unused-imports rule: batch edits", () => {
 
 describe("unused-imports rule: whole-line deletion edges", () => {
   it("preserves a blank line that follows a deleted import", () => {
-    const src = [
-      `import { a } from "./x.agency"`,
-      ``,
-      `node main() { return 1 }`,
-      ``,
-    ].join("\n");
+    const src = [`import { a } from "./x.agency"`, ``, `node main() { return 1 }`, ``].join("\n");
     const f = unusedImportsRule.run(ctxFor(src))[0];
     expect(applied(src, f)).toBe(`\nnode main() { return 1 }\n`);
   });

@@ -2,10 +2,7 @@ import * as smoltalk from "smoltalk";
 import type { Interrupt } from "./interrupts.js";
 import type { MessageThread } from "./state/messageThread.js";
 import type { StateStack } from "./state/stateStack.js";
-import {
-  buildReplyUserMessage,
-  type HarvestedReplyAttachment,
-} from "./replyAttachments.js";
+import { buildReplyUserMessage, type HarvestedReplyAttachment } from "./replyAttachments.js";
 
 /**
  * INTERNAL — consumed by prompt.ts only. The public way to inject a message
@@ -39,10 +36,7 @@ export type BoundaryContext = {
    *  unit-testable with a recording fake. The body's return type matters:
    *  pr.step treats a returned Interrupt[] as "pause here" and stamps a
    *  checkpoint — that is HOW a guard trip suspends the run. */
-  step: (
-    key: string,
-    body: () => Promise<Interrupt[] | void>,
-  ) => Promise<void>;
+  step: (key: string, body: () => Promise<Interrupt[] | void>) => Promise<void>;
   /** runPrompt's guardGate closure (raiseGuardTripsUntilClear). Its
    *  Interrupt[] return is the pause signal and MUST flow through to
    *  step() unaltered — never wrap this in a void-returning adapter. */
@@ -71,15 +65,12 @@ export type TurnMessageProducer = {
 export const attachmentsProducer: TurnMessageProducer = {
   name: "attachReplies",
   take: (bctx) => {
-    const pending = (bctx.runnerState.replyAttachments ??
-      []) as HarvestedReplyAttachment[];
+    const pending = (bctx.runnerState.replyAttachments ?? []) as HarvestedReplyAttachment[];
     if (pending.length === 0) return [];
     bctx.runnerState.replyAttachments = [];
     return [
       {
-        message: smoltalk.userMessage(
-          buildReplyUserMessage(pending) as smoltalk.UserContentInput,
-        ),
+        message: smoltalk.userMessage(buildReplyUserMessage(pending) as smoltalk.UserContentInput),
         label: null,
       },
     ];
@@ -155,21 +146,10 @@ export async function runGateAndFeedback(
 /** The full round boundary, in the one canonical order: tool artifacts
  *  first, then queued messages, then the guard machinery gets the last
  *  word before the next request. */
-export async function runRoundBoundary(
-  round: number,
-  bctx: BoundaryContext,
-): Promise<void> {
+export async function runRoundBoundary(round: number, bctx: BoundaryContext): Promise<void> {
   await drainProducer(attachmentsProducer, `round.${round}.attachReplies`, bctx);
-  await drainProducer(
-    queuedMessagesProducer,
-    `round.${round}.queuedMessages`,
-    bctx,
-  );
-  await runGateAndFeedback(
-    `round.${round}.guardGate`,
-    `round.${round}.guardFeedback`,
-    bctx,
-  );
+  await drainProducer(queuedMessagesProducer, `round.${round}.queuedMessages`, bctx);
+  await runGateAndFeedback(`round.${round}.guardGate`, `round.${round}.guardFeedback`, bctx);
 }
 
 /** The call-entry boundary: deliver messages queued before this llm()
@@ -177,9 +157,7 @@ export async function runRoundBoundary(
  *  the new prompt — it reviews past work, same positioning as initial
  *  guard feedback), then the gate-and-feedback figure. No attachments
  *  phase: none can exist before the first request. */
-export async function runInitialBoundary(
-  bctx: BoundaryContext,
-): Promise<void> {
+export async function runInitialBoundary(bctx: BoundaryContext): Promise<void> {
   await drainProducer(queuedMessagesProducer, "queuedMessages.initial", bctx);
   await runGateAndFeedback("guardGate.initial", "guardFeedback.initial", bctx);
 }

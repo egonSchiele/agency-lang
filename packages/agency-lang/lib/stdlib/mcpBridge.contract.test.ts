@@ -49,7 +49,13 @@ describe.skipIf(!BUILT)("mcpBridge <-> @agency-lang/mcp contract", () => {
 
   it("mcpToolToAgencyFunction is callable and yields an AgencyFunction", async () => {
     const calls: string[] = [];
-    const tool = { name: "srv__do", description: "d", serverName: "srv", inputSchema: { type: "object", properties: {} }, __mcpTool: true };
+    const tool = {
+      name: "srv__do",
+      description: "d",
+      serverName: "srv",
+      inputSchema: { type: "object", properties: {} },
+      __mcpTool: true,
+    };
     const fn = await bridge.mcpToolToAgencyFunction(tool as any, async (s: string, t: string) => {
       calls.push(`${s}/${t}`);
       return "ok";

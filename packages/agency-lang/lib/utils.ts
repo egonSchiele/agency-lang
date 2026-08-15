@@ -80,17 +80,11 @@ function safeDelete(
   }
 }
 
-export function safeDeleteFile(
-  targetPath: string,
-  dryRun: boolean = true,
-): SafeDeleteResult {
+export function safeDeleteFile(targetPath: string, dryRun: boolean = true): SafeDeleteResult {
   return safeDelete(targetPath, "file", dryRun);
 }
 
-export function safeDeleteDirectory(
-  targetPath: string,
-  dryRun: boolean = true,
-): SafeDeleteResult {
+export function safeDeleteDirectory(targetPath: string, dryRun: boolean = true): SafeDeleteResult {
   return safeDelete(targetPath, "directory", dryRun);
 }
 

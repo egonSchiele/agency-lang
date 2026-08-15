@@ -51,35 +51,19 @@ import * as renderFunctionCatchFailure from "../templates/backends/typescriptGen
 
 import { AgencyConfig } from "@/config.js";
 import { parseDurationMs } from "@/duration.js";
-import {
-  BinOpArgument,
-  BinOpExpression,
-  Operator,
-  PRECEDENCE,
-} from "@/types/binop.js";
+import { BinOpArgument, BinOpExpression, Operator, PRECEDENCE } from "@/types/binop.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { walkNodes } from "@/utils/node.js";
 import { AccessChainElement, ValueAccess } from "../types/access.js";
-import {
-  AgencyArray,
-  AgencyObject,
-  AgencyObjectKV,
-} from "../types/dataStructures.js";
+import { AgencyArray, AgencyObject, AgencyObjectKV } from "../types/dataStructures.js";
 import { ForLoop } from "../types/forLoop.js";
 import { TryExpression } from "../types/tryExpression.js";
-import {
-  FunctionCall,
-  FunctionDefinition,
-  FunctionParameter,
-} from "../types/function.js";
+import { FunctionCall, FunctionDefinition, FunctionParameter } from "../types/function.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { HandleBlock } from "../types/handleBlock.js";
 import { WithModifier } from "../types/withModifier.js";
 import { IfElse } from "../types/ifElse.js";
-import {
-  ImportNodeStatement,
-  ImportStatement,
-} from "../types/importStatement.js";
+import { ImportNodeStatement, ImportStatement } from "../types/importStatement.js";
 import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { MatchYield } from "../types/matchYield.js";
 import { matchValName, isMatchValName } from "../matchVal.js";
@@ -90,10 +74,7 @@ import { NewExpression } from "../types/newExpression.js";
 import { InterruptStatement } from "../types/interruptStatement.js";
 import { moduleIdToOrigin } from "../runtime/origin.js";
 import { escape, mergeDeep } from "../utils.js";
-import {
-  generateBuiltinHelpers,
-  mapFunctionName,
-} from "./typescriptGenerator/builtins.js";
+import { generateBuiltinHelpers, mapFunctionName } from "./typescriptGenerator/builtins.js";
 import {
   DEFAULT_SCHEMA,
   mapTypeToValidationSchema,
@@ -137,12 +118,7 @@ function coarseKindFor(typeHint: VariableType): CoarseKind | null {
   return null;
 }
 import { printTs } from "../ir/prettyPrint.js";
-import type {
-  TsNode,
-  TsObjectEntry,
-  TsParam,
-  TsTemplatePart,
-} from "../ir/tsIR.js";
+import type { TsNode, TsObjectEntry, TsParam, TsTemplatePart } from "../ir/tsIR.js";
 import type { CompilationUnit } from "../compilationUnit.js";
 import { SourceMapBuilder } from "./sourceMap.js";
 import { nodeWrapperParams } from "./typescriptBuilder/nodeWrapperParams.js";
@@ -157,10 +133,7 @@ import {
 } from "./typescriptBuilder/finalizeCodegen.js";
 import { PipeChainEmitter } from "./typescriptBuilder/pipeChainEmitter.js";
 import { AssignmentEmitter } from "./typescriptBuilder/assignmentEmitter.js";
-import {
-  assembleSections,
-  partitionProgram,
-} from "./typescriptBuilder/sectionAssembler.js";
+import { assembleSections, partitionProgram } from "./typescriptBuilder/sectionAssembler.js";
 import { resolveNamedArgs } from "./typescriptBuilder/namedArgsResolver.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
@@ -384,8 +357,7 @@ export class TypeScriptBuilder {
       processNode: (n) => this.processNode(n),
       buildCallDescriptor: (call) => this.buildCallDescriptor(call),
       buildStateConfig: () => this.buildStateConfig(),
-      resolveBlockFrameVar: (blockDepth: number) =>
-        this.scopes.blockFrameVar(blockDepth),
+      resolveBlockFrameVar: (blockDepth: number) => this.scopes.blockFrameVar(blockDepth),
     });
     this.finalize = new FinalizeCodegen(this.scopes, moduleId, (body, stepBase) =>
       this.processBodyAsParts(body, stepBase),
@@ -490,8 +462,7 @@ export class TypeScriptBuilder {
   private needsParensLeft(child: BinOpArgument, parentOp: Operator): boolean {
     if (child.type !== "binOpExpression") return false;
     // For right-associative ops like **, (2 ** 3) ** 4 needs parens on the left
-    if (parentOp === "**")
-      return PRECEDENCE[child.operator] <= PRECEDENCE[parentOp];
+    if (parentOp === "**") return PRECEDENCE[child.operator] <= PRECEDENCE[parentOp];
     return PRECEDENCE[child.operator] < PRECEDENCE[parentOp];
   }
 
@@ -524,9 +495,7 @@ export class TypeScriptBuilder {
       const message = renderMessage(DIAGNOSTICS.topLevelStatementNotAllowed.message, {
         kind: illegal.map((node) => node.type).join(", "),
       });
-      throw new Error(
-        `${DIAGNOSTICS.topLevelStatementNotAllowed.code}: ${message}`,
-      );
+      throw new Error(`${DIAGNOSTICS.topLevelStatementNotAllowed.code}: ${message}`);
     }
 
     // A tripwire. Expansion removes every splice before codegen, so one
@@ -548,10 +517,7 @@ export class TypeScriptBuilder {
     // partitionProgram keeps top-level declarations in source order, so
     // source offsets are a faithful oracle for const-initialization order.
     this.aliasEmissionOrder = program.nodes
-      .filter(
-        (n): n is TypeAlias =>
-          n.type === "typeAlias" && !n.typeParams && !n.valueParams,
-      )
+      .filter((n): n is TypeAlias => n.type === "typeAlias" && !n.typeParams && !n.valueParams)
       .map((n) => ({ name: n.aliasName, start: n.loc?.start ?? 0 }));
 
     // Generate tool registry (empty — AgencyFunction.create() populates it)
@@ -599,9 +565,7 @@ export class TypeScriptBuilder {
   // ------- Node dispatch -------
 
   /** Process a function call argument, unwrapping NamedArgument and SplatExpression. */
-  private processCallArg(
-    arg: Expression | SplatExpression | NamedArgument,
-  ): TsNode {
+  private processCallArg(arg: Expression | SplatExpression | NamedArgument): TsNode {
     if (arg.type === "namedArgument") {
       return this.processNode(arg.value as AgencyNode);
     }
@@ -612,9 +576,7 @@ export class TypeScriptBuilder {
   }
 
   /** Process resolved arguments into TsNodes, tracking function usage. */
-  private processResolvedArgs(
-    args: (Expression | SplatExpression)[],
-  ): TsNode[] {
+  private processResolvedArgs(args: (Expression | SplatExpression)[]): TsNode[] {
     return args.map((arg) => {
       // `fork`/`race` carrying a block is a CALL, not a function
       // reference, and its lowering lives in processForkCall (reached
@@ -634,10 +596,7 @@ export class TypeScriptBuilder {
       }
       if (arg.type === "functionCall") {
         this.functionsUsed.add(arg.functionName);
-        return this.generateFunctionCallExpression(
-          arg as FunctionCall,
-          "functionArg",
-        );
+        return this.generateFunctionCallExpression(arg as FunctionCall, "functionArg");
       } else {
         return this.processCallArg(arg);
       }
@@ -756,9 +715,7 @@ export class TypeScriptBuilder {
         // no second representation. printCodeLiteralBody is the SAME
         // text the formatter shows between the brackets.
         const body = printCodeLiteralBody(node);
-        return ts.raw(
-          `__codeLiteral(${JSON.stringify(body)}, ${JSON.stringify(node.kind)})`,
-        );
+        return ts.raw(`__codeLiteral(${JSON.stringify(body)}, ${JSON.stringify(node.kind)})`);
       }
       case "hole":
         // Unreachable in a correct build: the pre-pass in build() refuses
@@ -782,10 +739,7 @@ export class TypeScriptBuilder {
     // Inside a runner loop: use runner.breakLoop() / runner.continueLoop()
     // and return from the callback. The runner handles iteration cleanup.
     const method = node.value === "break" ? "breakLoop" : "continueLoop";
-    return ts.statements([
-      ts.methodCall(ts.id("runner"), method),
-      ts.raw("return"),
-    ]);
+    return ts.statements([ts.methodCall(ts.id("runner"), method), ts.raw("return")]);
   }
 
   // ------- Type system (side effects only) -------
@@ -806,9 +760,7 @@ export class TypeScriptBuilder {
     const collected: TypeAlias[] = [];
     for (const { node, ancestors } of walkNodes(body)) {
       if (node.type !== "typeAlias") continue;
-      const inNestedDef = ancestors.some(
-        (a) => a.type === "function" || a.type === "graphNode",
-      );
+      const inNestedDef = ancestors.some((a) => a.type === "function" || a.type === "graphNode");
       if (inNestedDef) continue;
       collected.push(node);
     }
@@ -909,12 +861,9 @@ export class TypeScriptBuilder {
           ? { name: p.name, defaultValue: ts.raw(tagArgToTs(p.default)) }
           : { name: p.name },
       );
-      return ts.functionDecl(
-        node.aliasName,
-        vpFnParams,
-        ts.statements([ts.return(vpDescriptor)]),
-        { export: node.exported },
-      );
+      return ts.functionDecl(node.aliasName, vpFnParams, ts.statements([ts.return(vpDescriptor)]), {
+        export: node.exported,
+      });
     }
     const exportPrefix = node.exported ? "export " : "";
     // Thread alias-level @validate / @jsonSchema tags onto the body type so
@@ -940,24 +889,16 @@ export class TypeScriptBuilder {
     if (node.aliasedType.type === "typeAliasVariable") {
       const aliasesFull = this.scopes.visibleTypeAliasesFull();
       const chainEnd = safeResolveType(node.aliasedType, aliasesFull);
-      if (
-        chainEnd.type === "typeAliasVariable" &&
-        aliasesFull[chainEnd.aliasName]
-      ) {
+      if (chainEnd.type === "typeAliasVariable" && aliasesFull[chainEnd.aliasName]) {
         throw new Error(
           `Type alias '${node.aliasName}' circularly references itself with no structure. Give it an object, array, or union shape.`,
         );
       }
     }
-    const zodSchema = this.zodSchemaFor(
-      aliasedWithTags,
-      this.pendingAliasesFor(node.loc?.start),
-    );
+    const zodSchema = this.zodSchemaFor(aliasedWithTags, this.pendingAliasesFor(node.loc?.start));
     const stmts: TsNode[] = [
       ts.raw(`${exportPrefix}const ${node.aliasName} = ${zodSchema};`),
-      ts.raw(
-        `${exportPrefix}type ${node.aliasName} = z.infer<typeof ${node.aliasName}>;`,
-      ),
+      ts.raw(`${exportPrefix}type ${node.aliasName} = z.infer<typeof ${node.aliasName}>;`),
     ];
     // If the alias body carries any `@validate(...)` annotation, attach a
     // descriptor to the schema const so use-site `Foo!` validations can
@@ -976,10 +917,7 @@ export class TypeScriptBuilder {
       // co-located with the schema and avoids exporting/importing a second
       // symbol. Cast to `any` because Zod's typings don't know about us.
       stmts.push(
-        ts.assign(
-          ts.prop(ts.raw(`(${node.aliasName} as any)`), "__agency_descriptor"),
-          descriptor,
-        ),
+        ts.assign(ts.prop(ts.raw(`(${node.aliasName} as any)`), "__agency_descriptor"), descriptor),
       );
     }
     return ts.statements(stmts);
@@ -1020,11 +958,7 @@ export class TypeScriptBuilder {
     if (start === undefined) {
       return new Set(this.aliasEmissionOrder.map((a) => a.name));
     }
-    return new Set(
-      this.aliasEmissionOrder
-        .filter((a) => a.start >= start)
-        .map((a) => a.name),
-    );
+    return new Set(this.aliasEmissionOrder.filter((a) => a.start >= start).map((a) => a.name));
   }
 
   /**
@@ -1039,18 +973,10 @@ export class TypeScriptBuilder {
     const resolved = resolveTypeDeep(t, aliasesFull);
     const aliases = this.scopes.visibleTypeAliases();
     if (!hasAnyValidateTag(resolved, aliasesFull)) {
-      const zodSchema = mapTypeToValidationSchema(
-        resolved,
-        aliases,
-        aliasesFull,
-      );
+      const zodSchema = mapTypeToValidationSchema(resolved, aliases, aliasesFull);
       return ts.validateType(value, ts.raw(zodSchema));
     }
-    const descriptor = buildValidationDescriptor(
-      resolved,
-      aliases,
-      aliasesFull,
-    );
+    const descriptor = buildValidationDescriptor(resolved, aliases, aliasesFull);
     return ts.validateChainRecursive(value, descriptor);
   }
 
@@ -1067,10 +993,7 @@ export class TypeScriptBuilder {
       }
       const kv = entry as AgencyObjectKV;
       if (kv.computedKey) {
-        return ts.setComputed(
-          this.processNode(kv.computedKey),
-          this.processNode(kv.value),
-        );
+        return ts.setComputed(this.processNode(kv.computedKey), this.processNode(kv.value));
       }
       const keyCode = kv.key.replace(/"/g, '\\"');
       return ts.set(`"${keyCode}"`, this.processNode(kv.value));
@@ -1099,8 +1022,7 @@ export class TypeScriptBuilder {
       case "multiLineString":
         return this.generateStringLiteralNode(literal.segments);
       case "variableName": {
-        const importedOrUnknownScope =
-          literal.scope === "imported" || !literal.scope;
+        const importedOrUnknownScope = literal.scope === "imported" || !literal.scope;
         // A builtin name (e.g. `color`) is only the *fallback* meaning of the
         // identifier. A real binding — a parameter, local, etc. — with a
         // resolved scope shadows it, exactly like in any lexically-scoped
@@ -1109,8 +1031,7 @@ export class TypeScriptBuilder {
         // value (and any value restored on resume) is silently lost: the body
         // reads the undefaulted local while the default lands in the stack
         // slot. See issue #453.
-        const isBuiltinVar =
-          BUILTIN_VARIABLES.includes(literal.value) && importedOrUnknownScope;
+        const isBuiltinVar = BUILTIN_VARIABLES.includes(literal.value) && importedOrUnknownScope;
         const isLoopVar = this.loopVars.includes(literal.value);
         if (importedOrUnknownScope || isBuiltinVar || isLoopVar) {
           // Agency imports may resolve to a `static const` in the source
@@ -1129,18 +1050,14 @@ export class TypeScriptBuilder {
           // `scope === "imported"` is mutually exclusive with builtin
           // and loop-var names at the source level, so we only need to
           // check the import side.
-          if (
-            literal.scope === "imported" &&
-            this.names.isAgencyImport(literal.value)
-          ) {
+          if (literal.scope === "imported" && this.names.isAgencyImport(literal.value)) {
             // Thread the SOURCE module path through to the trap message
             // when we know it (always, when compileClosure built our
             // InitPlan). Without the plan, the empty string falls back
             // to the runtime trap's "<unknown module>" placeholder —
             // less helpful but never silently wrong.
             const sourceModuleId =
-              this.initPlan?.resolveImportedName(literal.value)
-                ?.sourceModuleId ?? "";
+              this.initPlan?.resolveImportedName(literal.value)?.sourceModuleId ?? "";
             return ts.call(ts.id("__readStatic"), [
               ts.id(literal.value),
               ts.str(literal.value),
@@ -1166,9 +1083,7 @@ export class TypeScriptBuilder {
             // to Agency's single nothing-value, `null`. This one read site is
             // the chokepoint for every match-result path (stepped no-arm and
             // the plain-mode IIFE that returns `undefined`). See #409.
-            return ts.call(ts.id("__nn"), [
-              ts.scopedVar(literal.value, "local", this.moduleId),
-            ]);
+            return ts.call(ts.id("__nn"), [ts.scopedVar(literal.value, "local", this.moduleId)]);
           }
           return ts.id(literal.value);
         }
@@ -1176,12 +1091,7 @@ export class TypeScriptBuilder {
           literal.scope === "block" || literal.scope === "blockArgs"
             ? this.scopes.blockFrameVar(literal.blockDepth ?? 0)
             : undefined;
-        return ts.scopedVar(
-          literal.value,
-          literal.scope!,
-          this.moduleId,
-          blockFrameVar,
-        );
+        return ts.scopedVar(literal.value, literal.scope!, this.moduleId, blockFrameVar);
       }
       case "boolean":
         return ts.bool(literal.value);
@@ -1273,11 +1183,7 @@ export class TypeScriptBuilder {
         case "methodCall": {
           const fnCall = element.functionCall;
           const descriptor = this.buildCallDescriptor(fnCall);
-          const callArgs: TsNode[] = [
-            result,
-            ts.str(fnCall.functionName),
-            descriptor,
-          ];
+          const callArgs: TsNode[] = [result, ts.str(fnCall.functionName), descriptor];
           if (element.optional) callArgs.push(ts.bool(true));
           result = this.awaitChainCall(
             ts.call(ts.id("__callMethod"), callArgs),
@@ -1334,9 +1240,7 @@ export class TypeScriptBuilder {
   }
 
   private awaitChainCall(callExpr: TsNode, isLast: boolean): TsNode {
-    return isLast
-      ? ts.await(callExpr)
-      : ts.raw(`(${this.str(ts.await(callExpr))})`);
+    return isLast ? ts.await(callExpr) : ts.raw(`(${this.str(ts.await(callExpr))})`);
   }
 
   private processBinOpExpression(node: BinOpExpression): TsNode {
@@ -1381,9 +1285,7 @@ export class TypeScriptBuilder {
       // outer parens around the arrow are required — without them JS
       // parses `(__v) => (...)(args)` as an arrow whose body invokes
       // `__v(args)`, never running the IIFE.
-      return ts.raw(
-        `((__v) => (${this.str(setCall)}, __v))(${this.str(newValueExpr)})`,
-      );
+      return ts.raw(`((__v) => (${this.str(setCall)}, __v))(${this.str(newValueExpr)})`);
     }
     // For a compound assignment (`x[i] += v`, `??=`, ...) the left operand is
     // also the assignment target, so it must stay a raw lvalue — never wrapped
@@ -1443,13 +1345,8 @@ export class TypeScriptBuilder {
   }
 
   private processTryExpression(node: TryExpression): TsNode {
-    if (
-      node.call.type === "functionCall" &&
-      node.call.functionName === "throw"
-    ) {
-      throw new Error(
-        "Cannot use 'try' with 'throw' — throw always raises an error.",
-      );
+    if (node.call.type === "functionCall" && node.call.functionName === "throw") {
+      throw new Error("Cannot use 'try' with 'throw' — throw always raises an error.");
     }
     const callNode = this.processNode(node.call as AgencyNode);
     const args: TsNode[] = [ts.arrowFn([], callNode, { async: true })];
@@ -1554,10 +1451,7 @@ export class TypeScriptBuilder {
         condition: this.processNode(current.condition),
         body,
       });
-      if (
-        current.elseBody?.length === 1 &&
-        current.elseBody[0].type === "ifElse"
-      ) {
+      if (current.elseBody?.length === 1 && current.elseBody[0].type === "ifElse") {
         current = current.elseBody[0] as IfElse;
       } else {
         remainingElse = current.elseBody;
@@ -1593,24 +1487,16 @@ export class TypeScriptBuilder {
     this.steps.popLoop();
 
     // Unregister loop variables
-    this.loopVars = this.loopVars.filter(
-      (v) => v !== node.itemVar && v !== node.indexVar,
-    );
+    this.loopVars = this.loopVars.filter((v) => v !== node.itemVar && v !== node.indexVar);
 
     // For range form, build an array expression: Array.from({length: end - start}, (_, i) => i + start)
     // Actually, the Runner's loop() takes an array of items. For range loops,
     // we generate the range as an array expression.
-    if (
-      node.iterable.type === "functionCall" &&
-      node.iterable.functionName === "range"
-    ) {
+    if (node.iterable.type === "functionCall" && node.iterable.functionName === "range") {
       const args = node.iterable.arguments;
-      const startNode =
-        args.length >= 2 ? this.processCallArg(args[0]) : ts.num(0);
+      const startNode = args.length >= 2 ? this.processCallArg(args[0]) : ts.num(0);
       const endNode =
-        args.length >= 2
-          ? this.processCallArg(args[1])
-          : this.processCallArg(args[0]);
+        args.length >= 2 ? this.processCallArg(args[1]) : this.processCallArg(args[0]);
       // Generate: Array.from({length: end - start}, (_, i) => i + start)
       const rangeExpr = ts.raw(
         `Array.from({length: ${printTs(endNode, 0)} - ${printTs(startNode, 0)}}, (_, __i) => __i + ${printTs(startNode, 0)})`,
@@ -1696,13 +1582,8 @@ export class TypeScriptBuilder {
    *  whose value may interrupt is hoisted to a temp binding first (#430), which
    *  hides the call from that check — so `_processAssignmentInner` re-runs this
    *  guard on the marked binding. Shared here to keep one error message. */
-  private assertMatchArmValueNotGraphNode(
-    value: Expression | MessageThread | undefined,
-  ): void {
-    if (
-      value?.type === "functionCall" &&
-      this.names.isGraphNode(value.functionName)
-    ) {
+  private assertMatchArmValueNotGraphNode(value: Expression | MessageThread | undefined): void {
+    if (value?.type === "functionCall" && this.names.isGraphNode(value.functionName)) {
       throw new Error(
         "a match arm cannot return a graph node transition; a node call is " +
           "control flow, not a value — use if/else statements for node dispatch",
@@ -1716,9 +1597,7 @@ export class TypeScriptBuilder {
     // the value argument of `runner.exitMatch(id, <value>)`. Reject it with a
     // clear compile error rather than emitting invalid TypeScript.
     this.assertMatchArmValueNotGraphNode(node.value);
-    const value = node.value
-      ? this.processNode(node.value)
-      : ts.id("null");
+    const value = node.value ? this.processNode(node.value) : ts.id("null");
     // Plain-mode (handler) match expressions wrap their arms in an async IIFE
     // (see processMatchExpressionPlain): a yield is a real `return` out of that
     // IIFE, not the stepped `runner.exitMatch` unwind — so the handler never
@@ -1830,8 +1709,7 @@ export class TypeScriptBuilder {
           });
       }
     });
-    const importNode =
-      imports.length === 1 ? imports[0] : ts.statements(imports);
+    const importNode = imports.length === 1 ? imports[0] : ts.statements(imports);
 
     // Auto-register any AgencyFunction instances imported from .agency files.
     if (node.isAgencyImport) {
@@ -1847,9 +1725,7 @@ export class TypeScriptBuilder {
                 continue;
               }
               const localName = nameType.aliases[name] ?? name;
-              this.toolRegistrations.push(
-                ts.raw(`__registerTool(${localName});`),
-              );
+              this.toolRegistrations.push(ts.raw(`__registerTool(${localName});`));
             }
             break;
           case "namespaceImport": {
@@ -1919,9 +1795,7 @@ export class TypeScriptBuilder {
     this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
     this.scopes.pop();
 
-    const bodyStr = compiledFinalize.bodyCode
-      .map((n) => printTs(n, 1))
-      .join("\n");
+    const bodyStr = compiledFinalize.bodyCode.map((n) => printTs(n, 1)).join("\n");
 
     const blockSetupCode = renderBlockSetup.default({
       params: block.params.map((p) => ({
@@ -1936,11 +1810,9 @@ export class TypeScriptBuilder {
       abortReturn: compiledFinalize.abortReturn,
     });
 
-    const blockFn = ts.arrowFn(
-      blockParams,
-      ts.statements([ts.raw(blockSetupCode)]),
-      { async: true },
-    );
+    const blockFn = ts.arrowFn(blockParams, ts.statements([ts.raw(blockSetupCode)]), {
+      async: true,
+    });
     return ts.agencyFunctionWrap(
       blockFn,
       blockName,
@@ -1973,9 +1845,7 @@ export class TypeScriptBuilder {
     this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
     this.scopes.pop();
 
-    const bodyStr = compiledFinalize.bodyCode
-      .map((n) => printTs(n, 1))
-      .join("\n");
+    const bodyStr = compiledFinalize.bodyCode.map((n) => printTs(n, 1)).join("\n");
 
     const blockSetupCode = renderBlockSetup.default({
       params: block.params.map((p) => ({
@@ -1990,11 +1860,9 @@ export class TypeScriptBuilder {
       abortReturn: compiledFinalize.abortReturn,
     });
 
-    const blockFn = ts.arrowFn(
-      blockParams,
-      ts.statements([ts.raw(blockSetupCode)]),
-      { async: true },
-    );
+    const blockFn = ts.arrowFn(blockParams, ts.statements([ts.raw(blockSetupCode)]), {
+      async: true,
+    });
     return ts.agencyFunctionWrap(
       blockFn,
       blockName,
@@ -2025,10 +1893,7 @@ export class TypeScriptBuilder {
   private paramSchemaContribution(
     param: FunctionParameter,
     pendingAliases: Set<string>,
-  ):
-    | { kind: "drop" }
-    | { kind: "scalar"; zod: string }
-    | { kind: "array"; zod: string } {
+  ): { kind: "drop" } | { kind: "scalar"; zod: string } | { kind: "array"; zod: string } {
     if (isFunctionTyped(param)) return { kind: "drop" };
 
     if (param.variadic) {
@@ -2058,9 +1923,7 @@ export class TypeScriptBuilder {
       // (e.g. an explicit default `x: T = 5`), so the LLM may omit them.
       const alreadyNullable =
         typeHint.type === "unionType" &&
-        typeHint.types.some(
-          (t) => t.type === "primitiveType" && t.value === "null",
-        );
+        typeHint.types.some((t) => t.type === "primitiveType" && t.value === "null");
       if (!alreadyNullable) zod += ".nullable()";
       zod += `.describe(${JSON.stringify("Default: " + defaultStr)})`;
     }
@@ -2081,11 +1944,7 @@ export class TypeScriptBuilder {
   private buildToolDefinition(node: FunctionDefinition): TsNode {
     const functionName = declaredName(node.functionName);
     const { parameters } = node;
-    if (
-      this.compilationUnit.graphNodes
-        .map((n) => n.nodeName)
-        .includes(functionName)
-    ) {
+    if (this.compilationUnit.graphNodes.map((n) => n.nodeName).includes(functionName)) {
       throw new Error(
         `There is already a node named '${functionName}'. Functions can't have the same name as an existing node.`,
       );
@@ -2118,9 +1977,7 @@ export class TypeScriptBuilder {
     // Trim leading/trailing indentation from doc-string segments before
     // emission so the LLM sees clean text, while keeping the AST
     // untouched for faithful formatter round-trips.
-    const trimmedDocSegments = node.docString
-      ? trimDocStringSegments(node.docString.segments)
-      : [];
+    const trimmedDocSegments = node.docString ? trimDocStringSegments(node.docString.segments) : [];
     return ts.obj({
       name: ts.str(functionName),
       description:
@@ -2129,9 +1986,7 @@ export class TypeScriptBuilder {
             // reads through `__globalCtx` instead of the strict ALS
             // accessor — this subtree is eagerly evaluated at module
             // load when no ALS frame is installed.
-            markTopLevelScopedVars(
-              this.generateStringLiteralNode(trimmedDocSegments),
-            )
+            markTopLevelScopedVars(this.generateStringLiteralNode(trimmedDocSegments))
           : ts.str("No description provided."),
       schema: $.z()
         .prop("object")
@@ -2399,9 +2254,7 @@ export class TypeScriptBuilder {
             ts.prop(ts.id("runner"), "halted"),
             ts.statements([
               ts.if(
-                ts.call(ts.id("isFailure"), [
-                  ts.prop(ts.id("runner"), "haltResult"),
-                ]),
+                ts.call(ts.id("isFailure"), [ts.prop(ts.id("runner"), "haltResult")]),
                 ts.statements([this.tracking.exitStamp()]),
               ),
               ts.return(ts.prop(ts.id("runner"), "haltResult")),
@@ -2492,14 +2345,9 @@ export class TypeScriptBuilder {
       finalize: compiledFinalize,
     });
 
-    const funcDecl = ts.functionDecl(
-      implName,
-      fnParams,
-      ts.statements(setupStmts),
-      {
-        async: true,
-      },
-    );
+    const funcDecl = ts.functionDecl(implName, fnParams, ts.statements(setupStmts), {
+      async: true,
+    });
 
     // Build AgencyFunction.create() params metadata
     // Include all params (including block-typed) so .partial() can bind them by name.
@@ -2537,8 +2385,7 @@ export class TypeScriptBuilder {
     // see `:2266` — so a contains-region-only function does not commit at
     // entry.)
     const isDestructive =
-      !!node.markers?.destructive ||
-      functionContainsDestructiveBlock(node.body);
+      !!node.markers?.destructive || functionContainsDestructiveBlock(node.body);
     if (isDestructive || node.markers?.idempotent) {
       const markerProps: Record<string, TsNode> = {};
       if (isDestructive) markerProps.destructive = ts.bool(true);
@@ -2568,12 +2415,7 @@ export class TypeScriptBuilder {
     return this.processNode(node);
   }
 
-  private interruptTemplateArgs(
-    effect: string,
-    message: string,
-    data: string,
-    origin: string,
-  ) {
+  private interruptTemplateArgs(effect: string, message: string, data: string, origin: string) {
     return {
       effect: JSON.stringify(effect),
       message,
@@ -2642,10 +2484,7 @@ export class TypeScriptBuilder {
     const callNode = this.processFunctionCall(node);
     const scope = this.scopes.current();
 
-    if (
-      this.names.shouldHandleInterrupts(node.functionName) &&
-      scope.type !== "global"
-    ) {
+    if (this.names.shouldHandleInterrupts(node.functionName) && scope.type !== "global") {
       // Async unassigned calls: register with pending promise store, no interrupt check
       if (node.async) {
         // Fork the stack for per-thread isolation
@@ -2653,26 +2492,20 @@ export class TypeScriptBuilder {
           this._asyncBranchCheckNeeded = true;
           const branchKey = this.steps.joined();
           let statements = ts.statements(this.forkBranchSetup(branchKey));
-          const callWithStack = this.generateFunctionCallExpression(
-            node,
-            "topLevelStatement",
-            { stateStack: ts.id("__forked") },
-          );
+          const callWithStack = this.generateFunctionCallExpression(node, "topLevelStatement", {
+            stateStack: ts.id("__forked"),
+          });
 
           statements = ts.statementsPush(
             statements,
             // Strict accessor inside a step body (under the
             // withAlsFrame wrap) — keeps missing-frame failures
             // actionable instead of "Cannot read 'add' of undefined".
-            ts.raw(
-              `getRuntimeContext().ctx.pendingPromises.add(${this.str(callWithStack)})`,
-            ),
+            ts.raw(`getRuntimeContext().ctx.pendingPromises.add(${this.str(callWithStack)})`),
           );
           return statements;
         }
-        return ts.raw(
-          `getRuntimeContext().ctx.pendingPromises.add(${this.str(callNode)})`,
-        );
+        return ts.raw(`getRuntimeContext().ctx.pendingPromises.add(${this.str(callNode)})`);
       }
 
       // Sync calls: bind the result to a temp and emit the shared interrupt
@@ -2685,32 +2518,21 @@ export class TypeScriptBuilder {
       const guard = this.assignmentInterruptGuard(ts.id(tempVar), {
         bindOnAborted: false,
       });
-      return ts.statements([
-        ts.constDecl(tempVar, callNode),
-        ...(guard ? [guard] : []),
-      ]);
+      return ts.statements([ts.constDecl(tempVar, callNode), ...(guard ? [guard] : [])]);
     }
 
     return callNode;
   }
 
   private processFunctionCall(node: FunctionCall): TsNode {
-    if (
-      (node.functionName === "fork" || node.functionName === "race") &&
-      node.block
-    ) {
+    if ((node.functionName === "fork" || node.functionName === "race") && node.block) {
       return this.processForkCall(node);
     }
 
-    if (
-      node.functionName === "failure" &&
-      this.scopes.current().type === "function"
-    ) {
+    if (node.functionName === "failure" && this.scopes.current().type === "function") {
       // Inside functions, inject checkpoint, function name, and args
       const scope = this.scopes.current() as FunctionScope;
-      const argNodes: TsNode[] = node.arguments.map((arg) =>
-        this.processCallArg(arg),
-      );
+      const argNodes: TsNode[] = node.arguments.map((arg) => this.processCallArg(arg));
       return ts.call(ts.id("failure"), [
         ...argNodes,
         ts.raw(
@@ -2724,17 +2546,13 @@ export class TypeScriptBuilder {
 
     if (node.functionName === "throw") {
       // throw("message") → throw new Error("message")
-      const argNodes: TsNode[] = node.arguments.map((arg) =>
-        this.processCallArg(arg),
-      );
+      const argNodes: TsNode[] = node.arguments.map((arg) => this.processCallArg(arg));
       const arg = argNodes.length > 0 ? argNodes[0] : ts.str("");
       return ts.throw(`new Error(${this.str(arg)})`);
     }
 
     if (node.functionName === "_emit") {
-      const argNodes: TsNode[] = node.arguments.map((arg) =>
-        this.processCallArg(arg),
-      );
+      const argNodes: TsNode[] = node.arguments.map((arg) => this.processCallArg(arg));
       const data = argNodes.length > 0 ? argNodes[0] : ts.id("undefined");
       // Wrap in `runner.hook(id, ...)` for substep-counter idempotency on
       // resume — without it, every resume cycle would re-fire onEmit.
@@ -2750,12 +2568,7 @@ export class TypeScriptBuilder {
 
     if (node.functionName === "llm") {
       // Standalone llm() call (not assigned to variable)
-      return this.processLlmCall(
-        DEFAULT_PROMPT_NAME,
-        this.scopes.returnType(),
-        node,
-        "local",
-      );
+      return this.processLlmCall(DEFAULT_PROMPT_NAME, this.scopes.returnType(), node, "local");
     }
 
     if (this.names.isGraphNode(node.functionName)) {
@@ -2770,10 +2583,7 @@ export class TypeScriptBuilder {
     }
 
     this.functionsUsed.add(node.functionName);
-    const callNode = this.generateFunctionCallExpression(
-      node,
-      "topLevelStatement",
-    );
+    const callNode = this.generateFunctionCallExpression(node, "topLevelStatement");
 
     const mappedName = mapFunctionName(node.functionName);
     const isBuiltinFunction = mappedName !== node.functionName;
@@ -2790,27 +2600,17 @@ export class TypeScriptBuilder {
     options?: { stateStack?: TsNode },
   ): TsNode {
     const functionName =
-      context === "valueAccess"
-        ? node.functionName
-        : mapFunctionName(node.functionName);
+      context === "valueAccess" ? node.functionName : mapFunctionName(node.functionName);
 
     const shouldAwait = !node.async && context !== "valueAccess";
 
     // __-prefixed helpers and DIRECT_CALL_FUNCTIONS: emit plain direct call
-    if (
-      functionName.startsWith("__") ||
-      this.names.isDirectCallFunction(functionName)
-    ) {
+    if (functionName.startsWith("__") || this.names.isDirectCallFunction(functionName)) {
       return this.emitDirectFunctionCall(node, functionName, shouldAwait);
     }
 
     // Everything else goes through __call runtime dispatch
-    return this.emitRuntimeDispatchCall(
-      node,
-      functionName,
-      shouldAwait,
-      options,
-    );
+    return this.emitRuntimeDispatchCall(node, functionName, shouldAwait, options);
   }
 
   private emitRuntimeDispatchCall(
@@ -2826,12 +2626,7 @@ export class TypeScriptBuilder {
         ? this.scopes.blockFrameVar(node.blockDepth ?? 0)
         : undefined;
     const callee = node.scope
-      ? ts.scopedVar(
-          functionName,
-          node.scope,
-          this.moduleId,
-          calleeBlockFrameVar,
-        )
+      ? ts.scopedVar(functionName, node.scope, this.moduleId, calleeBlockFrameVar)
       : ts.id(functionName);
 
     const callExpr = ts.call(ts.id("__call"), [callee, descriptor]);
@@ -2885,9 +2680,7 @@ export class TypeScriptBuilder {
    * Build a CallType descriptor TsNode for an Agency function call.
    * Determines whether to emit positional or named call type based on arguments.
    */
-  private buildCallDescriptor(
-    node: Pick<FunctionCall, "arguments" | "block">,
-  ): TsNode {
+  private buildCallDescriptor(node: Pick<FunctionCall, "arguments" | "block">): TsNode {
     const args = node.arguments;
     const hasNamedArgs = args.some((a) => a.type === "namedArgument");
 
@@ -2935,8 +2728,7 @@ export class TypeScriptBuilder {
     // ever reached here it would be dropped by the predicate instead of
     // silently miscompiled as a positional value.
     const positionalArgs = args.filter(
-      (arg): arg is Expression | SplatExpression =>
-        arg.type !== "namedArgument",
+      (arg): arg is Expression | SplatExpression => arg.type !== "namedArgument",
     );
     const argNodes = this.processResolvedArgs(positionalArgs);
 
@@ -2975,9 +2767,7 @@ export class TypeScriptBuilder {
     }
 
     const itemsNode =
-      positionalArgs.length > 0
-        ? this.processCallArg(positionalArgs[0])
-        : ts.arr([]);
+      positionalArgs.length > 0 ? this.processCallArg(positionalArgs[0]) : ts.arr([]);
 
     const blockName = this.steps.nextBlockName();
     const parentScopeName = this.scopes.currentName();
@@ -3007,11 +2797,7 @@ export class TypeScriptBuilder {
     });
 
     const blockFn = ts.arrowFn(
-      [
-        { name: "__forkItem" },
-        { name: "__forkIndex" },
-        { name: "__forkBranchStack" },
-      ],
+      [{ name: "__forkItem" }, { name: "__forkIndex" }, { name: "__forkBranchStack" }],
       ts.statements([ts.raw(blockSetupCode)]),
       { async: true },
     );
@@ -3040,9 +2826,7 @@ export class TypeScriptBuilder {
 
   private generateNodeCallExpression(node: FunctionCall): TsNode {
     const functionName = mapFunctionName(node.functionName);
-    const targetNode = this.compilationUnit.graphNodes.find(
-      (n) => n.nodeName === functionName,
-    );
+    const targetNode = this.compilationUnit.graphNodes.find((n) => n.nodeName === functionName);
     const resolvedArgs = resolveNamedArgs(node, targetNode?.parameters, true);
     const argNodes = this.processResolvedArgs(resolvedArgs);
 
@@ -3063,11 +2847,7 @@ export class TypeScriptBuilder {
       dataNode = ts.obj(entries);
     } else if (argNodes.length > 0) {
       const entries = $(ts.id(`__${functionName}NodeParams`))
-        .map(
-          ts.raw(
-            `(k, i) => [k, [${argNodes.map((n) => this.str(n)).join(", ")}][i]]`,
-          ),
-        )
+        .map(ts.raw(`(k, i) => [k, [${argNodes.map((n) => this.str(n)).join(", ")}][i]]`))
         .done();
       dataNode = ts.methodCall(ts.id("Object"), "fromEntries", [entries]);
     } else {
@@ -3098,10 +2878,7 @@ export class TypeScriptBuilder {
     this.isInsideGraphNode = true;
 
     for (const stmt of body) {
-      if (
-        stmt.type === "functionCall" &&
-        this.names.isGraphNode(stmt.functionName)
-      ) {
+      if (stmt.type === "functionCall" && this.names.isGraphNode(stmt.functionName)) {
         throw new Error(
           `Call to graph node '${stmt.functionName}' inside graph node '${nodeName}' must use goto or return, eg: goto ${stmt.functionName}(...)`,
         );
@@ -3216,9 +2993,7 @@ export class TypeScriptBuilder {
             body: [
               ts.runnerHookStep({
                 id: onNodeStartId,
-                body: [
-                  ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) }),
-                ],
+                body: [ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) })],
               }),
               ...bodyCode,
             ],
@@ -3241,19 +3016,13 @@ export class TypeScriptBuilder {
           ),
         ]),
         ts.statements([
-          ts.if(
-            ts.raw("__error instanceof RestoreSignal"),
-            ts.statements([ts.throw("__error")]),
-          ),
+          ts.if(ts.raw("__error instanceof RestoreSignal"), ts.statements([ts.throw("__error")])),
           // All aborts — cancellations (Esc / abort) AND guard trips — are a
           // single AgencyAbort carrying an AbortCause and must propagate
           // untouched rather than be logged + converted to a Failure here.
           // One rung replaces the old GuardExceededError + isAbortError
           // ladder. Mirrors the function catch template.
-          ts.if(
-            ts.raw("__error instanceof AgencyAbort"),
-            ts.statements([ts.throw("__error")]),
-          ),
+          ts.if(ts.raw("__error instanceof AgencyAbort"), ts.statements([ts.throw("__error")])),
           // Surface the underlying exception via logger + statelog
           // before converting to a Failure. Mirrors the function catch
           // template; see the recordAlwaysScoped bug in
@@ -3289,11 +3058,9 @@ export class TypeScriptBuilder {
       .prop("node")
       .call([
         ts.str(nodeName),
-        ts.arrowFn(
-          [{ name: "__state", typeAnnotation: "GraphState" }],
-          ts.statements(stmts),
-          { async: true },
-        ),
+        ts.arrowFn([{ name: "__state", typeAnnotation: "GraphState" }], ts.statements(stmts), {
+          async: true,
+        }),
       ])
       .done();
   }
@@ -3311,9 +3078,7 @@ export class TypeScriptBuilder {
       throw new Error(`goto can only be used inside a node body`);
     }
     if (!this.names.isGraphNode(node.nodeCall.functionName)) {
-      throw new Error(
-        `goto target '${node.nodeCall.functionName}' is not a node`,
-      );
+      throw new Error(`goto target '${node.nodeCall.functionName}' is not a node`);
     }
     this.currentAdjacentNodes.push(node.nodeCall.functionName);
     this.functionsUsed.add(node.nodeCall.functionName);
@@ -3324,8 +3089,7 @@ export class TypeScriptBuilder {
     // Bare return (no value)
     if (!node.value) {
       if (this.insideHandlerBody) return ts.return();
-      if (this.scopes.current().type === "block")
-        return ts.runnerHalt(ts.id("undefined"));
+      if (this.scopes.current().type === "block") return ts.runnerHalt(ts.id("undefined"));
       if (this.isInsideGraphNode) return ts.nodeResult(ts.id("undefined"));
       return ts.functionReturn(ts.id("undefined"));
     }
@@ -3351,26 +3115,18 @@ export class TypeScriptBuilder {
       // The block's declared return type is unknown to the builder
       // (see ScopeManager.returnType comment), so processLlmCall falls
       // back to a string-typed structured-output schema.
-      if (
-        node.value.type === "functionCall" &&
-        node.value.functionName === "llm"
-      ) {
+      if (node.value.type === "functionCall" && node.value.functionName === "llm") {
         const llmNode = this.processLlmCall(
           DEFAULT_PROMPT_NAME,
           this.scopes.returnType(),
           node.value,
           "block",
         );
-        return ts.statements([
-          llmNode,
-          ts.runnerHalt(ts.self(DEFAULT_PROMPT_NAME)),
-        ]);
+        return ts.statements([llmNode, ts.runnerHalt(ts.self(DEFAULT_PROMPT_NAME))]);
       }
       const valueNode = this.processNode(node.value);
       if (this.isFinalizeInterceptedReturn(node.value)) {
-        return this.finalize.interceptedReturn(valueNode, (v) =>
-          ts.runnerHalt(v),
-        );
+        return this.finalize.interceptedReturn(valueNode, (v) => ts.runnerHalt(v));
       }
       return ts.runnerHalt(valueNode);
     }
@@ -3379,10 +3135,7 @@ export class TypeScriptBuilder {
       if (this.isInterruptExpression(node.value)) {
         return this.processInterruptStatement(node.value as InterruptStatement);
       }
-      if (
-        node.value.type === "functionCall" &&
-        node.value.functionName === "llm"
-      ) {
+      if (node.value.type === "functionCall" && node.value.functionName === "llm") {
         const llmNode = this.processLlmCall(
           DEFAULT_PROMPT_NAME,
           this.scopes.returnType(),
@@ -3391,16 +3144,11 @@ export class TypeScriptBuilder {
         );
         return ts.statements([
           llmNode,
-          ts.nodeResult(
-            this.maybeWrapReturnValidation(ts.self(DEFAULT_PROMPT_NAME)),
-          ),
+          ts.nodeResult(this.maybeWrapReturnValidation(ts.self(DEFAULT_PROMPT_NAME))),
         ]);
       }
       const valueNode = this.processNode(node.value);
-      if (
-        node.value.type === "functionCall" &&
-        this.names.isGraphNode(node.value.functionName)
-      ) {
+      if (node.value.type === "functionCall" && this.names.isGraphNode(node.value.functionName)) {
         return valueNode;
       }
       return ts.nodeResult(this.maybeWrapReturnValidation(valueNode));
@@ -3408,10 +3156,7 @@ export class TypeScriptBuilder {
 
     if (this.isInterruptExpression(node.value)) {
       return this.processInterruptStatement(node.value as InterruptStatement);
-    } else if (
-      node.value.type === "functionCall" &&
-      node.value.functionName === "llm"
-    ) {
+    } else if (node.value.type === "functionCall" && node.value.functionName === "llm") {
       const llmNode = this.processLlmCall(
         DEFAULT_PROMPT_NAME,
         this.scopes.returnType(),
@@ -3420,9 +3165,7 @@ export class TypeScriptBuilder {
       );
       return ts.statements([
         llmNode,
-        ts.functionReturn(
-          this.maybeWrapReturnValidation(ts.self(DEFAULT_PROMPT_NAME)),
-        ),
+        ts.functionReturn(this.maybeWrapReturnValidation(ts.self(DEFAULT_PROMPT_NAME))),
       ]);
     }
     const valueNode = this.processNode(node.value);
@@ -3454,16 +3197,8 @@ export class TypeScriptBuilder {
         node.scope === "block" || node.scope === "blockArgs"
           ? this.scopes.blockFrameVar(node.blockDepth ?? 0)
           : undefined;
-      const varRef = ts.scopedVar(
-        node.variableName,
-        node.scope!,
-        this.moduleId,
-        blockFrameVar,
-      );
-      const validateStmt = ts.assign(
-        varRef,
-        this.validateExpr(node.typeHint, varRef),
-      );
+      const varRef = ts.scopedVar(node.variableName, node.scope!, this.moduleId, blockFrameVar);
+      const validateStmt = ts.assign(varRef, this.validateExpr(node.typeHint, varRef));
       if (result.kind === "statements") {
         return ts.statementsPush(result, validateStmt);
       }
@@ -3519,9 +3254,7 @@ export class TypeScriptBuilder {
       return ts.statements([
         ts.if(
           this.interruptCheckRaw(this.str(varRef)),
-          ts.throw(
-            `new Error("Cannot throw an interrupt inside a handler body")`,
-          ),
+          ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
         ),
         abortedGuard,
       ]);
@@ -3562,16 +3295,10 @@ export class TypeScriptBuilder {
    * partial is first bound into it via partialValueOrNull(), so the
    * finalize reads it like any other local. Bare-call temps have nothing
    * to bind. */
-  private assignmentAbortedGuard(
-    varRef: TsNode,
-    opts?: { bindOnAborted?: boolean },
-  ): TsNode {
+  private assignmentAbortedGuard(varRef: TsNode, opts?: { bindOnAborted?: boolean }): TsNode {
     const scopeType = this.scopes.current().type;
     const expr = this.str(varRef);
-    if (
-      !this.insideHandlerBody &&
-      (scopeType === "function" || scopeType === "block")
-    ) {
+    if (!this.insideHandlerBody && (scopeType === "function" || scopeType === "block")) {
       const frameVar = scopeType === "block" ? "__bstack" : "__stack";
       const scopeName = JSON.stringify(this.scopes.currentName());
       if (this.finalize.isActive()) {
@@ -3591,17 +3318,12 @@ export class TypeScriptBuilder {
       return ts.if(
         ts.raw(`isAborted(${expr})`),
         ts.statements([
-          ts.raw(
-            `runner.halt(${expr}.carryThrough(${frameVar}, ${scopeName}))`,
-          ),
+          ts.raw(`runner.halt(${expr}.carryThrough(${frameVar}, ${scopeName}))`),
           ts.return(),
         ]),
       );
     }
-    return ts.if(
-      ts.raw(`isAborted(${expr})`),
-      ts.raw(`throw ${expr}.toError()`),
-    );
+    return ts.if(ts.raw(`isAborted(${expr})`), ts.raw(`throw ${expr}.toError()`));
   }
 
   private _processAssignmentInner(node: Assignment): TsNode {
@@ -3753,17 +3475,13 @@ export class TypeScriptBuilder {
 
     // Extract prompt from first argument, using processNode to get scoped variable references
     const promptArg = node.arguments[0];
-    const promptNode = promptArg
-      ? this.processCallArg(promptArg)
-      : ts.raw("``");
+    const promptNode = promptArg ? this.processCallArg(promptArg) : ts.raw("``");
 
     // Everything after the prompt becomes the clientConfig, passed straight
     // through to runPrompt. Tools (AgencyFunction instances, MCP tools) live
     // in config.tools and are handled entirely by runPrompt at runtime.
     const argsAfterPrompt = node.arguments.slice(1);
-    const hasNamedOptions = argsAfterPrompt.some(
-      (a) => a.type === "namedArgument",
-    );
+    const hasNamedOptions = argsAfterPrompt.some((a) => a.type === "namedArgument");
     let clientConfig: TsNode;
     if (!hasNamedOptions) {
       // Back-compat: a lone positional options object (or nothing) passes
@@ -3778,9 +3496,7 @@ export class TypeScriptBuilder {
       for (const arg of argsAfterPrompt) {
         if (arg.type === "namedArgument") {
           const keyCode = arg.name.replace(/"/g, '\\"');
-          configEntries.push(
-            ts.set(`"${keyCode}"`, this.processNode(arg.value)),
-          );
+          configEntries.push(ts.set(`"${keyCode}"`, this.processNode(arg.value)));
         } else if (arg.type === "splat") {
           // `processCallArg` already lowers a splat to a spread node; spread
           // the underlying expression once to avoid emitting `......expr`.
@@ -3827,9 +3543,7 @@ export class TypeScriptBuilder {
         runPromptEntries.draftSchema = ts.raw(this.zodSchemaFor(declaredReturn));
       }
     }
-    runPromptEntries.maxToolCallRounds = ts.num(
-      this.agencyConfig.maxToolCallRounds || 10,
-    );
+    runPromptEntries.maxToolCallRounds = ts.num(this.agencyConfig.maxToolCallRounds || 10);
     runPromptEntries.removedTools = ts.self("__removedTools");
     // Decision 8: hand runPrompt this function's own locals object so a
     // destructive tool executed inside the call marks OUR `__destructiveRan`,
@@ -3843,10 +3557,7 @@ export class TypeScriptBuilder {
 
     const varRef = ts.scopedVar(variableName, scope, this.moduleId);
     const stmts: TsNode[] = [
-      ts.assign(
-        ts.self("__removedTools"),
-        ts.binOp(ts.self("__removedTools"), "||", ts.arr([])),
-      ),
+      ts.assign(ts.self("__removedTools"), ts.binOp(ts.self("__removedTools"), "||", ts.arr([]))),
     ];
 
     if (node.async) {
@@ -3869,9 +3580,7 @@ export class TypeScriptBuilder {
         stmts.push(
           ts.if(
             this.interruptCheckRaw(this.str(varRef)),
-            ts.throw(
-              `new Error("Cannot throw an interrupt inside a handler body")`,
-            ),
+            ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
           ),
         );
       } else {
@@ -3916,15 +3625,10 @@ export class TypeScriptBuilder {
   // `__internal_thread(opts, block)` function so future named args don't
   // require parser+IR+codegen+runtime edits in five files. See
   // `docs/superpowers/specs/2026-05-30-thread-as-agency-function.md`.
-  private processMessageThread(
-    node: MessageThread,
-    assignTo?: Assignment,
-  ): TsNode {
+  private processMessageThread(node: MessageThread, assignTo?: Assignment): TsNode {
     const id = this.steps.currentId();
     const method =
-      node.threadType === "subthread"
-        ? ("createSubthread" as const)
-        : ("create" as const);
+      node.threadType === "subthread" ? ("createSubthread" as const) : ("create" as const);
 
     // Body: process each statement with substep tracking
     const bodyNodes = this.processBodyAsParts(node.body);
@@ -3960,10 +3664,7 @@ export class TypeScriptBuilder {
     // instead of confusing runtime behaviour. (Parse-time rejection
     // would be nicer but the shared parser doesn't know which variant
     // we're in.)
-    if (
-      node.threadType === "subthread" &&
-      (node.continueExpr || node.sessionExpr)
-    ) {
+    if (node.threadType === "subthread" && (node.continueExpr || node.sessionExpr)) {
       throw new Error(
         "subthread() does not support `continue` or `session` — those modes " +
           "resume a top-level thread. Use `thread(continue: ...)` or " +
@@ -3972,12 +3673,8 @@ export class TypeScriptBuilder {
     }
     const label = node.label ? this.processNode(node.label) : null;
     const summarize = node.summarize ? this.processNode(node.summarize) : null;
-    const continueExpr = node.continueExpr
-      ? this.processNode(node.continueExpr)
-      : null;
-    const sessionExpr = node.sessionExpr
-      ? this.processNode(node.sessionExpr)
-      : null;
+    const continueExpr = node.continueExpr ? this.processNode(node.continueExpr) : null;
+    const sessionExpr = node.sessionExpr ? this.processNode(node.sessionExpr) : null;
     const hidden = node.hidden ? this.processNode(node.hidden) : null;
 
     return ts.runnerThread({
@@ -3992,9 +3689,7 @@ export class TypeScriptBuilder {
     });
   }
 
-  private processBlockPlain(
-    node: IfElse | WhileLoop | ForLoop | MatchBlock,
-  ): TsNode {
+  private processBlockPlain(node: IfElse | WhileLoop | ForLoop | MatchBlock): TsNode {
     const processBody = (body: AgencyNode[]): TsNode =>
       ts.statements(body.map((s) => this.processNode(s)));
 
@@ -4004,11 +3699,7 @@ export class TypeScriptBuilder {
           ? this.processBlockPlain(node.elseBody[0] as IfElse)
           : processBody(node.elseBody)
         : undefined;
-      return ts.if(
-        this.processNode(node.condition),
-        processBody(node.thenBody),
-        { elseBody },
-      );
+      return ts.if(this.processNode(node.condition), processBody(node.thenBody), { elseBody });
     }
     if (node.type === "whileLoop") {
       return ts.while(this.processNode(node.condition), processBody(node.body));
@@ -4032,19 +3723,11 @@ export class TypeScriptBuilder {
         return elseBody ?? ts.empty();
       }
       const elseIfs = nonDefault.slice(1).map((c) => ({
-        condition: ts.binOp(
-          expression,
-          "===",
-          this.processNode(c.caseValue as AgencyNode),
-        ),
+        condition: ts.binOp(expression, "===", this.processNode(c.caseValue as AgencyNode)),
         body: processBody(c.body),
       }));
       return ts.if(
-        ts.binOp(
-          expression,
-          "===",
-          this.processNode(nonDefault[0].caseValue as AgencyNode),
-        ),
+        ts.binOp(expression, "===", this.processNode(nonDefault[0].caseValue as AgencyNode)),
         processBody(nonDefault[0].body),
         { elseIfs, elseBody },
       );
@@ -4082,12 +3765,7 @@ export class TypeScriptBuilder {
       ts.constDecl(node.itemVar as string, ts.index(ts.id(keys), ts.id(i))),
     ];
     if (node.indexVar) {
-      loopBody.push(
-        ts.constDecl(
-          node.indexVar,
-          ts.raw(`${isArr} ? ${i} : ${src}[${keys}[${i}]]`),
-        ),
-      );
+      loopBody.push(ts.constDecl(node.indexVar, ts.raw(`${isArr} ? ${i} : ${src}[${keys}[${i}]]`)));
     }
     for (const s of node.body) loopBody.push(this.processNode(s));
 
@@ -4139,8 +3817,7 @@ export class TypeScriptBuilder {
     const destructured = keys.map((k, i) => `${k}: __k${i}`).join(", ");
     // Empty destructured (no excluded keys) collapses the leading comma so
     // we never emit invalid `(({ , ...__r }) => ...)`.
-    const params =
-      destructured.length > 0 ? `{ ${destructured}, ...__r }` : `{ ...__r }`;
+    const params = destructured.length > 0 ? `{ ${destructured}, ...__r }` : `{ ...__r }`;
     return `((${params}) => __r)(${sourceJs})`;
   }
 
@@ -4183,21 +3860,14 @@ export class TypeScriptBuilder {
         ? this.scopes.blockFrameVar(handlerBlockDepth ?? 0)
         : undefined;
     const callee = handlerScope
-      ? ts.scopedVar(
-          handlerName,
-          handlerScope,
-          this.moduleId,
-          handlerBlockFrameVar,
-        )
+      ? ts.scopedVar(handlerName, handlerScope, this.moduleId, handlerBlockFrameVar)
       : ts.id(handlerName);
     const callArgs: TsNode[] = [callee, descriptor];
     if (configObj) callArgs.push(configObj);
     const callExpr = ts.call(ts.id("__call"), callArgs);
-    return ts.arrowFn(
-      [{ name: "__data", typeAnnotation: "any" }],
-      ts.await(callExpr),
-      { async: true },
-    );
+    return ts.arrowFn([{ name: "__data", typeAnnotation: "any" }], ts.await(callExpr), {
+      async: true,
+    });
   }
 
   private processHandleBlockWithSteps(node: HandleBlock): TsNode {
@@ -4210,9 +3880,7 @@ export class TypeScriptBuilder {
     if (node.handler.kind === "inline") {
       const prevInsideHandlerBody = this.insideHandlerBody;
       this.insideHandlerBody = true;
-      const handlerBody = node.handler.body.map((stmt) =>
-        this.processStatement(stmt),
-      );
+      const handlerBody = node.handler.body.map((stmt) => this.processStatement(stmt));
       this.insideHandlerBody = prevInsideHandlerBody;
       const paramType = node.handler.param.typeHint
         ? formatTypeHintTs(node.handler.param.typeHint)
@@ -4300,11 +3968,7 @@ export class TypeScriptBuilder {
       if (pipeStages) {
         flushPart();
         const baseId = nextId();
-        const pipeNodes = this.pipes.expand(
-          stmt as Assignment,
-          pipeStages,
-          baseId,
-        );
+        const pipeNodes = this.pipes.expand(stmt as Assignment, pipeStages, baseId);
         for (let i = 0; i < pipeNodes.length; i++) {
           this.steps.push(baseId + i);
           result.push(pipeNodes[i]);
@@ -4322,10 +3986,7 @@ export class TypeScriptBuilder {
       this.steps.push(stepIndex);
       // Destructive-execution tracking: the pre-flip runs before the
       // statement, the post-flip after. See DestructiveTracking.statementFlips.
-      const { pre, post } = this.tracking.statementFlips(
-        stmt,
-        this.scopes.inDestructiveFunction,
-      );
+      const { pre, post } = this.tracking.statementFlips(stmt, this.scopes.inDestructiveFunction);
       if (pre) {
         if (!currentPart) currentPart = [];
         currentPart.push(pre);
@@ -4443,9 +4104,7 @@ export class TypeScriptBuilder {
       statelogFields.logFile = ts.str(cfg.log.logFile);
     }
     if (cfg.log?.requestTimeoutMs !== undefined) {
-      statelogFields.requestTimeoutMs = ts.raw(
-        String(cfg.log.requestTimeoutMs),
-      );
+      statelogFields.requestTimeoutMs = ts.raw(String(cfg.log.requestTimeoutMs));
     }
     if (cfg.log?.metadata) {
       const metaFields: Record<string, TsNode> = {};
@@ -4486,19 +4145,13 @@ export class TypeScriptBuilder {
       runtimeCtxArgs.logLevel = ts.str(this.agencyConfig.logLevel);
     }
     if (this.agencyConfig.checkpoints?.maxRestores !== undefined) {
-      runtimeCtxArgs.maxRestores = ts.raw(
-        String(this.agencyConfig.checkpoints.maxRestores),
-      );
+      runtimeCtxArgs.maxRestores = ts.raw(String(this.agencyConfig.checkpoints.maxRestores));
     }
     if (this.agencyConfig.maxCallDepth !== undefined) {
-      runtimeCtxArgs.maxCallDepth = ts.raw(
-        String(this.agencyConfig.maxCallDepth),
-      );
+      runtimeCtxArgs.maxCallDepth = ts.raw(String(this.agencyConfig.maxCallDepth));
     }
     if (this.agencyConfig.failurePropagation !== undefined) {
-      runtimeCtxArgs.failurePropagation = ts.str(
-        this.agencyConfig.failurePropagation,
-      );
+      runtimeCtxArgs.failurePropagation = ts.str(this.agencyConfig.failurePropagation);
     }
     // Bake the config `budget` into the RuntimeContext, resolving maxTime to ms
     // at compile time. installRootBudget reads this when no --max-cost/--max-time
@@ -4511,26 +4164,18 @@ export class TypeScriptBuilder {
         budgetFields.maxCost = ts.raw(String(b.maxCost));
       }
       if (b.maxTime !== undefined) {
-        budgetFields.maxTimeMs = ts.raw(
-          String(parseDurationMs(b.maxTime, "budget.maxTime")),
-        );
+        budgetFields.maxTimeMs = ts.raw(String(parseDurationMs(b.maxTime, "budget.maxTime")));
       }
       runtimeCtxArgs.budget = ts.obj(budgetFields);
     }
     if (cfg.client?.maxToolResultChars !== undefined) {
-      runtimeCtxArgs.maxToolResultChars = ts.raw(
-        String(cfg.client.maxToolResultChars),
-      );
+      runtimeCtxArgs.maxToolResultChars = ts.raw(String(cfg.client.maxToolResultChars));
     }
     if (cfg.client?.maxToolSchemaChars !== undefined) {
-      runtimeCtxArgs.maxToolSchemaChars = ts.raw(
-        String(cfg.client.maxToolSchemaChars),
-      );
+      runtimeCtxArgs.maxToolSchemaChars = ts.raw(String(cfg.client.maxToolSchemaChars));
     }
     if (cfg.client?.providerModules && cfg.client.providerModules.length > 0) {
-      runtimeCtxArgs.providerModules = ts.arr(
-        cfg.client.providerModules.map((p) => ts.str(p)),
-      );
+      runtimeCtxArgs.providerModules = ts.arr(cfg.client.providerModules.map((p) => ts.str(p)));
     }
 
     const traceConfigFields: Record<string, TsNode> = {
@@ -4574,10 +4219,7 @@ export class TypeScriptBuilder {
     }
 
     const runtimeCtxStatements: TsNode[] = [
-      ts.constDecl(
-        "__globalCtx",
-        ts.new(ts.id("RuntimeContext"), [ts.obj(runtimeCtxArgs)]),
-      ),
+      ts.constDecl("__globalCtx", ts.new(ts.id("RuntimeContext"), [ts.obj(runtimeCtxArgs)])),
       ts.constDecl("graph", $(ts.runtime.globalCtx).prop("graph").done()),
     ];
 
@@ -4616,9 +4258,7 @@ export class TypeScriptBuilder {
     const nodes: TsNode[] = [];
     this.compilationUnit.importedNodes.forEach((importNode) => {
       const from = importNode.agencyFile.replace(".agency", ".js");
-      const defaultImportName = this.agencyFileToDefaultImportName(
-        importNode.agencyFile,
-      );
+      const defaultImportName = this.agencyFileToDefaultImportName(importNode.agencyFile);
       nodes.push(
         ts.importDecl({
           importKind: "default",
@@ -4626,22 +4266,14 @@ export class TypeScriptBuilder {
           from,
         }),
       );
-      const nodeParamNames = importNode.importedNodes.map(
-        (name) => `__${name}NodeParams`,
-      );
-      nodes.push(
-        ts.importDecl({ importKind: "named", names: nodeParamNames, from }),
-      );
+      const nodeParamNames = importNode.importedNodes.map((name) => `__${name}NodeParams`);
+      nodes.push(ts.importDecl({ importKind: "named", names: nodeParamNames, from }));
       // Re-exported nodes (synthesized by `resolveReExports`): also emit a
       // JS-level re-export of `__<name>NodeParams` from the source so other
       // files can `import node { ... } from "this-file"`. The default graph
       // is already chained through via `graph.merge(...)` in postprocess.
       if (importNode.reExport && nodeParamNames.length > 0) {
-        nodes.push(
-          ts.raw(
-            `export { ${nodeParamNames.join(", ")} } from ${JSON.stringify(from)}`,
-          ),
-        );
+        nodes.push(ts.raw(`export { ${nodeParamNames.join(", ")} } from ${JSON.stringify(from)}`));
       }
     });
     return nodes;
@@ -4658,18 +4290,13 @@ export class TypeScriptBuilder {
       result.push(
         $(ts.id("graph"))
           .prop("conditionalEdge")
-          .call([
-            ts.str(nodeName),
-            ts.arr(adjacent.map((a: string) => ts.str(a))),
-          ])
+          .call([ts.str(nodeName), ts.arr(adjacent.map((a: string) => ts.str(a)))])
           .done(),
       );
     });
 
     this.compilationUnit.importedNodes.forEach((importNode) => {
-      const defaultImportName = this.agencyFileToDefaultImportName(
-        importNode.agencyFile,
-      );
+      const defaultImportName = this.agencyFileToDefaultImportName(importNode.agencyFile);
       result.push(
         $(ts.id("graph"))
           .prop("merge")
@@ -4741,8 +4368,7 @@ export class TypeScriptBuilder {
       // trailing arguments to the child process, where `std::args` reads them;
       // the compiler does not read them on the entry node's behalf.
       const mainParamCount =
-        this.compilationUnit.graphNodes.find((n) => n.nodeName === "main")
-          ?.parameters.length ?? 0;
+        this.compilationUnit.graphNodes.find((n) => n.nodeName === "main")?.parameters.length ?? 0;
       const mainCallArgs = [
         ...Array.from({ length: mainParamCount }, () => ts.id("undefined")),
         ts.id("initialState"),
@@ -4752,62 +4378,56 @@ export class TypeScriptBuilder {
           ts.binOp(
             $(ts.id("__process")).prop("argv").index(ts.num(1)).done(),
             "===",
-            ts.call(ts.id("fileURLToPath"), [
-              $(ts.id("import")).prop("meta").prop("url").done(),
-            ]),
+            ts.call(ts.id("fileURLToPath"), [$(ts.id("import")).prop("meta").prop("url").done()]),
           ),
           ts.statements([
             ts.tryCatch(
-            ts.statements([
-              ts.varDecl(
-                "const",
-                "initialState",
-                ts.obj({
-                  messages: ts.newThreadStore(),
-                  data: ts.obj({}),
-                }),
-              ),
-              ts.varDecl(
-                "const",
-                "__result",
-                ts.await(ts.call(ts.id("main"), mainCallArgs)),
-              ),
-              // Running `main` directly from the CLI: interrupts that no
-              // handler settled have surfaced to the user. resolveCliInterrupts
-              // is that user endpoint — under a run policy it decides each one
-              // (prompting with --interactive, rejecting otherwise) and resumes
-              // via respondToInterrupts; without a policy it reports the
-              // unhandled interrupt and exits non-zero. Skipped when imported
-              // from TS (guard above is false), where the caller handles
-              // interrupts itself.
-              ts.await(
-                ts.call(ts.id("resolveCliInterrupts"), [
-                  ts.id("__result"),
-                  ts.id("respondToInterrupts"),
-                ]),
-              ),
-            ]),
-            ts.statements([
-              // A root budget trip (--max-cost/--max-time) exits 3 with a
-              // user-facing overrun message and never returns; every other
-              // error falls through to the crash path below. User guard()
-              // trips never reach here — _runGuarded converts them to
-              // Results at their boundary.
-              ts.call(ts.id("reportBudgetExceededAndExit"), [ts.id("__error")]),
-              ts.consoleError(
-                ts.template([
-                  {
-                    // Real newline char: template part text is raw runtime
-                    // characters; the printer escapes, not the caller.
-                    text: "\nAgent crashed: ",
-                    expr: $(ts.id("__error")).prop("message").done(),
-                  },
-                ]),
-              ),
-              ts.throw("__error"),
-            ]),
-            "__error: any",
-          ),
+              ts.statements([
+                ts.varDecl(
+                  "const",
+                  "initialState",
+                  ts.obj({
+                    messages: ts.newThreadStore(),
+                    data: ts.obj({}),
+                  }),
+                ),
+                ts.varDecl("const", "__result", ts.await(ts.call(ts.id("main"), mainCallArgs))),
+                // Running `main` directly from the CLI: interrupts that no
+                // handler settled have surfaced to the user. resolveCliInterrupts
+                // is that user endpoint — under a run policy it decides each one
+                // (prompting with --interactive, rejecting otherwise) and resumes
+                // via respondToInterrupts; without a policy it reports the
+                // unhandled interrupt and exits non-zero. Skipped when imported
+                // from TS (guard above is false), where the caller handles
+                // interrupts itself.
+                ts.await(
+                  ts.call(ts.id("resolveCliInterrupts"), [
+                    ts.id("__result"),
+                    ts.id("respondToInterrupts"),
+                  ]),
+                ),
+              ]),
+              ts.statements([
+                // A root budget trip (--max-cost/--max-time) exits 3 with a
+                // user-facing overrun message and never returns; every other
+                // error falls through to the crash path below. User guard()
+                // trips never reach here — _runGuarded converts them to
+                // Results at their boundary.
+                ts.call(ts.id("reportBudgetExceededAndExit"), [ts.id("__error")]),
+                ts.consoleError(
+                  ts.template([
+                    {
+                      // Real newline char: template part text is raw runtime
+                      // characters; the printer escapes, not the caller.
+                      text: "\nAgent crashed: ",
+                      expr: $(ts.id("__error")).prop("message").done(),
+                    },
+                  ]),
+                ),
+                ts.throw("__error"),
+              ]),
+              "__error: any",
+            ),
           ]),
         ),
       );

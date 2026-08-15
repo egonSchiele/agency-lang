@@ -38,13 +38,8 @@ describe("formatDiff", () => {
 
   it("does not split a single line into multiple lines", () => {
     // The motivating bug: "What is the capital of France?" -> "...India?"
-    const result = formatDiff(
-      "What is the capital of France?",
-      "What is the capital of India?",
-    );
-    expect(strip(result)).toBe(
-      "- What is the capital of France?\n+ What is the capital of India?",
-    );
+    const result = formatDiff("What is the capital of France?", "What is the capital of India?");
+    expect(strip(result)).toBe("- What is the capital of France?\n+ What is the capital of India?");
     expect(result).toContain(color.red("France"));
     expect(result).toContain(color.green("India"));
   });
@@ -80,14 +75,10 @@ describe("formatDiff", () => {
   });
 
   it("does not split lines in plain-text replacement mode", () => {
-    const result = formatDiff(
-      "What is the capital of France?",
-      "What is the capital of India?",
-      { colorize: false },
-    );
-    expect(result).toBe(
-      "- What is the capital of France?\n+ What is the capital of India?",
-    );
+    const result = formatDiff("What is the capital of France?", "What is the capital of India?", {
+      colorize: false,
+    });
+    expect(result).toBe("- What is the capital of France?\n+ What is the capital of India?");
   });
 
   it("colorizes by default", () => {
@@ -165,7 +156,11 @@ describe("renderPatch", () => {
   });
 
   it("uses /dev/null for new and deleted files", () => {
-    const created = renderPatch(computeHunks("", "hello\nworld", 3, false), "/dev/null", "b/new.txt");
+    const created = renderPatch(
+      computeHunks("", "hello\nworld", 3, false),
+      "/dev/null",
+      "b/new.txt",
+    );
     expect(created).toContain("--- /dev/null");
     expect(created).toContain("@@ -0,0 +1");
     expect(created).toContain("+hello");

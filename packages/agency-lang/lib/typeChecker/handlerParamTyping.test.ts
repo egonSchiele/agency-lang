@@ -10,7 +10,10 @@ import { typeCheck } from "./index.js";
 import type { TypeCheckError } from "./types.js";
 
 function allErrors(source: string): TypeCheckError[] {
-  const file = path.join(os.tmpdir(), `tc-h1-${Date.now()}-${Math.random().toString(36).slice(2)}.agency`);
+  const file = path.join(
+    os.tmpdir(),
+    `tc-h1-${Date.now()}-${Math.random().toString(36).slice(2)}.agency`,
+  );
   writeFileSync(file, source);
   try {
     const absPath = path.resolve(file);
@@ -379,7 +382,9 @@ node main() {
     if (e.effect == "toString") { let x = e.data.anything }
   }
 }`);
-    expect(errs.some((x) => /Conflicting payload types for effect 'toString'/.test(x.message))).toBe(true);
+    expect(
+      errs.some((x) => /Conflicting payload types for effect 'toString'/.test(x.message)),
+    ).toBe(true);
     expect(errs.some((x) => /does not exist/i.test(x.message))).toBe(false);
   });
 
@@ -409,9 +414,7 @@ node main() {
 
 describe("ordering assertion", () => {
   it("throws if called after buildFlowGraphs (flowEnv already set)", () => {
-    const ctx = { flowEnv: {} } as unknown as Parameters<
-      typeof refineInlineHandlerParams
-    >[2];
+    const ctx = { flowEnv: {} } as unknown as Parameters<typeof refineInlineHandlerParams>[2];
     expect(() => refineInlineHandlerParams([], {}, ctx, {})).toThrow(
       /must run before buildFlowGraphs/,
     );

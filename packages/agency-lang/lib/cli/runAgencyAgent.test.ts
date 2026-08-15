@@ -50,19 +50,22 @@ describe("runAgencyAgent", () => {
     const deps: RunAgencyAgentDeps = { executeNodeAsync };
     const llmMocks = [{ return: "mocked" }];
 
-    const result = await runAgencyAgent({
-      agent: "agent.agency",
-      node: "main",
-      args: { value: "hello" },
-      config: { client: { defaultModel: "gpt-test" } },
-      cwd: tmpDir,
-      scratchDir: tmpDir,
-      statelogPath,
-      limits: { wallClockMs: 1234, stdoutBytes: 2048 },
-      llmMocks,
-      useTestLLMProvider: true,
-      argv: ["--flag"],
-    }, deps);
+    const result = await runAgencyAgent(
+      {
+        agent: "agent.agency",
+        node: "main",
+        args: { value: "hello" },
+        config: { client: { defaultModel: "gpt-test" } },
+        cwd: tmpDir,
+        scratchDir: tmpDir,
+        statelogPath,
+        limits: { wallClockMs: 1234, stdoutBytes: 2048 },
+        llmMocks,
+        useTestLLMProvider: true,
+        argv: ["--flag"],
+      },
+      deps,
+    );
 
     expect(result).toEqual({
       data: { ok: true },
@@ -79,7 +82,7 @@ describe("runAgencyAgent", () => {
       agencyFile: agentPath,
       nodeName: "main",
       hasArgs: true,
-      argsString: "\"hello\"",
+      argsString: '"hello"',
       timeoutMs: 1234,
       maxBufferBytes: 2048,
       llmMocks,
@@ -95,12 +98,15 @@ describe("runAgencyAgent", () => {
       async () => ({ data: "ok", stdout: "", stderr: "" }),
     );
 
-    await runAgencyAgent({
-      agent: "eval/judgePairwise.agency",
-      node: "judgePairwise",
-      args: { goal: "g", responseA: "a", responseB: "b" },
-      config: {},
-    }, { executeNodeAsync });
+    await runAgencyAgent(
+      {
+        agent: "eval/judgePairwise.agency",
+        node: "judgePairwise",
+        args: { goal: "g", responseA: "a", responseB: "b" },
+        config: {},
+      },
+      { executeNodeAsync },
+    );
 
     const call = executeNodeAsync.mock.calls[0]?.[0];
     expect(call).toBeDefined();
@@ -111,28 +117,39 @@ describe("runAgencyAgent", () => {
 
   it("omits trailing defaulted parameters and rejects unknown arguments", async () => {
     const agentPath = path.join(tmpDir, "agent.agency");
-    fs.writeFileSync(agentPath, "node main(value: string, suffix: string = \"!\") { return value + suffix }\n");
+    fs.writeFileSync(
+      agentPath,
+      'node main(value: string, suffix: string = "!") { return value + suffix }\n',
+    );
     const executeNodeAsync = vi.fn<NonNullable<RunAgencyAgentDeps["executeNodeAsync"]>>(
       async () => ({ data: "ok", stdout: "", stderr: "" }),
     );
 
-    await runAgencyAgent({
-      agent: agentPath,
-      node: "main",
-      args: { value: "hello" },
-      config: {},
-    }, { executeNodeAsync });
+    await runAgencyAgent(
+      {
+        agent: agentPath,
+        node: "main",
+        args: { value: "hello" },
+        config: {},
+      },
+      { executeNodeAsync },
+    );
 
     const call = executeNodeAsync.mock.calls[0]?.[0];
     expect(call).toBeDefined();
     if (!call) throw new Error("executeNodeAsync was not called");
-    expect(call.argsString).toBe("\"hello\"");
+    expect(call.argsString).toBe('"hello"');
 
-    await expect(runAgencyAgent({
-      agent: agentPath,
-      node: "main",
-      args: { value: "hello", extra: true },
-      config: {},
-    }, { executeNodeAsync })).rejects.toThrow(/Unknown argument "extra"/);
+    await expect(
+      runAgencyAgent(
+        {
+          agent: agentPath,
+          node: "main",
+          args: { value: "hello", extra: true },
+          config: {},
+        },
+        { executeNodeAsync },
+      ),
+    ).rejects.toThrow(/Unknown argument "extra"/);
   });
 });

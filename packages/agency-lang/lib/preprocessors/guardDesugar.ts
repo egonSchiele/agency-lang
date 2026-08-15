@@ -40,10 +40,7 @@ type DesugarContext = {
   returnTarget?: VariableType;
 };
 
-export function desugarGuardsInBody(
-  body: AgencyNode[],
-  ctx: DesugarContext = {},
-): AgencyNode[] {
+export function desugarGuardsInBody(body: AgencyNode[], ctx: DesugarContext = {}): AgencyNode[] {
   body.forEach((node, i) => {
     body[i] = desugarNode(node, ctx);
   });
@@ -53,9 +50,7 @@ export function desugarGuardsInBody(
 /** `successType` of a Result annotation; undefined for anything else.
  *  The desugar never validates — a non-Result annotation simply
  *  stamps nothing, and the checker owns diagnosing it. */
-function yieldTypeFrom(
-  t: VariableType | null | undefined,
-): VariableType | undefined {
+function yieldTypeFrom(t: VariableType | null | undefined): VariableType | undefined {
   if (t && t.type === "resultType") {
     return t.successType;
   }
@@ -68,11 +63,7 @@ function yieldTypeFrom(
  *  desugar run the blockAncestor read returns run-1 stamps, which is
  *  when it earns its keep); def/node bodies capture the declared
  *  return; every other body inherits. */
-function slotContext(
-  node: AgencyNode,
-  slot: BodySlot,
-  ctx: DesugarContext,
-): DesugarContext {
+function slotContext(node: AgencyNode, slot: BodySlot, ctx: DesugarContext): DesugarContext {
   if (slot.retargetsReturn) {
     return { returnTarget: slot.blockAncestor?.declaredYieldType };
   }
@@ -86,10 +77,7 @@ function slotContext(
 /** The type a guard sitting in this node's `value` slot is stamped
  *  with: an assignment names its own slot; a return yields to the
  *  current return target; anything else stamps nothing. */
-function stampFor(
-  node: AgencyNode,
-  ctx: DesugarContext,
-): VariableType | undefined {
+function stampFor(node: AgencyNode, ctx: DesugarContext): VariableType | undefined {
   if (node.type === "assignment") {
     return yieldTypeFrom((node as Assignment).typeHint);
   }
@@ -116,10 +104,7 @@ function desugarNode(node: AgencyNode, ctx: DesugarContext): AgencyNode {
   }
   const valueNode = value as AgencyNode;
   if (valueNode.type === "guardBlock") {
-    holder.value = desugarGuardBlock(
-      valueNode as GuardBlock,
-      stampFor(node, ctx),
-    );
+    holder.value = desugarGuardBlock(valueNode as GuardBlock, stampFor(node, ctx));
     return node;
   }
   const rewritten = desugarNode(valueNode, ctx);
@@ -129,10 +114,7 @@ function desugarNode(node: AgencyNode, ctx: DesugarContext): AgencyNode {
   return node;
 }
 
-function desugarGuardBlock(
-  g: GuardBlock,
-  yieldType: VariableType | undefined,
-): AgencyNode {
+function desugarGuardBlock(g: GuardBlock, yieldType: VariableType | undefined): AgencyNode {
   // The head arguments forward VERBATIM. Named, positional, unknown,
   // duplicated — all of it lands on the `_guard` call and gets exactly
   // the validation and diagnostics the legacy call syntax got from the

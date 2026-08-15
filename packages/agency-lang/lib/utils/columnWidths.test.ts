@@ -41,7 +41,8 @@ describe("resolveColumnWidths", () => {
   });
 
   it("percent with no available width throws the basis error with the given context", () => {
-    expect(() => resolveColumnWidths([pct(50)], undefined, "std::ui/layout"))
-      .toThrow(/std::ui\/layout.*percentage width/);
+    expect(() => resolveColumnWidths([pct(50)], undefined, "std::ui/layout")).toThrow(
+      /std::ui\/layout.*percentage width/,
+    );
   });
 });

@@ -7,10 +7,7 @@ import { gate } from "./mcpGate.js";
 
 function inFrame<T>(fn: () => Promise<T>): Promise<T> {
   const ctx = makeMockCtx();
-  return agency.withTestContext(
-    { ctx, stack: ctx.stateStack, threads: new ThreadStore() },
-    fn,
-  );
+  return agency.withTestContext({ ctx, stack: ctx.stateStack, threads: new ThreadStore() }, fn);
 }
 
 // Run `gated(...)` under an optional handler, inside an outer scope/step so the

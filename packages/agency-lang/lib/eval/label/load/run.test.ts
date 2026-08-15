@@ -42,8 +42,9 @@ afterEach(() => {
 
 describe("selectLabelingFinalOutput", () => {
   it("selects the last output with its index", () => {
-    expect(selectLabelingFinalOutput({ evalOutputs: [{ value: "first" }, { value: "second" }] }))
-      .toEqual({ kind: "selected", value: "second", index: 1 });
+    expect(
+      selectLabelingFinalOutput({ evalOutputs: [{ value: "first" }, { value: "second" }] }),
+    ).toEqual({ kind: "selected", value: "second", index: 1 });
   });
 
   it("reports an empty output list as missing", () => {
@@ -51,8 +52,9 @@ describe("selectLabelingFinalOutput", () => {
   });
 
   it("reports a truncated output with its index rather than selecting it", () => {
-    expect(selectLabelingFinalOutput({ evalOutputs: [{ value: "big", truncated: true }] }))
-      .toEqual({ kind: "truncated", index: 0 });
+    expect(selectLabelingFinalOutput({ evalOutputs: [{ value: "big", truncated: true }] })).toEqual(
+      { kind: "truncated", index: 0 },
+    );
   });
 
   it("refuses the legacy finalResponse shape rather than inventing an index", () => {
@@ -69,10 +71,14 @@ describe("selectLabelingFinalOutput", () => {
 
   it("distinguishes an ABSENT value from a deliberate JSON null", () => {
     expect(selectLabelingFinalOutput({ evalOutputs: [{}] })).toEqual({ kind: "missing" });
-    expect(selectLabelingFinalOutput({ evalOutputs: [{ threadId: "0" }] }))
-      .toEqual({ kind: "missing" });
-    expect(selectLabelingFinalOutput({ evalOutputs: [{ value: null }] }))
-      .toEqual({ kind: "selected", value: null, index: 0 });
+    expect(selectLabelingFinalOutput({ evalOutputs: [{ threadId: "0" }] })).toEqual({
+      kind: "missing",
+    });
+    expect(selectLabelingFinalOutput({ evalOutputs: [{ value: null }] })).toEqual({
+      kind: "selected",
+      value: null,
+      index: 0,
+    });
   });
 
   it("treats a non-object output entry as missing", () => {
@@ -88,8 +94,9 @@ describe("loadRun fields", () => {
 
   it("omits the task field when asked", () => {
     writeSource([{ inputId: "a" }]);
-    expect(Object.keys(load({ includeTaskField: false }).occurrences[0].fields))
-      .toEqual(["output"]);
+    expect(Object.keys(load({ includeTaskField: false }).occurrences[0].fields)).toEqual([
+      "output",
+    ]);
   });
 
   it("projects a structured task through the shared rule", () => {
@@ -107,7 +114,6 @@ describe("loadRun fields", () => {
     const batch = load({ includeTaskField: false, constantFields: { task: "a better framing" } });
     expect(batch.occurrences[0].fields).toEqual({ task: "a better framing", output: "hello" });
   });
-
 });
 
 describe("loadRun provenance", () => {
@@ -206,7 +212,10 @@ describe("loadRun skips", () => {
 
   it("skips an input whose task is not JSON-serialisable data", () => {
     writeSource([{ inputId: "a" }]);
-    fs.writeFileSync(path.join(sourceDir, "inputs", "a", "input.json"), JSON.stringify({ id: "a" }));
+    fs.writeFileSync(
+      path.join(sourceDir, "inputs", "a", "input.json"),
+      JSON.stringify({ id: "a" }),
+    );
     expect(load().skips).toEqual([{ item: "a", reason: "invalid-task" }]);
   });
 

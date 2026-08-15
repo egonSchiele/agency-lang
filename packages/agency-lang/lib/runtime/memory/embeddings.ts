@@ -1,9 +1,5 @@
 import { DEFAULT_EMBEDDING_MODEL } from "../../constants.js";
-import {
-  EMBEDDING_FORMAT_VERSION,
-  type EmbeddingEntry,
-  type EmbeddingIndex,
-} from "./types.js";
+import { EMBEDDING_FORMAT_VERSION, type EmbeddingEntry, type EmbeddingIndex } from "./types.js";
 
 export function cosineSimilarity(a: number[], b: number[]): number {
   let dot = 0;
@@ -49,11 +45,7 @@ export class EmbeddingManager {
     this.entries = this.entries.filter((e) => e.id !== id);
   }
 
-  findSimilar(
-    queryVector: number[],
-    topK: number,
-    minThreshold = 0.0
-  ): SimilarityResult[] {
+  findSimilar(queryVector: number[], topK: number, minThreshold = 0.0): SimilarityResult[] {
     const scored = this.entries
       .map((entry) => ({
         id: entry.id,

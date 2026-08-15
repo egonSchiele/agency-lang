@@ -11,10 +11,10 @@ import type { StateStack } from "./state/stateStack.js";
  *  cap this dimension"; a value still passes through the disable rule at the
  *  call site (cost < 0 / time <= 0 install nothing). FAILS CLOSED on a
  *  malformed value. */
-function resolveRootLimits(contextBudget?: {
-  maxCost?: number;
-  maxTimeMs?: number;
-}): { cost?: number; timeMs?: number } {
+function resolveRootLimits(contextBudget?: { maxCost?: number; maxTimeMs?: number }): {
+  cost?: number;
+  timeMs?: number;
+} {
   const rawCost = process.env[AGENCY_MAX_COST];
   const cost =
     rawCost !== undefined

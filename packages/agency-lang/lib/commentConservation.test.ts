@@ -128,23 +128,14 @@ const SAMPLES: [string, string][] = [
     "block match arm",
     `node main() {\n  match(x) {\n    1 => {\n      print(1) // inside\n    }\n  }\n}\n`,
   ],
-  [
-    "array literal",
-    `node main() {\n  const xs = [\n    1, // first\n    2 // second\n  ]\n}\n`,
-  ],
+  ["array literal", `node main() {\n  const xs = [\n    1, // first\n    2 // second\n  ]\n}\n`],
   [
     "object literal",
     `node main() {\n  const o = {\n    a: 1, // first\n    b: 2 // second\n  }\n}\n`,
   ],
   ["object type", `type V = {\n  one: number; // first\n  two: string // second\n}\n`],
-  [
-    "object type inside a wrapper",
-    `type V = {\n  one: number // wrapped\n}[]\n`,
-  ],
-  [
-    "call arguments",
-    `node main() {\n  save(\n    first, // who\n    second // what\n  )\n}\n`,
-  ],
+  ["object type inside a wrapper", `type V = {\n  one: number // wrapped\n}[]\n`],
+  ["call arguments", `node main() {\n  save(\n    first, // who\n    second // what\n  )\n}\n`],
   [
     "named call arguments",
     `node main() {\n  save(\n    value: first, // who\n    retries: 3 // how hard\n  )\n}\n`,
@@ -166,10 +157,7 @@ const SAMPLES: [string, string][] = [
     `node save(\n  value: string, // the payload\n  retries: number = 3 // how hard\n) {\n\n}\n`,
   ],
   ["named import", `import {\n  alpha, // fast path\n  beta // fallback\n} from "./tools"\n`],
-  [
-    "mixed import",
-    `import tools, {\n  alpha // fast path\n} from "./tools"\n`,
-  ],
+  ["mixed import", `import tools, {\n  alpha // fast path\n} from "./tools"\n`],
   ["node import", `import node {\n  first, // one\n  second // two\n} from "./n.agency"\n`],
   ["named export", `export {\n  alpha, // fast path\n  beta // fallback\n} from "./tools"\n`],
   [
@@ -218,9 +206,7 @@ describe("a comment comes out where it went in", () => {
     // because a plain `readdirSync` silently skipped fourteen fixture files
     // and a bare count threshold was too loose to notice.
     expect(corpus.length).toBeGreaterThan(50);
-    expect(
-      corpus.filter((file) => path.dirname(file).includes("euler")).length,
-    ).toBeGreaterThan(0);
+    expect(corpus.filter((file) => path.dirname(file).includes("euler")).length).toBeGreaterThan(0);
     const total = corpus
       .map((file) => fs.readFileSync(file, "utf-8"))
       .map((source) => {

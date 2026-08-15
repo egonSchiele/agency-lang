@@ -9,10 +9,7 @@ import { createReturnObject, deepClone } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
 import { nanoid } from "nanoid";
 
-export function applyOverrides(
-  checkpoint: Checkpoint,
-  overrides: Record<string, unknown>,
-): void {
+export function applyOverrides(checkpoint: Checkpoint, overrides: Record<string, unknown>): void {
   const frame = StateStack.lastFrameJSON(checkpoint.stack);
   for (const [key, value] of Object.entries(overrides)) {
     frame.locals[key] = value;
@@ -44,10 +41,7 @@ export async function rewindFrom(args: {
   // (the `callback(...)` wrapper) that needs an ALS frame for
   // `__call` post-migration. See `runInBootstrapFrame` in
   // lib/runtime/asyncContext.ts.
-  await runInBootstrapFrame(
-    execCtx,
-    () => __initAllRegisteredCallbacks(execCtx),
-  );
+  await runInBootstrapFrame(execCtx, () => __initAllRegisteredCallbacks(execCtx));
   execCtx.restoreState(checkpoint);
   execCtx._skipNextCheckpoint = true;
 
@@ -72,21 +66,19 @@ export async function rewindFrom(args: {
         // `Runner.runInScope` with the per-scope ThreadStore
         // reconstituted by `setupNode` — nothing user-facing should
         // reach for `threads` in the slice covered by this wrap.
-        const result = await runInBootstrapFrame(
-          execCtx,
-          () =>
-            execCtx.graph.run(
-              nodeName,
-              {
-                data: {},
-                ctx: execCtx,
-                isResume: true,
-              },
-              {
-                onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
-                statelogClient: execCtx.statelogClient,
-              },
-            ),
+        const result = await runInBootstrapFrame(execCtx, () =>
+          execCtx.graph.run(
+            nodeName,
+            {
+              data: {},
+              ctx: execCtx,
+              isResume: true,
+            },
+            {
+              onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
+              statelogClient: execCtx.statelogClient,
+            },
+          ),
         );
         await execCtx.pendingPromises.awaitAll();
         return createReturnObject({ result, globals: execCtx.globals });

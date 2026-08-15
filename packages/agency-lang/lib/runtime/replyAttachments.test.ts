@@ -64,8 +64,18 @@ describe("harvestReplyAttachments", () => {
     fs.writeFileSync("/tmp/tra-b.png", Buffer.from([1]));
     fs.writeFileSync("/tmp/tra-c.png", Buffer.from([1]));
     const runnerState: Record<string, any> = {};
-    const markerA = harvestReplyAttachments({ queued: [imagePart("/tmp/tra-a.png")], runnerState, model: "m", toolName: "toolA" });
-    const markerB = harvestReplyAttachments({ queued: [imagePart("/tmp/tra-b.png"), imagePart("/tmp/tra-c.png")], runnerState, model: "m", toolName: "toolB" });
+    const markerA = harvestReplyAttachments({
+      queued: [imagePart("/tmp/tra-a.png")],
+      runnerState,
+      model: "m",
+      toolName: "toolA",
+    });
+    const markerB = harvestReplyAttachments({
+      queued: [imagePart("/tmp/tra-b.png"), imagePart("/tmp/tra-c.png")],
+      runnerState,
+      model: "m",
+      toolName: "toolB",
+    });
 
     expect(markerA).toContain("img_1");
     expect(markerB).toContain("img_2");
@@ -85,8 +95,18 @@ describe("harvestReplyAttachments", () => {
     fs.writeFileSync("/tmp/tra-b.png", Buffer.from([1]));
     const runnerStateLeft: Record<string, any> = {};
     const runnerStateRight: Record<string, any> = {};
-    harvestReplyAttachments({ queued: [imagePart("/tmp/tra-a.png")], runnerState: runnerStateLeft, model: "m", toolName: "t" });
-    harvestReplyAttachments({ queued: [imagePart("/tmp/tra-b.png")], runnerState: runnerStateRight, model: "m", toolName: "t" });
+    harvestReplyAttachments({
+      queued: [imagePart("/tmp/tra-a.png")],
+      runnerState: runnerStateLeft,
+      model: "m",
+      toolName: "t",
+    });
+    harvestReplyAttachments({
+      queued: [imagePart("/tmp/tra-b.png")],
+      runnerState: runnerStateRight,
+      model: "m",
+      toolName: "t",
+    });
     expect((runnerStateLeft.replyAttachments as HarvestedReplyAttachment[])[0].id).toBe("img_1");
     expect((runnerStateRight.replyAttachments as HarvestedReplyAttachment[])[0].id).toBe("img_1");
     expect(runnerStateLeft.replyAttachments).toHaveLength(1);
@@ -101,9 +121,7 @@ describe("harvestReplyAttachments", () => {
       model: "text-only-model",
       toolName: "showChart",
     });
-    expect(marker).toBe(
-      "\n\n[attachment img_1 skipped: the current model has no image input]",
-    );
+    expect(marker).toBe("\n\n[attachment img_1 skipped: the current model has no image input]");
     expect(runnerState.replyAttachments).toEqual([]);
   });
 
@@ -139,7 +157,12 @@ describe("harvestReplyAttachments", () => {
     const bigFile = path.join(dir, "big.png");
     fs.writeFileSync(bigFile, Buffer.alloc(21 * 1024 * 1024));
     const runnerState: Record<string, any> = {};
-    const marker = harvestReplyAttachments({ queued: [imagePart(bigFile)], runnerState, model: "m", toolName: "t" });
+    const marker = harvestReplyAttachments({
+      queued: [imagePart(bigFile)],
+      runnerState,
+      model: "m",
+      toolName: "t",
+    });
     expect(marker).toContain("skipped: too large to attach");
     fs.rmSync(dir, { recursive: true, force: true });
   });
@@ -160,7 +183,12 @@ describe("harvestReplyAttachments", () => {
 
   it("skips a missing path file at harvest with an honest marker", () => {
     const runnerState: Record<string, any> = {};
-    const marker = harvestReplyAttachments({ queued: [imagePart("/nonexistent-tra/missing.png")], runnerState, model: "m", toolName: "t" });
+    const marker = harvestReplyAttachments({
+      queued: [imagePart("/nonexistent-tra/missing.png")],
+      runnerState,
+      model: "m",
+      toolName: "t",
+    });
     expect(marker).toBe("\n\n[attachment img_1 skipped: file not found]");
     expect(runnerState.replyAttachments).toEqual([]);
   });
@@ -233,7 +261,11 @@ describe("buildReplyUserMessage", () => {
       {
         id: "img_1",
         toolName: "fetchDoc",
-        part: { type: "file", source: { kind: "url", url: "https://example.com/r.pdf" }, filename: "r.pdf" },
+        part: {
+          type: "file",
+          source: { kind: "url", url: "https://example.com/r.pdf" },
+          filename: "r.pdf",
+        },
       },
     ]) as any[];
     expect(parts[0].text).toBe("[img_1 — file output of tool fetchDoc]");

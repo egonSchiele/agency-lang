@@ -48,7 +48,12 @@ describe("scheduleAdd", () => {
   });
 
   it("uses custom name when provided", () => {
-    scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", name: "custom", baseDir: tmpDir });
+    scheduleAdd({
+      file: path.join(tmpDir, "agent.agency"),
+      every: "daily",
+      name: "custom",
+      baseDir: tmpDir,
+    });
     const reg = JSON.parse(fs.readFileSync(path.join(tmpDir, "schedules.json"), "utf-8"));
     expect(reg["custom"]).toBeDefined();
   });
@@ -56,7 +61,12 @@ describe("scheduleAdd", () => {
   it("stores env-file path", () => {
     const envFile = path.join(tmpDir, ".env");
     fs.writeFileSync(envFile, "KEY=value");
-    scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", envFile, baseDir: tmpDir });
+    scheduleAdd({
+      file: path.join(tmpDir, "agent.agency"),
+      every: "daily",
+      envFile,
+      baseDir: tmpDir,
+    });
     const reg = JSON.parse(fs.readFileSync(path.join(tmpDir, "schedules.json"), "utf-8"));
     expect(reg["agent"].envFile).toBe(envFile);
   });
@@ -68,15 +78,21 @@ describe("scheduleAdd", () => {
   });
 
   it("throws if agent file does not exist", () => {
-    expect(() => scheduleAdd({ file: path.join(tmpDir, "nope.agency"), every: "daily", baseDir: tmpDir })).toThrow("does not exist");
+    expect(() =>
+      scheduleAdd({ file: path.join(tmpDir, "nope.agency"), every: "daily", baseDir: tmpDir }),
+    ).toThrow("does not exist");
   });
 
   it("throws if cron expression is invalid", () => {
-    expect(() => scheduleAdd({ file: path.join(tmpDir, "agent.agency"), cron: "bad", baseDir: tmpDir })).toThrow("Invalid cron expression");
+    expect(() =>
+      scheduleAdd({ file: path.join(tmpDir, "agent.agency"), cron: "bad", baseDir: tmpDir }),
+    ).toThrow("Invalid cron expression");
   });
 
   it("throws if neither --every nor --cron is provided", () => {
-    expect(() => scheduleAdd({ file: path.join(tmpDir, "agent.agency"), baseDir: tmpDir })).toThrow("--every or --cron");
+    expect(() => scheduleAdd({ file: path.join(tmpDir, "agent.agency"), baseDir: tmpDir })).toThrow(
+      "--every or --cron",
+    );
   });
 
   it("throws ScheduleExistsError when name already exists", () => {
@@ -92,13 +108,20 @@ describe("scheduleAdd", () => {
 
   it("overwrites when force is true", () => {
     scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", baseDir: tmpDir });
-    scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "hourly", force: true, baseDir: tmpDir });
+    scheduleAdd({
+      file: path.join(tmpDir, "agent.agency"),
+      every: "hourly",
+      force: true,
+      baseDir: tmpDir,
+    });
     const reg = JSON.parse(fs.readFileSync(path.join(tmpDir, "schedules.json"), "utf-8"));
     expect(reg["agent"].cron).toBe("0 * * * *");
   });
 
   it("does not update registry if install fails", () => {
-    mockInstall.mockImplementationOnce(() => { throw new Error("install failed"); });
+    mockInstall.mockImplementationOnce(() => {
+      throw new Error("install failed");
+    });
     expect(() =>
       scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", baseDir: tmpDir }),
     ).toThrow("install failed");
@@ -108,9 +131,16 @@ describe("scheduleAdd", () => {
 
   it("does not update registry if overwrite install fails", () => {
     scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", baseDir: tmpDir });
-    mockInstall.mockImplementationOnce(() => { throw new Error("install failed"); });
+    mockInstall.mockImplementationOnce(() => {
+      throw new Error("install failed");
+    });
     expect(() =>
-      scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "hourly", force: true, baseDir: tmpDir }),
+      scheduleAdd({
+        file: path.join(tmpDir, "agent.agency"),
+        every: "hourly",
+        force: true,
+        baseDir: tmpDir,
+      }),
     ).toThrow("install failed");
     // Registry should still have the old entry
     const reg = JSON.parse(fs.readFileSync(path.join(tmpDir, "schedules.json"), "utf-8"));
@@ -119,19 +149,34 @@ describe("scheduleAdd", () => {
 
   it("rejects names with path separators", () => {
     expect(() =>
-      scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", name: "../evil", baseDir: tmpDir }),
+      scheduleAdd({
+        file: path.join(tmpDir, "agent.agency"),
+        every: "daily",
+        name: "../evil",
+        baseDir: tmpDir,
+      }),
     ).toThrow("Invalid schedule name");
   });
 
   it("rejects names with spaces", () => {
     expect(() =>
-      scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", name: "my agent", baseDir: tmpDir }),
+      scheduleAdd({
+        file: path.join(tmpDir, "agent.agency"),
+        every: "daily",
+        name: "my agent",
+        baseDir: tmpDir,
+      }),
     ).toThrow("Invalid schedule name");
   });
 
   it("rejects names with shell metacharacters", () => {
     expect(() =>
-      scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", name: "foo;rm -rf", baseDir: tmpDir }),
+      scheduleAdd({
+        file: path.join(tmpDir, "agent.agency"),
+        every: "daily",
+        name: "foo;rm -rf",
+        baseDir: tmpDir,
+      }),
     ).toThrow("Invalid schedule name");
   });
 });
@@ -234,10 +279,12 @@ describe("scheduleEdit", () => {
 
   it("does not update registry if install fails", () => {
     scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", baseDir: tmpDir });
-    mockInstall.mockImplementationOnce(() => { throw new Error("install failed"); });
-    expect(() =>
-      scheduleEdit({ name: "agent", cron: "0 8 * * *", baseDir: tmpDir }),
-    ).toThrow("install failed");
+    mockInstall.mockImplementationOnce(() => {
+      throw new Error("install failed");
+    });
+    expect(() => scheduleEdit({ name: "agent", cron: "0 8 * * *", baseDir: tmpDir })).toThrow(
+      "install failed",
+    );
     // Registry should still have the old cron
     const reg = JSON.parse(fs.readFileSync(path.join(tmpDir, "schedules.json"), "utf-8"));
     expect(reg["agent"].cron).toBe("0 9 * * *");

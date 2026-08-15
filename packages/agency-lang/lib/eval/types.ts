@@ -142,9 +142,7 @@ export type NormalizedToolEndEvent = NormalizedEventBase & {
 
 /** One step in the chronological tool-call / LLM-call sequence. */
 export type NormalizedEvent =
-  | NormalizedLlmEvent
-  | NormalizedToolStartEvent
-  | NormalizedToolEndEvent;
+  NormalizedLlmEvent | NormalizedToolStartEvent | NormalizedToolEndEvent;
 
 export type InterruptEntry = {
   interruptId: string;

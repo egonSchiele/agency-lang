@@ -14,7 +14,10 @@ const loadedModulePaths = new Set<string>();
 function envProviderModules(): string[] {
   const raw = process.env.AGENCY_PROVIDER_MODULES;
   if (!raw) return [];
-  return raw.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
 
 /** Resolve a configured path to absolute (cwd-relative when not absolute). */
@@ -52,9 +55,11 @@ export async function loadProviderModuleByPath(raw: string): Promise<void> {
       );
     }
     try {
-      await (mod.register as (api: {
-        registerProvider: typeof registerProvider;
-      }) => unknown | Promise<unknown>)({ registerProvider });
+      await (
+        mod.register as (api: {
+          registerProvider: typeof registerProvider;
+        }) => unknown | Promise<unknown>
+      )({ registerProvider });
     } catch (err) {
       throw new Error(
         `Provider module "${raw}" (resolved to ${resolved}) threw during register(): ${(err as Error).message}`,
@@ -83,9 +88,7 @@ export async function loadProviderModuleByPath(raw: string): Promise<void> {
  * Any failure is fatal and names the offending path — a misconfigured provider
  * module is a setup error, never silently skipped.
  */
-export async function loadProviderModules(ctx: {
-  providerModules?: string[];
-}): Promise<void> {
+export async function loadProviderModules(ctx: { providerModules?: string[] }): Promise<void> {
   const configured = [...(ctx.providerModules ?? []), ...envProviderModules()];
   for (const raw of configured) {
     await loadProviderModuleByPath(raw);

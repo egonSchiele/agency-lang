@@ -24,8 +24,7 @@ export type EvalRunPhaseOne = {
 };
 
 export type EvalRunPhaseOneResult =
-  | { kind: "loaded"; value: EvalRunPhaseOne }
-  | { kind: "failed"; runDir: string; warning: string };
+  { kind: "loaded"; value: EvalRunPhaseOne } | { kind: "failed"; runDir: string; warning: string };
 
 export type ReadFileFn = (filePath: string) => string;
 
@@ -67,8 +66,7 @@ export function readEvalRunPhaseOne(
 }
 
 type JsonObjectRead =
-  | { kind: "object"; value: Record<string, unknown> }
-  | { kind: "failed"; warning: string };
+  { kind: "object"; value: Record<string, unknown> } | { kind: "failed"; warning: string };
 
 function readJsonObject(filePath: string, readFile: ReadFileFn): JsonObjectRead {
   let text: string;

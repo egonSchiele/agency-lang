@@ -37,16 +37,31 @@ describe("createServeClient", () => {
   });
 
   it("invokeNode returns a pause (state string + real interrupts) as { data: interrupts }", async () => {
-    const paused = [interrupt({ effect: "app::confirm", message: "ok?", data: null, origin: "o", runId: "r", interruptId: "i1" })];
-    mockFetch(() => ({ json: { success: true, value: { interrupts: paused, state: "serialized" } } }));
+    const paused = [
+      interrupt({
+        effect: "app::confirm",
+        message: "ok?",
+        data: null,
+        origin: "o",
+        runId: "r",
+        interruptId: "i1",
+      }),
+    ];
+    mockFetch(() => ({
+      json: { success: true, value: { interrupts: paused, state: "serialized" } },
+    }));
     expect(await client().invokeNode("main", {})).toEqual({ data: paused });
   });
 
   it("treats an object without a string state (or without real interrupts) as final", async () => {
     mockFetch(() => ({ json: { success: true, value: { interrupts: [], completed: 12 } } }));
-    expect(await client().invokeNode("main", {})).toEqual({ data: { interrupts: [], completed: 12 } });
+    expect(await client().invokeNode("main", {})).toEqual({
+      data: { interrupts: [], completed: 12 },
+    });
 
-    mockFetch(() => ({ json: { success: true, value: { interrupts: ["not-an-interrupt"], state: "s" } } }));
+    mockFetch(() => ({
+      json: { success: true, value: { interrupts: ["not-an-interrupt"], state: "s" } },
+    }));
     expect(await client().invokeNode("main", {})).toEqual({
       data: { interrupts: ["not-an-interrupt"], state: "s" },
     });
@@ -89,7 +104,10 @@ describe("createServeClient", () => {
 
   it("throws when a function/node returns a failed AgencyResult (wrapped in the success envelope)", async () => {
     // The real shape of a served function that raises an unhandled interrupt.
-    const failed = { success: true, value: { __type: "resultType", success: false, error: "boom" } };
+    const failed = {
+      success: true,
+      value: { __type: "resultType", success: false, error: "boom" },
+    };
     mockFetch(() => ({ json: failed }));
     await expect(client().invokeFunction("f", {})).rejects.toThrow(/boom/);
     mockFetch(() => ({ json: failed }));
@@ -115,7 +133,13 @@ describe("createServeClient", () => {
       json: {
         nodes: [{ name: "main", parameters: ["message"], interruptEffects: ["app::confirm"] }],
         functions: [
-          { name: "add", parameters: ["a", "b"], interruptEffects: [], description: "adds", destructive: false },
+          {
+            name: "add",
+            parameters: ["a", "b"],
+            interruptEffects: [],
+            description: "adds",
+            destructive: false,
+          },
         ],
       },
     }));

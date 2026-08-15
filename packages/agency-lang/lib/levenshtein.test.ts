@@ -21,8 +21,6 @@ describe("levenshtein", () => {
   });
 
   it("is symmetric", () => {
-    expect(levenshtein("kitten", "sitting")).toBe(
-      levenshtein("sitting", "kitten"),
-    );
+    expect(levenshtein("kitten", "sitting")).toBe(levenshtein("sitting", "kitten"));
   });
 });

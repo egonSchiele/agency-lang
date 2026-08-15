@@ -85,16 +85,15 @@ export class Screen {
     while (!(await opts.isDone(state))) {
       if (opts.tickMs !== undefined) {
         if (pendingKeyPromise === null) {
-          pendingKeyPromise = this.nextKey().then(
-            (ev) => ({ kind: "key" as const, ev }),
-          );
+          pendingKeyPromise = this.nextKey().then((ev) => ({ kind: "key" as const, ev }));
         }
         const tickPromise = new Promise<{ kind: "tick" }>((resolve) =>
           setTimeout(() => resolve({ kind: "tick" }), opts.tickMs),
         );
-        const result = await Promise.race<
-          { kind: "tick" } | { kind: "key"; ev: KeyEvent }
-        >([pendingKeyPromise, tickPromise]);
+        const result = await Promise.race<{ kind: "tick" } | { kind: "key"; ev: KeyEvent }>([
+          pendingKeyPromise,
+          tickPromise,
+        ]);
         if (result.kind === "key") {
           pendingKeyPromise = null;
           state = await opts.handleKey(state, result.ev);

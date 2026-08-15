@@ -31,9 +31,7 @@ describe("abortableSleep", () => {
   it("rejects immediately if the signal is already aborted", async () => {
     const ac = new AbortController();
     ac.abort();
-    await expect(abortableSleep(60_000, ac.signal)).rejects.toBeInstanceOf(
-      AgencyCancelledError,
-    );
+    await expect(abortableSleep(60_000, ac.signal)).rejects.toBeInstanceOf(AgencyCancelledError);
   });
 
   it("resolves normally if not aborted", async () => {
@@ -142,16 +140,7 @@ describe("__internal_exec / __internal_bash", () => {
     const ctx = makeMockCtx();
     const stack = new StateStack();
     const threads = new ThreadStore();
-    const result = await __internal_exec(
-      ctx,
-      stack,
-      threads,
-      "printf",
-      ["ok"],
-      "",
-      0,
-      "",
-    );
+    const result = await __internal_exec(ctx, stack, threads, "printf", ["ok"], "", 0, "");
     expect(result.stdout).toBe("ok");
     expect(result.exitCode).toBe(0);
   });

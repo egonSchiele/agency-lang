@@ -1,7 +1,11 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { MISSING_TASK_PLACEHOLDER_ERROR, TASK_PLACEHOLDER, tokenizeCommand } from "@/eval/run/commandLine.js";
+import {
+  MISSING_TASK_PLACEHOLDER_ERROR,
+  TASK_PLACEHOLDER,
+  tokenizeCommand,
+} from "@/eval/run/commandLine.js";
 import { parseAgency } from "@/parser.js";
 
 /**
@@ -92,12 +96,13 @@ export function assertEvalEntryNodeTakesOneParameter(agentFile: string, node: st
     if (candidate.type !== "graphNode" || candidate.nodeName !== node) continue;
     const count = candidate.parameters.length;
     if (count !== 1) {
-      const detail = count === 0
-        ? `takes none — add one (it may go unused: \`node ${node}(task: string) { ... }\`)`
-        : `takes ${count} (${candidate.parameters.map((p) => p.name).join(", ")}) — add a one-parameter adapter node`;
+      const detail =
+        count === 0
+          ? `takes none — add one (it may go unused: \`node ${node}(task: string) { ... }\`)`
+          : `takes ${count} (${candidate.parameters.map((p) => p.name).join(", ")}) — add a one-parameter adapter node`;
       throw new Error(
         `eval delivers the input's task as the entry node's single parameter, ` +
-        `but node "${node}" in ${agentFile} ${detail}.`,
+          `but node "${node}" in ${agentFile} ${detail}.`,
       );
     }
   }

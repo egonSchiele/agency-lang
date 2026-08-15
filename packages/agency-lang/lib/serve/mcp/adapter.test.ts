@@ -33,19 +33,23 @@ function makeTestExports(): ServedExportedItem[] {
 
   return [
     {
-      kind: "function", ...unusedPublicInvoke,
+      kind: "function",
+      ...unusedPublicInvoke,
       name: "add",
       description: "Add two numbers",
       parameters: [{ name: "a" }, { name: "b" }],
       agencyFunction: addFn,
       interruptEffects: [],
-      invokeServed: async (namedArgs) => returnedOutcome(await addFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+      invokeServed: async (namedArgs) =>
+        returnedOutcome(await addFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
     },
     {
-      kind: "node", ...unusedPublicInvoke,
+      kind: "node",
+      ...unusedPublicInvoke,
       name: "main",
       parameters: [{ name: "city" }, { name: "country" }],
-      invokeServed: async (data: Record<string, unknown>) => returnedOutcome(`${data.city}, ${data.country}`),
+      invokeServed: async (data: Record<string, unknown>) =>
+        returnedOutcome(`${data.city}, ${data.country}`),
       interruptEffects: [],
     },
   ];
@@ -172,13 +176,17 @@ describe("MCP adapter", () => {
       serverVersion: "1.0.0",
       exports: [
         {
-          kind: "function", ...unusedPublicInvoke,
+          kind: "function",
+          ...unusedPublicInvoke,
           name: "deploy",
           description: "Deploy app",
           parameters: [],
           agencyFunction: deployFn,
           interruptEffects: [{ effect: "myapp::deploy" }, { effect: "myapp::approve" }],
-          invokeServed: async (namedArgs) => returnedOutcome(await deployFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+          invokeServed: async (namedArgs) =>
+            returnedOutcome(
+              await deployFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
+            ),
         },
       ],
     });
@@ -226,7 +234,8 @@ describe("MCP adapter", () => {
         parameters: [],
         agencyFunction: fn,
         interruptEffects: [],
-        invokeServed: async (namedArgs: Record<string, unknown>) => returnedOutcome(await fn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+        invokeServed: async (namedArgs: Record<string, unknown>) =>
+          returnedOutcome(await fn.invoke({ type: "named", positionalArgs: [], namedArgs })),
       };
     });
     const handler = createMcpHandler({
@@ -295,7 +304,10 @@ describe("MCP adapter — policy tools", () => {
       jsonrpc: "2.0",
       id: 3,
       method: "tools/call",
-      params: { name: "agencyAddRule", arguments: { effect: "email::send", action: "approve", match: { recipient: "*@co.com" } } },
+      params: {
+        name: "agencyAddRule",
+        arguments: { effect: "email::send", action: "approve", match: { recipient: "*@co.com" } },
+      },
     });
     expect(addResponse!.result.isError).toBe(false);
 
@@ -396,10 +408,22 @@ describe("MCP adapter — policy tools", () => {
         name: "greet",
         module: "test",
         fn: async () => [
-          { type: "interrupt", effect: "test::greet", message: "Greet?", data: {}, origin: "test", interruptId: "i1", runId: "r1" },
+          {
+            type: "interrupt",
+            effect: "test::greet",
+            message: "Greet?",
+            data: {},
+            origin: "test",
+            interruptId: "i1",
+            runId: "r1",
+          },
         ],
         params: [{ name: "name", hasDefault: false, defaultValue: undefined, variadic: false }],
-        toolDefinition: { name: "greet", description: "Greet someone", schema: z.object({ name: z.string() }) },
+        toolDefinition: {
+          name: "greet",
+          description: "Greet someone",
+          schema: z.object({ name: z.string() }),
+        },
         exported: true,
       },
       registry,
@@ -410,12 +434,23 @@ describe("MCP adapter — policy tools", () => {
       serverName: "test",
       serverVersion: "1.0.0",
       exports: [
-        { kind: "function", ...unusedPublicInvoke, name: "greet", description: "Greet someone", parameters: [{ name: "name" }], agencyFunction: greetFn, interruptEffects: [{ effect: "test::greet" }], invokeServed: async (namedArgs) => returnedOutcome(await greetFn.invoke({ type: "named", positionalArgs: [], namedArgs })) },
+        {
+          kind: "function",
+          ...unusedPublicInvoke,
+          name: "greet",
+          description: "Greet someone",
+          parameters: [{ name: "name" }],
+          agencyFunction: greetFn,
+          interruptEffects: [{ effect: "test::greet" }],
+          invokeServed: async (namedArgs) =>
+            returnedOutcome(await greetFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+        },
       ],
       policyConfig: {
         policyStore: new PolicyStore("test", tmpDir),
         interruptHandlers: {
-          hasInterrupts: (data) => Array.isArray(data) && data.length > 0 && data[0]?.type === "interrupt",
+          hasInterrupts: (data) =>
+            Array.isArray(data) && data.length > 0 && data[0]?.type === "interrupt",
           respondToInterrupts: async (_interrupts, responses) => {
             respondCalled = true;
             expect((responses[0] as any).type).toBe("reject");
@@ -444,7 +479,15 @@ describe("MCP adapter — policy tools", () => {
         name: "sendEmail",
         module: "test",
         fn: async () => [
-          { type: "interrupt", effect: "email::send", message: "Send?", data: { recipient: "alice@company.com" }, origin: "test", interruptId: "i2", runId: "r2" },
+          {
+            type: "interrupt",
+            effect: "email::send",
+            message: "Send?",
+            data: { recipient: "alice@company.com" },
+            origin: "test",
+            interruptId: "i2",
+            runId: "r2",
+          },
         ],
         params: [],
         toolDefinition: { name: "sendEmail", description: "Send an email", schema: z.object({}) },
@@ -460,12 +503,23 @@ describe("MCP adapter — policy tools", () => {
       serverName: "test",
       serverVersion: "1.0.0",
       exports: [
-        { kind: "function", ...unusedPublicInvoke, name: "sendEmail", description: "Send an email", parameters: [], agencyFunction: sendFn, interruptEffects: [{ effect: "email::send" }], invokeServed: async (namedArgs) => returnedOutcome(await sendFn.invoke({ type: "named", positionalArgs: [], namedArgs })) },
+        {
+          kind: "function",
+          ...unusedPublicInvoke,
+          name: "sendEmail",
+          description: "Send an email",
+          parameters: [],
+          agencyFunction: sendFn,
+          interruptEffects: [{ effect: "email::send" }],
+          invokeServed: async (namedArgs) =>
+            returnedOutcome(await sendFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+        },
       ],
       policyConfig: {
         policyStore: store,
         interruptHandlers: {
-          hasInterrupts: (data) => Array.isArray(data) && data.length > 0 && data[0]?.type === "interrupt",
+          hasInterrupts: (data) =>
+            Array.isArray(data) && data.length > 0 && data[0]?.type === "interrupt",
           respondToInterrupts: async (_interrupts, responses) => {
             expect((responses[0] as any).type).toBe("approve");
             return "sent";

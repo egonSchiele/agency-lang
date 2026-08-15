@@ -3,11 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
-import {
-  readDownloadManifest,
-  recordDownload,
-  MANIFEST_FILE,
-} from "./localModelManifest.js";
+import { readDownloadManifest, recordDownload, MANIFEST_FILE } from "./localModelManifest.js";
 
 function withDir(fn: (dir: string) => void) {
   const dir = mkdtempSync(path.join(tmpdir(), "manifest-"));

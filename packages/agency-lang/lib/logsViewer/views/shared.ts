@@ -76,8 +76,10 @@ export class BarComponent {
     for (const iv of draw) {
       if (iv.end < window.start || iv.start > window.end) continue;
       const windowMs = Math.max(window.end - window.start, 1);
-      const at = Math.min(cells - 1, Math.max(0,
-        Math.floor(((iv.start - window.start) / windowMs) * cells)));
+      const at = Math.min(
+        cells - 1,
+        Math.max(0, Math.floor(((iv.start - window.start) / windowMs) * cells)),
+      );
       if (glyphs[at] === "·") {
         glyphs[at] = "░";
       }
@@ -107,9 +109,8 @@ export class AxisHeader {
     const mid = fmtOffset((window.start + window.end) / 2 - viewStart);
     const right = fmtOffset(window.end - viewStart);
     const half = Math.floor(barCells / 2);
-    const axis = padCell(left, half)
-      + padCell(mid, Math.max(0, barCells - half - right.length))
-      + right;
+    const axis =
+      padCell(left, half) + padCell(mid, Math.max(0, barCells - half - right.length)) + right;
     return " ".repeat(this.gutter) + clipCell(axis, barCells).padEnd(barCells);
   }
 }
@@ -126,11 +127,12 @@ export class TimelineHeader {
     following?: boolean;
   }): string {
     const crumbs = args.crumbs.length > 0 ? `  » ${args.crumbs.join(" » ")}` : "";
-    const admin = (args.adminShown ? "  [admin spans shown]" : "")
-      + (args.following ? "  [following]" : "");
-    const zoom = args.zoom !== undefined
-      ? `  (zoom ${fmtOffset(args.zoom.start - args.viewStart)}–${fmtOffset(args.zoom.end - args.viewStart)})`
-      : "";
+    const admin =
+      (args.adminShown ? "  [admin spans shown]" : "") + (args.following ? "  [following]" : "");
+    const zoom =
+      args.zoom !== undefined
+        ? `  (zoom ${fmtOffset(args.zoom.start - args.viewStart)}–${fmtOffset(args.zoom.end - args.viewStart)})`
+        : "";
     return `TIMELINE [${args.view}]  ${args.title}${crumbs}  ${fmtOffset(args.totalMs)}${admin}${zoom}`;
   }
 }

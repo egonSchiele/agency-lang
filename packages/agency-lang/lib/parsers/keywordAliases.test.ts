@@ -98,14 +98,20 @@ describe("agency fmt normalizes each alias", () => {
 describe("aliases do not swallow neighbouring syntax", () => {
   it("a type name starting with a primitive word still parses", () => {
     // `str("Number")` would otherwise match the front of `NumberInRange`.
-    expect(parseAgency(`type NumberInRange = number\nnode main() { print(1) }`, {}, false).success)
-      .toBe(true);
-    expect(parseAgency(`type Stringy = string\nnode main() { print(1) }`, {}, false).success)
-      .toBe(true);
+    expect(
+      parseAgency(`type NumberInRange = number\nnode main() { print(1) }`, {}, false).success,
+    ).toBe(true);
+    expect(parseAgency(`type Stringy = string\nnode main() { print(1) }`, {}, false).success).toBe(
+      true,
+    );
   });
 
   it("an identifier starting with `undefined` is untouched", () => {
-    const parsed = parseAgency(`node main() { const undefinedThing = 1\nprint(undefinedThing) }`, {}, false);
+    const parsed = parseAgency(
+      `node main() { const undefinedThing = 1\nprint(undefinedThing) }`,
+      {},
+      false,
+    );
     expect(parsed.success).toBe(true);
     expect(JSON.stringify(parsed)).toContain("undefinedThing");
   });
@@ -144,7 +150,10 @@ describe("the undefined alias is confined to expression position", () => {
 
   it("does not rename a match-pattern binder", () => {
     const parsed = parseAgency(
-      `node main() { match (x) { { a as undefined } => print(1) _ => print(2) } }`, {}, false);
+      `node main() { match (x) { { a as undefined } => print(1) _ => print(2) } }`,
+      {},
+      false,
+    );
     expect(parsed.success).toBe(true);
     expect(JSON.stringify(parsed)).toContain("undefined");
   });
@@ -176,7 +185,9 @@ describe("interface inheritance gets a targeted error", () => {
   });
 
   it("leaves a type named `extendsSomething` alone", () => {
-    expect(parseAgency(`interface Foo { extendsThing: string }\nnode main() { print(1) }`, {}, false).success)
-      .toBe(true);
+    expect(
+      parseAgency(`interface Foo { extendsThing: string }\nnode main() { print(1) }`, {}, false)
+        .success,
+    ).toBe(true);
   });
 });

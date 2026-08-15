@@ -74,10 +74,7 @@ function collectDeclarations(ctx: TypeCheckerContext): DeclEntry[] {
   return out;
 }
 
-function groupBy<T, K extends string>(
-  items: T[],
-  key: (t: T) => K,
-): Record<K, T[]> {
+function groupBy<T, K extends string>(items: T[], key: (t: T) => K): Record<K, T[]> {
   // Null-prototype accumulator: keys derive from user-controlled strings (effect
   // names, file paths), so a reserved key must not read/write Object.prototype.
   const out = Object.create(null) as Record<K, T[]>;
@@ -95,9 +92,7 @@ function reportSameFileDuplicates(
   for (const [, dups] of Object.entries(byFile)) {
     if (dups.length < 2) continue;
     // point at the redundant declaration
-    ctx.errors.push(
-      diagnostic("effectDeclaredTwice", { effect }, dups[1].decl.loc ?? null),
-    );
+    ctx.errors.push(diagnostic("effectDeclaredTwice", { effect }, dups[1].decl.loc ?? null));
   }
 }
 
@@ -119,9 +114,7 @@ function mergePayload(
     (e) => !typesEqual(e.decl.payloadType, first.decl.payloadType, aliases),
   );
   if (!conflict) return first.decl.payloadType;
-  ctx.errors.push(
-    diagnostic("effectPayloadConflict", { effect }, conflict.decl.loc ?? null),
-  );
+  ctx.errors.push(diagnostic("effectPayloadConflict", { effect }, conflict.decl.loc ?? null));
   return null;
 }
 

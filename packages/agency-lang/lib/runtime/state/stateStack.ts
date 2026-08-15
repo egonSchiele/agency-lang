@@ -153,9 +153,7 @@ export class State {
   getBranch(key: string): BranchState | undefined {
     if (!this.branches) return undefined;
     if (this.deletedBranches?.has(key)) {
-      throw new Error(
-        `Tried to access branch with key ${key}, but it has been deleted`,
-      );
+      throw new Error(`Tried to access branch with key ${key}, but it has been deleted`);
     }
     return this.branches[key];
   }
@@ -257,10 +255,8 @@ export class State {
         }
 
         if (branch.interruptId) branchJson.interruptId = branch.interruptId;
-        if (branch.interruptData)
-          branchJson.interruptData = branch.interruptData;
-        if (branch.result !== undefined)
-          branchJson.result = deepClone(branch.result);
+        if (branch.interruptData) branchJson.interruptData = branch.interruptData;
+        if (branch.result !== undefined) branchJson.result = deepClone(branch.result);
         // Per-branch globals + activeStack snapshots captured by
         // `runInBranchAlsFrame` so a resumed branch sees its own
         // pre-interrupt state instead of a freshly-cloned parent.
@@ -268,10 +264,8 @@ export class State {
         // (runPrompt tool dispatch + user `shared: true`) skips the
         // globals snapshot; `shareThreads: true` (runPrompt only)
         // skips the activeStack snapshot.
-        if (branch.globalsJSON !== undefined)
-          branchJson.globalsJSON = branch.globalsJSON;
-        if (branch.activeStack !== undefined)
-          branchJson.activeStack = branch.activeStack;
+        if (branch.globalsJSON !== undefined) branchJson.globalsJSON = branch.globalsJSON;
+        if (branch.activeStack !== undefined) branchJson.activeStack = branch.activeStack;
         json.branches[key] = branchJson as BranchStateJSON;
       }
     }
@@ -302,18 +296,15 @@ export class State {
           stack: StateStack.fromJSON(branch.stack),
         };
         if (branch.interruptId) branchState.interruptId = branch.interruptId;
-        if (branch.interruptData)
-          branchState.interruptData = branch.interruptData;
+        if (branch.interruptData) branchState.interruptData = branch.interruptData;
         if (branch.result !== undefined) branchState.result = branch.result;
         // Per-branch globals + activeStack snapshots captured by
         // `runInBranchAlsFrame` before the interrupt. On re-entry
         // the resumed branch restores them instead of cloning fresh
         // from the parent, so writes made before the interrupt are
         // preserved across the resume boundary.
-        if (branch.globalsJSON !== undefined)
-          branchState.globalsJSON = branch.globalsJSON;
-        if (branch.activeStack !== undefined)
-          branchState.activeStack = branch.activeStack;
+        if (branch.globalsJSON !== undefined) branchState.globalsJSON = branch.globalsJSON;
+        if (branch.activeStack !== undefined) branchState.activeStack = branch.activeStack;
         state.branches[key] = branchState;
       }
     }
@@ -416,8 +407,7 @@ export class StateStack {
    *  queueReplyAttachment. Called by the tool loop exactly once per tool
    *  invocation, at completion. */
   drainPendingReplyAttachments(): ReplyAttachmentPart[] {
-    const queued = (this.other.pendingReplyAttachments ??
-      []) as ReplyAttachmentPart[];
+    const queued = (this.other.pendingReplyAttachments ?? []) as ReplyAttachmentPart[];
     delete this.other.pendingReplyAttachments;
     return queued;
   }
@@ -472,9 +462,7 @@ export class StateStack {
       );
     }
     for (const frame of this.stack) {
-      frame.forEachBranchStack((branchStack) =>
-        branchStack.assertNoExecutingHandlers(),
-      );
+      frame.forEachBranchStack((branchStack) => branchStack.assertNoExecutingHandlers());
     }
   }
 
@@ -527,11 +515,8 @@ export class StateStack {
       this.composedAbortSignal = undefined;
       return;
     }
-    const sources = this.baseAbortSignal
-      ? [this.baseAbortSignal, ...armed]
-      : armed;
-    this.composedAbortSignal =
-      sources.length === 1 ? sources[0] : AbortSignal.any(sources);
+    const sources = this.baseAbortSignal ? [this.baseAbortSignal, ...armed] : armed;
+    this.composedAbortSignal = sources.length === 1 ? sources[0] : AbortSignal.any(sources);
   }
 
   // Per-branch cumulative LLM cost (USD) and tokens. Seeded from the parent
@@ -755,8 +740,7 @@ export class StateStack {
    *  and the next guard gate. */
   anyGuardOverBudget(): boolean {
     return this.guards.some(
-      (g) =>
-        !this.suspendedGuardIds.includes(g.guardId) && g.overBudgetAndArmed(),
+      (g) => !this.suspendedGuardIds.includes(g.guardId) && g.overBudgetAndArmed(),
     );
   }
 
@@ -773,9 +757,7 @@ export class StateStack {
     return (
       this.guards.findLast(
         (g) =>
-          !g.isRootBudget &&
-          !this.suspendedGuardIds.includes(g.guardId) &&
-          g.raisableTripAtStep(),
+          !g.isRootBudget && !this.suspendedGuardIds.includes(g.guardId) && g.raisableTripAtStep(),
       ) ?? null
     );
   }
@@ -789,9 +771,7 @@ export class StateStack {
    *  cost guards are never step-raisable, and a SHARED cost guard must
    *  keep metering sibling branches. */
   settleGuards(ids: string[]): void {
-    this.guards
-      .filter((g) => ids.includes(g.guardId))
-      .forEach((g) => g.suspend());
+    this.guards.filter((g) => ids.includes(g.guardId)).forEach((g) => g.suspend());
     this.rebuildAbortSignal();
   }
 
@@ -815,9 +795,7 @@ export class StateStack {
 
   /** Remove and return every queued feedback entry, oldest first. */
   takeGuardFeedback(): Array<{ text: string; label: string }> {
-    const queue = this.other.__guardFeedback as
-      | Array<{ text: string; label: string }>
-      | undefined;
+    const queue = this.other.__guardFeedback as Array<{ text: string; label: string }> | undefined;
     if (!queue || queue.length === 0) return [];
     delete this.other.__guardFeedback;
     return queue;
@@ -881,9 +859,7 @@ export class StateStack {
    *  clock pause pairs correctly across nesting. */
   beginSuspension(visibleGuardIds: string[]): string[] {
     const previous = this.suspendedGuardIds;
-    const hidden = this.guards.filter(
-      (g) => !visibleGuardIds.includes(g.guardId),
-    );
+    const hidden = this.guards.filter((g) => !visibleGuardIds.includes(g.guardId));
     this.suspendedGuardIds = [
       ...previous,
       ...hidden.map((g) => g.guardId).filter((id) => !previous.includes(id)),
@@ -898,9 +874,7 @@ export class StateStack {
   }
 
   endSuspension(previous: string[]): void {
-    const removed = this.suspendedGuardIds.filter(
-      (id) => !previous.includes(id),
-    );
+    const removed = this.suspendedGuardIds.filter((id) => !previous.includes(id));
     this.suspendedGuardIds = previous;
     for (const g of this.guards) {
       if (removed.includes(g.guardId)) g.unsuspend();
@@ -985,18 +959,13 @@ export class StateStack {
     const inheritedRefs = parentStack.guards
       .map((g) => {
         if (g instanceof TimeGuard) {
-          const adopted = parked.find(
-            (p) => p instanceof TimeGuard && p.guardId === g.guardId,
-          );
+          const adopted = parked.find((p) => p instanceof TimeGuard && p.guardId === g.guardId);
           if (adopted) return adopted;
         }
         return g.cloneForBranch(parentStack, this);
       })
       .filter((g): g is Guard => g !== undefined);
-    if (
-      this.inheritedGuardCount > 0 &&
-      inheritedRefs.length !== this.inheritedGuardCount
-    ) {
+    if (this.inheritedGuardCount > 0 && inheritedRefs.length !== this.inheritedGuardCount) {
       throw new Error(
         `Inherited guard count mismatch on resume: snapshot recorded ` +
           `inheritedGuardCount=${this.inheritedGuardCount} parent-owned ` +
@@ -1009,10 +978,7 @@ export class StateStack {
     this.inheritedGuardCount = inheritedRefs.length;
   }
 
-  constructor(
-    stack: State[] = [],
-    mode: "serialize" | "deserialize" = "serialize",
-  ) {
+  constructor(stack: State[] = [], mode: "serialize" | "deserialize" = "serialize") {
     this.stack = stack;
     this.mode = mode;
   }
@@ -1061,9 +1027,7 @@ export class StateStack {
     if (this.stack.length === 0) {
       throw new Error("callerFrame() called on empty stack");
     }
-    return this.stack.length >= 2
-      ? this.stack[this.stack.length - 2]
-      : this.stack[0];
+    return this.stack.length >= 2 ? this.stack[this.stack.length - 2] : this.stack[0];
   }
 
   /** True when the only frame on the stack is the currently-running call's own
@@ -1224,9 +1188,7 @@ export class StateStack {
     stateStack.inheritedGuardCount = json.inheritedGuardCount ?? 0;
     // Park deserialized inherited time clones for rehydrate to adopt.
     // Live-only: consumed (and cleared) by rehydrateInheritedGuardsFrom.
-    stateStack.parkedInheritedTimeGuards = (json.inheritedTimeGuards ?? []).map(
-      guardFromJSON,
-    );
+    stateStack.parkedInheritedTimeGuards = (json.inheritedTimeGuards ?? []).map(guardFromJSON);
     return stateStack;
   }
 }
@@ -1240,12 +1202,8 @@ export class StateStack {
  *  the parent first). Shared by `Runner` (fork/parallel/race) and
  *  `PromptRunner` (LLM tool dispatch) so `getCost()`/`getTokens()` are
  *  cumulative across ALL child branches, including subagent tools. */
-export function seedBranchCost(
-  branchStack: StateStack,
-  parentStack: StateStack,
-): void {
-  const isFresh =
-    branchStack.localCost === 0 && branchStack.localTokens === 0;
+export function seedBranchCost(branchStack: StateStack, parentStack: StateStack): void {
+  const isFresh = branchStack.localCost === 0 && branchStack.localTokens === 0;
   if (!isFresh) return;
   branchStack.localCost = parentStack.localCost;
   branchStack.localTokens = parentStack.localTokens;
@@ -1258,10 +1216,7 @@ export function seedBranchCost(
  *  captured at seed time). Using the per-branch seed rather than the
  *  parent's current totals keeps the math correct when sibling branches
  *  already folded their spend in. Call BEFORE popBranches/deleteBranch. */
-export function propagateBranchCost(
-  branches: BranchState[],
-  parentStack: StateStack,
-): void {
+export function propagateBranchCost(branches: BranchState[], parentStack: StateStack): void {
   let costDelta = 0;
   let tokensDelta = 0;
   for (const branch of branches) {

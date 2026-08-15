@@ -16,12 +16,18 @@ export async function gradeSuite(
   suiteGraders: SuiteGraders,
   config: AgencyConfig,
 ): Promise<EvalRunGrading> {
-  const scorecard = await gradeRun(runDir, { suiteGraders, runAgency: new AgencyRunner(config), config });
+  const scorecard = await gradeRun(runDir, {
+    suiteGraders,
+    runAgency: new AgencyRunner(config),
+    config,
+  });
   const perInput = breakdown(scorecard);
   // The graders that actually participated. With per-test graders the sets
   // differ across inputs, so the run-level list is their union; an advisory
   // grader behind a failed gate never ran and is honestly absent.
-  const graderNames = [...new Set(perInput.flatMap((input) => input.grades.map((grade) => grade.grader)))];
+  const graderNames = [
+    ...new Set(perInput.flatMap((input) => input.grades.map((grade) => grade.grader))),
+  ];
   return {
     graders: graderNames,
     // objective(), not gatedObjective(): a gate-failed input already contributes

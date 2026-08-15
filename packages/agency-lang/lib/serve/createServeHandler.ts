@@ -80,8 +80,7 @@ export async function createServeHandler(
     );
   }
 
-  const toolRegistry =
-    (moduleExports.__toolRegistry as Record<string, AgencyFunction>) ?? {};
+  const toolRegistry = (moduleExports.__toolRegistry as Record<string, AgencyFunction>) ?? {};
 
   const exports = discoverExports({
     toolRegistry,

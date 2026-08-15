@@ -24,8 +24,7 @@ import type { CompilationUnit } from "../compilationUnit.js";
  * strings, array literals, etc.) is rejected.
  */
 export type JsonSchemaArgValidationResult =
-  | { ok: true }
-  | { ok: false; reason: string; loc?: { line: number; col: number } };
+  { ok: true } | { ok: false; reason: string; loc?: { line: number; col: number } };
 
 /**
  * Subset of the compilation unit we need to look up identifiers.
@@ -109,9 +108,7 @@ function validateValueAccess(
   va: { base: any; chain: any[]; loc?: { line: number; col: number } },
   scope: JsonSchemaArgScope,
 ): JsonSchemaArgValidationResult {
-  const hasMethodCall = (va.chain ?? []).some(
-    (el) => el && el.kind === "methodCall",
-  );
+  const hasMethodCall = (va.chain ?? []).some((el) => el && el.kind === "methodCall");
   if (!hasMethodCall) {
     return {
       ok: false,
@@ -244,10 +241,7 @@ function validateObjectLiteral(
   return { ok: true };
 }
 
-function validateFunctionCall(
-  call: any,
-  scope: JsonSchemaArgScope,
-): JsonSchemaArgValidationResult {
+function validateFunctionCall(call: any, scope: JsonSchemaArgScope): JsonSchemaArgValidationResult {
   // The callee must be a known top-level / imported function.
   const name: string | undefined = call.functionName;
   if (!name) {
@@ -272,10 +266,7 @@ function validateFunctionCall(
   return { ok: true };
 }
 
-function validateIdentifier(
-  id: any,
-  scope: JsonSchemaArgScope,
-): JsonSchemaArgValidationResult {
+function validateIdentifier(id: any, scope: JsonSchemaArgScope): JsonSchemaArgValidationResult {
   const name: string = id.value;
   if (
     scope.topLevelConstNames.has(name) ||
@@ -335,10 +326,7 @@ function collectImportedNames(stmt: unknown, out: Set<string>): void {
   }
 }
 
-function addNamedImportEntry(
-  entry: Record<string, unknown>,
-  out: Set<string>,
-): void {
+function addNamedImportEntry(entry: Record<string, unknown>, out: Set<string>): void {
   const arr: unknown = entry.importedNames;
   const aliases = entry.aliases as Record<string, string> | undefined;
   if (Array.isArray(arr)) {

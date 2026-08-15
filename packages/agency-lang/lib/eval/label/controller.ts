@@ -7,11 +7,7 @@ import {
   type NormalizedDefinition,
   type PendingRevision,
 } from "./checklist.js";
-import {
-  assertBindingIsCoherent,
-  assertDraftMatches,
-  type Draft,
-} from "./draft.js";
+import { assertBindingIsCoherent, assertDraftMatches, type Draft } from "./draft.js";
 import { atomicWriteValidated } from "./jsonl.js";
 import { acquireDatasetLock, type DatasetLock } from "./lock.js";
 import {
@@ -122,7 +118,10 @@ async function openSession(
     JSON.parse(fs.readFileSync(args.checklistFile, "utf8")),
   );
 
-  const lock = acquireDatasetLock({ datasetDir: args.datasetDir, reportWarning: args.reportWarning });
+  const lock = acquireDatasetLock({
+    datasetDir: args.datasetDir,
+    reportWarning: args.reportWarning,
+  });
   let dataset: LabelDataset | undefined;
   try {
     dataset = openDataset({
@@ -136,7 +135,7 @@ async function openSession(
     if (corpus.length === 0) {
       throw new Error(
         "There is nothing to label: the dataset holds no records. Add some with " +
-        "`agency label ingest <source> --source <name>`.",
+          "`agency label ingest <source> --source <name>`.",
       );
     }
 
@@ -150,11 +149,19 @@ async function openSession(
 
     const outputIds = corpus.map((row) => row.outputId);
     const sessionId = makeSessionId({
-      outputIds, checklistId: definition.checklistId, annotator: args.annotator,
+      outputIds,
+      checklistId: definition.checklistId,
+      annotator: args.annotator,
     });
 
     const session = new LabelingSession({
-      args, dependencies, dataset, lock, sessionId, outputIds, definition,
+      args,
+      dependencies,
+      dataset,
+      lock,
+      sessionId,
+      outputIds,
+      definition,
       corpus,
     });
     session.open();
@@ -294,7 +301,11 @@ class LabelingSession {
         ...this.draft,
         binding: {
           ...this.draft.binding,
-          checklist: { kind: "published", version: published.revision.version, hash: published.revision.hash },
+          checklist: {
+            kind: "published",
+            version: published.revision.version,
+            hash: published.revision.hash,
+          },
         },
         pendingRevision: null,
         stagedQuestions: null,
@@ -342,7 +353,10 @@ class LabelingSession {
       },
       answersByOutputId: {
         ...this.draft.answersByOutputId,
-        [pending.outputId]: { ...this.draft.answersByOutputId[pending.outputId], ...pending.answers },
+        [pending.outputId]: {
+          ...this.draft.answersByOutputId[pending.outputId],
+          ...pending.answers,
+        },
       },
       notesByOutputId: { ...this.draft.notesByOutputId, [pending.outputId]: pending.note },
       activeMsByOutputId: { ...this.draft.activeMsByOutputId, [pending.outputId]: 0 },
@@ -403,24 +417,28 @@ class LabelingSession {
     this.flushTiming();
     if (editor.kind === "question") {
       const text = editor.draft.trim();
-      this.state = text.length === 0
-        ? reduceSession(this.state, { kind: "cancelEditor" })
-        : reduceSession(this.state, {
-            kind: "questionAdded",
-            question: {
-              id: this.parts.dependencies.ids.questionId(),
-              text,
-              weight: 1,
-              deleted: false,
-            },
-          });
+      this.state =
+        text.length === 0
+          ? reduceSession(this.state, { kind: "cancelEditor" })
+          : reduceSession(this.state, {
+              kind: "questionAdded",
+              question: {
+                id: this.parts.dependencies.ids.questionId(),
+                text,
+                weight: 1,
+                deleted: false,
+              },
+            });
     } else {
       const item = this.state.items[this.state.itemIndex];
-      this.state = item === undefined
-        ? reduceSession(this.state, { kind: "cancelEditor" })
-        : reduceSession(this.state, {
-            kind: "noteSaved", outputId: item.outputId, note: editor.draft,
-          });
+      this.state =
+        item === undefined
+          ? reduceSession(this.state, { kind: "cancelEditor" })
+          : reduceSession(this.state, {
+              kind: "noteSaved",
+              outputId: item.outputId,
+              note: editor.draft,
+            });
     }
     this.persistState();
   }
@@ -492,15 +510,24 @@ class LabelingSession {
     };
     const prepared = this.parts.dataset.prepareChecklist(definition);
     if (prepared.kind !== "publish") {
-      this.state = reduceSession(this.state, { kind: "revisionAdopted", revision: prepared.revision });
+      this.state = reduceSession(this.state, {
+        kind: "revisionAdopted",
+        revision: prepared.revision,
+      });
       return;
     }
     this.draft = { ...this.draft, pendingRevision: prepared.pending };
     this.saveDraft();
     this.fault("after-pending-revision-save");
 
-    const published = this.parts.dataset.publishRevision(prepared.pending, this.parts.args.checklistFile);
-    this.state = reduceSession(this.state, { kind: "revisionAdopted", revision: published.revision });
+    const published = this.parts.dataset.publishRevision(
+      prepared.pending,
+      this.parts.args.checklistFile,
+    );
+    this.state = reduceSession(this.state, {
+      kind: "revisionAdopted",
+      revision: published.revision,
+    });
     this.draft = {
       ...this.draft,
       binding: {
@@ -604,7 +631,8 @@ class LabelingSession {
       if (primary === undefined) {
         primary = error;
       } else {
-        (primary as Error).message += `; also failed to release the dataset: ${(error as Error).message}`;
+        (primary as Error).message +=
+          `; also failed to release the dataset: ${(error as Error).message}`;
       }
     }
     if (primary !== undefined) {

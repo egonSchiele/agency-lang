@@ -32,7 +32,12 @@ function toImportSpec(node: AgencyNode): ImportSpec | null {
   }
   if (node.type === "importNodeStatement") {
     // Nodes are importable without `export`, so testOnly is irrelevant here.
-    return { modulePath: node.agencyFile, names: node.importedNodes, loc: node.loc ?? null, testOnly: false };
+    return {
+      modulePath: node.agencyFile,
+      names: node.importedNodes,
+      loc: node.loc ?? null,
+      testOnly: false,
+    };
   }
   return null;
 }
@@ -55,11 +60,7 @@ export function checkMissingImports(ctx: TypeCheckerContext): void {
     const spec = toImportSpec(node);
     if (!spec) continue;
 
-    const resolution = symbolTable.resolveImportModule(
-      spec.modulePath,
-      currentFile,
-      ctx.config,
-    );
+    const resolution = symbolTable.resolveImportModule(spec.modulePath, currentFile, ctx.config);
     if (resolution.kind === "missing") {
       // One module error per statement, not one per imported name.
       ctx.errors.push(diagnostic("importModuleNotFound", { module: spec.modulePath }, spec.loc));

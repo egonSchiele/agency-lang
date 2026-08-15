@@ -41,16 +41,27 @@ export class AgencyRunner {
   }
 
   /** Run a judge/proposer node and validate its structured return against a schema. */
-  async runStructured<T>(agencyFile: string, nodeName: string, args: JSON[], schema: ZodSchema<T>): Promise<T> {
+  async runStructured<T>(
+    agencyFile: string,
+    nodeName: string,
+    args: JSON[],
+    schema: ZodSchema<T>,
+  ): Promise<T> {
     const { data } = await this.exec(agencyFile, nodeName, args);
     const parsed = schema.safeParse(data);
     if (!parsed.success) {
-      throw new Error(`${agencyFile}: structured return failed schema validation: ${parsed.error.message}`);
+      throw new Error(
+        `${agencyFile}: structured return failed schema validation: ${parsed.error.message}`,
+      );
     }
     return parsed.data;
   }
 
-  private async exec(agencyFile: string, nodeName: string, args: JSON[]): Promise<{ data: unknown }> {
+  private async exec(
+    agencyFile: string,
+    nodeName: string,
+    args: JSON[],
+  ): Promise<{ data: unknown }> {
     const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-runner-"));
     try {
       const config = { ...this.config };
@@ -58,7 +69,16 @@ export class AgencyRunner {
       const argsString = args.map((v) => globalThis.JSON.stringify(v)).join(", ");
       // Judges/proposers are bundled agents with a precompiled .js in dist;
       // reuse it instead of recompiling on every grade/proposal call.
-      return await this.runNode({ config, agencyFile, nodeName, hasArgs: args.length > 0, argsString, scratchDir, quietCompile: true, preferCompiled: true });
+      return await this.runNode({
+        config,
+        agencyFile,
+        nodeName,
+        hasArgs: args.length > 0,
+        argsString,
+        scratchDir,
+        quietCompile: true,
+        preferCompiled: true,
+      });
     } finally {
       fs.rmSync(scratchDir, { recursive: true, force: true });
     }

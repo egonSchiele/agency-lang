@@ -2,11 +2,7 @@ import * as path from "path";
 
 import { makeOccurrenceId } from "./ids.js";
 import { openJsonlStrict, type OpenedJsonl } from "./jsonl.js";
-import {
-  OccurrenceRowSchema,
-  type OccurrenceCandidate,
-  type OccurrenceRow,
-} from "./types.js";
+import { OccurrenceRowSchema, type OccurrenceCandidate, type OccurrenceRow } from "./types.js";
 
 export function occurrencesPath(datasetDir: string): string {
   return path.join(datasetDir, "occurrences.jsonl");
@@ -42,14 +38,16 @@ export function openOccurrenceLog(datasetDir: string): OpenedOccurrenceLog {
 
     ensureOccurrence(candidate: OccurrenceCandidate): EnsureOccurrenceResult {
       const occurrenceId = makeOccurrenceId(candidate);
-      return log.findOrAppend(occurrenceId, () => OccurrenceRowSchema.parse({
-        schemaVersion: 1,
-        occurrenceId,
-        outputId: candidate.outputId,
-        source: candidate.source,
-        firstObservedAt: new Date().toISOString(),
-        origin: candidate.origin,
-      }));
+      return log.findOrAppend(occurrenceId, () =>
+        OccurrenceRowSchema.parse({
+          schemaVersion: 1,
+          occurrenceId,
+          outputId: candidate.outputId,
+          source: candidate.source,
+          firstObservedAt: new Date().toISOString(),
+          origin: candidate.origin,
+        }),
+      );
     },
   };
 }

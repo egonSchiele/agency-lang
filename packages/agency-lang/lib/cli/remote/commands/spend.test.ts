@@ -39,9 +39,50 @@ class ProcessExit extends Error {
   }
 }
 
-const usd = { inputCost: 0.3, outputCost: 0.2, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0.5, currency: "USD" };
-const tok = { inputTokens: 10, outputTokens: 2, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 12 };
-const spend = { cost: usd, tokens: tok, invocationCount: 3, unpricedCallCount: 0, pricingComplete: true, usageComplete: true, breakdown: [], breakdownTruncated: false, otherSpend: { cost: { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0, currency: "USD" }, tokens: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 } } };
+const usd = {
+  inputCost: 0.3,
+  outputCost: 0.2,
+  cachedInputCost: 0,
+  cacheCreationInputCost: 0,
+  hostedToolsCost: 0,
+  totalCost: 0.5,
+  currency: "USD",
+};
+const tok = {
+  inputTokens: 10,
+  outputTokens: 2,
+  cachedInputTokens: 0,
+  cacheCreationInputTokens: 0,
+  totalTokens: 12,
+};
+const spend = {
+  cost: usd,
+  tokens: tok,
+  invocationCount: 3,
+  unpricedCallCount: 0,
+  pricingComplete: true,
+  usageComplete: true,
+  breakdown: [],
+  breakdownTruncated: false,
+  otherSpend: {
+    cost: {
+      inputCost: 0,
+      outputCost: 0,
+      cachedInputCost: 0,
+      cacheCreationInputCost: 0,
+      hostedToolsCost: 0,
+      totalCost: 0,
+      currency: "USD",
+    },
+    tokens: {
+      inputTokens: 0,
+      outputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      totalTokens: 0,
+    },
+  },
+};
 const accountRows = [{ projectSlug: "p", deletedAt: null, spend }];
 
 let dir: string;
@@ -50,7 +91,10 @@ let logs: string[];
 let stdout: string[];
 
 function context(): RemoteCommandContext {
-  return { config: { log: { host: "https://host.example" } }, configPath } as unknown as RemoteCommandContext;
+  return {
+    config: { log: { host: "https://host.example" } },
+    configPath,
+  } as unknown as RemoteCommandContext;
 }
 
 beforeEach(() => {
@@ -59,9 +103,16 @@ beforeEach(() => {
   process.env.STATELOG_API_KEY = "secret";
   logs = [];
   stdout = [];
-  vi.spyOn(console, "log").mockImplementation((...a: unknown[]) => { logs.push(a.join(" ")); });
-  vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => { stdout.push(String(chunk)); return true; }) as never);
-  vi.spyOn(process, "exit").mockImplementation(((code?: number) => { throw new ProcessExit(code ?? 0); }) as never);
+  vi.spyOn(console, "log").mockImplementation((...a: unknown[]) => {
+    logs.push(a.join(" "));
+  });
+  vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
+    stdout.push(String(chunk));
+    return true;
+  }) as never);
+  vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+    throw new ProcessExit(code ?? 0);
+  }) as never);
   hoisted.createAccountClient.mockClear();
   hoisted.createProjectClient.mockClear();
   hoisted.accountClient.getAccountSpend.mockReset();
@@ -79,20 +130,28 @@ describe("runSpend", () => {
     hoisted.accountClient.getAccountSpend.mockResolvedValue(accountRows);
     await runSpend(undefined, { from: "1000", to: "2000" }, context());
     expect(hoisted.createAccountClient).toHaveBeenCalledWith("https://host.example", "secret");
-    expect(hoisted.accountClient.getAccountSpend).toHaveBeenCalledWith(expect.objectContaining({ from: 1000, to: 2000 }));
+    expect(hoisted.accountClient.getAccountSpend).toHaveBeenCalledWith(
+      expect.objectContaining({ from: 1000, to: 2000 }),
+    );
     expect(logs.join("\n")).toContain("PROJECT");
   });
 
   it("<project> → per-project spend via the project client", async () => {
     hoisted.projectClient.getSpend.mockResolvedValue(spend);
     await runSpend("my-proj", { since: "7d" }, context());
-    expect(hoisted.createProjectClient).toHaveBeenCalledWith("https://host.example", "my-proj", "secret");
+    expect(hoisted.createProjectClient).toHaveBeenCalledWith(
+      "https://host.example",
+      "my-proj",
+      "secret",
+    );
     expect(hoisted.projectClient.getSpend).toHaveBeenCalledTimes(1);
     expect(logs.join("\n")).toContain("my-proj"); // slug is un-colored; the label is bold-wrapped
   });
 
   it("an invalid time flag exits without calling any client", async () => {
-    await expect(runSpend(undefined, { since: "banana" }, context())).rejects.toBeInstanceOf(ProcessExit);
+    await expect(runSpend(undefined, { since: "banana" }, context())).rejects.toBeInstanceOf(
+      ProcessExit,
+    );
     expect(hoisted.createAccountClient).not.toHaveBeenCalled();
     expect(hoisted.createProjectClient).not.toHaveBeenCalled();
   });

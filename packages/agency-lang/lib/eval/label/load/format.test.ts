@@ -35,7 +35,10 @@ function auto(source: string) {
 describe("statelog auto-detection", () => {
   it("classifies a file whose first line is a statelog envelope as statelog", () => {
     const file = path.join(root, "log.jsonl");
-    fs.writeFileSync(file, JSON.stringify({ format_version: 1, trace_id: "T", data: { type: "agentStart" } }) + "\n");
+    fs.writeFileSync(
+      file,
+      JSON.stringify({ format_version: 1, trace_id: "T", data: { type: "agentStart" } }) + "\n",
+    );
     expect(auto(file)).toBe("statelog");
   });
 
@@ -48,14 +51,28 @@ describe("statelog auto-detection", () => {
   it("classifies a statelog whose first event is larger than one read chunk", () => {
     const file = path.join(root, "big-first.jsonl");
     const bigContent = "x".repeat(200_000); // well over the 64 KiB sniff chunk
-    const first = JSON.stringify({ format_version: 1, trace_id: "T", data: { type: "promptCompletion", content: bigContent } });
-    fs.writeFileSync(file, first + "\n" + JSON.stringify({ format_version: 1, trace_id: "T", data: { type: "agentEnd" } }) + "\n");
+    const first = JSON.stringify({
+      format_version: 1,
+      trace_id: "T",
+      data: { type: "promptCompletion", content: bigContent },
+    });
+    fs.writeFileSync(
+      file,
+      first +
+        "\n" +
+        JSON.stringify({ format_version: 1, trace_id: "T", data: { type: "agentEnd" } }) +
+        "\n",
+    );
     expect(auto(file)).toBe("statelog");
   });
 
   it("classifies a statelog that begins with blank lines the parser tolerates", () => {
     const file = path.join(root, "leading-blanks.jsonl");
-    const envelope = JSON.stringify({ format_version: 1, trace_id: "T", data: { type: "agentStart" } });
+    const envelope = JSON.stringify({
+      format_version: 1,
+      trace_id: "T",
+      data: { type: "agentStart" },
+    });
     fs.writeFileSync(file, "\n\n  \n" + envelope + "\n");
     expect(auto(file)).toBe("statelog");
   });
@@ -63,7 +80,11 @@ describe("statelog auto-detection", () => {
   it("classifies a statelog whose first non-empty line is a large event past blank lines", () => {
     const file = path.join(root, "blank-then-big.jsonl");
     const bigContent = "y".repeat(200_000);
-    const first = JSON.stringify({ format_version: 1, trace_id: "T", data: { type: "promptCompletion", content: bigContent } });
+    const first = JSON.stringify({
+      format_version: 1,
+      trace_id: "T",
+      data: { type: "promptCompletion", content: bigContent },
+    });
     fs.writeFileSync(file, "\n" + first + "\n");
     expect(auto(file)).toBe("statelog");
   });
@@ -102,8 +123,6 @@ describe("resolveFormat auto", () => {
   it("treats any other directory as files", () => {
     expect(auto(makeDir("gold", ["a.txt"]))).toBe("files");
   });
-
-
 
   it("treats a .json file as json", () => {
     fs.writeFileSync(path.join(root, "answers.json"), "[]");

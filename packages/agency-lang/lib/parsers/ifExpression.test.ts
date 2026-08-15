@@ -14,7 +14,8 @@ function parseErr(src: string, re: RegExp) {
   expect(parsed.success).toBe(false);
   if (!parsed.success) expect(parsed.message).toMatch(re);
 }
-const WRAP = (rhs: string) => `node main(c: boolean, d: boolean) {\n  const x = ${rhs}\n  return x\n}`;
+const WRAP = (rhs: string) =>
+  `node main(c: boolean, d: boolean) {\n  const x = ${rhs}\n  return x\n}`;
 
 describe("if-expression parsing", () => {
   it("parses `if c then a else b` as an ifElse with single-expression branches", () => {
@@ -37,7 +38,10 @@ describe("if-expression parsing", () => {
     parseErr(WRAP(`{ k: if c then "a" else "b" }`), /./));
 
   it("cannot be a function argument", () =>
-    parseErr(`def f(s: string): string { return s }\nnode main(c: boolean) {\n  return f(if c then "a" else "b")\n}`, /./));
+    parseErr(
+      `def f(s: string): string { return s }\nnode main(c: boolean) {\n  return f(if c then "a" else "b")\n}`,
+      /./,
+    ));
 
   it("a branch cannot itself be an if expression (no nesting)", () =>
     parseErr(WRAP(`if c then (if d then "x" else "y") else "z"`), /./));
@@ -45,8 +49,7 @@ describe("if-expression parsing", () => {
   it("no `else if` chain", () =>
     parseErr(WRAP(`if c then "x" else if d then "y" else "z"`), /else|if/i));
 
-  it("`else` is required", () =>
-    parseErr(WRAP(`if c then "a"`), /requires an `else`/));
+  it("`else` is required", () => parseErr(WRAP(`if c then "a"`), /requires an `else`/));
 
   it("round-trips through the formatter", () => {
     const src = `node main(c: boolean): string {\n  const kind = if c then "adult" else "child"\n  return kind\n}`;

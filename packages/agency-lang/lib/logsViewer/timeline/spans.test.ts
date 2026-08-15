@@ -28,9 +28,7 @@ describe("spanExtent", () => {
 describe("timelineSpans", () => {
   it("the 193% regression: a wrapping llm span self-time excludes its children", () => {
     const inner = span("toolExecution", [leaf("toolCallStart", 200), leaf("toolCall", 800)]);
-    const outer = span("llmCall", [
-      leaf("promptStart", 0), inner, leaf("promptCompletion", 1_000),
-    ]);
+    const outer = span("llmCall", [leaf("promptStart", 0), inner, leaf("promptCompletion", 1_000)]);
     const [outerSpan, innerSpan] = timelineSpans(trace([outer]), opts);
     expect(outerSpan.extent).toEqual({ start: 0, end: 1_000 });
     expect(outerSpan.selfMs).toBe(400);
@@ -39,9 +37,7 @@ describe("timelineSpans", () => {
 
   it("selfIntervals carry the actual gaps, not just the right total", () => {
     const inner = span("toolExecution", [leaf("toolCallStart", 200), leaf("toolCall", 800)]);
-    const outer = span("llmCall", [
-      leaf("promptStart", 0), inner, leaf("promptCompletion", 1_000),
-    ]);
+    const outer = span("llmCall", [leaf("promptStart", 0), inner, leaf("promptCompletion", 1_000)]);
     const [outerSpan] = timelineSpans(trace([outer]), opts);
     expect(outerSpan.selfIntervals).toEqual([
       { start: 0, end: 200 },
@@ -54,7 +50,9 @@ describe("timelineSpans", () => {
       span("agentRun", [span("nodeExecution", [span("llmCall", [leaf("promptCompletion", 5)])])]),
     ]);
     expect(timelineSpans(t, opts).map((s) => [s.kind, s.depth])).toEqual([
-      ["agentRun", 0], ["nodeExecution", 1], ["llmCall", 2],
+      ["agentRun", 0],
+      ["nodeExecution", 1],
+      ["llmCall", 2],
     ]);
   });
 
@@ -63,7 +61,8 @@ describe("timelineSpans", () => {
     const outer = span("llmCall", [leaf("promptStart", 0), inner, leaf("promptCompletion", 1_000)]);
     const rows = timelineSpans(outer, opts);
     expect(rows.map((s) => [s.kind, s.depth])).toEqual([
-      ["llmCall", 0], ["toolExecution", 1],
+      ["llmCall", 0],
+      ["toolExecution", 1],
     ]);
   });
 
@@ -83,7 +82,8 @@ describe("timelineSpans", () => {
     const tool = span("toolExecution", [leaf("toolCallStart", 100), admin, leaf("toolCall", 500)]);
     const rows = timelineSpans(trace([tool]), { hideKinds: ADMIN_KINDS });
     expect(rows.map((s) => [s.kind, s.depth])).toEqual([
-      ["toolExecution", 0], ["llmCall", 1],
+      ["toolExecution", 0],
+      ["llmCall", 1],
     ]);
   });
 
@@ -106,9 +106,7 @@ describe("timelineSpans", () => {
   });
 
   it("promptCancelled is a terminus — a cancelled call is not running forever", () => {
-    const cancelled = span("llmCall", [
-      leaf("promptStart", 0), leaf("promptCancelled", 100),
-    ]);
+    const cancelled = span("llmCall", [leaf("promptStart", 0), leaf("promptCancelled", 100)]);
     const open = span("llmCall", [leaf("promptStart", 0)]);
     expect(timelineSpans(trace([cancelled]), opts)[0].running).toBe(false);
     expect(timelineSpans(trace([open]), opts)[0].running).toBe(true);

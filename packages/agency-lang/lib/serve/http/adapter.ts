@@ -1,5 +1,10 @@
 import http from "http";
-import type { ExportedItem, ServedExportedItem, ServedExportedFunction, ServedExportedNode } from "../types.js";
+import type {
+  ExportedItem,
+  ServedExportedItem,
+  ServedExportedFunction,
+  ServedExportedNode,
+} from "../types.js";
 import { errorMessage, toArgs, parseJsonBody } from "../util.js";
 import { validateResumeBatch } from "../../runtime/interrupts.js";
 import { readCause } from "../../runtime/errors.js";
@@ -244,7 +249,9 @@ async function resumeInterrupts(
 const FUNCTION_ROUTE = /^\/function\/([^/]+)$/;
 const NODE_ROUTE = /^\/node\/([^/]+)$/;
 
-export function createHttpHandler(config: ServedHandlerConfig): (
+export function createHttpHandler(
+  config: ServedHandlerConfig,
+): (
   method: string,
   path: string,
   body: unknown,
@@ -259,7 +266,9 @@ export function createHttpHandler(config: ServedHandlerConfig): (
   const functions: Record<string, ServedExportedFunction> = Object.assign(
     Object.create(null),
     Object.fromEntries(
-      exports.filter((e): e is ServedExportedFunction => e.kind === "function").map((e) => [e.name, e]),
+      exports
+        .filter((e): e is ServedExportedFunction => e.kind === "function")
+        .map((e) => [e.name, e]),
     ),
   );
   const nodes: Record<string, ServedExportedNode> = Object.assign(

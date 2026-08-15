@@ -51,7 +51,6 @@ export const DIAGNOSTIC_EXPLANATIONS: Record<DiagnosticName, string> = {
 
 **How to fix:** to test the type and bind, write \`p: Person => ...\`; to test only, write \`is Person => ...\`; to genuinely bind whatever arrives, pick a name that is not a type.`,
 
-
   typePatternUnknownType: `A type pattern (\`x is T\`, or a match arm \`p: T\`) named something that is not a type. After \`is\`, a bare identifier is always read as a type reference — the old always-true binder form was retired — so a variable name or a JavaScript class name (like \`Date\`) in that position is an error rather than a silent match-anything.
 
 **How to fix:** if you meant a type, declare or import it. If you meant to bind the value, write \`const name = x\` instead. For JavaScript classes, use \`is object\` or a helper function — type patterns only test Agency types.`,

@@ -25,8 +25,14 @@ function tmp(): string {
 function makeProject(): { baseDir: string; seed: AgentSeed } {
   const baseDir = tmp();
   fs.mkdirSync(path.join(baseDir, "lib"), { recursive: true });
-  fs.writeFileSync(path.join(baseDir, "lib", "helper.agency"), "export def helper(): string { return \"hi\" }\n");
-  fs.writeFileSync(path.join(baseDir, "agent.agency"), "import { helper } from \"./lib/helper.agency\"\nnode main() {}\n");
+  fs.writeFileSync(
+    path.join(baseDir, "lib", "helper.agency"),
+    'export def helper(): string { return "hi" }\n',
+  );
+  fs.writeFileSync(
+    path.join(baseDir, "agent.agency"),
+    'import { helper } from "./lib/helper.agency"\nnode main() {}\n',
+  );
   fs.writeFileSync(path.join(baseDir, "junk.bin"), Buffer.alloc(2 * 1024 * 1024));
   const seed: AgentSeed = {
     baseDir,
@@ -37,7 +43,11 @@ function makeProject(): { baseDir: string; seed: AgentSeed } {
 }
 
 /** Seed + compile, the way runAgent composes these. */
-function seedAndCompile(workdirPath: string, seed: AgentSeed, overlayFiles?: Record<string, string>): string[] {
+function seedAndCompile(
+  workdirPath: string,
+  seed: AgentSeed,
+  overlayFiles?: Record<string, string>,
+): string[] {
   const files = filesToCopy(seed);
   copyFiles(workdirPath, files);
   applyOverlay(workdirPath, overlayFiles);
@@ -46,7 +56,8 @@ function seedAndCompile(workdirPath: string, seed: AgentSeed, overlayFiles?: Rec
 }
 
 function totalBytes(dir: string): number {
-  return fs.readdirSync(dir, { recursive: true, withFileTypes: true })
+  return fs
+    .readdirSync(dir, { recursive: true, withFileTypes: true })
     .filter((entry) => entry.isFile())
     .map((entry) => fs.statSync(path.join(entry.parentPath, entry.name)).size)
     .reduce((sum, size) => sum + size, 0);
@@ -96,7 +107,9 @@ describe("seeding", () => {
     const files = filesToCopy({ ...seed, filesDir });
     copyFiles(workdirPath, files);
 
-    expect(fs.readFileSync(path.join(workdirPath, "data", "report.txt"), "utf8")).toBe("q3 numbers");
+    expect(fs.readFileSync(path.join(workdirPath, "data", "report.txt"), "utf8")).toBe(
+      "q3 numbers",
+    );
     expect(Object.keys(files)).toContain(path.join("data", "report.txt"));
   });
 
@@ -106,8 +119,9 @@ describe("seeding", () => {
     fs.mkdirSync(path.join(filesDir, "lib"), { recursive: true });
     fs.writeFileSync(path.join(filesDir, "lib", "helper.agency"), "node main() {}\n");
 
-    expect(() => filesToCopy({ ...seed, filesDir }))
-      .toThrow(/lib\/helper\.agency.*test files.*agent/s);
+    expect(() => filesToCopy({ ...seed, filesDir })).toThrow(
+      /lib\/helper\.agency.*test files.*agent/s,
+    );
   });
 
   it("a fixture file named toString does not falsely collide with inherited object members", () => {
@@ -127,12 +141,15 @@ describe("seeding", () => {
     const workdirPath = path.join(tmp(), "workdir");
 
     seedAndCompile(workdirPath, seed, {
-      "lib/helper.agency": "export def helper(): string { return \"mutated\" }\n",
+      "lib/helper.agency": 'export def helper(): string { return "mutated" }\n',
     });
-    expect(fs.readFileSync(path.join(workdirPath, "lib", "helper.agency"), "utf8")).toContain("mutated");
+    expect(fs.readFileSync(path.join(workdirPath, "lib", "helper.agency"), "utf8")).toContain(
+      "mutated",
+    );
 
-    expect(() => applyOverlay(path.join(tmp(), "w2"), { "../escape.txt": "nope" }))
-      .toThrow(/escapes the workdir/);
+    expect(() => applyOverlay(path.join(tmp(), "w2"), { "../escape.txt": "nope" })).toThrow(
+      /escapes the workdir/,
+    );
   });
 
   it("size guard: a seeded workdir stays under 1 MB even in a 2 MB project", () => {

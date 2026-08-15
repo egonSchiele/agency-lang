@@ -25,10 +25,7 @@ export function nextGuardId(): string {
  *  time convention only; in the additive approve channel it would be
  *  fail-open on a cost-control feature). Disarming is explicit:
  *  `approve({disarm: ["cost"]})`. */
-function clampGrant(
-  delta: number,
-  g: { dimension: "cost" | "time"; label?: string },
-): number {
+function clampGrant(delta: number, g: { dimension: "cost" | "time"; label?: string }): number {
   if (delta >= 0) return delta;
   console.warn(
     `guard grant clamped to 0: a negative ${g.dimension} grant` +
@@ -204,10 +201,7 @@ export type Guard = {
    *  enforcement). TimeGuard returns a remaining-budget clone with the
    *  parent's guardId (per-branch working-time isolation; the parent
    *  pauses across the fork and charges max clone time at the join). */
-  cloneForBranch(
-    parentStack: StateStack,
-    childStack: StateStack,
-  ): Guard | undefined;
+  cloneForBranch(parentStack: StateStack, childStack: StateStack): Guard | undefined;
   toJSON(): GuardJSON;
 };
 
@@ -348,13 +342,7 @@ export class CostGuard implements Guard {
   check(_stack: StateStack): GuardExceededError | null {
     if (this.disarmed) return null;
     if (this.spent <= this.costLimit) return null;
-    return new GuardExceededError(
-      "cost",
-      this.costLimit,
-      this.spent,
-      this.guardId,
-      this.label,
-    );
+    return new GuardExceededError("cost", this.costLimit, this.spent, this.guardId, this.label);
   }
 
   extendBudget(delta: number): void {
@@ -436,7 +424,14 @@ export class CostGuard implements Guard {
     return json;
   }
 
-  static fromJSON(j: { costLimit: number; spent: number; guardId?: string; label?: string } & SharedGuardJSONFields): CostGuard {
+  static fromJSON(
+    j: {
+      costLimit: number;
+      spent: number;
+      guardId?: string;
+      label?: string;
+    } & SharedGuardJSONFields,
+  ): CostGuard {
     // Clean break with the prior `{costAtPush}` JSON shape: refuse to
     // restore a guard whose `spent` is missing rather than silently
     // initializing it to NaN/undefined and producing nonsense trips.
@@ -480,10 +475,7 @@ function writeSharedGuardJSON(
   if (g.isRootBudget) json.isRootBudget = true;
 }
 
-function readSharedGuardJSON(
-  j: SharedGuardJSONFields,
-  g: Guard,
-): void {
+function readSharedGuardJSON(j: SharedGuardJSONFields, g: Guard): void {
   if (j.scopeIds !== undefined) g.scopeIds = j.scopeIds;
   if (j.disarmed) g.disarm();
   if (j.isRootBudget) g.isRootBudget = true;
@@ -785,10 +777,7 @@ export class TimeGuard implements Guard {
     this.elapsedMs += ms;
   }
 
-  cloneForBranch(
-    _parentStack: StateStack,
-    _childStack: StateStack,
-  ): Guard | undefined {
+  cloneForBranch(_parentStack: StateStack, _childStack: StateStack): Guard | undefined {
     // A suspended guard clones NOTHING. Suspension means an interrupt
     // handler is deliberating over this guard right now, and handler
     // work is metered by the handler's registration-site guards only.
@@ -846,7 +835,15 @@ export class TimeGuard implements Guard {
     return json;
   }
 
-  static fromJSON(j: { timeLimit: number; elapsedMs: number; grantedMs?: number; guardId?: string; label?: string } & SharedGuardJSONFields): TimeGuard {
+  static fromJSON(
+    j: {
+      timeLimit: number;
+      elapsedMs: number;
+      grantedMs?: number;
+      guardId?: string;
+      label?: string;
+    } & SharedGuardJSONFields,
+  ): TimeGuard {
     const g = new TimeGuard(j.timeLimit, j.label);
     g.elapsedMs = j.elapsedMs;
     // Optional with a zero default: checkpoints written before the join
@@ -894,10 +891,9 @@ export class TimeGuard implements Guard {
       // fetch, …) listening on the composed signal rejects carrying the
       // guard trip — not a bare cancel that the guard's `try` boundary
       // can't recognize and would let escape as an unhandled rejection.
-      const spent = this.elapsedMs +
-        (this.windowStart !== undefined
-          ? this.clock().now() - this.windowStart
-          : 0);
+      const spent =
+        this.elapsedMs +
+        (this.windowStart !== undefined ? this.clock().now() - this.windowStart : 0);
       // Abort with an AgencyCancelledError that CARRIES the structured
       // cause. Keeping `signal.reason` an Error (not a bare object) means
       // a `throw signal.reason` site — e.g. runBatch's race-loser path —

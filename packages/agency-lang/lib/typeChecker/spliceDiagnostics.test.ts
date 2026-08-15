@@ -65,10 +65,7 @@ describe("splice diagnostics", () => {
 
   for (const [diagnosticName, params] of Object.entries(SPLICE_DIAGNOSTIC_PARAMS)) {
     it(`renders ${diagnosticName} with no unfilled placeholders`, () => {
-      const rendered = renderMessage(
-        DIAGNOSTICS[diagnosticName as DiagnosticName].message,
-        params,
-      );
+      const rendered = renderMessage(DIAGNOSTICS[diagnosticName as DiagnosticName].message, params);
       expect(rendered).not.toContain("{");
       expect(rendered).not.toContain("}");
     });

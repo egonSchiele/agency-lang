@@ -27,7 +27,9 @@ describe("lsp scaling", () => {
     // for manyFunctions (no imports) and for a scaling ratio, but this is not
     // the full keystroke cost.
     const doc = docOf(manyFunctions(LARGE, { docstrings: false }));
-    expect(runDiagnostics(doc, "/t.agency", {}, new SymbolTable()).diagnostics.length).toBeGreaterThan(0);
+    expect(
+      runDiagnostics(doc, "/t.agency", {}, new SymbolTable()).diagnostics.length,
+    ).toBeGreaterThan(0);
 
     const build = (n: number) => {
       const d = docOf(manyFunctions(n, { docstrings: false }));
@@ -53,8 +55,10 @@ describe("lsp scaling", () => {
     };
 
     const doc = docOf(manyUnusedImports(LARGE));
-    expect(getCodeActions(params, doc, new SymbolTable(), cachedLintFor(manyUnusedImports(LARGE))).length)
-      .toBeGreaterThan(0);
+    expect(
+      getCodeActions(params, doc, new SymbolTable(), cachedLintFor(manyUnusedImports(LARGE)))
+        .length,
+    ).toBeGreaterThan(0);
 
     const build = (n: number) => {
       const src = manyUnusedImports(n);

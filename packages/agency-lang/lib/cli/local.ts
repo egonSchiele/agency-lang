@@ -74,9 +74,7 @@ export const CUSTOM_CHOICE = "__custom__";
 /** Picker rows for the no-argument `agency local download`. Metadata-less
  *  aliases get a bare name; the trailing choice lets the user type an hf: URI
  *  or .gguf path. */
-export function downloadChoices(
-  entries: ModelNameEntry[],
-): { title: string; value: string }[] {
+export function downloadChoices(entries: ModelNameEntry[]): { title: string; value: string }[] {
   const rows = entries.map((e) => ({
     title:
       e.params !== undefined && e.sizeBytes !== undefined
@@ -166,7 +164,9 @@ export function runAliasRemove(name: string): void {
 export function formatRefreshOutput(r: RefreshResult): string[] {
   const lines: string[] = [];
   for (const s of r.skipped) {
-    lines.push(`Skipped ${ttyColor.yellow(`"${s.name}"`)}: kept your alias (${ttyColor.dim(s.keptUri)});`);
+    lines.push(
+      `Skipped ${ttyColor.yellow(`"${s.name}"`)}: kept your alias (${ttyColor.dim(s.keptUri)});`,
+    );
     lines.push(`  remote would have set ${ttyColor.dim(s.remoteUri)}`);
   }
   lines.push(

@@ -42,9 +42,7 @@ describe("effects reaching diagnostics across a file boundary", () => {
       `${IMPORT}node main() {\n` +
         `  handle {\n    const x = h()\n  } with (data) {\n    return approve()\n  }\n}\n`,
     );
-    expect(report.warnings.map((warning) => warning.code)).not.toContain(
-      "AG3009",
-    );
+    expect(report.warnings.map((warning) => warning.code)).not.toContain("AG3009");
     expect(report.errors).toEqual([]);
   });
 
@@ -105,15 +103,11 @@ describe("handler parameter typing across a file boundary", () => {
 
   it("reports a match that misses an effect raised by an imported function", () => {
     const missing = checkHandler(`      "mytest::alpha" => 1`);
-    expect(missing.some((diagnostic) => /beta/.test(diagnostic.message))).toBe(
-      true,
-    );
+    expect(missing.some((diagnostic) => /beta/.test(diagnostic.message))).toBe(true);
   });
 
   it("accepts a match that covers every effect the imported function raises", () => {
-    const covered = checkHandler(
-      `      "mytest::alpha" => 1\n      "mytest::beta" => 2`,
-    );
+    const covered = checkHandler(`      "mytest::alpha" => 1\n      "mytest::beta" => 2`);
     expect(covered).toEqual([]);
   });
 });

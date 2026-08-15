@@ -1,11 +1,7 @@
 import { describe, it, expect } from "vitest";
 import * as fs from "fs";
 import { fileURLToPath } from "url";
-import {
-  compileWarning,
-  compiledOutputNodeArgs,
-  compiledOutputRegisterUrl,
-} from "./commands.js";
+import { compileWarning, compiledOutputNodeArgs, compiledOutputRegisterUrl } from "./commands.js";
 
 describe("compiledOutputRegisterUrl", () => {
   it("returns a file:// URL pointing at the shipped register.mjs", () => {
@@ -23,10 +19,7 @@ describe("compiledOutputRegisterUrl", () => {
   it("points at a register.mjs sitting next to resolver.mjs", () => {
     // The register shim is useless without the resolver next to it.
     const registerUrl = compiledOutputRegisterUrl();
-    const resolverPath = fileURLToPath(registerUrl).replace(
-      /register\.mjs$/,
-      "resolver.mjs",
-    );
+    const resolverPath = fileURLToPath(registerUrl).replace(/register\.mjs$/, "resolver.mjs");
     expect(fs.existsSync(resolverPath)).toBe(true);
   });
 });

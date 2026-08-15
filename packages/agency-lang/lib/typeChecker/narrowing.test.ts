@@ -97,9 +97,20 @@ describe("analyzeCondition", () => {
     ref: { variable, chain: chain.map(prop) },
     refine: { kind: "presence", present },
   });
-  const discP = (variable: string, chain: string[], propName: string, value: string, keep: boolean) => ({
+  const discP = (
+    variable: string,
+    chain: string[],
+    propName: string,
+    value: string,
+    keep: boolean,
+  ) => ({
     ref: { variable, chain: chain.map(prop) },
-    refine: { kind: "discriminant", prop: propName, literal: { type: "stringLiteralType", value }, keep },
+    refine: {
+      kind: "discriminant",
+      prop: propName,
+      literal: { type: "stringLiteralType", value },
+      keep,
+    },
   });
 
   it("isSuccess(obj.r): full candidate, path ref (was the old NO_FACTS member-access row)", () => {
@@ -110,26 +121,39 @@ describe("analyzeCondition", () => {
   });
   it("isFailure(obj.r): symmetric (then keep=false)", () => {
     expect(analyzeCondition(firstIfCondition("isFailure(obj.r)")).then[0]).toEqual(
-      succP("obj", ["r"], false));
+      succP("obj", ["r"], false),
+    );
   });
   it('obj.kind == "x": discriminant, bare-variable receiver — full candidate', () => {
     expect(analyzeCondition(firstIfCondition('obj.kind == "x"')).then[0]).toEqual(
-      discP("obj", [], "kind", "x", true));
+      discP("obj", [], "kind", "x", true),
+    );
   });
   it('obj.payload.kind == "x": receiver obj.payload (one hop), prop kind — full candidate', () => {
     expect(analyzeCondition(firstIfCondition('obj.payload.kind == "x"')).then[0]).toEqual(
-      discP("obj", ["payload"], "kind", "x", true));
+      discP("obj", ["payload"], "kind", "x", true),
+    );
   });
   it("box.r != null / == null / swapped: presence on a one-hop path", () => {
-    expect(analyzeCondition(firstIfCondition("box.r != null")).then[0]).toEqual(presP("box", ["r"], true));
-    expect(analyzeCondition(firstIfCondition("box.r == null")).then[0]).toEqual(presP("box", ["r"], false));
-    expect(analyzeCondition(firstIfCondition("null != box.r")).then[0]).toEqual(presP("box", ["r"], true));
+    expect(analyzeCondition(firstIfCondition("box.r != null")).then[0]).toEqual(
+      presP("box", ["r"], true),
+    );
+    expect(analyzeCondition(firstIfCondition("box.r == null")).then[0]).toEqual(
+      presP("box", ["r"], false),
+    );
+    expect(analyzeCondition(firstIfCondition("null != box.r")).then[0]).toEqual(
+      presP("box", ["r"], true),
+    );
   });
   it("if (obj.r.success): member-access truthiness → discriminant on the one-hop receiver", () => {
-    expect(analyzeCondition(firstIfCondition("obj.r.success")).then[0]).toEqual(succP("obj", ["r"], true));
+    expect(analyzeCondition(firstIfCondition("obj.r.success")).then[0]).toEqual(
+      succP("obj", ["r"], true),
+    );
   });
   it("!isSuccess(obj.r): negation swaps then/else", () => {
-    expect(analyzeCondition(firstIfCondition("!isSuccess(obj.r)")).then[0]).toEqual(succP("obj", ["r"], false));
+    expect(analyzeCondition(firstIfCondition("!isSuccess(obj.r)")).then[0]).toEqual(
+      succP("obj", ["r"], false),
+    );
   });
   it("isSuccess(a.r) && isSuccess(b.r): two path facts in then", () => {
     expect(analyzeCondition(firstIfCondition("isSuccess(a.r) && isSuccess(b.r)")).then).toEqual([
@@ -141,27 +165,35 @@ describe("analyzeCondition", () => {
   // ── Multi-hop + literal-index member paths (M2) ───────────────────────────
   it("isSuccess(o.inner.r) narrows a two-hop property path", () => {
     expect(analyzeCondition(firstIfCondition("isSuccess(o.inner.r)")).then[0]).toEqual(
-      succP("o", ["inner", "r"], true));
+      succP("o", ["inner", "r"], true),
+    );
   });
 
   it('a.b.c == "x" splits to receiver a.b and discriminant c', () => {
     expect(analyzeCondition(firstIfCondition('a.b.c == "x"')).then[0]).toEqual(
-      discP("a", ["b"], "c", "x", true));
+      discP("a", ["b"], "c", "x", true),
+    );
   });
 
   it("isSuccess(arr[0]) narrows the index path", () => {
-    expect(analyzeCondition(firstIfCondition("isSuccess(arr[0])")).then[0].ref).toEqual(
-      { variable: "arr", chain: [{ kind: "index", index: 0 }] });
+    expect(analyzeCondition(firstIfCondition("isSuccess(arr[0])")).then[0].ref).toEqual({
+      variable: "arr",
+      chain: [{ kind: "index", index: 0 }],
+    });
   });
 
   it('arr[0].kind == "x" splits to receiver arr[0] and discriminant kind', () => {
-    expect(analyzeCondition(firstIfCondition('arr[0].kind == "x"')).then[0].ref).toEqual(
-      { variable: "arr", chain: [{ kind: "index", index: 0 }] });
+    expect(analyzeCondition(firstIfCondition('arr[0].kind == "x"')).then[0].ref).toEqual({
+      variable: "arr",
+      chain: [{ kind: "index", index: 0 }],
+    });
   });
 
   it('"click" == arr[0].kind narrows the same as the other operand order', () => {
-    expect(analyzeCondition(firstIfCondition('"click" == arr[0].kind')).then[0].ref).toEqual(
-      { variable: "arr", chain: [{ kind: "index", index: 0 }] });
+    expect(analyzeCondition(firstIfCondition('"click" == arr[0].kind')).then[0].ref).toEqual({
+      variable: "arr",
+      chain: [{ kind: "index", index: 0 }],
+    });
   });
 
   it("arr[0] != null narrows the index path (presence)", () => {
@@ -258,7 +290,8 @@ describe("analyzeCondition", () => {
 
   it('r.a.kind == "x": one-hop receiver r.a now narrows (M1; was out-of-scope)', () => {
     expect(analyzeCondition(firstIfCondition('r.a.kind == "x"')).then[0]).toEqual(
-      discP("r", ["a"], "kind", "x", true));
+      discP("r", ["a"], "kind", "x", true),
+    );
   });
 
   it("composes ! with a discriminant (swaps then/else)", () => {
@@ -334,7 +367,9 @@ node main() {
     let unsafe: string = reassignedR.value
   }
 }`);
-    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'safe').");
+    expect(errs).toContain(
+      "Type 'number' is not assignable to type 'string' (assignment to 'safe').",
+    );
     expect(errs).not.toContain("(assignment to 'unsafe')");
   });
 
@@ -349,7 +384,9 @@ node main() {
   }
   let after: string = r.value
 }`);
-    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'inside').");
+    expect(errs).toContain(
+      "Type 'number' is not assignable to type 'string' (assignment to 'inside').",
+    );
     expect(errs).not.toContain("(assignment to 'after')");
   });
 
@@ -492,7 +529,9 @@ node main() {
     unsafeR = tryParse("again")
   }
 }`);
-    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'safe').");
+    expect(errs).toContain(
+      "Type 'number' is not assignable to type 'string' (assignment to 'safe').",
+    );
     expect(errs).not.toContain("(assignment to 'unsafe')");
   });
 
@@ -609,7 +648,12 @@ describe("postGuardFacts", () => {
     expect(postGuardFacts(node, analyzeCondition(node.condition))).toEqual([
       {
         ref: { variable: "r", chain: [] },
-        refine: { kind: "discriminant", prop: "success", literal: { type: "booleanLiteralType", value: "true" }, keep: true },
+        refine: {
+          kind: "discriminant",
+          prop: "success",
+          literal: { type: "booleanLiteralType", value: "true" },
+          keep: true,
+        },
       },
     ]);
   });
@@ -685,7 +729,9 @@ node main() {
   unsafeR = tryParse("again")
   let unsafe: string = unsafeR.value
 }`);
-    expect(errs).toContain("Type 'number' is not assignable to type 'string' (assignment to 'safe').");
+    expect(errs).toContain(
+      "Type 'number' is not assignable to type 'string' (assignment to 'safe').",
+    );
     expect(errs).not.toContain("(assignment to 'unsafe')");
   });
 
@@ -818,7 +864,7 @@ node main() {
   if (r.kind == "answer") { let q = r.question } else { let t = r.text }
 }`);
     expect(has(errs, noQuestion)).toBe(1); // then: r is answer → no `question`
-    expect(has(errs, noText)).toBe(1);     // else: r is clarify → no `text`
+    expect(has(errs, noText)).toBe(1); // else: r is clarify → no `text`
   });
 
   it("does NOT narrow outside the guard (control)", () => {

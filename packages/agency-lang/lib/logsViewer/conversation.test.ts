@@ -45,9 +45,7 @@ describe("formatConversation", () => {
         ],
       },
     ]);
-    expect(lines).toEqual([
-      `${color.green("[assistant]")} tool call: add({"a":1,"b":2})`,
-    ]);
+    expect(lines).toEqual([`${color.green("[assistant]")} tool call: add({"a":1,"b":2})`]);
   });
 
   it("renders an array content payload as joined text", () => {
@@ -71,9 +69,7 @@ describe("formatConversation", () => {
     const lines = formatConversation([
       { role: "tool", name: "fibonacciNumbers", content: [0, 1, 1, 2, 3], tool_call_id: "x" },
     ]);
-    expect(lines).toEqual([
-      `${color.green("[tool: fibonacciNumbers]")} [0,1,1,2,3]`,
-    ]);
+    expect(lines).toEqual([`${color.green("[tool: fibonacciNumbers]")} [0,1,1,2,3]`]);
   });
 
   it("renders an object tool result as JSON", () => {

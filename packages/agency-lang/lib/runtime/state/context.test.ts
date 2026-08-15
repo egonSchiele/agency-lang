@@ -70,9 +70,7 @@ describe("RuntimeContext", () => {
     it("cancel() should set an AgencyCancelledError as the abort reason", () => {
       const ctx = makeMockCtx();
       ctx.cancel("user stop");
-      expect(ctx.abortController.signal.reason).toBeInstanceOf(
-        AgencyCancelledError,
-      );
+      expect(ctx.abortController.signal.reason).toBeInstanceOf(AgencyCancelledError);
       expect(ctx.abortController.signal.reason.message).toBe("user stop");
     });
 
@@ -191,9 +189,7 @@ describe("RuntimeContext memory frames", () => {
 
     const m = execCtx.getActiveMemoryManager();
     expect(m).toBeDefined();
-    expect(execCtx.stateStack.activeMemoryFrame()?.configKey).toBe(
-      fs.realpathSync(dirJson),
-    );
+    expect(execCtx.stateStack.activeMemoryFrame()?.configKey).toBe(fs.realpathSync(dirJson));
   });
 
   it("returns undefined after the user pops the JSON-seeded bottom frame", async () => {

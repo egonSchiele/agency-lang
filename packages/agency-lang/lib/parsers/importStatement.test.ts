@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  importStatmentParser,
-  importNodeStatmentParser,
-} from "./parsers.js";
+import { importStatmentParser, importNodeStatmentParser } from "./parsers.js";
 
 describe("importStatmentParser", () => {
   // Default imports
@@ -26,9 +23,7 @@ describe("importStatmentParser", () => {
     if (result.success) {
       expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
-        importedNames: [
-          { type: "namedImport", importedNames: ["foo"], aliases: {} },
-        ],
+        importedNames: [{ type: "namedImport", importedNames: ["foo"], aliases: {} }],
         modulePath: "./foo.ts",
         isAgencyImport: false,
       });
@@ -68,9 +63,7 @@ describe("importStatmentParser", () => {
 
   // Default + namespace imports
   it('should parse: import foo, * as bar from "./foo.ts"', () => {
-    const result = importStatmentParser(
-      'import foo, * as bar from "./foo.ts"',
-    );
+    const result = importStatmentParser('import foo, * as bar from "./foo.ts"');
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result).toEqualWithoutLoc({
@@ -105,9 +98,7 @@ describe("importStatmentParser", () => {
     if (result.success) {
       expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
-        importedNames: [
-          { type: "namedImport", importedNames: ["foo"], aliases: {} },
-        ],
+        importedNames: [{ type: "namedImport", importedNames: ["foo"], aliases: {} }],
         modulePath: "./foo.agency",
         isAgencyImport: true,
       });
@@ -116,22 +107,16 @@ describe("importStatmentParser", () => {
 
   // node/tool imports are handled by their own parsers, not importStatmentParser
   it('should not parse: import node { foo } from "./foo.agency"', () => {
-    expect(() =>
-      importStatmentParser('import node { foo } from "./foo.agency"'),
-    ).toThrow();
+    expect(() => importStatmentParser('import node { foo } from "./foo.agency"')).toThrow();
   });
 
   it('should not parse: import tool { foo } from "./foo.agency"', () => {
-    expect(() =>
-      importStatmentParser('import tool { foo } from "./foo.agency"'),
-    ).toThrow();
+    expect(() => importStatmentParser('import tool { foo } from "./foo.agency"')).toThrow();
   });
 
   // Multiple named imports
   it('should parse: import { foo, bar, baz } from "myModule"', () => {
-    const result = importStatmentParser(
-      'import { foo, bar, baz } from "myModule"',
-    );
+    const result = importStatmentParser('import { foo, bar, baz } from "myModule"');
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result).toEqualWithoutLoc({
@@ -151,9 +136,7 @@ describe("importStatmentParser", () => {
 
   // Idempotent imports
   it('should parse: import { idempotent foo, bar } from "./tools.js"', () => {
-    const result = importStatmentParser(
-      'import { idempotent foo, bar } from "./tools.js"',
-    );
+    const result = importStatmentParser('import { idempotent foo, bar } from "./tools.js"');
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result).toEqualWithoutLoc({
@@ -195,9 +178,7 @@ describe("importStatmentParser", () => {
   });
 
   it('should parse: import { idempotent foo } from "./tools.js"', () => {
-    const result = importStatmentParser(
-      'import { idempotent foo } from "./tools.js"',
-    );
+    const result = importStatmentParser('import { idempotent foo } from "./tools.js"');
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result).toEqualWithoutLoc({
@@ -217,9 +198,7 @@ describe("importStatmentParser", () => {
   });
 
   it('should parse: import { destructive rm, stat } from "./tools.js"', () => {
-    const result = importStatmentParser(
-      'import { destructive rm, stat } from "./tools.js"',
-    );
+    const result = importStatmentParser('import { destructive rm, stat } from "./tools.js"');
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result).toEqualWithoutLoc({
@@ -239,9 +218,7 @@ describe("importStatmentParser", () => {
   });
 
   it('should parse: import { idempotent a, destructive b } from "./tools.js"', () => {
-    const result = importStatmentParser(
-      'import { idempotent a, destructive b } from "./tools.js"',
-    );
+    const result = importStatmentParser('import { idempotent a, destructive b } from "./tools.js"');
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result).toEqualWithoutLoc({
@@ -262,9 +239,7 @@ describe("importStatmentParser", () => {
   });
 
   it('should parse: import { destructive rm as remove } from "./tools.js"', () => {
-    const result = importStatmentParser(
-      'import { destructive rm as remove } from "./tools.js"',
-    );
+    const result = importStatmentParser('import { destructive rm as remove } from "./tools.js"');
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result).toEqualWithoutLoc({
@@ -285,9 +260,7 @@ describe("importStatmentParser", () => {
 
   // Aliased imports
   it('should parse: import { foo as bar } from "./foo.ts"', () => {
-    const result = importStatmentParser(
-      'import { foo as bar } from "./foo.ts"',
-    );
+    const result = importStatmentParser('import { foo as bar } from "./foo.ts"');
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result).toEqualWithoutLoc({
@@ -306,9 +279,7 @@ describe("importStatmentParser", () => {
   });
 
   it('should parse: import { foo as f, bar as b, baz } from "./mod.js"', () => {
-    const result = importStatmentParser(
-      'import { foo as f, bar as b, baz } from "./mod.js"',
-    );
+    const result = importStatmentParser('import { foo as f, bar as b, baz } from "./mod.js"');
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result).toEqualWithoutLoc({
@@ -327,9 +298,7 @@ describe("importStatmentParser", () => {
   });
 
   it('should parse: import { idempotent foo as f } from "./tools.js"', () => {
-    const result = importStatmentParser(
-      'import { idempotent foo as f } from "./tools.js"',
-    );
+    const result = importStatmentParser('import { idempotent foo as f } from "./tools.js"');
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result).toEqualWithoutLoc({
@@ -349,7 +318,7 @@ describe("importStatmentParser", () => {
   });
 
   // With semicolons
-  it('should parse imports with semicolons', () => {
+  it("should parse imports with semicolons", () => {
     const result = importStatmentParser('import foo from "./foo.ts";');
     expect(result.success).toBe(true);
     if (result.success) {
@@ -392,9 +361,7 @@ describe("importStatmentParser", () => {
     if (result.success) {
       expect(result.result).toEqualWithoutLoc({
         type: "importStatement",
-        importedNames: [
-          { type: "namedImport", importedNames: ["foo"], aliases: {} },
-        ],
+        importedNames: [{ type: "namedImport", importedNames: ["foo"], aliases: {} }],
         modulePath: "std::x",
         isAgencyImport: true,
         testOnly: true,
@@ -632,12 +599,12 @@ describe("importNodeStatmentParser", () => {
       throws: true,
     },
     {
-      input: 'import nodes { myNode } from;',
+      input: "import nodes { myNode } from;",
       expected: { success: false },
       throws: true,
     },
     {
-      input: 'import nodes { myNode };',
+      input: "import nodes { myNode };",
       expected: { success: false },
       throws: true,
     },
@@ -668,7 +635,7 @@ describe("importNodeStatmentParser", () => {
 
     // Failure cases - mismatched quotes (matches "import nodes/node { ... }" -> throws)
     {
-      input: 'import nodes { myNode } from "file.agency\';',
+      input: "import nodes { myNode } from \"file.agency';",
       expected: { success: false },
       throws: true,
     },
@@ -709,4 +676,3 @@ describe("importNodeStatmentParser", () => {
     }
   });
 });
-

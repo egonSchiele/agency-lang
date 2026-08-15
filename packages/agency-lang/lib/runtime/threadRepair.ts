@@ -32,29 +32,20 @@ export type DanglingToolCall = { id: string; name: string };
  *  have advanced past it). Deliberately NOT a whole-thread validity check;
  *  do not reach for it as one. Empty when the tail is valid or there is
  *  no assistant turn at all. */
-export function unansweredToolCalls(
-  messages: MessageThread,
-): DanglingToolCall[] {
+export function unansweredToolCalls(messages: MessageThread): DanglingToolCall[] {
   const all = messages.getMessages();
-  const lastAssistant = all.findLastIndex(
-    (m) => m instanceof smoltalk.AssistantMessage,
-  );
+  const lastAssistant = all.findLastIndex((m) => m instanceof smoltalk.AssistantMessage);
   if (lastAssistant === -1) return [];
-  const calls =
-    (all[lastAssistant] as smoltalk.AssistantMessage).toolCalls ?? [];
+  const calls = (all[lastAssistant] as smoltalk.AssistantMessage).toolCalls ?? [];
   const answeredIds = all
     .slice(lastAssistant + 1)
-    .filter(
-      (m): m is smoltalk.ToolMessage => m instanceof smoltalk.ToolMessage,
-    )
+    .filter((m): m is smoltalk.ToolMessage => m instanceof smoltalk.ToolMessage)
     .map((m) => m.tool_call_id);
   return calls.filter((c) => !answeredIds.includes(c.id));
 }
 
 function hasAssistantTurn(messages: MessageThread): boolean {
-  return messages
-    .getMessages()
-    .some((m) => m instanceof smoltalk.AssistantMessage);
+  return messages.getMessages().some((m) => m instanceof smoltalk.AssistantMessage);
 }
 
 type RepairWording = { perCall: string; breadcrumb: string };
@@ -102,9 +93,7 @@ function appendRepair(
  * `push`, so per-message debug labels survive. Returns the calls it stubbed
  * (its sibling `repairAbandonedTurn` shares the contract).
  */
-export function markThreadCancelled(
-  messages: MessageThread,
-): DanglingToolCall[] {
+export function markThreadCancelled(messages: MessageThread): DanglingToolCall[] {
   if (!hasAssistantTurn(messages)) return []; // nothing sent yet — already valid
   const dangling = unansweredToolCalls(messages);
   appendRepair(messages, dangling, {
@@ -114,10 +103,8 @@ export function markThreadCancelled(
   return dangling;
 }
 
-export const ABANDONED_CALL_TEXT =
-  "[Tool call interrupted; the turn was never resumed.]";
-export const ABANDONED_TURN_TEXT =
-  "[The previous turn was interrupted before it finished.]";
+export const ABANDONED_CALL_TEXT = "[Tool call interrupted; the turn was never resumed.]";
+export const ABANDONED_TURN_TEXT = "[The previous turn was interrupted before it finished.]";
 
 /** Repair a thread whose previous turn parked on an unanswered interrupt
  *  and was then abandoned (the user started a new turn instead of
@@ -128,9 +115,7 @@ export const ABANDONED_TURN_TEXT =
  *  abandoned turn's checkpoint is refused instead of clobbering the
  *  thread — see `restoreThreadForResume`. Total no-op on a valid
  *  thread. */
-export function repairAbandonedTurn(
-  messages: MessageThread,
-): DanglingToolCall[] {
+export function repairAbandonedTurn(messages: MessageThread): DanglingToolCall[] {
   const dangling = unansweredToolCalls(messages);
   if (dangling.length === 0) return [];
   appendRepair(messages, dangling, {
@@ -142,10 +127,7 @@ export function repairAbandonedTurn(
 }
 
 export type ThreadRepairedSink = {
-  threadRepaired?: (event: {
-    threadId: string;
-    toolCallIds: string[];
-  }) => Promise<void> | void;
+  threadRepaired?: (event: { threadId: string; toolCallIds: string[] }) => Promise<void> | void;
 };
 
 /** Everything the reopen seam needs, so `Runner.thread()` stays one line.

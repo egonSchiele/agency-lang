@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  userMessage,
-  assistantMessage,
-  systemMessage,
-  toolMessage,
-} from "smoltalk";
+import { userMessage, assistantMessage, systemMessage, toolMessage } from "smoltalk";
 import { MemoryManager } from "./manager.js";
 import { FileMemoryStore } from "./store.js";
 import { StatelogClient } from "../../statelogClient.js";
@@ -29,12 +24,12 @@ import os from "node:os";
 function mockLlmClient() {
   const textFn = vi.fn();
   // Default: empty extraction result — most tests override this anyway.
-  textFn.mockResolvedValue(wrapTextResult(
-    JSON.stringify({ entities: [], relations: [], expirations: [] })
-  ));
+  textFn.mockResolvedValue(
+    wrapTextResult(JSON.stringify({ entities: [], relations: [], expirations: [] })),
+  );
   return {
     text: textFn,
-    textStream: async function* () { },
+    textStream: async function* () {},
     embed: vi.fn().mockResolvedValue({
       success: true,
       value: { embeddings: [[0.1, 0.2, 0.3]], model: "mock-embed" },
@@ -90,8 +85,22 @@ describe("MemoryManager", () => {
       value: {
         embeddings: [],
         model: "mock-embed",
-        costEstimate: { inputCost: 0, outputCost: 0.5, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0.5, currency: "USD" },
-        tokenUsage: { inputTokens: 4, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 4 },
+        costEstimate: {
+          inputCost: 0,
+          outputCost: 0.5,
+          cachedInputCost: 0,
+          cacheCreationInputCost: 0,
+          hostedToolsCost: 0,
+          totalCost: 0.5,
+          currency: "USD",
+        },
+        tokenUsage: {
+          inputTokens: 4,
+          outputTokens: 0,
+          cachedInputTokens: 0,
+          cacheCreationInputTokens: 0,
+          totalTokens: 4,
+        },
       },
     };
     const client = mockLlmClient();
@@ -105,7 +114,9 @@ describe("MemoryManager", () => {
     // The provider charged us even though it returned no vectors: usage is
     // accounted (guards + meter), then the structural no-vector error is thrown.
     await expect(
-      runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async () => (manager as any)._embed("hello")),
+      runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async () =>
+        (manager as any)._embed("hello"),
+      ),
     ).rejects.toThrow(/no vectors/);
     expect(ctx.stateStack.localCost).toBeCloseTo(0.5);
     const { usage } = ctx.invocationUsage.snapshot();
@@ -119,8 +130,22 @@ describe("MemoryManager", () => {
       value: {
         embeddings: [],
         model: "mock-embed",
-        costEstimate: { inputCost: 0, outputCost: 0.5, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0.5, currency: "USD" },
-        tokenUsage: { inputTokens: 4, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 4 },
+        costEstimate: {
+          inputCost: 0,
+          outputCost: 0.5,
+          cachedInputCost: 0,
+          cacheCreationInputCost: 0,
+          hostedToolsCost: 0,
+          totalCost: 0.5,
+          currency: "USD",
+        },
+        tokenUsage: {
+          inputTokens: 4,
+          outputTokens: 0,
+          cachedInputTokens: 0,
+          cacheCreationInputTokens: 0,
+          totalTokens: 4,
+        },
       },
     };
     const client = mockLlmClient();
@@ -170,13 +195,13 @@ describe("MemoryManager", () => {
     const store = new FileMemoryStore(tmpDir);
     const client = mockLlmClient();
     client.text.mockResolvedValue(
-      wrapTextResult(JSON.stringify({
-        entities: [
-          { name: "Mom", type: "person", observations: ["Likes pottery"] },
-        ],
-        relations: [],
-        expirations: [],
-      }))
+      wrapTextResult(
+        JSON.stringify({
+          entities: [{ name: "Mom", type: "person", observations: ["Likes pottery"] }],
+          relations: [],
+          expirations: [],
+        }),
+      ),
     );
     const manager = new MemoryManager({
       store,
@@ -203,22 +228,24 @@ describe("MemoryManager", () => {
     client.text.mockImplementation(async (config: any) => {
       const prompt = config?.messages?.[0]?.content ?? "";
       if (prompt.includes("Alice")) {
-        return wrapTextResult(JSON.stringify({
-          entities: [{ name: "Alice", type: "person", observations: ["a fact"] }],
-          relations: [],
-          expirations: [],
-        }));
+        return wrapTextResult(
+          JSON.stringify({
+            entities: [{ name: "Alice", type: "person", observations: ["a fact"] }],
+            relations: [],
+            expirations: [],
+          }),
+        );
       }
       if (prompt.includes("Bob")) {
-        return wrapTextResult(JSON.stringify({
-          entities: [{ name: "Bob", type: "person", observations: ["b fact"] }],
-          relations: [],
-          expirations: [],
-        }));
+        return wrapTextResult(
+          JSON.stringify({
+            entities: [{ name: "Bob", type: "person", observations: ["b fact"] }],
+            relations: [],
+            expirations: [],
+          }),
+        );
       }
-      return wrapTextResult(
-        JSON.stringify({ entities: [], relations: [], expirations: [] })
-      );
+      return wrapTextResult(JSON.stringify({ entities: [], relations: [], expirations: [] }));
     });
     const manager = new MemoryManager({
       store,
@@ -240,13 +267,13 @@ describe("MemoryManager", () => {
     const store = new FileMemoryStore(tmpDir);
     const client = mockLlmClient();
     client.text.mockResolvedValue(
-      wrapTextResult(JSON.stringify({
-        entities: [
-          { name: "Mom", type: "person", observations: ["Likes pottery"] },
-        ],
-        relations: [],
-        expirations: [],
-      }))
+      wrapTextResult(
+        JSON.stringify({
+          entities: [{ name: "Mom", type: "person", observations: ["Likes pottery"] }],
+          relations: [],
+          expirations: [],
+        }),
+      ),
     );
     const manager = new MemoryManager({
       store,
@@ -269,13 +296,13 @@ describe("MemoryManager", () => {
     const client = mockLlmClient();
     // First text call: extraction populates Mom + observation.
     client.text.mockResolvedValueOnce(
-      wrapTextResult(JSON.stringify({
-        entities: [
-          { name: "Mom", type: "person", observations: ["Likes pottery"] },
-        ],
-        relations: [],
-        expirations: [],
-      }))
+      wrapTextResult(
+        JSON.stringify({
+          entities: [{ name: "Mom", type: "person", observations: ["Likes pottery"] }],
+          relations: [],
+          expirations: [],
+        }),
+      ),
     );
     const manager = new MemoryManager({
       store,
@@ -287,9 +314,7 @@ describe("MemoryManager", () => {
     // Tier 3 (filter) returns Mom's id from the candidate set Tier 1
     // surfaced. We assert end-to-end that the formatted recall text
     // includes the entity and its observation.
-    client.text.mockResolvedValue(
-      wrapTextResult(JSON.stringify({ ids: [mom.id] })),
-    );
+    client.text.mockResolvedValue(wrapTextResult(JSON.stringify({ ids: [mom.id] })));
     const text = await manager.recall("mom");
     expect(text).toContain("Mom");
     expect(text).toContain("Likes pottery");
@@ -299,13 +324,13 @@ describe("MemoryManager", () => {
     const store = new FileMemoryStore(tmpDir);
     const client = mockLlmClient();
     client.text.mockResolvedValueOnce(
-      wrapTextResult(JSON.stringify({
-        entities: [
-          { name: "Mom", type: "person", observations: ["Likes pottery"] },
-        ],
-        relations: [],
-        expirations: [],
-      }))
+      wrapTextResult(
+        JSON.stringify({
+          entities: [{ name: "Mom", type: "person", observations: ["Likes pottery"] }],
+          relations: [],
+          expirations: [],
+        }),
+      ),
     );
     const manager = new MemoryManager({
       store,
@@ -316,9 +341,7 @@ describe("MemoryManager", () => {
     // LLM hallucinates an id outside the candidate set. With the
     // hallucination guard this collapses to an empty filter result,
     // and recall should return "" rather than a corrupted entity ref.
-    client.text.mockResolvedValue(
-      wrapTextResult(JSON.stringify({ ids: ["entity-totally-fake"] })),
-    );
+    client.text.mockResolvedValue(wrapTextResult(JSON.stringify({ ids: ["entity-totally-fake"] })));
     const text = await manager.recall("mom");
     expect(text).toBe("");
   });
@@ -327,13 +350,13 @@ describe("MemoryManager", () => {
     const store = new FileMemoryStore(tmpDir);
     const client = mockLlmClient();
     client.text.mockResolvedValueOnce(
-      wrapTextResult(JSON.stringify({
-        entities: [
-          { name: "Maggie", type: "person", observations: ["loves to weave"] },
-        ],
-        relations: [],
-        expirations: [],
-      }))
+      wrapTextResult(
+        JSON.stringify({
+          entities: [{ name: "Maggie", type: "person", observations: ["loves to weave"] }],
+          relations: [],
+          expirations: [],
+        }),
+      ),
     );
     const manager = new MemoryManager({
       store,
@@ -354,17 +377,19 @@ describe("MemoryManager", () => {
     const store = new FileMemoryStore(tmpDir);
     const client = mockLlmClient();
     client.text.mockResolvedValueOnce(
-      wrapTextResult(JSON.stringify({
-        entities: [
-          {
-            name: "Mom",
-            type: "person",
-            observations: ["Favorite color is blue"],
-          },
-        ],
-        relations: [],
-        expirations: [],
-      }))
+      wrapTextResult(
+        JSON.stringify({
+          entities: [
+            {
+              name: "Mom",
+              type: "person",
+              observations: ["Favorite color is blue"],
+            },
+          ],
+          relations: [],
+          expirations: [],
+        }),
+      ),
     );
     const manager = new MemoryManager({
       store,
@@ -374,12 +399,12 @@ describe("MemoryManager", () => {
     await manager.remember("Mom's favorite color is blue");
     // forget asks the LLM what to expire — return a substring that should match.
     client.text.mockResolvedValueOnce(
-      wrapTextResult(JSON.stringify({
-        observations: [
-          { entityName: "Mom", observationContent: "favorite color" },
-        ],
-        relations: [],
-      }))
+      wrapTextResult(
+        JSON.stringify({
+          observations: [{ entityName: "Mom", observationContent: "favorite color" }],
+          relations: [],
+        }),
+      ),
     );
     await manager.forget("forget mom's favorite color");
     const mom = manager.getGraph().findEntityByName("Mom")!;
@@ -443,11 +468,13 @@ describe("MemoryManager", () => {
       const openedSpans = spyOnSpans(statelogClient);
       const client = mockLlmClient();
       client.text.mockResolvedValue(
-        wrapTextResult(JSON.stringify({
-          entities: [{ name: "Mom", type: "person", observations: ["likes pottery"] }],
-          relations: [],
-          expirations: [],
-        }))
+        wrapTextResult(
+          JSON.stringify({
+            entities: [{ name: "Mom", type: "person", observations: ["likes pottery"] }],
+            relations: [],
+            expirations: [],
+          }),
+        ),
       );
       const manager = new MemoryManager({
         store: new FileMemoryStore(tmpDir),
@@ -477,11 +504,13 @@ describe("MemoryManager", () => {
       const client = mockLlmClient();
       // Seed an entity via remember.
       client.text.mockResolvedValueOnce(
-        wrapTextResult(JSON.stringify({
-          entities: [{ name: "Mom", type: "person", observations: ["likes pottery"] }],
-          relations: [],
-          expirations: [],
-        }))
+        wrapTextResult(
+          JSON.stringify({
+            entities: [{ name: "Mom", type: "person", observations: ["likes pottery"] }],
+            relations: [],
+            expirations: [],
+          }),
+        ),
       );
       const manager = new MemoryManager({
         store: new FileMemoryStore(tmpDir),
@@ -493,9 +522,7 @@ describe("MemoryManager", () => {
 
       // Tier-3 LLM returns the seeded entity id.
       const mom = manager.getGraph().findEntityByName("Mom")!;
-      client.text.mockResolvedValueOnce(
-        wrapTextResult(JSON.stringify({ ids: [mom.id] })),
-      );
+      client.text.mockResolvedValueOnce(wrapTextResult(JSON.stringify({ ids: [mom.id] })));
 
       // Spy on spans + reset the events file so we only see recall.
       const openedSpans = spyOnSpans(statelogClient);
@@ -513,9 +540,7 @@ describe("MemoryManager", () => {
       // The root-level case is when parent_span_id is null.
       const events = readEvents(eventsFile);
       const childishEvents = events.filter(
-        (e) =>
-          e.data.type === "promptCompletion" ||
-          e.data.type === "embedCompletion",
+        (e) => e.data.type === "promptCompletion" || e.data.type === "embedCompletion",
       );
       expect(childishEvents.length).toBeGreaterThan(0);
       for (const evt of childishEvents) {
@@ -528,11 +553,13 @@ describe("MemoryManager", () => {
       const statelogClient = makeStatelogClient(eventsFile);
       const client = mockLlmClient();
       client.text.mockResolvedValueOnce(
-        wrapTextResult(JSON.stringify({
-          entities: [{ name: "Mom", type: "person", observations: ["likes pottery"] }],
-          relations: [],
-          expirations: [],
-        }))
+        wrapTextResult(
+          JSON.stringify({
+            entities: [{ name: "Mom", type: "person", observations: ["likes pottery"] }],
+            relations: [],
+            expirations: [],
+          }),
+        ),
       );
       const manager = new MemoryManager({
         store: new FileMemoryStore(tmpDir),
@@ -542,10 +569,12 @@ describe("MemoryManager", () => {
       });
       await manager.remember("Mom likes pottery");
       client.text.mockResolvedValueOnce(
-        wrapTextResult(JSON.stringify({
-          observations: [{ entityName: "Mom", observationContent: "pottery" }],
-          relations: [],
-        }))
+        wrapTextResult(
+          JSON.stringify({
+            observations: [{ entityName: "Mom", observationContent: "pottery" }],
+            relations: [],
+          }),
+        ),
       );
       const openedSpans = spyOnSpans(statelogClient);
       fs.writeFileSync(eventsFile, "");
@@ -566,11 +595,13 @@ describe("MemoryManager", () => {
       const statelogClient = makeStatelogClient(eventsFile);
       const client = mockLlmClient();
       client.text.mockResolvedValue(
-        wrapTextResult(JSON.stringify({
-          entities: [{ name: "Mom", type: "person", observations: ["likes pottery"] }],
-          relations: [],
-          expirations: [],
-        }))
+        wrapTextResult(
+          JSON.stringify({
+            entities: [{ name: "Mom", type: "person", observations: ["likes pottery"] }],
+            relations: [],
+            expirations: [],
+          }),
+        ),
       );
       const manager = new MemoryManager({
         store: new FileMemoryStore(tmpDir),
@@ -671,9 +702,7 @@ describe("MemoryManager", () => {
       client.text.mockResolvedValueOnce(
         wrapTextResultWithCost(
           JSON.stringify({
-            entities: [
-              { name: "Maggie", type: "person", observations: ["weaves baskets"] },
-            ],
+            entities: [{ name: "Maggie", type: "person", observations: ["weaves baskets"] }],
             relations: [],
             expirations: [],
           }),
@@ -740,9 +769,7 @@ describe("MemoryManager", () => {
       client.text.mockResolvedValueOnce(
         wrapTextResultWithCost(
           JSON.stringify({
-            entities: [
-              { name: "Maggie", type: "person", observations: ["weaves baskets"] },
-            ],
+            entities: [{ name: "Maggie", type: "person", observations: ["weaves baskets"] }],
             relations: [],
             expirations: [],
           }),
@@ -795,28 +822,38 @@ describe("MemoryManager.resolveEmbedding (provider-aware embeddings)", () => {
   }
 
   it("explicit embeddings.model wins over derivation", () => {
-    expect(mgr({ embeddings: { model: "my-embed", provider: "x" } }).resolveEmbedding())
-      .toEqual({ model: "my-embed", provider: "x" });
+    expect(mgr({ embeddings: { model: "my-embed", provider: "x" } }).resolveEmbedding()).toEqual({
+      model: "my-embed",
+      provider: "x",
+    });
   });
 
   it("derives text-embedding-3-small for an openai provider", () => {
-    expect(mgr({ smoltalkDefaults: { provider: "openai" } }).resolveEmbedding())
-      .toEqual({ model: "text-embedding-3-small", provider: "openai" });
+    expect(mgr({ smoltalkDefaults: { provider: "openai" } }).resolveEmbedding()).toEqual({
+      model: "text-embedding-3-small",
+      provider: "openai",
+    });
   });
 
   it("derives the google embedding model for a google provider", () => {
-    expect(mgr({ smoltalkDefaults: { provider: "google" } }).resolveEmbedding())
-      .toEqual({ model: "gemini-embedding-001", provider: "google" });
+    expect(mgr({ smoltalkDefaults: { provider: "google" } }).resolveEmbedding()).toEqual({
+      model: "gemini-embedding-001",
+      provider: "google",
+    });
   });
 
   it("derives the ollama embedding model for an ollama provider", () => {
-    expect(mgr({ smoltalkDefaults: { provider: "ollama" } }).resolveEmbedding())
-      .toEqual({ model: "nomic-embed-text", provider: "ollama" });
+    expect(mgr({ smoltalkDefaults: { provider: "ollama" } }).resolveEmbedding()).toEqual({
+      model: "nomic-embed-text",
+      provider: "ollama",
+    });
   });
 
   it("derives the provider from the model name when no provider is set", () => {
-    expect(mgr({ smoltalkDefaults: { model: "gpt-4o-mini" } }).resolveEmbedding())
-      .toEqual({ model: "text-embedding-3-small", provider: "openai" });
+    expect(mgr({ smoltalkDefaults: { model: "gpt-4o-mini" } }).resolveEmbedding()).toEqual({
+      model: "text-embedding-3-small",
+      provider: "openai",
+    });
   });
 
   it("disables Tier-2 for a provider with no embedding endpoint (anthropic)", () => {
@@ -843,8 +880,7 @@ describe("MemoryManager compaction and auto-extraction on agentic threads", () =
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  const tool = (content: string) =>
-    toolMessage(content, { tool_call_id: "t1", name: "shell" });
+  const tool = (content: string) => toolMessage(content, { tool_call_id: "t1", name: "shell" });
 
   // The shape an agentic run produces: one user request up front, then
   // assistant/tool traffic for the rest of the thread.
@@ -891,9 +927,7 @@ describe("MemoryManager compaction and auto-extraction on agentic threads", () =
     // The kept tail must never begin with a tool reply — that would
     // orphan it from its assistant tool_calls message.
     expect(messages[plan!.tailIndices[0]].role).toBe("assistant");
-    expect(plan!.summaryMessageContent).toContain(
-      "Previous conversation summary:",
-    );
+    expect(plan!.summaryMessageContent).toContain("Previous conversation summary:");
   });
 
   it("auto-extraction only sends messages added since the last pass", async () => {
@@ -925,11 +959,7 @@ describe("MemoryManager compaction and auto-extraction on agentic threads", () =
     expect(plan).not.toBeNull();
     const head = plan!.systemPrefixIndices.map((i) => messages[i]);
     const tail = plan!.tailIndices.map((i) => messages[i]);
-    const reshaped = [
-      ...head,
-      systemMessage(plan!.summaryMessageContent),
-      ...tail,
-    ];
+    const reshaped = [...head, systemMessage(plan!.summaryMessageContent), ...tail];
 
     // Next turn adds one genuinely new message.
     const next = [...reshaped, assistantMessage("BRAND NEW FACT")];

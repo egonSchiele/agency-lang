@@ -1,9 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("child_process", () => ({
-  execFile: vi.fn((_cmd: string, _args: string[], cb: (err: Error | null, result: { stdout: string; stderr: string }) => void) => {
-    cb(null, { stdout: "", stderr: "" });
-  }),
+  execFile: vi.fn(
+    (
+      _cmd: string,
+      _args: string[],
+      cb: (err: Error | null, result: { stdout: string; stderr: string }) => void,
+    ) => {
+      cb(null, { stdout: "", stderr: "" });
+    },
+  ),
 }));
 
 // detectPlatform caches its answer, so overriding process.platform is not

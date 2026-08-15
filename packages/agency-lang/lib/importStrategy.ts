@@ -81,7 +81,7 @@ export class RunStrategy extends CompileStrategy {
     if (!fs.existsSync(tsPath)) {
       throw new Error(
         `Cannot resolve import '${path.relative(path.dirname(importer), normalized)}' from '${importer}'.\n` +
-        `Tried: ${normalized}, ${tsPath} — neither file exists.`,
+          `Tried: ${normalized}, ${tsPath} — neither file exists.`,
       );
     }
 
@@ -108,7 +108,10 @@ export class RunStrategy extends CompileStrategy {
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(code)) !== null) {
       const specifier = match[1];
-      if ((specifier.startsWith("./") || specifier.startsWith("../")) && specifier.endsWith(".js")) {
+      if (
+        (specifier.startsWith("./") || specifier.startsWith("../")) &&
+        specifier.endsWith(".js")
+      ) {
         imports.push(specifier);
       }
     }

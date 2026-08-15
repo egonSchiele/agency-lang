@@ -15,10 +15,37 @@ const MIN_NAME_LENGTH = 3;
 // names in noisy LLM extraction. Skipping them is cheaper than
 // asking the LLM to disambiguate downstream.
 const STOP_WORDS = new Set([
-  "the", "and", "you", "for", "not", "but", "are", "was", "were",
-  "with", "this", "that", "have", "has", "had", "from", "they",
-  "their", "them", "there", "here", "what", "when", "where",
-  "which", "who", "why", "how", "your", "our", "its",
+  "the",
+  "and",
+  "you",
+  "for",
+  "not",
+  "but",
+  "are",
+  "was",
+  "were",
+  "with",
+  "this",
+  "that",
+  "have",
+  "has",
+  "had",
+  "from",
+  "they",
+  "their",
+  "them",
+  "there",
+  "here",
+  "what",
+  "when",
+  "where",
+  "which",
+  "who",
+  "why",
+  "how",
+  "your",
+  "our",
+  "its",
 ]);
 
 function isMeaningfulName(lowerName: string): boolean {
@@ -42,7 +69,7 @@ function tokenRegex(s: string): RegExp {
 export function structuredLookup(
   graph: MemoryGraph,
   query: string,
-  options?: LookupOptions
+  options?: LookupOptions,
 ): Entity[] {
   const lower = query.toLowerCase().trim();
   if (!lower) return [];
@@ -103,10 +130,7 @@ export function structuredLookup(
   return matches;
 }
 
-export function formatRetrievalResults(
-  graph: MemoryGraph,
-  entities: Entity[]
-): string {
+export function formatRetrievalResults(graph: MemoryGraph, entities: Entity[]): string {
   if (entities.length === 0) return "";
 
   const lines: string[] = [];

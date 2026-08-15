@@ -16,7 +16,9 @@ describe("buildForest", () => {
   it("hides graph schema events from the tree", () => {
     const forest = buildForest([
       evt({ data: { type: "agentStart", timestamp: "" } }),
-      evt({ data: { type: "graph", timestamp: "", nodes: ["main"], edges: {}, startNode: "main" } }),
+      evt({
+        data: { type: "graph", timestamp: "", nodes: ["main"], edges: {}, startNode: "main" },
+      }),
       evt({ data: { type: "enterNode", timestamp: "", nodeId: "main" } }),
     ]);
     const labels = forest[0].children.map((c) => c.label);
@@ -40,8 +42,22 @@ describe("buildForest", () => {
     // threadCreated; subprocessStarted lands second. The span label must
     // upgrade from the passthrough "threadCreated" to "subprocessRun".
     const forest = buildForest([
-      evt({ span_id: "s1", data: { type: "threadCreated", timestamp: "", threadId: "1", threadType: "subthread" } }),
-      evt({ span_id: "s1", data: { type: "subprocessStarted", timestamp: "", moduleId: "m", node: "main", subprocessSessionId: "x", mode: "run", depth: 1 } }),
+      evt({
+        span_id: "s1",
+        data: { type: "threadCreated", timestamp: "", threadId: "1", threadType: "subthread" },
+      }),
+      evt({
+        span_id: "s1",
+        data: {
+          type: "subprocessStarted",
+          timestamp: "",
+          moduleId: "m",
+          node: "main",
+          subprocessSessionId: "x",
+          mode: "run",
+          depth: 1,
+        },
+      }),
     ]);
     const span = forest[0].children[0];
     expect(span.nodeKind).toBe("span");
@@ -51,7 +67,10 @@ describe("buildForest", () => {
   it("does not downgrade a strong span label", () => {
     const forest = buildForest([
       evt({ span_id: "s1", data: { type: "agentStart", timestamp: "", entryNode: "main" } }),
-      evt({ span_id: "s1", data: { type: "threadCreated", timestamp: "", threadId: "1", threadType: "thread" } }),
+      evt({
+        span_id: "s1",
+        data: { type: "threadCreated", timestamp: "", threadId: "1", threadType: "thread" },
+      }),
     ]);
     expect(forest[0].children[0].label).toBe("agentRun");
   });
@@ -207,13 +226,41 @@ describe("buildForest", () => {
     // parent ⊇ child holds.
     const B = "2026-06-21T00:00:0";
     const forest = buildForest([
-      evt({ span_id: "A", parent_span_id: null, data: { type: "agentStart", timestamp: `${B}0.000Z` } }),
-      evt({ span_id: "L", parent_span_id: "A", data: { type: "promptCompletion", timestamp: `${B}1.000Z`, timeTaken: 1000 } }),
-      evt({ span_id: "T", parent_span_id: "L", data: { type: "toolCall", timestamp: `${B}4.000Z`, timeTaken: 3000, toolName: "fib" } }),
-      evt({ span_id: "N1", parent_span_id: "T", data: { type: "promptCompletion", timestamp: `${B}4.000Z`, timeTaken: 3000 } }),
-      evt({ span_id: "N2", parent_span_id: "T", data: { type: "promptCompletion", timestamp: `${B}4.000Z`, timeTaken: 3000 } }),
-      evt({ span_id: "L", parent_span_id: "A", data: { type: "promptCompletion", timestamp: `${B}5.000Z`, timeTaken: 1000 } }),
-      evt({ span_id: "A", parent_span_id: null, data: { type: "agentEnd", timestamp: `${B}5.500Z`, timeTaken: 5500 } }),
+      evt({
+        span_id: "A",
+        parent_span_id: null,
+        data: { type: "agentStart", timestamp: `${B}0.000Z` },
+      }),
+      evt({
+        span_id: "L",
+        parent_span_id: "A",
+        data: { type: "promptCompletion", timestamp: `${B}1.000Z`, timeTaken: 1000 },
+      }),
+      evt({
+        span_id: "T",
+        parent_span_id: "L",
+        data: { type: "toolCall", timestamp: `${B}4.000Z`, timeTaken: 3000, toolName: "fib" },
+      }),
+      evt({
+        span_id: "N1",
+        parent_span_id: "T",
+        data: { type: "promptCompletion", timestamp: `${B}4.000Z`, timeTaken: 3000 },
+      }),
+      evt({
+        span_id: "N2",
+        parent_span_id: "T",
+        data: { type: "promptCompletion", timestamp: `${B}4.000Z`, timeTaken: 3000 },
+      }),
+      evt({
+        span_id: "L",
+        parent_span_id: "A",
+        data: { type: "promptCompletion", timestamp: `${B}5.000Z`, timeTaken: 1000 },
+      }),
+      evt({
+        span_id: "A",
+        parent_span_id: null,
+        data: { type: "agentEnd", timestamp: `${B}5.500Z`, timeTaken: 5500 },
+      }),
     ]);
     const find = (id: string): TreeNode => {
       const stack = [...forest];
@@ -297,11 +344,7 @@ describe("buildForest", () => {
     ]);
     const s1 = forest[0].children[0];
     const kinds = s1.children.map((c) => `${c.nodeKind}:${c.label}`);
-    expect(kinds).toEqual([
-      "event:agentStart",
-      "span:nodeExecution",
-      "event:agentEnd",
-    ]);
+    expect(kinds).toEqual(["event:agentStart", "span:nodeExecution", "event:agentEnd"]);
   });
 
   it("re-parents a child span when its parent appears later in the stream", () => {
@@ -389,10 +432,7 @@ describe("promptStart pairing", () => {
   it("pairs nth start with nth terminator per span (multi-round)", () => {
     const forest = buildForest([start("s1"), completion("s1"), start("s1")]);
     const span = forest[0].children[0];
-    expect(span.children.map((c) => c.label)).toEqual([
-      "promptCompletion",
-      "promptStart",
-    ]);
+    expect(span.children.map((c) => c.label)).toEqual(["promptCompletion", "promptStart"]);
   });
 
   it("an llmError terminates (pairs) a start", () => {

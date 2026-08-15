@@ -11,10 +11,7 @@ import { makeMockCtx } from "./__tests__/testHelpers.js";
 // (matches the harness checkpoint.test.ts uses).
 function inFrame<T>(fn: () => Promise<T>): Promise<T> {
   const ctx = makeMockCtx();
-  return agency.withTestContext(
-    { ctx, stack: ctx.stateStack, threads: new ThreadStore() },
-    fn,
-  );
+  return agency.withTestContext({ ctx, stack: ctx.stateStack, threads: new ThreadStore() }, fn);
 }
 
 describe("withResumableScope — basic flow", () => {
@@ -46,30 +43,25 @@ describe("withResumableScope — basic flow", () => {
     const startDepth = ctx.stateStack.stack.length;
 
     // completion
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads: new ThreadStore() },
-      () => agency.withResumableScope({ name: "ok" }, async () => "x"),
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads: new ThreadStore() }, () =>
+      agency.withResumableScope({ name: "ok" }, async () => "x"),
     );
     expect(ctx.stateStack.stack.length).toBe(startDepth);
 
     // halt
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads: new ThreadStore() },
-      () =>
-        agency.withResumableScope({ name: "halt" }, async (s) => {
-          s.halt("h");
-        }),
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads: new ThreadStore() }, () =>
+      agency.withResumableScope({ name: "halt" }, async (s) => {
+        s.halt("h");
+      }),
     );
     expect(ctx.stateStack.stack.length).toBe(startDepth);
 
     // throw
     await expect(
-      agency.withTestContext(
-        { ctx, stack: ctx.stateStack, threads: new ThreadStore() },
-        () =>
-          agency.withResumableScope({ name: "throw" }, async () => {
-            throw new Error("x");
-          }),
+      agency.withTestContext({ ctx, stack: ctx.stateStack, threads: new ThreadStore() }, () =>
+        agency.withResumableScope({ name: "throw" }, async () => {
+          throw new Error("x");
+        }),
       ),
     ).rejects.toThrow("x");
     expect(ctx.stateStack.stack.length).toBe(startDepth);
@@ -166,21 +158,19 @@ describe("withResumableScope — substep idempotence on re-execution", () => {
     const calls = { s1: 0, s2: 0 };
 
     const run = (haltAfterStep2: boolean) =>
-      agency.withTestContext(
-        { ctx, stack: ctx.stateStack, threads: new ThreadStore() },
-        () =>
-          agency.withResumableScope({ name: "rerun" }, async (s) => {
-            const a = await s.step(() => {
-              calls.s1 += 1;
-              return "v1";
-            });
-            const b = await s.step(() => {
-              calls.s2 += 1;
-              return "v2";
-            });
-            if (haltAfterStep2) s.halt({ a, b });
-            return { a, b };
-          }),
+      agency.withTestContext({ ctx, stack: ctx.stateStack, threads: new ThreadStore() }, () =>
+        agency.withResumableScope({ name: "rerun" }, async (s) => {
+          const a = await s.step(() => {
+            calls.s1 += 1;
+            return "v1";
+          });
+          const b = await s.step(() => {
+            calls.s2 += 1;
+            return "v2";
+          });
+          if (haltAfterStep2) s.halt({ a, b });
+          return { a, b };
+        }),
       );
 
     const r1 = await run(true);
@@ -217,14 +207,11 @@ describe("withResumableScope — callsite + options", () => {
   it("opts.moduleId override is honored", async () => {
     let moduleId: string | undefined;
     await inFrame(() =>
-      agency.withResumableScope(
-        { name: "s", moduleId: "my.module" },
-        async (s) => {
-          await s.step(() => {
-            moduleId = agency.callsite()?.moduleId;
-          });
-        },
-      ),
+      agency.withResumableScope({ name: "s", moduleId: "my.module" }, async (s) => {
+        await s.step(() => {
+          moduleId = agency.callsite()?.moduleId;
+        });
+      }),
     );
     expect(moduleId).toBe("my.module");
   });
@@ -238,9 +225,8 @@ describe("withResumableScope — callsite + options", () => {
     // undefined entry checkpoint and silently skips the rewind).
     const ctx = makeMockCtx();
     const spy = vi.spyOn(ctx.checkpoints, "createPinned");
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads: new ThreadStore() },
-      () => agency.withResumableScope({ name: "noPin" }, async () => "x"),
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads: new ThreadStore() }, () =>
+      agency.withResumableScope({ name: "noPin" }, async () => "x"),
     );
     expect(spy).not.toHaveBeenCalled();
   });
@@ -248,13 +234,8 @@ describe("withResumableScope — callsite + options", () => {
   it("pinResultCheckpoint: true opt-in creates a result-entry checkpoint findable via getResultCheckpoint()", async () => {
     const ctx = makeMockCtx();
     const spy = vi.spyOn(ctx.checkpoints, "createPinned");
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads: new ThreadStore() },
-      () =>
-        agency.withResumableScope(
-          { name: "pin", pinResultCheckpoint: true },
-          async () => "x",
-        ),
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads: new ThreadStore() }, () =>
+      agency.withResumableScope({ name: "pin", pinResultCheckpoint: true }, async () => "x"),
     );
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy.mock.calls[0][2]).toMatchObject({

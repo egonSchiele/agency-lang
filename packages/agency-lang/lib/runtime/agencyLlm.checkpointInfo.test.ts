@@ -46,13 +46,10 @@ describe("agency.llm — checkpointInfo forwarding", () => {
     const spy = runPrompt as unknown as ReturnType<typeof vi.fn>;
     spy.mockClear();
 
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      () =>
-        agency.withCallsite(
-          { moduleId: "M", scopeName: "S", stepPath: "1.2" },
-          () => agency.llm("hi"),
-        ),
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, () =>
+      agency.withCallsite({ moduleId: "M", scopeName: "S", stepPath: "1.2" }, () =>
+        agency.llm("hi"),
+      ),
     );
 
     expect(spy).toHaveBeenCalledTimes(1);
@@ -71,10 +68,7 @@ describe("agency.llm — checkpointInfo forwarding", () => {
     // `agency.llm` reads `agencyStore.getStore()?.callsite` so the
     // forwarded value should also be undefined — not a stale value
     // from a previous test, not a synthesized placeholder.
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      () => agency.llm("hi"),
-    );
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, () => agency.llm("hi"));
 
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy.mock.calls[0][0].checkpointInfo).toBeUndefined();

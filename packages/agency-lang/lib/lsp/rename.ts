@@ -9,10 +9,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { getWordAtPosition } from "../cli/definition.js";
 import { findAllOccurrences, occurrenceToRange } from "./util.js";
 
-export function handlePrepareRename(
-  params: PrepareRenameParams,
-  doc: TextDocument,
-): Range | null {
+export function handlePrepareRename(params: PrepareRenameParams, doc: TextDocument): Range | null {
   const source = doc.getText();
   const word = getWordAtPosition(source, params.position.line, params.position.character);
   if (!word) return null;
@@ -27,10 +24,7 @@ export function handlePrepareRename(
   };
 }
 
-export function handleRename(
-  params: RenameParams,
-  doc: TextDocument,
-): WorkspaceEdit | null {
+export function handleRename(params: RenameParams, doc: TextDocument): WorkspaceEdit | null {
   const source = doc.getText();
   const word = getWordAtPosition(source, params.position.line, params.position.character);
   if (!word) return null;

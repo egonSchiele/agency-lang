@@ -28,10 +28,7 @@ function makeFrame(overrides: FrameOpts = {}): State {
 
 describe("StateStack branches serialization", () => {
   it("toJSON serializes branches recursively", () => {
-    const childStack = new StateStack(
-      [makeFrame({ args: { x: 1 }, step: 2 })],
-      "serialize",
-    );
+    const childStack = new StateStack([makeFrame({ args: { x: 1 }, step: 2 })], "serialize");
 
     const parentFrame = makeFrame({
       args: { name: "parent" },
@@ -187,10 +184,7 @@ describe("StateStack branches serialization", () => {
   });
 
   it("toJSON omits branches when not present on a frame", () => {
-    const stack = new StateStack(
-      [makeFrame({ args: { simple: true }, step: 5 })],
-      "serialize",
-    );
+    const stack = new StateStack([makeFrame({ args: { simple: true }, step: 5 })], "serialize");
     const json = stack.toJSON();
     expect((json.stack[0] as any).branches).toBeUndefined();
   });
@@ -441,9 +435,7 @@ describe("_callback", () => {
     const ctx = ctxWithFrames(2); // [caller, callback's own frame]
     const fn = () => {};
     callCallback(ctx, "onNodeStart", fn);
-    expect(ctx.stateStack.stack[0].scopedCallbacks).toEqual([
-      { name: "onNodeStart", fn },
-    ]);
+    expect(ctx.stateStack.stack[0].scopedCallbacks).toEqual([{ name: "onNodeStart", fn }]);
     expect(ctx.stateStack.stack[1].scopedCallbacks).toBeUndefined();
     expect(ctx.topLevelCallbacks).toEqual([]);
   });
@@ -464,45 +456,35 @@ describe("_callback", () => {
 
   it("throws on unknown callback name", () => {
     const ctx = ctxWithFrames(2);
-    expect(() =>
-      callCallback(ctx, "notAHook", () => {}),
-    ).toThrow(/Unknown callback/);
+    expect(() => callCallback(ctx, "notAHook", () => {})).toThrow(/Unknown callback/);
   });
 
   it("throws when fn is a string (non-callable)", () => {
     const ctx = ctxWithFrames(2);
-    expect(() =>
-      callCallback(ctx, "onNodeStart", "not a function" as any),
-    ).toThrow(/must be a function/i);
+    expect(() => callCallback(ctx, "onNodeStart", "not a function" as any)).toThrow(
+      /must be a function/i,
+    );
   });
 
   it("throws when fn is a number (non-callable)", () => {
     const ctx = ctxWithFrames(2);
-    expect(() =>
-      callCallback(ctx, "onNodeStart", 42 as any),
-    ).toThrow(/must be a function/i);
+    expect(() => callCallback(ctx, "onNodeStart", 42 as any)).toThrow(/must be a function/i);
   });
 
   it("throws when fn is null", () => {
     const ctx = ctxWithFrames(2);
-    expect(() =>
-      callCallback(ctx, "onNodeStart", null as any),
-    ).toThrow(/must be a function/i);
+    expect(() => callCallback(ctx, "onNodeStart", null as any)).toThrow(/must be a function/i);
   });
 
   it("throws when fn is undefined", () => {
     const ctx = ctxWithFrames(2);
-    expect(() =>
-      callCallback(ctx, "onNodeStart", undefined as any),
-    ).toThrow(/must be a function/i);
+    expect(() => callCallback(ctx, "onNodeStart", undefined as any)).toThrow(/must be a function/i);
   });
 
   it("accepts a plain function", () => {
     const ctx = ctxWithFrames(2);
     const fn = (_data: any) => {};
-    expect(() =>
-      callCallback(ctx, "onNodeStart", fn),
-    ).not.toThrow();
+    expect(() => callCallback(ctx, "onNodeStart", fn)).not.toThrow();
   });
 });
 
@@ -593,9 +575,7 @@ describe("StateStack inherited time-guard clones across serialization", () => {
     // Interrupt: the branch serializes and later resumes in a fresh
     // process. Re-cloning from the parent would RESET the branch's
     // clock; the deserialized clone must be adopted instead.
-    const revived = StateStack.fromJSON(
-      JSON.parse(JSON.stringify(child.toJSON())),
-    );
+    const revived = StateStack.fromJSON(JSON.parse(JSON.stringify(child.toJSON())));
     revived.rehydrateInheritedGuardsFrom(parent);
     const adopted = revived.guards[0] as TimeGuard;
     expect(adopted).toBeInstanceOf(TimeGuard);
@@ -615,9 +595,7 @@ describe("StateStack inherited time-guard clones across serialization", () => {
     child.rehydrateInheritedGuardsFrom(parent);
     expect(child.inheritedGuardCount).toBe(2);
 
-    const revived = StateStack.fromJSON(
-      JSON.parse(JSON.stringify(child.toJSON())),
-    );
+    const revived = StateStack.fromJSON(JSON.parse(JSON.stringify(child.toJSON())));
     revived.rehydrateInheritedGuardsFrom(parent);
     expect(revived.guards).toHaveLength(2);
     // CostGuard: the SAME shared object as the parent's (real-time
@@ -735,9 +713,7 @@ describe("StateStack.rehydrateInheritedGuardsFrom", () => {
     const child = new StateStack();
     child.inheritedGuardCount = 1; // snapshot said 1, parent now yields 2
 
-    expect(() => child.rehydrateInheritedGuardsFrom(parent)).toThrow(
-      /inheritedGuardCount/,
-    );
+    expect(() => child.rehydrateInheritedGuardsFrom(parent)).toThrow(/inheritedGuardCount/);
   });
 
   it("filters out guards whose cloneForBranch returns undefined", () => {

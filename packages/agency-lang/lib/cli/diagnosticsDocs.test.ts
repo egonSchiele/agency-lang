@@ -1,19 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { generateDiagnosticsPages } from "./diagnosticsDocs.js";
 import { LINT_DIAGNOSTICS } from "@/linter/diagnostics.js";
-import {
-  DIAGNOSTICS,
-  DIAGNOSTIC_CATEGORIES,
-  categoryForCode,
-} from "@/typeChecker/diagnostics.js";
+import { DIAGNOSTICS, DIAGNOSTIC_CATEGORIES, categoryForCode } from "@/typeChecker/diagnostics.js";
 
 const pages = generateDiagnosticsPages();
 const byPath = Object.fromEntries(pages.map((p) => [p.relPath, p.contents]));
 // Retired diagnostics keep their registry entry (the code stays reserved,
 // `agency explain` still answers) but are omitted from the docs pages.
-const activeEntries = Object.values(DIAGNOSTICS).filter(
-  (e) => !("retired" in e),
-);
+const activeEntries = Object.values(DIAGNOSTICS).filter((e) => !("retired" in e));
 const codes = activeEntries.map((e) => e.code);
 
 describe("generateDiagnosticsPages", () => {

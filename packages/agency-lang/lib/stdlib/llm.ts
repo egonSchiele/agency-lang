@@ -167,7 +167,6 @@ export function _modelSupportsInput(model: string, modality: string): boolean | 
   return modelSupportsInputModality(model, modality) ?? null;
 }
 
-
 /** Fetch the latest model-data blob and return it pre-serialized. No
  *  registration — the CLI prints this to stdout for the user to save and later
  *  load with `std::llm.loadModelData`. */
@@ -186,9 +185,7 @@ export async function _fetchModelData(
  *  wins on provider+name collisions, deep-merging fields) and over the baked
  *  catalog. Errors are returned, never thrown, so the Agency wrapper can map
  *  them to a Result. Returns the number of models in THIS file. */
-export function _loadModelData(
-  path: string,
-): { ok: boolean; count: number; error: string } {
+export function _loadModelData(path: string): { ok: boolean; count: number; error: string } {
   let text: string;
   try {
     text = fs.readFileSync(path, "utf-8");
@@ -207,7 +204,12 @@ export function _loadModelData(
   const prior = getRegisteredModelData();
   // Refuse to stitch models of a different schema version onto the prior blob —
   // a cross-version merge could mix incompatible field shapes. Fail loudly.
-  if (prior && blob.schemaVersion != null && prior.schemaVersion != null && blob.schemaVersion !== prior.schemaVersion) {
+  if (
+    prior &&
+    blob.schemaVersion != null &&
+    prior.schemaVersion != null &&
+    blob.schemaVersion !== prior.schemaVersion
+  ) {
     return {
       ok: false,
       count: 0,

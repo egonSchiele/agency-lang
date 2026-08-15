@@ -122,10 +122,11 @@ describe("groupTestSources", () => {
       },
     });
     expect(() =>
-      precompileTestSources({}, [
-        path.join(root, "a/main.test.json"),
-        path.join(root, "b/main.test.json"),
-      ], { quiet: true }),
+      precompileTestSources(
+        {},
+        [path.join(root, "a/main.test.json"), path.join(root, "b/main.test.json")],
+        { quiet: true },
+      ),
     ).not.toThrow();
   });
 
@@ -133,9 +134,7 @@ describe("groupTestSources", () => {
     const root = writeTree({
       orphan: { "main.test.json": TEST_JSON },
     });
-    const groups = groupTestSources({}, [
-      path.join(root, "orphan/main.test.json"),
-    ]);
+    const groups = groupTestSources({}, [path.join(root, "orphan/main.test.json")]);
     expect(groups).toEqual([]);
   });
 });

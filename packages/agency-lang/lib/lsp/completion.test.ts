@@ -14,7 +14,9 @@ function parse(source: string) {
 
 describe("getCompletions", () => {
   it("includes function definitions as Function items with detail", () => {
-    const program = parse('def greet(name: string): string {\n  """\n  Say hello\n  """\n  return `hi ${name}`\n}');
+    const program = parse(
+      'def greet(name: string): string {\n  """\n  Say hello\n  """\n  return `hi ${name}`\n}',
+    );
     const info = buildCompilationUnit(program, new SymbolTable());
     const items = getCompletions(info);
     const greet = items.find((i) => i.label === "greet");
@@ -55,12 +57,20 @@ describe("getCompletions", () => {
     // Use a complete, parseable source. The dot-completion logic inspects
     // the raw text at the cursor position, not the AST, so we place the
     // cursor right after "x." on a line that has a full expression.
-    const source = 'type Foo = { name: string, age: number }\nnode main() {\n  let x: Foo = llm("hi")\n  x.name\n}';
+    const source =
+      'type Foo = { name: string, age: number }\nnode main() {\n  let x: Foo = llm("hi")\n  x.name\n}';
     const program = parse(source);
     const info = buildCompilationUnit(program, new SymbolTable());
     const { scopes } = typeCheck(program, {}, info);
     // Cursor at line 3, character 4 (right after "x.")
-    const items = getCompletions(info, { source, line: 3, character: 4, scopes, program, fsPath: "/test.agency" });
+    const items = getCompletions(info, {
+      source,
+      line: 3,
+      character: 4,
+      scopes,
+      program,
+      fsPath: "/test.agency",
+    });
     const names = items.map((i) => i.label);
     expect(names).toContain("name");
     expect(names).toContain("age");
@@ -71,7 +81,9 @@ describe("getCompletions", () => {
     const program = parse("node main() { }");
     const info = buildCompilationUnit(program, new SymbolTable());
     const items = getCompletions(info);
-    const defSnippet = items.find((i) => i.label === "def" && i.kind === CompletionItemKind.Snippet);
+    const defSnippet = items.find(
+      (i) => i.label === "def" && i.kind === CompletionItemKind.Snippet,
+    );
     expect(defSnippet).toBeDefined();
     expect(defSnippet!.insertTextFormat).toBe(InsertTextFormat.Snippet);
     expect(defSnippet!.insertText).toContain("${1:");
@@ -83,17 +95,21 @@ describe("getCompletions", () => {
     const info = buildCompilationUnit(program, new SymbolTable());
     const { scopes } = typeCheck(program, {}, info);
     // Cursor after typing "s" inside the import path
-    const items = getCompletions(info, { source, line: 0, character: 22, scopes, program, fsPath: "/test.agency" });
+    const items = getCompletions(info, {
+      source,
+      line: 0,
+      character: 22,
+      scopes,
+      program,
+      fsPath: "/test.agency",
+    });
     const stdArray = items.find((i) => i.label === "std::array");
     expect(stdArray).toBeDefined();
     expect(stdArray!.kind).toBe(CompletionItemKind.Module);
   });
 
   it("returns empty array for empty program", () => {
-    const info = buildCompilationUnit(
-      { type: "agencyProgram", nodes: [] },
-      new SymbolTable(),
-    );
+    const info = buildCompilationUnit({ type: "agencyProgram", nodes: [] }, new SymbolTable());
     const items = getCompletions(info);
     expect(Array.isArray(items)).toBe(true);
   });

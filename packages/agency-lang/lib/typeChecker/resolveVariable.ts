@@ -50,8 +50,7 @@ export type VariableResolution =
   | { kind: "jsGlobal" }
   | { kind: "unresolved" };
 
-const has = (obj: object, name: string): boolean =>
-  Object.prototype.hasOwnProperty.call(obj, name);
+const has = (obj: object, name: string): boolean => Object.prototype.hasOwnProperty.call(obj, name);
 
 /**
  * Resolution order for variable references — mirrors `resolveCall` but
@@ -67,18 +66,14 @@ const has = (obj: object, name: string): boolean =>
  *                                          namespace bases like `JSON`.
  *   7. Otherwise: unresolved.
  */
-export function resolveVariable(
-  name: string,
-  input: ResolveVariableInput,
-): VariableResolution {
+export function resolveVariable(name: string, input: ResolveVariableInput): VariableResolution {
   if (input.scopeHas(name)) return { kind: "scopeBinding" };
   if (has(input.functionDefs, name) || has(input.nodeDefs, name)) {
     return { kind: "def" };
   }
   if (has(input.importedFunctions, name)) return { kind: "imported" };
   if (input.importedNodeNames.includes(name)) return { kind: "imported" };
-  if (input.jsImportedNames && has(input.jsImportedNames, name))
-    return { kind: "jsImported" };
+  if (input.jsImportedNames && has(input.jsImportedNames, name)) return { kind: "jsImported" };
   if (has(BUILTIN_FUNCTION_TYPES, name)) return { kind: "builtin" };
   if (BUILTIN_VARIABLES.includes(name)) return { kind: "builtin" };
   if (has(JS_GLOBALS, name)) return { kind: "jsGlobal" };

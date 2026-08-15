@@ -85,7 +85,9 @@ describe("draft persistence", () => {
   });
 
   it("rejects a negative accumulated time", () => {
-    expect(DraftSchema.safeParse(draft({ activeMsByOutputId: { [OUT_A]: -1 } })).success).toBe(false);
+    expect(DraftSchema.safeParse(draft({ activeMsByOutputId: { [OUT_A]: -1 } })).success).toBe(
+      false,
+    );
   });
 });
 
@@ -140,8 +142,14 @@ describe("assertBindingIsCoherent", () => {
       binding: { ...draft().binding, checklist: { kind: "unpublished" } },
       pendingRevision: {
         revision: {
-          schemaVersion: 1, checklistId: "cl_news", name: "news", version: 1,
-          parentVersion: null, createdAt: "2026-08-03T00:00:00.000Z", hash: HASH, questions: [],
+          schemaVersion: 1,
+          checklistId: "cl_news",
+          name: "news",
+          version: 1,
+          parentVersion: null,
+          createdAt: "2026-08-03T00:00:00.000Z",
+          hash: HASH,
+          questions: [],
         },
         expectedParentVersion: null,
         expectedParentHash: null,
@@ -160,8 +168,14 @@ describe("assertBindingIsCoherent", () => {
       binding: { ...draft().binding, checklist: { kind: "unpublished" } },
       pendingRevision: {
         revision: {
-          schemaVersion: 1, checklistId: "cl_news", name: "news", version: 2,
-          parentVersion: 1, createdAt: "2026-08-03T00:00:00.000Z", hash: HASH, questions: [],
+          schemaVersion: 1,
+          checklistId: "cl_news",
+          name: "news",
+          version: 2,
+          parentVersion: 1,
+          createdAt: "2026-08-03T00:00:00.000Z",
+          hash: HASH,
+          questions: [],
         },
         expectedParentVersion: 1,
         expectedParentHash: HASH,

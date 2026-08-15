@@ -127,7 +127,13 @@ describe("resolveScheduleAdd", () => {
   it("resolves a function target with a raw cron", () => {
     const resolved = resolveScheduleAdd(
       "daily.agency",
-      { ...baseOptions, node: undefined, function: "summarize", every: undefined, cron: "*/5 * * * *" },
+      {
+        ...baseOptions,
+        node: undefined,
+        function: "summarize",
+        every: undefined,
+        cron: "*/5 * * * *",
+      },
       "UTC",
     );
     expect(resolved.input.target).toEqual({ kind: "function", name: "summarize" });
@@ -152,9 +158,9 @@ describe("resolveScheduleAdd", () => {
 
   it("includes the optional name only when given", () => {
     expect(resolveScheduleAdd("a.agency", baseOptions, "UTC").input).not.toHaveProperty("name");
-    expect(
-      resolveScheduleAdd("a.agency", { ...baseOptions, name: "mine" }, "UTC").input.name,
-    ).toBe("mine");
+    expect(resolveScheduleAdd("a.agency", { ...baseOptions, name: "mine" }, "UTC").input.name).toBe(
+      "mine",
+    );
   });
 
   it("builds args exactly as buildArgs does (--arg over --data, JSON coercion)", () => {
@@ -182,11 +188,7 @@ describe("resolveScheduleAdd", () => {
 
   it.each([
     ["neither target", { ...baseOptions, node: undefined }, /--node <name> or --function <name>/],
-    [
-      "both targets",
-      { ...baseOptions, function: "also" },
-      /--node <name> or --function <name>/,
-    ],
+    ["both targets", { ...baseOptions, function: "also" }, /--node <name> or --function <name>/],
     [
       "neither cadence",
       { ...baseOptions, every: undefined },
@@ -248,9 +250,7 @@ describe("addRemote", () => {
   });
 
   it("passes an unknown-target server error through unchanged", async () => {
-    createMock.mockRejectedValue(
-      new ScheduleRequestError('Unknown node "refresh" in daily', 200),
-    );
+    createMock.mockRejectedValue(new ScheduleRequestError('Unknown node "refresh" in daily', 200));
     await expect(
       addRemote("daily.agency", { ...baseOptions, deploy: false }, context),
     ).rejects.toThrow("exit:1");
@@ -385,28 +385,20 @@ describe("addRemote deployment policy", () => {
   it("a deploy that exits does not retry the create", async () => {
     createMock.mockRejectedValue(agentNotFound());
     runDeployMock.mockRejectedValue(new Error("exit:1"));
-    await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow(
-      "exit:1",
-    );
+    await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow("exit:1");
     expect(createMock).toHaveBeenCalledTimes(1);
   });
 
   it("an unknown-target failure deploys nothing (the file exists; the node does not)", async () => {
-    createMock.mockRejectedValue(
-      new ScheduleRequestError('Unknown node "refresh" in daily', 200),
-    );
-    await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow(
-      "exit:1",
-    );
+    createMock.mockRejectedValue(new ScheduleRequestError('Unknown node "refresh" in daily', 200));
+    await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow("exit:1");
     expect(runDeployMock).not.toHaveBeenCalled();
     expect(errorOutput()).toContain('Unknown node "refresh" in daily');
   });
 
   it("a not-found message for a DIFFERENT agent does not trigger a deploy", async () => {
     createMock.mockRejectedValue(new ScheduleRequestError("Agent 'other' not found", 200));
-    await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow(
-      "exit:1",
-    );
+    await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow("exit:1");
     expect(runDeployMock).not.toHaveBeenCalled();
   });
 
@@ -415,9 +407,7 @@ describe("addRemote deployment policy", () => {
       .mockRejectedValueOnce(agentNotFound())
       .mockRejectedValueOnce(new ScheduleRequestError("cap reached", 200));
     runDeployMock.mockResolvedValue("deployed");
-    await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow(
-      "exit:1",
-    );
+    await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow("exit:1");
     expect(createMock).toHaveBeenCalledTimes(2);
     expect(runDeployMock).toHaveBeenCalledTimes(1);
     expect(errorOutput()).toContain("cap reached");
@@ -451,9 +441,9 @@ describe("resolveSchedulePatch", () => {
   });
 
   it("combines cron, timezone, and disabled into one exact patch", () => {
-    expect(
-      resolveSchedulePatch({ every: "daily", timezone: "UTC", disabled: true }),
-    ).toStrictEqual({ cronExpr: "0 9 * * *", timezone: "UTC", enabled: false });
+    expect(resolveSchedulePatch({ every: "daily", timezone: "UTC", disabled: true })).toStrictEqual(
+      { cronExpr: "0 9 * * *", timezone: "UTC", enabled: false },
+    );
   });
 
   it("a timezone-only patch has no cronExpr key", () => {
@@ -527,9 +517,9 @@ describe("listRemote", () => {
 
   it("prints no partial table when the list request fails", async () => {
     listMock.mockRejectedValue(new ScheduleRequestError("boom", 500));
-    await expect(
-      listRemote({ project: "proj", apiKeyEnv: KEY_ENV }, context),
-    ).rejects.toThrow("exit:1");
+    await expect(listRemote({ project: "proj", apiKeyEnv: KEY_ENV }, context)).rejects.toThrow(
+      "exit:1",
+    );
     expect(logSpy).not.toHaveBeenCalled();
     expect(errorOutput()).toContain("boom");
   });

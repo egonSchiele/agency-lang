@@ -66,9 +66,9 @@ describe("__call", () => {
   });
 
   it("throws on non-callable target", async () => {
-    await expect(
-      __call(42, { type: "positional", args: [] }),
-    ).rejects.toThrow("Cannot call non-function value");
+    await expect(__call(42, { type: "positional", args: [] })).rejects.toThrow(
+      "Cannot call non-function value",
+    );
   });
 });
 

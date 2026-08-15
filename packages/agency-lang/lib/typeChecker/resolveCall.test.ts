@@ -1,10 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  resolveCall,
-  lookupJsMember,
-  JS_GLOBALS,
-  RESERVED_FUNCTION_NAMES,
-} from "./resolveCall.js";
+import { resolveCall, lookupJsMember, JS_GLOBALS, RESERVED_FUNCTION_NAMES } from "./resolveCall.js";
 
 const emptyInput = {
   functionDefs: {},
@@ -23,7 +18,10 @@ describe("resolveCall", () => {
 
   it("resolves an imported function", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = resolveCall("imported", { ...emptyInput, importedFunctions: { imported: {} as any } });
+    const result = resolveCall("imported", {
+      ...emptyInput,
+      importedFunctions: { imported: {} as any },
+    });
     expect(result.kind).toBe("imported");
   });
 

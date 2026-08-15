@@ -49,7 +49,7 @@ describe("code literals: typechecking", () => {
       "",
       "node main(): string {",
       "  const t = [| 1 + 2 |]",
-      "  return \"ok\"",
+      '  return "ok"',
       "}",
       "",
     ].join("\n");
@@ -68,7 +68,7 @@ describe("code literals: typechecking", () => {
       "  |]",
       "  const filled = fill(tpl, { n: 1 })",
       "  if (isFailure(filled)) {",
-      "    return \"fill failed\"",
+      '    return "fill failed"',
       "  }",
       "  return toSource(filled.value)",
       "}",
@@ -178,9 +178,7 @@ describe("code literals: the synthesized type tracks stdlib Code", () => {
     expect(codeAlias).toBeDefined();
     const strip = (value: unknown): unknown =>
       JSON.parse(
-        JSON.stringify(value, (key, val) =>
-          key === "loc" || key === "tags" ? undefined : val,
-        ),
+        JSON.stringify(value, (key, val) => (key === "loc" || key === "tags" ? undefined : val)),
       );
     expect(strip(codeLiteralTypeForTests())).toEqual(strip(codeAlias.aliasedType));
   });

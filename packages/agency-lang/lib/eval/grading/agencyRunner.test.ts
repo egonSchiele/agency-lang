@@ -14,11 +14,16 @@ describe("AgencyRunner", () => {
   it("runStructured() validates the return against a schema", async () => {
     const runner = new AgencyRunner({}, fakeRunner({ score: 0.5, reasoning: "ok" }));
     const schema = z.object({ score: z.number(), reasoning: z.string() });
-    expect(await runner.runStructured("./judge.agency", "main", [], schema)).toEqual({ score: 0.5, reasoning: "ok" });
+    expect(await runner.runStructured("./judge.agency", "main", [], schema)).toEqual({
+      score: 0.5,
+      reasoning: "ok",
+    });
   });
 
   it("runStructured() throws a clear error on a schema mismatch", async () => {
     const runner = new AgencyRunner({}, fakeRunner({ score: "nope" }));
-    await expect(runner.runStructured("./judge.agency", "main", [], z.object({ score: z.number() }))).rejects.toThrow(/judge\.agency.*schema/i);
+    await expect(
+      runner.runStructured("./judge.agency", "main", [], z.object({ score: z.number() })),
+    ).rejects.toThrow(/judge\.agency.*schema/i);
   });
 });

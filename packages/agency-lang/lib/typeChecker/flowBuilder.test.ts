@@ -1,7 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { parseAgency } from "../parser.js";
 import { Scope } from "./scope.js";
-import { typeAt, freshMemo, type FlowEnvironment, type FlowNode, type PathSegment } from "./flow.js";
+import {
+  typeAt,
+  freshMemo,
+  type FlowEnvironment,
+  type FlowNode,
+  type PathSegment,
+} from "./flow.js";
 import { buildFlowGraph, buildFlowGraphs } from "./flowBuilder.js";
 import { walkNodes } from "../utils/node.js";
 import type { AgencyNode, VariableType } from "../types.js";
@@ -26,10 +32,7 @@ function parseBody(src: string): AgencyNode[] {
 
 // `typeAliases` defaults to {} for forward-compat: real `buildFlowGraphs`
 // passes `ctx.getTypeAliases()`, so alias-typed tests can too.
-function freshEnv(
-  scope: Scope,
-  typeAliases: FlowEnvironment["typeAliases"] = {},
-): FlowEnvironment {
+function freshEnv(scope: Scope, typeAliases: FlowEnvironment["typeAliases"] = {}): FlowEnvironment {
   return { scope, flowOf: new WeakMap(), typeAliases, memo: freshMemo() };
 }
 
@@ -136,7 +139,9 @@ describe("buildFlowGraph — linear", () => {
     // A block on a call used as an EXPRESSION (assignment value) must have its
     // body flow-walked, so a `.property` access inside it narrows. Pins the
     // mechanism (flowOf attached), not just the outcome.
-    const body = parseBody(`let n = wrap(3) as value {\n  let inner = obj.field\n  return inner\n}`);
+    const body = parseBody(
+      `let n = wrap(3) as value {\n  let inner = obj.field\n  return inner\n}`,
+    );
     const scope = new Scope("t");
     scope.declare("obj", { type: "objectType", properties: [{ key: "field", value: NUM }] });
     scope.declare("wrap", { type: "primitiveType", value: "any" });

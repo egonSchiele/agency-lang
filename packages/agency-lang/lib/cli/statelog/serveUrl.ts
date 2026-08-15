@@ -27,9 +27,7 @@ export function resolveTrustedEndpointUrl(rawUrl: string, targetHost: string): s
     throw new Error(`endpoint URL must not embed credentials: ${rawUrl}`);
   }
   if (endpoint.origin !== target.origin) {
-    throw new Error(
-      `endpoint origin ${endpoint.origin} does not match target ${target.origin}`,
-    );
+    throw new Error(`endpoint origin ${endpoint.origin} does not match target ${target.origin}`);
   }
   return endpoint.toString();
 }

@@ -107,8 +107,8 @@ export function buildCompiledClosure(
   // entry. `entryModuleId` is kept as metadata (the first entry); the dep
   // graph derives everything it needs from `programs`, which holds the
   // full union regardless of which entry rooted it.
-  const entryFiles = (Array.isArray(entryFile) ? entryFile : [entryFile]).map(
-    (f) => path.resolve(f),
+  const entryFiles = (Array.isArray(entryFile) ? entryFile : [entryFile]).map((f) =>
+    path.resolve(f),
   );
   const entryModuleId = entryFiles[0];
   // SymbolTable must come first: it's the source of truth for re-export
@@ -248,9 +248,7 @@ function loadModule(
   config: AgencyConfig,
 ): { program: AgencyProgram; importTargets: string[] } {
   if (!fs.existsSync(moduleId)) {
-    throw new CompileClosureError(
-      `Error: Input file '${moduleId}' not found`,
-    );
+    throw new CompileClosureError(`Error: Input file '${moduleId}' not found`);
   }
   const applyTemplate = !isNonTemplatedStdlib(moduleId);
   const result = parseAgencyFileCached(moduleId, config, applyTemplate);
@@ -394,10 +392,7 @@ function assertNoIntraFileUseBeforeDef(
  * statement, so it always identifies the same set of wrappers
  * `resolveReExports` later synthesizes.
  */
-function isReExportWrapper(
-  node: InitVarNode,
-  symbolTable: SymbolTable,
-): boolean {
+function isReExportWrapper(node: InitVarNode, symbolTable: SymbolTable): boolean {
   const sym = symbolTable.getFile(node.moduleId)?.[node.varName];
   return !!sym?.reExportedFrom;
 }
@@ -408,22 +403,14 @@ function isReExportWrapper(
  * "global") parameterizes the error message so cycle in either graph
  * surfaces consistently.
  */
-function sortOrThrow(
-  graph: InitDepGraph,
-  phaseName: "static" | "global",
-): string[] {
+function sortOrThrow(graph: InitDepGraph, phaseName: "static" | "global"): string[] {
   const r = topSortInitGraph(graph);
   if (r.kind === "ok") return r.order;
   throw new CompileClosureError(formatCycleError(r, phaseName));
 }
 
-function formatCycleError(
-  err: CycleError,
-  phaseName: "static" | "global",
-): string {
-  const lines: string[] = [
-    `Error: Circular ${phaseName} dependency`,
-  ];
+function formatCycleError(err: CycleError, phaseName: "static" | "global"): string {
+  const lines: string[] = [`Error: Circular ${phaseName} dependency`];
   for (let i = 0; i < err.cycle.length; i++) {
     const cur = err.cycle[i];
     const next = err.cycle[(i + 1) % err.cycle.length];
@@ -482,11 +469,7 @@ function buildPlans(
   return plans;
 }
 
-function phasePlanFor(
-  moduleId: string,
-  graph: InitDepGraph,
-  order: string[],
-): ModuleInitPhasePlan {
+function phasePlanFor(moduleId: string, graph: InitDepGraph, order: string[]): ModuleInitPhasePlan {
   const localOrder: string[] = [];
   const awaitModulesSet: Record<string, true> = {};
 
@@ -583,11 +566,7 @@ function globalPhasePlanFor(
     // callee's home module. Mirrors `depsFor`'s expansion so a global
     // that reads a cross-module static through one function hop still
     // awaits the source module's static init.
-    for (const fnMatch of collectDirectCalls(
-      node.initExpr,
-      moduleId,
-      functionDefs,
-    )) {
+    for (const fnMatch of collectDirectCalls(node.initExpr, moduleId, functionDefs)) {
       for (const innerRef of collectFunctionBodyFreeRefs(fnMatch.def)) {
         resolveAndRecord(innerRef, fnMatch.moduleId);
       }
@@ -605,10 +584,7 @@ function globalPhasePlanFor(
  * empty default if the module isn't in the closure. Used by codegen
  * entry points that already have a CompiledClosure on hand.
  */
-export function planFor(
-  closure: CompiledClosure,
-  moduleId: string,
-): ModuleInitPlan {
+export function planFor(closure: CompiledClosure, moduleId: string): ModuleInitPlan {
   return (
     closure.plans[moduleId] ?? {
       moduleId,

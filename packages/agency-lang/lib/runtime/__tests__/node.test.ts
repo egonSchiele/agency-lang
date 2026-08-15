@@ -14,9 +14,7 @@ describe("setupNode", () => {
     const ctx = { stateStack: new StateStack() } as any;
     const state = { messages: threadStore, ctx, data: {} } as any;
 
-    const result = runInTestContext(ctx, ctx.stateStack, threadStore, () =>
-      setupNode({ state }),
-    );
+    const result = runInTestContext(ctx, ctx.stateStack, threadStore, () => setupNode({ state }));
 
     expect(result.threads).toBe(threadStore);
     expect(result.threads.activeId()).toBeDefined();
@@ -35,9 +33,7 @@ describe("setupNode", () => {
     const freshThreadStore = new ThreadStore();
     const state = { messages: freshThreadStore, ctx, data: {} } as any;
 
-    const result = runInTestContext(ctx, stateStack, freshThreadStore, () =>
-      setupNode({ state }),
-    );
+    const result = runInTestContext(ctx, stateStack, freshThreadStore, () => setupNode({ state }));
 
     // Should restore from stack.threads, not use state.messages
     expect(result.threads).not.toBe(freshThreadStore);
@@ -49,9 +45,7 @@ describe("setupNode", () => {
     const state = { ctx, data: {} } as any;
     const seedThreads = new ThreadStore();
 
-    const result = runInTestContext(ctx, ctx.stateStack, seedThreads, () =>
-      setupNode({ state }),
-    );
+    const result = runInTestContext(ctx, ctx.stateStack, seedThreads, () => setupNode({ state }));
 
     expect(result.threads).toBeInstanceOf(ThreadStore);
     expect(result.threads.activeId()).toBeDefined();
@@ -65,15 +59,13 @@ describe("setupNode", () => {
   // breaks silently — this test fails fast.
   it("pins the cross-node ThreadStore registry contract", () => {
     const threadStore = new ThreadStore();
-    threadStore.getOrCreateActive();           // raw id "0"
-    const extraId = threadStore.create();      // raw id "1" — closed thread
+    threadStore.getOrCreateActive(); // raw id "0"
+    const extraId = threadStore.create(); // raw id "1" — closed thread
 
     const ctx = { stateStack: new StateStack() } as any;
     const state = { messages: threadStore, ctx, data: {} } as any;
 
-    const result = runInTestContext(ctx, ctx.stateStack, threadStore, () =>
-      setupNode({ state }),
-    );
+    const result = runInTestContext(ctx, ctx.stateStack, threadStore, () => setupNode({ state }));
 
     // setupNode must hand back the SAME store, with both threads
     // intact and the counter past them — i.e. nothing has been wiped

@@ -49,10 +49,7 @@ export function toolSchemaChars(tool: ToolLike): number | null {
  * A threshold of 0 (or less) disables the check, matching how
  * `maxToolResultChars` treats 0.
  */
-export function findOversizedTools(
-  tools: ToolLike[],
-  threshold: number,
-): OversizedTool[] {
+export function findOversizedTools(tools: ToolLike[], threshold: number): OversizedTool[] {
   if (threshold <= 0) return [];
   const oversized: OversizedTool[] = [];
   for (const tool of tools) {
@@ -65,10 +62,7 @@ export function findOversizedTools(
 }
 
 /** The warning text a flagged tool produces. */
-export function oversizedToolMessage(
-  tool: OversizedTool,
-  threshold: number,
-): string {
+export function oversizedToolMessage(tool: OversizedTool, threshold: number): string {
   return (
     `Tool "${tool.name}" has a ${tool.chars}-character JSON schema, over the ` +
     `${threshold}-character warning threshold. Every request in this run ` +

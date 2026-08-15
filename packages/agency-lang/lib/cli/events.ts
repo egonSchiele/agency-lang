@@ -9,9 +9,7 @@ export function traceLog(inputFile: string, outputFile?: string): void {
 
   if (outputFile) {
     fs.writeFileSync(outputFile, json, "utf-8");
-    console.log(
-      `Event log written to ${outputFile} (${events.length} events)`,
-    );
+    console.log(`Event log written to ${outputFile} (${events.length} events)`);
   } else {
     console.log(json);
   }

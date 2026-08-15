@@ -29,28 +29,22 @@ import { compile, resetCompilationCache } from "@/compiler/defaultSession.js";
  *   • `import()` via `pathToFileURL(...).href` for Windows portability.
  */
 describe("cross-module static dep resolves correctly via PR-2 topsort", () => {
-  const fixturesRoot = path.resolve(
-    __dirname,
-    "../../.agency-tmp/static-cross-module-trap",
-  );
+  const fixturesRoot = path.resolve(__dirname, "../../.agency-tmp/static-cross-module-trap");
   const mainAgency = path.join(fixturesRoot, "main.agency");
   const barAgency = path.join(fixturesRoot, "bar.agency");
   const mainJs = mainAgency.replace(/\.agency$/, ".js");
 
   beforeAll(() => {
     fs.mkdirSync(fixturesRoot, { recursive: true });
-    fs.writeFileSync(
-      barAgency,
-      'export static const barStatic = "hello"\n',
-    );
+    fs.writeFileSync(barAgency, 'export static const barStatic = "hello"\n');
     fs.writeFileSync(
       mainAgency,
       'import { barStatic } from "./bar.agency";\n' +
         'static const fooStatic = barStatic + "!"\n' +
-        '\n' +
-        'node main() {\n' +
-        '  return fooStatic;\n' +
-        '}\n',
+        "\n" +
+        "node main() {\n" +
+        "  return fooStatic;\n" +
+        "}\n",
     );
     resetCompilationCache();
     compile({}, mainAgency);
@@ -84,31 +78,25 @@ describe("cross-module static dep resolves correctly via PR-2 topsort", () => {
  * is what makes this work.
  */
 describe("imported static used only from a function body initializes via closure bootstrap", () => {
-  const fixturesRoot = path.resolve(
-    __dirname,
-    "../../.agency-tmp/static-cross-module-fn-body",
-  );
+  const fixturesRoot = path.resolve(__dirname, "../../.agency-tmp/static-cross-module-fn-body");
   const mainAgency = path.join(fixturesRoot, "main.agency");
   const dataAgency = path.join(fixturesRoot, "data.agency");
   const mainJs = mainAgency.replace(/\.agency$/, ".js");
 
   beforeAll(() => {
     fs.mkdirSync(fixturesRoot, { recursive: true });
-    fs.writeFileSync(
-      dataAgency,
-      'export static const greeting = "hello"\n',
-    );
+    fs.writeFileSync(dataAgency, 'export static const greeting = "hello"\n');
     fs.writeFileSync(
       mainAgency,
       'import { greeting } from "./data.agency";\n' +
-        '\n' +
-        'def render(): string {\n' +
+        "\n" +
+        "def render(): string {\n" +
         '  return greeting + "!"\n' +
-        '}\n' +
-        '\n' +
-        'node main() {\n' +
-        '  return render()\n' +
-        '}\n',
+        "}\n" +
+        "\n" +
+        "node main() {\n" +
+        "  return render()\n" +
+        "}\n",
     );
     resetCompilationCache();
     compile({}, mainAgency);

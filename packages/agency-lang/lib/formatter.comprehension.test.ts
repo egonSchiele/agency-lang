@@ -9,18 +9,12 @@ describe("agency fmt preserves comprehensions", () => {
     ["[f(x) for x in xs]", "[f(x) for x in xs]"],
     ["[f(x) for x in xs if p(x)]", "[f(x) for x in xs if p(x)]"],
     ["[f(x, i) for x, i in xs]", "[f(x, i) for x, i in xs]"],
-    [
-      "[name for {name, age} in people]",
-      "[name for { name, age } in people]",
-    ],
+    ["[name for {name, age} in people]", "[name for { name, age } in people]"],
     ["fork [f(x) for x in xs]", "fork [f(x) for x in xs]"],
     ["fork [f(x) for x in xs if p(x)]", "fork [f(x) for x in xs if p(x)]"],
     ["forkShared [f(x) for x in xs]", "forkShared [f(x) for x in xs]"],
     ["race [f(x) for x in xs]", "race [f(x) for x in xs]"],
-    [
-      "raceShared [f(x) for x in xs if p(x)]",
-      "raceShared [f(x) for x in xs if p(x)]",
-    ],
+    ["raceShared [f(x) for x in xs if p(x)]", "raceShared [f(x) for x in xs if p(x)]"],
   ];
 
   for (const [expr, expected] of cases) {

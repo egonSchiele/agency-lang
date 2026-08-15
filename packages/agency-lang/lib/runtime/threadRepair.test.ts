@@ -27,8 +27,7 @@ const asst = (text: string, toolCalls?: Array<{ id: string; name: string }>) =>
       ? { toolCalls: toolCalls.map((c) => new smoltalk.ToolCall(c.id, c.name, {})) }
       : undefined,
   );
-const tool = (id: string) =>
-  smoltalk.toolMessage("ok", { tool_call_id: id, name: "f" });
+const tool = (id: string) => smoltalk.toolMessage("ok", { tool_call_id: id, name: "f" });
 const roles = (t: MessageThread) => t.getMessages().map((m) => m.role);
 
 describe("markThreadCancelled — non-destructive repair", () => {
@@ -71,14 +70,7 @@ describe("markThreadCancelled — non-destructive repair", () => {
       asst("thinking", [{ id: "y", name: "f" }]),
     ]);
     markThreadCancelled(t);
-    expect(roles(t)).toEqual([
-      "user",
-      "assistant",
-      "tool",
-      "assistant",
-      "tool",
-      "assistant",
-    ]);
+    expect(roles(t)).toEqual(["user", "assistant", "tool", "assistant", "tool", "assistant"]);
     // The dangling assistant's text body survives.
     expect((t.getMessages()[3] as smoltalk.AssistantMessage).content).toBe("thinking");
     // The new stub answers tool_call y.
@@ -194,9 +186,7 @@ describe("repairAbandonedTurn", () => {
       .filter((m): m is smoltalk.ToolMessage => m instanceof smoltalk.ToolMessage);
     expect(stubs.map((m) => m.tool_call_id)).toEqual(["a", "b", "c"]);
     expect(stubs[1].content).toBe(ABANDONED_CALL_TEXT);
-    expect((t.getMessages().at(-1) as smoltalk.AssistantMessage).content).toBe(
-      ABANDONED_TURN_TEXT,
-    );
+    expect((t.getMessages().at(-1) as smoltalk.AssistantMessage).content).toBe(ABANDONED_TURN_TEXT);
     expect(t.repairs).toBe(1);
   });
 
@@ -232,7 +222,15 @@ describe("repairReopenedThread — the seam helper", () => {
       tool("a"),
     ]);
     const events: Array<{ threadId: string; toolCallIds: string[] }> = [];
-    repairReopenedThread(t, { threadRepaired: (e) => { events.push(e); } }, "7");
+    repairReopenedThread(
+      t,
+      {
+        threadRepaired: (e) => {
+          events.push(e);
+        },
+      },
+      "7",
+    );
     // Raw id, matching threadCreated/threadResumed — consumers join on it.
     expect(events).toEqual([{ threadId: "7", toolCallIds: ["b"] }]);
     expect(t.repairs).toBe(1);
@@ -241,7 +239,15 @@ describe("repairReopenedThread — the seam helper", () => {
   it("healthy thread: NO event, no changes", () => {
     const t = new MessageThread([smoltalk.userMessage("hi"), asst("hello")]);
     const events: unknown[] = [];
-    repairReopenedThread(t, { threadRepaired: (e) => { events.push(e); } }, "7");
+    repairReopenedThread(
+      t,
+      {
+        threadRepaired: (e) => {
+          events.push(e);
+        },
+      },
+      "7",
+    );
     expect(events).toEqual([]);
     expect(t.repairs).toBe(0);
   });
@@ -268,9 +274,7 @@ describe("restoreThreadForResume", () => {
     const live = new MessageThread([smoltalk.userMessage("hi")]);
     const snap = live.toJSON(); // generation 0
     live.markRepaired();
-    expect(() => restoreThreadForResume(snap, live)).toThrow(
-      /repaired after this checkpoint/,
-    );
+    expect(() => restoreThreadForResume(snap, live)).toThrow(/repaired after this checkpoint/);
     expect(live.repairs).toBe(1); // refusal must not have adopted anything
   });
 
@@ -278,9 +282,7 @@ describe("restoreThreadForResume", () => {
     const live = new MessageThread([smoltalk.userMessage("hi")]);
     live.markRepaired();
     const legacy = [smoltalk.userMessage("hi").toJSON()];
-    expect(() => restoreThreadForResume(legacy, live)).toThrow(
-      /repaired after this checkpoint/,
-    );
+    expect(() => restoreThreadForResume(legacy, live)).toThrow(/repaired after this checkpoint/);
   });
 
   it("a snapshot taken AFTER the repair restores fine", () => {
@@ -303,9 +305,7 @@ describe("restoreThreadForResume", () => {
     const snap = live.toJSON();
     live.markRepaired();
     runInTestContext(ctx, new StateStack(), new ThreadStore(), () => {
-      expect(() => restoreThreadForResume(snap, live)).toThrow(
-        /repaired after this checkpoint/,
-      );
+      expect(() => restoreThreadForResume(snap, live)).toThrow(/repaired after this checkpoint/);
     });
     expect(errors).toHaveLength(1);
     expect(errors[0].errorType).toBe("runtimeError");

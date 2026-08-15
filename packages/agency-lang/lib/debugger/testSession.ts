@@ -209,12 +209,10 @@ export class DebuggerTestSession {
   /** Start the driver loop in the background and wait for it to reach its first idle. */
   private async startDriver(initialResult: any): Promise<void> {
     const idlePromise = this.input.waitForIdle();
-    this.runPromise = this.driver
-      .run(initialResult, { interceptConsole: false })
-      .then((r) => {
-        this.result = r;
-        this.finished = true;
-      });
+    this.runPromise = this.driver.run(initialResult, { interceptConsole: false }).then((r) => {
+      this.result = r;
+      this.finished = true;
+    });
     await idlePromise;
   }
 }
@@ -223,10 +221,7 @@ export class DebuggerTestSession {
  * Get the initial interrupt result — either from loaded checkpoints (trace mode)
  * or by running the entry node (normal mode).
  */
-async function getInitialResult(
-  opts: TestSessionOpts,
-  driver: DebuggerDriver,
-): Promise<any> {
+async function getInitialResult(opts: TestSessionOpts, driver: DebuggerDriver): Promise<any> {
   if (opts.checkpoints?.length) {
     const lastCp = opts.checkpoints[opts.checkpoints.length - 1];
     return {

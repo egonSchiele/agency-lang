@@ -4,11 +4,7 @@ export { FileMemoryStore } from "./store.js";
 export { EmbeddingManager, cosineSimilarity } from "./embeddings.js";
 export type { SimilarityResult } from "./embeddings.js";
 export { MemoryManager } from "./manager.js";
-export type {
-  MemoryManagerOptions,
-  MemoryIdRef,
-  ForgetResult,
-} from "./manager.js";
+export type { MemoryManagerOptions, MemoryIdRef, ForgetResult } from "./manager.js";
 export { getOrCreateStore, _resetStoreRegistry } from "./registry.js";
 export { MemoryFrame } from "./frame.js";
 export { ExtractionResultSchema } from "./extraction.js";

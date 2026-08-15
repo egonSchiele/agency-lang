@@ -25,9 +25,7 @@ function redundantNamesIn(ctx: LintContext): { stmt: ImportStatement; name: stri
   return ctx.program.nodes
     .filter(
       (node): node is ImportStatement =>
-        node.type === "importStatement" &&
-        node.modulePath === "std::index" &&
-        !node.testOnly,
+        node.type === "importStatement" && node.modulePath === "std::index" && !node.testOnly,
     )
     .flatMap((stmt) =>
       stmt.importedNames

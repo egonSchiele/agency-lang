@@ -46,7 +46,11 @@ describe("functionRefType assignability", () => {
     type: "functionRefType",
     name: "deploy",
     params: [
-      { type: "functionParameter", name: "env", typeHint: { type: "primitiveType", value: "string" } },
+      {
+        type: "functionParameter",
+        name: "env",
+        typeHint: { type: "primitiveType", value: "string" },
+      },
     ],
     returnType: { type: "primitiveType", value: "void" },
   };
@@ -74,7 +78,11 @@ describe("functionRefType assignability", () => {
       type: "functionRefType",
       name: "redeploy",
       params: [
-        { type: "functionParameter", name: "environment", typeHint: { type: "primitiveType", value: "string" } },
+        {
+          type: "functionParameter",
+          name: "environment",
+          typeHint: { type: "primitiveType", value: "string" },
+        },
       ],
       returnType: { type: "primitiveType", value: "void" },
     };
@@ -87,8 +95,16 @@ describe("functionRefType assignability", () => {
       type: "functionRefType",
       name: "add",
       params: [
-        { type: "functionParameter", name: "a", typeHint: { type: "primitiveType", value: "number" } },
-        { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "number" } },
+        {
+          type: "functionParameter",
+          name: "a",
+          typeHint: { type: "primitiveType", value: "number" },
+        },
+        {
+          type: "functionParameter",
+          name: "b",
+          typeHint: { type: "primitiveType", value: "number" },
+        },
       ],
       returnType: { type: "primitiveType", value: "number" },
     };
@@ -100,9 +116,7 @@ describe("functionRefType assignability", () => {
   });
 
   it("function primitive is not assignable to functionRefType", () => {
-    expect(
-      isAssignable({ type: "primitiveType", value: "function" }, fnRef, {}),
-    ).toBe(false);
+    expect(isAssignable({ type: "primitiveType", value: "function" }, fnRef, {})).toBe(false);
   });
 
   it("formats functionRefType with formatTypeHint", () => {
@@ -121,9 +135,7 @@ describe("functionRefType assignability", () => {
     const emptyStruct: VariableType = { type: "objectType", properties: [] };
     const nonEmptyStruct: VariableType = {
       type: "objectType",
-      properties: [
-        { key: "foo", value: { type: "primitiveType", value: "string" } },
-      ],
+      properties: [{ key: "foo", value: { type: "primitiveType", value: "string" } }],
     };
 
     it("objectType is assignable to object primitive", () => {
@@ -147,7 +159,11 @@ describe("functionRefType assignability", () => {
       type: "functionRefType",
       name: "deploy2",
       params: [
-        { type: "functionParameter", name: "env", typeHint: { type: "primitiveType", value: "string" } },
+        {
+          type: "functionParameter",
+          name: "env",
+          typeHint: { type: "primitiveType", value: "string" },
+        },
       ],
       returnType: { type: "primitiveType", value: "number" },
     };

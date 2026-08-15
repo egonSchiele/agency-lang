@@ -56,7 +56,11 @@ describe("requireRemoteLogsEnvironment", () => {
   });
 
   it("list and json modes accept any terminal", () => {
-    expect(() => requireRemoteLogsEnvironment(resolveRemoteLogsMode(undefined, { list: true }), noStdin)).not.toThrow();
-    expect(() => requireRemoteLogsEnvironment(resolveRemoteLogsMode(undefined, { json: true }), noStdout)).not.toThrow();
+    expect(() =>
+      requireRemoteLogsEnvironment(resolveRemoteLogsMode(undefined, { list: true }), noStdin),
+    ).not.toThrow();
+    expect(() =>
+      requireRemoteLogsEnvironment(resolveRemoteLogsMode(undefined, { json: true }), noStdout),
+    ).not.toThrow();
   });
 });

@@ -32,9 +32,7 @@ export function firstParagraph(body: string): string {
   const start = lines.findIndex((line) => line !== "");
   if (start === -1) return "";
   const afterLead = lines.slice(start);
-  const end = afterLead.findIndex(
-    (line) => line === "" || line.startsWith("```"),
-  );
+  const end = afterLead.findIndex((line) => line === "" || line.startsWith("```"));
   const paragraph = end === -1 ? afterLead : afterLead.slice(0, end);
   return paragraph.join(" ").replace(/\s+/g, " ").trim();
 }
@@ -54,9 +52,7 @@ export function sanitizeDescription(raw: string): string {
 
 /** The module's one-line summary: the `@summary` override if present,
  *  else the first sentence of the first paragraph, sanitized. */
-export function moduleDescription(
-  comment: AgencyMultiLineComment | undefined,
-): string | null {
+export function moduleDescription(comment: AgencyMultiLineComment | undefined): string | null {
   if (!comment) return null;
   const { override, body } = extractSummaryOverride(comment.content);
   const raw = override ?? firstSentence(firstParagraph(body));

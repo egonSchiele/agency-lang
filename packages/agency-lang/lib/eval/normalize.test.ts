@@ -39,10 +39,7 @@ describe("normalize", () => {
   });
 
   it("hoists threadId from data.threadId", () => {
-    const n = normalize([
-      ev("promptCompletion", { threadId: "t-0" }),
-      ev("promptCompletion", {}),
-    ]);
+    const n = normalize([ev("promptCompletion", { threadId: "t-0" }), ev("promptCompletion", {})]);
     expect(n.events[0].threadId).toBe("t-0");
     expect(n.events[1].threadId).toBeNull();
   });
@@ -70,19 +67,13 @@ describe("normalize", () => {
   });
 
   it("emits a warning when tool/LLM events lack threadId (legacy trace)", () => {
-    const n = normalize([
-      ev("promptCompletion"),
-      ev("toolCall"),
-    ]);
+    const n = normalize([ev("promptCompletion"), ev("toolCall")]);
     expect(n.warnings.length).toBe(1);
     expect(n.warnings[0]).toContain("no threadId field");
   });
 
   it("does not warn when any tool/LLM event has threadId", () => {
-    const n = normalize([
-      ev("promptCompletion", { threadId: "t-0" }),
-      ev("toolCall"),
-    ]);
+    const n = normalize([ev("promptCompletion", { threadId: "t-0" }), ev("toolCall")]);
     expect(n.warnings).toEqual([]);
   });
 
@@ -134,9 +125,7 @@ describe("extractThreads", () => {
   });
 
   it("handles missing label/session/hidden", () => {
-    const n = normalize([
-      ev("threadCreated", { threadId: "0", threadType: "thread" }),
-    ]);
+    const n = normalize([ev("threadCreated", { threadId: "0", threadType: "thread" })]);
     const [t] = extractThreads(n);
     expect(t.label).toBeNull();
     expect(t.session).toBeNull();

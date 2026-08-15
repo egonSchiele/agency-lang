@@ -17,9 +17,7 @@ const record = (k: VariableType, v: VariableType): VariableType => ({
   typeArgs: [k, v],
 });
 
-const obj = (
-  props: { key: string; value: VariableType }[],
-): VariableType => ({
+const obj = (props: { key: string; value: VariableType }[]): VariableType => ({
   type: "objectType",
   properties: props,
 });
@@ -31,31 +29,27 @@ const union = (...types: VariableType[]): VariableType => ({
 
 describe("isAssignable: Record-to-Record", () => {
   it("Record<string, string> is assignable to Record<string, string>", () => {
-    expect(
-      isAssignable(record(stringType, stringType), record(stringType, stringType), {}),
-    ).toBe(true);
+    expect(isAssignable(record(stringType, stringType), record(stringType, stringType), {})).toBe(
+      true,
+    );
   });
 
   it('covariant in values: Record<string, "approve"> -> Record<string, string>', () => {
     expect(
-      isAssignable(
-        record(stringType, stringLit("approve")),
-        record(stringType, stringType),
-        {},
-      ),
+      isAssignable(record(stringType, stringLit("approve")), record(stringType, stringType), {}),
     ).toBe(true);
   });
 
   it("rejects when value types are incompatible", () => {
-    expect(
-      isAssignable(record(stringType, numberType), record(stringType, stringType), {}),
-    ).toBe(false);
+    expect(isAssignable(record(stringType, numberType), record(stringType, stringType), {})).toBe(
+      false,
+    );
   });
 
   it("rejects when key types are incompatible", () => {
-    expect(
-      isAssignable(record(numberType, stringType), record(stringType, stringType), {}),
-    ).toBe(false);
+    expect(isAssignable(record(numberType, stringType), record(stringType, stringType), {})).toBe(
+      false,
+    );
   });
 });
 
@@ -74,9 +68,7 @@ describe("isAssignable: object -> Record", () => {
   });
 
   it("empty object is assignable to any Record (vacuously true)", () => {
-    expect(
-      isAssignable(obj([]), record(stringType, numberType), {}),
-    ).toBe(true);
+    expect(isAssignable(obj([]), record(stringType, numberType), {})).toBe(true);
   });
 
   it("rejects when a property value does not match V", () => {
@@ -109,11 +101,7 @@ describe("isAssignable: object -> Record", () => {
   it("rejects when a required literal key is missing", () => {
     const keyUnion = union(stringLit("active"), stringLit("inactive"));
     expect(
-      isAssignable(
-        obj([{ key: "active", value: numberType }]),
-        record(keyUnion, numberType),
-        {},
-      ),
+      isAssignable(obj([{ key: "active", value: numberType }]), record(keyUnion, numberType), {}),
     ).toBe(false);
   });
 });
@@ -125,11 +113,7 @@ describe("isAssignable: Record -> object", () => {
 
   it("Record is NOT assignable to a non-empty object", () => {
     expect(
-      isAssignable(
-        record(stringType, anyType),
-        obj([{ key: "a", value: stringType }]),
-        {},
-      ),
+      isAssignable(record(stringType, anyType), obj([{ key: "a", value: stringType }]), {}),
     ).toBe(false);
   });
 });

@@ -244,9 +244,7 @@ function checkSite(site: MatchSite, configured: Severity, ctx: TypeCheckerContex
 }
 
 /** Primitive names a binder can shadow just as confusingly as an alias. */
-const SHADOWABLE_PRIMITIVE_NAMES: readonly string[] = [
-  "string", "number", "boolean", "object",
-];
+const SHADOWABLE_PRIMITIVE_NAMES: readonly string[] = ["string", "number", "boolean", "object"];
 
 /**
  * Warn when a binder is named like a type, because with type patterns in the
@@ -270,22 +268,14 @@ function warnTypeShadowingBinders(site: MatchSite, ctx: TypeCheckerContext): voi
     const cv = arm.caseValue;
     if (!arm.guarded && cv.type === "variableName" && isTypeName(cv.value)) {
       ctx.errors.push(
-        diagnostic(
-          "bareArmBinderShadowsType",
-          { name: cv.value },
-          cv.loc ?? site.loc ?? null,
-        ),
+        diagnostic("bareArmBinderShadowsType", { name: cv.value }, cv.loc ?? site.loc ?? null),
       );
     }
   }
 }
 
 /** Normalize the two surviving match shapes to `(scrutineeType, arms)`. */
-function normalizeSite(
-  node: AgencyNode,
-  scope: Scope,
-  ctx: TypeCheckerContext,
-): MatchSite | null {
+function normalizeSite(node: AgencyNode, scope: Scope, ctx: TypeCheckerContext): MatchSite | null {
   // Pattern-arm match: lowered to a `__scrutinee` temp carrying `matchSource`.
   if (node.type === "assignment" && node.matchSource) {
     // Synth the original scrutinee expression, NOT the temp's declared type:
@@ -323,10 +313,7 @@ function normalizeSite(
  * `typechecker.matchExhaustiveness` (`silent` / `warn` / `error`). Conservative:
  * open types and non-discriminated object unions are never reported (B1).
  */
-export function checkMatchExhaustiveness(
-  scopes: ScopeInfo[],
-  ctx: TypeCheckerContext,
-): void {
+export function checkMatchExhaustiveness(scopes: ScopeInfo[], ctx: TypeCheckerContext): void {
   // Do NOT early-return on `silent`: expression matches are still hard-checked
   // per-site (checkSite decides the effective severity). Only statement sites
   // honor the configured value.

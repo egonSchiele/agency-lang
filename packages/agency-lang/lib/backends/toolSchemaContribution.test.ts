@@ -21,12 +21,7 @@ function toolSchemaSlice(source: string, toolName: string): string {
   if (!parseResult.success) {
     throw new Error(`parse failed: ${parseResult.message}`);
   }
-  const ts = generateTypeScript(
-    parseResult.result,
-    undefined,
-    undefined,
-    "test.agency",
-  );
+  const ts = generateTypeScript(parseResult.result, undefined, undefined, "test.agency");
   // Look for the toolDefinition with this function's name.
   const idx = ts.indexOf(`name: "${toolName}"`);
   if (idx < 0) {
@@ -44,20 +39,14 @@ function toolSchemaSlice(source: string, toolName: string): string {
 describe("paramSchemaContribution — schema field generation", () => {
   // #27 — Variadic emits array field.
   it("emits z.array(<element>) for a variadic param", () => {
-    const slice = toolSchemaSlice(
-      `def foo(...nums: number[]): number { return 0 }`,
-      "foo",
-    );
+    const slice = toolSchemaSlice(`def foo(...nums: number[]): number { return 0 }`, "foo");
     expect(slice).toContain(`"nums"`);
     expect(slice).toContain("z.array(z.number())");
   });
 
   // #28 — Function-typed param dropped (single).
   it("drops a function-typed param from the schema", () => {
-    const slice = toolSchemaSlice(
-      `def foo(a: number, block: () => void): void {}`,
-      "foo",
-    );
+    const slice = toolSchemaSlice(`def foo(a: number, block: () => void): void {}`, "foo");
     expect(slice).toContain(`"a"`);
     expect(slice).not.toContain(`"block"`);
   });

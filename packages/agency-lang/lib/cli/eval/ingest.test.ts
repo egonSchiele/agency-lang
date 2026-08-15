@@ -83,8 +83,9 @@ describe("parseFieldArgs", () => {
   });
 
   it("rejects --task together with --field task=", () => {
-    expect(() => parseFieldArgs({ task: "A", field: ["task=B"] }))
-      .toThrow(/--task is sugar for --field task=/);
+    expect(() => parseFieldArgs({ task: "A", field: ["task=B"] })).toThrow(
+      /--task is sugar for --field task=/,
+    );
   });
 
   it("rejects the same --field name twice, rather than letting the last one win", () => {
@@ -126,23 +127,27 @@ describe("parseFieldArgs field names", () => {
 
 describe("evalIngest", () => {
   it("requires --source, because an occurrence with no batch name is untraceable", async () => {
-    await expect(evalIngest(options({ source: undefined }), dependencies()))
-      .rejects.toThrow(/--source is required/);
+    await expect(evalIngest(options({ source: undefined }), dependencies())).rejects.toThrow(
+      /--source is required/,
+    );
   });
 
   it("rejects a blank --source", async () => {
-    await expect(evalIngest(options({ source: "   " }), dependencies()))
-      .rejects.toThrow(/--source is required/);
+    await expect(evalIngest(options({ source: "   " }), dependencies())).rejects.toThrow(
+      /--source is required/,
+    );
   });
 
   it("rejects extra positional arguments rather than ingesting only the first", async () => {
-    await expect(evalIngest(options({ extraArgs: ["b.txt", "c.txt"] }), dependencies()))
-      .rejects.toThrow(/takes one source/);
+    await expect(
+      evalIngest(options({ extraArgs: ["b.txt", "c.txt"] }), dependencies()),
+    ).rejects.toThrow(/takes one source/);
   });
 
   it("rejects an unknown --format", async () => {
-    await expect(evalIngest(options({ format: "csv" }), dependencies()))
-      .rejects.toThrow(/Unknown --format/);
+    await expect(evalIngest(options({ format: "csv" }), dependencies())).rejects.toThrow(
+      /Unknown --format/,
+    );
   });
 
   it("errors when a source yields zero records rather than succeeding quietly", async () => {
@@ -165,16 +170,18 @@ describe("evalIngest", () => {
       options({ format: "files", recursive: true, task: "Summarize", maxBytes: 99 }),
       dependencies({ loadBatch: loadBatch as never }),
     );
-    expect(loadBatch).toHaveBeenCalledWith(expect.objectContaining({
-      source: expect.objectContaining({
-        path: root,
-        requestedFormat: "files",
-        recursive: true,
+    expect(loadBatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: expect.objectContaining({
+          path: root,
+          requestedFormat: "files",
+          recursive: true,
+        }),
+        sourceName: "handwritten",
+        constantFields: { task: "Summarize" },
+        maxBytes: 99,
       }),
-      sourceName: "handwritten",
-      constantFields: { task: "Summarize" },
-      maxBytes: 99,
-    }));
+    );
   });
 
   it("passes --no-task-field through as includeTaskField false", async () => {
@@ -183,9 +190,11 @@ describe("evalIngest", () => {
       options({ format: "run", taskField: false }),
       dependencies({ loadBatch: loadBatch as never }),
     );
-    expect(loadBatch).toHaveBeenCalledWith(expect.objectContaining({
-      source: expect.objectContaining({ includeTaskField: false }),
-    }));
+    expect(loadBatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: expect.objectContaining({ includeTaskField: false }),
+      }),
+    );
   });
 
   it("prints added, replayed and occurrence counts", async () => {
@@ -197,7 +206,9 @@ describe("evalIngest", () => {
 
   it("prints one line per skip, naming the item", async () => {
     const deps = dependencies({
-      datasetWriter: fakeWriter({ skips: [{ item: "bad.txt", reason: "empty" as const }] }) as never,
+      datasetWriter: fakeWriter({
+        skips: [{ item: "bad.txt", reason: "empty" as const }],
+      }) as never,
     });
     await evalIngest(options(), deps);
     expect(reported.join("\n")).toContain("bad.txt");
@@ -213,7 +224,11 @@ describe("evalIngest", () => {
 
   it("propagates a writer failure (lock lifecycle is the writer's own concern)", async () => {
     const deps = dependencies({
-      datasetWriter: { ingest: () => { throw new Error("boom"); } } as never,
+      datasetWriter: {
+        ingest: () => {
+          throw new Error("boom");
+        },
+      } as never,
     });
     await expect(evalIngest(options(), deps)).rejects.toThrow("boom");
   });

@@ -123,10 +123,7 @@ export function failure(error: any, opts?: FailureOpts): ResultFailure {
 /** Fold an activation's destructive flag into a failure crossing a
  *  boundary (function exit, block halt, block join). OR: once destructive
  *  work started anywhere below, the failure reports it. */
-export function stampFailureBoundary(
-  f: ResultFailure,
-  destructiveRan: boolean,
-): ResultFailure {
+export function stampFailureBoundary(f: ResultFailure, destructiveRan: boolean): ResultFailure {
   f.destructiveRan = f.destructiveRan || destructiveRan;
   return f;
 }
@@ -136,9 +133,7 @@ export function stampFailureBoundary(
  *  function's __self — see lib/runtime/node.ts), so the exit stamp picks
  *  it up with no second source. Sole caller: the tool loop, when a
  *  destructive-marked tool executed or a tool failed destructively. */
-export function markDestructiveWork(
-  frame: { locals: Record<string, any> } | undefined,
-): void {
+export function markDestructiveWork(frame: { locals: Record<string, any> } | undefined): void {
   if (frame) {
     frame.locals.__destructiveRan = true;
   }
@@ -150,10 +145,7 @@ export function markDestructiveWork(
  *  never hidden. `failure()` is the single initializer of
  *  skippedFunctions — no `?? []` fallback here (spec: no backward-compat
  *  handling for pre-feature serialized failures). */
-export function propagateFailure(
-  orig: ResultFailure,
-  skipped: SkippedFunction,
-): ResultFailure {
+export function propagateFailure(orig: ResultFailure, skipped: SkippedFunction): ResultFailure {
   return {
     ...orig,
     skippedFunctions: [...orig.skippedFunctions, skipped],
@@ -161,11 +153,21 @@ export function propagateFailure(
 }
 
 export function isSuccess(result: unknown): result is ResultSuccess {
-  return result != null && typeof result === "object" && (result as any).__type === "resultType" && (result as any).success === true;
+  return (
+    result != null &&
+    typeof result === "object" &&
+    (result as any).__type === "resultType" &&
+    (result as any).success === true
+  );
 }
 
 export function isFailure(result: unknown): result is ResultFailure {
-  return result != null && typeof result === "object" && (result as any).__type === "resultType" && (result as any).success === false;
+  return (
+    result != null &&
+    typeof result === "object" &&
+    (result as any).__type === "resultType" &&
+    (result as any).success === false
+  );
 }
 
 /** Wrap a function call in try-catch, returning a Result.
@@ -187,10 +189,7 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
     // OUTER guard keeps travelling as a value — `try` must not catch it.
     if (isAborted(value)) {
       const cause = value.cause;
-      if (
-        cause.kind === "guardTrip" &&
-        opts?.ownedGuardIds?.includes(cause.guardId)
-      ) {
+      if (cause.kind === "guardTrip" && opts?.ownedGuardIds?.includes(cause.guardId)) {
         // De-dup flag, shared by identity with the abort signal's cause:
         // the runner's shouldSkip must not re-throw an already-delivered
         // trip. Same contract as the exception path below.
@@ -251,7 +250,12 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
         // frame existed to convert it into an AbortedResult. Exceptions
         // carry no partial — the value path above is the salvage path.
         return failure(
-          guardFailureData(guardCause.dimension, guardCause.limit, guardCause.spent, guardCause.label),
+          guardFailureData(
+            guardCause.dimension,
+            guardCause.limit,
+            guardCause.spent,
+            guardCause.label,
+          ),
           opts,
         );
       }
@@ -265,10 +269,7 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
     // the `guardCause?.kind === "guardTrip"` branch above already converts it
     // (reading the same dimension/limit/spent off the cause). That branch is
     // the single place a guard trip becomes a Failure.
-    return failure(
-      error instanceof Error ? error.message : String(error),
-      opts,
-    );
+    return failure(error instanceof Error ? error.message : String(error), opts);
   }
 }
 
@@ -289,7 +290,12 @@ export async function __pipeBind(result: any, fn: (value: any) => any): Promise<
     return output;
   }
   // Smart bind/fmap: if fn returns a Result, use it directly
-  if (output != null && typeof output === "object" && (output as any).__type === "resultType" && typeof output.success === "boolean") {
+  if (
+    output != null &&
+    typeof output === "object" &&
+    (output as any).__type === "resultType" &&
+    typeof output.success === "boolean"
+  ) {
     return output;
   }
   return success(output);

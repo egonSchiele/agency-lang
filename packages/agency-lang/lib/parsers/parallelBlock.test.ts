@@ -66,9 +66,7 @@ describe("parallelBlockParser", () => {
   it("throws a clear error if the opening brace is missing", () => {
     // After matching `parallel`, the parser expects `{` and throws via parseError if absent.
     const input = `parallel oops`;
-    expect(() => parallelBlockParser(input)).toThrow(
-      /expected `\{` to open parallel block body/,
-    );
+    expect(() => parallelBlockParser(input)).toThrow(/expected `\{` to open parallel block body/);
   });
 });
 

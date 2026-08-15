@@ -61,15 +61,10 @@ export function isValueParamInstantiation(
  * nodes with the input, so callers may further substitute or attach
  * additional tags without aliasing.
  */
-export function substituteValueArgsInTag(
-  tag: Tag,
-  bindings: ValueArgBindings,
-): Tag {
+export function substituteValueArgsInTag(tag: Tag, bindings: ValueArgBindings): Tag {
   return {
     ...tag,
-    arguments: tag.arguments.map((a) =>
-      substituteValueArgsInExpression(a, bindings),
-    ),
+    arguments: tag.arguments.map((a) => substituteValueArgsInExpression(a, bindings)),
   };
 }
 
@@ -133,8 +128,7 @@ function substituteInString(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const lit = expr as any;
   const segments = lit.segments as Array<
-    | { type: "text"; value: string }
-    | { type: "interpolation"; expression: Expression }
+    { type: "text"; value: string } | { type: "interpolation"; expression: Expression }
   >;
   // Fast path: nothing to substitute.
   const hasBoundInterp = segments.some(
@@ -176,10 +170,7 @@ function substituteInString(
 }
 
 function pushText(
-  out: Array<
-    | { type: "text"; value: string }
-    | { type: "interpolation"; expression: Expression }
-  >,
+  out: Array<{ type: "text"; value: string } | { type: "interpolation"; expression: Expression }>,
   value: string,
 ): void {
   const last = out[out.length - 1];
@@ -217,10 +208,7 @@ function literalToText(expr: Expression): string | undefined {
   }
 }
 
-function substituteInObject(
-  obj: AgencyObject,
-  bindings: ValueArgBindings,
-): AgencyObject {
+function substituteInObject(obj: AgencyObject, bindings: ValueArgBindings): AgencyObject {
   return {
     ...obj,
     entries: obj.entries.map((entry) => {
@@ -243,10 +231,7 @@ function substituteInObject(
   };
 }
 
-function substituteInArray(
-  arr: AgencyArray,
-  bindings: ValueArgBindings,
-): AgencyArray {
+function substituteInArray(arr: AgencyArray, bindings: ValueArgBindings): AgencyArray {
   return {
     ...arr,
     items: arr.items.map((item) => {
@@ -261,10 +246,7 @@ function substituteInArray(
   };
 }
 
-function substituteInFunctionCall(
-  call: FunctionCall,
-  bindings: ValueArgBindings,
-): FunctionCall {
+function substituteInFunctionCall(call: FunctionCall, bindings: ValueArgBindings): FunctionCall {
   return {
     ...call,
     arguments: (call.arguments ?? []).map((a) => {
@@ -287,10 +269,7 @@ function substituteInFunctionCall(
   };
 }
 
-function substituteInValueAccess(
-  va: ValueAccess,
-  bindings: ValueArgBindings,
-): ValueAccess {
+function substituteInValueAccess(va: ValueAccess, bindings: ValueArgBindings): ValueAccess {
   return {
     ...va,
     base: substituteValueArgsInExpression(
@@ -315,12 +294,8 @@ function substituteInChainElement(
   if (el.kind === "slice") {
     return {
       ...el,
-      start: el.start
-        ? substituteValueArgsInExpression(el.start, bindings)
-        : el.start,
-      end: el.end
-        ? substituteValueArgsInExpression(el.end, bindings)
-        : el.end,
+      start: el.start ? substituteValueArgsInExpression(el.start, bindings) : el.start,
+      end: el.end ? substituteValueArgsInExpression(el.end, bindings) : el.end,
     };
   }
   if (el.kind === "methodCall") {
@@ -476,23 +451,17 @@ export function applyValueArgs(
         // Best-effort literal type-check. Skip null vs declared-nullable etc.
         const loc = (provided as { loc?: { line: number; col: number } }).loc;
         const locStr = loc ? ` (at line ${loc.line}, col ${loc.col})` : "";
-        throw new TypeError(
-          `argument ${p.name} expected ${declared}, got ${litType}${locStr}`,
-        );
+        throw new TypeError(`argument ${p.name} expected ${declared}, got ${litType}${locStr}`);
       }
       bindings[p.name] = provided;
     } else if (p.default !== undefined) {
       bindings[p.name] = p.default;
     } else {
-      throw new TypeError(
-        `${aliasName} requires '${p.name}': ${variableTypeName(p.type)}`,
-      );
+      throw new TypeError(`${aliasName} requires '${p.name}': ${variableTypeName(p.type)}`);
     }
   }
 
-  const newTags = (entry.tags ?? []).map((t) =>
-    substituteValueArgsInTag(t, bindings),
-  );
+  const newTags = (entry.tags ?? []).map((t) => substituteValueArgsInTag(t, bindings));
 
   const newBody = substituteValueArgsInType(entry.body, bindings);
 
@@ -515,9 +484,7 @@ export function applyValueArgs(
       forwarded.add((v as Expression & { value: string }).value);
     }
   }
-  const checkNames = new Set(
-    params.map((p) => p.name).filter((n) => !forwarded.has(n)),
-  );
+  const checkNames = new Set(params.map((p) => p.name).filter((n) => !forwarded.has(n)));
   if (checkNames.size > 0) {
     assertNoUnsubstitutedValueParams(newTags, newBody, checkNames, aliasName);
   }
@@ -571,12 +538,7 @@ function checkExpr(
           }
           checkExpr(kv.value, paramNames, aliasName, tagName);
         } else {
-          checkExpr(
-            (entry as SplatExpression).value as Expression,
-            paramNames,
-            aliasName,
-            tagName,
-          );
+          checkExpr((entry as SplatExpression).value as Expression, paramNames, aliasName, tagName);
         }
       }
       break;
@@ -597,12 +559,7 @@ function checkExpr(
     case "agencyArray":
       for (const item of (e as AgencyArray).items ?? []) {
         if (item.type === "splat") {
-          checkExpr(
-            (item as SplatExpression).value as Expression,
-            paramNames,
-            aliasName,
-            tagName,
-          );
+          checkExpr((item as SplatExpression).value as Expression, paramNames, aliasName, tagName);
         } else {
           checkExpr(item as Expression, paramNames, aliasName, tagName);
         }
@@ -610,7 +567,8 @@ function checkExpr(
       break;
     case "string":
     case "multiLineString":
-      for (const seg of (e as { segments?: Array<{ type: string; expression?: Expression }> }).segments ?? []) {
+      for (const seg of (e as { segments?: Array<{ type: string; expression?: Expression }> })
+        .segments ?? []) {
         if (seg.type === "interpolation" && seg.expression) {
           checkExpr(seg.expression, paramNames, aliasName, tagName);
         }
@@ -629,23 +587,14 @@ function checkFunctionCallArgs(
     if (a.type === "namedArgument") {
       checkExpr((a as NamedArgument).value, paramNames, aliasName, tagName);
     } else if (a.type === "splat") {
-      checkExpr(
-        (a as SplatExpression).value as Expression,
-        paramNames,
-        aliasName,
-        tagName,
-      );
+      checkExpr((a as SplatExpression).value as Expression, paramNames, aliasName, tagName);
     } else {
       checkExpr(a as Expression, paramNames, aliasName, tagName);
     }
   }
 }
 
-function checkType(
-  vt: VariableType,
-  paramNames: Set<string>,
-  aliasName: string,
-): void {
+function checkType(vt: VariableType, paramNames: Set<string>, aliasName: string): void {
   switch (vt.type) {
     case "typeAliasVariable":
       if (vt.valueArgs) {
@@ -730,19 +679,13 @@ export function substituteValueArgsInType(
       if (!vt.valueArgs) return vt;
       return {
         ...vt,
-        valueArgs: vt.valueArgs.map((a) =>
-          substituteValueArgsInExpression(a, bindings),
-        ),
+        valueArgs: vt.valueArgs.map((a) => substituteValueArgsInExpression(a, bindings)),
       };
     }
     case "genericType": {
-      const newTypeArgs = vt.typeArgs.map((a) =>
-        substituteValueArgsInType(a, bindings),
-      );
+      const newTypeArgs = vt.typeArgs.map((a) => substituteValueArgsInType(a, bindings));
       const newValueArgs = vt.valueArgs
-        ? vt.valueArgs.map((a) =>
-            substituteValueArgsInExpression(a, bindings),
-          )
+        ? vt.valueArgs.map((a) => substituteValueArgsInExpression(a, bindings))
         : undefined;
       return { ...vt, typeArgs: newTypeArgs, valueArgs: newValueArgs };
     }

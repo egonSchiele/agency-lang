@@ -211,8 +211,8 @@ describe("agency.threads (registry subnamespace)", () => {
   it("list returns every thread with slug ids and correct isActive flag", () => {
     const env = setup();
     // Seed an active root thread, then create a second thread.
-    env.threads.getOrCreateActive();           // raw id "0", pushed active
-    env.threads.create();                       // raw id "1", not active
+    env.threads.getOrCreateActive(); // raw id "0", pushed active
+    env.threads.create(); // raw id "1", not active
     agency.withTestContext(env, () => {
       const list = agency.threads.list();
       expect(list.map((t) => t.id)).toEqual(["t0", "t1"]);
@@ -287,9 +287,8 @@ describe("agency.checkpoint / getCheckpoint / restore", () => {
       () => agency.checkpoint(),
     );
     expect(() =>
-      agency.withTestContext(
-        { ctx, stack: ctx.stateStack, threads: new ThreadStore() },
-        () => agency.restore(id),
+      agency.withTestContext({ ctx, stack: ctx.stateStack, threads: new ThreadStore() }, () =>
+        agency.restore(id),
       ),
     ).toThrow(RestoreSignal);
   });
@@ -426,7 +425,7 @@ describe("agency.addCost", () => {
       await expect(
         agency.withCostGuard(0.1, async () => {
           agency.addCost(0.05); // under
-          agency.addCost(0.10); // total 0.15 > 0.1 — trips
+          agency.addCost(0.1); // total 0.15 > 0.1 — trips
         }),
       ).rejects.toThrow();
     });
@@ -450,7 +449,13 @@ describe("agency.memory.*", () => {
 
   function makeMemCtx(memory?: { dir: string }) {
     const ctx = new RuntimeContext({
-      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
       smoltalkDefaults: {},
       dirname: process.cwd(),
       memory,
@@ -628,9 +633,7 @@ describe("agency.withLock", () => {
 
     const env = setup();
     await agency.withTestContext(env, () =>
-      agency.withLock("outer", () =>
-        agency.withLock("inner", async () => "done"),
-      ),
+      agency.withLock("outer", () => agency.withLock("inner", async () => "done")),
     );
 
     const acquires = sent.filter((msg) => msg.type === "lockAcquire");

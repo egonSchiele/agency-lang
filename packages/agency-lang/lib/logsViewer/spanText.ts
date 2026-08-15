@@ -3,12 +3,7 @@
 // format a duration ONE way. A span reading differently in two views of
 // the same session is the drift this file exists to prevent.
 import { EventEnvelope, TreeNode } from "./types.js";
-import {
-  ViewerThresholds,
-  durationMagnitude,
-  costMagnitude,
-  Magnitude,
-} from "./thresholds.js";
+import { ViewerThresholds, durationMagnitude, costMagnitude, Magnitude } from "./thresholds.js";
 
 // Find the first direct child leaf event of the given type under a span.
 export function childEvent(node: TreeNode, type: string): EventEnvelope | undefined {
@@ -100,9 +95,7 @@ export function lastUserMessage(pc: EventEnvelope): string | undefined {
     if (m?.role !== "user") continue;
     if (typeof m.content === "string") return m.content;
     if (Array.isArray(m.content)) {
-      const text = m.content
-        .map((p: any) => (typeof p?.text === "string" ? p.text : ""))
-        .join("");
+      const text = m.content.map((p: any) => (typeof p?.text === "string" ? p.text : "")).join("");
       return text || undefined;
     }
   }

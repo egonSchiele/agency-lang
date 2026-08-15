@@ -19,8 +19,14 @@
 import { Style, styledWrapper, visualWidth } from "./ansi.js";
 import { Align, Block, above, beside, pad, padLine, styled } from "./block.js";
 import {
-  BORDER_CELLS, BORDER_CHARS, BorderChars, BorderStyle, buildTopEdge,
-  minWidthForTitle, placeTitle, resolveBorderStyle,
+  BORDER_CELLS,
+  BORDER_CHARS,
+  BorderChars,
+  BorderStyle,
+  buildTopEdge,
+  minWidthForTitle,
+  placeTitle,
+  resolveBorderStyle,
 } from "./border.js";
 import { Cell, ColumnSpec, LayoutNode, parseWidth } from "./nodes.js";
 import { growToWidth, renderNode, resolveNode } from "./render.js";
@@ -37,13 +43,18 @@ export { Cell, ColumnSpec };
 // "cannot read property 'content' of undefined" instead of throwing a
 // clear `std::ui/layout.table` boundary error.
 function _looksLikeLayoutNode(cell: object): boolean {
-  if (!Object.hasOwn(cell, "type") || !Object.hasOwn(cell, "attrs") || !Object.hasOwn(cell, "children")) {
+  if (
+    !Object.hasOwn(cell, "type") ||
+    !Object.hasOwn(cell, "attrs") ||
+    !Object.hasOwn(cell, "children")
+  ) {
     return false;
   }
   const c = cell as { type: unknown; attrs: unknown; children: unknown };
   return (
     typeof c.type === "string" &&
-    c.attrs !== null && typeof c.attrs === "object" &&
+    c.attrs !== null &&
+    typeof c.attrs === "object" &&
     Array.isArray(c.children)
   );
 }
@@ -67,7 +78,7 @@ export type ValidatedTable = {
   // for symmetry with `body` and `footer`. Callers iterate uniformly
   // without a null guard.
   header: LayoutNode[];
-  body:   LayoutNode[][];
+  body: LayoutNode[][];
   footer: LayoutNode[][];
   columnCount: number;
 };
@@ -83,7 +94,7 @@ export type ValidatedTable = {
 // `LayoutNode`, plus the resolved column count.
 export function _validateTable(attrs: Record<string, unknown>): ValidatedTable {
   const rawHeader = attrs.header;
-  const rawBody   = attrs.body   ?? [];
+  const rawBody = attrs.body ?? [];
   const rawFooter = attrs.footer ?? [];
 
   if (rawHeader != null && !Array.isArray(rawHeader)) {
@@ -93,9 +104,7 @@ export function _validateTable(attrs: Record<string, unknown>): ValidatedTable {
   }
   const checkSection = (val: unknown, name: string): unknown[][] => {
     if (!Array.isArray(val)) {
-      throw new Error(
-        `std::ui/layout.table: ${name} must be an array of rows, got ${typeof val}`,
-      );
+      throw new Error(`std::ui/layout.table: ${name} must be an array of rows, got ${typeof val}`);
     }
     val.forEach((row, i) => {
       if (!Array.isArray(row)) {
@@ -107,7 +116,7 @@ export function _validateTable(attrs: Record<string, unknown>): ValidatedTable {
     return val as unknown[][];
   };
   const header = rawHeader as unknown[] | null | undefined;
-  const body   = checkSection(rawBody,   "body");
+  const body = checkSection(rawBody, "body");
   const footer = checkSection(rawFooter, "footer");
 
   // An all-empty table is a VALID table that renders as nothing.
@@ -125,16 +134,14 @@ export function _validateTable(attrs: Record<string, unknown>): ValidatedTable {
 
   const rawColumns = attrs.columns;
   if (rawColumns != null && !Array.isArray(rawColumns)) {
-    throw new Error(
-      `std::ui/layout.table: columns must be an array, got ${typeof rawColumns}`,
-    );
+    throw new Error(`std::ui/layout.table: columns must be an array, got ${typeof rawColumns}`);
   }
   const columns = rawColumns as ColumnSpec[] | null | undefined;
   let columnCount: number;
   if (columns && columns.length > 0) columnCount = columns.length;
-  else if (header)                   columnCount = header.length;
-  else if (body.length > 0)          columnCount = body[0].length;
-  else                                columnCount = footer[0].length;
+  else if (header) columnCount = header.length;
+  else if (body.length > 0) columnCount = body[0].length;
+  else columnCount = footer[0].length;
 
   if (columnCount === 0) {
     throw new Error(
@@ -150,22 +157,22 @@ export function _validateTable(attrs: Record<string, unknown>): ValidatedTable {
     }
   };
   if (header) checkRow(header, "header");
-  body.forEach(  (r, i) => checkRow(r, `body row ${i}`));
+  body.forEach((r, i) => checkRow(r, `body row ${i}`));
   footer.forEach((r, i) => checkRow(r, `footer row ${i}`));
 
   return {
     header: header ? header.map(_coerceCell) : [],
-    body:   body.map(row   => row.map(_coerceCell)),
-    footer: footer.map(row => row.map(_coerceCell)),
+    body: body.map((row) => row.map(_coerceCell)),
+    footer: footer.map((row) => row.map(_coerceCell)),
     columnCount,
   };
 }
 
 type ColumnLayout = {
-  width:       number;   // measured content width (after minWidth)
-  align:       Align;
+  width: number; // measured content width (after minWidth)
+  align: Align;
   cellPadding: number;
-  fgColor:     string;   // "" = none
+  fgColor: string; // "" = none
 };
 
 // Inject the column's `fgColor` as the cell's `fgColor` only when the
@@ -191,16 +198,14 @@ function _computeColumnLayouts(
   const cellBlocks = styledRows.map((row) => row.map(renderNode));
   const layouts: ColumnLayout[] = [];
   for (let c = 0; c < columnCount; c++) {
-    const measured = cellBlocks.reduce(
-      (m, row) => Math.max(m, row[c].width), 0,
-    );
+    const measured = cellBlocks.reduce((m, row) => Math.max(m, row[c].width), 0);
     const spec = columns[c] ?? {};
     const resolved = resolvedColumnWidths?.[c];
     layouts.push({
-      width:       resolved ?? Math.max(measured, spec.minWidth ?? 0),
-      align:       spec.align ?? "start",
+      width: resolved ?? Math.max(measured, spec.minWidth ?? 0),
+      align: spec.align ?? "start",
       cellPadding,
-      fgColor:     spec.fgColor ?? "",
+      fgColor: spec.fgColor ?? "",
     });
   }
   return { layouts, cellBlocks };
@@ -223,7 +228,7 @@ export function _tableChromeWidth(
 
 type TableSections = {
   header: LayoutNode[];
-  body:   LayoutNode[][];
+  body: LayoutNode[][];
   footer: LayoutNode[][];
 };
 
@@ -269,16 +274,13 @@ function planColumns(
   const natural = measureNaturalColumnWidths(sections, columnCount);
   return Array.from({ length: columnCount }, (_, index) => ({
     index,
-    parsed:   parseWidth(columns[index]?.width),
-    natural:  natural[index],
+    parsed: parseWidth(columns[index]?.width),
+    natural: natural[index],
     minWidth: columns[index]?.minWidth ?? 0,
   }));
 }
 
-function measureNaturalColumnWidths(
-  sections: TableSections,
-  columnCount: number,
-): number[] {
+function measureNaturalColumnWidths(sections: TableSections, columnCount: number): number[] {
   const rows = [
     ...(sections.header.length > 0 ? [sections.header] : []),
     ...sections.body,
@@ -295,14 +297,14 @@ function annotateCellsWithWrap(
 ): TableSections {
   const annotateCell = (cell: LayoutNode, columnWidth: number): LayoutNode => {
     if (cell.type === "text") return { ...cell, attrs: { ...cell.attrs, wrapWidth: columnWidth } };
-    if (cell.type === "raw")  return cell;
+    if (cell.type === "raw") return cell;
     return resolveNode(cell, { defaultWidth: columnWidth, percentBasis: columnWidth });
   };
   const annotateRow = (row: LayoutNode[]): LayoutNode[] =>
     row.map((cell, c) => annotateCell(cell, resolvedColumnWidths[c] ?? 0));
   return {
     header: annotateRow(sections.header),
-    body:   sections.body.map(annotateRow),
+    body: sections.body.map(annotateRow),
     footer: sections.footer.map(annotateRow),
   };
 }
@@ -332,15 +334,14 @@ function _composeRowBlock(
   dividerChar: string,
   wrapBorder: (s: string) => string,
 ): Block {
-  const rowHeight   = cells.reduce((m, b) => Math.max(m, b.height), 1);
+  const rowHeight = cells.reduce((m, b) => Math.max(m, b.height), 1);
   const paddedCells = cells.map((b, c) => _layoutCell(b, layouts[c], rowHeight));
   if (!columnDividers || paddedCells.length <= 1) {
     return paddedCells.reduce(beside, Block.empty());
   }
   const dividerBlock = Block.of(Array(rowHeight).fill(wrapBorder(dividerChar)));
   return paddedCells.reduce<Block>(
-    (acc, cell, i) =>
-      i === 0 ? cell : beside(beside(acc, dividerBlock), cell),
+    (acc, cell, i) => (i === 0 ? cell : beside(beside(acc, dividerBlock), cell)),
     Block.empty(),
   );
 }
@@ -357,8 +358,8 @@ function _composeDividerLine(
   ch: BorderChars,
   wrapBorder: (s: string) => string,
 ): Block {
-  const runs    = layouts.map((l) => ch.h.repeat(l.width + 2 * l.cellPadding));
-  const inner   = columnDividers ? runs.join(ch.cross) : runs.join("");
+  const runs = layouts.map((l) => ch.h.repeat(l.width + 2 * l.cellPadding));
+  const inner = columnDividers ? runs.join(ch.cross) : runs.join("");
   const padding = ch.h.repeat(Math.max(0, innerWidth - visualWidth(inner)));
   return Block.of(wrapBorder(ch.leftTee + inner + padding + ch.rightTee));
 }
@@ -371,12 +372,14 @@ function _composeDividerLine(
 // modifier on the leaf (italic / dim / underline / fgColor / bgColor)
 // also opts out — the caller's styling wins.
 function _hasExplicitTextStyle(attrs: Record<string, unknown>): boolean {
-  return attrs.bold === true
-      || attrs.italic === true
-      || attrs.dim === true
-      || attrs.underline === true
-      || (typeof attrs.fgColor === "string" && attrs.fgColor !== "")
-      || (typeof attrs.bgColor === "string" && attrs.bgColor !== "");
+  return (
+    attrs.bold === true ||
+    attrs.italic === true ||
+    attrs.dim === true ||
+    attrs.underline === true ||
+    (typeof attrs.fgColor === "string" && attrs.fgColor !== "") ||
+    (typeof attrs.bgColor === "string" && attrs.bgColor !== "")
+  );
 }
 
 function _styleHeaderCell(c: LayoutNode): LayoutNode {
@@ -398,9 +401,7 @@ function _wrapRowSides(
   wrapBorder: (s: string) => string,
 ): Block {
   const side = wrapBorder(ch.v);
-  return Block.of(
-    rowBlock.lines.map((l) => side + padLine(l, innerWidth, "start") + side),
-  );
+  return Block.of(rowBlock.lines.map((l) => side + padLine(l, innerWidth, "start") + side));
 }
 
 // Declarative interleave of `row` and `divider` markers for one
@@ -408,10 +409,7 @@ function _wrapRowSides(
 // can simply concat the three sections without separator guards).
 type SectionPart = { kind: "row"; cells: Block[] } | { kind: "divider" };
 
-function _interleaveRows(
-  rows: Block[][],
-  rowDividers: boolean,
-): SectionPart[] {
+function _interleaveRows(rows: Block[][], rowDividers: boolean): SectionPart[] {
   return rows.flatMap((cells, i): SectionPart[] => {
     const row: SectionPart = { kind: "row", cells };
     if (rowDividers && i < rows.length - 1) {
@@ -426,7 +424,7 @@ function _interleaveRows(
 // sides to separate.
 function _buildSectionParts(
   header: Block[][],
-  body:   Block[][],
+  body: Block[][],
   footer: Block[][],
   opts: { headerDivider: boolean; footerDivider: boolean; rowDividers: boolean },
 ): SectionPart[] {
@@ -436,10 +434,11 @@ function _buildSectionParts(
   // should sit flush, not get carved up).
   const sections: SectionPart[][] = [
     _interleaveRows(header, false),
-    _interleaveRows(body,   opts.rowDividers),
+    _interleaveRows(body, opts.rowDividers),
     _interleaveRows(footer, false),
   ];
-  const useHeaderDivider = opts.headerDivider && header.length > 0 && (body.length + footer.length) > 0;
+  const useHeaderDivider =
+    opts.headerDivider && header.length > 0 && body.length + footer.length > 0;
   const useFooterDivider = opts.footerDivider && footer.length > 0 && body.length > 0;
 
   const separators: (SectionPart[] | null)[] = [
@@ -472,23 +471,21 @@ export function composeTable(node: LayoutNode): Block {
   // negative value would shrink dividers below the cell grid and
   // misalign the right border, while a fractional value would break
   // `" ".repeat(...)`.
-  const cellPadding    = clampCellPadding(attrs.cellPadding);
-  const columns        = (attrs.columns        as ColumnSpec[] | null) ?? [];
+  const cellPadding = clampCellPadding(attrs.cellPadding);
+  const columns = (attrs.columns as ColumnSpec[] | null) ?? [];
   const columnDividers = (attrs.columnDividers as boolean) ?? true;
-  const headerDivider  = (attrs.headerDivider  as boolean) ?? true;
-  const footerDivider  = (attrs.footerDivider  as boolean) ?? true;
-  const rowDividers    = (attrs.rowDividers    as boolean) ?? false;
-  const borderStyleKey = resolveBorderStyle(
-    (attrs.borderStyle as string | undefined) ?? "rounded",
-  );
-  const ch          = BORDER_CHARS[borderStyleKey];
+  const headerDivider = (attrs.headerDivider as boolean) ?? true;
+  const footerDivider = (attrs.footerDivider as boolean) ?? true;
+  const rowDividers = (attrs.rowDividers as boolean) ?? false;
+  const borderStyleKey = resolveBorderStyle((attrs.borderStyle as string | undefined) ?? "rounded");
+  const ch = BORDER_CHARS[borderStyleKey];
   const borderColor = (attrs.borderColor as string | undefined) ?? "";
-  const titleColor  = (attrs.titleColor  as string | undefined) ?? "";
-  const title       = (attrs.title       as string | undefined) ?? "";
-  const caption     = (attrs.caption     as string | undefined) ?? "";
-  const resolved    = attrs.resolvedWidth as number | undefined;
+  const titleColor = (attrs.titleColor as string | undefined) ?? "";
+  const title = (attrs.title as string | undefined) ?? "";
+  const caption = (attrs.caption as string | undefined) ?? "";
+  const resolved = attrs.resolvedWidth as number | undefined;
   const resolvedColumnWidths = attrs.resolvedColumnWidths as number[] | undefined;
-  const wrapBorder  = styledWrapper(borderColor ? { fgColor: borderColor } : {});
+  const wrapBorder = styledWrapper(borderColor ? { fgColor: borderColor } : {});
   const titleStyle: Style = titleColor ? { fgColor: titleColor } : {};
 
   // Apply default-bold to header text cells before measurement so the
@@ -504,64 +501,67 @@ export function composeTable(node: LayoutNode): Block {
     ...footer,
   ];
   const { layouts, cellBlocks } = _computeColumnLayouts(
-    allRows, columnCount, columns, cellPadding, resolvedColumnWidths,
+    allRows,
+    columnCount,
+    columns,
+    cellPadding,
+    resolvedColumnWidths,
   );
   let idx = 0;
   const headerCells = styledHeader.length > 0 ? [cellBlocks[idx++]] : [];
-  const bodyCells   = body.map(()   => cellBlocks[idx++]);
+  const bodyCells = body.map(() => cellBlocks[idx++]);
   const footerCells = footer.map(() => cellBlocks[idx++]);
 
   // A wide title may grow innerWidth beyond the cell grid; dividers and
   // row wrappers both honour that final width so everything lines up.
-  const cellsWidth    = _innerTableWidth(layouts, columnDividers);
-  const titleFloor    = resolved === undefined && title !== "" ? minWidthForTitle(title) : 0;
+  const cellsWidth = _innerTableWidth(layouts, columnDividers);
+  const titleFloor = resolved === undefined && title !== "" ? minWidthForTitle(title) : 0;
   const resolvedInner = resolved !== undefined ? Math.max(0, resolved - BORDER_CELLS) : 0;
-  const innerWidth    = Math.max(cellsWidth, titleFloor, resolvedInner);
+  const innerWidth = Math.max(cellsWidth, titleFloor, resolvedInner);
 
   // Build flat declarative list of section parts, then render each
   // part into a Block in one place.
-  const sectionParts = _buildSectionParts(
-    headerCells, bodyCells, footerCells,
-    { headerDivider, footerDivider, rowDividers },
-  );
+  const sectionParts = _buildSectionParts(headerCells, bodyCells, footerCells, {
+    headerDivider,
+    footerDivider,
+    rowDividers,
+  });
   const renderPart = (part: SectionPart): Block =>
     part.kind === "divider"
       ? _composeDividerLine(layouts, columnDividers, innerWidth, ch, wrapBorder)
       : _wrapRowSides(
           _composeRowBlock(part.cells, layouts, columnDividers, ch.v, wrapBorder),
-          innerWidth, ch, wrapBorder,
+          innerWidth,
+          ch,
+          wrapBorder,
         );
   // A title that doesn't fit on the top edge gets wrapped inside the
   // frame as its own section. Same rule the box renderer uses (via
   // `placeTitle` in border.ts) — but only when the table has a resolved
   // width; otherwise the table is free to grow to fit the title.
-  const placement = resolved === undefined
-    ? { kind: "top" as const, title }
-    : placeTitle(title, innerWidth, titleStyle);
-  const titleRows = placement.kind === "wrapped"
-    ? [_wrapRowSides(placement.block, innerWidth, ch, wrapBorder)]
-    : [];
+  const placement =
+    resolved === undefined
+      ? { kind: "top" as const, title }
+      : placeTitle(title, innerWidth, titleStyle);
+  const titleRows =
+    placement.kind === "wrapped"
+      ? [_wrapRowSides(placement.block, innerWidth, ch, wrapBorder)]
+      : [];
   const topTitle = placement.kind === "top" ? placement.title : "";
   const sectionBlocks = [...titleRows, ...sectionParts.map(renderPart)];
 
   // Outer frame (top + bottom edges).
-  const topEdge    = Block.of(
-    buildTopEdge(ch, innerWidth, wrapBorder, topTitle, titleStyle),
-  );
-  const bottomEdge = Block.of(
-    wrapBorder(ch.bl + ch.h.repeat(innerWidth) + ch.br),
-  );
-  const framed = [topEdge, ...sectionBlocks, bottomEdge]
-    .reduce(above, Block.empty());
+  const topEdge = Block.of(buildTopEdge(ch, innerWidth, wrapBorder, topTitle, titleStyle));
+  const bottomEdge = Block.of(wrapBorder(ch.bl + ch.h.repeat(innerWidth) + ch.br));
+  const framed = [topEdge, ...sectionBlocks, bottomEdge].reduce(above, Block.empty());
 
   // Optional caption below. Append directly via Block construction
   // (not `above`) — `_composeCaption` returns a trimmed-trailing-space
   // line, and routing it through `above` would re-pad it back out to
   // the framed width.
   const captionBlock = _composeCaption(caption, framed.width);
-  const withCaption = captionBlock === null
-    ? framed
-    : Block.of([...framed.lines, ...captionBlock.lines]);
+  const withCaption =
+    captionBlock === null ? framed : Block.of([...framed.lines, ...captionBlock.lines]);
   return resolved !== undefined ? growToWidth(withCaption, resolved) : withCaption;
 }
 

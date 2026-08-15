@@ -43,9 +43,11 @@ function frameCells(over: Partial<SessionSnapshot> = {}, body?: string[]): strin
   const state = snapshot(over);
   // Default to the body the loop would actually build, so a field's own
   // rendering path is covered rather than a stand-in string.
-  const bodyLines = body ?? (state.currentItem === null
-    ? []
-    : renderFields(state.currentItem.fields, ["task", "output"], 100));
+  const bodyLines =
+    body ??
+    (state.currentItem === null
+      ? []
+      : renderFields(state.currentItem.fields, ["task", "output"], 100));
   const recorder = new FrameRecorder();
   const screen = new Screen({
     input: new ScriptedInput(),
@@ -53,14 +55,16 @@ function frameCells(over: Partial<SessionSnapshot> = {}, body?: string[]): strin
     width: 100,
     height: 30,
   });
-  screen.render(labelScreen({
-    snapshot: state,
-    datasetLabel: "labels",
-    width: 100,
-    height: 30,
-    scroll: 0,
-    body: bodyLines,
-  }));
+  screen.render(
+    labelScreen({
+      snapshot: state,
+      datasetLabel: "labels",
+      width: 100,
+      height: 30,
+      scroll: 0,
+      body: bodyLines,
+    }),
+  );
   // Every character the frame holds, so a stray escape cannot hide in a cell.
   return recorder.lastText();
 }
@@ -132,7 +136,9 @@ describe("untrusted content never reaches the frame raw", () => {
   it("escapes style tags in a hostile question, which are markup to the parser", () => {
     // Control characters are not the only way in: {black-fg} is markup, so
     // text alone could restyle or hide the evidence being judged.
-    const questions = [{ id: "q_a", text: "{black-fg}invisible?{/black-fg}", weight: 1, deleted: false }];
+    const questions = [
+      { id: "q_a", text: "{black-fg}invisible?{/black-fg}", weight: 1, deleted: false },
+    ];
     expect(frameCells({ questions })).toContain("{black-fg}invisible?");
   });
 

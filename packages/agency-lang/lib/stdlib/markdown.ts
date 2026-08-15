@@ -61,10 +61,7 @@ async function walkChildren(nodes: unknown[], fn: unknown): Promise<unknown[]> {
   return out;
 }
 
-async function walkListItems(
-  items: unknown[],
-  fn: unknown,
-): Promise<unknown[]> {
+async function walkListItems(items: unknown[], fn: unknown): Promise<unknown[]> {
   const out: unknown[] = [];
   for (const raw of items) {
     if (raw == null || typeof raw !== "object") {
@@ -100,10 +97,7 @@ async function walkNode(node: Node, fn: unknown): Promise<Node> {
 /** Walk a Markdown AST (array of block nodes), calling `fn` on every node
  *  top-down. `fn` returns a (possibly new) node; children of the returned
  *  node are then walked. The input AST is not mutated. */
-export async function _walkMarkdown(
-  blocks: unknown,
-  fn: unknown,
-): Promise<unknown[]> {
+export async function _walkMarkdown(blocks: unknown, fn: unknown): Promise<unknown[]> {
   if (!Array.isArray(blocks)) return [];
   const out: unknown[] = [];
   for (const b of blocks as unknown[]) {
@@ -201,8 +195,7 @@ function renderInlineNode(n: unknown): string {
     case "inline-ref-link":
       return LINK((node.text as string) ?? "") + FAINT(`[${node.id}]`);
     case "inline-ref-image":
-      return LINK(`[image: ${(node.alt as string) ?? ""}]`) +
-        FAINT(`[${node.id}]`);
+      return LINK(`[image: ${(node.alt as string) ?? ""}]`) + FAINT(`[${node.id}]`);
     case "inline-footnote-ref":
       return FAINT(`[^${node.id}]`);
     case "inline-html":
@@ -217,17 +210,13 @@ function renderBlock(b: unknown, indent: string = ""): string {
   const node = b as Node;
   switch (node.type) {
     case "paragraph":
-      return indent +
-        renderInline((node.content as unknown[]) ?? []) +
-        "\n";
+      return indent + renderInline((node.content as unknown[]) ?? []) + "\n";
 
     case "heading": {
       const lvl = Math.max(1, Math.min(6, (node.level as number) ?? 1));
       const styled = HEADING_COLORS[lvl - 1];
       const prefix = "#".repeat(lvl) + " ";
-      return indent +
-        styled(prefix + renderInline((node.content as unknown[]) ?? [])) +
-        "\n";
+      return indent + styled(prefix + renderInline((node.content as unknown[]) ?? [])) + "\n";
     }
 
     case "code-block": {
@@ -237,9 +226,13 @@ function renderBlock(b: unknown, indent: string = ""): string {
       const body = ((node.content as string) ?? "").replace(/\n+$/, "");
       const openFence = FAINT(lang ? "```" + lang : "```");
       const closeFence = FAINT("```");
-      const bodyLines = body.length === 0
-        ? ""
-        : body.split("\n").map((l) => indent + l).join("\n") + "\n";
+      const bodyLines =
+        body.length === 0
+          ? ""
+          : body
+              .split("\n")
+              .map((l) => indent + l)
+              .join("\n") + "\n";
       return indent + openFence + "\n" + bodyLines + indent + closeFence + "\n";
     }
 
@@ -248,17 +241,14 @@ function renderBlock(b: unknown, indent: string = ""): string {
       const allInline = children.every(
         (c) =>
           typeof c === "string" ||
-          (c != null && typeof c === "object" &&
-            isInlineType((c as Node).type)),
+          (c != null && typeof c === "object" && isInlineType((c as Node).type)),
       );
       const inner = allInline
         ? renderInline(children)
         : children.map((c) => renderBlock(c)).join("");
       const lines = inner.split("\n");
       if (lines[lines.length - 1] === "") lines.pop();
-      return lines
-        .map((l) => indent + QUOTE("│ ") + l)
-        .join("\n") + "\n";
+      return lines.map((l) => indent + QUOTE("│ ") + l).join("\n") + "\n";
     }
 
     case "list": {
@@ -281,13 +271,8 @@ function renderBlock(b: unknown, indent: string = ""): string {
         let firstLine = "";
         let rest: unknown[] = blocks;
         const first = blocks[0];
-        if (
-          first != null && typeof first === "object" &&
-          (first as Node).type === "paragraph"
-        ) {
-          firstLine = renderInline(
-            ((first as Node).content as unknown[]) ?? [],
-          );
+        if (first != null && typeof first === "object" && (first as Node).type === "paragraph") {
+          firstLine = renderInline(((first as Node).content as unknown[]) ?? []);
           rest = blocks.slice(1);
         }
         out += indent + BULLET(marker) + firstLine + "\n";
@@ -310,17 +295,14 @@ function renderBlock(b: unknown, indent: string = ""): string {
       return "";
 
     case "footnote-definition":
-      return indent + FAINT(`[^${node.id}]: `) +
-        ((node.content as string) ?? "") + "\n";
+      return indent + FAINT(`[^${node.id}]: `) + ((node.content as string) ?? "") + "\n";
 
     case "html-block":
       return indent + ((node.content as string) ?? "") + "\n";
 
     case "frontmatter": {
       const data = (node.data as Record<string, unknown>) ?? {};
-      const entries = Object.entries(data).map(
-        ([k, v]) => `${k}: ${JSON.stringify(v)}`,
-      );
+      const entries = Object.entries(data).map(([k, v]) => `${k}: ${JSON.stringify(v)}`);
       const lines = [FAINT("---"), ...entries.map((e) => FAINT(e)), FAINT("---")];
       return lines.map((l) => indent + l).join("\n") + "\n";
     }
@@ -344,8 +326,7 @@ function renderTable(node: Node, indent: string): string {
     if (align === "center") {
       const total = w - s.length;
       const left = Math.floor(total / 2);
-      return " ".repeat(Math.max(0, left)) + s +
-        " ".repeat(Math.max(0, total - left));
+      return " ".repeat(Math.max(0, left)) + s + " ".repeat(Math.max(0, total - left));
     }
     return s.padEnd(w);
   };
@@ -355,16 +336,10 @@ function renderTable(node: Node, indent: string): string {
     .join(sepBar);
   const rule = widths.map((w) => "─".repeat(w)).join("─┼─");
   const body = rows
-    .map((r) =>
-      r
-        .map((c, i) => pad(c ?? "", widths[i], aligns[i] ?? null))
-        .join(sepBar)
-    )
+    .map((r) => r.map((c, i) => pad(c ?? "", widths[i], aligns[i] ?? null)).join(sepBar))
     .map((l) => indent + l)
     .join("\n");
-  return indent + headLine + "\n" +
-    indent + FAINT(rule) + "\n" +
-    (body.length ? body + "\n" : "");
+  return indent + headLine + "\n" + indent + FAINT(rule) + "\n" + (body.length ? body + "\n" : "");
 }
 
 /** Render a Markdown AST (array of block nodes) to an ANSI-styled string
@@ -464,18 +439,14 @@ function renderInlineNodeHtml(n: unknown): string {
       const text = renderInlineHtml(content);
       // A link whose scheme was rejected still shows its text, just unlinked.
       if (href.length === 0) return text;
-      const title = typeof node.title === "string"
-        ? ` title="${escapeHtml(node.title)}"`
-        : "";
+      const title = typeof node.title === "string" ? ` title="${escapeHtml(node.title)}"` : "";
       return `<a href="${escapeHtml(href)}"${title}>${text || escapeHtml(href)}</a>`;
     }
     case "image": {
       const src = sanitizeHtmlUrl((node.url as string) ?? "");
       const alt = escapeHtml((node.alt as string) ?? "");
       if (src.length === 0) return alt;
-      const title = typeof node.title === "string"
-        ? ` title="${escapeHtml(node.title)}"`
-        : "";
+      const title = typeof node.title === "string" ? ` title="${escapeHtml(node.title)}"` : "";
       return `<img src="${escapeHtml(src)}" alt="${alt}"${title}>`;
     }
     case "inline-ref-link":
@@ -521,8 +492,7 @@ function renderBlockHtml(b: unknown): string {
       const allInline = children.every(
         (c) =>
           typeof c === "string" ||
-          (c != null && typeof c === "object" &&
-            isInlineType((c as Node).type)),
+          (c != null && typeof c === "object" && isInlineType((c as Node).type)),
       );
       const inner = allInline
         ? `<p>${renderInlineHtml(children)}</p>`
@@ -532,16 +502,12 @@ function renderBlockHtml(b: unknown): string {
 
     case "list": {
       const ordered = !!node.ordered;
-      const items = ((node.items as unknown[]) ?? [])
-        .map(renderListItemHtml)
-        .join("");
+      const items = ((node.items as unknown[]) ?? []).map(renderListItemHtml).join("");
       if (!ordered) return `<ul>${items}</ul>`;
       // `start` lands inside an attribute, so it must be a number rather than
       // merely annotated as one. Coercing fails closed on anything else.
       const start = Number(node.start ?? 1);
-      const startAttr = Number.isInteger(start) && start !== 1
-        ? ` start="${start}"`
-        : "";
+      const startAttr = Number.isInteger(start) && start !== 1 ? ` start="${start}"` : "";
       return `<ol${startAttr}>${items}</ol>`;
     }
 
@@ -556,9 +522,11 @@ function renderBlockHtml(b: unknown): string {
       return "";
 
     case "footnote-definition":
-      return `<p id="fn-${escapeHtml(String(node.id ?? ""))}">` +
+      return (
+        `<p id="fn-${escapeHtml(String(node.id ?? ""))}">` +
         `<sup>${escapeHtml(String(node.id ?? ""))}</sup> ` +
-        `${escapeHtml((node.content as string) ?? "")}</p>`;
+        `${escapeHtml((node.content as string) ?? "")}</p>`
+      );
 
     case "html-block":
       // Dropped on purpose. See the note at the top of this section.
@@ -582,8 +550,8 @@ function renderListItemHtml(raw: unknown): string {
   // A single paragraph is the common case; unwrap it so list items read as
   // `<li>text</li>` rather than `<li><p>text</p></li>`.
   const first = blocks[0];
-  const firstIsParagraph = first != null && typeof first === "object" &&
-    (first as Node).type === "paragraph";
+  const firstIsParagraph =
+    first != null && typeof first === "object" && (first as Node).type === "paragraph";
   const inner = firstIsParagraph
     ? renderInlineHtml(((first as Node).content as unknown[]) ?? []) +
       blocks.slice(1).map(renderBlockHtml).join("")
@@ -607,19 +575,16 @@ function renderTableHtml(node: Node): string {
   // faithfully rendering it.
   const alignAttr = (i: number): string => {
     const a = aligns[i];
-    return typeof a === "string" && TABLE_ALIGNMENTS.includes(a)
-      ? ` style="text-align:${a}"`
-      : "";
+    return typeof a === "string" && TABLE_ALIGNMENTS.includes(a) ? ` style="text-align:${a}"` : "";
   };
 
-  const head = headers
-    .map((h, i) => `<th${alignAttr(i)}>${escapeHtml(h ?? "")}</th>`)
-    .join("");
+  const head = headers.map((h, i) => `<th${alignAttr(i)}>${escapeHtml(h ?? "")}</th>`).join("");
   const body = rows
-    .map((r) =>
-      "<tr>" +
-      r.map((c, i) => `<td${alignAttr(i)}>${escapeHtml(c ?? "")}</td>`).join("") +
-      "</tr>"
+    .map(
+      (r) =>
+        "<tr>" +
+        r.map((c, i) => `<td${alignAttr(i)}>${escapeHtml(c ?? "")}</td>`).join("") +
+        "</tr>",
     )
     .join("");
 

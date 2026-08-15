@@ -23,9 +23,7 @@ export type InitPlanForModule = {
   staticAwaitModules: { localImport: string; sourceModuleId: string }[];
   globalLocalOrder: string[];
   globalAwaitModules: { localImport: string; sourceModuleId: string }[];
-  resolveImportedName: (
-    localName: string,
-  ) => { sourceModuleId: string; sourceName: string } | null;
+  resolveImportedName: (localName: string) => { sourceModuleId: string; sourceName: string } | null;
 };
 
 /**
@@ -34,10 +32,7 @@ export type InitPlanForModule = {
  * `lib/compiler/compile.ts`) — they each build the closure once at the
  * outer call, then call this helper for every per-file `generateTypeScript`.
  */
-export function initPlanForModule(
-  closure: CompiledClosure,
-  moduleId: string,
-): InitPlanForModule {
+export function initPlanForModule(closure: CompiledClosure, moduleId: string): InitPlanForModule {
   const plan = closure.plans[moduleId];
   return {
     registryModuleId: moduleId,
@@ -55,8 +50,7 @@ export function initPlanForModule(
       localImport: m,
       sourceModuleId: m,
     })),
-    resolveImportedName: (localName) =>
-      closure.resolver.resolve(localName, moduleId),
+    resolveImportedName: (localName) => closure.resolver.resolve(localName, moduleId),
   };
 }
 

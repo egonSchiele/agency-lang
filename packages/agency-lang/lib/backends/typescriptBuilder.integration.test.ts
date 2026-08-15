@@ -8,19 +8,20 @@ import { discoverFixturePairs } from "../../tests/fixtureDiscovery.js";
 import path from "path";
 
 function normalizeWhitespace(code: string): string {
-  return (
-    code
-      .replace(/\r\n/g, "\n")
-      .split("\n")
-      .map((line) => line.trimEnd())
-      .join("\n")
-      .replace(/\n\n\n+/g, "\n\n")
-      .trim()
-      .concat("\n")
-  );
+  return code
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .replace(/\n\n\n+/g, "\n\n")
+    .trim()
+    .concat("\n");
 }
 
-export function generateWithBuilder(agencySource: string, moduleId: string = "test.agency"): string {
+export function generateWithBuilder(
+  agencySource: string,
+  moduleId: string = "test.agency",
+): string {
   const parseResult = parseAgency(agencySource, {}, false);
   if (!parseResult.success) {
     throw new Error(`Failed to parse: ${parseResult.message}`);
@@ -33,10 +34,7 @@ export function generateWithBuilder(agencySource: string, moduleId: string = "te
   return printTs(ir);
 }
 
-const FIXTURES_DIR = path.resolve(
-  __dirname,
-  "../../tests/typescriptBuilder",
-);
+const FIXTURES_DIR = path.resolve(__dirname, "../../tests/typescriptBuilder");
 
 describe("TypeScript Builder Integration Tests", () => {
   const fixtures = discoverFixturePairs(FIXTURES_DIR, ".mjs");
@@ -63,9 +61,7 @@ describe("TypeScript Builder Integration Tests", () => {
           );
         }
 
-        expect(normalizeWhitespace(generatedTS)).toBe(
-          normalizeWhitespace(companionContent),
-        );
+        expect(normalizeWhitespace(generatedTS)).toBe(normalizeWhitespace(companionContent));
       });
     },
   );
@@ -248,9 +244,7 @@ node main() {
 
 describe("Destructive-execution tracking codegen", () => {
   const bodyOf = (output: string, funcName: string): string => {
-    const m = output.match(
-      new RegExp(`async function __${funcName}_impl\\([\\s\\S]*?finally`),
-    );
+    const m = output.match(new RegExp(`async function __${funcName}_impl\\([\\s\\S]*?finally`));
     expect(m).toBeTruthy();
     return m![0];
   };
@@ -390,10 +384,13 @@ node main() {
 import { mapTypeToValidationSchema } from "./typescriptGenerator/typeToZodSchema.js";
 
 describe("mapTypeToValidationSchema", () => {
-
   it("generates Result validation schema for bare Result", () => {
     const schema = mapTypeToValidationSchema(
-      { type: "resultType", successType: { type: "primitiveType", value: "any" }, failureType: { type: "primitiveType", value: "any" } },
+      {
+        type: "resultType",
+        successType: { type: "primitiveType", value: "any" },
+        failureType: { type: "primitiveType", value: "any" },
+      },
       {},
     );
     expect(schema).toContain("z.literal(true)");
@@ -402,7 +399,11 @@ describe("mapTypeToValidationSchema", () => {
 
   it("generates Result validation schema with typed success", () => {
     const schema = mapTypeToValidationSchema(
-      { type: "resultType", successType: { type: "primitiveType", value: "number" }, failureType: { type: "primitiveType", value: "string" } },
+      {
+        type: "resultType",
+        successType: { type: "primitiveType", value: "number" },
+        failureType: { type: "primitiveType", value: "string" },
+      },
       {},
     );
     expect(schema).toContain("z.number()");
@@ -410,10 +411,7 @@ describe("mapTypeToValidationSchema", () => {
   });
 
   it("delegates non-Result types to mapTypeToZodSchema", () => {
-    const schema = mapTypeToValidationSchema(
-      { type: "primitiveType", value: "number" },
-      {},
-    );
+    const schema = mapTypeToValidationSchema({ type: "primitiveType", value: "number" }, {});
     expect(schema).toBe("z.number()");
   });
 });
@@ -539,9 +537,7 @@ node main(first: string, second: string) {
 }
 `);
 
-    expect(output).toContain(
-      "await main(undefined, undefined, initialState)",
-    );
+    expect(output).toContain("await main(undefined, undefined, initialState)");
     expect(output).not.toContain("__process.argv[2]");
     expect(output).not.toContain("main() takes");
   });

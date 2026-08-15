@@ -3,7 +3,13 @@ import { describe, expect, it } from "vitest";
 import { suiteFromConfig } from "./suite.js";
 
 function config(source: unknown) {
-  return { provenance: { inputsSource: { source }, files: {}, agent: { command: "x", harnessVersion: "0" } } } as never;
+  return {
+    provenance: {
+      inputsSource: { source },
+      files: {},
+      agent: { command: "x", harnessVersion: "0" },
+    },
+  } as never;
 }
 
 describe("suiteFromConfig", () => {
@@ -14,8 +20,9 @@ describe("suiteFromConfig", () => {
   });
 
   it("git sources use the repository basename plus a shortened ref", () => {
-    expect(suiteFromConfig(config("github.com/foo/terminal-bench.git?ref=abc123def456")).suite)
-      .toBe("terminal-bench@abc123de");
+    expect(
+      suiteFromConfig(config("github.com/foo/terminal-bench.git?ref=abc123def456")).suite,
+    ).toBe("terminal-bench@abc123de");
     expect(suiteFromConfig(config("git@github.com:foo/bench.git")).suite).toBe("bench");
     expect(suiteFromConfig(config("https://github.com/foo/bench")).suite).toBe("bench");
   });

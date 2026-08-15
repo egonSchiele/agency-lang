@@ -1,9 +1,5 @@
 import { TreeNode, ViewerState } from "./types.js";
-import {
-  eventExpansionChildren,
-  rawDataChildren,
-  llmCallSpanChildren,
-} from "./treeRows.js";
+import { eventExpansionChildren, rawDataChildren, llmCallSpanChildren } from "./treeRows.js";
 
 // Walk every node in the forest (regardless of current expansion
 // state) AND every synthetic expansion row (conversation lines, JSON
@@ -79,10 +75,7 @@ export function findMatches(
 // synthetic-id chain to the underlying leaf event id, expanding each
 // synthetic ancestor along the way, then walk the real-forest
 // ancestors as before.
-export function expandAncestorsOf(
-  state: ViewerState,
-  matchIds: string[],
-): ViewerState {
+export function expandAncestorsOf(state: ViewerState, matchIds: string[]): ViewerState {
   if (matchIds.length === 0) return state;
   const byId = indexById(state.roots);
   const next = new Set(state.expanded);

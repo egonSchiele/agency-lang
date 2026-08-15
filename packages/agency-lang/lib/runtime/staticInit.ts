@@ -50,11 +50,7 @@ export const __UNINIT_STATIC = UNINIT_STATIC_SYMBOL;
  *   `${__readStatic(prompt, "prompt", "x.agency")} world`
  *   __readStatic(items, "items", "x.agency").length
  */
-export function __readStatic<T>(
-  value: T,
-  name: string,
-  moduleId: string,
-): T {
+export function __readStatic<T>(value: T, name: string, moduleId: string): T {
   if ((value as unknown) === UNINIT_STATIC_SYMBOL) {
     // PR 2's per-variable dep graph will thread the source module id
     // through to every wrap site. Until then, some cross-module wraps

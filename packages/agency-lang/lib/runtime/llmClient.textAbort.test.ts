@@ -130,44 +130,40 @@ describe("SmoltalkClient.textStream — cancellation rejects", () => {
   it("throws signal.reason instead of yielding an aborted empty done chunk", async () => {
     const controller = new AbortController();
     const reason = new AgencyCancelledError("call timeout");
-    vi.mocked(smoltalk.text).mockImplementation((function* () {
+    vi.mocked(smoltalk.text).mockImplementation(function* () {
       controller.abort(reason);
       yield { type: "done", result: { output: null, toolCalls: [] } };
-    }) as any);
-    await expect(drain(client.textStream(configWith(controller.signal)))).rejects.toBe(
-      reason,
-    );
+    } as any);
+    await expect(drain(client.textStream(configWith(controller.signal)))).rejects.toBe(reason);
   });
 
   it("throws signal.reason instead of yielding an aborted error chunk", async () => {
     const controller = new AbortController();
     const reason = new AgencyCancelledError("call timeout");
-    vi.mocked(smoltalk.text).mockImplementation((function* () {
+    vi.mocked(smoltalk.text).mockImplementation(function* () {
       controller.abort(reason);
       yield { type: "error", error: "Request was aborted" };
-    }) as any);
-    await expect(drain(client.textStream(configWith(controller.signal)))).rejects.toBe(
-      reason,
-    );
+    } as any);
+    await expect(drain(client.textStream(configWith(controller.signal)))).rejects.toBe(reason);
   });
 
   it("passes a normal stream through unchanged", async () => {
-    vi.mocked(smoltalk.text).mockImplementation((function* () {
+    vi.mocked(smoltalk.text).mockImplementation(function* () {
       yield { type: "text", text: "hel" };
       yield { type: "text", text: "lo" };
       yield { type: "done", result: { output: "hello", toolCalls: [] } };
-    }) as any);
+    } as any);
     const chunks = await drain(client.textStream(configWith(new AbortController().signal)));
     expect(chunks.map((c) => c.type)).toEqual(["text", "text", "done"]);
   });
 
   it("keeps an aborted done chunk that carries real output (late abort race)", async () => {
     const controller = new AbortController();
-    vi.mocked(smoltalk.text).mockImplementation((function* () {
+    vi.mocked(smoltalk.text).mockImplementation(function* () {
       controller.abort(new AgencyCancelledError("late"));
       yield { type: "text", text: "partial" };
       yield { type: "done", result: { output: "partial", toolCalls: [] } };
-    }) as any);
+    } as any);
     const chunks = await drain(client.textStream(configWith(controller.signal)));
     expect(chunks.at(-1).type).toBe("done");
     expect(chunks.at(-1).result.output).toBe("partial");

@@ -17,15 +17,10 @@ export function escapeTableCell(value: string): string {
   return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 }
 
-export function markdownTable(
-  headers: string[],
-  rows: string[][],
-): string {
+export function markdownTable(headers: string[], rows: string[][]): string {
   const headerRow = `| ${headers.join(" | ")} |`;
   const separator = `|${headers.map(() => "---").join("|")}|`;
-  const dataRows = rows.map(
-    (row) => `| ${row.map(escapeTableCell).join(" | ")} |`,
-  );
+  const dataRows = rows.map((row) => `| ${row.map(escapeTableCell).join(" | ")} |`);
   return [headerRow, separator, ...dataRows].join("\n");
 }
 

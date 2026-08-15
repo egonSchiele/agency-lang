@@ -27,13 +27,18 @@ function validResumeBody() {
 // interpretation happens in any serve file.
 
 function makeHandler() {
-  const nodeSpy = vi.fn(async () => returnedOutcome({ ok: true }, { traceId: "trace-from-outcome" }));
+  const nodeSpy = vi.fn(async () =>
+    returnedOutcome({ ok: true }, { traceId: "trace-from-outcome" }),
+  );
   const fnSpy = vi.fn(async () => returnedOutcome("v", { traceId: "trace-from-outcome" }));
-  const resumeSpy = vi.fn(async () => returnedOutcome({ data: "resumed" }, { traceId: "trace-from-outcome" }));
+  const resumeSpy = vi.fn(async () =>
+    returnedOutcome({ data: "resumed" }, { traceId: "trace-from-outcome" }),
+  );
 
   const exports: ServedExportedItem[] = [
     {
-      kind: "function", ...unusedPublicInvoke,
+      kind: "function",
+      ...unusedPublicInvoke,
       name: "add",
       description: "add",
       parameters: [],
@@ -42,7 +47,8 @@ function makeHandler() {
       invokeServed: fnSpy,
     },
     {
-      kind: "node", ...unusedPublicInvoke,
+      kind: "node",
+      ...unusedPublicInvoke,
       name: "main",
       parameters: [],
       invokeServed: nodeSpy,

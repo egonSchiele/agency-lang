@@ -1,9 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Checkpoint, CheckpointStore } from "./checkpointStore.js";
-import {
-  type StateStackJSON,
-  type StateJSON,
-} from "./stateStack.js";
+import { type StateStackJSON, type StateJSON } from "./stateStack.js";
 import { type GlobalStoreJSON } from "./globalStore.js";
 import { CheckpointError } from "../errors.js";
 import { makeMockCtx } from "../__tests__/testHelpers.js";
@@ -25,9 +22,7 @@ function makeStackJSON(frames: Partial<StateJSON>[] = []): StateStackJSON {
   };
 }
 
-function makeGlobalsJSON(
-  store: Record<string, Record<string, any>> = {},
-): GlobalStoreJSON {
+function makeGlobalsJSON(store: Record<string, Record<string, any>> = {}): GlobalStoreJSON {
   return { store, initializedModules: Object.keys(store) };
 }
 
@@ -153,11 +148,13 @@ describe("Checkpoint", () => {
     it("should return null when threads object has no threads", () => {
       const cp = new Checkpoint({
         id: 0,
-        stack: makeStackJSON([{
-          args: {},
-          locals: {},
-          threads: { threads: {}, counter: 0, activeStack: [] },
-        }]),
+        stack: makeStackJSON([
+          {
+            args: {},
+            locals: {},
+            threads: { threads: {}, counter: 0, activeStack: [] },
+          },
+        ]),
         globals: makeGlobalsJSON(),
         nodeId: "n1",
       });
@@ -167,27 +164,27 @@ describe("Checkpoint", () => {
     it("should return active thread messages", () => {
       const cp = new Checkpoint({
         id: 0,
-        stack: makeStackJSON([{
-          args: {},
-          locals: {},
-          threads: {
+        stack: makeStackJSON([
+          {
+            args: {},
+            locals: {},
             threads: {
-              "0": {
-                messages: [
-                  { role: "user", content: "Hello" },
-                  { role: "assistant", content: "Hi there" },
-                ],
+              threads: {
+                "0": {
+                  messages: [
+                    { role: "user", content: "Hello" },
+                    { role: "assistant", content: "Hi there" },
+                  ],
+                },
+                "1": {
+                  messages: [{ role: "user", content: "Other thread" }],
+                },
               },
-              "1": {
-                messages: [
-                  { role: "user", content: "Other thread" },
-                ],
-              },
+              counter: 2,
+              activeStack: ["0"],
             },
-            counter: 2,
-            activeStack: ["0"],
           },
-        }]),
+        ]),
         globals: makeGlobalsJSON(),
         nodeId: "n1",
       });
@@ -203,19 +200,21 @@ describe("Checkpoint", () => {
     it("should fall back to first thread when activeStack is empty", () => {
       const cp = new Checkpoint({
         id: 0,
-        stack: makeStackJSON([{
-          args: {},
-          locals: {},
-          threads: {
+        stack: makeStackJSON([
+          {
+            args: {},
+            locals: {},
             threads: {
-              "0": {
-                messages: [{ role: "user", content: "First" }],
+              threads: {
+                "0": {
+                  messages: [{ role: "user", content: "First" }],
+                },
               },
+              counter: 1,
+              activeStack: [],
             },
-            counter: 1,
-            activeStack: [],
           },
-        }]),
+        ]),
         globals: makeGlobalsJSON(),
         nodeId: "n1",
       });
@@ -227,19 +226,21 @@ describe("Checkpoint", () => {
     it("should skip stale activeStack IDs and find an existing thread", () => {
       const cp = new Checkpoint({
         id: 0,
-        stack: makeStackJSON([{
-          args: {},
-          locals: {},
-          threads: {
+        stack: makeStackJSON([
+          {
+            args: {},
+            locals: {},
             threads: {
-              "0": {
-                messages: [{ role: "user", content: "Still here" }],
+              threads: {
+                "0": {
+                  messages: [{ role: "user", content: "Still here" }],
+                },
               },
+              counter: 2,
+              activeStack: ["0", "deleted-id"],
             },
-            counter: 2,
-            activeStack: ["0", "deleted-id"],
           },
-        }]),
+        ]),
         globals: makeGlobalsJSON(),
         nodeId: "n1",
       });
@@ -251,57 +252,59 @@ describe("Checkpoint", () => {
     it("should handle null message content as empty string", () => {
       const cp = new Checkpoint({
         id: 0,
-        stack: makeStackJSON([{
-          args: {},
-          locals: {},
-          threads: {
+        stack: makeStackJSON([
+          {
+            args: {},
+            locals: {},
             threads: {
-              "0": {
-                messages: [{ role: "assistant", content: null }],
+              threads: {
+                "0": {
+                  messages: [{ role: "assistant", content: null }],
+                },
               },
+              counter: 1,
+              activeStack: ["0"],
             },
-            counter: 1,
-            activeStack: ["0"],
           },
-        }]),
+        ]),
         globals: makeGlobalsJSON(),
         nodeId: "n1",
       });
       const result = cp.getThreadMessages();
-      expect(result!.messages).toEqual([
-        { role: "assistant", content: "(no content)" },
-      ]);
+      expect(result!.messages).toEqual([{ role: "assistant", content: "(no content)" }]);
     });
 
     it("should concatenate TextPart[] content", () => {
       const cp = new Checkpoint({
         id: 0,
-        stack: makeStackJSON([{
-          args: {},
-          locals: {},
-          threads: {
+        stack: makeStackJSON([
+          {
+            args: {},
+            locals: {},
             threads: {
-              "0": {
-                messages: [{
-                  role: "assistant",
-                  content: [
-                    { type: "text", text: "Hello " },
-                    { type: "text", text: "world" },
+              threads: {
+                "0": {
+                  messages: [
+                    {
+                      role: "assistant",
+                      content: [
+                        { type: "text", text: "Hello " },
+                        { type: "text", text: "world" },
+                      ],
+                    },
                   ],
-                }],
+                },
               },
+              counter: 1,
+              activeStack: ["0"],
             },
-            counter: 1,
-            activeStack: ["0"],
           },
-        }]),
+        ]),
         globals: makeGlobalsJSON(),
         nodeId: "n1",
       });
       const result = cp.getThreadMessages();
-      expect(result!.messages).toEqual([
-        { role: "assistant", content: "Hello world" },
-      ]);
+      expect(result!.messages).toEqual([{ role: "assistant", content: "Hello world" }]);
     });
   });
 

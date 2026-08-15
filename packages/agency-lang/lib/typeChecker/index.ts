@@ -1,8 +1,5 @@
 import { color } from "@/utils/termcolors.js";
-import type {
-  CompilationUnit,
-  ImportedFunctionSignature,
-} from "../compilationUnit.js";
+import type { CompilationUnit, ImportedFunctionSignature } from "../compilationUnit.js";
 import type { InterruptEffect } from "../symbolTable.js";
 import {
   GLOBAL_SCOPE_KEY,
@@ -19,11 +16,7 @@ import {
   VariableType,
 } from "../types.js";
 import type { SourceLocation } from "../types/base.js";
-import {
-  TypeCheckError,
-  TypeCheckResult,
-  TypeCheckerContext,
-} from "./types.js";
+import { TypeCheckError, TypeCheckResult, TypeCheckerContext } from "./types.js";
 import { validateTypeReferences } from "./validate.js";
 import { applySuppressions, parseSuppressions } from "./suppression.js";
 import { inferReturnTypes } from "./inference.js";
@@ -96,11 +89,7 @@ export class TypeChecker {
   private inferringReturnType = new Set<string>();
   private sourceText: string | undefined;
 
-  constructor(
-    program: AgencyProgram,
-    config: AgencyConfig = {},
-    info?: CompilationUnit,
-  ) {
+  constructor(program: AgencyProgram, config: AgencyConfig = {}, info?: CompilationUnit) {
     // Guard constructs desugar to the legacy `_guard(...)` call +
     // block-argument shape BEFORE any checking, so every existing rule
     // — block return exclusion, saveDraft draft typing, finalize
@@ -117,9 +106,7 @@ export class TypeChecker {
     const resolved = info ?? buildCompilationUnit(program);
     this.scopedTypeAliases = resolved.typeAliases.clone();
     this.functionDefs = { ...resolved.functionDefinitions };
-    this.nodeDefs = Object.fromEntries(
-      resolved.graphNodes.map((n) => [n.nodeName, n]),
-    );
+    this.nodeDefs = Object.fromEntries(resolved.graphNodes.map((n) => [n.nodeName, n]));
     this.importedFunctions = { ...resolved.importedFunctions };
     this.jsImportedNames = { ...resolved.jsImportedNames };
     this.interruptEffectsByFunction = resolved.interruptEffectsByFunction ?? {};
@@ -205,12 +192,7 @@ export class TypeChecker {
               }
             }
           }
-          validateTypeReferences(
-            entry.body,
-            name,
-            localAliases,
-            this.errors,
-          );
+          validateTypeReferences(entry.body, name, localAliases, this.errors);
         }
       });
     }
@@ -255,11 +237,7 @@ export class TypeChecker {
       for (const name of Object.keys(aliases)) {
         if (RESERVED_TYPE_NAMES.has(name)) {
           this.errors.push(
-            diagnostic(
-              "reservedBuiltinTypeRedefined",
-              { name },
-              aliasDeclLocs[name] ?? null,
-            ),
+            diagnostic("reservedBuiltinTypeRedefined", { name }, aliasDeclLocs[name] ?? null),
           );
         }
       }
@@ -278,11 +256,7 @@ export class TypeChecker {
       if (!node.declKind) continue;
       if (RESERVED_FUNCTION_NAMES.has(node.variableName)) {
         this.errors.push(
-          diagnostic(
-            "reservedBuiltinRedefined",
-            { name: node.variableName },
-            node.loc ?? null,
-          ),
+          diagnostic("reservedBuiltinRedefined", { name: node.variableName }, node.loc ?? null),
         );
       }
     }
@@ -422,10 +396,7 @@ export class TypeChecker {
    *  the body runs. An explicit non-Result return type contradicts that.
    *  (Unannotated returns are auto-wrapped during inference instead.) */
   private checkValidatedParamReturns(): void {
-    const checkOne = (
-      name: string,
-      def: FunctionDefinition | GraphNodeDefinition,
-    ) => {
+    const checkOne = (name: string, def: FunctionDefinition | GraphNodeDefinition) => {
       if (!def.parameters.some((p) => p.validated)) return;
       if (!def.returnType) return;
       const effective = effectiveReturnType(def);
@@ -434,11 +405,7 @@ export class TypeChecker {
         // {kind} is a closed enum value (Function | Node), not phrasing —
         // allowed as a param per the sweep recipe.
         this.errors.push(
-          diagnostic(
-            "validatedParamsRequireResult",
-            { kind, name },
-            def.loc ?? null,
-          ),
+          diagnostic("validatedParamsRequireResult", { kind, name }, def.loc ?? null),
         );
       }
     };
@@ -522,10 +489,7 @@ export class TypeChecker {
   }
 
   /** Delegating method preserved for test compatibility. */
-  isAssignable(
-    source: VariableType,
-    target: VariableType,
-  ): boolean {
+  isAssignable(source: VariableType, target: VariableType): boolean {
     return _isAssignable(source, target, this.typeAliases);
   }
 }

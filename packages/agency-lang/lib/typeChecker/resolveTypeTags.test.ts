@@ -103,9 +103,7 @@ describe("resolveType — value-parameterized aliases", () => {
     const resolved = resolveType(ref, aliases);
     expect(resolved.tags).toHaveLength(1);
     expect(resolved.tags?.[0].name).toBe("jsonSchema");
-    expect((resolved.tags?.[0].arguments[0] as any).entries[0].value).toEqual(
-      numLit("18"),
-    );
+    expect((resolved.tags?.[0].arguments[0] as any).entries[0].value).toEqual(numLit("18"));
   });
 
   it("fills in defaults when fewer args are supplied", () => {
@@ -117,12 +115,7 @@ describe("resolveType — value-parameterized aliases", () => {
           { name: "high", type: numType, default: numLit("100") },
         ],
         tags: [
-          tag("jsonSchema", [
-            obj([
-              kv("minimum", ident("low")),
-              kv("maximum", ident("high")),
-            ]),
-          ]),
+          tag("jsonSchema", [obj([kv("minimum", ident("low")), kv("maximum", ident("high"))])]),
         ],
       },
     };
@@ -162,8 +155,6 @@ describe("resolveType — value-parameterized aliases", () => {
       value: "string",
     });
     expect(resolved.tags).toHaveLength(1);
-    expect((resolved.tags?.[0].arguments[0] as any).entries[0].value).toEqual(
-      numLit("3"),
-    );
+    expect((resolved.tags?.[0].arguments[0] as any).entries[0].value).toEqual(numLit("3"));
   });
 });

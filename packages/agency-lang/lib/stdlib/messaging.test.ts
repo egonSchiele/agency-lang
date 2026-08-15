@@ -8,30 +8,18 @@ describe("checkAllowBlockList", () => {
   });
 
   it("passes when recipient is in allowList", () => {
-    const result = checkAllowBlockList(
-      ["alice@example.com"],
-      ["alice@example.com"],
-      [],
-    );
+    const result = checkAllowBlockList(["alice@example.com"], ["alice@example.com"], []);
     expect(result).toBeNull();
   });
 
   it("fails when recipient is not in allowList", () => {
-    const result = checkAllowBlockList(
-      ["bob@example.com"],
-      ["alice@example.com"],
-      [],
-    );
+    const result = checkAllowBlockList(["bob@example.com"], ["alice@example.com"], []);
     expect(result).toContain("bob@example.com");
     expect(result).toContain("not in the allowList");
   });
 
   it("fails when recipient is in blockList", () => {
-    const result = checkAllowBlockList(
-      ["alice@example.com"],
-      [],
-      ["alice@example.com"],
-    );
+    const result = checkAllowBlockList(["alice@example.com"], [], ["alice@example.com"]);
     expect(result).toContain("alice@example.com");
     expect(result).toContain("blockList");
   });
@@ -60,29 +48,17 @@ describe("checkAllowBlockList", () => {
   });
 
   it("skips whitespace-only recipients", () => {
-    const result = checkAllowBlockList(
-      ["  "],
-      ["alice@example.com"],
-      [],
-    );
+    const result = checkAllowBlockList(["  "], ["alice@example.com"], []);
     expect(result).toBeNull();
   });
 
   it("passes when recipient is not in blockList", () => {
-    const result = checkAllowBlockList(
-      ["bob@example.com"],
-      [],
-      ["alice@example.com"],
-    );
+    const result = checkAllowBlockList(["bob@example.com"], [], ["alice@example.com"]);
     expect(result).toBeNull();
   });
 
   it("is case-insensitive", () => {
-    const result = checkAllowBlockList(
-      ["Alice@Example.COM"],
-      ["alice@example.com"],
-      [],
-    );
+    const result = checkAllowBlockList(["Alice@Example.COM"], ["alice@example.com"], []);
     expect(result).toBeNull();
   });
 });

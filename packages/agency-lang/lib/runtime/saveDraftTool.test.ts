@@ -37,9 +37,7 @@ function call(args: Record<string, unknown> | undefined) {
 
 describe("saveDraft intrinsic — recognition", () => {
   it("the registry finds the stdlib pair (name + module)", () => {
-    expect(findIntrinsic(fakeFn("saveDraft", "stdlib/index.agency"))).toBe(
-      saveDraftIntrinsic,
-    );
+    expect(findIntrinsic(fakeFn("saveDraft", "stdlib/index.agency"))).toBe(saveDraftIntrinsic);
   });
 
   it("a user function named saveDraft is NOT recognized", () => {
@@ -64,7 +62,10 @@ describe("saveDraft intrinsic — recognition", () => {
 
 describe("saveDraft intrinsic — synthesized definition", () => {
   it("declares exactly one required value param from the threaded schema", () => {
-    const def = saveDraftIntrinsic.buildDefinition({ draftSchema: z.number(), fn: fakeFn("saveDraft", "stdlib/index.agency") });
+    const def = saveDraftIntrinsic.buildDefinition({
+      draftSchema: z.number(),
+      fn: fakeFn("saveDraft", "stdlib/index.agency"),
+    });
     expect(def.name).toBe("saveDraft");
     expect(def.description).toMatch(/best-so-far/);
     const schema = def.schema as z.ZodObject<any>;
@@ -74,7 +75,10 @@ describe("saveDraft intrinsic — synthesized definition", () => {
   });
 
   it("falls back to string when no schema was threaded", () => {
-    const def = saveDraftIntrinsic.buildDefinition({ draftSchema: undefined, fn: fakeFn("saveDraft", "stdlib/index.agency") });
+    const def = saveDraftIntrinsic.buildDefinition({
+      draftSchema: undefined,
+      fn: fakeFn("saveDraft", "stdlib/index.agency"),
+    });
     const schema = def.schema as z.ZodObject<any>;
     expect(schema.shape.value.safeParse("x").success).toBe(true);
     expect(schema.shape.value.safeParse(3).success).toBe(false);

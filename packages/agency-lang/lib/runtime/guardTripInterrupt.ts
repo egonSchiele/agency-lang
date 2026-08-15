@@ -151,8 +151,7 @@ async function raiseOneTrip(
         {
           // Decision 3's visibility half: a handler registered INSIDE
           // this guard cannot adjudicate it.
-          eligible: (entry) =>
-            !entry.liveGuardIds.includes(tripped.guardId),
+          eligible: (entry) => !entry.liveGuardIds.includes(tripped.guardId),
         },
       );
       if (isApproved(verdict) || isRejected(verdict)) {
@@ -278,9 +277,7 @@ function draftPreview(stack: StateStack): unknown {
 
 function innermostGuardById(stack: StateStack, guardId: string | undefined): Guard | null {
   if (!guardId) return null;
-  return (
-    [...stack.guards].reverse().find((g) => g.guardId === guardId) ?? null
-  );
+  return [...stack.guards].reverse().find((g) => g.guardId === guardId) ?? null;
 }
 
 function makePendingTrip(): { settled: Promise<void>; settle: () => void } {
@@ -290,7 +287,6 @@ function makePendingTrip(): { settled: Promise<void>; settle: () => void } {
   });
   return { settled, settle };
 }
-
 
 /** Control-flow signal thrown by _runPrompt's cancellation classifier
  *  when an in-flight request died to a NON-ROOT guard trip on this
@@ -331,9 +327,7 @@ export async function raiseGuardTripsAtStep(args: {
   // cost guard left over budget by a REJECTED gate question would be
   // re-asked at every following step, delivering its reject outside the
   // owning guard boundary.
-  const outcome = await raiseGuardTripsUntilClear(ctx, stack, () =>
-    stack.detectStepRaisableTrip(),
-  );
+  const outcome = await raiseGuardTripsUntilClear(ctx, stack, () => stack.detectStepRaisableTrip());
   if (outcome === undefined) return false; // clear — run the step
   // Unanswered: surface through the runner. The interrupt id is already
   // persisted in stack.other (raiseOneTrip did it); stamp the checkpoint
@@ -352,10 +346,6 @@ export async function raiseGuardTripsAtStep(args: {
     reason: "interrupt",
     sourceLocation: args.location,
   });
-  args.halt(
-    args.isNodeContext
-      ? { messages: args.threads, data: outcome }
-      : outcome,
-  );
+  args.halt(args.isNodeContext ? { messages: args.threads, data: outcome } : outcome);
   return true;
 }

@@ -57,8 +57,7 @@ export function injectSchemaArgsInProgram(
   validateSchemaParamUniqueness(functionDefinitions, importedFunctions);
 
   const lookup = (name: string): FunctionParameter[] | undefined =>
-    functionDefinitions[name]?.parameters ??
-    importedFunctions[name]?.parameters;
+    functionDefinitions[name]?.parameters ?? importedFunctions[name]?.parameters;
 
   // Top-level program nodes (graph nodes, exported function defs, etc.)
   // get walked through their bodies below — the program body itself
@@ -230,11 +229,7 @@ function maybeInject(
  * Schema slot as "may have supplied it" and skip injection (the runtime
  * would receive the unrolled splat values).
  */
-function isSchemaArgSupplied(
-  call: FunctionCall,
-  paramIndex: number,
-  paramName: string,
-): boolean {
+function isSchemaArgSupplied(call: FunctionCall, paramIndex: number, paramName: string): boolean {
   // Named arg match.
   for (const arg of call.arguments) {
     if (arg.type === "namedArgument" && arg.name === paramName) return true;

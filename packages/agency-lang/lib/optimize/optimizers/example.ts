@@ -3,7 +3,11 @@ import type { Scorecard } from "@/eval/grading/scorecard.js";
 import type { Input } from "@/eval/grading/types.js";
 import { proposeMutation, type ProposeMutationArgs } from "../mutator.js";
 import type { BaseOptimizerConfig } from "../optimizer.js";
-import { defaultPreview, type OptimizeMutationOperation, type OptimizeMutationPreview } from "../sourceMutator.js";
+import {
+  defaultPreview,
+  type OptimizeMutationOperation,
+  type OptimizeMutationPreview,
+} from "../sourceMutator.js";
 import { fileMap, type OptimizeTargetSet } from "../targets.js";
 import type { MutationProposal, OptimizeResult } from "../types.js";
 
@@ -21,7 +25,10 @@ type Candidate = {
  */
 export type ExampleDeps = BaseOptimizerDeps & {
   propose?: (args: ProposeMutationArgs) => Promise<MutationProposal>;
-  preview?: (targetSet: OptimizeTargetSet, operations: OptimizeMutationOperation[]) => OptimizeMutationPreview;
+  preview?: (
+    targetSet: OptimizeTargetSet,
+    operations: OptimizeMutationOperation[],
+  ) => OptimizeMutationPreview;
 };
 
 /**
@@ -51,15 +58,24 @@ export type ExampleDeps = BaseOptimizerDeps & {
 export class ExampleOptimizer extends BaseOptimizer {
   readonly name = "example";
 
-  constructor(config: BaseOptimizerConfig, private readonly exampleDeps: ExampleDeps = {}) {
+  constructor(
+    config: BaseOptimizerConfig,
+    private readonly exampleDeps: ExampleDeps = {},
+  ) {
     super(config, exampleDeps);
   }
 
-  protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult> {
+  protected async optimizeTargets(
+    source: OptimizeTargetSet,
+    inputs: Input[],
+  ): Promise<OptimizeResult> {
     const startedAt = Date.now();
     this.reporter.runStarted({
-      optimizer: this.name, runId: this.config.runId,
-      targets: source.targets, inputCount: inputs.length, iterations: 1,
+      optimizer: this.name,
+      runId: this.config.runId,
+      targets: source.targets,
+      inputCount: inputs.length,
+      iterations: 1,
     });
 
     // 1. Score the unchanged agent.
@@ -69,14 +85,15 @@ export class ExampleOptimizer extends BaseOptimizer {
     // 2. Ask the built-in mutator for one new set of target values. proposeValidMutation
     //    (from BaseOptimizer) retries on validation errors and never throws on a bad response.
     const outcome = await this.proposeValidMutation(
-      (diagnostics) => (this.exampleDeps.propose ?? proposeMutation)({
-        config: this.config.config,
-        targets: source.targets,
-        inputs,
-        history: "",
-        model: this.config.mutatorModel,
-        diagnostics,
-      }),
+      (diagnostics) =>
+        (this.exampleDeps.propose ?? proposeMutation)({
+          config: this.config.config,
+          targets: source.targets,
+          inputs,
+          history: "",
+          model: this.config.mutatorModel,
+          diagnostics,
+        }),
       (operations) => (this.exampleDeps.preview ?? defaultPreview)(source, operations),
     );
 
@@ -84,12 +101,17 @@ export class ExampleOptimizer extends BaseOptimizer {
     const candidate = outcome.ok
       ? await this.makeCandidate(1, outcome.preview.files, outcome.preview.targetSet, inputs)
       : undefined;
-    const beatsBaseline = candidate !== undefined && candidate.scorecard.gatedObjective() > baseline.scorecard.gatedObjective();
+    const beatsBaseline =
+      candidate !== undefined &&
+      candidate.scorecard.gatedObjective() > baseline.scorecard.gatedObjective();
     const trainChampion = beatsBaseline ? candidate : baseline;
     const decision = beatsBaseline ? "accepted" : "rejected";
 
     this.reporter.iterationDecided({
-      iter: 1, total: 1, decision, objective: trainChampion.scorecard.gatedObjective(),
+      iter: 1,
+      total: 1,
+      decision,
+      objective: trainChampion.scorecard.gatedObjective(),
       ...(beatsBaseline && outcome.ok
         ? { changes: outcome.preview.changes, rationale: outcome.rationale }
         : {}),
@@ -98,14 +120,25 @@ export class ExampleOptimizer extends BaseOptimizer {
     // 4. Pick the writeback champion (by validation when configured), write it back,
     //    build the result with train/validation objectives + breakdown, and report.
     const candidates = beatsBaseline ? [baseline, candidate] : [baseline];
-    return this.finishPointwise(source, candidates, trainChampion, [{ iter: 1, decision }], startedAt);
+    return this.finishPointwise(
+      source,
+      candidates,
+      trainChampion,
+      [{ iter: 1, decision }],
+      startedAt,
+    );
   }
 
   /** Apply a candidate file set into a fresh workspace, run + grade it. The
    *  `targetSet` reflects this candidate's targets (the baseline's for the
    *  baseline candidate, `outcome.preview.targetSet` for an accepted mutation),
    *  so `finalTargets` in the reporter accurately describes the champion. */
-  private async makeCandidate(iter: number | "baseline", files: Record<string, string>, targetSet: OptimizeTargetSet, inputs: Input[]): Promise<Candidate> {
+  private async makeCandidate(
+    iter: number | "baseline",
+    files: Record<string, string>,
+    targetSet: OptimizeTargetSet,
+    inputs: Input[],
+  ): Promise<Candidate> {
     const scorecard = await this.scoreFiles(targetSet, files, inputs);
     return { iter, files, scorecard, targetSet };
   }

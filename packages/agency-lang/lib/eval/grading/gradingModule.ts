@@ -17,7 +17,10 @@ let counter = 0;
  * package), writes the bundle next to the source so Node finds the project's
  * node_modules, imports the default export, and normalizes it to BaseGrader[].
  */
-export async function loadGradingModule(filePath: string, _config: AgencyConfig): Promise<BaseGrader[]> {
+export async function loadGradingModule(
+  filePath: string,
+  _config: AgencyConfig,
+): Promise<BaseGrader[]> {
   const absolute = path.resolve(filePath);
   if (!fs.existsSync(absolute)) {
     throw new Error(`Grading module not found: ${absolute}`);
@@ -42,7 +45,7 @@ export async function loadGradingModule(filePath: string, _config: AgencyConfig)
     if (exported === undefined) {
       throw new Error(
         `Grading module ${absolute} must default-export a grader or an array of graders ` +
-        `(e.g. \`export default [...]\`).`,
+          `(e.g. \`export default [...]\`).`,
       );
     }
     const specs: Grader[] = Array.isArray(exported) ? exported : [exported];

@@ -36,7 +36,9 @@ describe("code literals: single-line bodies", () => {
   // did not, which made the difference look like a rule about
   // definitions rather than about whitespace.
   it("parses a one-line def, which needs the program grammar", () => {
-    const lit = firstLiteral(`def f(): Code {\n  return [| def greet(): string { return "hi" } |]\n}\n`);
+    const lit = firstLiteral(
+      `def f(): Code {\n  return [| def greet(): string { return "hi" } |]\n}\n`,
+    );
     expect(lit.kind).toBe("program");
     expect(lit.nodes.map((node) => node.type)).toContain("function");
   });
@@ -47,12 +49,16 @@ describe("code literals: single-line bodies", () => {
   });
 
   it("parses a one-line node", () => {
-    const lit = firstLiteral(`def f(): Code {\n  return [| node main(): number { return 1 } |]\n}\n`);
+    const lit = firstLiteral(
+      `def f(): Code {\n  return [| node main(): number { return 1 } |]\n}\n`,
+    );
     expect(lit.nodes.map((node) => node.type)).toContain("graphNode");
   });
 
   it("agrees with the same text written across lines", () => {
-    const oneLine = firstLiteral(`def f(): Code {\n  return [| def greet(): string { return "hi" } |]\n}\n`);
+    const oneLine = firstLiteral(
+      `def f(): Code {\n  return [| def greet(): string { return "hi" } |]\n}\n`,
+    );
     const multiLine = firstLiteral(
       `def f(): Code {\n  return [|\n    def greet(): string {\n      return "hi"\n    }\n  |]\n}\n`,
     );
@@ -177,15 +183,14 @@ describe("code literals: the end-scan", () => {
     );
     expect(
       lit.nodes.some(
-        (n) => n.type === "functionCall" && (n as { functionName?: unknown }).functionName === "print",
+        (n) =>
+          n.type === "functionCall" && (n as { functionName?: unknown }).functionName === "print",
       ),
     ).toBe(true);
   });
 
   it("|] inside an interpolation's nested string is inert, content intact", () => {
-    const lit = firstLiteral(
-      `node main() {\n  const t = [| return "\${f("has |] here")}" |]\n}\n`,
-    );
+    const lit = firstLiteral(`node main() {\n  const t = [| return "\${f("has |] here")}" |]\n}\n`);
     const printed = generateAgency({ type: "agencyProgram", nodes: lit.nodes });
     expect(printed).toContain("has |] here");
   });
@@ -193,9 +198,7 @@ describe("code literals: the end-scan", () => {
   it("|] in interpolation code position is inert (pinned decision)", () => {
     // The |] belongs to the GENERATED program's string; the string parser
     // consumes the whole interpolation, so the literal does not end there.
-    const lit = firstLiteral(
-      `node main() {\n  const t = [| return "\${join(xs, "|]")}" |]\n}\n`,
-    );
+    const lit = firstLiteral(`node main() {\n  const t = [| return "\${join(xs, "|]")}" |]\n}\n`);
     const printed = generateAgency({ type: "agencyProgram", nodes: lit.nodes });
     expect(printed).toContain(`join(xs, "|]")`);
   });
@@ -314,10 +317,26 @@ describe("declarations in a literal infer program", () => {
   const cases: { body: string; expects: string[]; label: string }[] = [
     { label: "un-annotated node", body: "node main() {\n  print(1)\n}", expects: ["graphNode"] },
     { label: "un-annotated def", body: "def foo() {\n  return 1\n}", expects: ["function"] },
-    { label: "node with parameters", body: "node m(x: number) {\n  print(x)\n}", expects: ["graphNode"] },
-    { label: "two declarations", body: "node a() {\n  print(1)\n}\n\nnode b() {\n  print(2)\n}", expects: ["graphNode"] },
-    { label: "comment first", body: "// hi\nnode main() {\n  print(1)\n}", expects: ["comment", "graphNode"] },
-    { label: "statement then declaration", body: "print(1)\nnode main() {\n  print(2)\n}", expects: ["functionCall", "graphNode"] },
+    {
+      label: "node with parameters",
+      body: "node m(x: number) {\n  print(x)\n}",
+      expects: ["graphNode"],
+    },
+    {
+      label: "two declarations",
+      body: "node a() {\n  print(1)\n}\n\nnode b() {\n  print(2)\n}",
+      expects: ["graphNode"],
+    },
+    {
+      label: "comment first",
+      body: "// hi\nnode main() {\n  print(1)\n}",
+      expects: ["comment", "graphNode"],
+    },
+    {
+      label: "statement then declaration",
+      body: "print(1)\nnode main() {\n  print(2)\n}",
+      expects: ["functionCall", "graphNode"],
+    },
   ];
 
   for (const { label, body, expects } of cases) {
@@ -337,7 +356,9 @@ describe("declarations in a literal infer program", () => {
   }
 
   it("still infers program for an annotated node", () => {
-    const lit = firstLiteral(`node host() {\n  const t = [|\n    node main(): string {\n      return "x"\n    }\n  |]\n}\n`);
+    const lit = firstLiteral(
+      `node host() {\n  const t = [|\n    node main(): string {\n      return "x"\n    }\n  |]\n}\n`,
+    );
     expect(lit.kind).toBe("program");
     expect(lit.nodes[0].type).toBe("graphNode");
   });
@@ -345,7 +366,9 @@ describe("declarations in a literal infer program", () => {
   it("still infers program for an annotated def", () => {
     // `def` takes the other branch of the probe's `or`, so it needs its
     // own annotated case, not just the un-annotated one above.
-    const lit = firstLiteral(`node host() {\n  const t = [|\n    def foo(): number {\n      return 1\n    }\n  |]\n}\n`);
+    const lit = firstLiteral(
+      `node host() {\n  const t = [|\n    def foo(): number {\n      return 1\n    }\n  |]\n}\n`,
+    );
     expect(lit.kind).toBe("program");
     expect(lit.nodes[0].type).toBe("function");
   });
@@ -382,7 +405,9 @@ describe("bodies whose kind must not change", () => {
 
   for (const { body, kind } of cases) {
     it(`keeps \`${body}\` as ${kind}`, () => {
-      const lit = firstLiteral(`node host() {\n  const node = 1\n  const t = [| ${body} |]\n  print("x")\n}\n`);
+      const lit = firstLiteral(
+        `node host() {\n  const node = 1\n  const t = [| ${body} |]\n  print("x")\n}\n`,
+      );
       expect(lit.kind, body).toBe(kind);
     });
   }
@@ -393,13 +418,17 @@ describe("a throwing attempt does not abandon the remaining attempts", () => {
   // reports through tarsec's parseError, which THROWS. A literal body may
   // legitimately be a whole program, where `static const` is correct.
   it("parses a static const literal as a program", () => {
-    const lit = firstLiteral(`node host() {\n  const t = [|\n    static const x = 1\n  |]\n  print("y")\n}\n`);
+    const lit = firstLiteral(
+      `node host() {\n  const t = [|\n    static const x = 1\n  |]\n  print("y")\n}\n`,
+    );
     expect(lit.kind).toBe("program");
     expect(lit.nodes.map((node) => node.type)).toContain("assignment");
   });
 
   it("parses a static const written after another statement", () => {
-    const lit = firstLiteral(`node host() {\n  const t = [|\n    const a = 1\n    static const x = 2\n  |]\n  print("y")\n}\n`);
+    const lit = firstLiteral(
+      `node host() {\n  const t = [|\n    const a = 1\n    static const x = 2\n  |]\n  print("y")\n}\n`,
+    );
     expect(lit.kind).toBe("program");
     expect(lit.nodes.filter((node) => node.type === "assignment").length).toBe(2);
   });

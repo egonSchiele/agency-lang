@@ -30,9 +30,7 @@ function errorsFrom(
     // lib/compiler/typecheck.ts). For tests that exercise callback
     // capture rules we need to run the same lift; for everything else
     // we skip it so existing call sites stay unchanged.
-    const program = opts.lift
-      ? liftCallbackBlocks(parseResult.result)
-      : parseResult.result;
+    const program = opts.lift ? liftCallbackBlocks(parseResult.result) : parseResult.result;
     const info = buildCompilationUnit(program, symbolTable, absPath, source);
     return typeCheck(program, config, info).errors;
   } finally {
@@ -44,10 +42,7 @@ const WARN: AgencyConfig = { typechecker: { undefinedVariables: "warn" } };
 
 describe("undefined variable diagnostic", () => {
   it("warns on `let x = doesNotExist`", () => {
-    const errors = errorsFrom(
-      `node main() {\n let x = doesNotExist\n print(x)\n }\n`,
-      WARN,
-    );
+    const errors = errorsFrom(`node main() {\n let x = doesNotExist\n print(x)\n }\n`, WARN);
     const undef = errors.filter(
       (e) => e.message.includes("doesNotExist") && e.message.includes("not defined"),
     );
@@ -66,20 +61,14 @@ describe("undefined variable diagnostic", () => {
   });
 
   it("does not warn on a builtin reference (`success`)", () => {
-    const errors = errorsFrom(
-      `node main() {\n let f = success\n print(f)\n }\n`,
-      WARN,
-    );
+    const errors = errorsFrom(`node main() {\n let f = success\n print(f)\n }\n`, WARN);
     expect(
       errors.filter((e) => e.message.includes("'success'") && e.message.includes("not defined")),
     ).toHaveLength(0);
   });
 
   it("does not warn on a JS namespace base (`JSON`)", () => {
-    const errors = errorsFrom(
-      `node main() {\n let x = JSON.parse("{}")\n print(x)\n }\n`,
-      WARN,
-    );
+    const errors = errorsFrom(`node main() {\n let x = JSON.parse("{}")\n print(x)\n }\n`, WARN);
     expect(
       errors.filter((e) => e.message.includes("'JSON'") && e.message.includes("not defined")),
     ).toHaveLength(0);
@@ -106,19 +95,16 @@ describe("undefined variable diagnostic", () => {
   });
 
   it("respects undefinedVariables: silent (default)", () => {
-    const errors = errorsFrom(
-      `node main() {\n let x = doesNotExist\n print(x)\n }\n`,
-    );
+    const errors = errorsFrom(`node main() {\n let x = doesNotExist\n print(x)\n }\n`);
     expect(
       errors.filter((e) => e.message.includes("doesNotExist") && e.message.includes("not defined")),
     ).toHaveLength(0);
   });
 
   it("respects undefinedVariables: error", () => {
-    const errors = errorsFrom(
-      `node main() {\n let x = doesNotExist\n print(x)\n }\n`,
-      { typechecker: { undefinedVariables: "error" } },
-    );
+    const errors = errorsFrom(`node main() {\n let x = doesNotExist\n print(x)\n }\n`, {
+      typechecker: { undefinedVariables: "error" },
+    });
     const undef = errors.filter(
       (e) => e.message.includes("doesNotExist") && e.message.includes("not defined"),
     );
@@ -132,9 +118,7 @@ describe("undefined variable diagnostic", () => {
       WARN,
     );
     expect(
-      errors.filter(
-        (e) => e.message.includes("doesNotExist") && e.message.includes("not defined"),
-      ),
+      errors.filter((e) => e.message.includes("doesNotExist") && e.message.includes("not defined")),
     ).toHaveLength(1);
   });
 
@@ -144,9 +128,7 @@ describe("undefined variable diagnostic", () => {
       WARN,
     );
     expect(
-      errors.filter(
-        (e) => e.message.includes("doesNotExist") && e.message.includes("not defined"),
-      ),
+      errors.filter((e) => e.message.includes("doesNotExist") && e.message.includes("not defined")),
     ).toHaveLength(1);
   });
 
@@ -180,9 +162,7 @@ node main() { wrap() }
       { lift: true },
     );
     const undef = errors.filter(
-      (e) =>
-        e.message.includes("counter") &&
-        e.message.includes("not defined"),
+      (e) => e.message.includes("counter") && e.message.includes("not defined"),
     );
     // Should fire for at least one reference to `counter` inside the lifted
     // body. Don't pin to an exact count — the diagnostic may report each

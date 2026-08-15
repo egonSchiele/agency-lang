@@ -282,16 +282,16 @@ export interface TsScopedVar {
   kind: "scopedVar";
   name: string;
   scope:
-  | "global"
-  | "static"
-  | "function"
-  | "node"
-  | "args"
-  | "imported"
-  | "local"
-  | "block"
-  | "blockArgs"
-  | "functionRef";
+    | "global"
+    | "static"
+    | "function"
+    | "node"
+    | "args"
+    | "imported"
+    | "local"
+    | "block"
+    | "blockArgs"
+    | "functionRef";
   moduleId?: string;
   /** For `block`/`blockArgs` scope: the unique frame binding to read
    *  through (`__bframe_<blockName>`). Set by the builder when the var
@@ -421,8 +421,6 @@ export interface TsRunnerPipe {
   input: TsNode;
   fn: TsNode;
 }
-
-
 
 /** No-op node — produces no output. Used for AST nodes handled elsewhere (e.g. imports collected in a separate pass). */
 export interface TsEmpty {

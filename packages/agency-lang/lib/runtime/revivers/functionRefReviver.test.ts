@@ -79,8 +79,9 @@ describe("FunctionRefReviver", () => {
 
     it("throws when registry is not set", () => {
       reviver.registry = null;
-      expect(() => reviver.revive({ name: "greet", module: "test.agency" }))
-        .toThrow("no registry set");
+      expect(() => reviver.revive({ name: "greet", module: "test.agency" })).toThrow(
+        "no registry set",
+      );
     });
 
     it("revives a missing ordinary function to a tripwire stub (#652)", async () => {
@@ -91,9 +92,9 @@ describe("FunctionRefReviver", () => {
       const stub = reviver.revive({ name: "missing", module: "test.agency" });
       expect(AgencyFunction.isAgencyFunction(stub)).toBe(true);
       expect(stub.name).toBe("missing");
-      await expect(
-        stub.invoke({ type: "positional", args: [] }),
-      ).rejects.toThrow(/never loaded its module/);
+      await expect(stub.invoke({ type: "positional", args: [] })).rejects.toThrow(
+        /never loaded its module/,
+      );
     });
 
     it("revives an unregistered block ref to a stub instead of throwing", () => {
@@ -116,11 +117,11 @@ describe("FunctionRefReviver", () => {
       // invoke() may reject or convert the throw to a failure Result
       // depending on failure-propagation settings; accept either, but the
       // tripwire message must surface.
-      const outcome = await stub
-        .invoke({ type: "positional", args: [] })
-        .then((v: unknown) => v, (e: unknown) => e);
-      const msg =
-        outcome instanceof Error ? outcome.message : JSON.stringify(outcome);
+      const outcome = await stub.invoke({ type: "positional", args: [] }).then(
+        (v: unknown) => v,
+        (e: unknown) => e,
+      );
+      const msg = outcome instanceof Error ? outcome.message : JSON.stringify(outcome);
       expect(msg).toContain("before replay rebound it");
     });
 
@@ -131,9 +132,9 @@ describe("FunctionRefReviver", () => {
       reviver.registry = {};
       for (const name of ["__blockish", "__block_"]) {
         const stub = reviver.revive({ name, module: "test.agency" });
-        await expect(
-          stub.invoke({ type: "positional", args: [] }),
-        ).rejects.toThrow(/never loaded its module/);
+        await expect(stub.invoke({ type: "positional", args: [] })).rejects.toThrow(
+          /never loaded its module/,
+        );
       }
     });
 
@@ -205,7 +206,10 @@ describe("nativeTypeReplacer with AgencyFunction", () => {
 
   it("handles AgencyFunction inside a serialized Map", () => {
     const fn = makeAgencyFunction("greet", "test.agency");
-    const m = new Map<string, any>([["callback", fn], ["data", 42]]);
+    const m = new Map<string, any>([
+      ["callback", fn],
+      ["data", 42],
+    ]);
     const json = JSON.stringify(m, nativeTypeReplacer);
     const parsed = JSON.parse(json);
     expect(parsed.__nativeType).toBe("Map");
@@ -239,16 +243,19 @@ describe("FunctionRefReviver with bound functions", () => {
 
   it("serializes bound function with params", () => {
     const registry: Record<string, AgencyFunction> = {};
-    const fn = AgencyFunction.create({
-      name: "add",
-      module: "test",
-      fn: (a: number, b: number) => a + b,
-      params: [
-        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
-        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
-      ],
-      toolDefinition: null,
-    }, registry);
+    const fn = AgencyFunction.create(
+      {
+        name: "add",
+        module: "test",
+        fn: (a: number, b: number) => a + b,
+        params: [
+          { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+        ],
+        toolDefinition: null,
+      },
+      registry,
+    );
     const bound = fn.partial({ a: 5 });
 
     const serialized = reviver.serialize(bound);
@@ -263,23 +270,33 @@ describe("FunctionRefReviver with bound functions", () => {
 
   it("revives bound function from serialized data", () => {
     const registry: Record<string, AgencyFunction> = {};
-    const fn = AgencyFunction.create({
-      name: "add",
-      module: "test",
-      fn: (a: number, b: number) => a + b,
-      params: [
-        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
-        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
-      ],
-      toolDefinition: null,
-    }, registry);
+    const fn = AgencyFunction.create(
+      {
+        name: "add",
+        module: "test",
+        fn: (a: number, b: number) => a + b,
+        params: [
+          { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+        ],
+        toolDefinition: null,
+      },
+      registry,
+    );
     reviver.registry = registry;
 
     const serialized = {
       name: "add",
       module: "test",
       params: [
-        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false, isBound: true, boundValue: 5 },
+        {
+          name: "a",
+          hasDefault: false,
+          defaultValue: undefined,
+          variadic: false,
+          isBound: true,
+          boundValue: 5,
+        },
         { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
       ],
     };
@@ -291,16 +308,19 @@ describe("FunctionRefReviver with bound functions", () => {
 
   it("revives unbound function unchanged", () => {
     const registry: Record<string, AgencyFunction> = {};
-    const fn = AgencyFunction.create({
-      name: "add",
-      module: "test",
-      fn: (a: number, b: number) => a + b,
-      params: [
-        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
-        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
-      ],
-      toolDefinition: null,
-    }, registry);
+    const fn = AgencyFunction.create(
+      {
+        name: "add",
+        module: "test",
+        fn: (a: number, b: number) => a + b,
+        params: [
+          { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+        ],
+        toolDefinition: null,
+      },
+      registry,
+    );
     reviver.registry = registry;
 
     const revived = reviver.revive({ name: "add", module: "test" });
@@ -309,25 +329,30 @@ describe("FunctionRefReviver with bound functions", () => {
   });
 
   it("validates records with params", () => {
-    expect(reviver.validate({
-      name: "add",
-      module: "test",
-      params: [{ name: "a", isBound: true, boundValue: 5 }],
-    })).toBe(true);
+    expect(
+      reviver.validate({
+        name: "add",
+        module: "test",
+        params: [{ name: "a", isBound: true, boundValue: 5 }],
+      }),
+    ).toBe(true);
   });
 
   it("round-trips bound function through JSON", () => {
     const registry: Record<string, AgencyFunction> = {};
-    const fn = AgencyFunction.create({
-      name: "add",
-      module: "test",
-      fn: (a: number, b: number) => a + b,
-      params: [
-        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
-        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
-      ],
-      toolDefinition: null,
-    }, registry);
+    const fn = AgencyFunction.create(
+      {
+        name: "add",
+        module: "test",
+        fn: (a: number, b: number) => a + b,
+        params: [
+          { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+        ],
+        toolDefinition: null,
+      },
+      registry,
+    );
     const bound = fn.partial({ a: 5 });
     functionRefReviver.registry = registry;
 
@@ -345,16 +370,23 @@ describe("FunctionRefReviver with bound functions", () => {
 
   it("revives function with custom description from .describe()", () => {
     const registry: Record<string, AgencyFunction> = {};
-    const fn = AgencyFunction.create({
-      name: "add",
-      module: "test",
-      fn: (a: number, b: number) => a + b,
-      params: [
-        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
-        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
-      ],
-      toolDefinition: { name: "add", description: "Add two numbers.\n@param a - First\n@param b - Second", schema: {} },
-    }, registry);
+    const fn = AgencyFunction.create(
+      {
+        name: "add",
+        module: "test",
+        fn: (a: number, b: number) => a + b,
+        params: [
+          { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+        ],
+        toolDefinition: {
+          name: "add",
+          description: "Add two numbers.\n@param a - First\n@param b - Second",
+          schema: {},
+        },
+      },
+      registry,
+    );
     const described = fn.partial({ a: 5 }).describe("Adds 5 to a number");
     functionRefReviver.registry = registry;
 
@@ -370,15 +402,16 @@ describe("FunctionRefReviver with bound functions", () => {
 
   it("round-trips .describe() on a function with no original toolDefinition", () => {
     const registry: Record<string, AgencyFunction> = {};
-    const fn = AgencyFunction.create({
-      name: "noTool",
-      module: "test",
-      fn: (a: number) => a,
-      params: [
-        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
-      ],
-      toolDefinition: null,
-    }, registry);
+    const fn = AgencyFunction.create(
+      {
+        name: "noTool",
+        module: "test",
+        fn: (a: number) => a,
+        params: [{ name: "a", hasDefault: false, defaultValue: undefined, variadic: false }],
+        toolDefinition: null,
+      },
+      registry,
+    );
     const described = fn.describe("Synthesized description");
     functionRefReviver.registry = registry;
 
@@ -394,16 +427,19 @@ describe("FunctionRefReviver with bound functions", () => {
 
   it("round-trips .partial().describe() on a function with no original toolDefinition", () => {
     const registry: Record<string, AgencyFunction> = {};
-    const fn = AgencyFunction.create({
-      name: "noTool",
-      module: "test",
-      fn: (a: number, b: number) => a + b,
-      params: [
-        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
-        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
-      ],
-      toolDefinition: null,
-    }, registry);
+    const fn = AgencyFunction.create(
+      {
+        name: "noTool",
+        module: "test",
+        fn: (a: number, b: number) => a + b,
+        params: [
+          { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+        ],
+        toolDefinition: null,
+      },
+      registry,
+    );
     const composed = fn.partial({ a: 5 }).describe("Partial + describe");
     functionRefReviver.registry = registry;
 
@@ -420,16 +456,19 @@ describe("FunctionRefReviver with bound functions", () => {
 
   it("revived bound function invokes correctly", async () => {
     const registry: Record<string, AgencyFunction> = {};
-    const fn = AgencyFunction.create({
-      name: "add",
-      module: "test",
-      fn: (a: number, b: number) => a + b,
-      params: [
-        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
-        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
-      ],
-      toolDefinition: null,
-    }, registry);
+    const fn = AgencyFunction.create(
+      {
+        name: "add",
+        module: "test",
+        fn: (a: number, b: number) => a + b,
+        params: [
+          { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+        ],
+        toolDefinition: null,
+      },
+      registry,
+    );
     const bound = fn.partial({ a: 5 });
     functionRefReviver.registry = registry;
 
@@ -464,9 +503,9 @@ describe("lazy callback refs (#544)", () => {
       // The generic stub is a tripwire: unlike the callback lazy ref, it
       // does NOT re-check the registry at invoke time.
       reviver.registry[`app.agency:${name}`] = makeAgencyFunction(name, "app.agency");
-      await expect(
-        stub.invoke({ type: "positional", args: [] }),
-      ).rejects.toThrow(/never loaded its module/);
+      await expect(stub.invoke({ type: "positional", args: [] })).rejects.toThrow(
+        /never loaded its module/,
+      );
     }
   });
 
@@ -508,7 +547,9 @@ describe("lazy callback refs (#544)", () => {
     reviver.registry["agency_abc:__cb_main_0"] = new AgencyFunction({
       name: "__cb_main_0",
       module: "agency_abc",
-      fn: async (data: unknown) => { received = data; },
+      fn: async (data: unknown) => {
+        received = data;
+      },
       params: [{ name: "data", hasDefault: false, defaultValue: undefined, variadic: false }],
       toolDefinition: null,
     });
@@ -526,7 +567,9 @@ describe("lazy callback refs (#544)", () => {
     const real = new AgencyFunction({
       name: "__cb_main_0",
       module: "agency_abc",
-      fn: async () => { depths.push(getRuntimeContext().stack.stack.length); },
+      fn: async () => {
+        depths.push(getRuntimeContext().stack.stack.length);
+      },
       params: [{ name: "data", hasDefault: false, defaultValue: undefined, variadic: false }],
       toolDefinition: null,
     });
@@ -534,7 +577,13 @@ describe("lazy callback refs (#544)", () => {
     reviver.registry["agency_abc:__cb_main_0"] = real;
 
     const ctx = new RuntimeContext({
-      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
@@ -557,18 +606,17 @@ describe("lazy callback refs (#544)", () => {
 });
 
 describe("renamed functions round-trip (#652)", () => {
-  function makeRegistered(
-    registry: Record<string, AgencyFunction>,
-  ): AgencyFunction {
-    return AgencyFunction.create({
-      name: "search",
-      module: "stdlib/wikipedia.agency",
-      fn: (query: string) => `results for ${query}`,
-      params: [
-        { name: "query", hasDefault: false, defaultValue: undefined, variadic: false },
-      ],
-      toolDefinition: { name: "search", description: "Search Wikipedia", schema: null },
-    }, registry);
+  function makeRegistered(registry: Record<string, AgencyFunction>): AgencyFunction {
+    return AgencyFunction.create(
+      {
+        name: "search",
+        module: "stdlib/wikipedia.agency",
+        fn: (query: string) => `results for ${query}`,
+        params: [{ name: "query", hasDefault: false, defaultValue: undefined, variadic: false }],
+        toolDefinition: { name: "search", description: "Search Wikipedia", schema: null },
+      },
+      registry,
+    );
   }
 
   it("serialize records the registered name when the function was renamed", () => {
@@ -609,9 +657,7 @@ describe("renamed functions round-trip (#652)", () => {
 
   it("rename composed with partial round-trips", async () => {
     const registry: Record<string, AgencyFunction> = {};
-    const composed = makeRegistered(registry)
-      .rename("wikipedia_search")
-      .partial({ query: "dogs" });
+    const composed = makeRegistered(registry).rename("wikipedia_search").partial({ query: "dogs" });
     functionRefReviver.registry = registry;
 
     const json = JSON.stringify({ tool: composed }, nativeTypeReplacer);
@@ -650,7 +696,14 @@ describe("renamed functions round-trip (#652)", () => {
       name: "read",
       module: "stdlib/shell.agency",
       params: [
-        { name: "useAgentCwd", hasDefault: false, defaultValue: undefined, variadic: false, isBound: true, boundValue: true },
+        {
+          name: "useAgentCwd",
+          hasDefault: false,
+          defaultValue: undefined,
+          variadic: false,
+          isBound: true,
+          boundValue: true,
+        },
         { name: "path", hasDefault: false, defaultValue: undefined, variadic: false },
       ],
       isPreapproved: true,
@@ -669,14 +722,18 @@ describe("lazy callback refs resolve through the shared lookup", () => {
     const reviver = new FunctionRefReviver();
     reviver.registry = {};
     const ref = reviver.revive({
-      __nativeType: "FunctionRef", name: "__cb_main_0", module: "agency_abc",
+      __nativeType: "FunctionRef",
+      name: "__cb_main_0",
+      module: "agency_abc",
     }) as AgencyFunction;
 
     let fired = false;
     reviver.registry["__cb_main_0"] = new AgencyFunction({
       name: "__cb_main_0",
       module: "agency_abc",
-      fn: async () => { fired = true; },
+      fn: async () => {
+        fired = true;
+      },
       params: [{ name: "data", hasDefault: false, defaultValue: undefined, variadic: false }],
       toolDefinition: null,
     });

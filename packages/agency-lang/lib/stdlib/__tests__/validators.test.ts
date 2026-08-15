@@ -28,9 +28,7 @@ describe("simple validators", () => {
   });
 
   it("isUuid accepts canonical UUIDs and rejects malformed", () => {
-    expect(isSuccess(_isUuid("123e4567-e89b-12d3-a456-426614174000"))).toBe(
-      true,
-    );
+    expect(isSuccess(_isUuid("123e4567-e89b-12d3-a456-426614174000"))).toBe(true);
     expect(isFailure(_isUuid("not-a-uuid"))).toBe(true);
   });
 

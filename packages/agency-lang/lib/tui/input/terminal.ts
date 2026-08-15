@@ -98,9 +98,7 @@ export function parseKeypress(data: string): KeyEvent {
  * reuse this.
  */
 type BracketedRead =
-  | null
-  | { kind: "partial"; body: string }
-  | { kind: "complete"; body: string; end: number };
+  null | { kind: "partial"; body: string } | { kind: "complete"; body: string; end: number };
 
 export function readBracketed(
   str: string,

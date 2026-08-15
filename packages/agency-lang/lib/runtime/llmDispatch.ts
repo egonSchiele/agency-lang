@@ -1,10 +1,6 @@
 import { PromptResult, ToolCallJSON, UserContentInput } from "smoltalk";
 import { abortableSleep } from "../stdlib/abortable.js";
-import {
-  AgencyCancelledError,
-  makeAbortCause,
-  readCause,
-} from "./errors.js";
+import { AgencyCancelledError, makeAbortCause, readCause } from "./errors.js";
 import { callHook } from "./hooks.js";
 import type { NormalizedLLMError, PromptConfig } from "./llmClient.js";
 import { decideRetry, enrichSchemaLimitationError } from "./llmRetry.js";
@@ -41,14 +37,10 @@ export async function dispatchLLMRequest({
       stateStack,
     });
     if (!response) {
-      throw new Error(
-        `No completion returned from streaming LLM call! This shouldn't happen.`,
-      );
+      throw new Error(`No completion returned from streaming LLM call! This shouldn't happen.`);
     }
     if (!response.success) {
-      throw new Error(
-        `Error getting completion from streaming response: ${response.error}`,
-      );
+      throw new Error(`Error getting completion from streaming response: ${response.error}`);
     }
     return {
       completion: response.value.completion,
@@ -204,9 +196,7 @@ export async function runWithRetry<T>(
   // Defensive: the loop body always either returns or throws above. Reaching
   // here means `decideRetry` repeatedly returned `retry` past `maxAttempts`,
   // which would be a programming error.
-  throw new Error(
-    `runWithRetry exceeded ${maxAttempts} attempts without resolving`,
-  );
+  throw new Error(`runWithRetry exceeded ${maxAttempts} attempts without resolving`);
 }
 
 /**
@@ -224,15 +214,7 @@ export async function dispatchWithRetry(args: {
   parentSignal: AbortSignal | undefined;
   stateStack?: StateStack;
 }): Promise<{ completion: PromptResult; toolCalls: ToolCallJSON[] }> {
-  const {
-    ctx,
-    promptConfig,
-    prompt,
-    stream,
-    retryPolicy,
-    parentSignal,
-    stateStack,
-  } = args;
+  const { ctx, promptConfig, prompt, stream, retryPolicy, parentSignal, stateStack } = args;
 
   const normalizeError = (err: unknown): NormalizedLLMError => {
     if (ctx.llmClient.normalizeError) {

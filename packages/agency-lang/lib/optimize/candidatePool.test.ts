@@ -16,7 +16,11 @@ describe("CandidatePool", () => {
   });
 
   it("samples a parent from the Pareto frontier", () => {
-    const pool = new CandidatePool([cand("a", [1, 0], 0.5), cand("b", [0, 1], 0.5), cand("c", [0.1, 0.1], 0.1)]);
+    const pool = new CandidatePool([
+      cand("a", [1, 0], 0.5),
+      cand("b", [0, 1], 0.5),
+      cand("c", [0.1, 0.1], 0.1),
+    ]);
     const rng = makeRng(5);
     for (let i = 0; i < 30; i += 1) expect(["a", "b"]).toContain(pool.sampleParent(rng).value);
   });

@@ -102,24 +102,16 @@ describe("AgencyConfigSchema", () => {
 
 describe("AgencyConfig maxCallDepth key", () => {
   it("accepts a positive integer", () => {
-    expect(AgencyConfigSchema.safeParse({ maxCallDepth: 4096 }).success).toBe(
-      true,
-    );
+    expect(AgencyConfigSchema.safeParse({ maxCallDepth: 4096 }).success).toBe(true);
   });
 
   it("rejects 0 (would make every call throw at depth 1)", () => {
-    expect(AgencyConfigSchema.safeParse({ maxCallDepth: 0 }).success).toBe(
-      false,
-    );
+    expect(AgencyConfigSchema.safeParse({ maxCallDepth: 0 }).success).toBe(false);
   });
 
   it("rejects negative and non-integer values", () => {
-    expect(AgencyConfigSchema.safeParse({ maxCallDepth: -10 }).success).toBe(
-      false,
-    );
-    expect(AgencyConfigSchema.safeParse({ maxCallDepth: 12.5 }).success).toBe(
-      false,
-    );
+    expect(AgencyConfigSchema.safeParse({ maxCallDepth: -10 }).success).toBe(false);
+    expect(AgencyConfigSchema.safeParse({ maxCallDepth: 12.5 }).success).toBe(false);
   });
 });
 
@@ -305,7 +297,12 @@ describe("applyCliFlags", () => {
 
 describe("config overrides env round-trip", () => {
   it("serialize → read yields the same Partial<AgencyConfig>", () => {
-    const overrides = { trace: true, traceDir: ".", observability: true, log: { logFile: "l.jsonl" } };
+    const overrides = {
+      trace: true,
+      traceDir: ".",
+      observability: true,
+      log: { logFile: "l.jsonl" },
+    };
     const env = { [CONFIG_OVERRIDES_ENV]: serializeConfigOverrides(overrides) };
     expect(readConfigOverrides(env)).toEqual(overrides);
   });

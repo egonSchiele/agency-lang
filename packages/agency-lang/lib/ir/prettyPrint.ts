@@ -13,9 +13,7 @@ function formatImportName(name: TsImportName): string {
 function scopeToPrefix(scope: TsScopedVar["scope"]): string {
   switch (scope) {
     case "global":
-      throw new Error(
-        "Global-scoped variables must have a moduleId on TsScopedVar",
-      );
+      throw new Error("Global-scoped variables must have a moduleId on TsScopedVar");
     case "function":
     case "node":
     case "local":
@@ -128,8 +126,7 @@ export function printTs(node: TsNode, indent = 0): string {
     case "objectLiteral": {
       if (node.entries.length === 0) return "{}";
       const inner = node.entries.map((e) => {
-        if (e.spread)
-          return `${ind(indent + 1)}...${printTs(e.expr, indent + 1)}`;
+        if (e.spread) return `${ind(indent + 1)}...${printTs(e.expr, indent + 1)}`;
         if (e.computed) {
           return `${ind(indent + 1)}[${printTs(e.key, indent + 1)}]: ${printTs(e.value, indent + 1)}`;
         }
@@ -211,9 +208,7 @@ export function printTs(node: TsNode, indent = 0): string {
     }
 
     case "tryCatch": {
-      const catchClause = node.catchParam
-        ? `catch (${node.catchParam})`
-        : "catch";
+      const catchClause = node.catchParam ? `catch (${node.catchParam})` : "catch";
       let result = `try {\n${printBody(node.tryBody, indent)}\n${ind(indent)}} ${catchClause} {\n${printBody(node.catchBody, indent)}\n${ind(indent)}}`;
       if (node.finallyBody) {
         result += ` finally {\n${printBody(node.finallyBody, indent)}\n${ind(indent)}}`;
@@ -228,9 +223,7 @@ export function printTs(node: TsNode, indent = 0): string {
           : printTs(node.right, indent);
         return `!${right}`;
       }
-      const left = node.parenLeft
-        ? `(${printTs(node.left, indent)})`
-        : printTs(node.left, indent);
+      const left = node.parenLeft ? `(${printTs(node.left, indent)})` : printTs(node.left, indent);
       const right = node.parenRight
         ? `(${printTs(node.right, indent)})`
         : printTs(node.right, indent);
@@ -295,9 +288,7 @@ export function printTs(node: TsNode, indent = 0): string {
         //     gives per-branch isolation in Stage 2: the branch's
         //     cloned GlobalStore is read here instead of the
         //     canonical one.
-        const receiver = node.topLevel
-          ? "__globalCtx.globals"
-          : "__globals()!";
+        const receiver = node.topLevel ? "__globalCtx.globals" : "__globals()!";
         return `${receiver}.get(${JSON.stringify(node.moduleId)}, ${JSON.stringify(node.name)})`;
       }
       if (node.scope === "static") {
@@ -316,10 +307,7 @@ export function printTs(node: TsNode, indent = 0): string {
         const moduleIdLit = JSON.stringify(node.moduleId ?? "");
         return `__readStatic(${node.name}, ${JSON.stringify(node.name)}, ${moduleIdLit})`;
       }
-      if (
-        (node.scope === "block" || node.scope === "blockArgs") &&
-        node.blockFrameVar
-      ) {
+      if ((node.scope === "block" || node.scope === "blockArgs") && node.blockFrameVar) {
         // An ancestor block's variable: address its uniquely-named frame
         // binding (in lexical closure scope) instead of the nearest
         // `__bstack`. Absent blockFrameVar (current/innermost block)
@@ -516,7 +504,10 @@ export function printTs(node: TsNode, indent = 0): string {
     case "agencyFunctionWrap": {
       const fnStr = printTs(node.fn, indent);
       const paramsStr = node.params
-        .map(p => `{ name: ${JSON.stringify(p.name)}, hasDefault: false, defaultValue: undefined, variadic: false }`)
+        .map(
+          (p) =>
+            `{ name: ${JSON.stringify(p.name)}, hasDefault: false, defaultValue: undefined, variadic: false }`,
+        )
         .join(", ");
       return renderAgencyFunctionWrap({
         name: JSON.stringify(node.name),
@@ -535,9 +526,7 @@ export function printTs(node: TsNode, indent = 0): string {
 
 function printBody(node: TsNode, indent: number): string {
   if (node.kind === "statements") {
-    return node.body
-      .map((n) => `${ind(indent + 1)}${printTs(n, indent + 1)}`)
-      .join("\n");
+    return node.body.map((n) => `${ind(indent + 1)}${printTs(n, indent + 1)}`).join("\n");
   }
   return `${ind(indent + 1)}${printTs(node, indent + 1)}`;
 }

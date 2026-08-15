@@ -93,14 +93,18 @@ def f(url: string): any {
   });
 
   it("goto arguments are slots that write back through the node call", () => {
-    const parsed = parseAgency(`
+    const parsed = parseAgency(
+      `
 node main() {
   goto second(wrap(1))
 }
 
 node second(x: number) {
   return x
-}`, {}, true);
+}`,
+      {},
+      true,
+    );
     if (!parsed.success) throw new Error(parsed.message);
     const main = (parsed.result.nodes as any[]).find(
       (n) => n.type === "graphNode" && n.nodeName !== "second",
@@ -148,10 +152,9 @@ describe("expressionSlots: completeness against EXPRESSION_NODE_TYPES", () => {
         enumerated || declaredEmpty,
         `unregistered expression kind: ${kind} — add it to expressionSlots.ts`,
       ).toBe(true);
-      expect(
-        enumerated && declaredEmpty,
-        `${kind} is both enumerated and declared empty`,
-      ).toBe(false);
+      expect(enumerated && declaredEmpty, `${kind} is both enumerated and declared empty`).toBe(
+        false,
+      );
       expect(isRegisteredExpressionKind(kind)).toBe(true);
     }
   });
@@ -204,9 +207,7 @@ function corpusPrograms(lower: boolean): { file: string; nodes: AgencyNode[] }[]
   for (const file of files) {
     const parsed = parseAgency(readFileSync(file, "utf8"), {}, true, lower);
     if (!parsed.success) {
-      throw new Error(
-        `corpus file failed to parse (lower: ${lower}): ${file}: ${parsed.message}`,
-      );
+      throw new Error(`corpus file failed to parse (lower: ${lower}): ${file}: ${parsed.message}`);
     }
     out.push({ file, nodes: parsed.result.nodes as AgencyNode[] });
   }
@@ -268,16 +269,16 @@ describe("expressionSlots: corpus invariants", () => {
       switch (node.type) {
         case "assignment":
           expect(viaChildren, `${file}: assignment order shim`).toEqual(
-            derived.length === 0
-              ? []
-              : [derived[derived.length - 1], ...derived.slice(0, -1)],
+            derived.length === 0 ? [] : [derived[derived.length - 1], ...derived.slice(0, -1)],
           );
           break;
         case "comprehension": {
           const [iterable, expression, ...cond] = derived;
-          expect(viaChildren, `${file}: comprehension order shim`).toEqual(
-            [expression, iterable, ...cond],
-          );
+          expect(viaChildren, `${file}: comprehension order shim`).toEqual([
+            expression,
+            iterable,
+            ...cond,
+          ]);
           break;
         }
         case "gotoStatement":
@@ -381,7 +382,7 @@ const WALKER_EXCLUDED_FIELDS: Record<string, string> = {
     "array-pattern content: every element is a literal matcher, a binder, or a nested " +
     "pattern — a match arm cannot compare against an outer name, so nothing here is a " +
     "use. Same ruling as objectPatternProperty.value, and reached first by a match on " +
-    "an array pattern (`[\"git\", \"diff\"] => ...`) rather than by a destructuring " +
+    'an array pattern (`["git", "diff"] => ...`) rather than by a destructuring ' +
     "declaration, whose pattern is already shielded by assignment.pattern",
   "typePattern.pattern": "type-pattern binder, not a use",
   "codeLiteral.nodes":
@@ -409,8 +410,7 @@ const WALKER_EXCLUDED_TYPES: Record<string, string> = {
 // visits — which is exactly why the fix is a compiler change that gets
 // its own PR and review.
 const KNOWN_WALKER_GAPS: Record<string, string> = {
-  "functionParameter.defaultValue":
-    "#668: parameter default expressions are never walked",
+  "functionParameter.defaultValue": "#668: parameter default expressions are never walked",
   "function.docString":
     "#668: docstring interpolations are evaluated by the builder " +
     "(hasDocStringInterpolation) but the segments are never walked",
@@ -443,9 +443,7 @@ function isKnownGap(ownerType: string, key: string): boolean {
 // a permanent field ruling, or under a known gap (which one, by key, so
 // the staleness guard can attribute liveness per entry).
 type StructuralVia =
-  | { kind: "clear" }
-  | { kind: "excluded" }
-  | { kind: "knownGap"; gapKey: string };
+  { kind: "clear" } | { kind: "excluded" } | { kind: "knownGap"; gapKey: string };
 
 const VIA_CLEAR: StructuralVia = { kind: "clear" };
 
@@ -477,53 +475,60 @@ describe("walker coverage: walkNodes reaches every expression position", () => {
   for (const lower of [true, false]) {
     const label = lower ? "lowered" : "unlowered";
 
-    it(`${label}: slot-table agreement — every expression slot of a walked node is itself walked`, { timeout: 30_000 }, () => {
-      // A CONSISTENCY check, not reachability: both sides start from a
-      // node the walker already yielded, so this can never prove a node
-      // reachable. What it pins is that expressionSlots and walkNodes
-      // agree about the children of everything walked. Reachability is
-      // the structural invariant below. Slot exprs sitting inside a
-      // KNOWN_WALKER_GAPS field are skipped for the same reason the
-      // structural invariant shields them: the fix is a deferred walker
-      // change, and the staleness guard keeps the entry honest.
-      for (const { file, nodes } of corpusPrograms(lower)) {
-        const walked = new Set(walkNodesArray(nodes).map((v) => v.node));
-        const shielded = new Set(
-          [...structuralNodes(nodes, "(root)", VIA_CLEAR)]
-            .filter((entry) => entry.via.kind === "knownGap")
-            .map((entry) => entry.node),
-        );
-        for (const node of walked) {
-          for (const slot of expressionSlots(node as AgencyNode)) {
-            if (shielded.has(slot.expr)) continue;
+    it(
+      `${label}: slot-table agreement — every expression slot of a walked node is itself walked`,
+      { timeout: 30_000 },
+      () => {
+        // A CONSISTENCY check, not reachability: both sides start from a
+        // node the walker already yielded, so this can never prove a node
+        // reachable. What it pins is that expressionSlots and walkNodes
+        // agree about the children of everything walked. Reachability is
+        // the structural invariant below. Slot exprs sitting inside a
+        // KNOWN_WALKER_GAPS field are skipped for the same reason the
+        // structural invariant shields them: the fix is a deferred walker
+        // change, and the staleness guard keeps the entry honest.
+        for (const { file, nodes } of corpusPrograms(lower)) {
+          const walked = new Set(walkNodesArray(nodes).map((v) => v.node));
+          const shielded = new Set(
+            [...structuralNodes(nodes, "(root)", VIA_CLEAR)]
+              .filter((entry) => entry.via.kind === "knownGap")
+              .map((entry) => entry.node),
+          );
+          for (const node of walked) {
+            for (const slot of expressionSlots(node as AgencyNode)) {
+              if (shielded.has(slot.expr)) continue;
+              expect(
+                walked.has(slot.expr),
+                `${file}: walkNodes does not descend into a ${(node as any).type} expression slot ` +
+                  `(slot expr type: ${(slot.expr as any).type}) — template hygiene cannot see names there`,
+              ).toBe(true);
+            }
+          }
+        }
+      },
+    );
+
+    it(
+      `${label}: structural reachability — every expression node in the AST is walked`,
+      { timeout: 30_000 },
+      () => {
+        for (const { file, nodes } of corpusPrograms(lower)) {
+          const walked = new Set(walkNodesArray(nodes).map((v) => v.node));
+          for (const { node, via } of structuralNodes(nodes, "(root)", VIA_CLEAR)) {
+            if (via.kind !== "clear") continue;
+            if (Object.hasOwn(WALKER_EXCLUDED_TYPES, node.type)) continue;
+            if (!EXPRESSION_NODE_TYPES.includes(node.type)) continue;
             expect(
-              walked.has(slot.expr),
-              `${file}: walkNodes does not descend into a ${(node as any).type} expression slot ` +
-                `(slot expr type: ${(slot.expr as any).type}) — template hygiene cannot see names there`,
+              walked.has(node),
+              `${file}: a ${node.type} node is reachable in the AST but never yielded by walkNodes. ` +
+                `Do NOT fix walkNodes in this PR — add a KNOWN_WALKER_GAPS entry naming a follow-up ` +
+                `issue, or, if the non-walk is deliberate, a WALKER_EXCLUDED_FIELDS or ` +
+                `WALKER_EXCLUDED_TYPES ruling.`,
             ).toBe(true);
           }
         }
-      }
-    });
-
-    it(`${label}: structural reachability — every expression node in the AST is walked`, { timeout: 30_000 }, () => {
-      for (const { file, nodes } of corpusPrograms(lower)) {
-        const walked = new Set(walkNodesArray(nodes).map((v) => v.node));
-        for (const { node, via } of structuralNodes(nodes, "(root)", VIA_CLEAR)) {
-          if (via.kind !== "clear") continue;
-          if (Object.hasOwn(WALKER_EXCLUDED_TYPES, node.type)) continue;
-          if (!EXPRESSION_NODE_TYPES.includes(node.type)) continue;
-          expect(
-            walked.has(node),
-            `${file}: a ${node.type} node is reachable in the AST but never yielded by walkNodes. ` +
-              `Do NOT fix walkNodes in this PR — add a KNOWN_WALKER_GAPS entry naming a follow-up ` +
-              `issue, or, if the non-walk is deliberate, a WALKER_EXCLUDED_FIELDS or ` +
-              `WALKER_EXCLUDED_TYPES ruling.`,
-          ).toBe(true);
-        }
-      }
-    });
-
+      },
+    );
   }
 
   it("known gaps are still gaps (staleness guard, both modes)", { timeout: 30_000 }, () => {
@@ -556,24 +561,28 @@ describe("walker coverage: walkNodes reaches every expression position", () => {
     }
   });
 
-  it("liveness: the corpus actually exercises the historically-missed positions", { timeout: 30_000 }, () => {
-    // A coverage invariant over kinds the corpus never contains proves
-    // nothing. Pin the kinds whose walker descent was added by hand
-    // during Template Agency development, in the mode each occurs in.
-    const walkedKinds = (lower: boolean): Record<string, true> => {
-      const seen: Record<string, true> = {};
-      for (const { nodes } of corpusPrograms(lower)) {
-        for (const v of walkNodesArray(nodes)) seen[(v.node as any).type] = true;
+  it(
+    "liveness: the corpus actually exercises the historically-missed positions",
+    { timeout: 30_000 },
+    () => {
+      // A coverage invariant over kinds the corpus never contains proves
+      // nothing. Pin the kinds whose walker descent was added by hand
+      // during Template Agency development, in the mode each occurs in.
+      const walkedKinds = (lower: boolean): Record<string, true> => {
+        const seen: Record<string, true> = {};
+        for (const { nodes } of corpusPrograms(lower)) {
+          for (const v of walkNodesArray(nodes)) seen[(v.node as any).type] = true;
+        }
+        return seen;
+      };
+      const lowered = walkedKinds(true);
+      const unlowered = walkedKinds(false);
+      for (const kind of ["guardBlock", "tryExpression"]) {
+        expect(lowered[kind], `corpus (lowered) never contains a ${kind}`).toBe(true);
       }
-      return seen;
-    };
-    const lowered = walkedKinds(true);
-    const unlowered = walkedKinds(false);
-    for (const kind of ["guardBlock", "tryExpression"]) {
-      expect(lowered[kind], `corpus (lowered) never contains a ${kind}`).toBe(true);
-    }
-    for (const kind of ["isExpression", "comprehension"]) {
-      expect(unlowered[kind], `corpus (unlowered) never contains a ${kind}`).toBe(true);
-    }
-  });
+      for (const kind of ["isExpression", "comprehension"]) {
+        expect(unlowered[kind], `corpus (unlowered) never contains a ${kind}`).toBe(true);
+      }
+    },
+  );
 });

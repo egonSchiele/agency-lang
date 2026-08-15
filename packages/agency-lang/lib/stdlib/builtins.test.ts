@@ -14,7 +14,11 @@ describe("_write mode parameter", () => {
   });
 
   afterEach(() => {
-    try { rmSync(dir, { recursive: true }); } catch (_) { /* best effort */ }
+    try {
+      rmSync(dir, { recursive: true });
+    } catch (_) {
+      /* best effort */
+    }
   });
 
   it("defaults to overwrite (backward compat: no mode arg)", async () => {
@@ -56,9 +60,9 @@ describe("_write mode parameter", () => {
   });
 
   it("rejects unknown mode strings with a clear message", async () => {
-    await expect(
-      _write(dir, target, "x", "bogus" as "overwrite"),
-    ).rejects.toThrow(/Invalid mode 'bogus'/);
+    await expect(_write(dir, target, "x", "bogus" as "overwrite")).rejects.toThrow(
+      /Invalid mode 'bogus'/,
+    );
   });
 });
 
@@ -70,7 +74,11 @@ describe("_read offset/limit", () => {
   });
 
   afterEach(() => {
-    try { rmSync(dir, { recursive: true }); } catch (_) { /* best effort */ }
+    try {
+      rmSync(dir, { recursive: true });
+    } catch (_) {
+      /* best effort */
+    }
   });
 
   it("returns the whole file when no offset/limit is given", async () => {

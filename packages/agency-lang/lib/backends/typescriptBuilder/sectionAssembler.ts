@@ -106,10 +106,7 @@ export type ProgramPartition = {
  *   - Anything else (bare expressions, function calls, …) goes into
  *     `__initializeGlobals` so it can access `__ctx`.
  */
-export function partitionProgram(
-  program: AgencyProgram,
-  deps: PartitionDeps,
-): ProgramPartition {
+export function partitionProgram(program: AgencyProgram, deps: PartitionDeps): ProgramPartition {
   const staticVarNames = new Set<string>();
   const exportedStaticVarNames = new Set<string>();
   // Tag each init statement with its var name (null = bare/anonymous)
@@ -167,9 +164,7 @@ export function partitionProgram(
       );
       globalInitTagged.push({
         varName: stmt.variableName,
-        node: handlerName
-          ? ts.withHandler(deps.buildHandlerArrow(handlerName), setNode)
-          : setNode,
+        node: handlerName ? ts.withHandler(deps.buildHandlerArrow(handlerName), setNode) : setNode,
       });
       continue;
     }
@@ -305,9 +300,9 @@ function isTopLevelCallbackCall(node: AgencyNode): boolean {
 }
 
 /** If `node` is a `static x = ...` (optionally wrapped in `with handler`), return its parts. */
-function unwrapStaticAssignment(node: AgencyNode):
-  | { stmt: Extract<AgencyNode, { type: "assignment" }>; handlerName?: string }
-  | null {
+function unwrapStaticAssignment(
+  node: AgencyNode,
+): { stmt: Extract<AgencyNode, { type: "assignment" }>; handlerName?: string } | null {
   if (node.type === "assignment" && node.scope === "static") {
     return { stmt: node };
   }
@@ -322,9 +317,9 @@ function unwrapStaticAssignment(node: AgencyNode):
 }
 
 /** If `node` is a `global x = ...` (optionally wrapped in `with handler`), return its parts. */
-function unwrapGlobalAssignment(node: AgencyNode):
-  | { stmt: Extract<AgencyNode, { type: "assignment" }>; handlerName?: string }
-  | null {
+function unwrapGlobalAssignment(
+  node: AgencyNode,
+): { stmt: Extract<AgencyNode, { type: "assignment" }>; handlerName?: string } | null {
   if (node.type === "assignment" && node.scope === "global") {
     return { stmt: node };
   }
@@ -444,10 +439,7 @@ export function assembleSections(opts: AssembleSectionsOpts): TsNode {
   // other modules whose globals depend on this module's statics still
   // need an `__awaitStaticInit(...)` entry to wait on — even if the
   // dependency is only a side effect, not a value.
-  if (
-    opts.staticVarNames.size > 0 ||
-    opts.staticInitStatements.length > 0
-  ) {
+  if (opts.staticVarNames.size > 0 || opts.staticInitStatements.length > 0) {
     sections.push(...buildStaticVarSetup(opts));
     sections.push(
       ts.raw(
@@ -479,9 +471,7 @@ export function assembleSections(opts: AssembleSectionsOpts): TsNode {
     sections.push(ts.statements(opts.postprocess));
   }
 
-  sections.push(
-    ts.raw(`export const __sourceMap = ${opts.sourceMapJson};`),
-  );
+  sections.push(ts.raw(`export const __sourceMap = ${opts.sourceMapJson};`));
 
   return ts.statements(sections);
 }
@@ -504,11 +494,8 @@ function buildInitBanner(
 ): TsNode[] {
   if (localOrder.length === 0 && awaitModules.length === 0) return [];
   const awaitsLine =
-    awaitModules.length > 0
-      ? awaitModules.map(displayModuleId).join(", ")
-      : "(none)";
-  const localLine =
-    localOrder.length > 0 ? localOrder.join(" → ") : "(none)";
+    awaitModules.length > 0 ? awaitModules.map(displayModuleId).join(", ") : "(none)";
+  const localLine = localOrder.length > 0 ? localOrder.join(" → ") : "(none)";
   return [
     ts.comment(`Init plan (${phase} phase):`),
     ts.comment(`  awaits (cross-module): ${awaitsLine}`),
@@ -544,10 +531,7 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
       : ts.letDecl(name, sentinel),
   );
 
-  out.push(ts.statements([
-    ts.letDecl("__staticInitPromise", ts.raw("null")),
-    ...staticLetDecls,
-  ]));
+  out.push(ts.statements([ts.letDecl("__staticInitPromise", ts.raw("null")), ...staticLetDecls]));
 
   // Promise-based guard: concurrent callers await the same init promise.
   // Body starts with awaits on any modules whose statics are
@@ -556,9 +540,7 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
   // Local assignments then run in topsort-order (sectionAssembler's
   // `reorderTagged` did that ordering during partition).
   const awaitPrelude = (opts.staticAwaitModules ?? []).map((m) =>
-    ts.raw(
-      `await __awaitStaticInit(${JSON.stringify(displayModuleId(m.sourceModuleId))}, __ctx);`,
-    ),
+    ts.raw(`await __awaitStaticInit(${JSON.stringify(displayModuleId(m.sourceModuleId))}, __ctx);`),
   );
   out.push(
     ts.functionDecl(
@@ -570,10 +552,7 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
           opts.staticLocalOrder ?? [],
           (opts.staticAwaitModules ?? []).map((m) => m.sourceModuleId),
         ),
-        ts.if(
-          ts.id("__staticInitPromise"),
-          ts.return(ts.id("__staticInitPromise")),
-        ),
+        ts.if(ts.id("__staticInitPromise"), ts.return(ts.id("__staticInitPromise"))),
         ts.assign(
           ts.id("__staticInitPromise"),
           ts.iife({
@@ -587,16 +566,13 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
     ),
   );
 
-  const staticVarObj = ts.obj(
-    [...opts.staticVarNames].map((n) => ts.set(n, ts.id(n))),
+  const staticVarObj = ts.obj([...opts.staticVarNames].map((n) => ts.set(n, ts.id(n))));
+  out.push(
+    ts.statements([
+      ts.functionDecl("__getStaticVars", [], ts.return(staticVarObj)),
+      ts.assign(ts.prop(ts.runtime.globalCtx, "getStaticVars"), ts.id("__getStaticVars")),
+    ]),
   );
-  out.push(ts.statements([
-    ts.functionDecl("__getStaticVars", [], ts.return(staticVarObj)),
-    ts.assign(
-      ts.prop(ts.runtime.globalCtx, "getStaticVars"),
-      ts.id("__getStaticVars"),
-    ),
-  ]));
 
   return out;
 }
@@ -631,20 +607,14 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
     // statements. Same per-execCtx flag that the per-function lazy
     // guard already checks; safe and cheap.
     ts.if(
-      ts.methodCall(ts.prop(ctxParam, "globals"), "isInitialized", [
-        ts.str(opts.moduleId),
-      ]),
+      ts.methodCall(ts.prop(ctxParam, "globals"), "isInitialized", [ts.str(opts.moduleId)]),
       ts.return(),
     ),
     // Mark this module as initialized BEFORE running init statements.
     // This prevents infinite recursion when a global init expression
     // calls a function defined in the same module (which would trigger
     // __initializeGlobals again via the isInitialized check).
-    ts.methodCall(
-      ts.prop(ctxParam, "globals"),
-      "markInitialized",
-      [ts.str(opts.moduleId)],
-    ),
+    ts.methodCall(ts.prop(ctxParam, "globals"), "markInitialized", [ts.str(opts.moduleId)]),
   ];
 
   // Always run this module's static init before its global init when
@@ -653,10 +623,7 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
   // in `__initializeStatic` makes the call cheap on the second-plus
   // run; the first run is what bare static statements rely on for
   // their once-per-process semantics.
-  if (
-    opts.staticVarNames.size > 0 ||
-    opts.staticInitStatements.length > 0
-  ) {
+  if (opts.staticVarNames.size > 0 || opts.staticInitStatements.length > 0) {
     body.push(ts.awaitCall(ts.id("__initializeStatic"), [ctxParam]));
   }
   if (opts.staticVarNames.size > 0) {
@@ -679,12 +646,9 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
 
   body.push(...opts.globalInitStatements);
 
-  return ts.functionDecl(
-    "__initializeGlobals",
-    [{ name: "__ctx" }],
-    ts.statements(body),
-    { async: true },
-  );
+  return ts.functionDecl("__initializeGlobals", [{ name: "__ctx" }], ts.statements(body), {
+    async: true,
+  });
 }
 
 /**
@@ -705,10 +669,7 @@ function buildRegisterTopLevelCallbacksFn(opts: AssembleSectionsOpts): TsNode {
   // Same parameter-context rule as buildInitializeGlobalsFn — `__ctx`
   // here is the function parameter, not an ALS-installed value.
   const body: TsNode[] = [...opts.topLevelCallbackStatements];
-  return ts.functionDecl(
-    "__registerTopLevelCallbacks",
-    [{ name: "__ctx" }],
-    ts.statements(body),
-    { async: true },
-  );
+  return ts.functionDecl("__registerTopLevelCallbacks", [{ name: "__ctx" }], ts.statements(body), {
+    async: true,
+  });
 }

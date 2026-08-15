@@ -23,23 +23,16 @@
  */
 import type { AgencyProgram, AgencyNode, Assignment } from "../types.js";
 import type { TypeCheckError } from "./types.js";
-import {
-  checkBannedBuiltinCalls,
-  checkStaticMutation,
-} from "./staticInitRules.js";
+import { checkBannedBuiltinCalls, checkStaticMutation } from "./staticInitRules.js";
 
-export function validateStaticInit(
-  program: AgencyProgram,
-  errors: TypeCheckError[],
-): void {
+export function validateStaticInit(program: AgencyProgram, errors: TypeCheckError[]): void {
   // First sweep: collect static names so the mutation rule has
   // something to match against. Both `static const` and `with handler
   // { static const ... }` shapes count; the `withModifier` wrapper
   // here mirrors how `sectionAssembler` / `initDepGraph` peel it off.
   const staticNames: Record<string, true> = {};
   for (const node of program.nodes) {
-    const inner =
-      node.type === "withModifier" ? node.statement : node;
+    const inner = node.type === "withModifier" ? node.statement : node;
     if (inner.type !== "assignment") continue;
     if ((inner as Assignment).static) {
       staticNames[(inner as Assignment).variableName] = true;
@@ -50,27 +43,19 @@ export function validateStaticInit(
   // and flag obvious mutations against known statics elsewhere at
   // top level.
   for (const node of program.nodes) {
-    const inner =
-      node.type === "withModifier" ? node.statement : node;
+    const inner = node.type === "withModifier" ? node.statement : node;
 
     // `static const x = ...` — validate the initializer expression.
     if (inner.type === "assignment" && (inner as Assignment).static) {
       const a = inner as Assignment;
       const label = `Static const \`${a.variableName}\``;
-      errors.push(
-        ...checkBannedBuiltinCalls(a.value as AgencyNode, label, a.variableName),
-      );
+      errors.push(...checkBannedBuiltinCalls(a.value as AgencyNode, label, a.variableName));
       continue;
     }
 
     // `static <bare>` — validate the wrapped statement.
     if (inner.type === "staticStatement") {
-      errors.push(
-        ...checkBannedBuiltinCalls(
-          inner.statement,
-          "Static bare statement",
-        ),
-      );
+      errors.push(...checkBannedBuiltinCalls(inner.statement, "Static bare statement"));
       continue;
     }
 

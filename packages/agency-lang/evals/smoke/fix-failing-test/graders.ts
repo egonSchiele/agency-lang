@@ -27,41 +27,47 @@ function fail(feedback: string) {
 }
 
 export default [
-  grader(({ workdir }) => {
-    const file = join(workdir, "test.cjs");
-    if (!existsSync(file)) {
-      return fail("test.cjs is gone — the task said not to edit it, let alone delete it");
-    }
-    const digest = createHash("sha256").update(readFileSync(file)).digest("hex");
-    if (digest !== TEST_FILE_SHA256) {
-      return fail(
-        "test.cjs was modified. The task is to fix stats.cjs; changing the test " +
-        "makes a pass meaningless.",
-      );
-    }
-    return true;
-  }, { name: "test-file-untouched", mustPass: true }),
+  grader(
+    ({ workdir }) => {
+      const file = join(workdir, "test.cjs");
+      if (!existsSync(file)) {
+        return fail("test.cjs is gone — the task said not to edit it, let alone delete it");
+      }
+      const digest = createHash("sha256").update(readFileSync(file)).digest("hex");
+      if (digest !== TEST_FILE_SHA256) {
+        return fail(
+          "test.cjs was modified. The task is to fix stats.cjs; changing the test " +
+            "makes a pass meaningless.",
+        );
+      }
+      return true;
+    },
+    { name: "test-file-untouched", mustPass: true },
+  ),
 
-  grader(({ workdir }) => {
-    if (!existsSync(join(workdir, "stats.cjs"))) {
-      return fail("stats.cjs is missing from the workdir");
-    }
-    try {
-      // Inherit no stdin and cap the wall clock: a fix that hangs is a
-      // failure, not a stuck grading pass.
-      const stdout = execFileSync("node", ["test.cjs"], {
-        cwd: workdir,
-        encoding: "utf8",
-        timeout: TEST_TIMEOUT_MS,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      return { score: { kind: "binary" as const, pass: true }, feedback: stdout.trim() };
-    } catch (err) {
-      // execFileSync throws on any non-zero exit; its stdout holds the
-      // per-case ok/FAIL lines, which are the useful feedback.
-      const output = (err as { stdout?: string }).stdout ?? "";
-      const message = (err as Error).message;
-      return fail(`node test.cjs did not pass:\n${output.trim() || message}`);
-    }
-  }, { name: "tests-pass", mustPass: true }),
+  grader(
+    ({ workdir }) => {
+      if (!existsSync(join(workdir, "stats.cjs"))) {
+        return fail("stats.cjs is missing from the workdir");
+      }
+      try {
+        // Inherit no stdin and cap the wall clock: a fix that hangs is a
+        // failure, not a stuck grading pass.
+        const stdout = execFileSync("node", ["test.cjs"], {
+          cwd: workdir,
+          encoding: "utf8",
+          timeout: TEST_TIMEOUT_MS,
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+        return { score: { kind: "binary" as const, pass: true }, feedback: stdout.trim() };
+      } catch (err) {
+        // execFileSync throws on any non-zero exit; its stdout holds the
+        // per-case ok/FAIL lines, which are the useful feedback.
+        const output = (err as { stdout?: string }).stdout ?? "";
+        const message = (err as Error).message;
+        return fail(`node test.cjs did not pass:\n${output.trim() || message}`);
+      }
+    },
+    { name: "tests-pass", mustPass: true },
+  ),
 ];

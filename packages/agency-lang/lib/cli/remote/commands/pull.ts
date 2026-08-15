@@ -11,10 +11,7 @@ export type PullOptions = ProjectCommandOptions & {
 
 /** `agency remote pull` — download the deployed source to disk (safe planner +
  *  atomic applicator; refuses to overwrite without --force). */
-export async function runPull(
-  options: PullOptions,
-  context: RemoteCommandContext,
-): Promise<void> {
+export async function runPull(options: PullOptions, context: RemoteCommandContext): Promise<void> {
   const target = resolveProjectTarget(context, options);
   try {
     const files = await createProjectClient(
@@ -24,7 +21,12 @@ export async function runPull(
     ).pullSource();
     const plan = planSourcePull(files, options.out ?? ".", options.force === true);
     applySourcePull(plan);
-    console.log(renderPullSummary(plan.files.map((file) => file.name), plan.outputDir));
+    console.log(
+      renderPullSummary(
+        plan.files.map((file) => file.name),
+        plan.outputDir,
+      ),
+    );
   } catch (error) {
     failProjectCommand(error);
   }

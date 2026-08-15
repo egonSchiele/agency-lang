@@ -64,10 +64,7 @@ export function parseFileOrNull(absPath: string, config: AgencyConfig): AgencyPr
  * A file that does not exist or does not parse is skipped. Whether that
  * matters is the caller's business.
  */
-export function closureFiles(
-  entryPath: string,
-  config: AgencyConfig = {},
-): string[] {
+export function closureFiles(entryPath: string, config: AgencyConfig = {}): string[] {
   // Paths are user-controlled, so the visited dictionary is null-prototype
   // and membership goes through Object.hasOwn (house pattern, see
   // lib/optimize/registry.ts). Without it an import cycle loops forever.
@@ -137,9 +134,7 @@ export function checkImportGraph(
     if (program === null) {
       continue;
     }
-    const escaping = importEdgesOf(program).find(
-      (specifier) => !isAllowedEdge(specifier),
-    );
+    const escaping = importEdgesOf(program).find((specifier) => !isAllowedEdge(specifier));
     if (escaping !== undefined) {
       return {
         diagnostic: "spliceGeneratorReachesNonAgency",
@@ -207,15 +202,10 @@ export function checkGeneratorEligible(
       config.allowNonAgencyGenerators === true
         ? null
         : checkImportGraph(generatorPath, generatorName, config),
-    () =>
-      checkGeneratorEffects(generatorPath, generatorName, config, symbolTable),
+    () => checkGeneratorEffects(generatorPath, generatorName, config, symbolTable),
   ];
-  return checks.reduce<SpliceDiagnostic | null>(
-    (found, check) => found ?? check(),
-    null,
-  );
+  return checks.reduce<SpliceDiagnostic | null>((found, check) => found ?? check(), null);
 }
-
 
 /**
  * Which module supplies a splice's generator, and under what name.

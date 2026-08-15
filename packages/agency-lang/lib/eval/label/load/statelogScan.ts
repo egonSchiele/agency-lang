@@ -43,8 +43,8 @@ export function scanStatelog(text: string): StatelogScan {
     const first = errors[0];
     throw new IngestSourceError(
       `This statelog has ${errors.length} unparseable line${errors.length === 1 ? "" : "s"} ` +
-      `(first at line ${first.line}: ${first.detail}). A dataset must not be built from a ` +
-      `partially parsed trace; fix or regenerate the log.`,
+        `(first at line ${first.line}: ${first.detail}). A dataset must not be built from a ` +
+        `partially parsed trace; fix or regenerate the log.`,
     );
   }
   if (events.length === 0) {
@@ -89,7 +89,8 @@ function summarizeTrace(traceId: string, events: readonly EventEnvelope[]): Trac
 export function describeAvailableTraces(scan: StatelogScan): string {
   const lines = scan.traces.map((trace) => {
     const label = trace.agentName ?? "(unnamed)";
-    const preview = trace.firstUserMessage === null ? "" : `  ${previewLine(trace.firstUserMessage)}`;
+    const preview =
+      trace.firstUserMessage === null ? "" : `  ${previewLine(trace.firstUserMessage)}`;
     return `  ${trace.traceId}  [${label}]  $${trace.costUsd.toFixed(4)}${preview}`;
   });
   return `Available traces:\n${lines.join("\n")}`;

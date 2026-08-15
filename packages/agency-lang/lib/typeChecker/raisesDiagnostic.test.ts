@@ -11,7 +11,7 @@ describe("raises subset diagnostic", () => {
 
   it("produces NO raises error for a fully valid program (false-positive guard)", () => {
     const errs = raisesErrors(
-      'effectSet Fs = <std::read, std::write>\n' +
+      "effectSet Fs = <std::read, std::write>\n" +
         'def f(): number raises Fs { raise std::read("m",{})\n raise std::write("m",{})\n return 1 }',
     );
     expect(errs).toHaveLength(0);
@@ -30,9 +30,9 @@ describe("raises subset diagnostic", () => {
 
   it("flags a locally-handled effect (decision A)", () => {
     const errs = typecheckSource(
-      'def f(): number raises <std::read> {\n' +
+      "def f(): number raises <std::read> {\n" +
         '  handle { raise std::write("m", {}) } with approve\n' +
-        '  return 1\n}',
+        "  return 1\n}",
     );
     expect(errs.find((e) => /raises effect 'std::write'/.test(e.message))).toBeDefined();
   });
@@ -49,7 +49,7 @@ describe("raises subset diagnostic", () => {
   it("counts an effect raised transitively through a callee", () => {
     const errs = typecheckSource(
       'def inner() { raise std::write("m", {}) }\n' +
-        'def f(): number raises <std::read> { inner()\n return 1 }',
+        "def f(): number raises <std::read> { inner()\n return 1 }",
     );
     expect(errs.find((e) => /raises effect 'std::write'/.test(e.message))).toBeDefined();
   });
@@ -60,12 +60,16 @@ describe("raises subset diagnostic", () => {
   });
 
   it("raises <> rejects any inferred effect", () => {
-    const errs = typecheckSource('def f(): number raises <> { raise std::read("m",{})\n return 1 }');
+    const errs = typecheckSource(
+      'def f(): number raises <> { raise std::read("m",{})\n return 1 }',
+    );
     expect(errs.find((e) => /raises effect/.test(e.message))).toBeDefined();
   });
 
   it("raises <*> imposes no upper bound", () => {
-    expect(raisesErrors('def f(): number raises <*> { raise std::write("m",{})\n return 1 }')).toHaveLength(0);
+    expect(
+      raisesErrors('def f(): number raises <*> { raise std::write("m",{})\n return 1 }'),
+    ).toHaveLength(0);
   });
 
   it("omitted clause imposes no upper bound", () => {
@@ -85,7 +89,9 @@ describe("unknown (unlabeled) effects", () => {
   });
 
   it("`raises <unknown>` precisely accepts an unlabeled interrupt", () => {
-    const errs = raisesErrors('def f(): number raises <unknown> { raise interrupt("x")\n return 1 }');
+    const errs = raisesErrors(
+      'def f(): number raises <unknown> { raise interrupt("x")\n return 1 }',
+    );
     expect(errs).toHaveLength(0);
   });
 
@@ -97,20 +103,24 @@ describe("unknown (unlabeled) effects", () => {
   });
 
   it("`raises <*>` accepts an unlabeled interrupt too", () => {
-    expect(raisesErrors('def f(): number raises <*> { raise interrupt("x")\n return 1 }')).toHaveLength(0);
+    expect(
+      raisesErrors('def f(): number raises <*> { raise interrupt("x")\n return 1 }'),
+    ).toHaveLength(0);
   });
 });
 
 describe("raises must reference an effect set (not a plain type)", () => {
   it("errors when raises references a non-effectSet type alias", () => {
     const errs = typecheckSource(
-      'type Color = "red" | "blue"\n' + 'def f(): number raises Color { return 1 }',
+      'type Color = "red" | "blue"\n' + "def f(): number raises Color { return 1 }",
     );
     expect(errs.find((e) => /not an effect set/.test(e.message))).toBeDefined();
   });
 
   it("treats an unknown bare name as a single literal effect (NOT an error)", () => {
-    const errs = typecheckSource('def f(): number raises deploy { raise deploy("m",{})\n return 1 }');
+    const errs = typecheckSource(
+      'def f(): number raises deploy { raise deploy("m",{})\n return 1 }',
+    );
     expect(errs.filter((e) => /not an effect set|raises effect/.test(e.message))).toHaveLength(0);
   });
 
@@ -121,7 +131,7 @@ describe("raises must reference an effect set (not a plain type)", () => {
 
   it("accepts a real effectSet reference", () => {
     const errs = typecheckSource(
-      'effectSet FsKinds = <std::read>\n' +
+      "effectSet FsKinds = <std::read>\n" +
         'def f(): number raises FsKinds { raise std::read("m", {})\n return 1 }',
     );
     expect(errs.filter((e) => /not an effect set|raises effect/.test(e.message))).toHaveLength(0);

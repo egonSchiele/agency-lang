@@ -178,14 +178,17 @@ def pick(x: string): Category {
   });
 
   it("expression exhaustiveness is a hard error even under silent config", () => {
-    const errs = check(`${TRY}
+    const errs = check(
+      `${TRY}
 node main() {
   let r = tryParse("ok")
   const val = match(r) {
     success(v) => 1
   }
   return val
-}`, { typechecker: { matchExhaustiveness: "silent" } });
+}`,
+      { typechecker: { matchExhaustiveness: "silent" } },
+    );
     expect(errs.some((e) => /not exhaustive/i.test(e))).toBe(true);
   });
 
@@ -206,14 +209,17 @@ node main() {
   });
 
   it("statement match exhaustiveness still honors silent config", () => {
-    const errs = check(`${TRY}
+    const errs = check(
+      `${TRY}
 node main() {
   let r = tryParse("ok")
   match(r) {
     success(v) => tryParse("x")
   }
   return 0
-}`, { typechecker: { matchExhaustiveness: "silent" } });
+}`,
+      { typechecker: { matchExhaustiveness: "silent" } },
+    );
     expect(errs).toEqual([]);
   });
 });
@@ -263,9 +269,7 @@ node main(): string { return label }`);
 describe("computeMatchExprTypes ordering assertion", () => {
   it("throws if called before buildFlowGraphs (flowEnv not set)", () => {
     const ctx = {} as unknown as Parameters<typeof computeMatchExprTypes>[1];
-    expect(() => computeMatchExprTypes([], ctx)).toThrow(
-      /must run after buildFlowGraphs/,
-    );
+    expect(() => computeMatchExprTypes([], ctx)).toThrow(/must run after buildFlowGraphs/);
   });
 });
 

@@ -71,19 +71,13 @@ export function __registerCallbacksInit(moduleId: string, fn: InitFn): void {
  * register, in which case the PR-1 read-before-init trap fires as the
  * safety net).
  */
-export async function __awaitStaticInit(
-  moduleId: string,
-  ctx: unknown,
-): Promise<void> {
+export async function __awaitStaticInit(moduleId: string, ctx: unknown): Promise<void> {
   const fn = staticInits[moduleId];
   if (!fn) return;
   await fn(ctx);
 }
 
-export async function __awaitGlobalsInit(
-  moduleId: string,
-  ctx: unknown,
-): Promise<void> {
+export async function __awaitGlobalsInit(moduleId: string, ctx: unknown): Promise<void> {
   const fn = globalsInits[moduleId];
   if (!fn) return;
   await fn(ctx);

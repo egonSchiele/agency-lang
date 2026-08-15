@@ -74,7 +74,9 @@ export class DebuggerDriver {
       const h = opts.traceHeader;
       const date = new Date(h.timestamp);
       const formattedDate = date.toLocaleString();
-      this.ui.state.log(`Trace: ${h.program} | ${formattedDate} | Agency v${h.agencyVersion} | ${opts.checkpoints?.length ?? 0} checkpoints`);
+      this.ui.state.log(
+        `Trace: ${h.program} | ${formattedDate} | Agency v${h.agencyVersion} | ${opts.checkpoints?.length ?? 0} checkpoints`,
+      );
     }
   }
 
@@ -84,15 +86,11 @@ export class DebuggerDriver {
 
   private interceptConsole(): void {
     console.log = (...args: any[]) => {
-      const text = args
-        .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
-        .join(" ");
+      const text = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
       this.ui.appendStdout(text);
     };
     console.error = (...args: any[]) => {
-      const text = args
-        .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
-        .join(" ");
+      const text = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
       this.ui.appendStdout(text);
     };
     (globalThis as any).__agencyInputOverride = (prompt: string) => {
@@ -140,15 +138,17 @@ export class DebuggerDriver {
         this.ui.render();
       },
       onLLMCallEnd: (data) => {
-        const tokens = data.usage
-          ? `${data.usage.totalTokens} tokens`
-          : "unknown tokens";
+        const tokens = data.usage ? `${data.usage.totalTokens} tokens` : "unknown tokens";
         const time = `${round(data.timeTaken)}ms`;
         this.ui.state.log(`LLM returned (${tokens}, ${time})`);
         this.ui.render();
       },
       onToolCallStart: (data) => {
-        this.ui.state.log(`Tool call: ${data.toolName}(${Object.entries(data.args).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(", ")})`);
+        this.ui.state.log(
+          `Tool call: ${data.toolName}(${Object.entries(data.args)
+            .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+            .join(", ")})`,
+        );
         this.ui.render();
       },
       onToolCallEnd: (data) => {
@@ -179,9 +179,13 @@ export class DebuggerDriver {
 
         if (!isInterrupt(result?.data)) {
           if (!lastInterrupt) {
-            throw new Error("Program finished without any interrupts. This shouldn't happen with the debugger enabled.");
+            throw new Error(
+              "Program finished without any interrupts. This shouldn't happen with the debugger enabled.",
+            );
           }
-          this.ui.state.log(`Program finished. Return value: ${JSON.stringify(result?.data ?? undefined)}`);
+          this.ui.state.log(
+            `Program finished. Return value: ${JSON.stringify(result?.data ?? undefined)}`,
+          );
           this.programFinished = true;
           finalResult = result;
 
@@ -217,9 +221,7 @@ export class DebuggerDriver {
           }
         } else {
           // User code interrupt — show it and collect input from the user
-          this.ui.state.log(
-            `Interrupt: ${JSON.stringify((interrupt as Interrupt).data)}`,
-          );
+          this.ui.state.log(`Interrupt: ${JSON.stringify((interrupt as Interrupt).data)}`);
           this.ui.state.setMode(this.debuggerState.getMode());
           await this.ui.render(interrupt);
           result = await this.handleInterrupt(interrupt);
@@ -235,9 +237,7 @@ export class DebuggerDriver {
   }
 
   private async handleInterrupt(interrupt: Interrupt): Promise<any> {
-    const input = await this.ui.promptForInput(
-      "approve / reject / resolve <value>",
-    );
+    const input = await this.ui.promptForInput("approve / reject / resolve <value>");
     const trimmed = input.trim();
 
     if (trimmed === "approve" || trimmed === "a" || trimmed === "") {
@@ -294,10 +294,7 @@ export class DebuggerDriver {
   }
 
   // eslint-disable-next-line max-lines-per-function -- large command dispatcher; refactor tracked separately
-  private async handleCommand(
-    command: DebuggerCommand,
-    interrupt: Interrupt,
-  ): Promise<any> {
+  private async handleCommand(command: DebuggerCommand, interrupt: Interrupt): Promise<any> {
     const forwardCommands = ["step", "stepIn", "next", "stepOut", "continue"];
     if (this.programFinished && forwardCommands.includes(command.type)) {
       this.ui.state.log("Already at end of execution.");
@@ -327,9 +324,7 @@ export class DebuggerDriver {
       }
       case "set": {
         this.ui.state.setOverride(command.varName, command.value);
-        this.ui.state.log(
-          `Set ${command.varName} = ${JSON.stringify(command.value)}`,
-        );
+        this.ui.state.log(`Set ${command.varName} = ${JSON.stringify(command.value)}`);
         return { data: interrupt };
       }
       case "checkpoint": {
@@ -342,8 +337,7 @@ export class DebuggerDriver {
         const lastCheckpoint = rollingCheckpoints.at(-1);
         if (lastCheckpoint) {
           //console.log(color.cyan(`Creating checkpoint at ${lastCheckpoint.location}`, JSON.stringify(lastCheckpoint, null, 2)));
-          const checkpointId =
-            this.debuggerState.cloneCheckpoint(lastCheckpoint);
+          const checkpointId = this.debuggerState.cloneCheckpoint(lastCheckpoint);
           this.debuggerState.checkpoints.removeDebugFlagsFor(checkpointId);
           this.debuggerState.pinCheckpoint(checkpointId, command.label);
           this.ui.state.log(
@@ -368,9 +362,7 @@ export class DebuggerDriver {
           return { data: interrupt };
         }
         if (cp.id < 0) {
-          this.ui.state.log(
-            "Current checkpoint is not valid for stepping back",
-          );
+          this.ui.state.log("Current checkpoint is not valid for stepping back");
           return { data: interrupt };
         }
 
@@ -420,18 +412,20 @@ export class DebuggerDriver {
         );
       }
       case "resolve": {
-        this.ui.state.log(
-          `Resolved interrupt with: ${JSON.stringify(command.value)}`,
-        );
+        this.ui.state.log(`Resolved interrupt with: ${JSON.stringify(command.value)}`);
         this.debuggerState.resetCallDepth();
         this.ui.state.resetCallStack();
         return await this.resumeInterrupt(() =>
-          this.mod.respondToInterrupts([interrupt], [{ type: "approve", value: command.value } as any], {
-            metadata: {
-              callbacks: this.getCallbacks(),
-              debugger: this.debuggerState,
+          this.mod.respondToInterrupts(
+            [interrupt],
+            [{ type: "approve", value: command.value } as any],
+            {
+              metadata: {
+                callbacks: this.getCallbacks(),
+                debugger: this.debuggerState,
+              },
             },
-          }),
+          ),
         );
       }
       case "showCheckpoints": {
@@ -451,9 +445,7 @@ export class DebuggerDriver {
           this.ui.state.log("No checkpoint to save");
           return { data: interrupt };
         }
-        const filePath = command.path.endsWith(".json")
-          ? command.path
-          : command.path + ".json";
+        const filePath = command.path.endsWith(".json") ? command.path : command.path + ".json";
         const absPath = path.resolve(filePath);
         try {
           fs.writeFileSync(absPath, JSON.stringify(rolling.toJSON(), null, 2));
@@ -464,18 +456,14 @@ export class DebuggerDriver {
         return { data: interrupt };
       }
       case "load": {
-        const filePath = command.path.endsWith(".json")
-          ? command.path
-          : command.path + ".json";
+        const filePath = command.path.endsWith(".json") ? command.path : command.path + ".json";
         const absPath = path.resolve(filePath);
         try {
           const raw = fs.readFileSync(absPath, "utf-8");
           const json = JSON.parse(raw);
           const checkpoint = Checkpoint.fromJSON(json);
           if (!checkpoint) {
-            this.ui.state.log(
-              `Invalid checkpoint data in file: ${JSON.stringify(json)}`,
-            );
+            this.ui.state.log(`Invalid checkpoint data in file: ${JSON.stringify(json)}`);
             return { data: interrupt };
           }
           return await this.rewindTo(checkpoint);

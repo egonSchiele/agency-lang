@@ -24,10 +24,7 @@ function check(source: string): TypeCheckError[] {
 }
 
 // Cross-module variant so imported functions resolve to real signatures.
-function checkImporter(
-  files: Record<string, string>,
-  entry: string,
-): TypeCheckError[] {
+function checkImporter(files: Record<string, string>, entry: string): TypeCheckError[] {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-toolarg-"));
   try {
     for (const [name, src] of Object.entries(files)) {
@@ -48,8 +45,7 @@ function checkImporter(
 // AG6014 is the named-argument type mismatch; `params.name` is the argument
 // that failed to type-check. Keying off the code + param is stabler than
 // matching the rendered message text.
-const toolsArrayError = (e: TypeCheckError) =>
-  e.code === "AG6014" && e.params.name === "tools";
+const toolsArrayError = (e: TypeCheckError) => e.code === "AG6014" && e.params.name === "tools";
 
 describe("tools: argument must be an array — locally-defined tools", () => {
   it("rejects a lone .partial() result", () => {

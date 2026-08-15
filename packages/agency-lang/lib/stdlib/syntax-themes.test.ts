@@ -13,7 +13,16 @@ describe("resolveTheme", () => {
   });
 
   it("resolves all 8 built-ins to a usable theme", () => {
-    for (const name of ["vscode-dark", "github-dark", "monokai", "dracula", "nord", "github", "a11y-dark", "a11y-light"]) {
+    for (const name of [
+      "vscode-dark",
+      "github-dark",
+      "monokai",
+      "dracula",
+      "nord",
+      "github",
+      "a11y-dark",
+      "a11y-light",
+    ]) {
       expect(typeof (resolveTheme(name) as any).keyword).toBe("function");
     }
   });
@@ -41,7 +50,9 @@ describe("resolveTheme", () => {
   });
 
   it("throws on an invalid custom color (bad name or malformed hex)", () => {
-    expect(() => resolveTheme({ keyword: { color: "totally-not-a-color" } })).toThrow(/Invalid color/);
+    expect(() => resolveTheme({ keyword: { color: "totally-not-a-color" } })).toThrow(
+      /Invalid color/,
+    );
     expect(() => resolveTheme({ keyword: { color: "#zzzzzz" } })).toThrow(/Invalid color/);
   });
 });

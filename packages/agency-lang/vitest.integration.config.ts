@@ -1,5 +1,5 @@
-import { defineConfig } from 'vitest/config';
-import path from 'path';
+import { defineConfig } from "vitest/config";
+import path from "path";
 
 // Dedicated config for the gated integration suite (real model download +
 // inference). The default `vitest.config.ts` excludes the whole `tests/` tree,
@@ -9,14 +9,14 @@ import path from 'path';
 export default defineConfig({
   test: {
     globals: true,
-    environment: 'node',
-    include: ['tests/integration/**/*.test.ts'],
-    exclude: ['**/node_modules/**', '**/dist/**'],
-    setupFiles: ['./lib/parsers/vitest.setup.ts'],
+    environment: "node",
+    include: ["tests/integration/**/*.test.ts"],
+    exclude: ["**/node_modules/**", "**/dist/**"],
+    setupFiles: ["./lib/parsers/vitest.setup.ts"],
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './lib'),
+      "@": path.resolve(__dirname, "./lib"),
     },
   },
 });

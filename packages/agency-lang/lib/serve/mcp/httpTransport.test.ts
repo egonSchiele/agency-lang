@@ -26,13 +26,15 @@ function makeHandler() {
   );
   const exports: ServedExportedItem[] = [
     {
-      kind: "function", ...unusedPublicInvoke,
+      kind: "function",
+      ...unusedPublicInvoke,
       name: "add",
       description: "Add two numbers",
       parameters: [{ name: "a" }, { name: "b" }],
       agencyFunction: addFn,
       interruptEffects: [],
-      invokeServed: async (namedArgs) => returnedOutcome(await addFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+      invokeServed: async (namedArgs) =>
+        returnedOutcome(await addFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
     },
   ];
   return createMcpHandler({
@@ -116,7 +118,11 @@ describe("MCP HTTP transport", () => {
           jsonrpc: "2.0",
           id: 1,
           method: "initialize",
-          params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "1" } },
+          params: {
+            protocolVersion: "2025-06-18",
+            capabilities: {},
+            clientInfo: { name: "t", version: "1" },
+          },
         }),
       });
       expect(res.status).toBe(200);

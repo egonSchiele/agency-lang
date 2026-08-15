@@ -19,13 +19,7 @@ describe("agencyGenerator - match block arm printing", () => {
     ],
     [
       "single-expression arm stays inline",
-      [
-        "node main() {",
-        "  match(x) {",
-        '    "a" => 1',
-        "  }",
-        "}",
-      ].join("\n"),
+      ["node main() {", "  match(x) {", '    "a" => 1', "  }", "}"].join("\n"),
     ],
     // NOTE: this case is intentionally a top-level (unwrapped) match rather
     // than `node main() { ... }`. There is a pre-existing parser bug (present
@@ -41,14 +35,7 @@ describe("agencyGenerator - match block arm printing", () => {
     // exercising the guard + multi-statement block printing this task adds.
     [
       "block arm with a guard",
-      [
-        "match(x) {",
-        "  y if (y > 2) => {",
-        "    print(y)",
-        "    let z = 1",
-        "  }",
-        "}",
-      ].join("\n"),
+      ["match(x) {", "  y if (y > 2) => {", "    print(y)", "    let z = 1", "  }", "}"].join("\n"),
     ],
     [
       "pattern arm block ending in return",
@@ -91,7 +78,7 @@ describe("agencyGenerator - match block arm printing", () => {
       [
         "node main() {",
         "  match(x) {",
-        '    _ => ({',
+        "    _ => ({",
         '      label: "hi"',
         "    })",
         "  }",

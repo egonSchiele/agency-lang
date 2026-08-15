@@ -185,7 +185,6 @@ describe("buildCompilationUnit", () => {
     const info = buildCompilationUnit(program);
     expect(info.functionDefinitions["test"]).toBe(funcNode);
   });
-
 });
 
 describe("buildCompilationUnit: marker registries", () => {

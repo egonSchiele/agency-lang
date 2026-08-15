@@ -8,7 +8,12 @@ const hoisted = vi.hoisted(() => {
   class AccountRequestError extends Error {}
   class AccountScopeError extends AccountRequestError {}
   const client = { listKeys: vi.fn(), createProjectKey: vi.fn() };
-  return { AccountRequestError, AccountScopeError, client, createAccountClient: vi.fn(() => client) };
+  return {
+    AccountRequestError,
+    AccountScopeError,
+    client,
+    createAccountClient: vi.fn(() => client),
+  };
 });
 
 vi.mock("../../statelog/accountClient.js", () => ({
@@ -87,7 +92,10 @@ describe("runKeysCreate", () => {
       plainKey: "plain-once",
     });
     await runKeysCreate("CI", { project: "my-proj" }, context());
-    expect(hoisted.client.createProjectKey).toHaveBeenCalledWith({ name: "CI", projectId: "my-proj" });
+    expect(hoisted.client.createProjectKey).toHaveBeenCalledWith({
+      name: "CI",
+      projectId: "my-proj",
+    });
     const out = logs.join("\n");
     expect(out).toContain("plain-once");
     expect(out).toContain("will not be shown again");

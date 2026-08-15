@@ -107,17 +107,9 @@ describe("_exec / _bash cwd ~ expansion", () => {
     // Sanity: the allow-list still enforces correctly under expansion.
     const ctx = makeMockCtx();
     await expect(
-      __internal_exec(
-        ctx,
-        new StateStack(),
-        new ThreadStore(),
-        "pwd",
-        [],
-        "~",
-        0,
-        "",
-        { allowedPaths: ["/tmp/agency-disallowed-root-xyz"] },
-      ),
+      __internal_exec(ctx, new StateStack(), new ThreadStore(), "pwd", [], "~", 0, "", {
+        allowedPaths: ["/tmp/agency-disallowed-root-xyz"],
+      }),
     ).rejects.toThrow(/not under/);
   });
 
@@ -199,7 +191,13 @@ describe("_exec / _bash reject a nonexistent cwd with a clear error", () => {
   it("still runs normally when the cwd exists", async () => {
     const ctx = makeMockCtx();
     const result = await __internal_bash(
-      ctx, new StateStack(), new ThreadStore(), "pwd", tmp, 0, "",
+      ctx,
+      new StateStack(),
+      new ThreadStore(),
+      "pwd",
+      tmp,
+      0,
+      "",
     );
     expect(result.exitCode).toBe(0);
     expect(result.stdout.trim()).toBe(fs.realpathSync(tmp));

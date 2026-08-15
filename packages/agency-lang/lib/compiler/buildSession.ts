@@ -102,9 +102,7 @@ export type CompileGroup = {
 // sibling .ts deps on disk — run/runAgencyNode/coverage paths), and the
 // manifest key cannot see it — same disease configKey/hasPkgImports
 // prevent, so it forces "always".
-function resolveFreshness(
-  options?: CompileOptions & { outputFile?: string },
-): Freshness {
+function resolveFreshness(options?: CompileOptions & { outputFile?: string }): Freshness {
   // An explicit outputFile also forces "always": a fresh entry only knows
   // the RECORDED output path, so a skip could return the requested path
   // without ever writing it. Unreachable today (the only outputFile caller
@@ -211,8 +209,7 @@ export class BuildSession {
     );
     if (conflicts.length > 0) {
       const lines = conflicts.map(
-        (c) =>
-          `  ${c.module}\n    reachable from: ${c.labels.join(", ")}`,
+        (c) => `  ${c.module}\n    reachable from: ${c.labels.join(", ")}`,
       );
       throw new CompileClosureError(
         "Test sources with differing configs share modules. A module's " +
@@ -332,8 +329,7 @@ export class BuildSession {
   ): void {
     const isOutermostCall = !hasSymbolTable;
     const isStdlibEntry = absoluteInputFile.startsWith(getStdlibDir() + path.sep);
-    const closureCoversEntry =
-      this.currentClosure?.programs[absoluteInputFile] !== undefined;
+    const closureCoversEntry = this.currentClosure?.programs[absoluteInputFile] !== undefined;
     if (!isOutermostCall || isStdlibEntry || closureCoversEntry) return;
 
     this.setClosure(null);
@@ -368,8 +364,7 @@ export class BuildSession {
   ): null {
     const files = [...findRecursively(inputFile)].map((f) => f.path);
     const absDir = path.resolve(inputFile);
-    const isStdlibDir =
-      absDir === getStdlibDir() || absDir.startsWith(getStdlibDir() + path.sep);
+    const isStdlibDir = absDir === getStdlibDir() || absDir.startsWith(getStdlibDir() + path.sep);
     if (!options?.symbolTable && !isStdlibDir && files.length > 0) {
       try {
         // The fresh union closure supersedes anything cached for a prior
@@ -458,19 +453,14 @@ export class BuildSession {
       config,
     );
 
-    const symbolTableStartTime = performance.now();
-    const symbolTable =
-      options?.symbolTable ?? SymbolTable.build(absoluteInputFile, config);
-
-    const symbolTableEndTime = performance.now();
-    logTime({ label: `Built symbol table for ${absoluteInputFile}`, start: symbolTableStartTime, end: symbolTableEndTime, verbose });
+    const symbolTable = timed(
+      `Built symbol table for ${absoluteInputFile}`,
+      verbose,
+      () => options?.symbolTable ?? SymbolTable.build(absoluteInputFile, config),
+    );
 
     const compilationUnitStartTime = performance.now();
-    const reExportedProgram = resolveReExports(
-      parsedProgram,
-      symbolTable,
-      absoluteInputFile,
-    );
+    const reExportedProgram = resolveReExports(parsedProgram, symbolTable, absoluteInputFile);
     const resolvedProgram = resolveImports(reExportedProgram, symbolTable, absoluteInputFile, {
       allowTestImports: options?.allowTestImports ?? false,
     });
@@ -478,14 +468,14 @@ export class BuildSession {
     // Must run BEFORE buildCompilationUnit and typecheck so the lifted defs
     // appear in functionDefinitions and get their bodies typechecked.
     const liftedProgram = liftCallbackBlocks(resolvedProgram);
-    const info = buildCompilationUnit(
-      liftedProgram,
-      symbolTable,
-      absoluteInputFile,
-      contents,
-    );
+    const info = buildCompilationUnit(liftedProgram, symbolTable, absoluteInputFile, contents);
     const compilationUnitEndTime = performance.now();
-    logTime({ label: `Built compilation unit for ${absoluteInputFile}`, start: compilationUnitStartTime, end: compilationUnitEndTime, verbose });
+    logTime({
+      label: `Built compilation unit for ${absoluteInputFile}`,
+      start: compilationUnitStartTime,
+      end: compilationUnitEndTime,
+      verbose,
+    });
 
     runTypecheck(liftedProgram, config, info, absoluteInputFile, verbose);
 
@@ -499,18 +489,14 @@ export class BuildSession {
     }
 
     // Rewrite import paths in the AST using the import strategy
-    const strategy =
-      options?.importStrategy ?? new CompileStrategy({ targetExt: ".js" });
+    const strategy = options?.importStrategy ?? new CompileStrategy({ targetExt: ".js" });
     const nonAgencyImports: string[] = [];
 
     liftedProgram.nodes.forEach((node) => {
       if (node.type !== "importStatement") return;
       if (isStdlibImport(node.modulePath) || isPkgImport(node.modulePath)) return;
 
-      node.modulePath = strategy.rewriteImport(
-        node.modulePath,
-        absoluteInputFile,
-      );
+      node.modulePath = strategy.rewriteImport(node.modulePath, absoluteInputFile);
 
       if (!node.modulePath.endsWith(".agency")) {
         nonAgencyImports.push(node.modulePath);
@@ -532,29 +518,20 @@ export class BuildSession {
     const initPlan = this.currentClosure
       ? initPlanForModule(this.currentClosure, absoluteInputFile)
       : undefined;
-    const codegenStartTime = performance.now();
-    const generatedCode = generateTypeScript(
-      liftedProgram,
-      config,
-      info,
-      moduleId,
-      absoluteOutputFile,
-      initPlan,
+    const generatedCode = timed(`Generated code for ${absoluteInputFile}`, verbose, () =>
+      generateTypeScript(liftedProgram, config, info, moduleId, absoluteOutputFile, initPlan),
     );
-    const codegenEndTime = performance.now();
-    logTime({ label: `Generated code for ${absoluteInputFile}`, start: codegenStartTime, end: codegenEndTime, verbose });
     if (options?.ts) {
       fs.writeFileSync(outputFile, "// @ts-nocheck\n" + generatedCode, "utf-8");
     } else {
-      const esbuildStartTime = performance.now();
-      const result = transformSync(generatedCode, {
-        loader: "ts",
-        format: "esm",
-        supported: { "top-level-await": true },
-      });
+      const result = timed(`Transformed code for ${absoluteInputFile} with esbuild`, verbose, () =>
+        transformSync(generatedCode, {
+          loader: "ts",
+          format: "esm",
+          supported: { "top-level-await": true },
+        }),
+      );
       fs.writeFileSync(outputFile, result.code, "utf-8");
-      const esbuildEndTime = performance.now();
-      logTime({ label: `Transformed code for ${absoluteInputFile} with esbuild`, start: esbuildStartTime, end: esbuildEndTime, verbose });
       // Record ONLY when the module's deps are knowable. Stdlib modules
       // compile closure-free by design; their deps come from
       // dependencyFingerprint (std::-resolved), which also reports whether
@@ -574,13 +551,17 @@ export class BuildSession {
         const transitiveDeps = this.transitiveDeps(absoluteInputFile);
         this.tracker.record(absoluteInputFile, path.resolve(outputFile), {
           deps: transitiveDeps,
-          hasPkgImports: subtreeHasPkgImport(this.currentClosure, absoluteInputFile, transitiveDeps),
+          hasPkgImports: subtreeHasPkgImport(
+            this.currentClosure,
+            absoluteInputFile,
+            transitiveDeps,
+          ),
           cacheable: true,
         });
       }
     }
     const compileEndTime = performance.now();
-    const timeTaken = `${(compileEndTime - compileStartTime).toFixed(2)}ms`
+    const timeTaken = `${(compileEndTime - compileStartTime).toFixed(2)}ms`;
     if (!options?.quiet) {
       console.log(`${inputFile} → ${outputFile} (in ${timeTaken})`);
     }
@@ -601,8 +582,7 @@ export function findCrossConfigConflicts(
   groups: { label: string; configKey: string; modules: string[] }[],
 ): { module: string; labels: string[] }[] {
   // Null-prototype: keyed by absolute module paths.
-  const touchedBy: Record<string, { configKey: string; label: string }[]> =
-    Object.create(null);
+  const touchedBy: Record<string, { configKey: string; label: string }[]> = Object.create(null);
   for (const group of groups) {
     for (const module of group.modules) {
       (touchedBy[module] ??= []).push({
@@ -671,7 +651,12 @@ function runTypecheck(
   const tcStartTime = performance.now();
   const { errors } = typeCheck(liftedProgram, config, info);
   const tcEndTime = performance.now();
-  logTime({ label: `Type checked ${absoluteInputFile}`, start: tcStartTime, end: tcEndTime, verbose });
+  logTime({
+    label: `Type checked ${absoluteInputFile}`,
+    start: tcStartTime,
+    end: tcEndTime,
+    verbose,
+  });
   if (errors.length === 0) return;
   const hint = formatDiagnosticsHint(errors);
   if (tc?.strict) {
@@ -686,7 +671,24 @@ function runTypecheck(
   }
 }
 
-function logTime({ label, start, end, verbose }: { label: string, start: number, end: number, verbose: boolean }): void {
+function timed<T>(label: string, verbose: boolean, fn: () => T): T {
+  const start = performance.now();
+  const result = fn();
+  logTime({ label, start, end: performance.now(), verbose });
+  return result;
+}
+
+function logTime({
+  label,
+  start,
+  end,
+  verbose,
+}: {
+  label: string;
+  start: number;
+  end: number;
+  verbose: boolean;
+}): void {
   if (verbose) {
     console.log(`${label} in ${(end - start).toFixed(2)}ms`);
   }

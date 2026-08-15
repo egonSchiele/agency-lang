@@ -71,12 +71,14 @@ export type ProposeMutationArgs = MutatorPromptInputs & {
 export function renderTargetsSection(targets: OptimizeTarget[]): string {
   return [...targets]
     .sort((a, b) => a.id.localeCompare(b.id))
-    .map((target) => [
-      `- id: ${target.id}`,
-      `  kind: ${target.kind}`,
-      `  type: ${describeConstraint(target)}`,
-      `  current value: ${JSON.stringify(target.value)}`,
-    ].join("\n"))
+    .map((target) =>
+      [
+        `- id: ${target.id}`,
+        `  kind: ${target.kind}`,
+        `  type: ${describeConstraint(target)}`,
+        `  current value: ${JSON.stringify(target.value)}`,
+      ].join("\n"),
+    )
     .join("\n");
 }
 
@@ -86,14 +88,21 @@ export function buildMutatorSections(promptInputs: MutatorPromptInputs): Mutator
     .sort((a, b) => (a.id ?? "").localeCompare(b.id ?? ""))
     .map((input) => `- [${input.id ?? ""}] ${input.goal ?? ""}`)
     .join("\n");
-  const diagnostics = (promptInputs.diagnostics ?? []).length === 0
-    ? ""
-    : [
-      "Your previous proposal failed validation:",
-      ...(promptInputs.diagnostics ?? []).map((entry) => `- [${entry.code}] ${entry.message}`),
-      "Fix every problem listed above and propose corrected operations.",
-    ].join("\n");
-  return { targets, goals, feedback: promptInputs.feedback ?? "", history: promptInputs.history, diagnostics };
+  const diagnostics =
+    (promptInputs.diagnostics ?? []).length === 0
+      ? ""
+      : [
+          "Your previous proposal failed validation:",
+          ...(promptInputs.diagnostics ?? []).map((entry) => `- [${entry.code}] ${entry.message}`),
+          "Fix every problem listed above and propose corrected operations.",
+        ].join("\n");
+  return {
+    targets,
+    goals,
+    feedback: promptInputs.feedback ?? "",
+    history: promptInputs.history,
+    diagnostics,
+  };
 }
 
 /**
@@ -150,7 +159,9 @@ const defaultCallModel: MutatorModelCaller = async (args) => {
         args.sections.feedback,
         args.sections.history,
         args.sections.diagnostics,
-      ].map((value) => JSON.stringify(value)).join(", "),
+      ]
+        .map((value) => JSON.stringify(value))
+        .join(", "),
       scratchDir,
       quietCompile: true,
       // mutatePrompt is a bundled agent with a precompiled .js in dist; reuse it.

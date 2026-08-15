@@ -43,11 +43,7 @@ function mockFailure(stderr: string): void {
 /** Make the mocked execFile succeed with the given stdout. */
 function mockStdout(stdout: string): void {
   (execFile as unknown as MockFn).mockImplementationOnce(
-    (
-      _c: string,
-      _a: string[],
-      cb: (e: null, r: { stdout: string; stderr: string }) => void,
-    ) => {
+    (_c: string, _a: string[], cb: (e: null, r: { stdout: string; stderr: string }) => void) => {
       cb(null, { stdout, stderr: "" });
     },
   );
@@ -127,7 +123,7 @@ describe("runNotesScript", () => {
 
 describe("withTimeout", () => {
   it("wraps the body so the 120s AppleScript default is not inherited", () => {
-    const out = withTimeout("tell application \"Notes\"\nend tell");
+    const out = withTimeout('tell application "Notes"\nend tell');
     expect(out).toContain("with timeout of 30 seconds");
     expect(out).toContain("end timeout");
     expect(out).toContain("on run argv");

@@ -151,11 +151,7 @@ describe("canonical step sequences", () => {
     "round.3.guardGate",
     "round.3.guardFeedback",
   ];
-  const initialCanonical = [
-    "queuedMessages.initial",
-    "guardGate.initial",
-    "guardFeedback.initial",
-  ];
+  const initialCanonical = ["queuedMessages.initial", "guardGate.initial", "guardFeedback.initial"];
 
   it("round boundary emits the canonical sequence with work pending", async () => {
     const { bctx, stepKeys, messages } = makeBctx();
@@ -189,9 +185,7 @@ describe("canonical step sequences", () => {
     messages.queueMessage("queued middle", { label: "q" });
     bctx.stateStack.queueGuardFeedback("feedback last", "guard:a");
     await runRoundBoundary(3, bctx);
-    const contents = messages
-      .getMessages()
-      .map((m) => JSON.stringify(m.toJSON()));
+    const contents = messages.getMessages().map((m) => JSON.stringify(m.toJSON()));
     expect(contents).toHaveLength(3);
     expect(contents[0]).toContain("att1");
     expect(contents[1]).toContain("queued middle");

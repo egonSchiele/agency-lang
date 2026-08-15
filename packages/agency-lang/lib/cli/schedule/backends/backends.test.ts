@@ -45,9 +45,7 @@ describe("LaunchdBackend", () => {
     vi.mocked(fs.writeFileSync).mockImplementation(() => {});
     vi.mocked(fs.mkdirSync).mockImplementation(() => undefined as any);
     vi.mocked(fs.unlinkSync).mockImplementation(() => {});
-    vi.mocked(childProcess.execFileSync).mockImplementation(
-      () => Buffer.from(""),
-    );
+    vi.mocked(childProcess.execFileSync).mockImplementation(() => Buffer.from(""));
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -57,18 +55,18 @@ describe("LaunchdBackend", () => {
     const writeCall = vi.mocked(fs.writeFileSync).mock.calls[0];
     const plistPath = writeCall[0] as string;
     expect(plistPath).toContain("com.agency.schedule.test-agent.plist");
-    expect(vi.mocked(childProcess.execFileSync)).toHaveBeenCalledWith(
-      "launchctl",
-      ["load", expect.stringContaining("com.agency.schedule.test-agent.plist")],
-    );
+    expect(vi.mocked(childProcess.execFileSync)).toHaveBeenCalledWith("launchctl", [
+      "load",
+      expect.stringContaining("com.agency.schedule.test-agent.plist"),
+    ]);
   });
 
   it("uninstall calls launchctl unload and deletes plist", () => {
     backend.uninstall("test-agent");
-    expect(vi.mocked(childProcess.execFileSync)).toHaveBeenCalledWith(
-      "launchctl",
-      ["unload", expect.stringContaining("com.agency.schedule.test-agent.plist")],
-    );
+    expect(vi.mocked(childProcess.execFileSync)).toHaveBeenCalledWith("launchctl", [
+      "unload",
+      expect.stringContaining("com.agency.schedule.test-agent.plist"),
+    ]);
     expect(vi.mocked(fs.unlinkSync)).toHaveBeenCalled();
   });
 });
@@ -93,9 +91,7 @@ describe("CrontabBackend", () => {
   it("install writes crontab with agency marker", () => {
     backend.install(mockEntry);
     const calls = vi.mocked(childProcess.execSync).mock.calls;
-    const installCall = calls.find(
-      (c) => c[1] && typeof c[1] === "object" && "input" in c[1],
-    );
+    const installCall = calls.find((c) => c[1] && typeof c[1] === "object" && "input" in c[1]);
     expect(installCall).toBeDefined();
     const input = (installCall![1] as any).input as string;
     expect(input).toContain("# agency:test-agent");
@@ -105,17 +101,13 @@ describe("CrontabBackend", () => {
     vi.mocked(childProcess.execSync).mockReset();
     vi.mocked(childProcess.execSync).mockImplementation((cmd) => {
       if (typeof cmd === "string" && cmd.includes("crontab -l")) {
-        return Buffer.from(
-          "0 * * * * other-job\n0 9 * * * /path/run.sh # agency:test-agent\n",
-        );
+        return Buffer.from("0 * * * * other-job\n0 9 * * * /path/run.sh # agency:test-agent\n");
       }
       return Buffer.from("");
     });
     backend.uninstall("test-agent");
     const calls = vi.mocked(childProcess.execSync).mock.calls;
-    const writeCall = calls.find(
-      (c) => c[1] && typeof c[1] === "object" && "input" in c[1],
-    );
+    const writeCall = calls.find((c) => c[1] && typeof c[1] === "object" && "input" in c[1]);
     const input = (writeCall![1] as any).input as string;
     expect(input).not.toContain("agency:test-agent");
     expect(input).toContain("other-job");
@@ -133,9 +125,7 @@ describe("CrontabBackend", () => {
     });
     backend.uninstall("foo");
     const calls = vi.mocked(childProcess.execSync).mock.calls;
-    const writeCall = calls.find(
-      (c) => c[1] && typeof c[1] === "object" && "input" in c[1],
-    );
+    const writeCall = calls.find((c) => c[1] && typeof c[1] === "object" && "input" in c[1]);
     const input = (writeCall![1] as any).input as string;
     expect(input).not.toContain("# agency:foo\n");
     expect(input).toContain("# agency:foo-bar");
@@ -150,9 +140,7 @@ describe("SystemdBackend", () => {
     vi.mocked(fs.writeFileSync).mockImplementation(() => {});
     vi.mocked(fs.mkdirSync).mockImplementation(() => undefined as any);
     vi.mocked(fs.unlinkSync).mockImplementation(() => {});
-    vi.mocked(childProcess.execFileSync).mockImplementation(
-      () => Buffer.from(""),
-    );
+    vi.mocked(childProcess.execFileSync).mockImplementation(() => Buffer.from(""));
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -163,18 +151,22 @@ describe("SystemdBackend", () => {
     const paths = writeCalls.map((c) => c[0] as string);
     expect(paths.some((p) => p.endsWith("agency-schedule-test-agent.service"))).toBe(true);
     expect(paths.some((p) => p.endsWith("agency-schedule-test-agent.timer"))).toBe(true);
-    expect(vi.mocked(childProcess.execFileSync)).toHaveBeenCalledWith(
-      "systemctl",
-      ["--user", "enable", "--now", "agency-schedule-test-agent.timer"],
-    );
+    expect(vi.mocked(childProcess.execFileSync)).toHaveBeenCalledWith("systemctl", [
+      "--user",
+      "enable",
+      "--now",
+      "agency-schedule-test-agent.timer",
+    ]);
   });
 
   it("uninstall disables timer and deletes unit files", () => {
     backend.uninstall("test-agent");
-    expect(vi.mocked(childProcess.execFileSync)).toHaveBeenCalledWith(
-      "systemctl",
-      ["--user", "disable", "--now", "agency-schedule-test-agent.timer"],
-    );
+    expect(vi.mocked(childProcess.execFileSync)).toHaveBeenCalledWith("systemctl", [
+      "--user",
+      "disable",
+      "--now",
+      "agency-schedule-test-agent.timer",
+    ]);
   });
 });
 

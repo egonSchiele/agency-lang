@@ -575,10 +575,7 @@ export const AgencyConfigSchema = z
       .object({
         maxCost: z
           .number()
-          .refine(
-            (n) => Number.isFinite(n),
-            "budget.maxCost must be a finite number",
-          ),
+          .refine((n) => Number.isFinite(n), "budget.maxCost must be a finite number"),
         maxTime: z.string(),
       })
       .partial(),
@@ -764,11 +761,7 @@ export type CliFlags = {
  *   --max-tool-result-chars <n> → client.maxToolResultChars=<n> (0 disables the
  *                      cap; overrides agency.json for this run)
  */
-export function applyCliFlags(
-  config: AgencyConfig,
-  flags: CliFlags,
-  input?: string,
-): AgencyConfig {
+export function applyCliFlags(config: AgencyConfig, flags: CliFlags, input?: string): AgencyConfig {
   const next: AgencyConfig = { ...config };
   if (flags.trace !== undefined) {
     next.trace = true;
@@ -843,18 +836,14 @@ export const CONFIG_OVERRIDES_ENV = "AGENCY_CONFIG_OVERRIDES";
 export const TRACE_ID_ENV = "AGENCY_TRACE_ID";
 
 /** Serialize config overrides for a child process's AGENCY_CONFIG_OVERRIDES. */
-export function serializeConfigOverrides(
-  overrides: Partial<AgencyConfig>,
-): string {
+export function serializeConfigOverrides(overrides: Partial<AgencyConfig>): string {
   return JSON.stringify(overrides);
 }
 
 /** Read + validate AGENCY_CONFIG_OVERRIDES. Returns {} when the var is absent,
  *  unparseable, or fails schema validation, so a malformed value can never
  *  brick startup. */
-export function readConfigOverrides(
-  env: NodeJS.ProcessEnv = process.env,
-): Partial<AgencyConfig> {
+export function readConfigOverrides(env: NodeJS.ProcessEnv = process.env): Partial<AgencyConfig> {
   const raw = env[CONFIG_OVERRIDES_ENV];
   if (!raw) return {};
   try {
@@ -900,8 +889,7 @@ export function mergeConfigOverrides(
  *  top-level `log.apiKey` string and each key under `client.apiKey` /
  *  `client.statelog.apiKey` — to `•••<last4>`. */
 export function redactConfigSecrets(config: AgencyConfig): AgencyConfig {
-  const mask = (value: string): string =>
-    value.length <= 4 ? "•••" : `•••${value.slice(-4)}`;
+  const mask = (value: string): string => (value.length <= 4 ? "•••" : `•••${value.slice(-4)}`);
   const clone = JSON.parse(JSON.stringify(config)) as AgencyConfig;
   const redactKeyMap = (obj: Record<string, unknown> | undefined): void => {
     if (!obj) return;
@@ -913,10 +901,7 @@ export function redactConfigSecrets(config: AgencyConfig): AgencyConfig {
     clone.log.apiKey = mask(clone.log.apiKey);
   }
   redactKeyMap(clone.client?.apiKey as Record<string, unknown> | undefined);
-  if (
-    clone.client?.statelog &&
-    typeof clone.client.statelog.apiKey === "string"
-  ) {
+  if (clone.client?.statelog && typeof clone.client.statelog.apiKey === "string") {
     clone.client.statelog.apiKey = mask(clone.client.statelog.apiKey);
   }
   return clone;

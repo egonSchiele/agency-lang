@@ -38,18 +38,14 @@ describe("previously loc-less diagnostics now carry locations", () => {
   });
 
   it("reserved built-in type redefinition anchors on the alias declaration", () => {
-    const errors = checkSource(
-      "type Result = { a: number }\nnode main() { return 1 }\n",
-    );
+    const errors = checkSource("type Result = { a: number }\nnode main() { return 1 }\n");
     expectLocated(errors, "reservedBuiltinTypeRedefined");
   });
 
   it("an assignability error on a loc-less literal anchors on the statement", () => {
     // String literals carry no loc of their own; checkType now falls back
     // to the assignment statement's loc.
-    const errors = checkSource(
-      'node main() {\n  const x: number = "nope"\n  return x\n}\n',
-    );
+    const errors = checkSource('node main() {\n  const x: number = "nope"\n  return x\n}\n');
     expectLocated(errors, "typeNotAssignableInContext");
   });
 });

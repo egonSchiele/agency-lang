@@ -15,10 +15,7 @@ export function* findRecursively(
   const filesToProcess = files.filter((file) => {
     if (file.startsWith(".")) return false;
     if (ignoreDirs.includes(file)) return false;
-    return (
-      file.endsWith(ext) ||
-      fs.statSync(path.join(dirName, file)).isDirectory()
-    );
+    return file.endsWith(ext) || fs.statSync(path.join(dirName, file)).isDirectory();
   });
 
   for (const file of filesToProcess) {

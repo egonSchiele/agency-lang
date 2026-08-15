@@ -57,11 +57,7 @@ describe("guardBlockParser", () => {
   });
 
   it("parses in return position", () => {
-    const r = parseAgency(
-      "node main() { return guard(cost: $1) { return 1 } }",
-      {},
-      false,
-    );
+    const r = parseAgency("node main() { return guard(cost: $1) { return 1 } }", {}, false);
     expect(r.success).toBe(true);
     if (!r.success) return;
     const main: any = r.result.nodes.find((n: any) => n.type === "graphNode");
@@ -70,11 +66,7 @@ describe("guardBlockParser", () => {
   });
 
   it("parses in statement position", () => {
-    const r = parseAgency(
-      "node main() { guard(time: 5ms) { doWork() }\n return 1 }",
-      {},
-      false,
-    );
+    const r = parseAgency("node main() { guard(time: 5ms) { doWork() }\n return 1 }", {}, false);
     expect(r.success).toBe(true);
     if (!r.success) return;
     const main: any = r.result.nodes.find((n: any) => n.type === "graphNode");
@@ -89,7 +81,8 @@ describe("guardBlockParser", () => {
     const without: GuardBlock = firstDeclValue(
       "node main() { const r = guard(cost: $1) { return 1 }\n return r }",
     );
-    const strip = (n: any) => JSON.parse(JSON.stringify(n, (k, v) => (k === "loc" ? undefined : v)));
+    const strip = (n: any) =>
+      JSON.parse(JSON.stringify(n, (k, v) => (k === "loc" ? undefined : v)));
     expect(strip(withAs)).toEqual(strip(without));
   });
 

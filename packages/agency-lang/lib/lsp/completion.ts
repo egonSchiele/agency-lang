@@ -1,7 +1,11 @@
 import { declaredName } from "../types/hole.js";
 import path from "path";
 import fs from "fs";
-import { CompletionItem, CompletionItemKind, InsertTextFormat } from "vscode-languageserver-protocol";
+import {
+  CompletionItem,
+  CompletionItemKind,
+  InsertTextFormat,
+} from "vscode-languageserver-protocol";
 import { CompilationUnit, GLOBAL_SCOPE_KEY } from "../compilationUnit.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { resolveType } from "../typeChecker/assignability.js";
@@ -20,7 +24,10 @@ function formatParams(params: FunctionParameter[]): string {
     .join(", ");
 }
 
-function formatDetail(params: FunctionParameter[], returnType: VariableType | null | undefined): string {
+function formatDetail(
+  params: FunctionParameter[],
+  returnType: VariableType | null | undefined,
+): string {
   const ret = returnType ? `: ${formatTypeHint(returnType)}` : "";
   return `(${formatParams(params)})${ret}`;
 }
@@ -34,7 +41,10 @@ export type CompletionContext = {
   fsPath: string;
 };
 
-export function getCompletions(info: CompilationUnit, context?: CompletionContext): CompletionItem[] {
+export function getCompletions(
+  info: CompilationUnit,
+  context?: CompletionContext,
+): CompletionItem[] {
   if (context) {
     const importItems = getImportPathCompletions(context);
     if (importItems) return importItems;
@@ -131,7 +141,8 @@ const SNIPPETS: CompletionItem[] = [
   {
     label: "class",
     kind: CompletionItemKind.Snippet,
-    insertText: "class ${1:Name} {\n  ${2:field}: ${3:string}\n\n  def ${4:method}() {\n    $0\n  }\n}",
+    insertText:
+      "class ${1:Name} {\n  ${2:field}: ${3:string}\n\n  def ${4:method}() {\n    $0\n  }\n}",
     insertTextFormat: InsertTextFormat.Snippet,
     detail: "Class definition",
   },
@@ -159,14 +170,14 @@ const SNIPPETS: CompletionItem[] = [
   {
     label: "match",
     kind: CompletionItemKind.Snippet,
-    insertText: "match(${1:value}) {\n  \"${2:case1}\" => $3\n  _ => $0\n}",
+    insertText: 'match(${1:value}) {\n  "${2:case1}" => $3\n  _ => $0\n}',
     insertTextFormat: InsertTextFormat.Snippet,
     detail: "Pattern matching",
   },
   {
     label: "thread",
     kind: CompletionItemKind.Snippet,
-    insertText: "thread {\n  ${1:name}: ${2:Type} = llm(\"${3:prompt}\")\n}",
+    insertText: 'thread {\n  ${1:name}: ${2:Type} = llm("${3:prompt}")\n}',
     insertTextFormat: InsertTextFormat.Snippet,
     detail: "Message thread with LLM call",
   },
@@ -208,21 +219,21 @@ const SNIPPETS: CompletionItem[] = [
   {
     label: "import",
     kind: CompletionItemKind.Snippet,
-    insertText: "import { ${1:name} } from \"${2:module}\"",
+    insertText: 'import { ${1:name} } from "${2:module}"',
     insertTextFormat: InsertTextFormat.Snippet,
     detail: "Import statement",
   },
   {
     label: "llm",
     kind: CompletionItemKind.Snippet,
-    insertText: "${1:name}: ${2:Type} = llm(\"${3:prompt}\")",
+    insertText: '${1:name}: ${2:Type} = llm("${3:prompt}")',
     insertTextFormat: InsertTextFormat.Snippet,
     detail: "LLM call with typed result",
   },
   {
     label: "interrupt",
     kind: CompletionItemKind.Snippet,
-    insertText: "interrupt(\"${1:message}\")",
+    insertText: 'interrupt("${1:message}")',
     insertTextFormat: InsertTextFormat.Snippet,
     detail: "Pause execution for approval",
   },
@@ -274,7 +285,10 @@ function getImportPathCompletions(context: CompletionContext): CompletionItem[] 
   if (partial.startsWith(".")) {
     const dir = path.dirname(fsPath);
     const relPrefix = partial || "./";
-    const resolvedDir = path.resolve(dir, relPrefix.endsWith("/") ? relPrefix : path.dirname(relPrefix));
+    const resolvedDir = path.resolve(
+      dir,
+      relPrefix.endsWith("/") ? relPrefix : path.dirname(relPrefix),
+    );
 
     try {
       const entries = fs.readdirSync(resolvedDir, { withFileTypes: true });
@@ -282,14 +296,21 @@ function getImportPathCompletions(context: CompletionContext): CompletionItem[] 
         if (entry.name.startsWith(".")) continue;
 
         if (entry.isDirectory()) {
-          const relPath = "./" + path.relative(dir, path.join(resolvedDir, entry.name)).split(path.sep).join("/") + "/";
+          const relPath =
+            "./" +
+            path.relative(dir, path.join(resolvedDir, entry.name)).split(path.sep).join("/") +
+            "/";
           items.push({
             label: relPath,
             kind: CompletionItemKind.Folder,
             textEdit: { range, newText: relPath },
           });
-        } else if (entry.name.endsWith(".agency") && path.join(resolvedDir, entry.name) !== fsPath) {
-          const relPath = "./" + path.relative(dir, path.join(resolvedDir, entry.name)).split(path.sep).join("/");
+        } else if (
+          entry.name.endsWith(".agency") &&
+          path.join(resolvedDir, entry.name) !== fsPath
+        ) {
+          const relPath =
+            "./" + path.relative(dir, path.join(resolvedDir, entry.name)).split(path.sep).join("/");
           items.push({
             label: relPath,
             kind: CompletionItemKind.File,
@@ -306,7 +327,10 @@ function getImportPathCompletions(context: CompletionContext): CompletionItem[] 
   return items.length > 0 ? items : null;
 }
 
-function getDotCompletions(context: CompletionContext, info: CompilationUnit): CompletionItem[] | null {
+function getDotCompletions(
+  context: CompletionContext,
+  info: CompilationUnit,
+): CompletionItem[] | null {
   const { source, line, character, scopes, program } = context;
   const lines = source.split("\n");
   const currentLine = lines[line] ?? "";
@@ -335,4 +359,3 @@ function getDotCompletions(context: CompletionContext, info: CompilationUnit): C
     detail: formatTypeHint(prop.value),
   }));
 }
-

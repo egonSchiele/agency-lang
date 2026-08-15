@@ -80,9 +80,9 @@ describe("hole sort by position", () => {
   });
 
   it("hole in an import specifier is an identifier hole", () => {
-    expect(firstHole(`import { #tool } from "std::fs"\n\nnode main() {\n  return 1\n}\n`).sort).toBe(
-      "identifier",
-    );
+    expect(
+      firstHole(`import { #tool } from "std::fs"\n\nnode main() {\n  return 1\n}\n`).sort,
+    ).toBe("identifier");
   });
 
   it("hole at top level is a decl hole", () => {
@@ -167,7 +167,10 @@ describe("hole positions are reachable by the walker", () => {
     ["object value", `node main() {\n  const x = { k: #h }\n}\n`],
     ["string interpolation", `node main() {\n  const x = "v: \${#h}"\n}\n`],
     ["for-loop iterable", `node main() {\n  for (item in #h) {\n    print(item)\n  }\n}\n`],
-    ["match scrutinee", `node main() {\n  const x = match (#h) {\n    1 => "a"\n    _ => "b"\n  }\n}\n`],
+    [
+      "match scrutinee",
+      `node main() {\n  const x = match (#h) {\n    1 => "a"\n    _ => "b"\n  }\n}\n`,
+    ],
     ["try expression", `node main() {\n  const x = try f(#h)\n}\n`],
     // typeTestExpression needs no entry: it is a lowering artifact
     // (lib/types/pattern.ts) and templates parse with lower: false.
@@ -196,8 +199,8 @@ describe("holes in operand positions", () => {
 
   it("parses as a named-argument value", () => {
     // guard(maxTime: #minutes) — the guard-template composition depends on this.
-    expect(
-      parses(`node main() {\n  guard(maxTime: #minutes) {\n    print(1)\n  }\n}\n`),
-    ).toBe(true);
+    expect(parses(`node main() {\n  guard(maxTime: #minutes) {\n    print(1)\n  }\n}\n`)).toBe(
+      true,
+    );
   });
 });

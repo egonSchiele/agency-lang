@@ -28,7 +28,11 @@ function clampDimension(value: number, min?: number, max?: number): number {
  * Entry point: lay out the root element. Both axes are resolved by the
  * element itself against the available terminal dimensions.
  */
-export function layout(element: Element, availableWidth: number, availableHeight: number): PositionedElement {
+export function layout(
+  element: Element,
+  availableWidth: number,
+  availableHeight: number,
+): PositionedElement {
   return layoutRoot(element, 0, 0, availableWidth, availableHeight);
 }
 
@@ -140,14 +144,17 @@ function layoutChildren(
 ): PositionedElement[] | undefined {
   const style = element.style ?? {};
 
-  const visibleChildren = (element.children ?? []).filter(
-    (c) => c.style?.visible !== false,
-  );
+  const visibleChildren = (element.children ?? []).filter((c) => c.style?.visible !== false);
 
   if (visibleChildren.length === 0) return undefined;
 
   // Inner area after border and padding
-  const { x: innerX, y: innerY, width: innerWidth, height: innerHeight } = innerArea(
+  const {
+    x: innerX,
+    y: innerY,
+    width: innerWidth,
+    height: innerHeight,
+  } = innerArea(
     style,
     parent.resolvedX,
     parent.resolvedY,
@@ -246,8 +253,11 @@ function layoutChildren(
     }
 
     const positioned = layoutChild(
-      child, childX, childY,
-      childMainSize, crossSize,
+      child,
+      childX,
+      childY,
+      childMainSize,
+      crossSize,
       mainAxis,
       alignItems,
     );

@@ -17,9 +17,7 @@ export const MANIFEST_FILE = "downloads.json";
 
 export function readDownloadManifest(dir: string): Record<string, string> {
   try {
-    const parsed: unknown = JSON.parse(
-      fs.readFileSync(path.join(dir, MANIFEST_FILE), "utf-8"),
-    );
+    const parsed: unknown = JSON.parse(fs.readFileSync(path.join(dir, MANIFEST_FILE), "utf-8"));
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
       return {};
     }

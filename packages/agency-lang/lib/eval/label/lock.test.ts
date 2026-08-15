@@ -41,9 +41,14 @@ describe("acquireDatasetLock", () => {
   });
 
   it("does NOT take over a lock whose process is gone, and says what to do", () => {
-    fs.writeFileSync(lockPath(), JSON.stringify({
-      pid: 999999, token: "someone-else", acquiredAt: "2026-08-03T00:00:00.000Z",
-    }));
+    fs.writeFileSync(
+      lockPath(),
+      JSON.stringify({
+        pid: 999999,
+        token: "someone-else",
+        acquiredAt: "2026-08-03T00:00:00.000Z",
+      }),
+    );
     expect(() => acquire()).toThrow(/no longer running.*delete/is);
   });
 
@@ -73,9 +78,14 @@ describe("acquireDatasetLock", () => {
 
   it("does not remove a lock another session now owns", () => {
     const lock = acquire();
-    fs.writeFileSync(lockPath(), JSON.stringify({
-      pid: 4242, token: "different-token", acquiredAt: "2026-08-03T00:00:00.000Z",
-    }));
+    fs.writeFileSync(
+      lockPath(),
+      JSON.stringify({
+        pid: 4242,
+        token: "different-token",
+        acquiredAt: "2026-08-03T00:00:00.000Z",
+      }),
+    );
     lock.release();
     expect(fs.existsSync(lockPath())).toBe(true);
     expect(warnings.join(" ")).toMatch(/not releasing/i);

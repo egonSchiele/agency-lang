@@ -7,11 +7,7 @@ import { lintSource } from "../linter/registry.js";
 import { unusedImportsRule } from "../linter/rules/unusedImports.js";
 import { missingDocstringRule } from "../linter/rules/missingDocstring.js";
 import { redundantPreludeImportRule } from "../linter/rules/redundantPreludeImport.js";
-import {
-  manyFunctions,
-  manyUnusedImports,
-  manyRedundantPreludeImports,
-} from "./fixtures.js";
+import { manyFunctions, manyUnusedImports, manyRedundantPreludeImports } from "./fixtures.js";
 import { growthFactor, measureMs, expectPerf, GROWTH_BOUND } from "./harness.js";
 
 const SMALL = 1000;

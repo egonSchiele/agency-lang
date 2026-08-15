@@ -4,10 +4,7 @@ import { TypescriptPreprocessor } from "./typescriptPreprocessor.js";
 import { discoverFixturePairs } from "../../tests/fixtureDiscovery.js";
 import path from "path";
 
-const FIXTURES_DIR = path.resolve(
-  __dirname,
-  "../../tests/typescriptPreprocessor"
-);
+const FIXTURES_DIR = path.resolve(__dirname, "../../tests/typescriptPreprocessor");
 
 describe("TypeScript Preprocessor Integration Tests", () => {
   const fixtures = discoverFixturePairs(FIXTURES_DIR, ".json");
@@ -58,15 +55,11 @@ describe("TypeScript Preprocessor Integration Tests", () => {
 
         // 4. Serialize and compare
         const generatedJSON = JSON.stringify(preprocessedAST, null, 2);
-        const normalizedExpected = JSON.stringify(
-          JSON.parse(companionContent),
-          null,
-          2
-        );
+        const normalizedExpected = JSON.stringify(JSON.parse(companionContent), null, 2);
 
         // 5. Assert equality
         expect(generatedJSON).toBe(normalizedExpected);
       });
-    }
+    },
   );
 });

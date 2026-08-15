@@ -20,10 +20,7 @@ function makeLocalDir(): string {
 function rmLocal(dir: string): void {
   const root = realpathSync(process.cwd());
   const resolved = realpathSync(dir);
-  if (
-    path.dirname(resolved) === root &&
-    path.basename(resolved).startsWith(".run-local-")
-  ) {
+  if (path.dirname(resolved) === root && path.basename(resolved).startsWith(".run-local-")) {
     rmSync(resolved, { recursive: true, force: true });
   }
 }

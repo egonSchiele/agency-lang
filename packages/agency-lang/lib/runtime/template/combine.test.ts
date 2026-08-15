@@ -59,16 +59,11 @@ describe("_combine", () => {
     const second = program(`def b(): number {\n  return 2\n}\n`);
     const merged = _combine([first, second]);
     expect(merged.nodes[0]).toBe(first.nodes[0]);
-    expect(merged.nodes[merged.nodes.length - 1]).toBe(
-      second.nodes[second.nodes.length - 1],
-    );
+    expect(merged.nodes[merged.nodes.length - 1]).toBe(second.nodes[second.nodes.length - 1]);
   });
 
   it("merges statement fragments into a statement fragment", () => {
-    const merged = _combine([
-      statements(`const a = 1`),
-      statements(`const b = 2`),
-    ]);
+    const merged = _combine([statements(`const a = 1`), statements(`const b = 2`)]);
     expect(kindOf(merged)).toBe("statements");
     expect(merged.nodes).toHaveLength(2);
   });

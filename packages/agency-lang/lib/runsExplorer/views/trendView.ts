@@ -84,19 +84,21 @@ export class TrendView implements ExplorerView {
     const dated = this.rows.filter((row) => row.startedAtMs !== null);
     const maxBuckets = Math.max(4, viewport.cols - AGENT_COL_WIDTH - LATEST_COL_WIDTH - 2);
     const agents = [...new Set(this.rows.map((row) => row.agent))];
-    const bucketsSpec = dated.length === 0
-      ? null
-      : trendBuckets(
-          Math.min(...dated.map((row) => row.startedAtMs ?? 0)),
-          Math.max(...dated.map((row) => row.startedAtMs ?? 0)),
-          maxBuckets,
-        );
+    const bucketsSpec =
+      dated.length === 0
+        ? null
+        : trendBuckets(
+            Math.min(...dated.map((row) => row.startedAtMs ?? 0)),
+            Math.max(...dated.map((row) => row.startedAtMs ?? 0)),
+            maxBuckets,
+          );
 
     const agentRows = agents
       .slice(0, Math.max(1, viewport.rows - CHROME_ROWS))
       .map((agent) => this.agentRow(agent, bucketsSpec));
 
-    return column({ justifyContent: "flex-start" },
+    return column(
+      { justifyContent: "flex-start" },
       line("TREND  score over time, one row per agent", { height: 1, fg: "bright-white" }),
       ...agentRows,
       line(this.message, { height: 1, fg: "gray" }),
@@ -107,7 +109,9 @@ export class TrendView implements ExplorerView {
   private agentRow(agent: string, spec: TrendBuckets | null): Element {
     const label = clip(agent, AGENT_COL_WIDTH - 1);
     const labelSegment = line(label.padEnd(AGENT_COL_WIDTH), {
-      width: AGENT_COL_WIDTH, height: 1, fg: this.colors[agent],
+      width: AGENT_COL_WIDTH,
+      height: 1,
+      fg: this.colors[agent],
     });
     if (spec === null) {
       return tuiRow({ height: 1 }, labelSegment, line(EMPTY_CELL, { height: 1, fg: "gray" }));
@@ -128,12 +132,19 @@ export class TrendView implements ExplorerView {
     for (let bucket = 0; bucket < spec.count; bucket++) {
       const from = spec.startMs + bucket * spec.bucketMs;
       const to = from + spec.bucketMs;
-      const graded = this.rows.filter((row) =>
-        row.agent === agent && row.score !== null
-        && row.startedAtMs !== null && row.startedAtMs >= from && row.startedAtMs < to);
-      means.push(graded.length === 0
-        ? null
-        : graded.reduce((sum, row) => sum + (row.score ?? 0), 0) / graded.length);
+      const graded = this.rows.filter(
+        (row) =>
+          row.agent === agent &&
+          row.score !== null &&
+          row.startedAtMs !== null &&
+          row.startedAtMs >= from &&
+          row.startedAtMs < to,
+      );
+      means.push(
+        graded.length === 0
+          ? null
+          : graded.reduce((sum, row) => sum + (row.score ?? 0), 0) / graded.length,
+      );
     }
     return means;
   }
@@ -141,16 +152,23 @@ export class TrendView implements ExplorerView {
   private latestSegment(means: (number | null)[]): Element {
     const scored = means.filter((mean): mean is number => mean !== null);
     if (scored.length === 0) {
-      return line(`  ${EMPTY_CELL}`.padEnd(LATEST_COL_WIDTH), { width: LATEST_COL_WIDTH, height: 1, fg: "gray" });
+      return line(`  ${EMPTY_CELL}`.padEnd(LATEST_COL_WIDTH), {
+        width: LATEST_COL_WIDTH,
+        height: 1,
+        fg: "gray",
+      });
     }
     const latest = scored[scored.length - 1];
     const previous = scored.length > 1 ? scored[scored.length - 2] : null;
-    const delta = previous === null
-      ? ""
-      : `${latest >= previous ? "▲" : "▼"}${Math.abs(latest - previous).toFixed(2)}`;
+    const delta =
+      previous === null
+        ? ""
+        : `${latest >= previous ? "▲" : "▼"}${Math.abs(latest - previous).toFixed(2)}`;
     const text = ` ${latest.toFixed(2)} ${delta}`;
     return line(clip(text, LATEST_COL_WIDTH).padEnd(LATEST_COL_WIDTH), {
-      width: LATEST_COL_WIDTH, height: 1, fg: scoreColor(latest),
+      width: LATEST_COL_WIDTH,
+      height: 1,
+      fg: scoreColor(latest),
     });
   }
 }

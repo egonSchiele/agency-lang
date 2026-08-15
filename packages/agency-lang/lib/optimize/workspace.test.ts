@@ -10,8 +10,12 @@ import { WorkspaceManager } from "./workspace.js";
 
 describe("WorkspaceManager", () => {
   let root: string;
-  beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), "wsm-")); });
-  afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "wsm-"));
+  });
+  afterEach(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
 
   const sourceFor = (file: string, source: string, sha: string): OptimizeTargetSet => ({
     baseDir: root,
@@ -45,8 +49,9 @@ describe("WorkspaceManager", () => {
     fs.writeFileSync(file, "original");
     const wsm = new WorkspaceManager();
     // sha recorded at discovery no longer matches the on-disk content
-    expect(() => wsm.writeBack(sourceFor(file, "stale", sha256Text("stale")), { "a.agency": "mutated" }))
-      .toThrow(/modified externally/);
+    expect(() =>
+      wsm.writeBack(sourceFor(file, "stale", sha256Text("stale")), { "a.agency": "mutated" }),
+    ).toThrow(/modified externally/);
     expect(fs.readFileSync(file, "utf8")).toBe("original");
   });
 });

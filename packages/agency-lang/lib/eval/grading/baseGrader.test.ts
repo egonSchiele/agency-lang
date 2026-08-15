@@ -7,12 +7,19 @@ import { loadedRun } from "./testUtils.js";
 
 const stubRunner = new AgencyRunner({}, async () => ({ data: null }));
 const input = (over: Partial<Input> = {}): Input => ({ id: "i1", task: "t", ...over });
-const graderInput = (over: Partial<Input> = {}): GraderInput => ({ input: input(over), run: loadedRun(null), runAgency: stubRunner });
+const graderInput = (over: Partial<Input> = {}): GraderInput => ({
+  input: input(over),
+  run: loadedRun(null),
+  runAgency: stubRunner,
+});
 
 /** Test grader whose single-shot grade is supplied per instance. */
 class StubGrader extends BaseGrader {
   protected readonly defaultName = "stub";
-  constructor(private readonly produce: () => Grade, options: GraderOptions = {}) {
+  constructor(
+    private readonly produce: () => Grade,
+    options: GraderOptions = {},
+  ) {
     super(options);
   }
   protected _run(): Promise<Grade> {
@@ -23,11 +30,16 @@ class StubGrader extends BaseGrader {
 describe("BaseGrader", () => {
   it("uses defaultName, overridable via options.name", () => {
     expect(new StubGrader(() => ({ score: { kind: "binary", pass: true } })).name()).toBe("stub");
-    expect(new StubGrader(() => ({ score: { kind: "binary", pass: true } }), { name: "custom" }).name()).toBe("custom");
+    expect(
+      new StubGrader(() => ({ score: { kind: "binary", pass: true } }), { name: "custom" }).name(),
+    ).toBe("custom");
   });
 
   it("exposes mustPass and weight from options with defaults", () => {
-    const g = new StubGrader(() => ({ score: { kind: "scalar", value: 1 } }), { mustPass: true, weight: 3 });
+    const g = new StubGrader(() => ({ score: { kind: "scalar", value: 1 } }), {
+      mustPass: true,
+      weight: 3,
+    });
     expect(g.mustPass()).toBe(true);
     expect(g.weight()).toBe(3);
     const d = new StubGrader(() => ({ score: { kind: "scalar", value: 1 } }));
@@ -46,7 +58,9 @@ describe("BaseGrader", () => {
   it("rejects a non-positive or non-integer samples", async () => {
     const zero = new StubGrader(() => ({ score: { kind: "binary", pass: true } }), { samples: 0 });
     await expect(zero.run(graderInput())).rejects.toThrow(/samples must be a positive integer/);
-    const frac = new StubGrader(() => ({ score: { kind: "binary", pass: true } }), { samples: 1.5 });
+    const frac = new StubGrader(() => ({ score: { kind: "binary", pass: true } }), {
+      samples: 1.5,
+    });
     await expect(frac.run(graderInput())).rejects.toThrow(/samples must be a positive integer/);
   });
 
@@ -62,12 +76,16 @@ describe("BaseGrader", () => {
     const all = new StubGrader(() => ({ score: { kind: "binary", pass: true } }));
     expect(all.gradesInput(input())).toBe(true);
 
-    const tagged = new StubGrader(() => ({ score: { kind: "binary", pass: true } }), { inputScope: { tag: "review" } });
+    const tagged = new StubGrader(() => ({ score: { kind: "binary", pass: true } }), {
+      inputScope: { tag: "review" },
+    });
     expect(tagged.gradesInput(input({ metadata: { tags: ["review"] } }))).toBe(true);
     expect(tagged.gradesInput(input({ metadata: { tags: ["other"] } }))).toBe(false);
     expect(tagged.gradesInput(input())).toBe(false);
 
-    const byId = new StubGrader(() => ({ score: { kind: "binary", pass: true } }), { inputScope: { ids: ["i1"] } });
+    const byId = new StubGrader(() => ({ score: { kind: "binary", pass: true } }), {
+      inputScope: { ids: ["i1"] },
+    });
     expect(byId.gradesInput(input({ id: "i1" }))).toBe(true);
     expect(byId.gradesInput(input({ id: "i2" }))).toBe(false);
   });

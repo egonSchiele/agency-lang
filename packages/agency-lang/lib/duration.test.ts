@@ -20,9 +20,7 @@ describe("parseDurationMs", () => {
   });
 
   it("uses the supplied label in the error message", () => {
-    expect(() => parseDurationMs("nope", "budget.maxTime")).toThrow(
-      /budget\.maxTime: expected/,
-    );
+    expect(() => parseDurationMs("nope", "budget.maxTime")).toThrow(/budget\.maxTime: expected/);
   });
 
   it("rejects an absurdly long value as too large (fail closed)", () => {

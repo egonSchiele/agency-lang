@@ -17,14 +17,21 @@ const RESULT = {
 
 function fakeLock(): DatasetLock & { released: () => number } {
   let count = 0;
-  return { release: () => { count += 1; }, released: () => count } as DatasetLock & { released: () => number };
+  return {
+    release: () => {
+      count += 1;
+    },
+    released: () => count,
+  } as DatasetLock & { released: () => number };
 }
 
 function fakeDataset(over: Partial<LabelDataset> = {}): LabelDataset & { closed: () => number } {
   let count = 0;
   return {
     ingest: () => RESULT,
-    close: () => { count += 1; },
+    close: () => {
+      count += 1;
+    },
     closed: () => count,
     ...over,
   } as unknown as LabelDataset & { closed: () => number };
@@ -48,7 +55,11 @@ describe("datasetWriter", () => {
 
   it("still closes and releases when ingest throws", () => {
     const lock = fakeLock();
-    const dataset = fakeDataset({ ingest: () => { throw new Error("ingest boom"); } });
+    const dataset = fakeDataset({
+      ingest: () => {
+        throw new Error("ingest boom");
+      },
+    });
     const writer = createDatasetWriter({ acquireLock: () => lock, openDataset: () => dataset });
 
     expect(() => writer.ingest(request)).toThrow("ingest boom");
@@ -60,7 +71,9 @@ describe("datasetWriter", () => {
     const lock = fakeLock();
     const writer = createDatasetWriter({
       acquireLock: () => lock,
-      openDataset: () => { throw new Error("open boom"); },
+      openDataset: () => {
+        throw new Error("open boom");
+      },
     });
 
     expect(() => writer.ingest(request)).toThrow("open boom");

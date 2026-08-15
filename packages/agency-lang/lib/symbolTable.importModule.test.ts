@@ -15,8 +15,9 @@ function makeDir(files: Record<string, string>): string {
 describe("SymbolTable.resolveImportModule", () => {
   it("returns loaded with symbols for a crawled Agency file", () => {
     const dir = makeDir({
-      "lib.agency": "export def realFn(): string {\n  return \"x\"\n}\n",
-      "use.agency": 'import { realFn } from "./lib.agency"\n\nnode u(): string {\n  return realFn()\n}\n',
+      "lib.agency": 'export def realFn(): string {\n  return "x"\n}\n',
+      "use.agency":
+        'import { realFn } from "./lib.agency"\n\nnode u(): string {\n  return realFn()\n}\n',
     });
     const usePath = path.join(dir, "use.agency");
     const table = SymbolTable.build(usePath);
@@ -39,7 +40,7 @@ describe("SymbolTable.resolveImportModule", () => {
   it("returns notLoaded for a file that exists on disk but was never crawled", () => {
     const dir = makeDir({
       "use.agency": 'node u(): string {\n  return "y"\n}\n',
-      "other.agency": "export def helper(): string {\n  return \"h\"\n}\n",
+      "other.agency": 'export def helper(): string {\n  return "h"\n}\n',
     });
     const usePath = path.join(dir, "use.agency");
     // build seeded from use.agency, which imports nothing → other.agency is

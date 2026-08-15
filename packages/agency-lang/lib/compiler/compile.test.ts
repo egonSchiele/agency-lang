@@ -93,9 +93,7 @@ node main() { raise app::read("m", { dir: 5 }) }
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(
-        result.errors.some((e) =>
-          /Effect 'app::read' data field 'dir' has the wrong type/.test(e),
-        ),
+        result.errors.some((e) => /Effect 'app::read' data field 'dir' has the wrong type/.test(e)),
       ).toBe(true);
     }
   });

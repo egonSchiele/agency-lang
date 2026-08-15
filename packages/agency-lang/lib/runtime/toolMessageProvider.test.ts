@@ -1,12 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { Result, PromptResult, StreamChunk } from "smoltalk";
 import { agency } from "./agency.js";
-import type {
-  EmbedConfig,
-  EmbedResult,
-  LLMClient,
-  PromptConfig,
-} from "./llmClient.js";
+import type { EmbedConfig, EmbedResult, LLMClient, PromptConfig } from "./llmClient.js";
 import { runPrompt } from "./prompt.js";
 import { RuntimeContext } from "./state/context.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -59,17 +54,14 @@ describe("toolMessage forwarding + wire shape", () => {
     ctx.setLLMClient(client);
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
 
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      async () => {
-        await _toolMessage("saveDraft", { value: "hi" }, "Draft saved.");
-        await runPrompt({
-          prompt: "continue",
-          messages: threads.getOrCreateActive(),
-          clientConfig: {} as any,
-        });
-      },
-    );
+    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, async () => {
+      await _toolMessage("saveDraft", { value: "hi" }, "Draft saved.");
+      await runPrompt({
+        prompt: "continue",
+        messages: threads.getOrCreateActive(),
+        clientConfig: {} as any,
+      });
+    });
 
     expect(client.configs).toHaveLength(1);
     // PromptConfig.messages (llmClient.ts:25), filled from the thread at
@@ -78,9 +70,7 @@ describe("toolMessage forwarding + wire shape", () => {
       typeof m.toJSON === "function" ? m.toJSON() : m,
     );
 
-    const asst = sent.find(
-      (m: any) => m.role === "assistant" && m.toolCalls?.length,
-    );
+    const asst = sent.find((m: any) => m.role === "assistant" && m.toolCalls?.length);
     expect(asst).toBeDefined();
     expect(asst.toolCalls[0].name).toBe("saveDraft");
 

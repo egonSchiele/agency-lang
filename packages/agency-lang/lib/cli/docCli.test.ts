@@ -25,7 +25,10 @@ afterEach(() => {
   }
 });
 
-function runDoc(args: string[], env: Record<string, string> = {}): { status: number; stderr: string } {
+function runDoc(
+  args: string[],
+  env: Record<string, string> = {},
+): { status: number; stderr: string } {
   try {
     execFileSync(process.execPath, [CLI, "doc", ...args], {
       env: { ...process.env, ...env },

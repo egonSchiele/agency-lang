@@ -10,10 +10,7 @@ import {
 
 const READ_OK = JSON.stringify({ "std::read": [{ action: "approve" }] });
 
-async function withEnv(
-  vars: Record<string, string | undefined>,
-  fn: () => void | Promise<void>,
-) {
+async function withEnv(vars: Record<string, string | undefined>, fn: () => void | Promise<void>) {
   const prev: Record<string, string | undefined> = {};
   for (const k of Object.keys(vars)) {
     prev[k] = process.env[k];
@@ -69,9 +66,7 @@ describe("resolveCliInterrupts", () => {
 
   it("without a policy env, reports unhandled and exits (historical path)", async () => {
     await withEnv({ [AGENCY_RUN_POLICY]: undefined, AGENCY_IPC: undefined }, async () => {
-      const exit = vi
-        .spyOn(process, "exit")
-        .mockImplementation((() => undefined) as any);
+      const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as any);
       const err = vi.spyOn(console, "error").mockImplementation(() => {});
       try {
         const respond = vi.fn();
@@ -103,10 +98,12 @@ describe("resolveCliInterrupts", () => {
           respond,
         );
         expect(result).toBe(done);
-        expect(seen).toEqual([[
-          { type: "reject", value: undefined },
-          { type: "reject", value: undefined },
-        ]]);
+        expect(seen).toEqual([
+          [
+            { type: "reject", value: undefined },
+            { type: "reject", value: undefined },
+          ],
+        ]);
       },
     );
   });
@@ -135,11 +132,7 @@ describe("resolveCliInterrupts", () => {
         promptCalls++;
         return "approve-always";
       };
-      const result = await resolveCliInterrupts(
-        withInterrupts("myapp::foo"),
-        respond,
-        { prompt },
-      );
+      const result = await resolveCliInterrupts(withInterrupts("myapp::foo"), respond, { prompt });
       expect(result).toBe(done);
       expect(promptCalls).toBe(1);
       expect(respond).toHaveBeenCalledTimes(2);
@@ -155,10 +148,13 @@ describe("resolveCliInterrupts", () => {
     await withEnv(INTERACTIVE_ENV, async () => {
       const respond = vi.fn(async () => done);
       const prompt = vi.fn();
-      const valuePrompt: ValuePromptFn = vi.fn(async () => ({
-        type: "approve",
-        value: "Adit",
-      } as any));
+      const valuePrompt: ValuePromptFn = vi.fn(
+        async () =>
+          ({
+            type: "approve",
+            value: "Adit",
+          }) as any,
+      );
       const result = await resolveCliInterrupts(
         { messages: {} as any, data: [valueInterrupt("std::input")] },
         respond,
@@ -179,20 +175,19 @@ describe("resolveCliInterrupts", () => {
       // Round 1: a statement interrupt of effect E answered approve-always.
       // Round 2: a VALUE interrupt of the same effect E — must still hit the
       // value prompt (a standing approve can't answer a question).
-      const rounds = [
-        { messages: {} as any, data: [valueInterrupt("myapp::foo")] },
-        done,
-      ];
+      const rounds = [{ messages: {} as any, data: [valueInterrupt("myapp::foo")] }, done];
       const respond = vi.fn(async () => rounds.shift()!);
-      const valuePrompt: ValuePromptFn = vi.fn(async () => ({
-        type: "approve",
-        value: "42",
-      } as any));
-      const result = await resolveCliInterrupts(
-        withInterrupts("myapp::foo"),
-        respond,
-        { prompt: promptWith(["approve-always"]), valuePrompt },
+      const valuePrompt: ValuePromptFn = vi.fn(
+        async () =>
+          ({
+            type: "approve",
+            value: "42",
+          }) as any,
       );
+      const result = await resolveCliInterrupts(withInterrupts("myapp::foo"), respond, {
+        prompt: promptWith(["approve-always"]),
+        valuePrompt,
+      });
       expect(result).toBe(done);
       expect(valuePrompt).toHaveBeenCalledTimes(1);
       expect(respond).toHaveBeenNthCalledWith(
@@ -229,9 +224,7 @@ describe("resolveCliInterrupts", () => {
 
   it("in an IPC subprocess, never prompts or resumes (parent owns the user)", async () => {
     await withEnv({ [AGENCY_RUN_POLICY]: READ_OK, AGENCY_IPC: "1" }, async () => {
-      const exit = vi
-        .spyOn(process, "exit")
-        .mockImplementation((() => undefined) as any);
+      const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as any);
       const err = vi.spyOn(console, "error").mockImplementation(() => {});
       try {
         const respond = vi.fn();

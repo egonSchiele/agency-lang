@@ -107,7 +107,11 @@ type AccountRequestOptions = {
   unsupportedRouteMessage?: string;
 };
 
-function accountRouteUrl(origin: string, route: AccountRoute, query: Record<string, string> | undefined): string {
+function accountRouteUrl(
+  origin: string,
+  route: AccountRoute,
+  query: Record<string, string> | undefined,
+): string {
   const url = new URL(`/api/${route}`, origin);
   if (query) {
     for (const [key, value] of Object.entries(query)) {
@@ -218,7 +222,8 @@ export function createAccountClient(origin: string, apiKey: string): AccountClie
     async getAccountSpend(window) {
       const value = await request("GET", "spend", {
         query: toSpendQuery(window),
-        unsupportedRouteMessage: "this statelog host does not support the spend API (upgrade the host)",
+        unsupportedRouteMessage:
+          "this statelog host does not support the spend API (upgrade the host)",
       });
       return parseValue(z.array(accountSpendRowSchema), value);
     },
@@ -271,7 +276,13 @@ function parseValue<T>(schema: z.ZodType<T>, value: unknown): T {
  *  when the project no longer exists — never the raw id). */
 function toKeySummary(raw: RawKeySummary, slugById: Record<string, string>): KeySummary {
   if (raw.scope === "account") {
-    return { id: raw.id, name: raw.name, createdAt: raw.createdAt, scope: "account", projectId: null };
+    return {
+      id: raw.id,
+      name: raw.name,
+      createdAt: raw.createdAt,
+      scope: "account",
+      projectId: null,
+    };
   }
   return {
     id: raw.id,

@@ -26,16 +26,34 @@ const okRunner: EvalInputRunner = async ({ statelogPath }) => {
 /** Writes the eval record grading reads, with one output value. */
 function recordExtractor(output: unknown): EvalRecordExtractor {
   return async ({ outPath }) => {
-    fs.writeFileSync(outPath, JSON.stringify({
-      traceId: "t", recordVersion: 2, formatVersion: 1, durationMs: 1, source: "s",
-      evalValues: [], evalOutputs: [{ value: output, threadId: "0", tMs: 1 }],
-      threads: [], events: [], interrupts: [], errors: [], incomplete: [],
-      metrics: {
-        llmCalls: 0, toolStarts: 0, toolEnds: 0, models: [],
-        tokensInTotal: 0, tokensOutTotal: 0, costUsdTotal: 0, toolCounts: {},
-      },
-      warnings: [],
-    }));
+    fs.writeFileSync(
+      outPath,
+      JSON.stringify({
+        traceId: "t",
+        recordVersion: 2,
+        formatVersion: 1,
+        durationMs: 1,
+        source: "s",
+        evalValues: [],
+        evalOutputs: [{ value: output, threadId: "0", tMs: 1 }],
+        threads: [],
+        events: [],
+        interrupts: [],
+        errors: [],
+        incomplete: [],
+        metrics: {
+          llmCalls: 0,
+          toolStarts: 0,
+          toolEnds: 0,
+          models: [],
+          tokensInTotal: 0,
+          tokensOutTotal: 0,
+          costUsdTotal: 0,
+          toolCounts: {},
+        },
+        warnings: [],
+      }),
+    );
   };
 }
 
@@ -52,7 +70,9 @@ describe("eval run CLI", () => {
 
   it("requires exactly one of inputs or goal", () => {
     expect(() => validateInputSelection({})).toThrow(/--inputs or --goal/);
-    expect(() => validateInputSelection({ inputs: "inputs.json", goal: "goal" })).toThrow(/one of/i);
+    expect(() => validateInputSelection({ inputs: "inputs.json", goal: "goal" })).toThrow(
+      /one of/i,
+    );
     expect(validateInputSelection({ goal: "goal" })).toBe("goal");
   });
 
@@ -83,7 +103,11 @@ describe("eval run CLI", () => {
 
     expect(result).toMatchObject({ runId: "r1", okCount: 1, errorCount: 0 });
     expect(result.inputs[0]).toMatchObject({ status: "success" });
-    expect(fs.existsSync(path.join(runsDir, "r1", "inputs", result.inputs[0].inputId, "agent", "eval-record.json"))).toBe(true);
+    expect(
+      fs.existsSync(
+        path.join(runsDir, "r1", "inputs", result.inputs[0].inputId, "agent", "eval-record.json"),
+      ),
+    ).toBe(true);
   });
 
   it("rejects an empty suite instead of succeeding with zero inputs", async () => {
@@ -93,9 +117,15 @@ describe("eval run CLI", () => {
     fs.writeFileSync(inputsFile, JSON.stringify({ inputs: [] }));
     const runsDir = path.join(tmpDir, "runs");
 
-    await expect(evalRun({
-      agent: agentFile, inputs: inputsFile, runsDir, runId: "empty", grade: false,
-    })).rejects.toThrow(/no inputs loaded from/);
+    await expect(
+      evalRun({
+        agent: agentFile,
+        inputs: inputsFile,
+        runsDir,
+        runId: "empty",
+        grade: false,
+      }),
+    ).rejects.toThrow(/no inputs loaded from/);
 
     expect(fs.existsSync(path.join(runsDir, "empty"))).toBe(false);
   });
@@ -103,13 +133,15 @@ describe("eval run CLI", () => {
   it("throws setup failures before creating a run directory", async () => {
     const runsDir = path.join(tmpDir, "runs");
 
-    await expect(evalRun({
-      agent: path.join(tmpDir, "missing.agency"),
-      goal: "do it",
-      runsDir,
-      runId: "setup-failed",
-      continueOnError: true,
-    })).rejects.toThrow();
+    await expect(
+      evalRun({
+        agent: path.join(tmpDir, "missing.agency"),
+        goal: "do it",
+        runsDir,
+        runId: "setup-failed",
+        continueOnError: true,
+      }),
+    ).rejects.toThrow();
 
     expect(fs.existsSync(path.join(runsDir, "setup-failed"))).toBe(false);
   });
@@ -153,12 +185,15 @@ describe("eval run CLI", () => {
     fs.writeFileSync(agentFile, "node main(task: string) {}\n");
     const runsDir = path.join(tmpDir, "runs");
     const inputsFile = path.join(tmpDir, "inputs.json");
-    fs.writeFileSync(inputsFile, JSON.stringify({
-      inputs: [
-        { id: "first", goal: "g1", task: "t" },
-        { id: "second", goal: "g2", task: "t" },
-      ],
-    }));
+    fs.writeFileSync(
+      inputsFile,
+      JSON.stringify({
+        inputs: [
+          { id: "first", goal: "g1", task: "t" },
+          { id: "second", goal: "g2", task: "t" },
+        ],
+      }),
+    );
 
     let runs = 0;
     const result = await evalRun(
@@ -187,11 +222,21 @@ describe("eval run CLI", () => {
       // The message now carries the seeded-file listing for diagnosability.
       errorMessage: expect.stringMatching(/^nope\n\nWorkdir was seeded with/),
     });
-    expect(fs.readFileSync(path.join(runsDir, "stop", "inputs", "first", "agent", "error.txt"), "utf-8")).toMatch(/^nope\n/);
-    expect(JSON.parse(fs.readFileSync(path.join(runsDir, "stop", "summary.json"), "utf-8"))).toMatchObject({
+    expect(
+      fs.readFileSync(path.join(runsDir, "stop", "inputs", "first", "agent", "error.txt"), "utf-8"),
+    ).toMatch(/^nope\n/);
+    expect(
+      JSON.parse(fs.readFileSync(path.join(runsDir, "stop", "summary.json"), "utf-8")),
+    ).toMatchObject({
       okCount: 0,
       errorCount: 1,
-      inputs: [{ inputId: "first", status: "error", errorMessage: expect.stringMatching(/^nope\n\nWorkdir was seeded with/) }],
+      inputs: [
+        {
+          inputId: "first",
+          status: "error",
+          errorMessage: expect.stringMatching(/^nope\n\nWorkdir was seeded with/),
+        },
+      ],
     });
   });
 
@@ -200,9 +245,13 @@ describe("eval run CLI", () => {
     // resolver path as a remote URL, with no network.
     const suiteRepo = path.join(tmpDir, "suite-repo");
     fs.mkdirSync(path.join(suiteRepo, "capital", "files"), { recursive: true });
-    fs.writeFileSync(path.join(suiteRepo, "capital", "test.json"), JSON.stringify({ goal: "g", task: "t" }));
+    fs.writeFileSync(
+      path.join(suiteRepo, "capital", "test.json"),
+      JSON.stringify({ goal: "g", task: "t" }),
+    );
     fs.writeFileSync(path.join(suiteRepo, "capital", "files", "hint.txt"), "Paris");
-    const gitInSuite = (...gitArgs: string[]) => execFileSync("git", gitArgs, { cwd: suiteRepo, encoding: "utf8" }).trim();
+    const gitInSuite = (...gitArgs: string[]) =>
+      execFileSync("git", gitArgs, { cwd: suiteRepo, encoding: "utf8" }).trim();
     gitInSuite("init", "-q", "-b", "main");
     gitInSuite("add", "-A");
     gitInSuite("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "suite");
@@ -234,14 +283,19 @@ describe("eval run CLI", () => {
     );
 
     expect(result.inputs[0].status).toBe("success");
-    const runConfig = JSON.parse(fs.readFileSync(path.join(tmpDir, "runs", "gitsuite", "config.json"), "utf8"));
-    expect(runConfig.provenance.inputsSource).toEqual({ source: `${suiteRepo}?ref=${suiteSha}`, sha: suiteSha });
+    const runConfig = JSON.parse(
+      fs.readFileSync(path.join(tmpDir, "runs", "gitsuite", "config.json"), "utf8"),
+    );
+    expect(runConfig.provenance.inputsSource).toEqual({
+      source: `${suiteRepo}?ref=${suiteSha}`,
+      sha: suiteSha,
+    });
     expect(runConfig.provenance.agent.closure.length).toBeGreaterThan(0);
     expect(runConfig.provenance.agent.closure[0].sha256).toMatch(/^[0-9a-f]{64}$/);
   });
 
   describe("grading", () => {
-/** An agent file plus the shared run options every grading case uses. The runs
+    /** An agent file plus the shared run options every grading case uses. The runs
      *  directory is a sibling of the agent's directory, never inside it: the seed
      *  copy would otherwise recurse into its own destination. */
     function setup(runId: string, inputs: { id: string; goal: string; task: string }[]) {
@@ -255,15 +309,26 @@ describe("eval run CLI", () => {
 
     it("recordGrading writes the grading block into summary.json and reports a failed gate", async () => {
       const opts = setup("graded", [{ id: "a", goal: "g", task: "t" }]);
-      const summary = await runSuite({ ...opts, perRun: { extractor: recordExtractor("hello") } }, { runner: okRunner });
-      expect(summary.grading).toBeUndefined();   // the runner never grades
+      const summary = await runSuite(
+        { ...opts, perRun: { extractor: recordExtractor("hello") } },
+        { runner: okRunner },
+      );
+      expect(summary.grading).toBeUndefined(); // the runner never grades
 
-      const grading = await recordGrading(summary.runDir, { mode: "override", graders: [grader(() => false, { name: "gate", mustPass: true })] }, {});
+      const grading = await recordGrading(
+        summary.runDir,
+        { mode: "override", graders: [grader(() => false, { name: "gate", mustPass: true })] },
+        {},
+      );
 
       expect(grading.gatesPassed).toBe(false);
-      const onDisk = JSON.parse(fs.readFileSync(path.join(tmpDir, "runs", "graded", "summary.json"), "utf8"));
+      const onDisk = JSON.parse(
+        fs.readFileSync(path.join(tmpDir, "runs", "graded", "summary.json"), "utf8"),
+      );
       expect(onDisk.grading.graders).toEqual(["gate"]);
-      expect(fs.existsSync(path.join(tmpDir, "runs", "graded", "verifier", "grading.json"))).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, "runs", "graded", "verifier", "grading.json"))).toBe(
+        true,
+      );
     });
 
     it("counts a gate-failed input as a zero rather than zeroing the whole run", async () => {
@@ -271,9 +336,19 @@ describe("eval run CLI", () => {
         { id: "a", goal: "g", task: "t" },
         { id: "b", goal: "g", task: "t" },
       ]);
-      const summary = await runSuite({ ...opts, perRun: { extractor: recordExtractor("hello") } }, { runner: okRunner });
+      const summary = await runSuite(
+        { ...opts, perRun: { extractor: recordExtractor("hello") } },
+        { runner: okRunner },
+      );
       // Passes on input "a", fails the gate on input "b".
-      const grading = await recordGrading(summary.runDir, { mode: "override", graders: [grader(({ input }) => input.id === "a", { name: "gate", mustPass: true })] }, {});
+      const grading = await recordGrading(
+        summary.runDir,
+        {
+          mode: "override",
+          graders: [grader(({ input }) => input.id === "a", { name: "gate", mustPass: true })],
+        },
+        {},
+      );
 
       // One of two inputs scored 1, the other 0 — the mean is 0.5, not 0.
       expect(grading.objective).toBeCloseTo(0.5);
@@ -284,8 +359,9 @@ describe("eval run CLI", () => {
       // ExactMatch's matchOn defaults to `expected`, which this input lacks.
       // The fail-fast ordering itself lives in evalRun: resolve → validate →
       // run → grade; the runner no longer knows graders exist.
-      expect(() => validateGraders([new ExactMatch({})], { id: "a", goal: "g", task: "t" }))
-        .toThrow(/matchOn/);
+      expect(() =>
+        validateGraders([new ExactMatch({})], { id: "a", goal: "g", task: "t" }),
+      ).toThrow(/matchOn/);
     });
   });
 
@@ -302,7 +378,9 @@ describe("eval run CLI", () => {
       ],
     } as never;
     expect(totalRunCostUsd(result)).toBeCloseTo(0.75);
-    expect(totalRunCostUsd({ inputs: [{ evalRecordPath: path.join(tmpDir, "nope.json") }] } as never)).toBeUndefined();
+    expect(
+      totalRunCostUsd({ inputs: [{ evalRecordPath: path.join(tmpDir, "nope.json") }] } as never),
+    ).toBeUndefined();
   });
 
   describe("per-test graders", () => {
@@ -316,8 +394,10 @@ describe("eval run CLI", () => {
       const suiteDir = path.join(tmpDir, "suite");
       fs.mkdirSync(path.join(suiteDir, "self"), { recursive: true });
       fs.writeFileSync(path.join(suiteDir, "self", "test.json"), JSON.stringify({ task: "t" }));
-      fs.writeFileSync(path.join(suiteDir, "self", "graders.ts"),
-        `export default ({ output }) => (output === "hello" ? 1 : 0);`);
+      fs.writeFileSync(
+        path.join(suiteDir, "self", "graders.ts"),
+        `export default ({ output }) => (output === "hello" ? 1 : 0);`,
+      );
       fs.mkdirSync(path.join(suiteDir, "plain"), { recursive: true });
       fs.writeFileSync(path.join(suiteDir, "plain", "test.json"), JSON.stringify({ task: "t" }));
       const fallbackModule = path.join(tmpDir, "fallback.ts");
@@ -394,11 +474,12 @@ describe("eval run CLI", () => {
 
     it("rejects neither/both agent flags and a command without {task}, before anything runs", async () => {
       await expect(evalRun({ goal: "g", grade: false })).rejects.toThrow(/exactly one of/);
-      await expect(evalRun({ agent: "a.agency", agentCmd: "x {task}", goal: "g", grade: false }))
-        .rejects.toThrow(/exactly one of/);
-      await expect(evalRun({ agentCmd: "agent-without-placeholder", goal: "g", grade: false }))
-        .rejects.toThrow(/\{task\}/);
+      await expect(
+        evalRun({ agent: "a.agency", agentCmd: "x {task}", goal: "g", grade: false }),
+      ).rejects.toThrow(/exactly one of/);
+      await expect(
+        evalRun({ agentCmd: "agent-without-placeholder", goal: "g", grade: false }),
+      ).rejects.toThrow(/\{task\}/);
     });
   });
-
 });

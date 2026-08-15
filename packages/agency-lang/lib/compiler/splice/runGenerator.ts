@@ -220,9 +220,7 @@ function localName(splice: Splice, exportedName: string): string {
  */
 function argumentImportLine(source: ImportSource, tempDir: string): string {
   const specifier =
-    source.modulePath === null
-      ? source.specifier
-      : importSpecifier(tempDir, source.modulePath);
+    source.modulePath === null ? source.specifier : importSpecifier(tempDir, source.modulePath);
   const binding =
     source.exportedName === source.localName
       ? source.exportedName
@@ -262,11 +260,7 @@ function compileRunner(
     if (outputFile === null) {
       return {
         ok: false,
-        diagnostic: failed(
-          splice,
-          generator,
-          "the generator module could not be compiled",
-        ),
+        diagnostic: failed(splice, generator, "the generator module could not be compiled"),
       };
     }
     return { ok: true, value: outputFile };
@@ -314,11 +308,7 @@ function execute(
   } catch (err) {
     const signal = (err as { signal?: string }).signal;
     if (signal === "SIGTERM") {
-      return failed(
-        splice,
-        generator,
-        `it did not finish within ${wallClockMs / 1000} seconds`,
-      );
+      return failed(splice, generator, `it did not finish within ${wallClockMs / 1000} seconds`);
     }
     if (signal === "SIGABRT") {
       return failed(splice, generator, `it exceeded the ${memoryMb}mb memory limit`);
@@ -427,7 +417,9 @@ function isInterruptList(value: unknown): value is Array<{ name?: string }> {
     value.length > 0 &&
     value.every(
       (item) =>
-        typeof item === "object" && item !== null && typeof (item as { name?: unknown }).name === "string",
+        typeof item === "object" &&
+        item !== null &&
+        typeof (item as { name?: unknown }).name === "string",
     )
   );
 }
@@ -497,7 +489,7 @@ function messageOf(err: unknown): string {
  */
 function stderrOf(err: unknown): string {
   const stderr = (err as { stderr?: string | Buffer }).stderr;
-  const text = typeof stderr === "string" ? stderr : stderr?.toString() ?? "";
+  const text = typeof stderr === "string" ? stderr : (stderr?.toString() ?? "");
   const trimmed = text.trim();
   return trimmed === "" ? messageOf(err) : trimmed;
 }

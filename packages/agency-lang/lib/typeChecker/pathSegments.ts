@@ -15,9 +15,7 @@ import type { AccessChainElement } from "../types/access.js";
  * paths only: calls, computed keys, slices, and method hops never appear here
  * (the recognizers reject them).
  */
-export type PathSegment =
-  | { kind: "prop"; name: string }
-  | { kind: "index"; index: number };
+export type PathSegment = { kind: "prop"; name: string } | { kind: "index"; index: number };
 
 /**
  * A normalized reference path — the bound thing being narrowed. A bare variable

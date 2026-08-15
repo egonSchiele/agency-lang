@@ -5,12 +5,7 @@ import { ToolCall } from "smoltalk";
 import type { Result, PromptResult, StreamChunk } from "smoltalk";
 import { AgencyFunction } from "./agencyFunction.js";
 import { agency } from "./agency.js";
-import type {
-  EmbedConfig,
-  EmbedResult,
-  LLMClient,
-  PromptConfig,
-} from "./llmClient.js";
+import type { EmbedConfig, EmbedResult, LLMClient, PromptConfig } from "./llmClient.js";
 import { runPrompt } from "./prompt.js";
 import { RuntimeContext } from "./state/context.js";
 import { MessageThread } from "./state/messageThread.js";
@@ -109,19 +104,14 @@ function stdlibShapedSaveDraft(): AgencyFunction {
   });
 }
 
-async function runSaveDraftPrompt(opts: {
-  draftSchema: unknown;
-  save: unknown;
-}) {
+async function runSaveDraftPrompt(opts: { draftSchema: unknown; save: unknown }) {
   const ctx = makeCtx();
   const client = new ScriptedClient(opts.save);
   ctx.setLLMClient(client);
   const statelogEvents: { kind: string; payload: any }[] = [];
   const sc = ctx.statelogClient as any;
-  sc.toolCallStart = (payload: any) =>
-    statelogEvents.push({ kind: "toolCallStart", payload });
-  sc.toolCall = (payload: any) =>
-    statelogEvents.push({ kind: "toolCall", payload });
+  sc.toolCallStart = (payload: any) => statelogEvents.push({ kind: "toolCallStart", payload });
+  sc.toolCall = (payload: any) => statelogEvents.push({ kind: "toolCall", payload });
   const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
   const thread = new MessageThread();
   // The frame a real caller (a function/node/guard-block scope) would

@@ -135,8 +135,7 @@ export const DIAGNOSTICS = {
   tooFewValueArgs: {
     code: "AG1005",
     severity: "error",
-    message:
-      "{alias} requires at least {min} value {argumentWord} (referenced in '{context}').",
+    message: "{alias} requires at least {min} value {argumentWord} (referenced in '{context}').",
   },
   unknownTypeAlias: {
     code: "AG1006",
@@ -151,8 +150,7 @@ export const DIAGNOSTICS = {
   genericRequiresTypeArgs: {
     code: "AG1007",
     severity: "error",
-    message:
-      "Generic type '{alias}' requires type arguments (referenced in '{context}').",
+    message: "Generic type '{alias}' requires type arguments (referenced in '{context}').",
   },
   builtinGenericArity: {
     code: "AG1008",
@@ -179,8 +177,7 @@ export const DIAGNOSTICS = {
   tooFewTypeArgs: {
     code: "AG1012",
     severity: "error",
-    message:
-      "{alias} requires at least {min} type {argumentWord} (referenced in '{context}').",
+    message: "{alias} requires at least {min} type {argumentWord} (referenced in '{context}').",
   },
   bannedBuiltinInStaticInit: {
     code: "AG7002",
@@ -225,8 +222,7 @@ export const DIAGNOSTICS = {
   unknownPartialParameter: {
     code: "AG6004",
     severity: "error",
-    message:
-      "Unknown parameter '{name}' in .partial() call. '{fn}' has parameters: {params}.",
+    message: "Unknown parameter '{name}' in .partial() call. '{fn}' has parameters: {params}.",
   },
   partialArgNotAssignable: {
     code: "AG6005",
@@ -247,8 +243,7 @@ export const DIAGNOSTICS = {
   methodArityAtLeast: {
     code: "AG6008",
     severity: "error",
-    message:
-      "Method '.{method}()' expects at least {min} argument(s), got {count}.",
+    message: "Method '.{method}()' expects at least {min} argument(s), got {count}.",
   },
   methodArityRange: {
     code: "AG6009",
@@ -264,14 +259,12 @@ export const DIAGNOSTICS = {
   namedArgsOnlyAgencyFunctions: {
     code: "AG6011",
     severity: "error",
-    message:
-      "Named arguments can only be used with Agency-defined functions, not '{fn}'.",
+    message: "Named arguments can only be used with Agency-defined functions, not '{fn}'.",
   },
   namedArgNotAccepted: {
     code: "AG6012",
     severity: "error",
-    message:
-      "'{fn}' does not accept the named argument '{name}'. Allowed: {allowed}.",
+    message: "'{fn}' does not accept the named argument '{name}'. Allowed: {allowed}.",
   },
   duplicateNamedArg: {
     code: "AG6013",
@@ -281,8 +274,7 @@ export const DIAGNOSTICS = {
   namedArgTypeMismatch: {
     code: "AG6014",
     severity: "error",
-    message:
-      "Named argument '{name}' on '{fn}' expects type '{expected}', got '{actual}'.",
+    message: "Named argument '{name}' on '{fn}' expects type '{expected}', got '{actual}'.",
   },
   blockArgNotAccepted: {
     code: "AG6015",
@@ -324,8 +316,7 @@ export const DIAGNOSTICS = {
   pipeSlotNotAssignable: {
     code: "AG6022",
     severity: "error",
-    message:
-      "Type '{actual}' is not assignable to pipe slot of type '{expected}'.",
+    message: "Type '{actual}' is not assignable to pipe slot of type '{expected}'.",
   },
   splatAfterNamedArg: {
     code: "AG6023",
@@ -335,8 +326,7 @@ export const DIAGNOSTICS = {
   positionalAfterNamedArg: {
     code: "AG6024",
     severity: "error",
-    message:
-      "Positional argument cannot follow a named argument in call to '{fn}'.",
+    message: "Positional argument cannot follow a named argument in call to '{fn}'.",
   },
   unknownNamedArg: {
     code: "AG6025",
@@ -369,8 +359,7 @@ export const DIAGNOSTICS = {
   namedArgsOnRaise: {
     code: "AG3004",
     severity: "error",
-    message:
-      "Named arguments are not allowed on 'raise'/'interrupt'. Pass the data positionally.",
+    message: "Named arguments are not allowed on 'raise'/'interrupt'. Pass the data positionally.",
   },
   effectDataMissing: {
     code: "AG3005",
@@ -395,8 +384,7 @@ export const DIAGNOSTICS = {
   unhandledInterrupts: {
     code: "AG3009",
     severity: "warning",
-    message:
-      "Function '{fn}' may throw interrupts [{effects}] but is not inside a handler.",
+    message: "Function '{fn}' may throw interrupts [{effects}] but is not inside a handler.",
   },
   handlerBodyRaises: {
     code: "AG3010",
@@ -471,7 +459,8 @@ export const DIAGNOSTICS = {
   importNameNotExported: {
     code: "AG4010",
     severity: "error",
-    message: "'{name}' is defined in '{module}' but is not exported. Add the 'export' keyword to its definition.",
+    message:
+      "'{name}' is defined in '{module}' but is not exported. Add the 'export' keyword to its definition.",
   },
   reservedBlockKeyword: {
     code: "AG4006",
@@ -527,8 +516,7 @@ export const DIAGNOSTICS = {
   finalizeDuplicate: {
     code: "AG6032",
     severity: "error",
-    message:
-      "A scope can declare at most one finalize block. Combine the logic into one block.",
+    message: "A scope can declare at most one finalize block. Combine the logic into one block.",
   },
   finalizeNotTopLevel: {
     code: "AG6033",
@@ -701,9 +689,7 @@ export const DIAGNOSTIC_CATEGORIES = [
 ] as const;
 
 /** The category a code belongs to, by its AG# prefix, or undefined if none. */
-export function categoryForCode(
-  code: string,
-): (typeof DIAGNOSTIC_CATEGORIES)[number] | undefined {
+export function categoryForCode(code: string): (typeof DIAGNOSTIC_CATEGORIES)[number] | undefined {
   const prefix = code.slice(0, 3);
   return DIAGNOSTIC_CATEGORIES.find((c) => c.prefix === prefix);
 }
@@ -715,12 +701,12 @@ export function categoryForCode(
  * runtime \w+ rule in renderMessage).
  */
 type NonPlaceholderChar = "{" | "}" | " ";
-type IsPlaceholderName<P extends string> =
-  P extends `${string}${NonPlaceholderChar}${string}` ? false : true;
-type Placeholders<S extends string> =
-  S extends `${string}{${infer P}}${infer Rest}`
-    ? (IsPlaceholderName<P> extends true ? P : never) | Placeholders<Rest>
-    : never;
+type IsPlaceholderName<P extends string> = P extends `${string}${NonPlaceholderChar}${string}`
+  ? false
+  : true;
+type Placeholders<S extends string> = S extends `${string}{${infer P}}${infer Rest}`
+  ? (IsPlaceholderName<P> extends true ? P : never) | Placeholders<Rest>
+  : never;
 
 /**
  * Typed params for a diagnostic: every {placeholder} in its template is a
@@ -742,10 +728,7 @@ export type DiagnosticParams<N extends DiagnosticName> = Record<
  * this, but an `as any` caller or future untyped path must fail loudly
  * rather than ship the string "undefined" inside a user-facing message.
  */
-export function renderMessage(
-  template: string,
-  params: Record<string, string | number>,
-): string {
+export function renderMessage(template: string, params: Record<string, string | number>): string {
   const OPEN_SENTINEL = "\u0000";
   const CLOSE_SENTINEL = "\u0001";
   const substituted = template
@@ -754,9 +737,7 @@ export function renderMessage(
     .replace(/\{(\w+)\}/g, (_, key: string) => {
       const value = params[key];
       if (value === undefined) {
-        throw new Error(
-          `renderMessage: missing param '${key}' for template: ${template}`,
-        );
+        throw new Error(`renderMessage: missing param '${key}' for template: ${template}`);
       }
       return String(value);
     });

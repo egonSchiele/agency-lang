@@ -125,7 +125,6 @@ export type IntersectionType = {
   tags?: Tag[];
 };
 
-
 /**
  * A value-parameter declaration on a value-parameterized type alias.
  * Example: in `type NumberInRange(low: number, high: number) = number`,

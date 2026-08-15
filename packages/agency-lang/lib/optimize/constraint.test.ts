@@ -2,11 +2,7 @@ import { describe, expect, it } from "vitest";
 import { exprParser } from "@/parsers/parsers.js";
 import type { TypeAliasEntry, VariableType } from "@/types.js";
 import { hasInterpolation, isNullLiteral } from "@/utils/node.js";
-import {
-  checkProposal,
-  describeConstraint,
-  renderDeclaredType,
-} from "./constraint.js";
+import { checkProposal, describeConstraint, renderDeclaredType } from "./constraint.js";
 
 const statusT: VariableType = {
   type: "unionType",
@@ -145,8 +141,12 @@ describe("renderDeclaredType + describeConstraint", () => {
     expect(checkProposal(text, `"pass"`, {}).ok).toBe(true);
     expect(checkProposal(text, `"exploded"`, {}).ok).toBe(false);
 
-    expect(describeConstraint({ declaredType: null, valueKind: "string" }).toLowerCase()).toContain("free");
-    expect(describeConstraint({ declaredType: null, valueKind: "literal" }).toLowerCase()).toContain("literal");
+    expect(describeConstraint({ declaredType: null, valueKind: "string" }).toLowerCase()).toContain(
+      "free",
+    );
+    expect(
+      describeConstraint({ declaredType: null, valueKind: "literal" }).toLowerCase(),
+    ).toContain("literal");
     expect(describeConstraint({ declaredType: "Status", valueKind: "string" })).toBe("Status");
   });
 });

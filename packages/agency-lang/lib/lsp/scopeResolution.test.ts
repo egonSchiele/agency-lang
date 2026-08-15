@@ -40,17 +40,17 @@ describe("findDefForScope", () => {
 
 describe("findContainingScope", () => {
   it("resolves correct scope for two adjacent functions", () => {
-    const source = "def foo() {\n  let x: number = 1\n}\ndef bar() {\n  let y: string = \"hi\"\n}";
+    const source = 'def foo() {\n  let x: number = 1\n}\ndef bar() {\n  let y: string = "hi"\n}';
     const { program, scopes } = getScopesAndProgram(source);
 
     // Find offset inside bar's body (line 4: "  let y: string = ...")
-    const barOffset = source.indexOf('let y');
+    const barOffset = source.indexOf("let y");
     const barScope = findContainingScope(barOffset, scopes, program);
     expect(barScope).toBeDefined();
     expect(barScope!.name).toBe("bar");
 
     // Find offset inside foo's body
-    const fooOffset = source.indexOf('let x');
+    const fooOffset = source.indexOf("let x");
     const fooScope = findContainingScope(fooOffset, scopes, program);
     expect(fooScope).toBeDefined();
     expect(fooScope!.name).toBe("foo");

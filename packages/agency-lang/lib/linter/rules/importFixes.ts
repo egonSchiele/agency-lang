@@ -19,8 +19,7 @@ function namedImportWithout(nameType: NamedImport, localNames: string[]): NamedI
   // Map each local name back to its original imported name (alias-aware).
   const originals = localNames.map(
     (localName) =>
-      Object.keys(nameType.aliases).find((o) => nameType.aliases[o] === localName) ??
-      localName,
+      Object.keys(nameType.aliases).find((o) => nameType.aliases[o] === localName) ?? localName,
   );
   // Hole entries (template import specifiers) are never reported unused.
   const importedNames = nameType.importedNames.filter(
@@ -88,8 +87,7 @@ export function removalEdit(
     // followed by `;`); extending unconditionally would eat the NEXT line's
     // newline and collapse an intentional blank line between imports.
     const spanEndsWithNewline = source[loc.end - 1] === "\n";
-    const end =
-      !spanEndsWithNewline && source[loc.end] === "\n" ? loc.end + 1 : loc.end;
+    const end = !spanEndsWithNewline && source[loc.end] === "\n" ? loc.end + 1 : loc.end;
     return { start: loc.start, end, newText: "" };
   }
   return { start: span.start, end: span.end, newText: printImport(rebuilt) };

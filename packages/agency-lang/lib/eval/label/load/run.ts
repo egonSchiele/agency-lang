@@ -104,9 +104,8 @@ export function loadRun(args: LoadRunArgs): LoadedBatch {
       continue;
     }
 
-    const traceId = typeof record.traceId === "string" && record.traceId.length > 0
-      ? record.traceId
-      : undefined;
+    const traceId =
+      typeof record.traceId === "string" && record.traceId.length > 0 ? record.traceId : undefined;
     if (traceId === undefined) {
       skips.push({ item: inputId, reason: "missing-trace-id" });
       continue;
@@ -185,14 +184,18 @@ function readAgentProvenance(sourceDir: string): JsonValue {
   try {
     const parsed = JsonValueSchema.safeParse(JSON.parse(fs.readFileSync(file, "utf8")));
     if (
-      !parsed.success || parsed.data === null || typeof parsed.data !== "object" ||
+      !parsed.success ||
+      parsed.data === null ||
+      typeof parsed.data !== "object" ||
       Array.isArray(parsed.data)
     ) {
       return null;
     }
     const provenance = parsed.data.provenance;
     if (
-      provenance === null || provenance === undefined || typeof provenance !== "object" ||
+      provenance === null ||
+      provenance === undefined ||
+      typeof provenance !== "object" ||
       Array.isArray(provenance)
     ) {
       return null;

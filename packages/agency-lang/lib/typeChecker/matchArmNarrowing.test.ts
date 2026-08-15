@@ -101,7 +101,9 @@ node main() {
     }
   }
 }`);
-    expect(errs.some((m) => /not available on every member|does not exist|not assignable/i.test(m))).toBe(true);
+    expect(
+      errs.some((m) => /not available on every member|does not exist|not assignable/i.test(m)),
+    ).toBe(true);
   });
 
   it("exhaustiveness still fires independently of narrowing", () => {

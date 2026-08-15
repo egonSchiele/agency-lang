@@ -1,14 +1,5 @@
-import type {
-  MemoryGraphData,
-  ConversationSummary,
-  EmbeddingIndex,
-  MemoryStore,
-} from "./types.js";
-import {
-  MemoryGraphDataSchema,
-  EmbeddingIndexSchema,
-  ConversationSummarySchema,
-} from "./types.js";
+import type { MemoryGraphData, ConversationSummary, EmbeddingIndex, MemoryStore } from "./types.js";
+import { MemoryGraphDataSchema, EmbeddingIndexSchema, ConversationSummarySchema } from "./types.js";
 import type { z } from "zod";
 import fs from "node:fs";
 import path from "node:path";
@@ -21,12 +12,7 @@ import { createLogger, type Logger, type LogLevel } from "../../logger.js";
 const MEMORY_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
 
 function validateMemoryId(memoryId: string): void {
-  if (
-    !memoryId ||
-    memoryId === "." ||
-    memoryId === ".." ||
-    !MEMORY_ID_PATTERN.test(memoryId)
-  ) {
+  if (!memoryId || memoryId === "." || memoryId === ".." || !MEMORY_ID_PATTERN.test(memoryId)) {
     throw new Error(
       `Invalid memoryId "${memoryId}". memoryIds must match ${MEMORY_ID_PATTERN} and cannot be "." or "..".`,
     );
@@ -39,7 +25,10 @@ export class FileMemoryStore implements MemoryStore {
    *  when grepping. */
   private logger: Logger;
 
-  constructor(private baseDir: string, logLevel?: LogLevel) {
+  constructor(
+    private baseDir: string,
+    logLevel?: LogLevel,
+  ) {
     this.logger = createLogger(logLevel ?? "info");
   }
 
@@ -70,9 +59,7 @@ export class FileMemoryStore implements MemoryStore {
       const issues = result.error.issues
         .map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`)
         .join("; ");
-      throw new Error(
-        `MemoryStore ${direction} schema mismatch at ${filePath}: ${issues}`,
-      );
+      throw new Error(`MemoryStore ${direction} schema mismatch at ${filePath}: ${issues}`);
     }
     return result.data;
   }
@@ -83,18 +70,14 @@ export class FileMemoryStore implements MemoryStore {
       return null;
     }
     const content = await fs.promises.readFile(filePath, "utf-8");
-    this.logger.debug(
-      `[memory] FileMemoryStore: read ${filePath} (${content.length} bytes)`,
-    );
+    this.logger.debug(`[memory] FileMemoryStore: read ${filePath} (${content.length} bytes)`);
     return JSON.parse(content);
   }
 
   private async writeJSON(filePath: string, data: unknown): Promise<void> {
     const serialized = JSON.stringify(data, null, 2);
     await fs.promises.writeFile(filePath, serialized, "utf-8");
-    this.logger.debug(
-      `[memory] FileMemoryStore: wrote ${filePath} (${serialized.length} bytes)`,
-    );
+    this.logger.debug(`[memory] FileMemoryStore: wrote ${filePath} (${serialized.length} bytes)`);
   }
 
   async loadGraph(memoryId: string): Promise<MemoryGraphData> {
@@ -118,10 +101,7 @@ export class FileMemoryStore implements MemoryStore {
     return this.validate(EmbeddingIndexSchema, raw, filePath, "load");
   }
 
-  async saveEmbeddings(
-    memoryId: string,
-    index: EmbeddingIndex
-  ): Promise<void> {
+  async saveEmbeddings(memoryId: string, index: EmbeddingIndex): Promise<void> {
     this.ensureDir(memoryId);
     const filePath = path.join(this.dir(memoryId), "embeddings.json");
     this.validate(EmbeddingIndexSchema, index, filePath, "save");
@@ -135,10 +115,7 @@ export class FileMemoryStore implements MemoryStore {
     return this.validate(ConversationSummarySchema, raw, filePath, "load");
   }
 
-  async saveSummary(
-    memoryId: string,
-    summary: ConversationSummary
-  ): Promise<void> {
+  async saveSummary(memoryId: string, summary: ConversationSummary): Promise<void> {
     this.ensureDir(memoryId);
     const filePath = path.join(this.dir(memoryId), "summary.json");
     this.validate(ConversationSummarySchema, summary, filePath, "save");

@@ -56,9 +56,7 @@ export const DETERMINISTIC_SPEECH_COST = 0.015;
 /** Recognizable fixed audio bytes ("AGENCY") the DeterministicClient returns
  *  from speak(), so a test can assert the exact bytes round-trip to the output
  *  file. */
-export const DETERMINISTIC_SPEECH_BYTES: readonly number[] = [
-  0x41, 0x47, 0x45, 0x4e, 0x43, 0x59,
-];
+export const DETERMINISTIC_SPEECH_BYTES: readonly number[] = [0x41, 0x47, 0x45, 0x4e, 0x43, 0x59];
 
 /**
  * Default token threshold for triggering memory compaction when the

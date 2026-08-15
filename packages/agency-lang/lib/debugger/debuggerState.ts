@@ -101,17 +101,11 @@ export class DebuggerState {
     this.checkpoints.pin(checkpointId, label);
   }
 
-  cloneCheckpoint(
-    checkpoint: Checkpoint,
-    opts: Partial<CheckpointArgs> = {},
-  ): number {
+  cloneCheckpoint(checkpoint: Checkpoint, opts: Partial<CheckpointArgs> = {}): number {
     return this.checkpoints.cloneCheckpoint(checkpoint, opts);
   }
 
-  createRollingCheckpoint(
-    ctx: RuntimeContext<any>,
-    opts: SourceLocationOpts,
-  ): number {
+  createRollingCheckpoint(ctx: RuntimeContext<any>, opts: SourceLocationOpts): number {
     return this.checkpoints.createRolling(ctx, opts);
   }
 

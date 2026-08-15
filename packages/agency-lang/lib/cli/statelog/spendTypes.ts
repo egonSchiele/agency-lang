@@ -83,9 +83,7 @@ export const projectSpendSchema = z
     // returns; the omitted tail is summed into `otherSpend`. Authoritative
     // `cost`/`tokens` totals are unaffected.
     breakdownTruncated: z.boolean(),
-    otherSpend: z
-      .object({ cost: costBreakdownSchema, tokens: tokenBreakdownSchema })
-      .strict(),
+    otherSpend: z.object({ cost: costBreakdownSchema, tokens: tokenBreakdownSchema }).strict(),
   })
   .strict()
   .refine(

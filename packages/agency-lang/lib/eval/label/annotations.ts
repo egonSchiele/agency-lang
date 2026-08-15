@@ -48,10 +48,12 @@ export type ItemJudgement = {
 };
 
 function matchesFoldKey(row: AnnotationRow, key: AnnotationFoldKey): boolean {
-  return row.outputId === key.outputId &&
+  return (
+    row.outputId === key.outputId &&
     row.checklistId === key.checklistId &&
     row.annotator.kind === key.annotator.kind &&
-    row.annotator.id === key.annotator.id;
+    row.annotator.id === key.annotator.id
+  );
 }
 
 export function liveQuestions(revision: ChecklistRevision): ChecklistQuestion[] {

@@ -7,9 +7,7 @@ import type { GraphState } from "./types.js";
 import type { ServedInvocationOutcome } from "./invocationUsage.js";
 
 /** A bare value-or-error, before the usage snapshot is attached. */
-export type RawOutcome<T> =
-  | { status: "returned"; value: T }
-  | { status: "threw"; error: unknown };
+export type RawOutcome<T> = { status: "returned"; value: T } | { status: "threw"; error: unknown };
 
 /**
  * Close a served invocation's lifecycle: run cleanup, then snapshot the meter.

@@ -3,10 +3,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import type { AgencyProgram } from "../types.js";
 import { walkNodes } from "../utils/node.js";
 
-export function getFoldingRanges(
-  program: AgencyProgram,
-  doc: TextDocument,
-): FoldingRange[] {
+export function getFoldingRanges(program: AgencyProgram, doc: TextDocument): FoldingRange[] {
   const ranges: FoldingRange[] = [];
 
   for (const { node } of walkNodes(program.nodes)) {

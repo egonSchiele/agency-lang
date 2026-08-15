@@ -100,10 +100,7 @@ function makeLocalDir(fixture: string): string {
 function rmLocal(dir: string): void {
   const root = realpathSync(process.cwd());
   const resolved = realpathSync(dir);
-  if (
-    path.dirname(resolved) === root &&
-    path.basename(resolved).startsWith(".runpol-spawn-")
-  ) {
+  if (path.dirname(resolved) === root && path.basename(resolved).startsWith(".runpol-spawn-")) {
     rmSync(resolved, { recursive: true, force: true });
   }
 }

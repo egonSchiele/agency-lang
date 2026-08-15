@@ -24,10 +24,7 @@ export function misplacedFlagWarning(flag: string, input: string): string {
 
 /** The rule-1 warning: an agency-owned flag in the program tail, unless the
  *  user drew the line with `--`. Provenance comes from the fork parser. */
-export function warnMisplacedAgencyFlags(
-  command: Command,
-  input: string,
-): string | undefined {
+export function warnMisplacedAgencyFlags(command: Command, input: string): string | undefined {
   const boundary = command.boundaryInfo();
   if (boundary === undefined || boundary.viaSeparator) {
     return undefined;

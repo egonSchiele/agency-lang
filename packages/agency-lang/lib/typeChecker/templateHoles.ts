@@ -23,13 +23,9 @@ export function checkTemplateHoles(ctx: TypeCheckerContext): void {
     if (visit.node.type !== "hole") continue;
     const hole = visit.node as Hole;
     if (hole.sort !== "expr" || hole.typeAnnotation) continue;
-    const parent = visit.ancestors[visit.ancestors.length - 1] as
-      | AgencyNode
-      | undefined;
+    const parent = visit.ancestors[visit.ancestors.length - 1] as AgencyNode | undefined;
     if (parent && parent.type === "assignment" && !parent.typeHint) {
-      ctx.errors.push(
-        diagnostic("holeNeedsTypeAnnotation", { name: hole.name }, hole.loc ?? null),
-      );
+      ctx.errors.push(diagnostic("holeNeedsTypeAnnotation", { name: hole.name }, hole.loc ?? null));
     }
   }
 }

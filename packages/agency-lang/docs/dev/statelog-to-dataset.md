@@ -1,96 +1,75 @@
-# Promoting a statelog trace into a label dataset
+# Labeling a statelog trace
 
 This is the bridge from a captured statelog trace to a human-judged **dataset**
 (`agency label`). It lets you run an agent ad-hoc, then — from the log viewer or
-the CLI — pick one trace out of a multi-trace statelog and start labeling it.
+the CLI — pick one trace out of a multi-trace statelog and label it.
 
 Read `eval-labeling.md` first for the dataset itself (examples, occurrences,
 annotations, the lock, checklists). This note covers only the bridge.
 
-## The three-piece pipeline (finding-2 shape)
+## A trace is just an example
 
-`loadBatch(...)` is **synchronous and never prompts**, so a print chooser cannot
-live inside a loader. The bridge is therefore split so the interactive step is
-owned by the surface, not the loader:
+Once extracted, a statelog trace is a `{ task, output }` example — the same
+shape a run produces — so it flows through the same machinery a run does:
 
-1. **`resolveTrace(events, sourcePath)`** (`lib/eval/label/load/statelog.ts`) —
-   pure. Runs the trace's events through `extractEvalRecord`, then decides the
-   output by strict precedence and returns a discriminated result:
-   - `resolved` — a definite output (`evalOutput` at the last explicit index,
-     else the entry-node `return` value, else a single clean printed value).
-   - `needs-selection` — several non-truncated prints; the surface must choose.
-   - `rejected` — a truncated explicit output (`truncated-output`, never falls
-     through to prints), only-truncated prints (`truncated-output`), or nothing
-     at all (`no-output`).
-2. **surface-owned selection** — the CLI's `--output <trace>=print:<index>` or
-   the viewer's chooser turns a `needs-selection` into a concrete choice.
-3. **`projectTrace(traceId, resolved, taskChoice, ctx)`** — pure. Projects the
-   output and task through `projectArtifactField`, runs `checkEligibility`, and
-   emits a `LoadedOccurrence` with a **`statelog` occurrence origin**, or a skip.
+- **Output** is chosen by the shared `selectLabelingFinalOutput` (an
+  `evalOutput()` value, else the entry-node return value; truncated or absent is
+  rejected, never the last chat message).
+- **Projection** into an occurrence's fields is the shared
+  `projectOccurrenceFields` (`lib/eval/label/load/occurrence.ts`), used by both
+  `loadRun` and the statelog loader — output rendered via `projectArtifactField`,
+  eligibility checked, task prepended.
 
-The output selection reuses `selectLabelingFinalOutput` (the run loader's
-helper), so "absent ≠ null" and truncation are handled identically to run
-ingestion. The last assistant message is deliberately never used as an output.
+The only things specific to a statelog are: extracting from a raw statelog with
+`extractEvalRecord` (a run has a pre-extracted `eval-record.json`), and a small
+occurrence-origin variant, because the `run` origin requires an `inputId` a raw
+trace has no honest value for.
 
 ## The `statelog` occurrence origin
 
-`OccurrenceOriginSchema` gained a fourth variant whose locator is
-`(traceId, outputSource)`, where `outputSource` is `evalOutput{index}` |
-`return` | `print{index}`. So re-promoting a trace with the **same** choice
-replays one occurrence (idempotent), while promoting `print[0]` and later
-`print[1]` from the same trace are two **distinct** observations. Print indexes
-are the 0-based ordinal among all of a trace's print events, so they stay stable
-even when a truncated print is dropped from the candidate list.
+`OccurrenceOriginSchema` has a `statelog` variant, `{ traceId, finalOutputIndex }`
+— the same locator fields `run` uses (minus the eval-input fields), so two
+`evalOutput()` values from one trace stay distinct observations and re-labeling
+the same trace is idempotent. No manifest bump: the variant is additive, and the
+dataset stays at schema version 2.
 
-Adding the variant is additive to the strict schema, but the dataset manifest
-bumps v2 → v3 anyway (`CURRENT_DATASET_VERSION`), so an older binary refuses at
-the manifest boundary rather than choking on an origin row it cannot parse. The
-upgrade is **non-destructive**: `openDataset` validates the whole v2 dataset and
-then rewrites only `manifest.json`, never the logs.
+## The loader (headless)
+
+`loadStatelog` (`lib/eval/label/load/statelog.ts`) scans once
+(`scanStatelog`), validates every requested `--trace` id, and for each resolves
+→ projects → occurrence-or-skip. It has no interactive selection: output
+resolution is deterministic, so there is nothing to prompt for. `agency label
+ingest <statelog> --trace <id>` reaches it via the `statelog` format
+(auto-detected by the first envelope, reusing the `agency logs` classifier).
 
 ## Shared effect owners
 
-Two lifecycles are owned once and shared by the CLI and the viewer, so neither
-reimplements them (and neither leaks a lock or a controller):
+Two lifecycles are owned once and shared by the CLI and the viewer:
 
-- **`datasetWriter`** (`lib/eval/label/datasetWriter.ts`) — the only
+- **`datasetWriter`** (`datasetWriter.ts`) — the only
   lock → `openDataset` → `ingest` → close → release sequence.
-- **`labelingHost`** (`lib/eval/label/labelingHost.ts`) — the only
-  `openLabelingSession` → `runLabelTui` → close-controller sequence. It runs on
-  an **existing** `Screen` and never destroys it; whoever created the terminal
-  owns tearing it down.
+- **`labelingHost`** (`labelingHost.ts`) — the only
+  `openLabelingSession` → `runLabelTui` → close-controller sequence, running on
+  an **existing** `Screen` it never destroys.
 
-The viewer's lock ordering is **sequential, never nested**: the writer acquires
-and releases the dataset lock for the ingest, and only then does the labeling
-host open its own session (which acquires the lock again).
+The viewer's lock ordering is sequential, never nested: the writer acquires and
+releases the lock for the ingest, then the labeling host opens its own session.
 
 ## The viewer hook
 
-`promoteFocusedTrace` (`lib/logsViewer/promoteTrace.ts`) is the imperative
-orchestrator: resolve → ask the `PromotionUI` only for unresolved decisions
-(which print, the task text) → project → compute `makeOutputId(fields)` →
-`datasetWriter.ingest` → `labelingHost.run(..., focusOutputId)`. It contains no
-file reread, lock, controller, or terminal code — those are the injected
-services.
+`labelTrace` (`lib/logsViewer/labelTrace.ts`) resolves the focused trace, asks
+the surface only for the task text, projects, computes `makeOutputId(fields)`,
+`datasetWriter.ingest`s, and `labelingHost.run(..., focusOutputId)`s. No file
+reread, lock, controller, or terminal code — those are injected services.
 
-In the tree view, `l` emits a `promoteTrace` ViewAction **when a dataset is
-configured** (local file views); the shell handles it in `dispatch`, which the
-main loop is already awaiting, so no key read races the labeling TUI for stdin.
-`Right`/`Enter` still expand. A brand-new session focuses the promoted example
-via the pure `focusItem` session action (`focusOutputId`). Without `--checklist`
-the action still fires but only notifies "Pass --checklist <file>".
+In the tree view, `l` emits a `labelTrace` ViewAction **when a dataset is
+configured** (local file views); it never expands (Right/Enter do). The shell
+handles it in `dispatch`, which the main loop already awaits, so no key read
+races the labeling TUI for stdin. It refuses when the current parse has errors
+(strict for ingestion, unlike display) and pauses the follow watcher for the
+handoff. A new session focuses the just-written example via the pure `focusItem`
+session action.
 
-`agency logs [view] --dataset/--store/--checklist` configure the destination
-(`resolveDataset` reconciles the alias); the per-trace source name is the
-trace's `setAgentName`, else the file basename. Stdin and remote logs get no
-promotion.
-
-## Print capture (PR 1)
-
-Promotion's third output tier needs printed values, which the statelog did not
-record. `_print`/`_printJSON` now call `recordPrint` (`lib/stdlib/statelog.ts`)
-after the console write: it attributes to the active thread, serializes with
-`node:util.format` / `JSON.stringify` exactly as the console did, and replaces a
-value over `PRINT_VALUE_MAX_BYTES` with a fixed placeholder (not a prefix, which
-could leak a tagged value past redaction). It is fire-and-forget; `post()` owns
-sink-failure reporting, so there is no `.catch`.
+`agency logs [view] --dataset/--checklist` configure the destination; the
+per-trace source name is the trace's last `setAgentName`, else the file
+basename. Stdin and remote logs get no labeling.

@@ -48,18 +48,17 @@ agency logs --dataset team-labels --checklist news.json run.jsonl
 - `--checklist <file>` — the yes/no questions you judge against. Without
   it, `l` just reminds you to pass one (nothing is written).
 - `--dataset <dir>` — where labels live (default `eval.dataset`, else
-  `labels/`). `--store` is a deprecated alias.
+  `labels/`).
 
 Pressing `l` resolves the trace's output (an `evalOutput()`, else the
-entry node's return value, else one of its `print` values — it asks which
-if there are several), lets you edit the task text, writes the example
-into the dataset, and opens the labeling screen focused on it. See
+entry node's return value), lets you edit the task text, writes the
+example into the dataset, and opens the labeling screen focused on it. See
 [Judging output by hand](/cli/eval#judging-output-by-hand) for the
-labeling UI itself. Promotion refuses a statelog with unparseable lines,
-so a dataset is never built from a partially read trace.
+labeling UI itself. Labeling refuses a statelog with unparseable lines, so
+a dataset is never built from a partially read trace.
 
 These options also flow into the runs explorer: drilling from a run into
-its statelog enables the same `l` promotion.
+its statelog enables the same `l` labeling.
 
 ## The runs explorer (many runs)
 

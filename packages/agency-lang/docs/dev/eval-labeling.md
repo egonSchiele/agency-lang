@@ -1,14 +1,12 @@
 # The human-label dataset
 
-> **Vocabulary (2026-08):** the user-facing concept is a **dataset** (`--dataset`,
-> `eval.dataset`; `--store`/`eval.labelStore` are kept as deprecated aliases) and
-> its items are **examples**. The TypeScript facade is `LabelDataset` /
-> `openDataset` (`lib/eval/label/dataset.ts`). The **durable on-disk names are
-> unchanged** — `outputId`, the `out_` prefix, and `outputs.jsonl` are a frozen
-> wire format, so this doc still uses them when describing rows. Promotion of a
-> statelog trace into a dataset is documented in
-> `docs/dev/statelog-to-dataset.md`, including the `statelog` occurrence origin
-> and the non-destructive manifest v2→v3 upgrade.
+> **Vocabulary (2026-08):** the user-facing concept is a **dataset**
+> (`--dataset`, `eval.dataset`) and its items are **examples**. The TypeScript
+> facade is `LabelDataset` / `openDataset` (`lib/eval/label/dataset.ts`). The
+> **durable on-disk names are unchanged** — `outputId`, the `out_` prefix, and
+> `outputs.jsonl` are a frozen wire format, so this doc still uses them when
+> describing rows. Labeling a statelog trace into a dataset is documented in
+> `docs/dev/statelog-to-dataset.md`, including the `statelog` occurrence origin.
 
 `agency label` builds a dataset of human judgements about agent outputs. It is
 registered twice — as `agency label` and as `agency eval label` — following the

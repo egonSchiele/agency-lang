@@ -228,20 +228,20 @@ describe("statelog dispatch", () => {
     return file;
   }
 
-  it("routes an auto-detected statelog file to loadStatelog with the selection", () => {
+  it("routes an auto-detected statelog file to loadStatelog with the trace ids", () => {
     const { calls, dependencies } = spies();
     loadBatch(request({
       source: { path: makeStatelogFile(), requestedFormat: "auto", includeTaskField: true, recursive: false },
-      selection: { kind: "statelog", request: { traceIds: ["A"], printSelections: {} } },
+      selection: { kind: "statelog", request: { traceIds: ["A"] } },
     }), dependencies);
     expect(calls.statelog).toHaveLength(1);
-    expect(calls.statelog[0]).toMatchObject({ request: { traceIds: ["A"] } });
+    expect(calls.statelog[0]).toMatchObject({ traceIds: ["A"] });
   });
 
   it("rejects a statelog selection on a non-statelog source", () => {
     const { dependencies } = spies();
     expect(() => loadBatch(request({
-      selection: { kind: "statelog", request: { traceIds: ["A"], printSelections: {} } },
+      selection: { kind: "statelog", request: { traceIds: ["A"] } },
     }), dependencies)).toThrow(/only apply to a statelog source/);
   });
 });

@@ -1,6 +1,5 @@
 import * as readline from "readline";
 import process from "process";
-import { format } from "node:util";
 import { readFile, writeFile, appendFile } from "fs/promises";
 import { classifyIterable } from "../utils/iteration.js";
 import { decodeBase64Strict } from "./base64.js";
@@ -16,30 +15,16 @@ import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
 import { abortableSleep } from "./abortable.js";
-import { recordPrint } from "./statelog.js";
 import { acceptsFailures } from "../runtime/failurePropagation.js";
 
 const execFileAsync = promisify(execFile);
 
 export function _print(...messages: any[]): void {
-  // Render ONCE, then log and record the same string. Formatting a second time
-  // for the statelog would run a custom util.inspect.custom hook twice (and
-  // could throw after console.log had already written); rendering up front also
-  // keeps the throw, if any, before the console write. The rendered string still
-  // passes through post()'s redaction, which scrubs any tagged substrings.
-  const rendered = format(...messages);
-  console.log(rendered);
-  recordPrint("print", rendered);
+  console.log(...messages);
 }
 
 export function _printJSON(obj: any): void {
-  // JSON.stringify throws on BigInt/circular data; that throw predates this
-  // recording and must be preserved, so it happens before the console write.
-  const json = JSON.stringify(obj, null, 2);
-  console.log(json);
-  // `json` is already a string (or undefined for a bare undefined); format
-  // normalizes undefined to "undefined" without a second object inspection.
-  recordPrint("printJSON", format(json));
+  console.log(JSON.stringify(obj, null, 2));
 }
 
 /**

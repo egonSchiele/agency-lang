@@ -25,13 +25,11 @@ import {
 const fields = { task: "Summarize", output: "A summary" };
 
 describe("statelog occurrence origin", () => {
-  const statelog = (outputSource: unknown) =>
-    OccurrenceOriginSchema.parse({ kind: "statelog", traceId: "T", outputSource });
+  const statelog = (finalOutputIndex: number) =>
+    OccurrenceOriginSchema.parse({ kind: "statelog", traceId: "T", finalOutputIndex });
 
-  it("parses each output source variant", () => {
-    expect(statelog({ kind: "evalOutput", index: 0 }).kind).toBe("statelog");
-    expect(statelog({ kind: "return" }).kind).toBe("statelog");
-    expect(statelog({ kind: "print", index: 2 }).kind).toBe("statelog");
+  it("parses a statelog origin", () => {
+    expect(statelog(0).kind).toBe("statelog");
   });
 
   it("leaves the existing run/file/json origins unchanged", () => {
@@ -39,21 +37,10 @@ describe("statelog occurrence origin", () => {
     expect(OccurrenceOriginSchema.parse({ kind: "json", itemKey: "d.json", itemIndex: 1 }).kind).toBe("json");
   });
 
-  it("locates return, two eval-output indexes, and two print indexes distinctly", () => {
-    const locators = [
-      occurrenceLocatorOf(statelog({ kind: "return" })),
-      occurrenceLocatorOf(statelog({ kind: "evalOutput", index: 0 })),
-      occurrenceLocatorOf(statelog({ kind: "evalOutput", index: 1 })),
-      occurrenceLocatorOf(statelog({ kind: "print", index: 0 })),
-      occurrenceLocatorOf(statelog({ kind: "print", index: 1 })),
-    ].map((locator) => JSON.stringify(locator));
-    expect(new Set(locators).size).toBe(locators.length);
-  });
-
-  it("gives one trace two distinct occurrence ids for two different print choices", () => {
+  it("gives one trace two distinct occurrence ids for two different output indexes", () => {
     const base = { outputId: makeOutputId(fields), source: "s" };
-    const first = makeOccurrenceId({ ...base, origin: statelog({ kind: "print", index: 0 }) } as OccurrenceCandidate);
-    const second = makeOccurrenceId({ ...base, origin: statelog({ kind: "print", index: 1 }) } as OccurrenceCandidate);
+    const first = makeOccurrenceId({ ...base, origin: statelog(0) } as OccurrenceCandidate);
+    const second = makeOccurrenceId({ ...base, origin: statelog(1) } as OccurrenceCandidate);
     expect(first).not.toBe(second);
   });
 });
@@ -202,19 +189,18 @@ describe("canonicalize", () => {
 });
 
 describe("durable schemas", () => {
-  it("pins the manifest schemaVersion to exactly 3", () => {
-    expect(ManifestSchema.safeParse({ schemaVersion: 3, fieldOrder: [] }).success).toBe(true);
-    expect(ManifestSchema.safeParse({ schemaVersion: 2, fieldOrder: [] }).success).toBe(false);
+  it("pins the manifest schemaVersion to exactly 2", () => {
+    expect(ManifestSchema.safeParse({ schemaVersion: 2, fieldOrder: [] }).success).toBe(true);
     expect(ManifestSchema.safeParse({ schemaVersion: 1, fieldOrder: [] }).success).toBe(false);
   });
 
   it("rejects unknown keys, so a typo cannot silently persist", () => {
-    expect(ManifestSchema.safeParse({ schemaVersion: 3, fieldOrder: [], extra: true }).success)
+    expect(ManifestSchema.safeParse({ schemaVersion: 2, fieldOrder: [], extra: true }).success)
       .toBe(false);
   });
 
   it("rejects a manifest field order holding a malformed field name", () => {
-    expect(ManifestSchema.safeParse({ schemaVersion: 3, fieldOrder: ["Bad"] }).success).toBe(false);
+    expect(ManifestSchema.safeParse({ schemaVersion: 2, fieldOrder: ["Bad"] }).success).toBe(false);
   });
 
   it("rejects a question weight that is zero, negative or not finite", () => {

@@ -4,15 +4,9 @@ import { extractEvalRecord } from "@/eval/extract.js";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 import type { JsonValue } from "@/utils/canonicalize.js";
 
-import { projectArtifactField } from "../project.js";
-import {
-  JsonValueSchema,
-  OccurrenceOriginSchema,
-  type Fields,
-  type StatelogOutputSource,
-} from "../types.js";
+import { JsonValueSchema, OccurrenceOriginSchema, type Fields } from "../types.js";
 
-import { checkEligibility } from "./eligibility.js";
+import { projectOccurrenceFields, skipReasonFor } from "./occurrence.js";
 import { selectLabelingFinalOutput } from "./run.js";
 import { describeAvailableTraces, scanStatelog } from "./statelogScan.js";
 import {
@@ -21,35 +15,23 @@ import {
   type IngestSkipReason,
   type LoadedBatch,
   type LoadedOccurrence,
-  type StatelogSelectionRequest,
 } from "./types.js";
 
-/** One printed value a trace offers as a candidate output. `index` is the
- *  0-based ordinal among ALL of the trace's print events, so it stays stable
- *  whether or not earlier prints were dropped for being truncated. */
-export type PrintCandidate = {
-  index: number;
-  value: string;
-};
-
-export type ResolvedOutputSelection = {
-  source: StatelogOutputSource;
-  output: JsonValue;
-};
-
+/** A trace resolved to its labelable output and default task. Once extracted, a
+ *  statelog trace is just a `{ task, output }` example — the same shape a run
+ *  produces — so the output is resolved by the same helper runs use. */
 export type ResolvedTrace = {
-  selection: ResolvedOutputSelection;
+  output: JsonValue;
+  /** Index of the chosen output among the trace's recorded outputs, so two
+   *  `evalOutput()` values from one trace stay distinct observations. */
+  finalOutputIndex: number;
   taskDefault: JsonValue | null;
 };
 
-/** The outcome of resolving one trace's output, before any surface picks among
- *  ambiguous prints. Pure: no prompting, no writes. */
 export type TraceResolution =
   | { kind: "resolved"; trace: ResolvedTrace }
-  | { kind: "needs-selection"; candidates: readonly PrintCandidate[]; taskDefault: JsonValue | null }
   | { kind: "rejected"; reason: IngestSkipReason };
 
-/** What the caller decided to do with the task field once it saw the default. */
 export type TaskChoice =
   | { kind: "keep-default" }
   | { kind: "replace"; value: JsonValue }
@@ -66,81 +48,46 @@ export type ProjectionResult =
   | { kind: "skipped"; skip: IngestSkip };
 
 /**
- * Decide what output (and default task) a single trace offers, following a
- * strict precedence:
- *
- *   1. explicit evalOutput()      -> evalOutput, at the last explicit index
- *   2. entry-node return value    -> return
- *   3. a truncated explicit output-> rejected (never falls through to prints)
- *   4. no output, one clean print -> resolved automatically
- *   5. no output, several prints  -> needs-selection
- *   6. no output, only truncated prints -> rejected (truncated-output)
- *   7. no output, no prints       -> rejected (no-output)
+ * Extract one trace and choose its output: an `evalOutput()` value, else the
+ * entry node's return value (via the same selection helper runs use). A
+ * truncated or absent output is rejected — the last chat message is never a
+ * stand-in. Pure: no prompting, no writes.
  */
-export function resolveTrace(
-  events: readonly EventEnvelope[],
-  sourcePath: string,
-): TraceResolution {
+export function resolveTrace(events: readonly EventEnvelope[], sourcePath: string): TraceResolution {
   const record = extractEvalRecord(events as EventEnvelope[], sourcePath);
-  const taskDefault = taskDefaultFrom(record);
-
   const selection = selectLabelingFinalOutput(record);
-  if (selection.kind === "selected") {
-    const source: StatelogOutputSource = hasExplicitEvalOutput(events)
-      ? { kind: "evalOutput", index: selection.index }
-      : { kind: "return" };
-    return { kind: "resolved", trace: { selection: { source, output: selection.value }, taskDefault } };
+  if (selection.kind !== "selected") {
+    return { kind: "rejected", reason: skipReasonFor(selection) };
   }
-  if (selection.kind === "truncated") {
-    return { kind: "rejected", reason: "truncated-output" };
-  }
-  if (selection.kind === "legacy") {
-    return { kind: "rejected", reason: "legacy-record" };
-  }
-
-  // No usable eval output: consider printed values.
-  const prints = collectPrints(events);
-  const clean = prints.filter((print) => !print.truncated);
-  if (clean.length === 1) {
-    const only = clean[0];
-    return {
-      kind: "resolved",
-      trace: { selection: { source: { kind: "print", index: only.index }, output: only.value }, taskDefault },
-    };
-  }
-  if (clean.length > 1) {
-    const candidates = clean.map((print) => ({ index: print.index, value: print.value }));
-    return { kind: "needs-selection", candidates, taskDefault };
-  }
-  // No clean prints. All-truncated is a different signal from no-prints.
-  return { kind: "rejected", reason: prints.length > 0 ? "truncated-output" : "no-output" };
+  return {
+    kind: "resolved",
+    trace: { output: selection.value, finalOutputIndex: selection.index, taskDefault: taskDefaultFrom(record) },
+  };
 }
 
-/** Turn a resolved trace and a task decision into a durable occurrence, or a
- *  skip when the projected output is ineligible (e.g. too large). Pure. */
+/** Project a resolved trace and a task decision into a durable occurrence, or a
+ *  skip when the output is ineligible. Pure. */
 export function projectTrace(
   traceId: string,
   resolved: ResolvedTrace,
   taskChoice: TaskChoice,
   context: ProjectionContext,
 ): ProjectionResult {
-  const output = projectArtifactField(resolved.selection.output);
-  const ineligible = checkEligibility(output, { maxBytes: context.maxBytes });
-  if (ineligible !== undefined) {
-    return { kind: "skipped", skip: { item: traceId, reason: ineligible } };
+  const projected = projectOccurrenceFields({
+    taskValue: taskValueFor(taskChoice, resolved.taskDefault),
+    outputValue: resolved.output,
+    constantFields: context.constantFields,
+    maxBytes: context.maxBytes,
+  });
+  if ("skipReason" in projected) {
+    return { kind: "skipped", skip: { item: traceId, reason: projected.skipReason } };
   }
-
-  const taskValue = taskValueFor(taskChoice, resolved.taskDefault);
-  const fields: Fields = taskValue === null
-    ? { ...context.constantFields, output }
-    : { task: projectArtifactField(taskValue), ...context.constantFields, output };
-
   const origin = OccurrenceOriginSchema.parse({
     kind: "statelog",
     traceId,
-    outputSource: resolved.selection.source,
+    finalOutputIndex: resolved.finalOutputIndex,
   });
-  return { kind: "accepted", occurrence: { fields, source: context.source, origin } };
+  return { kind: "accepted", occurrence: { fields: projected.fields, source: context.source, origin } };
 }
 
 function taskValueFor(taskChoice: TaskChoice, taskDefault: JsonValue | null): JsonValue | null {
@@ -154,7 +101,7 @@ function taskValueFor(taskChoice: TaskChoice, taskDefault: JsonValue | null): Js
 }
 
 /** The last recorded eval value, validated as JSON. Absent or malformed becomes
- *  null; a structured value is left structured until `projectArtifactField`. */
+ *  null; a structured value is left structured until it is projected. */
 function taskDefaultFrom(record: { evalValues?: readonly { value: unknown }[] }): JsonValue | null {
   const values = record.evalValues ?? [];
   const last = values.at(-1);
@@ -165,48 +112,15 @@ function taskDefaultFrom(record: { evalValues?: readonly { value: unknown }[] })
   return parsed.success ? parsed.data : null;
 }
 
-function hasExplicitEvalOutput(events: readonly EventEnvelope[]): boolean {
-  return events.some((event) => event.data.type === "evalOutputRecorded");
-}
-
-type CollectedPrint = {
-  index: number;
-  value: string;
-  truncated: boolean;
-};
-
-function collectPrints(events: readonly EventEnvelope[]): CollectedPrint[] {
-  const prints: CollectedPrint[] = [];
-  let ordinal = 0;
-  for (const event of events) {
-    if (event.data.type !== "print") {
-      continue;
-    }
-    const index = ordinal;
-    ordinal += 1;
-    const value = event.data.value;
-    if (typeof value !== "string") {
-      continue;
-    }
-    prints.push({ index, value, truncated: event.data.truncated === true });
-  }
-  return prints;
-}
-
-/** How much of a candidate print to show in a "which one?" error. */
-const CANDIDATE_PREVIEW_CHARS = 60;
-
 /**
- * Load one or more chosen traces from a statelog into a batch.
- *
- * Synchronous and non-interactive: every ambiguous trace must already have a
- * `--output` choice. The scan happens once; all requested ids are validated
- * before any projection, so a typo names the available traces instead of
- * silently promoting a subset.
+ * Load one or more chosen traces from a statelog into a batch. Synchronous:
+ * the scan happens once, and every requested id is validated before any
+ * projection so a typo names the available traces instead of silently
+ * promoting a subset.
  */
 export function loadStatelog(args: {
   path: string;
-  request: StatelogSelectionRequest;
+  traceIds: readonly string[];
   source: string;
   constantFields: Fields;
   includeTaskField: boolean;
@@ -214,24 +128,15 @@ export function loadStatelog(args: {
 }): LoadedBatch {
   const scan = scanStatelog(fs.readFileSync(args.path, "utf8"));
 
-  if (args.request.traceIds.length === 0) {
+  if (args.traceIds.length === 0) {
     throw new IngestSourceError(
       `A statelog source needs at least one --trace <id>.\n${describeAvailableTraces(scan)}`,
     );
   }
-  for (const traceId of args.request.traceIds) {
+  for (const traceId of args.traceIds) {
     if (!(traceId in scan.eventsByTrace)) {
       throw new IngestSourceError(
         `Trace "${traceId}" is not in ${args.path}.\n${describeAvailableTraces(scan)}`,
-      );
-    }
-  }
-  // A selector for a trace that was not requested is a typo, not a no-op: it
-  // would silently promote something other than what the operator named.
-  for (const selectedTraceId of Object.keys(args.request.printSelections)) {
-    if (!args.request.traceIds.includes(selectedTraceId)) {
-      throw new IngestSourceError(
-        `--output names trace "${selectedTraceId}", which is not among the requested --trace ids.`,
       );
     }
   }
@@ -240,13 +145,13 @@ export function loadStatelog(args: {
   const skips: IngestSkip[] = [];
   const taskChoice: TaskChoice = args.includeTaskField ? { kind: "keep-default" } : { kind: "omit" };
 
-  for (const traceId of args.request.traceIds) {
-    const resolved = resolveSelectedTrace(traceId, scan.eventsByTrace[traceId], args.path, args.request.printSelections);
-    if (resolved.kind === "rejected") {
-      skips.push({ item: traceId, reason: resolved.reason });
+  for (const traceId of args.traceIds) {
+    const resolution = resolveTrace(scan.eventsByTrace[traceId], args.path);
+    if (resolution.kind === "rejected") {
+      skips.push({ item: traceId, reason: resolution.reason });
       continue;
     }
-    const projected = projectTrace(traceId, resolved.trace, taskChoice, {
+    const projected = projectTrace(traceId, resolution.trace, taskChoice, {
       source: args.source,
       constantFields: args.constantFields,
       maxBytes: args.maxBytes,
@@ -258,50 +163,4 @@ export function loadStatelog(args: {
     }
   }
   return { occurrences, skips };
-}
-
-/** Resolve one requested trace, applying its keyed print choice. A selector for
- *  a trace that needs no choice, or a missing/invalid choice for one that does,
- *  is a hard error — headless code never guesses. */
-function resolveSelectedTrace(
-  traceId: string,
-  events: readonly EventEnvelope[],
-  sourcePath: string,
-  printSelections: Readonly<Record<string, number>>,
-): { kind: "resolved"; trace: ResolvedTrace } | { kind: "rejected"; reason: IngestSkipReason } {
-  const resolution = resolveTrace(events, sourcePath);
-  if (resolution.kind === "rejected") {
-    return resolution;
-  }
-  const selector = printSelections[traceId];
-  if (resolution.kind === "resolved") {
-    if (selector !== undefined) {
-      throw new IngestSourceError(
-        `--output was given for trace "${traceId}", but it already has a definite output; ` +
-        `remove the selector.`,
-      );
-    }
-    return { kind: "resolved", trace: resolution.trace };
-  }
-  // needs-selection
-  if (selector === undefined) {
-    const list = resolution.candidates
-      .map((candidate) => `  print:${candidate.index}  ${candidate.value.slice(0, CANDIDATE_PREVIEW_CHARS)}`)
-      .join("\n");
-    throw new IngestSourceError(
-      `Trace "${traceId}" has ${resolution.candidates.length} printed values and no recorded ` +
-      `output. Pick one with --output ${traceId}=print:<index>:\n${list}`,
-    );
-  }
-  const candidate = resolution.candidates.find((entry) => entry.index === selector);
-  if (candidate === undefined) {
-    throw new IngestSourceError(`Trace "${traceId}" has no printed value at index ${selector}.`);
-  }
-  return {
-    kind: "resolved",
-    trace: {
-      selection: { source: { kind: "print", index: candidate.index }, output: candidate.value },
-      taskDefault: resolution.taskDefault,
-    },
-  };
 }

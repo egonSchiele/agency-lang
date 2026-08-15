@@ -4,11 +4,10 @@ import * as path from "path";
 import { readEvalRun } from "@/eval/readRun.js";
 import type { JsonValue } from "@/utils/canonicalize.js";
 
-import { projectArtifactField } from "../project.js";
 import { JsonValueSchema, OccurrenceOriginSchema, type Fields } from "../types.js";
 
-import { checkEligibility } from "./eligibility.js";
-import type { IngestSkip, IngestSkipReason, LoadedBatch, LoadedOccurrence } from "./types.js";
+import { projectOccurrenceFields, skipReasonFor } from "./occurrence.js";
+import type { IngestSkip, LoadedBatch, LoadedOccurrence } from "./types.js";
 
 export type LoadRunArgs = {
   sourceDir: string;
@@ -75,16 +74,6 @@ export function selectLabelingFinalOutput(record: unknown): FinalOutputSelection
   return { kind: "selected", value: parsed.data, index };
 }
 
-function skipReasonFor(selection: FinalOutputSelection): IngestSkipReason {
-  if (selection.kind === "truncated") {
-    return "truncated-output";
-  }
-  if (selection.kind === "legacy") {
-    return "legacy-record";
-  }
-  return "no-output";
-}
-
 /**
  * Every labellable output from an eval run.
  *
@@ -135,16 +124,17 @@ export function loadRun(args: LoadRunArgs): LoadedBatch {
       continue;
     }
 
-    const output = projectArtifactField(selection.value);
-    const ineligible = checkEligibility(output, { maxBytes: args.maxBytes });
-    if (ineligible !== undefined) {
-      skips.push({ item: inputId, reason: ineligible });
+    const projected = projectOccurrenceFields({
+      taskValue: args.includeTaskField ? task.data : null,
+      outputValue: selection.value,
+      constantFields: args.constantFields,
+      maxBytes: args.maxBytes,
+    });
+    if ("skipReason" in projected) {
+      skips.push({ item: inputId, reason: projected.skipReason });
       continue;
     }
-
-    const fields: Fields = args.includeTaskField
-      ? { task: projectArtifactField(task.data), ...args.constantFields, output }
-      : { ...args.constantFields, output };
+    const fields = projected.fields;
 
     // Parsed with the durable schema HERE, not left for the store. `record` is
     // `any`, so a metrics block like `{ models: [42] }` would otherwise type

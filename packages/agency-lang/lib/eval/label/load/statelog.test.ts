@@ -6,13 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
-import {
-  loadStatelog,
-  projectTrace,
-  resolveTrace,
-  type ResolvedTrace,
-} from "./statelog.js";
-import { IngestSourceError, type StatelogSelectionRequest } from "./types.js";
+import { loadStatelog, projectTrace, resolveTrace, type ResolvedTrace } from "./statelog.js";
+import { IngestSourceError } from "./types.js";
 
 let ts = 0;
 function nextTs(): string {
@@ -20,10 +15,10 @@ function nextTs(): string {
   return new Date(1_700_000_000_000 + ts).toISOString();
 }
 
-function ev(type: string, data: Record<string, unknown> = {}): EventEnvelope {
+function ev(type: string, data: Record<string, unknown> = {}, traceId = "T"): EventEnvelope {
   return {
     format_version: 1,
-    trace_id: "T",
+    trace_id: traceId,
     project_id: "p",
     span_id: null,
     parent_span_id: null,
@@ -37,7 +32,7 @@ function resolve(events: EventEnvelope[]) {
 
 const CONTEXT = { source: "s", constantFields: {}, maxBytes: 1_048_576 };
 
-describe("resolveTrace output precedence", () => {
+describe("resolveTrace", () => {
   it("uses an explicit eval output, at the last explicit index", () => {
     const result = resolve([
       ev("evalOutputRecorded", { value: "first" }),
@@ -45,69 +40,24 @@ describe("resolveTrace output precedence", () => {
     ]);
     expect(result).toEqual({
       kind: "resolved",
-      trace: { selection: { source: { kind: "evalOutput", index: 1 }, output: "second" }, taskDefault: null },
+      trace: { output: "second", finalOutputIndex: 1, taskDefault: null },
     });
   });
 
   it("uses the entry-node return value when no eval output was recorded", () => {
     const result = resolve([ev("agentEnd", { result: "returned" })]);
-    expect(result).toMatchObject({
-      kind: "resolved",
-      trace: { selection: { source: { kind: "return" }, output: "returned" } },
-    });
+    expect(result).toMatchObject({ kind: "resolved", trace: { output: "returned" } });
   });
 
-  it("rejects a truncated explicit output rather than falling through to prints", () => {
-    const result = resolve([
-      ev("evalOutputRecorded", { value: "x".repeat(300_000) }),
-      ev("print", { kind: "print", value: "clean", truncated: false }),
-    ]);
+  it("rejects a truncated explicit output", () => {
+    const result = resolve([ev("evalOutputRecorded", { value: "x".repeat(300_000) })]);
     expect(result).toEqual({ kind: "rejected", reason: "truncated-output" });
-  });
-
-  it("auto-resolves a single clean print when there is no eval output", () => {
-    const result = resolve([ev("print", { kind: "print", value: "only", truncated: false })]);
-    expect(result).toMatchObject({
-      kind: "resolved",
-      trace: { selection: { source: { kind: "print", index: 0 }, output: "only" } },
-    });
-  });
-
-  it("needs selection when several clean prints exist", () => {
-    const result = resolve([
-      ev("print", { kind: "print", value: "one", truncated: false }),
-      ev("print", { kind: "printJSON", value: "two", truncated: false }),
-    ]);
-    expect(result).toMatchObject({
-      kind: "needs-selection",
-      candidates: [{ index: 0, value: "one" }, { index: 1, value: "two" }],
-    });
-  });
-
-  it("keeps print indexes stable across a dropped truncated print", () => {
-    const result = resolve([
-      ev("print", { kind: "print", value: "big", truncated: true }),
-      ev("print", { kind: "print", value: "a", truncated: false }),
-      ev("print", { kind: "print", value: "b", truncated: false }),
-    ]);
-    expect(result).toMatchObject({
-      kind: "needs-selection",
-      candidates: [{ index: 1, value: "a" }, { index: 2, value: "b" }],
-    });
   });
 
   it("rejects with no-output when there is nothing to judge", () => {
-    const result = resolve([ev("agentStart")]);
-    expect(result).toEqual({ kind: "rejected", reason: "no-output" });
+    expect(resolve([ev("agentStart")])).toEqual({ kind: "rejected", reason: "no-output" });
   });
 
-  it("rejects with truncated-output when the only prints are truncated", () => {
-    const result = resolve([ev("print", { kind: "print", value: "big", truncated: true })]);
-    expect(result).toEqual({ kind: "rejected", reason: "truncated-output" });
-  });
-});
-
-describe("resolveTrace task default", () => {
   it("infers the task from the first prompt when no evalValue was recorded", () => {
     const result = resolve([
       ev("promptCompletion", { messages: [{ role: "user", content: "the question" }] }),
@@ -126,27 +76,22 @@ describe("resolveTrace task default", () => {
 });
 
 describe("projectTrace", () => {
-  const resolved: ResolvedTrace = {
-    selection: { source: { kind: "evalOutput", index: 0 }, output: "answer" },
-    taskDefault: "the task",
-  };
+  const resolved: ResolvedTrace = { output: "answer", finalOutputIndex: 0, taskDefault: "the task" };
 
   it("projects a resolved trace into an occurrence with a statelog origin", () => {
-    const result = projectTrace("T", resolved, { kind: "keep-default" }, CONTEXT);
-    expect(result).toEqual({
+    expect(projectTrace("T", resolved, { kind: "keep-default" }, CONTEXT)).toEqual({
       kind: "accepted",
       occurrence: {
         fields: { task: "the task", output: "answer" },
         source: "s",
-        origin: { kind: "statelog", traceId: "T", outputSource: { kind: "evalOutput", index: 0 } },
+        origin: { kind: "statelog", traceId: "T", finalOutputIndex: 0 },
       },
     });
   });
 
   it("omits the task field when asked", () => {
     const result = projectTrace("T", resolved, { kind: "omit" }, CONTEXT);
-    expect(result).toMatchObject({ kind: "accepted", occurrence: { fields: { output: "answer" } } });
-    expect((result as any).occurrence.fields.task).toBeUndefined();
+    expect((result as any).occurrence.fields).toEqual({ output: "answer" });
   });
 
   it("replaces the task with a provided value", () => {
@@ -154,15 +99,14 @@ describe("projectTrace", () => {
     expect((result as any).occurrence.fields.task).toBe("edited");
   });
 
-  it("projects a structured task default through projectArtifactField", () => {
+  it("projects a structured task default", () => {
     const structured: ResolvedTrace = { ...resolved, taskDefault: { q: 1 } };
     const result = projectTrace("T", structured, { kind: "keep-default" }, CONTEXT);
     expect((result as any).occurrence.fields.task).toBe(JSON.stringify({ q: 1 }));
   });
 
   it("skips when the projected output is too large", () => {
-    const big: ResolvedTrace = { ...resolved, selection: { source: { kind: "return" }, output: "x".repeat(10) } };
-    const result = projectTrace("T", big, { kind: "omit" }, { ...CONTEXT, maxBytes: 4 });
+    const result = projectTrace("T", resolved, { kind: "omit" }, { ...CONTEXT, maxBytes: 4 });
     expect(result).toEqual({ kind: "skipped", skip: { item: "T", reason: "too-large" } });
   });
 });
@@ -171,24 +115,12 @@ describe("loadStatelog", () => {
   let dir: string;
   let file: string;
 
-  function evT(traceId: string, type: string, data: Record<string, unknown> = {}): EventEnvelope {
-    return {
-      format_version: 1,
-      trace_id: traceId,
-      project_id: "p",
-      span_id: null,
-      parent_span_id: null,
-      data: { type, timestamp: nextTs(), threadId: "0", ...data },
-    };
-  }
-
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "loadstatelog-"));
-    // Trace A: a clean eval output (resolved). Trace B: two prints (ambiguous).
+    // Trace A: an eval output (resolved). Trace B: nothing to judge.
     const events = [
-      evT("A", "evalOutputRecorded", { value: "answer A" }),
-      evT("B", "print", { kind: "print", value: "b-one", truncated: false }),
-      evT("B", "print", { kind: "print", value: "b-two", truncated: false }),
+      ev("evalOutputRecorded", { value: "answer A" }, "A"),
+      ev("agentStart", {}, "B"),
     ];
     file = path.join(dir, "log.jsonl");
     fs.writeFileSync(file, events.map((e) => JSON.stringify(e)).join("\n") + "\n");
@@ -198,54 +130,28 @@ describe("loadStatelog", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  const request = (over: Partial<StatelogSelectionRequest> = {}): StatelogSelectionRequest => ({
-    traceIds: [],
-    printSelections: {},
-    ...over,
-  });
-
-  const load = (req: StatelogSelectionRequest) =>
-    loadStatelog({ path: file, request: req, source: "s", constantFields: {}, includeTaskField: true, maxBytes: 1_048_576 });
+  const load = (traceIds: string[]) =>
+    loadStatelog({ path: file, traceIds, source: "s", constantFields: {}, includeTaskField: true, maxBytes: 1_048_576 });
 
   it("promotes a resolved trace", () => {
-    const batch = load(request({ traceIds: ["A"] }));
+    const batch = load(["A"]);
     expect(batch.occurrences).toHaveLength(1);
-    expect(batch.occurrences[0].origin).toMatchObject({ kind: "statelog", traceId: "A", outputSource: { kind: "evalOutput" } });
+    expect(batch.occurrences[0].origin).toMatchObject({ kind: "statelog", traceId: "A", finalOutputIndex: 0 });
+  });
+
+  it("skips a trace with nothing to judge", () => {
+    const batch = load(["B"]);
+    expect(batch.occurrences).toHaveLength(0);
+    expect(batch.skips).toEqual([{ item: "B", reason: "no-output" }]);
   });
 
   it("errors with the trace list when no --trace is given", () => {
-    expect(() => load(request())).toThrow(/at least one --trace/);
-    expect(() => load(request())).toThrow(/Available traces/);
+    expect(() => load([])).toThrow(/at least one --trace/);
+    expect(() => load([])).toThrow(/Available traces/);
   });
 
   it("errors naming available traces for an unknown id", () => {
-    expect(() => load(request({ traceIds: ["ZZ"] }))).toThrow(/"ZZ" is not in/);
-  });
-
-  it("errors asking for a print selector on an ambiguous trace", () => {
-    expect(() => load(request({ traceIds: ["B"] }))).toThrow(/Pick one with --output B=print/);
-  });
-
-  it("promotes the chosen print of an ambiguous trace", () => {
-    const batch = load(request({ traceIds: ["B"], printSelections: { B: 1 } }));
-    expect(batch.occurrences[0].origin).toMatchObject({ outputSource: { kind: "print", index: 1 } });
-    expect(batch.occurrences[0].fields.output).toBe("b-two");
-  });
-
-  it("rejects a selector for an already-resolved trace", () => {
-    expect(() => load(request({ traceIds: ["A"], printSelections: { A: 0 } }))).toThrow(/already has a definite output/);
-  });
-
-  it("rejects an out-of-range print index", () => {
-    expect(() => load(request({ traceIds: ["B"], printSelections: { B: 9 } }))).toThrow(/no printed value at index 9/);
-  });
-
-  it("rejects a --output selector for a trace that was not requested", () => {
-    expect(() => load(request({ traceIds: ["A"], printSelections: { B: 0 } })))
-      .toThrow(/names trace "B", which is not among the requested/);
-  });
-
-  it("throws IngestSourceError for a bad selection", () => {
-    expect(() => load(request({ traceIds: ["ZZ"] }))).toThrow(IngestSourceError);
+    expect(() => load(["ZZ"])).toThrow(IngestSourceError);
+    expect(() => load(["ZZ"])).toThrow(/"ZZ" is not in/);
   });
 });

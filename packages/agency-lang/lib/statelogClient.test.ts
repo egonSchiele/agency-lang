@@ -115,29 +115,6 @@ describe("StatelogClient", () => {
       expect(events[0].trace_id).toBe("test-trace");
       expect(events[0].project_id).toBe("test-project");
     });
-
-    it("printRecorded posts a print event with kind, value, truncated and threadId", async () => {
-      const file = newLogFile("print");
-      const client = fileClient(file);
-      await client.printRecorded({ kind: "printJSON", value: '{"a":1}', truncated: false, threadId: "3" });
-      const events = readEvents(file);
-      expect(events).toHaveLength(1);
-      expect(events[0].data).toMatchObject({
-        type: "print",
-        kind: "printJSON",
-        value: '{"a":1}',
-        truncated: false,
-        threadId: "3",
-      });
-    });
-
-    it("printRecorded records a null threadId when there is no active thread", async () => {
-      const file = newLogFile("print-null-thread");
-      const client = fileClient(file);
-      await client.printRecorded({ kind: "print", value: "hi", truncated: false, threadId: null });
-      const [event] = readEvents(file);
-      expect(event.data.threadId).toBeNull();
-    });
   });
 
   describe("promptCompletion audio-token hygiene", () => {

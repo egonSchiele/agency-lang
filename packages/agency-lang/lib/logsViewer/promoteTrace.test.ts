@@ -25,7 +25,6 @@ function ev(type: string, data: Record<string, unknown> = {}): EventEnvelope {
 function ui(over: Partial<PromotionUI> = {}): PromotionUI & { notes: string[] } {
   const notes: string[] = [];
   return {
-    choosePrint: vi.fn(async () => 0),
     editTask: vi.fn(async () => ({ kind: "keep-default" as const })),
     notify: (message: string) => { notes.push(message); },
     notes,
@@ -69,11 +68,7 @@ describe("promoteFocusedTrace", () => {
 
   it("does not ingest and reports when there is nothing to judge", async () => {
     const svc = services();
-    const outcome = await promoteFocusedTrace(
-      { ...baseRequest, events: [ev("agentStart")] },
-      ui(),
-      svc,
-    );
+    const outcome = await promoteFocusedTrace({ ...baseRequest, events: [ev("agentStart")] }, ui(), svc);
     expect(outcome).toEqual({ kind: "rejected", reason: "no-output" });
     expect(svc.ingested).toHaveLength(0);
     expect(svc.labeled).toHaveLength(0);
@@ -89,40 +84,6 @@ describe("promoteFocusedTrace", () => {
     );
     expect(outcome).toEqual({ kind: "rejected", reason: "missing-checklist" });
     expect(theUi.notes.join(" ")).toContain("--checklist");
-    expect(svc.ingested).toHaveLength(0);
-  });
-
-  it("asks which print for an ambiguous trace and honors the choice", async () => {
-    const svc = services();
-    const outcome = await promoteFocusedTrace(
-      {
-        ...baseRequest,
-        events: [
-          ev("print", { kind: "print", value: "one", truncated: false }),
-          ev("print", { kind: "print", value: "two", truncated: false }),
-        ],
-      },
-      ui({ choosePrint: vi.fn(async () => 1) }),
-      svc,
-    );
-    expect(outcome.kind).toBe("labeled");
-    expect((svc.ingested[0] as any).batch.occurrences[0].fields.output).toBe("two");
-  });
-
-  it("cancels when the print chooser is dismissed", async () => {
-    const svc = services();
-    const outcome = await promoteFocusedTrace(
-      {
-        ...baseRequest,
-        events: [
-          ev("print", { kind: "print", value: "one", truncated: false }),
-          ev("print", { kind: "print", value: "two", truncated: false }),
-        ],
-      },
-      ui({ choosePrint: vi.fn(async () => null) }),
-      svc,
-    );
-    expect(outcome).toEqual({ kind: "cancelled" });
     expect(svc.ingested).toHaveLength(0);
   });
 

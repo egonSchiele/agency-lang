@@ -81,23 +81,13 @@ export type SessionIdentity = {
 // --- durable rows --------------------------------------------------------
 
 export const ManifestSchema = z.object({
-  schemaVersion: z.literal(3),
+  schemaVersion: z.literal(2),
   /** Display order for fields. A store-level property so the same field means
    *  the same thing everywhere and order can never leak into identity. */
   fieldOrder: z.array(FieldNameSchema),
 }).strict();
 
 export type Manifest = z.infer<typeof ManifestSchema>;
-
-/** The previous manifest revision. Version 3 added only the statelog occurrence
- *  origin; the rows themselves are unchanged, so a v2 dataset upgrades to v3 by
- *  rewriting this one file after the whole dataset validates. Kept so an old
- *  binary refuses at the manifest boundary rather than choking on a new origin
- *  row it cannot parse. */
-export const ManifestV2Schema = z.object({
-  schemaVersion: z.literal(2),
-  fieldOrder: z.array(FieldNameSchema),
-}).strict();
 
 export const ChecklistQuestionSchema = z.object({
   id: QuestionIdSchema,
@@ -166,22 +156,6 @@ export const CorpusRowSchema = z.object({
 export type CorpusRow = z.infer<typeof CorpusRowSchema>;
 
 /**
- * Which output of a statelog trace an observation labeled.
- *
- * `evalOutput` and `print` carry an index (which explicit output / which
- * printed value); `return` is the entry node's single return value and needs
- * none. Named on its own rather than nested anonymously inside the origin, so
- * the origin schema stays readable.
- */
-export const StatelogOutputSourceSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("evalOutput"), index: z.number().int().nonnegative() }).strict(),
-  z.object({ kind: z.literal("return") }).strict(),
-  z.object({ kind: z.literal("print"), index: z.number().int().nonnegative() }).strict(),
-]);
-
-export type StatelogOutputSource = z.infer<typeof StatelogOutputSourceSchema>;
-
-/**
  * Where one observation of a record came from.
  *
  * A discriminated union is safe here in a way it is not for a record's
@@ -221,10 +195,9 @@ export const OccurrenceOriginSchema = z.discriminatedUnion("kind", [
     kind: z.literal("statelog"),
     /** Stable across renames and copies — a trace id moves with nothing. */
     traceId: z.string().min(1),
-    /** Which output of the trace this observation labeled. Part of the locator,
-     *  so re-promoting the SAME choice replays one occurrence, while promoting a
-     *  different print from the same trace is a genuinely distinct observation. */
-    outputSource: StatelogOutputSourceSchema,
+    /** Which recorded output was labeled, so two `evalOutput()` values from one
+     *  trace stay distinct observations (mirrors `run`'s finalOutputIndex). */
+    finalOutputIndex: z.number().int().nonnegative(),
   }).strict(),
 ]);
 
@@ -252,7 +225,7 @@ export function occurrenceLocatorOf(origin: OccurrenceOrigin): JsonValue {
     return { kind: origin.kind, itemKey: origin.itemKey, itemIndex: origin.itemIndex };
   }
   if (origin.kind === "statelog") {
-    return { kind: origin.kind, traceId: origin.traceId, outputSource: origin.outputSource };
+    return { kind: origin.kind, traceId: origin.traceId, finalOutputIndex: origin.finalOutputIndex };
   }
   return { kind: origin.kind, itemKey: origin.itemKey };
 }

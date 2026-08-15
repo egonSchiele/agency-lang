@@ -23,7 +23,7 @@ import { makeViewStack, type ViewAction, type Viewport } from "./views/view.js";
 import type { TreeNode } from "./types.js";
 import { createLabelingHost } from "../eval/label/labelingHost.js";
 import { projectArtifactField } from "../eval/label/project.js";
-import type { PrintCandidate, TaskChoice } from "../eval/label/load/statelog.js";
+import type { TaskChoice } from "../eval/label/load/statelog.js";
 import type { Annotator } from "../eval/label/types.js";
 import type { EventEnvelope } from "../statelog/wireTypes.js";
 import { promoteFocusedTrace, promotionServices, type PromotionOutcome, type PromotionUI } from "./promoteTrace.js";
@@ -106,13 +106,6 @@ async function runViewerPromotion(params: {
   const { screen, launch, traceId, traceEvents, notify } = params;
   const host = createLabelingHost(screen, () => screen.size());
   const ui: PromotionUI = {
-    async choosePrint(candidates: readonly PrintCandidate[]): Promise<number | null> {
-      const list = candidates.map((candidate) => `  [${candidate.index}] ${previewOf(candidate.value)}`).join("\n");
-      const answer = (await screen.nextLine(`Which printed value to label?\n${list}\nindex (blank cancels): `)).trim();
-      if (answer === "") return null;
-      const index = Number(answer);
-      return Number.isInteger(index) && candidates.some((candidate) => candidate.index === index) ? index : null;
-    },
     async editTask(defaultTask): Promise<TaskChoice | null> {
       const preview = defaultTask === null ? "(none)" : previewOf(projectArtifactField(defaultTask));
       const answer = await screen.nextLine(`Task [${preview}] — Enter keeps, text replaces, "-" clears: `);

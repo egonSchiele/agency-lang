@@ -81,8 +81,7 @@ export function addLabelCommand(
     .option("--task <text>", "Shorthand for --field task=<text>")
     .option("--field <name=value>", "A constant field added to every record", collectRepeated, [])
     .option("--no-task-field", "Run/statelog sources only: drop the source's own task field")
-    .option("--trace <id>", "Statelog sources: a trace id to promote (repeatable)", collectRepeated, [])
-    .option("--output <trace=print:index>", "Statelog sources: pick a printed value for an ambiguous trace (repeatable)", collectRepeated, [])
+    .option("--trace <id>", "Statelog sources: a trace id to label (repeatable)", collectRepeated, [])
     .option("--recursive", "Descend into subdirectories")
     .option("--max-bytes <n>", "Per-value size cap in bytes (default 1048576)", parseByteCap)
     .action(async (source: string, extra: string[], opts: {
@@ -92,7 +91,6 @@ export function addLabelCommand(
       field?: string[];
       taskField?: boolean;
       trace?: string[];
-      output?: string[];
       recursive?: boolean;
       maxBytes?: number;
     }, command: Command) => {

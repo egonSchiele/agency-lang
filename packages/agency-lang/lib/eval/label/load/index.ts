@@ -113,12 +113,10 @@ export function loadBatch(
   }
 
   if (format === "statelog") {
-    const request_ = request.selection.kind === "statelog"
-      ? request.selection.request
-      : { traceIds: [], printSelections: {} };
+    const traceIds = request.selection.kind === "statelog" ? request.selection.request.traceIds : [];
     return dependencies.loadStatelog({
       path: request.source.path,
-      request: request_,
+      traceIds,
       source: request.sourceName,
       constantFields: request.constantFields,
       includeTaskField: request.source.includeTaskField,

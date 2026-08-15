@@ -142,34 +142,14 @@ describe("openDataset", () => {
     const store = open();
     expect(store.readSession(SESSION_ID).annotations).toEqual([]);
     expect(JSON.parse(fs.readFileSync(path.join(storeDir, "manifest.json"), "utf8")))
-      .toEqual({ schemaVersion: 3, fieldOrder: [] });
+      .toEqual({ schemaVersion: 2, fieldOrder: [] });
     store.close();
   });
 
   it("refuses a manifest from a newer schema rather than risking the dataset", () => {
     fs.mkdirSync(storeDir, { recursive: true });
-    fs.writeFileSync(path.join(storeDir, "manifest.json"), JSON.stringify({ schemaVersion: 4 }));
+    fs.writeFileSync(path.join(storeDir, "manifest.json"), JSON.stringify({ schemaVersion: 3 }));
     expect(() => open()).toThrow(DatasetVersionError);
-  });
-
-  it("upgrades a version 2 dataset to version 3 on open, without rewriting rows", () => {
-    // Build a populated dataset with the current writer, then downgrade only its
-    // manifest to v2 on disk to simulate an older dataset.
-    const first = open();
-    first.ingest(batchOf());
-    first.close();
-    const corpusBefore = fs.readFileSync(path.join(storeDir, "outputs.jsonl"), "utf8");
-    const manifestFile = path.join(storeDir, "manifest.json");
-    const fieldOrder = JSON.parse(fs.readFileSync(manifestFile, "utf8")).fieldOrder;
-    fs.writeFileSync(manifestFile, JSON.stringify({ schemaVersion: 2, fieldOrder }));
-
-    // Reopening validates the whole dataset and then bumps the manifest.
-    open().close();
-
-    expect(JSON.parse(fs.readFileSync(manifestFile, "utf8")))
-      .toEqual({ schemaVersion: 3, fieldOrder });
-    // The logs are untouched by the upgrade.
-    expect(fs.readFileSync(path.join(storeDir, "outputs.jsonl"), "utf8")).toBe(corpusBefore);
   });
 
   it("refuses a version 1 store and says how to rebuild it", () => {

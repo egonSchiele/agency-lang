@@ -1,0 +1,17 @@
+# Only hand-written TypeScript is formatted. Everything below is generated,
+# vendored, or a test fixture whose exact text matters.
+dist/
+node_modules/
+.agency-build/
+.agency-tmp/
+lib/templates/**/*.ts
+lib/vendor/
+tests/fixtures/
+tests/typescriptGenerator/
+tests/typescriptBuilder/
+tests/typescriptPreprocessor/
+tests/agency/stdlib/glob-fixtures/
+tests/integration/optimize-efficacy/fixtures/
+docs/
+examples/
+runs/

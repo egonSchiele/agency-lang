@@ -1,0 +1,11 @@
+{
+  "editor.formatOnSave": true,
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "prettier.configPath": "packages/agency-lang/.prettierrc.json",
+  "prettier.ignorePath": "packages/agency-lang/.prettierignore"
+}

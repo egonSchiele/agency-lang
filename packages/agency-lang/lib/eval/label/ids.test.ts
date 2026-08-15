@@ -16,11 +16,34 @@ import {
   CorpusRowSchema,
   FieldNameSchema,
   ManifestSchema,
+  OccurrenceOriginSchema,
+  occurrenceLocatorOf,
   type OccurrenceCandidate,
   type SessionIdentity,
 } from "./types.js";
 
 const fields = { task: "Summarize", output: "A summary" };
+
+describe("statelog occurrence origin", () => {
+  const statelog = (finalOutputIndex: number) =>
+    OccurrenceOriginSchema.parse({ kind: "statelog", traceId: "T", finalOutputIndex });
+
+  it("parses a statelog origin", () => {
+    expect(statelog(0).kind).toBe("statelog");
+  });
+
+  it("leaves the existing run/file/json origins unchanged", () => {
+    expect(OccurrenceOriginSchema.parse({ kind: "file", itemKey: "a.txt" }).kind).toBe("file");
+    expect(OccurrenceOriginSchema.parse({ kind: "json", itemKey: "d.json", itemIndex: 1 }).kind).toBe("json");
+  });
+
+  it("gives one trace two distinct occurrence ids for two different output indexes", () => {
+    const base = { outputId: makeOutputId(fields), source: "s" };
+    const first = makeOccurrenceId({ ...base, origin: statelog(0) } as OccurrenceCandidate);
+    const second = makeOccurrenceId({ ...base, origin: statelog(1) } as OccurrenceCandidate);
+    expect(first).not.toBe(second);
+  });
+});
 
 describe("makeOutputId", () => {
   it("is stable across calls, so re-ingesting is idempotent", () => {

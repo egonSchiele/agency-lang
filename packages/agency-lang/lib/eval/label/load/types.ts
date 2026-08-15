@@ -1,6 +1,6 @@
 import type { Fields, OccurrenceOrigin } from "../types.js";
 
-/** What a loader produces. No store paths, no JSONL, no ids: a loader describes
+/** What a loader produces. No dataset paths, no JSONL, no ids: a loader describes
  *  candidates and knows nothing about durability. */
 export type LoadedOccurrence = {
   fields: Fields;
@@ -14,6 +14,7 @@ export type IngestSkipReason =
   | "not-utf8"
   | "symlink"
   | "run-failed"
+  | "trace-unfinished"
   | "record-unreadable"
   | "legacy-record"
   | "missing-trace-id"
@@ -32,6 +33,17 @@ export type LoadedBatch = {
   occurrences: readonly LoadedOccurrence[];
   skips: readonly IngestSkip[];
 };
+
+/** Which traces a statelog source promotes. */
+export type StatelogSelectionRequest = {
+  traceIds: readonly string[];
+};
+
+/** Interactive-free selection carried on an ingest request. `statelog` sources
+ *  name the traces to promote; every other source needs none. */
+export type IngestSelection =
+  | { kind: "none" }
+  | { kind: "statelog"; request: StatelogSelectionRequest };
 
 /** A screen cannot show more than this, and a value this large is far more
  *  likely to be a mistake than real output. */

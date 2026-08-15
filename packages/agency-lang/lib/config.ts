@@ -114,7 +114,7 @@ export interface AgencyConfig {
     /** Where the human-label dataset lives. Outside runsDir on purpose: runs
      *  are disposable and the labels must outlive them. A relative path
      *  resolves from the invoking working directory, like runsDir. */
-    labelStore?: string;
+    dataset?: string;
 
     /** Per-run resource limits for the agent subprocess. Unset fields keep the
      *  built-in defaults (lib/eval/run/subprocess.ts). */
@@ -480,7 +480,7 @@ export const AgencyConfigSchema = z
         optimizeRunsDir: z.string(),
         graders: z.string().optional(),
         sourceCacheRoot: z.string().optional(),
-        labelStore: z.string().optional(),
+        dataset: z.string().optional(),
         // Positive int only: the value feeds setTimeout (×1000), where 0 and
         // negatives don't mean "no limit" — they fire immediately and fail
         // every run with a wall_clock limit error.

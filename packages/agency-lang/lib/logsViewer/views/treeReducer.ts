@@ -56,7 +56,6 @@ export function handleKey(state: ViewerState, event: KeyEvent): ViewerState {
       return { ...state, cursorId: rows[0].node.id, scrollTop: 0 };
     case "G":
       return moveCursor(state, rows, rows.length - 1);
-    case "l":
     case "Right":
     case "Enter":
       return expand(state, rows, idx);

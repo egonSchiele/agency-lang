@@ -8,8 +8,8 @@ import {
   type OccurrenceRow,
 } from "./types.js";
 
-export function occurrencesPath(storeDir: string): string {
-  return path.join(storeDir, "occurrences.jsonl");
+export function occurrencesPath(datasetDir: string): string {
+  return path.join(datasetDir, "occurrences.jsonl");
 }
 
 export type EnsureOccurrenceResult = {
@@ -26,11 +26,11 @@ export type OpenedOccurrenceLog = {
 };
 
 /** The provenance log: which sources were observed emitting which record.
- *  Private to the store, like the corpus, so an occurrence can never reference
+ *  Private to the dataset, like the corpus, so an occurrence can never reference
  *  a record nobody wrote. */
-export function openOccurrenceLog(storeDir: string): OpenedOccurrenceLog {
+export function openOccurrenceLog(datasetDir: string): OpenedOccurrenceLog {
   const log: OpenedJsonl<OccurrenceRow> = openJsonlStrict({
-    filePath: occurrencesPath(storeDir),
+    filePath: occurrencesPath(datasetDir),
     schema: OccurrenceRowSchema,
     identityOf: (row) => row.occurrenceId,
   });

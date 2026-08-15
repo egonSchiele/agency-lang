@@ -131,7 +131,7 @@ function sniffFirstLine(file: string): FirstLineSniff {
   }
 }
 
-function isStatelogEnvelope(line: string): boolean {
+export function isStatelogEnvelope(line: string): boolean {
   let parsed: unknown;
   try {
     parsed = JSON.parse(line);

@@ -60,7 +60,7 @@ import { fixtures, test, testTs, SlowTest, parseShardSpec } from "@/cli/test.js"
 import { generateReport, cleanCoverage } from "@/cli/coverage.js";
 import { createBundle, extractBundle } from "@/cli/bundle.js";
 import { traceLog } from "@/cli/events.js";
-import { logsView } from "@/cli/logsView.js";
+import { logsView, type LogsViewOpts } from "@/cli/logsView.js";
 import { evalExtract } from "@/cli/evalExtract.js";
 import { evalJudge } from "@/cli/evalJudge.js";
 import { addLabelCommand, labelCommandDependencies } from "@/cli/eval/labelCommand.js";
@@ -771,6 +771,20 @@ export function createProgram(deps: CliDependencies = {}): Command {
       traceLog(file, options.output);
     });
 
+  type LogsCliOptions = {
+    follow?: boolean;
+    csv?: boolean;
+    dataset?: string;
+    checklist?: string;
+  };
+  const logsViewOptsFrom = (options: LogsCliOptions): LogsViewOpts => ({
+    follow: options.follow,
+    csv: options.csv,
+    dataset: options.dataset,
+    checklist: options.checklist,
+    config: getConfig(),
+  });
+
   const logsCmd = program
     .command("logs")
     .description("Inspect StateLog output")
@@ -782,24 +796,27 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("[files...]", "Statelog files ('-' for stdin), run directories, or directories of runs")
     .option("-f, --follow", "Tail the file — re-read and re-render as new events are appended")
     .option("--csv", "Print the runs table as CSV to stdout instead of opening the explorer")
-    .action(async (files: string[], options: { follow?: boolean; csv?: boolean }) => {
+    .option("--dataset <dir>", "Local viewing: label dataset the tree 'l' key labels into (default: eval.dataset, else labels/)")
+    .option("--checklist <file>", "Local viewing: checklist to label a trace against")
+    .action(async (files: string[], options: LogsCliOptions) => {
       if (files.length === 0) {
         logsCmd.help();
         return;
       }
-      await logsView(files, { follow: options.follow, csv: options.csv });
+      await logsView(files, logsViewOptsFrom(options));
     });
 
   logsCmd
     .command("view")
     .description("Open an interactive TUI viewer for a statelog JSONL file")
     .argument("<file>", "Path to a .statelog.jsonl file, or '-' for stdin")
-    // -f/--follow is declared once, on `logs`. Commander gives the parent
-    // priority wherever the flag sits, so a second declaration here would
-    // silently receive undefined (the vendored fork now rejects that shape
-    // at registration). The action reads the parent's parsed value.
+    // -f/--follow, --dataset and --checklist are declared once, on
+    // `logs`. Commander gives the parent priority wherever the flag sits, so a
+    // second declaration here would silently receive undefined (the vendored
+    // fork now rejects that shape at registration). The action reads the
+    // parent's parsed values.
     .action(async (file: string, _options: Record<string, never>, command: Command) => {
-      await logsView(file, { follow: command.parent?.opts().follow });
+      await logsView(file, logsViewOptsFrom((command.parent?.opts() ?? {}) as LogsCliOptions));
     });
 
   const evalCmd = program

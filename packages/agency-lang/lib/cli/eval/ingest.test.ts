@@ -14,12 +14,12 @@ import {
 } from "./ingest.js";
 
 let root: string;
-let storeDir: string;
+let datasetDir: string;
 const reported: string[] = [];
 
 beforeEach(() => {
   root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "label-ingest-cli-")));
-  storeDir = path.join(root, "labels");
+  datasetDir = path.join(root, "labels");
   reported.length = 0;
 });
 
@@ -38,27 +38,31 @@ function batchOf(count: number, skips: LoadedBatch["skips"] = []): LoadedBatch {
   };
 }
 
+function fakeWriter(over: Record<string, unknown> = {}) {
+  return {
+    ingest: () => ({
+      recordsAdded: 1,
+      recordsReplayed: 0,
+      occurrencesAdded: 1,
+      occurrencesReplayed: 0,
+      skips: [],
+      newFieldNames: [],
+      ...over,
+    }),
+  };
+}
+
 function dependencies(over: Partial<EvalIngestDependencies> = {}): EvalIngestDependencies {
   return {
     loadBatch: vi.fn(() => batchOf(1)) as never,
-    openStore: vi.fn(() => ({
-      ingest: () => ({
-        recordsAdded: 1,
-        recordsReplayed: 0,
-        occurrencesAdded: 1,
-        occurrencesReplayed: 0,
-        skips: [],
-        newFieldNames: [],
-      }),
-      close: () => {},
-    })) as never,
+    datasetWriter: fakeWriter() as never,
     report: (message) => reported.push(message),
     ...over,
   };
 }
 
 function options(over: Partial<EvalIngestOptions> = {}): EvalIngestOptions {
-  return { path: root, source: "handwritten", store: storeDir, ...over };
+  return { path: root, source: "handwritten", dataset: datasetDir, ...over };
 }
 
 describe("parseFieldArgs", () => {
@@ -108,7 +112,7 @@ describe("parseFieldArgs field names", () => {
     expect(() => parseFieldArgs({ field: ["__proto__=x"] })).toThrow(/not a valid field name/);
   });
 
-  it("rejects a name the store's schema would refuse", () => {
+  it("rejects a name the dataset's schema would refuse", () => {
     expect(() => parseFieldArgs({ field: ["Output=x"] })).toThrow(/not a valid field name/);
     expect(() => parseFieldArgs({ field: ["2nd=x"] })).toThrow(/not a valid field name/);
     expect(() => parseFieldArgs({ field: ["bad{name}=x"] })).toThrow(/not a valid field name/);
@@ -142,7 +146,7 @@ describe("evalIngest", () => {
   });
 
   it("errors when a source yields zero records rather than succeeding quietly", async () => {
-    // A silent zero-record success is how you end up labelling an empty store
+    // A silent zero-record success is how you end up labelling an empty dataset
     // and wondering where everything went.
     const deps = dependencies({ loadBatch: vi.fn(() => batchOf(0)) as never });
     await expect(evalIngest(options(), deps)).rejects.toThrow(/No records to ingest/);
@@ -193,17 +197,7 @@ describe("evalIngest", () => {
 
   it("prints one line per skip, naming the item", async () => {
     const deps = dependencies({
-      openStore: vi.fn(() => ({
-        ingest: () => ({
-          recordsAdded: 1,
-          recordsReplayed: 0,
-          occurrencesAdded: 1,
-          occurrencesReplayed: 0,
-          skips: [{ item: "bad.txt", reason: "empty" as const }],
-          newFieldNames: [],
-        }),
-        close: () => {},
-      })) as never,
+      datasetWriter: fakeWriter({ skips: [{ item: "bad.txt", reason: "empty" as const }] }) as never,
     });
     await evalIngest(options(), deps);
     expect(reported.join("\n")).toContain("bad.txt");
@@ -211,32 +205,16 @@ describe("evalIngest", () => {
 
   it("warns about an unseen field name without refusing the ingest", async () => {
     const deps = dependencies({
-      openStore: vi.fn(() => ({
-        ingest: () => ({
-          recordsAdded: 1,
-          recordsReplayed: 0,
-          occurrencesAdded: 1,
-          occurrencesReplayed: 0,
-          skips: [],
-          newFieldNames: ["response"],
-        }),
-        close: () => {},
-      })) as never,
+      datasetWriter: fakeWriter({ newFieldNames: ["response"] }) as never,
     });
     await expect(evalIngest(options(), deps)).resolves.toBeUndefined();
     expect(reported.join("\n")).toContain("response");
   });
 
-  it("releases the store lock even when ingesting throws", async () => {
+  it("propagates a writer failure (lock lifecycle is the writer's own concern)", async () => {
     const deps = dependencies({
-      openStore: vi.fn(() => ({
-        ingest: () => {
-          throw new Error("boom");
-        },
-        close: () => {},
-      })) as never,
+      datasetWriter: { ingest: () => { throw new Error("boom"); } } as never,
     });
     await expect(evalIngest(options(), deps)).rejects.toThrow("boom");
-    expect(fs.existsSync(path.join(storeDir, ".lock"))).toBe(false);
   });
 });

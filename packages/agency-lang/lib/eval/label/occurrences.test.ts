@@ -9,14 +9,14 @@ import type { OccurrenceCandidate } from "./types.js";
 
 const OUTPUT_ID = `out_${"a".repeat(64)}`;
 
-let storeDir: string;
+let datasetDir: string;
 
 beforeEach(() => {
-  storeDir = fs.mkdtempSync(path.join(os.tmpdir(), "label-occ-"));
+  datasetDir = fs.mkdtempSync(path.join(os.tmpdir(), "label-occ-"));
 });
 
 afterEach(() => {
-  fs.rmSync(storeDir, { recursive: true, force: true });
+  fs.rmSync(datasetDir, { recursive: true, force: true });
 });
 
 function candidate(over: Partial<OccurrenceCandidate> = {}): OccurrenceCandidate {
@@ -29,27 +29,27 @@ function candidate(over: Partial<OccurrenceCandidate> = {}): OccurrenceCandidate
 }
 
 describe("ensureOccurrence", () => {
-  it("appends an occurrence the store has not seen", () => {
-    expect(openOccurrenceLog(storeDir).ensureOccurrence(candidate()).added).toBe(true);
+  it("appends an occurrence the dataset has not seen", () => {
+    expect(openOccurrenceLog(datasetDir).ensureOccurrence(candidate()).added).toBe(true);
   });
 
   it("returns the existing row on re-ingest rather than throwing", () => {
     // The whole reason replay goes through `find` rather than `appendExact`:
     // a second session builds the same id carrying a different timestamp.
-    const first = openOccurrenceLog(storeDir).ensureOccurrence(candidate());
-    const second = openOccurrenceLog(storeDir).ensureOccurrence(candidate());
+    const first = openOccurrenceLog(datasetDir).ensureOccurrence(candidate());
+    const second = openOccurrenceLog(datasetDir).ensureOccurrence(candidate());
     expect(second.added).toBe(false);
     expect(second.row.firstObservedAt).toBe(first.row.firstObservedAt);
   });
 
   it("does not write a second line when replaying", () => {
-    openOccurrenceLog(storeDir).ensureOccurrence(candidate());
-    openOccurrenceLog(storeDir).ensureOccurrence(candidate());
-    expect(openOccurrenceLog(storeDir).rows()).toHaveLength(1);
+    openOccurrenceLog(datasetDir).ensureOccurrence(candidate());
+    openOccurrenceLog(datasetDir).ensureOccurrence(candidate());
+    expect(openOccurrenceLog(datasetDir).rows()).toHaveLength(1);
   });
 
   it("keeps two files with equal content as separate observations", () => {
-    const log = openOccurrenceLog(storeDir);
+    const log = openOccurrenceLog(datasetDir);
     log.ensureOccurrence(candidate({ origin: { kind: "file", itemKey: "a.txt" } }));
     const other = log.ensureOccurrence(candidate({ origin: { kind: "file", itemKey: "b.txt" } }));
     expect(other.added).toBe(true);
@@ -57,7 +57,7 @@ describe("ensureOccurrence", () => {
   });
 
   it("keeps two array elements at different indices separate", () => {
-    const log = openOccurrenceLog(storeDir);
+    const log = openOccurrenceLog(datasetDir);
     log.ensureOccurrence(candidate({ origin: { kind: "json", itemKey: "a.json", itemIndex: 0 } }));
     const other = log.ensureOccurrence(
       candidate({ origin: { kind: "json", itemKey: "a.json", itemIndex: 1 } }),
@@ -66,7 +66,7 @@ describe("ensureOccurrence", () => {
   });
 
   it("keeps equal elements in two JSON documents separate under one source", () => {
-    const log = openOccurrenceLog(storeDir);
+    const log = openOccurrenceLog(datasetDir);
     log.ensureOccurrence(candidate({ origin: { kind: "json", itemKey: "a.json", itemIndex: 0 } }));
     const other = log.ensureOccurrence(
       candidate({ origin: { kind: "json", itemKey: "b.json", itemIndex: 0 } }),
@@ -75,20 +75,20 @@ describe("ensureOccurrence", () => {
   });
 
   it("separates the same observation seen under two source names", () => {
-    const log = openOccurrenceLog(storeDir);
+    const log = openOccurrenceLog(datasetDir);
     log.ensureOccurrence(candidate({ source: "agent-v1" }));
     expect(log.ensureOccurrence(candidate({ source: "agent-v2" })).added).toBe(true);
   });
 
   it("separates two records observed from the same file path", () => {
-    const log = openOccurrenceLog(storeDir);
+    const log = openOccurrenceLog(datasetDir);
     log.ensureOccurrence(candidate());
     const other = log.ensureOccurrence(candidate({ outputId: `out_${"b".repeat(64)}` }));
     expect(other.added).toBe(true);
   });
 
   it("records a run origin with its provenance intact", () => {
-    const log = openOccurrenceLog(storeDir);
+    const log = openOccurrenceLog(datasetDir);
     const { row } = log.ensureOccurrence(candidate({
       origin: {
         kind: "run",

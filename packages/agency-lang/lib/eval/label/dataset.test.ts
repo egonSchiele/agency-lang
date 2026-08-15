@@ -5,18 +5,41 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { normalizeDefinition, prepareRevision, publishPendingRevision } from "./checklist.js";
+import { corpusPath } from "./corpus.js";
 import { checklistHashOf, makeOccurrenceId, makeOutputId } from "./ids.js";
 import type { LoadedBatch } from "./load/types.js";
-import { acquireStoreLock } from "./lock.js";
-import { openStore, StoreValidationError, StoreVersionError } from "./store.js";
+import { acquireDatasetLock } from "./lock.js";
+import { openDataset, DatasetValidationError, DatasetVersionError } from "./dataset.js";
+import { CorpusRowSchema } from "./types.js";
 import type { AnnotationRow, ChecklistRevision, CorpusRow } from "./types.js";
 
-let storeDir: string;
+// The rename from "dataset" to "dataset" is a TypeScript-symbol change ONLY. This
+// guard fails loudly if a durable name ever drifts: ids keep the `out_` prefix,
+// corpus rows keep `outputId`, and the corpus file stays `outputs.jsonl`.
+describe("durable vocabulary is preserved across the dataset rename", () => {
+  it("keeps the version 2 durable vocabulary", () => {
+    const fields = { output: "answer" };
+    const outputId = makeOutputId(fields);
+
+    expect(outputId).toMatch(/^out_[a-f0-9]{64}$/);
+    expect(
+      CorpusRowSchema.parse({
+        schemaVersion: 2,
+        outputId,
+        capturedAt: "2026-08-15T00:00:00.000Z",
+        fields,
+      }).outputId,
+    ).toBe(outputId);
+    expect(path.basename(corpusPath("labels"))).toBe("outputs.jsonl");
+  });
+});
+
+let datasetDir: string;
 let definitionPath: string;
 const warnings: string[] = [];
 
 const DEFAULT_FIELDS = { task: "t", output: "v" };
-/** The id the store will derive for DEFAULT_FIELDS. Computed rather than
+/** The id the dataset will derive for DEFAULT_FIELDS. Computed rather than
  *  written down, because a hand-written id is exactly what open-time validation
  *  now rejects. */
 const OUTPUT_ID = makeOutputId(DEFAULT_FIELDS);
@@ -26,25 +49,25 @@ const SESSION_ID = `session_${"c".repeat(64)}`;
 const HASH_ZERO = `sha256:${"0".repeat(64)}`;
 
 beforeEach(() => {
-  storeDir = fs.mkdtempSync(path.join(os.tmpdir(), "label-store-"));
-  definitionPath = path.join(storeDir, "news.json");
+  datasetDir = fs.mkdtempSync(path.join(os.tmpdir(), "label-dataset-"));
+  definitionPath = path.join(datasetDir, "news.json");
   warnings.length = 0;
 });
 
 afterEach(() => {
-  fs.rmSync(storeDir, { recursive: true, force: true });
+  fs.rmSync(datasetDir, { recursive: true, force: true });
 });
 
 function open() {
-  const lock = acquireStoreLock({ storeDir, reportWarning: (m) => warnings.push(m) });
-  return openStore({ storeDir, lock, reportWarning: (m) => warnings.push(m) });
+  const lock = acquireDatasetLock({ datasetDir, reportWarning: (m) => warnings.push(m) });
+  return openDataset({ datasetDir, lock, reportWarning: (m) => warnings.push(m) });
 }
 
 function corpusRow(over: Partial<CorpusRow> = {}): CorpusRow {
   const fields = over.fields ?? DEFAULT_FIELDS;
   return {
     schemaVersion: 2,
-    // Derived, so a row built here is one the store would accept: the open-time
+    // Derived, so a row built here is one the dataset would accept: the open-time
     // check recomputes this and refuses anything that does not match.
     outputId: makeOutputId(fields),
     capturedAt: "2026-08-03T00:00:00.000Z",
@@ -53,7 +76,7 @@ function corpusRow(over: Partial<CorpusRow> = {}): CorpusRow {
   };
 }
 
-/** One loaded candidate, as a loader would hand it to the store. */
+/** One loaded candidate, as a loader would hand it to the dataset. */
 function batchOf(fields = DEFAULT_FIELDS, source = "agent-v1"): LoadedBatch {
   return {
     occurrences: [{
@@ -66,8 +89,8 @@ function batchOf(fields = DEFAULT_FIELDS, source = "agent-v1"): LoadedBatch {
 }
 
 function appendRaw(file: string, row: unknown): void {
-  fs.mkdirSync(storeDir, { recursive: true });
-  fs.appendFileSync(path.join(storeDir, file), `${JSON.stringify(row)}\n`);
+  fs.mkdirSync(datasetDir, { recursive: true });
+  fs.appendFileSync(path.join(datasetDir, file), `${JSON.stringify(row)}\n`);
 }
 
 /** Publish a one-question checklist and return its revision. */
@@ -75,7 +98,7 @@ function publishChecklist(): ChecklistRevision {
   const normalized = normalizeDefinition({ name: "news", questions: [{ text: "Accurate?" }] });
   const prepared = prepareRevision({ definition: normalized, current: undefined });
   if (prepared.kind !== "publish") throw new Error("expected publish");
-  return publishPendingRevision({ storeDir, pending: prepared.pending, definitionPath }).revision;
+  return publishPendingRevision({ datasetDir, pending: prepared.pending, definitionPath }).revision;
 }
 
 
@@ -90,7 +113,7 @@ function writeRevisionFile(revision: ChecklistRevision): void {
       questions: revision.questions,
     }),
   };
-  const dir = path.join(storeDir, "checklists", revision.checklistId);
+  const dir = path.join(datasetDir, "checklists", revision.checklistId);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, `${revision.version}.json`), JSON.stringify(sealed));
 }
@@ -114,26 +137,26 @@ function annotationRow(revision: ChecklistRevision, over: Partial<AnnotationRow>
   };
 }
 
-describe("openStore", () => {
-  it("opens an empty store and writes a manifest", () => {
-    const store = open();
-    expect(store.readSession(SESSION_ID).annotations).toEqual([]);
-    expect(JSON.parse(fs.readFileSync(path.join(storeDir, "manifest.json"), "utf8")))
+describe("openDataset", () => {
+  it("opens an empty dataset and writes a manifest", () => {
+    const dataset = open();
+    expect(dataset.readSession(SESSION_ID).annotations).toEqual([]);
+    expect(JSON.parse(fs.readFileSync(path.join(datasetDir, "manifest.json"), "utf8")))
       .toEqual({ schemaVersion: 2, fieldOrder: [] });
-    store.close();
+    dataset.close();
   });
 
   it("refuses a manifest from a newer schema rather than risking the dataset", () => {
-    fs.mkdirSync(storeDir, { recursive: true });
-    fs.writeFileSync(path.join(storeDir, "manifest.json"), JSON.stringify({ schemaVersion: 3 }));
-    expect(() => open()).toThrow(StoreVersionError);
+    fs.mkdirSync(datasetDir, { recursive: true });
+    fs.writeFileSync(path.join(datasetDir, "manifest.json"), JSON.stringify({ schemaVersion: 3 }));
+    expect(() => open()).toThrow(DatasetVersionError);
   });
 
-  it("refuses a version 1 store and says how to rebuild it", () => {
-    // There is no migration, deliberately: a label store is derived data, and
+  it("refuses a version 1 dataset and says how to rebuild it", () => {
+    // There is no migration, deliberately: a label dataset is derived data, and
     // the eval runs it came from are still on disk.
-    fs.mkdirSync(storeDir, { recursive: true });
-    fs.writeFileSync(path.join(storeDir, "manifest.json"), JSON.stringify({ schemaVersion: 1 }));
+    fs.mkdirSync(datasetDir, { recursive: true });
+    fs.writeFileSync(path.join(datasetDir, "manifest.json"), JSON.stringify({ schemaVersion: 1 }));
     // One call, then assert on its message. Calling open() twice leaves the
     // first lock held, so the second failure is about the lock and any further
     // assertion passes or fails for the wrong reason.
@@ -145,17 +168,17 @@ describe("openStore", () => {
   it("checks the manifest BEFORE parsing any log", () => {
     // A version 1 corpus line would produce a confusing deep validation error
     // if the version gate ran second.
-    fs.mkdirSync(storeDir, { recursive: true });
-    fs.writeFileSync(path.join(storeDir, "manifest.json"), JSON.stringify({ schemaVersion: 1 }));
-    fs.writeFileSync(path.join(storeDir, "outputs.jsonl"), '{"schemaVersion":1,"nonsense":true}\n');
+    fs.mkdirSync(datasetDir, { recursive: true });
+    fs.writeFileSync(path.join(datasetDir, "manifest.json"), JSON.stringify({ schemaVersion: 1 }));
+    fs.writeFileSync(path.join(datasetDir, "outputs.jsonl"), '{"schemaVersion":1,"nonsense":true}\n');
     expect(() => open()).toThrow(/predates content-derived record ids/);
   });
 
   it("refuses a manifest with unknown keys", () => {
-    fs.mkdirSync(storeDir, { recursive: true });
-    fs.writeFileSync(path.join(storeDir, "manifest.json"),
+    fs.mkdirSync(datasetDir, { recursive: true });
+    fs.writeFileSync(path.join(datasetDir, "manifest.json"),
       JSON.stringify({ schemaVersion: 2, fieldOrder: [], extra: true }));
-    expect(() => open()).toThrow(StoreValidationError);
+    expect(() => open()).toThrow(DatasetValidationError);
   });
 
   it("refuses a corpus row whose id is not the hash of its own fields", () => {
@@ -178,15 +201,15 @@ describe("openStore", () => {
   });
 
   it("refuses a manifest listing a field twice", () => {
-    fs.mkdirSync(storeDir, { recursive: true });
-    fs.writeFileSync(path.join(storeDir, "manifest.json"),
+    fs.mkdirSync(datasetDir, { recursive: true });
+    fs.writeFileSync(path.join(datasetDir, "manifest.json"),
       JSON.stringify({ schemaVersion: 2, fieldOrder: ["output", "output"] }));
     expect(() => open()).toThrow(/more than once/);
   });
 
   it("releases the lock on close", () => {
     open().close();
-    expect(fs.existsSync(path.join(storeDir, ".lock"))).toBe(false);
+    expect(fs.existsSync(path.join(datasetDir, ".lock"))).toBe(false);
   });
 
   it("rejects a duplicate output id in the corpus", () => {
@@ -201,13 +224,13 @@ describe("openStore", () => {
   });
 
   it("rejects a JSONL tail with no terminating newline", () => {
-    fs.mkdirSync(storeDir, { recursive: true });
-    fs.writeFileSync(path.join(storeDir, "outputs.jsonl"), JSON.stringify(corpusRow()));
+    fs.mkdirSync(datasetDir, { recursive: true });
+    fs.writeFileSync(path.join(datasetDir, "outputs.jsonl"), JSON.stringify(corpusRow()));
     expect(() => open()).toThrow(/newline/i);
   });
 });
 
-describe("store invariants across files", () => {
+describe("dataset invariants across files", () => {
   it("rejects an annotation whose output is not in the corpus", () => {
     const revision = publishChecklist();
     appendRaw("labels.jsonl", annotationRow(revision));
@@ -255,18 +278,18 @@ describe("store invariants across files", () => {
 
   it("TOLERATES a current pointer that lags, because that is an interrupted publication", () => {
     // Refusing here would make the state permanently unrepairable: recovery
-    // runs after the store opens. It warns instead, and a session completes it.
+    // runs after the dataset opens. It warns instead, and a session completes it.
     const revision = publishChecklist();
     writeRevisionFile({ ...revision, version: 2, parentVersion: 1 });
-    const store = open();
+    const dataset = open();
     expect(warnings.join(" ")).toMatch(/publication was interrupted/i);
-    store.close();
+    dataset.close();
   });
 
   it("rejects a current pointer naming a revision that does not exist", () => {
     const revision = publishChecklist();
     fs.writeFileSync(
-      path.join(storeDir, "checklists", revision.checklistId, "current.json"),
+      path.join(datasetDir, "checklists", revision.checklistId, "current.json"),
       JSON.stringify({ schemaVersion: 1, checklistId: revision.checklistId, version: 9, hash: revision.hash }),
     );
     expect(() => open()).toThrow(/has no stored revision/i);
@@ -292,7 +315,7 @@ describe("store invariants across files", () => {
     };
     // Keeps the ORIGINAL hash, which is what an in-place edit looks like.
     fs.writeFileSync(
-      path.join(storeDir, "checklists", revision.checklistId, "1.json"),
+      path.join(datasetDir, "checklists", revision.checklistId, "1.json"),
       JSON.stringify(edited),
     );
     expect(() => open()).toThrow(/has been edited/i);
@@ -314,43 +337,43 @@ describe("appendAnnotation", () => {
   it("appends a grounded annotation", () => {
     const revision = publishChecklist();
     appendRaw("outputs.jsonl", corpusRow());
-    const store = open();
-    expect(store.appendAnnotation(annotationRow(revision))).toBe("appended");
-    expect(store.readSession(SESSION_ID).annotations).toHaveLength(1);
-    store.close();
+    const dataset = open();
+    expect(dataset.appendAnnotation(annotationRow(revision))).toBe("appended");
+    expect(dataset.readSession(SESSION_ID).annotations).toHaveLength(1);
+    dataset.close();
   });
 
   it("replays an identical annotation instead of duplicating it", () => {
     const revision = publishChecklist();
     appendRaw("outputs.jsonl", corpusRow());
-    const store = open();
-    store.appendAnnotation(annotationRow(revision));
-    expect(store.appendAnnotation(annotationRow(revision))).toBe("replayed");
-    expect(store.readSession(SESSION_ID).annotations).toHaveLength(1);
-    store.close();
+    const dataset = open();
+    dataset.appendAnnotation(annotationRow(revision));
+    expect(dataset.appendAnnotation(annotationRow(revision))).toBe("replayed");
+    expect(dataset.readSession(SESSION_ID).annotations).toHaveLength(1);
+    dataset.close();
   });
 
   it("refuses an annotation whose output was never captured", () => {
     const revision = publishChecklist();
-    const store = open();
-    expect(() => store.appendAnnotation(annotationRow(revision))).toThrow(/not in the corpus/i);
-    store.close();
+    const dataset = open();
+    expect(() => dataset.appendAnnotation(annotationRow(revision))).toThrow(/not in the corpus/i);
+    dataset.close();
   });
 
   it("refuses a second annotation reusing an id with different content", () => {
     const revision = publishChecklist();
     appendRaw("outputs.jsonl", corpusRow());
-    const store = open();
-    store.appendAnnotation(annotationRow(revision));
-    expect(() => store.appendAnnotation(annotationRow(revision, { note: "changed" })))
+    const dataset = open();
+    dataset.appendAnnotation(annotationRow(revision));
+    expect(() => dataset.appendAnnotation(annotationRow(revision, { note: "changed" })))
       .toThrow(/different content/i);
-    store.close();
+    dataset.close();
   });
 
   it("refuses every operation after close", () => {
-    const store = open();
-    store.close();
-    expect(() => store.readSession(SESSION_ID).annotations).toThrow(/closed/i);
+    const dataset = open();
+    dataset.close();
+    expect(() => dataset.readSession(SESSION_ID).annotations).toThrow(/closed/i);
   });
 });
 
@@ -377,49 +400,49 @@ describe("readSession and saveDraft", () => {
   }
 
   it("reports no draft for a session that has none", () => {
-    const store = open();
-    expect(store.readSession(SESSION_ID).draft).toBeNull();
-    store.close();
+    const dataset = open();
+    expect(dataset.readSession(SESSION_ID).draft).toBeNull();
+    dataset.close();
   });
 
   it("round-trips a draft through the facade", () => {
-    const store = open();
-    store.saveDraft(draftFor(SESSION_ID));
-    expect(store.readSession(SESSION_ID).draft?.currentIndex).toBe(0);
-    store.close();
+    const dataset = open();
+    dataset.saveDraft(draftFor(SESSION_ID));
+    expect(dataset.readSession(SESSION_ID).draft?.currentIndex).toBe(0);
+    dataset.close();
   });
 
   it("returns a frozen projection, not a mutable internal reference", () => {
-    const store = open();
-    const snapshot = store.readSession(SESSION_ID);
+    const dataset = open();
+    const snapshot = dataset.readSession(SESSION_ID);
     expect(Object.isFrozen(snapshot)).toBe(true);
     expect(Object.isFrozen(snapshot.annotationIds)).toBe(true);
-    store.close();
+    dataset.close();
   });
 
   it("indexes annotation ids for O(1) replay checks", () => {
     const revision = publishChecklist();
     appendRaw("outputs.jsonl", corpusRow());
-    const store = open();
-    store.appendAnnotation(annotationRow(revision));
-    expect(store.readSession(SESSION_ID).annotationIds).toEqual({ ann_one: true });
-    store.close();
+    const dataset = open();
+    dataset.appendAnnotation(annotationRow(revision));
+    expect(dataset.readSession(SESSION_ID).annotationIds).toEqual({ ann_one: true });
+    dataset.close();
   });
 
   it("validates a draft before writing it", () => {
-    const store = open();
+    const dataset = open();
     const invalid = { ...draftFor(SESSION_ID), currentIndex: -1 };
-    expect(() => store.saveDraft(invalid)).toThrow();
-    store.close();
+    expect(() => dataset.saveDraft(invalid)).toThrow();
+    dataset.close();
   });
 });
 
-describe("store format advice", () => {
-  it("tells you to upgrade, not migrate, when the store is NEWER", () => {
-    // Migration only moves a store forwards, so pointing at it would be a dead
+describe("dataset format advice", () => {
+  it("tells you to upgrade, not migrate, when the dataset is NEWER", () => {
+    // Migration only moves a dataset forwards, so pointing at it would be a dead
     // end.
-    fs.mkdirSync(storeDir, { recursive: true });
-    fs.writeFileSync(path.join(storeDir, "manifest.json"), JSON.stringify({ schemaVersion: 99 }));
+    fs.mkdirSync(datasetDir, { recursive: true });
+    fs.writeFileSync(path.join(datasetDir, "manifest.json"), JSON.stringify({ schemaVersion: 99 }));
     let message = "";
     try {
       open();
@@ -427,7 +450,7 @@ describe("store format advice", () => {
       message = (error as Error).message;
     }
     expect(message).toMatch(/Upgrade Agency/);
-    // Rebuilding cannot help a store from the FUTURE, so it must not be
+    // Rebuilding cannot help a dataset from the FUTURE, so it must not be
     // suggested. Asserted on the captured message: a second open() would fail
     // on the still-held lock and pass this vacuously.
     expect(message).not.toMatch(/agency label ingest/);

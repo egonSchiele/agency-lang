@@ -4,8 +4,8 @@ import { makeOutputId } from "./ids.js";
 import { openJsonlStrict, type OpenedJsonl } from "./jsonl.js";
 import { CorpusRowSchema, type CorpusRow, type Fields } from "./types.js";
 
-export function corpusPath(storeDir: string): string {
-  return path.join(storeDir, "outputs.jsonl");
+export function corpusPath(datasetDir: string): string {
+  return path.join(datasetDir, "outputs.jsonl");
 }
 
 export type EnsureRecordResult = {
@@ -22,12 +22,12 @@ export type OpenedCorpusLog = {
   ensureRecord(fields: Fields): EnsureRecordResult;
 };
 
-/** The copied artifacts. Kept private to the store and ingest layers: an
+/** The copied artifacts. Kept private to the dataset and ingest layers: an
  *  annotation must never be able to reference a record nobody captured, which
  *  is only guaranteed while writes go through one path. */
-export function openCorpusLog(storeDir: string): OpenedCorpusLog {
+export function openCorpusLog(datasetDir: string): OpenedCorpusLog {
   const log: OpenedJsonl<CorpusRow> = openJsonlStrict({
-    filePath: corpusPath(storeDir),
+    filePath: corpusPath(datasetDir),
     schema: CorpusRowSchema,
     identityOf: (row) => row.outputId,
   });

@@ -4,7 +4,7 @@ import type { JsonValue } from "@/utils/canonicalize.js";
 
 export type { JsonValue };
 
-/** Recursively readonly. The store hands these out so a caller cannot mutate
+/** Recursively readonly. The dataset hands these out so a caller cannot mutate
  *  loaded rows and silently desynchronise them from what is on disk. */
 export type DeepReadonly<Value> =
   Value extends (infer Element)[] ? readonly DeepReadonly<Element>[] :
@@ -82,7 +82,7 @@ export type SessionIdentity = {
 
 export const ManifestSchema = z.object({
   schemaVersion: z.literal(2),
-  /** Display order for fields. A store-level property so the same field means
+  /** Display order for fields. A dataset-level property so the same field means
    *  the same thing everywhere and order can never leak into identity. */
   fieldOrder: z.array(FieldNameSchema),
 }).strict();
@@ -191,6 +191,14 @@ export const OccurrenceOriginSchema = z.discriminatedUnion("kind", [
     itemKey: z.string().min(1),
     itemIndex: z.number().int().nonnegative(),
   }).strict(),
+  z.object({
+    kind: z.literal("statelog"),
+    /** Stable across renames and copies — a trace id moves with nothing. */
+    traceId: z.string().min(1),
+    /** Which recorded output was labeled, so two `evalOutput()` values from one
+     *  trace stay distinct observations (mirrors `run`'s finalOutputIndex). */
+    finalOutputIndex: z.number().int().nonnegative(),
+  }).strict(),
 ]);
 
 export type OccurrenceOrigin = z.infer<typeof OccurrenceOriginSchema>;
@@ -215,6 +223,9 @@ export function occurrenceLocatorOf(origin: OccurrenceOrigin): JsonValue {
   }
   if (origin.kind === "json") {
     return { kind: origin.kind, itemKey: origin.itemKey, itemIndex: origin.itemIndex };
+  }
+  if (origin.kind === "statelog") {
+    return { kind: origin.kind, traceId: origin.traceId, finalOutputIndex: origin.finalOutputIndex };
   }
   return { kind: origin.kind, itemKey: origin.itemKey };
 }
@@ -251,7 +262,7 @@ export const AnnotationRowSchema = z.object({
     { message: "coveredQuestionIds must not repeat a question" },
   ),
   /** An explicit boolean per covered question. A missing key means "not
-   *  judged" and is rejected as a store invariant, not here, because that
+   *  judged" and is rejected as a dataset invariant, not here, because that
    *  check is cross-field. */
   answers: z.record(QuestionIdSchema, z.boolean()),
   note: z.string(),
@@ -259,12 +270,12 @@ export const AnnotationRowSchema = z.object({
 
 export type AnnotationRow = z.infer<typeof AnnotationRowSchema>;
 
-/** @internal Named durable boundaries inside the store's multi-file
+/** @internal Named durable boundaries inside the dataset's multi-file
  *  operations. Tests interrupt execution at one of these and reopen, so
  *  recovery is exercised at every point a crash could actually land. Declared
- *  here rather than in store.ts because checklist publication needs to signal
- *  them and must not import the store that imports it. */
-export type LabelStoreFaultPoint =
+ *  here rather than in dataset.ts because checklist publication needs to signal
+ *  them and must not import the dataset that imports it. */
+export type LabelDatasetFaultPoint =
   | "after-record-append"
   | "after-occurrence-append"
   | "after-revision-temp-write"
@@ -273,4 +284,4 @@ export type LabelStoreFaultPoint =
   | "after-external-definition-sync"
   | "after-annotation-append";
 
-export type FaultHook = (point: LabelStoreFaultPoint) => void;
+export type FaultHook = (point: LabelDatasetFaultPoint) => void;

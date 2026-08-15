@@ -188,11 +188,11 @@ function statusChip(status: string): string {
   return color.brightBlack("○ untouched");
 }
 
-function headerLine(snapshot: SessionSnapshot, storeLabel: string): string {
+function headerLine(snapshot: SessionSnapshot, datasetLabel: string): string {
   const stale = snapshot.progress.stale > 0
     ? `  ${color.yellow(`⟳ ${snapshot.progress.stale} stale`)}`
     : "";
-  return ` ${color.bgBlue.bold(" eval label ")} ${color.brightBlack(sanitizeUntrusted(storeLabel))}  ` +
+  return ` ${color.bgBlue.bold(" eval label ")} ${color.brightBlack(sanitizeUntrusted(datasetLabel))}  ` +
     `${color.bold.green(String(snapshot.progress.reviewed))}` +
     `${color.dim(`/${snapshot.progress.total} reviewed`)}${stale}`;
 }
@@ -236,7 +236,7 @@ function footerLines(snapshot: SessionSnapshot): string[] {
 
 export type RenderArgs = {
   snapshot: SessionSnapshot;
-  storeLabel: string;
+  datasetLabel: string;
   width: number;
   height: number;
   /** Left-pane scroll position, owned by the loop. */
@@ -266,7 +266,7 @@ export function labelScreen(args: RenderArgs): Element {
   const paneHeight = paneHeightFor(args.height);
 
   if (snapshot.currentItem === null) {
-    return lines([headerLine(snapshot, args.storeLabel), "", " nothing to label"]);
+    return lines([headerLine(snapshot, args.datasetLabel), "", " nothing to label"]);
   }
 
   const checklist = renderChecklist(snapshot, rightWidth);
@@ -276,7 +276,7 @@ export function labelScreen(args: RenderArgs): Element {
   const checklistScroll = followCursor(0, checklist.focusLine, paneHeight);
 
   return column(
-    line(headerLine(snapshot, args.storeLabel)),
+    line(headerLine(snapshot, args.datasetLabel)),
     line("", { fill: "━", fg: "gray" }),
     line(itemLine(snapshot)),
     row(
@@ -376,7 +376,7 @@ export function isQuitKey(event: KeyEvent): boolean {
 /**
  * Order the fields of one record for display.
  *
- * The store's `fieldOrder` decides what it knows about; anything else follows
+ * The dataset's `fieldOrder` decides what it knows about; anything else follows
  * alphabetically rather than in object-key order, so the layout does not depend
  * on which loader happened to build the record.
  */
@@ -425,12 +425,12 @@ export function renderFields(
 export type RunLabelTuiArgs = {
   controller: LabelingSessionController;
   screen: Screen;
-  storeLabel?: string;
+  datasetLabel?: string;
   /** Current terminal size, read before every draw. Screen stores its
    *  dimensions, so without this a resize leaves stale pane widths, wrapping
    *  and scroll bounds until restart. */
   currentSize?: () => { width: number; height: number };
-  /** The store's display order for fields. Anything not listed renders after
+  /** The dataset's display order for fields. Anything not listed renders after
    *  it, alphabetically, so a field added by a later ingest is never hidden. */
   fieldOrder?: readonly string[];
 };
@@ -478,7 +478,7 @@ export async function runLabelTui(args: RunLabelTuiArgs): Promise<void> {
       const size = syncSize();
       return labelScreen({
         snapshot: args.controller.snapshot(),
-        storeLabel: args.storeLabel ?? "",
+        datasetLabel: args.datasetLabel ?? "",
         width: size.width,
         height: size.height,
         scroll: state.scroll,

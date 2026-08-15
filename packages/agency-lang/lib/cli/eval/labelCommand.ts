@@ -44,12 +44,12 @@ export function labelCommandDependencies(
  * `enablePositionalOptions()` would fix it, but only when set on the root
  * program, where it changes option parsing for every command in the CLI.
  *
- * So `--store` is declared once, on `label`, and the subcommands read it from
- * their parent. It works in either position: `label --store x ingest …` and
- * `label ingest … --store x` both reach the parent.
+ * So `--dataset` is declared once, on `label`, and the subcommands read it from
+ * their parent. It works in either position: `label --dataset x ingest …` and
+ * `label ingest … --dataset x` both reach the parent.
  *
  * `label` also takes no positional, which is why ingesting and labelling are
- * always two commands. That is the shape the store wants anyway: you ingest
+ * always two commands. That is the shape the dataset wants anyway: you ingest
  * several sources, then label once.
  */
 export function addLabelCommand(
@@ -58,11 +58,11 @@ export function addLabelCommand(
 ): Command {
   const label = parent
     .command("label")
-    .description("Label the records in a label store. Add records with `label ingest` first")
-    .option("--store <dir>", "Label store directory (default: eval.labelStore, else labels/)")
+    .description("Label the examples in a dataset. Add examples with `label ingest` first")
+    .option("--dataset <dir>", "Label dataset directory (default: eval.dataset, else labels/)")
     .option("--checklist <file>", "Checklist JSON: an existing one, or { name, questions }")
     .option("--annotator <id>", "Who is labelling (default: $USER)")
-    .action(async (opts: { checklist?: string; store?: string; annotator?: string }) => {
+    .action(async (opts: { checklist?: string; dataset?: string; annotator?: string }) => {
       try {
         await dependencies.evalLabel({ ...opts, config: dependencies.getConfig() });
       } catch (error) {
@@ -72,14 +72,15 @@ export function addLabelCommand(
 
   label
     .command("ingest")
-    .description("Add outputs to the label store, from a run, a directory of files, or a JSON array")
+    .description("Add examples to the dataset, from a run, files, a JSON array, or a statelog")
     .argument("<source>", INGEST_PATH_DESCRIPTION)
     .argument("[extra...]", "Rejected: several arguments means the shell expanded an unquoted glob")
     .option("--source <name>", SOURCE_FLAG_DESCRIPTION)
-    .option("--format <fmt>", "auto (default), run, files, or json")
+    .option("--format <fmt>", "auto (default), run, files, json, or statelog")
     .option("--task <text>", "Shorthand for --field task=<text>")
     .option("--field <name=value>", "A constant field added to every record", collectRepeated, [])
-    .option("--no-task-field", "Run sources only: drop the run's own task field")
+    .option("--no-task-field", "Run/statelog sources only: drop the source's own task field")
+    .option("--trace <id>", "Statelog sources: a trace id to label (repeatable)", collectRepeated, [])
     .option("--recursive", "Descend into subdirectories")
     .option("--max-bytes <n>", "Per-value size cap in bytes (default 1048576)", parseByteCap)
     .action(async (source: string, extra: string[], opts: {
@@ -88,13 +89,14 @@ export function addLabelCommand(
       task?: string;
       field?: string[];
       taskField?: boolean;
+      trace?: string[];
       recursive?: boolean;
       maxBytes?: number;
     }, command: Command) => {
       try {
         await dependencies.evalIngest({
           ...opts,
-          store: storeOptionOf(command),
+          dataset: datasetOptionOf(command),
           path: source,
           extraArgs: extra,
           config: dependencies.getConfig(),
@@ -107,9 +109,9 @@ export function addLabelCommand(
   return label;
 }
 
-/** `--store` lives on `label`, so a subcommand asks its parent for it. */
-function storeOptionOf(command: Command): string | undefined {
-  return (command.parent?.opts() as { store?: string } | undefined)?.store;
+/** `--dataset` lives on `label`, so a subcommand reads it from its parent. */
+function datasetOptionOf(command: Command): string | undefined {
+  return (command.parent?.opts() as { dataset?: string } | undefined)?.dataset;
 }
 
 /** commander calls this once per repeat of a flag, accumulating the values. */

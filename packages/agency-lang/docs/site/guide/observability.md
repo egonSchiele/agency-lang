@@ -61,14 +61,16 @@ Press `?` in the viewer to see this info.
 |---|---|
 | `j`, `Down`, `Ctrl+N` | Move cursor down |
 | `k`, `Up`, `Ctrl+P` | Move cursor up |
-| `l`, `Right`, `Enter` | Expand the focused node — on a span/trace, reveal children; on a leaf, inline the JSON payload |
+| `Right`, `Enter` | Expand the focused node — on a span/trace, reveal children; on a leaf, inline the JSON payload |
+| `l` | Label the focused trace (when a dataset is configured — see below) |
 | `h`, `Left` | Collapse the focused node (or jump to its parent) |
 | `g` | Jump to the top |
 | `G` | Jump to the bottom |
 | `Ctrl+F`, `PageDown` / `Ctrl+B`, `PageUp` | Page down / up |
 | `Ctrl+D` / `Ctrl+U` | Half-page down / up |
 | `Tab`, `Shift+Tab` | Jump cursor to the next / previous trace |
-| `e` / `E` | Expand all / collapse all |
+| `e` / `E` | Expand / collapse the focused node and everything below it |
+| `z` / `Z` | Expand-all / collapse-all |
 | `/`, then text + Enter | Search rows for a substring |
 | `n` / `N` | Jump to next / previous match |
 | `Esc` | Clear active search |

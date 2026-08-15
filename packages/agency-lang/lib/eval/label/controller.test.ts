@@ -14,13 +14,13 @@ import { loadDraftFile } from "./draft.js";
 import { writeRunFixture } from "./runFixture.js";
 import { loadBatch } from "./load/index.js";
 import { DEFAULT_MAX_INGEST_BYTES } from "./load/types.js";
-import { acquireStoreLock } from "./lock.js";
-import { openStore } from "./store.js";
+import { acquireDatasetLock } from "./lock.js";
+import { openDataset } from "./dataset.js";
 import { readCurrentPointer } from "./checklist.js";
 import type { AnnotationRow } from "./types.js";
 
 let root: string;
-let storeDir: string;
+let datasetDir: string;
 let sourceDir: string;
 let checklistFile: string;
 const warnings: string[] = [];
@@ -56,9 +56,9 @@ function writeChecklist(questions: string[]): void {
 }
 
 /**
- * Ingest the run into the store, the way the CLI does.
+ * Ingest the run into the dataset, the way the CLI does.
  *
- * Separate from opening a session: the controller labels what the store holds
+ * Separate from opening a session: the controller labels what the dataset holds
  * and no longer ingests anything itself.
  */
 function ingestRun(source = "agent-v1"): void {
@@ -67,26 +67,27 @@ function ingestRun(source = "agent-v1"): void {
     sourceName: source,
     constantFields: {},
     maxBytes: DEFAULT_MAX_INGEST_BYTES,
+    selection: { kind: "none" },
     reportWarning: (message) => warnings.push(message),
   });
-  const lock = acquireStoreLock({
-    storeDir,
+  const lock = acquireDatasetLock({
+    datasetDir,
     reportWarning: (message) => warnings.push(message),
   });
-  const store = openStore({
-    storeDir,
+  const dataset = openDataset({
+    datasetDir,
     lock,
     reportWarning: (message) => warnings.push(message),
   });
   try {
-    store.ingest(batch);
+    dataset.ingest(batch);
   } finally {
-    store.close();
+    dataset.close();
     lock.release();
   }
 }
 
-/** Ingest, then open — the order the CLI uses. Tests that need an empty store
+/** Ingest, then open — the order the CLI uses. Tests that need an empty dataset
  *  call `openOnly` instead. */
 async function open(dependencies = makeDependencies()): Promise<LabelingSessionController> {
   ingestRun();
@@ -97,7 +98,7 @@ async function openOnly(
   dependencies = makeDependencies(),
 ): Promise<LabelingSessionController> {
   return createLabelingSessionOpener(dependencies)({
-    storeDir,
+    datasetDir,
     checklistFile,
     annotator: { kind: "human", id: "adit" },
     reportWarning: (message) => warnings.push(message),
@@ -105,7 +106,7 @@ async function openOnly(
 }
 
 function readAnnotations(): AnnotationRow[] {
-  const file = path.join(storeDir, "labels.jsonl");
+  const file = path.join(datasetDir, "labels.jsonl");
   if (!fs.existsSync(file)) {
     return [];
   }
@@ -117,13 +118,13 @@ function checklistId(): string {
 }
 
 function sessionIdOnDisk(): string {
-  const dir = path.join(storeDir, "drafts");
+  const dir = path.join(datasetDir, "drafts");
   return fs.readdirSync(dir)[0].replace(".json", "");
 }
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "label-controller-"));
-  storeDir = path.join(root, "labels");
+  datasetDir = path.join(root, "labels");
   sourceDir = path.join(root, "run");
   checklistFile = path.join(root, "news.json");
   warnings.length = 0;
@@ -139,7 +140,7 @@ describe("module import", () => {
   it("has no side effects: importing does not touch the filesystem or terminal", () => {
     // The module was already imported at the top of this file. If it had run a
     // main(), acquired a lock or entered raw mode, these would not hold.
-    expect(fs.existsSync(storeDir)).toBe(false);
+    expect(fs.existsSync(datasetDir)).toBe(false);
     expect(process.stdin.isRaw).toBeFalsy();
   });
 });
@@ -150,7 +151,7 @@ describe("opening", () => {
     const snapshot = controller.snapshot();
     expect(snapshot.items).toHaveLength(2);
     expect(snapshot.questions).toHaveLength(2);
-    expect(readCurrentPointer(storeDir, checklistId())?.version).toBe(1);
+    expect(readCurrentPointer(datasetDir, checklistId())?.version).toBe(1);
     await controller.close();
   });
 
@@ -164,20 +165,20 @@ describe("opening", () => {
 
   it("captures nothing new on a second open", async () => {
     await (await open()).close();
-    const before = fs.readFileSync(path.join(storeDir, "outputs.jsonl"), "utf8");
+    const before = fs.readFileSync(path.join(datasetDir, "outputs.jsonl"), "utf8");
     await (await open()).close();
-    expect(fs.readFileSync(path.join(storeDir, "outputs.jsonl"), "utf8")).toBe(before);
+    expect(fs.readFileSync(path.join(datasetDir, "outputs.jsonl"), "utf8")).toBe(before);
   });
 
   it("releases the lock when opening fails", async () => {
     fs.writeFileSync(checklistFile, "{ not json");
     await expect(open()).rejects.toThrow();
-    expect(fs.existsSync(path.join(storeDir, ".lock"))).toBe(false);
+    expect(fs.existsSync(path.join(datasetDir, ".lock"))).toBe(false);
   });
 
-  it("refuses when the store holds nothing to label", async () => {
+  it("refuses when the dataset holds nothing to label", async () => {
     await expect(openOnly()).rejects.toThrow(/nothing to label/i);
-    expect(fs.existsSync(path.join(storeDir, ".lock"))).toBe(false);
+    expect(fs.existsSync(path.join(datasetDir, ".lock"))).toBe(false);
   });
 
   it("treats a reordered source as a separate session, never a corrupted resume", async () => {
@@ -192,7 +193,7 @@ describe("opening", () => {
     expect(controller.snapshot().items.map((item) => item.fields.task).slice().sort())
       .toEqual(["task a", "task b"]);
     await controller.close();
-    expect(fs.readdirSync(path.join(storeDir, "drafts"))).toHaveLength(1);
+    expect(fs.readdirSync(path.join(datasetDir, "drafts"))).toHaveLength(1);
   });
 });
 
@@ -200,7 +201,7 @@ describe("dispatch", () => {
   it("toggles an answer and persists it to the draft", async () => {
     const controller = await open();
     await controller.dispatch({ kind: "toggleAnswer" });
-    const draft = loadDraftFile(storeDir, sessionIdOnDisk());
+    const draft = loadDraftFile(datasetDir, sessionIdOnDisk());
     const answers = Object.values(draft?.answersByOutputId ?? {})[0];
     expect(Object.values(answers ?? {})).toContain(true);
     await controller.close();
@@ -209,7 +210,7 @@ describe("dispatch", () => {
   it("saves a draft on every state-changing dispatch", async () => {
     const controller = await open();
     await controller.dispatch({ kind: "nextItem" });
-    expect(loadDraftFile(storeDir, sessionIdOnDisk())?.currentIndex).toBe(1);
+    expect(loadDraftFile(datasetDir, sessionIdOnDisk())?.currentIndex).toBe(1);
     await controller.close();
   });
 
@@ -251,7 +252,7 @@ describe("sign-off", () => {
     const controller = await open();
     const snapshot = await controller.dispatch({ kind: "signOff" });
     expect(snapshot.itemIndex).toBe(1);
-    expect(loadDraftFile(storeDir, sessionIdOnDisk())?.pendingAnnotation).toBeNull();
+    expect(loadDraftFile(datasetDir, sessionIdOnDisk())?.pendingAnnotation).toBeNull();
     await controller.close();
   });
 
@@ -266,7 +267,7 @@ describe("sign-off", () => {
   it("resets the timer for the signed-off output, so a relabel starts fresh", async () => {
     const controller = await open();
     await controller.dispatch({ kind: "signOff" });
-    const draft = loadDraftFile(storeDir, sessionIdOnDisk());
+    const draft = loadDraftFile(datasetDir, sessionIdOnDisk());
     const first = Object.keys(draft?.activeMsByOutputId ?? {})[0];
     expect(draft?.activeMsByOutputId[first]).toBe(0);
     await controller.close();
@@ -279,7 +280,7 @@ describe("sign-off", () => {
     await controller.dispatch({ kind: "submitEditor" });
     await controller.dispatch({ kind: "signOff" });
 
-    expect(readCurrentPointer(storeDir, checklistId())?.version).toBe(2);
+    expect(readCurrentPointer(datasetDir, checklistId())?.version).toBe(2);
     const rows = readAnnotations();
     expect(rows[0].checklistVersion).toBe(2);
     expect(rows[0].coveredQuestionIds).toHaveLength(3);
@@ -342,7 +343,7 @@ describe("resume", () => {
 
 /**
  * Interrupt the session at a named durable boundary, then reopen and assert
- * the store converges. Each row of the plan's recovery table is one case.
+ * the dataset converges. Each row of the plan's recovery table is one case.
  *
  * `occurrence` matters for the revision boundaries: opening a brand-new
  * lineage publishes version 1, so a fault on the first hit would fire during
@@ -367,8 +368,8 @@ async function crashAt(
   });
   const controller = await open(dependencies);
   await expect(drive(controller)).rejects.toThrow(/injected crash/);
-  // The failed session released the store; the lock must not be left behind.
-  expect(fs.existsSync(path.join(storeDir, ".lock"))).toBe(false);
+  // The failed session released the dataset; the lock must not be left behind.
+  expect(fs.existsSync(path.join(datasetDir, ".lock"))).toBe(false);
 }
 
 /** Drive a session that adds a question and signs off, which is the path that
@@ -412,7 +413,7 @@ describe("crash recovery", () => {
 
     const reopened = await open();
     expect(reopened.snapshot().itemIndex).toBe(1);
-    const draft = loadDraftFile(storeDir, sessionIdOnDisk());
+    const draft = loadDraftFile(datasetDir, sessionIdOnDisk());
     const signedOff = readAnnotations()[0].outputId;
     expect(draft?.activeMsByOutputId[signedOff]).toBe(0);
     expect(draft?.reviewedByOutputId[signedOff]).toHaveLength(2);
@@ -433,7 +434,7 @@ describe("crash recovery", () => {
     await crashAt("after-revision-rename", addQuestionAndSignOff, 2);
 
     const reopened = await open();
-    expect(readCurrentPointer(storeDir, checklistId())?.version).toBe(2);
+    expect(readCurrentPointer(datasetDir, checklistId())?.version).toBe(2);
     expect(reopened.snapshot().questions).toHaveLength(3);
     await reopened.close();
   });
@@ -442,7 +443,7 @@ describe("crash recovery", () => {
     await crashAt("after-current-update", addQuestionAndSignOff, 2);
 
     const reopened = await open();
-    const draft = loadDraftFile(storeDir, sessionIdOnDisk());
+    const draft = loadDraftFile(datasetDir, sessionIdOnDisk());
     expect(draft?.pendingRevision).toBeNull();
     expect(draft?.binding.checklist).toMatchObject({ kind: "published", version: 2 });
     await reopened.close();
@@ -454,7 +455,7 @@ describe("crash recovery", () => {
 
     const reopened = await open();
     expect(fs.readFileSync(checklistFile, "utf8")).toBe(afterCrash);
-    expect(readCurrentPointer(storeDir, checklistId())?.version).toBe(2);
+    expect(readCurrentPointer(datasetDir, checklistId())?.version).toBe(2);
     await reopened.close();
   });
 });
@@ -483,12 +484,12 @@ describe("lifecycle", () => {
     const controller = await open(dependencies);
     await expect(controller.dispatch({ kind: "signOff" })).rejects.toThrow(/injected/);
     await expect(controller.dispatch({ kind: "nextItem" })).rejects.toThrow(/failed/i);
-    expect(fs.existsSync(path.join(storeDir, ".lock"))).toBe(false);
+    expect(fs.existsSync(path.join(datasetDir, ".lock"))).toBe(false);
   });
 
   it("releases the lock on close", async () => {
     const controller = await open();
     await controller.close();
-    expect(fs.existsSync(path.join(storeDir, ".lock"))).toBe(false);
+    expect(fs.existsSync(path.join(datasetDir, ".lock"))).toBe(false);
   });
 });

@@ -413,7 +413,7 @@ function checkLabelIngest() {
   // A top-level JSON array of strings is the only shape the JSON loader accepts.
   writeFile(labelDir, "data.json", JSON.stringify(fixture) + "\n");
 
-  const first = runInstalledAgency(labelDir, ["label", "ingest", "data.json", "--store", "labels", "--source", "batch"]);
+  const first = runInstalledAgency(labelDir, ["label", "ingest", "data.json", "--dataset", "labels", "--source", "batch"]);
   assertBlank(first.stderr, "[label ingest] stderr");
   const firstOut = stripAnsi(first.stdout);
   assertIncludes(firstOut, `${n} new records, 0 already stored`);
@@ -463,7 +463,7 @@ function checkLabelIngest() {
   const occurrencesPath = join(labelDir, "labels", "occurrences.jsonl");
   const outputsBefore = readFileSync(outputsPath);
   const occurrencesBefore = readFileSync(occurrencesPath);
-  const second = runInstalledAgency(labelDir, ["label", "ingest", "data.json", "--store", "labels", "--source", "batch"]);
+  const second = runInstalledAgency(labelDir, ["label", "ingest", "data.json", "--dataset", "labels", "--source", "batch"]);
   assertBlank(second.stderr, "[label ingest re-run] stderr");
   const secondOut = stripAnsi(second.stdout);
   assertIncludes(secondOut, `0 new records, ${n} already stored`);

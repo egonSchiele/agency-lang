@@ -16,16 +16,16 @@ import {
 } from "./checklist.js";
 import type { ChecklistDefinition, ChecklistRevision } from "./types.js";
 
-let storeDir: string;
+let datasetDir: string;
 let definitionPath: string;
 
 beforeEach(() => {
-  storeDir = fs.mkdtempSync(path.join(os.tmpdir(), "label-checklist-"));
-  definitionPath = path.join(storeDir, "news.json");
+  datasetDir = fs.mkdtempSync(path.join(os.tmpdir(), "label-checklist-"));
+  definitionPath = path.join(datasetDir, "news.json");
 });
 
 afterEach(() => {
-  fs.rmSync(storeDir, { recursive: true, force: true });
+  fs.rmSync(datasetDir, { recursive: true, force: true });
 });
 
 const rawDefinition: ChecklistDefinition = {
@@ -41,7 +41,7 @@ function publishFirst(): { definition: NormalizedDefinition; revision: Checklist
   if (prepared.kind !== "publish") {
     throw new Error(`expected publish, got ${prepared.kind}`);
   }
-  const published = publishPendingRevision({ storeDir, pending: prepared.pending, definitionPath });
+  const published = publishPendingRevision({ datasetDir, pending: prepared.pending, definitionPath });
   return { definition: readDefinition(), revision: published.revision };
 }
 
@@ -52,11 +52,11 @@ function readDefinition(): NormalizedDefinition {
 }
 
 function currentRevision(checklistId: string): ChecklistRevision {
-  const pointer = readCurrentPointer(storeDir, checklistId);
+  const pointer = readCurrentPointer(datasetDir, checklistId);
   if (pointer === undefined) {
     throw new Error("no current pointer");
   }
-  return readRevision(storeDir, checklistId, pointer.version);
+  return readRevision(datasetDir, checklistId, pointer.version);
 }
 
 describe("normalizeDefinition", () => {
@@ -98,9 +98,9 @@ describe("first publication", () => {
 
   it("writes an immutable revision file and a current pointer", () => {
     const { revision } = publishFirst();
-    const dir = path.join(storeDir, "checklists", revision.checklistId);
+    const dir = path.join(datasetDir, "checklists", revision.checklistId);
     expect(fs.existsSync(path.join(dir, "1.json"))).toBe(true);
-    expect(readCurrentPointer(storeDir, revision.checklistId)).toEqual({
+    expect(readCurrentPointer(datasetDir, revision.checklistId)).toEqual({
       schemaVersion: 1, checklistId: revision.checklistId, version: 1, hash: revision.hash,
     });
   });
@@ -115,7 +115,7 @@ describe("first publication", () => {
 
   it("leaves no publication temp file behind", () => {
     const { revision } = publishFirst();
-    const dir = path.join(storeDir, "checklists", revision.checklistId);
+    const dir = path.join(datasetDir, "checklists", revision.checklistId);
     expect(fs.readdirSync(dir).filter((name) => name.includes(".tmp"))).toEqual([]);
   });
 });
@@ -212,7 +212,7 @@ describe("stale external definitions", () => {
     };
     const prepared = prepareRevision({ definition: normalizeDefinition(edited), current: first.revision });
     if (prepared.kind !== "publish") throw new Error("expected publish");
-    const published = publishPendingRevision({ storeDir, pending: prepared.pending, definitionPath });
+    const published = publishPendingRevision({ datasetDir, pending: prepared.pending, definitionPath });
     return { first, second: published.revision };
   }
 
@@ -252,8 +252,8 @@ describe("publishPendingRevision idempotence", () => {
     const prepared = prepareRevision({ definition: normalizeDefinition(edited), current: revision });
     if (prepared.kind !== "publish") throw new Error("expected publish");
 
-    const first = publishPendingRevision({ storeDir, pending: prepared.pending, definitionPath });
-    const second = publishPendingRevision({ storeDir, pending: prepared.pending, definitionPath });
+    const first = publishPendingRevision({ datasetDir, pending: prepared.pending, definitionPath });
+    const second = publishPendingRevision({ datasetDir, pending: prepared.pending, definitionPath });
     expect(first.replayed).toBe(false);
     expect(second.replayed).toBe(true);
     expect(currentRevision(revision.checklistId).version).toBe(2);
@@ -271,11 +271,11 @@ describe("publishPendingRevision idempotence", () => {
     };
     const prepared = prepareRevision({ definition: normalizeDefinition(edited), current: revision });
     if (prepared.kind !== "publish") throw new Error("expected publish");
-    publishPendingRevision({ storeDir, pending: prepared.pending, definitionPath });
+    publishPendingRevision({ datasetDir, pending: prepared.pending, definitionPath });
 
     // Roll the pointer back to the parent, as a crash would have left it.
     fs.writeFileSync(
-      path.join(storeDir, "checklists", revision.checklistId, "current.json"),
+      path.join(datasetDir, "checklists", revision.checklistId, "current.json"),
       JSON.stringify({
         schemaVersion: 1, checklistId: revision.checklistId,
         version: revision.version, hash: revision.hash,
@@ -288,7 +288,7 @@ describe("publishPendingRevision idempotence", () => {
     };
     const other = prepareRevision({ definition: normalizeDefinition(conflicting), current: revision });
     if (other.kind !== "publish") throw new Error("expected publish");
-    expect(() => publishPendingRevision({ storeDir, pending: other.pending, definitionPath }))
+    expect(() => publishPendingRevision({ datasetDir, pending: other.pending, definitionPath }))
       .toThrow(/already exists|immutable/i);
   });
 
@@ -300,16 +300,16 @@ describe("publishPendingRevision idempotence", () => {
     };
     const prepared = prepareRevision({ definition: normalizeDefinition(edited), current: revision });
     if (prepared.kind !== "publish") throw new Error("expected publish");
-    publishPendingRevision({ storeDir, pending: prepared.pending, definitionPath });
+    publishPendingRevision({ datasetDir, pending: prepared.pending, definitionPath });
     fs.writeFileSync(
-      path.join(storeDir, "checklists", revision.checklistId, "current.json"),
+      path.join(datasetDir, "checklists", revision.checklistId, "current.json"),
       JSON.stringify({
         schemaVersion: 1, checklistId: revision.checklistId,
         version: revision.version, hash: revision.hash,
       }),
     );
 
-    const replay = publishPendingRevision({ storeDir, pending: prepared.pending, definitionPath });
+    const replay = publishPendingRevision({ datasetDir, pending: prepared.pending, definitionPath });
     expect(replay.replayed).toBe(true);
     expect(currentRevision(revision.checklistId).version).toBe(2);
   });
@@ -322,13 +322,13 @@ describe("publishPendingRevision idempotence", () => {
     };
     const prepared = prepareRevision({ definition: normalizeDefinition(edited), current: revision });
     if (prepared.kind !== "publish") throw new Error("expected publish");
-    publishPendingRevision({ storeDir, pending: prepared.pending, definitionPath });
+    publishPendingRevision({ datasetDir, pending: prepared.pending, definitionPath });
 
     const stalePending = {
       ...prepared.pending,
       revision: { ...prepared.pending.revision, version: 3, parentVersion: 2 },
     };
-    expect(() => publishPendingRevision({ storeDir, pending: stalePending, definitionPath }))
+    expect(() => publishPendingRevision({ datasetDir, pending: stalePending, definitionPath }))
       .toThrow(/parent|current/i);
   });
 });

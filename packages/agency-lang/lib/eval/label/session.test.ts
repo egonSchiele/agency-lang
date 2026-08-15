@@ -66,6 +66,24 @@ describe("navigation", () => {
     state = reduceSession(state, { kind: "nextItem" });
     expect(state.itemIndex).toBe(1);
   });
+
+  it("focuses a specific item by its output id", () => {
+    const state = reduceSession(start(), { kind: "focusItem", outputId: OUT_B });
+    expect(state.itemIndex).toBe(1);
+  });
+
+  it("leaves the state unchanged when focusing an unknown output id", () => {
+    const state = start();
+    expect(reduceSession(state, { kind: "focusItem", outputId: "out_nope" })).toBe(state);
+  });
+
+  it("preserves answers when focusing another item", () => {
+    let state = reduceSession(start(), { kind: "toggleAnswer" });
+    const answersBefore = state.answersByOutputId[OUT_A];
+    state = reduceSession(state, { kind: "focusItem", outputId: OUT_B });
+    expect(state.itemIndex).toBe(1);
+    expect(state.answersByOutputId[OUT_A]).toEqual(answersBefore);
+  });
 });
 
 describe("toggling", () => {

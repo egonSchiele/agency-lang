@@ -8,14 +8,14 @@ import { canonicalize } from "@/utils/canonicalize.js";
 import type { DeepReadonly } from "./types.js";
 
 /**
- * Corruption in the label store is a hard failure, never a warning.
+ * Corruption in the label dataset is a hard failure, never a warning.
  *
  * `lib/eval/readRun.ts` degrades one bad file and continues, because grading
  * happens after every agent has already been paid for and one unreadable
  * record must not waste the whole pass. Nothing here has that excuse: these
  * rows are human judgements and no rerun regenerates them.
  */
-export class LabelStoreCorruptionError extends Error {}
+export class LabelDatasetCorruptionError extends Error {}
 
 export type OpenJsonlArgs<Value> = {
   filePath: string;
@@ -77,7 +77,7 @@ export function openJsonlStrict<Value>(args: OpenJsonlArgs<Value>): OpenedJsonl<
     // one. Detecting it only on append would let an already-broken file load
     // clean and then be labelled against.
     if (existing !== undefined) {
-      throw new LabelStoreCorruptionError(
+      throw new LabelDatasetCorruptionError(
         `${args.filePath}: line ${index + 1} repeats identity "${identity}" ` +
         `${existing === canonical ? "with identical content" : "with different content"}. ` +
         `Each identity may appear once; remove the later line.`,
@@ -116,7 +116,7 @@ export function openJsonlStrict<Value>(args: OpenJsonlArgs<Value>): OpenedJsonl<
         if (existing === canonical) {
           return "replayed";
         }
-        throw new LabelStoreCorruptionError(
+        throw new LabelDatasetCorruptionError(
           `${args.filePath}: "${identity}" already exists with different content. ` +
           `An identity may be reused only to replay an identical row.`,
         );
@@ -143,7 +143,7 @@ function readAll<Value>(args: OpenJsonlArgs<Value>): Value[] {
   // A file that does not end in a newline was cut off mid-append. Reading the
   // rows before it would look fine and silently drop the torn one.
   if (!raw.endsWith("\n")) {
-    throw new LabelStoreCorruptionError(
+    throw new LabelDatasetCorruptionError(
       `${args.filePath}: the file does not end in a newline, which means an append was ` +
       `interrupted. The last line is incomplete — remove it and every earlier row is intact.`,
     );
@@ -166,7 +166,7 @@ function parseLine<Value>(args: OpenJsonlArgs<Value>, line: string, lineNumber: 
   try {
     parsed = JSON.parse(line);
   } catch (error) {
-    throw new LabelStoreCorruptionError(
+    throw new LabelDatasetCorruptionError(
       `${args.filePath}: line ${lineNumber} is not valid JSON (${(error as Error).message}). ` +
       `Repair it by hand — this file holds human judgements and nothing regenerates them.`,
     );
@@ -176,7 +176,7 @@ function parseLine<Value>(args: OpenJsonlArgs<Value>, line: string, lineNumber: 
     const detail = result.error.issues
       .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
       .join("; ");
-    throw new LabelStoreCorruptionError(
+    throw new LabelDatasetCorruptionError(
       `${args.filePath}: line ${lineNumber} does not match the expected row shape (${detail}).`,
     );
   }
@@ -188,7 +188,7 @@ function parseLine<Value>(args: OpenJsonlArgs<Value>, line: string, lineNumber: 
  *
  * `appendFileSync` returns once the write reaches the OS page cache, not the
  * device. Without the fsync, a power loss can lose an annotation the tool
- * already told the person was recorded — and this store exists precisely
+ * already told the person was recorded — and this dataset exists precisely
  * because those judgements cannot be regenerated.
  */
 export function appendDurably(filePath: string, line: string): void {

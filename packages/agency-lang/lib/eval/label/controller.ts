@@ -13,7 +13,7 @@ import {
   type Draft,
 } from "./draft.js";
 import { atomicWriteValidated } from "./jsonl.js";
-import { acquireStoreLock, type StoreLock } from "./lock.js";
+import { acquireDatasetLock, type DatasetLock } from "./lock.js";
 import {
   initSession,
   reduceSession,
@@ -23,7 +23,7 @@ import {
   type SessionSnapshot,
   type SessionState,
 } from "./session.js";
-import { openStore, type LabelStore } from "./store.js";
+import { openDataset, type LabelDataset } from "./dataset.js";
 import type { PrepareChecklistResult } from "./checklist.js";
 import {
   AnnotationRowSchema,
@@ -32,7 +32,7 @@ import {
   type Annotator,
   type ChecklistRevision,
   type FaultHook,
-  type LabelStoreFaultPoint,
+  type LabelDatasetFaultPoint,
 } from "./types.js";
 
 export type MonotonicClock = { elapsedMs(): number };
@@ -40,15 +40,19 @@ export type WallClock = { nowIso(): string };
 export type EntityIds = { questionId(): string; annotationId(): string };
 
 export type OpenLabelingSessionArgs = {
-  storeDir: string;
+  datasetDir: string;
   checklistFile: string;
   annotator: Annotator;
+  /** Start the cursor on this example when present. The viewer sets it to the
+   *  example it just promoted; the CLI omits it and keeps resume behavior. An
+   *  id that is not in the dataset is ignored. */
+  focusOutputId?: string;
   reportWarning(message: string): void;
 };
 
 /** @internal */
 export type ControllerFaultPoint =
-  | LabelStoreFaultPoint
+  | LabelDatasetFaultPoint
   | "after-pending-revision-save"
   | "after-draft-rebind"
   | "after-pending-annotation-save"
@@ -112,26 +116,26 @@ async function openSession(
   args: OpenLabelingSessionArgs,
   dependencies: ControllerDependencies,
 ): Promise<LabelingSessionController> {
-  // Parse the external file before touching the store: a malformed checklist
+  // Parse the external file before touching the dataset: a malformed checklist
   // should not leave a lock behind or a half-created lineage.
   const rawDefinition = ChecklistDefinitionSchema.parse(
     JSON.parse(fs.readFileSync(args.checklistFile, "utf8")),
   );
 
-  const lock = acquireStoreLock({ storeDir: args.storeDir, reportWarning: args.reportWarning });
-  let store: LabelStore | undefined;
+  const lock = acquireDatasetLock({ datasetDir: args.datasetDir, reportWarning: args.reportWarning });
+  let dataset: LabelDataset | undefined;
   try {
-    store = openStore({
-      storeDir: args.storeDir,
+    dataset = openDataset({
+      datasetDir: args.datasetDir,
       lock,
       reportWarning: args.reportWarning,
       fault: dependencies.fault as FaultHook | undefined,
     });
 
-    const corpus = store.corpusSnapshot();
+    const corpus = dataset.corpusSnapshot();
     if (corpus.length === 0) {
       throw new Error(
-        "There is nothing to label: the store holds no records. Add some with " +
+        "There is nothing to label: the dataset holds no records. Add some with " +
         "`agency label ingest <source> --source <name>`.",
       );
     }
@@ -150,16 +154,22 @@ async function openSession(
     });
 
     const session = new LabelingSession({
-      args, dependencies, store, lock, sessionId, outputIds, definition,
+      args, dependencies, dataset, lock, sessionId, outputIds, definition,
       corpus,
     });
     session.open();
-    return session.controller();
+    const controller = session.controller();
+    // Focus a specific example after recovery, so the draft cursor is durably
+    // updated before the caller sees the controller.
+    if (args.focusOutputId !== undefined) {
+      await controller.dispatch({ kind: "focusItem", outputId: args.focusOutputId });
+    }
+    return controller;
   } catch (error) {
-    // Any opening failure releases the lock: a store that cannot be opened
+    // Any opening failure releases the lock: a dataset that cannot be opened
     // must not stay locked against the next attempt.
     try {
-      store?.close();
+      dataset?.close();
     } finally {
       lock.release();
     }
@@ -171,7 +181,7 @@ async function openSession(
  * Write the allocated identities back to the checklist file.
  *
  * This must be atomic even though nothing durable references the file yet.
- * The next open parses this file *before* it inspects the store, so a
+ * The next open parses this file *before* it inspects the dataset, so a
  * truncated half-write here is unrecoverable by the recovery path — and it
  * would have destroyed the only copy of the questions the author wrote.
  */
@@ -186,8 +196,8 @@ function syncChecklistDefinitionIds(checklistFile: string, definition: Normalize
 type SessionConstruction = {
   args: OpenLabelingSessionArgs;
   dependencies: ControllerDependencies;
-  store: LabelStore;
-  lock: StoreLock;
+  dataset: LabelDataset;
+  lock: DatasetLock;
   sessionId: string;
   outputIds: string[];
   definition: NormalizedDefinition;
@@ -214,8 +224,8 @@ class LabelingSession {
   }
 
   open(): void {
-    const { store, sessionId, definition } = this.parts;
-    const snapshot = store.readSession(sessionId);
+    const { dataset, sessionId, definition } = this.parts;
+    const snapshot = dataset.readSession(sessionId);
 
     this.draft = (snapshot.draft as Draft | null) ?? this.bootstrapDraft();
     assertDraftMatches(this.draft, {
@@ -231,7 +241,7 @@ class LabelingSession {
     this.state = initSession({
       corpus: this.parts.corpus,
       revision,
-      annotations: store.readSession(sessionId).annotations as readonly AnnotationRow[],
+      annotations: dataset.readSession(sessionId).annotations as readonly AnnotationRow[],
       annotator: this.parts.args.annotator,
     });
     this.overlayDraft();
@@ -241,7 +251,7 @@ class LabelingSession {
   /** A fresh session begins bound to nothing only when its own version-1
    *  revision is still pending; that pairing is enforced on every load. */
   private bootstrapDraft(): Draft {
-    const prepared = this.parts.store.prepareChecklist(this.parts.definition);
+    const prepared = this.parts.dataset.prepareChecklist(this.parts.definition);
     const pendingRevision: PendingRevision | null =
       prepared.kind === "publish" ? prepared.pending : null;
 
@@ -273,13 +283,13 @@ class LabelingSession {
    * durable yet.
    */
   private recoverChecklist(): ChecklistRevision {
-    const { store, definition } = this.parts;
+    const { dataset, definition } = this.parts;
     const pending = this.draft.pendingRevision;
 
     if (pending !== null) {
       this.saveDraft();
       this.fault("after-pending-revision-save");
-      const published = store.publishRevision(pending, this.parts.args.checklistFile);
+      const published = dataset.publishRevision(pending, this.parts.args.checklistFile);
       this.draft = {
         ...this.draft,
         binding: {
@@ -296,12 +306,12 @@ class LabelingSession {
 
     // Nothing owed: reconcile whatever the external file now says against the
     // published lineage.
-    const prepared = store.prepareChecklist(definition);
+    const prepared = dataset.prepareChecklist(definition);
     if (prepared.kind === "current") {
       return prepared.revision;
     }
     if (prepared.kind === "refresh-definition") {
-      store.syncChecklistDefinition(this.parts.args.checklistFile, prepared.revision);
+      dataset.syncChecklistDefinition(this.parts.args.checklistFile, prepared.revision);
       return prepared.revision;
     }
     this.draft = { ...this.draft, pendingRevision: prepared.pending };
@@ -322,7 +332,7 @@ class LabelingSession {
     if (pending === null) {
       return undefined;
     }
-    this.parts.store.appendAnnotation(pending);
+    this.parts.dataset.appendAnnotation(pending);
     this.draft = {
       ...this.draft,
       pendingAnnotation: null,
@@ -455,7 +465,7 @@ class LabelingSession {
     this.saveDraft();
     this.fault("after-pending-annotation-save");
 
-    this.parts.store.appendAnnotation(row);
+    this.parts.dataset.appendAnnotation(row);
 
     this.state = reduceSession(this.state, { kind: "annotationCommitted", row });
     this.draft = {
@@ -480,7 +490,7 @@ class LabelingSession {
       hash: this.state.revision.hash,
       questions: staged,
     };
-    const prepared = this.parts.store.prepareChecklist(definition);
+    const prepared = this.parts.dataset.prepareChecklist(definition);
     if (prepared.kind !== "publish") {
       this.state = reduceSession(this.state, { kind: "revisionAdopted", revision: prepared.revision });
       return;
@@ -489,7 +499,7 @@ class LabelingSession {
     this.saveDraft();
     this.fault("after-pending-revision-save");
 
-    const published = this.parts.store.publishRevision(prepared.pending, this.parts.args.checklistFile);
+    const published = this.parts.dataset.publishRevision(prepared.pending, this.parts.args.checklistFile);
     this.state = reduceSession(this.state, { kind: "revisionAdopted", revision: published.revision });
     this.draft = {
       ...this.draft,
@@ -546,7 +556,7 @@ class LabelingSession {
   }
 
   private saveDraft(): void {
-    this.parts.store.saveDraft(this.draft);
+    this.parts.dataset.saveDraft(this.draft);
   }
 
   private fault(point: ControllerFaultPoint): void {
@@ -567,7 +577,7 @@ class LabelingSession {
   private fail(): void {
     this.lifecycle = "failed";
     try {
-      this.parts.store.close();
+      this.parts.dataset.close();
     } catch {
       this.parts.lock.release();
     }
@@ -589,12 +599,12 @@ class LabelingSession {
       primary = error;
     }
     try {
-      this.parts.store.close();
+      this.parts.dataset.close();
     } catch (error) {
       if (primary === undefined) {
         primary = error;
       } else {
-        (primary as Error).message += `; also failed to release the store: ${(error as Error).message}`;
+        (primary as Error).message += `; also failed to release the dataset: ${(error as Error).message}`;
       }
     }
     if (primary !== undefined) {

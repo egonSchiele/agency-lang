@@ -38,6 +38,7 @@ export type SessionEditor =
 export type SessionAction =
   | { kind: "nextItem" }
   | { kind: "previousItem" }
+  | { kind: "focusItem"; outputId: string }
   | { kind: "nextQuestion" }
   | { kind: "previousQuestion" }
   | { kind: "toggleAnswer" }
@@ -253,6 +254,8 @@ export function reduceSession(state: SessionState, event: SessionEvent): Session
       return moveItem(state, 1);
     case "previousItem":
       return moveItem(state, -1);
+    case "focusItem":
+      return focusItem(state, event.outputId);
     case "nextQuestion":
       return { ...state, questionIndex: clamp(state.questionIndex + 1, questionsOf(state).length) };
     case "previousQuestion":
@@ -301,6 +304,17 @@ function moveItem(state: SessionState, delta: number): SessionState {
     itemIndex: clamp(state.itemIndex + delta, state.items.length),
     questionIndex: 0,
   };
+}
+
+/** Jump the cursor to a specific item by its output id, preserving every
+ *  answer, note and editor. An unknown id leaves the state unchanged, so a
+ *  caller can focus a just-promoted example without special-casing "not here". */
+function focusItem(state: SessionState, outputId: string): SessionState {
+  const index = state.items.findIndex((item) => item.outputId === outputId);
+  if (index === -1) {
+    return state;
+  }
+  return { ...state, itemIndex: index, questionIndex: 0 };
 }
 
 function withEditorDraft(state: SessionState, update: (draft: string) => string): SessionState {

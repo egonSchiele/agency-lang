@@ -5,12 +5,11 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AgencyConfigSchema } from "@/config.js";
-import type { LabelingSessionController } from "@/eval/label/controller.js";
 
 import {
   evalLabel,
   resolveAnnotator,
-  resolveLabelStore,
+  resolveDataset,
   terminalDimension,
   type EvalLabelDependencies,
 } from "./label.js";
@@ -31,20 +30,17 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-function fakeController(): LabelingSessionController & { closed: () => number } {
-  let closeCount = 0;
+function fakeHost(run: (request: unknown) => Promise<void> = async () => {}) {
+  const calls: unknown[] = [];
   return {
-    snapshot: () => ({}) as never,
-    dispatch: async () => ({}) as never,
-    close: async () => { closeCount += 1; },
-    closed: () => closeCount,
+    host: { run: (request: unknown) => { calls.push(request); return run(request); } },
+    calls,
   };
 }
 
 function dependencies(over: Partial<EvalLabelDependencies> = {}): EvalLabelDependencies {
   return {
-    openSession: vi.fn(async () => fakeController()) as never,
-    runTui: vi.fn(async () => {}) as never,
+    makeHost: () => fakeHost().host as never,
     makeScreen: () => ({ destroy: () => {} }) as never,
     isInteractive: () => true,
     environment: { USER: "adit" },
@@ -54,32 +50,32 @@ function dependencies(over: Partial<EvalLabelDependencies> = {}): EvalLabelDepen
 }
 
 describe("config", () => {
-  it("accepts eval.labelStore", () => {
-    expect(AgencyConfigSchema.safeParse({ eval: { labelStore: "labels" } }).success).toBe(true);
+  it("accepts eval.dataset", () => {
+    expect(AgencyConfigSchema.safeParse({ eval: { dataset: "labels" } }).success).toBe(true);
   });
 
-  it("rejects a non-string labelStore", () => {
-    expect(AgencyConfigSchema.safeParse({ eval: { labelStore: 5 } }).success).toBe(false);
+  it("rejects a non-string dataset", () => {
+    expect(AgencyConfigSchema.safeParse({ eval: { dataset: 5 } }).success).toBe(false);
   });
 });
 
-describe("resolveLabelStore", () => {
-  it("prefers the explicit flag", () => {
-    expect(resolveLabelStore({ store: "/tmp/explicit" }, {})).toBe(path.resolve("/tmp/explicit"));
+describe("resolveDataset", () => {
+  it("accepts the flag", () => {
+    expect(resolveDataset({ dataset: "new" }, {})).toBe(path.resolve("new"));
   });
 
-  it("falls back to eval.labelStore", () => {
-    expect(resolveLabelStore({}, { eval: { labelStore: "my-labels" } }))
-      .toBe(path.resolve(process.cwd(), "my-labels"));
+  it("prefers a flag over config", () => {
+    expect(resolveDataset({ dataset: "flag" }, { eval: { dataset: "cfg" } }))
+      .toBe(path.resolve("flag"));
+  });
+
+  it("reads eval.dataset from config", () => {
+    expect(resolveDataset({}, { eval: { dataset: "configured" } }))
+      .toBe(path.resolve(process.cwd(), "configured"));
   });
 
   it("defaults to labels/ under the invoking directory, matching runsDir", () => {
-    expect(resolveLabelStore({}, {})).toBe(path.resolve(process.cwd(), "labels"));
-  });
-
-  it("resolves a relative configured path from the invoking directory", () => {
-    expect(resolveLabelStore({}, { eval: { labelStore: "./nested/labels" } }))
-      .toBe(path.resolve(process.cwd(), "nested/labels"));
+    expect(resolveDataset({}, {})).toBe(path.resolve(process.cwd(), "labels"));
   });
 });
 
@@ -120,65 +116,49 @@ describe("evalLabel", () => {
       .rejects.toThrow(/Checklist file not found/);
   });
 
-  it("refuses a non-interactive terminal before opening a session", async () => {
-    const openSession = vi.fn(async () => fakeController());
-    const deps = dependencies({ isInteractive: () => false, openSession: openSession as never });
+  it("refuses a non-interactive terminal before running the host", async () => {
+    const { host, calls } = fakeHost();
+    const deps = dependencies({ isInteractive: () => false, makeHost: () => host as never });
     await expect(evalLabel({ checklist: checklistFile }, deps))
       .rejects.toThrow(/interactive terminal/i);
-    expect(openSession).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
   });
 
-  it("destroys the screen even when the terminal loop throws", async () => {
+  it("destroys the screen even when the host throws", async () => {
     const destroyed = vi.fn();
-    const controller = fakeController();
+    const { host } = fakeHost(async () => { throw new Error("host exploded"); });
     const deps = dependencies({
-      openSession: (async () => controller) as never,
+      makeHost: () => host as never,
       makeScreen: () => ({ destroy: destroyed }) as never,
-      runTui: (async () => { throw new Error("tui exploded"); }) as never,
     });
     await expect(evalLabel({ checklist: checklistFile }, deps))
-      .rejects.toThrow(/tui exploded/);
+      .rejects.toThrow(/host exploded/);
     expect(destroyed).toHaveBeenCalled();
-    expect(controller.closed()).toBe(1);
   });
 
-  it("opens a session with resolved paths and annotator", async () => {
-    const openSession = vi.fn(async () => fakeController());
+  it("runs the host with the resolved dataset, checklist and annotator", async () => {
+    const { host, calls } = fakeHost();
     await evalLabel(
-      { checklist: checklistFile, store: path.join(root, "store") },
-      dependencies({ openSession: openSession as never }),
+      { checklist: checklistFile, dataset: path.join(root, "dataset") },
+      dependencies({ makeHost: () => host as never }),
     );
-    expect(openSession).toHaveBeenCalledWith(expect.objectContaining({
-      storeDir: path.resolve(root, "store"),
+    expect(calls[0]).toEqual({
+      datasetDir: path.resolve(root, "dataset"),
       checklistFile: path.resolve(checklistFile),
       annotator: { kind: "human", id: "adit" },
-    }));
+    });
   });
 
-  it("closes the session when the terminal loop throws", async () => {
-    const controller = fakeController();
+  it("propagates a host failure after destroying the screen", async () => {
+    const destroyed = vi.fn();
+    const { host } = fakeHost(async () => { throw new Error("dataset is locked"); });
     const deps = dependencies({
-      openSession: (async () => controller) as never,
-      runTui: (async () => { throw new Error("tui exploded"); }) as never,
+      makeHost: () => host as never,
+      makeScreen: () => ({ destroy: destroyed }) as never,
     });
     await expect(evalLabel({ checklist: checklistFile }, deps))
-      .rejects.toThrow(/tui exploded/);
-    expect(controller.closed()).toBe(1);
-  });
-
-  it("closes the session on a clean exit", async () => {
-    const controller = fakeController();
-    const deps = dependencies({ openSession: (async () => controller) as never });
-    await evalLabel({ checklist: checklistFile }, deps);
-    expect(controller.closed()).toBe(1);
-  });
-
-  it("propagates a session-opening failure without trying to close", async () => {
-    const deps = dependencies({
-      openSession: (async () => { throw new Error("store is locked"); }) as never,
-    });
-    await expect(evalLabel({ checklist: checklistFile }, deps))
-      .rejects.toThrow(/store is locked/);
+      .rejects.toThrow(/dataset is locked/);
+    expect(destroyed).toHaveBeenCalled();
   });
 });
 

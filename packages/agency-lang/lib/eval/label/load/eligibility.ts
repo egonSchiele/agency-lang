@@ -45,6 +45,8 @@ const SKIP_DESCRIPTIONS: Record<IngestSkipReason, string> = {
   symlink: "a symbolic link. Links are skipped: they make the item key ambiguous.",
   "run-failed":
     "the run failed. A failed run's salvaged record is evidence for diagnosis, not a result to judge.",
+  "trace-unfinished":
+    "the trace never reached its end (it was interrupted or killed mid-run), so its output is not final.",
   "record-unreadable": "no readable eval record for this input.",
   "legacy-record":
     "the record predates recorded eval outputs. Recapture the run; there is no way to say which output was final.",

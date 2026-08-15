@@ -28,6 +28,9 @@ export class TreeView implements View {
     roots: TreeNode[],
     private readonly thresholds: ViewerThresholds,
     private readonly viewport: Viewport,
+    /** When true, `l` labels the focused trace instead of     *  expanding the focused node (Right/Enter still expand). Off for remote or
+     *  stdin sources where there is no local file to label. */
+    private readonly labelingEnabled: boolean = false,
   ) {
     this.state = {
       roots,
@@ -50,6 +53,15 @@ export class TreeView implements View {
     if (fmt === "d") {
       const id = this.cursorRealId();
       if (id !== undefined) return { kind: "openDetail", spanId: id };
+    }
+    // `l` labels the focused trace when a dataset is configured. Right/Enter
+    // still expand, so no expand key is lost. Only fire with a real trace id —
+    // an empty forest (e.g. an empty file under --follow) has none.
+    if (fmt === "l" && this.labelingEnabled) {
+      const traceId = this.cursorTraceId();
+      if (traceId !== "") {
+        return { kind: "labelTrace", traceId };
+      }
     }
     const paged = this.paginate(ev, viewport);
     if (paged !== undefined) {
@@ -100,19 +112,25 @@ export class TreeView implements View {
   }
 
   setData(roots: TreeNode[]): void {
-    if (roots.length === 0) return;
+    // An empty forest is a real state under --follow (the file was truncated or
+    // rotated to nothing), not a transient to ignore: clearing it keeps the
+    // cursor — and so `cursorTraceId()` and the `l` label action — from pointing
+    // at a trace no longer in the file.
     const stillThere = findNode(roots, this.state.cursorId);
     this.state = {
       ...this.state,
       roots,
-      cursorId: stillThere !== undefined ? this.state.cursorId : roots[0].id,
+      cursorId: stillThere !== undefined ? this.state.cursorId : (roots[0]?.id ?? ""),
     };
   }
 
   helpLines(): string[] {
+    // `l` labels the focused trace when a dataset is configured; it does nothing
+    // otherwise. It never expands — Right/Enter do that.
     return [
       "t — timeline views (flame → by-name)",
       "d — full details of the focused span",
+      ...(this.labelingEnabled ? ["l — label this trace"] : []),
       "",
       ...treeHelpLines(),
     ];

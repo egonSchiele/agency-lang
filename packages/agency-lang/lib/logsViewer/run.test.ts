@@ -33,16 +33,45 @@ const sampleEvents = [
 const sample = sampleEvents.map((e) => JSON.stringify(e)).join("\n") + "\n";
 
 describe("runViewer", () => {
-  it("renders, navigates with j, expands with l, quits with q", async () => {
+  it("renders, navigates with j, expands with Enter, quits with q", async () => {
     const out = new FrameRecorder();
     await runViewer({
       jsonl: sample,
-      input: new ScriptedInput(["j", "l", "q"]),
+      input: new ScriptedInput(["j", "Enter", "q"]),
       output: out,
       viewport: { rows: 10, cols: 80 },
     });
     expect(out.frames.length).toBeGreaterThan(0);
     expect(out.lastText()).toMatch(/agentRun/);
+  });
+
+  it("l reports nothing to judge for an empty trace when labeling is enabled", async () => {
+    const out = new FrameRecorder();
+    await runViewer({
+      jsonl: sample, // trace has no evalOutput, no return value, no prints
+      input: new ScriptedInput(["l", "q"]),
+      output: out,
+      viewport: { rows: 12, cols: 80 },
+      labeling: { datasetDir: "/tmp/does-not-matter", sourcePath: "log.jsonl", annotator: { kind: "human", id: "t" } },
+    });
+    expect(out.lastText()).toMatch(/Nothing to label|no-output/);
+  });
+
+  it("l asks for a checklist when labeling is enabled but none is configured", async () => {
+    const withOutput = [
+      sampleEvents[0],
+      { ...sampleEvents[1], data: { type: "evalOutputRecorded", timestamp: "2026-05-16T00:00:01.000Z", value: "the answer", threadId: "0" } },
+      sampleEvents[1], // a terminal agentEnd, as a real completed run emits
+    ].map((e) => JSON.stringify(e)).join("\n") + "\n";
+    const out = new FrameRecorder();
+    await runViewer({
+      jsonl: withOutput,
+      input: new ScriptedInput(["l", "q"]),
+      output: out,
+      viewport: { rows: 12, cols: 80 },
+      labeling: { datasetDir: "/tmp/does-not-matter", sourcePath: "log.jsonl", annotator: { kind: "human", id: "t" } },
+    });
+    expect(out.lastText()).toMatch(/--checklist/);
   });
 
   it("shows a helpful message when the file is empty", async () => {
@@ -69,9 +98,9 @@ describe("runViewer", () => {
       data: { type: "debug", timestamp: "", message: `m${i}` },
     }));
     const jsonl = many.map((e) => JSON.stringify(e)).join("\n") + "\n";
-    // l: expand span. j × 20: scroll far down. h: collapse it. q.
+    // Enter: expand span. j × 20: scroll far down. h: collapse it. q.
     const keys = [
-      "l",
+      "Enter",
       ...Array.from({ length: 20 }, () => "j"),
       "h",
       "q",
@@ -94,9 +123,9 @@ describe("runViewer", () => {
     const out = new FrameRecorder();
     await runViewer({
       jsonl: sample,
-      // Navigate: l (expand trace) l (expand agentRun span) j (move
+      // Navigate: Enter (expand trace) Enter (expand agentRun span) j (move
       // to first child leaf, agentStart) Enter (inline its JSON) q.
-      input: new ScriptedInput(["l", "l", "j", "Enter", "q"]),
+      input: new ScriptedInput(["Enter", "Enter", "j", "Enter", "q"]),
       output: out,
       viewport: { rows: 20, cols: 80 },
     });
@@ -110,7 +139,7 @@ describe("runViewer", () => {
     const out2 = new FrameRecorder();
     await runViewer({
       jsonl: sample,
-      input: new ScriptedInput(["l", "l", "j", "Enter", "h", "q"]),
+      input: new ScriptedInput(["Enter", "Enter", "j", "Enter", "h", "q"]),
       output: out2,
       viewport: { rows: 20, cols: 80 },
     });
@@ -119,7 +148,7 @@ describe("runViewer", () => {
 
   it("/ then a query jumps the cursor to the first match", async () => {
     const out = new FrameRecorder();
-    const scripted = new ScriptedInput(["l", "j", "/"]);
+    const scripted = new ScriptedInput(["Enter", "j", "/"]);
     // Pre-load the search prompt response and the final 'q'.
     scripted.feedLine("agentEnd");
     scripted.feedKey({ key: "q" });

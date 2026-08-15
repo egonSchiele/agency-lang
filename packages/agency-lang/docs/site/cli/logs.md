@@ -28,6 +28,38 @@ timeline views (`t`), search, and follow mode. `agency logs view <file>`
 is the same thing spelled explicitly, and `-` reads from stdin. See the
 viewer's own help (`?`) for keys.
 
+## Labeling a trace from the viewer
+
+When you view a **local** statelog file, the tree's `l` key labels the
+trace your cursor is in: it writes the trace into a human-judged
+[dataset](/cli/eval) and drops you straight into labeling it — the moment
+you notice an agent did something well or badly, you can capture it.
+`Right`/`Enter` expand the focused node. `l` never expands; where labeling
+is unavailable (stdin or remote logs) it does nothing.
+
+```bash
+# label into ./labels (the default), against a checklist
+agency logs view run.jsonl --checklist news.json
+
+# label into a specific dataset
+agency logs --dataset team-labels --checklist news.json run.jsonl
+```
+
+- `--checklist <file>` — the yes/no questions you judge against. Without
+  it, `l` just reminds you to pass one (nothing is written).
+- `--dataset <dir>` — where labels live (default `eval.dataset`, else
+  `labels/`).
+
+Pressing `l` resolves the trace's output (an `evalOutput()`, else the
+entry node's return value), lets you edit the task text, writes the
+example into the dataset, and opens the labeling screen focused on it. See
+[Judging output by hand](/cli/eval#judging-output-by-hand) for the
+labeling UI itself. Labeling refuses a statelog with unparseable lines, so
+a dataset is never built from a partially read trace.
+
+These options also flow into the runs explorer: drilling from a run into
+its statelog enables the same `l` labeling.
+
 ## The runs explorer (many runs)
 
 Everything else opens the explorer: one sortable row per run.

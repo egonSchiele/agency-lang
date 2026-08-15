@@ -8,14 +8,15 @@ import {
   DEFAULT_MAX_INGEST_BYTES,
   EmptyIngestError,
   IngestSourceError,
+  type IngestSelection,
   type LoadedBatch,
 } from "@/eval/label/load/types.js";
-import { acquireStoreLock } from "@/eval/label/lock.js";
-import { openStore, type IngestResult, type LabelStore } from "@/eval/label/store.js";
+import { datasetWriter, type DatasetWriter } from "@/eval/label/datasetWriter.js";
+import { type IngestResult } from "@/eval/label/dataset.js";
 import { FieldNameSchema, type Fields } from "@/eval/label/types.js";
 import { color } from "@/utils/termcolors.js";
 
-import { resolveLabelStore } from "./label.js";
+import { resolveDataset } from "./label.js";
 
 export type EvalIngestOptions = {
   path: string;
@@ -26,23 +27,24 @@ export type EvalIngestOptions = {
   taskField?: boolean;
   recursive?: boolean;
   maxBytes?: number;
-  store?: string;
+  trace?: string[];
+  dataset?: string;
   config?: AgencyConfig;
   /** Extra positional arguments. Non-empty when a shell pattern expanded into
    *  several paths, which is worth saying out loud rather than ignoring. */
   extraArgs?: string[];
 };
 
-/** @internal Injected so the command can be tested without a store or a disk. */
+/** @internal Injected so the command can be tested without a dataset or a disk. */
 export type EvalIngestDependencies = {
   loadBatch: typeof loadBatch;
-  openStore: typeof openStore;
+  datasetWriter: DatasetWriter;
   report(message: string): void;
 };
 
 const defaultDependencies: EvalIngestDependencies = {
   loadBatch,
-  openStore,
+  datasetWriter,
   report: (message) => console.log(message),
 };
 
@@ -91,7 +93,17 @@ export function parseFieldArgs(options: {
   return fields;
 }
 
-/** Reject a bad name here rather than letting the store's schema fail later:
+/** Build the interactive-free selection a statelog source needs. `none` when no
+ *  `--trace` was given, so a non-statelog source is unaffected. */
+function buildSelection(options: { trace?: string[] }): IngestSelection {
+  const traceIds = options.trace ?? [];
+  if (traceIds.length === 0) {
+    return { kind: "none" };
+  }
+  return { kind: "statelog", request: { traceIds } };
+}
+
+/** Reject a bad name here rather than letting the dataset's schema fail later:
  *  the message can name the flag that caused it. */
 function assertFieldName(name: string): void {
   if (!FieldNameSchema.safeParse(name).success) {
@@ -152,10 +164,11 @@ export async function evalIngest(
     sourceName,
     constantFields,
     maxBytes: options.maxBytes ?? DEFAULT_MAX_INGEST_BYTES,
+    selection: buildSelection(options),
     reportWarning: (message) => console.warn(message),
   });
 
-  // A silent zero-record success is how you end up labelling an empty store and
+  // A silent zero-record success is how you end up labelling an empty dataset and
   // wondering where everything went.
   if (batch.occurrences.length === 0) {
     const detail = batch.skips.length === 0
@@ -164,31 +177,20 @@ export async function evalIngest(
     throw new EmptyIngestError(`No records to ingest from ${options.path}. ${detail}`);
   }
 
-  const storeDir = resolveLabelStore(options, options.config ?? {});
-  const lock = acquireStoreLock({
-    storeDir,
+  const datasetDir = resolveDataset(options, options.config ?? {});
+  const result: IngestResult = dependencies.datasetWriter.ingest({
+    datasetDir,
+    batch,
     reportWarning: (message) => console.warn(message),
   });
-  let store: LabelStore | undefined;
-  try {
-    store = dependencies.openStore({
-      storeDir,
-      lock,
-      reportWarning: (message) => console.warn(message),
-    });
-    const result = store.ingest(batch);
-    for (const message of summarize(result, sourceName)) {
-      dependencies.report(message);
-    }
-    if (result.newFieldNames.length > 0) {
-      dependencies.report(color.yellow(
-        `  note: this batch introduced ${result.newFieldNames.join(", ")}, which the store had ` +
-        "not seen. Records with different field names cannot be judged by the same question.",
-      ));
-    }
-  } finally {
-    store?.close();
-    lock.release();
+  for (const message of summarize(result, sourceName)) {
+    dependencies.report(message);
+  }
+  if (result.newFieldNames.length > 0) {
+    dependencies.report(color.yellow(
+      `  note: this batch introduced ${result.newFieldNames.join(", ")}, which the dataset had ` +
+      "not seen. Records with different field names cannot be judged by the same question.",
+    ));
   }
 }
 

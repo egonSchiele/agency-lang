@@ -35,7 +35,7 @@ jobs:
     env:
       # Bump this in lockstep with smoltalk-llama-cpp upstream releases.
       # node-llama-cpp's version is pinned transitively via smoltalk-llama-cpp's lockfile.
-      SMOLTALK_LLAMA_CPP_VERSION: "0.5.2"
+      SMOLTALK_LLAMA_CPP_VERSION: "0.4.0"
 
     steps:
       - name: Checkout repository

@@ -83,6 +83,19 @@ pnpm test:run lib/cli/schedule/backends/github.snapshot.test.ts
 
 Inspect the diff to confirm only the SHA and tag changed.
 
+### 5.25. Update the CLI integration fixtures
+
+A second set of fixtures bakes in the tag: the expected workflow YAML that
+`tests/integration/cli-main/test.mjs` compares against.
+
+```bash
+grep -rln "run-agency-action@" tests/integration/cli-main/fixtures/expected/
+```
+
+Edit the `uses:` line in each. These only run in CI (the `integration`
+workflow), so a stale fixture here passes every local check and fails
+after the merge.
+
 ### 5.5. Re-pin the live workflow files
 
 `pinnedActions.ts` controls workflows generated in *future*. The workflows that
@@ -107,13 +120,16 @@ All schedule tests should pass.
 
 ### 7. Commit
 
-A version bump is a single commit touching three files:
+A version bump is a single commit touching four sets of files:
 
 ```
 lib/cli/schedule/backends/pinnedActions.ts
 makefile
 lib/cli/schedule/backends/__snapshots__/*.yml
+tests/integration/cli-main/fixtures/expected/*.yml
 ```
+
+Plus the live workflows from step 5.5 if any pin the action.
 
 Open a PR with a title like `chore(schedule): bump
 egonSchiele/run-agency-action to v1.0.3`.

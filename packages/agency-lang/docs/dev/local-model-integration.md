@@ -23,7 +23,9 @@ won't write to your real `~/.agency-agent/models` or `~/agency.json`.
 ```bash
 # In packages/agency-lang/. Install the optional provider (one-time; not in
 # package.json, so this doesn't affect normal `pnpm install`).
-pnpm add --save=false smoltalk-llama-cpp@0.5.2
+# Keep the version in step with SMOLTALK_LLAMA_CPP_VERSION in
+# .github/workflows/local-model.yml, which is the source of truth.
+pnpm add --save=false smoltalk-llama-cpp@0.4.0
 
 # Run the suite (dedicated config — the default vitest run excludes tests/).
 AGENCY_LLM_INTEGRATION=1 pnpm test:integration

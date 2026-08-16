@@ -23,7 +23,9 @@ won't write to your real `~/.agency-agent/models` or `~/agency.json`.
 ```bash
 # In packages/agency-lang/. Install the optional provider (one-time; not in
 # package.json, so this doesn't affect normal `pnpm install`).
-pnpm add --save=false smoltalk-llama-cpp@0.5.2
+# Keep the version in step with SMOLTALK_LLAMA_CPP_VERSION in
+# .github/workflows/local-model.yml, which is the source of truth.
+pnpm add --save=false smoltalk-llama-cpp@0.4.0
 
 # Run the suite (dedicated config — the default vitest run excludes tests/).
 AGENCY_LLM_INTEGRATION=1 pnpm test:integration
@@ -37,10 +39,14 @@ cache and finish in seconds.
 If you change the curated `smollm2-135m` URI in `lib/stdlib/localModels.ts`,
 update **two** values:
 
-1. `EXPECTED_SHA256` in `tests/integration/local-model/smoltest.test.ts` —
-   currently `null` (format-only check). The first green integration run
-   prints the actual hash; paste it in to enable strict tamper-canary
-   matching on subsequent runs.
+1. `EXPECTED_SHA256` in `tests/integration/local-model/smoltest.test.ts`. It
+   holds the hash of the file the curated URI points at, and the test compares
+   the download against it byte for byte, so a stale value fails the run.
+   Recapture it from Hugging Face's LFS metadata for the new file (the git-LFS
+   oid is the sha256 of the content), or take it from the log line the test
+   prints. Setting it back to `null` drops the check to format-only (64 hex
+   chars) and logs the observed hash, which is a way to recapture a hash you
+   do not have — not a resting state to leave it in.
 2. The cache key in `.github/workflows/local-model.yml` (bump the `v1` suffix
    or change the model identifier in the key).
 

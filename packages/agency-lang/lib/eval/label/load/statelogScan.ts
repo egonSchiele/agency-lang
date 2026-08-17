@@ -84,14 +84,64 @@ function summarizeTrace(traceId: string, events: readonly EventEnvelope[]): Trac
   return { traceId, agentName, firstUserMessage, costUsd };
 }
 
-/** A human-readable list of the traces a statelog holds, for the "which one?"
- *  error when a caller names an id that is not there or omits `--trace`. */
+/** The result of resolving a user-supplied `--trace` value against a scan. */
+export type TraceIdMatch =
+  | { kind: "matched"; traceId: string }
+  | { kind: "none" }
+  | { kind: "ambiguous"; matches: readonly string[] };
+
+/**
+ * Resolve a user-supplied trace id, which may be a prefix, to a full trace id.
+ *
+ * The log viewer and event footers show only the first several characters of a
+ * trace id, so that shortened form is what a user copies. A full id always wins
+ * (an exact match is never treated as an ambiguous prefix); otherwise a prefix
+ * that singles out one trace matches, and a prefix shared by several is
+ * reported as ambiguous so the caller can lengthen it.
+ */
+export function matchTraceId(scan: StatelogScan, requested: string): TraceIdMatch {
+  if (Object.hasOwn(scan.eventsByTrace, requested)) {
+    return { kind: "matched", traceId: requested };
+  }
+  const matches = scan.traces
+    .map((trace) => trace.traceId)
+    .filter((id) => id.startsWith(requested));
+  if (matches.length === 1) {
+    return { kind: "matched", traceId: matches[0] };
+  }
+  return matches.length === 0 ? { kind: "none" } : { kind: "ambiguous", matches };
+}
+
+type TraceRow = { id: string; agent: string; cost: string; task: string };
+
+function traceRow(trace: TraceSummary): TraceRow {
+  return {
+    id: trace.traceId,
+    agent: trace.agentName ?? "(unnamed)",
+    cost: `$${trace.costUsd.toFixed(4)}`,
+    task: trace.firstUserMessage === null ? "" : previewLine(trace.firstUserMessage),
+  };
+}
+
+/** A human-readable table of the traces a statelog holds, for the "which one?"
+ *  error when a caller names an id that is not there or omits `--trace`. Column
+ *  headers name each value, and the id column is wide enough that a user can
+ *  copy a full id or any unique prefix of it. */
 export function describeAvailableTraces(scan: StatelogScan): string {
-  const lines = scan.traces.map((trace) => {
-    const label = trace.agentName ?? "(unnamed)";
-    const preview =
-      trace.firstUserMessage === null ? "" : `  ${previewLine(trace.firstUserMessage)}`;
-    return `  ${trace.traceId}  [${label}]  $${trace.costUsd.toFixed(4)}${preview}`;
-  });
-  return `Available traces:\n${lines.join("\n")}`;
+  const header: TraceRow = {
+    id: "TRACE ID",
+    agent: "AGENT",
+    cost: "COST",
+    task: "TASK (first user message)",
+  };
+  const rows = [header, ...scan.traces.map(traceRow)];
+  const idW = Math.max(...rows.map((row) => row.id.length));
+  const agentW = Math.max(...rows.map((row) => row.agent.length));
+  const costW = Math.max(...rows.map((row) => row.cost.length));
+  const format = (row: TraceRow): string =>
+    `  ${row.id.padEnd(idW)}  ${row.agent.padEnd(agentW)}  ${row.cost.padEnd(costW)}  ${row.task}`.trimEnd();
+  return (
+    "Available traces (pass a full id or any unique prefix to --trace):\n" +
+    rows.map(format).join("\n")
+  );
 }

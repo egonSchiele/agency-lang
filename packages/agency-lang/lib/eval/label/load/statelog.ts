@@ -8,7 +8,7 @@ import { JsonValueSchema, OccurrenceOriginSchema, type Fields } from "../types.j
 
 import { projectOccurrenceFields, skipReasonFor } from "./occurrence.js";
 import { selectLabelingFinalOutput } from "./run.js";
-import { describeAvailableTraces, scanStatelog } from "./statelogScan.js";
+import { describeAvailableTraces, matchTraceId, scanStatelog } from "./statelogScan.js";
 import {
   IngestSourceError,
   type IngestSkip,
@@ -173,12 +173,24 @@ export function loadStatelog(args: {
       `A statelog source needs at least one --trace <id>.\n${describeAvailableTraces(scan)}`,
     );
   }
-  for (const traceId of args.traceIds) {
-    if (!(traceId in scan.eventsByTrace)) {
+  // A user copies the shortened trace id shown in the log viewer, so resolve
+  // each requested value (which may be a prefix) to its full id before use.
+  const resolvedIds: string[] = [];
+  for (const requested of args.traceIds) {
+    const match = matchTraceId(scan, requested);
+    if (match.kind === "none") {
       throw new IngestSourceError(
-        `Trace "${traceId}" is not in ${args.path}.\n${describeAvailableTraces(scan)}`,
+        `No trace in ${args.path} matches "${requested}".\n${describeAvailableTraces(scan)}`,
       );
     }
+    if (match.kind === "ambiguous") {
+      throw new IngestSourceError(
+        `Trace id "${requested}" is ambiguous — it matches ${match.matches.length} traces:\n` +
+          match.matches.map((id) => `  ${id}`).join("\n") +
+          "\nUse more characters to pick one.",
+      );
+    }
+    resolvedIds.push(match.traceId);
   }
 
   const occurrences: LoadedOccurrence[] = [];
@@ -187,7 +199,7 @@ export function loadStatelog(args: {
     ? { kind: "keep-default" }
     : { kind: "omit" };
 
-  for (const traceId of args.traceIds) {
+  for (const traceId of resolvedIds) {
     const resolution = resolveTrace(scan.eventsByTrace[traceId], args.path);
     if (resolution.kind === "rejected") {
       skips.push({ item: traceId, reason: resolution.reason });

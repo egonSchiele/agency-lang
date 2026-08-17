@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
-import { describeAvailableTraces, scanStatelog } from "./statelogScan.js";
+import { describeAvailableTraces, matchTraceId, scanStatelog } from "./statelogScan.js";
 import { IngestSourceError } from "./types.js";
 
 let ts = 0;
@@ -71,7 +71,7 @@ describe("scanStatelog", () => {
 });
 
 describe("describeAvailableTraces", () => {
-  it("lists each trace with its label and cost", () => {
+  it("prints headers and one row per trace, naming an agent-less trace", () => {
     const text = jsonl([
       ev("A", "agentName", { name: "coder" }),
       ev("A", "promptCompletion", {
@@ -81,9 +81,41 @@ describe("describeAvailableTraces", () => {
       ev("B", "agentStart"),
     ]);
     const description = describeAvailableTraces(scanStatelog(text));
-    expect(description).toContain("A");
-    expect(description).toContain("[coder]");
+    // Column headers, so the values are self-explaining.
+    expect(description).toMatch(/TRACE ID\s+AGENT\s+COST\s+TASK/);
+    expect(description).toContain("coder");
     expect(description).toContain("$0.5000");
-    expect(description).toContain("[(unnamed)]");
+    // A trace that never named its agent, spelled out rather than as "[]".
+    expect(description).toContain("(unnamed)");
+    expect(description).not.toContain("[coder]");
+    // Tells the user the id can be shortened, which is the whole point.
+    expect(description).toContain("unique prefix");
+  });
+});
+
+describe("matchTraceId", () => {
+  const scan = scanStatelog(
+    jsonl([ev("abc123", "agentStart"), ev("abc999", "agentStart"), ev("xyz", "agentStart")]),
+  );
+
+  it("matches a full id exactly", () => {
+    expect(matchTraceId(scan, "abc123")).toEqual({ kind: "matched", traceId: "abc123" });
+  });
+
+  it("matches a unique prefix to its full id", () => {
+    expect(matchTraceId(scan, "xy")).toEqual({ kind: "matched", traceId: "xyz" });
+  });
+
+  it("reports a prefix shared by several traces as ambiguous", () => {
+    expect(matchTraceId(scan, "abc")).toEqual({ kind: "ambiguous", matches: ["abc123", "abc999"] });
+  });
+
+  it("reports a prefix that matches nothing as none", () => {
+    expect(matchTraceId(scan, "nope")).toEqual({ kind: "none" });
+  });
+
+  it("prefers an exact id over treating it as a prefix of a longer one", () => {
+    const nested = scanStatelog(jsonl([ev("abc", "agentStart"), ev("abcdef", "agentStart")]));
+    expect(matchTraceId(nested, "abc")).toEqual({ kind: "matched", traceId: "abc" });
   });
 });

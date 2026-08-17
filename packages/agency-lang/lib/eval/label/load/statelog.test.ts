@@ -207,6 +207,46 @@ describe("loadStatelog", () => {
 
   it("errors naming available traces for an unknown id", () => {
     expect(() => load(["ZZ"])).toThrow(IngestSourceError);
-    expect(() => load(["ZZ"])).toThrow(/"ZZ" is not in/);
+    expect(() => load(["ZZ"])).toThrow(/No trace in .* matches "ZZ"/);
+  });
+
+  describe("prefix trace ids", () => {
+    let pdir: string;
+    let pfile: string;
+    beforeEach(() => {
+      pdir = fs.mkdtempSync(path.join(os.tmpdir(), "loadstatelog-prefix-"));
+      const events = [
+        ev("evalOutputRecorded", { value: "answer" }, "abc123"),
+        ev("agentEnd", {}, "abc123"),
+        ev("evalOutputRecorded", { value: "answer2" }, "abc999"),
+        ev("agentEnd", {}, "abc999"),
+      ];
+      pfile = path.join(pdir, "log.jsonl");
+      fs.writeFileSync(pfile, events.map((e) => JSON.stringify(e)).join("\n") + "\n");
+    });
+    afterEach(() => {
+      fs.rmSync(pdir, { recursive: true, force: true });
+    });
+    const loadFrom = (traceIds: string[]) =>
+      loadStatelog({
+        path: pfile,
+        traceIds,
+        source: "s",
+        constantFields: {},
+        includeTaskField: true,
+        maxBytes: 1_048_576,
+      });
+
+    it("resolves a unique prefix to the full id and records the full id", () => {
+      const batch = loadFrom(["abc1"]);
+      expect(batch.occurrences).toHaveLength(1);
+      expect(batch.occurrences[0].origin).toMatchObject({ kind: "statelog", traceId: "abc123" });
+    });
+
+    it("rejects a prefix shared by more than one trace, listing the candidates", () => {
+      expect(() => loadFrom(["abc"])).toThrow(/ambiguous/);
+      expect(() => loadFrom(["abc"])).toThrow(/abc123/);
+      expect(() => loadFrom(["abc"])).toThrow(/abc999/);
+    });
   });
 });

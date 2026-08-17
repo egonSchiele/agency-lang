@@ -324,3 +324,44 @@ describe("projectClient.getSpend", () => {
     );
   });
 });
+
+describe("projectClient.fetchAgentInfo", () => {
+  const info = {
+    entryPoint: "agent.agency",
+    lastUploadAt: "2026-08-17T00:00:00.000Z",
+    files: [
+      {
+        name: "agent.agency",
+        nodeNames: ["main"],
+        createdAt: "2026-08-16T00:00:00.000Z",
+        updatedAt: "2026-08-17T00:00:00.000Z",
+      },
+    ],
+  };
+
+  it("GETs the agent route and returns the validated info", async () => {
+    fetchMock.mockResolvedValue(response(200, { success: true, value: info }));
+    await expect(client().fetchAgentInfo()).resolves.toEqual(info);
+    expect(fetchMock).toHaveBeenCalledWith("https://h/api/projects/proj/agent", {
+      method: "GET",
+      headers: { Authorization: "Bearer key" },
+    });
+  });
+
+  it("rejects a malformed shape as a ProjectRequestError", async () => {
+    fetchMock.mockResolvedValue(
+      response(200, { success: true, value: { entryPoint: null, lastUploadAt: null } }),
+    );
+    await expect(client().fetchAgentInfo()).rejects.toBeInstanceOf(ProjectRequestError);
+  });
+
+  it("keeps project-not-found for the known JSON 404", async () => {
+    fetchMock.mockResolvedValue(response(404, { error: "Project not found" }));
+    await expect(client().fetchAgentInfo()).rejects.toThrow(/not found — check the slug/);
+  });
+
+  it("reports an unsupported host for any other 404", async () => {
+    fetchMock.mockResolvedValue(response(404, { error: "Not Found" }));
+    await expect(client().fetchAgentInfo()).rejects.toThrow(/does not support the agent-info API/);
+  });
+});

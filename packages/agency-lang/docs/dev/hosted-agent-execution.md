@@ -162,6 +162,14 @@ Deploy reuses the **`log` section of `agency.json`** (`log.host`, `log.projectId
 
 Nothing local leaks to the server: `uploadClient` sends only `{ entrypoint, files: [{ name, contents }] }`; the on-disk absolute paths stay client-side.
 
+### Only the entrypoint's exports are served
+
+`collectServeMetadata` reads exports from the entrypoint's symbols only, and `discoverExports` filters functions by the entrypoint's `moduleId`. So an `export` inside an imported sibling file is *not* an endpoint of the deployed agent. Re-exporting from the entrypoint (`export { helper } from "./lib.agency"`) makes it one, because the symbol table merges re-exports into the entrypoint's file symbols.
+
+`remote deploy` warns before uploading an agent with zero endpoints (`lib/cli/remote/exportedEndpoints.ts`). When the entrypoint has none, it also scans the other bundled files for exports and prints the re-export line that would serve them, so a user whose exports live in `lib.agency` sees the fix instead of just "none". That scan builds a second symbol table, which is why it runs only when the entrypoint count is zero.
+
+Known gap: a re-exported *node* is counted by the metadata but not served — the generated code re-exports its `__<name>NodeParams` but not the node function itself, so `discoverExports` never finds it. Only re-exported functions are served today.
+
 ### The statelog coupling is sealed
 
 `uploadClient.ts` is the single file that knows statelog's HTTP contract: it POSTs to `/api/projects/:project/upload` with body `{ entrypoint, files }`, reads the `Result<{ endpointUrls }>` envelope, and best-effort fetches `/list` for the manifest (to print curl examples). Server responses are treated as untrusted — a bad shape reports an error or drops the extra rather than crashing a deploy that already landed. If statelog's API changes, only this file changes.
@@ -215,7 +223,7 @@ Agent commands:
 
 - **`remote link`** — show, or set with `--url`, the linked agent (stored as `remote.serveUrl` in `agency.json`).
 - **`remote deploy <file>`** — upload + link (reuses the `deploy()` engine). Warns, and on a TTY confirms, if the agent exports no nodes/functions.
-- **`remote ls`** — the callable nodes/functions (`GET /list`).
+- **`remote ls`** — the callable nodes/functions (serve `GET /list`), then the deployed files (`GET /api/projects/:slug/agent`: name, exported nodes, last update, entry point marked). The file listing is best-effort: an older host without that route gets a one-line "Files: unavailable" note instead of a failed command, because the endpoints are what `ls` exists for.
 - **`remote call <name>`** — invoke a node (or `--function`) and drive the interrupt cycle.
 - **`remote open`** — the project page in a browser.
 
@@ -247,7 +255,7 @@ The project-read wire is sealed in `lib/cli/statelog/projectClient.ts` (slug-add
 
 Top-level `agency deploy` has been **removed** (a breaking change) in favor of `agency remote deploy`; the `deploy()` engine in `lib/cli/deploy/` stays and is what `remote deploy` calls.
 
-**Deferred:** a `remote link --project <slug>` convenience that builds the serve URL from `host + whoami.userId + project + file` (dropping the pasted URL). A **`remote inspect`** metadata view (entry point, last upload, per-file exported nodes) is also deferred until the statelog `/api/projects/:slug/agent` endpoint returns the full callable manifest — functions and typed/defaulted parameters — so it would launch differentiated from `remote ls` rather than as a thin subset. The management (`whoami`/`projects`/`keys`) and introspection (`pull`/`logs`) commands are shipped.
+**Deferred:** a `remote link --project <slug>` convenience that builds the serve URL from `host + whoami.userId + project + file` (dropping the pasted URL). The once-deferred **`remote inspect`** view (entry point, last upload, per-file exported nodes) now lives inside `remote ls` as its Files section, so no separate command is planned. The management (`whoami`/`projects`/`keys`) and introspection (`pull`/`logs`) commands are shipped.
 
 ---
 

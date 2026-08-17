@@ -4,7 +4,7 @@
 
 import { color } from "@/utils/termcolors.js";
 import type { ServeManifest } from "../statelog/serveClient.js";
-import type { TraceSummary } from "../statelog/projectClient.js";
+import type { TraceSummary, HostedAgentInfo } from "../statelog/projectClient.js";
 import type { RemoteBinding } from "./binding.js";
 import type { ProjectSummary, KeySummary, CreatedKey } from "../statelog/accountClient.js";
 import type {
@@ -39,6 +39,33 @@ export function renderManifest(manifest: ServeManifest, binding: RemoteBinding):
     }
   }
   return lines.join("\n");
+}
+
+/** The deployed files (`remote ls`): one row per file, the entry point marked,
+ *  each file's exported nodes, and when it was last uploaded. */
+export function renderHostedFiles(info: HostedAgentInfo): string {
+  const lines: string[] = [color.bold("Files")];
+  if (info.files.length === 0) {
+    lines.push(color.dim("  No files deployed."));
+    return lines.join("\n");
+  }
+  const rows = info.files.map((file) => [
+    file.name + (file.name === info.entryPoint ? " (entry point)" : ""),
+    file.nodeNames.length ? file.nodeNames.join(", ") : NONE,
+    file.updatedAt,
+  ]);
+  lines.push(indent(formatStaticTable(["FILE", "NODES", "UPDATED"], rows), "  "));
+  if (info.lastUploadAt) {
+    lines.push(color.dim(`  Last upload: ${info.lastUploadAt}`));
+  }
+  return lines.join("\n");
+}
+
+function indent(text: string, prefix: string): string {
+  return text
+    .split("\n")
+    .map((line) => prefix + line)
+    .join("\n");
 }
 
 export function renderResult(value: unknown): string {

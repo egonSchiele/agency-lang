@@ -65,9 +65,49 @@ describe("editTaskOnScreen", () => {
   });
 
   it("paints the pre-filled default gray and the edited text plain white", () => {
-    const untouched = fieldLines("the recorded task", false, true, 60).join("");
-    const edited = fieldLines("the recorded task!", true, true, 60).join("");
+    const untouched = fieldLines("the recorded task", false, 60).join("");
+    const edited = fieldLines("the recorded task!", true, 60).join("");
     expect(untouched).toContain(GRAY); // gray default
     expect(edited).not.toContain(GRAY); // now the annotator's own text
+  });
+
+  it("shows a typing hint when the recorded task is an empty string", async () => {
+    // defaultTask is "" (not null): pre-filled but empty. The field must still
+    // show a hint rather than a blank line that looks broken.
+    const { screen, out } = makeScreen([{ key: "enter" }]);
+    await editTaskOnScreen(screen, "");
+    expect(out.lastText()).toMatch(/type a task/);
+  });
+
+  it("inserts a newline on Shift+Enter and only finalizes on a plain Enter", async () => {
+    // Shift/Option+Enter is the TUI's newline shape; plain Enter submits.
+    const { screen } = makeScreen([
+      ...chars("line one"),
+      { key: "enter", shift: true },
+      ...chars("line two"),
+      { key: "enter" },
+    ]);
+    expect(await editTaskOnScreen(screen, null)).toEqual({
+      kind: "replace",
+      value: "line one\nline two",
+    });
+  });
+
+  it("keeps the cursor and footer on screen for a task longer than the terminal", async () => {
+    // A recorded task that wraps well past a short terminal must not push the
+    // cursor and controls off screen — the field is windowed to its tail.
+    const longTask = Array.from({ length: 40 }, (_, i) => `sentence number ${i}`).join(". ");
+    const out = new FrameRecorder();
+    const screen = new Screen({
+      output: out,
+      input: new ScriptedInput([{ key: "!" }, { key: "enter" }]),
+      width: 70,
+      height: 16,
+    });
+    await editTaskOnScreen(screen, longTask);
+    const shown = out.textAt(out.frames.length - 2); // the frame before Enter finalized
+    expect(shown).toContain("▏"); // the cursor is visible
+    expect(shown).toContain("Esc cancel"); // the footer is visible
+    expect(shown).toContain("⋯"); // and the hidden head is marked
   });
 });

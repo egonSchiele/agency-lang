@@ -100,7 +100,7 @@ export type TraceIdMatch =
  * reported as ambiguous so the caller can lengthen it.
  */
 export function matchTraceId(scan: StatelogScan, requested: string): TraceIdMatch {
-  if (requested in scan.eventsByTrace) {
+  if (Object.hasOwn(scan.eventsByTrace, requested)) {
     return { kind: "matched", traceId: requested };
   }
   const matches = scan.traces

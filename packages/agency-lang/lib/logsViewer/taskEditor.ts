@@ -36,22 +36,15 @@ function defaultDraft(defaultTask: JsonValue | null): string {
 /**
  * The field as display lines, wrapped to the width. Gray (a pre-filled default
  * you can accept) until touched, plain white (your own text) after. The cursor
- * sits at the end. An untouched empty field shows a gray typing hint instead,
- * since there is nothing to accept.
+ * sits at the end. An empty, untouched field shows a gray typing hint so it
+ * never looks blank — whether the run recorded no task or recorded an empty one.
  *
  * Exported so a test can assert the gray-then-white behavior directly.
  */
-export function fieldLines(
-  draft: string,
-  touched: boolean,
-  hasDefault: boolean,
-  width: number,
-): string[] {
+export function fieldLines(draft: string, touched: boolean, width: number): string[] {
   const inner = Math.max(8, width - 2);
   if (!touched && draft === "") {
-    const hint = hasDefault
-      ? ""
-      : "type a task to judge this output against, or press Enter to skip";
+    const hint = "type a task to judge this output against, or press Enter to skip";
     return [`  ${CURSOR}${color.brightBlack(hint)}`];
   }
   const wrapped = wrapText(sanitizeUntrusted(draft), inner);
@@ -61,13 +54,28 @@ export function fieldLines(
   return out;
 }
 
+/** Keep the field within `budget` display rows, showing the tail so the cursor
+ *  (always at the end) stays visible and the footer below is never pushed off
+ *  screen for a task that wraps very long. A hidden head is marked with a
+ *  leading ellipsis. */
+function clampField(all: string[], budget: number): string[] {
+  if (all.length <= budget) return all;
+  if (budget <= 1) return [all[all.length - 1]];
+  return [`  ${color.brightBlack("⋯")}`, ...all.slice(all.length - (budget - 1))];
+}
+
 function explanation(hasDefault: boolean): string {
   return hasDefault
     ? "This output will be judged against a task. We filled in the task this run recorded, shown gray — edit it to change it, or press Enter to accept it."
     : "This output will be judged against a task, but this run recorded none. Type one below, or press Enter to skip and judge without a task.";
 }
 
-function editorScreen(state: EditorState, hasDefault: boolean, width: number): Element {
+function editorScreen(
+  state: EditorState,
+  hasDefault: boolean,
+  width: number,
+  height: number,
+): Element {
   const footer = [
     `${color.cyan("Enter")} accept`,
     `${color.cyan("edit")} to change`,
@@ -75,16 +83,24 @@ function editorScreen(state: EditorState, hasDefault: boolean, width: number): E
     `${color.cyan("Esc")} cancel`,
   ].join(color.brightBlack("  ·  "));
   const prose = wrapText(explanation(hasDefault), Math.max(8, width - 2));
-  return column(
-    { justifyContent: "flex-start", padding: 1 },
+  const top = [
     line(color.bold("Set the task")),
     line(""),
     ...prose.map((l) => line(color.brightBlack(l))),
     line(""),
     line(color.bold.yellow("Task")),
-    ...fieldLines(state.draft, state.touched, hasDefault, width).map((l) => line(l)),
-    line(""),
-    line(footer),
+  ];
+  const bottom = [line(""), line(footer)];
+  // padding:1 costs a row top and bottom; the field takes whatever rows are
+  // left, windowed to its tail, so the footer stays on screen no matter how
+  // long the task wraps.
+  const budget = Math.max(1, height - 2 - top.length - bottom.length);
+  const field = clampField(fieldLines(state.draft, state.touched, width), budget);
+  return column(
+    { justifyContent: "flex-start", padding: 1 },
+    ...top,
+    ...field.map((l) => line(l)),
+    ...bottom,
   );
 }
 
@@ -109,9 +125,13 @@ export async function editTaskOnScreen(
   const start = defaultDraft(defaultTask);
   const final = await screen.runLoop<EditorState>({
     initialState: { draft: start, touched: false, done: false, result: null },
-    render: (state) => editorScreen(state, hasDefault, screen.size().width),
+    render: (state) => editorScreen(state, hasDefault, screen.size().width, screen.size().height),
     handleKey: (state, event) => {
       if (event.key === "escape") return { ...state, done: true, result: null };
+      // Shift/Option+Enter inserts a newline (the TUI's editable-buffer
+      // contract, per ui-smoke); only a plain Enter finalizes.
+      if (event.key === "enter" && event.shift === true)
+        return { ...state, draft: state.draft + "\n", touched: true };
       if (event.key === "enter") return { ...state, done: true, result: finalize(state) };
       if (event.key === "backspace")
         return { ...state, draft: state.draft.slice(0, -1), touched: true };

@@ -162,6 +162,14 @@ Deploy reuses the **`log` section of `agency.json`** (`log.host`, `log.projectId
 
 Nothing local leaks to the server: `uploadClient` sends only `{ entrypoint, files: [{ name, contents }] }`; the on-disk absolute paths stay client-side.
 
+### Only the entrypoint's exports are served
+
+`collectServeMetadata` reads exports from the entrypoint's symbols only, and `discoverExports` filters functions by the entrypoint's `moduleId`. So an `export` inside an imported sibling file is *not* an endpoint of the deployed agent. Re-exporting from the entrypoint (`export { helper } from "./lib.agency"`) makes it one, because the symbol table merges re-exports into the entrypoint's file symbols.
+
+`remote deploy` warns before uploading an agent with zero endpoints (`lib/cli/remote/exportedEndpoints.ts`). When the entrypoint has none, it also scans the other bundled files for exports and prints the re-export line that would serve them, so a user whose exports live in `lib.agency` sees the fix instead of just "none". That scan builds a second symbol table, which is why it runs only when the entrypoint count is zero.
+
+Known gap: a re-exported *node* is counted by the metadata but not served — the generated code re-exports its `__<name>NodeParams` but not the node function itself, so `discoverExports` never finds it. Only re-exported functions are served today.
+
 ### The statelog coupling is sealed
 
 `uploadClient.ts` is the single file that knows statelog's HTTP contract: it POSTs to `/api/projects/:project/upload` with body `{ entrypoint, files }`, reads the `Result<{ endpointUrls }>` envelope, and best-effort fetches `/list` for the manifest (to print curl examples). Server responses are treated as untrusted — a bad shape reports an error or drops the extra rather than crashing a deploy that already landed. If statelog's API changes, only this file changes.

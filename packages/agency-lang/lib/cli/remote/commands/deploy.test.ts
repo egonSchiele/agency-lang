@@ -95,11 +95,32 @@ describe("runDeploy outcome contract", () => {
   });
 
   it("returns 'aborted' without deploying when the no-exports confirmation is declined", async () => {
-    countFn.mockReturnValue({ nodes: 0, functions: 0 });
+    countFn.mockReturnValue({ nodes: 0, functions: 0, imported: [] });
     confirmFn.mockResolvedValue(false);
     await expect(runDeploy("agent.agency", {}, context())).resolves.toBe("aborted");
     expect(deployFn).not.toHaveBeenCalled();
     expect(fs.existsSync(configPath)).toBe(false);
+  });
+
+  it("names imported files whose exports are not served, with the re-export fix", async () => {
+    countFn.mockReturnValue({
+      nodes: 0,
+      functions: 0,
+      imported: [{ file: "lib.agency", names: ["helper", "greet"] }],
+    });
+    confirmFn.mockResolvedValue(false);
+    const logged: string[] = [];
+    const logSpy = vi.spyOn(console, "log").mockImplementation((line: string) => {
+      logged.push(line);
+    });
+    try {
+      await runDeploy("agent.agency", {}, context());
+    } finally {
+      logSpy.mockRestore();
+    }
+    const text = logged.join("\n");
+    expect(text).toContain("Only exports in the entry point (agent.agency) are served.");
+    expect(text).toContain('export { helper, greet } from "./lib.agency"');
   });
 
   it("produces no outcome after an error exit", async () => {

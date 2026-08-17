@@ -1,3 +1,4 @@
+import path from "path";
 import { color } from "@/utils/termcolors.js";
 import type { AgencyConfig } from "@/config.js";
 import { deploy } from "../../deploy/deploy.js";
@@ -6,6 +7,7 @@ import { serveBaseUrl } from "../../statelog/uploadClient.js";
 import { parseServeBaseUrl } from "../../statelog/serveUrl.js";
 import { writeBinding } from "../binding.js";
 import { countExportedEndpoints } from "../exportedEndpoints.js";
+import type { ExportedEndpointCount } from "../exportedEndpoints.js";
 import { confirmDeployWithoutExports } from "../confirmation.js";
 import type { RemoteCommandContext } from "./util.js";
 
@@ -31,13 +33,7 @@ export async function runDeploy(
   // it with a better message.
   const counts = tryCountExports(file, context.config);
   if (counts && counts.nodes === 0 && counts.functions === 0) {
-    console.log(
-      color.yellow(
-        "This agent exports no nodes or functions, so it would have no callable endpoints.",
-      ) +
-        "\n" +
-        color.dim("Nodes and functions must be marked 'export' to be served."),
-    );
+    console.log(noExportsMessage(file, counts));
     if (!(await confirmDeployWithoutExports({ dryRun: options.dryRun }))) {
       console.log("Aborted.");
       return "aborted";
@@ -64,10 +60,32 @@ export async function runDeploy(
   return "deployed";
 }
 
-function tryCountExports(
-  file: string,
-  config: AgencyConfig,
-): { nodes: number; functions: number } | null {
+/** The warning, plus a hint when the exports exist but live in imported files:
+ *  only the entrypoint's exports are served, so name the files and show the
+ *  re-export line that would fix it. */
+function noExportsMessage(file: string, counts: ExportedEndpointCount): string {
+  const entrypoint = path.basename(file);
+  const lines = [
+    color.yellow(
+      "This agent exports no nodes or functions, so it would have no callable endpoints.",
+    ),
+    color.dim("Nodes and functions must be marked 'export' to be served."),
+  ];
+  if (counts.imported.length > 0) {
+    lines.push(
+      color.dim(
+        `Only exports in the entry point (${entrypoint}) are served. ` +
+          "These imported files have exports of their own; re-export them to serve them:",
+      ),
+    );
+    for (const { file: name, names } of counts.imported) {
+      lines.push(color.dim(`  export { ${names.join(", ")} } from "./${name}"`));
+    }
+  }
+  return lines.join("\n");
+}
+
+function tryCountExports(file: string, config: AgencyConfig): ExportedEndpointCount | null {
   try {
     return countExportedEndpoints(file, config);
   } catch {

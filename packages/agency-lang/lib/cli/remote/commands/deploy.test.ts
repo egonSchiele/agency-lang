@@ -3,9 +3,11 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
+import type { ExportedEndpointCount } from "../exportedEndpoints.js";
+
 const deployFn = vi.fn();
 const confirmFn = vi.fn(async () => true);
-const countFn = vi.fn((): { nodes: number; functions: number } => ({ nodes: 1, functions: 0 }));
+const countFn = vi.fn((): ExportedEndpointCount => ({ nodes: 1, functions: 0, imported: [] }));
 vi.mock("../../deploy/deploy.js", () => ({ deploy: (...args: unknown[]) => deployFn(...args) }));
 vi.mock("../../deploy/render.js", () => ({ renderOutcome: () => {} }));
 vi.mock("../confirmation.js", () => ({
@@ -29,7 +31,7 @@ beforeEach(() => {
   }) as never);
   deployFn.mockReset();
   confirmFn.mockReset().mockResolvedValue(true);
-  countFn.mockReset().mockReturnValue({ nodes: 1, functions: 0 });
+  countFn.mockReset().mockReturnValue({ nodes: 1, functions: 0, imported: [] });
 });
 
 afterEach(() => {

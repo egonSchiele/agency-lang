@@ -22,9 +22,8 @@ import { TreeView } from "./views/treeView.js";
 import { makeViewStack, type ViewAction, type Viewport } from "./views/view.js";
 import type { TreeNode } from "./types.js";
 import { createLabelingHost } from "../eval/label/labelingHost.js";
-import { projectArtifactField } from "../eval/label/project.js";
 import type { TaskChoice } from "../eval/label/load/statelog.js";
-import { previewLine } from "../eval/label/load/statelogScan.js";
+import { editTaskOnScreen } from "./taskEditor.js";
 import type { Annotator } from "../eval/label/types.js";
 import type { EventEnvelope } from "../statelog/wireTypes.js";
 import { labelTrace, labelTraceServices, type LabelTraceOutcome, type LabelTraceUI } from "./labelTrace.js";
@@ -100,13 +99,8 @@ async function runTraceLabeling(params: {
   const { screen, launch, traceId, traceEvents, notify } = params;
   const host = createLabelingHost(screen, () => screen.size());
   const ui: LabelTraceUI = {
-    async editTask(defaultTask): Promise<TaskChoice | null> {
-      const preview = defaultTask === null ? "(none)" : previewLine(projectArtifactField(defaultTask));
-      const answer = await screen.nextLine(`Task [${preview}] — Enter keeps, text replaces, "-" clears: `);
-      const trimmed = answer.trim();
-      if (trimmed === "") return { kind: "keep-default" };
-      if (trimmed === "-") return { kind: "omit" };
-      return { kind: "replace", value: answer };
+    editTask(defaultTask): Promise<TaskChoice | null> {
+      return editTaskOnScreen(screen, defaultTask);
     },
     notify,
   };

@@ -8,7 +8,9 @@ import { editTaskOnScreen, fieldLines } from "./taskEditor.js";
 // The gray-until-edited signal is an ANSI bright-black foreground.
 const GRAY = "\x1b[90m";
 
-function makeScreen(keys: ReadonlyArray<string | { key: string; text?: string; ctrl?: boolean }>) {
+function makeScreen(
+  keys: ReadonlyArray<string | { key: string; text?: string; ctrl?: boolean; shift?: boolean }>,
+) {
   const out = new FrameRecorder();
   const screen = new Screen({ output: out, input: new ScriptedInput(keys), width: 80, height: 24 });
   return { screen, out };

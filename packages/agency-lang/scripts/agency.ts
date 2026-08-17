@@ -495,7 +495,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   remoteCmd
     .command("ls")
-    .description("List the linked agent's callable nodes and functions")
+    .description("List the linked agent's callable nodes and functions, and its deployed files")
     .option("--api-key-env <name>", "env var to read the API key from (default: STATELOG_API_KEY)")
     .action((opts: { apiKeyEnv?: string }) => runLs(opts, getConfigContext()));
 

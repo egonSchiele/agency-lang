@@ -223,7 +223,7 @@ Agent commands:
 
 - **`remote link`** — show, or set with `--url`, the linked agent (stored as `remote.serveUrl` in `agency.json`).
 - **`remote deploy <file>`** — upload + link (reuses the `deploy()` engine). Warns, and on a TTY confirms, if the agent exports no nodes/functions.
-- **`remote ls`** — the callable nodes/functions (`GET /list`).
+- **`remote ls`** — the callable nodes/functions (serve `GET /list`), then the deployed files (`GET /api/projects/:slug/agent`: name, exported nodes, last update, entry point marked). The file listing is best-effort: an older host without that route gets a one-line "Files: unavailable" note instead of a failed command, because the endpoints are what `ls` exists for.
 - **`remote call <name>`** — invoke a node (or `--function`) and drive the interrupt cycle.
 - **`remote open`** — the project page in a browser.
 
@@ -255,7 +255,7 @@ The project-read wire is sealed in `lib/cli/statelog/projectClient.ts` (slug-add
 
 Top-level `agency deploy` has been **removed** (a breaking change) in favor of `agency remote deploy`; the `deploy()` engine in `lib/cli/deploy/` stays and is what `remote deploy` calls.
 
-**Deferred:** a `remote link --project <slug>` convenience that builds the serve URL from `host + whoami.userId + project + file` (dropping the pasted URL). A **`remote inspect`** metadata view (entry point, last upload, per-file exported nodes) is also deferred until the statelog `/api/projects/:slug/agent` endpoint returns the full callable manifest — functions and typed/defaulted parameters — so it would launch differentiated from `remote ls` rather than as a thin subset. The management (`whoami`/`projects`/`keys`) and introspection (`pull`/`logs`) commands are shipped.
+**Deferred:** a `remote link --project <slug>` convenience that builds the serve URL from `host + whoami.userId + project + file` (dropping the pasted URL). The once-deferred **`remote inspect`** view (entry point, last upload, per-file exported nodes) now lives inside `remote ls` as its Files section, so no separate command is planned. The management (`whoami`/`projects`/`keys`) and introspection (`pull`/`logs`) commands are shipped.
 
 ---
 

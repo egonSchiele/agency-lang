@@ -18,6 +18,22 @@ export type SourceFile = { name: string; contents: string };
 
 export type TraceSummary = { id: string; createdAt: string };
 
+/** One deployed file as the host describes it: name, exported node names, and
+ *  timestamps. Never the source (that is `pullSource`). */
+export type HostedFile = {
+  name: string;
+  nodeNames: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** What is currently deployed to a project: `GET /api/projects/:slug/agent`. */
+export type HostedAgentInfo = {
+  entryPoint: string | null;
+  lastUploadAt: string | null;
+  files: HostedFile[];
+};
+
 /** A statelog log row, narrowed to what the viewer bridge needs. `data` stays
  *  opaque past its `type` — the viewer parses it. */
 export type TraceLog = {
@@ -36,6 +52,19 @@ export class ProjectRequestError extends Error {}
 // downstream truthiness check.
 const sourceBundleSchema = z.object({
   files: z.array(z.object({ name: z.string(), contents: z.string() })),
+});
+
+const hostedAgentInfoSchema = z.object({
+  entryPoint: z.string().nullable(),
+  lastUploadAt: z.string().nullable(),
+  files: z.array(
+    z.object({
+      name: z.string(),
+      nodeNames: z.array(z.string()),
+      createdAt: z.string(),
+      updatedAt: z.string(),
+    }),
+  ),
 });
 
 const traceSummarySchema = z
@@ -58,6 +87,7 @@ const traceLogSchema = z
 
 export type ProjectClient = {
   pullSource(): Promise<SourceFile[]>;
+  fetchAgentInfo(): Promise<HostedAgentInfo>;
   listTraces(): Promise<TraceSummary[]>;
   traceLogs(traceId: string): Promise<TraceLog[]>;
   getSpend(window: SpendWindow): Promise<ProjectSpend>;
@@ -150,6 +180,14 @@ export function createProjectClient(
   return {
     async pullSource() {
       return parseWire(sourceBundleSchema, await request({ segments: ["source"] })).files;
+    },
+    async fetchAgentInfo() {
+      const value = await request({
+        segments: ["agent"],
+        unsupportedRouteMessage:
+          "this statelog host does not support the agent-info API (upgrade the host)",
+      });
+      return parseWire(hostedAgentInfoSchema, value);
     },
     async listTraces() {
       return parseWire(z.array(traceSummarySchema), await request({ segments: ["traces"] }));

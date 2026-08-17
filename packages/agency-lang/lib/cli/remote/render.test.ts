@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   renderManifest,
+  renderHostedFiles,
   renderResult,
   renderLink,
   renderWhoami,
@@ -48,6 +49,41 @@ describe("renderManifest", () => {
     expect(output).toContain("raises app::confirm");
     expect(output).toContain("add(a, b)");
     expect(output).toContain("adds two numbers");
+  });
+});
+
+describe("renderHostedFiles", () => {
+  it("lists each file with its nodes, marks the entry point, and shows the last upload", () => {
+    const output = strip(
+      renderHostedFiles({
+        entryPoint: "agent.agency",
+        lastUploadAt: "2026-08-17T00:00:00.000Z",
+        files: [
+          {
+            name: "agent.agency",
+            nodeNames: ["main"],
+            createdAt: "2026-08-16T00:00:00.000Z",
+            updatedAt: "2026-08-17T00:00:00.000Z",
+          },
+          {
+            name: "lib.agency",
+            nodeNames: [],
+            createdAt: "2026-08-16T00:00:00.000Z",
+            updatedAt: "2026-08-16T00:00:00.000Z",
+          },
+        ],
+      }),
+    );
+    expect(output).toContain("agent.agency (entry point)");
+    expect(output).toContain("main");
+    expect(output).toContain("lib.agency");
+    expect(output).toContain("Last upload: 2026-08-17T00:00:00.000Z");
+  });
+
+  it("says so when nothing is deployed", () => {
+    expect(strip(renderHostedFiles({ entryPoint: null, lastUploadAt: null, files: [] }))).toContain(
+      "No files deployed.",
+    );
   });
 });
 

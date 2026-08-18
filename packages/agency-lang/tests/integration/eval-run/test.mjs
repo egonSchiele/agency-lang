@@ -94,6 +94,14 @@ node main(task: string) {
   assert(resolved.data.outcome === "approved", `outcome: ${resolved.data.outcome}`);
   assert(resolved.data.resolvedBy === "ipc", `resolvedBy: ${resolved.data.resolvedBy}`);
 
+  // The trace names what ran and what it was given: the eval task arrives as
+  // an explicit `input`, and the seeded agent's code identity is recorded.
+  const started = events.find((e) => e.data?.type === "agentStart");
+  assert(started, "no agentStart event in the statelog");
+  assert(started.data.input === "run", `agentStart.input: ${JSON.stringify(started.data.input)}`);
+  assert(started.data.code?.entry === "agent.agency", `agentStart.code.entry: ${JSON.stringify(started.data.code)}`);
+  assert(/^[0-9a-f]{64}$/.test(started.data.code?.closureHash ?? ""), "agentStart.code.closureHash missing");
+
   // The record survives extraction: the interrupt shows up approved.
   const record = JSON.parse(readFileSync(join(runsDir, "interrupt-e2e", "inputs", "interrupting", "agent", "eval-record.json"), "utf-8"));
   assert(record.interrupts.length === 1, `interrupts: expected 1, got ${record.interrupts.length}`);
@@ -159,6 +167,11 @@ node main(): string {
   const cmdEvents = readFileSync(join(cmdInputDir, "agent", "statelog.jsonl"), "utf-8")
     .trim().split("\n").map((line) => JSON.parse(line));
   assert(cmdEvents.some((e) => e.data?.type === "agentStart"), "no agentStart from the spawned CLI in the harness statelog");
+  // `agency run` fills the code identity itself, and a named-args run
+  // (no eval task delivery) records no `input` — the runtime never guesses one.
+  const cmdStarted = cmdEvents.find((e) => e.data?.type === "agentStart");
+  assert(cmdStarted.data.code?.entry === "writer.agency", `command agentStart.code: ${JSON.stringify(cmdStarted.data.code)}`);
+  assert(!("input" in cmdStarted.data), `command agentStart should not record input, got ${JSON.stringify(cmdStarted.data.input)}`);
   // ...with exactly one trace id across the whole tree
   const traceIds = [...new Set(cmdEvents.map((e) => e.trace_id))];
   assert(traceIds.length === 1, `expected one trace id, got ${traceIds.length}: ${traceIds.join(", ")}`);

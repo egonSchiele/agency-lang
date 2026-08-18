@@ -1,3 +1,5 @@
+import * as path from "path";
+import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";
 import * as fs from "fs";
 
 import { nanoid } from "nanoid";
@@ -101,6 +103,8 @@ export async function runAgent(
 class AgentRunner {
   private readonly paths: AgentRunPaths;
   private seededFiles: string[] = [];
+  /** The seeded copy of the agent entry — the code that actually runs. */
+  private seededAgentEntry: string | null = null;
 
   constructor(
     private readonly target: EvalTarget,
@@ -181,6 +185,7 @@ class AgentRunner {
     copyFiles(this.paths.workdirPath, files);
     applyOverlay(this.paths.workdirPath, this.options.overlayFiles);
     this.seededFiles = Object.keys(files).sort();
+    this.seededAgentEntry = path.join(this.paths.workdirPath, seed.agentRelPath);
     return compileAgent(this.paths.workdirPath, seed.agentRelPath, this.options.config);
   }
 
@@ -213,6 +218,7 @@ class AgentRunner {
       task: this.task,
       cwd,
       statelogPath,
+      code: computeCodeIdentity(this.seededAgentEntry as string),
     };
   }
 

@@ -1,3 +1,4 @@
+import type { CodeIdentity } from "@/runDirectory/codeIdentity.js";
 import { fork } from "child_process";
 
 import type { AgencyConfig } from "@/config.js";
@@ -21,6 +22,8 @@ export type EvalRunnerJob =
       task: string | Record<string, any>;
       cwd: string;
       statelogPath: string;
+      /** Identity of the seeded agent code, recorded on the trace's agentStart. */
+      code: CodeIdentity;
     }
   | { kind: "command"; argv: string[]; cwd: string; statelogPath: string; traceId: string };
 
@@ -127,6 +130,7 @@ export function makeSubprocessRunner(
       task: job.task,
       cwd: job.cwd,
       statelogPath: job.statelogPath,
+      code: job.code,
       pipeAgentOutput,
       limits,
       maxCostUsd,
@@ -140,6 +144,7 @@ async function runCompiledAgentInSubprocess(args: {
   task: string | Record<string, any>;
   cwd: string;
   statelogPath: string;
+  code: CodeIdentity;
   pipeAgentOutput: boolean;
   limits: RunLimits;
   maxCostUsd: number;
@@ -153,7 +158,7 @@ async function runCompiledAgentInSubprocess(args: {
     limits,
     configOverrides: {
       observability: true,
-      log: { logFile: args.statelogPath },
+      log: { logFile: args.statelogPath, code: args.code },
     },
   });
 

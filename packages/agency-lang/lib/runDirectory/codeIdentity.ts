@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { agentClosure } from "@/analysis/closure.js";
+import { agentClosure, commonAncestor } from "@/analysis/closure.js";
 import { sha256Text } from "@/utils/hash.js";
 
 export type ClosureFile = { file: string; sha256: string };
@@ -9,9 +9,11 @@ export type CodeIdentity = { entry: string; closureHash: string; closure: Closur
 
 /** Which code an agent is: the entry file and every file it transitively
  *  imports, each hashed, plus one hash over the whole list. Paths are relative
- *  to the closure's base directory so the same code hashes the same anywhere. */
+ *  to the files' common ancestor (never the cwd, unlike `closureBaseDir`), so
+ *  the same code hashes the same wherever it was run from. */
 export function computeCodeIdentity(entryFile: string): CodeIdentity {
-  const { baseDir, files } = agentClosure(entryFile);
+  const { files } = agentClosure(entryFile);
+  const baseDir = commonAncestor(files.map((file) => path.dirname(file)));
   const closure = files
     .map((absoluteFile) => ({
       file: path.relative(baseDir, absoluteFile),

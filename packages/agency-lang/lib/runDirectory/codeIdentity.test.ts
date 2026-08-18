@@ -32,6 +32,19 @@ describe("computeCodeIdentity", () => {
     expect(secondIdentity.closureHash).toBe(firstIdentity.closureHash);
   });
 
+  it("does not depend on the working directory", () => {
+    const dir = proj({ "main.agency": "node main() { return 1 }\n" });
+    const fromOutside = computeCodeIdentity(path.join(dir, "main.agency"));
+    const previous = process.cwd();
+    process.chdir(path.dirname(dir));
+    try {
+      expect(computeCodeIdentity(path.join(dir, "main.agency"))).toEqual(fromOutside);
+    } finally {
+      process.chdir(previous);
+    }
+    expect(fromOutside.entry).toBe("main.agency");
+  });
+
   it("changes the hash when any closure file changes", () => {
     const dir = proj({ "main.agency": "node main() { return 1 }\n" });
     const before = computeCodeIdentity(path.join(dir, "main.agency")).closureHash;

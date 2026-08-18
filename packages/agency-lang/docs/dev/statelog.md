@@ -129,6 +129,29 @@ parent/child tree.
 Run lifecycle: `runMetadata`, `agentStart`, `agentEnd` (`agentEnd` posts its
 remote send with `noWait`).
 
+### Code identity and input on `agentStart`
+
+`agentStart` carries two fields that cannot be recovered after the fact and
+that let a trace stand on its own as "a run" (see
+`docs/superpowers/specs/2026-08-18-run-directory-and-annotations-design.md`):
+
+- `code` — `{ entry, closureHash, closure: [{ file, sha256 }] }`, computed by
+  `computeCodeIdentity(entryFile)` in `lib/runDirectory/codeIdentity.ts`.
+  Paths are relative to the closure files' common ancestor (never the cwd),
+  so the same code hashes the same wherever it was run from. It reaches the
+  client as `StatelogConfig.code`, which every launcher fills through the
+  `log.code` config override: `agency run` (`lib/cli/commands.ts`), the eval
+  file runner (`lib/eval/run/runAgent.ts` hashes the *seeded* copy), and
+  `agency agent` (`lib/cli/runBundledAgent.ts`; a precompiled agent shipped
+  without its `.agency` source records nothing). Command agents under
+  `--agent-cmd` get it from the `agency` CLI they invoke.
+- `input` — what the entry node was given, when the caller named it. It is
+  never derived from the node's parameters (a plain one-parameter call and an
+  eval input look identical there). The generated node wrapper takes a hidden
+  `input` option; the subprocess bootstrap passes `RunInstruction.task` through
+  it, so eval runs record their input and ordinary `agency run` invocations
+  record none.
+
 Graph & nodes: `graph`, `enterNode`, `exitNode`, `beforeHook`, `afterHook`,
 `followEdge`.
 

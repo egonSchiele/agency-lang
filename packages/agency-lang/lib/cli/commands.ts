@@ -1,5 +1,13 @@
 import { generateAgency } from "@/backends/agencyGenerator.js";
-import { AgencyConfig, loadConfigSafe } from "@/config.js";
+import {
+  AgencyConfig,
+  CONFIG_OVERRIDES_ENV,
+  loadConfigSafe,
+  mergeConfigOverrides,
+  readConfigOverrides,
+  serializeConfigOverrides,
+} from "@/config.js";
+import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";
 import { AgencyProgram } from "@/index.js";
 import { spawn } from "child_process";
 import * as fs from "fs";
@@ -276,6 +284,15 @@ export function run(
   console.log("---");
 
   const env: NodeJS.ProcessEnv = { ...process.env };
+  // Which code this run is, recorded on the trace's agentStart. Layered under
+  // any inherited overrides (an eval harness hands this process its statelog
+  // path the same way), so nothing a parent set is lost.
+  env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(
+    mergeConfigOverrides(
+      { log: { code: computeCodeIdentity(inputFile) } },
+      readConfigOverrides(env),
+    ),
+  );
   if (resumeFile) env.AGENCY_RESUME_FILE = resumeFile;
   // Make the child's policy behavior fully determined by THIS run's flags — never
   // by a stray AGENCY_RUN_POLICY* inherited from the parent shell or an outer run

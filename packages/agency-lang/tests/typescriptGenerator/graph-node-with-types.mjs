@@ -301,7 +301,7 @@ await callHook({
     };
   }
 })
-export async function greet(name: string, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId }: ({ messages?: any; callbacks?: any } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
+export async function greet(name: string, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, invocationInput: __invocationInput }: ({ messages?: any; callbacks?: any; invocationInput?: unknown } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "greet",
@@ -314,6 +314,7 @@ export async function greet(name: string, { messages: __invocationMessages, call
       config: __invocationConfig,
       traceId: __invocationTraceId
     },
+    input: __invocationInput,
     initializeGlobals: __initializeGlobals
   });
 }

@@ -283,7 +283,7 @@ await callHook({
     };
   }
 })
-export async function analyzeData(input: string, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId }: ({ messages?: any; callbacks?: any } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
+export async function analyzeData(input: string, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, invocationInput: __invocationInput }: ({ messages?: any; callbacks?: any; invocationInput?: unknown } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "analyzeData",
@@ -296,6 +296,7 @@ export async function analyzeData(input: string, { messages: __invocationMessage
       config: __invocationConfig,
       traceId: __invocationTraceId
     },
+    input: __invocationInput,
     initializeGlobals: __initializeGlobals
   });
 }

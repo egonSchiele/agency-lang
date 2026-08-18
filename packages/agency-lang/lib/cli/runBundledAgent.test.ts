@@ -169,7 +169,7 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     expect(overrides).toEqual({
       trace: true,
       traceFile: "t.trace",
-      log: { logFile: "l.jsonl" },
+      log: { logFile: "l.jsonl", code: expect.objectContaining({ entry: "agent.agency" }) },
       observability: true,
     });
     // Parent env is preserved (spread), so PATH survives.
@@ -188,7 +188,8 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
     expect(JSON.parse(opts.env[CONFIG_OVERRIDES_ENV])).toEqual({
       observability: true,
-      log: { logFile: "harness.jsonl" }, // inherited, survives
+      // inherited logFile survives; the launcher adds which code is running
+      log: { logFile: "harness.jsonl", code: expect.objectContaining({ entry: "agent.agency" }) },
       trace: true,
       traceFile: "t.trace",
     });
@@ -213,6 +214,27 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     const overrides = JSON.parse(opts.env[CONFIG_OVERRIDES_ENV]);
     expect(overrides.log.logFile).toBe("other.jsonl");
     expect(overrides.observability).toBe(true);
+  });
+
+  it("the launcher's own code identity replaces an inherited log.code: a trace never names another program", () => {
+    const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
+    vi.stubEnv(
+      CONFIG_OVERRIDES_ENV,
+      JSON.stringify({
+        log: {
+          logFile: "harness.jsonl",
+          code: { entry: "other.agency", closureHash: "stale", closure: [] },
+        },
+      }),
+    );
+
+    runBundledAgent({}, "agency-agent", [], {}, { spawn: spawnMock as never });
+
+    const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
+    const overrides = JSON.parse(opts.env[CONFIG_OVERRIDES_ENV]);
+    expect(overrides.log.code.entry).toBe("agent.agency");
+    expect(overrides.log.code.closureHash).not.toBe("stale");
+    expect(overrides.log.logFile).toBe("harness.jsonl");
   });
 
   it("sets AGENCY_MAX_COST/AGENCY_MAX_TIME from the forwarded flags and clears stale ones", () => {
@@ -281,11 +303,17 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
-  it("does not set the env var when no debug flags are present", () => {
+  it("always records which code is running, even with no debug flags", () => {
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
     runBundledAgent({}, "agency-agent", ["--print", "hi"], {}, { spawn: spawnMock as never });
     const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
-    expect(opts.env[CONFIG_OVERRIDES_ENV]).toBeUndefined();
+    const overrides = JSON.parse(opts.env[CONFIG_OVERRIDES_ENV]);
+    expect(Object.keys(overrides)).toEqual(["log"]);
+    expect(overrides.log.code.entry).toBe("agent.agency");
+    expect(overrides.log.code.closureHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(overrides.log.code.closure.map((file: { file: string }) => file.file)).toContain(
+      "agent.agency",
+    );
   });
 
   it("--agent-home sets AGENCY_AGENT_HOME in the child env, beating an inherited value", () => {

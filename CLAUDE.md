@@ -116,7 +116,7 @@ Pipeline and architecture:
 - `docs/dev/globalstore.md` — Global variable management with module isolation and serialization
 - `docs/dev/init-topsort.md` — Per-variable init dep graph, topological sort, per-module init plans, runtime init registry
 - `docs/dev/smoltalk.md` — External LLM client library for structured output requests
-- `docs/dev/statelog.md` — Observability and tracing system for execution events
+- `docs/dev/statelog.md` — Observability and tracing system for execution events; `agentStart` records code identity (`code`, cwd-independent closure hash) and the explicit `input`
 - `docs/dev/config.md` — AgencyConfig options for compiler and runtime configuration
 - `docs/dev/cli-arguments.md` — One command line, two programs: the position rule (agency's flags before the filename), the ownership rule (a flag is valid after its owning command, never before), the misplaced-flag warning and its `--` suppression, the shorthand being the real `run` command, the agent's full flag delegation with the minimal launcher pre-scan, and the `--` asymmetry across launchers
 - `docs/dev/vendored-commander.md` — The vendored commander fork: what was copied, the six ledgered modifications (duplicate-name guard, boundaries, provenance, fallback, ownership-aware parsing), the fork-discipline rules, and how to diff against upstream
@@ -126,7 +126,7 @@ Pipeline and architecture:
 - `docs/dev/runBatch.md` — The `runBatch` primitive: signature, three modes, slice rule, invoke no-throw contract, defensive guards
 - `docs/dev/saveDraft.md` — saveDraft salvage-on-abort: aborted functions return their draft (`AbortedResult`), the salvage rules and why they are structural, trade-offs, and easy-to-miss nuances
 - `docs/dev/reply-attachments.md` — How tools hand images back to the model: attachToReply, branch-local queues, harvest/inject in the tool loop, marker-string API
-- `docs/dev/writing-optimizers.md` — How to write a new `eval optimize` strategy on `BaseOptimizer`: the contract, helpers, grading semantics, reflection feedback, registration, testing
+- `docs/dev/writing-optimizers.md` — How to write a new `optimize` strategy on `BaseOptimizer`: the contract, helpers, grading semantics, reflection feedback, registration, testing
 - `docs/dev/eval-grading.md` — The run directory is the interface between running and grading: why `eval run --grade` deliberately re-reads what it just wrote, errored-runs-score-zero, per-test graders and the override/fallback precedence, where loader tolerance lives
 - `docs/dev/logs-viewer.md` — The interactive statelog viewer: the component View classes and view stack, the timeline kernel (self-time, busyness shading, thread-label grouping), and the rebuilt follow mode
 - `docs/dev/runs-explorer.md` — The cross-run explorer behind `agency logs <paths…>`: the loader's two-read phase 1 + bounded backfill, cursor pinned to row identity, the shared column-width table component, the embedded-viewer hand-off rules, CSV semantics

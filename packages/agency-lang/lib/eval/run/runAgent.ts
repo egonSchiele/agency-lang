@@ -1,3 +1,5 @@
+import * as path from "path";
+import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";
 import * as fs from "fs";
 
 import { nanoid } from "nanoid";
@@ -101,6 +103,8 @@ export async function runAgent(
 class AgentRunner {
   private readonly paths: AgentRunPaths;
   private seededFiles: string[] = [];
+  /** The seeded copy of the agent entry — the code that actually runs. */
+  private seededAgentEntry: string | null = null;
 
   constructor(
     private readonly target: EvalTarget,
@@ -181,6 +185,7 @@ class AgentRunner {
     copyFiles(this.paths.workdirPath, files);
     applyOverlay(this.paths.workdirPath, this.options.overlayFiles);
     this.seededFiles = Object.keys(files).sort();
+    this.seededAgentEntry = path.join(this.paths.workdirPath, seed.agentRelPath);
     return compileAgent(this.paths.workdirPath, seed.agentRelPath, this.options.config);
   }
 
@@ -206,13 +211,17 @@ class AgentRunner {
       const argv = substituteTask(this.target.tokens, this.task);
       return { kind: "command", argv, traceId: nanoid(), cwd, statelogPath };
     }
+    if (compiledEntryPath === null || this.seededAgentEntry === null) {
+      throw new Error("A file target must be seeded and compiled before its job is built.");
+    }
     return {
       kind: "file",
-      compiledEntryPath: compiledEntryPath as string,
+      compiledEntryPath,
       node: this.target.node,
       task: this.task,
       cwd,
       statelogPath,
+      code: computeCodeIdentity(this.seededAgentEntry),
     };
   }
 

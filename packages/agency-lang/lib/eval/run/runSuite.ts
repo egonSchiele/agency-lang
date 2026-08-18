@@ -60,7 +60,7 @@ export type RunSuiteOptions = {
   /** Default true: suite-level progress on stderr (the run-dir line, the
    *  per-input heartbeat and status lines, the parallel status board). The
    *  optimizer turns it off — its reporter owns the narrative, and
-   *  `eval optimize --silent` must print nothing at all. */
+   *  `optimize --silent` must print nothing at all. */
   progress?: boolean;
   /** Source provenance recorded in config.json; "unspecified" when omitted. */
   provenance?: { inputsSource: SourceProvenance; files: Record<string, SourceProvenance> };

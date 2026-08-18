@@ -60,7 +60,7 @@ export function closureBaseDir(absoluteFiles: string[]): string {
   return isInsideOrSame(ancestor, cwd) ? cwd : ancestor;
 }
 
-function commonAncestor(paths: string[]): string {
+export function commonAncestor(paths: string[]): string {
   if (paths.length === 0) return process.cwd();
   const [first, ...rest] = paths.map((candidate) => path.resolve(candidate).split(path.sep));
   const prefix: string[] = [];

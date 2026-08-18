@@ -152,14 +152,14 @@ describe("runCli", () => {
 });
 
 describe("agency CLI command tree", () => {
-  it("exposes optimize under both `eval optimize` and the top-level `optimize` alias", () => {
+  it("exposes optimize only at the top level, not as `eval optimize`", () => {
     const program = createProgram();
     const topLevelCommands = program.commands.map((command) => command.name());
     const evalCommand = program.commands.find((command) => command.name() === "eval");
     const evalCommands = evalCommand?.commands.map((command) => command.name()) ?? [];
 
     expect(topLevelCommands).toContain("optimize");
-    expect(evalCommands).toContain("optimize");
+    expect(evalCommands).not.toContain("optimize");
   });
 
   it("makes `view` the default for `logs` so `agency logs <file>` works without the subcommand", () => {

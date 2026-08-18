@@ -42,7 +42,7 @@ export function loadInputs(
     : loadInputsFromFile(sourcePath, makeId, options);
   // An empty suite is a mistake (wrong path, empty file), never a run:
   // zero inputs would "succeed" with objective 0 and hide the mistake —
-  // and under `eval optimize` it would burn the whole iteration budget
+  // and under `optimize` it would burn the whole iteration budget
   // grading candidates against nothing.
   if (inputs.length === 0) {
     throw new Error(`no inputs loaded from ${sourcePath}`);

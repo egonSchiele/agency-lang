@@ -29,6 +29,12 @@ export function traceDigest(events: readonly EventEnvelope[]): string {
 /**
  * Read a statelog file into traces, grouped by `trace_id` in first-seen order.
  *
+ * This is the many-trace, byte-preserving reader; `StatelogParser`
+ * (lib/eval/statelogParser.ts) is the one-trace, one-file view for graders.
+ * Both parse lines with `parseStatelogJsonlWithLines`, and a trace's eval
+ * record is still `extractEvalRecord` (see `evalRecord.ts`). What is new here
+ * is only grouping by id, keeping raw lines for merging, and the digest.
+ *
  * A trailing line without its newline is a torn write and is ignored. A line
  * byte-identical to one already seen for its trace is dropped: that is the
  * harmless result of `cat`-ing two copies of one trace. Nothing more is
@@ -37,6 +43,25 @@ export function traceDigest(events: readonly EventEnvelope[]): string {
  */
 export function readTraces(statelogPath: string): ReadTracesResult {
   return tracesFromText(fs.readFileSync(statelogPath, "utf8"));
+}
+
+/** For writers: a statelog with any unparseable line is refused whole, since a
+ *  trace stored without its bad lines would look complete and be judged as
+ *  such. Readers stay tolerant (`readTraces`). */
+export function readTracesOrThrow(statelogPath: string): Trace[] {
+  const { traces, errors } = readTraces(statelogPath);
+  if (errors.length > 0) {
+    const shown = errors
+      .slice(0, 3)
+      .map((error) => `line ${error.line}: ${error.kind} (${error.detail})`)
+      .join("; ");
+    const more = errors.length > 3 ? ` and ${errors.length - 3} more` : "";
+    throw new Error(
+      `Refusing to add ${statelogPath}: ${errors.length} line(s) could not be parsed as ` +
+        `statelog events (${shown}${more}). Nothing was written.`,
+    );
+  }
+  return traces;
 }
 
 export function tracesFromText(text: string): ReadTracesResult {

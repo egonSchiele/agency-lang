@@ -2,7 +2,7 @@ import * as fs from "fs";
 
 import { describe, expect, it } from "vitest";
 
-import { applyStatelogMerge, planStatelogMerge } from "./mergeStatelog.js";
+import { applyStatelogMerge, describeStatelogMerge, planStatelogMerge } from "./mergeStatelog.js";
 import { runDirPaths } from "./runDir.js";
 import { statelogLine, tempDir, tracesOf } from "./testFixtures.js";
 
@@ -51,5 +51,33 @@ describe("applyStatelogMerge", () => {
     const conflicting = planStatelogMerge(tracesOf(first), tracesOf(statelogLine("a", "agentEnd")));
     expect(() => applyStatelogMerge(paths, conflicting)).toThrow(/conflicts/);
     expect(fs.readFileSync(paths.statelog, "utf8")).toBe(text);
+  });
+});
+
+describe("describeStatelogMerge", () => {
+  const existing = tracesOf(statelogLine("a", "agentStart"), statelogLine("b", "agentStart"));
+
+  it("names every refused id", () => {
+    const incoming = tracesOf(
+      statelogLine("a", "agentStart", { changed: true }),
+      statelogLine("b", "agentStart", { changed: true }),
+    );
+    const text = describeStatelogMerge(planStatelogMerge(existing, incoming), "/runs/x");
+    expect(text).toMatch(/a, b/);
+    expect(text).toMatch(/Nothing was written/);
+  });
+
+  it("says outright that nothing was added, and how many were already there", () => {
+    const incoming = tracesOf(statelogLine("a", "agentStart"), statelogLine("b", "agentStart"));
+    const text = describeStatelogMerge(planStatelogMerge(existing, incoming), "/runs/x");
+    expect(text).toMatch(/Nothing was added/);
+    expect(text).toMatch(/all 2 trace\(s\) were already present \(a, b\)/);
+  });
+
+  it("counts what was added and what was already present", () => {
+    const incoming = tracesOf(statelogLine("a", "agentStart"), statelogLine("c", "agentStart"));
+    expect(describeStatelogMerge(planStatelogMerge(existing, incoming), "/runs/x")).toBe(
+      "Added 1 trace(s) to /runs/x; 1 already present.",
+    );
   });
 });

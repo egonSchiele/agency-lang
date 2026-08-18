@@ -151,6 +151,42 @@ describe("recordCompletedRun", () => {
   });
 });
 
+describe("recordCompletedRun preflight", () => {
+  const run = {
+    annotator: { kind: "harness" as const, id: "eval@test" },
+    payload: {
+      kind: "run" as const,
+      test: { id: "a", input: "hi" },
+      suite: null,
+      ended: "ok" as const,
+      flags: {},
+    },
+  };
+
+  it("refuses a run row whose trace is neither in the directory nor in the staged statelog", () => {
+    const dir = tempDir();
+    const staged = statelogFile(agentStartLine("t1"), statelogLine("t1", "agentEnd"));
+    expect(() =>
+      recordCompletedRun({ dir, stagedStatelogFile: staged, run: { traceId: "t2", ...run } }),
+    ).toThrow(/t2.*staged statelog.*t1/);
+    expect(fs.existsSync(runDirPaths(dir).statelog)).toBe(false);
+    expect(fs.existsSync(runDirPaths(dir).annotations)).toBe(false);
+  });
+
+  it("refuses a staged statelog with a malformed line in the middle, writing nothing", () => {
+    const dir = tempDir();
+    const staged = statelogFile(agentStartLine("t1"), "{ not json", statelogLine("t1", "agentEnd"));
+    expect(() =>
+      recordCompletedRun({ dir, stagedStatelogFile: staged, run: { traceId: "t1", ...run } }),
+    ).toThrow(/could not be parsed/);
+    expect(fs.existsSync(runDirPaths(dir).statelog)).toBe(false);
+    expect(() =>
+      addToRunDirectory({ dir, statelogFiles: [staged], codeEntries: [], annotationFiles: [] }),
+    ).toThrow(/could not be parsed/);
+    expect(fs.existsSync(runDirPaths(dir).statelog)).toBe(false);
+  });
+});
+
 describe("recordNote", () => {
   it("is idempotent and refuses an unknown trace", () => {
     const dir = tempDir();
@@ -227,6 +263,10 @@ describe("recordGradingPass", () => {
       first.annotations[0].id,
     );
     expect(partial.passId).toBeDefined();
+  });
+
+  it("refuses an empty pass instead of minting a pass id for nothing", () => {
+    expect(() => recordGradingPass({ dir: directory(), scores: [] })).toThrow(/at least one/);
   });
 
   it("refuses when any score names an unknown trace, recording nothing", () => {

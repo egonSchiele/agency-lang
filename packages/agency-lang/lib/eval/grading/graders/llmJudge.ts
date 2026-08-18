@@ -1,3 +1,6 @@
+import * as fs from "fs";
+
+import { sha256Text } from "@/utils/hash.js";
 import { z } from "zod";
 
 import { asJudgeText, goalJudgeFile, ScalarVerdict } from "../goalJudgeFile.js";
@@ -18,6 +21,14 @@ const BinaryVerdict = z.object({ pass: z.boolean(), reasoning: z.string() });
 
 /** Grades an output by running a judge .agency file and reading its structured verdict. */
 export class LlmJudge extends BaseGrader {
+  /** The bundled judge is identified by its prompt file's content, so a
+   *  changed judge prompt is a new annotator; a custom agencyFile likewise. */
+  override annotator(): { kind: "grader" | "judge"; id: string } {
+    if (this.revision !== undefined) return { kind: "grader", id: this.revision };
+    const agencyFile = this.options.agencyFile ?? goalJudgeFile();
+    return { kind: "judge", id: `goal-judge@${sha256Text(fs.readFileSync(agencyFile, "utf8"))}` };
+  }
+
   protected readonly defaultName = "llm-judge";
   constructor(protected readonly options: LlmJudgeOptions) {
     super(options);

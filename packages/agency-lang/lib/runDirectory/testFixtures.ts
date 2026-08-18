@@ -43,3 +43,37 @@ export function writeProject(files: Record<string, string>): string {
   }
   return dir;
 }
+
+/** A finished agent trace: agentStart, an optional evalOutputRecorded, agentEnd
+ *  with the return value. `output` undefined → no output recorded and a
+ *  result-less agentEnd (a clean run that returned nothing). */
+export function finishedTraceLines(
+  traceId: string,
+  options: { output?: unknown; input?: unknown; code?: CodeIdentity; costUsd?: number } = {},
+): string[] {
+  const start: Record<string, unknown> = { entryNode: "main", args: {} };
+  if (options.input !== undefined) start.input = options.input;
+  if (options.code !== undefined) start.code = options.code;
+  const lines = [statelogLine(traceId, "agentStart", start)];
+  if (options.costUsd !== undefined) {
+    lines.push(
+      statelogLine(traceId, "promptCompletion", {
+        model: "test-model",
+        cost: { totalCost: options.costUsd },
+        usage: { inputTokens: 1, outputTokens: 1 },
+      }),
+    );
+  }
+  if (options.output !== undefined) {
+    lines.push(
+      statelogLine(traceId, "evalOutputRecorded", { value: options.output, threadId: "0" }),
+    );
+  }
+  lines.push(
+    statelogLine(traceId, "agentEnd", {
+      timeTaken: 5,
+      ...(options.output === undefined ? {} : { result: options.output }),
+    }),
+  );
+  return lines;
+}

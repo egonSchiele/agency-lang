@@ -7,14 +7,23 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import type { EvalRunProvenance } from "../eval/runArtifacts.js";
 import type { EvalRunResult } from "../eval/runTypes.js";
+
+/** The pre-run-directory config.json `provenance` block, as old runs on disk
+ *  still carry it. Nothing writes this shape any more. */
+export type LegacyRunProvenance = {
+  inputsSource: { source: string; sha?: string };
+  files: Record<string, { source: string; sha?: string }>;
+  agent:
+    | { entry: string; closure: { file: string; sha256: string }[] }
+    | { command: string; harnessVersion: string; cliVersion?: string };
+};
 
 export type EvalRunConfig = {
   runId?: string;
   agentLabel?: string;
   startedAt?: string;
-  provenance?: EvalRunProvenance;
+  provenance?: LegacyRunProvenance;
 };
 
 export type EvalRunPhaseOne = {

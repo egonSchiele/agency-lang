@@ -61,6 +61,8 @@ export type RunPayload = {
   suite: SuiteIdentity | null;
   ended: RunOutcome;
   flags: Record<string, JsonValue>;
+  /** The harness's error message when `ended` is not "ok". */
+  error?: string;
 };
 
 export type AnnotationPayload = NotePayload | ChecklistPayload | ScorePayload | RunPayload;
@@ -141,6 +143,7 @@ export const AnnotationSchema = z.discriminatedUnion("kind", [
       suite: z.object({ source: z.string(), sha: z.string().optional() }).strict().nullable(),
       ended: z.enum(["ok", "error", "timeout", "cost-cap", "killed"]),
       flags: z.record(z.string(), JsonValueSchema),
+      error: z.string().optional(),
     })
     .strict(),
 ]);

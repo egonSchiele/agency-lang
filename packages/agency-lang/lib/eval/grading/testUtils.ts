@@ -33,5 +33,5 @@ export const EMPTY_RECORD: EvalRecord = {
 
 /** A LoadedRun carrying just an output — for tests of graders that read nothing else. */
 export function loadedRun(output: JSON): LoadedRun {
-  return { output, recordPath: "", workdir: "", record: EMPTY_RECORD };
+  return { output, traceId: "trace-under-test", workdir: "", record: EMPTY_RECORD };
 }

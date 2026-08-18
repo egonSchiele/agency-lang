@@ -3,9 +3,9 @@ import * as path from "path";
 
 /**
  * Resolve "the statelog for this run" from the paths a user naturally has
- * in hand: a run directory (one input → that input's statelog; several →
- * --input picks, and the error lists the choices), a single input's
- * directory (runs/<id>/inputs/<inputId>), or a statelog file itself.
+ * in hand: a run directory (its `statelog.jsonl`, which holds every test's
+ * trace), a statelog file itself, or — for eval runs written before the run
+ * directory — the old per-input layout (`--input` picks one).
  */
 export function resolveRunStatelog(target: string, inputId?: string): string {
   const resolved = path.resolve(target);
@@ -15,6 +15,12 @@ export function resolveRunStatelog(target: string, inputId?: string): string {
   if (fs.statSync(resolved).isFile()) {
     return resolved;
   }
+  // a run directory: one statelog holds every test's trace
+  const runStatelog = path.join(resolved, "statelog.jsonl");
+  if (fs.existsSync(runStatelog)) {
+    return runStatelog;
+  }
+  // LEGACY layouts below (pre-run-directory eval runs on disk).
   // an input directory directly
   const direct = path.join(resolved, "agent", "statelog.jsonl");
   if (fs.existsSync(direct)) {

@@ -14,6 +14,7 @@ import { loadProviderModules } from "./providerModules.js";
 import { ensureConfiguredLocalProvider } from "./localProvider.js";
 import { resolveTraceFilePath } from "./trace/traceWriter.js";
 import { getSubprocessRunInfo } from "./subprocessRunInfo.js";
+import { TRACE_ID_ENV } from "../config.js";
 import { resolveInvocation, type InvocationOptions } from "./invocationOptions.js";
 import { installRunPolicyHandler } from "./runPolicyHandler.js";
 import { installRootBudget } from "./rootBudget.js";
@@ -368,11 +369,13 @@ async function runNodeCore({
 }: RunNodeArgs): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
   // The resolver owns run-id policy: a subprocess INHERITS the parent's runId
   // (seeded from the run instruction) so child statelog events land in the same
-  // trace; otherwise an injected traceId wins, else a fresh id is minted.
+  // trace; otherwise an injected traceId wins, then a harness-set
+  // AGENCY_TRACE_ID, else a fresh id is minted.
   const resolved = resolveInvocation({
     kind: "fresh",
     options: invocation,
     inheritedRunId: getSubprocessRunInfo().runId,
+    environmentTraceId: process.env[TRACE_ID_ENV],
   });
 
   // runNode is the entry point for a fresh agent run (resumes go through

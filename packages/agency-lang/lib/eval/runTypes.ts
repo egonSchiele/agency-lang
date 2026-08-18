@@ -58,6 +58,27 @@ export type InputMetricsSummary = {
   agentName?: string;
 };
 
+/** What `runSuite` returns, in memory: which tests ran, as which traces, and
+ *  how each ended. Everything durable is in the run directory. */
+export type SuiteTestResult = {
+  testId: string;
+  traceId: string;
+  status: "success" | "error";
+  errorMessage?: string;
+};
+
+export type SuiteRunResult = {
+  runId: string;
+  runDir: string;
+  /** Display label, "<absolute agent path>:<node>" or the command string. */
+  agentLabel: string;
+  tests: SuiteTestResult[];
+  okCount: number;
+  errorCount: number;
+};
+
+/** @deprecated The pre-run-directory summary.json shape. Still read by the
+ *  runs explorer for old directories; nothing writes it. */
 export type EvalRunInputResult = {
   inputId: string;
   status: "success" | "error";
@@ -79,11 +100,7 @@ export type EvalRunGrading = {
   perInput: InputBreakdown[];
 };
 
-/** Two questions live here, deliberately separate: `inputs` answers "did the
- *  agent crash?" (execution; always present), `grading` answers "how good was
- *  it?" (judgment; present only when graders ran). okCount/errorCount are
- *  denormalized from inputs[].status for one-glance summaries. Restructuring
- *  this split is named Level-2 work in the eval-cleanups spec. */
+/** @deprecated The pre-run-directory summary.json shape (see EvalRunInputResult). */
 export type EvalRunResult = {
   runId: string;
   runDir: string;

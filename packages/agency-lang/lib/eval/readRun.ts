@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { agentRunPaths } from "./run/extract.js";
 import type { EvalRunResult, EvalRunInputResult, Test } from "./runTypes.js";
 
 export type ReadEvalRunInput = {
@@ -28,11 +27,12 @@ export function readEvalRun(
   for (const result of summary.inputs) {
     const inputDir = path.join(resolvedRunDir, "inputs", result.inputId);
     const input = readOptionalJson<Test>(path.join(inputDir, "input.json"), onWarning);
-    const recordPath = result.evalRecordPath || agentRunPaths(inputDir).evalRecordPath;
+    // Legacy layout: records under <input>/agent/.
+    const recordPath = result.evalRecordPath || path.join(inputDir, "agent", "eval-record.json");
     const status = inputStatus(result, recordPath);
     const errorMessage =
       status === "failed"
-        ? (readOptionalText(agentRunPaths(inputDir).errorPath) ?? result.errorMessage)
+        ? (readOptionalText(path.join(inputDir, "agent", "error.txt")) ?? result.errorMessage)
         : undefined;
 
     if (Object.hasOwn(inputsById, result.inputId)) {

@@ -124,7 +124,9 @@ export type RunAnnotationDraft = { traceId: string; annotator: Annotator; payloa
 
 export type RecordCompletedRunRequest = {
   dir: string;
-  stagedStatelogFile: string;
+  /** Absent when the run never wrote a statelog; the `run` row is still
+   *  recorded so the failure is not lost. */
+  stagedStatelogFile?: string;
   codeEntry?: string;
   workdir?: WorkdirAttachmentRequest;
   run: RunAnnotationDraft;
@@ -139,7 +141,8 @@ export function recordCompletedRun(
   options: MutationOptions = {},
 ): RecordCompletedRunResult {
   return withWriter(request.dir, options, (paths, snapshot, reportWarning) => {
-    const incoming = readTraces(request.stagedStatelogFile).traces;
+    const incoming =
+      request.stagedStatelogFile === undefined ? [] : readTraces(request.stagedStatelogFile).traces;
     const statelogPlan = planStatelogMerge(snapshot.traces, incoming);
     if (statelogPlan.refused.length > 0) {
       throw new Error(

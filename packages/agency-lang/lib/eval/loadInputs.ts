@@ -4,7 +4,6 @@ import * as path from "path";
 import { nanoid } from "nanoid";
 
 import { assertEvalInputId } from "./ids.js";
-import type { SourceProvenance } from "./runArtifacts.js";
 import type { Test } from "./runTypes.js";
 import { parseSource, resolveSource } from "./sources.js";
 
@@ -16,8 +15,8 @@ type LoadOptions = {
   requireGoal?: boolean;
   /** One-level nesting rule: set when the suite itself came from a git source. */
   forbidGitFiles?: boolean;
-  /** Caller-supplied accumulator: input id → files source provenance. */
-  filesProvenance?: Record<string, SourceProvenance>;
+  /** Caller-supplied accumulator: test id → where its `files` came from. */
+  filesProvenance?: Record<string, { source: string; sha?: string }>;
   /** Cache root override for git sources (tests; config.eval.sourceCacheRoot). */
   sourceCacheRoot?: string;
 };

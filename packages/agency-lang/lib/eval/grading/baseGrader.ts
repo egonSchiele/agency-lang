@@ -8,6 +8,19 @@ import type { Grade, GraderInput, GraderOptions, Test } from "./types.js";
 export abstract class BaseGrader {
   constructor(protected readonly options: GraderOptions = {}) {}
 
+  /** Who this grader is, by revision, for the score rows it writes: a module
+   *  grader is `<path>@<sha256 of the file>` (set by loadGradingModule), so
+   *  editing the module in place is a new annotator; the bundled goal judge is
+   *  `goal-judge@<hash of its prompt file>`; anything else constructed in
+   *  process is `inline:<name>`. */
+  annotator(): { kind: "grader" | "judge"; id: string } {
+    if (this.revision !== undefined) return { kind: "grader", id: this.revision };
+    return { kind: "grader", id: `inline:${this.name()}` };
+  }
+
+  /** @internal Set by loadGradingModule on every grader a module exports. */
+  revision?: string;
+
   /** Subclasses set a default; `options.name` overrides it. */
   protected abstract readonly defaultName: string;
   name(): string {

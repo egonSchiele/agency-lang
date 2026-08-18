@@ -1,7 +1,6 @@
 import * as path from "path";
 
 import { resolveEvalRunTarget } from "@/agentTarget.js";
-import { makeEvalRecordExtractor } from "@/eval/run/extract.js";
 import { runSuite } from "@/eval/run/runSuite.js";
 import { gradeRun, type GradingContext } from "@/eval/grading/gradeRun.js";
 
@@ -319,7 +318,7 @@ export abstract class BaseOptimizer {
     const result = await runSuite({
       agent: path.join(source.baseDir, source.entryFile), // used for label/node parsing only
       inputs: [{ ...input, id }],
-      provenance: { inputsSource: { source: "optimize" }, files: {} },
+      suite: { source: "optimize" },
       runsDir: path.join(this.config.runsDir, this.config.runId, "agent-runs", ws.key),
       runId: `run-${this.runCounter}`,
       config: this.config.config,
@@ -335,15 +334,12 @@ export abstract class BaseOptimizer {
           closureFiles: Object.values(source.files).map((sourceFile) => sourceFile.absoluteFile),
         },
         overlayFiles: files,
-        // Skip the "did you forget to call evalValue()" warning — optimize
-        // inputs come from the input spec, so its absence is normal here.
-        extractor: makeEvalRecordExtractor({ warnMissingValue: false }),
       },
     });
-    const inputResult = result.inputs[0];
-    if (!inputResult || inputResult.status !== "success") {
+    const testResult = result.tests[0];
+    if (!testResult || testResult.status !== "success") {
       throw new Error(
-        `agent run failed for input ${input.id ?? "(no id)"}: ${inputResult?.errorMessage ?? "unknown error"}`,
+        `agent run failed for input ${input.id ?? "(no id)"}: ${testResult?.errorMessage ?? "unknown error"}`,
       );
     }
     return result.runDir;

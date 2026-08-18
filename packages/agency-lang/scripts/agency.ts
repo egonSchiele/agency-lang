@@ -806,8 +806,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--runs-dir <path>", "Runs output directory")
     .option("--continue-on-error", "Continue after task failures", true)
     .option("--no-continue-on-error", "Stop after first input failure")
-    .option("--graders <file>", "TypeScript grading module (default-exports graders)")
-    .option("--no-grade", "Skip grading; only run the agent")
     .option(
       "-n, --parallel <count>",
       "Run up to this many inputs at once (default 1). Above 1, per-agent output is replaced by a status board (name, state, elapsed, cost so far)",
@@ -833,8 +831,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
         runId?: string;
         runsDir?: string;
         continueOnError?: boolean;
-        graders?: string;
-        grade?: boolean;
         parallel?: number;
         maxToolCallRounds?: number;
         maxToolResultChars?: number;
@@ -865,21 +861,14 @@ export function createProgram(deps: CliDependencies = {}): Command {
         });
         const result = await evalRun({ ...opts, config });
         console.log(
-          `Run ${result.runId} completed: ${result.okCount}/${result.inputs.length} inputs ok`,
+          `Run ${result.runId} completed: ${result.okCount}/${result.tests.length} tests ok`,
         );
-        if (result.grading) {
-          for (const line of formatGrading(result.grading.objective, result.grading.perInput)) {
-            console.log(line);
-          }
-        }
-        const costUsd = totalRunCostUsd(result);
+        const costUsd = totalRunCostUsd(result.runDir);
         if (costUsd !== undefined) {
           console.log(`total LLM cost: $${costUsd.toFixed(2)}`);
         }
-        console.log(path.join(result.runDir, "summary.json"));
-        if (result.grading && !result.grading.gatesPassed) {
-          process.exit(2);
-        }
+        console.log(result.runDir);
+        console.log(`grade it with: agency eval grade ${result.runDir}`);
         if (result.errorCount > 0 && opts.continueOnError === false) {
           process.exit(2);
         }
@@ -944,7 +933,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Score a finished eval run without re-running the agent")
     .argument("<runDir>", "Path to a run directory produced by `agency eval run`")
     .option("--graders <file>", "TypeScript grading module (default-exports graders)")
-    .option("-o, --out <path>", "Output path (default: <runDir>/grading.json)")
+    .option("-o, --out <path>", "Also write the grading summary here as JSON")
     .action(async (runDir: string, opts: { graders?: string; out?: string }) => {
       const grading = await evalGrade(runDir, { ...opts, config: getConfig() });
       for (const line of formatGrading(grading.objective, grading.perInput)) {

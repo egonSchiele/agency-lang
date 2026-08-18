@@ -13,15 +13,13 @@ export type JSON = string | number | boolean | null | JSON[] | { [key: string]: 
 /** A path of object keys / array indices into a JSON value. */
 export type JSONPath = (string | number)[];
 
-/** One finished run's evidence, loaded off disk by grading's loader — as
- *  opposed to `AgentRun` (lib/eval/run/runAgent.ts), which is the outcome of
- *  EXECUTING. Built from the run's `EvalRunInputResult`, so `record` is parsed
- *  exactly once per input. */
+/** One trace's evidence as grading sees it — as opposed to `AgentRun`
+ *  (lib/eval/run/runAgent.ts), which is the outcome of EXECUTING. */
 export type LoadedRun = {
-  output: JSON; // the agent's return value
-  recordPath: string; // path to the full execution trace (eval record)
-  workdir: string; // the isolated directory the agent ran in
-  record: EvalRecord; // that trace, parsed
+  output: JSON; // the agent's return value (last recorded eval output), or null
+  traceId: string; // which trace in the run directory this is
+  workdir: string; // the agent's workdir snapshot ("" when none was captured)
+  record: EvalRecord; // the trace's eval record, computed from the statelog
 };
 
 /** A grader's score: pass/fail or a continuous value. */

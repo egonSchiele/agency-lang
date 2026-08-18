@@ -6,6 +6,7 @@ import type { Test } from "@/eval/runTypes.js";
 import type { EvalRecord } from "@/eval/types.js";
 import type { Annotation, EffectiveTraceAnnotations } from "@/runDirectory/annotations.js";
 import { evalRecordFor, traceEnding } from "@/runDirectory/evalRecord.js";
+import { humanFeedbackFor, type HumanFeedback } from "@/runDirectory/humanFeedback.js";
 import { readRunDirectory, runDirPaths, type RunDirectorySnapshot } from "@/runDirectory/runDir.js";
 import type { Trace } from "@/runDirectory/traces.js";
 
@@ -110,6 +111,7 @@ export function makeGraderModuleCache(
 type Entry = {
   test: Test;
   run: LoadedRun;
+  humanFeedback: HumanFeedback;
   /** Set when the trace cannot be graded at all — skip straight to a scored zero. */
   ungradedReason?: string;
 };
@@ -141,15 +143,16 @@ function entryFor(snapshot: RunDirectorySnapshot, trace: Trace): Entry {
     workdir: fs.existsSync(workdir) ? workdir : "",
     record,
   };
+  const humanFeedback = humanFeedbackFor(snapshot, trace.traceId);
   const ended = runRow !== null && runRow.kind === "run" ? runRow.ended : traceEnding(trace);
   if (ended === "ok") {
-    return { test, run };
+    return { test, run, humanFeedback };
   }
   const detail =
     runRow !== null && runRow.kind === "run" && runRow.error !== undefined
       ? `: ${runRow.error}`
       : "";
-  return { test, run, ungradedReason: `the run ended with ${ended}${detail}` };
+  return { test, run, humanFeedback, ungradedReason: `the run ended with ${ended}${detail}` };
 }
 
 /** The test a trace ran, from the harness's `run` row; an ad-hoc trace with
@@ -178,9 +181,11 @@ async function gradeEntry(
       grades: [],
       gatesPassed: false,
       ungradedReason: entry.ungradedReason,
+      humanFeedback: entry.humanFeedback,
     };
   }
-  return gradeInput(entry.test, entry.run, ctx, graders);
+  const graded = await gradeInput(entry.test, entry.run, ctx, graders);
+  return { ...graded, humanFeedback: entry.humanFeedback };
 }
 
 /**

@@ -77,7 +77,17 @@ on success or failure.
 - `addToRunDirectory({ dir, statelogFiles, codeEntries, workdir?, annotationFiles })`
 - `recordCompletedRun({ dir, stagedStatelogFile, codeEntry?, workdir?, run })` — the eval harness's one call per finished test
 - `recordNote({ dir, traceId, annotator, text })`
-- `recordGradingPass({ dir, scores })` — mints one `passId`, stamps `passSize`, marks the last row `completesPass`
+- `recordGradingPass({ dir, scores })` — mints one `passId`, stamps `passSize`, marks the last row `completesPass`; an empty `scores` is refused
+
+Writer inputs are held to a stricter standard than reads: a statelog file
+with any unparseable line is refused whole (`readTracesOrThrow`), because a
+trace stored without its bad lines would look complete. `recordCompletedRun`
+also refuses a `run` row for trace X when the staged statelog holds traces
+and X is not among them (nor already in the directory). A staged log with no
+traces is still fine: a run that died before its first event has no trace,
+and its `run` row is the only record it happened. `describeStatelogMerge(plan, dir)` is the one sentence for a
+merge outcome (which ids were refused, or that nothing was added and how many
+were already there); the CLI and the refusal errors both use it.
 
 Nothing outside this module and the checklist sign-off owner may import the
 lock or the `apply*` helpers.
@@ -92,7 +102,10 @@ The planners (`mergeStatelog.ts`, `attachCode.ts`, `attachWorkdir.ts`):
   warned. Stored under `code/<closureHash>/`; a stored tree that is incomplete
   or does not hash to its own name is reported as corrupt.
 - **Workdir** copies to `workdir/<traceId>/` and writes the dated sidecar. A
-  workdir attached later may postdate the run; the sidecar says so.
+  workdir attached later may postdate the run; the sidecar says so. The trace
+  id comes from the statelog, so the plan checks that both resolved paths are
+  direct children of `workdir/` before anything is written; an id like
+  `../escaped` is refused.
   Replacement goes through `safeDeleteDirectoryWithin(root, target)`
   (`lib/utils.ts`), which deletes only a strict descendant of the run
   directory's `workdir/` after resolving symlinks.
@@ -102,6 +115,13 @@ The planners (`mergeStatelog.ts`, `attachCode.ts`, `attachWorkdir.ts`):
 Moved here from the label store. One writer at a time per directory, as
 integrity protection: append order is semantic. A stale lock is reported with
 its pid and liveness and **never stolen**. Readers do not need it.
+
+Node has no built-in file lock (`fs` exposes no `flock`), so this is the
+standard idiom: create the lock file with the `wx` flag, which fails if the
+file exists, and record who holds it. Packages such as `proper-lockfile` do
+the same thing with more machinery (mtime-based staleness and takeover); we
+deliberately do not want takeover, so the ~100 lines here are the whole
+feature.
 
 ## Derived views
 

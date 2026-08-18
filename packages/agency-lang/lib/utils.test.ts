@@ -151,6 +151,14 @@ describe("safeDeleteDirectoryWithin", () => {
     expect(existsSync(child)).toBe(true);
   });
 
+  it("deletes a child whose name merely starts with two dots", () => {
+    const { root } = scratch();
+    const dotted = join(root, "..cache");
+    mkdirSync(dotted);
+    expect(safeDeleteDirectoryWithin(root, dotted)).toEqual({ success: true });
+    expect(existsSync(dotted)).toBe(false);
+  });
+
   it("refuses a symlink inside root that points outside it", () => {
     const { root, sibling } = scratch();
     const link = join(root, "escape");

@@ -41,6 +41,27 @@ export function planStatelogMerge(
   return plan;
 }
 
+/** One sentence a person can act on: which ids were refused, or that nothing
+ *  was added and why, or what was added. */
+export function describeStatelogMerge(plan: StatelogMergePlan, dir: string): string {
+  if (plan.refused.length > 0) {
+    const ids = plan.refused.map((refusal) => refusal.traceId).join(", ");
+    return (
+      `Refusing to merge into ${dir}: trace id(s) ${ids} already exist there with different ` +
+      `content. Nothing was written.`
+    );
+  }
+  if (plan.add.length === 0) {
+    if (plan.skipped.length === 0) return `Nothing to add to ${dir}: no traces were given.`;
+    return (
+      `Nothing was added to ${dir}: all ${plan.skipped.length} trace(s) were already present ` +
+      `(${plan.skipped.join(", ")}).`
+    );
+  }
+  const skipped = plan.skipped.length === 0 ? "" : `; ${plan.skipped.length} already present`;
+  return `Added ${plan.add.length} trace(s) to ${dir}${skipped}.`;
+}
+
 /** @internal Writes a plan that has no refusals. Caller holds the lock. */
 export function applyStatelogMerge(paths: RunDirectoryPaths, plan: StatelogMergePlan): void {
   if (plan.refused.length > 0) {

@@ -35,7 +35,7 @@ export function runsAdd(
   dependencies.report(
     [
       `Updated ${options.dir}:`,
-      `  statelog traces: ${result.statelogs.added} added, ${result.statelogs.skipped} already present`,
+      `  statelog traces: ${result.statelogSummary}`,
       `  code versions:   ${result.code.added} added, ${result.code.skipped} already present`,
       `  workdirs:        ${result.workdirs.added} added`,
       `  annotations:     ${result.annotations.added} added, ${result.annotations.skipped} already present`,

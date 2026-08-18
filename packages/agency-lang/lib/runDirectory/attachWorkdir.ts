@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { safeDeleteDirectoryWithin } from "@/utils.js";
+import { isStrictDescendant, safeDeleteDirectoryWithin } from "@/utils.js";
 
 import type { RunDirectoryPaths, RunDirectorySnapshot } from "./runDir.js";
 
@@ -46,6 +46,21 @@ export function planWorkdirAttachment(
   }
   const target = path.join(paths.workdirDir, request.traceId);
   const sidecar = path.join(paths.workdirDir, `${request.traceId}.json`);
+  // A trace id is whatever the statelog said it was. One like `../escaped`
+  // would put both files outside workdir/, so the resolved paths are checked
+  // here, before anything is written, not just on replacement.
+  const workdirRoot = path.resolve(paths.workdirDir);
+  const contained = [target, sidecar].every(
+    (file) =>
+      isStrictDescendant(workdirRoot, path.resolve(file)) &&
+      path.dirname(path.resolve(file)) === workdirRoot,
+  );
+  if (!contained) {
+    throw new WorkdirAttachmentError(
+      `Refusing to attach a workdir for trace "${request.traceId}": its id would place files ` +
+        `outside ${paths.workdirDir}.`,
+    );
+  }
   if (fs.existsSync(target)) {
     if (request.replace !== true) {
       throw new WorkdirAttachmentError(

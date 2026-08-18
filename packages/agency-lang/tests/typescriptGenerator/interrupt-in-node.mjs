@@ -621,7 +621,7 @@ await callHook({
   }
 })
 graph.conditionalEdge("sayHi", ["foo2"])
-export async function foo2(name: string, age: number, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, input: __invocationInput }: ({ messages?: any; callbacks?: any; input?: unknown } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
+export async function foo2(name: string, age: number, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, invocationInput: __invocationInput }: ({ messages?: any; callbacks?: any; invocationInput?: unknown } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "foo2",
@@ -640,7 +640,7 @@ export async function foo2(name: string, age: number, { messages: __invocationMe
   });
 }
 export const __foo2NodeParams = ["name", "age"];
-export async function sayHi(name: any, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, input: __invocationInput }: ({ messages?: any; callbacks?: any; input?: unknown } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
+export async function sayHi(name: any, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, invocationInput: __invocationInput }: ({ messages?: any; callbacks?: any; invocationInput?: unknown } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "sayHi",

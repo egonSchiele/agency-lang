@@ -8,7 +8,7 @@ import {
   serializeConfigOverrides,
   TRACE_ID_ENV,
 } from "@/config.js";
-import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";
+import { withCodeIdentity } from "@/runDirectory/codeIdentity.js";
 import { addToRunDirectory } from "@/runDirectory/mutations.js";
 import { AgencyProgram } from "@/index.js";
 import { spawn } from "child_process";
@@ -292,19 +292,15 @@ export function run(
 
   const env: NodeJS.ProcessEnv = { ...process.env };
   const captured = capture === undefined ? undefined : prepareCapture(capture.runDir);
-  // Which code this run is, recorded on the trace's agentStart. Layered under
-  // any inherited overrides (an eval harness hands this process its statelog
-  // path the same way), so nothing a parent set is lost.
+  // Which code this run is, recorded on the trace's agentStart, plus the
+  // capture statelog when one was asked for. Inherited overrides are kept (an
+  // eval harness hands this process its statelog path the same way), but the
+  // identity of THIS file wins over any `log.code` a parent or stale shell
+  // left behind: a trace must never name another program.
+  const captureOverrides =
+    captured === undefined ? {} : { observability: true, log: { logFile: captured.statelogFile } };
   env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(
-    mergeConfigOverrides(
-      captured === undefined
-        ? { log: { code: computeCodeIdentity(inputFile) } }
-        : {
-            observability: true,
-            log: { code: computeCodeIdentity(inputFile), logFile: captured.statelogFile },
-          },
-      readConfigOverrides(env),
-    ),
+    withCodeIdentity(mergeConfigOverrides(readConfigOverrides(env), captureOverrides), inputFile),
   );
   if (captured !== undefined) env[TRACE_ID_ENV] = captured.traceId;
   if (resumeFile) env.AGENCY_RESUME_FILE = resumeFile;

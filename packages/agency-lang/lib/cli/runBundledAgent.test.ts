@@ -216,6 +216,27 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     expect(overrides.observability).toBe(true);
   });
 
+  it("the launcher's own code identity replaces an inherited log.code: a trace never names another program", () => {
+    const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
+    vi.stubEnv(
+      CONFIG_OVERRIDES_ENV,
+      JSON.stringify({
+        log: {
+          logFile: "harness.jsonl",
+          code: { entry: "other.agency", closureHash: "stale", closure: [] },
+        },
+      }),
+    );
+
+    runBundledAgent({}, "agency-agent", [], {}, { spawn: spawnMock as never });
+
+    const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
+    const overrides = JSON.parse(opts.env[CONFIG_OVERRIDES_ENV]);
+    expect(overrides.log.code.entry).toBe("agent.agency");
+    expect(overrides.log.code.closureHash).not.toBe("stale");
+    expect(overrides.log.logFile).toBe("harness.jsonl");
+  });
+
   it("sets AGENCY_MAX_COST/AGENCY_MAX_TIME from the forwarded flags and clears stale ones", () => {
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
     vi.stubEnv("AGENCY_MAX_COST", "999");

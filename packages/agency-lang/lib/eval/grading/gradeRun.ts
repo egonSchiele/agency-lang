@@ -49,13 +49,44 @@ export async function gradeSnapshot(
 ): Promise<Scorecard> {
   const moduleCache = makeGraderModuleCache(ctx.config);
   const perInput = await Promise.all(
-    snapshot.traces.map(async (trace) => {
-      const entry = entryFor(snapshot, trace);
+    gradableEntries(snapshot).map(async (entry) => {
       const graders = await effectiveGraders(entry.test, ctx, moduleCache);
       return gradeEntry(entry, ctx, graders);
     }),
   );
   return new Scorecard(perInput);
+}
+
+/** Every trace, plus every harness `run` row whose trace never made it into
+ *  the statelog (the agent died before its first event). Those runs are
+ *  tests too; leaving them out would let a suite where half the tests never
+ *  started score as if only the other half existed. */
+function gradableEntries(snapshot: RunDirectorySnapshot): Entry[] {
+  const entries = snapshot.traces.map((trace) => entryFor(snapshot, trace));
+  const withTrace: Record<string, true> = Object.create(null);
+  for (const trace of snapshot.traces) withTrace[trace.traceId] = true;
+  for (const [traceId, effective] of Object.entries(snapshot.effectiveAnnotations)) {
+    if (withTrace[traceId] === true || effective.run === null) continue;
+    entries.push(tracelessEntry(snapshot, effective.run, traceId));
+  }
+  return entries;
+}
+
+/** A run row with no trace behind it. Whatever the row says about how the run
+ *  ended, there is nothing to grade, so it scores zero with the row's reason. */
+function tracelessEntry(
+  snapshot: RunDirectorySnapshot,
+  runRow: Annotation,
+  traceId: string,
+): Entry {
+  const test = testOf(runRow, traceId);
+  const ended = runRow.kind === "run" ? runRow.ended : "unknown";
+  const detail = runRow.kind === "run" && runRow.error !== undefined ? `: ${runRow.error}` : "";
+  return {
+    test,
+    humanFeedback: humanFeedbackFor(snapshot, traceId),
+    ungradedReason: `the run produced no trace and ended with ${ended}${detail}`,
+  };
 }
 
 /**
@@ -108,13 +139,10 @@ export function makeGraderModuleCache(
 
 /** What grading needs from one trace: the test it ran, its evidence, and
  *  optionally a reason not to grade at all. */
-type Entry = {
-  test: Test;
-  run: LoadedRun;
-  humanFeedback: HumanFeedback;
-  /** Set when the trace cannot be graded at all — skip straight to a scored zero. */
-  ungradedReason?: string;
-};
+type Entry =
+  | { test: Test; run: LoadedRun; humanFeedback: HumanFeedback }
+  /** The trace cannot be graded at all: skip straight to a scored zero. */
+  | { test: Test; humanFeedback: HumanFeedback; ungradedReason: string };
 
 /**
  * One entry from a run directory. THE POLICY LIVES HERE: a run that did not
@@ -152,7 +180,7 @@ function entryFor(snapshot: RunDirectorySnapshot, trace: Trace): Entry {
     runRow !== null && runRow.kind === "run" && runRow.error !== undefined
       ? `: ${runRow.error}`
       : "";
-  return { test, run, humanFeedback, ungradedReason: `the run ended with ${ended}${detail}` };
+  return { test, humanFeedback, ungradedReason: `the run ended with ${ended}${detail}` };
 }
 
 /** The test a trace ran, from the harness's `run` row; an ad-hoc trace with
@@ -174,7 +202,7 @@ async function gradeEntry(
   ctx: GradingContext,
   graders: BaseGrader[],
 ): Promise<InputGrades> {
-  if (entry.ungradedReason !== undefined) {
+  if ("ungradedReason" in entry) {
     return {
       test: entry.test,
       run: null,

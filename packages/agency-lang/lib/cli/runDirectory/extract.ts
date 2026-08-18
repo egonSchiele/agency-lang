@@ -3,7 +3,7 @@ import { matchTrace, readTraces, type Trace } from "@/runDirectory/traces.js";
 
 import { describeTraces } from "./traceListing.js";
 
-export type LogsExtractOptions = { log: string; trace?: string; out?: string };
+export type LogsExtractOptions = { log: string; trace?: string; out?: string; overwrite?: boolean };
 
 export type LogsExtractDependencies = { writeStdout(text: string): void };
 
@@ -12,9 +12,11 @@ const defaultDependencies: LogsExtractDependencies = {
 };
 
 /**
- * Copy one trace's lines out of a statelog, verbatim, to a file or stdout. A
- * trace slice is itself a valid statelog, so this is the primitive that turns
- * "a run I noticed in a big log" into "a run I can attach things to".
+ * Copy one trace's lines out of a statelog to a file or stdout, as they
+ * appear in the source (minus a torn final line or a byte-identical repeated
+ * line, which `readTraces` drops). A trace slice is itself a valid statelog,
+ * so this is the primitive that turns "a run I noticed in a big log" into "a
+ * run I can attach things to".
  */
 export function logsExtract(
   options: LogsExtractOptions,
@@ -25,7 +27,12 @@ export function logsExtract(
   if (options.out === undefined) {
     dependencies.writeStdout(text);
   } else {
-    writeTraceFile(trace, options.out);
+    writeTraceFile({
+      trace,
+      outPath: options.out,
+      sourcePath: options.log,
+      overwrite: options.overwrite,
+    });
   }
   return { traceId: trace.traceId, lines: trace.lines.length };
 }

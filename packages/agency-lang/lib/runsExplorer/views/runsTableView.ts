@@ -169,8 +169,7 @@ export class RunsTableView implements ExplorerView {
       return this.message;
     }
     if (this.progress !== null) {
-      const verb = this.progress.phase === "summary" ? "Loading runs" : "Backfilling";
-      return `${verb}… ${this.progress.completed}/${this.progress.total}`;
+      return `Loading runs… ${this.progress.completed}/${this.progress.total}`;
     }
     return "";
   }

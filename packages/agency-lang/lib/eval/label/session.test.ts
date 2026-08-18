@@ -304,8 +304,10 @@ describe("trace ids that collide with Object.prototype names", () => {
   });
 
   it("resumes them from folded judgements", () => {
-    const judgements: Record<string, EffectiveChecklistJudgement> = Object.create(null);
-    judgements.toString = { annotator, answers: { q_accurate: true, q_today: true }, note: "n" };
+    const judgements: Record<string, EffectiveChecklistJudgement> = Object.assign(
+      Object.create(null),
+      { toString: { annotator, answers: { q_accurate: true, q_today: true }, note: "n" } },
+    );
     const state = initSession({ items: awkward, revision, judgements, annotator });
     expect(itemStatus(state, "toString")).toBe("reviewed");
     expect(sessionSnapshot(state).note).toBe("n");

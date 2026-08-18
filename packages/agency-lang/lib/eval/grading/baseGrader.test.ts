@@ -8,7 +8,7 @@ import { loadedRun } from "./testUtils.js";
 const stubRunner = new AgencyRunner({}, async () => ({ data: null }));
 const input = (over: Partial<Test> = {}): Test => ({ id: "i1", input: "t", ...over });
 const graderInput = (over: Partial<Test> = {}): GraderInput => ({
-  input: input(over),
+  test: input(over),
   run: loadedRun(null),
   runAgency: stubRunner,
 });

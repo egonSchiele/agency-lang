@@ -17,7 +17,7 @@ const fakeGrader = (name: string) =>
 function entry(record: EvalRecord): InputGrades {
   return {
     test: { id: "q1", input: { question: "capital of France?" } },
-    run: { output: "Paris", recordPath: "", workdir: "", record },
+    run: { output: "Paris", traceId: "t1", workdir: "", record },
     gatesPassed: true,
     grades: [
       {
@@ -98,7 +98,7 @@ describe("human feedback in the reflection block", () => {
   it("includes notes and unchecked checklist questions when present", () => {
     const withHuman: InputGrades = {
       ...entry(partialRecord({})),
-      humanFeedback: { notes: ["too slow"], unchecked: ["Is it on time?"] },
+      humanFeedback: { notes: ["too slow"], checked: [], unchecked: ["Is it on time?"] },
     };
     const text = renderInputFeedback(withHuman);
     expect(text).toContain("Notes from people who reviewed this run:");
@@ -110,7 +110,7 @@ describe("human feedback in the reflection block", () => {
   it("adds no human sections when there is nothing to say", () => {
     const text = renderInputFeedback({
       ...entry(partialRecord({})),
-      humanFeedback: { notes: [], unchecked: [] },
+      humanFeedback: { notes: [], checked: [], unchecked: [] },
     });
     expect(text).not.toContain("Notes from people");
     expect(text).not.toContain("answered NO");

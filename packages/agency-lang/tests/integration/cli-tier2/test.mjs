@@ -404,73 +404,48 @@ function checkLocalIsolated() {
   console.log("[cli-tier2] local isolated ✓");
 }
 
-// --- label ingest (store mutation + persistence oracle) ---------------------
+// --- run directory (mutation + persistence oracle) -------------------------
+// `agency runs add` merges a statelog into a run directory by trace, and a
+// second add of the same statelog changes nothing. `agency note` appends an
+// annotation that `runs list` then shows.
 
-function checkLabelIngest() {
-  const labelDir = subdir("label");
-  const fixture = ["tier2 first output", "tier2 second output", "tier2 third output"];
-  const n = fixture.length;
-  // A top-level JSON array of strings is the only shape the JSON loader accepts.
-  writeFile(labelDir, "data.json", JSON.stringify(fixture) + "\n");
+function checkRunDirectory() {
+  const rdDir = subdir("rundir");
+  writeFile(rdDir, "hello.agency", `node main() {\n  print("tier2 run directory")\n}\n`);
+  runCleanAgency(rdDir, ["run", "--log-file", "hello.jsonl", "hello.agency"], "run --log-file");
+  assert(existsSync(join(rdDir, "hello.jsonl")), "run --log-file wrote no statelog");
 
-  const first = runInstalledAgency(labelDir, ["label", "ingest", "data.json", "--dataset", "labels", "--source", "batch"]);
-  assertBlank(first.stderr, "[label ingest] stderr");
-  const firstOut = stripAnsi(first.stdout);
-  assertIncludes(firstOut, `${n} new records, 0 already stored`);
-  assertIncludes(firstOut, `${n} new occurrences, 0 already recorded`);
+  const first = runCleanAgency(rdDir, ["runs", "add", "runs/hello", "--statelog", "hello.jsonl"], "runs add");
+  assertIncludes(stripAnsi(first.stdout), "Added 1 trace(s)");
+  const statelogPath = join(rdDir, "runs", "hello", "statelog.jsonl");
+  const annotationsPath = join(rdDir, "runs", "hello", "annotations.jsonl");
+  assert(existsSync(statelogPath), "runs add wrote no statelog.jsonl");
+  const traces = readJsonLines(statelogPath);
+  assert(traces.length > 0, "statelog.jsonl is empty");
+  const traceId = traces[0].trace_id;
 
-  // outputs.jsonl: exactly one record per fixture string (order-independent).
-  const outputs = readJsonLines(join(labelDir, "labels", "outputs.jsonl"));
-  assert(outputs.length === n, `expected ${n} output records, got ${outputs.length}`);
-  // Null-prototype object + Object.hasOwn, so a fixture string like "__proto__"
-  // cannot collide with prototype keys.
-  const outputIdByString = Object.create(null);
-  for (const record of outputs) {
-    const value = record.fields.output;
-    assert(fixture.includes(value), `unexpected output record: "${value}"`);
-    outputIdByString[value] = record.outputId;
-  }
-  for (const value of fixture) {
-    assert(Object.hasOwn(outputIdByString, value), `outputs.jsonl is missing a record for "${value}"`);
-  }
+  // Re-adding the same statelog is idempotent: nothing new, bytes unchanged.
+  const statelogBefore = readFileSync(statelogPath);
+  const second = runCleanAgency(rdDir, ["runs", "add", "runs/hello", "--statelog", "hello.jsonl"], "runs add re-run");
+  assertIncludes(stripAnsi(second.stdout), "already present");
+  assert(readFileSync(statelogPath).equals(statelogBefore), "statelog.jsonl bytes changed on re-add");
 
-  // occurrences.jsonl: one per fixture item, each referencing the right output.
-  const occurrences = readJsonLines(join(labelDir, "labels", "occurrences.jsonl"));
-  assert(occurrences.length === n, `expected ${n} occurrences, got ${occurrences.length}`);
-  const seenIndexes = [];
-  for (const occ of occurrences) {
-    assert(occ.source === "batch", `occurrence source was "${occ.source}"`);
-    assert(occ.origin.kind === "json", `occurrence origin.kind was "${occ.origin.kind}"`);
-    assert(occ.origin.itemKey === "data.json", `occurrence origin.itemKey was "${occ.origin.itemKey}"`);
-    const idx = occ.origin.itemIndex;
-    assert(!seenIndexes.includes(idx), `duplicate itemIndex ${idx}`);
-    seenIndexes.push(idx);
-    assert(
-      occ.outputId === outputIdByString[fixture[idx]],
-      `occurrence ${idx} outputId does not reference the output for "${fixture[idx]}"`,
-    );
-  }
-  seenIndexes.sort((a, b) => a - b);
-  assert(
-    JSON.stringify(seenIndexes) === JSON.stringify([...Array(n).keys()]),
-    `expected itemIndexes 0..${n - 1}, got ${seenIndexes}`,
-  );
+  const noted = runCleanAgency(rdDir, ["note", "runs/hello", "wanted a greeting", "--annotator", "tier2"], "note");
+  assertIncludes(stripAnsi(noted.stdout), `Noted on trace ${traceId}`);
+  const notes = readJsonLines(annotationsPath).filter((row) => row.kind === "note");
+  assert(notes.length === 1, `expected 1 note annotation, got ${notes.length}`);
+  assert(notes[0].traceId === traceId, `note traceId was ${notes[0].traceId}`);
+  assert(notes[0].text === "wanted a greeting", `note text was ${JSON.stringify(notes[0].text)}`);
 
-  // Re-ingesting the same data is idempotent: nothing new, both files unchanged.
-  // Snapshot raw bytes (not readText, which normalizes CRLF) so a re-ingest that
-  // rewrote LF as CRLF would still fail the byte-identical check.
-  const outputsPath = join(labelDir, "labels", "outputs.jsonl");
-  const occurrencesPath = join(labelDir, "labels", "occurrences.jsonl");
-  const outputsBefore = readFileSync(outputsPath);
-  const occurrencesBefore = readFileSync(occurrencesPath);
-  const second = runInstalledAgency(labelDir, ["label", "ingest", "data.json", "--dataset", "labels", "--source", "batch"]);
-  assertBlank(second.stderr, "[label ingest re-run] stderr");
-  const secondOut = stripAnsi(second.stdout);
-  assertIncludes(secondOut, `0 new records, ${n} already stored`);
-  assertIncludes(secondOut, `0 new occurrences, ${n} already recorded`);
-  assert(readFileSync(outputsPath).equals(outputsBefore), "outputs.jsonl bytes changed on re-ingest");
-  assert(readFileSync(occurrencesPath).equals(occurrencesBefore), "occurrences.jsonl bytes changed on re-ingest");
-  console.log("[cli-tier2] label ingest ✓");
+  // `runs list` is one table row per trace; the NOTES column counts them.
+  const listed = runCleanAgency(rdDir, ["runs", "list", "runs/hello"], "runs list");
+  const listRows = stripAnsi(listed.stdout).trim().split("\n");
+  assertIncludes(listRows[0], "NOTES");
+  const traceRow = listRows.find((row) => row.startsWith(traceId.slice(0, 8)));
+  assert(traceRow !== undefined, `runs list has no row for ${traceId}:\n${listed.stdout}`);
+  const notesCell = traceRow.slice(listRows[0].indexOf("NOTES"), listRows[0].indexOf("LABELED")).trim();
+  assert(notesCell === "1", `NOTES column was ${JSON.stringify(notesCell)} in:\n${listed.stdout}`);
+  console.log("[cli-tier2] run directory ✓");
 }
 
 // --- Run everything ---------------------------------------------------------
@@ -485,7 +460,7 @@ try {
   checkDefinition();
   checkModelsList();
   checkLocalIsolated();
-  checkLabelIngest();
+  checkRunDirectory();
 
   console.log("=== cli-tier2 test passed ===");
   cleanup(dir);

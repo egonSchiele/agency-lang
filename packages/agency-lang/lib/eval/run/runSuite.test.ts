@@ -90,7 +90,7 @@ describe("runSuite", () => {
       ).toBe("by the agent");
       const run = snapshot.effectiveAnnotations[test.traceId].run;
       expect(run).toMatchObject({ kind: "run", ended: "ok", suite: { source: "inputs.json" } });
-      expect((run as { test: { id: string } }).test.id).toBe(test.testId);
+      expect((run as unknown as { test: { id: string } }).test.id).toBe(test.testId);
     }
     // The seeded agent code is stored once, by its closure hash.
     const codeVersions = fs.readdirSync(paths.codeDir);
@@ -339,7 +339,7 @@ describe("runSuite", () => {
     );
     const run = readRunDirectory(result.runDir, quiet).effectiveAnnotations[result.tests[0].traceId]
       .run;
-    expect((run as { test: { timeoutSec: number } }).test.timeoutSec).toBe(1200);
+    expect((run as unknown as { test: { timeoutSec: number } }).test.timeoutSec).toBe(1200);
     expect(result.okCount).toBe(1);
   });
 

@@ -70,7 +70,7 @@ describe("eval run CLI", () => {
     // Nothing graded: the only annotation is the harness's run row.
     expect(snapshot.annotationRows.map((row) => row.kind)).toEqual(["run"]);
     // --goal sets input AND goal to the same text.
-    const run = snapshot.effectiveAnnotations[result.tests[0].traceId].run as {
+    const run = snapshot.effectiveAnnotations[result.tests[0].traceId].run as unknown as {
       test: { input: string; goal: string };
     };
     expect(run.test).toMatchObject({ input: "do it", goal: "do it" });

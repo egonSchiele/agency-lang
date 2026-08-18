@@ -139,14 +139,21 @@ node main(task: string): string {
   return greeting + " world"
 }
 `);
-  // --no-grade: this test checks the run plumbing (compile, workdir, artifacts),
-  // not scoring. eval run grades with the goal judge by default, which is an
-  // llm() call, and there is no API key in this job. Test 7 below covers the
-  // judge path with a mock.
-  run(dir, "npx agency eval run --agent eval-agent.agency --goal \"Say hello\" --runs-dir eval-runs --run-id smoke --no-grade");
-  const evalSummary = JSON.parse(readFileSync(join(dir, "eval-runs", "smoke", "summary.json"), "utf-8"));
-  if (evalSummary.okCount !== 1 || evalSummary.errorCount !== 0) {
-    throw new Error(`eval run summary unexpected: ${JSON.stringify(evalSummary)}`);
+  // eval run never grades: it writes a run directory (statelog.jsonl +
+  // annotations.jsonl) and `agency eval grade <dir>` scores it later. This test
+  // checks the run plumbing only, so no LLM call and no API key are needed.
+  run(dir, "npx agency eval run --agent eval-agent.agency --goal \"Say hello\" --runs-dir eval-runs --run-id smoke");
+  const evalRunDir = join(dir, "eval-runs", "smoke");
+  if (!existsSync(join(evalRunDir, "statelog.jsonl"))) {
+    throw new Error("eval run wrote no statelog.jsonl");
+  }
+  const evalRows = readFileSync(join(evalRunDir, "annotations.jsonl"), "utf-8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  const evalRunRow = evalRows.find((row) => row.kind === "run");
+  if (!evalRunRow || evalRunRow.ended !== "ok") {
+    throw new Error(`eval run row unexpected: ${JSON.stringify(evalRows)}`);
   }
   console.log("Test 6 passed");
 
@@ -157,7 +164,7 @@ node main(task: string): string {
   assertIncludes(csvOutput, "run");
   console.log("Test 6b passed");
 
-  // --- Test 7: eval optimize baseline-only run ---
+  // --- Test 7: optimize baseline-only run ---
   // --iterations 0 skips the mutator, but the greedy optimizer still grades the
   // baseline with the goal judge — an llm() call. Mock it so the smoke test runs
   // offline (no API key in CI); without a mock the judge's structured output is
@@ -169,10 +176,10 @@ node main(task: string): string {
       { return: { score: 1, reasoning: "mock judge verdict" } },
     ]),
   };
-  console.log("--- Test 7: eval optimize baseline-only ---");
+  console.log("--- Test 7: optimize baseline-only ---");
   const optimizeOutput = run(
     dir,
-    "npx agency eval optimize eval-agent.agency --goal \"Say hello\" --iterations 0 --runs-dir optimize-runs --run-id smoke --no-writeback 2>&1",
+    "npx agency optimize eval-agent.agency --goal \"Say hello\" --iterations 0 --runs-dir optimize-runs --run-id smoke --no-writeback 2>&1",
     { env: judgeMockEnv },
   );
   assertIncludes(optimizeOutput, "1 target(s)");
@@ -183,13 +190,13 @@ node main(task: string): string {
   if (optimizeSummary.championIter !== "baseline") {
     throw new Error(`optimize summary unexpected: ${JSON.stringify(optimizeSummary)}`);
   }
-  // The legacy flag surface must stay dead.
-  const legacyOutput = run(dir, "npx agency eval optimize --agent eval-agent.agency --goal x 2>&1", { expectFail: true });
+  // The legacy flag surface must stay dead: the agent is a positional argument.
+  const legacyOutput = run(dir, "npx agency optimize --agent eval-agent.agency --goal x 2>&1", { expectFail: true });
   assertIncludes(legacyOutput, "unknown option");
   // --silent prints nothing.
   const silentOutput = run(
     dir,
-    "npx agency eval optimize eval-agent.agency --goal \"Say hello\" --iterations 0 --runs-dir optimize-runs --run-id silent-smoke --no-writeback --silent 2>&1",
+    "npx agency optimize eval-agent.agency --goal \"Say hello\" --iterations 0 --runs-dir optimize-runs --run-id silent-smoke --no-writeback --silent 2>&1",
     { env: judgeMockEnv },
   );
   if (silentOutput.trim() !== "") {
@@ -323,14 +330,14 @@ node main() {
     throw new Error("--trace-file wrote no trace file");
   }
 
-  // `--dataset` is declared on `label`, not on `ingest`. The source does not
-  // exist, so this fails either way; what matters is which error comes back.
+  // `--follow` is declared on `logs`, not on `view`. The file does not exist,
+  // so this fails either way; what matters is which error comes back.
   const parentOption = run(
     dir,
-    "./node_modules/.bin/agency eval label ingest no-such-dir --dataset label-dataset 2>&1",
+    "./node_modules/.bin/agency logs view no-such-file.jsonl --follow 2>&1",
     { expectFail: true },
   );
-  if (parentOption.includes("unknown option '--dataset'")) {
+  if (parentOption.includes("unknown option '--follow'")) {
     throw new Error("parent-command options stopped reaching subcommands");
   }
 

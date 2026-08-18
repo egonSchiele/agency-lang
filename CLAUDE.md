@@ -116,6 +116,7 @@ Pipeline and architecture:
 - `docs/dev/globalstore.md` — Global variable management with module isolation and serialization
 - `docs/dev/init-topsort.md` — Per-variable init dep graph, topological sort, per-module init plans, runtime init registry
 - `docs/dev/smoltalk.md` — External LLM client library for structured output requests
+- `docs/dev/run-directory.md` — The run directory (`lib/runDirectory/`): the statelog is the run; the coherent lock-free read snapshot, the four annotation kinds and their fold (deterministic ids, complete-pass scores, per-question checklist fold, revision-named annotators), the four declarative writes and their preflight/torn-tail/lock rules, digest merge, code-by-closure-hash, dated workdir snapshots, and `safeDeleteDirectoryWithin`
 - `docs/dev/statelog.md` — Observability and tracing system for execution events; `agentStart` records code identity (`code`, cwd-independent closure hash) and the explicit `input`
 - `docs/dev/config.md` — AgencyConfig options for compiler and runtime configuration
 - `docs/dev/cli-arguments.md` — One command line, two programs: the position rule (agency's flags before the filename), the ownership rule (a flag is valid after its owning command, never before), the misplaced-flag warning and its `--` suppression, the shorthand being the real `run` command, the agent's full flag delegation with the minimal launcher pre-scan, and the `--` asymmetry across launchers

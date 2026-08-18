@@ -229,6 +229,46 @@ node main(): string {
   assert(!existsSync(join(runsDir, "cmd-noplaceholder")), "no run directory should exist for a resolution-time failure");
   console.log("[eval-run-integration] PASS: missing {task} rejected before any run");
 
+  // ── Scenario E: `agency run --capture-workdir <dir>` writes a run directory ──
+  // A plain run, no harness: the trace, the code and the working directory
+  // land in the named directory through the same `addToRunDirectory` the
+  // `runs add` command uses.
+  const captureDir = join(TMP_ROOT, "captured");
+  const captureCwd = join(TMP_ROOT, "capture-cwd");
+  mkdirSync(captureCwd, { recursive: true });
+  writeFileSync(join(captureCwd, "note.txt"), "in the working directory");
+  writeFileSync(join(cmdFixtures, "trivial.agency"), `node main(): string {
+  return "captured"
+}
+`);
+  let captureOutput;
+  try {
+    captureOutput = execSync(
+      `node ${JSON.stringify(AGENCY_CLI)} run --capture-workdir ${JSON.stringify(captureDir)}` +
+      ` ${JSON.stringify(join(cmdFixtures, "trivial.agency"))}`,
+      { cwd: captureCwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+    );
+  } catch (err) {
+    console.error("[eval-run-integration] --capture-workdir run failed. Child stdout:");
+    console.error(err.stdout ?? "(none)");
+    console.error("[eval-run-integration] Child stderr:");
+    console.error(err.stderr ?? "(none)");
+    throw err;
+  }
+  const capturedMatch = captureOutput.match(/Captured trace (\S+) into/);
+  assert(capturedMatch, `no capture line in output:\n${captureOutput}`);
+  const capturedTraceId = capturedMatch[1];
+  const capturedEvents = readFileSync(join(captureDir, "statelog.jsonl"), "utf-8")
+    .trim().split("\n").map((line) => JSON.parse(line));
+  assert(capturedEvents.length > 0 && capturedEvents.every((e) => e.trace_id === capturedTraceId),
+    "captured statelog does not hold exactly the run's trace");
+  const capturedStart = capturedEvents.find((e) => e.data?.type === "agentStart");
+  assert(capturedStart?.data.code?.entry === "trivial.agency", `captured code identity: ${JSON.stringify(capturedStart?.data.code)}`);
+  assert(existsSync(join(captureDir, "code", capturedStart.data.code.closureHash, "trivial.agency")), "captured code not stored");
+  assert(readFileSync(join(captureDir, "workdir", capturedTraceId, "note.txt"), "utf-8") === "in the working directory",
+    "working directory not captured under the trace id");
+  console.log("[eval-run-integration] PASS: run --capture-workdir writes a run directory");
+
   passed = true;
 } finally {
   if (passed && !process.env.EVAL_RUN_KEEP_TMP) {

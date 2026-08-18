@@ -6,12 +6,16 @@ import {
   mergeConfigOverrides,
   readConfigOverrides,
   serializeConfigOverrides,
+  TRACE_ID_ENV,
 } from "@/config.js";
 import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";
+import { addToRunDirectory } from "@/runDirectory/mutations.js";
 import { AgencyProgram } from "@/index.js";
 import { spawn } from "child_process";
 import * as fs from "fs";
 import { createRequire } from "module";
+import { nanoid } from "nanoid";
+import * as os from "os";
 import * as path from "path";
 
 import { RunStrategy } from "../importStrategy.js";
@@ -271,6 +275,9 @@ export function run(
    *  itself to read — `std::args` is how. They are NOT mapped onto the entry
    *  node's parameters, which receive `undefined` on this path. */
   nodeArgs: string[] = [],
+  /** `--capture-workdir <dir>`: after the run, fold its statelog, code and a
+   *  snapshot of the working directory into that run directory. */
+  capture?: { runDir: string },
 ): void {
   const output = compile(config, inputFile, outputFile, {
     importStrategy: new RunStrategy(),
@@ -284,15 +291,22 @@ export function run(
   console.log("---");
 
   const env: NodeJS.ProcessEnv = { ...process.env };
+  const captured = capture === undefined ? undefined : prepareCapture(capture.runDir);
   // Which code this run is, recorded on the trace's agentStart. Layered under
   // any inherited overrides (an eval harness hands this process its statelog
   // path the same way), so nothing a parent set is lost.
   env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(
     mergeConfigOverrides(
-      { log: { code: computeCodeIdentity(inputFile) } },
+      captured === undefined
+        ? { log: { code: computeCodeIdentity(inputFile) } }
+        : {
+            observability: true,
+            log: { code: computeCodeIdentity(inputFile), logFile: captured.statelogFile },
+          },
       readConfigOverrides(env),
     ),
   );
+  if (captured !== undefined) env[TRACE_ID_ENV] = captured.traceId;
   if (resumeFile) env.AGENCY_RESUME_FILE = resumeFile;
   // Make the child's policy behavior fully determined by THIS run's flags — never
   // by a stray AGENCY_RUN_POLICY* inherited from the parent shell or an outer run
@@ -328,8 +342,47 @@ export function run(
   });
 
   nodeProcess.on("exit", (code) => {
+    if (captured !== undefined) {
+      try {
+        finishCapture(captured, inputFile);
+      } catch (error) {
+        console.error(`Error: could not capture the run: ${(error as Error).message}`);
+        process.exit(1);
+      }
+    }
     if (code !== 0) {
       process.exit(code || 1);
     }
   });
+}
+
+type Capture = { runDir: string; traceId: string; statelogFile: string; stagingDir: string };
+
+/** A fresh trace id and a private statelog file for this run, so the fold
+ *  into the run directory sees exactly this run's events. */
+function prepareCapture(runDir: string): Capture {
+  const traceId = nanoid();
+  const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-capture-"));
+  return { runDir, traceId, statelogFile: path.join(stagingDir, "statelog.jsonl"), stagingDir };
+}
+
+/** One `addToRunDirectory`: the staged statelog, the code that ran, and the
+ *  working directory as this trace's workdir snapshot. */
+function finishCapture(capture: Capture, inputFile: string): void {
+  if (!fs.existsSync(capture.statelogFile)) {
+    throw new Error(`the run wrote no statelog at ${capture.statelogFile}`);
+  }
+  addToRunDirectory(
+    {
+      dir: capture.runDir,
+      statelogFiles: [capture.statelogFile],
+      codeEntries: [inputFile],
+      annotationFiles: [],
+      workdir: { traceId: capture.traceId, sourceDir: process.cwd() },
+    },
+    { reportWarning: (message) => console.warn(message) },
+  );
+  fs.rmSync(capture.stagingDir, { recursive: true, force: true });
+  console.log(`---
+Captured trace ${capture.traceId} into ${capture.runDir}`);
 }

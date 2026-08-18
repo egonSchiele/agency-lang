@@ -136,6 +136,7 @@ type RunOptions = Omit<CliFlags, "trace"> & {
   maxCost?: string;
   maxTime?: string;
   local?: string;
+  captureWorkdir?: string;
 };
 
 // commander option parsers. Match the WHOLE string against digits so
@@ -275,7 +276,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
       console.error(`Error: ${(e as Error).message}`);
       process.exit(2);
     }
-    run(config, input, undefined, options.resume, runPolicy, budget, nodeArgs);
+    run(
+      config,
+      input,
+      undefined,
+      options.resume,
+      runPolicy,
+      budget,
+      nodeArgs,
+      options.captureWorkdir === undefined ? undefined : { runDir: options.captureWorkdir },
+    );
   }
 
   program
@@ -413,6 +423,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
         .option(
           "--max-time <duration>",
           "Abort if the run's working time exceeds this duration (e.g. 30s, 5m, 1h, 2d). Waiting on a human is not counted; zero/negative = no limit",
+        )
+        .option(
+          "--capture-workdir <dir>",
+          "After the run, add its trace, code and a snapshot of the working directory to this run directory (see: agency runs list)",
         )
     );
   }

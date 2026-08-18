@@ -1,0 +1,42 @@
+/** @module
+  @summary The simplest brain: each turn is one LLM call with no tools, in a
+  single conversation thread. Exists as the worked example of adding a brain.
+*/
+import { Attachment, systemMessage } from "std::thread"
+
+import { AgentBrain, BrainContext } from "../brain.agency"
+
+// Per-run grounding, from BrainContext. Spliced into the system prompt.
+let _context: string = ""
+
+let first = true
+
+def simpleInit(context: BrainContext) {
+  _context = context.grounding
+}
+
+def simpleRunTurn(
+  target: string,
+  prompt: string | (string | Attachment)[],
+): string {
+  thread(label: "simple", session: "simple") {
+    if (first) {
+      systemMessage(
+        "You are a helpful assistant. Answer directly and concisely.${_context}",
+      )
+      first = false
+    }
+    const result = llm(prompt)
+  }
+  return result
+}
+
+export def simpleBrain(): AgentBrain {
+  return {
+    name: "simple",
+    description: "One tool-less LLM call per turn, in a single thread",
+    startTargets: [],
+    init: simpleInit,
+    runTurn: simpleRunTurn
+  }
+}

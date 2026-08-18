@@ -1,0 +1,26 @@
+import {
+  brainByName,
+  allBrains,
+  brainFlagHelp,
+ } from "../brains/registry.agency"
+
+node knownBrainResolves(): string {
+  const brain = brainByName("coordinator")
+  if (brain == null) {
+    return "null"
+  }
+  return "${brain.name}|${brain.startTargets.join(",")}"
+}
+
+node simpleBrainResolves(): string {
+  return "${brainByName("simple") != null}"
+}
+
+node unknownBrainIsNull(): string {
+  return "${brainByName("bogus") == null}|${allBrains().length}"
+}
+
+node helpListsRegisteredBrains(): string {
+  const help = brainFlagHelp()
+  return "${help.includes("default: coordinator")}|${help.includes("coordinator: One coordinator LLM")}|${help.includes("simple: ")}"
+}

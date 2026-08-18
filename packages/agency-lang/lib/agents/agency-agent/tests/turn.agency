@@ -8,7 +8,6 @@
  * packages/agency-lang, whose .claude/commands/check-tests.md is the
  * fixture (projectCommands is a static read of ${cwd()}/.claude/commands).
  */
-import { applyResolved } from "../shared.agency"
 import { budgetCost, budgetTime } from "../lib/budget.agency"
 import { setInteractive } from "../lib/trace.agency"
 import {
@@ -19,6 +18,7 @@ import {
   resolveBrainName,
   resolveStartTarget,
  } from "../lib/turn.agency"
+import { applyResolved } from "../shared.agency"
 import {
   recordingBrain,
   selfApprovingBrain,
@@ -70,7 +70,15 @@ node slashCommandExpands(): string {
 // harness. (The "📎 attached" line goes to the UI and is not asserted here.)
 node mainTargetGetsAttachment(): string {
   setBrain(recordingBrain())
-  applyResolved({ main: { model: "gpt-4o", provider: "openai", via: "test" } })
+  applyResolved(
+    {
+      main: {
+        model: "gpt-4o",
+        provider: "openai",
+        via: "test"
+      }
+    },
+  )
   writeBinary("turn-a.png", PNG, "/tmp") with approve
   runTurn("", "look at /tmp/turn-a.png") with approve
   return "${lastPromptKind()}|${lastAttachmentCount()}|${lastText() == "look at /tmp/turn-a.png"}"
@@ -119,7 +127,15 @@ node parsedBudgetGuardsBrain(): boolean {
 // case proves the harness still calls it before handing the main turn over.
 node textOnlyModelDropsAttachment(): string {
   setBrain(recordingBrain())
-  applyResolved({ main: { model: "gpt-3.5-turbo", provider: "openai", via: "test" } })
+  applyResolved(
+    {
+      main: {
+        model: "gpt-3.5-turbo",
+        provider: "openai",
+        via: "test"
+      }
+    },
+  )
   writeBinary("turn-text-only.png", PNG, "/tmp") with approve
   runTurn("", "look at /tmp/turn-text-only.png") with approve
   return "${lastPromptKind()}|${lastAttachmentCount()}"
@@ -155,9 +171,15 @@ node sessionPassesInteractiveContext(): string {
 }
 
 node resolvesBrainNamePrecedence(): string {
-  const flagWins = resolveBrainName("flag-brain", { brain: "settings-brain" })
-  const settingsNext = resolveBrainName(null, { brain: "settings-brain" })
-  const emptyFlagFallsThrough = resolveBrainName("", { brain: "settings-brain" })
+  const flagWins = resolveBrainName("flag-brain", {
+    brain: "settings-brain"
+  })
+  const settingsNext = resolveBrainName(null, {
+    brain: "settings-brain"
+  })
+  const emptyFlagFallsThrough = resolveBrainName("", {
+    brain: "settings-brain"
+  })
   const defaultLast = resolveBrainName(null, {})
   return "${flagWins}|${settingsNext}|${emptyFlagFallsThrough}|${defaultLast}"
 }

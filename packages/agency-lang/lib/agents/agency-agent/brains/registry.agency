@@ -4,9 +4,10 @@
 */
 import { AgentBrain } from "./brain.agency"
 import { coordinatorBrain } from "./coordinator/coordinator.agency"
+import { simpleBrain } from "./simple/simple.agency"
 
 export def allBrains(): AgentBrain[] {
-  return [coordinatorBrain()]
+  return [coordinatorBrain(), simpleBrain()]
 }
 
 export def brainByName(name: string): AgentBrain | null {

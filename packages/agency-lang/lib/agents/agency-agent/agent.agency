@@ -204,7 +204,8 @@ node main() {
   const resolvedStartTarget = resolveStartTarget(brain, requestedStartTarget)
   let startAgent = ""
   if (resolvedStartTarget == null) {
-    print(color.red("Unknown --agent value: ${requestedStartTarget}. Valid for the ${brain.name} brain: main, ${brain.startTargets.join(", ")}"))
+    const validTargets = ["main", ...brain.startTargets].join(", ")
+    print(color.red("Unknown --agent value: ${requestedStartTarget}. Valid for the ${brain.name} brain: ${validTargets}"))
     process.exit(1)
     return
   } else {

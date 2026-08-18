@@ -55,9 +55,12 @@ def recordingInit(context: BrainContext) {
   _lastGrounding = context.grounding
 }
 
-def recordingRunTurn(target: string, prompt: string | (string | Attachment)[]): string {
+def recordingRunTurn(
+  target: string,
+  prompt: string | (string | Attachment)[],
+): string {
   _lastTarget = target
-  match (prompt) {
+  match(prompt) {
     text: string => {
       _lastPromptKind = "text"
       _lastText = text
@@ -94,15 +97,18 @@ def touchy(): string {
 def selfApprovingInit(context: BrainContext) {
   recordingInit(context)
   const outcome = try touchy() with approve
-  _initPolicyOutcome = match (outcome) {
+  _initPolicyOutcome = match(outcome) {
     success(_) => "approved"
     failure(_) => "rejected"
   }
 }
 
-def selfApprovingRunTurn(target: string, prompt: string | (string | Attachment)[]): string {
+def selfApprovingRunTurn(
+  target: string,
+  prompt: string | (string | Attachment)[],
+): string {
   const outcome = try touchy() with approve
-  return match (outcome) {
+  return match(outcome) {
     success(value) => value
     failure(_) => "rejected"
   }
@@ -119,7 +125,10 @@ export def selfApprovingBrain(): AgentBrain {
 }
 
 // One deterministic LLM call gives the real turn guard non-zero cost.
-def costlyRunTurn(target: string, prompt: string | (string | Attachment)[]): string {
+def costlyRunTurn(
+  target: string,
+  prompt: string | (string | Attachment)[],
+): string {
   return llm("Return the test reply.")
 }
 

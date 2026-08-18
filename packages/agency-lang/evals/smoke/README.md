@@ -10,14 +10,18 @@ everything in the directory, and mixing a two-cent canary with an eighteen-minut
 discriminator means you can never run just the fast set.
 
 Every test grades itself with the `graders.ts` beside its `test.json`, so no
-suite-level grader is named anywhere:
+suite-level grader is named anywhere. Running and grading are two commands:
+`eval run` writes a run directory and prints its path, and `eval grade` scores
+it.
 
 ```bash
 # the whole suite
 agency eval run --agent path/to/agent.agency:main --inputs evals/smoke
+agency eval grade runs/<run-id>        # the path eval run printed
 
 # one test
 agency eval run --agent path/to/agent.agency:main --inputs evals/smoke/hello-file
+agency eval grade runs/<run-id>
 ```
 
 ## The ladder
@@ -41,11 +45,12 @@ them.
 ## Reference solutions
 
 Every test ships a `solution.agency` that produces the right answer with **no
-LLM**. Running one must score 1.000:
+LLM**. Running and then grading one must score 1.000:
 
 ```bash
 agency eval run --agent evals/smoke/csv-total/solution.agency:main \
-  --inputs evals/smoke/csv-total
+  --inputs evals/smoke/csv-total --run-id csv-solution
+agency eval grade runs/csv-solution
 ```
 
 That makes "is the harness broken or is the agent broken?" one free run apart —

@@ -143,7 +143,7 @@ describe("BaseOptimizer.evaluate", () => {
     class NeedsExpected extends BaseGrader {
       protected readonly defaultName = "needs-expected";
       validateInput(input: Test): void {
-        if (!test.metadata?.expected)
+        if (!input.metadata?.expected)
           throw new Error("matchOn [metadata,expected] did not resolve");
       }
       protected _run(): Promise<Grade> {

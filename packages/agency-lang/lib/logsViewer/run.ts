@@ -20,7 +20,7 @@ import { FlameView } from "./views/flameView.js";
 import { OccurrencesView } from "./views/occurrencesView.js";
 import { TreeView } from "./views/treeView.js";
 import { makeViewStack, type ViewAction, type Viewport } from "./views/view.js";
-import type { TreeNode } from "./types.js";
+import type { EventEnvelope, TreeNode } from "./types.js";
 import { findTrace, writeTraceFile } from "../runDirectory/extractTrace.js";
 
 export type RunViewerOpts = {
@@ -116,6 +116,7 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
   const parsed = parseStatelogJsonl(watcher.bootText);
   let roots = buildForest(parsed.events);
   let parseErrors: ReadonlyArray<{ line: number }> = parsed.errors;
+  let allEvents: readonly EventEnvelope[] = parsed.events; // `Y` copies these verbatim
 
   const screen = new Screen({
     input: opts.input,
@@ -141,6 +142,7 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
     focusTraceId: opts.focusTraceId,
   });
   const stack = makeViewStack(treeView);
+  const notify = (message: string): void => stack.active().notify(message);
   // The trace timeline views open on: fixed when flame opens from the tree.
   let timelineTraceId = treeView.cursorTraceId();
   let helpOpen = false;
@@ -155,19 +157,20 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
     const reparsed = parseStatelogJsonl(text);
     roots = buildForest(reparsed.events);
     parseErrors = reparsed.errors;
+    allEvents = reparsed.events;
     for (const view of stack.all()) view.setData(roots);
     render();
   };
   const toggleFollow = (): void => {
     if (!opts.followPath) {
-      stack.active().notify("follow unavailable when reading from stdin");
+      notify("follow unavailable when reading from stdin");
       return;
     }
     followOn = !followOn;
     for (const view of stack.all()) view.setFollowIndicator(followOn);
     if (followOn) watcher.start(onNewText);
     else watcher.stop();
-    stack.active().notify(followOn ? "follow on" : "follow off");
+    notify(followOn ? "follow on" : "follow off");
   };
 
   if (opts.initialFollow && opts.followPath) {
@@ -219,7 +222,9 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
       const text = await screen.nextLine(action.label);
       action.onResult(text);
     } else if (action.kind === "copy") {
-      copyToClipboard(action.text, (message) => stack.active().notify(message));
+      copyToClipboard(action.text, notify);
+    } else if (action.kind === "copyTrace") {
+      copyTraceToClipboard(allEvents, action.traceId, notify);
     } else if (action.kind === "extractTrace" && opts.extract !== undefined) {
       await handleTraceExtract({
         screen,
@@ -229,7 +234,7 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
         watcher,
         onNewText,
         render,
-        notify: (message: string) => stack.active().notify(message),
+        notify,
       });
     }
   };
@@ -245,14 +250,8 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
       }
       // Esc backs out, never quits: with nothing left to pop or clear,
       // an embedded viewer hands control back to its host.
-      if (
-        opts.embedded &&
-        fmt === "Escape" &&
-        stack.all().length === 1 &&
-        !treeView.hasActiveSearch()
-      ) {
-        return "back";
-      }
+      const nothingLeftToClear = stack.all().length === 1 && !treeView.hasActiveSearch();
+      if (opts.embedded && fmt === "Escape" && nothingLeftToClear) return "back";
       if (helpOpen) {
         helpOpen = false;
         render();
@@ -334,7 +333,27 @@ function makeFollowWatcher(opts: RunViewerOpts): {
   };
 }
 
-function copyToClipboard(text: string, notify: (message: string) => void): void {
+/** `Y` in the tree view: every event of one trace, one JSON object per line. */
+function copyTraceToClipboard(
+  events: readonly EventEnvelope[],
+  traceId: string,
+  notify: (message: string) => void,
+): void {
+  const lines = events
+    .filter((event) => event.trace_id === traceId)
+    .map((event) => JSON.stringify(event));
+  copyToClipboard(
+    lines.join("\n") + "\n",
+    notify,
+    `copied ${lines.length} events of trace ${traceId}`,
+  );
+}
+
+function copyToClipboard(
+  text: string,
+  notify: (message: string) => void,
+  successMessage: string = "copied",
+): void {
   const clipboard = detectClipboard();
   if (clipboard === null) {
     notify("clipboard unavailable");
@@ -342,7 +361,7 @@ function copyToClipboard(text: string, notify: (message: string) => void): void 
   }
   try {
     clipboard.write(text);
-    notify("copied");
+    notify(successMessage);
   } catch (err) {
     notify(`copy failed: ${err instanceof Error ? err.message : String(err)}`);
   }

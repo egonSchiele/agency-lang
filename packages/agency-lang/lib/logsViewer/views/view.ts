@@ -18,6 +18,9 @@ export type ViewAction =
   | { kind: "promptLine"; label: string; onResult: (text: string) => void }
   | { kind: "copy"; text: string }
   | { kind: "extractTrace"; traceId: string }
+  /** Copy every statelog line of one trace as JSONL. The shell owns the
+   *  events, so the view can only name the trace. */
+  | { kind: "copyTrace"; traceId: string }
   | { kind: "none" };
 
 export type View = {

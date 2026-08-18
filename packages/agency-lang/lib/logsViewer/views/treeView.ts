@@ -82,6 +82,14 @@ export class TreeView implements View {
         return { kind: "extractTrace", traceId };
       }
     }
+    // `Y` copies the whole focused trace (every event, one JSON per line);
+    // lowercase `y` copies just the focused node.
+    if (fmt === "Y") {
+      const traceId = this.cursorTraceId();
+      if (traceId !== "" && this.clipboardReady()) {
+        return { kind: "copyTrace", traceId };
+      }
+    }
     const paged = this.paginate(ev, viewport);
     if (paged !== undefined) {
       this.state = this.applyScroll(paged, viewport);
@@ -148,6 +156,7 @@ export class TreeView implements View {
     return [
       "t — timeline views (flame → by-name)",
       "d — full details of the focused span",
+      "y — copy focused node as JSON; Y — copy the whole trace as JSONL",
       ...(this.extractEnabled ? ["x — extract this trace to a file"] : []),
       "",
       ...treeHelpLines(),
@@ -259,16 +268,19 @@ export class TreeView implements View {
   private copyText(): string | undefined {
     const node = findNode(this.state.roots, this.state.cursorId);
     if (node === undefined) return undefined;
-    if (detectClipboard() === null) {
-      this.notify("clipboard unavailable");
-      return undefined;
-    }
+    if (!this.clipboardReady()) return undefined;
     const payload = node.event ?? {
       label: node.label,
       traceId: node.traceId,
       metrics: { duration: node.duration, tokens: node.tokens, cost: node.cost },
     };
     return JSON.stringify(payload, null, 2);
+  }
+
+  private clipboardReady(): boolean {
+    if (detectClipboard() !== null) return true;
+    this.notify("clipboard unavailable");
+    return false;
   }
 
   private paneRows(viewport: Viewport, _state: ViewerState = this.state): number {

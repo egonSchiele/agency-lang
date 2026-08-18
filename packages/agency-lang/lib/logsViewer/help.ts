@@ -40,7 +40,10 @@ export const HELP_GROUPS: BindingGroup[] = [
   },
   {
     heading: "Inspect",
-    bindings: [{ keys: "y", action: "copy JSON of focused node to clipboard" }],
+    bindings: [
+      { keys: "y", action: "copy JSON of focused node to clipboard" },
+      { keys: "Y", action: "copy all events of focused trace as JSONL to clipboard" },
+    ],
   },
   {
     heading: "Modes",

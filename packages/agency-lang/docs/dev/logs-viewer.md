@@ -132,6 +132,10 @@ rules are its reason to exist.
   and resolves with `"back"` (Esc at the bottom of the stack, nothing
   left to clear) or `"quit"` (`q`), so the host can honor the same
   contract.
+- Copying: `y` copies the focused node's JSON; `Y` in the tree view copies
+  every statelog event of the focused trace as JSONL (one object per line,
+  file order). Views only *name* what to copy (`ViewAction` `copy` /
+  `copyTrace`); the shell in `run.ts` owns the events and the clipboard.
 - Every view pins its name to the bottom-right corner via
   `views/shared.ts`'s `bottomHints(hints, tag, cols)` — the answer to
   "where am I" always lives in the same place.

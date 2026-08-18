@@ -1,3 +1,4 @@
+import { sha256Text } from "@/utils/hash.js";
 import * as fs from "fs";
 import * as path from "path";
 import { pathToFileURL } from "url";
@@ -49,7 +50,15 @@ export async function loadGradingModule(
       );
     }
     const specs: Grader[] = Array.isArray(exported) ? exported : [exported];
-    return specs.map(toGrader);
+    // Name each grader by the module's revision, so a score row says which
+    // version of graders.ts produced it and an in-place edit never supersedes
+    // the rows an earlier version wrote.
+    const revision = `${absolute}@${sha256Text(fs.readFileSync(absolute, "utf8"))}`;
+    return specs.map((spec) => {
+      const grader = toGrader(spec);
+      grader.revision = revision;
+      return grader;
+    });
   } finally {
     if (fs.existsSync(out)) fs.rmSync(out, { force: true });
   }

@@ -4,8 +4,7 @@ import * as path from "path";
 import { nanoid } from "nanoid";
 
 import { assertEvalInputId } from "./ids.js";
-import type { SourceProvenance } from "./runArtifacts.js";
-import type { Input } from "./runTypes.js";
+import type { Test } from "./runTypes.js";
 import { parseSource, resolveSource } from "./sources.js";
 
 type MakeId = () => string;
@@ -16,26 +15,26 @@ type LoadOptions = {
   requireGoal?: boolean;
   /** One-level nesting rule: set when the suite itself came from a git source. */
   forbidGitFiles?: boolean;
-  /** Caller-supplied accumulator: input id → files source provenance. */
-  filesProvenance?: Record<string, SourceProvenance>;
+  /** Caller-supplied accumulator: test id → where its `files` came from. */
+  filesProvenance?: Record<string, { source: string; sha?: string }>;
   /** Cache root override for git sources (tests; config.eval.sourceCacheRoot). */
   sourceCacheRoot?: string;
 };
 
 /** The `--goal` one-liner: criterion and instruction coincide, and both are
  *  written explicitly so the run's input.json shows what the agent was told. */
-export function inputFromGoal(goal: string): Input {
+export function inputFromGoal(goal: string): Test {
   if (typeof goal !== "string" || goal.length === 0) {
     throw new Error("--goal must be a non-empty string");
   }
-  return { id: "input-1", task: goal, goal };
+  return { id: "input-1", input: goal, goal };
 }
 
 export function loadInputs(
   sourcePath: string,
   makeId: MakeId = nanoid,
   options: LoadOptions = {},
-): Input[] {
+): Test[] {
   const stat = fs.statSync(sourcePath);
   const inputs = stat.isDirectory()
     ? loadInputsFromDirectory(sourcePath, makeId, options)
@@ -54,10 +53,10 @@ export function loadInputsFromFile(
   filePath: string,
   makeId: MakeId = nanoid,
   options: LoadOptions = {},
-): Input[] {
+): Test[] {
   const parsed = readJson(filePath);
   if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as any).inputs)) {
-    throw new Error(`Input suite ${filePath} must contain a top-level inputs array`);
+    throw new Error(`Test suite ${filePath} must contain a top-level inputs array`);
   }
   return validateInputs(
     (parsed as any).inputs.map((raw: unknown) =>
@@ -80,7 +79,7 @@ function loadInputsFromDirectory(
   directoryPath: string,
   makeId: MakeId,
   options: LoadOptions,
-): Input[] {
+): Test[] {
   // A directory that itself contains test.json IS a single test — pointing
   // --inputs at one test of a suite must keep the test-directory sugar
   // (id from the directory name, files/, graders.ts auto-discovery).
@@ -105,14 +104,14 @@ function loadInputsFromDirectory(
   const shapes = [wrapperFiles, looseFiles, testDirs].filter((group) => group.length > 0);
   if (shapes.length > 1) {
     throw new Error(
-      `Input directory ${directoryPath} mixes suite shapes ` +
+      `Test directory ${directoryPath} mixes suite shapes ` +
         `(${shapes.map((group) => group[0]).join(", ")}). Use one form per directory: ` +
         `a single inputs file with an "inputs" array, one-input .json files, or test directories.`,
     );
   }
   if (wrapperFiles.length > 1) {
     throw new Error(
-      `Input directory ${directoryPath} has multiple suite files: ${wrapperFiles.join(", ")}`,
+      `Test directory ${directoryPath} has multiple suite files: ${wrapperFiles.join(", ")}`,
     );
   }
   if (wrapperFiles.length === 1) {
@@ -131,10 +130,10 @@ function loadInputsFromDirectory(
 }
 
 /** The heavy form: test.json beside an optional files/ directory and an
- *  optional graders.ts. Desugars to the same Input the light form produces —
+ *  optional graders.ts. Desugars to the same Test the light form produces —
  *  id defaults to the directory name, files to the sibling files/, graders
  *  to the sibling graders.ts. */
-function loadTestDir(testDir: string, makeId: MakeId, options: LoadOptions): Input {
+function loadTestDir(testDir: string, makeId: MakeId, options: LoadOptions): Test {
   const raw = readJson(path.join(testDir, "test.json"));
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error(`${path.join(testDir, "test.json")} must contain a JSON object`);
@@ -160,20 +159,21 @@ function readJson(filePath: string): unknown {
   }
 }
 
-function normalizeInput(
-  raw: unknown,
-  baseDir: string,
-  makeId: MakeId,
-  options: LoadOptions,
-): Input {
+function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: LoadOptions): Test {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("Eval input must be a JSON object");
   }
   const spec = raw as Record<string, unknown>;
+  if (spec.task !== undefined) {
+    throw new Error(
+      '"task" was renamed to "input": put what the agent is given in "input" ' +
+        "(a string or a JSON object).",
+    );
+  }
   if (spec.args !== undefined || spec.node !== undefined) {
     throw new Error(
-      'Eval inputs no longer take "args" or "node" — tests describe the task, not the agent. ' +
-        'Put what the agent is told in "task" (a string or a JSON object); ' +
+      'Eval tests do not take "args" or "node" — tests describe the input, not the agent. ' +
+        'Put what the agent is given in "input" (a string or a JSON object); ' +
         "pick the node with --agent file.agency:node.",
     );
   }
@@ -189,14 +189,14 @@ function normalizeInput(
   if (spec.goal !== undefined && typeof spec.goal !== "string") {
     throw new Error("Eval input goal must be a string when provided");
   }
-  if (typeof spec.task !== "string" && !isPlainObject(spec.task)) {
-    throw new Error("Eval input task is required: a string, or a JSON object for structured input");
+  if (typeof spec.input !== "string" && !isPlainObject(spec.input)) {
+    throw new Error("Eval test input is required: a string, or a JSON object for structured input");
   }
-  if (typeof spec.task === "string" && spec.task.length === 0) {
-    throw new Error("Eval input task must not be empty");
+  if (typeof spec.input === "string" && spec.input.length === 0) {
+    throw new Error("Eval test input must not be empty");
   }
-  if (isPlainObject(spec.task) && Object.keys(spec.task).length === 0) {
-    throw new Error("Eval input task must not be empty");
+  if (isPlainObject(spec.input) && Object.keys(spec.input).length === 0) {
+    throw new Error("Eval test input must not be empty");
   }
   if (spec.files !== undefined && typeof spec.files !== "string") {
     throw new Error("Eval input files must be a string when provided");
@@ -215,9 +215,9 @@ function normalizeInput(
   if (spec.metadata !== undefined && !isPlainObject(spec.metadata)) {
     throw new Error("Eval input metadata must be an object when provided");
   }
-  const out: Input = {
+  const out: Test = {
     id: typeof spec.id === "string" ? spec.id : makeId(),
-    task: spec.task as string | Record<string, any>,
+    input: spec.input as string | Record<string, any>,
     expected: spec.expected, // any JSON; absent stays undefined
   };
   if (typeof spec.goal === "string") out.goal = spec.goal;
@@ -242,7 +242,7 @@ function resolveFilesDir(
   if (parsed.kind === "git") {
     if (options.forbidGitFiles) {
       throw new Error(
-        `Input ${inputId}: files "${raw}" is a git source, but this suite was itself loaded from git. ` +
+        `Test ${inputId}: files "${raw}" is a git source, but this suite was itself loaded from git. ` +
           `Sources resolve one level deep — vendor the fixtures into the suite repo instead.`,
       );
     }
@@ -270,7 +270,7 @@ function resolveGradersFile(raw: string, baseDir: string, inputId: string): stri
   const abs = path.resolve(baseDir, raw);
   if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
     throw new Error(
-      `Input ${inputId}: graders must name a TypeScript file (got ${raw}, resolved to ${abs})`,
+      `Test ${inputId}: graders must name a TypeScript file (got ${raw}, resolved to ${abs})`,
     );
   }
   return abs;
@@ -281,7 +281,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function validateInputs(inputs: Input[]): Input[] {
+function validateInputs(inputs: Test[]): Test[] {
   // Null-prototype: ids are user-controlled and the id charset allows names
   // like "__proto__" and "constructor", which on a plain object hit inherited
   // members ("constructor" would be a false duplicate; "__proto__" cannot be

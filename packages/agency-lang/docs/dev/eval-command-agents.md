@@ -58,15 +58,19 @@ The spawn runner sets two env vars:
   RuntimeContext construction, and the var inherits through intermediate
   processes (the `agency` CLI wrapper is not a compiled agent; the
   `agent.js` it spawns is). So the agent's own record — tool calls, cost,
-  interrupts, its whole process tree — lands exactly where the extractor
-  reads, and grading/judging work unchanged.
-- `AGENCY_TRACE_ID` (`lib/config.ts`) → one trace id for the whole tree.
-  Mint order in `context.ts`: explicit > env > `nanoid()`. IPC descendants
-  inherit identity anyway; the env var covers descendants started WITHOUT
-  IPC (an agent shelling out to `agency run`), whose fresh trace ids would
-  otherwise make the shared statelog fail `assertSingleTrace` at
-  extraction. The eval FORK runner deletes this var from file-target child
-  env (`evalForkOptions`) so a stray value cannot merge unrelated runs.
+  interrupts, its whole process tree — lands exactly where the harness
+  folds it into the run directory, and grading/judging work unchanged.
+- `AGENCY_TRACE_ID` (`lib/config.ts`) → one trace id for the whole tree,
+  ROOT INCLUDED: the harness mints the id (`runSuite`), and
+  `resolveInvocation` (`lib/runtime/invocationOptions.ts`) uses it for a
+  fresh run below an explicit per-invocation `traceId` and above `nanoid()`
+  (before 2026-08-18 only the context-level client honored it, so the root
+  run of a command agent minted its own id and the harness could not key
+  its workdir). IPC descendants inherit identity anyway; the env var covers
+  descendants started WITHOUT IPC (an agent shelling out to `agency run`).
+  The eval FORK runner deletes this var from file-target child env
+  (`evalForkOptions`) and passes the minted id as `identity.runId` on the
+  run instruction instead, so a stray value cannot merge unrelated runs.
 
 Two sharp edges, both mitigated: `runBundledAgent` merges flag-derived
 config overrides ONTO the inherited env value ("env first, flags on top"),

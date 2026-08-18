@@ -1,39 +1,19 @@
 // Suite identity: the short name a run's test set groups under, derived
-// from config.json's provenance.inputsSource.source. The source string
-// formats are the ones lib/cli/eval/run.ts and lib/optimize actually
-// write: a local path, a git URL (optionally ?ref=), "inline:--goal",
-// "optimize", or "unspecified". Pure — malformed provenance comes back
-// as a warning, never a log line.
+// from the harness `run` row's `suite.source`. The source string formats
+// are the ones lib/cli/eval/run.ts and lib/optimize actually write: a
+// local path, a git URL (optionally ?ref=), "inline:--goal", "optimize",
+// or "unspecified". Pure.
 import { MAX_IDENTITY_LABEL_CHARS } from "./identity.js";
-import type { EvalRunConfig } from "./readRunSummary.js";
 
 export const UNKNOWN_SUITE = "—";
 const GIT_REF_CHARS = 8;
 
-export type SuiteResolution = { suite: string; warning?: string };
-
-export function suiteFromConfig(config: EvalRunConfig | null): SuiteResolution {
-  if (config === null) {
-    return { suite: UNKNOWN_SUITE };
+/** The short suite name for a `run` row's suite identity; `null` (an
+ *  ad-hoc directory, or a run with no suite on record) is unknown. */
+export function suiteFromSource(source: string | null | undefined): string {
+  if (source === null || source === undefined) {
+    return UNKNOWN_SUITE;
   }
-  const source = config.provenance?.inputsSource?.source;
-  if (typeof source === "string") {
-    return { suite: suiteFromSource(source) };
-  }
-  const legacySource = (config as Record<string, unknown>).inputsSource;
-  if (typeof legacySource === "string") {
-    return { suite: suiteFromSource(legacySource) };
-  }
-  if (config.provenance === undefined) {
-    return { suite: UNKNOWN_SUITE };
-  }
-  return {
-    suite: UNKNOWN_SUITE,
-    warning: `config.json provenance.inputsSource.source is not a string`,
-  };
-}
-
-function suiteFromSource(source: string): string {
   if (source === "" || source === "unspecified") {
     return UNKNOWN_SUITE;
   }

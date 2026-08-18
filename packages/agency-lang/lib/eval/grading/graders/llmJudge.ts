@@ -1,3 +1,6 @@
+import * as fs from "fs";
+
+import { sha256Text } from "@/utils/hash.js";
 import { z } from "zod";
 
 import { asJudgeText, goalJudgeFile, ScalarVerdict } from "../goalJudgeFile.js";
@@ -18,20 +21,28 @@ const BinaryVerdict = z.object({ pass: z.boolean(), reasoning: z.string() });
 
 /** Grades an output by running a judge .agency file and reading its structured verdict. */
 export class LlmJudge extends BaseGrader {
+  /** The bundled judge is identified by its prompt file's content, so a
+   *  changed judge prompt is a new annotator; a custom agencyFile likewise. */
+  override annotator(): { kind: "grader" | "judge"; id: string } {
+    if (this.revision !== undefined) return { kind: "grader", id: this.revision };
+    const agencyFile = this.options.agencyFile ?? goalJudgeFile();
+    return { kind: "judge", id: `goal-judge@${sha256Text(fs.readFileSync(agencyFile, "utf8"))}` };
+  }
+
   protected readonly defaultName = "llm-judge";
   constructor(protected readonly options: LlmJudgeOptions) {
     super(options);
   }
 
-  protected async _run({ input, run, runAgency }: GraderInput): Promise<Grade> {
+  protected async _run({ test, run, runAgency }: GraderInput): Promise<Grade> {
     const goalPath = this.options.goalPath ?? ["goal"];
     // Prefer an inline goal (same for every input); otherwise read it from the input.
-    const goal = this.options.goal ?? getPath(input, goalPath);
+    const goal = this.options.goal ?? getPath(test, goalPath);
     // An LLM judge with no goal has nothing to judge against — fail loudly rather
     // than ask the model to grade output against an empty criterion.
     if (goal === undefined || goal === null || String(goal).trim() === "") {
       throw new Error(
-        `${this.name()}: no goal (set options.goal or provide one at ${globalThis.JSON.stringify(goalPath)} on input ${input.id ?? "(no id)"}); an LLM judge needs a goal.`,
+        `${this.name()}: no goal (set options.goal or provide one at ${globalThis.JSON.stringify(goalPath)} on test ${test.id ?? "(no id)"}); an LLM judge needs a goal.`,
       );
     }
     const agencyFile = this.options.agencyFile ?? goalJudgeFile();
@@ -40,7 +51,7 @@ export class LlmJudge extends BaseGrader {
     const output = asJudgeText(run.output);
     // The gold answer, when the input carries one — the bundled judge grades against
     // it. Empty string when absent; a custom judge node that ignores it is unaffected.
-    const expectedRaw = getPath(input, this.options.expectedPath ?? ["expected"]);
+    const expectedRaw = getPath(test, this.options.expectedPath ?? ["expected"]);
     const expected =
       expectedRaw === undefined || expectedRaw === null ? "" : asJudgeText(expectedRaw);
     const args = [String(goal), output, expected];

@@ -18,14 +18,14 @@ export function renderInputFeedback(
   const lines: string[] = [];
   const objective = inputObjective(entry.grades).toFixed(3);
   lines.push(
-    `### Input ${entry.input.id ?? "(no id)"} — objective ${objective}${entry.gatesPassed ? "" : " (GATE FAILED)"}`,
+    `### Test ${entry.test.id ?? "(no id)"} — objective ${objective}${entry.gatesPassed ? "" : " (GATE FAILED)"}`,
   );
   // stringifyOutput, not JSON.stringify: a string task must reach the
   // proposer LLM as readable multi-line text, not one escaped line.
-  lines.push(`Task: ${preview(stringifyOutput(entry.input.task), 400)}`);
+  lines.push(`Input: ${preview(stringifyOutput(entry.test.input), 400)}`);
   lines.push(`Output: ${preview(stringifyOutput(entry.run?.output ?? null), 600)}`);
-  if (entry.input.expected !== undefined) {
-    lines.push(`Expected: ${preview(stringifyOutput(entry.input.expected), 400)}`);
+  if (entry.test.expected !== undefined) {
+    lines.push(`Expected: ${preview(stringifyOutput(entry.test.expected), 400)}`);
   }
 
   const errors = record?.errors ?? [];
@@ -43,6 +43,15 @@ export function renderInputFeedback(
     lines.push(
       `  - ${g.grader.name()} = ${formatScore(g.grade.score)}${g.grade.feedback ? `: ${preview(g.grade.feedback, 400)}` : ""}`,
     );
+  }
+  const human = entry.humanFeedback;
+  if (human !== undefined && human.notes.length > 0) {
+    lines.push("Notes from people who reviewed this run:");
+    for (const note of human.notes) lines.push(`  - ${preview(note, 400)}`);
+  }
+  if (human !== undefined && human.unchecked.length > 0) {
+    lines.push("Checklist questions reviewers answered NO:");
+    for (const question of human.unchecked) lines.push(`  - ${preview(question, 200)}`);
   }
   return clamp(lines.join("\n"), maxChars);
 }

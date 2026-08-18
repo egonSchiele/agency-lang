@@ -23,7 +23,7 @@ describe("breakdown", () => {
     const grade: Grade = { score: { kind: "scalar", value: 0.2 }, feedback: "off-topic" };
     const sc = new Scorecard([
       {
-        input: { id: "brazil", task: "t" },
+        test: { id: "brazil", input: "t" },
         run: loadedRun("area is 8.5M km²"),
         gatesPassed: true,
         grades: [{ grader: new Fixed(grade, "goal"), grade }],

@@ -1,15 +1,20 @@
+import type { HumanFeedback } from "@/runDirectory/humanFeedback.js";
+
 import type { BaseGrader } from "./baseGrader.js";
-import type { LoadedRun, Grade, Input } from "./types.js";
+import type { LoadedRun, Grade, Test } from "./types.js";
 
 export type GraderGrade = { grader: BaseGrader; grade: Grade };
 export type InputGrades = {
-  input: Input;
+  test: Test;
   /** Null when the input was never graded — the run errored, or produced no output. */
   run: LoadedRun | null;
   grades: GraderGrade[];
   gatesPassed: boolean;
   /** Why this input scored 0 without being graded. Set iff `run` is null. */
   ungradedReason?: string;
+  /** Notes and unchecked checklist questions people left on the trace, when
+   *  the run directory carried any. Reflection feeds these to the model. */
+  humanFeedback?: HumanFeedback;
 };
 
 /**

@@ -18,10 +18,18 @@ export type InvocationOptions = {
 /**
  * A fresh run or a resume, described declaratively for {@link resolveInvocation}.
  * A fresh run may carry an inherited subprocess run id (which wins over any
- * supplied trace id); a resume carries the run id read from the interrupt.
+ * supplied trace id) and a harness-given trace id from the environment
+ * (`AGENCY_TRACE_ID`, the fallback below a supplied one); a resume carries
+ * the run id read from the interrupt.
  */
 export type InvocationRequest =
-  | { kind: "fresh"; options?: InvocationOptions; inheritedRunId?: string }
+  | {
+      kind: "fresh";
+      options?: InvocationOptions;
+      inheritedRunId?: string;
+      /** `AGENCY_TRACE_ID`, when a harness set it for the whole process tree. */
+      environmentTraceId?: string;
+    }
   | { kind: "resume"; options?: InvocationOptions; runId: string };
 
 /**
@@ -147,10 +155,11 @@ function selectLogConfig(log: AgencyConfig["log"] | undefined): PerInvocationLog
  * policy, or the config allow-list.
  *
  * Run-id precedence for a fresh run: an inherited subprocess id wins (so child
- * events land in the parent's trace), then a supplied `traceId`, then a fresh
- * `nanoid()`. A resume always keeps `interrupt.runId`; a supplied `traceId` —
- * empty or not — is ignored. A supplied empty trace id on a fresh run is a
- * caller error and is rejected.
+ * events land in the parent's trace), then a supplied `traceId`, then the
+ * environment's `AGENCY_TRACE_ID` (a harness giving a whole process tree —
+ * root included — one trace id), then a fresh `nanoid()`. A resume always
+ * keeps `interrupt.runId`; a supplied `traceId` — empty or not — is ignored.
+ * A supplied empty trace id on a fresh run is a caller error and is rejected.
  */
 export function resolveInvocation(request: InvocationRequest): ResolvedInvocation {
   const contextOverride = selectContextOverride(request.options?.config);
@@ -159,9 +168,17 @@ export function resolveInvocation(request: InvocationRequest): ResolvedInvocatio
     return { runId: request.runId, contextOverride };
   }
 
-  const runId = request.inheritedRunId ?? request.options?.traceId ?? nanoid();
+  const runId =
+    request.inheritedRunId ??
+    request.options?.traceId ??
+    emptyToUndefined(request.environmentTraceId) ??
+    nanoid();
   if (runId.length === 0) {
     throw new Error("traceId must not be empty");
   }
   return { runId, contextOverride };
+}
+
+function emptyToUndefined(value: string | undefined): string | undefined {
+  return value === undefined || value.length === 0 ? undefined : value;
 }

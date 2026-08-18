@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { substituteTask, tokenizeCommand } from "./commandLine.js";
+import { substituteInput, tokenizeCommand } from "./commandLine.js";
 
 describe("tokenizeCommand", () => {
   it("splits on whitespace and honors single and double quotes", () => {
@@ -33,9 +33,9 @@ describe("tokenizeCommand", () => {
   });
 });
 
-describe("substituteTask", () => {
+describe("substituteInput", () => {
   it("replaces every occurrence, inside tokens too", () => {
-    expect(substituteTask(["-p", "{task}", "--again={task}"], "do it")).toEqual([
+    expect(substituteInput(["-p", "{task}", "--again={task}"], "do it")).toEqual([
       "-p",
       "do it",
       "--again=do it",
@@ -43,10 +43,10 @@ describe("substituteTask", () => {
   });
 
   it("serializes an object task as JSON", () => {
-    expect(substituteTask(["-p", "{task}"], { rows: [1] })).toEqual(["-p", `{"rows":[1]}`]);
+    expect(substituteInput(["-p", "{task}"], { rows: [1] })).toEqual(["-p", `{"rows":[1]}`]);
   });
 
   it("throws when no token carries the placeholder — the task must reach the agent", () => {
-    expect(() => substituteTask(["agency", "agent"], "t")).toThrow(/\{task\}/);
+    expect(() => substituteInput(["agency", "agent"], "t")).toThrow(/\{task\}/);
   });
 });

@@ -5,8 +5,10 @@ import * as path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { EvalTarget } from "@/agentTarget.js";
-import type { EvalRunnerJob } from "./subprocess.js";
+import { finishedTraceLines } from "@/runDirectory/testFixtures.js";
+
 import { runAgent } from "./runAgent.js";
+import type { EvalRunnerJob } from "./subprocess.js";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -42,50 +44,46 @@ function fileTarget(agentPath: string): EvalTarget {
   return { kind: "file", agentFile: agentPath, node: "main", label: `${agentPath}:main` };
 }
 
-/** Writes the record grading would read, with one output value. */
-function recordWritingExtractor(output: unknown) {
-  return async ({ outPath }: { outPath: string }) => {
+/** A fake runner that behaves like a real child: writes a finished trace under
+ *  the trace id the harness handed it, with `output` as the return value. */
+function traceWritingRunner(output: unknown, observe?: (job: EvalRunnerJob) => void) {
+  return async (job: EvalRunnerJob) => {
+    observe?.(job);
     fs.writeFileSync(
-      outPath,
-      JSON.stringify({ evalOutputs: [{ value: output, threadId: "0", tMs: 1 }] }),
+      job.statelogPath,
+      finishedTraceLines(job.traceId, { output }).join("\n") + "\n",
     );
+    return { ok: true as const };
   };
 }
 
 describe("runAgent", () => {
-  it("runs the recipe: seeds, compiles, executes with cwd=workdir, extracts, returns the output", async () => {
+  it("runs the recipe: seeds, compiles, executes with cwd=workdir, reads the trace, returns the output", async () => {
     const { agentPath } = makeAgentProject();
     const runDir = path.join(tmp(), "run-1");
-    let observedCwd = "";
+    let observed: EvalRunnerJob | undefined;
 
     const run = await runAgent(
       fileTarget(agentPath),
       "t",
-      {
-        runDir,
-        config: {},
-        extractor: recordWritingExtractor("New Delhi"),
-      },
-      {
-        runner: async (job: EvalRunnerJob) => {
-          const { cwd, statelogPath } = job as { cwd: string; statelogPath: string };
-          observedCwd = cwd;
-          fs.writeFileSync(statelogPath, "{}\n");
-          return { ok: true };
-        },
-      },
+      { runDir, traceId: "trace-1", config: {} },
+      { runner: traceWritingRunner("New Delhi", (job) => (observed = job)) },
     );
 
     expect(run.status).toBe("success");
     if (run.status === "success") {
       expect(run.output).toBe("New Delhi");
       expect(run.workdir).toBe(path.join(runDir, "workdir"));
+      expect(run.statelogPath).toBe(path.join(runDir, "agent", "statelog.jsonl"));
+      expect(run.seededAgentEntry).toBe(path.join(runDir, "workdir", "agent.agency"));
     }
-    expect(observedCwd).toBe(path.join(runDir, "workdir"));
-    expect(fs.existsSync(path.join(runDir, "agent", "statelog.jsonl"))).toBe(true);
+    expect(observed?.cwd).toBe(path.join(runDir, "workdir"));
+    // The harness-minted trace id and the seeded code's identity reach the child.
+    expect(observed?.traceId).toBe("trace-1");
+    expect(observed?.kind === "file" && observed.code.entry).toBe("agent.agency");
   });
 
-  it("seedFiles land in the workdir; a failed run lists what was seeded and writes error.txt", async () => {
+  it("seedFiles land in the workdir; a failed run lists what was seeded and leaves no statelog", async () => {
     const { agentPath } = makeAgentProject();
     const seedFiles = tmp();
     fs.writeFileSync(path.join(seedFiles, "hint.txt"), "Paris");
@@ -94,7 +92,7 @@ describe("runAgent", () => {
     const run = await runAgent(
       fileTarget(agentPath),
       "t",
-      { runDir, config: {}, seedFiles },
+      { runDir, traceId: "trace-2", config: {}, seedFiles },
       {
         runner: async () => ({ ok: false, errorMessage: "boom" }),
       },
@@ -103,8 +101,8 @@ describe("runAgent", () => {
     expect(run.status).toBe("error");
     if (run.status === "error") {
       expect(run.errorMessage).toMatch(/^boom\n\nWorkdir was seeded with/);
+      expect(run.statelogPath).toBeNull();
     }
-    expect(fs.readFileSync(path.join(runDir, "agent", "error.txt"), "utf8")).toMatch(/^boom/);
     expect(fs.existsSync(path.join(runDir, "workdir", "hint.txt"))).toBe(true);
   });
 
@@ -115,6 +113,7 @@ describe("runAgent", () => {
 
     const run = await runAgent(fileTarget(agentPath), "t", {
       runDir: path.join(tmp(), "run-3"),
+      traceId: "trace-3",
       config: {},
       seedFiles,
     });
@@ -132,7 +131,7 @@ describe("runAgent", () => {
     const run = await runAgent(
       fileTarget(agentPath),
       "t",
-      { runDir: run4Dir, config: {} },
+      { runDir: run4Dir, traceId: "trace-4", config: {} },
       {
         runner: async () => ({ ok: true }),
       },
@@ -140,91 +139,32 @@ describe("runAgent", () => {
 
     expect(run.status).toBe("error");
     if (run.status === "error") {
-      expect(run.errorMessage).toMatch(/produced no eval record/);
-    }
-    expect(fs.existsSync(path.join(run4Dir, "agent", "error.txt"))).toBe(true);
-  });
-
-  it("an extractor crash is an error carrying the extractor's message, not 'no statelog'", async () => {
-    const { agentPath } = makeAgentProject();
-
-    const run = await runAgent(
-      fileTarget(agentPath),
-      "t",
-      {
-        runDir: path.join(tmp(), "run-5"),
-        config: {},
-        extractor: async () => {
-          throw new Error("extractor exploded");
-        },
-      },
-      {
-        runner: async (job: EvalRunnerJob) => {
-          const { statelogPath } = job as { statelogPath: string };
-          fs.writeFileSync(statelogPath, "{}\n");
-          return { ok: true };
-        },
-      },
-    );
-
-    expect(run.status).toBe("error");
-    if (run.status === "error") {
-      expect(run.errorMessage).toMatch(/extractor exploded/);
+      expect(run.errorMessage).toMatch(/wrote no statelog/);
+      expect(run.statelogPath).toBeNull();
     }
   });
 
-  it("an extractor that runs but writes no record file is an error too", async () => {
-    const { agentPath } = makeAgentProject();
-
-    const run = await runAgent(
-      fileTarget(agentPath),
-      "t",
-      {
-        runDir: path.join(tmp(), "run-6"),
-        config: {},
-        extractor: async () => {},
-      },
-      {
-        runner: async (job: EvalRunnerJob) => {
-          const { statelogPath } = job as { statelogPath: string };
-          fs.writeFileSync(statelogPath, "{}\n");
-          return { ok: true };
-        },
-      },
-    );
-
-    expect(run.status).toBe("error");
-    if (run.status === "error") {
-      expect(run.errorMessage).toMatch(/produced no eval record/);
-    }
-  });
-
-  it("a failed run still salvages its record to disk, so a crash after useful work keeps its evidence", async () => {
+  it("a failed run that wrote a statelog keeps it — the trace is the evidence", async () => {
     const run7Dir = path.join(tmp(), "run-7");
     const { agentPath } = makeAgentProject();
 
     const run = await runAgent(
       fileTarget(agentPath),
       "t",
-      {
-        runDir: run7Dir,
-        config: {},
-        extractor: recordWritingExtractor("partial work"),
-      },
+      { runDir: run7Dir, traceId: "trace-7", config: {} },
       {
         runner: async (job: EvalRunnerJob) => {
-          const { statelogPath } = job as { statelogPath: string };
-          fs.writeFileSync(statelogPath, "{}\n");
+          fs.writeFileSync(
+            job.statelogPath,
+            finishedTraceLines(job.traceId, { output: "partial" }).join("\n") + "\n",
+          );
           return { ok: false, errorMessage: "died late" };
         },
       },
     );
 
     expect(run.status).toBe("error");
-    const salvaged = JSON.parse(
-      fs.readFileSync(path.join(run7Dir, "agent", "eval-record.json"), "utf8"),
-    );
-    expect(salvaged.evalOutputs[0].value).toBe("partial work");
+    expect(run.statelogPath).toBe(path.join(run7Dir, "agent", "statelog.jsonl"));
   });
 
   it("command targets: seeds only the test files, compiles nothing, and hands the runner the substituted argv", async () => {
@@ -241,19 +181,8 @@ describe("runAgent", () => {
     const run = await runAgent(
       target,
       "do the thing",
-      {
-        runDir,
-        config: {},
-        seedFiles: filesDir,
-        extractor: recordWritingExtractor("done"),
-      },
-      {
-        runner: async (j: EvalRunnerJob) => {
-          job = j;
-          fs.writeFileSync((j as { statelogPath: string }).statelogPath, "{}\n");
-          return { ok: true };
-        },
-      },
+      { runDir, traceId: "trace-cmd", config: {}, seedFiles: filesDir },
+      { runner: traceWritingRunner("done", (j) => (job = j)) },
     );
 
     expect(run.status).toBe("success");
@@ -261,8 +190,8 @@ describe("runAgent", () => {
       kind: "command",
       argv: ["node", "run.js", "-p", "do the thing"],
       cwd: path.join(runDir, "workdir"),
+      traceId: "trace-cmd",
     });
-    expect((job as { traceId: string }).traceId).toBeTruthy();
     expect(fs.readFileSync(path.join(runDir, "workdir", "data.txt"), "utf8")).toBe("fixture");
     // nothing compiled: only the fixture landed in the workdir
     expect(
@@ -279,6 +208,7 @@ describe("runAgent", () => {
       "t",
       {
         runDir: path.join(tmp(), "run-cmd-nolog"),
+        traceId: "trace-nolog",
         config: {},
       },
       {
@@ -300,6 +230,7 @@ describe("runAgent", () => {
     };
     const run = await runAgent(target, "x".repeat(128 * 1024 + 1), {
       runDir: path.join(tmp(), "run-cmd-big"),
+      traceId: "trace-big",
       config: {},
     }); // real runner: the size check fires before any spawn
 

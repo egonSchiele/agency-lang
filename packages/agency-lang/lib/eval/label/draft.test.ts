@@ -16,17 +16,17 @@ import {
 
 const HASH = `sha256:${"0".repeat(64)}`;
 const SESSION_ID = `session_${"c".repeat(64)}`;
-const OUT_A = `out_${"a".repeat(64)}`;
-const OUT_B = `out_${"b".repeat(64)}`;
+const OUT_A = "trace-a";
+const OUT_B = "trace-b";
 
-let datasetDir: string;
+let dir: string;
 
 beforeEach(() => {
-  datasetDir = fs.mkdtempSync(path.join(os.tmpdir(), "label-draft-"));
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "label-draft-"));
 });
 
 afterEach(() => {
-  fs.rmSync(datasetDir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 function draft(over: Partial<Draft> = {}): Draft {
@@ -34,50 +34,50 @@ function draft(over: Partial<Draft> = {}): Draft {
     schemaVersion: 1,
     sessionId: SESSION_ID,
     binding: {
-      outputIds: [OUT_A, OUT_B],
+      traceIds: [OUT_A, OUT_B],
       checklistId: "cl_news",
       checklist: { kind: "published", version: 1, hash: HASH },
       annotator: { kind: "human", id: "adit" },
     },
     currentIndex: 0,
-    answersByOutputId: {},
-    notesByOutputId: {},
-    reviewedByOutputId: {},
+    answersByTraceId: {},
+    notesByTraceId: {},
+    reviewedByTraceId: {},
     stagedQuestions: null,
     pendingRevision: null,
     pendingAnnotation: null,
-    activeMsByOutputId: {},
+    activeMsByTraceId: {},
     ...over,
   };
 }
 
 describe("draft persistence", () => {
   it("round-trips", () => {
-    saveDraftFile(datasetDir, draft());
-    expect(loadDraftFile(datasetDir, SESSION_ID)?.binding.outputIds).toEqual([OUT_A, OUT_B]);
+    saveDraftFile(dir, draft());
+    expect(loadDraftFile(dir, "cl_news", SESSION_ID)?.binding.traceIds).toEqual([OUT_A, OUT_B]);
   });
 
   it("returns undefined when there is no draft", () => {
-    expect(loadDraftFile(datasetDir, SESSION_ID)).toBeUndefined();
+    expect(loadDraftFile(dir, "cl_news", SESSION_ID)).toBeUndefined();
   });
 
   it("writes atomically, leaving no temporary file", () => {
-    saveDraftFile(datasetDir, draft());
-    const dir = path.dirname(draftPath(datasetDir, SESSION_ID));
-    expect(fs.readdirSync(dir).filter((name) => name.includes(".tmp"))).toEqual([]);
+    saveDraftFile(dir, draft());
+    const draftsDir = path.dirname(draftPath(dir, "cl_news", SESSION_ID));
+    expect(fs.readdirSync(draftsDir).filter((name) => name.includes(".tmp"))).toEqual([]);
   });
 
   it("replaces the previous draft rather than appending", () => {
-    saveDraftFile(datasetDir, draft());
-    saveDraftFile(datasetDir, draft({ currentIndex: 1 }));
-    expect(loadDraftFile(datasetDir, SESSION_ID)?.currentIndex).toBe(1);
+    saveDraftFile(dir, draft());
+    saveDraftFile(dir, draft({ currentIndex: 1 }));
+    expect(loadDraftFile(dir, "cl_news", SESSION_ID)?.currentIndex).toBe(1);
   });
 
   it("rejects a draft file with unknown fields", () => {
-    const file = draftPath(datasetDir, SESSION_ID);
+    const file = draftPath(dir, "cl_news", SESSION_ID);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, JSON.stringify({ ...draft(), surprise: true }));
-    expect(() => loadDraftFile(datasetDir, SESSION_ID)).toThrow(/not a valid labelling draft/i);
+    expect(() => loadDraftFile(dir, "cl_news", SESSION_ID)).toThrow(/not a valid labelling draft/i);
   });
 
   it("rejects an unsafe session id", () => {
@@ -85,7 +85,7 @@ describe("draft persistence", () => {
   });
 
   it("rejects a negative accumulated time", () => {
-    expect(DraftSchema.safeParse(draft({ activeMsByOutputId: { [OUT_A]: -1 } })).success).toBe(
+    expect(DraftSchema.safeParse(draft({ activeMsByTraceId: { [OUT_A]: -1 } })).success).toBe(
       false,
     );
   });
@@ -93,7 +93,7 @@ describe("draft persistence", () => {
 
 describe("assertDraftMatches", () => {
   const expected = {
-    outputIds: [OUT_A, OUT_B],
+    traceIds: [OUT_A, OUT_B],
     checklistId: "cl_news",
     annotator: { kind: "human", id: "adit" },
   };
@@ -103,12 +103,12 @@ describe("assertDraftMatches", () => {
   });
 
   it("rejects a reordered source, which would misalign the cursor", () => {
-    const reordered = draft({ binding: { ...draft().binding, outputIds: [OUT_B, OUT_A] } });
+    const reordered = draft({ binding: { ...draft().binding, traceIds: [OUT_B, OUT_A] } });
     expect(() => assertDraftMatches(reordered, expected)).toThrow(/order/i);
   });
 
-  it("rejects a different set of outputs", () => {
-    const fewer = draft({ binding: { ...draft().binding, outputIds: [OUT_A] } });
+  it("rejects a different set of traces", () => {
+    const fewer = draft({ binding: { ...draft().binding, traceIds: [OUT_A] } });
     expect(() => assertDraftMatches(fewer, expected)).toThrow(/set or order/i);
   });
 
@@ -126,9 +126,9 @@ describe("assertDraftMatches", () => {
 
   it("rejects a machine annotator sharing the human's id", () => {
     const other = draft({
-      binding: { ...draft().binding, annotator: { kind: "llm", id: "adit" } },
+      binding: { ...draft().binding, annotator: { kind: "judge", id: "adit" } },
     });
-    expect(() => assertDraftMatches(other, expected)).toThrow(/llm/i);
+    expect(() => assertDraftMatches(other, expected)).toThrow(/judge/i);
   });
 });
 
@@ -182,5 +182,13 @@ describe("assertBindingIsCoherent", () => {
       },
     });
     expect(() => assertBindingIsCoherent(wrong)).toThrow(/unpublished/i);
+  });
+});
+
+describe("draftPath", () => {
+  it("lives beside the checklist it is bound to", () => {
+    expect(draftPath("/run", "cl_news", SESSION_ID)).toBe(
+      path.join("/run", "checklists", "cl_news", "drafts", `${SESSION_ID}.json`),
+    );
   });
 });

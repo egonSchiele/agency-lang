@@ -21,10 +21,10 @@ import {
 } from "./labelTui.js";
 import type { SessionAction, SessionSnapshot } from "./session.js";
 
-const OUTPUT_ID = `out_${"a".repeat(64)}`;
+const TRACE_ID = "trace-1";
 
 function snapshot(over: Partial<SessionSnapshot> = {}): SessionSnapshot {
-  const item = { outputId: OUTPUT_ID, fields: { task: "a task", output: "some output" } };
+  const item = { traceId: TRACE_ID, fields: { input: "a task", output: "some output" } };
   return {
     items: [item],
     itemIndex: 0,
@@ -38,8 +38,8 @@ function snapshot(over: Partial<SessionSnapshot> = {}): SessionSnapshot {
     answers: { q_a: true },
     note: "",
     editor: { kind: "none" },
-    statuses: { [OUTPUT_ID]: "untouched" },
-    scores: { [OUTPUT_ID]: null },
+    statuses: { [TRACE_ID]: "untouched" },
+    scores: { [TRACE_ID]: null },
     progress: { reviewed: 0, total: 1, stale: 0 },
     canSignOff: true,
     hasStagedQuestions: false,
@@ -63,7 +63,7 @@ function frameText(over: Partial<SessionSnapshot> = {}, size = { width: 100, hei
   screen.render(
     labelScreen({
       snapshot: snapshot(over),
-      datasetLabel: "labels",
+      title: "run-1",
       width: size.width,
       height: size.height,
       scroll: 0,
@@ -76,7 +76,7 @@ function frameText(over: Partial<SessionSnapshot> = {}, size = { width: 100, hei
 describe("frame content", () => {
   it("shows the header with reviewed progress", () => {
     const text = frameText();
-    expect(text).toContain("eval label");
+    expect(text).toContain("label");
     expect(text).toContain("0/1 reviewed");
   });
 
@@ -310,7 +310,7 @@ describe("runLabelTui", () => {
     const { controller } = fakeController();
     await runLabelTui({ controller, screen });
     expect(recorder.frames.length).toBeGreaterThan(0);
-    expect(recorder.lastText()).toContain("eval label");
+    expect(recorder.lastText()).toContain("label");
   });
 
   it("dispatches the action a key maps to", async () => {

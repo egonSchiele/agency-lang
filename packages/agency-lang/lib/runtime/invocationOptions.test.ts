@@ -19,6 +19,22 @@ describe("resolveInvocation — run id policy", () => {
     expect(resolved.runId).toBe("requested-run");
   });
 
+  it("falls back to the environment's trace id below a supplied one, and ignores an empty one", () => {
+    expect(resolveInvocation({ kind: "fresh", environmentTraceId: "harness-run" }).runId).toBe(
+      "harness-run",
+    );
+    expect(
+      resolveInvocation({
+        kind: "fresh",
+        options: { traceId: "requested-run" },
+        environmentTraceId: "harness-run",
+      }).runId,
+    ).toBe("requested-run");
+    expect(
+      resolveInvocation({ kind: "fresh", environmentTraceId: "" }).runId.length,
+    ).toBeGreaterThan(0);
+  });
+
   it("generates a non-empty id when nothing is supplied", () => {
     const resolved = resolveInvocation({ kind: "fresh" });
     expect(resolved.runId.length).toBeGreaterThan(0);

@@ -88,6 +88,67 @@ export function safeDeleteDirectory(targetPath: string, dryRun: boolean = true):
   return safeDelete(targetPath, "directory", dryRun);
 }
 
+/**
+ * Delete a directory only if it is a strict descendant of `root`.
+ *
+ * `safeDeleteDirectory` is anchored to the project root, which is the wrong
+ * boundary for a run directory that can live anywhere. This one takes the
+ * boundary as an argument: both paths are resolved through symlinks, `target`
+ * must lie strictly inside `root` (never the root itself, never a sibling,
+ * never `..`, never a symlink that escapes), and only then is it removed.
+ */
+/** True when `target` is inside `root` and is not `root` itself. Both must be
+ *  resolved paths. A first segment of exactly `..` is the escape; a name that
+ *  merely begins with two dots (`..cache`) is an ordinary child. */
+export function isStrictDescendant(root: string, target: string): boolean {
+  const relative = path.relative(root, target);
+  if (relative === "" || path.isAbsolute(relative)) return false;
+  const first = relative.split(path.sep)[0];
+  return first !== "..";
+}
+
+export function safeDeleteDirectoryWithin(root: string, target: string): SafeDeleteResult {
+  if (!fs.existsSync(target)) {
+    return { success: false, message: `Path does not exist: '${target}'.` };
+  }
+  let resolvedRoot: string;
+  let resolvedTarget: string;
+  try {
+    resolvedRoot = fs.realpathSync(path.resolve(root));
+    resolvedTarget = fs.realpathSync(path.resolve(target));
+  } catch (err) {
+    return {
+      success: false,
+      message: `Refusing to delete '${target}': ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+  try {
+    if (!fs.statSync(resolvedTarget).isDirectory()) {
+      return { success: false, message: `Not a directory: '${resolvedTarget}'.` };
+    }
+  } catch (err) {
+    return {
+      success: false,
+      message: `Refusing to delete '${target}': ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+  if (!isStrictDescendant(resolvedRoot, resolvedTarget)) {
+    return {
+      success: false,
+      message: `Refusing to delete '${resolvedTarget}': not strictly inside '${resolvedRoot}'.`,
+    };
+  }
+  try {
+    fs.rmSync(resolvedTarget, { recursive: true, force: true });
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      message: `Failed to delete '${resolvedTarget}': ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
 export function escape(str: string): string {
   return (
     str

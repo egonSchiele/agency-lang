@@ -1,54 +1,58 @@
 import * as fs from "fs";
 
-import { makeAnnotationId, makeQuestionId, makeSessionId } from "./ids.js";
+import { completeAnnotation, type AnnotationDraft } from "@/runDirectory/annotations.js";
+import { atomicWriteValidated } from "@/runDirectory/durableWrite.js";
+import { openLabelStore, type LabelStore } from "@/runDirectory/labelStore.js";
+import { acquireRunDirLock, type RunDirLock } from "@/runDirectory/lock.js";
+
 import {
   normalizeDefinition,
   syncChecklistDefinition,
   type NormalizedDefinition,
   type PendingRevision,
+  type PrepareChecklistResult,
 } from "./checklist.js";
 import { assertBindingIsCoherent, assertDraftMatches, type Draft } from "./draft.js";
-import { atomicWriteValidated } from "./jsonl.js";
-import { acquireDatasetLock, type DatasetLock } from "./lock.js";
+import { own } from "@/utils/ownProperty.js";
+
+import { makeQuestionId, makeSessionId } from "./ids.js";
 import {
   initSession,
   reduceSession,
   sessionSnapshot,
   signOffPayload,
+  type ChecklistAnnotation,
   type SessionAction,
+  type SessionItem,
   type SessionSnapshot,
   type SessionState,
 } from "./session.js";
-import { openDataset, type LabelDataset } from "./dataset.js";
-import type { PrepareChecklistResult } from "./checklist.js";
 import {
-  AnnotationRowSchema,
   ChecklistDefinitionSchema,
-  type AnnotationRow,
   type Annotator,
   type ChecklistRevision,
   type FaultHook,
-  type LabelDatasetFaultPoint,
+  type LabelStoreFaultPoint,
 } from "./types.js";
 
 export type MonotonicClock = { elapsedMs(): number };
 export type WallClock = { nowIso(): string };
-export type EntityIds = { questionId(): string; annotationId(): string };
+export type EntityIds = { questionId(): string };
 
 export type OpenLabelingSessionArgs = {
-  datasetDir: string;
+  /** The run directory whose traces are being labelled. */
+  dir: string;
   checklistFile: string;
   annotator: Annotator;
-  /** Start the cursor on this example when present. The viewer sets it to the
-   *  example it just promoted; the CLI omits it and keeps resume behavior. An
-   *  id that is not in the dataset is ignored. */
-  focusOutputId?: string;
+  /** Start the cursor on this trace when present; an id that is not in the
+   *  directory is ignored. */
+  focusTraceId?: string;
   reportWarning(message: string): void;
 };
 
 /** @internal */
 export type ControllerFaultPoint =
-  | LabelDatasetFaultPoint
+  | LabelStoreFaultPoint
   | "after-pending-revision-save"
   | "after-draft-rebind"
   | "after-pending-annotation-save"
@@ -71,7 +75,7 @@ export type LabelingSessionController = {
 const defaultDependencies: ControllerDependencies = {
   monotonicClock: { elapsedMs: () => Number(process.hrtime.bigint() / 1_000_000n) },
   wallClock: { nowIso: () => new Date().toISOString() },
-  ids: { questionId: makeQuestionId, annotationId: makeAnnotationId },
+  ids: { questionId: makeQuestionId },
 };
 
 export async function openLabelingSession(
@@ -112,30 +116,29 @@ async function openSession(
   args: OpenLabelingSessionArgs,
   dependencies: ControllerDependencies,
 ): Promise<LabelingSessionController> {
-  // Parse the external file before touching the dataset: a malformed checklist
-  // should not leave a lock behind or a half-created lineage.
+  // Parse the external file before touching the directory: a malformed
+  // checklist should not leave a lock behind or a half-created lineage.
   const rawDefinition = ChecklistDefinitionSchema.parse(
     JSON.parse(fs.readFileSync(args.checklistFile, "utf8")),
   );
 
-  const lock = acquireDatasetLock({
-    datasetDir: args.datasetDir,
-    reportWarning: args.reportWarning,
-  });
-  let dataset: LabelDataset | undefined;
+  const lock = acquireRunDirLock({ dir: args.dir, reportWarning: args.reportWarning });
+  let store: LabelStore | undefined;
   try {
-    dataset = openDataset({
-      datasetDir: args.datasetDir,
+    store = openLabelStore({
+      dir: args.dir,
       lock,
       reportWarning: args.reportWarning,
       fault: dependencies.fault as FaultHook | undefined,
     });
 
-    const corpus = dataset.corpusSnapshot();
-    if (corpus.length === 0) {
+    const items: SessionItem[] = store
+      .items()
+      .map((item) => ({ traceId: item.traceId, fields: item.fields }));
+    if (items.length === 0) {
       throw new Error(
-        "There is nothing to label: the dataset holds no records. Add some with " +
-          "`agency label ingest <source> --source <name>`.",
+        `There is nothing to label: ${args.dir} holds no traces. Add some with ` +
+          "`agency runs add <dir> <statelog>`.",
       );
     }
 
@@ -147,9 +150,9 @@ async function openSession(
       syncChecklistDefinitionIds(args.checklistFile, definition);
     }
 
-    const outputIds = corpus.map((row) => row.outputId);
+    const traceIds = items.map((item) => item.traceId);
     const sessionId = makeSessionId({
-      outputIds,
+      traceIds,
       checklistId: definition.checklistId,
       annotator: args.annotator,
     });
@@ -157,26 +160,26 @@ async function openSession(
     const session = new LabelingSession({
       args,
       dependencies,
-      dataset,
+      store,
       lock,
       sessionId,
-      outputIds,
+      traceIds,
       definition,
-      corpus,
+      items,
     });
     session.open();
     const controller = session.controller();
     // Focus a specific example after recovery, so the draft cursor is durably
     // updated before the caller sees the controller.
-    if (args.focusOutputId !== undefined) {
-      await controller.dispatch({ kind: "focusItem", outputId: args.focusOutputId });
+    if (args.focusTraceId !== undefined) {
+      await controller.dispatch({ kind: "focusItem", traceId: args.focusTraceId });
     }
     return controller;
   } catch (error) {
-    // Any opening failure releases the lock: a dataset that cannot be opened
+    // Any opening failure releases the lock: a directory that cannot be opened
     // must not stay locked against the next attempt.
     try {
-      dataset?.close();
+      store?.close();
     } finally {
       lock.release();
     }
@@ -188,7 +191,7 @@ async function openSession(
  * Write the allocated identities back to the checklist file.
  *
  * This must be atomic even though nothing durable references the file yet.
- * The next open parses this file *before* it inspects the dataset, so a
+ * The next open parses this file *before* it inspects the directory, so a
  * truncated half-write here is unrecoverable by the recovery path — and it
  * would have destroyed the only copy of the questions the author wrote.
  */
@@ -203,12 +206,12 @@ function syncChecklistDefinitionIds(checklistFile: string, definition: Normalize
 type SessionConstruction = {
   args: OpenLabelingSessionArgs;
   dependencies: ControllerDependencies;
-  dataset: LabelDataset;
-  lock: DatasetLock;
+  store: LabelStore;
+  lock: RunDirLock;
   sessionId: string;
-  outputIds: string[];
+  traceIds: string[];
   definition: NormalizedDefinition;
-  corpus: Parameters<typeof initSession>[0]["corpus"];
+  items: SessionItem[];
 };
 
 /**
@@ -224,19 +227,19 @@ class LabelingSession {
   private draft!: Draft;
   private lifecycle: Lifecycle = "open";
   private intervalStartMs: number;
-  private activeOutputId: string | null = null;
+  private activeTraceId: string | null = null;
 
   constructor(private readonly parts: SessionConstruction) {
     this.intervalStartMs = parts.dependencies.monotonicClock.elapsedMs();
   }
 
   open(): void {
-    const { dataset, sessionId, definition } = this.parts;
-    const snapshot = dataset.readSession(sessionId);
+    const { store, definition } = this.parts;
+    const snapshot = store.readSession(this.sessionIdentity());
 
     this.draft = (snapshot.draft as Draft | null) ?? this.bootstrapDraft();
     assertDraftMatches(this.draft, {
-      outputIds: this.parts.outputIds,
+      traceIds: this.parts.traceIds,
       checklistId: definition.checklistId,
       annotator: this.parts.args.annotator,
     });
@@ -246,19 +249,27 @@ class LabelingSession {
     this.recoverAnnotation();
 
     this.state = initSession({
-      corpus: this.parts.corpus,
+      items: this.parts.items,
       revision,
-      annotations: dataset.readSession(sessionId).annotations as readonly AnnotationRow[],
+      judgements: store.readSession(this.sessionIdentity()).judgements,
       annotator: this.parts.args.annotator,
     });
     this.overlayDraft();
     this.startInterval();
   }
 
+  private sessionIdentity() {
+    return {
+      sessionId: this.parts.sessionId,
+      checklistId: this.parts.definition.checklistId,
+      annotator: this.parts.args.annotator,
+    };
+  }
+
   /** A fresh session begins bound to nothing only when its own version-1
    *  revision is still pending; that pairing is enforced on every load. */
   private bootstrapDraft(): Draft {
-    const prepared = this.parts.dataset.prepareChecklist(this.parts.definition);
+    const prepared = this.parts.store.prepareChecklist(this.parts.definition);
     const pendingRevision: PendingRevision | null =
       prepared.kind === "publish" ? prepared.pending : null;
 
@@ -266,19 +277,19 @@ class LabelingSession {
       schemaVersion: 1,
       sessionId: this.parts.sessionId,
       binding: {
-        outputIds: this.parts.outputIds,
+        traceIds: this.parts.traceIds,
         checklistId: this.parts.definition.checklistId,
         checklist: bootstrapBinding(prepared),
         annotator: this.parts.args.annotator,
       },
       currentIndex: 0,
-      answersByOutputId: {},
-      notesByOutputId: {},
-      reviewedByOutputId: {},
+      answersByTraceId: {},
+      notesByTraceId: {},
+      reviewedByTraceId: {},
       stagedQuestions: null,
       pendingRevision,
       pendingAnnotation: null,
-      activeMsByOutputId: {},
+      activeMsByTraceId: {},
     };
   }
 
@@ -290,13 +301,13 @@ class LabelingSession {
    * durable yet.
    */
   private recoverChecklist(): ChecklistRevision {
-    const { dataset, definition } = this.parts;
+    const { store, definition } = this.parts;
     const pending = this.draft.pendingRevision;
 
     if (pending !== null) {
       this.saveDraft();
       this.fault("after-pending-revision-save");
-      const published = dataset.publishRevision(pending, this.parts.args.checklistFile);
+      const published = store.publishRevision(pending, this.parts.args.checklistFile);
       this.draft = {
         ...this.draft,
         binding: {
@@ -317,12 +328,12 @@ class LabelingSession {
 
     // Nothing owed: reconcile whatever the external file now says against the
     // published lineage.
-    const prepared = dataset.prepareChecklist(definition);
+    const prepared = store.prepareChecklist(definition);
     if (prepared.kind === "current") {
       return prepared.revision;
     }
     if (prepared.kind === "refresh-definition") {
-      dataset.syncChecklistDefinition(this.parts.args.checklistFile, prepared.revision);
+      store.syncChecklistDefinition(this.parts.args.checklistFile, prepared.revision);
       return prepared.revision;
     }
     this.draft = { ...this.draft, pendingRevision: prepared.pending };
@@ -334,35 +345,35 @@ class LabelingSession {
    *
    * Appending the row and clearing the pending marker is not enough: a normal
    * sign-off also advances the cursor, records what was reviewed, and resets
-   * that output's timer. Stopping halfway leaves the person back on an item
+   * that trace's timer. Stopping halfway leaves the person back on an item
    * they already judged, with its old accumulated time still running — so
    * recovery applies the same post-append transition the live path does.
    */
-  private recoverAnnotation(): AnnotationRow | undefined {
+  private recoverAnnotation(): ChecklistAnnotation | undefined {
     const pending = this.draft.pendingAnnotation;
     if (pending === null) {
       return undefined;
     }
-    this.parts.dataset.appendAnnotation(pending);
+    this.parts.store.appendAnnotation(pending);
     this.draft = {
       ...this.draft,
       pendingAnnotation: null,
-      reviewedByOutputId: {
-        ...this.draft.reviewedByOutputId,
-        [pending.outputId]: [...pending.coveredQuestionIds],
+      reviewedByTraceId: {
+        ...this.draft.reviewedByTraceId,
+        [pending.traceId]: Object.keys(pending.answers),
       },
-      answersByOutputId: {
-        ...this.draft.answersByOutputId,
-        [pending.outputId]: {
-          ...this.draft.answersByOutputId[pending.outputId],
+      answersByTraceId: {
+        ...this.draft.answersByTraceId,
+        [pending.traceId]: {
+          ...own(this.draft.answersByTraceId, pending.traceId),
           ...pending.answers,
         },
       },
-      notesByOutputId: { ...this.draft.notesByOutputId, [pending.outputId]: pending.note },
-      activeMsByOutputId: { ...this.draft.activeMsByOutputId, [pending.outputId]: 0 },
+      notesByTraceId: { ...this.draft.notesByTraceId, [pending.traceId]: pending.note },
+      activeMsByTraceId: { ...this.draft.activeMsByTraceId, [pending.traceId]: 0 },
       currentIndex: Math.min(
         this.draft.currentIndex + 1,
-        Math.max(this.parts.outputIds.length - 1, 0),
+        Math.max(this.parts.traceIds.length - 1, 0),
       ),
     };
     this.saveDraft();
@@ -373,9 +384,9 @@ class LabelingSession {
   private overlayDraft(): void {
     this.state = {
       ...this.state,
-      answersByOutputId: { ...this.state.answersByOutputId, ...this.draft.answersByOutputId },
-      notesByOutputId: { ...this.state.notesByOutputId, ...this.draft.notesByOutputId },
-      reviewedByOutputId: { ...this.state.reviewedByOutputId, ...this.draft.reviewedByOutputId },
+      answersByTraceId: { ...this.state.answersByTraceId, ...this.draft.answersByTraceId },
+      notesByTraceId: { ...this.state.notesByTraceId, ...this.draft.notesByTraceId },
+      reviewedByTraceId: { ...this.state.reviewedByTraceId, ...this.draft.reviewedByTraceId },
       stagedQuestions: this.draft.stagedQuestions,
       itemIndex: Math.min(this.draft.currentIndex, Math.max(this.state.items.length - 1, 0)),
     };
@@ -436,7 +447,7 @@ class LabelingSession {
           ? reduceSession(this.state, { kind: "cancelEditor" })
           : reduceSession(this.state, {
               kind: "noteSaved",
-              outputId: item.outputId,
+              traceId: item.traceId,
               note: editor.draft,
             });
     }
@@ -449,8 +460,9 @@ class LabelingSession {
    * Timing is flushed first so a crash cannot lose it; the revision is
    * published before the annotation because the annotation names it; and the
    * complete annotation is written to the draft before it is appended, so a
-   * crash between the two replays the same id rather than writing a second
-   * judgement.
+   * crash between the two replays the same row rather than writing a second
+   * judgement. The id is derived from the row's content, so even a replay
+   * that rebuilt the row would land on the same id.
    */
   private signOff(): void {
     this.flushTiming();
@@ -464,33 +476,35 @@ class LabelingSession {
     if (payload === undefined) {
       return;
     }
-    const row = AnnotationRowSchema.parse({
-      schemaVersion: 1,
-      annotationId: this.parts.dependencies.ids.annotationId(),
-      outputId: payload.outputId,
+    const draft: AnnotationDraft = {
+      traceId: payload.traceId,
       annotator: this.parts.args.annotator,
-      checklistId: this.state.revision.checklistId,
-      checklistVersion: this.state.revision.version,
-      checklistHash: this.state.revision.hash,
-      createdAt: this.parts.dependencies.wallClock.nowIso(),
-      activeMs: this.draft.activeMsByOutputId[payload.outputId] ?? 0,
-      coveredQuestionIds: payload.coveredQuestionIds,
+      sessionId: this.parts.sessionId,
+      kind: "checklist",
+      checklist: this.state.revision.checklistId,
+      version: this.state.revision.version,
+      hash: this.state.revision.hash,
       answers: payload.answers,
       note: payload.note,
-    });
+      activeMs: own(this.draft.activeMsByTraceId, payload.traceId) ?? 0,
+    };
+    const row = completeAnnotation(
+      draft,
+      this.parts.dependencies.wallClock.nowIso(),
+    ) as ChecklistAnnotation;
 
     this.draft = { ...this.draft, pendingAnnotation: row };
     this.saveDraft();
     this.fault("after-pending-annotation-save");
 
-    this.parts.dataset.appendAnnotation(row);
+    this.parts.store.appendAnnotation(row);
 
     this.state = reduceSession(this.state, { kind: "annotationCommitted", row });
     this.draft = {
       ...this.draft,
       pendingAnnotation: null,
-      // A later relabel of this output starts its own clock.
-      activeMsByOutputId: { ...this.draft.activeMsByOutputId, [payload.outputId]: 0 },
+      // A later relabel of this trace starts its own clock.
+      activeMsByTraceId: { ...this.draft.activeMsByTraceId, [payload.traceId]: 0 },
     };
     this.persistState();
     this.fault("after-annotation-commit-save");
@@ -508,7 +522,7 @@ class LabelingSession {
       hash: this.state.revision.hash,
       questions: staged,
     };
-    const prepared = this.parts.dataset.prepareChecklist(definition);
+    const prepared = this.parts.store.prepareChecklist(definition);
     if (prepared.kind !== "publish") {
       this.state = reduceSession(this.state, {
         kind: "revisionAdopted",
@@ -520,7 +534,7 @@ class LabelingSession {
     this.saveDraft();
     this.fault("after-pending-revision-save");
 
-    const published = this.parts.dataset.publishRevision(
+    const published = this.parts.store.publishRevision(
       prepared.pending,
       this.parts.args.checklistFile,
     );
@@ -550,14 +564,14 @@ class LabelingSession {
    *  monotonic anchor would count the hours a paused session spent closed. */
   private flushTiming(): void {
     const now = this.parts.dependencies.monotonicClock.elapsedMs();
-    const outputId = this.activeOutputId;
-    if (outputId !== null) {
-      const previous = this.draft.activeMsByOutputId[outputId] ?? 0;
+    const traceId = this.activeTraceId;
+    if (traceId !== null) {
+      const previous = own(this.draft.activeMsByTraceId, traceId) ?? 0;
       this.draft = {
         ...this.draft,
-        activeMsByOutputId: {
-          ...this.draft.activeMsByOutputId,
-          [outputId]: previous + Math.max(0, now - this.intervalStartMs),
+        activeMsByTraceId: {
+          ...this.draft.activeMsByTraceId,
+          [traceId]: previous + Math.max(0, now - this.intervalStartMs),
         },
       };
     }
@@ -566,7 +580,7 @@ class LabelingSession {
 
   private startInterval(): void {
     this.intervalStartMs = this.parts.dependencies.monotonicClock.elapsedMs();
-    this.activeOutputId = this.state.items[this.state.itemIndex]?.outputId ?? null;
+    this.activeTraceId = this.state.items[this.state.itemIndex]?.traceId ?? null;
   }
 
   /** Fold the live state back into the draft and write it. */
@@ -574,16 +588,16 @@ class LabelingSession {
     this.draft = {
       ...this.draft,
       currentIndex: this.state.itemIndex,
-      answersByOutputId: this.state.answersByOutputId,
-      notesByOutputId: this.state.notesByOutputId,
-      reviewedByOutputId: this.state.reviewedByOutputId,
+      answersByTraceId: this.state.answersByTraceId,
+      notesByTraceId: this.state.notesByTraceId,
+      reviewedByTraceId: this.state.reviewedByTraceId,
       stagedQuestions: this.state.stagedQuestions,
     };
     this.saveDraft();
   }
 
   private saveDraft(): void {
-    this.parts.dataset.saveDraft(this.draft);
+    this.parts.store.saveDraft(this.draft);
   }
 
   private fault(point: ControllerFaultPoint): void {
@@ -604,7 +618,7 @@ class LabelingSession {
   private fail(): void {
     this.lifecycle = "failed";
     try {
-      this.parts.dataset.close();
+      this.parts.store.close();
     } catch {
       this.parts.lock.release();
     }
@@ -626,13 +640,13 @@ class LabelingSession {
       primary = error;
     }
     try {
-      this.parts.dataset.close();
+      this.parts.store.close();
     } catch (error) {
       if (primary === undefined) {
         primary = error;
       } else {
         (primary as Error).message +=
-          `; also failed to release the dataset: ${(error as Error).message}`;
+          `; also failed to release the run directory: ${(error as Error).message}`;
       }
     }
     if (primary !== undefined) {

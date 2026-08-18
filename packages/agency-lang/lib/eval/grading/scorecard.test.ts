@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { BaseGrader } from "./baseGrader.js";
 import { Scorecard, type GraderGrade, type InputGrades } from "./scorecard.js";
-import type { Grade, GraderOptions, Input } from "./types.js";
+import type { Grade, GraderOptions, Test } from "./types.js";
 import { loadedRun } from "./testUtils.js";
 
 class StubGrader extends BaseGrader {
@@ -15,7 +15,7 @@ class StubGrader extends BaseGrader {
   }
 }
 
-const input = (id: string): Input => ({ id, task: "t" });
+const input = (id: string): Test => ({ id, input: "t" });
 const scalarGrade = (grader: BaseGrader, value: number): GraderGrade => ({
   grader,
   grade: { score: { kind: "scalar", value } },
@@ -27,13 +27,13 @@ describe("Scorecard", () => {
     const weighted = new StubGrader({ weight: 3 });
     const perInput: InputGrades[] = [
       {
-        input: input("a"),
+        test: input("a"),
         run: loadedRun(null),
         gatesPassed: true,
         grades: [scalarGrade(advisory, 1), scalarGrade(weighted, 0)],
       },
       {
-        input: input("b"),
+        test: input("b"),
         run: loadedRun(null),
         gatesPassed: true,
         grades: [scalarGrade(advisory, 1), scalarGrade(weighted, 1)],
@@ -48,7 +48,7 @@ describe("Scorecard", () => {
     const failing = new StubGrader({ weight: 1 });
     const perInput: InputGrades[] = [
       {
-        input: input("a"),
+        test: input("a"),
         run: loadedRun(null),
         gatesPassed: true,
         grades: [
@@ -65,13 +65,13 @@ describe("Scorecard", () => {
     const exact = new StubGrader({ weight: 1 });
     const perInput: InputGrades[] = [
       {
-        input: input("a"),
+        test: input("a"),
         run: loadedRun(null),
         gatesPassed: true,
         grades: [{ grader: exact, grade: { score: { kind: "binary", pass: true } } }],
       },
       {
-        input: input("b"),
+        test: input("b"),
         run: loadedRun(null),
         gatesPassed: true,
         grades: [{ grader: exact, grade: { score: { kind: "binary", pass: false } } }],
@@ -85,7 +85,7 @@ describe("Scorecard", () => {
     const advisory = new StubGrader({ weight: 1 });
     const perInput: InputGrades[] = [
       {
-        input: input("a"),
+        test: input("a"),
         run: loadedRun(null),
         gatesPassed: true,
         grades: [
@@ -103,7 +103,7 @@ describe("Scorecard", () => {
     const advisory = new StubGrader({ weight: 1 });
     const perInput: InputGrades[] = [
       {
-        input: input("a"),
+        test: input("a"),
         run: loadedRun(null),
         gatesPassed: true,
         grades: [scalarGrade(scalarGate, 0.4), scalarGrade(advisory, 0.8)],
@@ -117,13 +117,13 @@ describe("Scorecard", () => {
     const advisory = new StubGrader({ weight: 1 });
     const perInput: InputGrades[] = [
       {
-        input: input("a"),
+        test: input("a"),
         run: loadedRun(null),
         gatesPassed: false,
         grades: [scalarGrade(advisory, 1)],
       },
       {
-        input: input("b"),
+        test: input("b"),
         run: loadedRun(null),
         gatesPassed: true,
         grades: [scalarGrade(advisory, 1)],
@@ -137,13 +137,13 @@ describe("Scorecard", () => {
   it("gatesPassed is true only when every input passed its gates", () => {
     const advisory = new StubGrader({ weight: 1 });
     const passing: InputGrades = {
-      input: input("a"),
+      test: input("a"),
       run: loadedRun(null),
       gatesPassed: true,
       grades: [scalarGrade(advisory, 1)],
     };
     const failing: InputGrades = {
-      input: input("b"),
+      test: input("b"),
       run: loadedRun(null),
       gatesPassed: false,
       grades: [scalarGrade(advisory, 1)],
@@ -154,7 +154,7 @@ describe("Scorecard", () => {
 
   it("an input with no grades scores 0", () => {
     const perInput: InputGrades[] = [
-      { input: input("a"), run: loadedRun(null), gatesPassed: true, grades: [] },
+      { test: input("a"), run: loadedRun(null), gatesPassed: true, grades: [] },
     ];
     expect(new Scorecard(perInput).inputScores()).toEqual([0]);
   });

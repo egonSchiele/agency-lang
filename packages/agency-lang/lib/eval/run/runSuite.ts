@@ -1,5 +1,6 @@
-import { execFileSync } from "child_process";
+import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "url";
 
 import { nanoid } from "nanoid";
 
@@ -13,18 +14,15 @@ import { ttyColor } from "@/utils/termcolors.js";
 import { makeStatelogCostTailer } from "./costTail.js";
 import { formatElapsed, startStatusBoard } from "./statusBoard.js";
 import type { AgencyConfig } from "@/config.js";
-import {
-  buildProvenance,
-  initializeEvalRun,
-  prepareInput,
-  recordInputPrepareFailure,
-  writeEvalRunSummary,
-  type EvalRunProvenance,
-  type PreparedInput,
-  type SourceProvenance,
-} from "@/eval/runArtifacts.js";
-import type { EvalRunInputResult, EvalRunResult, Input } from "@/eval/runTypes.js";
+import type { SuiteRunResult, SuiteTestResult, Test } from "@/eval/runTypes.js";
+import type { RunOutcome, SuiteIdentity } from "@/runDirectory/annotations.js";
+import { recordedClosureHashes } from "@/runDirectory/attachCode.js";
+import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";
+import { recordCompletedRun } from "@/runDirectory/mutations.js";
+import { readTraces } from "@/runDirectory/traces.js";
+import { safeDeleteDirectoryWithin } from "@/utils.js";
 
+import { agentRunPaths } from "./extract.js";
 import { runAgent, type AgentRun, type RunAgentOptions } from "./runAgent.js";
 import { seedFromAgentFile } from "./seed.js";
 import type { EvalInputRunner } from "./subprocess.js";
@@ -35,12 +33,9 @@ import type { EvalInputRunner } from "./subprocess.js";
  *  `seed` omitted, runSuite computes ONE closure walk for the whole suite and
  *  passes it to every run — never one walk per input (RunAgentOptions.seed's
  *  own doc describes the single-run case). */
-export type PerRunOptions = Pick<
-  RunAgentOptions,
-  "seed" | "overlayFiles" | "pipeOutput" | "extractor"
->;
+export type PerRunOptions = Pick<RunAgentOptions, "seed" | "overlayFiles" | "pipeOutput">;
 
-/** Options for running a LOADED suite: parsed Input[], resolved values.
+/** Options for running a LOADED suite: parsed Test[], resolved values.
  *  The raw-flags side lives in the evalRun command (EvalRunCliOptions). */
 export type RunSuiteOptions = {
   /** The agent. A string is file-target convenience (path, path:node, or a
@@ -48,7 +43,7 @@ export type RunSuiteOptions = {
    *  EvalTarget passes through with no re-validation — it already passed
    *  resolveEvalTarget, including the {task}-placeholder check. */
   agent: string | EvalTarget;
-  inputs: Input[];
+  inputs: Test[];
   runId?: string;
   runsDir?: string;
   /** Default true. */
@@ -62,8 +57,8 @@ export type RunSuiteOptions = {
    *  optimizer turns it off — its reporter owns the narrative, and
    *  `optimize --silent` must print nothing at all. */
   progress?: boolean;
-  /** Source provenance recorded in config.json; "unspecified" when omitted. */
-  provenance?: { inputsSource: SourceProvenance; files: Record<string, SourceProvenance> };
+  /** Where the suite came from, recorded on every test's `run` annotation. */
+  suite?: SuiteIdentity;
   perRun?: PerRunOptions;
 };
 
@@ -71,158 +66,238 @@ export type RunSuiteOptions = {
 export type RunSuiteDeps = { runner?: EvalInputRunner };
 
 /**
- * Run an agent against a loaded input suite and write the run directory:
- * per-input artifacts, provenance, summary. Executes only — grading reads
- * the finished directory separately (docs/dev/eval-grading.md).
+ * Run an agent against a loaded suite and write ONE run directory: every
+ * test's trace in `statelog.jsonl`, its workdir under `workdir/<traceId>/`,
+ * the agent's code under `code/<closureHash>/`, and one `run` annotation per
+ * test saying which test it was and how it ended. Executes only — grading is
+ * a separate pass over the finished directory (docs/dev/eval-grading.md).
  */
 export async function runSuite(
   opts: RunSuiteOptions,
   deps: RunSuiteDeps = {},
-): Promise<EvalRunResult> {
+): Promise<SuiteRunResult> {
   const target: EvalTarget =
     typeof opts.agent === "string" ? resolveEvalTarget({ agent: opts.agent }) : opts.agent;
   if (target.kind === "file") {
     // Before any workdir is seeded or agent compiled: a mis-shaped entry
-    // node is a configuration error, not a per-input run failure. The
+    // node is a configuration error, not a per-test run failure. The
     // command analog (the {task}-placeholder check) ran at resolution.
     assertEvalEntryNodeTakesOneParameter(target.agentFile, target.node);
   }
 
   const runsDir = path.resolve(opts.runsDir ?? opts.config?.eval?.runsDir ?? "runs");
   const runId = opts.runId ?? defaultRunId();
+  const runDir = path.join(runsDir, runId);
+  if (fs.existsSync(runDir)) {
+    throw new Error(
+      `Run directory already exists: ${runDir}\nChoose a different --run-id or delete the existing directory.`,
+    );
+  }
   const continueOnError = opts.continueOnError ?? true;
   const config = opts.config ?? {};
   const perRun = opts.perRun ?? {};
 
-  // One closure walk per suite; never per input. Command targets have no
-  // closure and nothing to compile.
+  // One closure walk per suite; never per test. Command targets have no
+  // closure and nothing to compile. Before any directory is created: a
+  // missing agent is a setup failure, not a run.
   const defaultSeed =
     target.kind === "file" ? (perRun.seed ?? seedFromAgentFile(target.agentFile)) : undefined;
 
-  const provenance: EvalRunProvenance = buildProvenance({
-    inputsSource: opts.provenance?.inputsSource ?? { source: "unspecified" },
-    files: opts.provenance?.files ?? {},
-    agent:
-      defaultSeed !== undefined
-        ? { kind: "file", seed: defaultSeed }
-        : {
-            kind: "command",
-            command: target.label,
-            cliVersion: commandCliVersion((target as { tokens: string[] }).tokens),
-          },
-  });
+  // Each test runs in its own staging directory OUTSIDE the run directory and
+  // is folded in when it finishes; the staging root lives beside the run
+  // directory so the fold never crosses filesystems.
+  const stagingRoot = path.join(runsDir, ".staging", runId);
+  fs.mkdirSync(stagingRoot, { recursive: true });
+  fs.mkdirSync(runDir, { recursive: true });
 
-  const state = initializeEvalRun({
-    runId,
-    runsDir,
-    agentLabel: target.label,
-    inputs: opts.inputs,
-    continueOnError,
-    startedAt: new Date(),
-    provenance,
-  });
   // Up front, not just at the end: a long run's evidence (statelogs, the
   // live `eval logs -f` view) lives here while it is still running.
   const progress = opts.progress ?? true;
-  if (progress) console.error(`run dir: ${state.runDir}`);
+  if (progress) console.error(`run dir: ${runDir}`);
 
   // Ctrl-C mid-suite must still produce a run directory the toolchain can
-  // read: the in-flight input finishes as an error result (the runner kills
-  // its child; runAgent's error path salvages an eval record and writes
-  // error.txt), the loop stops, and the summary below is written as normal.
-  // `once`, so a second Ctrl-C gets default handling — immediate death.
+  // read: the in-flight test finishes as an error result (the runner kills
+  // its child), is folded in, and the loop stops. `once`, so a second
+  // Ctrl-C gets default handling — immediate death.
   let interrupted = false;
   const onSigint = () => {
     interrupted = true;
     console.warn(
-      "\neval run interrupted — salvaging the in-flight input and writing a " +
-        "partial summary; press Ctrl-C again to force quit",
+      "\neval run interrupted — folding the in-flight test into the run directory; " +
+        "press Ctrl-C again to force quit",
     );
   };
   process.once("SIGINT", onSigint);
 
   const parallel = Math.max(1, Math.floor(opts.parallel ?? 1));
+  // `agent` is the target's label (an agent file path or the command line),
+  // so a listing can say which agent a directory's runs came from.
+  const flags: Record<string, string | number | boolean> = {
+    parallel,
+    continueOnError,
+    agent: target.label,
+  };
+  const harness = { kind: "harness" as const, id: `agency-eval@${harnessVersion()}` };
 
-  // One input, executed and recorded — shared by both scheduling modes.
-  // Prepare failures become error results, not throws. `onPrepared` fires
-  // before the agent starts, so the pool can begin tailing the statelog
-  // while the run is live.
-  const executeInput = async (
-    input: Input,
+  // One test, executed, folded into the run directory, and its staging
+  // removed — shared by both scheduling modes. Prepare failures become error
+  // results, not throws. `onStarted` fires before the agent starts, so the
+  // pool can begin tailing the statelog while the run is live.
+  const executeTest = async (
+    test: Test,
     pipeOutput: boolean,
-    onPrepared?: (prepared: PreparedInput) => void,
-  ): Promise<{ result: EvalRunInputResult; prepared?: PreparedInput }> => {
-    let prepared: PreparedInput;
+    onStarted?: (statelogPath: string) => void,
+  ): Promise<SuiteTestResult> => {
+    const testId = test.id ?? "";
+    const traceId = nanoid();
+    const stagingDir = path.join(stagingRoot, testId);
+    onStarted?.(agentRunPaths(stagingDir).statelogPath);
     try {
-      prepared = prepareInput(state, input);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`[runSuite] prepare failed for input ${input.id ?? ""}: ${message}`);
-      return { result: recordInputPrepareFailure(input.id ?? "", message) };
+      const run = await runAgent(
+        target,
+        test.input,
+        {
+          runDir: stagingDir,
+          traceId,
+          config,
+          seedFiles: test.files,
+          overlayFiles: perRun.overlayFiles,
+          seed: defaultSeed,
+          pipeOutput,
+          timeoutSec: test.timeoutSec,
+        },
+        { runner: deps.runner },
+      );
+      foldIntoRunDirectory({ runDir, test, traceId, run, harness, suite: opts.suite, flags });
+      return {
+        testId,
+        traceId,
+        status: run.status,
+        errorMessage: run.status === "error" ? run.errorMessage : undefined,
+      };
+    } finally {
+      const deleted = safeDeleteDirectoryWithin(stagingRoot, stagingDir);
+      if (!deleted.success && fs.existsSync(stagingDir)) {
+        console.warn(`[runSuite] could not remove staging ${stagingDir}: ${deleted.message}`);
+      }
     }
-    onPrepared?.(prepared);
-    const run = await runAgent(
-      target,
-      input.task,
-      {
-        runDir: prepared.inputDir,
-        config,
-        seedFiles: input.files,
-        overlayFiles: perRun.overlayFiles,
-        seed: defaultSeed,
-        pipeOutput,
-        extractor: perRun.extractor,
-        timeoutSec: input.timeoutSec,
-      },
-      { runner: deps.runner },
-    );
-    return { result: toInputResult(input, prepared, run), prepared };
   };
 
-  let results: EvalRunInputResult[] = [];
+  let results: SuiteTestResult[] = [];
   try {
     if (parallel === 1) {
-      for (const input of opts.inputs) {
+      for (const test of opts.inputs) {
         // Progress heartbeat: agents legitimately go quiet for a minute
         // inside one LLM call, and a silent terminal reads as a hang.
         // stderr, so piped agent output and result printing stay clean.
         const startedAt = Date.now();
-        const inputLabel = ttyColor.green(input.id ?? "");
+        const label = ttyColor.green(test.id ?? "");
         const ticker = progress
           ? setInterval(() => {
-              console.error(`[${inputLabel}] running… ${formatElapsed(Date.now() - startedAt)}`);
+              console.error(`[${label}] running… ${formatElapsed(Date.now() - startedAt)}`);
             }, 15_000)
           : undefined;
-        let outcome: Awaited<ReturnType<typeof executeInput>>;
+        let outcome: SuiteTestResult;
         try {
-          outcome = await executeInput(input, perRun.pipeOutput ?? true);
+          outcome = await executeTest(test, perRun.pipeOutput ?? true);
         } finally {
           if (ticker !== undefined) clearInterval(ticker);
         }
         if (progress) {
-          const status =
-            outcome.result.status === "error" ? ttyColor.red("error") : outcome.result.status;
-          console.error(`[${inputLabel}] ${status} in ${formatElapsed(Date.now() - startedAt)}`);
+          const status = outcome.status === "error" ? ttyColor.red("error") : outcome.status;
+          console.error(`[${label}] ${status} in ${formatElapsed(Date.now() - startedAt)}`);
         }
-        results.push(outcome.result);
+        results.push(outcome);
         if (interrupted) break;
-        if (outcome.result.status === "error" && !continueOnError) break;
+        if (outcome.status === "error" && !continueOnError) break;
       }
     } else {
       results = await runPool({
-        inputs: opts.inputs,
+        tests: opts.inputs,
         parallel,
         continueOnError,
         progress,
         isInterrupted: () => interrupted,
-        executeInput,
+        executeTest,
       });
     }
   } finally {
     process.removeListener("SIGINT", onSigint);
+    safeDeleteDirectoryWithin(path.join(runsDir, ".staging"), stagingRoot);
+    removeIfEmpty(path.join(runsDir, ".staging"));
   }
 
-  return writeEvalRunSummary(state, results);
+  return {
+    runId,
+    runDir,
+    agentLabel: target.label,
+    tests: results,
+    okCount: results.filter((result) => result.status === "success").length,
+    errorCount: results.filter((result) => result.status === "error").length,
+  };
+}
+
+/** Fold one finished run into the run directory: its trace, its workdir, the
+ *  agent's code, and the `run` row. A run that never wrote a statelog still
+ *  gets its `run` row (keyed by the trace id the harness minted), so a
+ *  failure is recorded rather than lost; it gets no workdir, because a
+ *  workdir needs a trace to hang off. */
+function foldIntoRunDirectory(args: {
+  runDir: string;
+  test: Test;
+  traceId: string;
+  run: AgentRun;
+  harness: { kind: "harness"; id: string };
+  suite: SuiteIdentity | undefined;
+  flags: Record<string, string | number | boolean>;
+}): void {
+  const { run } = args;
+  const staged = run.statelogPath === null ? [] : readTraces(run.statelogPath).traces;
+  const trace = staged.find((entry) => entry.traceId === args.traceId);
+  const traceRecorded = trace !== undefined;
+  // Attach the seeded code only when the trace itself recorded that closure
+  // (a child running an older runtime records none); the code tree must
+  // never contradict the trace.
+  const codeEntry =
+    trace !== undefined &&
+    run.seededAgentEntry !== null &&
+    recordedClosureHashes([trace]).includes(computeCodeIdentity(run.seededAgentEntry).closureHash)
+      ? run.seededAgentEntry
+      : undefined;
+  recordCompletedRun({
+    dir: args.runDir,
+    stagedStatelogFile: run.statelogPath === null ? undefined : run.statelogPath,
+    codeEntry,
+    workdir:
+      traceRecorded && fs.existsSync(run.workdir)
+        ? { traceId: args.traceId, sourceDir: run.workdir }
+        : undefined,
+    run: {
+      traceId: args.traceId,
+      annotator: args.harness,
+      payload: {
+        kind: "run",
+        // JSON round trip: the loader leaves optional fields as `undefined`,
+        // which is not a JSON value; on disk they are simply absent.
+        test: JSON.parse(JSON.stringify(args.test)),
+        suite: args.suite ?? null,
+        ended: endedFrom(run),
+        flags: args.flags,
+        ...(run.status === "error" ? { error: run.errorMessage } : {}),
+      },
+    },
+  });
+}
+
+/** How the harness saw the run end. Only the harness knows it killed a run
+ *  at the wall clock or the cost cap; the runner's message says which. */
+function endedFrom(run: AgentRun): RunOutcome {
+  if (run.status === "success") return "ok";
+  const message = run.errorMessage;
+  if (/wall clock/i.test(message)) return "timeout";
+  if (/cost cap/i.test(message)) return "cost-cap";
+  if (/SIGINT|interrupted/i.test(message)) return "killed";
+  return "error";
 }
 
 /**
@@ -235,21 +310,21 @@ export async function runSuite(
  * they come back as error results). Results keep input order.
  */
 async function runPool(args: {
-  inputs: Input[];
+  tests: Test[];
   parallel: number;
   continueOnError: boolean;
   progress: boolean;
   isInterrupted: () => boolean;
-  executeInput: (
-    input: Input,
+  executeTest: (
+    test: Test,
     pipeOutput: boolean,
-    onPrepared?: (prepared: PreparedInput) => void,
-  ) => Promise<{ result: EvalRunInputResult; prepared?: PreparedInput }>;
-}): Promise<EvalRunInputResult[]> {
+    onStarted?: (statelogPath: string) => void,
+  ) => Promise<SuiteTestResult>;
+}): Promise<SuiteTestResult[]> {
   const board = args.progress
-    ? startStatusBoard(args.inputs.map((input) => input.id ?? ""))
+    ? startStatusBoard(args.tests.map((test) => test.id ?? ""))
     : { update: () => {}, stop: () => {} };
-  const slots: (EvalRunInputResult | undefined)[] = new Array(args.inputs.length);
+  const slots: (SuiteTestResult | undefined)[] = new Array(args.tests.length);
   const costTails: (() => number)[] = [];
   let nextIndex = 0;
   let stopScheduling = false;
@@ -262,28 +337,28 @@ async function runPool(args: {
     for (;;) {
       if (stopScheduling || args.isInterrupted()) return;
       const index = nextIndex++;
-      if (index >= args.inputs.length) return;
-      const input = args.inputs[index];
-      const id = input.id ?? "";
+      if (index >= args.tests.length) return;
+      const test = args.tests[index];
+      const id = test.id ?? "";
       board.update(id, { status: "running", startedAt: Date.now() });
 
-      const outcome = await args.executeInput(input, false, (prepared) => {
+      const outcome = await args.executeTest(test, false, (statelogPath) => {
         // Tail this run's statelog for the board's cost column, from run
         // start; the tail stays registered afterwards so the final cost
         // sticks.
-        const tailer = makeStatelogCostTailer(prepared.statelogPath);
+        const tailer = makeStatelogCostTailer(statelogPath);
         costTails.push(() => {
           const total = tailer.poll();
           board.update(id, { costUsd: total });
           return total;
         });
       });
-      slots[index] = outcome.result;
+      slots[index] = outcome;
       board.update(id, {
-        status: outcome.result.status === "error" ? "error" : "done",
+        status: outcome.status === "error" ? "error" : "done",
         endedAt: Date.now(),
       });
-      if (outcome.result.status === "error" && !args.continueOnError) {
+      if (outcome.status === "error" && !args.continueOnError) {
         stopScheduling = true;
       }
     }
@@ -296,7 +371,7 @@ async function runPool(args: {
     clearInterval(costPoll);
     board.stop();
   }
-  return slots.filter((entry): entry is EvalRunInputResult => entry !== undefined);
+  return slots.filter((entry): entry is SuiteTestResult => entry !== undefined);
 }
 
 /** Default run id: local-time timestamp then a short random suffix, so
@@ -310,33 +385,30 @@ function defaultRunId(): string {
   return `${stamp}-${nanoid(6)}`;
 }
 
-/** Best-effort --version of the CLI a command target invokes, recorded in
- *  provenance (the command string alone cannot anchor a comparison over
- *  time). Only attempted when the command looks like the agency CLI;
- *  failures are swallowed — provenance must never fail a run. */
-function commandCliVersion(tokens: string[]): string | undefined {
-  const first = tokens[0] ?? "";
-  const invokesAgency =
-    path.basename(first) === "agency" ||
-    first.endsWith("agency.js") ||
-    (first === "node" && (tokens[1] ?? "").endsWith("agency.js"));
-  if (!invokesAgency) return undefined;
-  const argv = first === "node" ? [tokens[1], "--version"] : ["--version"];
+/** The staging root is shared by concurrent suites in one runs dir; only the
+ *  last one out removes it. */
+function removeIfEmpty(dir: string): void {
   try {
-    return execFileSync(first, argv, { timeout: 5_000, encoding: "utf8" }).trim() || undefined;
+    fs.rmdirSync(dir);
   } catch {
-    return undefined;
+    // not empty, or already gone — either is fine
   }
 }
 
-/** An AgentRun in the suite's per-input vocabulary. */
-function toInputResult(input: Input, prepared: PreparedInput, run: AgentRun): EvalRunInputResult {
-  return {
-    inputId: input.id ?? "",
-    status: run.status,
-    evalRecordPath: prepared.evalRecordPath,
-    statelogPath: prepared.statelogPath,
-    workdirPath: prepared.workdirPath,
-    errorMessage: run.status === "error" ? run.errorMessage : undefined,
-  };
+/** The harness's own version, for the `run` row's annotator id. */
+function harnessVersion(): string {
+  let dir = path.dirname(fileURLToPath(import.meta.url));
+  for (let index = 0; index < 5; index += 1) {
+    const candidate = path.join(dir, "package.json");
+    if (fs.existsSync(candidate)) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(candidate, "utf8")) as { version?: string };
+        return parsed.version ?? "unknown";
+      } catch {
+        return "unknown";
+      }
+    }
+    dir = path.dirname(dir);
+  }
+  return "unknown";
 }

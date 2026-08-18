@@ -58,11 +58,13 @@ export function tokenizeCommand(command: string): string[] {
   return result.result;
 }
 
-/** Replace every {task} occurrence. Objects serialize as JSON. At least one
- *  occurrence is required — a command that never receives the task is the
- *  silent-drop bug in new clothing. */
-export function substituteTask(tokens: string[], task: string | Record<string, any>): string[] {
-  const text = typeof task === "string" ? task : JSON.stringify(task);
+/** Replace every {task} occurrence with the test's input. (The placeholder
+ *  token stays `{task}` — it is user-facing; renaming it is a separate
+ *  decision.) Objects serialize as JSON. At least one occurrence is required —
+ *  a command that never receives the input is the silent-drop bug in new
+ *  clothing. */
+export function substituteInput(tokens: string[], input: string | Record<string, any>): string[] {
+  const text = typeof input === "string" ? input : JSON.stringify(input);
   if (!tokens.some((t) => t.includes(TASK_PLACEHOLDER))) {
     throw new Error(MISSING_TASK_PLACEHOLDER_ERROR);
   }

@@ -7,13 +7,13 @@ import {
   parseScalarAnswer,
   type HumanRead,
 } from "./humanGrader.js";
-import type { GraderInput, Input, JSON } from "../types.js";
+import type { GraderInput, Test, JSON } from "../types.js";
 import { loadedRun } from "../testUtils.js";
 
 const graderInput = (output: JSON): GraderInput => {
-  const input: Input = { id: "i1", task: "t" };
+  const test: Test = { id: "i1", input: "t" };
   return {
-    input,
+    test,
     run: loadedRun(output),
     runAgency: new AgencyRunner({}, async () => ({ data: null })),
   };

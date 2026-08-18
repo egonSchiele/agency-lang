@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { Input } from "@/eval/runTypes.js";
+import type { Test } from "@/eval/runTypes.js";
 
 import type { OptimizeTarget } from "./targets.js";
 import { buildMutatorSections, proposeMutation } from "./mutator.js";
@@ -30,9 +30,9 @@ const targets: OptimizeTarget[] = [
   },
 ];
 
-const inputs: Input[] = [
-  { id: "task-2", goal: "Mention the city", task: "t" },
-  { id: "task-1", goal: "Return Paris", task: "t" },
+const inputs: Test[] = [
+  { id: "task-2", goal: "Mention the city", input: "t" },
+  { id: "task-1", goal: "Return Paris", input: "t" },
 ];
 
 const proposalJson = {
@@ -73,7 +73,7 @@ describe("buildMutatorSections", () => {
       targets,
       inputs,
       history: "",
-      feedback: "### Input india\nExpected: New Delhi",
+      feedback: "### Test india\nExpected: New Delhi",
     });
     expect(sections.feedback).toContain("Expected: New Delhi");
   });

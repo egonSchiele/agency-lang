@@ -1,3 +1,7 @@
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+
 import { describe, it, expect } from "vitest";
 import { runViewer } from "./run.js";
 import { ScriptedInput } from "../tui/input/scripted.js";
@@ -45,52 +49,90 @@ describe("runViewer", () => {
     expect(out.lastText()).toMatch(/agentRun/);
   });
 
-  it("l reports nothing to judge for an empty trace when labeling is enabled", async () => {
+  it("shows a run directory's annotation summary on the trace row", async () => {
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: sample, // trace has no evalOutput, no return value, no prints
-      input: new ScriptedInput(["l", "q"]),
+      jsonl: sample,
+      input: new ScriptedInput(["q"]),
       output: out,
-      viewport: { rows: 12, cols: 80 },
-      labeling: {
-        datasetDir: "/tmp/does-not-matter",
-        sourcePath: "log.jsonl",
-        annotator: { kind: "human", id: "t" },
-      },
+      viewport: { rows: 10, cols: 100 },
+      traceAnnotations: { abc: "1 note · score 0.50" },
     });
-    expect(out.lastText()).toMatch(/Nothing to label|no-output/);
+    expect(out.lastText()).toContain("1 note · score 0.50");
   });
 
-  it("l asks for a checklist when labeling is enabled but none is configured", async () => {
-    const withOutput =
-      [
-        sampleEvents[0],
-        {
-          ...sampleEvents[1],
-          data: {
-            type: "evalOutputRecorded",
-            timestamp: "2026-05-16T00:00:01.000Z",
-            value: "the answer",
-            threadId: "0",
-          },
-        },
-        sampleEvents[1], // a terminal agentEnd, as a real completed run emits
-      ]
-        .map((e) => JSON.stringify(e))
-        .join("\n") + "\n";
+  it("starts on the focused trace when asked to", async () => {
+    const second = sample.replaceAll('"trace_id":"abc"', '"trace_id":"xyz"');
+    const out = new FrameRecorder();
+    // Extract via `x` writes `<traceId>.jsonl` by default, which tells us
+    // which trace the cursor was on.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "viewer-focus-"));
+    const source = path.join(dir, "log.jsonl");
+    fs.writeFileSync(source, sample + second);
+    const input = new ScriptedInput(["x"]);
+    input.feedLine(path.join(dir, "picked.jsonl"));
+    input.feedKey({ key: "q" });
+    await runViewer({
+      jsonl: sample + second,
+      input,
+      output: out,
+      viewport: { rows: 12, cols: 100 },
+      extract: { sourcePath: source },
+      focusTraceId: "xyz",
+    });
+    expect(fs.readFileSync(path.join(dir, "picked.jsonl"), "utf8")).toBe(second);
+  });
+
+  it("x extracts the focused trace to the file the user names", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "viewer-extract-"));
+    const source = path.join(dir, "log.jsonl");
+    fs.writeFileSync(source, sample);
+    const outPath = path.join(dir, "out", "abc.jsonl");
+    const input = new ScriptedInput(["x"]);
+    input.feedLine(outPath);
+    input.feedKey({ key: "q" });
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: withOutput,
-      input: new ScriptedInput(["l", "q"]),
+      jsonl: sample,
+      input,
+      output: out,
+      viewport: { rows: 12, cols: 100 },
+      extract: { sourcePath: source },
+    });
+    expect(fs.readFileSync(outPath, "utf8")).toBe(sample);
+    expect(out.lastText()).toMatch(/Wrote 2 events/);
+  });
+
+  it("x refuses to overwrite a file that already exists", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "viewer-extract-"));
+    const source = path.join(dir, "log.jsonl");
+    fs.writeFileSync(source, sample);
+    const outPath = path.join(dir, "taken.jsonl");
+    fs.writeFileSync(outPath, "precious\n");
+    const input = new ScriptedInput(["x"]);
+    input.feedLine(outPath);
+    input.feedKey({ key: "q" });
+    const out = new FrameRecorder();
+    await runViewer({
+      jsonl: sample,
+      input,
+      output: out,
+      viewport: { rows: 12, cols: 100 },
+      extract: { sourcePath: source },
+    });
+    expect(fs.readFileSync(outPath, "utf8")).toBe("precious\n");
+    expect(out.lastText()).toMatch(/Extract failed/);
+  });
+
+  it("x does nothing without a local source", async () => {
+    const out = new FrameRecorder();
+    await runViewer({
+      jsonl: sample,
+      input: new ScriptedInput(["x", "q"]),
       output: out,
       viewport: { rows: 12, cols: 80 },
-      labeling: {
-        datasetDir: "/tmp/does-not-matter",
-        sourcePath: "log.jsonl",
-        annotator: { kind: "human", id: "t" },
-      },
     });
-    expect(out.lastText()).toMatch(/--checklist/);
+    expect(out.lastText()).not.toMatch(/Wrote/);
   });
 
   it("shows a helpful message when the file is empty", async () => {

@@ -250,7 +250,12 @@ export function renderRowText(
   row: VisibleRow,
   isCursor: boolean,
   isExpanded: boolean,
-  opts: { query?: string; thresholds?: ViewerThresholds } = {},
+  opts: {
+    query?: string;
+    thresholds?: ViewerThresholds;
+    /** Per trace id, a summary of its annotations, appended to trace rows. */
+    traceAnnotations?: Record<string, string>;
+  } = {},
 ): string {
   const indent = "  ".repeat(row.depth);
   const marker = isCursor ? "> " : "  ";
@@ -271,7 +276,15 @@ export function renderRowText(
       : row.node.nodeKind === "trace"
         ? summarizeTraceStyled(row.node, t)
         : row.node.summary;
-  const withHighlight = opts.query ? highlightInline(styledSummary, opts.query) : styledSummary;
+  const annotation =
+    row.node.nodeKind === "trace" ? opts.traceAnnotations?.[row.node.traceId] : undefined;
+  const summaryWithAnnotation =
+    annotation === undefined || annotation === ""
+      ? styledSummary
+      : `${styledSummary}  {gray-fg}${annotation}{/gray-fg}`;
+  const withHighlight = opts.query
+    ? highlightInline(summaryWithAnnotation, opts.query)
+    : summaryWithAnnotation;
   // Over-long lines are clipped centrally by the TUI renderer; no
   // need to slice here.
   return `${marker}${indent}${glyph} ${withHighlight}`;

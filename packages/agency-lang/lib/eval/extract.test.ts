@@ -430,7 +430,7 @@ describe("extractEvalRecord", () => {
       ]);
       expect(rec.evalOutputs).toEqual([{ value: "real output", threadId: "0", tMs: 200 }]);
       expect(rec.warnings).not.toEqual(
-        expect.arrayContaining([expect.stringMatching(/Call eval(Input|Output)/)]),
+        expect.arrayContaining([expect.stringMatching(/Call eval(Test|Output)/)]),
       );
     });
 

@@ -1,16 +1,23 @@
-// RunRow: one table row per run (or per statelog trace), plus the pure
-// derivation and patch/recompute helpers the loader drives. Nothing
-// here does I/O — phase-1 values come in as EvalRunPhaseOne, backfill
-// values come in as patches, and every aggregate is recomputed from the
-// per-test rows so the two paths cannot disagree.
-import type { EvalRunPhaseOne } from "./readRunSummary.js";
+// RunRow: one table row per run directory (or per statelog trace), plus
+// the pure derivation helpers the loader drives. Nothing here does I/O —
+// a run directory comes in as the snapshot `readRunDirectory` produced,
+// a raw statelog as the miner's scan result, and every aggregate is
+// recomputed from the per-test rows so no two paths can disagree.
+import * as path from "path";
+
+import { summarizeRuns } from "@/runDirectory/list.js";
+import type { RunDirectorySnapshot } from "@/runDirectory/runDir.js";
+import { runDirPaths } from "@/runDirectory/runDir.js";
+
 import { resolveAgentName } from "./identity.js";
-import { suiteFromConfig, UNKNOWN_SUITE } from "./suite.js";
+import { suiteFromSource, UNKNOWN_SUITE } from "./suite.js";
 import type { Source } from "./sources.js";
 import type { ScanResult, TraceTotals } from "./mine.js";
 
 export type TestRow = {
   inputId: string;
+  /** The trace this test ran as; the viewer opens the run's statelog on it. */
+  traceId?: string;
   statelogPath?: string;
   score: number | null;
   gatesPassed: boolean | null;
@@ -19,10 +26,10 @@ export type TestRow = {
   durationMs: number | null;
   startedAtMs: number | null;
   models: string[];
-  /** From the summary metrics block or backfill; feeds run identity. */
+  /** The trace's `agentName` event; feeds run identity. */
   agentName?: string;
-  /** Set by backfill: this test's statelog produced events even though
-   *  no eval record exists — the signature of a killed run. */
+  /** The trace produced events but the run was cut short (timeout, cost
+   *  cap, kill) — the signature of a killed run. */
   statelogHadEvents?: boolean;
 };
 
@@ -35,7 +42,8 @@ export type RunRow = {
   agent: string;
   /** Shown on the info screen only; the table shows `agent`. */
   command?: string;
-  /** summary.json agentLabel, kept for identity fallback + info screen. */
+  /** The harness's agent label (`flags.agent` on the run row), kept for
+   *  identity fallback + info screen. */
   agentLabel?: string;
   suite: string;
   score: number | null;
@@ -49,82 +57,92 @@ export type RunRow = {
   backfilled: boolean;
 };
 
-export type BuiltRunRow = {
-  row: RunRow;
-  /** Inputs phase 1 could not complete; the loader schedules one
-   *  backfill job per entry. */
-  backfillInputIds: string[];
-};
+const CUT_SHORT_ENDINGS = ["timeout", "cost-cap", "killed", "unknown"];
 
-export function buildRunRow(phaseOne: EvalRunPhaseOne, source: Source): BuiltRunRow {
-  const summary = phaseOne.summary;
-  const gradeByInput: Record<string, { objective: number; gatesPassed: boolean }> =
-    Object.create(null);
-  for (const grade of summary.grading?.perInput ?? []) {
-    const entry = grade as unknown as { inputId: string; objective: number; gatesPassed: boolean };
-    gradeByInput[entry.inputId] = entry;
-  }
-
-  const backfillInputIds: string[] = [];
-  const tests: TestRow[] = summary.inputs.map((input) => {
-    const grade = gradeByInput[input.inputId];
+/**
+ * One row for a run directory, from its snapshot. Every trace is a test
+ * row: the harness `run` row names the test and how it ended; scores come
+ * from the effective annotations; cost, time and models from the trace.
+ */
+export function buildRunRowFromDirectory(snapshot: RunDirectorySnapshot, source: Source): RunRow {
+  const summaries = summarizeRuns(snapshot);
+  const statelogPath = runDirPaths(snapshot.dir).statelog;
+  const tests: TestRow[] = summaries.map((summary) => {
     const test: TestRow = {
-      inputId: input.inputId,
-      statelogPath: input.statelogPath,
-      score: grade !== undefined ? grade.objective : null,
-      gatesPassed: grade !== undefined ? grade.gatesPassed : null,
-      status: initialTestStatus(input),
-      costUsd: input.metrics !== undefined ? input.metrics.costUsd : null,
-      durationMs: input.metrics !== undefined ? input.metrics.durationMs : null,
-      startedAtMs: input.metrics !== undefined ? input.metrics.startedAtMs : null,
-      models: input.metrics !== undefined ? [...input.metrics.models] : [],
+      inputId: summary.testId ?? summary.traceId,
+      traceId: summary.traceId,
+      statelogPath,
+      score: summary.latestScore,
+      gatesPassed: summary.gatesPassed,
+      status: summary.ended === "ok" ? "ok" : "failed",
+      costUsd: summary.costUsd,
+      durationMs: summary.durationMs,
+      startedAtMs: summary.startedAtMs,
+      models: summary.models,
     };
-    if (input.metrics?.agentName !== undefined) {
-      test.agentName = input.metrics.agentName;
+    // A run the harness cut short (timeout, cost cap, kill) is the explorer's
+    // "killed": events exist, but nothing finished. An error is a plain failure.
+    if (CUT_SHORT_ENDINGS.includes(summary.ended)) {
+      test.statelogHadEvents = true;
     }
-    // Errored inputs backfill even when a (salvaged, possibly partial)
-    // record left metrics behind — their statelog may know more.
-    if (input.metrics === undefined || input.status === "error") {
-      backfillInputIds.push(input.inputId);
+    if (summary.agentName !== null) {
+      test.agentName = summary.agentName;
     }
     return test;
   });
 
-  const suite = suiteFromConfig(phaseOne.config);
-  const warnings = [...phaseOne.warnings];
-  if (suite.warning !== undefined) {
-    warnings.push(suite.warning);
-  }
-
-  const dir = source.kind === "runDir" ? source.dir : summary.runDir;
+  const firstRun = firstRunRow(snapshot);
   const row: RunRow = {
-    key: dir,
+    key: snapshot.dir,
     source,
-    startedAtMs: parseIsoOrNull(phaseOne.config?.startedAt),
+    startedAtMs: null,
     agent: "",
-    agentLabel: summary.agentLabel,
-    suite: suite.suite,
-    score: typeof summary.grading?.objective === "number" ? summary.grading.objective : null,
-    gatesPassed:
-      typeof summary.grading?.gatesPassed === "boolean" ? summary.grading.gatesPassed : null,
+    suite: suiteFromSource(firstRun?.suite?.source),
+    score: meanScore(tests),
+    gatesPassed: runGatesPassed(tests),
     status: "failed",
     costUsd: null,
     wallMs: null,
     models: [],
     tests,
-    warnings,
-    backfilled: backfillInputIds.length === 0,
+    warnings: [],
+    backfilled: true,
   };
-  const command = commandFromConfig(phaseOne);
-  if (command !== undefined) {
-    row.command = command;
+  const agentLabel = firstRun?.flags.agent;
+  if (typeof agentLabel === "string") {
+    row.agentLabel = agentLabel;
   }
   recomputeRunAggregates(row);
-  return { row, backfillInputIds };
+  return row;
 }
 
-/** A run whose summary could not be read at all: still a row, so 1
- *  corrupt run in 200 stays visible instead of vanishing. */
+/** The harness row of the first trace that has one: suite and agent label
+ *  are per run, so any trace's row will do. */
+function firstRunRow(snapshot: RunDirectorySnapshot) {
+  for (const trace of snapshot.traces) {
+    const run = snapshot.effectiveAnnotations[trace.traceId]?.run;
+    if (run !== undefined && run !== null && run.kind === "run") return run;
+  }
+  return null;
+}
+
+/** False if any test failed a gate, true if any passed and none failed,
+ *  null when no test has a verdict. */
+function runGatesPassed(tests: TestRow[]): boolean | null {
+  if (tests.some((test) => test.gatesPassed === false)) return false;
+  if (tests.some((test) => test.gatesPassed === true)) return true;
+  return null;
+}
+
+/** Mean of the tests that have a score; null when none do. */
+function meanScore(tests: TestRow[]): number | null {
+  const scored = tests.filter((test) => test.score !== null);
+  if (scored.length === 0) return null;
+  return scored.reduce((sum, test) => sum + (test.score ?? 0), 0) / scored.length;
+}
+
+/** A source that could not be read at all: still a row, so 1 broken run
+ *  in 200 stays visible instead of vanishing. */
 export function buildFailedRunRow(source: Source, warning: string): RunRow {
   const key = source.kind === "runDir" ? source.dir : source.file;
   return {
@@ -171,48 +189,6 @@ export function buildTraceRows(file: string, result: ScanResult): RunRow[] {
   }));
 }
 
-export type InputBackfillPatch = {
-  costUsd?: number;
-  durationMs?: number;
-  startedAtMs?: number;
-  models?: string[];
-  agentName?: string;
-  warnings: string[];
-  /** The eval record existed — the test really finished. */
-  recordFound?: boolean;
-  statelogHadEvents?: boolean;
-};
-
-export function applyInputPatch(row: RunRow, inputId: string, patch: InputBackfillPatch): void {
-  const test = row.tests.find((candidate) => candidate.inputId === inputId);
-  if (test === undefined) {
-    row.warnings.push(`backfill for unknown input ${inputId}`);
-    return;
-  }
-  if (patch.costUsd !== undefined) {
-    test.costUsd = patch.costUsd;
-  }
-  if (patch.durationMs !== undefined) {
-    test.durationMs = patch.durationMs;
-  }
-  if (patch.startedAtMs !== undefined) {
-    test.startedAtMs = patch.startedAtMs;
-  }
-  if (patch.models !== undefined) {
-    test.models = [...patch.models];
-  }
-  if (patch.agentName !== undefined) {
-    test.agentName = patch.agentName;
-  }
-  if (patch.statelogHadEvents === true) {
-    test.statelogHadEvents = true;
-  }
-  if (patch.recordFound === true && test.status === "missing") {
-    test.status = "ok";
-  }
-  row.warnings.push(...patch.warnings);
-}
-
 /** Recompute every run-level aggregate from the per-test rows. Called
  *  after phase 1 and after every completed backfill patch. */
 export function recomputeRunAggregates(row: RunRow): void {
@@ -252,15 +228,6 @@ export function recomputeRunAggregates(row: RunRow): void {
   row.status = deriveRunStatus(tests);
 }
 
-/** "missing" = no metrics yet; backfill upgrades it to "ok" when the
- *  eval record turns out to exist. */
-function initialTestStatus(input: { status: string; metrics?: unknown }): TestRow["status"] {
-  if (input.status === "error") {
-    return "failed";
-  }
-  return input.metrics !== undefined ? "ok" : "missing";
-}
-
 function deriveRunStatus(tests: TestRow[]): RunRow["status"] {
   if (tests.length === 0) {
     return "failed";
@@ -285,26 +252,6 @@ function traceWallMs(totals: TraceTotals): number | null {
   return totals.lastTsMs - totals.firstTsMs;
 }
 
-function commandFromConfig(phaseOne: EvalRunPhaseOne): string | undefined {
-  const agent = phaseOne.config?.provenance?.agent;
-  if (agent === undefined) {
-    return undefined;
-  }
-  if ("command" in agent) {
-    return agent.command;
-  }
-  return `agency run ${agent.entry}`;
-}
-
-function parseIsoOrNull(iso: string | undefined): number | null {
-  if (iso === undefined) {
-    return null;
-  }
-  const parsed = Date.parse(iso);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 function lastPathSegment(value: string): string {
-  const segments = value.split("/").filter((part) => part !== "");
-  return segments[segments.length - 1] ?? value;
+  return path.basename(value) || value;
 }

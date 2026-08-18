@@ -13,8 +13,30 @@ export type ParseResult = {
   errors: ParseError[];
 };
 
+/** One validated event together with the exact line it came from. */
+export type ParsedEventLine = {
+  event: EventEnvelope;
+  raw: string;
+  /** One-based line number in the source text. */
+  line: number;
+};
+
+export type ParseWithLinesResult = {
+  lines: ParsedEventLine[];
+  errors: ParseError[];
+};
+
 export function parseStatelogJsonl(text: string): ParseResult {
-  const events: EventEnvelope[] = [];
+  const parsed = parseStatelogJsonlWithLines(text);
+  return { events: parsed.lines.map((entry) => entry.event), errors: parsed.errors };
+}
+
+/** The one owner of statelog line decoding: JSON, version check, envelope
+ *  validation. `parseStatelogJsonl` is this with the raw lines dropped;
+ *  callers that need the original bytes (per-trace digests, extracting a trace
+ *  verbatim) read `raw`. */
+export function parseStatelogJsonlWithLines(text: string): ParseWithLinesResult {
+  const parsedLines: ParsedEventLine[] = [];
   const errors: ParseError[] = [];
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i++) {
@@ -60,14 +82,18 @@ export function parseStatelogJsonl(text: string): ParseResult {
       });
       continue;
     }
-    events.push({
-      format_version: version,
-      trace_id: obj.trace_id,
-      project_id: obj.project_id ?? "",
-      span_id: obj.span_id ?? null,
-      parent_span_id: obj.parent_span_id ?? null,
-      data: obj.data,
+    parsedLines.push({
+      event: {
+        format_version: version,
+        trace_id: obj.trace_id,
+        project_id: obj.project_id ?? "",
+        span_id: obj.span_id ?? null,
+        parent_span_id: obj.parent_span_id ?? null,
+        data: obj.data,
+      },
+      raw,
+      line: i + 1,
     });
   }
-  return { events, errors };
+  return { lines: parsedLines, errors };
 }

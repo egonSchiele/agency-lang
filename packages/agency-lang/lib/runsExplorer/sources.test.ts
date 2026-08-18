@@ -4,7 +4,7 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { discoverSources } from "./sources.js";
-import { writeCorruptRun, writeGradedRun, writeMultiTraceStatelog } from "./testFixtures.js";
+import { writeGradedRun, writeMultiTraceStatelog } from "./testFixtures.js";
 
 describe("discoverSources", () => {
   let tmpDir: string;
@@ -17,13 +17,13 @@ describe("discoverSources", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("classifies a run directory and routes a sole run dir to the run table", () => {
+  it("classifies a run directory and routes a sole run dir to the viewer on it", () => {
     const runDir = writeGradedRun(tmpDir);
 
     const discovery = discoverSources([runDir]);
 
     expect(discovery.sources).toEqual([{ kind: "runDir", dir: runDir }]);
-    expect(discovery.route).toBe("runTable");
+    expect(discovery.route).toBe("runDirectory");
     expect(discovery.errors).toEqual([]);
   });
 
@@ -114,8 +114,10 @@ describe("discoverSources", () => {
     expect(discovery.errors[0]).toContain("first line");
   });
 
-  it("a corrupt run still classifies as a run directory (contents are a row problem)", () => {
-    const runDir = writeCorruptRun(tmpDir);
+  it("a torn statelog still classifies as a run directory (contents are a row problem)", () => {
+    const runDir = path.join(tmpDir, "torn-run");
+    fs.mkdirSync(runDir);
+    fs.writeFileSync(path.join(runDir, "statelog.jsonl"), '{"format_version": 1, "tra');
 
     const discovery = discoverSources([runDir]);
 

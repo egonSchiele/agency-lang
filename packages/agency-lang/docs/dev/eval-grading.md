@@ -1,70 +1,85 @@
 # Eval grading: the run directory is the interface
 
 Running an agent and grading it are separate concepts, joined by exactly one
-thing: the run directory on disk. This page exists so the seam survives future
-readers; every rule here was decided deliberately (2026-07-30), not inherited.
+thing: the run directory on disk (`docs/dev/run-directory.md`). This page
+exists so the seam survives future readers; every rule here was decided
+deliberately (2026-07-30, re-based on the run directory 2026-08-18).
 
 ## The rules
 
-**Grading's only input is a run directory.** `gradeRun(runDir, ctx)`
-(`lib/eval/grading/gradeRun.ts`) and `gradeSuite(runDir, suiteGraders, config)`
-(`lib/eval/grading/gradeSuite.ts`) take a path, never an in-memory result.
-There used to be an in-memory handoff (`gradeRun` accepted a three-shape
-union); it was deleted on purpose.
+**`eval run` never grades.** `agency eval run` loads the suite, runs it, and
+writes one run directory: every test's trace in `statelog.jsonl`, its workdir
+under `workdir/<traceId>/`, the agent's code under `code/<closureHash>/`, and
+one `run` annotation per test (`{ test, suite, ended, flags, error? }`). No
+`goal` is needed to run. Grading is `agency eval grade <dir>`, whenever you
+like, as many times as you like.
 
-**Tests grade themselves; the suite level is override or fallback.** An
-input may carry its own grading module (`graders` in its spec; auto-
-discovered as `graders.ts` beside `test.json`), recorded as an absolute
-path in the run directory's `input.json` — so a re-grade days later loads
-the same module with no flags. The suite-level set is a tagged union,
-`SuiteGraders` (`gradeRun.ts`): `override` (an explicit `--graders` flag)
-replaces every test's own graders — the experiment knob — while `fallback`
-(the `eval.graders` config module, else the bundled goal judge) applies
-only to inputs that carry none. Precedence, one line: flag > test's own >
-config > goal judge. Grading modules are loaded once per path per grade
-pass (`makeGraderModuleCache`); the run CLI's pre-run validation loads
-through the same cache. Trust note: graders are code the harness executes —
-pulling a remote suite means trusting it, by decision (2026-07-31).
+**Each test runs in staging, then is folded in.** `runSuite` mints the trace
+id up front (`nanoid`) and hands it to the child — the fork runner via
+`identity.runId` on the run instruction, the spawn runner via
+`AGENCY_TRACE_ID`, which `resolveInvocation` honors for a fresh root run —
+runs the agent in `<runsDir>/.staging/<runId>/<testId>/`, and calls
+`recordCompletedRun` once with the staged statelog, workdir, seeded agent
+entry and the `run` row. A test that never wrote a statelog still gets its
+`run` row (so the failure is recorded), but no workdir. Code is attached only
+when the trace itself recorded that closure hash. Staging is removed through
+`safeDeleteDirectoryWithin` in `finally`.
 
-**`eval run --grade` re-reads the artifacts it just wrote.** The suite runner
-(`runSuite`) executes agents and writes the run directory; it knows
-nothing about graders. The `evalRun` command then grades that directory —
-`resolve graders → validate → run → grade` — the same call `agency eval grade`
-makes days later. The re-read looks like waste; it is the point. The cost is
-one bounded JSON write plus one read per input, and in exchange the artifacts
-(`summary.json`, `input.json`, `eval-record.json`) are proven to round-trip on
-every graded run instead of only when someone re-grades an old run. Do not
-"optimize" this by passing the in-memory summary through — that reconnects the
-two concepts this design separates. (Revisit only if grading ever needs heavy
-post-read processing; it currently does one `JSON.parse` and a field lookup.)
+**Grading's only input is a run directory.** `gradeRun(dir, ctx)` /
+`gradeSnapshot(snapshot, ctx)` (`lib/eval/grading/gradeRun.ts`) read the
+directory: for each trace, the test comes from its `run` row (an ad-hoc trace
+with no row is a test named by its trace id), the record is
+`evalRecordFor(trace)`, the workdir is `workdir/<traceId>` when present, and
+the output is the last recorded eval output. There is no in-memory handoff, so
+grading right after a run reads the same directory `eval grade` reads days
+later.
 
-**An errored run scores zero, always.** Graders never see an errored run. A
-failed run may leave a salvaged `eval-record.json` on disk (a crash after
-useful work keeps its evidence); that salvage is for humans and optimizer
-reflection, and is never graded — a run that almost finished must not earn
-points from a judge that cannot tell it crashed. This includes runs killed
-by a timeout, a cost cap, or Ctrl-C: an agent that reached the right disk
-state but could not decide it was done is not a success (decided
-2026-07-31). The diversion lives in `loadedEntry` (`gradeRun.ts`), with a
-spy-grader test pinning it.
+**Tests grade themselves; the suite level is override or fallback.** A test
+may carry its own grading module (`graders` in its spec; auto-discovered as
+`graders.ts` beside `test.json`), recorded on its `run` row as an absolute
+path. The suite-level set is `SuiteGraders`: `override` (an explicit
+`--graders` flag) replaces every test's own graders — the experiment knob —
+while `fallback` (the `eval.graders` config module, else the bundled goal
+judge) applies only to tests that carry none. Precedence, one line: flag >
+test's own > config > goal judge. Grader modules load once per path per pass
+(`makeGraderModuleCache`). Trust note: graders are code the harness executes.
+
+**A run that did not end cleanly scores zero, always.** The harness's `run`
+row is authoritative when present — only it knows about a wall-clock or
+cost-cap kill (`ended: "timeout" | "cost-cap" | "killed" | "error"`); without
+one, the trace's own ending decides (`traceEnding`). Such a trace is never
+shown to graders: a run that almost finished must not earn points from a judge
+that cannot tell it crashed. `gradeRun.test.ts` pins this with a spy grader.
+
+**A test that never produced a trace still counts.** When an agent dies
+before its first event (a compile failure, a kill before start), the harness
+records a `run` row with no trace behind it. `gradeSnapshot` enumerates those
+rows too (`gradableEntries`), scoring each zero with the row's reason.
+Otherwise a suite where half the tests never started would score as if only
+the other half existed, and one where none started would pass gates
+vacuously.
 
 **A successful run with no recorded output still grades, with `output:
-null`.** Command agents (the agency CLI under `--agent-cmd`) emit no output
-event, and for terminal-bench-style tests the deliverable is the
-FILESYSTEM — graders read the workdir. Graders that need the output see
-`null` and fail on their own terms. The two hard ungraded reasons are
-record-missing and record-unreadable only (`lookUpOutput`, `gradeRun.ts`).
-A real agent once passed a task and was scored ungraded before this rule.
+null`.** Command agents emit no output event, and for terminal-bench-style
+tests the deliverable is the FILESYSTEM — graders read the workdir. Graders
+that need the output fail on their own terms.
 
-**`readEvalRun` is the single place grading touches the filesystem** and owns
-all tolerance: a corrupt per-input file degrades that one input with a warning
-(grading runs after every agent has been paid for; one bad file must not take
-the pass down), while a corrupt `summary.json` fails loudly with the file
-named, because nothing is loadable without it.
+**Every grading pass is recorded as annotations.** `gradeSuite` reads one
+snapshot, grades it, converts each grade to a `ScoreDraft`, and calls
+`recordGradingPass` once: one `score` row per grader per trace, all sharing a
+fresh `passId`, the last marked `completesPass`. The fold counts only complete
+passes, so a crash mid-pass never moves effective state, and a re-grade sits
+beside the earlier passes rather than over them. Graders are named by
+revision — a module grader is `<path>@<sha256 of file>` (set by
+`loadGradingModule`), the goal judge `goal-judge@<hash of its prompt file>` —
+so editing `graders.ts` in place is a new annotator. `EvalRunGrading` (the
+objective, gates, per-test breakdown) is computed for printing and `-o`; it is
+not stored.
 
-## History
+## What is gone
 
-`judgeSuite` was the last holdout: it accepted a loaded-run-or-directory
-union and took input specs in memory. It converged on 2026-07-30 — it now
-takes two run directories and reads the specs from each run's `input.json`,
-the same way grading does.
+`config.json`, `summary.json`, per-input `input.json`, `eval-record.json` on
+disk, `verifier-N/grading.json`, `error.txt`, and `--no-grade`. Old run
+directories on disk are still readable by the runs explorer's legacy loader
+(`lib/runsExplorer/readRunSummary.ts`) and the label loader
+(`lib/eval/readRun.ts`) until those move to the run directory.

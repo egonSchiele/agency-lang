@@ -7,15 +7,15 @@ import type { GraderInput } from "./types.js";
 import { loadedRun } from "./testUtils.js";
 
 const runInput = (output: unknown): GraderInput => ({
-  input: { id: "a", task: "t", metadata: { expected: "Paris" } },
+  test: { id: "a", input: "t", metadata: { expected: "Paris" } },
   run: loadedRun(output as any),
   runAgency: {} as AgencyRunner,
 });
 
 describe("FunctionGrader", () => {
   it("coerces a number return to a scalar grade", async () => {
-    const g = new FunctionGrader(({ input, output }) =>
-      output === input.metadata?.expected ? 1 : 0,
+    const g = new FunctionGrader(({ test, output }) =>
+      output === test.metadata?.expected ? 1 : 0,
     );
     expect(await g.run(runInput("Paris"))).toEqual({ score: { kind: "scalar", value: 1 } });
     expect(await g.run(runInput("Lyon"))).toEqual({ score: { kind: "scalar", value: 0 } });
@@ -37,10 +37,10 @@ describe("FunctionGrader", () => {
     });
   });
 
-  it("exposes the input's metadata to the function via ctx.input", async () => {
+  it("exposes the input's metadata to the function via ctx.test", async () => {
     const seen: unknown[] = [];
-    const g = new FunctionGrader(({ input }) => {
-      seen.push(input.metadata?.expected);
+    const g = new FunctionGrader(({ test }) => {
+      seen.push(test.metadata?.expected);
       return 1;
     });
     await g.run(runInput("Paris"));
@@ -60,10 +60,10 @@ describe("FunctionGrader", () => {
     expect(runStructured).toHaveBeenCalledTimes(1);
   });
 
-  it("ctx.judge forwards input.expected as the third judge arg by default", async () => {
+  it("ctx.judge forwards test.expected as the third judge arg by default", async () => {
     const runStructured = vi.fn(async () => ({ score: 1, reasoning: "" }));
     const input: GraderInput = {
-      input: { id: "a", task: "t", expected: "New Delhi" },
+      test: { id: "a", input: "t", expected: "New Delhi" },
       run: loadedRun("New Delhi"),
       runAgency: { runStructured } as unknown as AgencyRunner,
     };
@@ -79,7 +79,7 @@ describe("FunctionGrader", () => {
   it("ctx.judge lets the caller override expected explicitly", async () => {
     const runStructured = vi.fn(async () => ({ score: 1, reasoning: "" }));
     const input: GraderInput = {
-      input: { id: "a", task: "t", expected: "New Delhi" },
+      test: { id: "a", input: "t", expected: "New Delhi" },
       run: loadedRun("Mumbai"),
       runAgency: { runStructured } as unknown as AgencyRunner,
     };

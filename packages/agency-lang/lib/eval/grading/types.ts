@@ -1,11 +1,11 @@
-import type { Input } from "@/eval/runTypes.js";
+import type { Test } from "@/eval/runTypes.js";
 import type { EvalRecord } from "@/eval/types.js";
 
 import type { AgencyRunner } from "./agencyRunner.js";
 
 /** The unified run-spec type lives in the eval layer; re-export it so the many
- *  `import { Input } from "./types.js"` sites in the optimizer keep working. */
-export type { Input };
+ *  `import { Test } from "./types.js"` sites in the optimizer keep working. */
+export type { Test };
 
 /** A JSON-compatible value. */
 export type JSON = string | number | boolean | null | JSON[] | { [key: string]: JSON };
@@ -13,15 +13,13 @@ export type JSON = string | number | boolean | null | JSON[] | { [key: string]: 
 /** A path of object keys / array indices into a JSON value. */
 export type JSONPath = (string | number)[];
 
-/** One finished run's evidence, loaded off disk by grading's loader — as
- *  opposed to `AgentRun` (lib/eval/run/runAgent.ts), which is the outcome of
- *  EXECUTING. Built from the run's `EvalRunInputResult`, so `record` is parsed
- *  exactly once per input. */
+/** One trace's evidence as grading sees it — as opposed to `AgentRun`
+ *  (lib/eval/run/runAgent.ts), which is the outcome of EXECUTING. */
 export type LoadedRun = {
-  output: JSON; // the agent's return value
-  recordPath: string; // path to the full execution trace (eval record)
-  workdir: string; // the isolated directory the agent ran in
-  record: EvalRecord; // that trace, parsed
+  output: JSON; // the agent's return value (last recorded eval output), or null
+  traceId: string; // which trace in the run directory this is
+  workdir: string; // the agent's workdir snapshot ("" when none was captured)
+  record: EvalRecord; // the trace's eval record, computed from the statelog
 };
 
 /** A grader's score: pass/fail or a continuous value. */
@@ -46,7 +44,7 @@ export type GraderOptions = {
 
 /** What a grader's `_run` receives. */
 export type GraderInput = {
-  input: Input;
+  test: Test;
   run: LoadedRun;
   runAgency: AgencyRunner; // capability to invoke a judge .agency file
 };

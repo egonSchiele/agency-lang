@@ -1,28 +1,30 @@
+import type {
+  ChecklistAnnotation,
+  EffectiveChecklistJudgement,
+} from "@/runDirectory/annotations.js";
+import { own } from "@/utils/ownProperty.js";
+
 import {
-  effectiveAnswers,
   itemStatus as itemStatusOf,
-  latestNote,
   liveQuestions,
   score as scoreOf,
-  type AnnotationFoldKey,
-  type EffectiveAnswers,
   type ItemStatus,
-} from "./annotations.js";
+} from "./judgement.js";
 import type {
-  AnnotationRow,
   Annotator,
   ChecklistQuestion,
   ChecklistRevision,
-  CorpusRow,
   DeepReadonly,
   Fields,
 } from "./types.js";
 
-/** One thing being judged: its id and the named fields that make it up. */
+/** One trace being judged: its id and the named text the screen shows for it. */
 export type SessionItem = {
-  outputId: string;
+  traceId: string;
   fields: Fields;
 };
+
+export type { ChecklistAnnotation };
 
 export type SessionEditor =
   { kind: "none" } | { kind: "question"; draft: string } | { kind: "note"; draft: string };
@@ -36,7 +38,7 @@ export type SessionEditor =
 export type SessionAction =
   | { kind: "nextItem" }
   | { kind: "previousItem" }
-  | { kind: "focusItem"; outputId: string }
+  | { kind: "focusItem"; traceId: string }
   | { kind: "nextQuestion" }
   | { kind: "previousQuestion" }
   | { kind: "toggleAnswer" }
@@ -54,9 +56,9 @@ export type SessionAction =
 export type SessionEvent =
   | Exclude<SessionAction, { kind: "submitEditor" } | { kind: "signOff" }>
   | { kind: "questionAdded"; question: ChecklistQuestion }
-  | { kind: "noteSaved"; outputId: string; note: string }
+  | { kind: "noteSaved"; traceId: string; note: string }
   | { kind: "revisionAdopted"; revision: ChecklistRevision }
-  | { kind: "annotationCommitted"; row: AnnotationRow };
+  | { kind: "annotationCommitted"; row: ChecklistAnnotation };
 
 export type SessionState = {
   items: SessionItem[];
@@ -64,10 +66,10 @@ export type SessionState = {
   /** Question edits staged but not yet published. The controller turns these
    *  into a revision; the reducer never writes one. */
   stagedQuestions: ChecklistQuestion[] | null;
-  answersByOutputId: Record<string, Record<string, boolean>>;
-  notesByOutputId: Record<string, string>;
-  /** outputId → the question ids it was signed off against. */
-  reviewedByOutputId: Record<string, string[]>;
+  answersByTraceId: Record<string, Record<string, boolean>>;
+  notesByTraceId: Record<string, string>;
+  /** traceId → the question ids it was signed off against. */
+  reviewedByTraceId: Record<string, string[]>;
   itemIndex: number;
   questionIndex: number;
   editor: SessionEditor;
@@ -92,9 +94,11 @@ export type SessionSnapshot = {
 };
 
 export type InitSessionArgs = {
-  corpus: readonly DeepReadonly<CorpusRow>[];
+  items: readonly SessionItem[];
   revision: ChecklistRevision;
-  annotations: readonly AnnotationRow[];
+  /** traceId → this annotator's folded answers and latest note on this
+   *  checklist, as the run directory folds them. */
+  judgements: Readonly<Record<string, EffectiveChecklistJudgement>>;
   annotator: Annotator;
 };
 
@@ -108,35 +112,30 @@ function liveOf(state: SessionState): ChecklistQuestion[] {
   return questionsOf(state).filter((question) => !question.deleted);
 }
 
-function foldKey(state: SessionState, outputId: string): AnnotationFoldKey {
-  return { outputId, checklistId: state.revision.checklistId, annotator: state.annotator };
-}
-
 export function initSession(args: InitSessionArgs): SessionState {
-  const items: SessionItem[] = args.corpus.map((row) => ({
-    outputId: row.outputId,
-    fields: { ...row.fields },
+  const items: SessionItem[] = args.items.map((item) => ({
+    traceId: item.traceId,
+    fields: { ...item.fields },
   }));
 
-  const answersByOutputId: Record<string, Record<string, boolean>> = {};
-  const notesByOutputId: Record<string, string> = {};
-  const reviewedByOutputId: Record<string, string[]> = {};
+  // Trace ids are outside data; a trace named `toString` or `__proto__` must
+  // be an ordinary key, so every trace-keyed record here has no prototype and
+  // every read goes through `own`.
+  const answersByTraceId: Record<string, Record<string, boolean>> = Object.create(null);
+  const notesByTraceId: Record<string, string> = Object.create(null);
+  const reviewedByTraceId: Record<string, string[]> = Object.create(null);
 
   for (const item of items) {
-    const key: AnnotationFoldKey = {
-      outputId: item.outputId,
-      checklistId: args.revision.checklistId,
-      annotator: args.annotator,
-    };
-    const answers: EffectiveAnswers = effectiveAnswers(args.annotations, key);
-    answersByOutputId[item.outputId] = { ...answers };
-    const note = latestNote(args.annotations, key);
+    const judgement = own(args.judgements, item.traceId);
+    const answers = { ...(judgement?.answers ?? {}) };
+    answersByTraceId[item.traceId] = answers;
+    const note = judgement?.note ?? "";
     if (note.length > 0) {
-      notesByOutputId[item.outputId] = note;
+      notesByTraceId[item.traceId] = note;
     }
     const judged = Object.keys(answers);
     if (judged.length > 0) {
-      reviewedByOutputId[item.outputId] = judged;
+      reviewedByTraceId[item.traceId] = judged;
     }
   }
 
@@ -144,9 +143,9 @@ export function initSession(args: InitSessionArgs): SessionState {
     items,
     revision: args.revision,
     stagedQuestions: null,
-    answersByOutputId,
-    notesByOutputId,
-    reviewedByOutputId,
+    answersByTraceId,
+    notesByTraceId,
+    reviewedByTraceId,
     itemIndex: 0,
     questionIndex: 0,
     editor: { kind: "none" },
@@ -164,8 +163,8 @@ export function currentQuestion(state: SessionState): ChecklistQuestion | undefi
   return questionsOf(state)[state.questionIndex];
 }
 
-export function itemStatus(state: SessionState, outputId: string): ItemStatus {
-  const signedOff = state.reviewedByOutputId[outputId];
+export function itemStatus(state: SessionState, traceId: string): ItemStatus {
+  const signedOff = own(state.reviewedByTraceId, traceId);
   if (signedOff === undefined) {
     return "untouched";
   }
@@ -175,25 +174,25 @@ export function itemStatus(state: SessionState, outputId: string): ItemStatus {
 
 export function sessionSnapshot(state: SessionState): SessionSnapshot {
   const item = currentItem(state);
-  const statuses: Record<string, ItemStatus> = {};
-  const scores: Record<string, number | null> = {};
+  const statuses: Record<string, ItemStatus> = Object.create(null);
+  const scores: Record<string, number | null> = Object.create(null);
   let reviewed = 0;
   let stale = 0;
 
   const stagedRevision: ChecklistRevision = { ...state.revision, questions: questionsOf(state) };
   for (const entry of state.items) {
-    const status = itemStatus(state, entry.outputId);
-    statuses[entry.outputId] = status;
+    const status = itemStatus(state, entry.traceId);
+    statuses[entry.traceId] = status;
     if (status === "reviewed") {
       reviewed += 1;
     }
     if (status === "stale") {
       stale += 1;
     }
-    scores[entry.outputId] =
+    scores[entry.traceId] =
       status === "reviewed"
         ? scoreOf({
-            answers: state.answersByOutputId[entry.outputId] ?? {},
+            answers: own(state.answersByTraceId, entry.traceId) ?? {},
             revision: stagedRevision,
           })
         : null;
@@ -206,8 +205,8 @@ export function sessionSnapshot(state: SessionState): SessionSnapshot {
     currentItem: item ?? null,
     currentQuestion: currentQuestion(state) ?? null,
     questions: questionsOf(state),
-    answers: item === undefined ? {} : (state.answersByOutputId[item.outputId] ?? {}),
-    note: item === undefined ? "" : (state.notesByOutputId[item.outputId] ?? ""),
+    answers: item === undefined ? {} : (own(state.answersByTraceId, item.traceId) ?? {}),
+    note: item === undefined ? "" : (own(state.notesByTraceId, item.traceId) ?? ""),
     editor: state.editor,
     statuses,
     scores,
@@ -221,7 +220,7 @@ export function sessionSnapshot(state: SessionState): SessionSnapshot {
  *  box written as an explicit `false` because you looked at it and moved on. */
 export function signOffPayload(state: SessionState):
   | {
-      outputId: string;
+      traceId: string;
       coveredQuestionIds: string[];
       answers: Record<string, boolean>;
       note: string;
@@ -240,13 +239,13 @@ export function signOffPayload(state: SessionState):
   }
   const answers: Record<string, boolean> = {};
   for (const question of live) {
-    answers[question.id] = state.answersByOutputId[item.outputId]?.[question.id] === true;
+    answers[question.id] = own(state.answersByTraceId, item.traceId)?.[question.id] === true;
   }
   return {
-    outputId: item.outputId,
+    traceId: item.traceId,
     coveredQuestionIds: live.map((question) => question.id),
     answers,
-    note: state.notesByOutputId[item.outputId] ?? "",
+    note: own(state.notesByTraceId, item.traceId) ?? "",
   };
 }
 
@@ -259,7 +258,7 @@ export function reduceSession(state: SessionState, event: SessionEvent): Session
     case "previousItem":
       return moveItem(state, -1);
     case "focusItem":
-      return focusItem(state, event.outputId);
+      return focusItem(state, event.traceId);
     case "nextQuestion":
       return { ...state, questionIndex: clamp(state.questionIndex + 1, questionsOf(state).length) };
     case "previousQuestion":
@@ -272,7 +271,7 @@ export function reduceSession(state: SessionState, event: SessionEvent): Session
       return { ...state, editor: { kind: "question", draft: "" } };
     case "beginNote": {
       const item = currentItem(state);
-      const draft = item === undefined ? "" : (state.notesByOutputId[item.outputId] ?? "");
+      const draft = item === undefined ? "" : (own(state.notesByTraceId, item.traceId) ?? "");
       return { ...state, editor: { kind: "note", draft } };
     }
     case "appendEditorText":
@@ -290,7 +289,7 @@ export function reduceSession(state: SessionState, event: SessionEvent): Session
     case "noteSaved":
       return {
         ...state,
-        notesByOutputId: { ...state.notesByOutputId, [event.outputId]: event.note },
+        notesByTraceId: { ...state.notesByTraceId, [event.traceId]: event.note },
         editor: { kind: "none" },
       };
     case "revisionAdopted":
@@ -310,11 +309,11 @@ function moveItem(state: SessionState, delta: number): SessionState {
   };
 }
 
-/** Jump the cursor to a specific item by its output id, preserving every
+/** Jump the cursor to a specific item by its trace id, preserving every
  *  answer, note and editor. An unknown id leaves the state unchanged, so a
  *  caller can focus a just-promoted example without special-casing "not here". */
-function focusItem(state: SessionState, outputId: string): SessionState {
-  const index = state.items.findIndex((item) => item.outputId === outputId);
+function focusItem(state: SessionState, traceId: string): SessionState {
+  const index = state.items.findIndex((item) => item.traceId === traceId);
   if (index === -1) {
     return state;
   }
@@ -337,12 +336,12 @@ function applyToggle(state: SessionState): SessionState {
   if (item === undefined || question === undefined || question.deleted) {
     return state;
   }
-  const forItem = state.answersByOutputId[item.outputId] ?? {};
+  const forItem = own(state.answersByTraceId, item.traceId) ?? {};
   return {
     ...state,
-    answersByOutputId: {
-      ...state.answersByOutputId,
-      [item.outputId]: { ...forItem, [question.id]: forItem[question.id] !== true },
+    answersByTraceId: {
+      ...state.answersByTraceId,
+      [item.traceId]: { ...forItem, [question.id]: forItem[question.id] !== true },
     },
     questionIndex: clamp(state.questionIndex + 1, questionsOf(state).length),
   };
@@ -361,20 +360,20 @@ function applyToggleDeleted(state: SessionState): SessionState {
   };
 }
 
-/** Sign-off landed durably: mark reviewed, advance, and reset this output's
+/** Sign-off landed durably: mark reviewed, advance, and reset this trace's
  *  answers to what was actually recorded, so a later relabel starts from the
  *  truth rather than from unsaved screen state. */
-function applyCommitted(state: SessionState, row: AnnotationRow): SessionState {
+function applyCommitted(state: SessionState, row: ChecklistAnnotation): SessionState {
   return {
     ...state,
-    answersByOutputId: {
-      ...state.answersByOutputId,
-      [row.outputId]: { ...state.answersByOutputId[row.outputId], ...row.answers },
+    answersByTraceId: {
+      ...state.answersByTraceId,
+      [row.traceId]: { ...own(state.answersByTraceId, row.traceId), ...row.answers },
     },
-    notesByOutputId: { ...state.notesByOutputId, [row.outputId]: row.note },
-    reviewedByOutputId: {
-      ...state.reviewedByOutputId,
-      [row.outputId]: [...row.coveredQuestionIds],
+    notesByTraceId: { ...state.notesByTraceId, [row.traceId]: row.note },
+    reviewedByTraceId: {
+      ...state.reviewedByTraceId,
+      [row.traceId]: Object.keys(row.answers),
     },
     itemIndex: clamp(state.itemIndex + 1, state.items.length),
     questionIndex: 0,

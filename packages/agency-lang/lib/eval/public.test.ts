@@ -5,8 +5,8 @@ import * as evalApi from "./public.js";
 
 // Types are erased at runtime, so GRADING_NAMES below cannot guard them; this
 // import line IS the guard — typecheck fails if a contract type vanishes.
-import type { Grade, GraderOptions, Input, LoadedRun, Score } from "./public.js";
-type _TypeExportsAreContract = [Grade, GraderOptions, Input, LoadedRun, Score];
+import type { Grade, GraderOptions, Test, LoadedRun, Score } from "./public.js";
+type _TypeExportsAreContract = [Grade, GraderOptions, Test, LoadedRun, Score];
 
 /** The grader-authoring names. Both entry points must expose all of them:
  *  `agency-lang/eval` as the new home, `agency-lang/optimize` by re-export so

@@ -1,18 +1,23 @@
 import { describe, expect, it } from "vitest";
 
+import type { EffectiveChecklistJudgement } from "@/runDirectory/annotations.js";
+
 import {
   currentQuestion,
   initSession,
+  itemStatus,
   reduceSession,
   sessionSnapshot,
   signOffPayload,
+  type ChecklistAnnotation,
+  type SessionItem,
   type SessionState,
 } from "./session.js";
-import type { AnnotationRow, ChecklistRevision, CorpusRow } from "./types.js";
+import type { ChecklistRevision } from "./types.js";
 
 const HASH = `sha256:${"0".repeat(64)}`;
-const OUT_A = `out_${"a".repeat(64)}`;
-const OUT_B = `out_${"b".repeat(64)}`;
+const OUT_A = "trace-a";
+const OUT_B = "trace-b";
 const annotator = { kind: "human" as const, id: "adit" };
 
 const revision: ChecklistRevision = {
@@ -29,33 +34,41 @@ const revision: ChecklistRevision = {
   ],
 };
 
-function corpusRow(outputId: string, output: string): CorpusRow {
-  return {
-    schemaVersion: 2,
-    outputId,
-    capturedAt: "2026-08-03T00:00:00.000Z",
-    fields: { task: "a task", output },
-  };
+function item(traceId: string, output: string): SessionItem {
+  return { traceId, fields: { input: "an input", output } };
 }
 
-const corpus = [corpusRow(OUT_A, "first output"), corpusRow(OUT_B, "second output")];
+const items = [item(OUT_A, "first output"), item(OUT_B, "second output")];
 
-function start(annotations: AnnotationRow[] = []): SessionState {
-  return initSession({ corpus, revision, annotations, annotator });
+/** Start a session, optionally with this annotator's already-folded judgement
+ *  of the first trace, the way the store hands it over. */
+function start(judgement?: Partial<EffectiveChecklistJudgement>): SessionState {
+  const judgements: Record<string, EffectiveChecklistJudgement> =
+    judgement === undefined
+      ? {}
+      : {
+          [OUT_A]: {
+            annotator,
+            answers: { q_accurate: true, q_today: false },
+            note: "",
+            ...judgement,
+          },
+        };
+  return initSession({ items, revision, judgements, annotator });
 }
 
-function annotation(over: Partial<AnnotationRow> = {}): AnnotationRow {
+function annotation(over: Partial<ChecklistAnnotation> = {}): ChecklistAnnotation {
   return {
-    schemaVersion: 1,
-    annotationId: "ann_one",
-    outputId: OUT_A,
+    v: 1,
+    id: `ann_${"1".repeat(64)}`,
+    traceId: OUT_A,
     annotator,
-    checklistId: "cl_news",
-    checklistVersion: 1,
-    checklistHash: HASH,
+    kind: "checklist",
+    checklist: "cl_news",
+    version: 1,
+    hash: HASH,
     createdAt: "2026-08-03T00:00:00.000Z",
     activeMs: 0,
-    coveredQuestionIds: ["q_accurate", "q_today"],
     answers: { q_accurate: true, q_today: false },
     note: "",
     ...over,
@@ -81,28 +94,28 @@ describe("navigation", () => {
   });
 
   it("focuses a specific item by its output id", () => {
-    const state = reduceSession(start(), { kind: "focusItem", outputId: OUT_B });
+    const state = reduceSession(start(), { kind: "focusItem", traceId: OUT_B });
     expect(state.itemIndex).toBe(1);
   });
 
   it("leaves the state unchanged when focusing an unknown output id", () => {
     const state = start();
-    expect(reduceSession(state, { kind: "focusItem", outputId: "out_nope" })).toBe(state);
+    expect(reduceSession(state, { kind: "focusItem", traceId: "out_nope" })).toBe(state);
   });
 
   it("preserves answers when focusing another item", () => {
     let state = reduceSession(start(), { kind: "toggleAnswer" });
-    const answersBefore = state.answersByOutputId[OUT_A];
-    state = reduceSession(state, { kind: "focusItem", outputId: OUT_B });
+    const answersBefore = state.answersByTraceId[OUT_A];
+    state = reduceSession(state, { kind: "focusItem", traceId: OUT_B });
     expect(state.itemIndex).toBe(1);
-    expect(state.answersByOutputId[OUT_A]).toEqual(answersBefore);
+    expect(state.answersByTraceId[OUT_A]).toEqual(answersBefore);
   });
 });
 
 describe("toggling", () => {
   it("ticks the focused question and advances", () => {
     const state = reduceSession(start(), { kind: "toggleAnswer" });
-    expect(state.answersByOutputId[OUT_A].q_accurate).toBe(true);
+    expect(state.answersByTraceId[OUT_A].q_accurate).toBe(true);
     expect(currentQuestion(state)?.id).toBe("q_today");
   });
 
@@ -110,14 +123,14 @@ describe("toggling", () => {
     let state = reduceSession(start(), { kind: "toggleAnswer" });
     state = reduceSession(state, { kind: "previousQuestion" });
     state = reduceSession(state, { kind: "toggleAnswer" });
-    expect(state.answersByOutputId[OUT_A].q_accurate).toBe(false);
+    expect(state.answersByTraceId[OUT_A].q_accurate).toBe(false);
   });
 
   it("refuses to tick a deleted question", () => {
     let state = start();
     state = reduceSession(state, { kind: "toggleQuestionDeleted" });
     state = reduceSession(state, { kind: "toggleAnswer" });
-    expect(state.answersByOutputId[OUT_A]?.q_accurate).toBeUndefined();
+    expect(state.answersByTraceId[OUT_A]?.q_accurate).toBeUndefined();
   });
 });
 
@@ -164,7 +177,7 @@ describe("editor", () => {
   });
 
   it("seeds the note editor with the existing note", () => {
-    let state = reduceSession(start(), { kind: "noteSaved", outputId: OUT_A, note: "prior" });
+    let state = reduceSession(start(), { kind: "noteSaved", traceId: OUT_A, note: "prior" });
     state = reduceSession(state, { kind: "beginNote" });
     expect(state.editor).toEqual({ kind: "note", draft: "prior" });
   });
@@ -174,7 +187,7 @@ describe("signOffPayload", () => {
   it("covers every live question with an explicit boolean", () => {
     const state = reduceSession(start(), { kind: "toggleAnswer" });
     expect(signOffPayload(state)).toMatchObject({
-      outputId: OUT_A,
+      traceId: OUT_A,
       coveredQuestionIds: ["q_accurate", "q_today"],
       answers: { q_accurate: true, q_today: false },
     });
@@ -189,7 +202,7 @@ describe("signOffPayload", () => {
 describe("annotationCommitted", () => {
   it("marks reviewed and advances", () => {
     const state = reduceSession(start(), { kind: "annotationCommitted", row: annotation() });
-    expect(state.reviewedByOutputId[OUT_A]).toEqual(["q_accurate", "q_today"]);
+    expect(state.reviewedByTraceId[OUT_A]).toEqual(["q_accurate", "q_today"]);
     expect(state.itemIndex).toBe(1);
   });
 
@@ -199,24 +212,24 @@ describe("annotationCommitted", () => {
       kind: "annotationCommitted",
       row: annotation({ answers: { q_accurate: false, q_today: true } }),
     });
-    expect(state.answersByOutputId[OUT_A]).toMatchObject({ q_accurate: false, q_today: true });
+    expect(state.answersByTraceId[OUT_A]).toMatchObject({ q_accurate: false, q_today: true });
   });
 });
 
 describe("resume from completed annotations", () => {
   it("seeds answers and counts the item as reviewed", () => {
-    const state = start([annotation()]);
-    expect(state.answersByOutputId[OUT_A].q_accurate).toBe(true);
+    const state = start({});
+    expect(state.answersByTraceId[OUT_A].q_accurate).toBe(true);
     expect(sessionSnapshot(state).progress.reviewed).toBe(1);
   });
 
   it("seeds the note", () => {
-    const state = start([annotation({ note: "missed the big one" })]);
+    const state = start({ note: "missed the big one" });
     expect(sessionSnapshot(state).note).toBe("missed the big one");
   });
 
   it("shows an item as stale once a question is staged that it never covered", () => {
-    let state = start([annotation()]);
+    let state = start({});
     state = reduceSession(state, {
       kind: "questionAdded",
       question: { id: "q_new", text: "Sourced?", weight: 1, deleted: false },
@@ -225,7 +238,7 @@ describe("resume from completed annotations", () => {
   });
 
   it("scores a stale item as null rather than a low number", () => {
-    let state = start([annotation()]);
+    let state = start({});
     state = reduceSession(state, {
       kind: "questionAdded",
       question: { id: "q_new", text: "Sourced?", weight: 1, deleted: false },
@@ -234,7 +247,7 @@ describe("resume from completed annotations", () => {
   });
 
   it("scores a fully reviewed item from its live questions", () => {
-    const state = start([annotation()]);
+    const state = start({});
     expect(sessionSnapshot(state).scores[OUT_A]).toBe(0.5);
   });
 });
@@ -260,8 +273,44 @@ describe("sessionSnapshot", () => {
     ]);
   });
 
-  it("reports an empty corpus as unable to sign off", () => {
-    const empty = initSession({ corpus: [], revision, annotations: [], annotator });
+  it("reports an empty directory as unable to sign off", () => {
+    const empty = initSession({ items: [], revision, judgements: {}, annotator });
     expect(sessionSnapshot(empty).canSignOff).toBe(false);
+  });
+});
+
+describe("trace ids that collide with Object.prototype names", () => {
+  const awkward = [item("toString", "a"), item("__proto__", "b"), item("constructor", "c")];
+
+  it("treats them as ordinary untouched items and can sign each one off", () => {
+    let state = initSession({ items: awkward, revision, judgements: {}, annotator });
+    for (const entry of awkward) {
+      expect(itemStatus(state, entry.traceId)).toBe("untouched");
+    }
+    const snapshot = sessionSnapshot(state);
+    expect(snapshot.statuses.toString).toBe("untouched");
+    expect(snapshot.scores.__proto__).toBeNull();
+    expect(snapshot.answers).toEqual({});
+    expect(snapshot.note).toBe("");
+    for (const entry of awkward) {
+      const payload = signOffPayload(state);
+      expect(payload?.traceId).toBe(entry.traceId);
+      state = reduceSession(state, {
+        kind: "annotationCommitted",
+        row: annotation({ traceId: entry.traceId, answers: payload?.answers ?? {} }),
+      });
+    }
+    expect(sessionSnapshot(state).progress.reviewed).toBe(3);
+  });
+
+  it("resumes them from folded judgements", () => {
+    const judgements: Record<string, EffectiveChecklistJudgement> = Object.assign(
+      Object.create(null),
+      { toString: { annotator, answers: { q_accurate: true, q_today: true }, note: "n" } },
+    );
+    const state = initSession({ items: awkward, revision, judgements, annotator });
+    expect(itemStatus(state, "toString")).toBe("reviewed");
+    expect(sessionSnapshot(state).note).toBe("n");
+    expect(itemStatus(state, "__proto__")).toBe("untouched");
   });
 });

@@ -167,6 +167,8 @@ feedback: renderReflectionFeedback(champion.scorecard.perInput),
 
 This renders, per input, the args, the **output**, the **`expected`** answer (when set), and each grader's **score + `feedback`**. `proposeMutation` accepts it as its `feedback` field; GEPA already builds it. This is what lets the optimizer learn "the output gave the area, not the capital New Delhi" without a separate `--goal`.
 
+It also renders what **people** said about the run, when the run directory carries any: every `note` row on the trace ("Notes from people who reviewed this run:") and the text of every checklist question a reviewer answered no ("Checklist questions reviewers answered NO:"). Both come from `humanFeedbackFor(snapshot, traceId)` (`lib/runDirectory/humanFeedback.ts`), which also returns the questions answered yes (`checked`) for consumers that want to say what a run did right; reflection uses only `unchecked`. `gradeRun` attaches the result to each `InputGrades.humanFeedback`, so an optimizer gets it for free by grading a run directory. To make use of it, run the candidate once, `agency note` / `agency label` its run directory, and re-grade: the next proposal sees the notes.
+
 ## Grading semantics you should know
 
 `evaluate`/`scoreFiles` return a `Scorecard`; how it turns grades into a number matters for your accept/reject logic.
@@ -221,7 +223,7 @@ class MyOptimizer extends BaseOptimizer {
 export default (config: BaseOptimizerConfig) => new MyOptimizer(config);
 ```
 ```bash
-agency optimize foo.agency --inputs inputs.json --optimizer ./myOptimizer.ts
+agency optimize foo.agency --suite inputs.json --optimizer ./myOptimizer.ts
 ```
 
 `--optimizer` treats a value with a `/` or a `.ts`/`.js`/`.mjs` extension as a path: it's loaded with esbuild + `import()` (same as a grading module), the default-exported factory is called with the run config, and the result is used **structurally** as an `Optimizer` (`{ name, optimize }`) — no `instanceof`, so it works even across realms. This is the path for users who don't fork the repo. Can also be set as `eval.optimize.optimizer` in `agency.json`.
@@ -242,7 +244,7 @@ Config that only your optimizer needs rides on `BaseOptimizerConfig` and gets ca
 | Seam | Replaces |
 | --- | --- |
 | `discover` | Target discovery — return a fixed `OptimizeTargetSet` instead of parsing a file. |
-| `runInput` | Running the agent — return the run DIRECTORY it wrote (a suite of one). Grading loads that directory like any other run, so it must carry real artifacts (`eval-record.json`, `input.json`, `summary.json`); `fakeRun` in `lib/optimize/testUtils.ts` builds one. |
+| `runInput` | Running the agent — return the run DIRECTORY it wrote (one trace). Grading reads that directory like any other run directory (`docs/dev/run-directory.md`), so it must carry a real statelog and a `run` row; `fakeRun` in `lib/optimize/testUtils.ts` builds one. |
 | `reporter` | Progress output — capture emitted events. |
 | `agencyRunner` | Running judge/proposer `.agency` files. |
 | `cache` | The per-`(workspace, input)` run cache. |

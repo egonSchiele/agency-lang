@@ -71,8 +71,6 @@ describe("RunsTableView rendering", () => {
     const view = makeView();
     view.setProgress({ kind: "progress", phase: "summary", completed: 40, total: 210 });
     expect(screenText(view.render(viewport))).toContain("Loading runs… 40/210");
-    view.setProgress({ kind: "progress", phase: "backfill", completed: 3, total: 7 });
-    expect(screenText(view.render(viewport))).toContain("Backfilling… 3/7");
     view.setProgress(null);
     expect(screenText(view.render(viewport))).not.toContain("Loading");
   });

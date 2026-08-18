@@ -1,7 +1,6 @@
 import * as path from "path";
 
 import { resolveEvalRunTarget } from "@/agentTarget.js";
-import { makeEvalRecordExtractor } from "@/eval/run/extract.js";
 import { runSuite } from "@/eval/run/runSuite.js";
 import { gradeRun, type GradingContext } from "@/eval/grading/gradeRun.js";
 
@@ -10,7 +9,7 @@ import { breakdown } from "@/eval/grading/gradeBreakdown.js";
 import { AgencyRunner } from "@/eval/grading/agencyRunner.js";
 import type { BaseGrader } from "@/eval/grading/baseGrader.js";
 import { Scorecard } from "@/eval/grading/scorecard.js";
-import type { Input } from "@/eval/grading/types.js";
+import type { Test } from "@/eval/grading/types.js";
 import type { BaseOptimizerConfig, OptimizeTarget } from "./optimizer.js";
 import { createPointwiseReporter, type PointwiseReporter } from "./reporter.js";
 import type {
@@ -43,7 +42,7 @@ export type RunInput = (
   ws: CachePartition,
   source: OptimizeTargetSet,
   files: Record<string, string>,
-  input: Input,
+  input: Test,
   id: string,
 ) => Promise<string>;
 
@@ -67,7 +66,7 @@ export abstract class BaseOptimizer {
   private readonly discover: (agentFile: string) => OptimizeTargetSet;
   private runCounter = 0;
   /** Held-out validation inputs (empty when none); set in optimize(). */
-  protected validationInputs: Input[] = [];
+  protected validationInputs: Test[] = [];
 
   constructor(
     protected readonly config: BaseOptimizerConfig,
@@ -105,7 +104,7 @@ export abstract class BaseOptimizer {
 
   /** Print the resolved grading setup and fail fast on a misconfigured grader,
    *  checked against the first input before any agent run. */
-  private echoAndValidateGrading(inputs: Input[]): void {
+  private echoAndValidateGrading(inputs: Test[]): void {
     this.reporter.gradingSetup({
       graders: this.config.graders.map((g) => ({ name: g.name(), describe: g.describe() })),
       firstInput: inputs[0] ? { id: inputs[0].id ?? "(no id)", goal: inputs[0].goal } : undefined,
@@ -120,7 +119,7 @@ export abstract class BaseOptimizer {
   /** Run the search over already-discovered targets. The one method an optimizer must implement. */
   protected abstract optimizeTargets(
     source: OptimizeTargetSet,
-    inputs: Input[],
+    inputs: Test[],
   ): Promise<OptimizeResult>;
 
   /**
@@ -175,7 +174,7 @@ export abstract class BaseOptimizer {
   protected async scoreFiles(
     source: OptimizeTargetSet,
     files: Record<string, string>,
-    inputs: Input[],
+    inputs: Test[],
   ): Promise<Scorecard> {
     const ws = this.fork();
     return this.evaluate(ws, source, files, inputs);
@@ -273,7 +272,7 @@ export abstract class BaseOptimizer {
     ws: CachePartition,
     source: OptimizeTargetSet,
     files: Record<string, string>,
-    inputs: Input[],
+    inputs: Test[],
   ): Promise<Scorecard> {
     // "override": the optimizer's grader set IS its objective — a suite
     // input's own graders must not silently change what is being optimized.
@@ -312,14 +311,14 @@ export abstract class BaseOptimizer {
     ws: CachePartition,
     source: OptimizeTargetSet,
     files: Record<string, string>,
-    input: Input,
+    input: Test,
     id: string,
   ): Promise<string> {
     this.runCounter += 1;
     const result = await runSuite({
       agent: path.join(source.baseDir, source.entryFile), // used for label/node parsing only
       inputs: [{ ...input, id }],
-      provenance: { inputsSource: { source: "optimize" }, files: {} },
+      suite: { source: "optimize" },
       runsDir: path.join(this.config.runsDir, this.config.runId, "agent-runs", ws.key),
       runId: `run-${this.runCounter}`,
       config: this.config.config,
@@ -335,15 +334,12 @@ export abstract class BaseOptimizer {
           closureFiles: Object.values(source.files).map((sourceFile) => sourceFile.absoluteFile),
         },
         overlayFiles: files,
-        // Skip the "did you forget to call evalValue()" warning — optimize
-        // inputs come from the input spec, so its absence is normal here.
-        extractor: makeEvalRecordExtractor({ warnMissingValue: false }),
       },
     });
-    const inputResult = result.inputs[0];
-    if (!inputResult || inputResult.status !== "success") {
+    const testResult = result.tests[0];
+    if (!testResult || testResult.status !== "success") {
       throw new Error(
-        `agent run failed for input ${input.id ?? "(no id)"}: ${inputResult?.errorMessage ?? "unknown error"}`,
+        `agent run failed for input ${input.id ?? "(no id)"}: ${testResult?.errorMessage ?? "unknown error"}`,
       );
     }
     return result.runDir;
@@ -406,6 +402,6 @@ function failingGraders(scorecard: Scorecard): string[] {
 }
 
 /** A stable id for an input: its own id when present, otherwise its position. */
-function inputId(input: Input, index: number): string {
+function inputId(input: Test, index: number): string {
   return input.id && input.id.trim() !== "" ? input.id : `input-${index}`;
 }

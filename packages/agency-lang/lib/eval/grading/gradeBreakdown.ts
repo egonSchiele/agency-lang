@@ -30,7 +30,7 @@ function gradeRow({ grader, grade }: GraderGrade): GradeRow {
 export function breakdown(scorecard: Scorecard): InputBreakdown[] {
   const objectives = scorecard.inputScores(); // reuse the canonical gate→0 rule; don't re-derive it
   return scorecard.perInput.map((i, idx) => ({
-    inputId: i.input.id ?? "(no id)",
+    inputId: i.test.id ?? "(no id)",
     output: i.run?.output ?? null,
     objective: objectives[idx],
     gatesPassed: i.gatesPassed,

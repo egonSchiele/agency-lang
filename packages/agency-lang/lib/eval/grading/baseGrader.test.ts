@@ -2,13 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AgencyRunner } from "./agencyRunner.js";
 import { BaseGrader } from "./baseGrader.js";
-import type { Grade, GraderInput, GraderOptions, Input } from "./types.js";
+import type { Grade, GraderInput, GraderOptions, Test } from "./types.js";
 import { loadedRun } from "./testUtils.js";
 
 const stubRunner = new AgencyRunner({}, async () => ({ data: null }));
-const input = (over: Partial<Input> = {}): Input => ({ id: "i1", task: "t", ...over });
-const graderInput = (over: Partial<Input> = {}): GraderInput => ({
-  input: input(over),
+const input = (over: Partial<Test> = {}): Test => ({ id: "i1", input: "t", ...over });
+const graderInput = (over: Partial<Test> = {}): GraderInput => ({
+  test: input(over),
   run: loadedRun(null),
   runAgency: stubRunner,
 });

@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import type { AgencyConfig } from "@/config.js";
 import { executeNodeAsync } from "@/cli/util.js";
-import type { Input } from "@/eval/runTypes.js";
+import type { Test } from "@/eval/runTypes.js";
 import { getAgentsDir } from "@/importPaths.js";
 
 import { describeConstraint } from "./constraint.js";
@@ -40,7 +40,7 @@ export const MutationProposalSchema = z.object({
 
 export type MutatorPromptInputs = {
   targets: OptimizeTarget[];
-  inputs: Input[];
+  inputs: Test[];
   history: string;
   /** Pre-rendered per-input feedback from the last run (expected answers + grader notes). */
   feedback?: string;

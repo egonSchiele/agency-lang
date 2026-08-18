@@ -52,7 +52,7 @@ const RUNS = [
 function runOnce({ name, flags }) {
   const runId = `${name}-${Date.now()}`;
   const cmd =
-    `node ./dist/scripts/agency.js eval optimize ${q(AGENT)} ${flags} ` +
+    `node ./dist/scripts/agency.js optimize ${q(AGENT)} ${flags} ` +
     `--iterations ${ITERATIONS} --runs-dir ${q(runsDir)} --run-id ${q(runId)} ` +
     `--no-writeback --silent`;
   console.log(`[${name}] ${cmd}`);

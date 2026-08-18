@@ -1,6 +1,6 @@
 import { BaseGrader } from "../baseGrader.js";
 import { getPath } from "../getPath.js";
-import type { Grade, GraderInput, GraderOptions, Input, JSONPath } from "../types.js";
+import type { Grade, GraderInput, GraderOptions, Test, JSONPath } from "../types.js";
 import { levenshtein } from "@/levenshtein.js";
 
 /** Graders that compare the agent output against a value read from the input.
@@ -23,8 +23,8 @@ abstract class MatchGrader extends BaseGrader {
     return `${this.name()} (matchOn ${stringify(this.matchPath())})`;
   }
 
-  validateInput(input: Input): void {
-    resolveMatch(input, this.matchPath(), this.name()); // throws if unresolved
+  validateInput(test: Test): void {
+    resolveMatch(test, this.matchPath(), this.name()); // throws if unresolved
   }
 }
 
@@ -32,8 +32,8 @@ abstract class MatchGrader extends BaseGrader {
 export class ExactMatchGrader extends MatchGrader {
   protected readonly defaultName = "exact-match";
 
-  protected async _run({ input, run }: GraderInput): Promise<Grade> {
-    const expected = this.reference(input);
+  protected async _run({ test, run }: GraderInput): Promise<Grade> {
+    const expected = this.reference(test);
     if (deepEqual(expected, run.output)) {
       return { score: { kind: "binary", pass: true } };
     }
@@ -43,8 +43,8 @@ export class ExactMatchGrader extends MatchGrader {
     };
   }
 
-  private reference(input: Input): unknown {
-    return resolveMatch(input, this.matchPath(), this.name());
+  private reference(test: Test): unknown {
+    return resolveMatch(test, this.matchPath(), this.name());
   }
 }
 
@@ -52,8 +52,8 @@ export class ExactMatchGrader extends MatchGrader {
 export class ContainsGrader extends MatchGrader {
   protected readonly defaultName = "contains";
 
-  protected async _run({ input, run }: GraderInput): Promise<Grade> {
-    const needle = String(resolveMatch(input, this.matchPath(), this.name()));
+  protected async _run({ test, run }: GraderInput): Promise<Grade> {
+    const needle = String(resolveMatch(test, this.matchPath(), this.name()));
     if (String(run.output ?? "").includes(needle)) {
       return { score: { kind: "binary", pass: true } };
     }
@@ -68,8 +68,8 @@ export class ContainsGrader extends MatchGrader {
 export class SimilarityGrader extends MatchGrader {
   protected readonly defaultName = "similarity";
 
-  protected async _run({ input, run }: GraderInput): Promise<Grade> {
-    const expected = String(resolveMatch(input, this.matchPath(), this.name()));
+  protected async _run({ test, run }: GraderInput): Promise<Grade> {
+    const expected = String(resolveMatch(test, this.matchPath(), this.name()));
     const actual = String(run.output ?? "");
     const longest = Math.max(expected.length, actual.length);
     const value = longest === 0 ? 1 : 1 - levenshtein(expected, actual) / longest;
@@ -78,7 +78,7 @@ export class SimilarityGrader extends MatchGrader {
 }
 
 /** Read a grader's reference value; a `matchOn` that does not resolve is a misconfiguration. */
-function resolveMatch(input: Input, matchOn: JSONPath, graderName: string): unknown {
+function resolveMatch(input: Test, matchOn: JSONPath, graderName: string): unknown {
   const value = getPath(input, matchOn);
   if (value === undefined) {
     throw new Error(

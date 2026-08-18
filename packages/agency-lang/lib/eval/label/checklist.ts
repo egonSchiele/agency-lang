@@ -4,7 +4,7 @@ import * as path from "path";
 import { canonicalize } from "@/utils/canonicalize.js";
 
 import { checklistHashOf, makeChecklistId, makeQuestionId } from "./ids.js";
-import { atomicWriteValidated } from "./jsonl.js";
+import { atomicWriteValidated } from "@/runDirectory/durableWrite.js";
 import {
   ChecklistCurrentSchema,
   ChecklistDefinitionSchema,
@@ -52,16 +52,16 @@ export type PrepareChecklistResult =
 
 // --- paths ---------------------------------------------------------------
 
-function lineageDir(datasetDir: string, checklistId: string): string {
-  return path.join(datasetDir, "checklists", checklistId);
+function lineageDir(dir: string, checklistId: string): string {
+  return path.join(dir, "checklists", checklistId);
 }
 
-function revisionPath(datasetDir: string, checklistId: string, version: number): string {
-  return path.join(lineageDir(datasetDir, checklistId), `${version}.json`);
+function revisionPath(dir: string, checklistId: string, version: number): string {
+  return path.join(lineageDir(dir, checklistId), `${version}.json`);
 }
 
-function currentPath(datasetDir: string, checklistId: string): string {
-  return path.join(lineageDir(datasetDir, checklistId), "current.json");
+function currentPath(dir: string, checklistId: string): string {
+  return path.join(lineageDir(dir, checklistId), "current.json");
 }
 
 // --- normalization -------------------------------------------------------
@@ -154,20 +154,20 @@ export function prepareRevision(args: {
 
   if (definition.checklistId !== current.checklistId) {
     throw new Error(
-      `Checklist file names lineage "${definition.checklistId}" but the dataset holds ` +
+      `Checklist file names lineage "${definition.checklistId}" but the run directory holds ` +
         `"${current.checklistId}". A checklist file belongs to one lineage.`,
     );
   }
   if (definition.version === undefined || definition.hash === undefined) {
     throw new Error(
       `Checklist "${definition.checklistId}" has an id but no recorded version. ` +
-        `The file is partly written; restore it from the dataset or start a new checklist.`,
+        `The file is partly written; restore it from the run directory or start a new checklist.`,
     );
   }
   if (definition.version > current.version) {
     throw new Error(
-      `Checklist file claims version ${definition.version} but the dataset's newest is ` +
-        `${current.version}. The dataset is the record; a file cannot be ahead of it.`,
+      `Checklist file claims version ${definition.version} but the run directory's newest is ` +
+        `${current.version}. The run directory is the record; a file cannot be ahead of it.`,
     );
   }
 
@@ -211,9 +211,9 @@ export function prepareRevision(args: {
   if (recordedHash !== definition.hash) {
     throw new Error(
       `Checklist file is based on version ${definition.version} but has been edited since, ` +
-        `while the dataset has moved on to version ${current.version}. This is ambiguous: ` +
+        `while the run directory has moved on to version ${current.version}. This is ambiguous: ` +
         `publishing it would discard whatever changed in between. Refresh the file from the ` +
-        `dataset and reapply your edit.`,
+        `run directory and reapply your edit.`,
     );
   }
   return { kind: "refresh-definition", revision: current };
@@ -287,19 +287,19 @@ function sameQuestions(
  * as a replay.
  */
 export function publishPendingRevision(args: {
-  datasetDir: string;
+  dir: string;
   pending: PendingRevision;
   definitionPath: string;
   fault?: FaultHook;
 }): PublishRevisionResult {
   const revision = ChecklistRevisionSchema.parse(args.pending.revision);
-  const existingCurrent = readCurrentPointer(args.datasetDir, revision.checklistId);
+  const existingCurrent = readCurrentPointer(args.dir, revision.checklistId);
   assertParentStillMatches(args.pending, existingCurrent, revision);
 
-  const target = revisionPath(args.datasetDir, revision.checklistId, revision.version);
+  const target = revisionPath(args.dir, revision.checklistId, revision.version);
   let replayed = false;
   if (fs.existsSync(target)) {
-    const stored = readRevision(args.datasetDir, revision.checklistId, revision.version);
+    const stored = readRevision(args.dir, revision.checklistId, revision.version);
     if (canonicalize(stored) !== canonicalize(revision)) {
       throw new Error(
         `Revision ${revision.version} of "${revision.checklistId}" already exists with different ` +
@@ -320,7 +320,7 @@ export function publishPendingRevision(args: {
     hash: revision.hash,
   };
   atomicWriteValidated({
-    targetPath: currentPath(args.datasetDir, revision.checklistId),
+    targetPath: currentPath(args.dir, revision.checklistId),
     value: pointer,
     schema: ChecklistCurrentSchema,
   });
@@ -346,7 +346,7 @@ function assertParentStillMatches(
     }
     throw new Error(
       `Revision ${revision.version} expects parent ${pending.expectedParentVersion}, but the ` +
-        `dataset has no published revision for "${revision.checklistId}".`,
+        `run directory has no published revision for "${revision.checklistId}".`,
     );
   }
   const isReplayOfThis = current.version === revision.version && current.hash === revision.hash;
@@ -384,11 +384,8 @@ export function syncChecklistDefinition(args: {
 
 // --- reading -------------------------------------------------------------
 
-export function readCurrentPointer(
-  datasetDir: string,
-  checklistId: string,
-): ChecklistCurrent | undefined {
-  const file = currentPath(datasetDir, checklistId);
+export function readCurrentPointer(dir: string, checklistId: string): ChecklistCurrent | undefined {
+  const file = currentPath(dir, checklistId);
   if (!fs.existsSync(file)) {
     return undefined;
   }
@@ -404,12 +401,8 @@ export function readCurrentPointer(
  * would otherwise change what old answers mean while still matching the
  * hash those annotations recorded.
  */
-export function readRevision(
-  datasetDir: string,
-  checklistId: string,
-  version: number,
-): ChecklistRevision {
-  const file = revisionPath(datasetDir, checklistId, version);
+export function readRevision(dir: string, checklistId: string, version: number): ChecklistRevision {
+  const file = revisionPath(dir, checklistId, version);
   if (!fs.existsSync(file)) {
     throw new Error(`Checklist revision not found: ${file}`);
   }
@@ -448,7 +441,7 @@ export function readRevision(
  * introduced between two revisions is never noticed on read.
  */
 export function validateLineageContinuity(
-  datasetDir: string,
+  dir: string,
   checklistId: string,
   versions: number[],
 ): void {
@@ -461,7 +454,7 @@ export function validateLineageContinuity(
           `are ${versions.join(", ")}. Revisions are a chain, not a set.`,
       );
     }
-    const revision = readRevision(datasetDir, checklistId, versions[index]);
+    const revision = readRevision(dir, checklistId, versions[index]);
     const expectedParent = previous === undefined ? null : previous.version;
     if (revision.parentVersion !== expectedParent) {
       throw new Error(
@@ -476,15 +469,15 @@ export function validateLineageContinuity(
   }
 }
 
-/** Every published revision id for a lineage, ascending. Used by dataset
+/** Every published revision id for a lineage, ascending. Used by label-store
  *  validation to check lineage continuity. */
-export function listRevisionVersions(datasetDir: string, checklistId: string): number[] {
-  const dir = lineageDir(datasetDir, checklistId);
-  if (!fs.existsSync(dir)) {
+export function listRevisionVersions(dir: string, checklistId: string): number[] {
+  const lineage = lineageDir(dir, checklistId);
+  if (!fs.existsSync(lineage)) {
     return [];
   }
   return fs
-    .readdirSync(dir)
+    .readdirSync(lineage)
     .filter((name) => /^\d+\.json$/.test(name))
     .map((name) => Number.parseInt(name.replace(".json", ""), 10))
     .sort((left, right) => left - right);

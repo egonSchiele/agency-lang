@@ -5,7 +5,7 @@ import { renderReflectionFeedback } from "../reflectionFeedback.js";
 import { proposeReflective, type ReflectionSections } from "../gepaReflect.js";
 import type { AgencyRunner } from "@/eval/grading/agencyRunner.js";
 import { inputObjective, type InputGrades, type Scorecard } from "@/eval/grading/scorecard.js";
-import type { Input } from "@/eval/grading/types.js";
+import type { Test } from "@/eval/grading/types.js";
 import { renderTargetsSection } from "../mutator.js";
 import type { BaseOptimizerConfig } from "../optimizer.js";
 import { formatDiagnostics } from "../reporter.js";
@@ -27,7 +27,7 @@ import type { CachePartition } from "../workspace.js";
 
 export type GepaConfig = BaseOptimizerConfig & {
   minibatch: number;
-  paretoSet?: Input[];
+  paretoSet?: Test[];
   moduleSelection?: "round-robin" | "all";
 };
 
@@ -85,7 +85,7 @@ export class Gepa extends BaseOptimizer {
 
   protected async optimizeTargets(
     source: OptimizeTargetSet,
-    inputs: Input[],
+    inputs: Test[],
   ): Promise<OptimizeResult> {
     const paretoInputs = this.gepaConfig.paretoSet ?? inputs;
     const rng = makeRng(this.config.seed ?? 0);
@@ -132,8 +132,8 @@ export class Gepa extends BaseOptimizer {
   /** Run the optimization loop, threading the pool. */
   private async evolve(
     pool: CandidatePool<Candidate>,
-    inputs: Input[],
-    paretoInputs: Input[],
+    inputs: Test[],
+    paretoInputs: Test[],
     rng: Rng,
   ): Promise<Attempt[]> {
     const attempts: Attempt[] = [];
@@ -170,8 +170,8 @@ export class Gepa extends BaseOptimizer {
   /** One reflective iteration: propose → validate → minibatch filter → (maybe) full eval. */
   private async attempt(
     parent: Candidate,
-    minibatch: Input[],
-    paretoInputs: Input[],
+    minibatch: Test[],
+    paretoInputs: Test[],
     iter: number,
   ): Promise<Attempt> {
     const selected = this.selectTargets(parent.targetSet.targets, iter);
@@ -239,9 +239,9 @@ export class Gepa extends BaseOptimizer {
   }
 
   /** The parent's weakest minibatch inputs (by reference), weakest first; falls back to all. */
-  private focus(parent: Candidate, minibatch: Input[]): InputGrades[] {
+  private focus(parent: Candidate, minibatch: Test[]): InputGrades[] {
     const batch = new Set(minibatch);
-    const matched = parent.scorecard.perInput.filter((pi) => batch.has(pi.input));
+    const matched = parent.scorecard.perInput.filter((pi) => batch.has(pi.test));
     const focus = matched.length > 0 ? matched : [...parent.scorecard.perInput];
     return [...focus]
       .sort((a, b) => inputObjective(a.grades) - inputObjective(b.grades))
@@ -253,7 +253,7 @@ export class Gepa extends BaseOptimizer {
     iter: number | "baseline",
     ws: CachePartition,
     targetSet: OptimizeTargetSet,
-    inputs: Input[],
+    inputs: Test[],
     files: Record<string, string>,
   ): Promise<Candidate> {
     const scorecard = await this.evaluate(ws, targetSet, files, inputs);

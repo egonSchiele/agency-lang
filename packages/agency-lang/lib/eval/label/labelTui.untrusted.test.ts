@@ -8,12 +8,12 @@ import { Screen } from "@/tui/screen.js";
 import { labelScreen, renderFields, sanitizeUntrusted } from "./labelTui.js";
 import type { SessionSnapshot } from "./session.js";
 
-const OUTPUT_ID = `out_${"a".repeat(64)}`;
+const TRACE_ID = "trace-1";
 const ESC = "\x1b";
 const BEL = "\x07";
 
 function snapshot(over: Partial<SessionSnapshot> = {}): SessionSnapshot {
-  const item = { outputId: OUTPUT_ID, fields: { task: "a task", output: "some output" } };
+  const item = { traceId: TRACE_ID, fields: { input: "a task", output: "some output" } };
   return {
     items: [item],
     itemIndex: 0,
@@ -24,8 +24,8 @@ function snapshot(over: Partial<SessionSnapshot> = {}): SessionSnapshot {
     answers: {},
     note: "",
     editor: { kind: "none" },
-    statuses: { [OUTPUT_ID]: "untouched" },
-    scores: { [OUTPUT_ID]: null },
+    statuses: { [TRACE_ID]: "untouched" },
+    scores: { [TRACE_ID]: null },
     progress: { reviewed: 0, total: 1, stale: 0 },
     canSignOff: true,
     hasStagedQuestions: false,
@@ -44,10 +44,7 @@ function frameCells(over: Partial<SessionSnapshot> = {}, body?: string[]): strin
   // Default to the body the loop would actually build, so a field's own
   // rendering path is covered rather than a stand-in string.
   const bodyLines =
-    body ??
-    (state.currentItem === null
-      ? []
-      : renderFields(state.currentItem.fields, ["task", "output"], 100));
+    body ?? (state.currentItem === null ? [] : renderFields(state.currentItem.fields, 100));
   const recorder = new FrameRecorder();
   const screen = new Screen({
     input: new ScriptedInput(),
@@ -58,7 +55,7 @@ function frameCells(over: Partial<SessionSnapshot> = {}, body?: string[]): strin
   screen.render(
     labelScreen({
       snapshot: state,
-      datasetLabel: "labels",
+      title: "run-1",
       width: 100,
       height: 30,
       scroll: 0,
@@ -109,8 +106,8 @@ describe("sanitizeUntrusted", () => {
 });
 
 describe("untrusted content never reaches the frame raw", () => {
-  it("sanitizes a hostile task field", () => {
-    const hostile = { outputId: OUTPUT_ID, fields: { task: `safe${ESC}[2Jhidden`, output: "x" } };
+  it("sanitizes a hostile input field", () => {
+    const hostile = { traceId: TRACE_ID, fields: { input: `safe${ESC}[2Jhidden`, output: "x" } };
     expect(frameCells({ currentItem: hostile, items: [hostile] })).not.toContain(ESC);
   });
 
@@ -146,20 +143,20 @@ describe("untrusted content never reaches the frame raw", () => {
     expect(frameCells({ note: "{bg-red}alarming{/bg-red}" })).toContain("{bg-red}alarming");
   });
 
-  it("escapes style tags in a hostile task field", () => {
-    const hostile = { outputId: OUTPUT_ID, fields: { task: "{black-fg}hidden", output: "x" } };
+  it("escapes style tags in a hostile input field", () => {
+    const hostile = { traceId: TRACE_ID, fields: { input: "{black-fg}hidden", output: "x" } };
     expect(frameVisible({ currentItem: hostile, items: [hostile] })).toContain("{black-fg}hidden");
   });
 
   it("escapes style tags in a hostile output field", () => {
-    const hostile = { outputId: OUTPUT_ID, fields: { task: "t", output: "{bg-red}alarming" } };
+    const hostile = { traceId: TRACE_ID, fields: { input: "t", output: "{bg-red}alarming" } };
     expect(frameVisible({ currentItem: hostile, items: [hostile] })).toContain("{bg-red}alarming");
   });
 
   it("renders a field name as a header without letting a value forge one", () => {
     // Field names come from a charset that cannot express markup, so the only
-    // way a header can appear is if the dataset put it there.
-    const hostile = { outputId: OUTPUT_ID, fields: { output: "not_a_field:\nfaked" } };
+    // way a header can appear is if the trace put it there.
+    const hostile = { traceId: TRACE_ID, fields: { output: "not_a_field:\nfaked" } };
     const text = frameVisible({ currentItem: hostile, items: [hostile] });
     expect(text).toContain("output:");
     expect(text).toContain("not_a_field:");

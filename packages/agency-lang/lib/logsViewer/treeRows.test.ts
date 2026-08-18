@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { renderViewerLines, flattenVisibleRows, colorFor, wrapLine } from "./treeRows.js";
+import {
+  renderViewerLines,
+  flattenVisibleRows,
+  colorFor,
+  renderRowText,
+  wrapLine,
+} from "./treeRows.js";
 import { TreeNode, ViewerState } from "./types.js";
 import { color } from "@/utils/termcolors.js";
 
@@ -309,5 +315,24 @@ describe("colorFor", () => {
 
   it("returns undefined for unrecognized labels", () => {
     expect(colorFor(span("x", "weird"))).toBeUndefined();
+  });
+});
+
+describe("trace annotations", () => {
+  it("appends the run directory's summary to the trace row, and only there", () => {
+    const roots = [trace([span("a", "llm")])];
+    const rows = flattenVisibleRows(baseState(roots, ["trace-t"]));
+    const annotations = { t: "2 notes · score 0.70 · labeled" };
+    const traceLine = renderRowText(rows[0], false, true, { traceAnnotations: annotations });
+    const spanLine = renderRowText(rows[1], false, false, { traceAnnotations: annotations });
+    expect(traceLine).toContain("2 notes · score 0.70 · labeled");
+    expect(spanLine).not.toContain("2 notes");
+  });
+
+  it("leaves the trace row alone when the directory has nothing to say", () => {
+    const roots = [trace([])];
+    const rows = flattenVisibleRows(baseState(roots));
+    const plain = renderRowText(rows[0], false, false, {});
+    expect(renderRowText(rows[0], false, false, { traceAnnotations: {} })).toBe(plain);
   });
 });

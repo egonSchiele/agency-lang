@@ -19,11 +19,15 @@ export type EvalRunnerJob =
       kind: "file";
       compiledEntryPath: string;
       node: string;
-      task: string | Record<string, any>;
+      input: string | Record<string, any>;
       cwd: string;
       statelogPath: string;
       /** Identity of the seeded agent code, recorded on the trace's agentStart. */
       code: CodeIdentity;
+      /** The trace id the child adopts, minted by the harness so the run
+       *  directory can key the workdir and the run row before the child
+       *  writes a byte. */
+      traceId: string;
     }
   | { kind: "command"; argv: string[]; cwd: string; statelogPath: string; traceId: string };
 
@@ -127,10 +131,11 @@ export function makeSubprocessRunner(
     return runCompiledAgentInSubprocess({
       compiledPath: job.compiledEntryPath,
       node: job.node,
-      task: job.task,
+      input: job.input,
       cwd: job.cwd,
       statelogPath: job.statelogPath,
       code: job.code,
+      traceId: job.traceId,
       pipeAgentOutput,
       limits,
       maxCostUsd,
@@ -141,10 +146,11 @@ export function makeSubprocessRunner(
 async function runCompiledAgentInSubprocess(args: {
   compiledPath: string;
   node: string;
-  task: string | Record<string, any>;
+  input: string | Record<string, any>;
   cwd: string;
   statelogPath: string;
   code: CodeIdentity;
+  traceId: string;
   pipeAgentOutput: boolean;
   limits: RunLimits;
   maxCostUsd: number;
@@ -154,12 +160,14 @@ async function runCompiledAgentInSubprocess(args: {
   const instruction = buildRunInstruction({
     scriptPath: args.compiledPath,
     node: args.node,
-    task: args.task,
+    input: args.input,
     limits,
     configOverrides: {
       observability: true,
       log: { logFile: args.statelogPath, code: args.code },
     },
+    // The child adopts this as its run id, which is its trace id.
+    identity: { runId: args.traceId },
   });
 
   return new Promise((resolve) => {

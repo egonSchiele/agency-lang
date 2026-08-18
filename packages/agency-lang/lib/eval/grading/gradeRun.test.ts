@@ -1,99 +1,20 @@
 import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import type { EvalRunInputResult, Input } from "@/eval/runTypes.js";
+import { writeRunDirectory, type FakeRun } from "@/eval/runDirectoryFixture.js";
+import type { Test } from "@/eval/runTypes.js";
+import { recordNote } from "@/runDirectory/mutations.js";
+import { readRunDirectory } from "@/runDirectory/runDir.js";
 
 import { AgencyRunner } from "./agencyRunner.js";
 import { grader } from "./functionGrader.js";
 import { gradeRun, type GradingContext } from "./gradeRun.js";
 
-const dirs: string[] = [];
-afterEach(() => {
-  // Raw rmSync, not safeDelete: these are mkdtemp paths outside any project
-  // root, which safeDelete refuses by design. Same reasoning as runArtifacts.ts.
-  for (const tempDir of dirs.splice(0)) {
-    fs.rmSync(tempDir, { recursive: true, force: true });
-  }
-});
+const capital: Test = { id: "a", goal: "name the capital", input: "t", expected: "New Delhi" };
 
-/** A minimal eval record with `outputs` as its evalOutputs. */
-function recordJson(outputs: unknown[]): string {
-  return globalThis.JSON.stringify({
-    traceId: "t",
-    recordVersion: 2,
-    formatVersion: 1,
-    durationMs: 1,
-    source: "s",
-    evalValues: [],
-    evalOutputs: outputs.map((value) => ({ value, threadId: "0", tMs: 1 })),
-    threads: [],
-    events: [],
-    interrupts: [],
-    errors: [],
-    incomplete: [],
-    metrics: {
-      llmCalls: 1,
-      toolStarts: 0,
-      toolEnds: 0,
-      models: [],
-      tokensInTotal: 0,
-      tokensOutTotal: 0,
-      costUsdTotal: 0.01,
-      toolCounts: {},
-    },
-    warnings: [],
-  });
-}
-
-type Fixture = { runDir: string; result: EvalRunInputResult; input: Input };
-
-/**
- * A run directory for one input, laid out exactly as `agency eval run` writes it.
- * `output === undefined` means the agent produced nothing; `status: "error"`
- * means the run failed and no eval record was written at all.
- */
-function makeRun(args: { id: string; output?: unknown; status?: "success" | "error" }): Fixture {
-  const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "grade-run-"));
-  dirs.push(runDir);
-  const inputDir = path.join(runDir, "inputs", args.id);
-  const workdir = path.join(inputDir, "workdir");
-  fs.mkdirSync(workdir, { recursive: true });
-  fs.mkdirSync(path.join(inputDir, "agent"), { recursive: true });
-
-  const status = args.status ?? "success";
-  const recordPath = path.join(inputDir, "agent", "eval-record.json");
-  if (status === "success") {
-    fs.writeFileSync(recordPath, recordJson(args.output === undefined ? [] : [args.output]));
-  } else {
-    fs.writeFileSync(path.join(inputDir, "error.txt"), "boom");
-  }
-
-  const input: Input = { id: args.id, goal: "name the capital", task: "t", expected: "New Delhi" };
-  fs.writeFileSync(path.join(inputDir, "input.json"), globalThis.JSON.stringify(input));
-
-  const result: EvalRunInputResult = {
-    inputId: args.id,
-    status,
-    evalRecordPath: recordPath,
-    statelogPath: path.join(inputDir, "agent", "statelog.jsonl"),
-    workdirPath: workdir,
-    errorMessage: status === "error" ? "boom" : undefined,
-  };
-  fs.writeFileSync(
-    path.join(runDir, "summary.json"),
-    globalThis.JSON.stringify({
-      runId: "r",
-      runDir,
-      agentLabel: "a:main",
-      inputs: [result],
-      okCount: status === "success" ? 1 : 0,
-      errorCount: status === "error" ? 1 : 0,
-    }),
-  );
-  return { runDir, result, input };
+function makeRun(run: Omit<FakeRun, "test"> & { test?: Test }): string {
+  return writeRunDirectory([{ test: capital, workdirFiles: { "note.txt": "x" }, ...run }]);
 }
 
 function ctx(graders: ReturnType<typeof grader>[]): GradingContext {
@@ -104,9 +25,9 @@ function ctx(graders: ReturnType<typeof grader>[]): GradingContext {
   };
 }
 
-describe("grading one input (through gradeRun on a suite of one)", () => {
-  it("gives a grader the output, workdir, and parsed record", async () => {
-    const { runDir } = makeRun({ id: "a", output: "New Delhi" });
+describe("grading one trace (through gradeRun on a directory of one)", () => {
+  it("gives a grader the output, workdir, and computed record", async () => {
+    const runDir = makeRun({ output: "New Delhi", costUsd: 0.01 });
     let seen: { output?: unknown; workdir?: string; record?: any } = {};
     const spy = grader(
       (context) => {
@@ -125,7 +46,7 @@ describe("grading one input (through gradeRun on a suite of one)", () => {
   });
 
   it("runs mustPass gates before advisory graders and short-circuits on failure", async () => {
-    const { runDir } = makeRun({ id: "a", output: "x" });
+    const runDir = makeRun({ output: "x" });
     const order: string[] = [];
     const gate = grader(
       () => {
@@ -150,35 +71,80 @@ describe("grading one input (through gradeRun on a suite of one)", () => {
 });
 
 describe("gradeRun", () => {
-  it("scores an errored input 0 and marks it gate-failed, with no eval record on disk", async () => {
-    const { runDir } = makeRun({ id: "a", status: "error" });
-    const never = grader(() => 1, { name: "never-runs" });
+  it("carries the notes people left on a trace alongside its grades", async () => {
+    const runDir = makeRun({ output: "New Delhi" });
+    recordNote({
+      dir: runDir,
+      traceId: "trace-1",
+      annotator: { kind: "human", id: "adit" },
+      text: "too slow",
+    });
+    const card = await gradeRun(runDir, ctx([grader(() => 1, { name: "g" })]));
+    expect(card.perInput[0].humanFeedback).toEqual({
+      notes: ["too slow"],
+      checked: [],
+      unchecked: [],
+    });
+  });
 
-    const card = await gradeRun(runDir, ctx([never]));
+  it("scores a run the harness marked as errored 0, gate-failed, without showing it to graders", async () => {
+    const runDir = makeRun({ output: "plausible answer", ended: "error", errorMessage: "boom" });
+    let graderRan = false;
+    const spy = grader(
+      () => {
+        graderRan = true;
+        return 1;
+      },
+      { name: "spy" },
+    );
 
+    const card = await gradeRun(runDir, ctx([spy]));
+
+    expect(graderRan).toBe(false);
     expect(card.objective()).toBe(0);
     expect(card.gatesPassed()).toBe(false);
-    expect(card.perInput[0].ungradedReason).toMatch(/errored/i);
+    expect(card.perInput[0].ungradedReason).toMatch(/ended with error: boom/);
   });
 
-  it("scores an input with an unreadable eval record 0 instead of throwing", async () => {
-    const { runDir, result } = makeRun({ id: "a", output: "hello" });
-    fs.writeFileSync(result.evalRecordPath, "{ this is not json");
-    const never = grader(() => 1, { name: "never-runs" });
+  it("scores a run killed at the wall clock 0 — the harness verdict beats the trace's own ending", async () => {
+    // The trace itself ended cleanly (agentEnd with a result), but the harness
+    // says it was killed; the harness knows more.
+    const runDir = makeRun({ output: "done", ended: "timeout" });
+    const card = await gradeRun(runDir, ctx([grader(() => 1, { name: "never-runs" })]));
+    expect(card.perInput[0].ungradedReason).toMatch(/timeout/);
+  });
 
-    // The mirror of the missing-record case: one corrupt file must not take down a
-    // whole pass whose agents have already run and been paid for.
-    const card = await gradeRun(runDir, ctx([never]));
+  it("a test that died before its first event still counts: scored 0 beside its successful neighbour", async () => {
+    const runDir = writeRunDirectory([
+      { test: { ...capital, id: "ok" }, output: "New Delhi" },
+      {
+        test: { ...capital, id: "never-started" },
+        wroteStatelog: false,
+        ended: "error",
+        errorMessage: "compile failed",
+      },
+    ]);
+    const card = await gradeRun(runDir, ctx([grader(() => 1, { name: "one" })]));
+    expect(card.perInput.map((entry) => entry.test.id).sort()).toEqual(["never-started", "ok"]);
+    expect(card.objective()).toBe(0.5);
+    expect(card.gatesPassed()).toBe(false);
+    const dead = card.perInput.find((entry) => entry.test.id === "never-started");
+    expect(dead?.ungradedReason).toMatch(/no trace.*error: compile failed/);
+  });
 
+  it("a suite where every test died before its first event does not pass gates vacuously", async () => {
+    const runDir = writeRunDirectory([{ test: capital, wroteStatelog: false, ended: "timeout" }]);
+    const card = await gradeRun(runDir, ctx([grader(() => 1, { name: "one" })]));
+    expect(card.perInput).toHaveLength(1);
+    expect(card.gatesPassed()).toBe(false);
     expect(card.objective()).toBe(0);
-    expect(card.perInput[0].ungradedReason).toMatch(/unreadable/i);
   });
 
-  it("a record with no output still grades, with output null — the deliverable may be the filesystem", async () => {
+  it("a trace with no output still grades, with output null — the deliverable may be the filesystem", async () => {
     // Command agents (agency CLI under --agent-cmd) emit no output event;
     // terminal-bench-style graders read the workdir, not the reply. A real
     // agent once PASSED a task and was scored ungraded over this.
-    const { runDir } = makeRun({ id: "a" }); // record present, evalOutputs empty
+    const runDir = makeRun({});
     let sawOutput: unknown = "unset";
     const disk = grader(
       ({ output }) => {
@@ -195,43 +161,14 @@ describe("gradeRun", () => {
     expect(sawOutput).toBeNull();
   });
 
-  it("distinguishes a lost eval record from a failed agent run", async () => {
-    const { runDir, result } = makeRun({ id: "a", output: "hello" });
-    fs.rmSync(result.evalRecordPath);
-    const never = grader(() => 1, { name: "never-runs" });
-
-    const card = await gradeRun(runDir, ctx([never]));
-
-    expect(card.perInput[0].ungradedReason).toMatch(/no eval record/i);
-  });
-
-  it("never grades an errored run, even when a salvaged record with a plausible output exists", async () => {
-    const { runDir, result } = makeRun({ id: "a", status: "error" });
-    fs.writeFileSync(result.evalRecordPath, recordJson(["plausible answer"]));
-    let graderRan = false;
-    const spy = grader(
-      () => {
-        graderRan = true;
-        return 1;
-      },
-      { name: "spy" },
-    );
-
-    const card = await gradeRun(runDir, ctx([spy]));
-
-    expect(graderRan).toBe(false);
-    expect(card.objective()).toBe(0);
-    expect(card.perInput[0].ungradedReason).toMatch(/agent run errored/);
-  });
-
-  it("reads the input spec from the run directory, so goal and expected survive", async () => {
-    const { runDir } = makeRun({ id: "a", output: "hello" });
+  it("reads the test from the run row, so goal and expected survive", async () => {
+    const runDir = makeRun({ output: "hello" });
     let seenGoal: unknown = "not-read";
     let seenExpected: unknown = "not-read";
     const spy = grader(
-      ({ input }) => {
-        seenGoal = input.goal;
-        seenExpected = input.expected;
+      ({ test }) => {
+        seenGoal = test.goal;
+        seenExpected = test.expected;
         return 1;
       },
       { name: "spy" },
@@ -241,5 +178,24 @@ describe("gradeRun", () => {
 
     expect(seenGoal).toBe("name the capital");
     expect(seenExpected).toBe("New Delhi");
+  });
+
+  it("grades an ad-hoc trace with no run row by its own ending, as a test named by its trace id", async () => {
+    const runDir = makeRun({ output: "hello", traceId: "adhoc" });
+    // Strip the run row: the directory is now just a statelog.
+    const { annotations } = { annotations: `${runDir}/annotations.jsonl` };
+    fs.rmSync(annotations);
+    expect(readRunDirectory(runDir, { reportWarning: () => {} }).annotationRows).toEqual([]);
+    let seenId: string | undefined;
+    const spy = grader(
+      ({ test }) => {
+        seenId = test.id;
+        return 1;
+      },
+      { name: "spy" },
+    );
+    const card = await gradeRun(runDir, ctx([spy]));
+    expect(seenId).toBe("adhoc");
+    expect(card.objective()).toBe(1);
   });
 });

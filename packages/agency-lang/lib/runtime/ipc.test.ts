@@ -967,30 +967,30 @@ describe("handleChildMessage oversize handling", () => {
 
 describe("resolveNodeCallArgs", () => {
   it("delivers a string task to a one-parameter node, whatever the parameter is named", () => {
-    expect(resolveNodeCallArgs({ node: "main", args: {}, task: "do it" }, ["prompt"])).toEqual({
+    expect(resolveNodeCallArgs({ node: "main", args: {}, input: "do it" }, ["prompt"])).toEqual({
       args: ["do it"],
     });
   });
 
   it("delivers an object task as the single argument", () => {
     const task = { rows: [1, 2], mode: "fast" };
-    expect(resolveNodeCallArgs({ node: "main", args: {}, task }, ["data"])).toEqual({
+    expect(resolveNodeCallArgs({ node: "main", args: {}, input: task }, ["data"])).toEqual({
       args: [task],
     });
   });
 
   it("errors when the node takes no parameters", () => {
-    const result = resolveNodeCallArgs({ node: "main", args: {}, task: "t" }, []);
+    const result = resolveNodeCallArgs({ node: "main", args: {}, input: "t" }, []);
     expect(result).toMatchObject({ error: expect.stringContaining("takes none") });
   });
 
   it("errors when the node takes more than one parameter, naming them", () => {
-    const result = resolveNodeCallArgs({ node: "main", args: {}, task: "t" }, ["a", "b"]);
+    const result = resolveNodeCallArgs({ node: "main", args: {}, input: "t" }, ["a", "b"]);
     expect(result).toMatchObject({ error: expect.stringContaining("takes 2 (a, b)") });
   });
 
   it("rejects an instruction carrying both task and args", () => {
-    const result = resolveNodeCallArgs({ node: "main", args: { x: 1 }, task: "t" }, ["x"]);
+    const result = resolveNodeCallArgs({ node: "main", args: { x: 1 }, input: "t" }, ["x"]);
     expect(result).toMatchObject({ error: expect.stringContaining("mutually exclusive") });
   });
 

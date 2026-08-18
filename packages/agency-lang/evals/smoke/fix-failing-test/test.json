@@ -1,5 +1,5 @@
 {
   "goal": "stats.cjs is fixed so that `node test.cjs` exits 0, with test.cjs left unmodified.",
-  "task": "The file stats.cjs in your current working directory has a bug. Its test suite, test.cjs, does not pass.\n\nRun `node test.cjs` to see the failures, fix stats.cjs so that every case passes, and confirm the suite passes before you finish.\n\nDo not edit test.cjs — fix the code under test, not the test.",
+  "input": "The file stats.cjs in your current working directory has a bug. Its test suite, test.cjs, does not pass.\n\nRun `node test.cjs` to see the failures, fix stats.cjs so that every case passes, and confirm the suite passes before you finish.\n\nDo not edit test.cjs — fix the code under test, not the test.",
   "timeoutSec": 300
 }

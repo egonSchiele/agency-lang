@@ -1,5 +1,5 @@
 import { aggregateGrades } from "./aggregate.js";
-import type { Grade, GraderInput, GraderOptions, Input } from "./types.js";
+import type { Grade, GraderInput, GraderOptions, Test } from "./types.js";
 
 /**
  * Base class for graders. Authors implement the single-shot `_run`; the base
@@ -7,6 +7,19 @@ import type { Grade, GraderInput, GraderOptions, Input } from "./types.js";
  */
 export abstract class BaseGrader {
   constructor(protected readonly options: GraderOptions = {}) {}
+
+  /** Who this grader is, by revision, for the score rows it writes: a module
+   *  grader is `<path>@<sha256 of the file>` (set by loadGradingModule), so
+   *  editing the module in place is a new annotator; the bundled goal judge is
+   *  `goal-judge@<hash of its prompt file>`; anything else constructed in
+   *  process is `inline:<name>`. */
+  annotator(): { kind: "grader" | "judge"; id: string } {
+    if (this.revision !== undefined) return { kind: "grader", id: this.revision };
+    return { kind: "grader", id: `inline:${this.name()}` };
+  }
+
+  /** @internal Set by loadGradingModule on every grader a module exports. */
+  revision?: string;
 
   /** Subclasses set a default; `options.name` overrides it. */
   protected abstract readonly defaultName: string;
@@ -21,7 +34,7 @@ export abstract class BaseGrader {
 
   /** Pre-flight check against an input before the run. Default: nothing to check.
    *  Match-based graders override this to fail fast on an unresolved matchOn. */
-  validateInput(_input: Input): void {
+  validateInput(_input: Test): void {
     /* no-op */
   }
 
@@ -37,7 +50,7 @@ export abstract class BaseGrader {
   }
 
   /** Whether this grader runs on `input`. Default (no inputScope) → every input. */
-  gradesInput(input: Input): boolean {
+  gradesInput(input: Test): boolean {
     const scope = this.options.inputScope;
     if (!scope) return true;
     if ("tag" in scope) {

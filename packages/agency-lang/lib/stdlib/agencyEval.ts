@@ -5,10 +5,9 @@ import { StatelogParser } from "../eval/statelogParser.js";
 import type { EvalRecord } from "../eval/types.js";
 
 /**
- * Stdlib binding for `eval extract`. Reads a JSONL statelog at
- * `statelogPath` and returns the structured EvalRecord that
- * `agency eval extract` would write. Composes the existing extractor
- * pipeline; no separate logic here.
+ * Stdlib binding: reads a JSONL statelog at `statelogPath` and returns its
+ * structured EvalRecord (the eval record is a view of the statelog, never a
+ * file). Composes the existing extractor pipeline; no separate logic here.
  */
 export async function _evalExtract(statelogPath: string): Promise<EvalRecord> {
   return new StatelogParser(statelogPath).evalRecord();

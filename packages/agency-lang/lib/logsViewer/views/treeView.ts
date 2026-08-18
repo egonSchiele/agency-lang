@@ -20,22 +20,41 @@ import type { ViewerThresholds } from "../thresholds.js";
 import type { TreeNode, ViewerState } from "../types.js";
 import type { View, ViewAction, Viewport } from "./view.js";
 
+export type TreeViewOptions = {
+  /** When true, `x` extracts the focused trace to a file of its own. Off for
+   *  remote or stdin sources, where there is no local file to read it from. */
+  extractEnabled?: boolean;
+  /** One line per trace id, shown after the trace's own summary: what the
+   *  run directory's annotations say about it ("2 notes · score 0.70 · labeled"). */
+  traceAnnotations?: Record<string, string>;
+  /** Start with the cursor on this trace, when it is in the forest. */
+  focusTraceId?: string;
+};
+
 export class TreeView implements View {
   readonly viewName = "tree" as const;
   private state: ViewerState;
+  private readonly extractEnabled: boolean;
+  private readonly traceAnnotations: Record<string, string>;
 
   constructor(
     roots: TreeNode[],
     private readonly thresholds: ViewerThresholds,
     private readonly viewport: Viewport,
-    /** When true, `l` labels the focused trace instead of     *  expanding the focused node (Right/Enter still expand). Off for remote or
-     *  stdin sources where there is no local file to label. */
-    private readonly labelingEnabled: boolean = false,
+    options: TreeViewOptions = {},
   ) {
+    this.extractEnabled = options.extractEnabled ?? false;
+    this.traceAnnotations = options.traceAnnotations ?? {};
+    // Start on the trace the caller asked for, else the first. That trace
+    // opens expanded when it was asked for by id or is the only one; a
+    // multi-trace log with no focus opens with every trace collapsed.
+    const focused = roots.find((root) => root.traceId === options.focusTraceId);
+    const start = focused ?? roots[0];
+    const startExpanded = focused !== undefined || roots.length === 1;
     this.state = {
       roots,
-      expanded: new Set(roots.length === 1 ? [roots[0].id] : []),
-      cursorId: roots[0]?.id ?? "",
+      expanded: new Set(startExpanded && start !== undefined ? [start.id] : []),
+      cursorId: start?.id ?? "",
       scrollTop: 0,
       quit: false,
       viewportCols: viewport.cols,
@@ -54,13 +73,13 @@ export class TreeView implements View {
       const id = this.cursorRealId();
       if (id !== undefined) return { kind: "openDetail", spanId: id };
     }
-    // `l` labels the focused trace when a dataset is configured. Right/Enter
-    // still expand, so no expand key is lost. Only fire with a real trace id —
-    // an empty forest (e.g. an empty file under --follow) has none.
-    if (fmt === "l" && this.labelingEnabled) {
+    // `x` extracts the focused trace when the source is a local file. Only fire
+    // with a real trace id — an empty forest (an empty file under --follow) has
+    // none.
+    if (fmt === "x" && this.extractEnabled) {
       const traceId = this.cursorTraceId();
       if (traceId !== "") {
-        return { kind: "labelTrace", traceId };
+        return { kind: "extractTrace", traceId };
       }
     }
     const paged = this.paginate(ev, viewport);
@@ -103,6 +122,7 @@ export class TreeView implements View {
           renderRowText(vrow, isCursor, state.expanded.has(vrow.node.id), {
             query: state.query,
             thresholds: this.thresholds,
+            traceAnnotations: this.traceAnnotations,
           }),
           fg ? { fg } : undefined,
         );
@@ -125,12 +145,10 @@ export class TreeView implements View {
   }
 
   helpLines(): string[] {
-    // `l` labels the focused trace when a dataset is configured; it does nothing
-    // otherwise. It never expands — Right/Enter do that.
     return [
       "t — timeline views (flame → by-name)",
       "d — full details of the focused span",
-      ...(this.labelingEnabled ? ["l — label this trace"] : []),
+      ...(this.extractEnabled ? ["x — extract this trace to a file"] : []),
       "",
       ...treeHelpLines(),
     ];

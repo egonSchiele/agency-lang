@@ -1,21 +1,15 @@
-import * as path from "path";
-import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";
 import * as fs from "fs";
-
-import { nanoid } from "nanoid";
+import * as path from "path";
 
 import type { EvalTarget } from "@/agentTarget.js";
 import type { AgencyConfig } from "@/config.js";
+import { extractEvalRecord } from "@/eval/extract.js";
 import type { EvalRecord } from "@/eval/types.js";
+import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";
+import { readTraces } from "@/runDirectory/traces.js";
 
-import { substituteTask } from "./commandLine.js";
-import {
-  agentRunPaths,
-  makeEvalRecordExtractor,
-  shouldExtractStatelog,
-  type AgentRunPaths,
-  type EvalRecordExtractor,
-} from "./extract.js";
+import { substituteInput } from "./commandLine.js";
+import { agentRunPaths, hasStatelog, type AgentRunPaths } from "./extract.js";
 import {
   applyOverlay,
   commandFilesToCopy,
@@ -35,10 +29,13 @@ import {
 } from "./subprocess.js";
 
 export type RunAgentOptions = {
-  /** The directory for THIS run — records land in <runDir>/agent/, the agent
-   *  executes in <runDir>/workdir/. A suite allocates one per input
-   *  (runs/<suiteId>/inputs/<inputId>/). */
+  /** The staging directory for THIS run — the statelog lands in
+   *  <runDir>/agent/, the agent executes in <runDir>/workdir/. A suite
+   *  allocates one per test and folds it into the run directory afterwards. */
   runDir: string;
+  /** The trace id the run adopts. The harness mints it so the run directory
+   *  can key the workdir and the run row even when the agent never starts. */
+  traceId: string;
   config: AgencyConfig;
   /** The test's fixture directory; contents land at the workdir root. */
   seedFiles?: string;
@@ -56,28 +53,31 @@ export type RunAgentOptions = {
    *  The optimizer sets false: it runs many agents and the interleaved
    *  output would be noise — the statelog keeps the evidence either way. */
   pipeOutput?: boolean;
-  /** How the statelog becomes the eval record. Defaults to
-   *  makeEvalRecordExtractor({ warnMissingValue: true }); see that factory
-   *  for why the optimizer passes warnMissingValue: false. Tests pass stubs. */
-  extractor?: EvalRecordExtractor;
-  /** The input's per-test wall-clock override, in seconds. */
+  /** The test's per-test wall-clock override, in seconds. */
   timeoutSec?: number;
 };
 
 /** Test seam: inject a fake in place of the subprocess fork. */
 export type RunAgentDeps = { runner?: EvalInputRunner };
 
+/** What one run left behind, for the suite to fold into the run directory:
+ *  the staged statelog (when the agent wrote one), the workdir, and the seeded
+ *  agent entry (file targets) whose closure hash the trace recorded. */
+export type AgentRunArtifacts = {
+  runDir: string;
+  workdir: string;
+  statelogPath: string | null;
+  seededAgentEntry: string | null;
+};
+
 export type AgentRun =
-  /** Ran and was recorded. `output` is a convenience copy of the record's
-   *  last eval output; the full evidence lives only on disk, at
-   *  <runDir>/agent/eval-record.json — the run directory is the interface
-   *  anything downstream (grading, reflection) reads. */
-  | { status: "success"; output: unknown; runDir: string; workdir: string }
-  /** Anything else: crashed, failed to seed/compile, the extractor blew up,
-   *  or the run left no record behind (a completed run always writes a
-   *  statelog, so its absence is a failure too). error.txt is on disk, and
-   *  a salvaged eval-record.json sits beside it when one was extractable. */
-  | { status: "error"; errorMessage: string; runDir: string; workdir: string };
+  /** Ran and left a statelog behind. `output` is the trace's last recorded
+   *  eval output; the statelog is the evidence anything downstream reads. */
+  | ({ status: "success"; output: unknown } & AgentRunArtifacts)
+  /** Anything else: crashed, failed to seed/compile, or the run left no
+   *  statelog behind (a completed run always writes one, so its absence is a
+   *  failure too). */
+  | ({ status: "error"; errorMessage: string } & AgentRunArtifacts);
 
 const MAX_LISTED_SEEDED_FILES = 50;
 
@@ -91,11 +91,11 @@ const MAX_LISTED_SEEDED_FILES = 50;
  */
 export async function runAgent(
   target: EvalTarget,
-  task: string | Record<string, any>,
+  input: string | Record<string, any>,
   options: RunAgentOptions,
   deps: RunAgentDeps = {},
 ): Promise<AgentRun> {
-  return new AgentRunner(target, task, options, deps).run();
+  return new AgentRunner(target, input, options, deps).run();
 }
 
 /** One run's worth of state — the paths, and what got seeded — so the steps
@@ -108,7 +108,7 @@ class AgentRunner {
 
   constructor(
     private readonly target: EvalTarget,
-    private readonly task: string | Record<string, any>,
+    private readonly input: string | Record<string, any>,
     private readonly options: RunAgentOptions,
     private readonly deps: RunAgentDeps,
   ) {
@@ -126,15 +126,14 @@ class AgentRunner {
     const result = await this.execute(compiledPath);
 
     if (!result.ok) {
-      await this.salvageRecord();
       return this.fail(this.withSeedListing(result.errorMessage));
     }
 
     let record: EvalRecord | undefined;
     try {
-      record = await this.extractRecord(result.statelogPath);
+      record = this.readRecord(result.statelogPath);
     } catch (err) {
-      return this.fail(`eval-record extraction failed: ${errMessage(err)}`);
+      return this.fail(`statelog could not be read: ${errMessage(err)}`);
     }
     if (record === undefined) {
       const commandHint =
@@ -143,28 +142,19 @@ class AgentRunner {
             "If the command is not an Agency CLI, it cannot produce the statelog eval requires."
           : "";
       return this.fail(
-        "run completed but produced no eval record: no statelog was written " +
-          "(or it landed somewhere unexpected), or the extractor wrote no record file." +
-          commandHint,
+        "run completed but wrote no statelog (or it landed somewhere unexpected)." + commandHint,
       );
     }
-    return {
-      status: "success",
-      output: lastOutput(record),
-      runDir: this.options.runDir,
-      workdir: this.paths.workdirPath,
-    };
+    return { status: "success", output: lastOutput(record), ...this.artifacts() };
   }
 
-  /** Best-effort: write the salvaged eval record to disk, so a crash after
-   *  useful work keeps its evidence for diagnosis. Never affects the result —
-   *  an errored run scores zero regardless. */
-  private async salvageRecord(): Promise<void> {
-    try {
-      await this.extractRecord(undefined);
-    } catch (err) {
-      console.warn(`salvage extraction failed for ${this.options.runDir}: ${errMessage(err)}`);
-    }
+  private artifacts(): AgentRunArtifacts {
+    return {
+      runDir: this.options.runDir,
+      workdir: this.paths.workdirPath,
+      statelogPath: hasStatelog(this.paths.statelogPath) ? this.paths.statelogPath : null,
+      seededAgentEntry: this.seededAgentEntry,
+    };
   }
 
   /** Put every needed file in place and, for file targets, compile the agent
@@ -208,8 +198,8 @@ class AgentRunner {
     const cwd = this.paths.workdirPath;
     const statelogPath = this.paths.statelogPath;
     if (this.target.kind === "command") {
-      const argv = substituteTask(this.target.tokens, this.task);
-      return { kind: "command", argv, traceId: nanoid(), cwd, statelogPath };
+      const argv = substituteInput(this.target.tokens, this.input);
+      return { kind: "command", argv, traceId: this.options.traceId, cwd, statelogPath };
     }
     if (compiledEntryPath === null || this.seededAgentEntry === null) {
       throw new Error("A file target must be seeded and compiled before its job is built.");
@@ -218,10 +208,11 @@ class AgentRunner {
       kind: "file",
       compiledEntryPath,
       node: this.target.node,
-      task: this.task,
+      input: this.input,
       cwd,
       statelogPath,
       code: computeCodeIdentity(this.seededAgentEntry),
+      traceId: this.options.traceId,
     };
   }
 
@@ -240,54 +231,44 @@ class AgentRunner {
         : makeSubprocessRunner(pipeOutput, limits, maxCostUsd)(job);
   }
 
-  /** Distill the statelog into the eval record. Undefined when there is
-   *  nothing to extract (no/empty statelog, or the extractor wrote no record
-   *  file); throws when the extractor itself blows up — a bug in the
-   *  extractor, not in the input. */
-  private async extractRecord(
-    runnerStatelogPath: string | undefined,
-  ): Promise<EvalRecord | undefined> {
+  /** The eval record for the run's trace, read from the statelog. Undefined
+   *  when there is nothing to read (no/empty statelog); throws when the
+   *  statelog cannot be parsed into a trace at all. */
+  private readRecord(runnerStatelogPath: string | undefined): EvalRecord | undefined {
     const statelogPath = this.adoptStatelogFallback(runnerStatelogPath);
-    if (!shouldExtractStatelog(statelogPath)) {
+    if (!hasStatelog(statelogPath)) {
       return undefined;
     }
-    const extractor = this.options.extractor ?? makeEvalRecordExtractor({ warnMissingValue: true });
-    await extractor({ statelogPath, outPath: this.paths.evalRecordPath });
-    if (!fs.existsSync(this.paths.evalRecordPath)) {
+    const { traces } = readTraces(statelogPath);
+    const trace = traces.find((entry) => entry.traceId === this.options.traceId) ?? traces[0];
+    if (trace === undefined) {
       return undefined;
     }
-    return JSON.parse(fs.readFileSync(this.paths.evalRecordPath, "utf8")) as EvalRecord;
+    return extractEvalRecord(trace.events, statelogPath);
   }
 
   /** Some runtimes write the statelog into the workdir under a default name;
-   *  adopt it at the expected location so extraction finds it. */
+   *  adopt it at the expected location so the run directory finds it. */
   private adoptStatelogFallback(runnerStatelogPath: string | undefined): string {
     const expected = this.paths.statelogPath;
     if (runnerStatelogPath !== undefined && runnerStatelogPath !== expected) {
-      if (shouldExtractStatelog(runnerStatelogPath)) {
+      if (hasStatelog(runnerStatelogPath)) {
         fs.copyFileSync(runnerStatelogPath, expected);
       }
       return expected;
     }
-    if (shouldExtractStatelog(expected)) {
+    if (hasStatelog(expected)) {
       return expected;
     }
     const fallbackPath = `${this.paths.workdirPath}/statelog.log`;
-    if (shouldExtractStatelog(fallbackPath)) {
+    if (hasStatelog(fallbackPath)) {
       fs.copyFileSync(fallbackPath, expected);
     }
     return expected;
   }
 
   private fail(errorMessage: string): AgentRun {
-    fs.mkdirSync(this.paths.agentDir, { recursive: true });
-    fs.writeFileSync(this.paths.errorPath, errorMessage);
-    return {
-      status: "error",
-      errorMessage,
-      runDir: this.options.runDir,
-      workdir: this.paths.workdirPath,
-    };
+    return { status: "error", errorMessage, ...this.artifacts() };
   }
 
   /** Append what the workdir contained, so "the agent read a file nobody

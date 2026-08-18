@@ -21,17 +21,7 @@ import { OccurrencesView } from "./views/occurrencesView.js";
 import { TreeView } from "./views/treeView.js";
 import { makeViewStack, type ViewAction, type Viewport } from "./views/view.js";
 import type { TreeNode } from "./types.js";
-import { createLabelingHost } from "../eval/label/labelingHost.js";
-import type { TaskChoice } from "../eval/label/load/statelog.js";
-import { editTaskOnScreen } from "./taskEditor.js";
-import type { Annotator } from "../eval/label/types.js";
-import type { EventEnvelope } from "../statelog/wireTypes.js";
-import {
-  labelTrace,
-  labelTraceServices,
-  type LabelTraceOutcome,
-  type LabelTraceUI,
-} from "./labelTrace.js";
+import { findTrace, writeTraceFile } from "../runDirectory/extractTrace.js";
 
 export type RunViewerOpts = {
   // The statelog text. Optional when `followPath` is given — the shell
@@ -57,127 +47,57 @@ export type RunViewerOpts = {
   // resolution tells the host whether the user backed out or quit.
   embedded?: boolean;
   thresholds?: ViewerThresholds;
-  // Enables the tree `l` action: label the focused trace into this dataset.
-  // Undefined for remote or stdin sources (no local file).
-  labeling?: LabelTraceLaunch;
-};
-
-/** What the shell needs to label a focused trace into a dataset. */
-export type LabelTraceLaunch = {
-  datasetDir: string;
-  checklistFile?: string;
-  sourcePath: string;
-  annotator: Annotator;
+  // Enables the tree `x` action: extract the focused trace to a file of its
+  // own, read back from this local path. Undefined for remote or stdin sources.
+  extract?: { sourcePath: string };
+  // A run directory's annotations, one summary line per trace id, shown on
+  // each trace's row in the tree.
+  traceAnnotations?: Record<string, string>;
+  // Start with the cursor on this trace (the explorer drilling into a test).
+  focusTraceId?: string;
 };
 
 export type ViewerResolution = "quit" | "back";
 
-/** The batch name a labeled occurrence records: the trace's agent name if it
- *  set one, else the statelog file's basename. Keeps "did v2 beat v1"
- *  answerable without asking. */
-function traceSourceName(events: readonly EventEnvelope[], sourcePath: string): string {
-  // The LAST agentName wins, matching scanStatelog and the extractor: an agent
-  // may rename itself during a run, and headless ingestion records the last name.
-  let agentName: string | undefined;
-  for (const event of events) {
-    if (event.data.type === "agentName" && typeof event.data.name === "string") {
-      agentName = event.data.name;
-    }
-  }
-  if (agentName !== undefined) {
-    return agentName;
-  }
-  const base = sourcePath.split(/[\\/]/).pop();
-  return base !== undefined && base.length > 0 ? base : "statelog";
-}
-
-/** The labeling flow, factored out of `runViewer` so the shell stays small. It
- *  runs the labeling TUI on the viewer's own `screen`; the caller repaints
- *  afterwards. */
-async function runTraceLabeling(params: {
-  screen: Screen;
-  launch: LabelTraceLaunch;
-  traceId: string;
-  traceEvents: readonly EventEnvelope[];
-  notify: (message: string) => void;
-}): Promise<LabelTraceOutcome> {
-  const { screen, launch, traceId, traceEvents, notify } = params;
-  const host = createLabelingHost(screen, () => screen.size());
-  const ui: LabelTraceUI = {
-    editTask(defaultTask): Promise<TaskChoice | null> {
-      return editTaskOnScreen(screen, defaultTask);
-    },
-    notify,
-  };
-  return labelTrace(
-    {
-      traceId,
-      events: traceEvents,
-      sourceName: traceSourceName(traceEvents, launch.sourcePath),
-      sourcePath: launch.sourcePath,
-      datasetDir: launch.datasetDir,
-      annotator: launch.annotator,
-      checklistFile: launch.checklistFile,
-    },
-    ui,
-    labelTraceServices(host),
-  );
-}
-
-/** Follow watcher handle, named so the labeling handler can pause and resume it. */
+/** Follow watcher handle, named so the extract handler can pause and resume it. */
 type FollowWatcher = ReturnType<typeof makeFollowWatcher>;
 
 /**
- * The viewer's full label-a-trace flow, kept at module scope so `runViewer`
- * stays small: guard against a partially parsed statelog, pause follow so an
- * append cannot repaint over the labeling UI, run the labeling on the shared
- * screen, resume follow, repaint, and report.
+ * Extract the focused trace to a file: ask where (default `<traceId>.jsonl` in
+ * the working directory), re-read the trace from the source file so the copy
+ * is verbatim, and write it. Follow is paused during the prompt so an append
+ * cannot repaint over it.
  */
-async function handleTraceLabeling(args: {
+async function handleTraceExtract(args: {
   screen: Screen;
-  launch: LabelTraceLaunch;
+  sourcePath: string;
   traceId: string;
-  traceEvents: readonly EventEnvelope[];
-  parseErrorCount: number;
   following: boolean;
   watcher: FollowWatcher;
   onNewText: (text: string) => void;
   render: () => void;
   notify: (message: string) => void;
 }): Promise<void> {
-  if (args.parseErrorCount > 0) {
-    // Dataset ingestion must not be built from a partially parsed trace, even
-    // though the viewer tolerates malformed lines for display.
-    args.notify(
-      `Cannot label: the statelog has ${args.parseErrorCount} unparseable line(s); fix or regenerate it.`,
-    );
-    return;
-  }
-  if (args.traceEvents.length === 0) {
-    // The trace was truncated/rotated out of the file between focus and `l`.
-    args.notify("Cannot label: that trace is no longer in the file.");
-    return;
-  }
   if (args.following) {
     args.watcher.stop();
   }
-  let outcome: LabelTraceOutcome;
   try {
-    outcome = await runTraceLabeling({
-      screen: args.screen,
-      launch: args.launch,
-      traceId: args.traceId,
-      traceEvents: args.traceEvents,
-      notify: args.notify,
-    });
+    const answer = await args.screen.nextLine(`Write trace to [${args.traceId}.jsonl]: `);
+    const outPath = answer.trim().length === 0 ? `${args.traceId}.jsonl` : answer.trim();
+    const match = findTrace(args.sourcePath, args.traceId);
+    if (match.kind !== "one") {
+      args.notify("Cannot extract: that trace is no longer in the file.");
+      return;
+    }
+    writeTraceFile({ trace: match.trace, outPath, sourcePath: args.sourcePath });
+    args.notify(`Wrote ${match.trace.lines.length} events to ${outPath}.`);
+  } catch (error) {
+    args.notify(`Extract failed: ${(error as Error).message}`);
   } finally {
     if (args.following) {
       args.watcher.start(args.onNewText);
     }
-  }
-  args.render(); // the labeling TUI took over the screen; repaint on return
-  if (outcome.kind === "labeled") {
-    args.notify(`Labeled and stored (${outcome.outputId.slice(0, 12)}…).`);
+    args.render();
   }
 }
 
@@ -215,11 +135,12 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
 
   const thresholds = opts.thresholds ?? DEFAULT_THRESHOLDS;
   const viewport: Viewport = opts.viewport;
-  const treeView = new TreeView(roots, thresholds, viewport, opts.labeling !== undefined);
+  const treeView = new TreeView(roots, thresholds, viewport, {
+    extractEnabled: opts.extract !== undefined,
+    traceAnnotations: opts.traceAnnotations,
+    focusTraceId: opts.focusTraceId,
+  });
   const stack = makeViewStack(treeView);
-  // Kept alongside `roots` so a labeling can hand the trace's raw events to the
-  // resolver without re-reading the file.
-  let allEvents: readonly EventEnvelope[] = parsed.events;
   // The trace timeline views open on: fixed when flame opens from the tree.
   let timelineTraceId = treeView.cursorTraceId();
   let helpOpen = false;
@@ -230,10 +151,9 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
     // Update the parsed state unconditionally — including to an EMPTY forest.
     // A truncation/rotation to empty or malformed content must clear the views;
     // returning early here would leave the previous file's trace selectable, so
-    // `l` could label an output no longer in the file.
+    // `x` could extract a trace no longer in the file.
     const reparsed = parseStatelogJsonl(text);
     roots = buildForest(reparsed.events);
-    allEvents = reparsed.events;
     parseErrors = reparsed.errors;
     for (const view of stack.all()) view.setData(roots);
     render();
@@ -300,13 +220,11 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
       action.onResult(text);
     } else if (action.kind === "copy") {
       copyToClipboard(action.text, (message) => stack.active().notify(message));
-    } else if (action.kind === "labelTrace" && opts.labeling !== undefined) {
-      await handleTraceLabeling({
+    } else if (action.kind === "extractTrace" && opts.extract !== undefined) {
+      await handleTraceExtract({
         screen,
-        launch: opts.labeling,
+        sourcePath: opts.extract.sourcePath,
         traceId: action.traceId,
-        traceEvents: allEvents.filter((event) => event.trace_id === action.traceId),
-        parseErrorCount: parseErrors.length,
         following: followOn,
         watcher,
         onNewText,

@@ -4,19 +4,15 @@ import type { InputBreakdown } from "./grading/gradeBreakdown.js";
  *  here describes the agent — which file, which node, how the task lands is
  *  the runner's side of the line (--agent). Shared by the eval runner and
  *  every optimizer. */
-export type Input = {
+export type Test = {
   /** Stable identifier. Auto-derived when omitted: the loader generates one
    *  via nanoid, the optimizer derives it positionally (`input-<index>`). */
   id?: string;
-  /** What the agent is told: an instruction string, or a JSON object for
+  /** What the agent is given: an instruction string, or a JSON object for
    *  agents that take structured data. Delivered as the entry node's single
-   *  positional parameter (eval entry nodes take exactly one). Required;
-   *  the loader rejects inputs without one. On-disk caveat: this type is
-   *  also the shape of a run directory's input.json, and run dirs written
-   *  before PR #739 carry args/node and NO task — read back off disk, task
-   *  may be undefined there. Grading and judging read only goal/expected/
-   *  metadata, so old runs still load. */
-  task: string | Record<string, any>;
+   *  positional parameter (eval entry nodes take exactly one). Required; the
+   *  loader rejects tests without one. */
+  input: string | Record<string, any>;
   /** The success criterion — read by the goal judge and the pairwise judge
    *  suite, never shown to the agent. Optional; required only when the
    *  default LLM judge will run. */
@@ -45,34 +41,26 @@ export type Input = {
   metadata?: Record<string, any>;
 };
 
-/** One input's EXECUTION record: did the process finish, and where its
- *  artifacts live. Exists whether or not anything was graded. Its judgment
- *  counterpart is grading's InputBreakdown (scores per grader), which can be
- *  regenerated later by `eval grade` without re-running anything. */
-/** Denormalized from the input's eval record when the summary is
- *  written, so cross-run tools (the runs explorer) read one file per
- *  run instead of one record per input. Absent on runs written before
- *  this field existed and on inputs whose record is missing or
- *  unreadable — that absence routes the run to statelog backfill. */
-export type InputMetricsSummary = {
-  costUsd: number;
-  durationMs: number;
-  startedAtMs: number;
-  models: string[];
-  agentName?: string;
-};
-
-export type EvalRunInputResult = {
-  inputId: string;
+/** What `runSuite` returns, in memory: which tests ran, as which traces, and
+ *  how each ended. Everything durable is in the run directory. */
+export type SuiteTestResult = {
+  testId: string;
+  traceId: string;
   status: "success" | "error";
-  evalRecordPath: string;
-  statelogPath: string;
-  workdirPath: string;
   errorMessage?: string;
-  metrics?: InputMetricsSummary;
 };
 
-/** A run's score. Absent from EvalRunResult when grading was skipped. */
+export type SuiteRunResult = {
+  runId: string;
+  runDir: string;
+  /** Display label, "<absolute agent path>:<node>" or the command string. */
+  agentLabel: string;
+  tests: SuiteTestResult[];
+  okCount: number;
+  errorCount: number;
+};
+
+/** A run's score, as `eval grade` reports it. */
 export type EvalRunGrading = {
   graders: string[];
   /** The run's aggregate grade, 0..1 (strictly: the objective function's
@@ -81,22 +69,4 @@ export type EvalRunGrading = {
   objective: number;
   gatesPassed: boolean;
   perInput: InputBreakdown[];
-};
-
-/** Two questions live here, deliberately separate: `inputs` answers "did the
- *  agent crash?" (execution; always present), `grading` answers "how good was
- *  it?" (judgment; present only when graders ran). okCount/errorCount are
- *  denormalized from inputs[].status for one-glance summaries. Restructuring
- *  this split is named Level-2 work in the eval-cleanups spec. */
-export type EvalRunResult = {
-  runId: string;
-  runDir: string;
-  /** Display label, "<absolute agent path>:<node>". Not used to re-locate the
-   *  agent — reproduction data lives in config.json's provenance. */
-  agentLabel: string;
-  inputs: EvalRunInputResult[];
-  okCount: number;
-  errorCount: number;
-  /** Present unless grading was skipped (`--no-grade`). */
-  grading?: EvalRunGrading;
 };

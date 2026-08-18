@@ -29,17 +29,17 @@ describe("eval run input loading", () => {
 
   it("loads inputs from a suite file and fills defaults", () => {
     const suitePath = writeJson("suite.json", {
-      inputs: [{ goal: "do it", task: { prompt: "x" } }],
+      inputs: [{ goal: "do it", input: { prompt: "x" } }],
     });
 
     expect(loadInputsFromFile(suitePath, () => "generated-id")).toEqual([
-      { id: "generated-id", goal: "do it", task: { prompt: "x" } },
+      { id: "generated-id", goal: "do it", input: { prompt: "x" } },
     ]);
   });
 
   it("allows a missing goal when requireGoal is false and preserves metadata", () => {
     const suitePath = writeJson("no-goal.json", {
-      inputs: [{ id: "a", task: { country: "Brazil" }, metadata: { expected: "Brasília" } }],
+      inputs: [{ id: "a", input: { country: "Brazil" }, metadata: { expected: "Brasília" } }],
     });
     const inputs = loadInputsFromFile(suitePath, () => "a", { requireGoal: false });
     expect(inputs[0].goal).toBeUndefined();
@@ -48,14 +48,14 @@ describe("eval run input loading", () => {
 
   it("passes a first-class expected output through", () => {
     const suitePath = writeJson("with-expected.json", {
-      inputs: [{ id: "india", task: { country: "India" }, expected: "New Delhi" }],
+      inputs: [{ id: "india", input: { country: "India" }, expected: "New Delhi" }],
     });
     const inputs = loadInputsFromFile(suitePath, () => "india", { requireGoal: false });
     expect(inputs[0].expected).toBe("New Delhi");
   });
 
   it("still requires a non-empty goal by default", () => {
-    const suitePath = writeJson("needs-goal.json", { inputs: [{ id: "a", task: "t" }] });
+    const suitePath = writeJson("needs-goal.json", { inputs: [{ id: "a", input: "t" }] });
     expect(() => loadInputsFromFile(suitePath, () => "a")).toThrow(
       /goal must be a non-empty string/,
     );
@@ -63,51 +63,53 @@ describe("eval run input loading", () => {
 
   it("validates required goals and input ids", () => {
     expect(() =>
-      loadInputsFromFile(writeJson("missing-goal.json", { inputs: [{ task: "t" }] })),
+      loadInputsFromFile(writeJson("missing-goal.json", { inputs: [{ input: "t" }] })),
     ).toThrow(/goal/i);
     expect(() =>
       loadInputsFromFile(
-        writeJson("bad-id.json", { inputs: [{ id: "bad/id", goal: "x", task: "t" }] }),
+        writeJson("bad-id.json", { inputs: [{ id: "bad/id", goal: "x", input: "t" }] }),
       ),
     ).toThrow(/invalid id/i);
     expect(() =>
       loadInputsFromFile(
         writeJson("duplicate-id.json", {
           inputs: [
-            { id: "same", goal: "a", task: "t" },
-            { id: "same", goal: "b", task: "t" },
+            { id: "same", goal: "a", input: "t" },
+            { id: "same", goal: "b", input: "t" },
           ],
         }),
       ),
     ).toThrow(/duplicate/i);
   });
 
-  it("requires a task: string or object, nothing else", () => {
+  it("requires an input: string or object, nothing else", () => {
     expect(() =>
       loadInputsFromFile(writeJson("no-task.json", { inputs: [{ goal: "g" }] })),
-    ).toThrow(/task is required/);
+    ).toThrow(/input is required/);
     expect(() =>
-      loadInputsFromFile(writeJson("empty-task.json", { inputs: [{ goal: "g", task: "" }] })),
+      loadInputsFromFile(writeJson("empty-task.json", { inputs: [{ goal: "g", input: "" }] })),
     ).toThrow(/must not be empty/);
     expect(() =>
-      loadInputsFromFile(writeJson("array-task.json", { inputs: [{ goal: "g", task: [1] }] })),
-    ).toThrow(/task is required/);
+      loadInputsFromFile(writeJson("array-task.json", { inputs: [{ goal: "g", input: [1] }] })),
+    ).toThrow(/input is required/);
     const loaded = loadInputsFromFile(
-      writeJson("object-task.json", { inputs: [{ goal: "g", task: { rows: [1, 2] } }] }),
+      writeJson("object-task.json", { inputs: [{ goal: "g", input: { rows: [1, 2] } }] }),
     );
-    expect(loaded[0].task).toEqual({ rows: [1, 2] });
+    expect(loaded[0].input).toEqual({ rows: [1, 2] });
   });
 
   it("resolves a graders path relative to the test and requires it to exist", () => {
     fs.mkdirSync(path.join(tmpDir, "suite2"));
     fs.writeFileSync(path.join(tmpDir, "suite2", "check.ts"), "export default [];");
     const [input] = loadInputsFromFile(
-      writeJson("suite2/wrap.json", { inputs: [{ id: "g", task: "t", graders: "./check.ts" }] }),
+      writeJson("suite2/wrap.json", { inputs: [{ id: "g", input: "t", graders: "./check.ts" }] }),
     );
     expect(input.graders).toBe(path.join(tmpDir, "suite2", "check.ts"));
     expect(() =>
       loadInputsFromFile(
-        writeJson("suite2/bad.json", { inputs: [{ id: "g", task: "t", graders: "./missing.ts" }] }),
+        writeJson("suite2/bad.json", {
+          inputs: [{ id: "g", input: "t", graders: "./missing.ts" }],
+        }),
       ),
     ).toThrow(/graders must name a TypeScript file/);
   });
@@ -116,7 +118,7 @@ describe("eval run input loading", () => {
     fs.mkdirSync(path.join(tmpDir, "suite3"));
     fs.writeFileSync(path.join(tmpDir, "suite3", "check.ts"), "export default [];");
     const [input] = loadInputsFromFile(
-      writeJson("suite3/wrap.json", { inputs: [{ id: "g", task: "t", graders: "./check.ts" }] }),
+      writeJson("suite3/wrap.json", { inputs: [{ id: "g", input: "t", graders: "./check.ts" }] }),
     );
     expect(input.goal).toBeUndefined();
   });
@@ -124,7 +126,7 @@ describe("eval run input loading", () => {
   it("test-directory form auto-discovers graders.ts, and a single test dir loads directly", () => {
     const testDir = path.join(tmpDir, "suite4", "my-test");
     fs.mkdirSync(testDir, { recursive: true });
-    fs.writeFileSync(path.join(testDir, "test.json"), JSON.stringify({ task: "t", goal: "g" }));
+    fs.writeFileSync(path.join(testDir, "test.json"), JSON.stringify({ input: "t", goal: "g" }));
     fs.writeFileSync(path.join(testDir, "graders.ts"), "export default [];");
 
     // the whole suite: a directory of test dirs
@@ -141,14 +143,14 @@ describe("eval run input loading", () => {
 
   it("timeoutSec must be a positive number when provided", () => {
     const [input] = loadInputsFromFile(
-      writeJson("timeout.json", { inputs: [{ id: "t", goal: "g", task: "x", timeoutSec: 1200 }] }),
+      writeJson("timeout.json", { inputs: [{ id: "t", goal: "g", input: "x", timeoutSec: 1200 }] }),
     );
     expect(input.timeoutSec).toBe(1200);
     for (const bad of [0, -5, "10"]) {
       expect(() =>
         loadInputsFromFile(
           writeJson("timeout-bad.json", {
-            inputs: [{ id: "t", goal: "g", task: "x", timeoutSec: bad }],
+            inputs: [{ id: "t", goal: "g", input: "x", timeoutSec: bad }],
           }),
         ),
       ).toThrow(/timeoutSec must be a positive number/);
@@ -160,12 +162,18 @@ describe("eval run input loading", () => {
       loadInputsFromFile(
         writeJson("legacy-args.json", { inputs: [{ goal: "g", args: { x: 1 } }] }),
       ),
-    ).toThrow(/tests describe the task, not the agent/);
+    ).toThrow(/tests describe the input, not the agent/);
     expect(() =>
       loadInputsFromFile(
-        writeJson("legacy-node.json", { inputs: [{ goal: "g", task: "t", node: "main" }] }),
+        writeJson("legacy-node.json", { inputs: [{ goal: "g", input: "t", node: "main" }] }),
       ),
-    ).toThrow(/tests describe the task, not the agent/);
+    ).toThrow(/tests describe the input, not the agent/);
+  });
+
+  it("rejects a legacy task field with a message naming the rename", () => {
+    expect(() =>
+      loadInputsFromFile(writeJson("legacy-task.json", { inputs: [{ goal: "g", task: "do it" }] })),
+    ).toThrow(/"task" was renamed to "input"/);
   });
 
   it("rejects rubric-shaped input files", () => {
@@ -184,13 +192,13 @@ describe("eval run input loading", () => {
   });
 
   it("loads input files from a directory in lexical order", () => {
-    writeJson("suite/b.json", { id: "b", goal: "B", task: "t" });
-    writeJson("suite/a.json", { id: "a", goal: "A", task: { n: 1 } });
+    writeJson("suite/b.json", { id: "b", goal: "B", input: "t" });
+    writeJson("suite/a.json", { id: "a", goal: "A", input: { n: 1 } });
 
     const inputs = loadInputs(path.join(tmpDir, "suite"));
 
     expect(inputs.map((input) => input.id)).toEqual(["a", "b"]);
-    expect(inputs[0].task).toEqual({ n: 1 });
+    expect(inputs[0].input).toEqual({ n: 1 });
   });
 
   it("rejects a directory with no json files: an empty suite is a mistake, not a run", () => {
@@ -203,7 +211,7 @@ describe("eval run input loading", () => {
   it("creates an inline input from a goal, with the goal text as the task too", () => {
     expect(inputFromGoal("do it")).toEqual({
       id: "input-1",
-      task: "do it",
+      input: "do it",
       goal: "do it",
     });
   });
@@ -218,7 +226,7 @@ describe("files field", () => {
     fs.writeFileSync(
       inputsFile,
       JSON.stringify({
-        inputs: [{ id: "a", goal: "g", task: "t", files: "./fixtures/report" }],
+        inputs: [{ id: "a", goal: "g", input: "t", files: "./fixtures/report" }],
       }),
     );
 
@@ -235,7 +243,7 @@ describe("files field", () => {
     fs.writeFileSync(
       inputsFile,
       JSON.stringify({
-        inputs: [{ id: "a", goal: "g", task: "t", files: "./not-a-dir.txt" }],
+        inputs: [{ id: "a", goal: "g", input: "t", files: "./not-a-dir.txt" }],
       }),
     );
 
@@ -250,12 +258,12 @@ describe("test directories (heavy form)", () => {
     fs.mkdirSync(path.join(suiteDir, "capital-france"));
     fs.writeFileSync(
       path.join(suiteDir, "capital-france", "test.json"),
-      JSON.stringify({ goal: "Return the capital of France", task: "t", expected: "Paris" }),
+      JSON.stringify({ goal: "Return the capital of France", input: "t", expected: "Paris" }),
     );
     fs.mkdirSync(path.join(suiteDir, "summarize", "files", "data"), { recursive: true });
     fs.writeFileSync(
       path.join(suiteDir, "summarize", "test.json"),
-      JSON.stringify({ goal: "Summarize the report", task: "t" }),
+      JSON.stringify({ goal: "Summarize the report", input: "t" }),
     );
     fs.writeFileSync(path.join(suiteDir, "summarize", "files", "data", "report.txt"), "q3");
     return suiteDir;
@@ -278,7 +286,7 @@ describe("test directories (heavy form)", () => {
     const suiteDir = makeSuite();
     fs.writeFileSync(
       path.join(suiteDir, "capital-france", "test.json"),
-      JSON.stringify({ id: "france", goal: "g", task: "t" }),
+      JSON.stringify({ id: "france", goal: "g", input: "t" }),
     );
     const inputs = loadInputs(suiteDir);
     expect(inputs.map((input) => input.id).sort()).toEqual(["france", "summarize"]);
@@ -291,8 +299,8 @@ describe("test directories (heavy form)", () => {
       path.join(suiteDir, "inputs.json"),
       JSON.stringify({
         inputs: [
-          { id: "a", goal: "g", task: "t" },
-          { id: "b", goal: "g", task: "t" },
+          { id: "a", goal: "g", input: "t" },
+          { id: "b", goal: "g", input: "t" },
         ],
       }),
     );
@@ -305,7 +313,7 @@ describe("test directories (heavy form)", () => {
     const suiteDir = makeSuite();
     fs.writeFileSync(
       path.join(suiteDir, "loose-input.json"),
-      JSON.stringify({ id: "x", goal: "g", task: "t" }),
+      JSON.stringify({ id: "x", goal: "g", input: "t" }),
     );
 
     expect(() => loadInputs(suiteDir)).toThrow(/mixes.*loose-input\.json.*capital-france/s);
@@ -316,11 +324,11 @@ describe("test directories (heavy form)", () => {
     const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "suite-"));
     fs.writeFileSync(
       path.join(suiteDir, "inputs.json"),
-      JSON.stringify({ inputs: [{ id: "a", goal: "g", task: "t" }] }),
+      JSON.stringify({ inputs: [{ id: "a", goal: "g", input: "t" }] }),
     );
     fs.writeFileSync(
       path.join(suiteDir, "b.json"),
-      JSON.stringify({ id: "b", goal: "g", task: "t" }),
+      JSON.stringify({ id: "b", goal: "g", input: "t" }),
     );
 
     expect(() => loadInputs(suiteDir)).toThrow(/inputs\.json.*b\.json/s);
@@ -331,7 +339,7 @@ describe("test directories (heavy form)", () => {
     const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "suite-"));
     fs.writeFileSync(
       path.join(suiteDir, "a.json"),
-      JSON.stringify({ id: "a", goal: "g", task: "t" }),
+      JSON.stringify({ id: "a", goal: "g", input: "t" }),
     );
     fs.mkdirSync(path.join(suiteDir, "shared-fixtures"));
     const inputs = loadInputs(suiteDir);
@@ -349,7 +357,7 @@ describe("git sources for files", () => {
     fs.writeFileSync(
       inputsFile,
       JSON.stringify({
-        inputs: [{ id: "a", goal: "g", task: "t", files: filesSource }],
+        inputs: [{ id: "a", goal: "g", input: "t", files: filesSource }],
       }),
     );
 
@@ -372,7 +380,7 @@ describe("git sources for files", () => {
     fs.writeFileSync(
       inputsFile,
       JSON.stringify({
-        inputs: [{ id: "__proto__", goal: "g", task: "t", files: `${repo}//tests?ref=${first}` }],
+        inputs: [{ id: "__proto__", goal: "g", input: "t", files: `${repo}//tests?ref=${first}` }],
       }),
     );
 
@@ -394,7 +402,7 @@ describe("git sources for files", () => {
     fs.writeFileSync(
       inputsFile,
       JSON.stringify({
-        inputs: [{ id: "a", goal: "g", task: "t", files: "git@github.com:x/y.git" }],
+        inputs: [{ id: "a", goal: "g", input: "t", files: "git@github.com:x/y.git" }],
       }),
     );
 

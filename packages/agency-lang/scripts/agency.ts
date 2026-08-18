@@ -55,9 +55,13 @@ import { generateReport, cleanCoverage } from "@/cli/coverage.js";
 import { createBundle, extractBundle } from "@/cli/bundle.js";
 import { traceLog } from "@/cli/events.js";
 import { logsView, type LogsViewOpts } from "@/cli/logsView.js";
-import { evalExtract } from "@/cli/evalExtract.js";
 import { evalJudge } from "@/cli/evalJudge.js";
 import { addLabelCommand, labelCommandDependencies } from "@/cli/eval/labelCommand.js";
+import {
+  addLogsExtractCommand,
+  addRunDirectoryCommands,
+  runDirectoryCommandDependencies,
+} from "@/cli/runDirectory/commands.js";
 import { evalGrade } from "@/cli/eval/grade.js";
 import { resolveRunStatelog } from "@/cli/eval/logs.js";
 import { evalRun, totalRunCostUsd } from "@/cli/eval/run.js";
@@ -132,6 +136,7 @@ type RunOptions = Omit<CliFlags, "trace"> & {
   maxCost?: string;
   maxTime?: string;
   local?: string;
+  captureWorkdir?: string;
 };
 
 // commander option parsers. Match the WHOLE string against digits so
@@ -271,7 +276,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
       console.error(`Error: ${(e as Error).message}`);
       process.exit(2);
     }
-    run(config, input, undefined, options.resume, runPolicy, budget, nodeArgs);
+    run(
+      config,
+      input,
+      undefined,
+      options.resume,
+      runPolicy,
+      budget,
+      nodeArgs,
+      options.captureWorkdir === undefined ? undefined : { runDir: options.captureWorkdir },
+    );
   }
 
   program
@@ -409,6 +423,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
         .option(
           "--max-time <duration>",
           "Abort if the run's working time exceeds this duration (e.g. 30s, 5m, 1h, 2d). Waiting on a human is not counted; zero/negative = no limit",
+        )
+        .option(
+          "--capture-workdir <dir>",
+          "After the run, add its trace, code and a snapshot of the working directory to this run directory (see: agency runs list)",
         )
     );
   }
@@ -734,14 +752,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
   type LogsCliOptions = {
     follow?: boolean;
     csv?: boolean;
-    dataset?: string;
-    checklist?: string;
   };
   const logsViewOptsFrom = (options: LogsCliOptions): LogsViewOpts => ({
     follow: options.follow,
     csv: options.csv,
-    dataset: options.dataset,
-    checklist: options.checklist,
     config: getConfig(),
   });
 
@@ -759,11 +773,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
     )
     .option("-f, --follow", "Tail the file — re-read and re-render as new events are appended")
     .option("--csv", "Print the runs table as CSV to stdout instead of opening the explorer")
-    .option(
-      "--dataset <dir>",
-      "Local viewing: label dataset the tree 'l' key labels into (default: eval.dataset, else labels/)",
-    )
-    .option("--checklist <file>", "Local viewing: checklist to label a trace against")
     .action(async (files: string[], options: LogsCliOptions) => {
       if (files.length === 0) {
         logsCmd.help();
@@ -776,14 +785,17 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("view")
     .description("Open an interactive TUI viewer for a statelog JSONL file")
     .argument("<file>", "Path to a .statelog.jsonl file, or '-' for stdin")
-    // -f/--follow, --dataset and --checklist are declared once, on
-    // `logs`. Commander gives the parent priority wherever the flag sits, so a
+    // -f/--follow is declared once, on `logs`. Commander gives the parent priority wherever the flag sits, so a
     // second declaration here would silently receive undefined (the vendored
     // fork now rejects that shape at registration). The action reads the
     // parent's parsed values.
     .action(async (file: string, _options: Record<string, never>, command: Command) => {
       await logsView(file, logsViewOptsFrom((command.parent?.opts() ?? {}) as LogsCliOptions));
     });
+
+  const runDirectoryDeps = runDirectoryCommandDependencies();
+  addLogsExtractCommand(logsCmd, runDirectoryDeps);
+  addRunDirectoryCommands(program, runDirectoryDeps);
 
   const evalCmd = program.command("eval").description("Evaluate agent runs against task fixtures");
 
@@ -799,16 +811,14 @@ export function createProgram(deps: CliDependencies = {}): Command {
         "and one-shot (e.g. agency agent --policy approve-all -p -- {task})",
     )
     .option(
-      "--inputs <source>",
-      "Input suite: a JSON file, a directory, or a git source (URL[//subdir][?ref=...])",
+      "--suite <source>",
+      "Test suite: a JSON file, a directory, or a git source (URL[//subdir][?ref=...])",
     )
-    .option("--goal <text>", "Run one inline input with this goal")
+    .option("--goal <text>", "Run one inline test whose input and goal are both this text")
     .option("--run-id <id>", "Run id / output subdirectory")
     .option("--runs-dir <path>", "Runs output directory")
     .option("--continue-on-error", "Continue after task failures", true)
     .option("--no-continue-on-error", "Stop after first input failure")
-    .option("--graders <file>", "TypeScript grading module (default-exports graders)")
-    .option("--no-grade", "Skip grading; only run the agent")
     .option(
       "-n, --parallel <count>",
       "Run up to this many inputs at once (default 1). Above 1, per-agent output is replaced by a status board (name, state, elapsed, cost so far)",
@@ -829,13 +839,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
       async (opts: {
         agent?: string;
         agentCmd?: string;
-        inputs?: string;
+        suite?: string;
         goal?: string;
         runId?: string;
         runsDir?: string;
         continueOnError?: boolean;
-        graders?: string;
-        grade?: boolean;
         parallel?: number;
         maxToolCallRounds?: number;
         maxToolResultChars?: number;
@@ -866,50 +874,17 @@ export function createProgram(deps: CliDependencies = {}): Command {
         });
         const result = await evalRun({ ...opts, config });
         console.log(
-          `Run ${result.runId} completed: ${result.okCount}/${result.inputs.length} inputs ok`,
+          `Run ${result.runId} completed: ${result.okCount}/${result.tests.length} tests ok`,
         );
-        if (result.grading) {
-          for (const line of formatGrading(result.grading.objective, result.grading.perInput)) {
-            console.log(line);
-          }
-        }
-        const costUsd = totalRunCostUsd(result);
+        const costUsd = totalRunCostUsd(result.runDir);
         if (costUsd !== undefined) {
           console.log(`total LLM cost: $${costUsd.toFixed(2)}`);
         }
-        console.log(path.join(result.runDir, "summary.json"));
-        if (result.grading && !result.grading.gatesPassed) {
-          process.exit(2);
-        }
+        console.log(result.runDir);
+        console.log(`grade it with: agency eval grade ${result.runDir}`);
         if (result.errorCount > 0 && opts.continueOnError === false) {
           process.exit(2);
         }
-      },
-    );
-
-  evalCmd
-    .command("extract")
-    .description(
-      "Extract a structured eval record from a statelog file. " +
-        "Use this on the trace of one agent run to produce a JSON " +
-        "artifact you can grade with an LLM judge or compare against " +
-        "another run.",
-    )
-    .argument("<file>", "Path to a .statelog.jsonl file")
-    .option("-o, --out <path>", "Output JSON path (default: <file>.eval.json)")
-    .option(
-      "--preview-chars <n>",
-      "Max chars for tool args/output previews (default: 200, 0 for full)",
-      (v) => parseInt(v, 10),
-    )
-    .option("--compact", "Emit compact JSON instead of pretty-printed (pipelines / diffs)")
-    .action(
-      async (file: string, opts: { out?: string; previewChars?: number; compact?: boolean }) => {
-        await evalExtract(file, {
-          out: opts.out,
-          previewChars: opts.previewChars,
-          pretty: !opts.compact,
-        });
       },
     );
 
@@ -920,12 +895,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--input <id>", "Which input's statelog, when the run has several")
     .option("-f, --follow", "Tail the file — re-read and re-render as new events are appended")
     .action(async (runDir: string, opts: { input?: string; follow?: boolean }) => {
-      // A whole run without --input opens the explorer's per-test
-      // table; --input (or an input dir / statelog file) keeps the
-      // straight-to-viewer path.
+      // A run directory opens the viewer on its statelog with each trace's
+      // annotations summarised; --input (or a statelog file) keeps the
+      // plain viewer path.
       if (
         opts.input === undefined &&
-        fs.existsSync(path.join(path.resolve(runDir), "summary.json"))
+        fs.existsSync(path.join(path.resolve(runDir), "statelog.jsonl"))
       ) {
         await logsView([runDir], { follow: opts.follow });
         return;
@@ -945,7 +920,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Score a finished eval run without re-running the agent")
     .argument("<runDir>", "Path to a run directory produced by `agency eval run`")
     .option("--graders <file>", "TypeScript grading module (default-exports graders)")
-    .option("-o, --out <path>", "Output path (default: <runDir>/grading.json)")
+    .option("-o, --out <path>", "Also write the grading summary here as JSON")
     .action(async (runDir: string, opts: { graders?: string; out?: string }) => {
       const grading = await evalGrade(runDir, { ...opts, config: getConfig() });
       for (const line of formatGrading(grading.objective, grading.perInput)) {
@@ -956,17 +931,17 @@ export function createProgram(deps: CliDependencies = {}): Command {
       }
     });
 
-  addLabelCommand(evalCmd, labelCommandDependencies(getConfig));
-  addLabelCommand(program, labelCommandDependencies(getConfig));
+  addLabelCommand(evalCmd, labelCommandDependencies());
+  addLabelCommand(program, labelCommandDependencies());
 
   evalCmd
     .command("judge")
-    .description("Compare two eval records or eval run directories")
-    .argument("<inputA>", "Path to first eval record (.eval.json) or run directory")
-    .argument("<inputB>", "Path to second eval record (.eval.json) or run directory")
+    .description("Compare two single-trace statelogs, or two run directories test by test")
+    .argument("<inputA>", "A single-trace statelog file, or a run directory")
+    .argument("<inputB>", "A single-trace statelog file, or a run directory")
     .option(
       "--goal <text>",
-      "Goal used to judge responses (record files only; run directories carry their own goals)",
+      "Goal used to judge responses (statelog files only; run directories carry their own goals)",
     )
     .option("--samples <n>", "Judge samples per input", parseInt)
     .option("--confidence-threshold <n>", "Minimum confidence counted as a win", parseInt)
@@ -999,9 +974,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
       )
       .argument("<agent>", "Agency file target: file.agency[:node]")
       .option("--goal <text>", "Goal to optimize for")
-      .option("--inputs <fileOrDir>", "Input suite JSON file or directory")
+      .option("--suite <fileOrDir>", "Test suite JSON file or directory")
       .option("--graders <file>", "TypeScript grading module (default-exports graders)")
-      .option("--validation-inputs <fileOrDir>", "Held-out validation input suite")
+      .option("--validation-suite <fileOrDir>", "Held-out validation test suite")
       .option(
         "--validation-split <ratio>",
         "Hold out this fraction of inputs for validation",
@@ -1028,9 +1003,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
           agent: string,
           opts: {
             goal?: string;
-            inputs?: string;
+            suite?: string;
             graders?: string;
-            validationInputs?: string;
+            validationSuite?: string;
             validationSplit?: number;
             iterations?: number;
             runId?: string;

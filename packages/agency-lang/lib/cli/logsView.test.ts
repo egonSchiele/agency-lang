@@ -11,23 +11,31 @@ import { runRow } from "../runsExplorer/views/viewTestUtils.js";
 
 type Calls = {
   viewed: { file: string; follow: boolean }[];
-  explored: { route: string; sourceKinds: string[] }[];
+  viewedDirs: { dir: string; follow: boolean }[];
+  explored: { sourceKinds: string[] }[];
   csvSources: number[];
   stdout: string[];
   errors: string[];
 };
 
 function seams(): { deps: LogsViewDeps; calls: Calls } {
-  const calls: Calls = { viewed: [], explored: [], csvSources: [], stdout: [], errors: [] };
+  const calls: Calls = {
+    viewed: [],
+    viewedDirs: [],
+    explored: [],
+    csvSources: [],
+    stdout: [],
+    errors: [],
+  };
   const deps: LogsViewDeps = {
     viewFile: async (file, opts) => {
       calls.viewed.push({ file, follow: opts.follow ?? false });
     },
+    viewRunDirectory: async (dir, opts) => {
+      calls.viewedDirs.push({ dir, follow: opts.follow ?? false });
+    },
     explorer: async (options) => {
-      calls.explored.push({
-        route: options.route,
-        sourceKinds: options.sources.map((s) => s.kind),
-      });
+      calls.explored.push({ sourceKinds: options.sources.map((s) => s.kind) });
     },
     loadAll: (sources) => {
       calls.csvSources.push(sources.length);
@@ -72,43 +80,6 @@ describe("logsView routing", () => {
     expect(calls.viewed).toEqual([{ file: "-", follow: false }]);
   });
 
-  it("passes --dataset and --checklist through to the file viewer", async () => {
-    const file = writeMultiTraceStatelog(tmpDir);
-    let seenOpts: { dataset?: string; checklist?: string } | undefined;
-    await logsView(
-      [file],
-      { dataset: "my-ds", checklist: "cl.json" },
-      {
-        viewFile: async (_file, opts) => {
-          seenOpts = { dataset: opts.dataset, checklist: opts.checklist };
-        },
-      },
-    );
-    expect(seenOpts).toEqual({ dataset: "my-ds", checklist: "cl.json" });
-  });
-
-  it("passes the labeling base to the explorer for a run directory", async () => {
-    const runDir = writeGradedRun(tmpDir);
-    let seenLabeling: { datasetDir: string; checklistFile?: string } | undefined;
-    await logsView(
-      [runDir],
-      { dataset: "my-ds", checklist: "cl.json" },
-      {
-        explorer: async (options) => {
-          seenLabeling =
-            options.labeling === undefined
-              ? undefined
-              : {
-                  datasetDir: options.labeling.datasetDir,
-                  checklistFile: options.labeling.checklistFile,
-                };
-        },
-      },
-    );
-    expect(seenLabeling?.datasetDir).toBe(path.resolve("my-ds"));
-    expect(seenLabeling?.checklistFile).toBe(path.resolve("cl.json"));
-  });
-
   it("a sole regular file with --follow goes straight to the viewer, even when empty", async () => {
     const empty = path.join(tmpDir, "empty.jsonl");
     fs.writeFileSync(empty, "");
@@ -130,13 +101,14 @@ describe("logsView routing", () => {
     expect(calls.viewed).toEqual([{ file: empty, follow: false }]);
   });
 
-  it("a run directory opens the explorer in tests mode", async () => {
+  it("a sole run directory opens the viewer on it, annotations and all", async () => {
     const runDir = writeGradedRun(tmpDir);
     const { deps, calls } = seams();
 
     await logsView([runDir], {}, deps);
 
-    expect(calls.explored).toEqual([{ route: "runTable", sourceKinds: ["runDir"] }]);
+    expect(calls.viewedDirs).toEqual([{ dir: runDir, follow: false }]);
+    expect(calls.explored).toEqual([]);
   });
 
   it("multiple mixed paths open the explorer home table", async () => {
@@ -146,7 +118,7 @@ describe("logsView routing", () => {
 
     await logsView([runDir, file], {}, deps);
 
-    expect(calls.explored).toEqual([{ route: "explorer", sourceKinds: ["runDir", "statelog"] }]);
+    expect(calls.explored).toEqual([{ sourceKinds: ["runDir", "statelog"] }]);
   });
 
   it("--follow errors with directories, multiple paths, or --csv", async () => {

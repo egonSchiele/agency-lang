@@ -15,7 +15,6 @@
 import * as fs from "fs";
 
 import { runViewer } from "../logsViewer/run.js";
-import type { Annotator } from "../eval/label/types.js";
 import { Screen } from "../tui/screen.js";
 import type { InputSource, KeyEvent } from "../tui/input/types.js";
 import type { OutputTarget } from "../tui/output/types.js";
@@ -36,16 +35,11 @@ type Variant = (typeof VARIANTS)[number];
 
 export type ExplorerOptions = {
   sources: Source[];
-  /** "runTable" (a sole run-dir argument) starts on the per-test table. */
-  route: "runTable" | "explorer";
   input: InputSource;
   output: OutputTarget;
   viewport: Viewport;
   /** Injectable for tests; production uses the real logs viewer. */
   runViewerFn?: typeof runViewer;
-  /** When set, a drilled-into statelog enables the tree `l` label action,
-   *  targeting this dataset. The per-run statelog path becomes the source. */
-  labeling?: { datasetDir: string; checklistFile?: string; annotator: Annotator };
 };
 
 export async function runExplorer(options: ExplorerOptions): Promise<void> {
@@ -81,9 +75,6 @@ class ExplorerShell {
       width: options.viewport.cols,
       height: options.viewport.rows,
     });
-    if (options.route === "runTable" && options.sources[0]?.kind === "runDir") {
-      this.overlay.push(new TestsTableView(options.sources[0].dir));
-    }
   }
 
   async run(): Promise<void> {
@@ -216,7 +207,7 @@ class ExplorerShell {
       return false;
     }
     if (action.kind === "openLog") {
-      return this.openLog(action.statelogPath);
+      return this.openLog(action.statelogPath, action.traceId);
     }
     if (action.kind === "exportCsv") {
       const { path: outPath, content } = exportCsv(
@@ -243,7 +234,7 @@ class ExplorerShell {
    *  one OutputTarget between two Screen instances is safe because
    *  TerminalOutput owns the single previousGrid both write through, so
    *  the diff-based repaint stays coherent across the hand-off. */
-  private async openLog(statelogPath: string): Promise<boolean> {
+  private async openLog(statelogPath: string, traceId?: string): Promise<boolean> {
     if (this.pendingKey !== null) {
       throw new Error("explorer key waiter still outstanding at viewer hand-off");
     }
@@ -255,10 +246,10 @@ class ExplorerShell {
         viewport: { rows: this.options.viewport.rows, cols: this.options.viewport.cols },
         followPath: statelogPath,
         embedded: true,
-        labeling:
-          this.options.labeling === undefined
-            ? undefined
-            : { ...this.options.labeling, sourcePath: statelogPath },
+        // A drilled-into statelog is a local file, so `x` can extract from it.
+        extract: { sourcePath: statelogPath },
+        // A run directory's statelog holds every test's trace; land on this one.
+        focusTraceId: traceId,
       });
       if (resolution === "quit") {
         return true;

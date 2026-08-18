@@ -4,13 +4,14 @@ import { BaseGrader } from "./baseGrader.js";
 import { asJudgeText, goalJudgeFile, ScalarVerdict } from "./goalJudgeFile.js";
 import type { EvalRecord } from "@/eval/types.js";
 
-import type { Grade, GraderInput, GraderOptions, Input, JSON } from "./types.js";
+import type { Grade, GraderInput, GraderOptions, Test, JSON } from "./types.js";
 
-/** What a metric function receives. `input` is the typed Input; the gold answer is
- *  `input.expected`, and any extra per-input data lives under `input.metadata`. */
+/** What a metric function receives. `test` is the typed Test: what the agent
+ *  was given is `test.input`, the gold answer is `test.expected`, and any extra
+ *  per-test data lives under `test.metadata`. */
 export type GraderContext = {
   output: JSON;
-  input: Input;
+  test: Test;
   /** The isolated directory the agent ran in. Read files the agent wrote. */
   workdir: string;
   /** The parsed eval record: events, metrics, tool counts, interrupts, cost. */
@@ -45,11 +46,11 @@ export class FunctionGrader extends BaseGrader {
     super(options);
   }
 
-  protected async _run({ input, run, runAgency }: GraderInput): Promise<Grade> {
+  protected async _run({ test, run, runAgency }: GraderInput): Promise<Grade> {
     // The bundled judge takes (goal, output, expected); default expected to the
-    // input's gold answer so a metric that calls ctx.judge({ goal }) grades the
-    // same way LlmJudge does when input.expected is present.
-    const inputExpected = (input as { expected?: JSON }).expected;
+    // test's gold answer so a metric that calls ctx.judge({ goal }) grades the
+    // same way LlmJudge does when test.expected is present.
+    const inputExpected = (test as { expected?: JSON }).expected;
     const judge = ({
       goal,
       output,
@@ -70,7 +71,7 @@ export class FunctionGrader extends BaseGrader {
     };
     const result = await this.fn({
       output: run.output,
-      input,
+      test,
       judge,
       workdir: run.workdir,
       record: run.record,

@@ -2,7 +2,7 @@ import { BaseOptimizer, type BaseOptimizerDeps } from "../baseOptimizer.js";
 import { proposeMutation, type ProposeMutationArgs } from "../mutator.js";
 import { renderReflectionFeedback } from "../reflectionFeedback.js";
 import type { Scorecard } from "@/eval/grading/scorecard.js";
-import type { Input } from "@/eval/grading/types.js";
+import type { Test } from "@/eval/grading/types.js";
 import type { BaseOptimizerConfig } from "../optimizer.js";
 import { formatDiagnostics } from "../reporter.js";
 import {
@@ -65,7 +65,7 @@ export class GreedyReflective extends BaseOptimizer {
 
   protected async optimizeTargets(
     source: OptimizeTargetSet,
-    inputs: Input[],
+    inputs: Test[],
   ): Promise<OptimizeResult> {
     const startedAt = Date.now();
     this.reporter.runStarted({
@@ -107,7 +107,7 @@ export class GreedyReflective extends BaseOptimizer {
   }
 
   /** The one place the champion is threaded across iterations. */
-  private async hillClimb(baseline: Candidate, inputs: Input[]): Promise<Attempt[]> {
+  private async hillClimb(baseline: Candidate, inputs: Test[]): Promise<Attempt[]> {
     const attempts: Attempt[] = [];
     let champion = baseline;
     for (let iter = 1; iter <= this.config.iterations; iter += 1) {
@@ -136,7 +136,7 @@ export class GreedyReflective extends BaseOptimizer {
   /** Propose → apply → evaluate one candidate, deciding accept/reject against the champion. */
   private async attempt(
     champion: Candidate,
-    inputs: Input[],
+    inputs: Test[],
     iter: number,
     history: Attempt[],
   ): Promise<Attempt> {
@@ -185,7 +185,7 @@ export class GreedyReflective extends BaseOptimizer {
     iter: number | "baseline",
     ws: CachePartition,
     targetSet: OptimizeTargetSet,
-    inputs: Input[],
+    inputs: Test[],
     files: Record<string, string>,
   ): Promise<Candidate> {
     const scorecard = await this.evaluate(ws, targetSet, files, inputs);

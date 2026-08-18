@@ -1,21 +1,26 @@
 # The runs explorer
 
-`agency logs` pointed at run directories (or several paths at once)
-opens the cross-run explorer: one sortable, groupable table with one row
-per eval run or statelog trace, drill-down into a run's tests, and from
-a test into the existing log viewer. This page explains how it is built
-and why the boundaries sit where they do. The single-run viewer has its
-own page (`docs/dev/logs-viewer.md`); the explorer is a **separate app**
-that reuses the viewer via one call, not a set of views inside it.
+`agency logs` pointed at several paths (run directories, a directory of
+run directories, statelog files) opens the cross-run explorer: one
+sortable, groupable table with one row per run directory or statelog
+trace, drill-down into a run's tests, and from a test into the existing
+log viewer focused on that test's trace. A **sole** run directory does
+not open the explorer: it opens the viewer on the directory's statelog,
+with each trace's annotations summarised on its row ("2 notes · score
+0.70 · labeled", from `annotationSummaries` in `lib/runDirectory/list.ts`).
+This page explains how the explorer is built and why the boundaries sit
+where they do. The single-run viewer has its own page
+(`docs/dev/logs-viewer.md`); the explorer is a **separate app** that
+reuses the viewer via one call, not a set of views inside it.
 
 ## The data flow, end to end
 
 ```
 CLI paths
-  → sources.ts        classify: run dir / dir of runs / statelog file
-  → loader.ts         phase 1 (two reads per run) + backfill, one bounded
-                      unit per advance(), emits progress / upsert / done
-  → rows.ts           RunRow + TestRow, patches, aggregate recompute
+  → sources.ts        classify: run dir (has statelog.jsonl) / dir of runs / statelog file
+  → loader.ts         one readRunDirectory per run dir, chunked scan per statelog file,
+                      one bounded unit per advance(), emits progress / upsert / done
+  → rows.ts           RunRow + TestRow from a snapshot (or a scan), aggregate recompute
   → views/tableState  sort / group / expand / cursor-by-identity
   → views/*           render through lib/tui's TableComponent
   → run.ts            the shell: key loop, loader pump, viewer hand-off
@@ -26,36 +31,24 @@ CLI paths
 `lib/runsExplorer/loader.ts` is the only place that decides how a row
 gets its numbers. Callers see three declarative events (`progress`,
 `upsert` with a snapshot row, `done`) and advance the loader one bounded
-unit at a time. Everything else — which miner runs for which input, how
-record and statelog values merge, when a row counts as `backfilled` —
-is private. There are two phases:
+unit at a time.
 
-**Phase 1 reads exactly two files per run**: `summary.json` and
-`config.json`, via `readEvalRunPhaseOne` (`lib/runsExplorer/
-readRunSummary.ts`). That budget is pinned by a read-counting test
-through the loader itself. It is enough for every table column because
-`summary.json` carries a per-input `metrics` block ({costUsd,
-durationMs, startedAtMs, models, agentName}, denormalized from each
-eval record at summary-write time — see `writeEvalRunSummary`). This is
-why a directory of two hundred runs shows a complete table in a couple
-of seconds. Do not add per-input file reads to phase 1; that is what
-backfill is for.
+**A run directory is one `readRunDirectory`.** Its statelog is the truth
+about every trace and its `annotations.jsonl` carries the harness `run`
+rows (test id, how the run ended, suite, the agent label under
+`flags.agent`) and the effective scores, so `buildRunRowFromDirectory`
+(`rows.ts`, over `summarizeRuns`) fills every column from that one
+snapshot and the row is `backfilled` immediately. There is no
+`summary.json`, no per-input record, and no backfill phase any more.
+A directory whose statelog has a torn or malformed line still loads: the
+line becomes a warning on the row. Only a directory `readRunDirectory`
+cannot read at all becomes a `failed` row.
 
-**Backfill** handles what phase 1 could not: runs written before the
-summary carried metrics, and killed or errored inputs with no record at
-all. Per input, the eval record is read first (it is the salvaged
-truth); the statelog is streamed only for fields the record could not
-supply — old records lack `startedAtMs`/`agentName`, killed inputs lack
-everything. The statelog scan (`mine.ts`) is resumable: one `advance()`
-reads one chunk, bytes carry across chunks so a UTF-8 character split
-at a boundary survives, and a torn final line becomes a warning while
-the metrics before it are kept. One shared accumulator serves both
-direct statelog rows and backfill, so the two paths cannot disagree
-about what a statelog means.
-
-Corrupt inputs never disappear: a half-written `summary.json` (the
-common case — an eval run still writing while the explorer reads it)
-becomes a visible `failed` row whose warnings show on the info screen.
+**A raw statelog file** given on the command line is scanned chunk by
+chunk (`mine.ts`): one `advance()` reads one chunk, bytes carry across
+chunks so a UTF-8 character split at a boundary survives, and a torn
+final line becomes a warning while the metrics before it are kept. One
+row per trace in the file.
 
 ## Wall-clock, not summed durations
 
@@ -110,7 +103,9 @@ letting cells collide.
   explorer waiter would steal the viewer's first keypress (there is an
   assertion at the hand-off and a test that feeds the viewer its own
   key). `"back"` resumes the explorer with its state intact; `"quit"`
-  exits the program — the Esc-backs/q-quits contract.
+  exits the program — the Esc-backs/q-quits contract. Every test in a
+  run directory shares one `statelog.jsonl`, so the hand-off passes the
+  test's `traceId` as `focusTraceId` and the viewer starts on that trace.
 - **The loader advances once per macrotask** (`setImmediate`), so `q`
   lands between chunks of a multi-megabyte statelog scan. Never race
   the key waiter against an always-ready microtask.

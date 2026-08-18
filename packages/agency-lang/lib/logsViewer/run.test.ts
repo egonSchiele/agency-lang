@@ -49,6 +49,40 @@ describe("runViewer", () => {
     expect(out.lastText()).toMatch(/agentRun/);
   });
 
+  it("shows a run directory's annotation summary on the trace row", async () => {
+    const out = new FrameRecorder();
+    await runViewer({
+      jsonl: sample,
+      input: new ScriptedInput(["q"]),
+      output: out,
+      viewport: { rows: 10, cols: 100 },
+      traceAnnotations: { abc: "1 note · score 0.50" },
+    });
+    expect(out.lastText()).toContain("1 note · score 0.50");
+  });
+
+  it("starts on the focused trace when asked to", async () => {
+    const second = sample.replaceAll('"trace_id":"abc"', '"trace_id":"xyz"');
+    const out = new FrameRecorder();
+    // Extract via `x` writes `<traceId>.jsonl` by default, which tells us
+    // which trace the cursor was on.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "viewer-focus-"));
+    const source = path.join(dir, "log.jsonl");
+    fs.writeFileSync(source, sample + second);
+    const input = new ScriptedInput(["x"]);
+    input.feedLine(path.join(dir, "picked.jsonl"));
+    input.feedKey({ key: "q" });
+    await runViewer({
+      jsonl: sample + second,
+      input,
+      output: out,
+      viewport: { rows: 12, cols: 100 },
+      extract: { sourcePath: source },
+      focusTraceId: "xyz",
+    });
+    expect(fs.readFileSync(path.join(dir, "picked.jsonl"), "utf8")).toBe(second);
+  });
+
   it("x extracts the focused trace to the file the user names", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "viewer-extract-"));
     const source = path.join(dir, "log.jsonl");

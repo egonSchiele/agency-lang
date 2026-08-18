@@ -93,3 +93,26 @@ describe("renderInputFeedback", () => {
     expect(text.match(/### Test/g)).toHaveLength(2);
   });
 });
+
+describe("human feedback in the reflection block", () => {
+  it("includes notes and unchecked checklist questions when present", () => {
+    const withHuman: InputGrades = {
+      ...entry(partialRecord({})),
+      humanFeedback: { notes: ["too slow"], unchecked: ["Is it on time?"] },
+    };
+    const text = renderInputFeedback(withHuman);
+    expect(text).toContain("Notes from people who reviewed this run:");
+    expect(text).toContain("too slow");
+    expect(text).toContain("answered NO:");
+    expect(text).toContain("Is it on time?");
+  });
+
+  it("adds no human sections when there is nothing to say", () => {
+    const text = renderInputFeedback({
+      ...entry(partialRecord({})),
+      humanFeedback: { notes: [], unchecked: [] },
+    });
+    expect(text).not.toContain("Notes from people");
+    expect(text).not.toContain("answered NO");
+  });
+});

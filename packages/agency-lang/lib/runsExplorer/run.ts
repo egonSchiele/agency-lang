@@ -35,8 +35,6 @@ type Variant = (typeof VARIANTS)[number];
 
 export type ExplorerOptions = {
   sources: Source[];
-  /** "runTable" (a sole run-dir argument) starts on the per-test table. */
-  route: "runTable" | "explorer";
   input: InputSource;
   output: OutputTarget;
   viewport: Viewport;
@@ -77,9 +75,6 @@ class ExplorerShell {
       width: options.viewport.cols,
       height: options.viewport.rows,
     });
-    if (options.route === "runTable" && options.sources[0]?.kind === "runDir") {
-      this.overlay.push(new TestsTableView(options.sources[0].dir));
-    }
   }
 
   async run(): Promise<void> {
@@ -212,7 +207,7 @@ class ExplorerShell {
       return false;
     }
     if (action.kind === "openLog") {
-      return this.openLog(action.statelogPath);
+      return this.openLog(action.statelogPath, action.traceId);
     }
     if (action.kind === "exportCsv") {
       const { path: outPath, content } = exportCsv(
@@ -239,7 +234,7 @@ class ExplorerShell {
    *  one OutputTarget between two Screen instances is safe because
    *  TerminalOutput owns the single previousGrid both write through, so
    *  the diff-based repaint stays coherent across the hand-off. */
-  private async openLog(statelogPath: string): Promise<boolean> {
+  private async openLog(statelogPath: string, traceId?: string): Promise<boolean> {
     if (this.pendingKey !== null) {
       throw new Error("explorer key waiter still outstanding at viewer hand-off");
     }
@@ -253,6 +248,8 @@ class ExplorerShell {
         embedded: true,
         // A drilled-into statelog is a local file, so `x` can extract from it.
         extract: { sourcePath: statelogPath },
+        // A run directory's statelog holds every test's trace; land on this one.
+        focusTraceId: traceId,
       });
       if (resolution === "quit") {
         return true;

@@ -167,6 +167,8 @@ feedback: renderReflectionFeedback(champion.scorecard.perInput),
 
 This renders, per input, the args, the **output**, the **`expected`** answer (when set), and each grader's **score + `feedback`**. `proposeMutation` accepts it as its `feedback` field; GEPA already builds it. This is what lets the optimizer learn "the output gave the area, not the capital New Delhi" without a separate `--goal`.
 
+It also renders what **people** said about the run, when the run directory carries any: every `note` row on the trace ("Notes from people who reviewed this run:") and the text of every checklist question a reviewer answered no ("Checklist questions reviewers answered NO:"). Both come from `humanFeedbackFor(snapshot, traceId)` (`lib/runDirectory/humanFeedback.ts`), which also returns the questions answered yes (`checked`) for consumers that want to say what a run did right; reflection uses only `unchecked`. `gradeRun` attaches the result to each `InputGrades.humanFeedback`, so an optimizer gets it for free by grading a run directory. To make use of it, run the candidate once, `agency note` / `agency label` its run directory, and re-grade: the next proposal sees the notes.
+
 ## Grading semantics you should know
 
 `evaluate`/`scoreFiles` return a `Scorecard`; how it turns grades into a number matters for your accept/reject logic.

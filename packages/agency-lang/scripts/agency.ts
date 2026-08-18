@@ -136,6 +136,7 @@ type RunOptions = Omit<CliFlags, "trace"> & {
   maxCost?: string;
   maxTime?: string;
   local?: string;
+  captureWorkdir?: string;
 };
 
 // commander option parsers. Match the WHOLE string against digits so
@@ -275,7 +276,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
       console.error(`Error: ${(e as Error).message}`);
       process.exit(2);
     }
-    run(config, input, undefined, options.resume, runPolicy, budget, nodeArgs);
+    run(
+      config,
+      input,
+      undefined,
+      options.resume,
+      runPolicy,
+      budget,
+      nodeArgs,
+      options.captureWorkdir === undefined ? undefined : { runDir: options.captureWorkdir },
+    );
   }
 
   program
@@ -413,6 +423,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
         .option(
           "--max-time <duration>",
           "Abort if the run's working time exceeds this duration (e.g. 30s, 5m, 1h, 2d). Waiting on a human is not counted; zero/negative = no limit",
+        )
+        .option(
+          "--capture-workdir <dir>",
+          "After the run, add its trace, code and a snapshot of the working directory to this run directory (see: agency runs list)",
         )
     );
   }
@@ -881,12 +895,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--input <id>", "Which input's statelog, when the run has several")
     .option("-f, --follow", "Tail the file — re-read and re-render as new events are appended")
     .action(async (runDir: string, opts: { input?: string; follow?: boolean }) => {
-      // A whole run without --input opens the explorer's per-test
-      // table; --input (or an input dir / statelog file) keeps the
-      // straight-to-viewer path.
+      // A run directory opens the viewer on its statelog with each trace's
+      // annotations summarised; --input (or a statelog file) keeps the
+      // plain viewer path.
       if (
         opts.input === undefined &&
-        fs.existsSync(path.join(path.resolve(runDir), "summary.json"))
+        fs.existsSync(path.join(path.resolve(runDir), "statelog.jsonl"))
       ) {
         await logsView([runDir], { follow: opts.follow });
         return;

@@ -50,6 +50,11 @@ export type RunViewerOpts = {
   // Enables the tree `x` action: extract the focused trace to a file of its
   // own, read back from this local path. Undefined for remote or stdin sources.
   extract?: { sourcePath: string };
+  // A run directory's annotations, one summary line per trace id, shown on
+  // each trace's row in the tree.
+  traceAnnotations?: Record<string, string>;
+  // Start with the cursor on this trace (the explorer drilling into a test).
+  focusTraceId?: string;
 };
 
 export type ViewerResolution = "quit" | "back";
@@ -130,7 +135,11 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
 
   const thresholds = opts.thresholds ?? DEFAULT_THRESHOLDS;
   const viewport: Viewport = opts.viewport;
-  const treeView = new TreeView(roots, thresholds, viewport, opts.extract !== undefined);
+  const treeView = new TreeView(roots, thresholds, viewport, {
+    extractEnabled: opts.extract !== undefined,
+    traceAnnotations: opts.traceAnnotations,
+    focusTraceId: opts.focusTraceId,
+  });
   const stack = makeViewStack(treeView);
   // The trace timeline views open on: fixed when flame opens from the tree.
   let timelineTraceId = treeView.cursorTraceId();

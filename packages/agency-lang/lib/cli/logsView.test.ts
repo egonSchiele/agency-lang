@@ -11,23 +11,31 @@ import { runRow } from "../runsExplorer/views/viewTestUtils.js";
 
 type Calls = {
   viewed: { file: string; follow: boolean }[];
-  explored: { route: string; sourceKinds: string[] }[];
+  viewedDirs: { dir: string; follow: boolean }[];
+  explored: { sourceKinds: string[] }[];
   csvSources: number[];
   stdout: string[];
   errors: string[];
 };
 
 function seams(): { deps: LogsViewDeps; calls: Calls } {
-  const calls: Calls = { viewed: [], explored: [], csvSources: [], stdout: [], errors: [] };
+  const calls: Calls = {
+    viewed: [],
+    viewedDirs: [],
+    explored: [],
+    csvSources: [],
+    stdout: [],
+    errors: [],
+  };
   const deps: LogsViewDeps = {
     viewFile: async (file, opts) => {
       calls.viewed.push({ file, follow: opts.follow ?? false });
     },
+    viewRunDirectory: async (dir, opts) => {
+      calls.viewedDirs.push({ dir, follow: opts.follow ?? false });
+    },
     explorer: async (options) => {
-      calls.explored.push({
-        route: options.route,
-        sourceKinds: options.sources.map((s) => s.kind),
-      });
+      calls.explored.push({ sourceKinds: options.sources.map((s) => s.kind) });
     },
     loadAll: (sources) => {
       calls.csvSources.push(sources.length);
@@ -93,13 +101,14 @@ describe("logsView routing", () => {
     expect(calls.viewed).toEqual([{ file: empty, follow: false }]);
   });
 
-  it("a run directory opens the explorer in tests mode", async () => {
+  it("a sole run directory opens the viewer on it, annotations and all", async () => {
     const runDir = writeGradedRun(tmpDir);
     const { deps, calls } = seams();
 
     await logsView([runDir], {}, deps);
 
-    expect(calls.explored).toEqual([{ route: "runTable", sourceKinds: ["runDir"] }]);
+    expect(calls.viewedDirs).toEqual([{ dir: runDir, follow: false }]);
+    expect(calls.explored).toEqual([]);
   });
 
   it("multiple mixed paths open the explorer home table", async () => {
@@ -109,7 +118,7 @@ describe("logsView routing", () => {
 
     await logsView([runDir, file], {}, deps);
 
-    expect(calls.explored).toEqual([{ route: "explorer", sourceKinds: ["runDir", "statelog"] }]);
+    expect(calls.explored).toEqual([{ sourceKinds: ["runDir", "statelog"] }]);
   });
 
   it("--follow errors with directories, multiple paths, or --csv", async () => {

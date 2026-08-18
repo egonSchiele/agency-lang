@@ -44,6 +44,15 @@ export function renderInputFeedback(
       `  - ${g.grader.name()} = ${formatScore(g.grade.score)}${g.grade.feedback ? `: ${preview(g.grade.feedback, 400)}` : ""}`,
     );
   }
+  const human = entry.humanFeedback;
+  if (human !== undefined && human.notes.length > 0) {
+    lines.push("Notes from people who reviewed this run:");
+    for (const note of human.notes) lines.push(`  - ${preview(note, 400)}`);
+  }
+  if (human !== undefined && human.unchecked.length > 0) {
+    lines.push("Checklist questions reviewers answered NO:");
+    for (const question of human.unchecked) lines.push(`  - ${preview(question, 200)}`);
+  }
   return clamp(lines.join("\n"), maxChars);
 }
 

@@ -1,53 +1,35 @@
 import { describe, expect, it } from "vitest";
 
-import { suiteFromConfig } from "./suite.js";
+import { suiteFromSource } from "./suite.js";
 
-function config(source: unknown) {
-  return {
-    provenance: {
-      inputsSource: { source },
-      files: {},
-      agent: { command: "x", harnessVersion: "0" },
-    },
-  } as never;
-}
-
-describe("suiteFromConfig", () => {
+describe("suiteFromSource", () => {
   it("local paths use the basename without the data extension", () => {
-    expect(suiteFromConfig(config("suites/terminal-bench.json")).suite).toBe("terminal-bench");
-    expect(suiteFromConfig(config("inputs.jsonl")).suite).toBe("inputs");
-    expect(suiteFromConfig(config("/abs/cases.agency")).suite).toBe("cases");
+    expect(suiteFromSource("suites/terminal-bench.json")).toBe("terminal-bench");
+    expect(suiteFromSource("inputs.jsonl")).toBe("inputs");
+    expect(suiteFromSource("/abs/cases.agency")).toBe("cases");
   });
 
   it("git sources use the repository basename plus a shortened ref", () => {
-    expect(
-      suiteFromConfig(config("github.com/foo/terminal-bench.git?ref=abc123def456")).suite,
-    ).toBe("terminal-bench@abc123de");
-    expect(suiteFromConfig(config("git@github.com:foo/bench.git")).suite).toBe("bench");
-    expect(suiteFromConfig(config("https://github.com/foo/bench")).suite).toBe("bench");
+    expect(suiteFromSource("github.com/foo/terminal-bench.git?ref=abc123def456")).toBe(
+      "terminal-bench@abc123de",
+    );
+    expect(suiteFromSource("git@github.com:foo/bench.git")).toBe("bench");
+    expect(suiteFromSource("https://github.com/foo/bench")).toBe("bench");
   });
 
   it("inline sources keep a whitespace-normalized prefix", () => {
-    expect(suiteFromConfig(config("inline:--goal")).suite).toBe("inline:--goal");
+    expect(suiteFromSource("inline:--goal")).toBe("inline:--goal");
     const long = `inline:${"goal words ".repeat(10)}`;
-    const suite = suiteFromConfig(config(long)).suite;
-    expect(suite.length).toBeLessThanOrEqual(24);
+    expect(suiteFromSource(long).length).toBeLessThanOrEqual(24);
   });
 
   it("optimize and unspecified sources pass through / dash", () => {
-    expect(suiteFromConfig(config("optimize")).suite).toBe("optimize");
-    expect(suiteFromConfig(config("unspecified")).suite).toBe("—");
+    expect(suiteFromSource("optimize")).toBe("optimize");
+    expect(suiteFromSource("unspecified")).toBe("—");
   });
 
-  it("missing config or malformed provenance is a dash with a warning", () => {
-    expect(suiteFromConfig(null).suite).toBe("—");
-    const malformed = suiteFromConfig(config(42));
-    expect(malformed.suite).toBe("—");
-    expect(malformed.warning).toBeDefined();
-  });
-
-  it("legacy string config.inputsSource is honored", () => {
-    const legacy = { inputsSource: "old-suite.json" } as never;
-    expect(suiteFromConfig(legacy).suite).toBe("old-suite");
+  it("no suite on record is a dash", () => {
+    expect(suiteFromSource(null)).toBe("—");
+    expect(suiteFromSource(undefined)).toBe("—");
   });
 });

@@ -41,23 +41,6 @@ export type Test = {
   metadata?: Record<string, any>;
 };
 
-/** One input's EXECUTION record: did the process finish, and where its
- *  artifacts live. Exists whether or not anything was graded. Its judgment
- *  counterpart is grading's InputBreakdown (scores per grader), which can be
- *  regenerated later by `eval grade` without re-running anything. */
-/** Denormalized from the input's eval record when the summary is
- *  written, so cross-run tools (the runs explorer) read one file per
- *  run instead of one record per input. Absent on runs written before
- *  this field existed and on inputs whose record is missing or
- *  unreadable — that absence routes the run to statelog backfill. */
-export type InputMetricsSummary = {
-  costUsd: number;
-  durationMs: number;
-  startedAtMs: number;
-  models: string[];
-  agentName?: string;
-};
-
 /** What `runSuite` returns, in memory: which tests ran, as which traces, and
  *  how each ended. Everything durable is in the run directory. */
 export type SuiteTestResult = {
@@ -77,19 +60,7 @@ export type SuiteRunResult = {
   errorCount: number;
 };
 
-/** @deprecated The pre-run-directory summary.json shape. Still read by the
- *  runs explorer for old directories; nothing writes it. */
-export type EvalRunInputResult = {
-  inputId: string;
-  status: "success" | "error";
-  evalRecordPath: string;
-  statelogPath: string;
-  workdirPath: string;
-  errorMessage?: string;
-  metrics?: InputMetricsSummary;
-};
-
-/** A run's score. Absent from EvalRunResult when grading was skipped. */
+/** A run's score, as `eval grade` reports it. */
 export type EvalRunGrading = {
   graders: string[];
   /** The run's aggregate grade, 0..1 (strictly: the objective function's
@@ -98,18 +69,4 @@ export type EvalRunGrading = {
   objective: number;
   gatesPassed: boolean;
   perInput: InputBreakdown[];
-};
-
-/** @deprecated The pre-run-directory summary.json shape (see EvalRunInputResult). */
-export type EvalRunResult = {
-  runId: string;
-  runDir: string;
-  /** Display label, "<absolute agent path>:<node>". Not used to re-locate the
-   *  agent — reproduction data lives in config.json's provenance. */
-  agentLabel: string;
-  inputs: EvalRunInputResult[];
-  okCount: number;
-  errorCount: number;
-  /** Present unless grading was skipped (`--no-grade`). */
-  grading?: EvalRunGrading;
 };

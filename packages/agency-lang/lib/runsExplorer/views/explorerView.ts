@@ -12,7 +12,7 @@ export type Viewport = { rows: number; cols: number };
 
 export type ExplorerAction =
   | { kind: "openRun"; parentRunKey: string }
-  | { kind: "openLog"; statelogPath: string; title: string }
+  | { kind: "openLog"; statelogPath: string; title: string; traceId?: string }
   | { kind: "openInfo"; rowKey: string }
   | { kind: "back" }
   | { kind: "exportCsv"; projection: TableProjection }

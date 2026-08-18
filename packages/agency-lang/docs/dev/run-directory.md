@@ -162,6 +162,21 @@ One file per command; none imports the lock or the append helpers.
   — one `addToRunDirectory` request; prints counts and the listing.
 - `agency runs list <dir>` — one line per trace (`summarizeRuns`).
 - `agency note <dir> <text> [--trace id] [--annotator who]` — `recordNote`.
+- `agency run <file> --capture-workdir <dir>` (`lib/cli/commands.ts`) — mints
+  a trace id (`AGENCY_TRACE_ID`), points the child's statelog at a private
+  staging file (`log.logFile` + `observability` overrides), and after exit
+  makes one `addToRunDirectory` call: that statelog, the entry file's code
+  closure, and the working directory as the trace's workdir snapshot. The
+  snapshot is the whole cwd, so run it from the project you mean to capture.
+  The destination may sit inside that cwd (`--capture-workdir ./runs/x` is
+  the natural call); the run directory is left out of its own snapshot rather
+  than copied into itself. The capture statelog and the code identity always
+  win over inherited config overrides (`runChildOverrides`), and the temp
+  staging directory is removed whether or not the fold succeeded.
+- `agency logs <dir>` — the viewer on the directory's statelog with each
+  trace's annotations summarised (`annotationSummaries`); several paths open
+  the runs explorer, which reads run directories through `readRunDirectory`
+  (`docs/dev/runs-explorer.md`).
 
 ## Gotchas
 

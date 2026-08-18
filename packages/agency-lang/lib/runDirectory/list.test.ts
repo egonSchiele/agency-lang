@@ -73,6 +73,36 @@ describe("summarizeRuns", () => {
     });
   });
 
+  it("reports gates as unknown (null) when a must-pass score is scalar, since its threshold is not on the row", () => {
+    const dir = tempDir();
+    addToRunDirectory({
+      dir,
+      statelogFiles: [
+        statelogFile(
+          statelogLine("t1", "agentStart", { entryNode: "main", args: {} }),
+          statelogLine("t1", "agentEnd", { result: "done", timeTaken: 1 }),
+        ),
+      ],
+      codeEntries: [],
+      annotationFiles: [],
+    });
+    const score = (name: string, kind: "binary" | "scalar", mustPass: boolean) => ({
+      traceId: "t1",
+      annotator: { kind: "grader" as const, id: "g@1" },
+      name,
+      score:
+        kind === "binary"
+          ? { kind: "binary" as const, pass: true }
+          : { kind: "scalar" as const, value: 0.2 },
+      weight: 1,
+      mustPass,
+    });
+    recordGradingPass({ dir, scores: [score("a", "binary", true), score("b", "scalar", false)] });
+    expect(summarizeRuns(readRunDirectory(dir, quiet))[0].gatesPassed).toBe(true);
+    recordGradingPass({ dir, scores: [score("a", "binary", true), score("b", "scalar", true)] });
+    expect(summarizeRuns(readRunDirectory(dir, quiet))[0].gatesPassed).toBeNull();
+  });
+
   it("prefers the harness verdict over the trace's own ending", () => {
     const dir = tempDir();
     addToRunDirectory({

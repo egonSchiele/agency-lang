@@ -141,3 +141,14 @@ rules are its reason to exist.
 Implement the `View` type, add a `ViewAction` case if the view needs a new cross-view jump,
 construct it in the shell's `dispatch`, and give it `helpLines()`. State that must survive
 follow re-parses goes by id or absolute time, never by row index.
+
+## Run directories
+
+`agency logs <dir>` on a run directory (`docs/dev/run-directory.md`) opens
+this viewer on `<dir>/statelog.jsonl` with `traceAnnotations`: one line per
+trace id ("2 notes · score 0.70 · labeled", built by `annotationSummaries`
+in `lib/runDirectory/list.ts`) that `renderRowText` appends, dimmed, to the
+trace's row and nowhere else. `focusTraceId` starts the cursor on a given
+trace and expands it; the runs explorer uses it when drilling from a test
+into the run's shared statelog. Both are read once at open; follow mode
+re-reads the statelog, not the annotations.

@@ -130,7 +130,13 @@ export async function runSuite(
   process.once("SIGINT", onSigint);
 
   const parallel = Math.max(1, Math.floor(opts.parallel ?? 1));
-  const flags: Record<string, string | number | boolean> = { parallel, continueOnError };
+  // `agent` is the target's label (an agent file path or the command line),
+  // so a listing can say which agent a directory's runs came from.
+  const flags: Record<string, string | number | boolean> = {
+    parallel,
+    continueOnError,
+    agent: target.label,
+  };
   const harness = { kind: "harness" as const, id: `agency-eval@${harnessVersion()}` };
 
   // One test, executed, folded into the run directory, and its staging

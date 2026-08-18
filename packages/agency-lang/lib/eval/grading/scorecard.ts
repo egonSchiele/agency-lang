@@ -1,3 +1,5 @@
+import type { HumanFeedback } from "@/runDirectory/humanFeedback.js";
+
 import type { BaseGrader } from "./baseGrader.js";
 import type { LoadedRun, Grade, Test } from "./types.js";
 
@@ -10,6 +12,9 @@ export type InputGrades = {
   gatesPassed: boolean;
   /** Why this input scored 0 without being graded. Set iff `run` is null. */
   ungradedReason?: string;
+  /** Notes and unchecked checklist questions people left on the trace, when
+   *  the run directory carried any. Reflection feeds these to the model. */
+  humanFeedback?: HumanFeedback;
 };
 
 /**

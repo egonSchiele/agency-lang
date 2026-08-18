@@ -91,7 +91,28 @@ export function applyWorkdirAttachment(
     }
   }
   fs.mkdirSync(plan.target, { recursive: true });
-  fs.cpSync(plan.sourceDir, plan.target, { recursive: true });
+  // The run directory may sit inside the tree being captured (`agency run
+  // --capture-workdir ./runs/x` from the project root); copying it into itself
+  // would recurse forever, so its subtree is left out.
+  copyTreeExcluding(path.resolve(plan.sourceDir), plan.target, path.resolve(paths.dir));
   const sidecar: WorkdirSidecar = { snapshotAt, source: path.resolve(plan.sourceDir) };
   fs.writeFileSync(plan.sidecar, JSON.stringify(sidecar, null, 2) + "\n");
+}
+
+/** Copy `source` into `target`, skipping the `excluded` directory. `cpSync`
+ *  refuses a tree that contains its own destination outright, so the walk
+ *  descends only along the path to `excluded` and copies whole subtrees
+ *  everywhere else. */
+function copyTreeExcluding(source: string, target: string, excluded: string): void {
+  fs.mkdirSync(target, { recursive: true });
+  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+    const from = path.join(source, entry.name);
+    const to = path.join(target, entry.name);
+    if (from === excluded) continue;
+    if (entry.isDirectory() && isStrictDescendant(from, excluded)) {
+      copyTreeExcluding(from, to, excluded);
+    } else {
+      fs.cpSync(from, to, { recursive: true });
+    }
+  }
 }

@@ -1,8 +1,6 @@
-// Bounded artifact mining for the loader: read what a row still needs
-// from an eval record or, when records are missing fields or missing
-// entirely, from the statelog itself. These are loader internals, not
-// explorer API — the loader chooses which miner runs; views never see
-// this module.
+// Bounded statelog mining for the loader: per-trace totals for a raw
+// statelog file given on the command line. Loader internals, not
+// explorer API — views never see this module.
 //
 // The statelog scan is resumable on purpose: one advance() reads at
 // most one chunk, so the shell can interleave scanning a multi-megabyte
@@ -15,52 +13,9 @@ import { stripQuotes } from "../logsViewer/spanText.js";
 
 export const STATELOG_SCAN_CHUNK_BYTES = 256 * 1024;
 
-// ── record mining ──────────────────────────────────────────────────
-
-/** Null fields mean "this record does not know" — the statelog supplies
- *  them then. A wrong $0.00 would read as a fact, so a record with no
- *  metrics block reports null cost, never zero. */
-export type RecordMetrics = {
-  costUsd: number | null;
-  durationMs: number | null;
-  startedAtMs: number | null;
-  models: string[] | null;
-  agentName?: string;
-};
-
-export type RecordMetricsRead =
-  | { kind: "metrics"; value: RecordMetrics }
-  | { kind: "missing" }
-  | { kind: "warning"; message: string };
-
-export function readRecordMetrics(recordPath: string): RecordMetricsRead {
-  if (recordPath === "" || !fs.existsSync(recordPath)) {
-    return { kind: "missing" };
-  }
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(fs.readFileSync(recordPath, "utf-8")) as Record<string, unknown>;
-  } catch (error) {
-    return { kind: "warning", message: `could not read ${recordPath}: ${errText(error)}` };
-  }
-  const metrics = parsed.metrics as Record<string, unknown> | undefined;
-  const value: RecordMetrics = {
-    costUsd: numberOrNull(metrics?.costUsdTotal),
-    durationMs: numberOrNull(parsed.durationMs),
-    startedAtMs: numberOrNull(parsed.startedAtMs),
-    models: Array.isArray(metrics?.models) ? (metrics.models as string[]) : null,
-  };
-  if (typeof parsed.agentName === "string") {
-    value.agentName = parsed.agentName;
-  }
-  return { kind: "metrics", value };
-}
-
 // ── statelog mining ────────────────────────────────────────────────
 
-/** Per-trace totals the accumulator derives. The same accumulation
- *  serves direct statelog rows and backfill, so the two can never
- *  disagree about what a statelog means. */
+/** Per-trace totals the accumulator derives. */
 export type TraceTotals = {
   costUsd: number;
   models: string[];
@@ -222,10 +177,6 @@ function accumulate(traces: Record<string, TraceTotals>, parsed: unknown): void 
 
 function numberOr(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function numberOrNull(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function errText(error: unknown): string {

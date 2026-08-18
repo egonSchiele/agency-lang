@@ -203,6 +203,7 @@ export class RunsTableView implements ExplorerView {
         kind: "openLog",
         statelogPath: row.tests[0].statelogPath,
         title: `${row.agent} / ${row.tests[0].inputId}`,
+        traceId: row.tests[0].traceId,
       };
     }
     if (row.tests.length > 1) {

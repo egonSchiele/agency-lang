@@ -20,6 +20,8 @@ export type FakeRun = {
   costUsd?: number;
   /** When false, no trace is written at all — a run that never started. */
   wroteStatelog?: boolean;
+  /** The harness's agent label, recorded as `flags.agent` on the run row. */
+  agentLabel?: string;
 };
 
 /**
@@ -66,7 +68,7 @@ export function writeRunDirectory(runs: FakeRun[], dir: string = tempDir("run-")
           test: run.test as never,
           suite: null,
           ended,
-          flags: {},
+          flags: run.agentLabel === undefined ? {} : { agent: run.agentLabel },
           ...(ended === "ok" ? {} : { error: run.errorMessage ?? `ended with ${ended}` }),
         },
       },

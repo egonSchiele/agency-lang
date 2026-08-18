@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { writeRunDirectory, type FakeRun } from "@/eval/runDirectoryFixture.js";
 import type { Test } from "@/eval/runTypes.js";
+import { recordNote } from "@/runDirectory/mutations.js";
 import { readRunDirectory } from "@/runDirectory/runDir.js";
 
 import { AgencyRunner } from "./agencyRunner.js";
@@ -70,6 +71,22 @@ describe("grading one trace (through gradeRun on a directory of one)", () => {
 });
 
 describe("gradeRun", () => {
+  it("carries the notes people left on a trace alongside its grades", async () => {
+    const runDir = makeRun({ output: "New Delhi" });
+    recordNote({
+      dir: runDir,
+      traceId: "trace-1",
+      annotator: { kind: "human", id: "adit" },
+      text: "too slow",
+    });
+    const card = await gradeRun(runDir, ctx([grader(() => 1, { name: "g" })]));
+    expect(card.perInput[0].humanFeedback).toEqual({
+      notes: ["too slow"],
+      checked: [],
+      unchecked: [],
+    });
+  });
+
   it("scores a run the harness marked as errored 0, gate-failed, without showing it to graders", async () => {
     const runDir = makeRun({ output: "plausible answer", ended: "error", errorMessage: "boom" });
     let graderRan = false;

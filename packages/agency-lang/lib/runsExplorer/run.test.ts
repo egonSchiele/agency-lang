@@ -7,12 +7,7 @@ import type { KeyEvent } from "../tui/input/types.js";
 import { ScriptedInput } from "../tui/input/scripted.js";
 import { FrameRecorder } from "../tui/output/recorder.js";
 import { runExplorer, type ExplorerOptions } from "./run.js";
-import {
-  resetFixtureClock,
-  writeGradedRun,
-  writeKilledRun,
-  writeMultiTraceStatelog,
-} from "./testFixtures.js";
+import { resetFixtureClock, writeGradedRun, writeMultiTraceStatelog } from "./testFixtures.js";
 
 const viewport = { rows: 24, cols: 120 };
 
@@ -28,7 +23,6 @@ function makeOptions(over: Partial<ExplorerOptions> & { sources: ExplorerOptions
   const input = new ScriptedInput();
   const recorder = new FrameRecorder();
   const options: ExplorerOptions = {
-    route: "explorer",
     input,
     output: recorder,
     viewport,
@@ -92,9 +86,8 @@ describe("runExplorer", () => {
     expect(all).toContain("regex-log");
   });
 
-  it("q interrupts a large backfill scan mid-load", async () => {
-    const runDir = writeKilledRun(tmpDir);
-    const statelog = path.join(runDir, "inputs", "t1", "agent", "statelog.jsonl");
+  it("q interrupts a large statelog scan mid-load", async () => {
+    const statelog = path.join(tmpDir, "big.jsonl");
     const bigEvent = JSON.stringify({
       format_version: 1,
       trace_id: "big",
@@ -104,14 +97,17 @@ describe("runExplorer", () => {
     for (let i = 0; i < 20_000; i++) {
       lines.push(bigEvent);
     }
-    fs.appendFileSync(statelog, lines.join("\n") + "\n");
+    fs.writeFileSync(statelog, lines.join("\n") + "\n");
 
     const { options, input, recorder } = makeOptions({
-      sources: [{ kind: "runDir", dir: runDir }],
+      sources: [
+        { kind: "runDir", dir: writeGradedRun(tmpDir) },
+        { kind: "statelog", file: statelog },
+      ],
     });
     await drive(options, input, recorder, [
-      // Quit while the row is visible but backfill still pending (…).
-      { when: (frame) => frame.includes("…") && frame.includes("[runs]"), key: "q" },
+      // Quit while the first row is visible but the scan is still going.
+      { when: (frame) => frame.includes("regex-log") && frame.includes("[runs]"), key: "q" },
     ]);
   });
 
@@ -144,18 +140,6 @@ describe("runExplorer", () => {
     ]);
 
     expect(lastFrame(recorder)).toContain("[runs]");
-  });
-
-  it("a single run dir route starts directly on the per-test table", async () => {
-    const runDir = writeGradedRun(tmpDir);
-    const { options, input, recorder } = makeOptions({
-      sources: [{ kind: "runDir", dir: runDir }],
-      route: "runTable",
-    });
-
-    await drive(options, input, recorder, [
-      { when: (frame) => frame.includes("[pick test]") && frame.includes("t1"), key: "q" },
-    ]);
   });
 
   it("hands the embedded viewer the terminal; back re-renders, quit exits", async () => {

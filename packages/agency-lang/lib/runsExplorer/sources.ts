@@ -1,7 +1,7 @@
-// Source discovery for the runs explorer: classify each CLI path as an
-// eval run directory or a statelog file, and decide which screen a sole
+// Source discovery for the runs explorer: classify each CLI path as a
+// run directory or a statelog file, and decide which screen a sole
 // argument opens. Classification is cheap on purpose — a run dir is
-// "has summary.json" (contents are a row problem, not a discovery
+// "has statelog.jsonl" (contents are a row problem, not a discovery
 // problem) and a statelog is "first complete nonblank line is an
 // enveloped JSON event". Nothing here reads more than one line.
 import * as fs from "fs";
@@ -11,10 +11,10 @@ export type Source = { kind: "runDir"; dir: string } | { kind: "statelog"; file:
 
 export type Discovery = {
   sources: Source[];
-  /** Where a sole argument goes: one statelog file → today's viewer,
-   *  one run dir → that run's per-test table, anything else → the
-   *  explorer home table. */
-  route: "viewer" | "runTable" | "explorer";
+  /** Where a sole argument goes: one statelog file → the viewer, one run
+   *  dir → the viewer on its statelog with each trace's annotations
+   *  summarised, anything else → the explorer home table. */
+  route: "viewer" | "runDirectory" | "explorer";
   errors: string[];
 };
 
@@ -22,7 +22,7 @@ const SOURCE_SNIFF_CHUNK_BYTES = 64 * 1024;
 const MAX_SOURCE_SNIFF_LINE_BYTES = 1024 * 1024;
 
 const ACCEPTED_KINDS =
-  "not a run directory (summary.json), a directory of run directories, or a statelog file";
+  "not a run directory (statelog.jsonl), a directory of run directories, or a statelog file";
 
 export function discoverSources(paths: string[]): Discovery {
   const sources: Source[] = [];
@@ -49,7 +49,7 @@ function routeFor(paths: string[], sources: Source[]): Discovery["route"] {
     return "viewer";
   }
   if (soleSource && sources[0].kind === "runDir") {
-    return "runTable";
+    return "runDirectory";
   }
   return "explorer";
 }
@@ -88,14 +88,14 @@ function classifyDirectory(
   sources: Source[],
   errors: string[],
 ): void {
-  if (fs.existsSync(path.join(resolved, "summary.json"))) {
+  if (isRunDirectory(resolved)) {
     sources.push({ kind: "runDir", dir: resolved });
     return;
   }
   const childRuns = fs
     .readdirSync(resolved)
     .map((child) => path.join(resolved, child))
-    .filter((child) => fs.existsSync(path.join(child, "summary.json")));
+    .filter(isRunDirectory);
   if (childRuns.length === 0) {
     errors.push(`${rawPath}: directory contains no run directories — ${ACCEPTED_KINDS}`);
     return;
@@ -103,6 +103,10 @@ function classifyDirectory(
   for (const dir of childRuns) {
     sources.push({ kind: "runDir", dir });
   }
+}
+
+export function isRunDirectory(dir: string): boolean {
+  return fs.existsSync(path.join(dir, "statelog.jsonl"));
 }
 
 type FirstLineSniff =

@@ -65,6 +65,8 @@ export type MutationCounts = { added: number; skipped: number };
 
 export type AddToRunDirectoryResult = {
   statelogs: MutationCounts;
+  /** `describeStatelogMerge` for this request: names what was already there. */
+  statelogSummary: string;
   code: MutationCounts;
   workdirs: MutationCounts;
   annotations: MutationCounts;
@@ -112,6 +114,7 @@ export function addToRunDirectory(
 
     return {
       statelogs: { added: statelogPlan.add.length, skipped: statelogPlan.skipped.length },
+      statelogSummary: describeStatelogMerge(statelogPlan, request.dir),
       code: countPlans(codePlans.map((plan) => plan.status === "add")),
       workdirs: countWorkdir(workdirPlan),
       annotations: annotationCounts,

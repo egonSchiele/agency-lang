@@ -4,6 +4,8 @@ import * as path from "path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
+
 import {
   aggregateSuite,
   judgeSuite,
@@ -171,8 +173,9 @@ function inputVerdict(
   };
 }
 
-/** A one-input run directory on disk in the given state — judgeSuite reads
- *  directories only, so the fixture is files, not a loaded shape. */
+/** A one-test run directory on disk in the given state — judgeSuite reads
+ *  directories only, so the fixture is files, not a loaded shape. `missing`
+ *  is a directory that has no such test at all. */
 function writeRunDir(args: {
   inputId: string;
   status: "ok" | "missing" | "failed";
@@ -180,35 +183,18 @@ function writeRunDir(args: {
 }): string {
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "judge-suite-"));
   dirs.push(runDir);
-  const inputDir = path.join(runDir, "inputs", args.inputId);
-  fs.mkdirSync(path.join(inputDir, "agent"), { recursive: true });
-  fs.writeFileSync(
-    path.join(inputDir, "input.json"),
-    JSON.stringify({ id: args.inputId, goal: "Return Paris", args: {} }),
-  );
-  const recordPath = path.join(inputDir, "agent", "eval-record.json");
-  if (args.status === "ok") {
-    fs.writeFileSync(recordPath, JSON.stringify({ evalOutputs: [{ value: "x", tMs: 1 }] }));
+  if (args.status === "missing") {
+    return writeRunDirectory([], runDir);
   }
-  fs.writeFileSync(
-    path.join(runDir, "summary.json"),
-    JSON.stringify({
-      runId: "r",
-      runDir,
-      agentLabel: "a:main",
-      inputs: [
-        {
-          inputId: args.inputId,
-          status: args.status === "failed" ? "error" : "success",
-          evalRecordPath: recordPath,
-          statelogPath: "",
-          workdirPath: path.join(inputDir, "workdir"),
-          errorMessage: args.errorMessage,
-        },
-      ],
-      okCount: args.status === "ok" ? 1 : 0,
-      errorCount: args.status === "failed" ? 1 : 0,
-    }),
+  return writeRunDirectory(
+    [
+      {
+        test: { id: args.inputId, goal: "Return Paris", input: "t" },
+        output: args.status === "ok" ? "x" : undefined,
+        ended: args.status === "ok" ? "ok" : "error",
+        errorMessage: args.errorMessage,
+      },
+    ],
+    runDir,
   );
-  return runDir;
 }

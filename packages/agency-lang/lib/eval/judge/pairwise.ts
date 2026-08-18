@@ -1,3 +1,6 @@
+import type { EvalRecord } from "@/eval/types.js";
+import { evalRecordFor } from "@/runDirectory/evalRecord.js";
+import { readTraces } from "@/runDirectory/traces.js";
 import * as fs from "fs";
 
 import { runAgencyAgent } from "@/cli/runAgencyAgent.js";
@@ -17,24 +20,26 @@ const PairwiseJudgeResultSchema = z.object({
   reasoning: z.string(),
 });
 
+/** One side of a pair: the eval record (computed from its trace) and a label
+ *  naming where it came from, for the verdict. */
+export type JudgeSide = { label: string; record: EvalRecord };
+
 export type JudgePairArgs = {
   inputId: string;
   goal: string;
-  recordPathA: string;
-  recordPathB: string;
+  sideA: JudgeSide;
+  sideB: JudgeSide;
   order?: "AB" | "BA";
 };
 
 export async function judgePair(args: JudgePairArgs): Promise<InputVerdict> {
   if (!args.inputId) throw new Error("judgePair requires inputId");
   const order = args.order ?? "AB";
-  const recordA = readJson(args.recordPathA);
-  const recordB = readJson(args.recordPathB);
-  const respA = selectFinalResponse(recordA);
-  const respB = selectFinalResponse(recordB);
+  const respA = selectFinalResponse(args.sideA.record);
+  const respB = selectFinalResponse(args.sideB.record);
 
-  if (respA.missing) warnMissing(args.recordPathA);
-  if (respB.missing) warnMissing(args.recordPathB);
+  if (respA.missing) warnMissing(args.sideA.label);
+  if (respB.missing) warnMissing(args.sideB.label);
 
   const judged = await runPairwiseJudge(
     args.goal,
@@ -52,7 +57,7 @@ export async function judgePair(args: JudgePairArgs): Promise<InputVerdict> {
   return {
     inputId: args.inputId,
     goal: args.goal,
-    inputs: [verdictSideOf(args.recordPathA, respA), verdictSideOf(args.recordPathB, respB)],
+    inputs: [verdictSideOf(args.sideA.label, respA), verdictSideOf(args.sideB.label, respB)],
     winner,
     confidence: sample.confidence,
     reasoning: sample.reasoning,
@@ -61,12 +66,18 @@ export async function judgePair(args: JudgePairArgs): Promise<InputVerdict> {
   };
 }
 
+/** Judge two single-trace statelog files against a goal. */
 export async function judgePairwise(
   goal: string,
-  recordPathA: string,
-  recordPathB: string,
+  statelogA: string,
+  statelogB: string,
 ): Promise<PairwiseVerdict> {
-  const verdict = await judgePair({ inputId: "pairwise", goal, recordPathA, recordPathB });
+  const verdict = await judgePair({
+    inputId: "pairwise",
+    goal,
+    sideA: { label: statelogA, record: recordFromStatelog(statelogA) },
+    sideB: { label: statelogB, record: recordFromStatelog(statelogB) },
+  });
 
   return {
     verdictVersion: 1,
@@ -101,20 +112,25 @@ function assertPairwiseJudgeResult(value: unknown): PairwiseJudgeResult {
   return parsed.data;
 }
 
-function readJson(filePath: string): any {
-  try {
-    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      throw new Error(`Eval record not found: ${filePath}`);
-    }
-    throw error;
+/** The eval record of a statelog file's one trace. Several traces need a run
+ *  directory (`judgeSuite`), where each trace names its test. */
+function recordFromStatelog(statelogPath: string): EvalRecord {
+  if (!fs.existsSync(statelogPath)) {
+    throw new Error(`Statelog not found: ${statelogPath}`);
   }
+  const { traces } = readTraces(statelogPath);
+  if (traces.length !== 1) {
+    throw new Error(
+      `${statelogPath} holds ${traces.length} traces; eval judge takes a single-trace statelog ` +
+        `(use \`agency logs extract\`) or two run directories.`,
+    );
+  }
+  return evalRecordFor(traces[0], statelogPath);
 }
 
-function warnMissing(filePath: string): void {
+function warnMissing(label: string): void {
   process.stderr.write(
-    `warning: ${filePath} has no recorded final response; judging against empty string.\n`,
+    `warning: ${label} has no recorded final response; judging against empty string.\n`,
   );
 }
 

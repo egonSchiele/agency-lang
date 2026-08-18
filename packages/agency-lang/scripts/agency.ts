@@ -55,7 +55,6 @@ import { generateReport, cleanCoverage } from "@/cli/coverage.js";
 import { createBundle, extractBundle } from "@/cli/bundle.js";
 import { traceLog } from "@/cli/events.js";
 import { logsView, type LogsViewOpts } from "@/cli/logsView.js";
-import { evalExtract } from "@/cli/evalExtract.js";
 import { evalJudge } from "@/cli/evalJudge.js";
 import { addLabelCommand, labelCommandDependencies } from "@/cli/eval/labelCommand.js";
 import {
@@ -876,32 +875,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
     );
 
   evalCmd
-    .command("extract")
-    .description(
-      "Extract a structured eval record from a statelog file. " +
-        "Use this on the trace of one agent run to produce a JSON " +
-        "artifact you can grade with an LLM judge or compare against " +
-        "another run.",
-    )
-    .argument("<file>", "Path to a .statelog.jsonl file")
-    .option("-o, --out <path>", "Output JSON path (default: <file>.eval.json)")
-    .option(
-      "--preview-chars <n>",
-      "Max chars for tool args/output previews (default: 200, 0 for full)",
-      (v) => parseInt(v, 10),
-    )
-    .option("--compact", "Emit compact JSON instead of pretty-printed (pipelines / diffs)")
-    .action(
-      async (file: string, opts: { out?: string; previewChars?: number; compact?: boolean }) => {
-        await evalExtract(file, {
-          out: opts.out,
-          previewChars: opts.previewChars,
-          pretty: !opts.compact,
-        });
-      },
-    );
-
-  evalCmd
     .command("logs")
     .description("Open a run's statelog in the interactive logs viewer")
     .argument("<runDir>", "A run directory, one input's directory, or a statelog file")
@@ -949,12 +922,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   evalCmd
     .command("judge")
-    .description("Compare two eval records or eval run directories")
-    .argument("<inputA>", "Path to first eval record (.eval.json) or run directory")
-    .argument("<inputB>", "Path to second eval record (.eval.json) or run directory")
+    .description("Compare two single-trace statelogs, or two run directories test by test")
+    .argument("<inputA>", "A single-trace statelog file, or a run directory")
+    .argument("<inputB>", "A single-trace statelog file, or a run directory")
     .option(
       "--goal <text>",
-      "Goal used to judge responses (record files only; run directories carry their own goals)",
+      "Goal used to judge responses (statelog files only; run directories carry their own goals)",
     )
     .option("--samples <n>", "Judge samples per input", parseInt)
     .option("--confidence-threshold <n>", "Minimum confidence counted as a win", parseInt)

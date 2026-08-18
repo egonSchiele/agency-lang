@@ -242,7 +242,7 @@ Config that only your optimizer needs rides on `BaseOptimizerConfig` and gets ca
 | Seam | Replaces |
 | --- | --- |
 | `discover` | Target discovery — return a fixed `OptimizeTargetSet` instead of parsing a file. |
-| `runInput` | Running the agent — return the run DIRECTORY it wrote (a suite of one). Grading loads that directory like any other run, so it must carry real artifacts (`eval-record.json`, `input.json`, `summary.json`); `fakeRun` in `lib/optimize/testUtils.ts` builds one. |
+| `runInput` | Running the agent — return the run DIRECTORY it wrote (one trace). Grading reads that directory like any other run directory (`docs/dev/run-directory.md`), so it must carry a real statelog and a `run` row; `fakeRun` in `lib/optimize/testUtils.ts` builds one. |
 | `reporter` | Progress output — capture emitted events. |
 | `agencyRunner` | Running judge/proposer `.agency` files. |
 | `cache` | The per-`(workspace, input)` run cache. |

@@ -1,7 +1,9 @@
 import type { EventEnvelope } from "../statelog/wireTypes.js";
 import { extractEvalRecord, type ExtractOptions } from "./extract.js";
 import { normalize, type Normalized } from "./normalize.js";
-import { readAllEventsSync } from "./parseJsonl.js";
+import * as fs from "fs";
+
+import { parseStatelogJsonl } from "../statelog/parse.js";
 import type {
   ErrorEntry,
   EvalRecord,
@@ -27,7 +29,15 @@ export class StatelogParser {
 
   events(): EventEnvelope[] {
     if (!this.eventsCache) {
-      this.eventsCache = readAllEventsSync(this.filePath);
+      // Strict, unlike the viewer: a malformed line fails the whole read,
+      // because an eval record built from a partially read trace is worse than
+      // no record.
+      const parsed = parseStatelogJsonl(fs.readFileSync(this.filePath, "utf-8"));
+      const [firstError] = parsed.errors;
+      if (firstError !== undefined) {
+        throw new Error(`Malformed JSON on line ${firstError.line}: ${firstError.detail}`);
+      }
+      this.eventsCache = parsed.events;
     }
     return this.eventsCache;
   }

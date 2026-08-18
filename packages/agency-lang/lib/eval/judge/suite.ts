@@ -1,5 +1,9 @@
+import { evalRecordFor, traceEnding } from "@/runDirectory/evalRecord.js";
+import { readRunDirectory, type RunDirectorySnapshot } from "@/runDirectory/runDir.js";
+import type { Trace } from "@/runDirectory/traces.js";
+
+import type { EvalRecord } from "../types.js";
 import type { Test } from "../runTypes.js";
-import { readEvalRun, type ReadEvalRunInput } from "../readRun.js";
 import { judgePair, type JudgePairArgs } from "./pairwise.js";
 import type {
   JudgeAggregationPolicy,
@@ -9,8 +13,8 @@ import type {
   InputVerdict,
 } from "./types.js";
 
-/** Two run directories and a policy — the input specs (ids, goals) come from
- *  each run's own input.json files, the same way grading reads them. */
+/** Two run directories and a policy — the tests (ids, goals) come from each
+ *  directory's `run` rows, the same way grading reads them. */
 export type JudgeSuiteArgs = {
   runA: string;
   runB: string;
@@ -81,30 +85,30 @@ export function aggregateSuite(
 }
 
 export async function judgeSuite(args: JudgeSuiteArgs): Promise<SuiteVerdict> {
-  const runA = readEvalRun(args.runA);
-  const runB = readEvalRun(args.runB);
+  const runA = loadSide(args.runA);
+  const runB = loadSide(args.runB);
   const perInput: InputVerdict[] = [];
   const judge = args.judgePair ?? judgePair;
 
-  // Run A's inputs in summary order, then any ids only run B has — a lopsided
-  // pair yields missing-data verdicts rather than silently dropping inputs.
+  // Run A's tests in trace order, then any ids only run B has — a lopsided
+  // pair yields missing-data verdicts rather than silently dropping tests.
   const ids = [
-    ...Object.keys(runA.inputsById),
-    ...Object.keys(runB.inputsById).filter((id) => !Object.hasOwn(runA.inputsById, id)),
+    ...Object.keys(runA.byTestId),
+    ...Object.keys(runB.byTestId).filter((id) => !Object.hasOwn(runA.byTestId, id)),
   ];
   for (const id of ids) {
-    const inputA = runA.inputsById[id] ?? missingInput(id);
-    const inputB = runB.inputsById[id] ?? missingInput(id);
-    const spec: Test = inputA.input ?? inputB.input ?? { id, input: "" };
-    if (inputA.status !== "ok" || inputB.status !== "ok") {
-      perInput.push(missingDataVerdict(spec, inputA, inputB));
+    const sideA = runA.byTestId[id] ?? missingSide(id);
+    const sideB = runB.byTestId[id] ?? missingSide(id);
+    const spec: Test = sideA.test ?? sideB.test ?? { id, input: "" };
+    if (sideA.status !== "ok" || sideB.status !== "ok") {
+      perInput.push(missingDataVerdict(spec, sideA, sideB));
       continue;
     }
     // No goal means nothing to judge against. An LLM judge handed "" would
     // still return a confident-looking verdict, so refuse deterministically
     // instead — same treatment as missing data.
     if (!spec.goal) {
-      perInput.push(noGoalVerdict(id, inputA, inputB));
+      perInput.push(noGoalVerdict(id, sideA, sideB));
       continue;
     }
 
@@ -114,8 +118,8 @@ export async function judgeSuite(args: JudgeSuiteArgs): Promise<SuiteVerdict> {
       const verdict = await judge({
         inputId: id,
         goal: spec.goal ?? "",
-        recordPathA: inputA.recordPath ?? "",
-        recordPathB: inputB.recordPath ?? "",
+        sideA: { label: sideA.label, record: sideA.record as EvalRecord },
+        sideB: { label: sideB.label, record: sideB.record as EvalRecord },
         order,
       });
       samples.push(...verdict.samples);
@@ -125,12 +129,57 @@ export async function judgeSuite(args: JudgeSuiteArgs): Promise<SuiteVerdict> {
         inputId: id,
         goal: spec.goal ?? "",
         samples,
-        inputs: [verdictSideOf(inputA), verdictSideOf(inputB)],
+        inputs: [verdictSideOf(sideA), verdictSideOf(sideB)],
       }),
     );
   }
 
   return aggregateSuite(perInput, args.policy);
+}
+
+/** One test's trace as the judge sees it: `ok` when the run ended cleanly
+ *  (the harness's `run` row is authoritative, else the trace's own ending),
+ *  `failed` otherwise, `missing` when the directory has no such test. */
+type JudgeSuiteSide = {
+  label: string;
+  status: "ok" | "failed" | "missing";
+  test?: Test;
+  record?: EvalRecord;
+  errorMessage?: string;
+};
+
+function loadSide(dir: string): { byTestId: Record<string, JudgeSuiteSide> } {
+  const snapshot = readRunDirectory(dir, { reportWarning: (m) => console.warn(`judge: ${m}`) });
+  const byTestId: Record<string, JudgeSuiteSide> = Object.create(null);
+  for (const trace of snapshot.traces) {
+    const side = sideOf(snapshot, trace);
+    const id = side.test?.id ?? trace.traceId;
+    if (Object.hasOwn(byTestId, id)) {
+      console.warn(`judge: ${dir} has two traces for test ${id}; keeping the first`);
+      continue;
+    }
+    byTestId[id] = side;
+  }
+  return { byTestId };
+}
+
+function sideOf(snapshot: RunDirectorySnapshot, trace: Trace): JudgeSuiteSide {
+  const runRow = snapshot.effectiveAnnotations[trace.traceId]?.run ?? null;
+  const test =
+    runRow !== null &&
+    runRow.kind === "run" &&
+    typeof runRow.test === "object" &&
+    runRow.test !== null &&
+    !Array.isArray(runRow.test)
+      ? (runRow.test as Test)
+      : undefined;
+  const ended = runRow !== null && runRow.kind === "run" ? runRow.ended : traceEnding(trace);
+  const label = `${snapshot.dir}#${trace.traceId}`;
+  if (ended !== "ok") {
+    const error = runRow !== null && runRow.kind === "run" ? runRow.error : undefined;
+    return { label, status: "failed", test, errorMessage: error ?? `ended with ${ended}` };
+  }
+  return { label, status: "ok", test, record: evalRecordFor(trace, snapshot.dir) };
 }
 
 function winnerFromCounts(samples: JudgeSample[]): JudgeWinner {
@@ -152,14 +201,14 @@ function mean(values: number[]): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-function missingInput(inputId: string): ReadEvalRunInput {
-  return { inputId, status: "missing" };
+function missingSide(inputId: string): JudgeSuiteSide {
+  return { label: `(no test ${inputId})`, status: "missing" };
 }
 
 function missingDataVerdict(
   input: Test,
-  inputA: ReadEvalRunInput,
-  inputB: ReadEvalRunInput,
+  inputA: JudgeSuiteSide,
+  inputB: JudgeSuiteSide,
 ): InputVerdict {
   const winner = missingDataWinner(inputA.status, inputB.status);
   return {
@@ -182,12 +231,11 @@ function missingDataVerdict(
  *  skewing the aggregate. */
 function noGoalVerdict(
   inputId: string,
-  inputA: ReadEvalRunInput,
-  inputB: ReadEvalRunInput,
+  inputA: JudgeSuiteSide,
+  inputB: JudgeSuiteSide,
 ): InputVerdict {
-  // "no goal recorded", not "no goal in its input.json": this branch also
-  // fires when input.json is missing or unparseable (the loader degrades
-  // those to a spec-less input while the records stay judgeable).
+  // "no goal recorded": this branch also fires for an ad-hoc trace with no
+  // `run` row at all (a test named by its trace id, judgeable but goal-less).
   const reasoning = "no goal recorded for this input; nothing to judge against";
   return {
     inputId,
@@ -203,17 +251,17 @@ function noGoalVerdict(
 }
 
 function missingDataWinner(
-  statusA: ReadEvalRunInput["status"],
-  statusB: ReadEvalRunInput["status"],
+  statusA: JudgeSuiteSide["status"],
+  statusB: JudgeSuiteSide["status"],
 ): JudgeWinner {
   if (statusA === "ok" && statusB !== "ok") return "A";
   if (statusB === "ok" && statusA !== "ok") return "B";
   return "tie";
 }
 
-function verdictSideOf(input: ReadEvalRunInput): InputVerdict["inputs"][number] {
+function verdictSideOf(input: JudgeSuiteSide): InputVerdict["inputs"][number] {
   return {
-    ...(input.recordPath ? { path: input.recordPath } : {}),
+    path: input.label,
     status: input.status,
     ...(input.errorMessage ? { errorMessage: input.errorMessage } : {}),
   };

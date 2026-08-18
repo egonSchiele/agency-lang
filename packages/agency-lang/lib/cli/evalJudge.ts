@@ -6,7 +6,7 @@ import { judgeSuite } from "@/eval/judge/suite.js";
 import type { JudgeAggregationPolicy } from "@/eval/judge/types.js";
 
 export type EvalJudgeOptions = {
-  /** Files mode only — run directories carry their own goals. */
+  /** Statelog-file mode only — run directories carry their own goals. */
   goal?: string;
   out?: string;
   samples?: number;
@@ -22,11 +22,13 @@ export async function evalJudge(
 ): Promise<void> {
   const mode = inputMode(inputA, inputB);
   if (mode === "mixed") {
-    throw new Error("Both inputs to eval judge must be files or both must be run directories");
+    throw new Error(
+      "Both inputs to eval judge must be statelog files or both must be run directories",
+    );
   }
 
   if (mode === "files") {
-    if (!opts.goal) throw new Error("--goal is required when judging eval record files");
+    if (!opts.goal) throw new Error("--goal is required when judging statelog files");
     const verdict = await judgePairwise(opts.goal, inputA, inputB);
     const outPath = opts.out ?? defaultOutPath(inputA, inputB);
     fs.writeFileSync(outPath, JSON.stringify(verdict, null, 2));
@@ -39,7 +41,7 @@ export async function evalJudge(
 
   if (opts.goal) {
     throw new Error(
-      "--goal is only for judging eval record files; run directories carry their own goals in input.json",
+      "--goal is only for judging statelog files; run directories carry their own goals on each test's run row",
     );
   }
   const verdict = await judgeSuite({
@@ -105,5 +107,8 @@ function defaultOutPath(recordPathA: string, recordPathB: string): string {
 }
 
 function stem(filePath: string): string {
-  return path.basename(filePath).replace(/\.eval\.json$/, "");
+  return path
+    .basename(filePath)
+    .replace(/\.(statelog\.)?jsonl$/, "")
+    .replace(/\.eval\.json$/, "");
 }

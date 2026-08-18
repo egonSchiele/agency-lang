@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseStatelogJsonl } from "./parse.js";
+import { parseStatelogJsonlWithLines } from "../statelog/parse.js";
 
 const v1 = (data: object, extra: object = {}) =>
   JSON.stringify({
@@ -80,5 +81,27 @@ describe("parseStatelogJsonl", () => {
     const result = parseStatelogJsonl(legacy);
     expect(result.events).toHaveLength(1);
     expect(result.events[0].format_version).toBe(1);
+  });
+});
+
+describe("parseStatelogJsonlWithLines", () => {
+  it("returns the validated envelope with its raw line and one-based line number", () => {
+    const first = v1({ message: "a" });
+    const second = v1({ message: "b" });
+    const input = first + "\n\n" + second + "\n";
+    const result = parseStatelogJsonlWithLines(input);
+    expect(result.errors).toEqual([]);
+    expect(result.lines.map((entry) => entry.line)).toEqual([1, 3]);
+    expect(result.lines[0].raw).toBe(first);
+    expect(result.lines[1].event.data.message).toBe("b");
+  });
+
+  it("is what parseStatelogJsonl delegates to", () => {
+    const input = [v1({ message: "a" }), "not json", v1({ message: "b" })].join("\n");
+    const withLines = parseStatelogJsonlWithLines(input);
+    const plain = parseStatelogJsonl(input);
+    expect(plain.events).toEqual(withLines.lines.map((entry) => entry.event));
+    expect(plain.errors).toEqual(withLines.errors);
+    expect(withLines.errors[0].line).toBe(2);
   });
 });

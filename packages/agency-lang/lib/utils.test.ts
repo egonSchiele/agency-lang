@@ -10,7 +10,7 @@ import {
 } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { safeDeleteFile, safeDeleteDirectory } from "./utils.js";
+import { safeDeleteFile, safeDeleteDirectory, safeDeleteDirectoryWithin } from "./utils.js";
 import { findPackageRoot } from "./importPaths.js";
 
 // All tests here use dryRun=true (the default). We never exercise the
@@ -119,5 +119,49 @@ describe("safeDeleteFile / safeDeleteDirectory (dry-run only)", () => {
       expect(result.message).toMatch(/outside project root|no project root found/);
       rmSync(symlinkPath, { force: true, recursive: true });
     });
+  });
+});
+
+describe("safeDeleteDirectoryWithin", () => {
+  function scratch(): { root: string; child: string; sibling: string } {
+    const base = mkdtempSync(join(tmpdir(), "sdw-"));
+    const root = join(base, "root");
+    const child = join(root, "child");
+    const sibling = join(base, "sibling");
+    mkdirSync(child, { recursive: true });
+    mkdirSync(sibling, { recursive: true });
+    writeFileSync(join(child, "sentinel.txt"), "x");
+    writeFileSync(join(sibling, "sentinel.txt"), "x");
+    return { root, child, sibling };
+  }
+
+  it("deletes a strict descendant", () => {
+    const { root, child } = scratch();
+    expect(safeDeleteDirectoryWithin(root, child)).toEqual({ success: true });
+    expect(existsSync(child)).toBe(false);
+    expect(existsSync(root)).toBe(true);
+  });
+
+  it("refuses the root itself, a sibling, and a .. escape", () => {
+    const { root, child, sibling } = scratch();
+    expect(safeDeleteDirectoryWithin(root, root).success).toBe(false);
+    expect(safeDeleteDirectoryWithin(root, sibling).success).toBe(false);
+    expect(safeDeleteDirectoryWithin(root, join(child, "..", "..", "sibling")).success).toBe(false);
+    expect(existsSync(sibling)).toBe(true);
+    expect(existsSync(child)).toBe(true);
+  });
+
+  it("refuses a symlink inside root that points outside it", () => {
+    const { root, sibling } = scratch();
+    const link = join(root, "escape");
+    symlinkSync(sibling, link);
+    expect(safeDeleteDirectoryWithin(root, link).success).toBe(false);
+    expect(existsSync(join(sibling, "sentinel.txt"))).toBe(true);
+  });
+
+  it("refuses a missing path and a file", () => {
+    const { root, child } = scratch();
+    expect(safeDeleteDirectoryWithin(root, join(root, "missing")).success).toBe(false);
+    expect(safeDeleteDirectoryWithin(root, join(child, "sentinel.txt")).success).toBe(false);
   });
 });

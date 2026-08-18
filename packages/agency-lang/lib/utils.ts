@@ -88,6 +88,53 @@ export function safeDeleteDirectory(targetPath: string, dryRun: boolean = true):
   return safeDelete(targetPath, "directory", dryRun);
 }
 
+/**
+ * Delete a directory only if it is a strict descendant of `root`.
+ *
+ * `safeDeleteDirectory` is anchored to the project root, which is the wrong
+ * boundary for a run directory that can live anywhere. This one takes the
+ * boundary as an argument: both paths are resolved through symlinks, `target`
+ * must lie strictly inside `root` (never the root itself, never a sibling,
+ * never `..`, never a symlink that escapes), and only then is it removed.
+ */
+export function safeDeleteDirectoryWithin(root: string, target: string): SafeDeleteResult {
+  if (!fs.existsSync(target)) {
+    return { success: false, message: `Path does not exist: '${target}'.` };
+  }
+  let resolvedRoot: string;
+  let resolvedTarget: string;
+  try {
+    resolvedRoot = fs.realpathSync(path.resolve(root));
+    resolvedTarget = fs.realpathSync(path.resolve(target));
+  } catch (err) {
+    return {
+      success: false,
+      message: `Refusing to delete '${target}': ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+  if (!fs.statSync(resolvedTarget).isDirectory()) {
+    return { success: false, message: `Not a directory: '${resolvedTarget}'.` };
+  }
+  const relative = path.relative(resolvedRoot, resolvedTarget);
+  const strictlyInside =
+    relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+  if (!strictlyInside) {
+    return {
+      success: false,
+      message: `Refusing to delete '${resolvedTarget}': not strictly inside '${resolvedRoot}'.`,
+    };
+  }
+  try {
+    fs.rmSync(resolvedTarget, { recursive: true, force: true });
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      message: `Failed to delete '${resolvedTarget}': ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
 export function escape(str: string): string {
   return (
     str

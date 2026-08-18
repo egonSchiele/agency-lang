@@ -20,22 +20,37 @@ import type { ViewerThresholds } from "../thresholds.js";
 import type { TreeNode, ViewerState } from "../types.js";
 import type { View, ViewAction, Viewport } from "./view.js";
 
+export type TreeViewOptions = {
+  /** When true, `x` extracts the focused trace to a file of its own. Off for
+   *  remote or stdin sources, where there is no local file to read it from. */
+  extractEnabled?: boolean;
+  /** One line per trace id, shown after the trace's own summary: what the
+   *  run directory's annotations say about it ("2 notes · score 0.70 · labeled"). */
+  traceAnnotations?: Record<string, string>;
+  /** Start with the cursor on this trace, when it is in the forest. */
+  focusTraceId?: string;
+};
+
 export class TreeView implements View {
   readonly viewName = "tree" as const;
   private state: ViewerState;
+  private readonly extractEnabled: boolean;
+  private readonly traceAnnotations: Record<string, string>;
 
   constructor(
     roots: TreeNode[],
     private readonly thresholds: ViewerThresholds,
     private readonly viewport: Viewport,
-    /** When true, `x` extracts the focused trace to a file of its own. Off for
-     *  remote or stdin sources, where there is no local file to read it from. */
-    private readonly extractEnabled: boolean = false,
+    options: TreeViewOptions = {},
   ) {
+    this.extractEnabled = options.extractEnabled ?? false;
+    this.traceAnnotations = options.traceAnnotations ?? {};
+    const focused = roots.find((root) => root.traceId === options.focusTraceId);
+    const start = focused ?? roots[0];
     this.state = {
       roots,
-      expanded: new Set(roots.length === 1 ? [roots[0].id] : []),
-      cursorId: roots[0]?.id ?? "",
+      expanded: new Set(roots.length === 1 || focused !== undefined ? [start.id] : []),
+      cursorId: start?.id ?? "",
       scrollTop: 0,
       quit: false,
       viewportCols: viewport.cols,
@@ -103,6 +118,7 @@ export class TreeView implements View {
           renderRowText(vrow, isCursor, state.expanded.has(vrow.node.id), {
             query: state.query,
             thresholds: this.thresholds,
+            traceAnnotations: this.traceAnnotations,
           }),
           fg ? { fg } : undefined,
         );

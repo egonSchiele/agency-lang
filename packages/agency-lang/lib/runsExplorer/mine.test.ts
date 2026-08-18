@@ -3,12 +3,7 @@ import * as os from "os";
 import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import {
-  createStatelogScan,
-  readRecordMetrics,
-  runScanToEnd,
-  STATELOG_SCAN_CHUNK_BYTES,
-} from "./mine.js";
+import { createStatelogScan, runScanToEnd, STATELOG_SCAN_CHUNK_BYTES } from "./mine.js";
 import {
   envelope,
   promptCompletion,
@@ -16,83 +11,6 @@ import {
   writeStatelog,
   FIXTURE_EPOCH_MS,
 } from "./testFixtures.js";
-
-describe("readRecordMetrics", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "explorer-mine-"));
-    resetFixtureClock();
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it("reads a modern record completely", () => {
-    const recordPath = path.join(tmpDir, "record.json");
-    fs.writeFileSync(
-      recordPath,
-      JSON.stringify({
-        durationMs: 60_000,
-        startedAtMs: 100,
-        agentName: "named",
-        metrics: { costUsdTotal: 2.0, models: ["opus"] },
-      }),
-    );
-
-    const read = readRecordMetrics(recordPath);
-    if (read.kind !== "metrics") {
-      throw new Error(`expected metrics, got ${read.kind}`);
-    }
-    expect(read.value).toEqual({
-      costUsd: 2.0,
-      durationMs: 60_000,
-      startedAtMs: 100,
-      models: ["opus"],
-      agentName: "named",
-    });
-  });
-
-  it("an old record without startedAtMs or agentName reports which fields are missing", () => {
-    const recordPath = path.join(tmpDir, "old-record.json");
-    fs.writeFileSync(
-      recordPath,
-      JSON.stringify({
-        durationMs: 45_000,
-        metrics: { costUsdTotal: 2.5, models: ["opus"] },
-      }),
-    );
-
-    const read = readRecordMetrics(recordPath);
-    if (read.kind !== "metrics") {
-      throw new Error(`expected metrics, got ${read.kind}`);
-    }
-    expect(read.value.costUsd).toBe(2.5);
-    expect(read.value.startedAtMs).toBeNull();
-    expect(read.value.agentName).toBeUndefined();
-  });
-
-  it("a record with no metrics block reports null cost, never $0.00", () => {
-    const recordPath = path.join(tmpDir, "no-metrics.json");
-    fs.writeFileSync(recordPath, JSON.stringify({ durationMs: 5_000 }));
-
-    const read = readRecordMetrics(recordPath);
-    if (read.kind !== "metrics") {
-      throw new Error(`expected metrics, got ${read.kind}`);
-    }
-    expect(read.value.costUsd).toBeNull();
-    expect(read.value.models).toBeNull();
-  });
-
-  it("missing and malformed records are typed results, never throws", () => {
-    expect(readRecordMetrics(path.join(tmpDir, "nope.json")).kind).toBe("missing");
-    const torn = path.join(tmpDir, "torn.json");
-    fs.writeFileSync(torn, "{ torn");
-    const read = readRecordMetrics(torn);
-    expect(read.kind).toBe("warning");
-  });
-});
 
 describe("createStatelogScan", () => {
   let tmpDir: string;

@@ -7,15 +7,22 @@ import { traceInputText } from "./traceText.js";
 /** One row per trace, for `agency runs list` and the viewer's overview. */
 export type RunSummary = {
   traceId: string;
+  /** The test id from the harness's `run` row; null for an ad-hoc trace. */
+  testId: string | null;
   input: string | null;
+  agentName: string | null;
   startedAt: string | null;
+  startedAtMs: number | null;
   durationMs: number;
   costUsd: number;
   llmCalls: number;
   toolCalls: number;
+  models: string[];
   /** The harness's verdict when it recorded one, else read from the trace. */
   ended: string;
   latestScore: number | null;
+  /** False when an effective must-pass score failed; null with no scores. */
+  gatesPassed: boolean | null;
   noteCount: number;
   labeled: boolean;
   codeHash: string | null;
@@ -35,23 +42,67 @@ function summarizeTrace(
   const record = evalRecordFor(trace, sourcePath);
   const start = trace.events.find((event) => event.data.type === "agentStart");
   const run = effective?.run;
+  const runRow = run !== undefined && run !== null && run.kind === "run" ? run : null;
+  const startedAtMs = Number.isFinite(record.startedAtMs) ? record.startedAtMs : null;
   return {
     traceId: trace.traceId,
+    testId: testIdOf(runRow),
     input: traceInputText(trace, record),
-    startedAt: Number.isFinite(record.startedAtMs)
-      ? new Date(record.startedAtMs).toISOString()
-      : null,
+    agentName: record.agentName ?? null,
+    startedAt: startedAtMs === null ? null : new Date(startedAtMs).toISOString(),
+    startedAtMs,
     durationMs: record.durationMs,
     costUsd: record.metrics.costUsdTotal,
     llmCalls: record.metrics.llmCalls,
     toolCalls: record.metrics.toolEnds,
-    ended: run !== undefined && run !== null && run.kind === "run" ? run.ended : traceEnding(trace),
+    models: [...record.metrics.models],
+    ended: runRow !== null ? runRow.ended : traceEnding(trace),
     latestScore: latestScore(effective),
+    gatesPassed: gatesPassed(effective),
     noteCount: effective?.notes.length ?? 0,
     labeled: Object.keys(effective?.checklists ?? {}).length > 0,
     codeHash:
       typeof start?.data.code?.closureHash === "string" ? start.data.code.closureHash : null,
   };
+}
+
+/** One short line about a trace's annotations for a listing or the viewer's
+ *  trace row: "2 notes · score 0.70 · labeled". Empty when there are none. */
+export function annotationSummaryText(summary: RunSummary): string {
+  const parts: string[] = [];
+  if (summary.noteCount > 0) {
+    parts.push(`${summary.noteCount} ${summary.noteCount === 1 ? "note" : "notes"}`);
+  }
+  if (summary.latestScore !== null) parts.push(`score ${summary.latestScore.toFixed(2)}`);
+  if (summary.labeled) parts.push("labeled");
+  return parts.join(" · ");
+}
+
+/** traceId → `annotationSummaryText`, for every trace that has one. */
+export function annotationSummaries(snapshot: RunDirectorySnapshot): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const summary of summarizeRuns(snapshot)) {
+    const text = annotationSummaryText(summary);
+    if (text !== "") out[summary.traceId] = text;
+  }
+  return out;
+}
+
+function testIdOf(runRow: (Annotation & { kind: "run" }) | null): string | null {
+  const test = runRow?.test;
+  if (typeof test !== "object" || test === null || Array.isArray(test)) return null;
+  return typeof test.id === "string" ? test.id : null;
+}
+
+/** False when an effective must-pass binary score failed; null with no
+ *  scores. A scalar gate's threshold lives on the grader, not the row, so a
+ *  scalar must-pass score cannot be judged here and counts as passed. */
+function gatesPassed(effective: EffectiveTraceAnnotations | undefined): boolean | null {
+  const rows = Object.values(effective?.scores ?? {});
+  if (rows.length === 0) return null;
+  return rows.every(
+    (row) => row.kind !== "score" || !row.mustPass || row.score.kind !== "binary" || row.score.pass,
+  );
 }
 
 /** Weighted mean of the effective scores, on 0..1; null when there are none. */

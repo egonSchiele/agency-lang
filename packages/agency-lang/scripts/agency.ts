@@ -881,12 +881,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--input <id>", "Which input's statelog, when the run has several")
     .option("-f, --follow", "Tail the file — re-read and re-render as new events are appended")
     .action(async (runDir: string, opts: { input?: string; follow?: boolean }) => {
-      // A whole run without --input opens the explorer's per-test
-      // table; --input (or an input dir / statelog file) keeps the
-      // straight-to-viewer path.
+      // A run directory opens the viewer on its statelog with each trace's
+      // annotations summarised; --input (or a statelog file) keeps the
+      // plain viewer path.
       if (
         opts.input === undefined &&
-        fs.existsSync(path.join(path.resolve(runDir), "summary.json"))
+        fs.existsSync(path.join(path.resolve(runDir), "statelog.jsonl"))
       ) {
         await logsView([runDir], { follow: opts.follow });
         return;

@@ -1,6 +1,7 @@
 // `agency logs` — point it at anything log-shaped. A sole statelog file
-// (or "-") opens the interactive viewer exactly as before; a run
-// directory, a directory of run directories, or several paths open the
+// (or "-") opens the interactive viewer; a sole run directory opens the
+// viewer on its statelog with each trace's annotations summarised on its
+// row; a directory of run directories or several paths open the
 // cross-run explorer; --csv prints the table to stdout instead of
 // opening a TUI. Routing is decided by discoverSources; this file only
 // wires the routes to the two apps.
@@ -8,6 +9,8 @@ import * as fs from "fs";
 import * as tty from "tty";
 import type { AgencyConfig } from "@/config.js";
 import { runViewer } from "@/logsViewer/run.js";
+import { annotationSummaries } from "@/runDirectory/list.js";
+import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 import { csvRowsFromRuns, exportCsv } from "@/runsExplorer/csv.js";
 import { loadAllRuns } from "@/runsExplorer/loader.js";
 import { runExplorer } from "@/runsExplorer/run.js";
@@ -27,7 +30,8 @@ export type LogsViewOpts = {
 /** Injectable route targets, so routing is testable without a TTY. */
 export type LogsViewDeps = {
   viewFile?: (file: string, opts: LogsViewOpts) => Promise<void>;
-  explorer?: (options: { sources: Source[]; route: "runTable" | "explorer" }) => Promise<void>;
+  viewRunDirectory?: (dir: string, opts: LogsViewOpts) => Promise<void>;
+  explorer?: (options: { sources: Source[] }) => Promise<void>;
   loadAll?: (sources: Source[]) => RunRow[];
   stdout?: (text: string) => void;
   onError?: (message: string) => void;
@@ -81,11 +85,12 @@ export async function logsView(
     await viewFile(discovery.sources[0].file, cliOpts);
     return;
   }
+  if (discovery.route === "runDirectory" && discovery.sources[0]?.kind === "runDir") {
+    await (deps.viewRunDirectory ?? viewRunDirectory)(discovery.sources[0].dir, cliOpts);
+    return;
+  }
   const explorer = deps.explorer ?? runExplorerOnTerminal;
-  await explorer({
-    sources: discovery.sources,
-    route: discovery.route === "runTable" ? "runTable" : "explorer",
-  });
+  await explorer({ sources: discovery.sources });
 }
 
 function isRegularFile(file: string): boolean {
@@ -97,16 +102,12 @@ function exitWithError(message: string): void {
   process.exit(1);
 }
 
-async function runExplorerOnTerminal(options: {
-  sources: Source[];
-  route: "runTable" | "explorer";
-}): Promise<void> {
+async function runExplorerOnTerminal(options: { sources: Source[] }): Promise<void> {
   const input = new TerminalInput();
   const output = new TerminalOutput();
   try {
     await runExplorer({
       sources: options.sources,
-      route: options.route,
       input,
       output,
       viewport: {
@@ -126,7 +127,14 @@ export type ViewerTerminalInput = "current-stdin" | "controlling-tty";
  *  or a local file with follow. */
 type ViewerSource =
   | { kind: "text"; jsonl: string; terminalInput: ViewerTerminalInput }
-  | { kind: "file"; followPath: string; initialFollow: boolean };
+  | {
+      kind: "file";
+      followPath: string;
+      initialFollow: boolean;
+      /** Set when the file is a run directory's statelog: one summary line
+       *  of annotations per trace id, shown on the trace rows. */
+      traceAnnotations?: Record<string, string>;
+    };
 
 type ViewerTerminalDependencies = {
   createInput(): InputSource;
@@ -209,6 +217,7 @@ function viewerOptions(
     initialFollow: source.initialFollow,
     // A local file: the tree's `x` can extract a trace from it.
     extract: { sourcePath: source.followPath },
+    traceAnnotations: source.traceAnnotations,
   };
 }
 
@@ -328,4 +337,16 @@ function swapStdinToTty(): () => void {
       // best-effort cleanup
     }
   };
+}
+
+/** A run directory: its statelog in the viewer, with each trace's notes,
+ *  scores and labels summarised on the trace's row. */
+async function viewRunDirectory(dir: string, cliOpts: LogsViewOpts): Promise<void> {
+  const snapshot = readRunDirectory(dir, { reportWarning: (message) => console.warn(message) });
+  await defaultViewerHost({
+    kind: "file",
+    followPath: runDirPaths(dir).statelog,
+    initialFollow: cliOpts.follow === true,
+    traceAnnotations: annotationSummaries(snapshot),
+  });
 }

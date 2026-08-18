@@ -1,147 +1,70 @@
-import { describe, expect, it } from "vitest";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 
-import { applyInputPatch, buildRunRow, recomputeRunAggregates, type RunRow } from "./rows.js";
-import type { EvalRunPhaseOne } from "./readRunSummary.js";
-import type { Source } from "./sources.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const source: Source = { kind: "runDir", dir: "/runs/r1" };
+import { readRunDirectory } from "@/runDirectory/runDir.js";
 
-function gradedPhaseOne(): EvalRunPhaseOne {
-  return {
-    summary: {
-      runId: "r1",
-      runDir: "/runs/r1",
-      agentLabel: "/abs/regex.agency:main",
-      okCount: 2,
-      errorCount: 0,
-      inputs: [
-        {
-          inputId: "t1",
-          status: "success",
-          statelogPath: "/runs/r1/inputs/t1/agent/statelog.jsonl",
-          evalRecordPath: "/runs/r1/inputs/t1/agent/eval-record.json",
-          workdirPath: "",
-          metrics: {
-            costUsd: 1.25,
-            durationMs: 60_000,
-            startedAtMs: 1_000_000,
-            models: ["sonnet"],
-            agentName: "regex-log",
-          },
-        },
-        {
-          inputId: "t2",
-          status: "success",
-          statelogPath: "/runs/r1/inputs/t2/agent/statelog.jsonl",
-          evalRecordPath: "/runs/r1/inputs/t2/agent/eval-record.json",
-          workdirPath: "",
-          metrics: {
-            costUsd: 0.75,
-            durationMs: 120_000,
-            startedAtMs: 1_030_000,
-            models: ["sonnet", "opus"],
-          },
-        },
-      ],
-      grading: {
-        graders: ["g"],
-        objective: 0.9,
-        gatesPassed: true,
-        perInput: [
-          { inputId: "t1", objective: 1.0, gatesPassed: true },
-          { inputId: "t2", objective: 0.8, gatesPassed: false },
-        ] as never,
-      },
-    },
-    config: {
-      runId: "r1",
-      startedAt: "2026-08-01T10:00:00.000Z",
-      provenance: {
-        inputsSource: { source: "suites/bench.json" },
-        files: {},
-        agent: { command: "claude -p {task}", harnessVersion: "0" },
-      },
-    },
-    warnings: [],
-  };
-}
+import { buildRunRowFromDirectory } from "./rows.js";
+import { writeGradedRun, writeKilledRun } from "./testFixtures.js";
 
-describe("buildRunRow", () => {
-  it("builds a complete row from a modern summary alone", () => {
-    const built = buildRunRow(gradedPhaseOne(), source);
+let tmpDir: string;
 
-    expect(built.backfillInputIds).toEqual([]);
-    const row = built.row;
-    expect(row.key).toBe("/runs/r1");
-    expect(row.agent).toBe("regex-log");
-    expect(row.suite).toBe("bench");
-    expect(row.score).toBe(0.9);
-    expect(row.gatesPassed).toBe(true);
-    expect(row.status).toBe("ok");
-    expect(row.costUsd).toBeCloseTo(2.0);
-    expect(row.models).toEqual(["sonnet", "opus"]);
-    expect(row.backfilled).toBe(true);
-  });
-
-  it("wall time is the envelope over tests, not the sum of durations", () => {
-    const row = buildRunRow(gradedPhaseOne(), source).row;
-    expect(row.wallMs).toBe(1_030_000 + 120_000 - 1_000_000);
-  });
-
-  it("per-test rows carry grades matched by input id", () => {
-    const row = buildRunRow(gradedPhaseOne(), source).row;
-    expect(row.tests.map((t) => [t.inputId, t.score, t.gatesPassed])).toEqual([
-      ["t1", 1.0, true],
-      ["t2", 0.8, false],
-    ]);
-  });
-
-  it("inputs without metrics are named for backfill and null out aggregates", () => {
-    const phaseOne = gradedPhaseOne();
-    delete (phaseOne.summary.inputs[1] as { metrics?: unknown }).metrics;
-
-    const built = buildRunRow(phaseOne, source);
-
-    expect(built.backfillInputIds).toEqual(["t2"]);
-    expect(built.row.backfilled).toBe(false);
-    expect(built.row.costUsd).toBeCloseTo(1.25);
-    expect(built.row.tests[1].costUsd).toBeNull();
-  });
-
-  it("an errored input makes the run partial when another succeeded", () => {
-    const phaseOne = gradedPhaseOne();
-    phaseOne.summary.inputs[1].status = "error";
-
-    const built = buildRunRow(phaseOne, source);
-
-    expect(built.row.status).toBe("partial");
-    expect(built.row.tests[1].status).toBe("failed");
-    expect(built.backfillInputIds).toContain("t2");
-  });
+beforeEach(() => {
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "explorer-rows-"));
 });
 
-describe("applyInputPatch + recomputeRunAggregates", () => {
-  it("a backfill patch updates the test, re-resolves the agent, and recomputes aggregates", () => {
-    const phaseOne = gradedPhaseOne();
-    delete (phaseOne.summary.inputs[0] as { metrics?: unknown }).metrics;
-    delete (phaseOne.summary.inputs[1] as { metrics?: unknown }).metrics;
-    const row: RunRow = buildRunRow(phaseOne, source).row;
-    expect(row.agent).toBe("regex.agency");
+afterEach(() => {
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
 
-    applyInputPatch(row, "t1", {
-      costUsd: 3.0,
-      durationMs: 60_000,
-      startedAtMs: 2_000_000,
-      models: ["opus"],
-      agentName: "patched-agent",
-      warnings: ["torn line"],
-    });
-    recomputeRunAggregates(row);
+function rowFor(dir: string) {
+  const snapshot = readRunDirectory(dir, { reportWarning: () => {} });
+  return buildRunRowFromDirectory(snapshot, { kind: "runDir", dir });
+}
 
-    expect(row.tests[0].costUsd).toBe(3.0);
-    expect(row.agent).toBe("patched-agent");
+describe("buildRunRowFromDirectory", () => {
+  it("builds a complete row from one snapshot: no backfill left", () => {
+    const dir = writeGradedRun(tmpDir);
+    const row = rowFor(dir);
+    expect(row.key).toBe(dir);
+    expect(row.backfilled).toBe(true);
+    expect(row.status).toBe("ok");
+    expect(row.costUsd).toBeCloseTo(2.0);
+    expect(row.models).toEqual(["test-model"]);
+    expect(row.warnings).toEqual([]);
+  });
+
+  it("per-test rows carry the test id, trace id, and the effective scores", () => {
+    const row = rowFor(writeGradedRun(tmpDir));
+    expect(
+      row.tests.map((test) => [test.inputId, test.traceId, test.score, test.gatesPassed]),
+    ).toEqual([
+      ["t1", "t1", 1, true],
+      ["t2", "t2", 0, false],
+    ]);
+    expect(row.score).toBe(0.5);
+    expect(row.gatesPassed).toBe(false);
+  });
+
+  it("every test opens the same statelog, so the viewer can focus its trace", () => {
+    const dir = writeGradedRun(tmpDir);
+    const row = rowFor(dir);
+    expect(new Set(row.tests.map((test) => test.statelogPath))).toEqual(
+      new Set([path.join(dir, "statelog.jsonl")]),
+    );
+  });
+
+  it("a run the harness killed reads as killed, not merely failed", () => {
+    const row = rowFor(writeKilledRun(tmpDir));
+    expect(row.tests[0].status).toBe("failed");
+    expect(row.status).toBe("killed");
     expect(row.costUsd).toBeCloseTo(3.0);
-    expect(row.models).toContain("opus");
-    expect(row.warnings).toContain("torn line");
+  });
+
+  it("names the agent from the harness label when the trace never named itself", () => {
+    expect(rowFor(writeGradedRun(tmpDir)).agent).toBe("regex-log.agency");
+    expect(rowFor(writeKilledRun(tmpDir)).agent).toBe("claude -p {task}");
   });
 });

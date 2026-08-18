@@ -102,6 +102,7 @@ export class TestsTableView implements ExplorerView {
           kind: "openLog",
           statelogPath: test.statelogPath,
           title: `${this.parent.agent} / ${test.inputId}`,
+          traceId: test.traceId,
         };
       }
     }

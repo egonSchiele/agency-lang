@@ -211,14 +211,17 @@ class AgentRunner {
       const argv = substituteTask(this.target.tokens, this.task);
       return { kind: "command", argv, traceId: nanoid(), cwd, statelogPath };
     }
+    if (compiledEntryPath === null || this.seededAgentEntry === null) {
+      throw new Error("A file target must be seeded and compiled before its job is built.");
+    }
     return {
       kind: "file",
-      compiledEntryPath: compiledEntryPath as string,
+      compiledEntryPath,
       node: this.target.node,
       task: this.task,
       cwd,
       statelogPath,
-      code: computeCodeIdentity(this.seededAgentEntry as string),
+      code: computeCodeIdentity(this.seededAgentEntry),
     };
   }
 

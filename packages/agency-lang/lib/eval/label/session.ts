@@ -2,6 +2,7 @@ import type {
   ChecklistAnnotation,
   EffectiveChecklistJudgement,
 } from "@/runDirectory/annotations.js";
+import { own } from "@/utils/ownProperty.js";
 
 import {
   itemStatus as itemStatusOf,
@@ -117,12 +118,15 @@ export function initSession(args: InitSessionArgs): SessionState {
     fields: { ...item.fields },
   }));
 
-  const answersByTraceId: Record<string, Record<string, boolean>> = {};
-  const notesByTraceId: Record<string, string> = {};
-  const reviewedByTraceId: Record<string, string[]> = {};
+  // Trace ids are outside data; a trace named `toString` or `__proto__` must
+  // be an ordinary key, so every trace-keyed record here has no prototype and
+  // every read goes through `own`.
+  const answersByTraceId: Record<string, Record<string, boolean>> = Object.create(null);
+  const notesByTraceId: Record<string, string> = Object.create(null);
+  const reviewedByTraceId: Record<string, string[]> = Object.create(null);
 
   for (const item of items) {
-    const judgement = args.judgements[item.traceId];
+    const judgement = own(args.judgements, item.traceId);
     const answers = { ...(judgement?.answers ?? {}) };
     answersByTraceId[item.traceId] = answers;
     const note = judgement?.note ?? "";
@@ -160,7 +164,7 @@ export function currentQuestion(state: SessionState): ChecklistQuestion | undefi
 }
 
 export function itemStatus(state: SessionState, traceId: string): ItemStatus {
-  const signedOff = state.reviewedByTraceId[traceId];
+  const signedOff = own(state.reviewedByTraceId, traceId);
   if (signedOff === undefined) {
     return "untouched";
   }
@@ -170,8 +174,8 @@ export function itemStatus(state: SessionState, traceId: string): ItemStatus {
 
 export function sessionSnapshot(state: SessionState): SessionSnapshot {
   const item = currentItem(state);
-  const statuses: Record<string, ItemStatus> = {};
-  const scores: Record<string, number | null> = {};
+  const statuses: Record<string, ItemStatus> = Object.create(null);
+  const scores: Record<string, number | null> = Object.create(null);
   let reviewed = 0;
   let stale = 0;
 
@@ -188,7 +192,7 @@ export function sessionSnapshot(state: SessionState): SessionSnapshot {
     scores[entry.traceId] =
       status === "reviewed"
         ? scoreOf({
-            answers: state.answersByTraceId[entry.traceId] ?? {},
+            answers: own(state.answersByTraceId, entry.traceId) ?? {},
             revision: stagedRevision,
           })
         : null;
@@ -201,8 +205,8 @@ export function sessionSnapshot(state: SessionState): SessionSnapshot {
     currentItem: item ?? null,
     currentQuestion: currentQuestion(state) ?? null,
     questions: questionsOf(state),
-    answers: item === undefined ? {} : (state.answersByTraceId[item.traceId] ?? {}),
-    note: item === undefined ? "" : (state.notesByTraceId[item.traceId] ?? ""),
+    answers: item === undefined ? {} : (own(state.answersByTraceId, item.traceId) ?? {}),
+    note: item === undefined ? "" : (own(state.notesByTraceId, item.traceId) ?? ""),
     editor: state.editor,
     statuses,
     scores,
@@ -235,13 +239,13 @@ export function signOffPayload(state: SessionState):
   }
   const answers: Record<string, boolean> = {};
   for (const question of live) {
-    answers[question.id] = state.answersByTraceId[item.traceId]?.[question.id] === true;
+    answers[question.id] = own(state.answersByTraceId, item.traceId)?.[question.id] === true;
   }
   return {
     traceId: item.traceId,
     coveredQuestionIds: live.map((question) => question.id),
     answers,
-    note: state.notesByTraceId[item.traceId] ?? "",
+    note: own(state.notesByTraceId, item.traceId) ?? "",
   };
 }
 
@@ -267,7 +271,7 @@ export function reduceSession(state: SessionState, event: SessionEvent): Session
       return { ...state, editor: { kind: "question", draft: "" } };
     case "beginNote": {
       const item = currentItem(state);
-      const draft = item === undefined ? "" : (state.notesByTraceId[item.traceId] ?? "");
+      const draft = item === undefined ? "" : (own(state.notesByTraceId, item.traceId) ?? "");
       return { ...state, editor: { kind: "note", draft } };
     }
     case "appendEditorText":
@@ -332,7 +336,7 @@ function applyToggle(state: SessionState): SessionState {
   if (item === undefined || question === undefined || question.deleted) {
     return state;
   }
-  const forItem = state.answersByTraceId[item.traceId] ?? {};
+  const forItem = own(state.answersByTraceId, item.traceId) ?? {};
   return {
     ...state,
     answersByTraceId: {
@@ -364,7 +368,7 @@ function applyCommitted(state: SessionState, row: ChecklistAnnotation): SessionS
     ...state,
     answersByTraceId: {
       ...state.answersByTraceId,
-      [row.traceId]: { ...state.answersByTraceId[row.traceId], ...row.answers },
+      [row.traceId]: { ...own(state.answersByTraceId, row.traceId), ...row.answers },
     },
     notesByTraceId: { ...state.notesByTraceId, [row.traceId]: row.note },
     reviewedByTraceId: {

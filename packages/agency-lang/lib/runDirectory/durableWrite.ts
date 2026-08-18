@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -63,16 +64,17 @@ export type AtomicWriteArgs<Value> = {
  * A plain write truncates before it writes, so a crash part-way leaves a file
  * that is neither the old content nor the new. Writing a uniquely named
  * temporary and renaming means a reader always sees one or the other. The temp
- * name carries the pid so two processes cannot collide on it.
+ * name is random and created exclusively, so two processes cannot collide on
+ * it and nobody can plant a symlink at it ahead of time to redirect the write.
  */
 export function atomicWriteValidated<Value>(args: AtomicWriteArgs<Value>): void {
   const validated = args.schema.parse(args.value);
   fs.mkdirSync(path.dirname(args.targetPath), { recursive: true });
-  const temporaryPath = `${args.targetPath}.${process.pid}.tmp`;
+  const temporaryPath = `${args.targetPath}.${randomUUID()}.tmp`;
 
   // Flush the temp file's contents before the rename: renaming a file whose
   // bytes are still in cache can publish an empty or partial file.
-  const handle = fs.openSync(temporaryPath, "w");
+  const handle = fs.openSync(temporaryPath, "wx");
   try {
     fs.writeSync(handle, `${JSON.stringify(validated, null, 2)}\n`);
     fs.fsyncSync(handle);

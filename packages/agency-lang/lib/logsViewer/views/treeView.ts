@@ -28,9 +28,9 @@ export class TreeView implements View {
     roots: TreeNode[],
     private readonly thresholds: ViewerThresholds,
     private readonly viewport: Viewport,
-    /** When true, `l` labels the focused trace instead of     *  expanding the focused node (Right/Enter still expand). Off for remote or
-     *  stdin sources where there is no local file to label. */
-    private readonly labelingEnabled: boolean = false,
+    /** When true, `x` extracts the focused trace to a file of its own. Off for
+     *  remote or stdin sources, where there is no local file to read it from. */
+    private readonly extractEnabled: boolean = false,
   ) {
     this.state = {
       roots,
@@ -54,13 +54,13 @@ export class TreeView implements View {
       const id = this.cursorRealId();
       if (id !== undefined) return { kind: "openDetail", spanId: id };
     }
-    // `l` labels the focused trace when a dataset is configured. Right/Enter
-    // still expand, so no expand key is lost. Only fire with a real trace id —
-    // an empty forest (e.g. an empty file under --follow) has none.
-    if (fmt === "l" && this.labelingEnabled) {
+    // `x` extracts the focused trace when the source is a local file. Only fire
+    // with a real trace id — an empty forest (an empty file under --follow) has
+    // none.
+    if (fmt === "x" && this.extractEnabled) {
       const traceId = this.cursorTraceId();
       if (traceId !== "") {
-        return { kind: "labelTrace", traceId };
+        return { kind: "extractTrace", traceId };
       }
     }
     const paged = this.paginate(ev, viewport);
@@ -125,12 +125,10 @@ export class TreeView implements View {
   }
 
   helpLines(): string[] {
-    // `l` labels the focused trace when a dataset is configured; it does nothing
-    // otherwise. It never expands — Right/Enter do that.
     return [
       "t — timeline views (flame → by-name)",
       "d — full details of the focused span",
-      ...(this.labelingEnabled ? ["l — label this trace"] : []),
+      ...(this.extractEnabled ? ["x — extract this trace to a file"] : []),
       "",
       ...treeHelpLines(),
     ];

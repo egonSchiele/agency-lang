@@ -1,3 +1,7 @@
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+
 import { describe, it, expect } from "vitest";
 import { runViewer } from "./run.js";
 import { ScriptedInput } from "../tui/input/scripted.js";
@@ -45,52 +49,35 @@ describe("runViewer", () => {
     expect(out.lastText()).toMatch(/agentRun/);
   });
 
-  it("l reports nothing to judge for an empty trace when labeling is enabled", async () => {
+  it("x extracts the focused trace to the file the user names", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "viewer-extract-"));
+    const source = path.join(dir, "log.jsonl");
+    fs.writeFileSync(source, sample);
+    const outPath = path.join(dir, "out", "abc.jsonl");
+    const input = new ScriptedInput(["x"]);
+    input.feedLine(outPath);
+    input.feedKey({ key: "q" });
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: sample, // trace has no evalOutput, no return value, no prints
-      input: new ScriptedInput(["l", "q"]),
+      jsonl: sample,
+      input,
       output: out,
-      viewport: { rows: 12, cols: 80 },
-      labeling: {
-        datasetDir: "/tmp/does-not-matter",
-        sourcePath: "log.jsonl",
-        annotator: { kind: "human", id: "t" },
-      },
+      viewport: { rows: 12, cols: 100 },
+      extract: { sourcePath: source },
     });
-    expect(out.lastText()).toMatch(/Nothing to label|no-output/);
+    expect(fs.readFileSync(outPath, "utf8")).toBe(sample);
+    expect(out.lastText()).toMatch(/Wrote 2 events/);
   });
 
-  it("l asks for a checklist when labeling is enabled but none is configured", async () => {
-    const withOutput =
-      [
-        sampleEvents[0],
-        {
-          ...sampleEvents[1],
-          data: {
-            type: "evalOutputRecorded",
-            timestamp: "2026-05-16T00:00:01.000Z",
-            value: "the answer",
-            threadId: "0",
-          },
-        },
-        sampleEvents[1], // a terminal agentEnd, as a real completed run emits
-      ]
-        .map((e) => JSON.stringify(e))
-        .join("\n") + "\n";
+  it("x does nothing without a local source", async () => {
     const out = new FrameRecorder();
     await runViewer({
-      jsonl: withOutput,
-      input: new ScriptedInput(["l", "q"]),
+      jsonl: sample,
+      input: new ScriptedInput(["x", "q"]),
       output: out,
       viewport: { rows: 12, cols: 80 },
-      labeling: {
-        datasetDir: "/tmp/does-not-matter",
-        sourcePath: "log.jsonl",
-        annotator: { kind: "human", id: "t" },
-      },
     });
-    expect(out.lastText()).toMatch(/--checklist/);
+    expect(out.lastText()).not.toMatch(/Wrote/);
   });
 
   it("shows a helpful message when the file is empty", async () => {

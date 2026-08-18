@@ -1,6 +1,4 @@
-import * as fs from "fs";
-import * as path from "path";
-
+import { writeTraceFile } from "@/runDirectory/extractTrace.js";
 import { matchTrace, readTraces, type Trace } from "@/runDirectory/traces.js";
 
 import { describeTraces } from "./traceListing.js";
@@ -27,8 +25,7 @@ export function logsExtract(
   if (options.out === undefined) {
     dependencies.writeStdout(text);
   } else {
-    fs.mkdirSync(path.dirname(path.resolve(options.out)), { recursive: true });
-    fs.writeFileSync(options.out, text);
+    writeTraceFile(trace, options.out);
   }
   return { traceId: trace.traceId, lines: trace.lines.length };
 }

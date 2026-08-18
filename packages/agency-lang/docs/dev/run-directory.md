@@ -111,6 +111,18 @@ ended from its own events (`ok` / `error` / `unknown`); the harness's `run` row,
 when present, knows more. `summarizeRuns(snapshot)` (`list.ts`) is one
 `RunSummary` per trace for listings.
 
+## Commands (`lib/cli/runDirectory/`)
+
+One file per command; none imports the lock or the append helpers.
+
+- `agency logs extract <log> [--trace <id>] [-o <file>]` — copy one trace out
+  of a statelog, verbatim (a single-trace log needs no `--trace`). The viewer's
+  `x` key does the same for the focused trace, prompting for a path.
+- `agency runs add <dir> [--statelog f]… [--code entry]… [--workdir p [--trace id]] [--annotations f]… [--replace]`
+  — one `addToRunDirectory` request; prints counts and the listing.
+- `agency runs list <dir>` — one line per trace (`summarizeRuns`).
+- `agency note <dir> <text> [--trace id] [--annotator who]` — `recordNote`.
+
 ## Gotchas
 
 - The module is `lib/runDirectory/`, not `lib/runs/`: `**/runs/` is gitignored

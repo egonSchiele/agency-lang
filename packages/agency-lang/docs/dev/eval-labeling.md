@@ -5,8 +5,9 @@
 > facade is `LabelDataset` / `openDataset` (`lib/eval/label/dataset.ts`). The
 > **durable on-disk names are unchanged** — `outputId`, the `out_` prefix, and
 > `outputs.jsonl` are a frozen wire format, so this doc still uses them when
-> describing rows. Labeling a statelog trace into a dataset is documented in
-> `docs/dev/statelog-to-dataset.md`, including the `statelog` occurrence origin.
+> describing rows. The viewer's `l` key and `docs/dev/statelog-to-dataset.md` are gone: the
+> viewer's `x` extracts a trace to a file, and `agency label ingest --format
+> statelog` remains until Phase 5 of the run-directory arc replaces the store.
 
 `agency label` builds a dataset of human judgements about agent outputs. It is
 registered twice — as `agency label` and as `agency eval label` — following the

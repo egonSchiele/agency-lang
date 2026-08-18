@@ -82,8 +82,10 @@ on success or failure.
 Writer inputs are held to a stricter standard than reads: a statelog file
 with any unparseable line is refused whole (`readTracesOrThrow`), because a
 trace stored without its bad lines would look complete. `recordCompletedRun`
-also refuses a `run` row whose trace is in neither the directory nor the
-staged statelog. `describeStatelogMerge(plan, dir)` is the one sentence for a
+also refuses a `run` row for trace X when the staged statelog holds traces
+and X is not among them (nor already in the directory). A staged log with no
+traces is still fine: a run that died before its first event has no trace,
+and its `run` row is the only record it happened. `describeStatelogMerge(plan, dir)` is the one sentence for a
 merge outcome (which ids were refused, or that nothing was added and how many
 were already there); the CLI and the refusal errors both use it.
 

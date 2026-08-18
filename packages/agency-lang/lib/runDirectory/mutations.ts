@@ -152,14 +152,17 @@ export function recordCompletedRun(
       ...snapshot,
       traces: [...snapshot.traces, ...statelogPlan.add],
     };
-    // The run row must describe a trace this call is putting (or finding) in
-    // the directory; otherwise the staged trace loses its completion record
-    // and an orphan row points at nothing.
-    if (!merged.traces.some((trace) => trace.traceId === request.run.traceId)) {
-      const staged = incoming.map((trace) => trace.traceId).join(", ") || "none";
+    // A run that died before writing a single event has no trace, and its run
+    // row is the only record it happened; that is allowed. But when the staged
+    // statelog does hold traces, the run row must be about one of them (or one
+    // already in the directory): otherwise the staged trace loses its
+    // completion record and an orphan row points at nothing.
+    const known = merged.traces.some((trace) => trace.traceId === request.run.traceId);
+    if (incoming.length > 0 && !known) {
+      const staged = incoming.map((trace) => trace.traceId).join(", ");
       throw new Error(
-        `Cannot record run for trace ${request.run.traceId}: it is not in ${request.dir} and ` +
-          `not in the staged statelog (which holds: ${staged}). Nothing was written.`,
+        `Cannot record run for trace ${request.run.traceId}: it is not in ${request.dir}, and ` +
+          `the staged statelog holds ${staged} instead. Nothing was written.`,
       );
     }
     const codePlan =

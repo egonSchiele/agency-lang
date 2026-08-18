@@ -1,0 +1,29 @@
+/** @module
+  @summary The brain record: what the harness needs from the thing that
+  answers a turn. See docs/dev/agent-brains.md.
+*/
+import { Attachment } from "std::thread"
+
+/** What the harness knows at startup that a brain may want. */
+export type BrainContext = {
+  // false for --print, piped stdin, or a positional query without -i.
+  interactive: boolean;
+  // Date, working directory, and the AGENTS.md block. Built by the harness.
+  grounding: string
+}
+
+export type AgentBrain = {
+  // What --brain selects and what the header shows. Lowercase, no spaces.
+  name: string;
+  // One line, shown by --help next to the name.
+  description: string;
+  // Valid --agent values. "" (the main entry) is always valid and not listed.
+  startTargets: string[];
+  // Called once, inside the policy handler, before any turn. Validate the
+  // brain's static-init reads and take the grounding here; do not read
+  // files here (an inner `with approve` does not get past the policy).
+  init: (BrainContext) -> void raises <*>;
+  // Answer one turn. `target` is "" or one of startTargets. For "" the
+  // prompt may carry attachments; for a named target it is bare text.
+  runTurn: (string, string | (string | Attachment)[]) -> string raises <*>
+}

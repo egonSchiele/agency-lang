@@ -1,7 +1,7 @@
 /** @module
   @summary The interactive terminal: slash commands, the status line, and how
-  a turn and its reply are drawn. It calls the coordinator and decides nothing
-  about the work itself.
+  a turn and its reply are drawn. It calls the harness runTurn and decides
+  nothing about the work itself.
 */
 import { localModelsSupported, listModelNames } from "std::agency/local"
 import { parseArgs } from "std::args"
@@ -14,7 +14,6 @@ import { setMemoryId, disableMemory } from "std::memory"
 import { basename, dirname } from "std::path"
 import {
   ScopedRuleFields,
-  cliPolicyHandler,
   parsePolicyFile,
   setPolicy,
   minimalAutoApprovePolicy,
@@ -127,11 +126,6 @@ import {
   embeddingsOverride,
   providerEnvMissing,
  } from "../shared.agency"
-import { codeAgent, setCodeOneShot } from "../subagents/code.agency"
-import { explorerAgent } from "../subagents/explorer.agency"
-import { oracleAgent } from "../subagents/oracle.agency"
-import { researchAgent } from "../subagents/research.agency"
-import { reviewAgent } from "../subagents/review.agency"
 
 
 // UI mode select — one-line swap between the alt-screen TUI and the
@@ -142,7 +136,7 @@ import { reviewAgent } from "../subagents/review.agency"
 //
 //import { clearMessages, pushMessage, repl } from "std::ui"
 
-import { runTurn } from "./coordinator.agency"
+import { runTurn } from "./turn.agency"
 import { parseModelSpec } from "./utils.agency"
 
 let _session: Session = {
@@ -358,7 +352,7 @@ def _runTurn(msg: string): boolean {
 
 
 def renderUserTurn(trimmed: string, msg: string): boolean {
-  const result = try runTurn("coordinator", msg)
+  const result = try runTurn("", msg)
   renderAgentResponse(result)
   return true
 }
@@ -371,10 +365,6 @@ export def buildStatus(): { left: string; right: string; context: string } {
     context: ""
   }
 }
-
-// Shared session setup for both interactive and one-shot modes. Builds
-// the grounding context, loads (or initializes) the policy, and
-// returns the installed CLI policy handler.
 
 export def runSeedTurn(target: string, msg: string) {
   pushMessage(color.dim("> ${msg}"))
@@ -396,20 +386,19 @@ export def renderAgentResponse(
   }
 }
 
-export def startInteractive(handler: any, seedTarget: string, seedPrompt: string) {
-  handle {
-    if (seedPrompt != "") {
-      runSeedTurn(seedTarget, seedPrompt)
-    }
-    repl(
-      status: buildStatus,
-      onSubmit: _runTurn,
-      prompt: "> ",
-      historyFile: HISTORY_PATH,
-      historyMax: 1000,
-      paletteCommands: mergedPalette(),
-    )
-  } with handler
+// Runs inside runSession's policy handler; the REPL installs none of its own.
+export def startInteractive(seedTarget: string, seedPrompt: string) {
+  if (seedPrompt != "") {
+    runSeedTurn(seedTarget, seedPrompt)
+  }
+  repl(
+    status: buildStatus,
+    onSubmit: _runTurn,
+    prompt: "> ",
+    historyFile: HISTORY_PATH,
+    historyMax: 1000,
+    paletteCommands: mergedPalette(),
+  )
   print(color.cyan("\nGoodbye!"))
 }
 

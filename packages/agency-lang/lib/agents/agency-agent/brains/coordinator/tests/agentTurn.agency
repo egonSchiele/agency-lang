@@ -7,7 +7,7 @@
  * testable — this harness just calls it with the deterministic LLM
  * provider (see agentTurn.test.json) and checks the reply comes back.
  */
-import { dispatchAgent } from "../lib/coordinator.agency"
+import { coordinatorBrain } from "../coordinator.agency"
 import {
   switchModel,
   reactToSlotChange,
@@ -15,20 +15,20 @@ import {
   modelChoiceItems,
   parseModelsFilters,
   Session,
- } from "../lib/session.agency"
-import { knownProviders, Resolved } from "../lib/models.agency"
+ } from "../../../lib/session.agency"
+import { knownProviders, Resolved } from "../../../lib/models.agency"
 import {
   resolveAll,
   buildLayers,
   Ctx,
   SlotChange,
- } from "../lib/resolution.agency"
-import { saveSettings } from "../lib/settings.agency"
+ } from "../../../lib/resolution.agency"
+import { saveSettings } from "../../../lib/settings.agency"
 import { setEnv } from "std::system"
-import { applyResolved, getResolvedSlots, promoteAll } from "../shared.agency"
+import { applyResolved, getResolvedSlots, promoteAll } from "../../../shared.agency"
 
 node respondsToAMessage(): boolean {
-  const reply = dispatchAgent("coordinator", "hello")
+  const reply = coordinatorBrain().runTurn("", "hello")
   return reply == "Hi from the agent!"
 }
 
@@ -186,7 +186,7 @@ node reactSilentOnSameProvider(): boolean {
 }
 
 
-import { headerModelLines } from "../lib/header.agency"
+import { headerModelLines } from "../../../lib/header.agency"
 import { hostedModelInfo } from "std::llm"
 
 // The splash header lists the resolved main + reasoning models. The internal

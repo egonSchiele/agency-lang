@@ -45,6 +45,11 @@ import {
   overrideFromResolved,
   configureModels,
   configureLocalModel,
+  getResolvedSlots,
+  getCapabilities,
+  embeddingKeyStatus,
+  memoryEnablePlan,
+  enableAgentMemory,
  } from "../shared.agency"
 
 // In-session model selection state.
@@ -62,6 +67,33 @@ let _memoryEmbeddingsPinned = false
 
 export def markMemoryEmbeddingsPinned(pinned: boolean) {
   _memoryEmbeddingsPinned = pinned
+}
+
+// Persistent knowledge graph, gated on the capability profile.
+export def maybeEnableMemory() {
+  const status = embeddingKeyStatus(getResolvedSlots())
+  const plan = memoryEnablePlan(getCapabilities().memory, status)
+  markMemoryEmbeddingsPinned(plan == "enable-override")
+  return match(plan) {
+    "skip" => null
+    "enable-override" => {
+      enableAgentMemory(status.override)
+      return null
+    }
+    "enable-fallback" => {
+      print(
+        color.dim(
+        "Memory: the embedding slot needs ${status.varName}, which is not set. Falling back to the default embedding behavior.",
+      ),
+      )
+      enableAgentMemory()
+      return null
+    }
+    _ => {
+      enableAgentMemory()
+      return null
+    }
+  }
 }
 
 /** Apply an in-session model selection. Takes effect on

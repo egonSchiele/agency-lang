@@ -1,6 +1,6 @@
 import { getVersion } from "std::agency"
 import { parseArgs } from "std::args"
-export def parseAgentArgs() {
+export def parseAgentArgs(brainHelp: string) {
   return parseArgs(
     {
     programName: "agency agent",
@@ -43,7 +43,11 @@ export def parseAgentArgs() {
       },
       agent: {
         type: "string",
-        description: "Route the starting prompt to a named subagent: code, research, oracle, explorer, review (default: coordinator)"
+        description: "Route the starting prompt to a named subagent of the selected brain (default: the brain's main entry). The coordinator brain accepts: code, research, oracle, explorer, review"
+      },
+      brain: {
+        type: "string",
+        description: brainHelp
       },
       policy: {
         type: "string",

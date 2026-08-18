@@ -1,0 +1,38 @@
+/** @module
+  @summary The per-run grounding a brain gets: date, working directory,
+  and the project AGENTS.md. Harness-owned; brains only read it.
+*/
+import { today } from "std::date"
+import { exists } from "std::shell"
+import { cwd } from "std::system"
+
+export def loadAgentsMd(dir: string): string {
+  """
+  Read `AGENTS.md` from `dir` if it exists and return it wrapped in a
+  <project_context> block ready to splice into a system prompt. Returns
+  an empty string if there is no AGENTS.md or it cannot be read.
+  """
+  if (!exists("AGENTS.md", dir)) {
+    return ""
+  }
+  const result = read("AGENTS.md", dir) with approve
+  if (isFailure(result)) {
+    return ""
+  }
+  return """
+
+  <project_context>
+  ${result.value}
+  </project_context>
+  """
+}
+
+export def groundingText(): string {
+  const projectContext = loadAgentsMd(cwd()) with approve
+  return """
+
+  Current date: ${today()}
+  Current working directory: ${cwd()}
+  ${projectContext}
+  """
+}

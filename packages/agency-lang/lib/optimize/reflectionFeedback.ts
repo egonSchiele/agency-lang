@@ -22,7 +22,9 @@ export function renderInputFeedback(
   );
   // stringifyOutput, not JSON.stringify: a string task must reach the
   // proposer LLM as readable multi-line text, not one escaped line.
-  lines.push(`Input: ${preview(stringifyOutput(entry.test.input), 400)}`);
+  if (entry.test.input !== undefined) {
+    lines.push(`Input: ${preview(stringifyOutput(entry.test.input), 400)}`);
+  }
   lines.push(`Output: ${preview(stringifyOutput(entry.run?.output ?? null), 600)}`);
   if (entry.test.expected !== undefined) {
     lines.push(`Expected: ${preview(stringifyOutput(entry.test.expected), 400)}`);

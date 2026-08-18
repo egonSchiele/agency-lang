@@ -4,11 +4,7 @@ import { fileURLToPath } from "url";
 
 import { nanoid } from "nanoid";
 
-import {
-  assertEvalEntryNodeTakesOneParameter,
-  resolveEvalTarget,
-  type EvalTarget,
-} from "@/agentTarget.js";
+import { assertTargetMatchesInputs, resolveEvalTarget, type EvalTarget } from "@/agentTarget.js";
 import { ttyColor } from "@/utils/termcolors.js";
 
 import { makeStatelogCostTailer } from "./costTail.js";
@@ -47,7 +43,6 @@ export type RunSuiteOptions = {
   runId?: string;
   runsDir?: string;
   /** Default true. */
-  continueOnError?: boolean;
   config?: AgencyConfig;
   /** Worker-pool size for input scheduling; 1 (default) = sequential with
    *  piped agent output, >1 = parallel with a status board instead. */
@@ -78,12 +73,10 @@ export async function runSuite(
 ): Promise<SuiteRunResult> {
   const target: EvalTarget =
     typeof opts.agent === "string" ? resolveEvalTarget({ agent: opts.agent }) : opts.agent;
-  if (target.kind === "file") {
-    // Before any workdir is seeded or agent compiled: a mis-shaped entry
-    // node is a configuration error, not a per-test run failure. The
-    // command analog (the {task}-placeholder check) ran at resolution.
-    assertEvalEntryNodeTakesOneParameter(target.agentFile, target.node);
-  }
+  // Before any workdir is seeded or agent compiled: an agent whose shape
+  // does not match the tests' inputs is a configuration error, not a
+  // per-test run failure.
+  assertTargetMatchesInputs(target, opts.inputs);
 
   const runsDir = path.resolve(opts.runsDir ?? opts.config?.eval?.runsDir ?? "runs");
   const runId = opts.runId ?? defaultRunId();
@@ -93,7 +86,6 @@ export async function runSuite(
       `Run directory already exists: ${runDir}\nChoose a different --run-id or delete the existing directory.`,
     );
   }
-  const continueOnError = opts.continueOnError ?? true;
   const config = opts.config ?? {};
   const perRun = opts.perRun ?? {};
 
@@ -134,7 +126,6 @@ export async function runSuite(
   // so a listing can say which agent a directory's runs came from.
   const flags: Record<string, string | number | boolean> = {
     parallel,
-    continueOnError,
     agent: target.label,
   };
   const harness = { kind: "harness" as const, id: `agency-eval@${harnessVersion()}` };
@@ -209,13 +200,11 @@ export async function runSuite(
         }
         results.push(outcome);
         if (interrupted) break;
-        if (outcome.status === "error" && !continueOnError) break;
       }
     } else {
       results = await runPool({
         tests: opts.inputs,
         parallel,
-        continueOnError,
         progress,
         isInterrupted: () => interrupted,
         executeTest,
@@ -304,15 +293,15 @@ function endedFrom(run: AgentRun): RunOutcome {
  * Parallel scheduling: a pool of workers pulls inputs in order. Agent output
  * is never piped (n interleaved streams are noise — `eval logs <dir> -f` is
  * the drill-down); a status board shows each test's state, elapsed time, and
- * cost so far (tailed from its live statelog every second). An error under
- * continueOnError=false, or an interrupt, stops SCHEDULING; in-flight runs
- * settle normally (interrupt: their forwarded SIGINT kills their trees and
- * they come back as error results). Results keep input order.
+ * cost so far (tailed from its live statelog every second). An errored test
+ * never stops the others (it is a `run` row that grades 0); an interrupt
+ * stops SCHEDULING and in-flight runs settle normally (their forwarded
+ * SIGINT kills their trees and they come back as error results). Results
+ * keep input order.
  */
 async function runPool(args: {
   tests: Test[];
   parallel: number;
-  continueOnError: boolean;
   progress: boolean;
   isInterrupted: () => boolean;
   executeTest: (
@@ -327,7 +316,6 @@ async function runPool(args: {
   const slots: (SuiteTestResult | undefined)[] = new Array(args.tests.length);
   const costTails: (() => number)[] = [];
   let nextIndex = 0;
-  let stopScheduling = false;
 
   const costPoll = setInterval(() => {
     for (const poll of costTails) poll();
@@ -335,7 +323,7 @@ async function runPool(args: {
 
   const worker = async (): Promise<void> => {
     for (;;) {
-      if (stopScheduling || args.isInterrupted()) return;
+      if (args.isInterrupted()) return;
       const index = nextIndex++;
       if (index >= args.tests.length) return;
       const test = args.tests[index];
@@ -358,9 +346,6 @@ async function runPool(args: {
         status: outcome.status === "error" ? "error" : "done",
         endedAt: Date.now(),
       });
-      if (outcome.status === "error" && !args.continueOnError) {
-        stopScheduling = true;
-      }
     }
   };
 

@@ -289,10 +289,8 @@ describe("runSuite", () => {
     expect(readRunDirectory(result.runDir, quiet).traces).toHaveLength(4);
   });
 
-  it("parallel + continueOnError=false: an error stops scheduling; in-flight tests still record", async () => {
-    let calls = 0;
+  it("parallel: an errored test never stops the others; every test records", async () => {
     const runner = vi.fn(async (job: EvalRunnerJob) => {
-      calls += 1;
       await new Promise((r) => setTimeout(r, 20));
       if (job.kind === "file" && String(job.input) === "t-a") {
         return { ok: false as const, errorMessage: "boom" };
@@ -311,18 +309,17 @@ describe("runSuite", () => {
           { id: "d", goal: "g", input: "t-d" },
         ],
         runsDir: path.join(proj, "runs"),
-        runId: "r-par-stop",
+        runId: "r-par-error",
         config: {},
         parallel: 2,
-        continueOnError: false,
       },
       { runner },
     );
 
-    // a errored; b was already in flight; c/d never scheduled
-    expect(calls).toBeLessThanOrEqual(2);
-    expect(result.tests.map((test) => test.testId)).toContain("a");
-    expect(result.tests.length).toBeLessThanOrEqual(2);
+    expect(runner).toHaveBeenCalledTimes(4);
+    expect(result.tests.map((test) => test.testId)).toEqual(["a", "b", "c", "d"]);
+    expect(result.tests[0].status).toBe("error");
+    expect(result.okCount).toBe(3);
   });
 
   it("a test's spec, timeoutSec included, is recorded on its run row", async () => {

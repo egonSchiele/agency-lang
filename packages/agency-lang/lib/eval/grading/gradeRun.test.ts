@@ -180,6 +180,25 @@ describe("gradeRun", () => {
     expect(seenExpected).toBe("New Delhi");
   });
 
+  it("a default goal fills in for tests that recorded none, and never overrides a test's own", async () => {
+    const withGoal = makeRun({ output: "hello" });
+    const withoutGoal = makeRun({ output: "hello", test: { id: "b", input: "t" } });
+    const seen: unknown[] = [];
+    const spy = grader(
+      ({ test }) => {
+        seen.push(test.goal);
+        return 1;
+      },
+      { name: "spy" },
+    );
+
+    await gradeRun(withGoal, { ...ctx([spy]), defaultGoal: "be nice" });
+    await gradeRun(withoutGoal, { ...ctx([spy]), defaultGoal: "be nice" });
+    await gradeRun(withoutGoal, ctx([spy]));
+
+    expect(seen).toEqual(["name the capital", "be nice", undefined]);
+  });
+
   it("grades an ad-hoc trace with no run row by its own ending, as a test named by its trace id", async () => {
     const runDir = makeRun({ output: "hello", traceId: "adhoc" });
     // Strip the run row: the directory is now just a statelog.

@@ -10,9 +10,11 @@ export type Test = {
   id?: string;
   /** What the agent is given: an instruction string, or a JSON object for
    *  agents that take structured data. Delivered as the entry node's single
-   *  positional parameter (eval entry nodes take exactly one). Required; the
-   *  loader rejects tests without one. */
-  input: string | Record<string, any>;
+   *  positional parameter (or as `{task}` for a command agent). Optional:
+   *  an agent that takes no input runs a test with none, and then the entry
+   *  node takes no parameter. Within one suite, either every test has an
+   *  input or none does. */
+  input?: string | Record<string, any>;
   /** The success criterion — read by the goal judge and the pairwise judge
    *  suite, never shown to the agent. Optional; required only when the
    *  default LLM judge will run. */

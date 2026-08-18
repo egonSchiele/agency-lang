@@ -36,5 +36,13 @@ export async function resolveGraders(
     }
     return { mode: "fallback", graders };
   }
+  return goalJudgeGraders();
+}
+
+/** The bundled goal judge as the fallback set: what grades a test that
+ *  carries no graders of its own when nothing else is configured, and what
+ *  `eval grade --goal` always means (the goal is the criterion, so a
+ *  configured grading module is set aside for that run). */
+export function goalJudgeGraders(): SuiteGraders {
   return { mode: "fallback", graders: [new LlmJudge({ name: "goal" })] };
 }

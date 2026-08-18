@@ -21,13 +21,15 @@ type LoadOptions = {
   sourceCacheRoot?: string;
 };
 
-/** The `--goal` one-liner: criterion and instruction coincide, and both are
- *  written explicitly so the run's input.json shows what the agent was told. */
-export function inputFromGoal(goal: string): Test {
-  if (typeof goal !== "string" || goal.length === 0) {
-    throw new Error("--goal must be a non-empty string");
+/** The `eval run` one-off test: `--input <text>` gives it that input, no
+ *  `--input` gives it none (for agents that take no argument). It carries no
+ *  goal either way; `eval grade --goal` supplies one at grading time. */
+export function inlineInput(input: string | undefined): Test {
+  if (input === undefined) return { id: "input-1" };
+  if (typeof input !== "string" || input.length === 0) {
+    throw new Error("--input must be a non-empty string");
   }
-  return { id: "input-1", input: goal, goal };
+  return { id: "input-1", input };
 }
 
 export function loadInputs(
@@ -189,8 +191,10 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   if (spec.goal !== undefined && typeof spec.goal !== "string") {
     throw new Error("Eval input goal must be a string when provided");
   }
-  if (typeof spec.input !== "string" && !isPlainObject(spec.input)) {
-    throw new Error("Eval test input is required: a string, or a JSON object for structured input");
+  if (spec.input !== undefined && typeof spec.input !== "string" && !isPlainObject(spec.input)) {
+    throw new Error(
+      "Eval test input must be a string, or a JSON object for structured input (or omitted for an agent that takes none)",
+    );
   }
   if (typeof spec.input === "string" && spec.input.length === 0) {
     throw new Error("Eval test input must not be empty");
@@ -217,9 +221,9 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   }
   const out: Test = {
     id: typeof spec.id === "string" ? spec.id : makeId(),
-    input: spec.input as string | Record<string, any>,
     expected: spec.expected, // any JSON; absent stays undefined
   };
+  if (spec.input !== undefined) out.input = spec.input as string | Record<string, any>;
   if (typeof spec.goal === "string") out.goal = spec.goal;
   if (typeof spec.files === "string")
     out.files = resolveFilesDir(spec.files, baseDir, options, out.id ?? "");

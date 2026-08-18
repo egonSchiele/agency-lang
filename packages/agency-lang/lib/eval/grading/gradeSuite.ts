@@ -23,13 +23,14 @@ export type GradeSuiteResult = {
  * directory (`eval grade`, the optimizer's per-candidate grading).
  *
  * `record: false` grades without writing (the optimizer's throwaway candidate
- * directories, and dry runs).
+ * directories, and dry runs). `defaultGoal` is `eval grade --goal`: the goal
+ * for tests that recorded none.
  */
 export async function gradeSuite(
   runDir: string,
   suiteGraders: SuiteGraders,
   config: AgencyConfig,
-  options: { record?: boolean } = {},
+  options: { record?: boolean; defaultGoal?: string } = {},
 ): Promise<GradeSuiteResult> {
   const snapshot = readRunDirectory(runDir, {
     reportWarning: (message) => console.warn(`grading: ${message}`),
@@ -38,6 +39,7 @@ export async function gradeSuite(
     suiteGraders,
     runAgency: new AgencyRunner(config),
     config,
+    defaultGoal: options.defaultGoal,
   });
   const drafts = scoreDrafts(scorecard);
   let passId: string | null = null;
@@ -49,8 +51,10 @@ export async function gradeSuite(
 
 /** One draft per grade that actually ran. A gate-failed or ungraded trace
  *  contributes the rows it has (its zero is the fold's business: a failed
- *  gate is a `pass: false` row, an ungraded trace has none). */
-function scoreDrafts(scorecard: Scorecard): ScoreDraft[] {
+ *  gate is a `pass: false` row, an ungraded trace has none). A judge's row
+ *  records the goal it scored against, so a re-grade with a different
+ *  `--goal` stays tellable apart from the first. */
+export function scoreDrafts(scorecard: Scorecard): ScoreDraft[] {
   const drafts: ScoreDraft[] = [];
   for (const entry of scorecard.perInput) {
     if (entry.run === null) continue;
@@ -65,6 +69,9 @@ function scoreDrafts(scorecard: Scorecard): ScoreDraft[] {
       };
       if (grade.feedback !== undefined) draft.feedback = grade.feedback;
       if (grader.revision !== undefined) draft.gradersModule = grader.revision.split("@")[0];
+      if (draft.annotator.kind === "judge" && typeof entry.test.goal === "string") {
+        draft.goal = entry.test.goal;
+      }
       drafts.push(draft);
     }
   }

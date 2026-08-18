@@ -802,77 +802,45 @@ export function createProgram(deps: CliDependencies = {}): Command {
   evalCmd
     .command("run")
     .description("Run an Agency agent against an eval task suite")
-    .option("--agent <target>", "Agent .agency file or directory, optionally suffixed with :node")
+    .argument(
+      "[agent]",
+      "Agent .agency file or directory, optionally suffixed with :node (or use --agent-cmd)",
+    )
     .option(
       "--agent-cmd <command>",
-      "Run this command as the agent; {task} is replaced with each input's task. " +
-        "Mutually exclusive with --agent. Agency CLIs only — the command's process " +
-        "must write the statelog the harness points it at, and it must run headless " +
-        "and one-shot (e.g. agency agent --policy approve-all -p -- {task})",
+      "Run this command as the agent instead of an agent file; {task} is replaced with each input's task. " +
+        "Agency CLIs only — the command's process must write the statelog the harness points it at, " +
+        "and it must run headless and one-shot (e.g. agency agent --policy approve-all -p -- {task})",
     )
     .option(
       "--suite <source>",
       "Test suite: a JSON file, a directory, or a git source (URL[//subdir][?ref=...])",
     )
-    .option("--goal <text>", "Run one inline test whose input and goal are both this text")
+    .option("--input <text>", "Run one inline test whose input is this text (no suite file needed)")
     .option("--run-id <id>", "Run id / output subdirectory")
     .option("--runs-dir <path>", "Runs output directory")
-    .option("--continue-on-error", "Continue after task failures", true)
-    .option("--no-continue-on-error", "Stop after first input failure")
     .option(
       "-n, --parallel <count>",
       "Run up to this many inputs at once (default 1). Above 1, per-agent output is replaced by a status board (name, state, elapsed, cost so far)",
       parsePositiveInt,
     )
-    .option(
-      "--max-tool-call-rounds <n>",
-      "Max LLM tool-call rounds before halting a tool loop (default 10; overrides agency.json)",
-      parsePositiveInt,
-    )
-    .option(
-      "--max-tool-result-chars <n>",
-      "Max chars of a single tool result fed back to the model (0 disables; default 100000; overrides agency.json)",
-      parseNonNegativeInt,
-    )
-    .option("--strict", "Fail the run on any fatal type error (typechecker.strict)")
     .action(
-      async (opts: {
-        agent?: string;
-        agentCmd?: string;
-        suite?: string;
-        goal?: string;
-        runId?: string;
-        runsDir?: string;
-        continueOnError?: boolean;
-        parallel?: number;
-        maxToolCallRounds?: number;
-        maxToolResultChars?: number;
-        strict?: boolean;
-      }) => {
-        // The three flags below are compile-time: they are baked into the
-        // compiled program, and a command target compiles nothing — the
-        // equivalent flags belong inside the command itself.
-        if (
-          opts.agentCmd &&
-          (opts.maxToolCallRounds !== undefined ||
-            opts.maxToolResultChars !== undefined ||
-            opts.strict)
-        ) {
-          console.error(
-            "Error: --max-tool-call-rounds, --max-tool-result-chars and --strict are compile-time flags " +
-              "and a command target compiles nothing — put the equivalent flags inside the command",
-          );
-          process.exit(2);
-        }
-        // Eval compiles each FILE agent inside its seeded workdir with THIS
-        // config (all three flags are baked in via applyCliFlags), so folding
-        // them onto the config here is the whole implementation.
-        const config = applyCliFlags(getConfig(), {
-          maxToolCallRounds: opts.maxToolCallRounds,
-          maxToolResultChars: opts.maxToolResultChars,
-          strict: opts.strict,
-        });
-        const result = await evalRun({ ...opts, config });
+      async (
+        agent: string | undefined,
+        opts: {
+          agentCmd?: string;
+          suite?: string;
+          input?: string;
+          runId?: string;
+          runsDir?: string;
+          parallel?: number;
+        },
+      ) => {
+        // Every test in the suite always runs, whatever the others did: an
+        // errored test is a `run` row that grades 0, not a reason to stop.
+        // Agent config (strict types, tool-loop caps) comes from agency.json
+        // beside the agent, not from eval flags.
+        const result = await evalRun({ agent, ...opts, config: getConfig() });
         console.log(
           `Run ${result.runId} completed: ${result.okCount}/${result.tests.length} tests ok`,
         );
@@ -882,9 +850,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
         }
         console.log(result.runDir);
         console.log(`grade it with: agency eval grade ${result.runDir}`);
-        if (result.errorCount > 0 && opts.continueOnError === false) {
-          process.exit(2);
-        }
       },
     );
 
@@ -918,11 +883,20 @@ export function createProgram(deps: CliDependencies = {}): Command {
   evalCmd
     .command("grade")
     .description("Score a finished eval run without re-running the agent")
-    .argument("<runDir>", "Path to a run directory produced by `agency eval run`")
+    .argument(
+      "<runDir>",
+      "A run directory: from `agency eval run`, `agency run --capture-workdir`, or `agency runs add`",
+    )
     .option("--graders <file>", "TypeScript grading module (default-exports graders)")
+    .option(
+      "--goal <text>",
+      "Judge every trace against this goal with the built-in LLM judge (traces whose test recorded its own goal keep it; not with --graders)",
+    )
     .option("-o, --out <path>", "Also write the grading summary here as JSON")
-    .action(async (runDir: string, opts: { graders?: string; out?: string }) => {
-      const grading = await evalGrade(runDir, { ...opts, config: getConfig() });
+    .action(async (runDir: string, opts: { graders?: string; goal?: string; out?: string }) => {
+      const grading = await evalGrade(runDir, { ...opts, config: getConfig() }).catch(
+        failProjectCommand,
+      );
       for (const line of formatGrading(grading.objective, grading.perInput)) {
         console.log(line);
       }

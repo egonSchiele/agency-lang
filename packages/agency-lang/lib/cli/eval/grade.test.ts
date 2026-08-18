@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
 import { readRunDirectory } from "@/runDirectory/runDir.js";
 
-import { evalGrade } from "./grade.js";
+import { evalGrade, gradersFor, validateGradeTarget } from "./grade.js";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -89,5 +89,39 @@ describe("evalGrade", () => {
     expect(new Set(scores.map((row) => (row.kind === "score" ? row.passId : ""))).size).toBe(2);
     const effective = snapshot.effectiveAnnotations["trace-1"].scores;
     expect(Object.values(effective)[0].id).toBe(scores[1].id);
+  });
+
+  it("refuses a folder with no statelog.jsonl, naming how to build a run directory", () => {
+    const folder = fs.mkdtempSync(path.join(process.cwd(), ".test-not-a-run-dir-"));
+    dirs.push(folder);
+    fs.writeFileSync(path.join(folder, "statelogs.jsonl"), "");
+    expect(() => validateGradeTarget(folder, {})).toThrow(/not a run directory.*agency runs add/s);
+    expect(() => validateGradeTarget(makeRunDir("x"), {})).not.toThrow();
+  });
+
+  it("refuses --goal together with --graders", () => {
+    expect(() => validateGradeTarget(makeRunDir("x"), { goal: "g", graders: "g.ts" })).toThrow(
+      /only one of --graders or --goal/,
+    );
+  });
+
+  it("--goal sets aside a configured grading module and runs the goal judge", async () => {
+    // A configured module carries its own criteria, just as --graders does; --goal
+    // names the criterion, so it must reach the bundled goal judge, not the module.
+    const dir = fs.mkdtempSync(path.join(process.cwd(), ".test-grading-"));
+    dirs.push(dir);
+    const file = path.join(dir, "graders.ts");
+    fs.writeFileSync(
+      file,
+      `import { grader } from "agency-lang/eval";
+export default [grader(() => 1, { name: "module" })];`,
+    );
+    const withGoal = await gradersFor({ goal: "be nice" }, { eval: { graders: file } });
+    expect(withGoal?.mode).toBe("fallback");
+    expect(withGoal?.graders.map((g) => g.name())).toEqual(["goal"]);
+    expect(withGoal?.graders[0].annotator().kind).toBe("judge");
+    // Without --goal the configured module is the fallback, as before.
+    const withoutGoal = await gradersFor({}, { eval: { graders: file } });
+    expect(withoutGoal?.graders.map((g) => g.name())).toEqual(["module"]);
   });
 });

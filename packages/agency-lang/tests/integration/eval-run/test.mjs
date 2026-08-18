@@ -66,7 +66,7 @@ node main(task: string) {
   try {
     output = execSync(
       `node ${JSON.stringify(AGENCY_CLI)} eval run` +
-      ` --agent ${JSON.stringify(join(agentDir, "agent.agency"))}` +
+      ` ${JSON.stringify(join(agentDir, "agent.agency"))}` +
       ` --suite ${JSON.stringify(join(TMP_ROOT, "inputs.json"))}` +
       ` --runs-dir ${JSON.stringify(runsDir)} --run-id interrupt-e2e`,
       { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },

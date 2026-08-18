@@ -18,7 +18,7 @@ describe("suiteFromSource", () => {
   });
 
   it("inline sources keep a whitespace-normalized prefix", () => {
-    expect(suiteFromSource("inline:--goal")).toBe("inline:--goal");
+    expect(suiteFromSource("inline:--input")).toBe("inline:--input");
     const long = `inline:${"goal words ".repeat(10)}`;
     expect(suiteFromSource(long).length).toBeLessThanOrEqual(24);
   });

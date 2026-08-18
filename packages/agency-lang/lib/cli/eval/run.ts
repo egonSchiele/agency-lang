@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 
 import type { AgencyConfig } from "@/config.js";
-import { loadInputs, inputFromGoal } from "@/eval/loadInputs.js";
+import { loadInputs, inlineInput } from "@/eval/loadInputs.js";
 import { runSuite } from "@/eval/run/runSuite.js";
 import type { EvalInputRunner } from "@/eval/run/subprocess.js";
 import type { SuiteRunResult, Test } from "@/eval/runTypes.js";
@@ -19,23 +19,25 @@ export type EvalRunCliOptions = {
   agentCmd?: string;
   /** The test suite: a JSON file, a directory, or a git source. */
   suite?: string;
-  goal?: string;
+  /** One inline test with this input text; no suite file needed. */
+  input?: string;
   runId?: string;
   runsDir?: string;
-  continueOnError?: boolean;
   config?: AgencyConfig;
   /** Worker-pool size (-n/--parallel); default 1 = sequential. */
   parallel?: number;
 };
 
-export function validateInputSelection(opts: { suite?: string; goal?: string }): "suite" | "goal" {
-  if (opts.suite && opts.goal) {
-    throw new Error("Provide only one of --suite or --goal");
+/** `--suite` runs a suite; otherwise the run is one inline test, with
+ *  `--input`'s text or (for an agent that takes no argument) no input. */
+export function validateInputSelection(opts: {
+  suite?: string;
+  input?: string;
+}): "suite" | "input" {
+  if (opts.suite && opts.input !== undefined) {
+    throw new Error("Provide only one of --suite or --input");
   }
-  if (!opts.suite && !opts.goal) {
-    throw new Error("Provide --suite or --goal");
-  }
-  return opts.goal ? "goal" : "suite";
+  return opts.suite ? "suite" : "input";
 }
 
 /**
@@ -55,7 +57,7 @@ export async function evalRun(
   const suite = loadSuite({
     selection,
     source: opts.suite,
-    goal: opts.goal,
+    input: opts.input,
     cacheRoot: opts.config?.eval?.sourceCacheRoot,
   });
 
@@ -66,7 +68,6 @@ export async function evalRun(
       suite: suite.identity,
       runId: opts.runId,
       runsDir: opts.runsDir,
-      continueOnError: opts.continueOnError,
       config: opts.config,
       parallel: opts.parallel,
     },
@@ -76,18 +77,18 @@ export async function evalRun(
 
 type LoadedSuite = { tests: Test[]; identity: SuiteIdentity };
 
-/** Load the suite named by --suite/--goal, resolving a git source when given
+/** Load the suite named by --suite/--input, resolving a git source when given
  *  one and recording the resolved sha as the suite's identity. Running never
- *  needs a `goal`, so none is required here; `eval grade` asks for one per
- *  test when its judge needs it. */
+ *  needs a `goal`, so none is required here; `eval grade` takes one (`--goal`)
+ *  or reads each test's own when its judge needs it. */
 function loadSuite(args: {
-  selection: "suite" | "goal";
+  selection: "suite" | "input";
   source?: string;
-  goal?: string;
+  input?: string;
   cacheRoot?: string;
 }): LoadedSuite {
-  if (args.selection === "goal") {
-    return { tests: [inputFromGoal(args.goal ?? "")], identity: { source: "inline:--goal" } };
+  if (args.selection === "input") {
+    return { tests: [inlineInput(args.input)], identity: { source: "inline:--input" } };
   }
   const loadOptions = { requireGoal: false, sourceCacheRoot: args.cacheRoot };
   const parsed = parseSource(args.source ?? "", process.cwd());

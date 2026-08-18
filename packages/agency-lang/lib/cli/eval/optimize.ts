@@ -16,7 +16,7 @@ import { splitInputs } from "@/optimize/validationSplit.js";
 import { DEFAULT_OPTIMIZER, getOptimizer } from "@/optimize/registry.js";
 import type { OptimizeResult } from "@/optimize/types.js";
 
-import { assertEvalEntryNodeTakesOneParameter, resolveEvalRunTarget } from "@/agentTarget.js";
+import { assertTargetMatchesInputs, resolveEvalRunTarget } from "@/agentTarget.js";
 
 export type EvalOptimizeOptions = {
   agent: string;
@@ -156,10 +156,18 @@ function provisionInputs(
 
 /** Build the optimize target: the agent plus the inputs to run it on (from --goal or --suite). */
 export function buildTarget(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): OptimizeTarget {
-  // Fail here, once, rather than as a run failure per candidate iteration.
   const resolved = resolveEvalRunTarget(opts.agent);
-  assertEvalEntryNodeTakesOneParameter(resolved.agentFile, resolved.node);
-  if (optimizeInputSelection(opts) === "goal") return goalTarget(opts);
+  const target =
+    optimizeInputSelection(opts) === "goal" ? goalTarget(opts) : suiteTarget(opts, deps);
+  // Fail here, once, rather than as a run failure per candidate iteration.
+  assertTargetMatchesInputs({ kind: "file", ...resolved }, [
+    ...target.inputs,
+    ...(target.validationInputs ?? []),
+  ]);
+  return target;
+}
+
+function suiteTarget(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): OptimizeTarget {
   const s = resolveOptimizeSettings(opts);
   // A per-input goal is required only when nothing else supplies one: no custom
   // grading module AND no overall --goal default to fall back on.

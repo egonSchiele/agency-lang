@@ -60,10 +60,15 @@ export function tokenizeCommand(command: string): string[] {
 
 /** Replace every {task} occurrence with the test's input. (The placeholder
  *  token stays `{task}` — it is user-facing; renaming it is a separate
- *  decision.) Objects serialize as JSON. At least one occurrence is required —
- *  a command that never receives the input is the silent-drop bug in new
- *  clothing. */
-export function substituteInput(tokens: string[], input: string | Record<string, any>): string[] {
+ *  decision.) Objects serialize as JSON. With an input, at least one
+ *  occurrence is required — a command that never receives the input is the
+ *  silent-drop bug in new clothing. A test with no input leaves the command
+ *  as written (the preflight already refused a placeholder in that case). */
+export function substituteInput(
+  tokens: string[],
+  input: string | Record<string, any> | undefined,
+): string[] {
+  if (input === undefined) return tokens;
   const text = typeof input === "string" ? input : JSON.stringify(input);
   if (!tokens.some((t) => t.includes(TASK_PLACEHOLDER))) {
     throw new Error(MISSING_TASK_PLACEHOLDER_ERROR);

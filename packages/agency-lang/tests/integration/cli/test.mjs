@@ -129,10 +129,10 @@ def add(a: number, b: number): number {
   assertIncludes(literateOutput, "// sum");
   console.log("Test 5 passed");
 
-  // --- Test 6: eval run with an inline goal ---
-  console.log("--- Test 6: eval run with an inline goal ---");
+  // --- Test 6: eval run with an inline input ---
+  console.log("--- Test 6: eval run with an inline input ---");
   // task is unused: eval entry nodes must take exactly one parameter (the
-  // input's task; --goal supplies the goal text as the task).
+  // input's task; --input supplies it).
   writeFile(dir, "eval-agent.agency", `optimize const greeting = "hello"
 
 node main(task: string): string {
@@ -142,7 +142,7 @@ node main(task: string): string {
   // eval run never grades: it writes a run directory (statelog.jsonl +
   // annotations.jsonl) and `agency eval grade <dir>` scores it later. This test
   // checks the run plumbing only, so no LLM call and no API key are needed.
-  run(dir, "npx agency eval run --agent eval-agent.agency --goal \"Say hello\" --runs-dir eval-runs --run-id smoke");
+  run(dir, "npx agency eval run eval-agent.agency --input \"Say hello\" --runs-dir eval-runs --run-id smoke");
   const evalRunDir = join(dir, "eval-runs", "smoke");
   if (!existsSync(join(evalRunDir, "statelog.jsonl"))) {
     throw new Error("eval run wrote no statelog.jsonl");
@@ -156,6 +156,23 @@ node main(task: string): string {
     throw new Error(`eval run row unexpected: ${JSON.stringify(evalRows)}`);
   }
   console.log("Test 6 passed");
+
+  // --- Test 6a: eval grade --goal over the run directory just written ---
+  // The goal judge is an llm() call; mock it so this runs offline (see Test 7).
+  console.log("--- Test 6a: eval grade --goal ---");
+  const gradeMockEnv = {
+    AGENCY_LLM_MOCKS: JSON.stringify([{ return: { score: 1, reasoning: "mock judge verdict" } }]),
+  };
+  const gradeOutput = run(dir, "npx agency eval grade eval-runs/smoke --goal \"Say hello\" 2>&1", { env: gradeMockEnv });
+  assertIncludes(gradeOutput, "objective  1.000");
+  // A folder that is not a run directory is refused with a pointer, not scored 0.
+  const notRunDir = run(dir, "npx agency eval grade eval-runs 2>&1", { expectFail: true });
+  assertIncludes(notRunDir, "not a run directory");
+  assertIncludes(notRunDir, "agency runs add");
+  // --graders and --goal are exclusive.
+  const both = run(dir, "npx agency eval grade eval-runs/smoke --goal x --graders g.ts 2>&1", { expectFail: true });
+  assertIncludes(both, "only one of --graders or --goal");
+  console.log("Test 6a passed");
 
   // --- Test 6b: agency logs --csv over the run directory just written ---
   console.log("--- Test 6b: agency logs --csv ---");

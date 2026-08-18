@@ -12,7 +12,7 @@
  */
 import { oracleAgent as stdOracleAgent } from "std::agents/oracle"
 
-import { getSlowModel, getSlowProvider } from "../shared.agency"
+import { getSlowModel, getSlowProvider } from "../../../shared.agency"
 
 export def oracleAgent(userMsg: string): string {
   """

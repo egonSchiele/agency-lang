@@ -1,0 +1,29 @@
+/** @module
+  @summary Every brain the agent can run. Adding a brain = a directory under
+  brains/ plus one entry in allBrains().
+*/
+import { AgentBrain } from "./brain.agency"
+import { coordinatorBrain } from "./coordinator/coordinator.agency"
+import { simpleBrain } from "./simple/simple.agency"
+
+export def allBrains(): AgentBrain[] {
+  return [coordinatorBrain(), simpleBrain()]
+}
+
+export def brainByName(name: string): AgentBrain | null {
+  for (brain in allBrains()) {
+    if (brain.name == name) {
+      return brain
+    }
+  }
+  return null
+}
+
+/** The --brain flag description: each name with its one-line description. */
+export def brainFlagHelp(): string {
+  let lines: string[] = []
+  for (brain in allBrains()) {
+    lines.push("${brain.name}: ${brain.description}")
+  }
+  return "Which brain answers turns (default: coordinator). One of — ${lines.join("; ")}"
+}

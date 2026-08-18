@@ -3,7 +3,7 @@
     {
       "nodeName": "respondsToAMessage",
       "input": "",
-      "expectedOutput": "true",
+      "expectedOutput": "\"Hi from the agent!|true|true\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -290,6 +290,16 @@
       "nodeName": "headerLinesSkipsMissing",
       "input": "",
       "expectedOutput": "1",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "headerShowsBrain",
+      "input": "",
+      "expectedOutput": "true",
       "evaluationCriteria": [
         {
           "type": "exact"

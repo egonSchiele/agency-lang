@@ -1,0 +1,29 @@
+/*
+ * Test helper: scan every thread for a message of a given role containing
+ * `needle`. listThreads with lazySummarize: false enumerates real thread ids
+ * without triggering the on-demand LLM summarization of closed threads
+ * (which would burn mocks).
+ */
+import { getThread, listThreads } from "std::thread"
+
+export def threadHasText(role: string, needle: string): boolean {
+  const threads = listThreads(lazySummarize: false)
+  if (isFailure(threads)) {
+    return false
+  }
+  for (info in threads.value) {
+    const messages = getThread(info.id, 0, 200)
+    if (isSuccess(messages)) {
+      for (message in messages.value) {
+        if (message.role == role && message.content.includes(needle)) {
+          return true
+        }
+      }
+    }
+  }
+  return false
+}
+
+export def threadHasSystemText(needle: string): boolean {
+  return threadHasText("system", needle)
+}

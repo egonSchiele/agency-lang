@@ -34,7 +34,7 @@ type GeneratedCode = {
 }
 
 // Kept in sync by hand with the syntax rules in the code subagent prompt
-// (lib/agents/agency-agent/subagents/code.agency) — the authoritative
+// (lib/agents/agency-agent/brains/coordinator/subagents/code.agency) — the authoritative
 // source is docs/site/guide/basic-syntax.md, which the model can read
 // through the docs tool.
 static const systemPrompt = """You write code in the Agency language.

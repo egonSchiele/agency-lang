@@ -17,53 +17,6 @@
       ]
     },
     {
-      "nodeName": "modalitySkipsTextOnlyModel",
-      "input": "",
-      "expectedOutput": "\"ok|false\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ],
-      "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": "ok"
-        }
-      ]
-    },
-    {
-      "nodeName": "subagentRouteIgnoresImagePath",
-      "input": "",
-      "expectedOutput": "\"true|false\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ],
-      "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": "code reply"
-        },
-        {
-          "return": "code reply"
-        },
-        {
-          "return": "code reply"
-        },
-        {
-          "return": "code reply"
-        },
-        {
-          "return": "code reply"
-        },
-        {
-          "return": "code reply"
-        }
-      ]
-    },
-    {
       "nodeName": "generatedImageIsShownToModel",
       "input": "",
       "expectedOutput": "\"made it|true\"",

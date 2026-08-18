@@ -1,0 +1,124 @@
+/** @module
+  @summary The coordinator brain: one main LLM that routes to the code,
+  research, oracle, explorer, and review subagents. The harness (agent.agency
+  and lib/) owns the CLI, the REPL, the policy handler, and the per-turn
+  guard; this module only answers turns.
+*/
+import { whatIAmDoing } from "std::agents/lib/toolkits"
+import { now, elapsedTime } from "std::date"
+import { setMemoryId } from "std::memory"
+import { Attachment, systemMessage } from "std::thread"
+
+import { generateImageFile } from "../../lib/images.agency"
+import { getMcpTools } from "../../lib/mcp.agency"
+import { getCapabilities } from "../../shared.agency"
+import { AgentBrain, BrainContext } from "../brain.agency"
+import { codeAgent, setCodeOneShot } from "./subagents/code.agency"
+import { explorerAgent } from "./subagents/explorer.agency"
+import { oracleAgent } from "./subagents/oracle.agency"
+import { researchAgent } from "./subagents/research.agency"
+import { reviewAgent } from "./subagents/review.agency"
+
+// Per-run grounding, from BrainContext. Spliced into the system prompt.
+let _context: string = ""
+
+let first = true
+
+// Bundled prompts are read at static-init, before the policy handler exists.
+// coordinatorInit only checks the reads succeeded.
+static const MAIN_PROMPT_LARGE = read("./prompts/main-large.md", __dirname) with approve
+static const MAIN_PROMPT_SMALL = read("./prompts/main-small.md", __dirname) with approve
+
+static const mainAgentTools = [
+  researchAgent,
+  codeAgent,
+  reviewAgent,
+  oracleAgent,
+  explorerAgent,
+  generateImageFile,
+]
+
+def coordinatorInit(context: BrainContext) {
+  if (isFailure(MAIN_PROMPT_LARGE)) {
+    print(
+      color.red("Failed to read prompts/main-large.md: ${MAIN_PROMPT_LARGE.error}"),
+    )
+    process.exit(1)
+  }
+  if (isFailure(MAIN_PROMPT_SMALL)) {
+    print(
+      color.red("Failed to read prompts/main-small.md: ${MAIN_PROMPT_SMALL.error}"),
+    )
+    process.exit(1)
+  }
+  _context = context.grounding
+  first = true
+  // One-shot autonomy: tell the code subagent there is no human to answer
+  // questions and no next turn, so it must drive to a finished artifact.
+  setCodeOneShot(!context.interactive)
+}
+
+def mainAgent(prompt: string | (string | Attachment)[]): string {
+  // The prompt tells the model to report progress (whatIAmDoing) and watch
+  // the clock (elapsedTime), so both must be in its tool list. elapsedTime
+  // is anchored to this turn's start.
+  const turnStart = now()
+  thread(label: "main", session: "main") {
+    setMemoryId("main")
+    if (first) {
+      const promptSize = getCapabilities().prompt
+      const sysPrompt = match(promptSize) {
+        "small" => MAIN_PROMPT_SMALL catch ""
+        _ => MAIN_PROMPT_LARGE catch ""
+      }
+      systemMessage("${sysPrompt}${_context}")
+      first = false
+    }
+    const result = llm(
+      prompt,
+      {
+        memory: true,
+        tools: [
+          ...mainAgentTools,
+          ...getMcpTools(),
+          whatIAmDoing,
+          elapsedTime.partial(since: turnStart),
+        ]
+      },
+    )
+  }
+  return result
+}
+
+// Named subagents take text; the harness sends them text, so this is the
+// identity in practice and a guard against a future caller.
+def promptText(prompt: string | (string | Attachment)[]): string {
+  return match(prompt) {
+    text: string => text
+    parts: (string | Attachment)[] => "${parts[0]}"
+  }
+}
+
+def coordinatorRunTurn(
+  target: string,
+  prompt: string | (string | Attachment)[],
+): string {
+  return match(target) {
+    "code" => codeAgent(promptText(prompt))
+    "research" => researchAgent(promptText(prompt))
+    "oracle" => oracleAgent(promptText(prompt))
+    "explorer" => explorerAgent(promptText(prompt))
+    "review" => reviewAgent(promptText(prompt))
+    _ => mainAgent(prompt)
+  }
+}
+
+export def coordinatorBrain(): AgentBrain {
+  return {
+    name: "coordinator",
+    description: "One coordinator LLM that routes to code, research, oracle, explorer, and review subagents",
+    startTargets: ["code", "research", "oracle", "explorer", "review"],
+    init: coordinatorInit,
+    runTurn: coordinatorRunTurn
+  }
+}

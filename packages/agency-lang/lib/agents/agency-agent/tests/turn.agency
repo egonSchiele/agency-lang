@@ -1,0 +1,194 @@
+/*
+ * Harness tests: the work that happens around a brain (slash expansion,
+ * attachments, the budget guard) and the session wrapper that installs the
+ * policy handler around init and every turn. Uses stub brains; no real
+ * coordinator involved.
+ *
+ * `slashCommandExpands` depends on the working directory being
+ * packages/agency-lang, whose .claude/commands/check-tests.md is the
+ * fixture (projectCommands is a static read of ${cwd()}/.claude/commands).
+ */
+import { budgetCost, budgetTime } from "../lib/budget.agency"
+import { setInteractive } from "../lib/trace.agency"
+import {
+  setBrain,
+  runTurn,
+  runSession,
+  setPolicyArg,
+  resolveBrainName,
+  resolveStartTarget,
+ } from "../lib/turn.agency"
+import { applyResolved } from "../shared.agency"
+import {
+  recordingBrain,
+  selfApprovingBrain,
+  costlyBrain,
+  initCount,
+  lastTarget,
+  lastPromptKind,
+  lastText,
+  lastAttachmentCount,
+  lastContextInteractive,
+  lastGrounding,
+  initPolicyOutcome,
+ } from "./stubBrains.agency"
+
+static const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+
+let _readBinaryInterrupts = 0
+
+// The CLI policy is the inner handler and approves std::readBinary. Every
+// approval is only a vote, so this outer handler sees an attempted read,
+// records it, and rejects it. detectAttachments converts that rejection to a
+// skipped attachment, which is why the final prompt alone cannot prove that
+// no read was attempted.
+def auditReadBinary(intr: any): any {
+  if (intr.effect == "std::readBinary") {
+    _readBinaryInterrupts = _readBinaryInterrupts + 1
+    return reject("unexpected attachment read")
+  }
+  return pass()
+}
+
+// A plain message reaches the brain on the main target, as the array form
+// with zero attachments.
+node plainMessageReachesBrain(): string {
+  setBrain(recordingBrain())
+  const reply = runTurn("", "hello there") with approve
+  return "${reply}|${lastTarget() == ""}|${lastPromptKind()}|${lastAttachmentCount()}"
+}
+
+// A project slash command is expanded by the harness before the brain sees it.
+node slashCommandExpands(): string {
+  setBrain(recordingBrain())
+  runTurn("", "/check-tests") with approve
+  const text = lastText()
+  return "${text.startsWith("/")}|${text.includes("Please review the tests you have written")}"
+}
+
+// An image path on the main target is detected, read, and attached by the
+// harness. (The "📎 attached" line goes to the UI and is not asserted here.)
+node mainTargetGetsAttachment(): string {
+  setBrain(recordingBrain())
+  applyResolved(
+    {
+      main: {
+        model: "gpt-4o",
+        provider: "openai",
+        via: "test"
+      }
+    },
+  )
+  writeBinary("turn-a.png", PNG, "/tmp") with approve
+  runTurn("", "look at /tmp/turn-a.png") with approve
+  return "${lastPromptKind()}|${lastAttachmentCount()}|${lastText() == "look at /tmp/turn-a.png"}"
+}
+
+// The same message to a named target arrives as bare text AND no read was
+// attempted. The outer audit is essential: detectAttachments turns a
+// rejected read into a skipped attachment, so prompt shape alone is not
+// evidence that detection was bypassed.
+node namedTargetGetsBareTextWithoutReading(): string {
+  setBrain(recordingBrain())
+  setPolicyArg("${__dirname}/stubPolicy.json")
+  writeBinary("turn-b.png", PNG, "/tmp") with approve
+  let reply = ""
+  handle {
+    runSession(false) {
+      reply = runTurn("worker", "look at /tmp/turn-b.png")
+    }
+  } with auditReadBinary
+  return "${reply}|${lastTarget()}|${lastPromptKind()}|${lastAttachmentCount()}|${_readBinaryInterrupts}"
+}
+
+// The harness calls parseTurnBudget, uses both parsed dimensions, and resets
+// them on the next clue-free turn.
+node budgetIsParsedAndReset(): string {
+  setBrain(recordingBrain())
+  const firstReply = runTurn("", "answer within 2 minutes and $1.25: what is 1+1") with approve
+  const firstReachedBrain = lastText().includes("1+1")
+  const parsedTime = budgetTime()
+  const parsedCost = budgetCost()
+  const secondReply = runTurn("", "ordinary follow-up") with approve
+  return "${firstReply}|${firstReachedBrain}|${parsedTime == 120000}|${parsedCost == 1.25}|${secondReply}|${budgetTime() == 1h}|${budgetCost() == 50}"
+}
+
+// Parsing alone is insufficient: a deterministic LLM call must actually trip
+// the cost guard. If runTurn stops wrapping the brain in guard(...), this
+// returns the stub reply and the assertion fails.
+node parsedBudgetGuardsBrain(): boolean {
+  setInteractive(false)
+  setBrain(costlyBrain())
+  const reply = runTurn("", "spend no more than $0.000001") with approve
+  return reply.includes("over the cost budget")
+}
+
+// The unit tests for modalityFilter prove its internals. This integration
+// case proves the harness still calls it before handing the main turn over.
+node textOnlyModelDropsAttachment(): string {
+  setBrain(recordingBrain())
+  applyResolved(
+    {
+      main: {
+        model: "gpt-3.5-turbo",
+        provider: "openai",
+        via: "test"
+      }
+    },
+  )
+  writeBinary("turn-text-only.png", PNG, "/tmp") with approve
+  runTurn("", "look at /tmp/turn-text-only.png") with approve
+  return "${lastPromptKind()}|${lastAttachmentCount()}"
+}
+
+// Session wrapper: init runs once before two turns. The rejecting CLI policy
+// beats the brain's own approval during BOTH init and each turn.
+node sessionRunsInitAndPolicyWins(): string {
+  setBrain(selfApprovingBrain())
+  setPolicyArg("${__dirname}/stubPolicy.json")
+  let firstReply = ""
+  let secondReply = ""
+  let initBeforeTurn = false
+  runSession(false) {
+    initBeforeTurn = initCount() == 1
+    firstReply = runTurn("", "first")
+    secondReply = runTurn("", "second")
+  }
+  return "${initBeforeTurn}|${initPolicyOutcome()}|${firstReply}|${secondReply}|${initCount()}|${!lastContextInteractive()}"
+}
+
+// A separate interactive session proves runSession builds and passes the
+// actual BrainContext rather than coordinator tests succeeding only because
+// they manually supplied one.
+node sessionPassesInteractiveContext(): string {
+  setBrain(recordingBrain())
+  setPolicyArg("${__dirname}/stubPolicy.json")
+  let bodyRan = false
+  runSession(true) {
+    bodyRan = true
+  }
+  return "${lastContextInteractive()}|${lastGrounding().includes("Current date:")}|${lastGrounding().includes("Current working directory:")}|${bodyRan}|${initCount()}"
+}
+
+node resolvesBrainNamePrecedence(): string {
+  const flagWins = resolveBrainName("flag-brain", {
+    brain: "settings-brain"
+  })
+  const settingsNext = resolveBrainName(null, {
+    brain: "settings-brain"
+  })
+  const emptyFlagFallsThrough = resolveBrainName("", {
+    brain: "settings-brain"
+  })
+  const defaultLast = resolveBrainName(null, {})
+  return "${flagWins}|${settingsNext}|${emptyFlagFallsThrough}|${defaultLast}"
+}
+
+node resolvesStartTargets(): string {
+  const brain = recordingBrain()
+  const emptyMain = resolveStartTarget(brain, "")
+  const namedMain = resolveStartTarget(brain, "main")
+  const worker = resolveStartTarget(brain, "worker")
+  const invalid = resolveStartTarget(brain, "bogus")
+  return "${emptyMain == ""}|${namedMain == ""}|${worker == "worker"}|${invalid == null}"
+}

@@ -157,7 +157,7 @@ node main(task: string): string {
   assertIncludes(csvOutput, "run");
   console.log("Test 6b passed");
 
-  // --- Test 7: eval optimize baseline-only run ---
+  // --- Test 7: optimize baseline-only run ---
   // --iterations 0 skips the mutator, but the greedy optimizer still grades the
   // baseline with the goal judge — an llm() call. Mock it so the smoke test runs
   // offline (no API key in CI); without a mock the judge's structured output is
@@ -169,10 +169,10 @@ node main(task: string): string {
       { return: { score: 1, reasoning: "mock judge verdict" } },
     ]),
   };
-  console.log("--- Test 7: eval optimize baseline-only ---");
+  console.log("--- Test 7: optimize baseline-only ---");
   const optimizeOutput = run(
     dir,
-    "npx agency eval optimize eval-agent.agency --goal \"Say hello\" --iterations 0 --runs-dir optimize-runs --run-id smoke --no-writeback 2>&1",
+    "npx agency optimize eval-agent.agency --goal \"Say hello\" --iterations 0 --runs-dir optimize-runs --run-id smoke --no-writeback 2>&1",
     { env: judgeMockEnv },
   );
   assertIncludes(optimizeOutput, "1 target(s)");
@@ -184,12 +184,12 @@ node main(task: string): string {
     throw new Error(`optimize summary unexpected: ${JSON.stringify(optimizeSummary)}`);
   }
   // The legacy flag surface must stay dead.
-  const legacyOutput = run(dir, "npx agency eval optimize --agent eval-agent.agency --goal x 2>&1", { expectFail: true });
+  const legacyOutput = run(dir, "npx agency optimize --agent eval-agent.agency --goal x 2>&1", { expectFail: true });
   assertIncludes(legacyOutput, "unknown option");
   // --silent prints nothing.
   const silentOutput = run(
     dir,
-    "npx agency eval optimize eval-agent.agency --goal \"Say hello\" --iterations 0 --runs-dir optimize-runs --run-id silent-smoke --no-writeback --silent 2>&1",
+    "npx agency optimize eval-agent.agency --goal \"Say hello\" --iterations 0 --runs-dir optimize-runs --run-id silent-smoke --no-writeback --silent 2>&1",
     { env: judgeMockEnv },
   );
   if (silentOutput.trim() !== "") {

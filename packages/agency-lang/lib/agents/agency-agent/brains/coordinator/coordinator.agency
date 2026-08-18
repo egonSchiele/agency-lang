@@ -52,6 +52,7 @@ def coordinatorInit(context: BrainContext) {
     process.exit(1)
   }
   _context = context.grounding
+  first = true
   // One-shot autonomy: tell the code subagent there is no human to answer
   // questions and no next turn, so it must drive to a finished artifact.
   setCodeOneShot(!context.interactive)

@@ -21,7 +21,6 @@ import { mergedPalette } from "./commandPalette.agency"
 import { HISTORY_PATH } from "./config.agency"
 import { mcpSlashCommand } from "./mcp.agency"
 import { filterHostedModels } from "./modelFilters.agency"
-import { parseModelSpec } from "./models.agency"
 import { diffResolved, Ctx } from "./resolution.agency"
 import {
   configureSearch,

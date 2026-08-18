@@ -13,6 +13,7 @@ let first = true
 
 def simpleInit(context: BrainContext) {
   _context = context.grounding
+  first = true
 }
 
 def simpleRunTurn(

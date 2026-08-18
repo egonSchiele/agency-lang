@@ -4,7 +4,7 @@
 
 **Goal:** Make the statelog the run, and one plain directory plus one append-only `annotations.jsonl` the single shape that observing, noting, labeling, grading and optimizing all read and write.
 
-**Architecture:** A new `lib/runs/` module owns the run directory behind one declarative read interface (`readRunDirectory`) and four declarative write operations (`addToRunDirectory`, `recordCompletedRun`, `recordNote`, `recordGradingPass`). Those operations—not CLIs or eval callers—own the writer lock, complete preflight, mutation order, safe replacement, torn-tail repair and durable append. The runtime records code identity and input on `agentStart`; then the eval harness, grader, labeling TUI, optimizer and log viewer are re-pointed at the new module, and the redundant formats they replaced are deleted.
+**Architecture:** A new `lib/runDirectory/` module owns the run directory behind one declarative read interface (`readRunDirectory`) and four declarative write operations (`addToRunDirectory`, `recordCompletedRun`, `recordNote`, `recordGradingPass`). Those operations—not CLIs or eval callers—own the writer lock, complete preflight, mutation order, safe replacement, torn-tail repair and durable append. The runtime records code identity and input on `agentStart`; then the eval harness, grader, labeling TUI, optimizer and log viewer are re-pointed at the new module, and the redundant formats they replaced are deleted.
 
 **Tech Stack:** TypeScript, Node `fs`/`crypto`, zod (row schemas), vitest, the vendored commander (CLI), the existing statelog client and JSONL helpers.
 
@@ -43,7 +43,7 @@
 New module, one concept per file:
 
 ```
-lib/runs/
+lib/runDirectory/
   runDir.ts            # paths + readRunDirectory(dir) → one consistent snapshot
   traces.ts            # per-trace digest; readTraces(statelogPath) → Trace[]
   mergeStatelog.ts     # pure preflight + private application of a trace merge
@@ -55,11 +55,11 @@ lib/runs/
   attachWorkdir.ts     # private preflight/application for workdir attachments
   evalRecord.ts        # evalRecordFor(trace) — the in-memory EvalRecord from a Trace
   list.ts              # summarizeRuns(dir) → one row per trace for `runs list`
-lib/cli/runs/
+lib/cli/runDirectory/
   add.ts  list.ts  note.ts  extract.ts   # one command per file
 ```
 
-Existing files that change hands: `lib/eval/label/{checklist,controller,labelTui,session,draft,annotations}.ts` are re-pointed at `lib/runs/annotations.ts`; everything else under `lib/eval/label/` and `lib/eval/label/load/` is deleted in Phase 5.
+Existing files that change hands: `lib/eval/label/{checklist,controller,labelTui,session,draft,annotations}.ts` are re-pointed at `lib/runDirectory/annotations.ts`; everything else under `lib/eval/label/` and `lib/eval/label/load/` is deleted in Phase 5.
 
 ---
 
@@ -113,8 +113,8 @@ git commit -F /private/tmp/…/scratchpad/msg.txt   # "Remove the label-save pro
 ### Task 1.1: `computeCodeIdentity`
 
 **Files:**
-- Create: `lib/runs/codeIdentity.ts`
-- Test: `lib/runs/codeIdentity.test.ts`
+- Create: `lib/runDirectory/codeIdentity.ts`
+- Test: `lib/runDirectory/codeIdentity.test.ts`
 
 **Interfaces:**
 - Produces: `type CodeIdentity = { entry: string; closureHash: string; closure: { file: string; sha256: string }[] }` and `computeCodeIdentity(entryFile: string): CodeIdentity`. `entry` and `closure[].file` are relative to `agentClosure(entryFile).baseDir`, sorted by `file`; `closureHash` = `sha256Text(closure.map(f => `${f.file}\n${f.sha256}\n`).join(""))`.
@@ -122,7 +122,7 @@ git commit -F /private/tmp/…/scratchpad/msg.txt   # "Remove the label-save pro
 - [ ] **Step 1: Write the failing test**
 
 ```ts
-// lib/runs/codeIdentity.test.ts
+// lib/runDirectory/codeIdentity.test.ts
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -166,13 +166,13 @@ describe("computeCodeIdentity", () => {
 
 - [ ] **Step 2: Run it to see it fail**
 
-Run: `pnpm vitest run lib/runs/codeIdentity.test.ts > /private/tmp/…/scratchpad/t11.log 2>&1`
+Run: `pnpm vitest run lib/runDirectory/codeIdentity.test.ts > /private/tmp/…/scratchpad/t11.log 2>&1`
 Expected: FAIL, cannot find module `./codeIdentity.js`.
 
 - [ ] **Step 3: Implement**
 
 ```ts
-// lib/runs/codeIdentity.ts
+// lib/runDirectory/codeIdentity.ts
 import * as fs from "fs";
 import * as path from "path";
 import { agentClosure } from "@/analysis/closure.js";
@@ -265,13 +265,13 @@ Do not reconstruct input from `RunNodeArgs.data`: an ordinary one-parameter invo
 
 ---
 
-# Phase 2 — `lib/runs/`: the run directory core
+# Phase 2 — `lib/runDirectory/`: the run directory core
 
 ### Task 2.1: Traces and per-trace digest
 
 **Files:**
 - Modify: `lib/statelog/parse.ts`, `lib/statelog/parse.test.ts`
-- Create: `lib/runs/traces.ts`, `lib/runs/traces.test.ts`
+- Create: `lib/runDirectory/traces.ts`, `lib/runDirectory/traces.test.ts`
 
 **Interfaces:**
 - Produces: `type ParsedEventLine = { event: EventEnvelope; raw: string; line: number }`; `parseStatelogJsonlWithLines(text): { lines: ParsedEventLine[]; errors: ParseError[] }`. The existing `parseStatelogJsonl` delegates to it and maps `lines` to events, so JSON decoding, version checks and envelope validation still have one owner.
@@ -281,12 +281,12 @@ Do not reconstruct input from `RunNodeArgs.data`: an ordinary one-parameter invo
 - [ ] **Step 1: Failing tests** — first extend the parser test to prove `parseStatelogJsonlWithLines` returns the validated envelope, original raw line and one-based line number, while `parseStatelogJsonl` retains its existing output. Then write a 3-line statelog with two trace ids and assert `readTraces` returns two traces with the right event counts; assert `traceDigest` is equal for envelopes that differ only in key order and differs when a value changes; assert a duplicated identical line yields one event; assert prefix match works; assert a trailing partial line is not counted.
 - [ ] **Step 2: Run, fail.**
 - [ ] **Step 3: Implement** — move the existing per-line decoding in `parseStatelogJsonl` into `parseStatelogJsonlWithLines`; make the old function delegate. `readTraces` removes only the torn suffix before calling that parser, groups its validated `ParsedEventLine`s by `trace_id`, skips exact duplicate raw lines and computes the canonical digest. It must not call `JSON.parse` itself.
-- [ ] **Step 4: Run, pass.** **Step 5: Commit** ("Add lib/runs/traces: read a statelog into traces with per-trace digests").
+- [ ] **Step 4: Run, pass.** **Step 5: Commit** ("Add lib/runDirectory/traces: read a statelog into traces with per-trace digests").
 
 ### Task 2.2: Named annotation types and effective state
 
 **Files:**
-- Create: `lib/runs/annotations.ts`, `lib/runs/annotations.test.ts`
+- Create: `lib/runDirectory/annotations.ts`, `lib/runDirectory/annotations.test.ts`
 
 **Interfaces:**
 - Produces named types rather than nested anonymous object contracts:
@@ -341,8 +341,8 @@ export function foldAnnotations(rows: Annotation[]): Record<string, EffectiveTra
 ### Task 2.3: One read snapshot and private lock infrastructure
 
 **Files:**
-- Create: `lib/runs/runDir.ts`, `lib/runs/runDir.test.ts`, `lib/runs/lock.ts`
-- Move test: `lib/eval/label/lock.test.ts` → `lib/runs/lock.test.ts`
+- Create: `lib/runDirectory/runDir.ts`, `lib/runDirectory/runDir.test.ts`, `lib/runDirectory/lock.ts`
+- Move test: `lib/eval/label/lock.test.ts` → `lib/runDirectory/lock.test.ts`
 
 **Interfaces:**
 - Produces: `type RunDirectorySnapshot = { dir: string; hasStatelog: boolean; traces: Trace[]; annotationRows: Annotation[]; effectiveAnnotations: Record<string, EffectiveTraceAnnotations> }`; `readRunDirectory(dir, {reportWarning}) → RunDirectorySnapshot`; `runDirPaths(dir) → RunDirectoryPaths` (a named type).
@@ -355,7 +355,7 @@ export function foldAnnotations(rows: Annotation[]): Record<string, EffectiveTra
 ### Task 2.4: Private mutation primitives and safe replacement
 
 **Files:**
-- Create: `lib/runs/mergeStatelog.ts`, `lib/runs/attachCode.ts`, `lib/runs/attachWorkdir.ts`, tests for each
+- Create: `lib/runDirectory/mergeStatelog.ts`, `lib/runDirectory/attachCode.ts`, `lib/runDirectory/attachWorkdir.ts`, tests for each
 - Modify: `lib/utils.ts`, `lib/utils.test.ts`
 
 **Interfaces:**
@@ -372,7 +372,7 @@ export function foldAnnotations(rows: Annotation[]): Record<string, EffectiveTra
 ### Task 2.5: Declarative run-directory mutations
 
 **Files:**
-- Create: `lib/runs/mutations.ts`, `lib/runs/mutations.test.ts`
+- Create: `lib/runDirectory/mutations.ts`, `lib/runDirectory/mutations.test.ts`
 
 **Interfaces:**
 - Produces named request/result types and four public operations. The request describes the desired domain change, not the lock or filesystem steps needed to make it:
@@ -452,7 +452,7 @@ export function recordGradingPass(request: RecordGradingPassRequest): RecordGrad
 ### Task 2.6: `evalRecordFor` and `summarizeRuns`
 
 **Files:**
-- Create: `lib/runs/evalRecord.ts`, `lib/runs/list.ts`, tests
+- Create: `lib/runDirectory/evalRecord.ts`, `lib/runDirectory/list.ts`, tests
 
 **Interfaces:**
 - `evalRecordFor(trace, sourcePath) → EvalRecord`; `summarizeRuns(snapshot: RunDirectorySnapshot) → RunSummary[]`. Define `RunSummary` as a named type with one property per displayed column; callers never reopen or separately fold files.
@@ -471,11 +471,11 @@ export function recordGradingPass(request: RecordGradingPassRequest): RecordGrad
 ### Task 3.1: `agency logs extract <log> --trace <id> [-o <file>]`
 
 **Files:**
-- Create: `lib/cli/runs/extract.ts`, `lib/cli/runs/extract.test.ts`
+- Create: `lib/cli/runDirectory/extract.ts`, `lib/cli/runDirectory/extract.test.ts`
 - Modify: `scripts/agency.ts` (register under the `logs` command at `:683`)
 
 **Interfaces:**
-- `logsExtract({ log, trace?, out? }, deps = { stdout })`: `readTraces(log)`; if `trace` is undefined and there is exactly one trace, use it; if undefined with several, error listing ids (reuse the table from `describeAvailableTraces` — move that helper into `lib/runs/traces.ts` in this task); prefix match via `matchTrace`; write `trace.lines.join("\n") + "\n"` to `out` (create parent dirs) or stdout.
+- `logsExtract({ log, trace?, out? }, deps = { stdout })`: `readTraces(log)`; if `trace` is undefined and there is exactly one trace, use it; if undefined with several, error listing ids (reuse the table from `describeAvailableTraces` — move that helper into `lib/runDirectory/traces.ts` in this task); prefix match via `matchTrace`; write `trace.lines.join("\n") + "\n"` to `out` (create parent dirs) or stdout.
 
 - [ ] **Step 1: Failing test** — two-trace log: no `--trace` → error listing both; `--trace <prefix>` → output has exactly that trace's lines; one-trace log with no `--trace` → succeeds.
 - [ ] **Step 2–4.** **Step 5: Commit** ("agency logs extract: copy one trace out of a statelog").
@@ -483,7 +483,7 @@ export function recordGradingPass(request: RecordGradingPassRequest): RecordGrad
 ### Task 3.2: `agency runs add`
 
 **Files:**
-- Create: `lib/cli/runs/add.ts`, test
+- Create: `lib/cli/runDirectory/add.ts`, test
 - Modify: `scripts/agency.ts` (new `runs` command group with `add`)
 
 **Interfaces:**
@@ -495,7 +495,7 @@ export function recordGradingPass(request: RecordGradingPassRequest): RecordGrad
 ### Task 3.3: `agency note <dir> [--trace <id>] <text>` and `agency runs list <dir>`
 
 **Files:**
-- Create: `lib/cli/runs/note.ts`, `lib/cli/runs/list.ts`, tests
+- Create: `lib/cli/runDirectory/note.ts`, `lib/cli/runDirectory/list.ts`, tests
 - Modify: `scripts/agency.ts`
 
 - `note`: resolve the trace from `readRunDirectory`, call `recordNote({ dir, traceId, annotator, text })`, and print the returned annotation id. It never opens the annotation file or lock.
@@ -583,7 +583,7 @@ Rules to keep from `docs/dev/eval-grading.md`: a trace whose `run.ended !== "ok"
 
 **Files:**
 - Modify: `lib/eval/label/checklist.ts` (paths from `runDirPaths(dir).checklistsDir`; drafts at `checklists/<name>/draft.json`), `lib/eval/label/draft.ts` (draft carries `pendingAnnotation` as today, plus `traceIds` order for the session id)
-- Create: `lib/runs/checklistSignoff.ts`, `lib/runs/checklistSignoff.test.ts`
+- Create: `lib/runDirectory/checklistSignoff.ts`, `lib/runDirectory/checklistSignoff.test.ts`
 - Test: existing checklist/draft tests re-pointed
 
 **Interfaces:**

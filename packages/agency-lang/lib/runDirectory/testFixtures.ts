@@ -22,11 +22,9 @@ export function statelogLine(
 }
 
 export function agentStartLine(traceId: string, code?: CodeIdentity): string {
-  return statelogLine(traceId, "agentStart", {
-    entryNode: "main",
-    args: {},
-    ...(code === undefined ? {} : { code }),
-  });
+  const data: Record<string, unknown> = { entryNode: "main", args: {} };
+  if (code !== undefined) data.code = code;
+  return statelogLine(traceId, "agentStart", data);
 }
 
 export function tracesOf(...lines: string[]): Trace[] {

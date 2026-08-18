@@ -65,17 +65,14 @@ export type RunPayload = {
 
 export type AnnotationPayload = NotePayload | ChecklistPayload | ScorePayload | RunPayload;
 
-export type Annotation = {
-  v: 1;
-  id: string;
+/** What a writer supplies; `v`, `id` and `createdAt` are filled at append. */
+export type AnnotationDraft = {
   traceId: string;
-  createdAt: string;
   annotator: Annotator;
   sessionId?: string;
 } & AnnotationPayload;
 
-/** What a writer supplies; `v`, `id` and `createdAt` are filled at append. */
-export type AnnotationDraft = Omit<Annotation, "v" | "id" | "createdAt">;
+export type Annotation = { v: 1; id: string; createdAt: string } & AnnotationDraft;
 
 // --- schemas --------------------------------------------------------------
 

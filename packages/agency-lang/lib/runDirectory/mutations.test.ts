@@ -168,9 +168,21 @@ describe("recordCompletedRun preflight", () => {
     const staged = statelogFile(agentStartLine("t1"), statelogLine("t1", "agentEnd"));
     expect(() =>
       recordCompletedRun({ dir, stagedStatelogFile: staged, run: { traceId: "t2", ...run } }),
-    ).toThrow(/t2.*staged statelog.*t1/);
+    ).toThrow(/t2.*staged statelog holds t1/);
     expect(fs.existsSync(runDirPaths(dir).statelog)).toBe(false);
     expect(fs.existsSync(runDirPaths(dir).annotations)).toBe(false);
+  });
+
+  it("still records a run that produced no trace at all, since the row is its only record", () => {
+    const dir = tempDir();
+    const staged = statelogFile();
+    const result = recordCompletedRun({
+      dir,
+      stagedStatelogFile: staged,
+      run: { traceId: "t-died-early", ...run },
+    });
+    expect(result.snapshot.effectiveAnnotations["t-died-early"].run?.kind).toBe("run");
+    expect(result.snapshot.traces).toEqual([]);
   });
 
   it("refuses a staged statelog with a malformed line in the middle, writing nothing", () => {

@@ -1,7 +1,7 @@
 // Suite identity: the short name a run's test set groups under, derived
 // from the harness `run` row's `suite.source`. The source string formats
 // are the ones lib/cli/eval/run.ts and lib/optimize actually write: a
-// local path, a git URL (optionally ?ref=), "inline:--goal", "optimize",
+// local path, a git URL (optionally ?ref=), "inline:--input", "optimize",
 // or "unspecified". Pure.
 import { MAX_IDENTITY_LABEL_CHARS } from "./identity.js";
 

@@ -59,51 +59,84 @@ export type EvalTarget =
  *  would be remote code execution. */
 export function resolveEvalTarget(opts: { agent?: string; agentCmd?: string }): EvalTarget {
   if ((opts.agent ? 1 : 0) + (opts.agentCmd ? 1 : 0) !== 1) {
-    throw new Error("Provide exactly one of --agent or --agent-cmd");
+    throw new Error("Provide exactly one of an agent file or --agent-cmd");
   }
   if (opts.agentCmd) {
-    const tokens = tokenizeCommand(opts.agentCmd);
-    if (!tokens.some((t) => t.includes(TASK_PLACEHOLDER))) {
-      throw new Error(MISSING_TASK_PLACEHOLDER_ERROR);
-    }
-    return { kind: "command", tokens, label: opts.agentCmd };
+    return { kind: "command", tokens: tokenizeCommand(opts.agentCmd), label: opts.agentCmd };
   }
   return { kind: "file", ...resolveEvalRunTarget(opts.agent as string) };
 }
 
 /**
- * Fail fast when the entry node cannot receive a task: eval delivers the
- * input's task as the node's single positional parameter, so the node must
- * take exactly one. The subprocess bootstrap enforces the same rule at run
- * time (resolveNodeCallArgs), but by then a workdir has been seeded and the
- * agent compiled — and the optimizer would pay that once per candidate.
- * A misconfigured agent should cost one error, not a suite of run failures.
+ * Fail fast when the agent's shape does not match what the tests deliver.
+ * A test's input reaches a file agent as the entry node's single positional
+ * parameter and a command agent as `{task}`; a test with no input reaches a
+ * node that takes none / a command with no placeholder. Within one suite the
+ * tests must agree (all carry an input, or none does), so the agent has one
+ * shape to be. Checked before any workdir is seeded or agent compiled: a
+ * mis-shaped agent is a configuration error, not a per-test run failure —
+ * and the optimizer would pay it once per candidate. The subprocess
+ * bootstrap re-checks the file case at run time (resolveNodeCallArgs).
  *
- * Best-effort: an unreadable or unparseable file, or a node defined
- * elsewhere than the entry file, is left for compile/run to report with
- * better errors than a pre-parse could.
+ * The file check is best-effort: an unreadable or unparseable file, or a
+ * node defined elsewhere than the entry file, is left for compile/run to
+ * report with better errors than a pre-parse could.
  */
-export function assertEvalEntryNodeTakesOneParameter(agentFile: string, node: string): void {
+export function assertTargetMatchesInputs(target: EvalTarget, tests: { input?: unknown }[]): void {
+  const withInput = tests.filter((test) => test.input !== undefined).length;
+  if (withInput !== 0 && withInput !== tests.length) {
+    throw new Error(
+      `Within one suite either every test provides an "input" or none does; ${withInput} of ${tests.length} do.`,
+    );
+  }
+  const hasInput = withInput > 0;
+  if (target.kind === "command") {
+    const hasPlaceholder = target.tokens.some((t) => t.includes(TASK_PLACEHOLDER));
+    if (hasInput && !hasPlaceholder) throw new Error(MISSING_TASK_PLACEHOLDER_ERROR);
+    if (!hasInput && hasPlaceholder) {
+      throw new Error(
+        `--agent-cmd contains ${TASK_PLACEHOLDER} but no test provides an input — pass --input <text> ` +
+          `(or give the tests an "input"), or drop the placeholder for an agent that takes none.`,
+      );
+    }
+    return;
+  }
+  const count = entryNodeParameterCount(target.agentFile, target.node);
+  if (count === undefined) return;
+  const { names } = count;
+  if (hasInput && names.length !== 1) {
+    const detail =
+      names.length === 0
+        ? `takes none — add one (it may go unused: \`node ${target.node}(task: string) { ... }\`), or drop the input if the agent needs none`
+        : `takes ${names.length} (${names.join(", ")}) — add a one-parameter adapter node`;
+    throw new Error(
+      `eval delivers each test's input as the entry node's single parameter, ` +
+        `but node "${target.node}" in ${target.agentFile} ${detail}.`,
+    );
+  }
+  if (!hasInput && names.length !== 0) {
+    throw new Error(
+      `node "${target.node}" in ${target.agentFile} takes ${names.length} (${names.join(", ")}) ` +
+        `but no test provides an input — pass --input <text> (or give the tests an "input"), ` +
+        `or make the node take no parameter.`,
+    );
+  }
+}
+
+/** The entry node's parameter names, or undefined when the file cannot be
+ *  read/parsed or does not define the node (best-effort, see above). */
+function entryNodeParameterCount(agentFile: string, node: string): { names: string[] } | undefined {
   let source: string;
   try {
     source = fs.readFileSync(agentFile, "utf-8");
   } catch {
-    return;
+    return undefined;
   }
   const parsed = parseAgency(source, {}, false);
-  if (!parsed.success) return;
+  if (!parsed.success) return undefined;
   for (const candidate of parsed.result.nodes) {
     if (candidate.type !== "graphNode" || candidate.nodeName !== node) continue;
-    const count = candidate.parameters.length;
-    if (count !== 1) {
-      const detail =
-        count === 0
-          ? `takes none — add one (it may go unused: \`node ${node}(task: string) { ... }\`)`
-          : `takes ${count} (${candidate.parameters.map((p) => p.name).join(", ")}) — add a one-parameter adapter node`;
-      throw new Error(
-        `eval delivers the input's task as the entry node's single parameter, ` +
-          `but node "${node}" in ${agentFile} ${detail}.`,
-      );
-    }
+    return { names: candidate.parameters.map((p) => p.name) };
   }
+  return undefined;
 }

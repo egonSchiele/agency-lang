@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { nanoid } from "nanoid";
 
-import { loadInputs, loadInputsFromFile, inputFromGoal } from "./loadInputs.js";
+import { loadInputs, loadInputsFromFile, inlineInput } from "./loadInputs.js";
 import { makeRepo } from "./testUtils.js";
 
 describe("eval run input loading", () => {
@@ -82,16 +82,16 @@ describe("eval run input loading", () => {
     ).toThrow(/duplicate/i);
   });
 
-  it("requires an input: string or object, nothing else", () => {
-    expect(() =>
-      loadInputsFromFile(writeJson("no-task.json", { inputs: [{ goal: "g" }] })),
-    ).toThrow(/input is required/);
+  it("an input is a string or object, or absent for an agent that takes none", () => {
+    const [noInput] = loadInputsFromFile(writeJson("no-task.json", { inputs: [{ goal: "g" }] }));
+    expect(noInput.input).toBeUndefined();
+    expect("input" in noInput).toBe(false);
     expect(() =>
       loadInputsFromFile(writeJson("empty-task.json", { inputs: [{ goal: "g", input: "" }] })),
     ).toThrow(/must not be empty/);
     expect(() =>
       loadInputsFromFile(writeJson("array-task.json", { inputs: [{ goal: "g", input: [1] }] })),
-    ).toThrow(/input is required/);
+    ).toThrow(/input must be a string, or a JSON object/);
     const loaded = loadInputsFromFile(
       writeJson("object-task.json", { inputs: [{ goal: "g", input: { rows: [1, 2] } }] }),
     );
@@ -208,12 +208,9 @@ describe("eval run input loading", () => {
     expect(() => loadInputs(path.join(tmpDir, "empty"))).toThrow(/no inputs loaded from/);
   });
 
-  it("creates an inline input from a goal, with the goal text as the task too", () => {
-    expect(inputFromGoal("do it")).toEqual({
-      id: "input-1",
-      input: "do it",
-      goal: "do it",
-    });
+  it("creates an inline input with no goal", () => {
+    expect(inlineInput("do it")).toEqual({ id: "input-1", input: "do it" });
+    expect(() => inlineInput("")).toThrow(/--input/);
   });
 });
 

@@ -91,7 +91,7 @@ const MAX_LISTED_SEEDED_FILES = 50;
  */
 export async function runAgent(
   target: EvalTarget,
-  input: string | Record<string, any>,
+  input: string | Record<string, any> | undefined,
   options: RunAgentOptions,
   deps: RunAgentDeps = {},
 ): Promise<AgentRun> {
@@ -108,7 +108,7 @@ class AgentRunner {
 
   constructor(
     private readonly target: EvalTarget,
-    private readonly input: string | Record<string, any>,
+    private readonly input: string | Record<string, any> | undefined,
     private readonly options: RunAgentOptions,
     private readonly deps: RunAgentDeps,
   ) {

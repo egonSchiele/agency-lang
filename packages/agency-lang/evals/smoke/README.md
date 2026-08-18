@@ -5,7 +5,7 @@ Small, cheap, deterministic eval tests. These are not a benchmark. Where
 anything is *working* — so that when a run goes red, you can tell in about a
 minute whether the problem is your change or the harness.
 
-They live in their own directory for a practical reason: `--inputs <dir>` runs
+They live in their own directory for a practical reason: `--suite <dir>` runs
 everything in the directory, and mixing a two-cent canary with an eighteen-minute
 discriminator means you can never run just the fast set.
 
@@ -16,11 +16,11 @@ it.
 
 ```bash
 # the whole suite
-agency eval run --agent path/to/agent.agency:main --inputs evals/smoke
+agency eval run path/to/agent.agency:main --suite evals/smoke
 agency eval grade runs/<run-id>        # the path eval run printed
 
 # one test
-agency eval run --agent path/to/agent.agency:main --inputs evals/smoke/hello-file
+agency eval run path/to/agent.agency:main --suite evals/smoke/hello-file
 agency eval grade runs/<run-id>
 ```
 
@@ -48,8 +48,8 @@ Every test ships a `solution.agency` that produces the right answer with **no
 LLM**. Running and then grading one must score 1.000:
 
 ```bash
-agency eval run --agent evals/smoke/csv-total/solution.agency:main \
-  --inputs evals/smoke/csv-total --run-id csv-solution
+agency eval run evals/smoke/csv-total/solution.agency:main \
+  --suite evals/smoke/csv-total --run-id csv-solution
 agency eval grade runs/csv-solution
 ```
 

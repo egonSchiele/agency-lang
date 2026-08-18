@@ -1,8 +1,8 @@
 # Command agents: running a CLI under `agency eval run`
 
 `--agent-cmd '<command with {task}>'` runs a CLI as the agent instead of
-compiling an `.agency` file — the way the bundled `agency agent` is
-benchmarked. This page is the architecture; user-facing rules live in
+compiling an `.agency` file (the positional `<agent>` argument) — the way
+the bundled `agency agent` is benchmarked. This page is the architecture; user-facing rules live in
 `docs/site/cli/eval.md` ("Command agents").
 
 ## The target union
@@ -31,8 +31,11 @@ The command string is tokenized by a tarsec grammar
 group, adjacent chunks join (`--flag="a b"` is one token), and NOTHING
 shell-like — no expansion, operators, or escapes, because no shell ever
 runs. `{task}` substitution happens AFTER tokenization, per token, so a
-hostile task is inert bytes inside one argv entry. `{task}` is required at
-resolution time; an object task substitutes as JSON. Two hard-won notes in
+hostile task is inert bytes inside one argv entry. `{task}` is required
+exactly when the tests carry an input, and refused when they carry none —
+`assertTargetMatchesInputs` (`lib/agentTarget.ts`) checks that once, before
+any run, for command and file agents alike; an object task substitutes as
+JSON. Two hard-won notes in
 the file: tarsec's `between(char, char, manyWithJoin(noneOf))` takes ~14s
 to FAIL on an unclosed quote (pathological backtracking) — `quotedString`
 with a first-char guard is used instead; and the argv byte total is capped

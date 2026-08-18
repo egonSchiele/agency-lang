@@ -47,10 +47,47 @@ describe("eval run CLI", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("requires exactly one of suite or goal", () => {
-    expect(() => validateInputSelection({})).toThrow(/--suite or --goal/);
-    expect(() => validateInputSelection({ suite: "inputs.json", goal: "goal" })).toThrow(/one of/i);
-    expect(validateInputSelection({ goal: "goal" })).toBe("goal");
+  it("--suite and --input are exclusive; neither means one input-less test", () => {
+    expect(() => validateInputSelection({ suite: "inputs.json", input: "x" })).toThrow(/one of/i);
+    expect(validateInputSelection({ input: "x" })).toBe("input");
+    expect(validateInputSelection({ suite: "inputs.json" })).toBe("suite");
+    expect(validateInputSelection({})).toBe("input");
+  });
+
+  it("runs an agent that takes no input when neither --suite nor --input is given", async () => {
+    const agentFile = path.join(tmpDir, "agent.agency");
+    fs.writeFileSync(agentFile, "node main() {}\n");
+    const runsDir = path.join(tmpDir, "runs");
+    let seenInput: unknown = "unset";
+    const result = await evalRun(
+      { agent: agentFile, runsDir, runId: "no-input" },
+      {
+        runner: async (job) => {
+          seenInput = job.kind === "file" ? job.input : "not-a-file-job";
+          return okRunner(job);
+        },
+      },
+    );
+    expect(result.okCount).toBe(1);
+    expect(seenInput).toBeUndefined();
+    const run = readRunDirectory(path.join(runsDir, "no-input"), quiet).effectiveAnnotations[
+      result.tests[0].traceId
+    ].run as unknown as { test: { input?: unknown } };
+    expect(run.test.input).toBeUndefined();
+  });
+
+  it("refuses --input for a node that takes no parameter, and no input for a node that takes one", async () => {
+    const noParam = path.join(tmpDir, "no-param.agency");
+    fs.writeFileSync(noParam, "node main() {}\n");
+    const oneParam = path.join(tmpDir, "one-param.agency");
+    fs.writeFileSync(oneParam, "node main(task: string) {}\n");
+    const runsDir = path.join(tmpDir, "runs");
+    await expect(
+      evalRun({ agent: noParam, input: "x", runsDir, runId: "a" }, { runner: okRunner }),
+    ).rejects.toThrow(/takes none/);
+    await expect(
+      evalRun({ agent: oneParam, runsDir, runId: "b" }, { runner: okRunner }),
+    ).rejects.toThrow(/no test provides an input/);
   });
 
   it("compiles, runs each test through the injected runner, and writes a run directory — never grading", async () => {
@@ -59,7 +96,7 @@ describe("eval run CLI", () => {
     const runsDir = path.join(tmpDir, "runs");
 
     const result = await evalRun(
-      { agent: agentFile, goal: "do it", runsDir, runId: "r1", continueOnError: true },
+      { agent: agentFile, input: "do it", runsDir, runId: "r1" },
       { runner: okRunner },
     );
 
@@ -69,11 +106,12 @@ describe("eval run CLI", () => {
     expect(snapshot.traces).toHaveLength(1);
     // Nothing graded: the only annotation is the harness's run row.
     expect(snapshot.annotationRows.map((row) => row.kind)).toEqual(["run"]);
-    // --goal sets input AND goal to the same text.
+    // --input records the input and no goal: grading supplies one later.
     const run = snapshot.effectiveAnnotations[result.tests[0].traceId].run as unknown as {
-      test: { input: string; goal: string };
+      test: { input: string; goal?: string };
     };
-    expect(run.test).toMatchObject({ input: "do it", goal: "do it" });
+    expect(run.test).toMatchObject({ input: "do it" });
+    expect(run.test.goal).toBeUndefined();
   });
 
   it("does not need a goal to run", async () => {
@@ -111,10 +149,9 @@ describe("eval run CLI", () => {
     await expect(
       evalRun({
         agent: path.join(tmpDir, "missing.agency"),
-        goal: "do it",
+        input: "do it",
         runsDir,
         runId: "setup-failed",
-        continueOnError: true,
       }),
     ).rejects.toThrow();
 
@@ -127,7 +164,7 @@ describe("eval run CLI", () => {
     const runsDir = path.join(tmpDir, "runs");
 
     const result = await evalRun(
-      { agent: agentFile, goal: "do it", runsDir, runId: "fallback", continueOnError: true },
+      { agent: agentFile, input: "do it", runsDir, runId: "fallback" },
       {
         runner: async (job) => {
           fs.writeFileSync(
@@ -143,7 +180,7 @@ describe("eval run CLI", () => {
     expect(readRunDirectory(path.join(runsDir, "fallback"), quiet).traces).toHaveLength(1);
   });
 
-  it("stops after the first test error when continueOnError is false, recording the failure", async () => {
+  it("runs every test even after one errors, recording each failure", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
     fs.writeFileSync(agentFile, "node main(input: string) {}\n");
     const runsDir = path.join(tmpDir, "runs");
@@ -160,7 +197,7 @@ describe("eval run CLI", () => {
 
     let runs = 0;
     const result = await evalRun(
-      { agent: agentFile, suite: inputsFile, runsDir, runId: "stop", continueOnError: false },
+      { agent: agentFile, suite: inputsFile, runsDir, runId: "all" },
       {
         runner: async () => {
           runs += 1;
@@ -169,15 +206,15 @@ describe("eval run CLI", () => {
       },
     );
 
-    expect(runs).toBe(1);
-    expect(result.tests).toHaveLength(1);
+    expect(runs).toBe(2);
+    expect(result.tests.map((test) => test.testId)).toEqual(["first", "second"]);
     expect(result.tests[0]).toMatchObject({
       testId: "first",
       status: "error",
       // The message carries the seeded-file listing for diagnosability.
       errorMessage: expect.stringMatching(/^nope\n\nWorkdir was seeded with/),
     });
-    const snapshot = readRunDirectory(path.join(runsDir, "stop"), quiet);
+    const snapshot = readRunDirectory(path.join(runsDir, "all"), quiet);
     const run = snapshot.effectiveAnnotations[result.tests[0].traceId].run as {
       ended: string;
       error: string;
@@ -363,13 +400,13 @@ describe("eval run CLI", () => {
       let job: EvalRunnerJob | undefined;
 
       const result = await evalRun(
-        { agentCmd: "some-agent -p -- {task}", goal: "do it", runsDir, runId: "r-cmd" },
+        { agentCmd: "some-agent -p -- {task}", input: "do it", runsDir, runId: "r-cmd" },
         { runner: traceRunner("done", (j) => (job = j)) },
       );
 
       expect(result.okCount).toBe(1);
       expect(job?.kind).toBe("command");
-      // --goal sets input = goal, so the substituted argv carries it
+      // --input is the substituted {task}, so the argv carries it
       expect(job?.kind === "command" && job.argv).toEqual(["some-agent", "-p", "--", "do it"]);
     });
   });

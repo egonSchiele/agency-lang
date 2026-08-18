@@ -23,13 +23,14 @@ export type GradeSuiteResult = {
  * directory (`eval grade`, the optimizer's per-candidate grading).
  *
  * `record: false` grades without writing (the optimizer's throwaway candidate
- * directories, and dry runs).
+ * directories, and dry runs). `defaultGoal` is `eval grade --goal`: the goal
+ * for tests that recorded none.
  */
 export async function gradeSuite(
   runDir: string,
   suiteGraders: SuiteGraders,
   config: AgencyConfig,
-  options: { record?: boolean } = {},
+  options: { record?: boolean; defaultGoal?: string } = {},
 ): Promise<GradeSuiteResult> {
   const snapshot = readRunDirectory(runDir, {
     reportWarning: (message) => console.warn(`grading: ${message}`),
@@ -38,6 +39,7 @@ export async function gradeSuite(
     suiteGraders,
     runAgency: new AgencyRunner(config),
     config,
+    defaultGoal: options.defaultGoal,
   });
   const drafts = scoreDrafts(scorecard);
   let passId: string | null = null;

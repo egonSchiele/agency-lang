@@ -30,6 +30,10 @@ export type GradingContext = {
   runAgency: AgencyRunner;
   /** For loading per-test grading modules. */
   config: AgencyConfig;
+  /** `eval grade --goal`: the goal for every test that recorded none of its
+   *  own (an ad-hoc trace, or a suite that never had goals). A test's own
+   *  goal always wins. */
+  defaultGoal?: string;
 };
 
 /**
@@ -49,7 +53,8 @@ export async function gradeSnapshot(
 ): Promise<Scorecard> {
   const moduleCache = makeGraderModuleCache(ctx.config);
   const perInput = await Promise.all(
-    gradableEntries(snapshot).map(async (entry) => {
+    gradableEntries(snapshot).map(async (bare) => {
+      const entry = withDefaultGoal(bare, ctx.defaultGoal);
       const graders = await effectiveGraders(entry.test, ctx, moduleCache);
       return gradeEntry(entry, ctx, graders);
     }),
@@ -70,6 +75,14 @@ function gradableEntries(snapshot: RunDirectorySnapshot): Entry[] {
     entries.push(tracelessEntry(snapshot, effective.run, traceId));
   }
   return entries;
+}
+
+/** Fill in the grading-time goal where the test has none of its own. */
+function withDefaultGoal(entry: Entry, defaultGoal: string | undefined): Entry {
+  if (defaultGoal === undefined) return entry;
+  const own = entry.test.goal;
+  if (typeof own === "string" && own.trim() !== "") return entry;
+  return { ...entry, test: { ...entry.test, goal: defaultGoal } };
 }
 
 /** A run row with no trace behind it. Whatever the row says about how the run

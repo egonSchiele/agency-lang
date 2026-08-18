@@ -11,8 +11,44 @@ deliberately (2026-07-30, re-based on the run directory 2026-08-18).
 writes one run directory: every test's trace in `statelog.jsonl`, its workdir
 under `workdir/<traceId>/`, the agent's code under `code/<closureHash>/`, and
 one `run` annotation per test (`{ test, suite, ended, flags, error? }`). No
-`goal` is needed to run. Grading is `agency eval grade <dir>`, whenever you
-like, as many times as you like.
+`goal` is needed to run: `--input <text>` runs one inline test with that
+input and no goal (`inlineInput`; the suite identity is `inline:--input`).
+Grading is `agency eval grade <dir>`, whenever you like, as many times as you
+like. `eval run` takes the agent file as its positional argument (or
+`--agent-cmd`), plus `--suite`/`--input`, `--runs-dir`/`--run-id` and
+`-n`. There is deliberately no `--goal` (grading's business), no
+stop-on-error (`--continue-on-error` is gone: an errored test is a `run` row
+that grades 0, and stopping the suite half-way only leaves holes), and no
+agent-config flags (`--strict`, `--max-tool-call-rounds`,
+`--max-tool-result-chars` are gone: they belong in `agency.json` beside the
+agent, and never applied to command agents anyway). Grading is always
+concurrent across traces (`Promise.all` in `gradeSnapshot`), so `-n` is a
+run-only knob.
+
+**Input is optional, and the agent's shape must match.** A test may omit
+`input` (a suite test without the field, or `eval run <agent>` with neither
+`--suite` nor `--input`), for agents that take no argument. Within one
+suite the tests must agree — all with an input or none —
+and `assertTargetMatchesInputs` (`lib/agentTarget.ts`, called from
+`runSuite` and the optimizer's `buildTarget`) checks the agent against
+that once, up front: with inputs the entry node takes exactly one
+parameter / the command contains `{task}`; without, the node takes none /
+the command has no placeholder. Each mismatch names the fix in both
+directions ("pass --input" or "make the node take no parameter"). A test
+with no input reaches the child as a run instruction without `input`,
+which `resolveNodeCallArgs` already treats as a bare call.
+
+**The goal is a grading-time input.** `eval grade --goal <text>` is the goal
+for the built-in judge, applied to every trace whose test recorded no goal
+of its own (`withDefaultGoal` in `gradeRun.ts`, threaded as
+`GradingContext.defaultGoal` / `gradeSuite`'s `defaultGoal` option). A
+test's own goal always wins, so a suite with goals is unaffected. `--goal`
+and `--graders` are exclusive (`validateGradeTarget`): a grading module
+carries its own criteria, and `LlmJudge({ goal })` is the place to put one
+there. The same preflight refuses a target with no `statelog.jsonl` — a
+statelog copied into a folder is not a run directory; the error names
+`agency runs add` and `agency run --capture-workdir` as the two ways to make
+one — instead of quietly grading zero traces to `objective 0.000`.
 
 **Each test runs in staging, then is folded in.** `runSuite` mints the trace
 id up front (`nanoid`) and hands it to the child — the fork runner via

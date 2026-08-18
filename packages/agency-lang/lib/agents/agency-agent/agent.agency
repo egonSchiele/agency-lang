@@ -1,100 +1,23 @@
-import { localModelsSupported, listModelNames } from "std::agency/local"
 import { parseArgs } from "std::args"
 import { map } from "std::array"
-import { today } from "std::date"
-import { generateImage } from "std::image"
-import { listHostedModels, hostedModelInfo, setLlmOptions } from "std::llm"
-import { setMemoryId, disableMemory } from "std::memory"
-import { basename, dirname } from "std::path"
-import {
-  ScopedRuleFields,
-  parsePolicyFile,
-  setPolicy,
-  minimalAutoApprovePolicy,
-  recommendedAutoApprovePolicy,
-  builtinPolicy,
-  builtinPolicyNames,
-  BUILTIN_POLICIES,
- } from "std::policy"
-import { exists } from "std::shell"
-import { commandsDir, expandSlash } from "std::skills"
-import { highlight } from "std::syntax"
+import { setLlmOptions } from "std::llm"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
-import {
-  Attachment,
-  attachToReply,
-  getCost,
-  getModelCosts,
-  image,
-  systemMessage,
- } from "std::thread"
-import { chooseOption, ChoiceItem } from "std::ui"
+import { getCost } from "std::thread"
 import {
   clearMessages,
   pushMessage,
   repl,
   clearScreen,
-  clearHistory,
  } from "std::ui/cli"
 
 import { brainByName, allBrains, brainFlagHelp } from "./brains/registry.agency"
 import { parseAgentArgs } from "./lib/args.agency"
-import { detectAttachments, modalityFilter } from "./lib/attachments.agency"
-import { showCapabilities, editCapabilities } from "./lib/capabilitiesUi.agency"
-import { mergedPalette, projectCommands } from "./lib/commandPalette.agency"
-import {
-  POLICY_PATH,
-  SESSION_POLICY_PATH,
-  HISTORY_PATH,
-  ALWAYS_FIELDS,
- } from "./lib/config.agency"
 import { getHeader } from "./lib/header.agency"
-import { generateImageFile } from "./lib/images.agency"
-import { getMcpTools, maybeLoadMcp, mcpSlashCommand } from "./lib/mcp.agency"
-import { filterHostedModels, ModelFilters } from "./lib/modelFilters.agency"
-import {
-  parseModelFlag,
-  parseModelSpec,
-  knownProviders,
-  missingProviderEnvVar,
-  Resolved,
- } from "./lib/models.agency"
-import {
-  givePolicyChoice,
-  printPolicyHelp,
-  getPolicyForAgent,
- } from "./lib/policy.agency"
-import { startInteractive, renderAgentResponse } from "./lib/repl.agency"
-import {
-  buildLayers,
-  resolveAll,
-  diffResolved,
-  Ctx,
-  SlotChange,
- } from "./lib/resolution.agency"
-import {
-  configureSearch,
-  setSearchBackend,
-  getSearchBackend,
-  availableBackendItems,
- } from "./lib/search.agency"
-import {
-  Session,
-  switchModel,
-  reactToSlotChange,
-  modelChoiceItems,
-  parseModelsFilters,
-  markMemoryEmbeddingsPinned,
-  pickModelsForAgent,
-  maybeEnableMemory,
- } from "./lib/session.agency"
-import {
-  getCapabilitySettings,
-  getModelSettings,
-  loadSettings,
-  saveSettings,
- } from "./lib/settings.agency"
-import { SLOTS } from "./lib/slots.agency"
+import { maybeLoadMcp } from "./lib/mcp.agency"
+import { printPolicyHelp } from "./lib/policy.agency"
+import { startInteractive } from "./lib/repl.agency"
+import { pickModelsForAgent, maybeEnableMemory } from "./lib/session.agency"
+import { loadSettings } from "./lib/settings.agency"
 import { setDebug, setVerbose, setInteractive } from "./lib/trace.agency"
 import {
   setBrain,
@@ -104,34 +27,8 @@ import {
   resolveBrainName,
   resolveStartTarget,
  } from "./lib/turn.agency"
-import {
-  truncate,
-  formatArgs,
-  formatToolResponse,
-  retryReasonLabel,
-  formatTurnFailure,
- } from "./lib/utils.agency"
-import { renderLLMCallResponse } from "./lib/utils/renderLLMCallResponse.agency"
-import {
-  configureModels,
-  configureLocalModel,
-  enableAgentMemory,
-  getResolvedSlots,
-  applyResolved,
-  promoteAll,
-  currentProvider,
-  resolveMaxToolCallRounds,
-  getCapabilities,
-  getCapabilitiesResolved,
-  getCapabilityModelKey,
-  getCapabilityProvider,
-  refreshCapabilities,
-  embeddingKeyStatus,
-  memoryEnablePlan,
-  overrideFromResolved,
-  embeddingsOverride,
-  providerEnvMissing,
- } from "./shared.agency"
+import { formatTurnFailure } from "./lib/utils.agency"
+import { resolveMaxToolCallRounds, getCapabilities } from "./shared.agency"
 
 
 // UI mode select — one-line swap between the alt-screen TUI and the
@@ -192,7 +89,7 @@ node main() {
   const brainName = resolveBrainName(args.flags.brain ?? null, loadSettings())
   const brain = brainByName(brainName)
   if (brain == null) {
-    const names = map(allBrains(), \b -> b.name).join(", ")
+    const names = map(allBrains(), \entry -> entry.name).join(", ")
     print(color.red("Unknown --brain value: ${brainName}. Valid: ${names}"))
     process.exit(1)
     return

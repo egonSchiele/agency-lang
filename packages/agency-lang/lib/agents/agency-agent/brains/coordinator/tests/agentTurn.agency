@@ -4,9 +4,8 @@
  * deterministic LLM provider (see agentTurn.test.json), no terminal, no
  * user input, no policy handler.
  */
-import { getThread, listThreads } from "std::thread"
-
 import { coordinatorBrain } from "../coordinator.agency"
+import { threadHasSystemText } from "../../../tests/threadText.agency"
 import {
   switchModel,
   reactToSlotChange,
@@ -25,26 +24,6 @@ import {
 import { saveSettings } from "../../../lib/settings.agency"
 import { setEnv } from "std::system"
 import { applyResolved, getResolvedSlots, promoteAll } from "../../../shared.agency"
-
-// Scan every thread's system messages for `needle`. Modeled on
-// threadHasImagePlaceholder in attachmentsTurn.agency.
-def threadHasSystemText(needle: string): boolean {
-  const threads = listThreads(lazySummarize: false)
-  if (isFailure(threads)) {
-    return false
-  }
-  for (info in threads.value) {
-    const messages = getThread(info.id, 0, 200)
-    if (isSuccess(messages)) {
-      for (message in messages.value) {
-        if (message.role == "system" && message.content.includes(needle)) {
-          return true
-        }
-      }
-    }
-  }
-  return false
-}
 
 // The grounding marker proves init reached the system prompt; the phrase
 // shared by main-large.md and main-small.md proves the bundled prompt itself

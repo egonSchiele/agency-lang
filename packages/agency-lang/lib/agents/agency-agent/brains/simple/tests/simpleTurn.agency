@@ -1,24 +1,5 @@
-import { getThread, listThreads } from "std::thread"
-
 import { simpleBrain } from "../simple.agency"
-
-def threadHasSystemText(needle: string): boolean {
-  const threads = listThreads(lazySummarize: false)
-  if (isFailure(threads)) {
-    return false
-  }
-  for (info in threads.value) {
-    const messages = getThread(info.id, 0, 200)
-    if (isSuccess(messages)) {
-      for (message in messages.value) {
-        if (message.role == "system" && message.content.includes(needle)) {
-          return true
-        }
-      }
-    }
-  }
-  return false
-}
+import { threadHasSystemText } from "../../../tests/threadText.agency"
 
 // One turn is one LLM call, and the grounding from init reaches the system
 // prompt of the brain's thread.

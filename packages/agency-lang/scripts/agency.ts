@@ -58,6 +58,11 @@ import { logsView, type LogsViewOpts } from "@/cli/logsView.js";
 import { evalExtract } from "@/cli/evalExtract.js";
 import { evalJudge } from "@/cli/evalJudge.js";
 import { addLabelCommand, labelCommandDependencies } from "@/cli/eval/labelCommand.js";
+import {
+  addLogsExtractCommand,
+  addRunDirectoryCommands,
+  runDirectoryCommandDependencies,
+} from "@/cli/runDirectory/commands.js";
 import { evalGrade } from "@/cli/eval/grade.js";
 import { resolveRunStatelog } from "@/cli/eval/logs.js";
 import { evalRun, totalRunCostUsd } from "@/cli/eval/run.js";
@@ -784,6 +789,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(async (file: string, _options: Record<string, never>, command: Command) => {
       await logsView(file, logsViewOptsFrom((command.parent?.opts() ?? {}) as LogsCliOptions));
     });
+
+  const runDirectoryDeps = runDirectoryCommandDependencies();
+  addLogsExtractCommand(logsCmd, runDirectoryDeps);
+  addRunDirectoryCommands(program, runDirectoryDeps);
 
   const evalCmd = program.command("eval").description("Evaluate agent runs against task fixtures");
 

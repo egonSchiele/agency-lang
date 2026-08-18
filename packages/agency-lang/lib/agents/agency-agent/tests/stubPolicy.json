@@ -1,0 +1,4 @@
+{
+  "test::stub": [{ "action": "reject" }],
+  "std::readBinary": [{ "action": "approve" }]
+}

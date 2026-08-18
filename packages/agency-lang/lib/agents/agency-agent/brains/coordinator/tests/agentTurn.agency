@@ -1,12 +1,11 @@
 /*
- * Tests that the agent's per-message logic is callable without the REPL.
- *
- * `agentReply` is the seam extracted from `main`/`_runTurn`: it takes a
- * user message and returns the agent's reply, with no terminal, no user
- * input, and no policy handler required. That's what makes the agent
- * testable — this harness just calls it with the deterministic LLM
- * provider (see agentTurn.test.json) and checks the reply comes back.
+ * Tests that the coordinator brain answers a turn without the REPL: the
+ * brain record is called directly (init, then runTurn) with the
+ * deterministic LLM provider (see agentTurn.test.json), no terminal, no
+ * user input, no policy handler.
  */
+import { getThread, listThreads } from "std::thread"
+
 import { coordinatorBrain } from "../coordinator.agency"
 import {
   switchModel,
@@ -27,9 +26,42 @@ import { saveSettings } from "../../../lib/settings.agency"
 import { setEnv } from "std::system"
 import { applyResolved, getResolvedSlots, promoteAll } from "../../../shared.agency"
 
-node respondsToAMessage(): boolean {
-  const reply = coordinatorBrain().runTurn("", "hello")
-  return reply == "Hi from the agent!"
+// Scan every thread's system messages for `needle`. Modeled on
+// threadHasImagePlaceholder in attachmentsTurn.agency.
+def threadHasSystemText(needle: string): boolean {
+  const threads = listThreads(lazySummarize: false)
+  if (isFailure(threads)) {
+    return false
+  }
+  for (info in threads.value) {
+    const messages = getThread(info.id, 0, 200)
+    if (isSuccess(messages)) {
+      for (message in messages.value) {
+        if (message.role == "system" && message.content.includes(needle)) {
+          return true
+        }
+      }
+    }
+  }
+  return false
+}
+
+// The grounding marker proves init reached the system prompt; the phrase
+// shared by main-large.md and main-small.md proves the bundled prompt itself
+// was read and used (a bad prompt path is caught as "" and would fail here).
+node respondsToAMessage(): string {
+  // Bound to locals: `brain.init(...) with approve` miscompiles (compiler bug).
+  const brain = coordinatorBrain()
+  const init = brain.init
+  const answer = brain.runTurn
+  init({ interactive: false, grounding: "GROUNDING-MARKER-7f3a" }) with approve
+  const reply = answer("", "hello") with approve
+  return "${reply}|${threadHasSystemText("GROUNDING-MARKER-7f3a")}|${threadHasSystemText("Agency-language assistant")}"
+}
+
+node headerShowsBrain(): boolean {
+  const header = getHeader("coordinator")
+  return header.includes("Brain") && header.includes("coordinator")
 }
 
 // End-to-end of the wired apply/read path (env-independent: empty settings, no
@@ -186,7 +218,7 @@ node reactSilentOnSameProvider(): boolean {
 }
 
 
-import { headerModelLines } from "../../../lib/header.agency"
+import { headerModelLines, getHeader } from "../../../lib/header.agency"
 import { hostedModelInfo } from "std::llm"
 
 // The splash header lists the resolved main + reasoning models. The internal

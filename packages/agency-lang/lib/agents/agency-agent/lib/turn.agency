@@ -78,8 +78,10 @@ export def resolveBrainName(flag: string | null, settings: Settings): string {
   if (flag != null && flag != "") {
     return flag
   }
+  // settings.json is hand-editable, so check the runtime shape, not just
+  // the declared type.
   const fromSettings = settings.brain
-  if (fromSettings != null && fromSettings != "") {
+  if (fromSettings is string && fromSettings != "") {
     return fromSettings
   }
   return DEFAULT_BRAIN

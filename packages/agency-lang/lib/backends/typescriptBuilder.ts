@@ -4329,6 +4329,7 @@ export class TypeScriptBuilder {
                     config: ts.id("__invocationConfig"),
                     traceId: ts.id("__invocationTraceId"),
                   }),
+                  input: ts.id("__invocationInput"),
                   initializeGlobals: ts.id("__initializeGlobals"),
                 }),
               ])

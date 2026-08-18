@@ -19,5 +19,9 @@ export type EventEnvelope = {
 export type EventData = {
   type: string;
   timestamp: string;
+  // Untyped by design (see above). Notable fields for consumers:
+  //   agentStart: `entryNode`, `args`, optional `input` (what the entry node
+  //   was given, when the caller named it) and optional `code`
+  //   ({ entry, closureHash, closure: [{ file, sha256 }] } — which code ran).
   [key: string]: any;
 };

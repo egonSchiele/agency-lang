@@ -134,7 +134,10 @@ async function executeRun(mod: any, msg: RunInstruction): Promise<any> {
   // Wrapping again here would attach the subprocess's parent-process
   // context (which doesn't even exist as a peer ALS) instead of the
   // child's own `RuntimeContext`.
-  return nodeFn(...positionalArgs);
+  // The trailing options object names the input explicitly, so the runtime
+  // records it on agentStart without guessing from the parameters. Absent
+  // (`undefined`) for a named-args run.
+  return nodeFn(...positionalArgs, { input: msg.task });
 }
 
 /** Resume-mode body: re-attach the shared checkpoint to each interrupt and

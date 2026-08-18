@@ -348,6 +348,10 @@ type RunNodeArgs = {
   abortSignal?: AbortSignal;
   // Per-invocation config override + optional root trace id for this run.
   invocation?: InvocationOptions;
+  // What the entry node was given, when the caller names it (an eval input).
+  // Recorded on agentStart; never derived from `data`, because an ordinary
+  // one-parameter call and an eval input look the same there.
+  input?: unknown;
 };
 
 // eslint-disable-next-line max-lines-per-function -- core node-execution loop; refactor tracked separately
@@ -360,6 +364,7 @@ async function runNodeCore({
   initializeGlobals,
   abortSignal,
   invocation,
+  input,
 }: RunNodeArgs): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
   // The resolver owns run-id policy: a subprocess INHERITS the parent's runId
   // (seeded from the run instruction) so child statelog events land in the same
@@ -428,7 +433,7 @@ async function runNodeCore({
     );
 
     agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
-    execCtx.statelogClient.agentStart({ entryNode: nodeName, args: data });
+    execCtx.statelogClient.agentStart({ entryNode: nodeName, args: data, input });
 
     let isResume = false;
     let threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);

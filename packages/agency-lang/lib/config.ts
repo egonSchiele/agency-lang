@@ -102,6 +102,14 @@ export interface AgencyConfig {
       agentVersion?: string;
       custom?: Record<string, string>;
     };
+    /** Which code this run is: entry file, closure file hashes, one closure
+     *  hash. Set by launchers (agency run, eval, agency agent) and recorded on
+     *  the statelog's agentStart event. */
+    code: {
+      entry: string;
+      closureHash: string;
+      closure: { file: string; sha256: string }[];
+    };
   }>;
 
   /** Eval command configuration */
@@ -472,6 +480,11 @@ export const AgencyConfigSchema = z
             custom: z.record(z.string(), z.string()),
           })
           .partial(),
+        code: z.object({
+          entry: z.string(),
+          closureHash: z.string(),
+          closure: z.array(z.object({ file: z.string(), sha256: z.string() })),
+        }),
       })
       .partial(),
     eval: z

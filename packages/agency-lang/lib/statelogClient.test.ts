@@ -550,6 +550,22 @@ describe("StatelogClient", () => {
       expect(evt.data.type).toBe("agentStart");
       expect(evt.data.entryNode).toBe("main");
       expect(evt.data.args).toEqual({ x: 1 });
+      expect(evt.data).not.toHaveProperty("input");
+      expect(evt.data).not.toHaveProperty("code");
+    });
+
+    it("agentStart records the input and the configured code identity", async () => {
+      const file = newLogFile("agent-start-code");
+      const code = {
+        entry: "a.agency",
+        closureHash: "h",
+        closure: [{ file: "a.agency", sha256: "s" }],
+      };
+      const client = fileClient(file, { code });
+      await client.agentStart({ entryNode: "main", args: {}, input: "hello" });
+      const [evt] = readEvents(file);
+      expect(evt.data.input).toBe("hello");
+      expect(evt.data.code).toEqual(code);
     });
 
     it("agentEnd includes timeTaken and tokenStats", async () => {

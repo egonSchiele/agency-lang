@@ -1,3 +1,4 @@
+import type { CodeIdentity } from "@/runDirectory/codeIdentity.js";
 import * as fs from "fs";
 import * as path from "path";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -76,6 +77,9 @@ export type StatelogConfig = {
   projectId: string;
   debugMode: boolean;
   metadata?: RunMetadata;
+  /** Which code this process is running; recorded on agentStart so a trace can
+   *  be attributed to a version after the fact. */
+  code?: CodeIdentity;
   observability?: boolean;
   // Append every event as a JSON line to this file path. Intended for
   // local development and tests. Mutually compatible with host/stdout —
@@ -162,6 +166,7 @@ export class StatelogClient {
   // share this single StatelogClient instance.
   private spanStorage = new AsyncLocalStorage<SpanContext[]>();
   private metadata?: RunMetadata;
+  private code?: CodeIdentity;
   private requestTimeoutMs: number;
   // Fallback tag-store accessor for posts that fire OUTSIDE any ALS frame
   // (agentEnd and the resume-path finalization events post after the run's
@@ -182,6 +187,7 @@ export class StatelogClient {
     this.requestTimeoutMs = config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 
     this.metadata = config.metadata;
+    this.code = config.code;
 
     // Observability must be explicitly enabled. When false (the default),
     // the entire client is a no-op — no events emitted, no network calls,
@@ -1002,11 +1008,23 @@ export class StatelogClient {
     });
   }
 
-  async agentStart({ entryNode, args }: { entryNode: string; args?: any }): Promise<void> {
+  async agentStart({
+    entryNode,
+    args,
+    input,
+  }: {
+    entryNode: string;
+    args?: any;
+    /** What the entry node was given, when the caller says so explicitly (an
+     *  eval input, or any single-parameter invocation that names it). */
+    input?: unknown;
+  }): Promise<void> {
     await this.post({
       type: "agentStart",
       entryNode,
       args,
+      input,
+      code: this.code,
     });
     if (this.metadata) {
       await this.runMetadata({ ...this.metadata, entryNode });

@@ -751,7 +751,7 @@ await callHook({
     };
   }
 })
-export async function main({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId }: ({ messages?: any; callbacks?: any } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
+export async function main({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, input: __invocationInput }: ({ messages?: any; callbacks?: any; input?: unknown } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
@@ -762,6 +762,7 @@ export async function main({ messages: __invocationMessages, callbacks: __invoca
       config: __invocationConfig,
       traceId: __invocationTraceId
     },
+    input: __invocationInput,
     initializeGlobals: __initializeGlobals
   });
 }

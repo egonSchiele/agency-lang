@@ -116,11 +116,15 @@ export function addLogsExtractCommand(
 ): void {
   logs
     .command("extract")
-    .description("Copy one trace out of a statelog, to a file or stdout")
+    .description(
+      "Copy one trace out of a statelog, to a file or stdout. Lines are copied as they " +
+        "appear; a torn final line and byte-identical repeated lines are dropped.",
+    )
     .argument("<log>", "A statelog .jsonl file")
     .option("--trace <id>", "Trace id or unique prefix (default: the only trace)")
-    .option("-o, --out <file>", "Write here instead of stdout")
-    .action((log: string, opts: { trace?: string; out?: string }) => {
+    .option("-o, --out <file>", "Write here instead of stdout (refused if it exists)")
+    .option("--overwrite", "Replace an existing --out file (never the source log)")
+    .action((log: string, opts: { trace?: string; out?: string; overwrite?: boolean }) => {
       try {
         const result = dependencies.logsExtract({ log, ...opts });
         if (opts.out !== undefined) {

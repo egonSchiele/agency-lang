@@ -51,8 +51,10 @@ export async function gradeSuite(
 
 /** One draft per grade that actually ran. A gate-failed or ungraded trace
  *  contributes the rows it has (its zero is the fold's business: a failed
- *  gate is a `pass: false` row, an ungraded trace has none). */
-function scoreDrafts(scorecard: Scorecard): ScoreDraft[] {
+ *  gate is a `pass: false` row, an ungraded trace has none). A judge's row
+ *  records the goal it scored against, so a re-grade with a different
+ *  `--goal` stays tellable apart from the first. */
+export function scoreDrafts(scorecard: Scorecard): ScoreDraft[] {
   const drafts: ScoreDraft[] = [];
   for (const entry of scorecard.perInput) {
     if (entry.run === null) continue;
@@ -67,6 +69,9 @@ function scoreDrafts(scorecard: Scorecard): ScoreDraft[] {
       };
       if (grade.feedback !== undefined) draft.feedback = grade.feedback;
       if (grader.revision !== undefined) draft.gradersModule = grader.revision.split("@")[0];
+      if (draft.annotator.kind === "judge" && typeof entry.test.goal === "string") {
+        draft.goal = entry.test.goal;
+      }
       drafts.push(draft);
     }
   }

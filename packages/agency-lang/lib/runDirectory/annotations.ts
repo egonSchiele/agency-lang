@@ -49,6 +49,8 @@ export type ScorePayload = {
   mustPass: boolean;
   feedback?: string;
   gradersModule?: string;
+  /** The goal an LLM judge scored against (a test's own, or `eval grade --goal`). */
+  goal?: string;
 };
 
 export type SuiteIdentity = { source: string; sha?: string };
@@ -144,6 +146,7 @@ const ScoreAnnotationSchema = z
     mustPass: z.boolean(),
     feedback: z.string().optional(),
     gradersModule: z.string().optional(),
+    goal: z.string().optional(),
   })
   .strict();
 

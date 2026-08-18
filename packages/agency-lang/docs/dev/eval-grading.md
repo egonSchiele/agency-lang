@@ -45,7 +45,15 @@ of its own (`withDefaultGoal` in `gradeRun.ts`, threaded as
 test's own goal always wins, so a suite with goals is unaffected. `--goal`
 and `--graders` are exclusive (`validateGradeTarget`): a grading module
 carries its own criteria, and `LlmJudge({ goal })` is the place to put one
-there. The same preflight refuses a target with no `statelog.jsonl` — a
+there. For the same reason `--goal` sets aside a configured `eval.graders`
+module: `gradersFor` in `lib/cli/eval/grade.ts` returns the bundled goal
+judge whenever `--goal` is given, so the flag always means "judge against
+this text" (per-test graders still apply, as fallback mode always allows).
+Because the goal no longer has to live in the run row, every judge score
+records the goal it scored against (`ScorePayload.goal`, set in
+`scoreDrafts` for annotators of kind `judge`): two passes over the same run
+with `--goal A` and `--goal B` are tellable apart in `annotations.jsonl`.
+The same preflight refuses a target with no `statelog.jsonl` — a
 statelog copied into a folder is not a run directory; the error names
 `agency runs add` and `agency run --capture-workdir` as the two ways to make
 one — instead of quietly grading zero traces to `objective 0.000`.

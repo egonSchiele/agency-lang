@@ -7,13 +7,15 @@ import type { EvalRunGrading } from "@/eval/runTypes.js";
 
 import { runDirPaths } from "@/runDirectory/runDir.js";
 
-import { resolveGraders } from "./graders.js";
+import { goalJudgeGraders, resolveGraders } from "./graders.js";
 
 export type EvalGradeOptions = {
   /** Path to a TypeScript grading module. Defaults to `eval.graders`, then the goal judge. */
   graders?: string;
-  /** The goal for the default judge, for every trace whose test recorded none.
-   *  Not combined with `graders`: a module brings its own criteria. */
+  /** Judge every trace against this goal with the bundled goal judge (a test's
+   *  own recorded goal still wins). Not combined with `graders`, and it sets
+   *  aside a configured `eval.graders` module too: a module brings its own
+   *  criteria, and `--goal` names the criterion. */
   goal?: string;
   /** Also write the grading summary here, as JSON. */
   out?: string;
@@ -40,6 +42,12 @@ export function validateGradeTarget(runDir: string, opts: EvalGradeOptions): voi
   }
 }
 
+/** The grader set `eval grade` runs with; see `resolveGraders` for the precedence. */
+export async function gradersFor(opts: EvalGradeOptions, config: AgencyConfig) {
+  if (opts.goal !== undefined) return goalJudgeGraders();
+  return resolveGraders(opts.graders, undefined, config);
+}
+
 /**
  * Score a run directory. Never re-executes the agent. Every pass appends
  * `score` annotations to the directory — a re-grade sits beside the earlier
@@ -53,7 +61,8 @@ export async function evalGrade(runDir: string, opts: EvalGradeOptions): Promise
   // grading switched off, so the same resolver's default path applies. An
   // explicit --graders overrides every test's recorded graders; otherwise
   // per-test graders apply, with the config module / goal judge as fallback.
-  const graders = await resolveGraders(opts.graders, undefined, config);
+  // --goal promises the goal judge, so it never reaches the config module.
+  const graders = await gradersFor(opts, config);
   // resolveGraders only returns undefined for --no-grade, which this command never
   // passes, and otherwise falls back to the goal judge — so the reachable case is a
   // grading module that default-exports an empty array.

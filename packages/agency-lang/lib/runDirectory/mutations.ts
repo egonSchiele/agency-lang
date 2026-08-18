@@ -226,6 +226,7 @@ export type ScoreDraft = {
   mustPass: boolean;
   feedback?: string;
   gradersModule?: string;
+  goal?: string;
 };
 
 export type RecordGradingPassRequest = { dir: string; scores: ScoreDraft[] };
@@ -269,6 +270,7 @@ export function recordGradingPass(
       };
       if (score.feedback !== undefined) draft.feedback = score.feedback;
       if (score.gradersModule !== undefined) draft.gradersModule = score.gradersModule;
+      if (score.goal !== undefined) draft.goal = score.goal;
       return draft;
     });
     return { annotations: appendRows(paths.annotations, drafts, options, reportWarning) };

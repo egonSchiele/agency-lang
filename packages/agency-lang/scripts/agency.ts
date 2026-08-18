@@ -854,6 +854,33 @@ export function createProgram(deps: CliDependencies = {}): Command {
     );
 
   evalCmd
+    .command("logs")
+    .description("Open a run's statelog in the interactive logs viewer")
+    .argument("<runDir>", "A run directory, one input's directory, or a statelog file")
+    .option("--input <id>", "Which input's statelog, when the run has several")
+    .option("-f, --follow", "Tail the file — re-read and re-render as new events are appended")
+    .action(async (runDir: string, opts: { input?: string; follow?: boolean }) => {
+      // A run directory opens the viewer on its statelog with each trace's
+      // annotations summarised; --input (or a statelog file) keeps the
+      // plain viewer path.
+      if (
+        opts.input === undefined &&
+        fs.existsSync(path.join(path.resolve(runDir), "statelog.jsonl"))
+      ) {
+        await logsView([runDir], { follow: opts.follow });
+        return;
+      }
+      let statelogPath: string;
+      try {
+        statelogPath = resolveRunStatelog(runDir, opts.input);
+      } catch (e) {
+        console.error(`Error: ${(e as Error).message}`);
+        process.exit(2);
+      }
+      await logsView(statelogPath, { follow: opts.follow });
+    });
+
+  evalCmd
     .command("grade")
     .description("Score a finished eval run without re-running the agent")
     .argument(

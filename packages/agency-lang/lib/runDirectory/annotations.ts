@@ -71,6 +71,10 @@ export type AnnotationPayload = NotePayload | ChecklistPayload | ScorePayload | 
 export type AnnotationDraft = {
   traceId: string;
   annotator: Annotator;
+  /** The interactive labeling session (`agency label`) that produced the row,
+   *  when there was one. A session is one sitting: one person, one checklist,
+   *  one ordered list of traces. Two sittings answering the same questions
+   *  the same way are still two rows, because the id hashes this in. */
   sessionId?: string;
 } & AnnotationPayload;
 

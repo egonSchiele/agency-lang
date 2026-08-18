@@ -58,6 +58,21 @@ describe("workdir attachment", () => {
     ).toThrow(WorkdirAttachmentError);
   });
 
+  it("refuses a trace id that would place the workdir outside workdir/", () => {
+    const dir = tempDir();
+    fs.writeFileSync(runDirPaths(dir).statelog, agentStartLine("../escaped") + "\n");
+    const paths = runDirPaths(dir);
+    const source = writeProject({ "out.txt": "hello" });
+    expect(() =>
+      planWorkdirAttachment(
+        readRunDirectory(dir, quiet),
+        { traceId: "../escaped", sourceDir: source },
+        paths,
+      ),
+    ).toThrow(/outside/);
+    expect(fs.existsSync(path.join(dir, "escaped"))).toBe(false);
+  });
+
   it("refuses to overwrite without replace, and replaces cleanly with it", () => {
     const dir = directoryWithTrace();
     const paths = runDirPaths(dir);

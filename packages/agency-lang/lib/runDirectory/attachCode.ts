@@ -89,9 +89,11 @@ function assertStoredTreeMatches(target: string, identity: CodeIdentity): void {
     }
     return { file: file.file, sha256: hashFile(storedPath) };
   });
-  if (closureHashOf(stored) !== identity.closureHash) {
+  const storedHash = closureHashOf(stored);
+  if (storedHash !== identity.closureHash) {
     throw new CodeMismatchError(
-      `${target} does not hash to its own name; the stored code tree is corrupt.`,
+      `${target} is named for closure hash ${identity.closureHash} but its files hash to ` +
+        `${storedHash}; the stored code tree is corrupt.`,
     );
   }
 }

@@ -62,12 +62,15 @@ describe("runs add", () => {
     );
     expect(first.statelogs).toEqual({ added: 2, skipped: 0 });
     expect(first.code).toEqual({ added: 1, skipped: 0 });
-    expect(reports[0]).toContain("2 added");
+    expect(reports[0]).toContain("Added 2 trace(s)");
     const again = runsAdd(
       { dir, statelog: [log], code: [], annotations: [] },
-      { report: () => {} },
+      { report: (message) => reports.push(message) },
     );
     expect(again.statelogs).toEqual({ added: 0, skipped: 2 });
+    expect(reports[1]).toMatch(
+      /Nothing was added.*all 2 trace\(s\) were already present \(t1, t2\)/,
+    );
   });
 
   it("refuses code no trace recorded, naming the recorded hash", () => {

@@ -310,7 +310,7 @@ await callHook({
     };
   }
 })
-export async function foo({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, input: __invocationInput }: ({ messages?: any; callbacks?: any; input?: unknown } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
+export async function foo({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, invocationInput: __invocationInput }: ({ messages?: any; callbacks?: any; invocationInput?: unknown } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "foo",

@@ -21,9 +21,14 @@ import {
   type WorkdirAttachmentRequest,
 } from "./attachWorkdir.js";
 import { acquireRunDirLock } from "./lock.js";
-import { applyStatelogMerge, planStatelogMerge, type StatelogMergePlan } from "./mergeStatelog.js";
+import {
+  applyStatelogMerge,
+  describeStatelogMerge,
+  planStatelogMerge,
+  type StatelogMergePlan,
+} from "./mergeStatelog.js";
 import { readRunDirectory, runDirPaths, type RunDirectorySnapshot } from "./runDir.js";
-import { readTraces } from "./traces.js";
+import { readTracesOrThrow } from "./traces.js";
 
 /**
  * The public writes on a run directory. Each operation describes a domain
@@ -60,6 +65,8 @@ export type MutationCounts = { added: number; skipped: number };
 
 export type AddToRunDirectoryResult = {
   statelogs: MutationCounts;
+  /** `describeStatelogMerge` for this request: names what was already there. */
+  statelogSummary: string;
   code: MutationCounts;
   workdirs: MutationCounts;
   annotations: MutationCounts;
@@ -73,14 +80,10 @@ export function addToRunDirectory(
   return withWriter(request.dir, options, (paths, snapshot, reportWarning) => {
     // Plan everything first. Statelogs are planned as one incoming set so a
     // conflict in the third file also stops the first from being written.
-    const incoming = request.statelogFiles.flatMap((file) => readTraces(file).traces);
+    const incoming = request.statelogFiles.flatMap(readTracesOrThrow);
     const statelogPlan = planStatelogMerge(snapshot.traces, incoming);
     if (statelogPlan.refused.length > 0) {
-      const ids = statelogPlan.refused.map((refusal) => refusal.traceId).join(", ");
-      throw new Error(
-        `Refusing to merge: trace id(s) ${ids} already exist in ${request.dir} with different ` +
-          `content. Nothing was written.`,
-      );
+      throw new Error(describeStatelogMerge(statelogPlan, request.dir));
     }
     // Code and workdir plans need the traces the statelogs are about to add,
     // so plan them against the merged view.
@@ -111,6 +114,7 @@ export function addToRunDirectory(
 
     return {
       statelogs: { added: statelogPlan.add.length, skipped: statelogPlan.skipped.length },
+      statelogSummary: describeStatelogMerge(statelogPlan, request.dir),
       code: countPlans(codePlans.map((plan) => plan.status === "add")),
       workdirs: countWorkdir(workdirPlan),
       annotations: annotationCounts,
@@ -142,18 +146,25 @@ export function recordCompletedRun(
 ): RecordCompletedRunResult {
   return withWriter(request.dir, options, (paths, snapshot, reportWarning) => {
     const incoming =
-      request.stagedStatelogFile === undefined ? [] : readTraces(request.stagedStatelogFile).traces;
+      request.stagedStatelogFile === undefined ? [] : readTracesOrThrow(request.stagedStatelogFile);
     const statelogPlan = planStatelogMerge(snapshot.traces, incoming);
     if (statelogPlan.refused.length > 0) {
-      throw new Error(
-        `Refusing to record run: trace ${statelogPlan.refused[0].traceId} already exists in ` +
-          `${request.dir} with different content.`,
-      );
+      throw new Error(describeStatelogMerge(statelogPlan, request.dir));
     }
     const merged: RunDirectorySnapshot = {
       ...snapshot,
       traces: [...snapshot.traces, ...statelogPlan.add],
     };
+    // The run row must describe a trace this call is putting (or finding) in
+    // the directory; otherwise the staged trace loses its completion record
+    // and an orphan row points at nothing.
+    if (!merged.traces.some((trace) => trace.traceId === request.run.traceId)) {
+      const staged = incoming.map((trace) => trace.traceId).join(", ") || "none";
+      throw new Error(
+        `Cannot record run for trace ${request.run.traceId}: it is not in ${request.dir} and ` +
+          `not in the staged statelog (which holds: ${staged}). Nothing was written.`,
+      );
+    }
     const codePlan =
       request.codeEntry === undefined
         ? undefined
@@ -229,6 +240,9 @@ export function recordGradingPass(
   request: RecordGradingPassRequest,
   options: MutationOptions = {},
 ): RecordGradingPassResult {
+  if (request.scores.length === 0) {
+    throw new Error("A grading pass needs at least one score; nothing was recorded.");
+  }
   const passId = newPassId();
   const result = withWriter(request.dir, options, (paths, snapshot, reportWarning) => {
     const known: Record<string, true> = Object.create(null);

@@ -148,7 +148,7 @@ that let a trace stand on its own as "a run" (see
 - `input` — what the entry node was given, when the caller named it. It is
   never derived from the node's parameters (a plain one-parameter call and an
   eval input look identical there). The generated node wrapper takes a hidden
-  `input` option; the subprocess bootstrap passes `RunInstruction.task` through
+  `invocationInput` option (not `input`, which is a common parameter name); the subprocess bootstrap passes `RunInstruction.task` through
   it, so eval runs record their input and ordinary `agency run` invocations
   record none.
 

@@ -97,6 +97,16 @@ export function safeDeleteDirectory(targetPath: string, dryRun: boolean = true):
  * must lie strictly inside `root` (never the root itself, never a sibling,
  * never `..`, never a symlink that escapes), and only then is it removed.
  */
+/** True when `target` is inside `root` and is not `root` itself. Both must be
+ *  resolved paths. A first segment of exactly `..` is the escape; a name that
+ *  merely begins with two dots (`..cache`) is an ordinary child. */
+export function isStrictDescendant(root: string, target: string): boolean {
+  const relative = path.relative(root, target);
+  if (relative === "" || path.isAbsolute(relative)) return false;
+  const first = relative.split(path.sep)[0];
+  return first !== "..";
+}
+
 export function safeDeleteDirectoryWithin(root: string, target: string): SafeDeleteResult {
   if (!fs.existsSync(target)) {
     return { success: false, message: `Path does not exist: '${target}'.` };
@@ -112,13 +122,17 @@ export function safeDeleteDirectoryWithin(root: string, target: string): SafeDel
       message: `Refusing to delete '${target}': ${err instanceof Error ? err.message : String(err)}`,
     };
   }
-  if (!fs.statSync(resolvedTarget).isDirectory()) {
-    return { success: false, message: `Not a directory: '${resolvedTarget}'.` };
+  try {
+    if (!fs.statSync(resolvedTarget).isDirectory()) {
+      return { success: false, message: `Not a directory: '${resolvedTarget}'.` };
+    }
+  } catch (err) {
+    return {
+      success: false,
+      message: `Refusing to delete '${target}': ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
-  const relative = path.relative(resolvedRoot, resolvedTarget);
-  const strictlyInside =
-    relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
-  if (!strictlyInside) {
+  if (!isStrictDescendant(resolvedRoot, resolvedTarget)) {
     return {
       success: false,
       message: `Refusing to delete '${resolvedTarget}': not strictly inside '${resolvedRoot}'.`,

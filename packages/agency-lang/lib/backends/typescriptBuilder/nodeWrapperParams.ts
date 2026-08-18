@@ -34,13 +34,16 @@ export function nodeWrapperParams(
   // Alias each option to a hidden name so a node parameter named `config`,
   // `traceId`, `messages`, or `callbacks` cannot collide with the destructured
   // options. The runtime owns all behavior; this only packages the arguments.
-  // `input` is the one value the caller says the node was given (an eval
-  // input, or a harness that names it); the runtime records it on agentStart.
-  // It is never inferred from the parameters, because a plain one-parameter
-  // call and an eval input have the same shape.
+  // `invocationInput` is the one value the caller says the node was given (an
+  // eval input, or a harness that names it); the runtime records it as
+  // `agentStart.input`. It is never inferred from the parameters, because a
+  // plain one-parameter call and an eval input have the same shape. The key
+  // is deliberately not `input`: nodes often have a parameter of that name,
+  // and `main(input, { input } = {})` would read as the same value twice.
   params.push({
-    name: "{ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, input: __invocationInput }",
-    typeAnnotation: "({ messages?: any; callbacks?: any; input?: unknown } & InvocationOptions)",
+    name: "{ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, invocationInput: __invocationInput }",
+    typeAnnotation:
+      "({ messages?: any; callbacks?: any; invocationInput?: unknown } & InvocationOptions)",
     defaultValue: ts.obj({}),
   });
   return params;

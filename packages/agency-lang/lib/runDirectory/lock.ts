@@ -114,8 +114,15 @@ function releaseOwnedLock(
     reportWarning(`Refusing to remove ${lockFile}: not a lock file`);
     return;
   }
+  if (!fs.existsSync(lockFile)) {
+    return;
+  }
   const existing = readHolder(lockFile);
   if (existing === undefined) {
+    reportWarning(
+      `Not releasing ${lockFile}: it exists but is unreadable, so this session cannot prove it ` +
+        `still owns it. If no writer is running, delete the file.`,
+    );
     return;
   }
   if (existing.token !== holder.token) {

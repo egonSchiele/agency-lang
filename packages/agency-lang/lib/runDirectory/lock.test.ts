@@ -91,6 +91,14 @@ describe("acquireRunDirLock", () => {
     expect(warnings.join(" ")).toMatch(/not releasing/i);
   });
 
+  it("warns, and does not remove, a lock that is present but unreadable", () => {
+    const lock = acquire();
+    fs.writeFileSync(lockPath(), "{ not json");
+    lock.release();
+    expect(fs.existsSync(lockPath())).toBe(true);
+    expect(warnings.join(" ")).toMatch(/unreadable/i);
+  });
+
   it("tolerates the lock already being gone", () => {
     const lock = acquire();
     fs.rmSync(lockPath());

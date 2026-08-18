@@ -19,7 +19,7 @@ describe("node wrapper per-invocation options", () => {
 
   it("destructures the options into hidden aliases", () => {
     expect(ts).toContain(
-      "{ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, input: __invocationInput }",
+      "{ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, invocationInput: __invocationInput }",
     );
   });
 
@@ -31,5 +31,13 @@ describe("node wrapper per-invocation options", () => {
     expect(ts).toContain("config: __invocationConfig");
     expect(ts).toContain("traceId: __invocationTraceId");
     expect(ts).toContain("input: __invocationInput");
+  });
+
+  it("does not name the carrier `input`, which nodes commonly use as a parameter", () => {
+    const withInput = compile(`node main(input: string) {
+  return input
+}`);
+    expect(withInput).toContain("main(input: string, {");
+    expect(withInput).not.toMatch(/traceId: __invocationTraceId, input: __invocationInput/);
   });
 });

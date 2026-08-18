@@ -4,7 +4,7 @@ import * as path from "path";
 
 import { describe, expect, it } from "vitest";
 
-import { computeCodeIdentity } from "./codeIdentity.js";
+import { computeCodeIdentity, withCodeIdentity } from "./codeIdentity.js";
 
 function proj(files: Record<string, string>): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "codeid-"));
@@ -50,5 +50,23 @@ describe("computeCodeIdentity", () => {
     const before = computeCodeIdentity(path.join(dir, "main.agency")).closureHash;
     fs.writeFileSync(path.join(dir, "main.agency"), "node main() { return 2 }\n");
     expect(computeCodeIdentity(path.join(dir, "main.agency")).closureHash).not.toBe(before);
+  });
+});
+
+describe("withCodeIdentity", () => {
+  it("keeps every inherited override but replaces an inherited log.code with the entry file's own", () => {
+    const dir = proj({ "main.agency": "node main() { return 1 }" });
+    const inherited = {
+      observability: true,
+      log: {
+        logFile: "harness.jsonl",
+        code: { entry: "other.agency", closureHash: "stale", closure: [] },
+      },
+    };
+    const merged = withCodeIdentity(inherited, path.join(dir, "main.agency"));
+    expect(merged.observability).toBe(true);
+    expect(merged.log?.logFile).toBe("harness.jsonl");
+    expect(merged.log?.code?.entry).toBe("main.agency");
+    expect(merged.log?.code?.closureHash).not.toBe("stale");
   });
 });

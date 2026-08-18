@@ -16,7 +16,7 @@ import { spawn as realSpawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 
-import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";
+import { withCodeIdentity } from "@/runDirectory/codeIdentity.js";
 
 const currentDir = path.dirname(new URL(import.meta.url).pathname);
 
@@ -220,10 +220,12 @@ export function runBundledAgent(
   const env = { ...process.env };
   // Inherited overrides matter: an eval harness hands this process its
   // statelog path via this env var, and flags must layer on top, not
+  // replace it. The code identity goes on last: it names the agent that is
+  // actually about to run, so neither an inherited `log.code` nor a flag may
   // replace it.
-  const merged = mergeConfigOverrides(
-    mergeConfigOverrides(codeIdentityOverrides(agencyFile), readConfigOverrides(env)),
-    launchArgs.configOverrides,
+  const merged = withCodeIdentityIfSourced(
+    mergeConfigOverrides(readConfigOverrides(env), launchArgs.configOverrides),
+    agencyFile,
   );
   if (Object.keys(merged).length > 0) {
     env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(merged);
@@ -277,7 +279,10 @@ export function runBundledAgent(
 
 /** Which code the agent is, for the trace's agentStart. A precompiled agent
  *  shipped without its `.agency` source records nothing. */
-function codeIdentityOverrides(agencyFile: string): Partial<AgencyConfig> {
-  if (!fs.existsSync(agencyFile)) return {};
-  return { log: { code: computeCodeIdentity(agencyFile) } };
+function withCodeIdentityIfSourced(
+  overrides: Partial<AgencyConfig>,
+  agencyFile: string,
+): Partial<AgencyConfig> {
+  if (!fs.existsSync(agencyFile)) return overrides;
+  return withCodeIdentity(overrides, agencyFile);
 }

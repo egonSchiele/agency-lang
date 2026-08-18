@@ -84,7 +84,7 @@ async function handleTraceExtract(args: {
       args.notify("Cannot extract: that trace is no longer in the file.");
       return;
     }
-    writeTraceFile(match.trace, outPath);
+    writeTraceFile({ trace: match.trace, outPath, sourcePath: args.sourcePath });
     args.notify(`Wrote ${match.trace.lines.length} events to ${outPath}.`);
   } catch (error) {
     args.notify(`Extract failed: ${(error as Error).message}`);

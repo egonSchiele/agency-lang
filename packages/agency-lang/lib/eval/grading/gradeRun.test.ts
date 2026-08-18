@@ -97,6 +97,32 @@ describe("gradeRun", () => {
     expect(card.perInput[0].ungradedReason).toMatch(/timeout/);
   });
 
+  it("a test that died before its first event still counts: scored 0 beside its successful neighbour", async () => {
+    const runDir = writeRunDirectory([
+      { test: { ...capital, id: "ok" }, output: "New Delhi" },
+      {
+        test: { ...capital, id: "never-started" },
+        wroteStatelog: false,
+        ended: "error",
+        errorMessage: "compile failed",
+      },
+    ]);
+    const card = await gradeRun(runDir, ctx([grader(() => 1, { name: "one" })]));
+    expect(card.perInput.map((entry) => entry.test.id).sort()).toEqual(["never-started", "ok"]);
+    expect(card.objective()).toBe(0.5);
+    expect(card.gatesPassed()).toBe(false);
+    const dead = card.perInput.find((entry) => entry.test.id === "never-started");
+    expect(dead?.ungradedReason).toMatch(/no trace.*error: compile failed/);
+  });
+
+  it("a suite where every test died before its first event does not pass gates vacuously", async () => {
+    const runDir = writeRunDirectory([{ test: capital, wroteStatelog: false, ended: "timeout" }]);
+    const card = await gradeRun(runDir, ctx([grader(() => 1, { name: "one" })]));
+    expect(card.perInput).toHaveLength(1);
+    expect(card.gatesPassed()).toBe(false);
+    expect(card.objective()).toBe(0);
+  });
+
   it("a trace with no output still grades, with output null — the deliverable may be the filesystem", async () => {
     // Command agents (agency CLI under --agent-cmd) emit no output event;
     // terminal-bench-style graders read the workdir, not the reply. A real

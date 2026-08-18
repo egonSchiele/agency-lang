@@ -69,6 +69,27 @@ describe("runViewer", () => {
     expect(out.lastText()).toMatch(/Wrote 2 events/);
   });
 
+  it("x refuses to overwrite a file that already exists", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "viewer-extract-"));
+    const source = path.join(dir, "log.jsonl");
+    fs.writeFileSync(source, sample);
+    const outPath = path.join(dir, "taken.jsonl");
+    fs.writeFileSync(outPath, "precious\n");
+    const input = new ScriptedInput(["x"]);
+    input.feedLine(outPath);
+    input.feedKey({ key: "q" });
+    const out = new FrameRecorder();
+    await runViewer({
+      jsonl: sample,
+      input,
+      output: out,
+      viewport: { rows: 12, cols: 100 },
+      extract: { sourcePath: source },
+    });
+    expect(fs.readFileSync(outPath, "utf8")).toBe("precious\n");
+    expect(out.lastText()).toMatch(/Extract failed/);
+  });
+
   it("x does nothing without a local source", async () => {
     const out = new FrameRecorder();
     await runViewer({

@@ -14,6 +14,7 @@ import {
 } from "@/runDirectory/testFixtures.js";
 
 import { runsAdd } from "./add.js";
+import { formatTextTable } from "./table.js";
 import { logsExtract } from "./extract.js";
 import { runsList } from "./list.js";
 import { note } from "./note.js";
@@ -43,6 +44,30 @@ describe("logs extract", () => {
     logsExtract({ log, trace: "abd", out }, { writeStdout: () => {} });
     expect(fs.readFileSync(out, "utf8").split("\n").filter(Boolean)).toHaveLength(1);
     expect(() => logsExtract({ log, trace: "ab" }, { writeStdout: () => {} })).toThrow(/ambiguous/);
+  });
+
+  it("refuses an existing --out unless --overwrite, and never the source log itself", () => {
+    const log = statelogFile(agentStartLine("abc123"), agentStartLine("abd456"));
+    const out = path.join(tempDir(), "trace.jsonl");
+    fs.writeFileSync(out, "precious\n");
+    expect(() => logsExtract({ log, trace: "abc", out }, { writeStdout: () => {} })).toThrow(
+      /already exists.*--overwrite/,
+    );
+    expect(fs.readFileSync(out, "utf8")).toBe("precious\n");
+    logsExtract({ log, trace: "abc", out, overwrite: true }, { writeStdout: () => {} });
+    expect(fs.readFileSync(out, "utf8").split("\n").filter(Boolean)).toHaveLength(1);
+    const before = fs.readFileSync(log, "utf8");
+    expect(() =>
+      logsExtract({ log, trace: "abc", out: log, overwrite: true }, { writeStdout: () => {} }),
+    ).toThrow(/own source/);
+    expect(fs.readFileSync(log, "utf8")).toBe(before);
+  });
+});
+
+describe("formatTextTable", () => {
+  it("paints the header after padding, so columns still line up", () => {
+    const text = formatTextTable(["a", "bbb"], [["xxxx", "y"]], (line) => `<${line}>`);
+    expect(text).toBe("<a     bbb>\nxxxx  y");
   });
 });
 

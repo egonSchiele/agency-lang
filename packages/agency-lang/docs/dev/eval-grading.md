@@ -51,6 +51,14 @@ one, the trace's own ending decides (`traceEnding`). Such a trace is never
 shown to graders: a run that almost finished must not earn points from a judge
 that cannot tell it crashed. `gradeRun.test.ts` pins this with a spy grader.
 
+**A test that never produced a trace still counts.** When an agent dies
+before its first event (a compile failure, a kill before start), the harness
+records a `run` row with no trace behind it. `gradeSnapshot` enumerates those
+rows too (`gradableEntries`), scoring each zero with the row's reason.
+Otherwise a suite where half the tests never started would score as if only
+the other half existed, and one where none started would pass gates
+vacuously.
+
 **A successful run with no recorded output still grades, with `output:
 null`.** Command agents emit no output event, and for terminal-bench-style
 tests the deliverable is the FILESYSTEM — graders read the workdir. Graders

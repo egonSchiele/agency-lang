@@ -150,9 +150,14 @@ appends through `appendAnnotationsUnderLock`, the one `@internal` export of
 
 One file per command; none imports the lock or the append helpers.
 
-- `agency logs extract <log> [--trace <id>] [-o <file>]` — copy one trace out
-  of a statelog, verbatim (a single-trace log needs no `--trace`). The viewer's
-  `x` key does the same for the focused trace, prompting for a path.
+- `agency logs extract <log> [--trace <id>] [-o <file>] [--overwrite]` — copy
+  one trace out of a statelog (a single-trace log needs no `--trace`). Lines
+  are copied as they appear, except the two things `readTraces` drops: a torn
+  final line and a byte-identical repeat of an earlier line in the same trace.
+  An existing `--out` file is refused unless `--overwrite` is passed, and the
+  source log itself is never a valid output. The viewer's `x` key does the
+  same for the focused trace, prompting for a path, and also refuses an
+  existing file.
 - `agency runs add <dir> [--statelog f]… [--code entry]… [--workdir p [--trace id]] [--annotations f]… [--replace]`
   — one `addToRunDirectory` request; prints counts and the listing.
 - `agency runs list <dir>` — one line per trace (`summarizeRuns`).

@@ -11,7 +11,7 @@ import type { GraderInput, Test, JSON } from "../types.js";
 import { loadedRun } from "../testUtils.js";
 
 const graderInput = (output: JSON): GraderInput => {
-  const input: Test = { id: "i1", input: "t" };
+  const test: Test = { id: "i1", input: "t" };
   return {
     test,
     run: loadedRun(output),

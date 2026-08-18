@@ -1,6 +1,6 @@
 import { BaseOptimizer, type BaseOptimizerDeps } from "../baseOptimizer.js";
 import type { Scorecard } from "@/eval/grading/scorecard.js";
-import type { Input } from "@/eval/grading/types.js";
+import type { Test } from "@/eval/grading/types.js";
 import { proposeMutation, type ProposeMutationArgs } from "../mutator.js";
 import type { BaseOptimizerConfig } from "../optimizer.js";
 import {
@@ -67,7 +67,7 @@ export class ExampleOptimizer extends BaseOptimizer {
 
   protected async optimizeTargets(
     source: OptimizeTargetSet,
-    inputs: Input[],
+    inputs: Test[],
   ): Promise<OptimizeResult> {
     const startedAt = Date.now();
     this.reporter.runStarted({
@@ -137,7 +137,7 @@ export class ExampleOptimizer extends BaseOptimizer {
     iter: number | "baseline",
     files: Record<string, string>,
     targetSet: OptimizeTargetSet,
-    inputs: Input[],
+    inputs: Test[],
   ): Promise<Candidate> {
     const scorecard = await this.scoreFiles(targetSet, files, inputs);
     return { iter, files, scorecard, targetSet };

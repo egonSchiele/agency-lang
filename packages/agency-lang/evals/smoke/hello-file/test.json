@@ -1,5 +1,5 @@
 {
   "goal": "out.txt exists in the working directory and contains exactly the text 'hello world'.",
-  "task": "Write the text `hello world` to a file named out.txt in your current working directory. The file must contain exactly that text and nothing else — no quotes, no trailing commentary. Once the file is written you are done.",
+  "input": "Write the text `hello world` to a file named out.txt in your current working directory. The file must contain exactly that text and nothing else — no quotes, no trailing commentary. Once the file is written you are done.",
   "timeoutSec": 120
 }

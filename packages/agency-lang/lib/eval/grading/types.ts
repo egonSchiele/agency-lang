@@ -1,11 +1,11 @@
-import type { Input } from "@/eval/runTypes.js";
+import type { Test } from "@/eval/runTypes.js";
 import type { EvalRecord } from "@/eval/types.js";
 
 import type { AgencyRunner } from "./agencyRunner.js";
 
 /** The unified run-spec type lives in the eval layer; re-export it so the many
- *  `import { Input } from "./types.js"` sites in the optimizer keep working. */
-export type { Input };
+ *  `import { Test } from "./types.js"` sites in the optimizer keep working. */
+export type { Test };
 
 /** A JSON-compatible value. */
 export type JSON = string | number | boolean | null | JSON[] | { [key: string]: JSON };
@@ -46,7 +46,7 @@ export type GraderOptions = {
 
 /** What a grader's `_run` receives. */
 export type GraderInput = {
-  input: Input;
+  test: Test;
   run: LoadedRun;
   runAgency: AgencyRunner; // capability to invoke a judge .agency file
 };

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { BaseGrader } from "./baseGrader.js";
 import { Scorecard, type GraderGrade, type InputGrades } from "./scorecard.js";
-import type { Grade, GraderOptions, Input } from "./types.js";
+import type { Grade, GraderOptions, Test } from "./types.js";
 import { loadedRun } from "./testUtils.js";
 
 class StubGrader extends BaseGrader {
@@ -15,7 +15,7 @@ class StubGrader extends BaseGrader {
   }
 }
 
-const input = (id: string): Input => ({ id, task: "t" });
+const input = (id: string): Test => ({ id, input: "t" });
 const scalarGrade = (grader: BaseGrader, value: number): GraderGrade => ({
   grader,
   grade: { score: { kind: "scalar", value } },

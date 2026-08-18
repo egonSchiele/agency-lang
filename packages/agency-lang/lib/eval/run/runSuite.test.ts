@@ -45,7 +45,7 @@ describe("runSuite", () => {
   let proj: string;
   beforeEach(() => {
     proj = fs.mkdtempSync(path.join(os.tmpdir(), "runsuite-"));
-    fs.writeFileSync(path.join(proj, "agent.agency"), "node main(task: string) { return 1 }\n");
+    fs.writeFileSync(path.join(proj, "agent.agency"), "node main(input: string) { return 1 }\n");
   });
   afterEach(() => {
     // Raw rmSync, not safeDelete: mkdtemp paths sit outside any project root,
@@ -66,7 +66,7 @@ describe("runSuite", () => {
     const result = await runSuite(
       {
         agent: path.join(proj, "agent.agency"),
-        inputs: [{ id: "input-1", goal: "g", task: "t" }],
+        inputs: [{ id: "input-1", goal: "g", input: "t" }],
         runsDir,
         runId: "r1",
         config: {},
@@ -93,7 +93,7 @@ describe("runSuite", () => {
     await runSuite(
       {
         agent: path.join(proj, "agent.agency"),
-        inputs: [{ id: "input-1", goal: "g", task: "t" }],
+        inputs: [{ id: "input-1", goal: "g", input: "t" }],
         runsDir: path.join(proj, "runs"),
         runId: "r-overlay",
         config: {},
@@ -124,13 +124,13 @@ describe("runSuite", () => {
     const agentDir = path.join(proj, "agent-proj");
     fs.mkdirSync(agentDir, { recursive: true });
     const agent = path.join(agentDir, "agent.agency");
-    fs.writeFileSync(agent, "node main(task: string) {}\n");
+    fs.writeFileSync(agent, "node main(input: string) {}\n");
 
     let sawFixture = false;
     const result = await runSuite(
       {
         agent,
-        inputs: [{ id: "a", goal: "g", task: "t", files: filesDir }],
+        inputs: [{ id: "a", goal: "g", input: "t", files: filesDir }],
         runsDir: path.join(proj, "runs"),
         runId: "files-e2e",
         perRun: { extractor: recordExtractor("ok") },
@@ -151,7 +151,7 @@ describe("runSuite", () => {
   it("delivers each input's task to the runner — string and object alike", async () => {
     const seen: unknown[] = [];
     const runner = vi.fn(async (args: { kind: string; task?: unknown }) => {
-      seen.push(args.task);
+      seen.push(args.input);
       return { ok: true as const };
     });
 
@@ -159,8 +159,8 @@ describe("runSuite", () => {
       {
         agent: path.join(proj, "agent.agency"),
         inputs: [
-          { id: "a", goal: "g", task: "write a haiku" },
-          { id: "b", goal: "g", task: { rows: [1, 2], mode: "fast" } },
+          { id: "a", goal: "g", input: "write a haiku" },
+          { id: "b", goal: "g", input: { rows: [1, 2], mode: "fast" } },
         ],
         runsDir: path.join(proj, "runs"),
         runId: "r-task",
@@ -190,8 +190,8 @@ describe("runSuite", () => {
           label: "some-agent -p {task}",
         },
         inputs: [
-          { id: "a", goal: "g", task: "first task" },
-          { id: "b", goal: "g", task: "second task" },
+          { id: "a", goal: "g", input: "first task" },
+          { id: "b", goal: "g", input: "second task" },
         ],
         runsDir,
         runId: "r-cmd",
@@ -227,7 +227,7 @@ describe("runSuite", () => {
           tokens: [fakeAgency, "agent", "-p", "{task}"],
           label: `${fakeAgency} agent -p {task}`,
         },
-        inputs: [{ id: "a", goal: "g", task: "t" }],
+        inputs: [{ id: "a", goal: "g", input: "t" }],
         runsDir: path.join(proj, "runs"),
         runId: "r-cliv",
         config: {},
@@ -249,7 +249,7 @@ describe("runSuite", () => {
     const runner = vi.fn(async (job: { kind: string; task?: unknown; statelogPath?: string }) => {
       inFlight += 1;
       maxInFlight = Math.max(maxInFlight, inFlight);
-      started.push(String(job.task));
+      started.push(String(job.input));
       await new Promise((r) => setTimeout(r, 30));
       fs.writeFileSync(job.statelogPath as string, "{}\n");
       inFlight -= 1;
@@ -260,10 +260,10 @@ describe("runSuite", () => {
       {
         agent: path.join(proj, "agent.agency"),
         inputs: [
-          { id: "a", goal: "g", task: "t-a" },
-          { id: "b", goal: "g", task: "t-b" },
-          { id: "c", goal: "g", task: "t-c" },
-          { id: "d", goal: "g", task: "t-d" },
+          { id: "a", goal: "g", input: "t-a" },
+          { id: "b", goal: "g", input: "t-b" },
+          { id: "c", goal: "g", input: "t-c" },
+          { id: "d", goal: "g", input: "t-d" },
         ],
         runsDir: path.join(proj, "runs"),
         runId: "r-par",
@@ -286,7 +286,7 @@ describe("runSuite", () => {
     const runner = vi.fn(async (job: { task?: unknown; statelogPath?: string }) => {
       calls += 1;
       await new Promise((r) => setTimeout(r, 20));
-      if (String(job.task) === "t-a") {
+      if (String(job.input) === "t-a") {
         return { ok: false as const, errorMessage: "boom" };
       }
       fs.writeFileSync(job.statelogPath as string, "{}\n");
@@ -297,10 +297,10 @@ describe("runSuite", () => {
       {
         agent: path.join(proj, "agent.agency"),
         inputs: [
-          { id: "a", goal: "g", task: "t-a" },
-          { id: "b", goal: "g", task: "t-b" },
-          { id: "c", goal: "g", task: "t-c" },
-          { id: "d", goal: "g", task: "t-d" },
+          { id: "a", goal: "g", input: "t-a" },
+          { id: "b", goal: "g", input: "t-b" },
+          { id: "c", goal: "g", input: "t-c" },
+          { id: "d", goal: "g", input: "t-d" },
         ],
         runsDir: path.join(proj, "runs"),
         runId: "r-par-stop",
@@ -331,7 +331,7 @@ describe("runSuite", () => {
     const result = await runSuite(
       {
         agent: path.join(proj, "agent.agency"),
-        inputs: [{ id: "a", goal: "g", task: "t", timeoutSec: 1200 }],
+        inputs: [{ id: "a", goal: "g", input: "t", timeoutSec: 1200 }],
         runsDir: path.join(proj, "runs"),
         runId: "r-timeout",
         config: {},
@@ -355,7 +355,7 @@ describe("runSuite", () => {
     const result = await runSuite(
       {
         agent: path.join(proj, "agent.agency"),
-        inputs: [{ id: "a", goal: "g", task: "t" }],
+        inputs: [{ id: "a", goal: "g", input: "t" }],
         runsDir: path.join(proj, "runs"),
         config: {},
         perRun: { pipeOutput: false, extractor: recordExtractor("done") },
@@ -384,9 +384,9 @@ describe("runSuite", () => {
       {
         agent: path.join(proj, "agent.agency"),
         inputs: [
-          { id: "input-1", goal: "g", task: "t" },
-          { id: "input-2", goal: "g", task: "t" },
-          { id: "input-3", goal: "g", task: "t" },
+          { id: "input-1", goal: "g", input: "t" },
+          { id: "input-2", goal: "g", input: "t" },
+          { id: "input-3", goal: "g", input: "t" },
         ],
         runsDir,
         runId: "r-sigint",
@@ -414,7 +414,7 @@ describe("runSuite", () => {
       await runSuite(
         {
           agent: path.join(proj, "agent.agency"),
-          inputs: [{ id: "input-1", goal: "g", task: "t" }],
+          inputs: [{ id: "input-1", goal: "g", input: "t" }],
           runsDir: path.join(proj, "runs"),
           runId: "r-quiet",
           config: {},

@@ -69,7 +69,7 @@ Choose a different --run-id or delete the existing directory.`,
   it("prepares per-input artifact paths but leaves workdir to prepareRunDir", () => {
     const state = initializeState();
 
-    const prepared = prepareInput(state, { id: "t1", goal: "goal", task: "t" });
+    const prepared = prepareInput(state, { id: "t1", goal: "goal", input: "t" });
 
     expect(
       JSON.parse(fs.readFileSync(path.join(state.runDir, "inputs", "t1", "input.json"), "utf-8")),
@@ -101,7 +101,7 @@ Choose a different --run-id or delete the existing directory.`,
   it("rejects input ids that escape the input directory", () => {
     const state = initializeState();
 
-    expect(() => prepareInput(state, { id: "../escape", goal: "goal", task: "t" })).toThrow(
+    expect(() => prepareInput(state, { id: "../escape", goal: "goal", input: "t" })).toThrow(
       "Invalid id",
     );
   });
@@ -132,7 +132,7 @@ Choose a different --run-id or delete the existing directory.`,
   describe("writeEvalRunSummary metrics", () => {
     it("copies a metrics block from each eval record, including the agent name", () => {
       const state = initializeState();
-      const prepared = prepareInput(state, { id: "t1", goal: "g", task: "t" });
+      const prepared = prepareInput(state, { id: "t1", goal: "g", input: "t" });
       fs.mkdirSync(path.dirname(prepared.evalRecordPath), { recursive: true });
       fs.writeFileSync(
         prepared.evalRecordPath,
@@ -157,7 +157,7 @@ Choose a different --run-id or delete the existing directory.`,
 
     it("omits agentName when the record has none", () => {
       const state = initializeState();
-      const prepared = prepareInput(state, { id: "t1", goal: "g", task: "t" });
+      const prepared = prepareInput(state, { id: "t1", goal: "g", input: "t" });
       fs.mkdirSync(path.dirname(prepared.evalRecordPath), { recursive: true });
       fs.writeFileSync(
         prepared.evalRecordPath,
@@ -176,7 +176,7 @@ Choose a different --run-id or delete the existing directory.`,
 
     it("leaves metrics absent for a missing record without warning", () => {
       const state = initializeState();
-      const prepared = prepareInput(state, { id: "t1", goal: "g", task: "t" });
+      const prepared = prepareInput(state, { id: "t1", goal: "g", input: "t" });
       const warnings: string[] = [];
 
       const summary = writeEvalRunSummary(state, [inputResult(prepared, "error")], (m) =>
@@ -189,7 +189,7 @@ Choose a different --run-id or delete the existing directory.`,
 
     it("a parseable record with a wrong shape leaves metrics absent with a warning", () => {
       const state = initializeState();
-      const prepared = prepareInput(state, { id: "t1", goal: "g", task: "t" });
+      const prepared = prepareInput(state, { id: "t1", goal: "g", input: "t" });
       fs.mkdirSync(path.dirname(prepared.evalRecordPath), { recursive: true });
       fs.writeFileSync(
         prepared.evalRecordPath,
@@ -212,7 +212,7 @@ Choose a different --run-id or delete the existing directory.`,
 
     it("warns on a malformed record but still writes the summary", () => {
       const state = initializeState();
-      const prepared = prepareInput(state, { id: "t1", goal: "g", task: "t" });
+      const prepared = prepareInput(state, { id: "t1", goal: "g", input: "t" });
       fs.mkdirSync(path.dirname(prepared.evalRecordPath), { recursive: true });
       fs.writeFileSync(prepared.evalRecordPath, "{ torn");
       const warnings: string[] = [];

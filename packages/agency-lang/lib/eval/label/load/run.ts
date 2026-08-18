@@ -111,7 +111,7 @@ export function loadRun(args: LoadRunArgs): LoadedBatch {
       continue;
     }
 
-    const task = JsonValueSchema.safeParse(entry.input?.task);
+    const task = JsonValueSchema.safeParse(entry.input?.input);
     if (!task.success || task.data === undefined || task.data === null) {
       skips.push({ item: inputId, reason: "invalid-task" });
       continue;

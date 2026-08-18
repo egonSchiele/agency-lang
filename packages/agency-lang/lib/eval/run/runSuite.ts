@@ -23,7 +23,7 @@ import {
   type PreparedInput,
   type SourceProvenance,
 } from "@/eval/runArtifacts.js";
-import type { EvalRunInputResult, EvalRunResult, Input } from "@/eval/runTypes.js";
+import type { EvalRunInputResult, EvalRunResult, Test } from "@/eval/runTypes.js";
 
 import { runAgent, type AgentRun, type RunAgentOptions } from "./runAgent.js";
 import { seedFromAgentFile } from "./seed.js";
@@ -40,7 +40,7 @@ export type PerRunOptions = Pick<
   "seed" | "overlayFiles" | "pipeOutput" | "extractor"
 >;
 
-/** Options for running a LOADED suite: parsed Input[], resolved values.
+/** Options for running a LOADED suite: parsed Test[], resolved values.
  *  The raw-flags side lives in the evalRun command (EvalRunCliOptions). */
 export type RunSuiteOptions = {
   /** The agent. A string is file-target convenience (path, path:node, or a
@@ -48,7 +48,7 @@ export type RunSuiteOptions = {
    *  EvalTarget passes through with no re-validation — it already passed
    *  resolveEvalTarget, including the {task}-placeholder check. */
   agent: string | EvalTarget;
-  inputs: Input[];
+  inputs: Test[];
   runId?: string;
   runsDir?: string;
   /** Default true. */
@@ -148,7 +148,7 @@ export async function runSuite(
   // before the agent starts, so the pool can begin tailing the statelog
   // while the run is live.
   const executeInput = async (
-    input: Input,
+    input: Test,
     pipeOutput: boolean,
     onPrepared?: (prepared: PreparedInput) => void,
   ): Promise<{ result: EvalRunInputResult; prepared?: PreparedInput }> => {
@@ -163,7 +163,7 @@ export async function runSuite(
     onPrepared?.(prepared);
     const run = await runAgent(
       target,
-      input.task,
+      input.input,
       {
         runDir: prepared.inputDir,
         config,
@@ -235,13 +235,13 @@ export async function runSuite(
  * they come back as error results). Results keep input order.
  */
 async function runPool(args: {
-  inputs: Input[];
+  inputs: Test[];
   parallel: number;
   continueOnError: boolean;
   progress: boolean;
   isInterrupted: () => boolean;
   executeInput: (
-    input: Input,
+    input: Test,
     pipeOutput: boolean,
     onPrepared?: (prepared: PreparedInput) => void,
   ) => Promise<{ result: EvalRunInputResult; prepared?: PreparedInput }>;
@@ -330,7 +330,7 @@ function commandCliVersion(tokens: string[]): string | undefined {
 }
 
 /** An AgentRun in the suite's per-input vocabulary. */
-function toInputResult(input: Input, prepared: PreparedInput, run: AgentRun): EvalRunInputResult {
+function toInputResult(input: Test, prepared: PreparedInput, run: AgentRun): EvalRunInputResult {
   return {
     inputId: input.id ?? "",
     status: run.status,

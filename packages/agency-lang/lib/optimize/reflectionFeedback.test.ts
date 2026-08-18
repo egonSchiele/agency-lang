@@ -16,7 +16,7 @@ const fakeGrader = (name: string) =>
 
 function entry(record: EvalRecord): InputGrades {
   return {
-    input: { id: "q1", task: { question: "capital of France?" } },
+    test: { id: "q1", input: { question: "capital of France?" } },
     run: { output: "Paris", recordPath: "", workdir: "", record },
     gatesPassed: true,
     grades: [
@@ -65,7 +65,7 @@ describe("renderInputFeedback", () => {
 
   it("renders the expected output when the input carries one", () => {
     const e = entry(EMPTY_RECORD);
-    e.input.expected = "New Delhi";
+    e.test.expected = "New Delhi";
     expect(renderInputFeedback(e)).toContain("Expected: New Delhi");
   });
 
@@ -90,6 +90,6 @@ describe("renderInputFeedback", () => {
   it("renderReflectionFeedback concatenates focus entries as given", () => {
     const record = partialRecord({ errors: [], events: [] });
     const text = renderReflectionFeedback([entry(record), entry(record)]);
-    expect(text.match(/### Input/g)).toHaveLength(2);
+    expect(text.match(/### Test/g)).toHaveLength(2);
   });
 });

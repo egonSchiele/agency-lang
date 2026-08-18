@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { readEvalRun, type ReadEvalRunInput } from "@/eval/readRun.js";
-import type { Input } from "@/eval/runTypes.js";
+import type { Test } from "@/eval/runTypes.js";
 import type { EvalRecord } from "@/eval/types.js";
 
 import type { AgencyConfig } from "@/config.js";
@@ -43,34 +43,34 @@ async function gradeInput(
   ctx: GradingContext,
   graders: BaseGrader[],
 ): Promise<InputGrades> {
-  const input = entry.input;
+  const test = entry.input;
   const lookup = lookUpOutput(entry.recordPath, entry.workdir);
   if ("reason" in lookup) {
-    return ungraded(input, lookup.reason);
+    return ungraded(test, lookup.reason);
   }
   const run = lookup.run;
 
-  const applicable = graders.filter((grader) => grader.gradesInput(input));
+  const applicable = graders.filter((grader) => grader.gradesInput(test));
   const gates = applicable.filter((grader) => grader.mustPass());
   const advisory = applicable.filter((grader) => !grader.mustPass());
 
   const gateGrades: GraderGrade[] = [];
   for (const grader of gates) {
-    const grade = await grader.run({ input, run, runAgency: ctx.runAgency });
+    const grade = await grader.run({ test, run, runAgency: ctx.runAgency });
     gateGrades.push({ grader, grade });
     if (!grader.passes(grade)) {
-      return { input, run, grades: gateGrades, gatesPassed: false };
+      return { test, run, grades: gateGrades, gatesPassed: false };
     }
   }
 
   const advisoryGrades = await Promise.all(
     advisory.map(async (grader) => ({
       grader,
-      grade: await grader.run({ input, run, runAgency: ctx.runAgency }),
+      grade: await grader.run({ test, run, runAgency: ctx.runAgency }),
     })),
   );
 
-  return { input, run, grades: [...gateGrades, ...advisoryGrades], gatesPassed: true };
+  return { test, run, grades: [...gateGrades, ...advisoryGrades], gatesPassed: true };
 }
 
 /**
@@ -79,7 +79,7 @@ async function gradeInput(
  * `matchOn`; without this the error surfaces per input, after the whole suite has
  * already been run and paid for. Mirrors what `BaseOptimizer` does in its preamble.
  */
-export function validateGraders(graders: BaseGrader[], input: Input | undefined): void {
+export function validateGraders(graders: BaseGrader[], input: Test | undefined): void {
   if (input === undefined) {
     return;
   }
@@ -116,7 +116,7 @@ export async function gradeRun(runDir: string, ctx: GradingContext): Promise<Sco
 /** Which graders score this input, per the precedence the SuiteGraders doc
  *  states: override > the input's own recorded module > fallback. */
 async function effectiveGraders(
-  input: Input,
+  input: Test,
   ctx: GradingContext,
   cache: (modulePath: string) => Promise<BaseGrader[]>,
 ): Promise<BaseGrader[]> {
@@ -147,7 +147,7 @@ export function makeGraderModuleCache(
 /** What grading needs from one loaded input: the spec, where its evidence
  *  lives, and optionally a reason not to grade at all. */
 type Entry = {
-  input: Input;
+  input: Test;
   recordPath: string;
   workdir: string;
   /** Set when the input cannot be graded at all — skip straight to a scored zero. */
@@ -186,7 +186,7 @@ function loadedEntry(runDir: string, input: ReadEvalRunInput): Entry {
   return {
     // Placeholder for a run dir whose input.json is missing; "" is not a
     // loadable task, which is the point — nothing real was recorded.
-    input: input.input ?? { id: input.inputId, task: "" },
+    input: input.input ?? { id: input.inputId, input: "" },
     recordPath: input.recordPath ?? "",
     workdir: workdirFor(runDir, input.inputId),
     ungradedReason: reasonByStatus[input.status],
@@ -202,8 +202,8 @@ function workdirFor(runDir: string, inputId: string): string {
 }
 
 /** An input that scored 0 without being graded. */
-function ungraded(input: Input, reason: string): InputGrades {
-  return { input, run: null, grades: [], gatesPassed: false, ungradedReason: reason };
+function ungraded(test: Test, reason: string): InputGrades {
+  return { test, run: null, grades: [], gatesPassed: false, ungradedReason: reason };
 }
 
 /** Either the run to grade, or why there is nothing to grade. */

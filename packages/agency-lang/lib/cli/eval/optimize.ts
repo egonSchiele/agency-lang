@@ -7,7 +7,7 @@ import type { AgencyConfig } from "@/config.js";
 import { loadInputs } from "@/eval/loadInputs.js";
 import type { BaseGrader } from "@/eval/grading/baseGrader.js";
 import { LlmJudge } from "@/eval/grading/graders/llmJudge.js";
-import type { Input } from "@/eval/grading/types.js";
+import type { Test } from "@/eval/grading/types.js";
 import { loadGradingModule } from "@/eval/grading/gradingModule.js";
 import { loadOptimizerModule } from "@/optimize/optimizerModule.js";
 import type { BaseOptimizerConfig, Optimizer, OptimizeTarget } from "@/optimize/optimizer.js";
@@ -20,10 +20,10 @@ import { assertEvalEntryNodeTakesOneParameter, resolveEvalRunTarget } from "@/ag
 
 export type EvalOptimizeOptions = {
   agent: string;
-  inputs?: string;
+  suite?: string;
   goal?: string;
   graders?: string;
-  validationInputs?: string;
+  validationSuite?: string;
   validationSplit?: number;
   iterations?: number;
   writeback?: boolean;
@@ -102,16 +102,16 @@ async function resolveOptimizer(
 }
 
 /**
- * Which input source to use. `--inputs` and `--goal` may be combined: when
- * `--inputs` is present it wins (the suite is the data) and `--goal` becomes the
+ * Which input source to use. `--suite` and `--goal` may be combined: when
+ * `--suite` is present it wins (the suite is the data) and `--goal` becomes the
  * overall-goal default for inputs that omit one (filled in by `withDefaults`).
  * `--goal` alone means one synthetic input whose task is the goal text. At
  * least one is required.
  */
 function optimizeInputSelection(opts: EvalOptimizeOptions): "inputs" | "goal" {
-  if (opts.inputs) return "inputs";
+  if (opts.suite) return "inputs";
   if (opts.goal) return "goal";
-  throw new Error("Provide --inputs (optionally with --goal as the overall goal), or --goal");
+  throw new Error("Provide --suite (optionally with --goal as the overall goal), or --goal");
 }
 
 /** Effective optimize settings: CLI flags override agency.json's eval.optimize. */
@@ -121,15 +121,15 @@ function resolveOptimizeSettings(opts: EvalOptimizeOptions) {
     goal: opts.goal ?? cfg?.goal,
     gradersPath: opts.graders ?? cfg?.graders,
     optimizer: opts.optimizer ?? cfg?.optimizer,
-    inputsPath: opts.inputs,
-    validationInputsPath: opts.validationInputs ?? cfg?.validation?.inputs,
+    inputsPath: opts.suite,
+    validationInputsPath: opts.validationSuite ?? cfg?.validation?.inputs,
     validationSplit: opts.validationSplit ?? cfg?.validation?.split,
     seed: opts.seed ?? 0,
   };
 }
 
 /** Fill in the overall goal for inputs that omit one. */
-function withDefaults(inputs: Input[], goal?: string): Input[] {
+function withDefaults(inputs: Test[], goal?: string): Test[] {
   return inputs.map((input) => {
     if (input.goal === undefined && goal !== undefined) return { ...input, goal };
     return input;
@@ -142,7 +142,7 @@ function provisionInputs(
   s: ReturnType<typeof resolveOptimizeSettings>,
   requireGoal: boolean,
   deps: EvalOptimizeDeps,
-): { inputs: Input[]; validationInputs?: Input[] } {
+): { inputs: Test[]; validationInputs?: Test[] } {
   const load = (p: string) =>
     withDefaults(loadInputs(path.resolve(p), deps.makeId ?? nanoid, { requireGoal }), s.goal);
   const inputs = load(s.inputsPath ?? "");
@@ -154,7 +154,7 @@ function provisionInputs(
   return { inputs };
 }
 
-/** Build the optimize target: the agent plus the inputs to run it on (from --goal or --inputs). */
+/** Build the optimize target: the agent plus the inputs to run it on (from --goal or --suite). */
 export function buildTarget(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): OptimizeTarget {
   // Fail here, once, rather than as a run failure per candidate iteration.
   const resolved = resolveEvalRunTarget(opts.agent);
@@ -175,7 +175,7 @@ export function buildTarget(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): 
 function goalTarget(opts: EvalOptimizeOptions): OptimizeTarget {
   return {
     agent: opts.agent,
-    inputs: [{ id: "input-1", task: opts.goal ?? "", goal: opts.goal ?? "" }],
+    inputs: [{ id: "input-1", input: opts.goal ?? "", goal: opts.goal ?? "" }],
   };
 }
 

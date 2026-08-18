@@ -24,7 +24,7 @@ export type {
   LoadedRun,
   Grade,
   GraderOptions,
-  Input,
+  Test,
   JSON,
   JSONPath,
   Score,

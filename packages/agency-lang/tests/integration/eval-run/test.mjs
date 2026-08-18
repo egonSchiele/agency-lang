@@ -58,7 +58,7 @@ node main(task: string) {
 }
 `);
   writeFileSync(join(TMP_ROOT, "inputs.json"), JSON.stringify({
-    inputs: [{ id: "interrupting", goal: "finish despite the interrupt", task: "run" }],
+    inputs: [{ id: "interrupting", goal: "finish despite the interrupt", input: "run" }],
   }));
 
   const runsDir = join(TMP_ROOT, "runs");
@@ -67,7 +67,7 @@ node main(task: string) {
     output = execSync(
       `node ${JSON.stringify(AGENCY_CLI)} eval run` +
       ` --agent ${JSON.stringify(join(agentDir, "agent.agency"))}` +
-      ` --inputs ${JSON.stringify(join(TMP_ROOT, "inputs.json"))}` +
+      ` --suite ${JSON.stringify(join(TMP_ROOT, "inputs.json"))}` +
       ` --runs-dir ${JSON.stringify(runsDir)} --run-id interrupt-e2e --no-grade`,
       { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
     );
@@ -138,7 +138,7 @@ node main(): string {
 }
 `);
   writeFileSync(join(TMP_ROOT, "cmd-inputs.json"), JSON.stringify({
-    inputs: [{ id: "cmd-e2e", goal: "writes the task to out.txt", task: "hello from a command target", files: cmdFixtures }],
+    inputs: [{ id: "cmd-e2e", goal: "writes the input to out.txt", input: "hello from a command target", files: cmdFixtures }],
   }));
   const agentCmd = `node ${AGENCY_CLI} run --policy approve-all writer.agency -- {task}`;
   let cmdOutput;
@@ -146,7 +146,7 @@ node main(): string {
     cmdOutput = execSync(
       `node ${JSON.stringify(AGENCY_CLI)} eval run` +
       ` --agent-cmd ${JSON.stringify(agentCmd)}` +
-      ` --inputs ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
+      ` --suite ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
       ` --runs-dir ${JSON.stringify(runsDir)} --run-id cmd-e2e --no-grade`,
       { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
     );
@@ -186,7 +186,7 @@ node main(): string {
     execSync(
       `node ${JSON.stringify(AGENCY_CLI)} eval run` +
       ` --agent-cmd ${JSON.stringify(`node -e 1+1 {task}`)}` +
-      ` --inputs ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
+      ` --suite ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
       ` --runs-dir ${JSON.stringify(runsDir)} --run-id cmd-clobber --no-grade`,
       { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
     );
@@ -203,7 +203,7 @@ node main(): string {
   try {
     execSync(
       `node ${JSON.stringify(AGENCY_CLI)} eval run --agent-cmd "echo hello"` +
-      ` --inputs ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
+      ` --suite ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
       ` --runs-dir ${JSON.stringify(runsDir)} --run-id cmd-noplaceholder --no-grade`,
       { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
     );

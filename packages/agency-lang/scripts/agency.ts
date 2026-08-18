@@ -798,10 +798,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
         "and one-shot (e.g. agency agent --policy approve-all -p -- {task})",
     )
     .option(
-      "--inputs <source>",
-      "Input suite: a JSON file, a directory, or a git source (URL[//subdir][?ref=...])",
+      "--suite <source>",
+      "Test suite: a JSON file, a directory, or a git source (URL[//subdir][?ref=...])",
     )
-    .option("--goal <text>", "Run one inline input with this goal")
+    .option("--goal <text>", "Run one inline test whose input and goal are both this text")
     .option("--run-id <id>", "Run id / output subdirectory")
     .option("--runs-dir <path>", "Runs output directory")
     .option("--continue-on-error", "Continue after task failures", true)
@@ -828,7 +828,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       async (opts: {
         agent?: string;
         agentCmd?: string;
-        inputs?: string;
+        suite?: string;
         goal?: string;
         runId?: string;
         runsDir?: string;
@@ -998,9 +998,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
       )
       .argument("<agent>", "Agency file target: file.agency[:node]")
       .option("--goal <text>", "Goal to optimize for")
-      .option("--inputs <fileOrDir>", "Input suite JSON file or directory")
+      .option("--suite <fileOrDir>", "Test suite JSON file or directory")
       .option("--graders <file>", "TypeScript grading module (default-exports graders)")
-      .option("--validation-inputs <fileOrDir>", "Held-out validation input suite")
+      .option("--validation-suite <fileOrDir>", "Held-out validation test suite")
       .option(
         "--validation-split <ratio>",
         "Hold out this fraction of inputs for validation",
@@ -1027,9 +1027,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
           agent: string,
           opts: {
             goal?: string;
-            inputs?: string;
+            suite?: string;
             graders?: string;
-            validationInputs?: string;
+            validationSuite?: string;
             validationSplit?: number;
             iterations?: number;
             runId?: string;

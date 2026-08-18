@@ -4,19 +4,15 @@ import type { InputBreakdown } from "./grading/gradeBreakdown.js";
  *  here describes the agent — which file, which node, how the task lands is
  *  the runner's side of the line (--agent). Shared by the eval runner and
  *  every optimizer. */
-export type Input = {
+export type Test = {
   /** Stable identifier. Auto-derived when omitted: the loader generates one
    *  via nanoid, the optimizer derives it positionally (`input-<index>`). */
   id?: string;
-  /** What the agent is told: an instruction string, or a JSON object for
+  /** What the agent is given: an instruction string, or a JSON object for
    *  agents that take structured data. Delivered as the entry node's single
-   *  positional parameter (eval entry nodes take exactly one). Required;
-   *  the loader rejects inputs without one. On-disk caveat: this type is
-   *  also the shape of a run directory's input.json, and run dirs written
-   *  before PR #739 carry args/node and NO task — read back off disk, task
-   *  may be undefined there. Grading and judging read only goal/expected/
-   *  metadata, so old runs still load. */
-  task: string | Record<string, any>;
+   *  positional parameter (eval entry nodes take exactly one). Required; the
+   *  loader rejects tests without one. */
+  input: string | Record<string, any>;
   /** The success criterion — read by the goal judge and the pairwise judge
    *  suite, never shown to the agent. Optional; required only when the
    *  default LLM judge will run. */

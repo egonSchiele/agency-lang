@@ -137,7 +137,7 @@ async function executeRun(mod: any, msg: RunInstruction): Promise<any> {
   // The trailing options object names the input explicitly, so the runtime
   // records it on agentStart without guessing from the parameters. Absent
   // (`undefined`) for a named-args run.
-  return nodeFn(...positionalArgs, { input: msg.task });
+  return nodeFn(...positionalArgs, { input: msg.input });
 }
 
 /** Resume-mode body: re-attach the shared checkpoint to each interrupt and

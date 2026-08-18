@@ -9,7 +9,7 @@ import { assertEvalRunId, assertEvalInputId } from "./ids.js";
 import type {
   EvalRunResult,
   EvalRunGrading,
-  Input,
+  Test,
   EvalRunInputResult,
   InputMetricsSummary,
 } from "./runTypes.js";
@@ -98,7 +98,7 @@ export type EvalRunState = {
 };
 
 export type PreparedInput = {
-  input: Input;
+  input: Test;
   inputDir: string;
   inputJsonPath: string;
   statelogPath: string;
@@ -111,7 +111,7 @@ export function initializeEvalRun(args: {
   runId: string;
   runsDir: string;
   agentLabel: string;
-  inputs: Input[];
+  inputs: Test[];
   continueOnError: boolean;
   startedAt: Date;
   provenance?: EvalRunProvenance;
@@ -146,7 +146,7 @@ Choose a different --run-id or delete the existing directory.`,
   };
 }
 
-export function prepareInput(state: EvalRunState, input: Input): PreparedInput {
+export function prepareInput(state: EvalRunState, input: Test): PreparedInput {
   const id = input.id ?? "";
   assertEvalInputId(id);
 

@@ -23,15 +23,15 @@ export class LlmJudge extends BaseGrader {
     super(options);
   }
 
-  protected async _run({ input, run, runAgency }: GraderInput): Promise<Grade> {
+  protected async _run({ test, run, runAgency }: GraderInput): Promise<Grade> {
     const goalPath = this.options.goalPath ?? ["goal"];
     // Prefer an inline goal (same for every input); otherwise read it from the input.
-    const goal = this.options.goal ?? getPath(input, goalPath);
+    const goal = this.options.goal ?? getPath(test, goalPath);
     // An LLM judge with no goal has nothing to judge against — fail loudly rather
     // than ask the model to grade output against an empty criterion.
     if (goal === undefined || goal === null || String(goal).trim() === "") {
       throw new Error(
-        `${this.name()}: no goal (set options.goal or provide one at ${globalThis.JSON.stringify(goalPath)} on input ${input.id ?? "(no id)"}); an LLM judge needs a goal.`,
+        `${this.name()}: no goal (set options.goal or provide one at ${globalThis.JSON.stringify(goalPath)} on test ${test.id ?? "(no id)"}); an LLM judge needs a goal.`,
       );
     }
     const agencyFile = this.options.agencyFile ?? goalJudgeFile();
@@ -40,7 +40,7 @@ export class LlmJudge extends BaseGrader {
     const output = asJudgeText(run.output);
     // The gold answer, when the input carries one — the bundled judge grades against
     // it. Empty string when absent; a custom judge node that ignores it is unaffected.
-    const expectedRaw = getPath(input, this.options.expectedPath ?? ["expected"]);
+    const expectedRaw = getPath(test, this.options.expectedPath ?? ["expected"]);
     const expected =
       expectedRaw === undefined || expectedRaw === null ? "" : asJudgeText(expectedRaw);
     const args = [String(goal), output, expected];

@@ -5,7 +5,7 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BaseGrader } from "@/eval/grading/baseGrader.js";
-import type { Grade, GraderInput, GraderOptions, Input } from "@/eval/grading/types.js";
+import type { Grade, GraderInput, GraderOptions, Test } from "@/eval/grading/types.js";
 import type { Scorecard } from "@/eval/grading/scorecard.js";
 import { BaseOptimizer } from "./baseOptimizer.js";
 import { cleanupFakeRuns, fakeRun } from "./testUtils.js";
@@ -42,7 +42,7 @@ class Probe extends BaseOptimizer {
     ws: ReturnType<Probe["fork"]>,
     source: OptimizeTargetSet,
     files: Record<string, string>,
-    inputs: Input[],
+    inputs: Test[],
   ): Promise<Scorecard> {
     return this.evaluate(ws, source, files, inputs);
   }
@@ -64,7 +64,7 @@ describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
     fs.writeFileSync(path.join(src, "data.txt"), "hello\n");
 
     mockEval.mockImplementation(
-      async (args: { runsDir: string; runId: string; inputs: Input[] }) => {
+      async (args: { runsDir: string; runId: string; inputs: Test[] }) => {
         const input = args.inputs[0];
         // A real one-input run directory: the optimizer grades it via gradeRun.
         const runDir = fakeRun(input.id ?? "a", "out", input);
@@ -95,7 +95,7 @@ describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
     const p = probe();
     const ws = p.forkAt();
     const files = { "agent.agency": "node main() { return 1 }\n" };
-    await p.evaluateAt(ws, source(), files, [{ id: "a", task: "t" }]);
+    await p.evaluateAt(ws, source(), files, [{ id: "a", input: "t" }]);
 
     expect(mockEval).toHaveBeenCalledTimes(1);
     const call = mockEval.mock.calls[0][0];
@@ -114,8 +114,8 @@ describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
     const p = probe();
     const ws1 = p.forkAt();
     const ws2 = p.forkAt();
-    await p.evaluateAt(ws1, source(), {}, [{ id: "a", task: "t" }]);
-    await p.evaluateAt(ws2, source(), {}, [{ id: "a", task: "t" }]);
+    await p.evaluateAt(ws1, source(), {}, [{ id: "a", input: "t" }]);
+    await p.evaluateAt(ws2, source(), {}, [{ id: "a", input: "t" }]);
 
     expect(ws1.key).not.toBe(ws2.key);
     expect(mockEval.mock.calls[0][0].runsDir).toContain(ws1.key);

@@ -4,7 +4,7 @@ import * as path from "path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { EvalRunInputResult, Input } from "@/eval/runTypes.js";
+import type { EvalRunInputResult, Test } from "@/eval/runTypes.js";
 
 import { AgencyRunner } from "./agencyRunner.js";
 import { grader } from "./functionGrader.js";
@@ -48,7 +48,7 @@ function recordJson(outputs: unknown[]): string {
   });
 }
 
-type Fixture = { runDir: string; result: EvalRunInputResult; input: Input };
+type Fixture = { runDir: string; result: EvalRunInputResult; input: Test };
 
 /**
  * A run directory for one input, laid out exactly as `agency eval run` writes it.
@@ -71,7 +71,7 @@ function makeRun(args: { id: string; output?: unknown; status?: "success" | "err
     fs.writeFileSync(path.join(inputDir, "error.txt"), "boom");
   }
 
-  const input: Input = { id: args.id, goal: "name the capital", task: "t", expected: "New Delhi" };
+  const input: Test = { id: args.id, goal: "name the capital", input: "t", expected: "New Delhi" };
   fs.writeFileSync(path.join(inputDir, "input.json"), globalThis.JSON.stringify(input));
 
   const result: EvalRunInputResult = {
@@ -229,9 +229,9 @@ describe("gradeRun", () => {
     let seenGoal: unknown = "not-read";
     let seenExpected: unknown = "not-read";
     const spy = grader(
-      ({ input }) => {
-        seenGoal = input.goal;
-        seenExpected = input.expected;
+      ({ test }) => {
+        seenGoal = test.goal;
+        seenExpected = test.expected;
         return 1;
       },
       { name: "spy" },

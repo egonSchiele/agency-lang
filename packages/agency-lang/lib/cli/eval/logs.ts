@@ -41,7 +41,7 @@ export function resolveRunStatelog(target: string, inputId?: string): string {
     throw new Error(
       inputId !== undefined && !ids.includes(inputId)
         ? `No input "${inputId}" in this run. Inputs: ${ids.join(", ")}`
-        : `Input "${chosen}" has no statelog at ${statelogPath} — the run may have failed before the agent started`,
+        : `Test "${chosen}" has no statelog at ${statelogPath} — the run may have failed before the agent started`,
     );
   }
   return statelogPath;

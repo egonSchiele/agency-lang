@@ -221,7 +221,7 @@ class MyOptimizer extends BaseOptimizer {
 export default (config: BaseOptimizerConfig) => new MyOptimizer(config);
 ```
 ```bash
-agency optimize foo.agency --inputs inputs.json --optimizer ./myOptimizer.ts
+agency optimize foo.agency --suite inputs.json --optimizer ./myOptimizer.ts
 ```
 
 `--optimizer` treats a value with a `/` or a `.ts`/`.js`/`.mjs` extension as a path: it's loaded with esbuild + `import()` (same as a grading module), the default-exported factory is called with the run config, and the result is used **structurally** as an `Optimizer` (`{ name, optimize }`) — no `instanceof`, so it works even across realms. This is the path for users who don't fork the repo. Can also be set as `eval.optimize.optimizer` in `agency.json`.

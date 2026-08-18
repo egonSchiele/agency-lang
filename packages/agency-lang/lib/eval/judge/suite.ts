@@ -1,4 +1,4 @@
-import type { Input } from "../runTypes.js";
+import type { Test } from "../runTypes.js";
 import { readEvalRun, type ReadEvalRunInput } from "../readRun.js";
 import { judgePair, type JudgePairArgs } from "./pairwise.js";
 import type {
@@ -95,7 +95,7 @@ export async function judgeSuite(args: JudgeSuiteArgs): Promise<SuiteVerdict> {
   for (const id of ids) {
     const inputA = runA.inputsById[id] ?? missingInput(id);
     const inputB = runB.inputsById[id] ?? missingInput(id);
-    const spec: Input = inputA.input ?? inputB.input ?? { id, task: "" };
+    const spec: Test = inputA.input ?? inputB.input ?? { id, input: "" };
     if (inputA.status !== "ok" || inputB.status !== "ok") {
       perInput.push(missingDataVerdict(spec, inputA, inputB));
       continue;
@@ -157,7 +157,7 @@ function missingInput(inputId: string): ReadEvalRunInput {
 }
 
 function missingDataVerdict(
-  input: Input,
+  input: Test,
   inputA: ReadEvalRunInput,
   inputB: ReadEvalRunInput,
 ): InputVerdict {

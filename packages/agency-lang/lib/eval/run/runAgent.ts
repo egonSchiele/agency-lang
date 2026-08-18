@@ -8,7 +8,7 @@ import type { EvalTarget } from "@/agentTarget.js";
 import type { AgencyConfig } from "@/config.js";
 import type { EvalRecord } from "@/eval/types.js";
 
-import { substituteTask } from "./commandLine.js";
+import { substituteInput } from "./commandLine.js";
 import {
   agentRunPaths,
   makeEvalRecordExtractor,
@@ -91,11 +91,11 @@ const MAX_LISTED_SEEDED_FILES = 50;
  */
 export async function runAgent(
   target: EvalTarget,
-  task: string | Record<string, any>,
+  input: string | Record<string, any>,
   options: RunAgentOptions,
   deps: RunAgentDeps = {},
 ): Promise<AgentRun> {
-  return new AgentRunner(target, task, options, deps).run();
+  return new AgentRunner(target, input, options, deps).run();
 }
 
 /** One run's worth of state — the paths, and what got seeded — so the steps
@@ -108,7 +108,7 @@ class AgentRunner {
 
   constructor(
     private readonly target: EvalTarget,
-    private readonly task: string | Record<string, any>,
+    private readonly input: string | Record<string, any>,
     private readonly options: RunAgentOptions,
     private readonly deps: RunAgentDeps,
   ) {
@@ -208,14 +208,14 @@ class AgentRunner {
     const cwd = this.paths.workdirPath;
     const statelogPath = this.paths.statelogPath;
     if (this.target.kind === "command") {
-      const argv = substituteTask(this.target.tokens, this.task);
+      const argv = substituteInput(this.target.tokens, this.input);
       return { kind: "command", argv, traceId: nanoid(), cwd, statelogPath };
     }
     return {
       kind: "file",
       compiledEntryPath: compiledEntryPath as string,
       node: this.target.node,
-      task: this.task,
+      input: this.input,
       cwd,
       statelogPath,
       code: computeCodeIdentity(this.seededAgentEntry as string),

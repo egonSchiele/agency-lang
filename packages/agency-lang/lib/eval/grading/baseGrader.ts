@@ -1,5 +1,5 @@
 import { aggregateGrades } from "./aggregate.js";
-import type { Grade, GraderInput, GraderOptions, Input } from "./types.js";
+import type { Grade, GraderInput, GraderOptions, Test } from "./types.js";
 
 /**
  * Base class for graders. Authors implement the single-shot `_run`; the base
@@ -21,7 +21,7 @@ export abstract class BaseGrader {
 
   /** Pre-flight check against an input before the run. Default: nothing to check.
    *  Match-based graders override this to fail fast on an unresolved matchOn. */
-  validateInput(_input: Input): void {
+  validateInput(_input: Test): void {
     /* no-op */
   }
 
@@ -37,7 +37,7 @@ export abstract class BaseGrader {
   }
 
   /** Whether this grader runs on `input`. Default (no inputScope) → every input. */
-  gradesInput(input: Input): boolean {
+  gradesInput(input: Test): boolean {
     const scope = this.options.inputScope;
     if (!scope) return true;
     if ("tag" in scope) {

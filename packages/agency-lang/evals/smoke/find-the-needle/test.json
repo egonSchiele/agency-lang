@@ -1,6 +1,6 @@
 {
   "goal": "answer.txt names the one file under the working directory that contains PROJECT-CANARY-7Q4X.",
-  "task": "Exactly one file in the directory tree below your current working directory contains the text PROJECT-CANARY-7Q4X. Find it and write its path to a file named answer.txt.\n\nWrite the path relative to your current working directory, with no leading ./ and nothing else in the file — for example: handbook/index.md",
+  "input": "Exactly one file in the directory tree below your current working directory contains the text PROJECT-CANARY-7Q4X. Find it and write its path to a file named answer.txt.\n\nWrite the path relative to your current working directory, with no leading ./ and nothing else in the file — for example: handbook/index.md",
   "expected": "archive/2025/q3-notes.md",
   "timeoutSec": 180
 }

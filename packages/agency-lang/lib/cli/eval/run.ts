@@ -8,7 +8,7 @@ import type { EvalRecordExtractor } from "@/eval/run/extract.js";
 import { runSuite } from "@/eval/run/runSuite.js";
 import type { EvalInputRunner } from "@/eval/run/subprocess.js";
 import type { SourceProvenance } from "@/eval/runArtifacts.js";
-import type { EvalRunResult, Input } from "@/eval/runTypes.js";
+import type { EvalRunResult, Test } from "@/eval/runTypes.js";
 import { parseSource, resolveSource } from "@/eval/sources.js";
 
 import * as fs from "fs";
@@ -22,7 +22,8 @@ export type EvalRunCliOptions = {
   agent?: string;
   /** Command agent target: the command string with a {task} placeholder. */
   agentCmd?: string;
-  inputs?: string;
+  /** The test suite: a JSON file, a directory, or a git source. */
+  suite?: string;
   goal?: string;
   runId?: string;
   runsDir?: string;
@@ -36,17 +37,14 @@ export type EvalRunCliOptions = {
   parallel?: number;
 };
 
-export function validateInputSelection(opts: {
-  inputs?: string;
-  goal?: string;
-}): "inputs" | "goal" {
-  if (opts.inputs && opts.goal) {
-    throw new Error("Provide only one of --inputs or --goal");
+export function validateInputSelection(opts: { suite?: string; goal?: string }): "suite" | "goal" {
+  if (opts.suite && opts.goal) {
+    throw new Error("Provide only one of --suite or --goal");
   }
-  if (!opts.inputs && !opts.goal) {
-    throw new Error("Provide --inputs or --goal");
+  if (!opts.suite && !opts.goal) {
+    throw new Error("Provide --suite or --goal");
   }
-  return opts.goal ? "goal" : "inputs";
+  return opts.goal ? "goal" : "suite";
 }
 
 /**
@@ -69,7 +67,7 @@ export async function evalRun(
   const graders = await resolveGraders(opts.graders, opts.grade, opts.config ?? {});
   const suite = loadSuite({
     selection,
-    inputs: opts.inputs,
+    source: opts.suite,
     goal: opts.goal,
     // A goal is required only where the default goal judge would actually
     // run: not under --no-grade, not when a suite-level module is supplied,
@@ -122,15 +120,15 @@ export async function evalRun(
 }
 
 type LoadedSuite = {
-  inputs: Input[];
+  inputs: Test[];
   provenance: { inputsSource: SourceProvenance; files: Record<string, SourceProvenance> };
 };
 
-/** Load the suite named by --inputs/--goal, resolving a git source when given
+/** Load the suite named by --suite/--goal, resolving a git source when given
  *  one, collecting source provenance for config.json as it goes. */
 function loadSuite(args: {
-  selection: "inputs" | "goal";
-  inputs?: string;
+  selection: "suite" | "goal";
+  source?: string;
   goal?: string;
   requireGoal: boolean;
   cacheRoot?: string;
@@ -150,13 +148,13 @@ function loadSuite(args: {
     filesProvenance,
     sourceCacheRoot: args.cacheRoot,
   };
-  const parsed = parseSource(args.inputs ?? "", process.cwd());
+  const parsed = parseSource(args.source ?? "", process.cwd());
   if (parsed.kind === "git") {
     const resolved = resolveSource(parsed, { cacheRoot: args.cacheRoot });
     return {
       inputs: loadInputs(resolved.dir, nanoid, { ...loadOptions, forbidGitFiles: true }),
       provenance: {
-        inputsSource: { source: args.inputs ?? "", sha: resolved.sha },
+        inputsSource: { source: args.source ?? "", sha: resolved.sha },
         files: filesProvenance,
       },
     };

@@ -69,16 +69,14 @@ describe("eval run CLI", () => {
   });
 
   it("requires exactly one of inputs or goal", () => {
-    expect(() => validateInputSelection({})).toThrow(/--inputs or --goal/);
-    expect(() => validateInputSelection({ inputs: "inputs.json", goal: "goal" })).toThrow(
-      /one of/i,
-    );
+    expect(() => validateInputSelection({})).toThrow(/--suite or --goal/);
+    expect(() => validateInputSelection({ suite: "inputs.json", goal: "goal" })).toThrow(/one of/i);
     expect(validateInputSelection({ goal: "goal" })).toBe("goal");
   });
 
   it("compiles, runs each task through the injected runner, and writes artifacts", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
-    fs.writeFileSync(agentFile, "node main(task: string) {}\n");
+    fs.writeFileSync(agentFile, "node main(input: string) {}\n");
     const runsDir = path.join(tmpDir, "runs");
 
     const result = await evalRun(
@@ -112,7 +110,7 @@ describe("eval run CLI", () => {
 
   it("rejects an empty suite instead of succeeding with zero inputs", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
-    fs.writeFileSync(agentFile, "node main(task: string) {}\n");
+    fs.writeFileSync(agentFile, "node main(input: string) {}\n");
     const inputsFile = path.join(tmpDir, "empty.json");
     fs.writeFileSync(inputsFile, JSON.stringify({ inputs: [] }));
     const runsDir = path.join(tmpDir, "runs");
@@ -120,7 +118,7 @@ describe("eval run CLI", () => {
     await expect(
       evalRun({
         agent: agentFile,
-        inputs: inputsFile,
+        suite: inputsFile,
         runsDir,
         runId: "empty",
         grade: false,
@@ -148,7 +146,7 @@ describe("eval run CLI", () => {
 
   it("extracts from workdir statelog.log when runtime overrides do not redirect the log file", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
-    fs.writeFileSync(agentFile, "node main(task: string) {}\n");
+    fs.writeFileSync(agentFile, "node main(input: string) {}\n");
     const runsDir = path.join(tmpDir, "runs");
     let extractorStatelogPath = "";
 
@@ -182,15 +180,15 @@ describe("eval run CLI", () => {
 
   it("stops after the first task error when continueOnError is false", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
-    fs.writeFileSync(agentFile, "node main(task: string) {}\n");
+    fs.writeFileSync(agentFile, "node main(input: string) {}\n");
     const runsDir = path.join(tmpDir, "runs");
     const inputsFile = path.join(tmpDir, "inputs.json");
     fs.writeFileSync(
       inputsFile,
       JSON.stringify({
         inputs: [
-          { id: "first", goal: "g1", task: "t" },
-          { id: "second", goal: "g2", task: "t" },
+          { id: "first", goal: "g1", input: "t" },
+          { id: "second", goal: "g2", input: "t" },
         ],
       }),
     );
@@ -199,7 +197,7 @@ describe("eval run CLI", () => {
     const result = await evalRun(
       {
         agent: agentFile,
-        inputs: inputsFile,
+        suite: inputsFile,
         runsDir,
         runId: "stop",
         grade: false,
@@ -240,14 +238,14 @@ describe("eval run CLI", () => {
     });
   });
 
-  it("accepts a git source for --inputs and records provenance in config.json", async () => {
+  it("accepts a git source for --suite and records provenance in config.json", async () => {
     // A local repo of test directories; local path + ?ref= exercises the same
     // resolver path as a remote URL, with no network.
     const suiteRepo = path.join(tmpDir, "suite-repo");
     fs.mkdirSync(path.join(suiteRepo, "capital", "files"), { recursive: true });
     fs.writeFileSync(
       path.join(suiteRepo, "capital", "test.json"),
-      JSON.stringify({ goal: "g", task: "t" }),
+      JSON.stringify({ goal: "g", input: "t" }),
     );
     fs.writeFileSync(path.join(suiteRepo, "capital", "files", "hint.txt"), "Paris");
     const gitInSuite = (...gitArgs: string[]) =>
@@ -260,12 +258,12 @@ describe("eval run CLI", () => {
     const agentDir = path.join(tmpDir, "agent");
     fs.mkdirSync(agentDir, { recursive: true });
     const agent = path.join(agentDir, "agent.agency");
-    fs.writeFileSync(agent, "node main(task: string) {}\n");
+    fs.writeFileSync(agent, "node main(input: string) {}\n");
 
     const result = await evalRun(
       {
         agent,
-        inputs: `${suiteRepo}?ref=${suiteSha}`,
+        suite: `${suiteRepo}?ref=${suiteSha}`,
         runsDir: path.join(tmpDir, "runs"),
         runId: "gitsuite",
         grade: false,
@@ -298,17 +296,17 @@ describe("eval run CLI", () => {
     /** An agent file plus the shared run options every grading case uses. The runs
      *  directory is a sibling of the agent's directory, never inside it: the seed
      *  copy would otherwise recurse into its own destination. */
-    function setup(runId: string, inputs: { id: string; goal: string; task: string }[]) {
+    function setup(runId: string, inputs: { id: string; goal: string; input: string }[]) {
       const agentDir = path.join(tmpDir, "agent");
       fs.mkdirSync(agentDir, { recursive: true });
       const agent = path.join(agentDir, "agent.agency");
-      fs.writeFileSync(agent, "node main(task: string) {}\n");
+      fs.writeFileSync(agent, "node main(input: string) {}\n");
       const runsDir = path.join(tmpDir, "runs");
       return { agent, inputs, runsDir, runId };
     }
 
     it("recordGrading writes the grading block into summary.json and reports a failed gate", async () => {
-      const opts = setup("graded", [{ id: "a", goal: "g", task: "t" }]);
+      const opts = setup("graded", [{ id: "a", goal: "g", input: "t" }]);
       const summary = await runSuite(
         { ...opts, perRun: { extractor: recordExtractor("hello") } },
         { runner: okRunner },
@@ -333,8 +331,8 @@ describe("eval run CLI", () => {
 
     it("counts a gate-failed input as a zero rather than zeroing the whole run", async () => {
       const opts = setup("mixed", [
-        { id: "a", goal: "g", task: "t" },
-        { id: "b", goal: "g", task: "t" },
+        { id: "a", goal: "g", input: "t" },
+        { id: "b", goal: "g", input: "t" },
       ]);
       const summary = await runSuite(
         { ...opts, perRun: { extractor: recordExtractor("hello") } },
@@ -345,7 +343,7 @@ describe("eval run CLI", () => {
         summary.runDir,
         {
           mode: "override",
-          graders: [grader(({ input }) => input.id === "a", { name: "gate", mustPass: true })],
+          graders: [grader(({ test }) => test.id === "a", { name: "gate", mustPass: true })],
         },
         {},
       );
@@ -360,7 +358,7 @@ describe("eval run CLI", () => {
       // The fail-fast ordering itself lives in evalRun: resolve → validate →
       // run → grade; the runner no longer knows graders exist.
       expect(() =>
-        validateGraders([new ExactMatch({})], { id: "a", goal: "g", task: "t" }),
+        validateGraders([new ExactMatch({})], { id: "a", goal: "g", input: "t" }),
       ).toThrow(/matchOn/);
     });
   });
@@ -386,27 +384,27 @@ describe("eval run CLI", () => {
   describe("per-test graders", () => {
     it("each test grades itself; a config module is the fallback; --graders overrides everything", async () => {
       const agentFile = path.join(tmpDir, "agent.agency");
-      fs.writeFileSync(agentFile, "node main(task: string) {}\n");
+      fs.writeFileSync(agentFile, "node main(input: string) {}\n");
       const runsDir = path.join(tmpDir, "runs");
 
       // Two test dirs: "self" carries its own grader (scores 1 on "hello"),
       // "plain" has none and falls back to the config module (scores 0).
       const suiteDir = path.join(tmpDir, "suite");
       fs.mkdirSync(path.join(suiteDir, "self"), { recursive: true });
-      fs.writeFileSync(path.join(suiteDir, "self", "test.json"), JSON.stringify({ task: "t" }));
+      fs.writeFileSync(path.join(suiteDir, "self", "test.json"), JSON.stringify({ input: "t" }));
       fs.writeFileSync(
         path.join(suiteDir, "self", "graders.ts"),
         `export default ({ output }) => (output === "hello" ? 1 : 0);`,
       );
       fs.mkdirSync(path.join(suiteDir, "plain"), { recursive: true });
-      fs.writeFileSync(path.join(suiteDir, "plain", "test.json"), JSON.stringify({ task: "t" }));
+      fs.writeFileSync(path.join(suiteDir, "plain", "test.json"), JSON.stringify({ input: "t" }));
       const fallbackModule = path.join(tmpDir, "fallback.ts");
       fs.writeFileSync(fallbackModule, `export default () => 0;`);
 
       const result = await evalRun(
         {
           agent: agentFile,
-          inputs: suiteDir,
+          suite: suiteDir,
           runsDir,
           runId: "per-test",
           config: { eval: { graders: fallbackModule } },
@@ -426,7 +424,7 @@ describe("eval run CLI", () => {
       const overridden = await evalRun(
         {
           agent: agentFile,
-          inputs: suiteDir,
+          suite: suiteDir,
           runsDir,
           runId: "override",
           graders: overrideModule,

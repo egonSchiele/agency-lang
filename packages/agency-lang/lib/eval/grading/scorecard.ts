@@ -1,9 +1,9 @@
 import type { BaseGrader } from "./baseGrader.js";
-import type { LoadedRun, Grade, Input } from "./types.js";
+import type { LoadedRun, Grade, Test } from "./types.js";
 
 export type GraderGrade = { grader: BaseGrader; grade: Grade };
 export type InputGrades = {
-  input: Input;
+  test: Test;
   /** Null when the input was never graded — the run errored, or produced no output. */
   run: LoadedRun | null;
   grades: GraderGrade[];

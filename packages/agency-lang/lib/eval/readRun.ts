@@ -2,11 +2,11 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { agentRunPaths } from "./run/extract.js";
-import type { EvalRunResult, EvalRunInputResult, Input } from "./runTypes.js";
+import type { EvalRunResult, EvalRunInputResult, Test } from "./runTypes.js";
 
 export type ReadEvalRunInput = {
   inputId: string;
-  input?: Input;
+  input?: Test;
   recordPath?: string;
   status: "ok" | "missing" | "failed";
   errorMessage?: string;
@@ -27,7 +27,7 @@ export function readEvalRun(
 
   for (const result of summary.inputs) {
     const inputDir = path.join(resolvedRunDir, "inputs", result.inputId);
-    const input = readOptionalJson<Input>(path.join(inputDir, "input.json"), onWarning);
+    const input = readOptionalJson<Test>(path.join(inputDir, "input.json"), onWarning);
     const recordPath = result.evalRecordPath || agentRunPaths(inputDir).evalRecordPath;
     const status = inputStatus(result, recordPath);
     const errorMessage =

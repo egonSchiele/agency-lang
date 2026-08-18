@@ -2,16 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import { AgencyRunner } from "../agencyRunner.js";
 import { LlmJudge } from "./llmJudge.js";
-import type { GraderInput, Input } from "../types.js";
+import type { GraderInput, Test } from "../types.js";
 import { loadedRun } from "../testUtils.js";
 
 const graderInput = (
   verdict: { score?: number; pass?: boolean; reasoning: string },
   goal: string = "Return the capital",
 ): GraderInput => {
-  const input: Input = { id: "i1", task: "t", goal };
+  const test: Test = { id: "i1", input: "t", goal };
   return {
-    input,
+    test,
     run: loadedRun("New Delhi"),
     runAgency: new AgencyRunner({}, async () => ({ data: verdict })),
   };
@@ -47,7 +47,7 @@ describe("LlmJudge", () => {
     });
     const judge = new LlmJudge({ goal: "Return the capital." }); // no agencyFile, no goalPath
     const grade = await judge.run({
-      input: { id: "a", task: "t" },
+      test: { id: "a", input: "t" },
       run: loadedRun("Paris"),
       runAgency,
     });
@@ -64,7 +64,7 @@ describe("LlmJudge", () => {
     });
     const judge = new LlmJudge({}); // default goalPath ["goal"]
     await judge.run({
-      input: { id: "a", task: "t", goal: "from input" },
+      test: { id: "a", input: "t", goal: "from input" },
       run: loadedRun("x"),
       runAgency,
     });
@@ -79,7 +79,7 @@ describe("LlmJudge", () => {
     });
     const judge = new LlmJudge({ goal: "Return the capital." }); // default expectedPath ["expected"]
     await judge.run({
-      input: { id: "a", task: "t", expected: "New Delhi" },
+      test: { id: "a", input: "t", expected: "New Delhi" },
       run: loadedRun("New Delhi"),
       runAgency,
     });

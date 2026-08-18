@@ -60,7 +60,8 @@ export function writeRunFixture(args: WriteRunFixtureArgs): string {
       path.join(inputDir, "input.json"),
       JSON.stringify({
         id: input.inputId,
-        task: input.task === undefined ? "do a thing" : input.task,
+        // The run directory's test spec field is `input` (renamed from `task`).
+        input: input.task === undefined ? "do a thing" : input.task,
       }),
     );
     if (input.omitRecord === true) {

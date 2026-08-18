@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { AgencyRunner } from "../agencyRunner.js";
 import { ContainsGrader, ExactMatchGrader, SimilarityGrader } from "./builtinGraders.js";
-import type { GraderInput, Input, JSON } from "../types.js";
+import type { GraderInput, Test, JSON } from "../types.js";
 import { loadedRun } from "../testUtils.js";
 
 const stubRunner = new AgencyRunner({}, async () => ({ data: null }));
 const graderInput = (output: JSON, metadata: Record<string, JSON>): GraderInput => {
-  const input: Input = { id: "i1", task: "t", metadata };
-  return { input, run: loadedRun(output), runAgency: stubRunner };
+  const input: Test = { id: "i1", input: "t", metadata };
+  return { test: input, run: loadedRun(output), runAgency: stubRunner };
 };
 
 describe("ExactMatchGrader", () => {
@@ -96,7 +96,7 @@ describe("matcher pre-flight validation", () => {
 
   it("validateInput throws when matchOn does not resolve on the input", () => {
     const grader = new ExactMatchGrader({ matchOn: ["metadata", "expected"] });
-    expect(() => grader.validateInput({ id: "a", task: "t" })).toThrow(
+    expect(() => grader.validateInput({ id: "a", input: "t" })).toThrow(
       /matchOn .* did not resolve/,
     );
   });
@@ -104,14 +104,14 @@ describe("matcher pre-flight validation", () => {
   it("validateInput passes when matchOn resolves", () => {
     const grader = new ExactMatchGrader({ matchOn: ["metadata", "expected"] });
     expect(() =>
-      grader.validateInput({ id: "a", task: "t", metadata: { expected: "x" } }),
+      grader.validateInput({ id: "a", input: "t", metadata: { expected: "x" } }),
     ).not.toThrow();
   });
 
   it("defaults matchOn to ['expected']", async () => {
     const grader = new ExactMatchGrader({}); // no matchOn
-    const input: Input = { id: "a", task: "t", expected: "New Delhi" };
-    const grade = await grader.run({ input, run: loadedRun("New Delhi"), runAgency: stubRunner });
+    const test: Test = { id: "a", input: "t", expected: "New Delhi" };
+    const grade = await grader.run({ test, run: loadedRun("New Delhi"), runAgency: stubRunner });
     expect(grade.score).toEqual({ kind: "binary", pass: true });
     expect(grader.describe()).toContain("expected");
   });

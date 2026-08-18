@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
-import type { Input } from "@/eval/runTypes.js";
+import type { Test } from "@/eval/runTypes.js";
 
 /** Every directory fakeRun minted; tests call cleanupFakeRuns in afterEach so
  *  optimizer runs do not litter the system temp dir. */
@@ -22,7 +22,7 @@ export function cleanupFakeRuns(): void {
  * Optimizer tests inject `runInput` seams that return this directory.
  * Registered for cleanupFakeRuns.
  */
-export function fakeRun(inputId: string, output: unknown, spec?: Input): string {
+export function fakeRun(inputId: string, output: unknown, spec?: Test): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "optimize-run-"));
   fakeRunDirs.push(root);
   const inputDir = path.join(root, "inputs", inputId);

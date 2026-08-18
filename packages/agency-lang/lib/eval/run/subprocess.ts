@@ -19,7 +19,7 @@ export type EvalRunnerJob =
       kind: "file";
       compiledEntryPath: string;
       node: string;
-      task: string | Record<string, any>;
+      input: string | Record<string, any>;
       cwd: string;
       statelogPath: string;
       /** Identity of the seeded agent code, recorded on the trace's agentStart. */
@@ -127,7 +127,7 @@ export function makeSubprocessRunner(
     return runCompiledAgentInSubprocess({
       compiledPath: job.compiledEntryPath,
       node: job.node,
-      task: job.task,
+      input: job.input,
       cwd: job.cwd,
       statelogPath: job.statelogPath,
       code: job.code,
@@ -141,7 +141,7 @@ export function makeSubprocessRunner(
 async function runCompiledAgentInSubprocess(args: {
   compiledPath: string;
   node: string;
-  task: string | Record<string, any>;
+  input: string | Record<string, any>;
   cwd: string;
   statelogPath: string;
   code: CodeIdentity;
@@ -154,7 +154,7 @@ async function runCompiledAgentInSubprocess(args: {
   const instruction = buildRunInstruction({
     scriptPath: args.compiledPath,
     node: args.node,
-    task: args.task,
+    input: args.input,
     limits,
     configOverrides: {
       observability: true,

@@ -43,7 +43,7 @@ export def headerModelLines(slots: Record<string, Resolved>): string[] {
   return lines
 }
 
-export def getHeader(): string {
+export def getHeader(brainName: string): string {
   const fig = sample(figs)
   const modelLines = headerModelLines(getResolvedSlots())
   const data = box(
@@ -68,6 +68,9 @@ export def getHeader(): string {
             left.text(line, dim: true)
           }
         }
+        left.hline()
+        left.text("Brain", bold: true, fgColor: "cyan")
+        left.text(brainName, dim: true)
         left.hline()
         left.text("Getting Started", bold: true, fgColor: "cyan")
         left.text("/help for commands · /exit to quit", dim: true)

@@ -26,8 +26,8 @@ import { exec } from "std::shell"
 import { supervise } from "std::supervise"
 import { systemMessage } from "std::thread"
 
-import { withWebSearch, getSearchBackend } from "../lib/search.agency"
-import { getSlowModel, getSlowProvider } from "../shared.agency"
+import { withWebSearch, getSearchBackend } from "../../../lib/search.agency"
+import { getSlowModel, getSlowProvider } from "../../../shared.agency"
 import { oracleAgent } from "./oracle.agency"
 import {
   reviewWrittenFiles,

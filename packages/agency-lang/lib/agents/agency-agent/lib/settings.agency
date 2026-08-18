@@ -44,7 +44,8 @@ export type Settings = {
   search?: SearchSettings;
   model?: ModelSettings;
   capabilities?: CapabilitySettings;
-  mcpServers?: Record<string, any>
+  mcpServers?: Record<string, any>;
+  brain?: string
 }
 
 /** Return a NEW ModelSettings with unknown slot keys dropped (warned). Does NOT

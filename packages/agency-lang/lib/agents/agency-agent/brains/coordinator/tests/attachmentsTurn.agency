@@ -1,6 +1,6 @@
-import { dispatchAgent } from "../lib/coordinator.agency"
-import { applyResolved } from "../shared.agency"
-import { getThread, listThreads } from "std::thread"
+import { getThread, image, listThreads } from "std::thread"
+
+import { coordinatorBrain } from "../coordinator.agency"
 
 static const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
 
@@ -9,7 +9,7 @@ static const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk
 // proves the multimodal array reached the llm() turn. listThreads with
 // lazySummarize: false enumerates real thread ids without triggering
 // the on-demand LLM summarization of closed threads (which would burn
-// mocks). currentThreadId() would NOT work here: after agentReply
+// mocks). currentThreadId() would NOT work here: after runTurn
 // returns, the active thread is the node root, not the main thread.
 def threadHasImagePlaceholder(): boolean {
   const threads = listThreads(lazySummarize: false)
@@ -29,32 +29,27 @@ def threadHasImagePlaceholder(): boolean {
   return false
 }
 
+// Detection and modality filtering are harness work (tests/turn.agency).
+// Here the brain is handed a real attachment, built the way the harness
+// builds it (lib/attachments.agency), and must put it in front of the model.
 node attachesImageToTurn(): string {
-  writeBinary("at-x.png", PNG, "/tmp") with approve
-  const reply = dispatchAgent("coordinator", "look at /tmp/at-x.png") with approve
+  // Bound to locals: `brain.init(...) with approve` miscompiles (compiler bug).
+  const brain = coordinatorBrain()
+  const init = brain.init
+  const answer = brain.runTurn
+  init({ interactive: false, grounding: "" }) with approve
+  const reply = answer("", ["look at this", image(PNG, "image/png", base64: true)]) with approve
   return "${reply}|${threadHasImagePlaceholder()}"
-}
-
-node modalitySkipsTextOnlyModel(): string {
-  applyResolved({ main: { model: "gpt-3.5-turbo", provider: "openai", via: "test" } })
-  writeBinary("at-y.png", PNG, "/tmp") with approve
-  const reply = dispatchAgent("coordinator", "look at /tmp/at-y.png") with approve
-  return "${reply}|${threadHasImagePlaceholder()}"
-}
-
-node subagentRouteIgnoresImagePath(): string {
-  // Pins spec decision 3: direct-to-subagent routes stay text-only. The
-  // code agent's reply shape is its own business (multi-llm choreography
-  // under sequential mocks) — this test only asserts the turn completed
-  // and no image part reached any thread.
-  writeBinary("at-z.png", PNG, "/tmp") with approve
-  const reply = dispatchAgent("code", "look at /tmp/at-z.png") with approve
-  return "${reply != null}|${threadHasImagePlaceholder()}"
 }
 
 node generatedImageIsShownToModel(): string {
   // The coordinator LLM calls generateImageFile; after the tool round
   // the generated image must be injected so the model can see it.
-  const reply = dispatchAgent("coordinator", "draw me a bicycle") with approve
+  // Bound to locals: `brain.init(...) with approve` miscompiles (compiler bug).
+  const brain = coordinatorBrain()
+  const init = brain.init
+  const answer = brain.runTurn
+  init({ interactive: false, grounding: "" }) with approve
+  const reply = answer("", ["draw me a bicycle"]) with approve
   return "${reply}|${threadHasImagePlaceholder()}"
 }

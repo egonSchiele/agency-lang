@@ -12,7 +12,7 @@
  */
 import { explorerAgent as stdExplorerAgent } from "std::agents/explorer"
 
-import { getSlowModel, getSlowProvider } from "../shared.agency"
+import { getSlowModel, getSlowProvider } from "../../../shared.agency"
 
 export def explorerAgent(userMsg: string): string {
   """

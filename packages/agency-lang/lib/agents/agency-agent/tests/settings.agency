@@ -16,6 +16,7 @@ import {
   getCapabilitySettings,
   ModelSettings,
  } from "../lib/settings.agency"
+import { resolveBrainName } from "../lib/turn.agency"
 
 node roundTripsTheSearchBackend(): string {
   saveSettings({
@@ -197,4 +198,19 @@ node keepsPrefixedEmbeddingSlotValue(): string {
     return "no-slots"
   }
   return "${slots["embedding"]}"
+}
+
+node roundTripsBrain(): string {
+  saveSettings({ brain: "flat" }) with approve
+  const loaded = loadSettings() with approve
+  return loaded.brain ?? ""
+}
+
+// loadSettings receives hand-edited JSON at runtime. A non-string brain must
+// not become an unusable registry key merely because the static Settings type
+// says the field is a string.
+node invalidPersistedBrainFallsBack(): string {
+  write(SETTINGS_FILE, "{\"brain\":42}", POLICY_DIR) with approve
+  const loaded = loadSettings() with approve
+  return resolveBrainName(null, loaded)
 }

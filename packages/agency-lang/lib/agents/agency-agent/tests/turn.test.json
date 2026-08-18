@@ -1,0 +1,29 @@
+{
+  "sourceFile": "turn.agency",
+  "tests": [
+    { "nodeName": "plainMessageReachesBrain", "input": "", "expectedOutput": "\"stub reply|true|array|0\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "slashCommandExpands", "input": "", "expectedOutput": "\"false|true\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "mainTargetGetsAttachment", "input": "", "expectedOutput": "\"array|1|true\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "namedTargetGetsBareTextWithoutReading", "input": "", "expectedOutput": "\"stub reply|worker|text|0|0\"", "evaluationCriteria": [{ "type": "exact" }] },
+    {
+      "nodeName": "budgetIsParsedAndReset", "input": "", "expectedOutput": "\"stub reply|true|true|true|stub reply|true|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": { "maxSeconds": 120, "maxDollars": 1.25 } }]
+    },
+    {
+      "nodeName": "parsedBudgetGuardsBrain", "input": "", "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": { "maxSeconds": null, "maxDollars": 0.000001 } },
+        { "return": "costly reply" }
+      ]
+    },
+    { "nodeName": "textOnlyModelDropsAttachment", "input": "", "expectedOutput": "\"array|0\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "sessionRunsInitAndPolicyWins", "input": "", "expectedOutput": "\"true|rejected|rejected|rejected|1|true\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "sessionPassesInteractiveContext", "input": "", "expectedOutput": "\"true|true|true|true|1\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "resolvesBrainNamePrecedence", "input": "", "expectedOutput": "\"flag-brain|settings-brain|settings-brain|coordinator\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "resolvesStartTargets", "input": "", "expectedOutput": "\"true|true|true|true\"", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

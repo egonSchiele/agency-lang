@@ -1,0 +1,13 @@
+{
+  "sourceFile": "simpleTurn.agency",
+  "tests": [
+    {
+      "nodeName": "answersATurn",
+      "input": "",
+      "expectedOutput": "\"Hi from simple!|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "Hi from simple!" }]
+    }
+  ]
+}

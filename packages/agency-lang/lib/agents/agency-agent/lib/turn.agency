@@ -1,0 +1,196 @@
+/** @module
+  @summary The harness side of a turn: which brain is selected, the one
+  session wrapper that installs the policy handler, and the per-turn work
+  (budget guard, slash expansion, attachments) that happens before the brain
+  sees the message. See docs/dev/agent-brains.md.
+*/
+import { map } from "std::array"
+import { cliPolicyHandler } from "std::policy"
+import { expandSlash } from "std::skills"
+import { Attachment } from "std::thread"
+import { pushMessage } from "std::ui/cli"
+
+import { AgentBrain, BrainContext } from "../brains/brain.agency"
+import { detectAttachments, modalityFilter } from "./attachments.agency"
+import {
+  TURN_BUDGET_LABEL,
+  budgetTime,
+  budgetCost,
+  parseTurnBudget,
+  turnBudgetHandler,
+  lastTurnPartial,
+  clearTurnPartial,
+ } from "./budget.agency"
+import { projectCommands } from "./commandPalette.agency"
+import { ALWAYS_FIELDS } from "./config.agency"
+import { groundingText } from "./grounding.agency"
+import { getPolicyForAgent } from "./policy.agency"
+import { Settings } from "./settings.agency"
+
+export static const DEFAULT_BRAIN = "coordinator"
+
+// The brain this run talks to. Set once by main(); read by runTurn/runSession.
+let _brain: AgentBrain | null = null
+
+// The `--policy` argument (a built-in name or a policy-file path), or ""
+// when absent. main() sets it; policyHandlerFor() reads it.
+let _policyArg: string = ""
+
+export def setBrain(brain: AgentBrain) {
+  _brain = brain
+}
+
+export def currentBrain(): AgentBrain | null {
+  return _brain
+}
+
+// A missing brain is a harness bug: main() must call setBrain() before
+// runSession or runTurn.
+static const NO_BRAIN = "No brain selected: main() must call setBrain() first"
+
+export def setPolicyArg(arg: string) {
+  _policyArg = arg
+}
+
+export def resolveStartTarget(
+  brain: AgentBrain,
+  requested: string,
+): string | null {
+  """
+  Normalize the CLI's `main` alias to the empty main target and reject names
+  the selected brain does not expose.
+  """
+  let target = requested
+  if (target == "main") {
+    target = ""
+  }
+  if (target != "" && !brain.startTargets.includes(target)) {
+    return null
+  }
+  return target
+}
+
+export def resolveBrainName(flag: string | null, settings: Settings): string {
+  """
+  Which brain to run: the --brain flag, else the `brain` setting, else the
+  default.
+  """
+  if (flag != null && flag != "") {
+    return flag
+  }
+  // settings.json is hand-editable, so check the runtime shape, not just
+  // the declared type.
+  const fromSettings = settings.brain
+  if (fromSettings is string && fromSettings != "") {
+    return fromSettings
+  }
+  return DEFAULT_BRAIN
+}
+
+def buildBrainContext(interactive: boolean): BrainContext {
+  return {
+    interactive: interactive,
+    grounding: groundingText()
+  }
+}
+
+// Load (or initialize) the policy and return the installed CLI policy handler.
+def policyHandlerFor(interactive: boolean): any {
+  const { policyFile, sessionPolicy } = getPolicyForAgent(_policyArg, interactive)
+  return cliPolicyHandler(
+    file: policyFile,
+    fields: ALWAYS_FIELDS,
+    policy: sessionPolicy,
+  )
+}
+
+export def runSession(interactive: boolean, body: () -> void raises <*>) {
+  """
+  The only place a brain is called. Installs the policy handler, runs the
+  brain's `init` under it, then runs `body` (the one-shot turn or the REPL)
+  under it. Both production paths go through here.
+  """
+  const brain = currentBrain()
+  if (brain == null) {
+    throw(NO_BRAIN)
+    return
+  }
+  const context = buildBrainContext(interactive)
+  const handler = policyHandlerFor(interactive)
+  handle {
+    brain.init(context)
+    body()
+  } with handler
+}
+
+def checkForAttachments(expanded: string): Attachment[] {
+  // Auto-attach image/PDF files the user referenced (drag-drop or typed
+  // path), filtered to what the resolved model accepts. Never silent:
+  // every attach and every skip prints a visible line.
+  const detected = modalityFilter(detectAttachments(expanded))
+  for (skippedFile in detected.skipped) {
+    pushMessage(
+      color.yellow("📎 skipped ${skippedFile.label} (${skippedFile.reason})"),
+    )
+  }
+  if (detected.attached.length == 0) {
+    return []
+  }
+  for (item in detected.attached) {
+    pushMessage(color.dim("📎 attached ${item.label}"))
+  }
+  const attachments = map(detected.attached) as item {
+    return item.attachment
+  }
+  return attachments
+}
+
+def dispatchToBrain(target: string, userMsg: string): string {
+  const brain = currentBrain()
+  if (brain == null) {
+    throw(NO_BRAIN)
+    return ""
+  }
+  const expanded = expandSlash(userMsg, projectCommands)
+  if (target != "") {
+    return brain.runTurn(target, expanded)
+  }
+  const attachments = checkForAttachments(expanded)
+  return brain.runTurn("", [expanded, ...attachments])
+}
+
+export def runTurn(target: string, userMsg: string): string {
+  """
+  Run one user turn under a time/cost guard parsed from the user's message.
+  A single guard wraps the whole turn — the brain and every subagent it
+  calls — so the budget is a true total. When the guard trips,
+  `turnBudgetHandler` asks the user whether to grant more and resumes in
+  place, or stops.
+  """
+  parseTurnBudget(userMsg)
+  clearTurnPartial()
+  handle {
+    const result = guard(time: budgetTime(), cost: budgetCost(), label: TURN_BUDGET_LABEL) {
+      return dispatchToBrain(target, userMsg)
+    }
+    return match(result) {
+      success(reply) => reply
+      failure(f) => {
+        let dimension = "cost"
+        if (f.type == "timeoutFailure") {
+          dimension = "time"
+        }
+        // Show the best-so-far draft the handler kept, if any. The draft is
+        // the innermost saveDraft from anywhere in the turn.
+        const partial = lastTurnPartial()
+        if (partial != null && partial != "") {
+          const header = color.yellow(
+            "⏳ Stopped (over the ${dimension} budget). Best answer so far:",
+          )
+          return "${header}\n\n${partial}"
+        }
+        return color.yellow("⏳ Stopped: over the ${dimension} budget for this turn.")
+      }
+    }
+  } with turnBudgetHandler
+}

@@ -1,0 +1,17 @@
+import { simpleBrain } from "../simple.agency"
+import { threadHasSystemText } from "../../../tests/threadText.agency"
+
+// One turn is one LLM call, and the grounding from init reaches the system
+// prompt of the brain's thread.
+node answersATurn(): string {
+  // Bound to locals: `brain.init(...) with approve` miscompiles (compiler bug).
+  const brain = simpleBrain()
+  const init = brain.init
+  const answer = brain.runTurn
+  init({
+    interactive: false,
+    grounding: "GROUNDING-MARKER-1c9e"
+  }) with approve
+  const reply = answer("", ["hello"]) with approve
+  return "${reply}|${threadHasSystemText("GROUNDING-MARKER-1c9e")}"
+}

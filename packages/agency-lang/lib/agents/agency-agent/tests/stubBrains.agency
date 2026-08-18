@@ -1,0 +1,143 @@
+/*
+ * Stub brains for the harness tests. `recording` records what the harness
+ * handed it; `selfApproving` raises an interrupt it approves itself, to prove
+ * the harness policy handler still gets a vote; `costly` makes one
+ * deterministic LLM call so the real turn guard has a cost to trip on.
+ */
+import { Attachment } from "std::thread"
+
+import { AgentBrain, BrainContext } from "../brains/brain.agency"
+
+let _initCount = 0
+let _lastTarget = ""
+let _lastPromptKind = "" // "text" | "array"
+let _lastText = ""
+let _lastAttachmentCount = 0
+let _lastContextInteractive = false
+let _lastGrounding = ""
+let _initPolicyOutcome = "not-run"
+
+export def initCount(): number {
+  return _initCount
+}
+
+export def lastTarget(): string {
+  return _lastTarget
+}
+
+export def lastPromptKind(): string {
+  return _lastPromptKind
+}
+
+export def lastText(): string {
+  return _lastText
+}
+
+export def lastAttachmentCount(): number {
+  return _lastAttachmentCount
+}
+
+export def lastContextInteractive(): boolean {
+  return _lastContextInteractive
+}
+
+export def lastGrounding(): string {
+  return _lastGrounding
+}
+
+export def initPolicyOutcome(): string {
+  return _initPolicyOutcome
+}
+
+def recordingInit(context: BrainContext) {
+  _initCount = _initCount + 1
+  _lastContextInteractive = context.interactive
+  _lastGrounding = context.grounding
+}
+
+def recordingRunTurn(
+  target: string,
+  prompt: string | (string | Attachment)[],
+): string {
+  _lastTarget = target
+  match(prompt) {
+    text: string => {
+      _lastPromptKind = "text"
+      _lastText = text
+      _lastAttachmentCount = 0
+    }
+    parts: (string | Attachment)[] => {
+      _lastPromptKind = "array"
+      _lastText = "${parts[0]}"
+      _lastAttachmentCount = parts.length - 1
+    }
+  }
+  return "stub reply"
+}
+
+export def recordingBrain(): AgentBrain {
+  return {
+    name: "recording",
+    description: "test stub that records its arguments",
+    startTargets: ["worker"],
+    init: recordingInit,
+    runTurn: recordingRunTurn
+  }
+}
+
+// A function that must ask before it acts. The stub approves it itself.
+def touchy(): string {
+  raise test::stub("may I?")
+  return "approved"
+}
+
+// Catch the result so init completes even when the outer harness policy
+// rejects the stub's own approval. The recorded value proves init itself ran
+// inside that outer policy, not merely before the session body.
+def selfApprovingInit(context: BrainContext) {
+  recordingInit(context)
+  const outcome = try touchy() with approve
+  _initPolicyOutcome = match(outcome) {
+    success(_) => "approved"
+    failure(_) => "rejected"
+  }
+}
+
+def selfApprovingRunTurn(
+  target: string,
+  prompt: string | (string | Attachment)[],
+): string {
+  const outcome = try touchy() with approve
+  return match(outcome) {
+    success(value) => value
+    failure(_) => "rejected"
+  }
+}
+
+export def selfApprovingBrain(): AgentBrain {
+  return {
+    name: "self-approving",
+    description: "test stub that pre-approves its own interrupt",
+    startTargets: [],
+    init: selfApprovingInit,
+    runTurn: selfApprovingRunTurn
+  }
+}
+
+// One deterministic LLM call gives the real turn guard non-zero cost.
+def costlyRunTurn(
+  target: string,
+  prompt: string | (string | Attachment)[],
+): string {
+  return llm("Return the test reply.")
+}
+
+export def costlyBrain(): AgentBrain {
+  return {
+    name: "costly",
+    description: "test stub that incurs deterministic LLM cost",
+    startTargets: [],
+    init: recordingInit,
+    runTurn: costlyRunTurn
+  }
+}

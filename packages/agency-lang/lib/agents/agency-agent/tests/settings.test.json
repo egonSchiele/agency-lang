@@ -120,6 +120,26 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "roundTripsBrain",
+      "input": "",
+      "expectedOutput": "\"flat\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "invalidPersistedBrainFallsBack",
+      "input": "",
+      "expectedOutput": "\"coordinator\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

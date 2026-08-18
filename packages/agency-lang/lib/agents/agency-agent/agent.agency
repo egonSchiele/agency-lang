@@ -1,141 +1,34 @@
-import { localModelsSupported, listModelNames } from "std::agency/local"
 import { parseArgs } from "std::args"
 import { map } from "std::array"
-import { today } from "std::date"
-import { generateImage } from "std::image"
-import { listHostedModels, hostedModelInfo, setLlmOptions } from "std::llm"
-import { setMemoryId, disableMemory } from "std::memory"
-import { basename, dirname } from "std::path"
-import {
-  ScopedRuleFields,
-  cliPolicyHandler,
-  parsePolicyFile,
-  setPolicy,
-  minimalAutoApprovePolicy,
-  recommendedAutoApprovePolicy,
-  builtinPolicy,
-  builtinPolicyNames,
-  BUILTIN_POLICIES,
- } from "std::policy"
-import { exists } from "std::shell"
-import { commandsDir, expandSlash } from "std::skills"
-import { highlight } from "std::syntax"
+import { setLlmOptions } from "std::llm"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
-import {
-  Attachment,
-  attachToReply,
-  getCost,
-  getModelCosts,
-  image,
-  systemMessage,
- } from "std::thread"
-import { chooseOption, ChoiceItem } from "std::ui"
+import { getCost } from "std::thread"
 import {
   clearMessages,
   pushMessage,
   repl,
   clearScreen,
-  clearHistory,
  } from "std::ui/cli"
 
+import { brainByName, allBrains, brainFlagHelp } from "./brains/registry.agency"
 import { parseAgentArgs } from "./lib/args.agency"
-import { detectAttachments, modalityFilter } from "./lib/attachments.agency"
-import { showCapabilities, editCapabilities } from "./lib/capabilitiesUi.agency"
-import { mergedPalette, projectCommands } from "./lib/commandPalette.agency"
-import {
-  POLICY_PATH,
-  SESSION_POLICY_PATH,
-  HISTORY_PATH,
-  ALWAYS_FIELDS,
- } from "./lib/config.agency"
-import {
-  runTurn,
-  setGroundingContext,
-  loadAgentsMd,
-  maybeEnableMemory,
-  checkMainPrompts,
-  START_AGENTS,
- } from "./lib/coordinator.agency"
 import { getHeader } from "./lib/header.agency"
-import { generateImageFile } from "./lib/images.agency"
-import { getMcpTools, maybeLoadMcp, mcpSlashCommand } from "./lib/mcp.agency"
-import { filterHostedModels, ModelFilters } from "./lib/modelFilters.agency"
-import {
-  parseModelFlag,
-  parseModelSpec,
-  knownProviders,
-  missingProviderEnvVar,
-  Resolved,
- } from "./lib/models.agency"
-import {
-  givePolicyChoice,
-  printPolicyHelp,
-  getPolicyForAgent,
- } from "./lib/policy.agency"
-import { startInteractive, renderAgentResponse } from "./lib/repl.agency"
-import {
-  buildLayers,
-  resolveAll,
-  diffResolved,
-  Ctx,
-  SlotChange,
- } from "./lib/resolution.agency"
-import {
-  configureSearch,
-  setSearchBackend,
-  getSearchBackend,
-  availableBackendItems,
- } from "./lib/search.agency"
-import {
-  Session,
-  switchModel,
-  reactToSlotChange,
-  modelChoiceItems,
-  parseModelsFilters,
-  markMemoryEmbeddingsPinned,
-  pickModelsForAgent,
- } from "./lib/session.agency"
-import {
-  getCapabilitySettings,
-  getModelSettings,
-  loadSettings,
-  saveSettings,
- } from "./lib/settings.agency"
-import { SLOTS } from "./lib/slots.agency"
+import { maybeLoadMcp } from "./lib/mcp.agency"
+import { printPolicyHelp } from "./lib/policy.agency"
+import { startInteractive } from "./lib/repl.agency"
+import { pickModelsForAgent, maybeEnableMemory } from "./lib/session.agency"
+import { loadSettings } from "./lib/settings.agency"
 import { setDebug, setVerbose, setInteractive } from "./lib/trace.agency"
 import {
-  truncate,
-  formatArgs,
-  formatToolResponse,
-  retryReasonLabel,
-  formatTurnFailure,
- } from "./lib/utils.agency"
-import { renderLLMCallResponse } from "./lib/utils/renderLLMCallResponse.agency"
-import {
-  configureModels,
-  configureLocalModel,
-  enableAgentMemory,
-  getResolvedSlots,
-  applyResolved,
-  promoteAll,
-  currentProvider,
-  resolveMaxToolCallRounds,
-  getCapabilities,
-  getCapabilitiesResolved,
-  getCapabilityModelKey,
-  getCapabilityProvider,
-  refreshCapabilities,
-  embeddingKeyStatus,
-  memoryEnablePlan,
-  overrideFromResolved,
-  embeddingsOverride,
-  providerEnvMissing,
- } from "./shared.agency"
-import { codeAgent, setCodeOneShot } from "./subagents/code.agency"
-import { explorerAgent } from "./subagents/explorer.agency"
-import { oracleAgent } from "./subagents/oracle.agency"
-import { researchAgent } from "./subagents/research.agency"
-import { reviewAgent } from "./subagents/review.agency"
+  setBrain,
+  runTurn,
+  runSession,
+  setPolicyArg,
+  resolveBrainName,
+  resolveStartTarget,
+ } from "./lib/turn.agency"
+import { formatTurnFailure } from "./lib/utils.agency"
+import { resolveMaxToolCallRounds, getCapabilities } from "./shared.agency"
 
 
 // UI mode select — one-line swap between the alt-screen TUI and the
@@ -146,44 +39,20 @@ import { reviewAgent } from "./subagents/review.agency"
 //
 //import { clearMessages, pushMessage, repl } from "std::ui"
 
-// The `--policy` argument (a built-in name or a policy-file path), or "" when
-// absent. CLI-owned: main() sets it, setupSession() reads it.
-let _policyArg: string = ""
-
-
-def setupSession(interactive: boolean): any {
-  setAgentCwd(cwd())
-
-  // Grounding: the LLM shouldn't have to ask where it is or what day it
-  // is. Also load `AGENTS.md` if present.
-  const projectContext = loadAgentsMd(cwd()) with approve
-  const grounding = """
-
-  Current date: ${today()}
-  Current working directory: ${cwd()}
-  ${projectContext}
-  """
-  setGroundingContext(grounding)
-
-  const { policyFile, sessionPolicy } = getPolicyForAgent(_policyArg, interactive)
-
-  return cliPolicyHandler(
-    file: policyFile,
-    fields: ALWAYS_FIELDS,
-    policy: sessionPolicy,
-  )
-}
-
 def oneShotAgent(target: string, prompt: string): string {
   setInteractive(false)
-  const handler = setupSession(interactive: false)
-  handle {
+  let reply = ""
+  runSession(false) {
     const result = try runTurn(target, prompt)
-    return match(result) {
-      success(r) => r
-      failure(f) => formatTurnFailure("${f.error}")
+    // Not `match`: a match expression inside a block body keeps its value on
+    // the wrong stack, so `reply` would end up null (compiler bug).
+    if (result is success(r)) {
+      reply = r
+    } else if (result is failure(f)) {
+      reply = formatTurnFailure("${f.error}")
     }
-  } with handler
+  }
+  return reply
 }
 
 /* A seeded turn is if the user invokes the Agency agent with
@@ -193,7 +62,7 @@ It means that agent starts with an initial prompt already there to respond to. *
 node main() {
   // Parse CLI flags first — `parseArgs` exits on --help / --version /
   // usage errors, before any handlers or the TUI are installed.
-  const args = parseAgentArgs()
+  const args = parseAgentArgs(brainFlagHelp())
 
   // NOTE: --trace / --log / --agent-home are declared here only for
   // --help and so parseArgs accepts them. runBundledAgent extracts them from
@@ -208,8 +77,6 @@ node main() {
     setVerbose(true)
   }
 
-  checkMainPrompts()
-
   // `--policy` is an optional-value flag: a bare `--policy` (no name or
   // path) prints the usage + the built-in policies and exits, rather than
   // silently doing nothing.
@@ -217,7 +84,30 @@ node main() {
     printPolicyHelp()
     process.exit(0)
   }
-  _policyArg = args.flags.policy ?? ""
+  setPolicyArg(args.flags.policy ?? "")
+
+  const brainName = resolveBrainName(args.flags.brain ?? null, loadSettings())
+  const brain = brainByName(brainName)
+  if (brain == null) {
+    const names = map(allBrains(), \entry -> entry.name).join(", ")
+    print(color.red("Unknown --brain value: ${brainName}. Valid: ${names}"))
+    process.exit(1)
+    return
+  }
+  setBrain(brain)
+
+  // Validate the --agent target up front, before any model or session setup.
+  const requestedStartTarget = args.flags.agent ?? ""
+  const resolvedStartTarget = resolveStartTarget(brain, requestedStartTarget)
+  let startAgent = ""
+  if (resolvedStartTarget == null) {
+    const validTargets = ["main", ...brain.startTargets].join(", ")
+    print(color.red("Unknown --agent value: ${requestedStartTarget}. Valid for the ${brain.name} brain: ${validTargets}"))
+    process.exit(1)
+    return
+  } else {
+    startAgent = resolvedStartTarget
+  }
 
   pickModelsForAgent(args)
 
@@ -234,16 +124,6 @@ node main() {
   // would otherwise look like a flag.
   const positionalQuery = args.positionals.join(" ")
   const hasQuery = positionalQuery != ""
-  const startAgent = args.flags.agent ?? ""
-  // Validate the target subagent name up front (empty = coordinator).
-  if (startAgent != "" && !START_AGENTS.includes(startAgent)) {
-    print(
-      color.red(
-      "Unknown --agent value: ${startAgent}. Valid: ${START_AGENTS.join(", ")}",
-    ),
-    )
-    process.exit(1)
-  }
 
   const wantInteractive = args.flags.interactive
 
@@ -275,11 +155,7 @@ node main() {
     })
   }
 
-  // One-shot autonomy: tell the code subagent there is no human to answer
-  // questions and no next turn, so it must drive to a finished artifact.
-  // Set before any dispatch so both the pinned `--agent code` path and the
-  // coordinator (which calls codeAgent as a tool) pick it up.
-  setCodeOneShot(isOneShot)
+  setAgentCwd(cwd())
 
   if (isOneShot) {
     let prompt = positionalQuery
@@ -296,8 +172,9 @@ node main() {
   } else {
     setTitle("Agency Agent")
     clearScreen()
-    print(getHeader())
-    const handler = setupSession(interactive: true)
-    startInteractive(handler, startAgent, positionalQuery)
+    print(getHeader(brain.name))
+    runSession(true) {
+      startInteractive(startAgent, positionalQuery)
+    }
   }
 }

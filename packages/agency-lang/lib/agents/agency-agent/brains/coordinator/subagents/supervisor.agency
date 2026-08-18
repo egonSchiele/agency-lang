@@ -22,7 +22,7 @@ import { renderFeedback } from "std::agents/lib/feedback"
 import { verifierAgent } from "std::agents/verifier"
 import { SuperviseDecision } from "std::supervise"
 
-import { truncate } from "../lib/utils.agency"
+import { truncate } from "../../../lib/utils.agency"
 
 
 // The verifier is a pulse check here, not a final gate: small budgets,

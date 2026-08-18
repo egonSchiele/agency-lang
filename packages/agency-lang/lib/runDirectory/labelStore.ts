@@ -118,7 +118,7 @@ export function openLabelStore(args: OpenLabelStoreArgs): LabelStore {
     readSession(identity: LabelSessionIdentity): LabelStoreSessionSnapshot {
       assertOpen();
       const key = `${identity.checklistId}:${identity.annotator.kind}:${identity.annotator.id}`;
-      const judgements: Record<string, EffectiveChecklistJudgement> = {};
+      const judgements: Record<string, EffectiveChecklistJudgement> = Object.create(null);
       for (const [traceId, effective] of Object.entries(snapshot.effectiveAnnotations)) {
         const judgement = effective.checklists[key];
         if (judgement !== undefined) judgements[traceId] = judgement;

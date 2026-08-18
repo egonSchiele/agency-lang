@@ -5,6 +5,7 @@ import type { EffectiveChecklistJudgement } from "@/runDirectory/annotations.js"
 import {
   currentQuestion,
   initSession,
+  itemStatus,
   reduceSession,
   sessionSnapshot,
   signOffPayload,
@@ -275,5 +276,39 @@ describe("sessionSnapshot", () => {
   it("reports an empty directory as unable to sign off", () => {
     const empty = initSession({ items: [], revision, judgements: {}, annotator });
     expect(sessionSnapshot(empty).canSignOff).toBe(false);
+  });
+});
+
+describe("trace ids that collide with Object.prototype names", () => {
+  const awkward = [item("toString", "a"), item("__proto__", "b"), item("constructor", "c")];
+
+  it("treats them as ordinary untouched items and can sign each one off", () => {
+    let state = initSession({ items: awkward, revision, judgements: {}, annotator });
+    for (const entry of awkward) {
+      expect(itemStatus(state, entry.traceId)).toBe("untouched");
+    }
+    const snapshot = sessionSnapshot(state);
+    expect(snapshot.statuses.toString).toBe("untouched");
+    expect(snapshot.scores.__proto__).toBeNull();
+    expect(snapshot.answers).toEqual({});
+    expect(snapshot.note).toBe("");
+    for (const entry of awkward) {
+      const payload = signOffPayload(state);
+      expect(payload?.traceId).toBe(entry.traceId);
+      state = reduceSession(state, {
+        kind: "annotationCommitted",
+        row: annotation({ traceId: entry.traceId, answers: payload?.answers ?? {} }),
+      });
+    }
+    expect(sessionSnapshot(state).progress.reviewed).toBe(3);
+  });
+
+  it("resumes them from folded judgements", () => {
+    const judgements: Record<string, EffectiveChecklistJudgement> = Object.create(null);
+    judgements.toString = { annotator, answers: { q_accurate: true, q_today: true }, note: "n" };
+    const state = initSession({ items: awkward, revision, judgements, annotator });
+    expect(itemStatus(state, "toString")).toBe("reviewed");
+    expect(sessionSnapshot(state).note).toBe("n");
+    expect(itemStatus(state, "__proto__")).toBe("untouched");
   });
 });

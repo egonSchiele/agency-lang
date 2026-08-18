@@ -13,6 +13,8 @@ import {
   type PrepareChecklistResult,
 } from "./checklist.js";
 import { assertBindingIsCoherent, assertDraftMatches, type Draft } from "./draft.js";
+import { own } from "@/utils/ownProperty.js";
+
 import { makeQuestionId, makeSessionId } from "./ids.js";
 import {
   initSession,
@@ -363,7 +365,7 @@ class LabelingSession {
       answersByTraceId: {
         ...this.draft.answersByTraceId,
         [pending.traceId]: {
-          ...this.draft.answersByTraceId[pending.traceId],
+          ...own(this.draft.answersByTraceId, pending.traceId),
           ...pending.answers,
         },
       },
@@ -484,7 +486,7 @@ class LabelingSession {
       hash: this.state.revision.hash,
       answers: payload.answers,
       note: payload.note,
-      activeMs: this.draft.activeMsByTraceId[payload.traceId] ?? 0,
+      activeMs: own(this.draft.activeMsByTraceId, payload.traceId) ?? 0,
     };
     const row = completeAnnotation(
       draft,
@@ -564,7 +566,7 @@ class LabelingSession {
     const now = this.parts.dependencies.monotonicClock.elapsedMs();
     const traceId = this.activeTraceId;
     if (traceId !== null) {
-      const previous = this.draft.activeMsByTraceId[traceId] ?? 0;
+      const previous = own(this.draft.activeMsByTraceId, traceId) ?? 0;
       this.draft = {
         ...this.draft,
         activeMsByTraceId: {

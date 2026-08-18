@@ -4,25 +4,17 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AgencyConfigSchema } from "@/config.js";
-
-import {
-  evalLabel,
-  resolveAnnotator,
-  resolveDataset,
-  terminalDimension,
-  type EvalLabelDependencies,
-} from "./label.js";
+import { label, resolveAnnotator, terminalDimension, type LabelDependencies } from "./label.js";
 
 let root: string;
-let sourceDir: string;
+let runDir: string;
 let checklistFile: string;
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "cli-label-"));
-  sourceDir = path.join(root, "run");
+  runDir = path.join(root, "run");
   checklistFile = path.join(root, "news.json");
-  fs.mkdirSync(sourceDir, { recursive: true });
+  fs.mkdirSync(runDir, { recursive: true });
   fs.writeFileSync(checklistFile, JSON.stringify({ name: "n", questions: [{ text: "Q?" }] }));
 });
 
@@ -30,22 +22,14 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-function fakeHost(run: (request: unknown) => Promise<void> = async () => {}) {
-  const calls: unknown[] = [];
-  return {
-    host: {
-      run: (request: unknown) => {
-        calls.push(request);
-        return run(request);
-      },
-    },
-    calls,
-  };
+function fakeController() {
+  return { snapshot: () => ({}), dispatch: async () => ({}), close: vi.fn(async () => {}) };
 }
 
-function dependencies(over: Partial<EvalLabelDependencies> = {}): EvalLabelDependencies {
+function dependencies(over: Partial<LabelDependencies> = {}): LabelDependencies {
   return {
-    makeHost: () => fakeHost().host as never,
+    openSession: vi.fn(async () => fakeController() as never),
+    runTui: vi.fn(async () => {}),
     makeScreen: () => ({ destroy: () => {} }) as never,
     isInteractive: () => true,
     environment: { USER: "adit" },
@@ -53,38 +37,6 @@ function dependencies(over: Partial<EvalLabelDependencies> = {}): EvalLabelDepen
     ...over,
   };
 }
-
-describe("config", () => {
-  it("accepts eval.dataset", () => {
-    expect(AgencyConfigSchema.safeParse({ eval: { dataset: "labels" } }).success).toBe(true);
-  });
-
-  it("rejects a non-string dataset", () => {
-    expect(AgencyConfigSchema.safeParse({ eval: { dataset: 5 } }).success).toBe(false);
-  });
-});
-
-describe("resolveDataset", () => {
-  it("accepts the flag", () => {
-    expect(resolveDataset({ dataset: "new" }, {})).toBe(path.resolve("new"));
-  });
-
-  it("prefers a flag over config", () => {
-    expect(resolveDataset({ dataset: "flag" }, { eval: { dataset: "cfg" } })).toBe(
-      path.resolve("flag"),
-    );
-  });
-
-  it("reads eval.dataset from config", () => {
-    expect(resolveDataset({}, { eval: { dataset: "configured" } })).toBe(
-      path.resolve(process.cwd(), "configured"),
-    );
-  });
-
-  it("defaults to labels/ under the invoking directory, matching runsDir", () => {
-    expect(resolveDataset({}, {})).toBe(path.resolve(process.cwd(), "labels"));
-  });
-});
 
 describe("resolveAnnotator", () => {
   it("prefers the explicit flag", () => {
@@ -118,65 +70,84 @@ describe("resolveAnnotator", () => {
   });
 });
 
-describe("evalLabel", () => {
+describe("label", () => {
   it("requires a checklist", async () => {
-    await expect(evalLabel({}, dependencies())).rejects.toThrow(/--checklist is required/);
+    await expect(label({ dir: runDir }, dependencies())).rejects.toThrow(/--checklist is required/);
   });
 
   it("reports a missing checklist file", async () => {
     await expect(
-      evalLabel({ checklist: path.join(root, "nope.json") }, dependencies()),
+      label({ dir: runDir, checklist: path.join(root, "nope.json") }, dependencies()),
     ).rejects.toThrow(/Checklist file not found/);
   });
 
-  it("refuses a non-interactive terminal before running the host", async () => {
-    const { host, calls } = fakeHost();
-    const deps = dependencies({ isInteractive: () => false, makeHost: () => host as never });
-    await expect(evalLabel({ checklist: checklistFile }, deps)).rejects.toThrow(
+  it("reports a missing run directory", async () => {
+    await expect(
+      label({ dir: path.join(root, "nope"), checklist: checklistFile }, dependencies()),
+    ).rejects.toThrow(/Run directory not found/);
+  });
+
+  it("refuses a non-interactive terminal before opening a session", async () => {
+    const deps = dependencies({ isInteractive: () => false });
+    await expect(label({ dir: runDir, checklist: checklistFile }, deps)).rejects.toThrow(
       /interactive terminal/i,
     );
-    expect(calls).toHaveLength(0);
+    expect(deps.openSession).not.toHaveBeenCalled();
   });
 
-  it("destroys the screen even when the host throws", async () => {
-    const destroyed = vi.fn();
-    const { host } = fakeHost(async () => {
-      throw new Error("host exploded");
-    });
-    const deps = dependencies({
-      makeHost: () => host as never,
-      makeScreen: () => ({ destroy: destroyed }) as never,
-    });
-    await expect(evalLabel({ checklist: checklistFile }, deps)).rejects.toThrow(/host exploded/);
-    expect(destroyed).toHaveBeenCalled();
-  });
-
-  it("runs the host with the resolved dataset, checklist and annotator", async () => {
-    const { host, calls } = fakeHost();
-    await evalLabel(
-      { checklist: checklistFile, dataset: path.join(root, "dataset") },
-      dependencies({ makeHost: () => host as never }),
-    );
-    expect(calls[0]).toEqual({
-      datasetDir: path.resolve(root, "dataset"),
+  it("opens the session with the resolved directory, checklist and annotator", async () => {
+    const deps = dependencies();
+    await label({ dir: runDir, checklist: checklistFile }, deps);
+    expect(deps.openSession).toHaveBeenCalledWith({
+      dir: path.resolve(runDir),
       checklistFile: path.resolve(checklistFile),
       annotator: { kind: "human", id: "adit" },
     });
   });
 
-  it("propagates a host failure after destroying the screen", async () => {
+  it("closes the session and destroys the screen even when the screen throws", async () => {
     const destroyed = vi.fn();
-    const { host } = fakeHost(async () => {
-      throw new Error("dataset is locked");
-    });
+    const controller = fakeController();
     const deps = dependencies({
-      makeHost: () => host as never,
+      openSession: async () => controller as never,
+      runTui: async () => {
+        throw new Error("screen exploded");
+      },
       makeScreen: () => ({ destroy: destroyed }) as never,
     });
-    await expect(evalLabel({ checklist: checklistFile }, deps)).rejects.toThrow(
-      /dataset is locked/,
+    await expect(label({ dir: runDir, checklist: checklistFile }, deps)).rejects.toThrow(
+      /screen exploded/,
     );
+    expect(controller.close).toHaveBeenCalled();
     expect(destroyed).toHaveBeenCalled();
+  });
+
+  it("closes the session when the screen cannot be created", async () => {
+    const controller = fakeController();
+    const deps = dependencies({
+      openSession: async () => controller as never,
+      makeScreen: () => {
+        throw new Error("no terminal");
+      },
+    });
+    await expect(label({ dir: runDir, checklist: checklistFile }, deps)).rejects.toThrow(
+      /no terminal/,
+    );
+    expect(controller.close).toHaveBeenCalled();
+  });
+
+  it("propagates an open failure without touching the terminal", async () => {
+    const made = vi.fn();
+    const deps = dependencies({
+      openSession: async () => {
+        throw new Error("directory is locked");
+      },
+      makeScreen: made as never,
+    });
+    await expect(label({ dir: runDir, checklist: checklistFile }, deps)).rejects.toThrow(
+      /directory is locked/,
+    );
+    expect(made).not.toHaveBeenCalled();
   });
 });
 

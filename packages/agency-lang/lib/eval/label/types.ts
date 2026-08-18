@@ -1,27 +1,16 @@
 import { z } from "zod";
 
-import type { JsonValue } from "@/utils/canonicalize.js";
+import type { Annotator } from "@/runDirectory/annotations.js";
 
-export type { JsonValue };
+export type { Annotator };
 
-/** Recursively readonly. The dataset hands these out so a caller cannot mutate
+/** Recursively readonly. The store hands these out so a caller cannot mutate
  *  loaded rows and silently desynchronise them from what is on disk. */
 export type DeepReadonly<Value> = Value extends (infer Element)[]
   ? readonly DeepReadonly<Element>[]
   : Value extends object
     ? { readonly [Key in keyof Value]: DeepReadonly<Value[Key]> }
     : Value;
-
-export const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([
-    z.null(),
-    z.boolean(),
-    z.number().finite(),
-    z.string(),
-    z.array(JsonValueSchema),
-    z.record(z.string(), JsonValueSchema),
-  ]),
-);
 
 // --- identifier shapes ---------------------------------------------------
 
@@ -30,70 +19,47 @@ const DIGEST_HEX_LENGTH = 64;
 /** Random suffix length for entity ids that are allocated, not derived. */
 export const QUESTION_ID_RANDOM_LENGTH = 10;
 export const CHECKLIST_ID_RANDOM_LENGTH = 10;
-export const ANNOTATION_ID_RANDOM_LENGTH = 12;
 
 const hexDigest = `[a-f0-9]{${DIGEST_HEX_LENGTH}}`;
 /** Anchored and filesystem-safe: these ids become path segments and file names. */
-export const OutputIdSchema = z.string().regex(new RegExp(`^out_${hexDigest}$`));
-export const OccurrenceIdSchema = z.string().regex(new RegExp(`^occ_${hexDigest}$`));
 export const SessionIdSchema = z.string().regex(new RegExp(`^session_${hexDigest}$`));
 export const ContentHashSchema = z.string().regex(new RegExp(`^sha256:${hexDigest}$`));
 export const ChecklistIdSchema = z.string().regex(/^cl_[A-Za-z0-9_-]+$/);
 export const QuestionIdSchema = z.string().regex(/^q_[A-Za-z0-9_-]+$/);
-export const AnnotationIdSchema = z.string().regex(/^ann_[A-Za-z0-9_-]+$/);
+/** A trace id is whatever the statelog says it is; it only has to be present. */
+export const TraceIdSchema = z.string().min(1);
 
-// --- records -------------------------------------------------------------
+// --- items ---------------------------------------------------------------
 
-/** Field names are display-safe and stable: they become headers in the screen
- *  and keys in exported training data. The charset also means a name can never
- *  carry a control character or a `{style-tag}`. */
+/** Field names are display-safe and stable: they become headers on the screen.
+ *  The charset also means a name can never carry a control character or a
+ *  `{style-tag}`. */
 export const FieldNameSchema = z.string().regex(/^[a-z][a-z0-9_]*$/);
 
-/** A record is a map of named text. Values are strings because the stored
- *  artifact must be exactly the bytes a human read and an agent will read. */
-export const FieldsSchema = z
-  .record(FieldNameSchema, z.string())
-  .refine((fields) => Object.keys(fields).length > 0, {
-    message: "a record must have at least one field",
-  });
+/** What the screen shows for one trace: named text, e.g. `input` and `output`. */
+export const FieldsSchema = z.record(FieldNameSchema, z.string());
 
 export type Fields = z.infer<typeof FieldsSchema>;
 
 // --- identities ----------------------------------------------------------
 
-export type Annotator = {
-  kind: "human" | "llm" | "code";
-  id: string;
-};
-
 export const AnnotatorSchema = z
   .object({
-    kind: z.enum(["human", "llm", "code"]),
+    kind: z.enum(["human", "grader", "judge", "harness"]),
     id: z.string().min(1),
   })
   .strict();
 
-/** Everything a resumable session is bound to. Order of `outputIds` is part of
- *  the identity: a draft resumed against a differently ordered source would
- *  attach answers to the wrong outputs. */
+/** Everything a resumable session is bound to. Order of `traceIds` is part of
+ *  the identity: a draft resumed against a differently ordered directory would
+ *  attach answers to the wrong traces. */
 export type SessionIdentity = {
-  outputIds: string[];
+  traceIds: string[];
   checklistId: string;
   annotator: Annotator;
 };
 
-// --- durable rows --------------------------------------------------------
-
-export const ManifestSchema = z
-  .object({
-    schemaVersion: z.literal(2),
-    /** Display order for fields. A dataset-level property so the same field means
-     *  the same thing everywhere and order can never leak into identity. */
-    fieldOrder: z.array(FieldNameSchema),
-  })
-  .strict();
-
-export type Manifest = z.infer<typeof ManifestSchema>;
+// --- checklists ----------------------------------------------------------
 
 export const ChecklistQuestionSchema = z
   .object({
@@ -166,161 +132,16 @@ export const ChecklistDefinitionSchema = z
 
 export type ChecklistDefinition = z.infer<typeof ChecklistDefinitionSchema>;
 
-export const CorpusRowSchema = z
-  .object({
-    schemaVersion: z.literal(2),
-    outputId: OutputIdSchema,
-    capturedAt: z.string().min(1),
-    fields: FieldsSchema,
-  })
-  .strict();
-
-export type CorpusRow = z.infer<typeof CorpusRowSchema>;
-
-/**
- * Where one observation of a record came from.
- *
- * A discriminated union is safe here in a way it is not for a record's
- * identity: nothing about an output id flows through `kind`. This is the one
- * place the shape of a source is allowed to matter.
- */
-export const OccurrenceOriginSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("run"),
-      traceId: z.string().min(1),
-      inputId: z.string().min(1),
-      finalOutputIndex: z.number().int().nonnegative(),
-      runStartedAtMs: z.number().finite().nullable(),
-      /** Defaulted rather than optional: an eval record with no metrics block is
-       *  ordinary, but a metrics block holding non-strings is malformed. */
-      models: z.array(z.string()).default([]),
-      agent: JsonValueSchema,
-      rawTask: JsonValueSchema.nullable(),
-      /** Pre-projection structured output. Provenance only: never hashed into a
-       *  record id, never displayed, never exported. */
-      rawValue: JsonValueSchema.nullable(),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("file"),
-      /** Path normalized relative to the batch root, so the same folder ingested
-       *  from two working directories yields the same key. */
-      itemKey: z.string().min(1),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("json"),
-      /** Normalized path of the JSON document relative to its batch root. Without
-       *  it, equal strings at index 0 of two documents would be one observation. */
-      itemKey: z.string().min(1),
-      itemIndex: z.number().int().nonnegative(),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("statelog"),
-      /** Stable across renames and copies — a trace id moves with nothing. */
-      traceId: z.string().min(1),
-      /** Which recorded output was labeled, so two `evalOutput()` values from one
-       *  trace stay distinct observations (mirrors `run`'s finalOutputIndex). */
-      finalOutputIndex: z.number().int().nonnegative(),
-    })
-    .strict(),
-]);
-
-export type OccurrenceOrigin = z.infer<typeof OccurrenceOriginSchema>;
-
-/**
- * What makes one observation distinct from another.
- *
- * Only the stable locator, never the descriptive fields beside it. Hashing
- * `models` or `agent` into the identity would make a corrected model name look
- * like a second observation of the same execution, and per-source counts would
- * then overstate how many times a source produced a record — which is the one
- * question this log exists to answer.
- */
-export function occurrenceLocatorOf(origin: OccurrenceOrigin): JsonValue {
-  if (origin.kind === "run") {
-    return {
-      kind: origin.kind,
-      traceId: origin.traceId,
-      inputId: origin.inputId,
-      finalOutputIndex: origin.finalOutputIndex,
-    };
-  }
-  if (origin.kind === "json") {
-    return { kind: origin.kind, itemKey: origin.itemKey, itemIndex: origin.itemIndex };
-  }
-  if (origin.kind === "statelog") {
-    return {
-      kind: origin.kind,
-      traceId: origin.traceId,
-      finalOutputIndex: origin.finalOutputIndex,
-    };
-  }
-  return { kind: origin.kind, itemKey: origin.itemKey };
-}
-
-export const OccurrenceRowSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    occurrenceId: OccurrenceIdSchema,
-    outputId: OutputIdSchema,
-    source: z.string().min(1),
-    firstObservedAt: z.string().min(1),
-    origin: OccurrenceOriginSchema,
-  })
-  .strict();
-
-export type OccurrenceRow = z.infer<typeof OccurrenceRowSchema>;
-
-export type OccurrenceCandidate = {
-  outputId: string;
-  source: string;
-  origin: OccurrenceOrigin;
-};
-
-export const AnnotationRowSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    annotationId: AnnotationIdSchema,
-    outputId: OutputIdSchema,
-    annotator: AnnotatorSchema,
-    checklistId: ChecklistIdSchema,
-    checklistVersion: z.number().int().positive(),
-    checklistHash: ContentHashSchema,
-    createdAt: z.string().min(1),
-    activeMs: z.number().finite().nonnegative(),
-    coveredQuestionIds: z
-      .array(QuestionIdSchema)
-      .refine((ids) => new Set(ids).size === ids.length, {
-        message: "coveredQuestionIds must not repeat a question",
-      }),
-    /** An explicit boolean per covered question. A missing key means "not
-     *  judged" and is rejected as a dataset invariant, not here, because that
-     *  check is cross-field. */
-    answers: z.record(QuestionIdSchema, z.boolean()),
-    note: z.string(),
-  })
-  .strict();
-
-export type AnnotationRow = z.infer<typeof AnnotationRowSchema>;
-
-/** @internal Named durable boundaries inside the dataset's multi-file
+/** @internal Named durable boundaries inside the store's multi-file
  *  operations. Tests interrupt execution at one of these and reopen, so
  *  recovery is exercised at every point a crash could actually land. Declared
- *  here rather than in dataset.ts because checklist publication needs to signal
- *  them and must not import the dataset that imports it. */
-export type LabelDatasetFaultPoint =
-  | "after-record-append"
-  | "after-occurrence-append"
+ *  here rather than in labelStore.ts because checklist publication needs to
+ *  signal them and must not import the store that imports it. */
+export type LabelStoreFaultPoint =
   | "after-revision-temp-write"
   | "after-revision-rename"
   | "after-current-update"
   | "after-external-definition-sync"
   | "after-annotation-append";
 
-export type FaultHook = (point: LabelDatasetFaultPoint) => void;
+export type FaultHook = (point: LabelStoreFaultPoint) => void;

@@ -2,7 +2,7 @@ import * as fs from "fs";
 
 import { nanoid } from "nanoid";
 
-import { appendDurably } from "@/eval/label/jsonl.js";
+import { appendDurably } from "./durableWrite.js";
 
 import {
   completeAnnotation,
@@ -261,6 +261,22 @@ export function recordGradingPass(
 
 export function newPassId(): string {
   return `pass_${nanoid()}`;
+}
+
+// --- appendAnnotationsUnderLock -------------------------------------------
+
+/** @internal For a run-directory owner that already holds the writer lock for
+ *  a whole session (the labeling store). Repairs a torn tail, then appends
+ *  the drafts idempotently, exactly as the public mutations do. */
+export function appendAnnotationsUnderLock(
+  dir: string,
+  drafts: readonly AnnotationDraft[],
+  options: MutationOptions = {},
+): Annotation[] {
+  const reportWarning = options.reportWarning ?? (() => {});
+  const paths = runDirPaths(dir);
+  repairTornTail(paths.annotations);
+  return appendRows(paths.annotations, drafts, options, reportWarning);
 }
 
 // --- private machinery ----------------------------------------------------

@@ -5,12 +5,8 @@ import { nanoid } from "nanoid";
 import { canonicalize, type JsonValue } from "@/utils/canonicalize.js";
 
 import {
-  ANNOTATION_ID_RANDOM_LENGTH,
   CHECKLIST_ID_RANDOM_LENGTH,
   QUESTION_ID_RANDOM_LENGTH,
-  occurrenceLocatorOf,
-  type Fields,
-  type OccurrenceCandidate,
   type SessionIdentity,
 } from "./types.js";
 
@@ -25,40 +21,11 @@ function digestOf(identity: JsonValue): string {
   return sha256(canonicalize(identity));
 }
 
-/**
- * Identity of a record: the hash of its fields.
- *
- * Not where it came from. Two runs that emit byte-identical output produced the
- * same training example and should be labelled once; which run emitted it is a
- * fact about the record, recorded in the occurrence log. Canonical JSON sorts
- * keys, so the order fields were added in cannot change an id.
- */
-export function makeOutputId(fields: Fields): string {
-  return `out_${digestOf({ ...fields })}`;
-}
-
-/**
- * Identity of one observation: which record, from which source, at which
- * locator.
- *
- * Deliberately excludes the timestamp, and everything else descriptive. Only
- * `occurrenceLocatorOf` contributes, so re-ingesting a run whose recorded model
- * name or agent provenance has changed still replays the same observation
- * rather than inventing a second one.
- */
-export function makeOccurrenceId(candidate: OccurrenceCandidate): string {
-  return `occ_${digestOf({
-    outputId: candidate.outputId,
-    source: candidate.source,
-    locator: occurrenceLocatorOf(candidate.origin),
-  })}`;
-}
-
-/** Identity of a resumable session. Includes output ORDER, so a draft can
- *  never be resumed against a differently ordered source. */
+/** Identity of a resumable session. Includes trace ORDER, so a draft can
+ *  never be resumed against a differently ordered directory. */
 export function makeSessionId(identity: SessionIdentity): string {
   return `session_${digestOf({
-    outputIds: identity.outputIds,
+    traceIds: identity.traceIds,
     checklistId: identity.checklistId,
     annotator: { ...identity.annotator },
   })}`;
@@ -84,8 +51,4 @@ export function makeChecklistId(): string {
 
 export function makeQuestionId(): string {
   return `q_${nanoid(QUESTION_ID_RANDOM_LENGTH)}`;
-}
-
-export function makeAnnotationId(): string {
-  return `ann_${nanoid(ANNOTATION_ID_RANDOM_LENGTH)}`;
 }

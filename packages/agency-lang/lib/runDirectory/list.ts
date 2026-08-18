@@ -2,6 +2,7 @@ import type { Annotation, EffectiveTraceAnnotations } from "./annotations.js";
 import { evalRecordFor, traceEnding } from "./evalRecord.js";
 import type { RunDirectorySnapshot } from "./runDir.js";
 import type { Trace } from "./traces.js";
+import { traceInputText } from "./traceText.js";
 
 /** One row per trace, for `agency runs list` and the viewer's overview. */
 export type RunSummary = {
@@ -36,7 +37,7 @@ function summarizeTrace(
   const run = effective?.run;
   return {
     traceId: trace.traceId,
-    input: inputText(start?.data.input, record.evalValues.at(-1)?.value),
+    input: traceInputText(trace, record),
     startedAt: Number.isFinite(record.startedAtMs)
       ? new Date(record.startedAtMs).toISOString()
       : null,
@@ -51,12 +52,6 @@ function summarizeTrace(
     codeHash:
       typeof start?.data.code?.closureHash === "string" ? start.data.code.closureHash : null,
   };
-}
-
-function inputText(recorded: unknown, inferred: unknown): string | null {
-  const value = recorded !== undefined ? recorded : inferred;
-  if (value === undefined || value === null) return null;
-  return typeof value === "string" ? value : JSON.stringify(value);
 }
 
 /** Weighted mean of the effective scores, on 0..1; null when there are none. */

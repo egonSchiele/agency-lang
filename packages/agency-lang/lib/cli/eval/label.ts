@@ -2,55 +2,46 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
-import type { AgencyConfig } from "@/config.js";
-import { createLabelingHost, type LabelingHost } from "@/eval/label/labelingHost.js";
+import { openLabelingSession, type LabelingSessionController } from "@/eval/label/controller.js";
+import { runLabelTui } from "@/eval/label/labelTui.js";
+import type { Annotator } from "@/eval/label/types.js";
 import { TerminalInput } from "@/tui/input/terminal.js";
 import { TerminalOutput } from "@/tui/output/terminal.js";
 import { Screen } from "@/tui/screen.js";
-import type { Annotator } from "@/eval/label/types.js";
 
-const DEFAULT_DATASET_DIRECTORY = "labels";
 const FALLBACK_ANNOTATOR_ID = "human";
 
-export type EvalLabelOptions = {
+export type LabelOptions = {
+  /** The run directory to label. */
+  dir: string;
   checklist?: string;
-  dataset?: string;
   annotator?: string;
-  config?: AgencyConfig;
 };
 
-export type DatasetLocationOptions = {
-  dataset?: string;
+/** What a session is opened with, once the CLI has resolved every flag. */
+export type LabelRequest = {
+  dir: string;
+  checklistFile: string;
+  annotator: Annotator;
 };
 
-/** @internal Injected so the fallback order is testable without a real
- *  environment or terminal. */
-export type EvalLabelDependencies = {
-  /** Built here rather than inside the host so the terminal lifecycle has one
-   *  owner: the CLI creates and destroys the screen, the host runs on it. */
+/** @internal Injected so the fallback order and the terminal lifecycle are
+ *  testable without a real environment or terminal. */
+export type LabelDependencies = {
+  /** The CLI creates and destroys the screen; the session runs on it. */
   makeScreen(): Screen;
-  makeHost(screen: Screen, currentSize: () => { width: number; height: number }): LabelingHost;
+  openSession(request: LabelRequest): Promise<LabelingSessionController>;
+  runTui: typeof runLabelTui;
   isInteractive(): boolean;
   environment: NodeJS.ProcessEnv;
   osUserName(): string | undefined;
 };
 
-/**
- * A relative dataset resolves from the invoking working directory, matching how
- * `runSuite` resolves `runsDir` — the two are sibling notions of "where this
- * project keeps its eval artifacts".
- */
-export function resolveDataset(options: DatasetLocationOptions, config: AgencyConfig): string {
-  // Flags win over config, matching how runsDir and every other CLI override
-  // behaves.
-  return path.resolve(options.dataset ?? config.eval?.dataset ?? DEFAULT_DATASET_DIRECTORY);
-}
-
 /** Who is judging. Recorded on every annotation, and part of the fold key, so
  *  it must never silently change between sessions. */
 export function resolveAnnotator(
   options: { annotator?: string },
-  dependencies: Pick<EvalLabelDependencies, "environment" | "osUserName">,
+  dependencies: Pick<LabelDependencies, "environment" | "osUserName">,
 ): Annotator {
   const explicit = options.annotator?.trim();
   if (explicit !== undefined && explicit.length > 0) {
@@ -82,15 +73,23 @@ export function terminalDimension(value: number | undefined, fallback: number): 
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-const defaultDependencies: EvalLabelDependencies = {
-  makeHost: (screen, currentSize) => createLabelingHost(screen, currentSize),
+function currentTerminalSize(): { width: number; height: number } {
+  return {
+    width: terminalDimension(process.stdout.columns, DEFAULT_COLUMNS),
+    height: terminalDimension(process.stdout.rows, DEFAULT_ROWS),
+  };
+}
+
+const defaultDependencies: LabelDependencies = {
   makeScreen: () =>
     new Screen({
       input: new TerminalInput({ suppressSigint: true }),
       output: new TerminalOutput(),
-      width: terminalDimension(process.stdout.columns, DEFAULT_COLUMNS),
-      height: terminalDimension(process.stdout.rows, DEFAULT_ROWS),
+      ...currentTerminalSize(),
     }),
+  openSession: (request) =>
+    openLabelingSession({ ...request, reportWarning: (message) => console.warn(message) }),
+  runTui: runLabelTui,
   isInteractive: () => process.stdin.isTTY === true && process.stdout.isTTY === true,
   environment: process.env,
   osUserName: () => {
@@ -103,9 +102,11 @@ const defaultDependencies: EvalLabelDependencies = {
   },
 };
 
-export async function evalLabel(
-  options: EvalLabelOptions,
-  dependencies: EvalLabelDependencies = defaultDependencies,
+/** `agency label <dir> --checklist <file>`: judge every trace in a run
+ *  directory against a checklist, on an interactive screen. */
+export async function label(
+  options: LabelOptions,
+  dependencies: LabelDependencies = defaultDependencies,
 ): Promise<void> {
   if (options.checklist === undefined || options.checklist.trim().length === 0) {
     throw new Error(
@@ -117,30 +118,44 @@ export async function evalLabel(
   if (!fs.existsSync(options.checklist)) {
     throw new Error(`Checklist file not found: ${options.checklist}`);
   }
+  if (!fs.existsSync(options.dir)) {
+    throw new Error(`Run directory not found: ${options.dir}`);
+  }
   if (!dependencies.isInteractive()) {
     throw new Error(
-      "agency eval label needs an interactive terminal: it shows outputs and reads " +
+      "agency label needs an interactive terminal: it shows outputs and reads " +
         "keystrokes. Run it directly rather than through a pipe.",
     );
   }
 
-  const config = options.config ?? {};
-  const datasetDir = resolveDataset(options, config);
+  const request: LabelRequest = {
+    dir: path.resolve(options.dir),
+    checklistFile: path.resolve(options.checklist),
+    annotator: resolveAnnotator(options, dependencies),
+  };
 
-  // The CLI owns the terminal (it created the screen); the labeling host owns
-  // the session lifecycle on it. Destroying the screen stays here.
-  const screen = dependencies.makeScreen();
-  const host = dependencies.makeHost(screen, () => ({
-    width: terminalDimension(process.stdout.columns, DEFAULT_COLUMNS),
-    height: terminalDimension(process.stdout.rows, DEFAULT_ROWS),
-  }));
+  // Open the session before taking the terminal, so a locked or malformed
+  // directory reports as a plain error rather than a flash of raw mode.
+  const controller = await dependencies.openSession(request);
+  let screen: Screen;
   try {
-    await host.run({
-      datasetDir,
-      checklistFile: path.resolve(options.checklist),
-      annotator: resolveAnnotator(options, dependencies),
+    screen = dependencies.makeScreen();
+  } catch (error) {
+    await controller.close();
+    throw error;
+  }
+  try {
+    await dependencies.runTui({
+      controller,
+      screen,
+      title: path.basename(request.dir),
+      currentSize: currentTerminalSize,
     });
   } finally {
-    screen.destroy();
+    try {
+      await controller.close();
+    } finally {
+      screen.destroy();
+    }
   }
 }

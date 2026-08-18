@@ -191,11 +191,11 @@ function statusChip(status: string): string {
   return color.brightBlack("○ untouched");
 }
 
-function headerLine(snapshot: SessionSnapshot, datasetLabel: string): string {
+function headerLine(snapshot: SessionSnapshot, title: string): string {
   const stale =
     snapshot.progress.stale > 0 ? `  ${color.yellow(`⟳ ${snapshot.progress.stale} stale`)}` : "";
   return (
-    ` ${color.bgBlue.bold(" eval label ")} ${color.brightBlack(sanitizeUntrusted(datasetLabel))}  ` +
+    ` ${color.bgBlue.bold(" label ")} ${color.brightBlack(sanitizeUntrusted(title))}  ` +
     `${color.bold.green(String(snapshot.progress.reviewed))}` +
     `${color.dim(`/${snapshot.progress.total} reviewed`)}${stale}`
   );
@@ -206,15 +206,15 @@ function itemLine(snapshot: SessionSnapshot): string {
   if (item === null) {
     return "";
   }
-  const score = snapshot.scores[item.outputId];
+  const score = snapshot.scores[item.traceId];
   const scoreText =
     score === null || score === undefined
       ? color.brightBlack("—")
       : scoreStyle(score)(score.toFixed(2));
   return (
-    ` ${color.bold.cyan(item.outputId.slice(0, 12))} ` +
+    ` ${color.bold.cyan(item.traceId.slice(0, 12))} ` +
     `${color.brightBlack(`${snapshot.itemIndex + 1}/${snapshot.items.length}`)}  ` +
-    `${statusChip(snapshot.statuses[item.outputId] ?? "untouched")}  ${scoreText}`
+    `${statusChip(snapshot.statuses[item.traceId] ?? "untouched")}  ${scoreText}`
   );
 }
 
@@ -243,7 +243,7 @@ function footerLines(snapshot: SessionSnapshot): string[] {
 
 export type RenderArgs = {
   snapshot: SessionSnapshot;
-  datasetLabel: string;
+  title: string;
   width: number;
   height: number;
   /** Left-pane scroll position, owned by the loop. */
@@ -273,7 +273,7 @@ export function labelScreen(args: RenderArgs): Element {
   const paneHeight = paneHeightFor(args.height);
 
   if (snapshot.currentItem === null) {
-    return lines([headerLine(snapshot, args.datasetLabel), "", " nothing to label"]);
+    return lines([headerLine(snapshot, args.title), "", " nothing to label"]);
   }
 
   const checklist = renderChecklist(snapshot, rightWidth);
@@ -283,7 +283,7 @@ export function labelScreen(args: RenderArgs): Element {
   const checklistScroll = followCursor(0, checklist.focusLine, paneHeight);
 
   return column(
-    line(headerLine(snapshot, args.datasetLabel)),
+    line(headerLine(snapshot, args.title)),
     line("", { fill: "━", fg: "gray" }),
     line(itemLine(snapshot)),
     row(
@@ -390,16 +390,14 @@ export function isQuitKey(event: KeyEvent): boolean {
   return event.key === "q" || (event.key === "c" && event.ctrl === true);
 }
 
-/**
- * Order the fields of one record for display.
- *
- * The dataset's `fieldOrder` decides what it knows about; anything else follows
- * alphabetically rather than in object-key order, so the layout does not depend
- * on which loader happened to build the record.
- */
-export function orderFieldNames(fields: Fields, fieldOrder: readonly string[]): string[] {
+/** Display order: what went in, then what came out. Anything else follows
+ *  alphabetically rather than in object-key order, so the layout never depends
+ *  on how the fields happened to be built. */
+const FIELD_ORDER = ["input", "output", "last_message"];
+
+export function orderFieldNames(fields: Fields): string[] {
   const present = Object.keys(fields);
-  const known = fieldOrder.filter((name) => present.includes(name));
+  const known = FIELD_ORDER.filter((name) => present.includes(name));
   const rest = present.filter((name) => !known.includes(name)).sort();
   return [...known, ...rest];
 }
@@ -411,13 +409,9 @@ export function orderFieldNames(fields: Fields, fieldOrder: readonly string[]): 
  * style tag, but the values are arbitrary text from a model, so they go through
  * `sanitizeUntrusted` before anything else touches them.
  */
-export function renderFields(
-  fields: Fields,
-  fieldOrder: readonly string[],
-  width: number,
-): string[] {
+export function renderFields(fields: Fields, width: number): string[] {
   const out: string[] = [];
-  for (const name of orderFieldNames(fields, fieldOrder)) {
+  for (const name of orderFieldNames(fields)) {
     if (out.length > 0) {
       out.push("");
     }
@@ -439,17 +433,14 @@ export function renderFields(
 export type RunLabelTuiArgs = {
   controller: LabelingSessionController;
   screen: Screen;
-  datasetLabel?: string;
+  title?: string;
   /** Current terminal size, read before every draw. Screen stores its
    *  dimensions, so without this a resize leaves stale pane widths, wrapping
    *  and scroll bounds until restart. */
   currentSize?: () => { width: number; height: number };
-  /** The dataset's display order for fields. Anything not listed renders after
-   *  it, alphabetically, so a field added by a later ingest is never hidden. */
-  fieldOrder?: readonly string[];
 };
 
-type BodyCache = { outputId: string; width: number; lines: string[] };
+type BodyCache = { traceId: string; width: number; lines: string[] };
 
 type LoopState = {
   scroll: number;
@@ -479,11 +470,11 @@ export async function runLabelTui(args: RunLabelTuiArgs): Promise<void> {
       return state;
     }
     const leftWidth = leftPaneWidthFor(args.screen.size().width);
-    if (state.body?.outputId === item.outputId && state.body.width === leftWidth) {
+    if (state.body?.traceId === item.traceId && state.body.width === leftWidth) {
       return state;
     }
-    const wrapped = renderFields(item.fields, args.fieldOrder ?? [], leftWidth);
-    return { ...state, body: { outputId: item.outputId, width: leftWidth, lines: wrapped } };
+    const wrapped = renderFields(item.fields, leftWidth);
+    return { ...state, body: { traceId: item.traceId, width: leftWidth, lines: wrapped } };
   };
 
   await args.screen.runLoop<LoopState>({
@@ -492,7 +483,7 @@ export async function runLabelTui(args: RunLabelTuiArgs): Promise<void> {
       const size = syncSize();
       return labelScreen({
         snapshot: args.controller.snapshot(),
-        datasetLabel: args.datasetLabel ?? "",
+        title: args.title ?? "",
         width: size.width,
         height: size.height,
         scroll: state.scroll,
@@ -505,12 +496,12 @@ export async function runLabelTui(args: RunLabelTuiArgs): Promise<void> {
       if (!editing && isQuitKey(event)) {
         return { ...state, done: true };
       }
-      const previousItem = snapshot.currentItem?.outputId;
+      const previousItem = snapshot.currentItem?.traceId;
       let next = state;
       const action = actionForKey(event, editing);
       if (action !== null) {
         const after = await args.controller.dispatch(action);
-        if (after.currentItem?.outputId !== previousItem) {
+        if (after.currentItem?.traceId !== previousItem) {
           next = { ...next, scroll: 0 };
         }
       }

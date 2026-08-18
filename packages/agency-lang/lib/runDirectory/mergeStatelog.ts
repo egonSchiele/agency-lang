@@ -1,4 +1,4 @@
-import { appendDurably } from "@/eval/label/jsonl.js";
+import { appendDurably } from "./durableWrite.js";
 
 import type { RunDirectoryPaths } from "./runDir.js";
 import type { Trace } from "./traces.js";

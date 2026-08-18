@@ -1,14 +1,9 @@
-import { InvalidArgumentError, type Command } from "@/vendor/commander/index.js";
+import type { Command } from "@/vendor/commander/index.js";
 
-import type { AgencyConfig } from "@/config.js";
-
-import { evalIngest, INGEST_PATH_DESCRIPTION, SOURCE_FLAG_DESCRIPTION } from "./ingest.js";
-import { evalLabel } from "./label.js";
+import { label } from "./label.js";
 
 export type LabelCommandDependencies = {
-  getConfig(): AgencyConfig;
-  evalLabel: typeof evalLabel;
-  evalIngest: typeof evalIngest;
+  label: typeof label;
   fail(message: string): void;
 };
 
@@ -19,129 +14,30 @@ function defaultFail(message: string): void {
   process.exit(2);
 }
 
-export function labelCommandDependencies(getConfig: () => AgencyConfig): LabelCommandDependencies {
-  return { getConfig, evalLabel, evalIngest, fail: defaultFail };
+export function labelCommandDependencies(): LabelCommandDependencies {
+  return { label, fail: defaultFail };
 }
 
 /**
- * Wire `label` and its subcommands onto a parent.
+ * Wire `label` onto a parent.
  *
  * Called twice — once on the program for `agency label`, once on `eval` for
  * `agency eval label` — following the same dual registration `optimize` uses.
  * The short form is what people type; the eval form keeps it discoverable
- * beside run, grade and optimize.
- *
- * **No option name may appear on both `label` and one of its subcommands.**
- * Commander gives the parent priority, wherever the flag sits on the line, so a
- * duplicate is not a conflict error — the subcommand simply receives
- * `undefined` and behaves as though the flag were never passed.
- * `enablePositionalOptions()` would fix it, but only when set on the root
- * program, where it changes option parsing for every command in the CLI.
- *
- * So `--dataset` is declared once, on `label`, and the subcommands read it from
- * their parent. It works in either position: `label --dataset x ingest …` and
- * `label ingest … --dataset x` both reach the parent.
- *
- * `label` also takes no positional, which is why ingesting and labelling are
- * always two commands. That is the shape the dataset wants anyway: you ingest
- * several sources, then label once.
+ * beside run and grade.
  */
 export function addLabelCommand(parent: Command, dependencies: LabelCommandDependencies): Command {
-  const label = parent
+  return parent
     .command("label")
-    .description("Label the examples in a dataset. Add examples with `label ingest` first")
-    .option("--dataset <dir>", "Label dataset directory (default: eval.dataset, else labels/)")
+    .description("Judge every trace in a run directory against a checklist")
+    .argument("<dir>", "Run directory (statelog.jsonl + annotations.jsonl)")
     .option("--checklist <file>", "Checklist JSON: an existing one, or { name, questions }")
     .option("--annotator <id>", "Who is labelling (default: $USER)")
-    .action(async (opts: { checklist?: string; dataset?: string; annotator?: string }) => {
+    .action(async (dir: string, opts: { checklist?: string; annotator?: string }) => {
       try {
-        await dependencies.evalLabel({ ...opts, config: dependencies.getConfig() });
+        await dependencies.label({ dir, ...opts });
       } catch (error) {
         dependencies.fail((error as Error).message);
       }
     });
-
-  label
-    .command("ingest")
-    .description("Add examples to the dataset, from a run, files, a JSON array, or a statelog")
-    .argument("<source>", INGEST_PATH_DESCRIPTION)
-    .argument("[extra...]", "Rejected: several arguments means the shell expanded an unquoted glob")
-    .option("--source <name>", SOURCE_FLAG_DESCRIPTION)
-    .option("--format <fmt>", "auto (default), run, files, json, or statelog")
-    .option("--task <text>", "Shorthand for --field task=<text>")
-    .option("--field <name=value>", "A constant field added to every record", collectRepeated, [])
-    .option("--no-task-field", "Run/statelog sources only: drop the source's own task field")
-    .option(
-      "--trace <id>",
-      "Statelog sources: a trace id to label (repeatable)",
-      collectRepeated,
-      [],
-    )
-    .option("--recursive", "Descend into subdirectories")
-    .option("--max-bytes <n>", "Per-value size cap in bytes (default 1048576)", parseByteCap)
-    .action(
-      async (
-        source: string,
-        extra: string[],
-        opts: {
-          source?: string;
-          format?: string;
-          task?: string;
-          field?: string[];
-          taskField?: boolean;
-          trace?: string[];
-          recursive?: boolean;
-          maxBytes?: number;
-        },
-        command: Command,
-      ) => {
-        try {
-          await dependencies.evalIngest({
-            ...opts,
-            dataset: datasetOptionOf(command),
-            path: source,
-            extraArgs: extra,
-            config: dependencies.getConfig(),
-          });
-        } catch (error) {
-          dependencies.fail((error as Error).message);
-        }
-      },
-    );
-
-  return label;
-}
-
-/** `--dataset` lives on `label`, so a subcommand reads it from its parent. */
-function datasetOptionOf(command: Command): string | undefined {
-  return (command.parent?.opts() as { dataset?: string } | undefined)?.dataset;
-}
-
-/** commander calls this once per repeat of a flag, accumulating the values. */
-export function collectRepeated(value: string, previous: string[]): string[] {
-  return [...previous, value];
-}
-
-/**
- * A positive whole number of bytes, or an option error.
- *
- * `parseInt` stops at the first character it cannot read, so "1.5", "12junk"
- * and "1e6" become 1, 12 and 1 — each silently capping a batch far below what
- * was asked for. Matching the whole string is the only way to reject them.
- * `InvalidArgumentError` makes commander report it as a normal option problem
- * rather than a crash.
- */
-export function parseByteCap(value: string): number {
-  if (!/^\d+$/.test(value)) {
-    throw new InvalidArgumentError(
-      `--max-bytes must be a positive whole number of bytes; got "${value}"`,
-    );
-  }
-  const parsed = Number.parseInt(value, 10);
-  if (parsed <= 0 || !Number.isSafeInteger(parsed)) {
-    throw new InvalidArgumentError(
-      `--max-bytes must be a positive whole number of bytes; got "${value}"`,
-    );
-  }
-  return parsed;
 }

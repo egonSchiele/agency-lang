@@ -15,7 +15,7 @@ easy to get wrong.
   code/<closureHash>/   # one copy of the agent's closure per code VERSION
   workdir/<traceId>/    # filesystem snapshot for that trace
   workdir/<traceId>.json  # { snapshotAt, source } — when and where from
-  checklists/<name>/    # versioned checklist snapshots (Phase 5)
+  checklists/<id>/      # versioned checklist revisions + labeling drafts (docs/dev/eval-labeling.md)
   .lock                 # present only while a writer is open
 ```
 
@@ -109,7 +109,22 @@ its pid and liveness and **never stolen**. Readers do not need it.
 judges consume — a view, never a file. `traceEnding(trace)` reads how a trace
 ended from its own events (`ok` / `error` / `unknown`); the harness's `run` row,
 when present, knows more. `summarizeRuns(snapshot)` (`list.ts`) is one
-`RunSummary` per trace for listings.
+`RunSummary` per trace for listings. `traceInputText` / `traceOutputText`
+(`traceText.ts`) are the one rule for what "the input" and "the output" of a
+trace are when shown to a person (listings, the labeling screen).
+
+## Durable writes (`durableWrite.ts`)
+
+`appendDurably` (append + fsync) and `atomicWriteValidated` (validate, write a
+temp file, fsync, rename) are the two primitives every writer here uses;
+checklist revisions and labeling drafts use them too.
+
+## Labeling (`labelStore.ts`)
+
+`openLabelStore` is the facade `agency label` works through; see
+`docs/dev/eval-labeling.md`. It holds the writer lock for the whole session and
+appends through `appendAnnotationsUnderLock`, the one `@internal` export of
+`mutations.ts`.
 
 ## Commands (`lib/cli/runDirectory/`)
 

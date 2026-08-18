@@ -917,8 +917,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
       }
     });
 
-  addLabelCommand(evalCmd, labelCommandDependencies(getConfig));
-  addLabelCommand(program, labelCommandDependencies(getConfig));
+  addLabelCommand(evalCmd, labelCommandDependencies());
+  addLabelCommand(program, labelCommandDependencies());
 
   evalCmd
     .command("judge")

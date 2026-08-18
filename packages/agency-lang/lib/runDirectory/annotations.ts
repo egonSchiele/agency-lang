@@ -30,6 +30,8 @@ export type ChecklistPayload = {
   hash: string;
   answers: Record<string, boolean>;
   note: string;
+  /** Milliseconds a person spent on this trace before signing off. */
+  activeMs?: number;
 };
 
 /** One grader's verdict on one trace in one grading pass. A pass is `passSize`
@@ -75,6 +77,7 @@ export type AnnotationDraft = {
 } & AnnotationPayload;
 
 export type Annotation = { v: 1; id: string; createdAt: string } & AnnotationDraft;
+export type ChecklistAnnotation = Annotation & { kind: "checklist" };
 
 // --- schemas --------------------------------------------------------------
 
@@ -107,45 +110,56 @@ const common = {
   sessionId: z.string().min(1).optional(),
 };
 
+const NoteAnnotationSchema = z
+  .object({ ...common, kind: z.literal("note"), text: z.string() })
+  .strict();
+
+export const ChecklistAnnotationSchema = z
+  .object({
+    ...common,
+    kind: z.literal("checklist"),
+    checklist: z.string().min(1),
+    version: z.number().int().positive(),
+    hash: z.string().min(1),
+    answers: z.record(z.string(), z.boolean()),
+    note: z.string(),
+    activeMs: z.number().finite().nonnegative().optional(),
+  })
+  .strict();
+
+const ScoreAnnotationSchema = z
+  .object({
+    ...common,
+    kind: z.literal("score"),
+    passId: z.string().min(1),
+    passSize: z.number().int().positive(),
+    completesPass: z.boolean(),
+    name: z.string().min(1),
+    score: ScoreSchema,
+    weight: z.number().finite().nonnegative(),
+    mustPass: z.boolean(),
+    feedback: z.string().optional(),
+    gradersModule: z.string().optional(),
+  })
+  .strict();
+
+const RunAnnotationSchema = z
+  .object({
+    ...common,
+    kind: z.literal("run"),
+    test: JsonValueSchema,
+    suite: z.object({ source: z.string(), sha: z.string().optional() }).strict().nullable(),
+    ended: z.enum(["ok", "error", "timeout", "cost-cap", "killed"]),
+    flags: z.record(z.string(), JsonValueSchema),
+    error: z.string().optional(),
+  })
+  .strict();
+
 export const AnnotationSchema = z.discriminatedUnion("kind", [
-  z.object({ ...common, kind: z.literal("note"), text: z.string() }).strict(),
-  z
-    .object({
-      ...common,
-      kind: z.literal("checklist"),
-      checklist: z.string().min(1),
-      version: z.number().int().positive(),
-      hash: z.string().min(1),
-      answers: z.record(z.string(), z.boolean()),
-      note: z.string(),
-    })
-    .strict(),
-  z
-    .object({
-      ...common,
-      kind: z.literal("score"),
-      passId: z.string().min(1),
-      passSize: z.number().int().positive(),
-      completesPass: z.boolean(),
-      name: z.string().min(1),
-      score: ScoreSchema,
-      weight: z.number().finite().nonnegative(),
-      mustPass: z.boolean(),
-      feedback: z.string().optional(),
-      gradersModule: z.string().optional(),
-    })
-    .strict(),
-  z
-    .object({
-      ...common,
-      kind: z.literal("run"),
-      test: JsonValueSchema,
-      suite: z.object({ source: z.string(), sha: z.string().optional() }).strict().nullable(),
-      ended: z.enum(["ok", "error", "timeout", "cost-cap", "killed"]),
-      flags: z.record(z.string(), JsonValueSchema),
-      error: z.string().optional(),
-    })
-    .strict(),
+  NoteAnnotationSchema,
+  ChecklistAnnotationSchema,
+  ScoreAnnotationSchema,
+  RunAnnotationSchema,
 ]);
 
 // --- identity -------------------------------------------------------------

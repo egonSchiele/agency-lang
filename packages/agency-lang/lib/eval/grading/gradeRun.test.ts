@@ -80,7 +80,11 @@ describe("gradeRun", () => {
       text: "too slow",
     });
     const card = await gradeRun(runDir, ctx([grader(() => 1, { name: "g" })]));
-    expect(card.perInput[0].humanFeedback).toEqual({ notes: ["too slow"], unchecked: [] });
+    expect(card.perInput[0].humanFeedback).toEqual({
+      notes: ["too slow"],
+      checked: [],
+      unchecked: [],
+    });
   });
 
   it("scores a run the harness marked as errored 0, gate-failed, without showing it to graders", async () => {

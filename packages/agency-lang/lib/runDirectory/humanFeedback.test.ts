@@ -59,7 +59,7 @@ function snapshot() {
 
 describe("humanFeedbackFor", () => {
   it("is empty for a trace nobody annotated", () => {
-    expect(humanFeedbackFor(snapshot(), "t1")).toEqual({ notes: [], unchecked: [] });
+    expect(humanFeedbackFor(snapshot(), "t1")).toEqual({ notes: [], checked: [], unchecked: [] });
   });
 
   it("collects notes in append order", () => {
@@ -69,7 +69,7 @@ describe("humanFeedbackFor", () => {
     expect(humanFeedbackFor(snapshot(), "t2").notes).toEqual([]);
   });
 
-  it("names the checklist questions answered no, by their text", () => {
+  it("names the checklist questions answered yes and no, by their text", () => {
     const checklist = publishChecklist();
     const row = completeAnnotation(
       {
@@ -87,6 +87,7 @@ describe("humanFeedbackFor", () => {
     appendDurably(path.join(dir, "annotations.jsonl"), JSON.stringify(row) + "\n");
     expect(humanFeedbackFor(snapshot(), "t1")).toEqual({
       notes: ["late by a day"],
+      checked: ["Is it accurate?"],
       unchecked: ["Is it on time?"],
     });
   });

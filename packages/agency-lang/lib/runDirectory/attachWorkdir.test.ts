@@ -73,6 +73,25 @@ describe("workdir attachment", () => {
     expect(fs.existsSync(path.join(dir, "escaped"))).toBe(false);
   });
 
+  it("leaves the run directory itself out when it sits inside the tree being captured", () => {
+    const source = writeProject({ "note.txt": "keep", "sub/deep.txt": "keep too" });
+    const dir = path.join(source, "runs", "r1");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(runDirPaths(dir).statelog, agentStartLine("t1") + "\n");
+    const paths = runDirPaths(dir);
+    const plan = planWorkdirAttachment(
+      readRunDirectory(dir, quiet),
+      { traceId: "t1", sourceDir: source },
+      paths,
+    );
+    applyWorkdirAttachment(paths, plan, "2026-08-18T00:00:00.000Z");
+    const captured = path.join(paths.workdirDir, "t1");
+    expect(fs.readFileSync(path.join(captured, "note.txt"), "utf8")).toBe("keep");
+    expect(fs.readFileSync(path.join(captured, "sub", "deep.txt"), "utf8")).toBe("keep too");
+    expect(fs.existsSync(path.join(captured, "runs", "r1"))).toBe(false);
+    expect(fs.existsSync(path.join(captured, "runs"))).toBe(true);
+  });
+
   it("refuses to overwrite without replace, and replaces cleanly with it", () => {
     const dir = directoryWithTrace();
     const paths = runDirPaths(dir);

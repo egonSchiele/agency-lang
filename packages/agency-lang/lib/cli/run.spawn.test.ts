@@ -1,7 +1,14 @@
 import { describe, it, expect } from "vitest";
 import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import { fileURLToPath } from "url";
-import { compileWarning, compiledOutputNodeArgs, compiledOutputRegisterUrl } from "./commands.js";
+import {
+  compileWarning,
+  compiledOutputNodeArgs,
+  compiledOutputRegisterUrl,
+  runChildOverrides,
+} from "./commands.js";
 
 describe("compiledOutputRegisterUrl", () => {
   it("returns a file:// URL pointing at the shipped register.mjs", () => {
@@ -56,5 +63,41 @@ describe("compileWarning", () => {
 
   it("returns null when install is workspace", () => {
     expect(compileWarning("workspace", "/tmp/foo.js", cannotResolve)).toBeNull();
+  });
+});
+
+describe("runChildOverrides", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "run-overrides-"));
+  const inputFile = path.join(dir, "main.agency");
+  fs.writeFileSync(inputFile, "node main() { return 1 }\n");
+
+  it("lets the capture statelog and this file's code identity win over inherited overrides", () => {
+    const merged = runChildOverrides({
+      inherited: {
+        observability: false,
+        log: {
+          logFile: "harness.jsonl",
+          host: "stdout",
+          code: { entry: "other.agency", closureHash: "stale", closure: [] },
+        },
+      },
+      captureStatelogFile: "/tmp/capture/statelog.jsonl",
+      inputFile,
+    });
+    expect(merged.observability).toBe(true);
+    expect(merged.log?.logFile).toBe("/tmp/capture/statelog.jsonl");
+    expect(merged.log?.host).toBe("stdout");
+    expect(merged.log?.code?.entry).toBe("main.agency");
+    expect(merged.log?.code?.closureHash).not.toBe("stale");
+  });
+
+  it("without a capture, keeps the inherited log settings and only sets log.code", () => {
+    const merged = runChildOverrides({
+      inherited: { log: { logFile: "harness.jsonl" } },
+      inputFile,
+    });
+    expect(merged.log?.logFile).toBe("harness.jsonl");
+    expect(merged.observability).toBeUndefined();
+    expect(merged.log?.code?.entry).toBe("main.agency");
   });
 });

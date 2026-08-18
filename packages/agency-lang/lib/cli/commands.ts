@@ -292,15 +292,12 @@ export function run(
 
   const env: NodeJS.ProcessEnv = { ...process.env };
   const captured = capture === undefined ? undefined : prepareCapture(capture.runDir);
-  // Which code this run is, recorded on the trace's agentStart, plus the
-  // capture statelog when one was asked for. Inherited overrides are kept (an
-  // eval harness hands this process its statelog path the same way), but the
-  // identity of THIS file wins over any `log.code` a parent or stale shell
-  // left behind: a trace must never name another program.
-  const captureOverrides =
-    captured === undefined ? {} : { observability: true, log: { logFile: captured.statelogFile } };
   env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(
-    withCodeIdentity(mergeConfigOverrides(readConfigOverrides(env), captureOverrides), inputFile),
+    runChildOverrides({
+      inherited: readConfigOverrides(env),
+      captureStatelogFile: captured?.statelogFile,
+      inputFile,
+    }),
   );
   if (captured !== undefined) env[TRACE_ID_ENV] = captured.traceId;
   if (resumeFile) env.AGENCY_RESUME_FILE = resumeFile;
@@ -352,33 +349,81 @@ export function run(
   });
 }
 
-type Capture = { runDir: string; traceId: string; statelogFile: string; stagingDir: string };
+/**
+ * The config overrides `agency run` hands its child. Inherited overrides are
+ * kept (an eval harness hands this process its statelog path the same way),
+ * but two things always win over them: the capture statelog when
+ * `--capture-workdir` asked for one (the child MUST write there, or there is
+ * nothing to fold in), and the identity of THIS file (a trace must never name
+ * another program, whatever `log.code` a parent or stale shell left behind).
+ */
+export function runChildOverrides(args: {
+  inherited: Partial<AgencyConfig>;
+  captureStatelogFile?: string;
+  inputFile: string;
+}): Partial<AgencyConfig> {
+  const captureOverrides: Partial<AgencyConfig> =
+    args.captureStatelogFile === undefined
+      ? {}
+      : { observability: true, log: { logFile: args.captureStatelogFile } };
+  return withCodeIdentity(mergeConfigOverrides(args.inherited, captureOverrides), args.inputFile);
+}
+
+type Capture = {
+  runDir: string;
+  traceId: string;
+  statelogFile: string;
+  /** A fresh, empty directory this process created under the OS temp dir. It
+   *  holds only the staged statelog and is removed when the capture ends. */
+  captureTempDir: string;
+};
 
 /** A fresh trace id and a private statelog file for this run, so the fold
  *  into the run directory sees exactly this run's events. */
 function prepareCapture(runDir: string): Capture {
   const traceId = nanoid();
-  const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-capture-"));
-  return { runDir, traceId, statelogFile: path.join(stagingDir, "statelog.jsonl"), stagingDir };
+  const captureTempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-capture-"));
+  return {
+    runDir,
+    traceId,
+    statelogFile: path.join(captureTempDir, "statelog.jsonl"),
+    captureTempDir,
+  };
 }
 
 /** One `addToRunDirectory`: the staged statelog, the code that ran, and the
- *  working directory as this trace's workdir snapshot. */
+ *  working directory as this trace's workdir snapshot. The temp dir goes
+ *  whether or not the fold succeeded. */
 function finishCapture(capture: Capture, inputFile: string): void {
-  if (!fs.existsSync(capture.statelogFile)) {
-    throw new Error(`the run wrote no statelog at ${capture.statelogFile}`);
+  try {
+    if (!fs.existsSync(capture.statelogFile)) {
+      throw new Error(`the run wrote no statelog at ${capture.statelogFile}`);
+    }
+    addToRunDirectory(
+      {
+        dir: capture.runDir,
+        statelogFiles: [capture.statelogFile],
+        codeEntries: [inputFile],
+        annotationFiles: [],
+        workdir: { traceId: capture.traceId, sourceDir: process.cwd() },
+      },
+      { reportWarning: (message) => console.warn(message) },
+    );
+  } finally {
+    removeCaptureTempDir(capture.captureTempDir);
   }
-  addToRunDirectory(
-    {
-      dir: capture.runDir,
-      statelogFiles: [capture.statelogFile],
-      codeEntries: [inputFile],
-      annotationFiles: [],
-      workdir: { traceId: capture.traceId, sourceDir: process.cwd() },
-    },
-    { reportWarning: (message) => console.warn(message) },
-  );
-  fs.rmSync(capture.stagingDir, { recursive: true, force: true });
   console.log(`---
 Captured trace ${capture.traceId} into ${capture.runDir}`);
+}
+
+/** Only ever removes the mkdtemp directory prepareCapture made: it must sit
+ *  directly under the OS temp dir and carry the capture prefix. */
+function removeCaptureTempDir(captureTempDir: string): void {
+  const resolved = path.resolve(captureTempDir);
+  const underTemp = path.dirname(resolved) === path.resolve(os.tmpdir());
+  if (!underTemp || !path.basename(resolved).startsWith("agency-capture-")) {
+    console.warn(`Not removing ${captureTempDir}: it is not a capture temp directory.`);
+    return;
+  }
+  fs.rmSync(resolved, { recursive: true, force: true });
 }

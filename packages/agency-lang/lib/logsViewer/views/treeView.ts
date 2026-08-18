@@ -45,11 +45,15 @@ export class TreeView implements View {
   ) {
     this.extractEnabled = options.extractEnabled ?? false;
     this.traceAnnotations = options.traceAnnotations ?? {};
+    // Start on the trace the caller asked for, else the first. That trace
+    // opens expanded when it was asked for by id or is the only one; a
+    // multi-trace log with no focus opens with every trace collapsed.
     const focused = roots.find((root) => root.traceId === options.focusTraceId);
     const start = focused ?? roots[0];
+    const startExpanded = focused !== undefined || roots.length === 1;
     this.state = {
       roots,
-      expanded: new Set(roots.length === 1 || focused !== undefined ? [start.id] : []),
+      expanded: new Set(startExpanded && start !== undefined ? [start.id] : []),
       cursorId: start?.id ?? "",
       scrollTop: 0,
       quit: false,

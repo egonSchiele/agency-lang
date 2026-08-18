@@ -269,6 +269,26 @@ node main(): string {
     "working directory not captured under the trace id");
   console.log("[eval-run-integration] PASS: run --capture-workdir writes a run directory");
 
+  // ── Scenario F: the capture destination sits INSIDE the working directory ──
+  // `agency run --capture-workdir ./runs/example agent.agency` from a project
+  // root is the natural invocation. The run directory is left out of its own
+  // workdir snapshot instead of being copied into itself.
+  const inTreeOutput = execSync(
+    `node ${JSON.stringify(AGENCY_CLI)} run --capture-workdir ./runs/example` +
+    ` ${JSON.stringify(join(cmdFixtures, "trivial.agency"))}`,
+    { cwd: captureCwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+  );
+  const inTreeMatch = inTreeOutput.match(/Captured trace (\S+) into/);
+  assert(inTreeMatch, `no capture line in output:\n${inTreeOutput}`);
+  const inTreeDir = join(captureCwd, "runs", "example");
+  const inTreeWorkdir = join(inTreeDir, "workdir", inTreeMatch[1]);
+  assert(readFileSync(join(inTreeWorkdir, "note.txt"), "utf-8") === "in the working directory",
+    "in-tree capture did not snapshot the working directory");
+  assert(!existsSync(join(inTreeWorkdir, "runs", "example")),
+    "in-tree capture copied the run directory into itself");
+  assert(existsSync(join(inTreeDir, "statelog.jsonl")), "in-tree capture wrote no statelog");
+  console.log("[eval-run-integration] PASS: run --capture-workdir with a destination inside cwd");
+
   passed = true;
 } finally {
   if (passed && !process.env.EVAL_RUN_KEEP_TMP) {

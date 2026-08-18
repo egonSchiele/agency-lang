@@ -94,15 +94,21 @@ function testIdOf(runRow: (Annotation & { kind: "run" }) | null): string | null 
   return typeof test.id === "string" ? test.id : null;
 }
 
-/** False when an effective must-pass binary score failed; null with no
- *  scores. A scalar gate's threshold lives on the grader, not the row, so a
- *  scalar must-pass score cannot be judged here and counts as passed. */
+/** False when an effective must-pass binary score failed, true when every
+ *  gate is binary and passed. Null with no scores, and null when any gate is
+ *  scalar: a scalar gate's threshold lives on the grader, not the row, so it
+ *  cannot be judged here, and "unknown" is more honest than "passed". */
 function gatesPassed(effective: EffectiveTraceAnnotations | undefined): boolean | null {
-  const rows = Object.values(effective?.scores ?? {});
-  if (rows.length === 0) return null;
-  return rows.every(
-    (row) => row.kind !== "score" || !row.mustPass || row.score.kind !== "binary" || row.score.pass,
+  const gates = Object.values(effective?.scores ?? {}).filter(
+    (row) => row.kind === "score" && row.mustPass,
   );
+  if (Object.keys(effective?.scores ?? {}).length === 0) return null;
+  for (const gate of gates) {
+    if (gate.kind !== "score") continue;
+    if (gate.score.kind !== "binary") return null;
+    if (!gate.score.pass) return false;
+  }
+  return true;
 }
 
 /** Weighted mean of the effective scores, on 0..1; null when there are none. */

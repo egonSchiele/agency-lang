@@ -68,7 +68,7 @@ node main(task: string) {
       `node ${JSON.stringify(AGENCY_CLI)} eval run` +
       ` ${JSON.stringify(join(agentDir, "agent.agency"))}` +
       ` --suite ${JSON.stringify(join(TMP_ROOT, "inputs.json"))}` +
-      ` --runs-dir ${JSON.stringify(runsDir)} --run-id interrupt-e2e`,
+      ` --out ${JSON.stringify(join(runsDir, "interrupt-e2e"))}`,
       { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
     );
   } catch (err) {
@@ -155,7 +155,7 @@ node main(): string {
       `node ${JSON.stringify(AGENCY_CLI)} eval run` +
       ` --agent-cmd ${JSON.stringify(agentCmd)}` +
       ` --suite ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
-      ` --runs-dir ${JSON.stringify(runsDir)} --run-id cmd-e2e`,
+      ` --out ${JSON.stringify(join(runsDir, "cmd-e2e"))}`,
       { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
     );
   } catch (err) {
@@ -198,7 +198,7 @@ node main(): string {
       `node ${JSON.stringify(AGENCY_CLI)} eval run` +
       ` --agent-cmd ${JSON.stringify(`node -e 1+1 {task}`)}` +
       ` --suite ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
-      ` --runs-dir ${JSON.stringify(runsDir)} --run-id cmd-clobber`,
+      ` --out ${JSON.stringify(join(runsDir, "cmd-clobber"))}`,
       { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
     );
   } catch {
@@ -217,7 +217,7 @@ node main(): string {
     execSync(
       `node ${JSON.stringify(AGENCY_CLI)} eval run --agent-cmd "echo hello"` +
       ` --suite ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
-      ` --runs-dir ${JSON.stringify(runsDir)} --run-id cmd-noplaceholder`,
+      ` --out ${JSON.stringify(join(runsDir, "cmd-noplaceholder"))}`,
       { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
     );
   } catch (err) {

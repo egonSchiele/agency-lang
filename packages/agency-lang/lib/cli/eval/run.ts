@@ -21,8 +21,8 @@ export type EvalRunCliOptions = {
   suite?: string;
   /** One inline test with this input text; no suite file needed. */
   input?: string;
-  runId?: string;
-  runsDir?: string;
+  /** Directory to write the run into (default `<eval.runsDir or runs>/<timestamp>`). */
+  out?: string;
   config?: AgencyConfig;
   /** Worker-pool size (-n/--parallel); default 1 = sequential. */
   parallel?: number;
@@ -66,8 +66,7 @@ export async function evalRun(
       agent: target,
       inputs: suite.tests,
       suite: suite.identity,
-      runId: opts.runId,
-      runsDir: opts.runsDir,
+      out: opts.out,
       config: opts.config,
       parallel: opts.parallel,
     },

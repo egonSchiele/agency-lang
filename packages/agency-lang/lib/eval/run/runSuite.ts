@@ -40,8 +40,9 @@ export type RunSuiteOptions = {
    *  resolveEvalTarget, including the {task}-placeholder check. */
   agent: string | EvalTarget;
   inputs: Test[];
-  runId?: string;
-  runsDir?: string;
+  /** The directory to write the run into. Must not exist yet. Default:
+   *  `<eval.runsDir or runs>/<timestamp-suffix>`. */
+  out?: string;
   /** Default true. */
   config?: AgencyConfig;
   /** Worker-pool size for input scheduling; 1 (default) = sequential with
@@ -78,14 +79,15 @@ export async function runSuite(
   // per-test run failure.
   assertTargetMatchesInputs(target, opts.inputs);
 
-  const runsDir = path.resolve(opts.runsDir ?? opts.config?.eval?.runsDir ?? "runs");
-  const runId = opts.runId ?? defaultRunId();
-  const runDir = path.join(runsDir, runId);
+  const runDir = path.resolve(
+    opts.out ?? path.join(opts.config?.eval?.runsDir ?? "runs", defaultRunDirName()),
+  );
   if (fs.existsSync(runDir)) {
     throw new Error(
-      `Run directory already exists: ${runDir}\nChoose a different --run-id or delete the existing directory.`,
+      `Run directory already exists: ${runDir}\nChoose a different --out directory or delete the existing one.`,
     );
   }
+  const stagingParent = path.join(path.dirname(runDir), ".staging");
   const config = opts.config ?? {};
   const perRun = opts.perRun ?? {};
 
@@ -98,7 +100,7 @@ export async function runSuite(
   // Each test runs in its own staging directory OUTSIDE the run directory and
   // is folded in when it finishes; the staging root lives beside the run
   // directory so the fold never crosses filesystems.
-  const stagingRoot = path.join(runsDir, ".staging", runId);
+  const stagingRoot = path.join(stagingParent, path.basename(runDir));
   fs.mkdirSync(stagingRoot, { recursive: true });
   fs.mkdirSync(runDir, { recursive: true });
 
@@ -212,12 +214,11 @@ export async function runSuite(
     }
   } finally {
     process.removeListener("SIGINT", onSigint);
-    safeDeleteDirectoryWithin(path.join(runsDir, ".staging"), stagingRoot);
-    removeIfEmpty(path.join(runsDir, ".staging"));
+    safeDeleteDirectoryWithin(stagingParent, stagingRoot);
+    removeIfEmpty(stagingParent);
   }
 
   return {
-    runId,
     runDir,
     agentLabel: target.label,
     tests: results,
@@ -359,9 +360,9 @@ async function runPool(args: {
   return slots.filter((entry): entry is SuiteTestResult => entry !== undefined);
 }
 
-/** Default run id: local-time timestamp then a short random suffix, so
- *  runs/ lists in creation order. An explicit --run-id is used verbatim. */
-function defaultRunId(): string {
+/** Default run directory name: local-time timestamp then a short random
+ *  suffix, so runs/ lists in creation order. An explicit --out is used verbatim. */
+function defaultRunDirName(): string {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   const stamp =

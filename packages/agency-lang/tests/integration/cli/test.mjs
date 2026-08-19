@@ -142,7 +142,7 @@ node main(task: string): string {
   // eval run never grades: it writes a run directory (statelog.jsonl +
   // annotations.jsonl) and `agency eval grade <dir>` scores it later. This test
   // checks the run plumbing only, so no LLM call and no API key are needed.
-  run(dir, "npx agency eval run eval-agent.agency --input \"Say hello\" --runs-dir eval-runs --run-id smoke");
+  run(dir, "npx agency eval run eval-agent.agency --input \"Say hello\" --out eval-runs/smoke");
   const evalRunDir = join(dir, "eval-runs", "smoke");
   if (!existsSync(join(evalRunDir, "statelog.jsonl"))) {
     throw new Error("eval run wrote no statelog.jsonl");

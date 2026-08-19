@@ -53,7 +53,6 @@ export type SuiteTestResult = {
 };
 
 export type SuiteRunResult = {
-  runId: string;
   runDir: string;
   /** Display label, "<absolute agent path>:<node>" or the command string. */
   agentLabel: string;

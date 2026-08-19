@@ -57,8 +57,7 @@ describe("runSuite", () => {
           { id: "a", goal: "g", input: "first" },
           { id: "b", goal: "g", input: { rows: [1, 2] } },
         ],
-        runsDir,
-        runId: "r1",
+        out: path.join(runsDir, "r1"),
         config: {},
         suite: { source: "inputs.json" },
         perRun: { pipeOutput: false },
@@ -116,8 +115,7 @@ describe("runSuite", () => {
       {
         agent: path.join(proj, "agent.agency"),
         inputs: [{ id: "input-1", goal: "g", input: "t" }],
-        runsDir: path.join(proj, "runs"),
-        runId: "r1",
+        out: path.join(path.join(proj, "runs"), "r1"),
         config: {},
         perRun: { pipeOutput: false },
       },
@@ -140,8 +138,7 @@ describe("runSuite", () => {
       {
         agent: path.join(proj, "agent.agency"),
         inputs: [{ id: "input-1", goal: "g", input: "t" }],
-        runsDir: path.join(proj, "runs"),
-        runId: "r-overlay",
+        out: path.join(path.join(proj, "runs"), "r-overlay"),
         config: {},
         perRun: {
           pipeOutput: false,
@@ -175,8 +172,7 @@ describe("runSuite", () => {
       {
         agent,
         inputs: [{ id: "a", goal: "g", input: "t", files: filesDir }],
-        runsDir: path.join(proj, "runs"),
-        runId: "files-e2e",
+        out: path.join(path.join(proj, "runs"), "files-e2e"),
       },
       {
         runner: traceWritingRunner("ok", (job) => {
@@ -194,8 +190,7 @@ describe("runSuite", () => {
       {
         agent: path.join(proj, "agent.agency"),
         inputs: [{ id: "a", goal: "g", input: "t" }],
-        runsDir: path.join(proj, "runs"),
-        runId: "r-fail",
+        out: path.join(path.join(proj, "runs"), "r-fail"),
         config: {},
         perRun: { pipeOutput: false },
       },
@@ -234,8 +229,7 @@ describe("runSuite", () => {
           { id: "a", goal: "g", input: "first task" },
           { id: "b", goal: "g", input: "second task" },
         ],
-        runsDir,
-        runId: "r-cmd",
+        out: path.join(runsDir, "r-cmd"),
         config: {},
         perRun: { pipeOutput: false },
       },
@@ -273,8 +267,7 @@ describe("runSuite", () => {
           { id: "c", goal: "g", input: "t-c" },
           { id: "d", goal: "g", input: "t-d" },
         ],
-        runsDir: path.join(proj, "runs"),
-        runId: "r-par",
+        out: path.join(path.join(proj, "runs"), "r-par"),
         config: {},
         parallel: 2,
       },
@@ -308,8 +301,7 @@ describe("runSuite", () => {
           { id: "c", goal: "g", input: "t-c" },
           { id: "d", goal: "g", input: "t-d" },
         ],
-        runsDir: path.join(proj, "runs"),
-        runId: "r-par-error",
+        out: path.join(path.join(proj, "runs"), "r-par-error"),
         config: {},
         parallel: 2,
       },
@@ -327,8 +319,7 @@ describe("runSuite", () => {
       {
         agent: path.join(proj, "agent.agency"),
         inputs: [{ id: "a", goal: "g", input: "t", timeoutSec: 1200 }],
-        runsDir: path.join(proj, "runs"),
-        runId: "r-timeout",
+        out: path.join(path.join(proj, "runs"), "r-timeout"),
         config: {},
         perRun: { pipeOutput: false },
       },
@@ -340,21 +331,21 @@ describe("runSuite", () => {
     expect(result.okCount).toBe(1);
   });
 
-  it("a default run id starts with a sortable timestamp, so runs/ lists in creation order", async () => {
+  it("without --out, the run lands under eval.runsDir with a sortable timestamp name", async () => {
     const result = await runSuite(
       {
         agent: path.join(proj, "agent.agency"),
         inputs: [{ id: "a", goal: "g", input: "t" }],
-        runsDir: path.join(proj, "runs"),
-        config: {},
+        config: { eval: { runsDir: path.join(proj, "runs") } },
         perRun: { pipeOutput: false },
       },
       { runner: traceWritingRunner("done") },
     );
 
     // e.g. 2026-07-31-143022-Ab3dEf
-    expect(result.runId).toMatch(/^\d{4}-\d{2}-\d{2}-\d{6}-.{6}$/);
-    expect(fs.existsSync(path.join(proj, "runs", result.runId, "statelog.jsonl"))).toBe(true);
+    expect(path.basename(result.runDir)).toMatch(/^\d{4}-\d{2}-\d{2}-\d{6}-.{6}$/);
+    expect(path.dirname(result.runDir)).toBe(path.join(proj, "runs"));
+    expect(fs.existsSync(path.join(result.runDir, "statelog.jsonl"))).toBe(true);
   });
 
   it("refuses to reuse an existing run directory", async () => {
@@ -364,8 +355,7 @@ describe("runSuite", () => {
         {
           agent: path.join(proj, "agent.agency"),
           inputs: [{ id: "a", goal: "g", input: "t" }],
-          runsDir: path.join(proj, "runs"),
-          runId: "taken",
+          out: path.join(proj, "runs", "taken"),
           config: {},
         },
         { runner: traceWritingRunner("done") },
@@ -394,8 +384,7 @@ describe("runSuite", () => {
           { id: "input-2", goal: "g", input: "t" },
           { id: "input-3", goal: "g", input: "t" },
         ],
-        runsDir,
-        runId: "r-sigint",
+        out: path.join(runsDir, "r-sigint"),
         config: {},
         perRun: { pipeOutput: false },
       },
@@ -417,8 +406,7 @@ describe("runSuite", () => {
         {
           agent: path.join(proj, "agent.agency"),
           inputs: [{ id: "input-1", goal: "g", input: "t" }],
-          runsDir: path.join(proj, "runs"),
-          runId: "r-quiet",
+          out: path.join(path.join(proj, "runs"), "r-quiet"),
           config: {},
           progress: false,
           perRun: { pipeOutput: false },

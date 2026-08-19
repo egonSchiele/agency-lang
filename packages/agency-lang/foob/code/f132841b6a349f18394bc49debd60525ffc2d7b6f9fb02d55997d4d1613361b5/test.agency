@@ -1,0 +1,5 @@
+node main() {
+  const response = llm("What is Gandhi's birthday?")
+  print(response)
+  return response
+}

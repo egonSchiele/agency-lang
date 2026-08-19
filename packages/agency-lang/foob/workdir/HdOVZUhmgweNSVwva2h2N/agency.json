@@ -1,0 +1,31 @@
+{
+  "verbose": false,
+  "observability": true,
+  "log": {
+    "projectId": "agency-lang",
+    "debugMode": false,
+    "logFile": "log.jsonl"
+  },
+  "client": {
+    "logLevel": "warn",
+    "defaultModel": "gpt-4o-mini"
+  },
+  "typechecker": {
+    "enabled": true
+  },
+  "eval": {
+    "limits": {
+      "wallClockSec": 900
+    }
+  },
+  "doc": {
+    "outDir": "docs/site/stdlib",
+    "baseUrl": "https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib"
+  },
+  "coverage": {
+    "exclude": [
+      "tests/agency/topsort/cycles/**",
+      "tests/agency/expectedCompileError/**"
+    ]
+  }
+}

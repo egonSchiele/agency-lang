@@ -205,7 +205,7 @@ node main(): string {
   } catch {
     // exit code is not the assertion; error.txt is
   }
-  const clobberRows = readFileSync(join(runsDir, "cmd-clobber", "annotations.jsonl"), "utf-8").trim().split("\n").map((line) => JSON.parse(line));
+  const clobberRows = readFileSync(join(runsDir, "cmd-clobber", "cmd-e2e", "annotations.jsonl"), "utf-8").trim().split("\n").map((line) => JSON.parse(line));
   const clobberRun = clobberRows.find((row) => row.kind === "run");
   assert(clobberRun && clobberRun.ended === "error", `clobber run row: ${JSON.stringify(clobberRun)}`);
   assert(clobberRun.error.includes("If your command passes --log, remove it"),

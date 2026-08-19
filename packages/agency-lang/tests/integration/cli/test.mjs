@@ -164,7 +164,7 @@ node main(task: string): string {
     AGENCY_LLM_MOCKS: JSON.stringify([{ return: { score: 1, reasoning: "mock judge verdict" } }]),
   };
   const gradeOutput = run(dir, "npx agency eval grade eval-runs/smoke --goal \"Say hello\" 2>&1", { env: gradeMockEnv });
-  assertIncludes(gradeOutput, "objective  1.000");
+  assertIncludes(gradeOutput, "score 1.000");
   // A folder that is not a run directory is refused with a pointer, not scored 0.
   const notRunDir = run(dir, "npx agency eval grade eval-runs 2>&1", { expectFail: true });
   assertIncludes(notRunDir, "not a run directory");

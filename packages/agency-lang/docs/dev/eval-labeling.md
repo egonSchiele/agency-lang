@@ -19,7 +19,7 @@ validation here is stricter than in grading.
 ```text
 <dir>/
   statelog.jsonl                    the traces (one item per trace)
-  annotations.jsonl                 checklist rows land here, beside notes and scores
+  annotations.jsonl                 checklist rows land here, beside scores
   checklists/<checklistId>/
     1.json, 2.json, ...             immutable revisions
     current.json                    pointer to the newest revision
@@ -164,8 +164,11 @@ On append it also refuses a row for a trace the directory does not hold.
 The session holds the run directory's writer lock (`lib/runDirectory/lock.ts`)
 for its whole life. Two sessions on one directory would race for the same
 revision number and, with the same annotator and checklist, share one draft
-file. That also means `agency note` and `agency runs add` on the same
+file. That also means `agency runs add` and `eval grade` on the same
 directory wait until the session closes; that is integrity, not collaboration.
+The run's `notes.md` is not under this lock: a person edits it with any
+editor at any time, and readers sample it best-effort (see
+`docs/dev/run-directory.md`).
 Because the lock is already held, the store appends through
 `appendAnnotationsUnderLock` (marked `@internal` in `mutations.ts`) rather than
 a public mutation that would try to take the lock again.

@@ -16,8 +16,18 @@ import {
 const human = { kind: "human" as const, id: "adit" };
 const grader = (revision: string) => ({ kind: "grader" as const, id: `graders.ts@${revision}` });
 
-function note(traceId: string, text: string): AnnotationDraft {
-  return { traceId, annotator: human, kind: "note", text };
+/** A checklist sign-off carrying only a note: the smallest human-written row. */
+function signOff(traceId: string, text: string): AnnotationDraft {
+  return {
+    traceId,
+    annotator: human,
+    kind: "checklist",
+    checklist: "news",
+    version: 1,
+    hash: "sha256:a",
+    answers: {},
+    note: text,
+  };
 }
 
 function score(
@@ -48,9 +58,9 @@ function row(draft: AnnotationDraft): Annotation {
 
 describe("annotationId", () => {
   it("is deterministic and depends on the payload", () => {
-    expect(annotationId(note("t1", "slow"))).toBe(annotationId(note("t1", "slow")));
-    expect(annotationId(note("t1", "slow"))).not.toBe(annotationId(note("t1", "fast")));
-    expect(annotationId(note("t1", "slow"))).not.toBe(annotationId(note("t2", "slow")));
+    expect(annotationId(signOff("t1", "slow"))).toBe(annotationId(signOff("t1", "slow")));
+    expect(annotationId(signOff("t1", "slow"))).not.toBe(annotationId(signOff("t1", "fast")));
+    expect(annotationId(signOff("t1", "slow"))).not.toBe(annotationId(signOff("t2", "slow")));
   });
 
   it("differs per pass for otherwise identical scores", () => {
@@ -60,15 +70,15 @@ describe("annotationId", () => {
   });
 
   it("ignores createdAt", () => {
-    const first = row(note("t1", "x"));
-    const second = row(note("t1", "x"));
+    const first = row(signOff("t1", "x"));
+    const second = row(signOff("t1", "x"));
     expect(first.id).toBe(second.id);
     expect(first.createdAt).not.toBe(second.createdAt);
   });
 });
 
 describe("foldAnnotations", () => {
-  it("collects notes and the run row per trace", () => {
+  it("collects the run row per trace, and has no slot for free-form notes (those are notes.md)", () => {
     const run: AnnotationDraft = {
       traceId: "t1",
       annotator: { kind: "harness", id: "eval" },
@@ -78,9 +88,9 @@ describe("foldAnnotations", () => {
       ended: "ok",
       flags: {},
     };
-    const folded = foldAnnotations([row(note("t1", "one")), row(note("t1", "two")), row(run)]);
-    expect(folded.t1.notes.map((n) => (n.kind === "note" ? n.text : ""))).toEqual(["one", "two"]);
+    const folded = foldAnnotations([row(run)]);
     expect(folded.t1.run?.kind).toBe("run");
+    expect(Object.keys(folded.t1)).toEqual(["scores", "checklists", "run"]);
   });
 
   it("folds checklist answers per question in append order, keyed per annotator", () => {
@@ -138,12 +148,12 @@ describe("readAnnotations", () => {
   }
 
   it("skips a malformed middle row with a warning and ignores a torn last line", () => {
-    const good = row(note("t1", "ok"));
+    const good = row(signOff("t1", "ok"));
     const text =
       JSON.stringify(good) +
       "\n" +
       "{not json\n" +
-      JSON.stringify(row(note("t1", "torn"))).slice(0, 10);
+      JSON.stringify(row(signOff("t1", "torn"))).slice(0, 10);
     const warnings: string[] = [];
     const rows = readAnnotations(file(text), (message) => warnings.push(message));
     expect(rows.map((r) => r.id)).toEqual([good.id]);
@@ -152,10 +162,26 @@ describe("readAnnotations", () => {
   });
 
   it("rejects a row that fails the schema", () => {
-    const bad = { ...row(note("t1", "x")), extra: true };
+    const bad = { ...row(signOff("t1", "x")), extra: true };
     const warnings: string[] = [];
     expect(readAnnotations(file(JSON.stringify(bad) + "\n"), (m) => warnings.push(m))).toEqual([]);
     expect(warnings).toHaveLength(1);
+  });
+
+  it("rejects a row of the retired `note` kind with a warning naming its line", () => {
+    const old = {
+      v: 1,
+      id: "ann_old",
+      traceId: "t1",
+      annotator: human,
+      createdAt: "2026-08-18T00:00:00Z",
+      kind: "note",
+      text: "slow",
+    };
+    const warnings: string[] = [];
+    expect(readAnnotations(file(JSON.stringify(old) + "\n"), (m) => warnings.push(m))).toEqual([]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain(":1:");
   });
 
   it("returns nothing when the file is absent", () => {

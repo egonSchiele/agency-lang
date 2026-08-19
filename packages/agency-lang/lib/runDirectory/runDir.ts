@@ -16,8 +16,10 @@ import { readTraces, type Trace } from "./traces.js";
  * trace), `annotations.jsonl`, and optional attachments — the agent's code
  * closure directly under `code/`, a working-directory snapshot directly under
  * `workdir/` with its `workdir.json` sidecar, free-form `notes.md`. This
- * module names its paths and reads it into one coherent snapshot. It never
- * writes; `mutations.ts` does.
+ * module names its paths and reads it into one snapshot: the statelog and
+ * annotations are paired coherently (see `readRunDirectory`); `notes.md` is
+ * sampled independently, best effort (see `readNotes`). It never writes;
+ * `mutations.ts` does.
  */
 export type RunDirectoryPaths = {
   dir: string;
@@ -51,6 +53,8 @@ export type RunDirectorySnapshot = {
   traces: Trace[];
   annotationRows: Annotation[];
   effectiveAnnotations: Record<string, EffectiveTraceAnnotations>;
+  /** The text of `notes.md`, written by a person with any editor; null when absent. */
+  notes: string | null;
 };
 
 export type ReadRunDirectoryOptions = { reportWarning(message: string): void };
@@ -75,6 +79,7 @@ export function readRunDirectory(
     const before = readStatelog(paths);
     const annotationRows = readAnnotations(paths.annotations, options.reportWarning);
     const after = readStatelog(paths);
+    const notes = readNotes(paths);
     if (before.fingerprint === after.fingerprint) {
       // Only the read we keep reports its problems, so a warning shows once.
       for (const error of after.errors) {
@@ -86,12 +91,30 @@ export function readRunDirectory(
         traces: after.traces,
         annotationRows,
         effectiveAnnotations: foldAnnotations(annotationRows),
+        notes,
       };
     }
   }
   throw new Error(
     `${paths.statelog} kept changing while it was being read; retry when the writer is done.`,
   );
+}
+
+/**
+ * One best-effort read of `notes.md`. The file is a person's, edited with any
+ * editor and outside the writer lock, so it is not part of the statelog
+ * coherence check: during an atomic editor save this may return the old text,
+ * the new text, or null (the path vanished between unlink and rename).
+ */
+function readNotes(paths: RunDirectoryPaths): string | null {
+  try {
+    return fs.readFileSync(paths.notes, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
 }
 
 function readStatelog(paths: RunDirectoryPaths): {

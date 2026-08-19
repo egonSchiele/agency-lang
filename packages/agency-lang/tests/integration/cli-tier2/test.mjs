@@ -406,8 +406,8 @@ function checkLocalIsolated() {
 
 // --- run directory (mutation + persistence oracle) -------------------------
 // `agency runs add` merges a statelog into a run directory by trace, and a
-// second add of the same statelog changes nothing. `agency note` appends an
-// annotation that `runs list` then shows.
+// second add of the same statelog changes nothing. A `notes.md` written by
+// hand in the run directory shows up in `runs list`.
 
 function checkRunDirectory() {
   const rdDir = subdir("rundir");
@@ -433,21 +433,18 @@ function checkRunDirectory() {
   assertIncludes(stripAnsi(second.stdout), "already exists");
   assert(readFileSync(statelogPath).equals(statelogBefore), "statelog.jsonl bytes changed on re-add");
 
-  const noted = runCleanAgency(rdDir, ["note", runDir, "wanted a greeting", "--annotator", "tier2"], "note");
-  assertIncludes(stripAnsi(noted.stdout), `Noted on trace ${traceId}`);
-  const notes = readJsonLines(annotationsPath).filter((row) => row.kind === "note");
-  assert(notes.length === 1, `expected 1 note annotation, got ${notes.length}`);
-  assert(notes[0].traceId === traceId, `note traceId was ${notes[0].traceId}`);
-  assert(notes[0].text === "wanted a greeting", `note text was ${JSON.stringify(notes[0].text)}`);
+  writeFile(runDir, "notes.md", "wanted a greeting\n");
+  const rows = existsSync(annotationsPath) ? readJsonLines(annotationsPath) : [];
+  assert(rows.length === 0, `a hand-written notes.md must not add annotation rows; found ${rows.length}`);
 
-  // `runs list` is one table row per trace; the NOTES column counts them.
+  // `runs list` is one table row per trace; the NOTES column says whether notes.md has text.
   const listed = runCleanAgency(rdDir, ["runs", "list", runDir], "runs list");
   const listRows = stripAnsi(listed.stdout).trim().split("\n");
   assertIncludes(listRows[0], "NOTES");
   const traceRow = listRows.find((row) => row.startsWith(traceId.slice(0, 8)));
   assert(traceRow !== undefined, `runs list has no row for ${traceId}:\n${listed.stdout}`);
   const notesCell = traceRow.slice(listRows[0].indexOf("NOTES"), listRows[0].indexOf("LABELED")).trim();
-  assert(notesCell === "1", `NOTES column was ${JSON.stringify(notesCell)} in:\n${listed.stdout}`);
+  assert(notesCell === "yes", `NOTES column was ${JSON.stringify(notesCell)} in:\n${listed.stdout}`);
   console.log("[cli-tier2] run directory ✓");
 }
 

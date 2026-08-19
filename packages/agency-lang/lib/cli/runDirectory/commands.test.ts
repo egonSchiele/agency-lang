@@ -26,7 +26,6 @@ import {
 import { formatTextTable } from "./table.js";
 import { logsExtract } from "./extract.js";
 import { runsList } from "./list.js";
-import { note } from "./note.js";
 
 const quiet = { reportWarning: () => {} };
 
@@ -170,31 +169,21 @@ describe("runs add", () => {
   });
 });
 
-describe("note and runs list", () => {
-  it("notes the only trace, demands --trace with several, and lists counts", () => {
-    // Written by hand: a run directory holds one trace now, but the reader
-    // still accepts several, and note/list are rewritten in later chunks.
-    const dir = tempDir();
-    fs.writeFileSync(runDirPaths(dir).statelog, agentStartLine("t1") + "\n");
-    const deps = { report: vi.fn(), user: () => "adit" };
-    const row = note({ dir, text: "too slow" }, deps);
-    expect(row.kind).toBe("note");
-    expect(readRunDirectory(dir, quiet).effectiveAnnotations.t1.notes).toHaveLength(1);
-    expect(() => note({ dir, text: "  " }, deps)).toThrow(/needs some text/);
-
-    fs.appendFileSync(runDirPaths(dir).statelog, agentStartLine("t2") + "\n");
-    expect(() => note({ dir, text: "x" }, deps)).toThrow(/--trace/);
-    note({ dir, text: "second", trace: "t2" }, deps);
-
+describe("runs list NOTES column", () => {
+  it("shows yes for a run whose notes.md has text, blank for a blank one", () => {
+    const { group, a, b } = writeGroup();
+    fs.writeFileSync(runDirPaths(a).notes, "slow\n");
+    fs.writeFileSync(runDirPaths(b).notes, "  \n");
     const listed: string[] = [];
-    const summaries = runsList([dir], { report: (m) => listed.push(m) });
-    expect(summaries.map((s) => [s.traceId, s.noteCount])).toEqual([
-      ["t1", 1],
-      ["t2", 1],
+    const summaries = runsList([group], { report: (m) => listed.push(m) });
+    expect(summaries.map((s) => [s.testId, s.hasNotes])).toEqual([
+      ["a", true],
+      ["b", false],
     ]);
-    expect(listed[0]).toContain("TRACE");
-    // header, two rows, footer
-    expect(listed[0].split("\n")).toHaveLength(4);
+    const [header, rowA, rowB] = listed[0].split("\n");
+    const column = header.indexOf("NOTES");
+    expect(rowA.slice(column, column + 5)).toBe("yes  ");
+    expect(rowB.slice(column, column + 5)).toBe("     ");
     expect(lastLine(listed[0])).toBe("2 runs");
   });
 

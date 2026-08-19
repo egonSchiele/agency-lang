@@ -5,8 +5,8 @@ import type { RunDirectorySnapshot } from "./runDir.js";
 
 /**
  * What people said about a trace, in words a consumer can feed back to the
- * model: every note, and the text of every checklist question with how it
- * was answered. Grader feedback is separate (it rides on the score rows);
+ * model: the run's `notes.md`, if any, each checklist sign-off's note, and
+ * the text of every checklist question with how it was answered. Grader feedback is separate (it rides on the score rows);
  * this is the human side. The optimizer feeds the model the `unchecked`
  * questions (what reviewers found wrong); `checked` is here for anything
  * that wants to say what a run did right, or to compare annotators.
@@ -20,9 +20,12 @@ export type HumanFeedback = {
 };
 
 export function humanFeedbackFor(snapshot: RunDirectorySnapshot, traceId: string): HumanFeedback {
+  const notes: string[] = [];
+  if (snapshot.notes !== null && snapshot.notes.trim().length > 0) {
+    notes.push(snapshot.notes.trim());
+  }
   const effective = snapshot.effectiveAnnotations[traceId];
-  if (effective === undefined) return { notes: [], checked: [], unchecked: [] };
-  const notes = effective.notes.flatMap((row) => (row.kind === "note" ? [row.text] : []));
+  if (effective === undefined) return { notes, checked: [], unchecked: [] };
 
   const checked: string[] = [];
   const unchecked: string[] = [];

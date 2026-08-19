@@ -233,6 +233,7 @@ function planRunDirectoryAssembly(args: {
     traces: [args.trace],
     annotationRows: [],
     effectiveAnnotations: {},
+    notes: null,
   };
   return {
     dir: args.dir,
@@ -369,31 +370,6 @@ export function recordCompletedRun(
     const [annotation] = appendRows(paths.annotations, [draft], options, reportWarning);
     return { annotation };
   });
-}
-
-// --- recordNote -----------------------------------------------------------
-
-export type RecordNoteRequest = {
-  dir: string;
-  traceId: string;
-  annotator: Annotator;
-  text: string;
-};
-
-export function recordNote(request: RecordNoteRequest, options: MutationOptions = {}): Annotation {
-  return withWriter(request.dir, options, (paths, snapshot, reportWarning) => {
-    if (!snapshot.traces.some((trace) => trace.traceId === request.traceId)) {
-      throw new Error(`No trace ${request.traceId} in ${request.dir}.`);
-    }
-    const draft: AnnotationDraft = {
-      traceId: request.traceId,
-      annotator: request.annotator,
-      kind: "note",
-      text: request.text,
-    };
-    const [annotation] = appendRows(paths.annotations, [draft], options, reportWarning);
-    return { annotation };
-  }).annotation;
 }
 
 // --- recordGradingPass ----------------------------------------------------

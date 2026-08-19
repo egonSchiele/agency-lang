@@ -150,7 +150,7 @@ follow re-parses goes by id or absolute time, never by row index.
 
 `agency logs <dir>` on a run directory (`docs/dev/run-directory.md`) opens
 this viewer on `<dir>/statelog.jsonl` with `traceAnnotations`: one line per
-trace id ("2 notes · score 0.70 · labeled", built by `annotationSummaries`
+trace id ("notes · score 0.70 · labeled", built by `annotationSummaries`
 in `lib/runDirectory/list.ts`) that `renderRowText` appends, dimmed, to the
 trace's row and nowhere else. `focusTraceId` starts the cursor on a given
 trace and expands it; the runs explorer uses it when drilling from a test

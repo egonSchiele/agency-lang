@@ -11,8 +11,8 @@ easy to get wrong.
 ```
 <dir>/
   statelog.jsonl        # required; ONE trace (one trace = one run; subagents share the id)
-  annotations.jsonl     # every opinion about the run: note, checklist, score, run
-  notes.md              # free-form notes (reserved; not read yet)
+  annotations.jsonl     # every structured opinion about the run: checklist, score, run
+  notes.md              # a person's free-form notes, written with any editor
   code/                 # the agent's closure, as it ran, flat
   workdir/              # filesystem snapshot, flat
   workdir.json          # { snapshotAt, source } — when and where from
@@ -37,10 +37,17 @@ node was given) — see `docs/dev/statelog.md` — so a trace stands on its own.
 ## Read side: one snapshot, no lock
 
 `readRunDirectory(dir, { reportWarning })` (`runDir.ts`) returns a
-`RunDirectorySnapshot`: `traces`, raw `annotationRows`, and
-`effectiveAnnotations` (the fold). Readers never take the lock; the snapshot
-reads statelog → annotations → statelog and retries when a writer changed the
-statelog in between, so the pairing is coherent. Parse errors are warnings.
+`RunDirectorySnapshot`: `traces`, raw `annotationRows`, `effectiveAnnotations`
+(the fold), and `notes` (the text of `notes.md`, or null when absent). Readers
+never take the lock; the snapshot reads statelog → annotations → statelog and
+retries when a writer changed the statelog in between, so the pairing is
+coherent. Parse errors are warnings.
+
+`notes.md` is outside that coherence check and outside the writer lock: it is
+a person's file, edited with any editor, and nothing in Agency writes it.
+`readNotes` is one `readFileSync`; `ENOENT` is the value null (so an editor's
+unlink-then-rename save cannot crash a reader), any other I/O error propagates.
+A read during such a save may see the old text, the new text, or null.
 
 `readTraces` (`traces.ts`) is built on `parseStatelogJsonlWithLines`
 (`lib/statelog/parse.ts`), the one owner of line decoding. It drops a torn final
@@ -51,11 +58,11 @@ sharing an id once they are interleaved; that check lives in the merge planner.
 
 ## Annotations (`annotations.ts`)
 
-One row per opinion; four kinds:
+One row per opinion; three kinds (a person's free-form note is not a row, it
+is `notes.md`):
 
 | kind | who | what |
 |---|---|---|
-| `note` | human | free text |
 | `checklist` | human | one sign-off: `checklist`, `version`, `hash`, `answers`, `note` |
 | `score` | grader / judge | one grader's verdict in one pass: `passId`, `passSize`, `completesPass`, `name`, `score`, `weight`, `mustPass` |
 | `run` | harness | which `test`, which `suite`, how it `ended`, `flags` |
@@ -69,7 +76,7 @@ Rules:
 - **Annotators are named by revision**: a grader is `<path>@<sha256 of file>`,
   the goal judge `goal-judge:<model>@<prompt hash>`. Editing `graders.ts` in
   place is a new annotator; its rows sit beside the old ones.
-- **The fold is per key, append order decides**: notes accumulate; checklist
+- **The fold is per key, append order decides**: checklist
   answers fold per question per `(checklist, annotator)`, so a restored
   question keeps its earlier answer; scores count only from **complete**
   passes (exactly `passSize` distinct rows and one `completesPass`), so a crash
@@ -79,7 +86,7 @@ Rules:
 
 ## Write side: declarative operations (`mutations.ts`)
 
-Four public writes. Each takes the lock, snapshots, **plans the whole request
+Three public writes. Each takes the lock, snapshots, **plans the whole request
 with the pure planners before writing a byte**, repairs a torn final line on
 each append target, applies, and returns a fresh snapshot; the lock is released
 on success or failure.
@@ -92,7 +99,6 @@ on success or failure.
   annotation rows go to the child their `traceId` names and must name one of
   the traces. Used by `runs add` and `run --capture-workdir`.
 - `recordCompletedRun({ dir, stagedStatelogFile, codeEntry?, workdir?, run })` — the eval harness's one call per finished test, on a fresh directory
-- `recordNote({ dir, traceId, annotator, text })`
 - `recordGradingPass({ dir, scores })` — mints one `passId`, stamps `passSize`, marks the last row `completesPass`; an empty `scores` is refused
 
 Writer inputs are held to a stricter standard than reads: a statelog file
@@ -144,7 +150,12 @@ feature.
 judges consume — a view, never a file. `traceEnding(trace)` reads how a trace
 ended from its own events (`ok` / `error` / `unknown`); the harness's `run` row,
 when present, knows more. `summarizeRuns(snapshot)` (`list.ts`) is one
-`RunSummary` per trace for listings. `traceInputText` / `traceOutputText`
+`RunSummary` per trace for listings; its `hasNotes` is true when `notes.md`
+has non-blank text, and is the same for every trace the directory holds,
+because the note is about the run. `annotationSummaryText` renders the
+viewer's per-trace line ("notes · score 0.70 · labeled"). `humanFeedbackFor`
+(`humanFeedback.ts`) puts the trimmed `notes.md` first in `notes`, then each
+checklist sign-off's note. `traceInputText` / `traceOutputText`
 (`traceText.ts`) are the one rule for what "the input" and "the output" of a
 trace are when shown to a person (listings, the labeling screen).
 
@@ -179,7 +190,8 @@ One file per command; none imports the lock or the append helpers.
 - `agency runs list <path…>` — one line per run across every run directory
   the paths name (`findRunDirectories`, then `readRunDirectory` each, then
   `buildRunsListing` → `formatRunsList`). Columns `TRACE TEST AGENT STARTED
-  ENDED TIME COST LLM TOOLS SCORE NOTES LABELED INPUT`: `TEST` is the harness
+  ENDED TIME COST LLM TOOLS SCORE NOTES LABELED INPUT`: `NOTES` is `yes`
+  when `notes.md` has text, else blank; `TEST` is the harness
   `run` row's test id; `AGENT` is `displayAgent`: the trace's own `agentName`
   event, else the harness label `flags.agent` unchanged (a command line is
   not shortened; its basename could be any argument). `SCORE` and the footer
@@ -194,7 +206,6 @@ One file per command; none imports the lock or the append helpers.
   any pass is written: grading mutates, so `eval grade runs/suite runs/suite/a`
   grades `a` once. One pass per run directory; per-test blocks and the mean
   (`formatGrade.ts`).
-- `agency note <dir> <text> [--trace id] [--annotator who]` — `recordNote`.
 - `agency run <file> --capture-workdir <dir>` (`lib/cli/commands.ts`) — mints
   a trace id (`AGENCY_TRACE_ID`), points the child's statelog at a private
   staging file (`log.logFile` + `observability` overrides), and after exit

@@ -10,7 +10,11 @@ export type RunSummary = {
   /** The test id from the harness's `run` row; null for an ad-hoc trace. */
   testId: string | null;
   input: string | null;
+  /** The trace's own `agentName` event, when it emitted one. */
   agentName: string | null;
+  /** The harness's agent label from the `run` row (`flags.agent`: an agent
+   *  file target or a command line), unchanged; null for an ad-hoc trace. */
+  agentLabel: string | null;
   startedAt: string | null;
   startedAtMs: number | null;
   durationMs: number;
@@ -49,6 +53,7 @@ function summarizeTrace(
     testId: testIdOf(runRow),
     input: traceInputText(trace, record),
     agentName: record.agentName ?? null,
+    agentLabel: agentLabelOf(runRow),
     startedAt: startedAtMs === null ? null : new Date(startedAtMs).toISOString(),
     startedAtMs,
     durationMs: record.durationMs,
@@ -86,6 +91,50 @@ export function annotationSummaries(snapshot: RunDirectorySnapshot): Record<stri
     if (text !== "") out[summary.traceId] = text;
   }
   return out;
+}
+
+function agentLabelOf(runRow: (Annotation & { kind: "run" }) | null): string | null {
+  const label = runRow?.flags.agent;
+  if (typeof label !== "string" || label === "") {
+    return null;
+  }
+  return label;
+}
+
+/** What a listing shows for "which agent": the trace's own name when it
+ *  emitted one, else the harness label unchanged (a command line is not
+ *  shortened: its basename could be any argument), else null. */
+export function displayAgent(summary: RunSummary): string | null {
+  return summary.agentName ?? summary.agentLabel;
+}
+
+/** What `runs list` renders for a set of run directories. */
+export type RunsListing = {
+  /** One row per trace found (a transitional multi-trace directory is several rows). */
+  summaries: RunSummary[];
+  /** Directories whose statelog holds no trace: a run that died before its first event. */
+  silentRunCount: number;
+  /** summaries.length + silentRunCount. */
+  runCount: number;
+  /** Rows with a persisted score, and their mean; null when none. */
+  gradedCount: number;
+  meanScore: number | null;
+};
+
+export function buildRunsListing(snapshots: RunDirectorySnapshot[]): RunsListing {
+  const summaries = snapshots.flatMap(summarizeRuns);
+  const silentRunCount = snapshots.filter((snapshot) => snapshot.traces.length === 0).length;
+  const scores = summaries.flatMap((summary) =>
+    summary.latestScore === null ? [] : [summary.latestScore],
+  );
+  return {
+    summaries,
+    silentRunCount,
+    runCount: summaries.length + silentRunCount,
+    gradedCount: scores.length,
+    meanScore:
+      scores.length === 0 ? null : scores.reduce((sum, score) => sum + score, 0) / scores.length,
+  };
 }
 
 function testIdOf(runRow: (Annotation & { kind: "run" }) | null): string | null {

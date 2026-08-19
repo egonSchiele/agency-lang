@@ -1,5 +1,5 @@
 import * as fs from "fs";
-
+import * as path from "path";
 import { describe, expect, it } from "vitest";
 
 import { writeRunDirectory, type FakeRun } from "@/eval/runDirectoryFixture.js";
@@ -124,6 +124,8 @@ describe("gradeRun", () => {
         errorMessage: "compile failed",
       },
     ]);
+    // The silent run did not erase its neighbour's trace from the shared fixture statelog.
+    expect(fs.readFileSync(path.join(runDir, "statelog.jsonl"), "utf8")).toContain("trace-1");
     const card = await gradeRun(runDir, ctx([grader(() => 1, { name: "one" })]));
     expect(card.perInput.map((entry) => entry.test.id).sort()).toEqual(["never-started", "ok"]);
     expect(card.objective()).toBe(0.5);
@@ -134,6 +136,8 @@ describe("gradeRun", () => {
 
   it("a suite where every test died before its first event does not pass gates vacuously", async () => {
     const runDir = writeRunDirectory([{ test: capital, wroteStatelog: false, ended: "timeout" }]);
+    // Still a run directory by the walk rule: an empty statelog, as the harness writes.
+    expect(fs.readFileSync(path.join(runDir, "statelog.jsonl"), "utf8")).toBe("");
     const card = await gradeRun(runDir, ctx([grader(() => 1, { name: "one" })]));
     expect(card.perInput).toHaveLength(1);
     expect(card.gatesPassed()).toBe(false);

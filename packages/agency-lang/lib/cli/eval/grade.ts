@@ -30,17 +30,26 @@ export type EvalGradeResult = {
 };
 
 /** The command's own preconditions, checked before anything loads: the two
- *  ways of saying "judge against this" are exclusive, and the target must
+ *  ways of saying "judge against this" are exclusive, and the targets must
  *  hold run directories (a bare statelog copied into a folder is the common
- *  miss). Returns the run directories found. */
-export function validateGradeTarget(target: string, opts: EvalGradeOptions): string[] {
+ *  miss). Returns canonical run directories to grade, duplicates removed by
+ *  physical identity: `eval grade runs/suite runs/suite/a` grades `a` once. */
+export function validateGradeTarget(targets: string[], opts: EvalGradeOptions): string[] {
   if (opts.graders !== undefined && opts.goal !== undefined) {
     throw new Error(
       "Provide only one of --graders or --goal: a grading module carries its own criteria " +
         "(give LlmJudge a goal there instead).",
     );
   }
-  return findRunDirectories([target]);
+  return uniqueRunDirectories(findRunDirectories(targets));
+}
+
+/** First appearance wins. Canonical paths, so identity and the mutation
+ *  target come from one source of truth (the walk follows symlinks while
+ *  classifying, so two spellings can name one directory). */
+function uniqueRunDirectories(dirs: string[]): string[] {
+  const canonical = dirs.map((dir) => fs.realpathSync.native(dir));
+  return canonical.filter((dir, index) => canonical.indexOf(dir) === index);
 }
 
 /** The grader set `eval grade` runs with; see `resolveGraders` for the precedence. */
@@ -50,14 +59,17 @@ export async function gradersFor(opts: EvalGradeOptions, config: AgencyConfig) {
 }
 
 /**
- * Score a run directory, or every run directory in a group. Never re-executes
+ * Score run directories, or every run directory in groups. Never re-executes
  * the agent. Each run gets its own grading pass, appended to ITS
  * `annotations.jsonl` — a re-grade sits beside the earlier ones, never over
  * them.
  */
-export async function evalGrade(target: string, opts: EvalGradeOptions): Promise<EvalGradeResult> {
+export async function evalGrade(
+  targets: string[],
+  opts: EvalGradeOptions,
+): Promise<EvalGradeResult> {
   const config = opts.config ?? {};
-  const runDirs = validateGradeTarget(target, opts);
+  const runDirs = validateGradeTarget(targets, opts);
   // `grade` is undefined here: there is no point running this command with
   // grading switched off, so the same resolver's default path applies. An
   // explicit --graders overrides every test's recorded graders; otherwise

@@ -83,11 +83,11 @@ export function addRunDirectoryCommands(
 
   runs
     .command("list")
-    .description("One line per trace: when, how it ended, cost, score, notes")
-    .argument("<dir>", "The run directory")
-    .action((dir: string) => {
+    .description("One line per run: when, how it ended, cost, score, notes")
+    .argument("<paths...>", "Run directories, or directories of run directories")
+    .action((paths: string[]) => {
       try {
-        dependencies.runsList(dir);
+        dependencies.runsList(paths);
       } catch (error) {
         dependencies.fail((error as Error).message);
       }

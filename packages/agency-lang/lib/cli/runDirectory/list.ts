@@ -1,40 +1,56 @@
-import { summarizeRuns, type RunSummary } from "@/runDirectory/list.js";
-import { readRunDirectory, type RunDirectorySnapshot } from "@/runDirectory/runDir.js";
+import { findRunDirectories } from "@/runDirectory/findRuns.js";
+import {
+  buildRunsListing,
+  displayAgent,
+  type RunsListing,
+  type RunSummary,
+} from "@/runDirectory/list.js";
+import { readRunDirectory } from "@/runDirectory/runDir.js";
 
 import { formatTextTable, oneLine } from "./table.js";
 
 export type RunsListDependencies = { report(message: string): void };
 
-/** One line per trace in a run directory. */
+/** One line per run across every run directory the paths name (a run
+ *  directory is itself; a directory of run directories is its children). */
 export function runsList(
-  dir: string,
+  paths: string[],
   dependencies: RunsListDependencies = { report: (message) => console.log(message) },
 ): RunSummary[] {
-  const snapshot = readRunDirectory(dir, { reportWarning: (message) => console.warn(message) });
-  dependencies.report(formatRunsList(snapshot));
-  return summarizeRuns(snapshot);
+  const snapshots = findRunDirectories(paths).map((dir) =>
+    readRunDirectory(dir, { reportWarning: (message) => console.warn(message) }),
+  );
+  const listing = buildRunsListing(snapshots);
+  dependencies.report(formatRunsList(listing));
+  return listing.summaries;
 }
 
-export function formatRunsList(snapshot: RunDirectorySnapshot): string {
-  const summaries = summarizeRuns(snapshot);
-  if (summaries.length === 0) {
-    return `${snapshot.dir}: no traces${snapshot.hasStatelog ? "" : " (no statelog.jsonl yet)"}`;
+const HEADER = [
+  "TRACE",
+  "TEST",
+  "AGENT",
+  "STARTED",
+  "ENDED",
+  "TIME",
+  "COST",
+  "LLM",
+  "TOOLS",
+  "SCORE",
+  "NOTES",
+  "LABELED",
+  "INPUT",
+];
+
+/** The table (omitted when there are no rows) and the footer line. */
+export function formatRunsList(listing: RunsListing): string {
+  const footer = footerLine(listing);
+  if (listing.summaries.length === 0) {
+    return footer;
   }
-  const header = [
-    "TRACE",
-    "STARTED",
-    "ENDED",
-    "TIME",
-    "COST",
-    "LLM",
-    "TOOLS",
-    "SCORE",
-    "NOTES",
-    "LABELED",
-    "INPUT",
-  ];
-  const rows = summaries.map((summary) => [
+  const rows = listing.summaries.map((summary) => [
     summary.traceId.slice(0, 8),
+    summary.testId ?? "",
+    displayAgent(summary) ?? "",
     summary.startedAt === null ? "" : summary.startedAt.slice(0, 16).replace("T", " "),
     summary.ended,
     formatDuration(summary.durationMs),
@@ -46,7 +62,33 @@ export function formatRunsList(snapshot: RunDirectorySnapshot): string {
     summary.labeled ? "yes" : "",
     summary.input === null ? "" : oneLine(summary.input, 60),
   ]);
-  return formatTextTable(header, rows);
+  return `${formatTextTable(HEADER, rows)}\n${footer}`;
+}
+
+/** `N runs · mean 0.720 over G graded · S runs wrote no trace`, clauses present
+ *  only when they apply, in that order. */
+function footerLine(listing: RunsListing): string {
+  return [pluralRuns(listing.runCount), ...meanClause(listing), ...silentRunClause(listing)].join(
+    " · ",
+  );
+}
+
+function meanClause(listing: RunsListing): string[] {
+  if (listing.meanScore === null) {
+    return [];
+  }
+  return [`mean ${listing.meanScore.toFixed(3)} over ${listing.gradedCount} graded`];
+}
+
+function silentRunClause(listing: RunsListing): string[] {
+  if (listing.silentRunCount === 0) {
+    return [];
+  }
+  return [`${pluralRuns(listing.silentRunCount)} wrote no trace`];
+}
+
+function pluralRuns(count: number): string {
+  return count === 1 ? "1 run" : `${count} runs`;
 }
 
 function formatDuration(ms: number): string {

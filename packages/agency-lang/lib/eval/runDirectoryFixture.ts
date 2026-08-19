@@ -3,6 +3,7 @@ import * as path from "path";
 
 import type { RunOutcome } from "@/runDirectory/annotations.js";
 import { recordCompletedRun } from "@/runDirectory/mutations.js";
+import { runDirPaths } from "@/runDirectory/runDir.js";
 import { finishedTraceLines, tempDir } from "@/runDirectory/testFixtures.js";
 
 import type { Test } from "./runTypes.js";
@@ -32,6 +33,13 @@ export type FakeRun = {
  */
 export function writeRunDirectory(runs: FakeRun[], dir: string = tempDir("run-")): string {
   fs.mkdirSync(dir, { recursive: true });
+  const statelog = runDirPaths(dir).statelog;
+  if (!fs.existsSync(statelog)) {
+    // The harness creates the statelog before running an input. It remains
+    // empty when the test dies before its first event, so discovery still
+    // recognizes the directory as a run.
+    fs.writeFileSync(statelog, "");
+  }
   runs.forEach((run, index) => {
     const traceId = run.traceId ?? `trace-${index + 1}`;
     const staging = tempDir("staging-");

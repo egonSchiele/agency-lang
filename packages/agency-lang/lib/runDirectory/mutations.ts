@@ -3,6 +3,8 @@ import * as path from "path";
 
 import { nanoid } from "nanoid";
 
+import { safeDeleteDirectoryWithin } from "@/utils.js";
+
 import { appendDurably } from "./durableWrite.js";
 
 import {
@@ -26,6 +28,7 @@ import {
   applyWorkdirAttachment,
   planWorkdirAttachment,
   type WorkdirAttachmentRequest,
+  type WorkdirAttachmentPlan,
 } from "./attachWorkdir.js";
 import { acquireRunDirLock } from "./lock.js";
 import {
@@ -76,10 +79,30 @@ export type WrapTracesResult = {
   skipped: { traceId: string; reason: string }[];
 };
 
+type RunDirectoryAssemblyPlan = {
+  dir: string;
+  statelog: StatelogMergePlan;
+  code: CodeAttachmentPlan[];
+  workdir?: WorkdirAttachmentPlan;
+  annotationDrafts: AnnotationDraft[];
+};
+
+type WrappedRunPlan = {
+  childDir: string;
+  stagingDir: string;
+  assembly: RunDirectoryAssemblyPlan;
+};
+
+type WrapTracesPlan = {
+  stagingRoot: string;
+  writes: WrappedRunPlan[];
+  skipped: { traceId: string; reason: string }[];
+};
+
 /**
  * `agency runs add` and `agency run --capture-workdir`: make one run directory
  * per trace in the given statelogs, under `groupDir`. Each child is assembled
- * in `<groupDir>/.staging/<traceId>` and renamed into place, so a child is
+ * below `<groupDir>/.staging/` and renamed into place, so a child is
  * either whole or absent. A child that already exists is skipped, never
  * touched. Code is attached to the traces that recorded its closure hash and
  * must match at least one; annotation rows go to the child their `traceId`
@@ -89,6 +112,13 @@ export function wrapTracesAsRunDirectories(
   request: WrapTracesRequest,
   options: MutationOptions = {},
 ): WrapTracesResult {
+  const plan = planWrappedRuns(request, options);
+  return applyWrappedRuns(plan, options);
+}
+
+/** Resolve and validate every child before creating the group or staging any
+ *  run. The executor therefore receives only complete, writable requests. */
+function planWrappedRuns(request: WrapTracesRequest, options: MutationOptions): WrapTracesPlan {
   const reportWarning = options.reportWarning ?? (() => {});
   const traces = selectTraces(request);
   if (request.workdir !== undefined && traces.length > 1) {
@@ -113,45 +143,47 @@ export function wrapTracesAsRunDirectories(
     hash: computeCodeIdentity(entry).closureHash,
   }));
   const recordedAnywhere = recordedClosureHashes(traces);
-  for (const code of codeIdentities) {
-    if (!recordedAnywhere.includes(code.hash)) {
-      const known = recordedAnywhere.length === 0 ? "none recorded" : recordedAnywhere.join(", ");
-      throw new CodeMismatchError(
-        `${code.entry} hashes to ${code.hash}, which none of the traces recorded as its code ` +
-          `(${known}). Attach the code that actually ran.`,
-      );
-    }
+  const unmatchedCode = codeIdentities.find((code) => !recordedAnywhere.includes(code.hash));
+  if (unmatchedCode !== undefined) {
+    const known = recordedAnywhere.length === 0 ? "none recorded" : recordedAnywhere.join(", ");
+    throw new CodeMismatchError(
+      `${unmatchedCode.entry} hashes to ${unmatchedCode.hash}, which none of the traces recorded ` +
+        `as its code (${known}). Attach the code that actually ran.`,
+    );
   }
 
-  const result: WrapTracesResult = { written: [], skipped: [] };
-  const stagingRoot = path.join(request.groupDir, ".staging");
-  for (const trace of traces) {
-    const child = childDirFor(request.groupDir, trace.traceId);
-    if (fs.existsSync(child)) {
-      result.skipped.push({ traceId: trace.traceId, reason: `${child} already exists` });
-      continue;
-    }
-    const staging = path.join(stagingRoot, trace.traceId);
-    fs.rmSync(staging, { recursive: true, force: true });
-    fs.mkdirSync(staging, { recursive: true });
-    const recorded = recordedClosureHashes([trace]);
-    assembleRunDirectory(
-      {
-        dir: staging,
-        trace,
-        codeEntries: codeIdentities
-          .filter((code) => recorded.includes(code.hash))
-          .map((code) => code.entry),
-        workdir: request.workdir,
-        annotationDrafts: annotationDrafts.filter((draft) => draft.traceId === trace.traceId),
-      },
-      options,
-    );
-    fs.renameSync(staging, child);
-    result.written.push(child);
-  }
-  removeIfEmpty(stagingRoot);
-  return result;
+  const groupDir = path.resolve(request.groupDir);
+  const stagingRoot = path.join(groupDir, ".staging");
+  const children = traces.map((trace) => {
+    const childDir = childDirFor(groupDir, trace.traceId);
+    return { trace, childDir, exists: fs.existsSync(childDir) };
+  });
+  const skipped = children
+    .filter((child) => child.exists)
+    .map(({ trace, childDir }) => ({
+      traceId: trace.traceId,
+      reason: `${childDir} already exists`,
+    }));
+  const writes = children
+    .filter((child) => !child.exists)
+    .map(({ trace, childDir }) => {
+      const stagingDir = path.join(stagingRoot, nanoid());
+      const recorded = recordedClosureHashes([trace]);
+      return {
+        childDir,
+        stagingDir,
+        assembly: planRunDirectoryAssembly({
+          dir: stagingDir,
+          trace,
+          codeEntries: codeIdentities
+            .filter((code) => recorded.includes(code.hash))
+            .map((code) => code.entry),
+          workdir: request.workdir,
+          annotationDrafts: annotationDrafts.filter((draft) => draft.traceId === trace.traceId),
+        }),
+      };
+    });
+  return { stagingRoot, writes, skipped };
 }
 
 /** The traces the request is about, with the same id never carrying two
@@ -181,39 +213,93 @@ function childDirFor(groupDir: string, traceId: string): string {
         `${groupDir}.`,
     );
   }
+  if (child === path.join(path.resolve(groupDir), ".staging")) {
+    throw new Error(`Refusing to write trace "${traceId}": .staging is reserved for assembly.`);
+  }
   return child;
 }
 
-/** Write one trace's statelog into `dir`, then attach code, workdir and rows
- *  under the directory's writer lock. */
-function assembleRunDirectory(
-  args: {
-    dir: string;
-    trace: Trace;
-    codeEntries: string[];
-    workdir?: WorkdirAttachmentRequest;
-    annotationDrafts: AnnotationDraft[];
-  },
-  options: MutationOptions,
-): void {
-  withWriter(args.dir, options, (paths, snapshot, reportWarning) => {
-    applyStatelogMerge(paths, planStatelogMerge(snapshot.traces, [args.trace]));
-    const merged: RunDirectorySnapshot = { ...snapshot, traces: [args.trace] };
-    const codePlans = args.codeEntries.map((entry) => planCodeAttachment(merged, entry, paths));
-    const workdirPlan =
-      args.workdir === undefined ? undefined : planWorkdirAttachment(merged, args.workdir, paths);
-    for (const plan of codePlans) applyCodeAttachment(paths, plan);
-    if (workdirPlan !== undefined) applyWorkdirAttachment(paths, workdirPlan, now(options));
-    appendRows(paths.annotations, args.annotationDrafts, options, reportWarning);
+function planRunDirectoryAssembly(args: {
+  dir: string;
+  trace: Trace;
+  codeEntries: string[];
+  workdir?: WorkdirAttachmentRequest;
+  annotationDrafts: AnnotationDraft[];
+}): RunDirectoryAssemblyPlan {
+  const paths = runDirPaths(args.dir);
+  const snapshot: RunDirectorySnapshot = {
+    dir: args.dir,
+    hasStatelog: false,
+    traces: [args.trace],
+    annotationRows: [],
+    effectiveAnnotations: {},
+  };
+  return {
+    dir: args.dir,
+    statelog: planStatelogMerge([], [args.trace]),
+    code: args.codeEntries.map((entry) => planCodeAttachment(snapshot, entry, paths)),
+    workdir:
+      args.workdir === undefined ? undefined : planWorkdirAttachment(snapshot, args.workdir, paths),
+    annotationDrafts: args.annotationDrafts,
+  };
+}
+
+function applyWrappedRuns(plan: WrapTracesPlan, options: MutationOptions): WrapTracesResult {
+  const result: WrapTracesResult = { written: [], skipped: plan.skipped };
+  try {
+    for (const run of plan.writes) {
+      fs.mkdirSync(plan.stagingRoot, { recursive: true });
+      fs.mkdirSync(run.stagingDir);
+      try {
+        applyRunDirectoryAssembly(run.assembly, options);
+        fs.renameSync(run.stagingDir, run.childDir);
+        result.written.push(run.childDir);
+      } catch (error) {
+        removeStagedRun(plan.stagingRoot, run.stagingDir);
+        throw error;
+      }
+    }
+  } finally {
+    removeEmptyDirectory(plan.stagingRoot);
+  }
+  return result;
+}
+
+function applyRunDirectoryAssembly(plan: RunDirectoryAssemblyPlan, options: MutationOptions): void {
+  withWriter(plan.dir, options, (paths, _snapshot, reportWarning) => {
+    applyStatelogMerge(paths, plan.statelog);
+    for (const codePlan of plan.code) {
+      applyCodeAttachment(paths, codePlan);
+    }
+    if (plan.workdir !== undefined) {
+      applyWorkdirAttachment(paths, plan.workdir, now(options));
+    }
+    appendRows(paths.annotations, plan.annotationDrafts, options, reportWarning);
     return {};
   });
 }
 
-function removeIfEmpty(dir: string): void {
+function removeStagedRun(stagingRoot: string, stagingDir: string): void {
+  if (!fs.existsSync(stagingDir)) {
+    return;
+  }
+  const deleted = safeDeleteDirectoryWithin(stagingRoot, stagingDir);
+  if (!deleted.success) {
+    throw new Error(deleted.message ?? `Could not remove ${stagingDir}.`);
+  }
+}
+
+function removeEmptyDirectory(dir: string): void {
+  if (!fs.existsSync(dir)) {
+    return;
+  }
   try {
     fs.rmdirSync(dir);
-  } catch {
-    // not empty, or already gone — either is fine
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT" && code !== "ENOTEMPTY") {
+      throw error;
+    }
   }
 }
 

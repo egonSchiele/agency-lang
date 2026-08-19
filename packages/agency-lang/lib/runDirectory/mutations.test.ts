@@ -142,6 +142,47 @@ describe("wrapTracesAsRunDirectories", () => {
       }),
     ).toThrow(/outside/);
     expect(fs.existsSync(path.join(escaping, "..", "escaped"))).toBe(false);
+
+    expect(() =>
+      wrapTracesAsRunDirectories({
+        groupDir: escaping,
+        statelogFiles: [statelogFile(agentStartLine(".staging"))],
+        codeEntries: [],
+        annotationFiles: [],
+      }),
+    ).toThrow(/reserved/);
+  });
+
+  it("validates every child path before publishing any run directory", () => {
+    const group = tempDir();
+
+    expect(() =>
+      wrapTracesAsRunDirectories({
+        groupDir: group,
+        statelogFiles: [statelogFile(agentStartLine("valid"), agentStartLine("../escaped"))],
+        codeEntries: [],
+        annotationFiles: [],
+      }),
+    ).toThrow(/outside/);
+
+    expect(fs.existsSync(path.join(group, "valid"))).toBe(false);
+  });
+
+  it("removes staging when assembling a run directory fails", () => {
+    const group = tempDir();
+
+    expect(() =>
+      wrapTracesAsRunDirectories({
+        groupDir: group,
+        statelogFiles: [statelogFile(agentStartLine("t1"))],
+        codeEntries: [],
+        workdir: { sourceDir: path.join(group, "missing") },
+        annotationFiles: [],
+      }),
+    ).toThrow(/not a directory/);
+
+    expect(fs.existsSync(path.join(group, ".staging"))).toBe(false);
+    expect(fs.existsSync(path.join(group, "t1"))).toBe(false);
   });
 
   it("routes annotation rows to the child their trace names, idempotently, and refuses orphans", () => {

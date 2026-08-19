@@ -93,23 +93,26 @@ export function ungradedInputs(perInput: InputBreakdown[]): { inputId: string; r
  * runTypes.ts imports InputBreakdown from this file.
  */
 export function formatGrading(objective: number, perInput: InputBreakdown[]): string[] {
-  // Perfect green, zero red, in-between plain — the two ends are the ones a
-  // reader scans for. ttyColor: plain text when piped.
-  const objectiveText = objective.toFixed(3);
-  const coloredObjective =
-    objective === 0
-      ? ttyColor.red(objectiveText)
-      : objective === 1
-        ? ttyColor.green(objectiveText)
-        : objectiveText;
   return [
-    `objective  ${coloredObjective}`,
+    `objective  ${formatScore(objective)}`,
     ...summarizeGraders(perInput).map(formatGraderSummary),
     ...ungradedInputs(perInput).map(
       (entry) =>
         `  ${ttyColor.green(entry.inputId)}  ${ttyColor.red(`not graded — ${entry.reason}`)}`,
     ),
   ];
+}
+
+/** Perfect scores are green, zeroes red, and intermediate scores plain. */
+export function formatScore(score: number): string {
+  const text = score.toFixed(3);
+  if (score === 0) {
+    return ttyColor.red(text);
+  }
+  if (score === 1) {
+    return ttyColor.green(text);
+  }
+  return text;
 }
 
 function formatGraderSummary(summary: GraderSummary): string {

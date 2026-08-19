@@ -4,6 +4,7 @@ import * as path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
+import { buildRunsListing } from "@/runDirectory/list.js";
 import { readRunDirectory } from "@/runDirectory/runDir.js";
 
 import { evalGrade, gradersFor, validateGradeTarget } from "./grade.js";
@@ -45,10 +46,11 @@ describe("evalGrade", () => {
   it("scores a run directory and records one complete grading pass", async () => {
     const runDir = makeRunDir("hello");
 
-    const result = await evalGrade(runDir, { graders: makeGraders(), config: {} });
+    const result = await evalGrade([runDir], { graders: makeGraders(), config: {} });
 
     expect(result.runs).toHaveLength(1);
-    expect(result.runs[0].dir).toBe(runDir);
+    // Reported directories are canonical (realpath), the same path the pass was written to.
+    expect(result.runs[0].dir).toBe(fs.realpathSync(runDir));
     expect(result.mean).toBeCloseTo(0.5);
     expect(result.runs[0].grading.graders).toEqual(["len"]);
     const snapshot = readRunDirectory(runDir, { reportWarning: () => {} });
@@ -72,7 +74,7 @@ describe("evalGrade", () => {
     const runDir = makeRunDir("hello");
     const out = path.join(runDir, "custom.json");
 
-    await evalGrade(runDir, { graders: makeGraders(), out, config: {} });
+    await evalGrade([runDir], { graders: makeGraders(), out, config: {} });
 
     expect(JSON.parse(fs.readFileSync(out, "utf8")).mean).toBeCloseTo(0.5);
     expect(fs.existsSync(path.join(runDir, "annotations.jsonl"))).toBe(true);
@@ -82,8 +84,8 @@ describe("evalGrade", () => {
     const runDir = makeRunDir("hello");
     const graders = makeGraders(); // the SAME module both times: one annotator, two passes
 
-    await evalGrade(runDir, { graders, config: {} });
-    await evalGrade(runDir, { graders, config: {} });
+    await evalGrade([runDir], { graders, config: {} });
+    await evalGrade([runDir], { graders, config: {} });
 
     const snapshot = readRunDirectory(runDir, { reportWarning: () => {} });
     const scores = snapshot.annotationRows.filter((row) => row.kind === "score");
@@ -103,7 +105,7 @@ describe("evalGrade", () => {
     );
     fs.writeFileSync(path.join(group, "notes.txt"), "not a run");
 
-    const result = await evalGrade(group, { graders: makeGraders(), config: {} });
+    const result = await evalGrade([group], { graders: makeGraders(), config: {} });
 
     expect(result.runs.map((run) => path.basename(run.dir))).toEqual(["a", "b"]);
     expect(result.mean).toBeCloseTo((0.5 + 1.1) / 2);
@@ -127,23 +129,96 @@ describe("evalGrade", () => {
 export default [grader(({ output }) => output === "hello", { name: "gate", mustPass: true })];`,
     );
 
-    const result = await evalGrade(group, { graders: file, config: {} });
+    const result = await evalGrade([group], { graders: file, config: {} });
 
     expect(result.runs.map((run) => run.grading.objective)).toEqual([1, 0]);
     expect(result.gatesPassed).toBe(false);
     expect(result.mean).toBeCloseTo(0.5);
   });
 
+  it("several paths: every run found is graded once, in walk order", async () => {
+    const a = makeRunDir("hello");
+    const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
+    dirs.push(group);
+    writeRunDirectory([{ test: { id: "b", input: "t" }, output: "hello" }], path.join(group, "b"));
+
+    const result = await evalGrade([a, group], { graders: makeGraders(), config: {} });
+
+    expect(result.runs.map((run) => run.dir)).toEqual(
+      [a, path.join(group, "b")].map((dir) => fs.realpathSync(dir)),
+    );
+    for (const dir of [a, path.join(group, "b")]) {
+      const rows = readRunDirectory(dir, { reportWarning: () => {} }).annotationRows;
+      expect(rows.filter((row) => row.kind === "score")).toHaveLength(1);
+    }
+  });
+
+  it("a run named twice (through its group and directly) is graded once and counted once", async () => {
+    const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
+    dirs.push(group);
+    const a = path.join(group, "a");
+    writeRunDirectory([{ test: { id: "a", input: "t" }, output: "hello" }], a);
+    writeRunDirectory(
+      [{ test: { id: "b", input: "t" }, output: "hello world" }],
+      path.join(group, "b"),
+    );
+
+    const result = await evalGrade([group, a], { graders: makeGraders(), config: {} });
+
+    expect(result.runs.map((run) => path.basename(run.dir))).toEqual(["a", "b"]);
+    expect(result.mean).toBeCloseTo((0.5 + 1.1) / 2);
+    const rows = readRunDirectory(a, { reportWarning: () => {} }).annotationRows;
+    expect(rows.filter((row) => row.kind === "score")).toHaveLength(1);
+  });
+
+  it("a symlink alias of a run directory is the same run: graded once", async () => {
+    const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
+    dirs.push(group);
+    const a = path.join(group, "a");
+    writeRunDirectory([{ test: { id: "a", input: "t" }, output: "hello" }], a);
+    const alias = path.join(group, "alias");
+    fs.symlinkSync(a, alias, "dir");
+
+    const result = await evalGrade([a, alias], { graders: makeGraders(), config: {} });
+
+    expect(result.runs).toHaveLength(1);
+    const rows = readRunDirectory(a, { reportWarning: () => {} }).annotationRows;
+    expect(rows.filter((row) => row.kind === "score")).toHaveLength(1);
+  });
+
+  it("an errored run scores zero in eval grade but has no score row, so the listing mean leaves it out", async () => {
+    const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
+    dirs.push(group);
+    writeRunDirectory([{ test: { id: "a", input: "t" }, output: "hello" }], path.join(group, "a"));
+    writeRunDirectory(
+      [{ test: { id: "b", input: "t" }, output: "hello", ended: "error" }],
+      path.join(group, "b"),
+    );
+
+    const result = await evalGrade([group], { graders: makeGraders(), config: {} });
+
+    expect(result.mean).toBeCloseTo(0.5 / 2);
+    const listing = buildRunsListing(
+      [path.join(group, "a"), path.join(group, "b")].map((dir) =>
+        readRunDirectory(dir, { reportWarning: () => {} }),
+      ),
+    );
+    expect(listing.gradedCount).toBe(1);
+    expect(listing.meanScore).toBeCloseTo(0.5);
+  });
+
   it("refuses a folder with no run directories, naming how to build one", () => {
     const folder = fs.mkdtempSync(path.join(process.cwd(), ".test-not-a-run-dir-"));
     dirs.push(folder);
     fs.writeFileSync(path.join(folder, "statelogs.jsonl"), "");
-    expect(() => validateGradeTarget(folder, {})).toThrow(/not a run directory.*agency runs add/s);
-    expect(() => validateGradeTarget(makeRunDir("x"), {})).not.toThrow();
+    expect(() => validateGradeTarget([folder], {})).toThrow(
+      /not a run directory.*agency runs add/s,
+    );
+    expect(() => validateGradeTarget([makeRunDir("x")], {})).not.toThrow();
   });
 
   it("refuses --goal together with --graders", () => {
-    expect(() => validateGradeTarget(makeRunDir("x"), { goal: "g", graders: "g.ts" })).toThrow(
+    expect(() => validateGradeTarget([makeRunDir("x")], { goal: "g", graders: "g.ts" })).toThrow(
       /only one of --graders or --goal/,
     );
   });

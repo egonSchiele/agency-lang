@@ -8,9 +8,11 @@ deliberately (2026-07-30, re-based on the run directory 2026-08-18).
 ## The rules
 
 **`eval run` never grades.** `agency eval run` loads the suite, runs it, and
-writes one run directory: every test's trace in `statelog.jsonl`, its workdir
-under `workdir/<traceId>/`, the agent's code under `code/<closureHash>/`, and
-one `run` annotation per test (`{ test, suite, ended, flags, error? }`). No
+writes one run directory per test at `<out>/<testId>/`: the test's trace in
+`statelog.jsonl` (empty when the test died before its first event, so the
+directory is still a run directory), its workdir flat under `workdir/` with a
+`workdir.json` sidecar, the agent's code flat under `code/`, and one `run`
+annotation (`{ test, suite, ended, flags, error? }`). No
 `goal` is needed to run: `--input <text>` runs one inline test with that
 input and no goal (`inlineInput`; the suite identity is `inline:--input`).
 Grading is `agency eval grade <dir>`, whenever you like, as many times as you
@@ -21,9 +23,10 @@ names the GROUP directory; each test's run directory is written at
 and renamed into place so a child appears whole or not at all. A child that
 already exists is an error result for that test (nothing overwritten; the
 others still run). Default `<eval.runsDir or runs>/<timestamp>-<random suffix>`.
-`eval grade <path>` takes a run directory or a group and grades each run
-with its own pass, printing the mean over the group (`findRunDirectories`,
-`docs/dev/run-directory.md`). There is deliberately no `--goal` (grading's business), no
+`eval grade <path…>` takes run directories and groups, grades each run found
+with its own pass, and prints the mean over them (`findRunDirectories`,
+`docs/dev/run-directory.md`); a run named twice, or through a symlink alias,
+is graded once (`fs.realpathSync.native` identity, first appearance wins). There is deliberately no `--goal` (grading's business), no
 stop-on-error (`--continue-on-error` is gone: an errored test is a `run` row
 that grades 0, and stopping the suite half-way only leaves holes), and no
 agent-config flags (`--strict`, `--max-tool-call-rounds`,

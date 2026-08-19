@@ -314,7 +314,7 @@ describe("eval run CLI", () => {
       // Passes on test "a", fails the gate on test "b".
       const graders = path.join(tmpDir, "gate.ts");
       fs.writeFileSync(graders, `export default ({ test }) => (test.id === "a" ? 1 : 0);`);
-      const result = await evalGrade(summary.runDir, { graders, config: {} });
+      const result = await evalGrade([summary.runDir], { graders, config: {} });
 
       // One of two runs scored 1, the other 0 — the mean is 0.5, not 0.
       expect(result.mean).toBeCloseTo(0.5);
@@ -376,13 +376,13 @@ describe("eval run CLI", () => {
       );
 
       // "self" scored 1 by its own grader; "plain" scored 0 by the fallback.
-      const fallback = await evalGrade(result.runDir, { config });
+      const fallback = await evalGrade([result.runDir], { config });
       expect(fallback.mean).toBeCloseTo(0.5);
 
       // An explicit --graders replaces BOTH tests' graders.
       const overrideModule = path.join(tmpDir, "override.ts");
       fs.writeFileSync(overrideModule, `export default () => 1;`);
-      const overridden = await evalGrade(result.runDir, { graders: overrideModule, config });
+      const overridden = await evalGrade([result.runDir], { graders: overrideModule, config });
       expect(overridden.mean).toBeCloseTo(1);
     });
   });

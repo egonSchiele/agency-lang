@@ -25,9 +25,8 @@ trace, so a run can be moved with `cp -r` and opened anywhere. A **group** is
 any directory of run directories (what `eval run --out` writes); it has no
 index file. `findRunDirectories(paths)` (`findRuns.ts`) is the one walk rule:
 a run directory is itself, a directory of run directories yields its children
-(one level, sorted), anything else is an error. `eval grade` and the logs
-explorer use it; `runs list` and `label` still take a single directory (next
-chunks). The reader still tolerates several traces in one file, because the
+(one level, sorted), anything else is an error. `eval grade`, `runs list` and
+the logs explorer use it; `label` still takes a single directory (next chunk). The reader still tolerates several traces in one file, because the
 labeling and explorer tests were written for that shape; no writer makes one.
 
 **The statelog is the run.** A directory holding only `statelog.jsonl` is a
@@ -177,7 +176,24 @@ One file per command; none imports the lock or the append helpers.
 - `agency runs add <group> [--statelog f]… [--trace id] [--code entry]… [--workdir p] [--annotations f]…`
   — one `wrapTracesAsRunDirectories` request; prints one line per child
   written or skipped.
-- `agency runs list <dir>` — one line per trace (`summarizeRuns`).
+- `agency runs list <path…>` — one line per run across every run directory
+  the paths name (`findRunDirectories`, then `readRunDirectory` each, then
+  `buildRunsListing` → `formatRunsList`). Columns `TRACE TEST AGENT STARTED
+  ENDED TIME COST LLM TOOLS SCORE NOTES LABELED INPUT`: `TEST` is the harness
+  `run` row's test id; `AGENT` is `displayAgent`: the trace's own `agentName`
+  event, else the harness label `flags.agent` unchanged (a command line is
+  not shortened; its basename could be any argument). `SCORE` and the footer
+  mean are the persisted effective score rows (weighted mean per run); a run
+  `eval grade` scored zero without running graders (errored, timed out,
+  traceless) has no score row and is left out of `G graded`, so the two means
+  can differ for such a group. Footer: `N runs · mean 0.720 over G graded ·
+  S runs wrote no trace`, clauses only when they apply (the table is omitted
+  when there are no rows). Duplicate paths are duplicate rows.
+- `agency eval grade <path…>` (`lib/cli/eval/grade.ts`) — the same walk, then
+  duplicates removed by physical identity (`fs.realpathSync.native`) before
+  any pass is written: grading mutates, so `eval grade runs/suite runs/suite/a`
+  grades `a` once. One pass per run directory; per-test blocks and the mean
+  (`formatGrade.ts`).
 - `agency note <dir> <text> [--trace id] [--annotator who]` — `recordNote`.
 - `agency run <file> --capture-workdir <dir>` (`lib/cli/commands.ts`) — mints
   a trace id (`AGENCY_TRACE_ID`), points the child's statelog at a private

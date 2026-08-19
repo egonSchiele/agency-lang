@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { completeAnnotation } from "./annotations.js";
 
-import { summarizeRuns } from "./list.js";
+import { buildRunsListing, displayAgent, summarizeRuns } from "./list.js";
 import { recordGradingPass, recordNote } from "./mutations.js";
 import { readRunDirectory } from "./runDir.js";
 import { agentStartLine, statelogLine, tempDir } from "./testFixtures.js";
@@ -111,5 +111,101 @@ describe("summarizeRuns", () => {
       ) + "\n",
     );
     expect(summarizeRuns(readRunDirectory(dir, quiet))[0].ended).toBe("timeout");
+  });
+});
+
+describe("buildRunsListing", () => {
+  function runRow(traceId: string, flags: Record<string, string>): string {
+    return (
+      JSON.stringify(
+        completeAnnotation(
+          {
+            traceId,
+            annotator: { kind: "harness", id: "eval" },
+            kind: "run",
+            test: null,
+            suite: null,
+            ended: "ok",
+            flags,
+          },
+          "2026-08-18T00:00:00Z",
+        ),
+      ) + "\n"
+    );
+  }
+
+  it("counts rows, silent runs, total runs, and the mean over the graded rows, from the snapshots", () => {
+    const twoTraces = tempDir();
+    writeStatelog(twoTraces, agentStartLine("t1"), agentStartLine("t2"));
+    const graded = tempDir();
+    writeStatelog(graded, agentStartLine("t3"));
+    recordGradingPass({
+      dir: graded,
+      scores: [
+        {
+          traceId: "t3",
+          annotator: { kind: "grader", id: "g@1" },
+          name: "a",
+          score: { kind: "scalar", value: 0.25 },
+          weight: 1,
+          mustPass: false,
+        },
+      ],
+    });
+    const silent = tempDir();
+    writeStatelog(silent);
+    fs.writeFileSync(path.join(silent, "statelog.jsonl"), "");
+
+    const listing = buildRunsListing(
+      [twoTraces, graded, silent].map((dir) => readRunDirectory(dir, quiet)),
+    );
+    expect(listing.summaries.map((summary) => summary.traceId)).toEqual(["t1", "t2", "t3"]);
+    expect(listing.silentRunCount).toBe(1);
+    expect(listing.runCount).toBe(4);
+    expect(listing.gradedCount).toBe(1);
+    expect(listing.meanScore).toBe(0.25);
+  });
+
+  it("no graded rows: null mean and zero graded", () => {
+    const dir = tempDir();
+    writeStatelog(dir, agentStartLine("t1"));
+    const listing = buildRunsListing([readRunDirectory(dir, quiet)]);
+    expect(listing).toMatchObject({
+      runCount: 1,
+      silentRunCount: 0,
+      gradedCount: 0,
+      meanScore: null,
+    });
+  });
+
+  it("displayAgent: the trace's agentName event wins; else the harness label unchanged; else null", () => {
+    const dir = tempDir();
+    writeStatelog(
+      dir,
+      agentStartLine("named"),
+      statelogLine("named", "agentName", { name: "greeter" }),
+      agentStartLine("file"),
+      agentStartLine("command"),
+      agentStartLine("bare"),
+    );
+    const command = "/usr/bin/python /tmp/agent.py --workdir /tmp/data";
+    fs.writeFileSync(
+      path.join(dir, "annotations.jsonl"),
+      runRow("named", { agent: "/abs/agents/other.agency:main" }) +
+        runRow("file", { agent: "/abs/agents/greeter.agency:main" }) +
+        runRow("command", { agent: command }),
+    );
+    const byTrace = Object.fromEntries(
+      summarizeRuns(readRunDirectory(dir, quiet)).map((summary) => [
+        summary.traceId,
+        displayAgent(summary),
+      ]),
+    );
+    expect(byTrace).toEqual({
+      named: "greeter",
+      file: "/abs/agents/greeter.agency:main",
+      command,
+      bare: null,
+    });
   });
 });

@@ -10,6 +10,11 @@ import {
 } from "../helpers.mjs";
 
 const tarball = resolve(getTarballPath());
+
+function stripAnsi(text) {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/\x1b\[[0-9;]*m/g, "");
+}
 const dir = createTempProject("cli");
 
 try {
@@ -155,16 +160,32 @@ node main(task: string): string {
   if (!evalRunRow || evalRunRow.ended !== "ok") {
     throw new Error(`eval run row unexpected: ${JSON.stringify(evalRows)}`);
   }
+  // A second group of one, so grade and list can take several paths below.
+  run(dir, "npx agency eval run eval-agent.agency --input \"Say hello\" --out eval-runs/smoke2");
   console.log("Test 6 passed");
 
-  // --- Test 6a: eval grade --goal over the run directory just written ---
+  // --- Test 6a: eval grade --goal over two groups at once ---
   // The goal judge is an llm() call; mock it so this runs offline (see Test 7).
+  // One mock per judge call, consumed in order: two runs, two entries.
   console.log("--- Test 6a: eval grade --goal ---");
   const gradeMockEnv = {
-    AGENCY_LLM_MOCKS: JSON.stringify([{ return: { score: 1, reasoning: "mock judge verdict" } }]),
+    AGENCY_LLM_MOCKS: JSON.stringify([
+      { return: { score: 1, reasoning: "mock judge verdict 1" } },
+      { return: { score: 1, reasoning: "mock judge verdict 2" } },
+    ]),
   };
-  const gradeOutput = run(dir, "npx agency eval grade eval-runs/smoke --goal \"Say hello\" 2>&1", { env: gradeMockEnv });
-  assertIncludes(gradeOutput, "score 1.000");
+  const gradeOutput = stripAnsi(run(dir, "npx agency eval grade eval-runs/smoke eval-runs/smoke2 --goal \"Say hello\" 2>&1", { env: gradeMockEnv }));
+  const scoreLines = gradeOutput.split("\n").filter((line) => line.startsWith("input-1  score 1.000"));
+  if (scoreLines.length !== 2) {
+    throw new Error(`expected two graded runs, got ${scoreLines.length}:\n${gradeOutput}`);
+  }
+  assertIncludes(gradeOutput, "mean 1.000 over 2 runs");
+  // runs list over the same two groups: one table, the new columns, the mean footer.
+  const listOutput = stripAnsi(run(dir, "npx agency runs list eval-runs/smoke eval-runs/smoke2"));
+  assertIncludes(listOutput, "TEST");
+  assertIncludes(listOutput, "AGENT");
+  assertIncludes(listOutput, "input-1");
+  assertIncludes(listOutput.trim().split("\n").at(-1), "2 runs · mean 1.000 over 2 graded");
   // A folder that is not a run directory is refused with a pointer, not scored 0.
   const notRunDir = run(dir, "npx agency eval grade eval-runs 2>&1", { expectFail: true });
   assertIncludes(notRunDir, "not a run directory");

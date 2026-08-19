@@ -197,10 +197,9 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
     );
   }
   if (typeof spec.input === "string" && spec.input.length === 0) {
-    throw new Error("Eval test input must not be empty");
-  }
-  if (isPlainObject(spec.input) && Object.keys(spec.input).length === 0) {
-    throw new Error("Eval test input must not be empty");
+    throw new Error(
+      'Eval test input must not be an empty string; omit "input" (or give {}) for an agent that takes none',
+    );
   }
   if (spec.files !== undefined && typeof spec.files !== "string") {
     throw new Error("Eval input files must be a string when provided");
@@ -223,7 +222,11 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
     id: typeof spec.id === "string" ? spec.id : makeId(),
     expected: spec.expected, // any JSON; absent stays undefined
   };
-  if (spec.input !== undefined) out.input = spec.input as string | Record<string, any>;
+  // `{}` is the suite's way of saying "no input", like `eval run` without --input.
+  const hasInput =
+    spec.input !== undefined &&
+    !(isPlainObject(spec.input) && Object.keys(spec.input).length === 0);
+  if (hasInput) out.input = spec.input as string | Record<string, any>;
   if (typeof spec.goal === "string") out.goal = spec.goal;
   if (typeof spec.files === "string")
     out.files = resolveFilesDir(spec.files, baseDir, options, out.id ?? "");

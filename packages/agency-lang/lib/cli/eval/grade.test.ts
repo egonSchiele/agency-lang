@@ -60,7 +60,6 @@ describe("evalGrade", () => {
       kind: "score",
       name: "len",
       passSize: 1,
-      completesPass: true,
       score: { kind: "scalar", value: 0.5 },
     });
     // The grader is identified by its module revision, so an edit in place is a

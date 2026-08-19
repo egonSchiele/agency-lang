@@ -7,6 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 import { finishedTraceLines } from "@/runDirectory/testFixtures.js";
 
+import { AgencyRunner } from "@/eval/grading/agencyRunner.js";
+import { gradeRun } from "@/eval/grading/gradeRun.js";
+
 import { runSuite } from "./runSuite.js";
 import type { EvalRunnerJob } from "./subprocess.js";
 
@@ -223,8 +226,8 @@ describe("runSuite", () => {
       {
         agent: {
           kind: "command",
-          tokens: ["some-agent", "-p", "{task}"],
-          label: "some-agent -p {task}",
+          tokens: ["some-agent", "-p", "{input}"],
+          label: "some-agent -p {input}",
         },
         inputs: [
           { id: "a", goal: "g", input: "first task" },
@@ -331,6 +334,57 @@ describe("runSuite", () => {
     ].run;
     expect((run as unknown as { test: { timeoutSec: number } }).test.timeoutSec).toBe(1200);
     expect(result.okCount).toBe(1);
+  });
+
+  it("stores each test's grading module in its run directory, and grading uses that copy even after the source changes", async () => {
+    const modulePath = path.join(proj, "graders.ts");
+    const moduleReturning = (value: number) => `export default [() => ${value}];`;
+    fs.writeFileSync(modulePath, moduleReturning(1));
+    const result = await runSuite(
+      {
+        agent: path.join(proj, "agent.agency"),
+        inputs: [{ id: "a", goal: "g", input: "t", graders: modulePath }],
+        out: path.join(proj, "runs", "r-graders"),
+        config: {},
+        perRun: { pipeOutput: false },
+      },
+      { runner: traceWritingRunner("done") },
+    );
+    const { runDir, traceId } = result.tests[0];
+    const run = readRunDirectory(runDir, quiet).effectiveAnnotations[traceId].run;
+    const recorded = (run as unknown as { graders: { source: string; bundleFile: string } })
+      .graders;
+    expect(recorded.source).toBe(modulePath);
+    expect(fs.existsSync(path.join(runDirPaths(runDir).gradersDir, recorded.bundleFile))).toBe(
+      true,
+    );
+
+    // The source changes underfoot; the run still grades by the module it ran with.
+    fs.writeFileSync(modulePath, moduleReturning(0));
+    const scorecard = await gradeRun(runDir, {
+      suiteGraders: { mode: "fallback", graders: [] },
+      runAgency: new AgencyRunner({}),
+      config: {},
+    });
+    expect(scorecard.objective()).toBe(1);
+  });
+
+  it("a broken grading module fails before any agent runs", async () => {
+    const modulePath = path.join(proj, "graders.ts");
+    fs.writeFileSync(modulePath, "export const notDefault = 1;");
+    const runner = vi.fn();
+    await expect(
+      runSuite(
+        {
+          agent: path.join(proj, "agent.agency"),
+          inputs: [{ id: "a", goal: "g", input: "t", graders: modulePath }],
+          out: path.join(proj, "runs", "r-broken"),
+          config: {},
+        },
+        { runner },
+      ),
+    ).rejects.toThrow(/must default-export/);
+    expect(runner).not.toHaveBeenCalled();
   });
 
   it("without --out, the run lands under eval.runsDir with a sortable timestamp name", async () => {

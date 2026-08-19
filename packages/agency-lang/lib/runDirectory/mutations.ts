@@ -40,7 +40,12 @@ import {
   planStatelogMerge,
   type StatelogMergePlan,
 } from "./mergeStatelog.js";
-import { readRunDirectory, runDirPaths, type RunDirectorySnapshot } from "./runDir.js";
+import {
+  readRunDirectory,
+  runDirPaths,
+  type RunDirectoryPaths,
+  type RunDirectorySnapshot,
+} from "./runDir.js";
 import { matchTrace, readTracesOrThrow, type Trace } from "./traces.js";
 
 /**
@@ -318,6 +323,9 @@ export type RecordCompletedRunRequest = {
   stagedStatelogFile?: string;
   codeEntry?: string;
   workdir?: WorkdirAttachmentRequest;
+  /** Files to store under `graders/` (content-hash names); the run row's
+   *  `graders` field says what they are. */
+  gradersFiles?: { name: string; content: string }[];
   run: RunAnnotationDraft;
 };
 
@@ -358,9 +366,23 @@ export function recordCompletedRun(
     applyStatelogMerge(paths, statelogPlan);
     if (codePlan !== undefined) applyCodeAttachment(paths, codePlan);
     if (workdirPlan !== undefined) applyWorkdirAttachment(paths, workdirPlan, now(options));
+    if (request.gradersFiles !== undefined) writeGradersFiles(paths, request.gradersFiles);
     const [annotation] = appendRows(paths.annotations, [draft], options, reportWarning);
     return { annotation };
   });
+}
+
+/** Content-hash names never collide on different contents; the same name
+ *  already present is the same file, so nothing is rewritten. */
+function writeGradersFiles(
+  paths: RunDirectoryPaths,
+  files: readonly { name: string; content: string }[],
+): void {
+  fs.mkdirSync(paths.gradersDir, { recursive: true });
+  for (const file of files) {
+    const target = path.join(paths.gradersDir, file.name);
+    if (!fs.existsSync(target)) fs.writeFileSync(target, file.content);
+  }
 }
 
 /**
@@ -429,9 +451,9 @@ export type RecordGradingPassResult = {
   snapshot: RunDirectorySnapshot;
 };
 
-/** One grading pass: every score draft gets the same fresh `passId`, the
- *  pass size, and `completesPass` on the final row only. A crash before that
- *  row leaves an incomplete pass the fold ignores. */
+/** One grading pass: every score draft gets the same fresh `passId` and the
+ *  pass size. A crash before the last row leaves an incomplete pass the fold
+ *  ignores. */
 export function recordGradingPass(
   request: RecordGradingPassRequest,
   options: MutationOptions = {},
@@ -447,14 +469,13 @@ export function recordGradingPass(
     if (unknown !== undefined) {
       throw new Error(`No trace ${unknown.traceId} in ${request.dir}; nothing was recorded.`);
     }
-    const drafts: AnnotationDraft[] = request.scores.map((score, index) => {
+    const drafts: AnnotationDraft[] = request.scores.map((score) => {
       const draft: AnnotationDraft = {
         traceId: score.traceId,
         annotator: score.annotator,
         kind: "score",
         passId,
         passSize: request.scores.length,
-        completesPass: index === request.scores.length - 1,
         name: score.name,
         score: score.score,
         weight: score.weight,

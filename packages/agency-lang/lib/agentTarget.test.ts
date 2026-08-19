@@ -69,15 +69,15 @@ describe("resolveEvalTarget", () => {
   });
 
   it("resolves --agent-cmd into a command target with the placeholder intact", () => {
-    expect(resolveEvalTarget({ agentCmd: `agency agent -p -- {task}` })).toEqual({
+    expect(resolveEvalTarget({ agentCmd: `agency agent -p -- {input}` })).toEqual({
       kind: "command",
-      tokens: ["agency", "agent", "-p", "--", "{task}"],
-      label: "agency agent -p -- {task}",
+      tokens: ["agency", "agent", "-p", "--", "{input}"],
+      label: "agency agent -p -- {input}",
     });
   });
 
-  it("rejects both and neither; a command without {task} is fine here (the input check decides)", () => {
-    expect(() => resolveEvalTarget({ agent: "a.agency", agentCmd: "x {task}" })).toThrow(
+  it("rejects both and neither; a command without {input} is fine here (the input check decides)", () => {
+    expect(() => resolveEvalTarget({ agent: "a.agency", agentCmd: "x {input}" })).toThrow(
       /exactly one of/,
     );
     expect(() => resolveEvalTarget({})).toThrow(/exactly one of/);
@@ -125,17 +125,23 @@ describe("assertTargetMatchesInputs", () => {
     ).toThrow(/no test provides an input.*--input/);
   });
 
-  it("commands: {task} is required with inputs and refused without", () => {
+  it("commands: the old {task} placeholder is refused with a pointer to {input}", () => {
     expect(() =>
       assertTargetMatchesInputs(command("agency agent -p -- {task}"), withInput),
+    ).toThrow(/\{task\}, which was renamed: write \{input\}/);
+  });
+
+  it("commands: {input} is required with inputs and refused without", () => {
+    expect(() =>
+      assertTargetMatchesInputs(command("agency agent -p -- {input}"), withInput),
     ).not.toThrow();
     expect(() => assertTargetMatchesInputs(command("agency agent -p hello"), withInput)).toThrow(
-      /must contain \{task\}/,
+      /must contain \{input\}/,
     );
     expect(() =>
       assertTargetMatchesInputs(command("agency agent -p hello"), noInput),
     ).not.toThrow();
-    expect(() => assertTargetMatchesInputs(command("agency agent -p -- {task}"), noInput)).toThrow(
+    expect(() => assertTargetMatchesInputs(command("agency agent -p -- {input}"), noInput)).toThrow(
       /no test provides an input/,
     );
   });

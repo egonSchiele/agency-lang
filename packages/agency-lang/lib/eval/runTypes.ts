@@ -10,7 +10,7 @@ export type Test = {
   id?: string;
   /** What the agent is given: an instruction string, or a JSON object for
    *  agents that take structured data. Delivered as the entry node's single
-   *  positional parameter (or as `{task}` for a command agent). Optional:
+   *  positional parameter (or as `{input}` for a command agent). Optional:
    *  an agent that takes no input runs a test with none, and then the entry
    *  node takes no parameter. Within one suite, either every test has an
    *  input or none does. */

@@ -68,7 +68,7 @@ export function findPackageRoot(startDir: string, packageName?: string): string 
 // crash on module load. The failure is only surfaced when something actually
 // asks for the stdlib or tests directory.
 let _packageRoot: string | null = null;
-function getPackageRoot(): string {
+export function getPackageRoot(): string {
   if (_packageRoot === null) {
     _packageRoot = findPackageRoot(__dirname);
   }

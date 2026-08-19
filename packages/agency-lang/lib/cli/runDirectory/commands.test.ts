@@ -25,7 +25,7 @@ import {
 } from "./commands.js";
 import { formatTextTable } from "./table.js";
 import { logsExtract } from "./extract.js";
-import { runsList } from "./list.js";
+import { relativeAgentLabel, runsList } from "./list.js";
 
 const quiet = { reportWarning: () => {} };
 
@@ -205,6 +205,22 @@ describe("runs list over groups", () => {
     expect(rowA).toContain("/abs/agents/greeter.agency:main");
     expect(lastLine(listed[0])).toBe("2 runs");
     expect(readRunDirectory(a, quiet).traces).toHaveLength(1);
+  });
+
+  it("AGENT shows a file under the current directory relative to it, everything else as is", () => {
+    expect(relativeAgentLabel("/home/me/proj/test.agency:main", "/home/me/proj")).toBe(
+      "test.agency:main",
+    );
+    expect(relativeAgentLabel("/home/me/proj/agents/a.agency", "/home/me/proj")).toBe(
+      "agents/a.agency",
+    );
+    expect(relativeAgentLabel("/abs/agents/greeter.agency:main", "/home/me/proj")).toBe(
+      "/abs/agents/greeter.agency:main",
+    );
+    expect(relativeAgentLabel("/usr/bin/python /home/me/proj/agent.py", "/home/me/proj")).toBe(
+      "/usr/bin/python /home/me/proj/agent.py",
+    );
+    expect(relativeAgentLabel("greeter", "/home/me/proj")).toBe("greeter");
   });
 
   it("several paths keep the user's order and duplicates; one run directory is a list of one", () => {

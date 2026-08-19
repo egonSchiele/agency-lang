@@ -42,7 +42,7 @@ suite the tests must agree — all with an input or none —
 and `assertTargetMatchesInputs` (`lib/agentTarget.ts`, called from
 `runSuite` and the optimizer's `buildTarget`) checks the agent against
 that once, up front: with inputs the entry node takes exactly one
-parameter / the command contains `{task}`; without, the node takes none /
+parameter / the command contains `{input}`; without, the node takes none /
 the command has no placeholder. Each mismatch names the fix in both
 directions ("pass --input" or "make the node take no parameter"). A test
 with no input reaches the child as a run instruction without `input`,
@@ -95,8 +95,29 @@ path. The suite-level set is `SuiteGraders`: `override` (an explicit
 `--graders` flag) replaces every test's own graders — the experiment knob —
 while `fallback` (the `eval.graders` config module, else the bundled goal
 judge) applies only to tests that carry none. Precedence, one line: flag >
-test's own > config > goal judge. Grader modules load once per path per pass
-(`makeGraderModuleCache`). Trust note: graders are code the harness executes.
+the run directory's stored snapshot > test's own recorded path (directories
+from before snapshots) > config > goal judge. Live modules load once per path
+per pass (`makeGraderModuleCache`). Trust note: graders are code the harness
+executes.
+
+**The run directory stores the graders it ran with.** `eval run` decides
+each test's module up front (its own, else `eval.graders`), bundles it with
+esbuild (`snapshotGradingModule`: one self-contained `.mjs`, everything
+inlined except `agency-lang`), loads it once so a broken module fails before
+any agent runs, and collects the files its graders read by path
+(`BaseGrader.externalFiles()`, which `LlmJudge` implements for a custom
+`agencyFile`). The bundle and those files land in `<runDir>/graders/` by
+content hash, and the run row records `graders: { source, bundleFile,
+judgeFiles }`. `eval grade` loads that copy (`loadGradingSnapshot`, which
+rebinds each judge file to its stored copy via `rebindExternalFile`), so a
+copied run directory grades the same anywhere, and an edited `graders.ts`
+does not silently change what an old run scores; `--graders <file>` is the
+way to grade with a live module. The bundle is imported from a temp file
+next to the snapshot so its `agency-lang` import resolves from there; when
+that fails (a directory copied outside any project) it retries from this
+package's own root, where the name resolves to the package itself. A module's
+revision is `<source>@<sha256 of the bundle>` in both paths, so snapshot and
+unchanged-live grading agree on the annotator.
 
 **A run that did not end cleanly scores zero, always.** The harness's `run`
 row is authoritative when present — only it knows about a wall-clock or
@@ -121,11 +142,15 @@ that need the output fail on their own terms.
 **Every grading pass is recorded as annotations.** `gradeSuite` reads one
 snapshot, grades it, converts each grade to a `ScoreDraft`, and calls
 `recordGradingPass` once: one `score` row per grader per trace, all sharing a
-fresh `passId`, the last marked `completesPass`. The fold counts only complete
+fresh `passId` and stamped with the `passSize`. The fold counts only complete
 passes, so a crash mid-pass never moves effective state, and a re-grade sits
-beside the earlier passes rather than over them. Graders are named by
+beside the earlier passes rather than over them (the latest pass is the
+effective score per grader lineage, any revision; the pass count is shown so
+a re-grade is never silent). Graders are named by
 revision — a module grader is `<path>@<sha256 of file>` (set by
-`loadGradingModule`), the goal judge `goal-judge@<hash of its prompt file>` —
+`loadGradingModule`), the bundled goal judge `goal-judge@<GOAL_JUDGE_VERSION>`
+(bump the constant in `goalJudgeFile.ts` when you edit the prompt; a test pins
+the version to the file's hash), a custom judge file `<path>@<sha256 of file>` —
 so editing `graders.ts` in place is a new annotator. `EvalRunGrading` (the
 objective, gates, per-test breakdown) is computed for printing and `-o`; it is
 not stored.

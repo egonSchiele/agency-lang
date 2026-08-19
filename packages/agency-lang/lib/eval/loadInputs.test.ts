@@ -88,7 +88,11 @@ describe("eval run input loading", () => {
     expect("input" in noInput).toBe(false);
     expect(() =>
       loadInputsFromFile(writeJson("empty-task.json", { inputs: [{ goal: "g", input: "" }] })),
-    ).toThrow(/must not be empty/);
+    ).toThrow(/must not be an empty string/);
+    const [emptyObject] = loadInputsFromFile(
+      writeJson("empty-object-task.json", { inputs: [{ goal: "g", input: {} }] }),
+    );
+    expect("input" in emptyObject).toBe(false);
     expect(() =>
       loadInputsFromFile(writeJson("array-task.json", { inputs: [{ goal: "g", input: [1] }] })),
     ).toThrow(/input must be a string, or a JSON object/);

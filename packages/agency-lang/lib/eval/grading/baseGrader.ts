@@ -11,7 +11,8 @@ export abstract class BaseGrader {
   /** Who this grader is, by revision, for the score rows it writes: a module
    *  grader is `<path>@<sha256 of the file>` (set by loadGradingModule), so
    *  editing the module in place is a new annotator; the bundled goal judge is
-   *  `goal-judge@<hash of its prompt file>`; anything else constructed in
+   *  `goal-judge@<version>` (a test pins the version to the prompt's hash);
+   *  a custom judge file is `<path>@<sha256 of the file>`; anything else constructed in
    *  process is `inline:<name>`. */
   annotator(): { kind: "grader" | "judge"; id: string } {
     if (this.revision !== undefined) return { kind: "grader", id: this.revision };
@@ -20,6 +21,16 @@ export abstract class BaseGrader {
 
   /** @internal Set by loadGradingModule on every grader a module exports. */
   revision?: string;
+
+  /** Files this grader reads from disk at grade time, as the paths were
+   *  declared (relative ones are cwd-relative). A run directory snapshots
+   *  them next to the grading bundle so a copied run still grades;
+   *  `rebindExternalFile` is called with the declared path and the copy's
+   *  absolute path. Default: none. */
+  externalFiles(): string[] {
+    return [];
+  }
+  rebindExternalFile(_from: string, _to: string): void {}
 
   /** Subclasses set a default; `options.name` overrides it. */
   protected abstract readonly defaultName: string;

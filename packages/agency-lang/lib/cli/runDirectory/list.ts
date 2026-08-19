@@ -1,3 +1,5 @@
+import * as path from "path";
+
 import { findRunDirectories } from "@/runDirectory/findRuns.js";
 import {
   buildRunsListing,
@@ -36,13 +38,15 @@ const HEADER = [
   "LLM",
   "TOOLS",
   "SCORE",
+  "PASSES",
   "NOTES",
   "LABELED",
   "INPUT",
 ];
 
-/** The table (omitted when there are no rows) and the footer line. */
-export function formatRunsList(listing: RunsListing): string {
+/** The table (omitted when there are no rows) and the footer line. Agent
+ *  file paths under `cwd` are shown relative to it. */
+export function formatRunsList(listing: RunsListing, cwd: string = process.cwd()): string {
   const footer = footerLine(listing);
   if (listing.summaries.length === 0) {
     return footer;
@@ -50,7 +54,7 @@ export function formatRunsList(listing: RunsListing): string {
   const rows = listing.summaries.map((summary) => [
     summary.traceId.slice(0, 8),
     summary.testId ?? "",
-    displayAgent(summary) ?? "",
+    relativeAgentLabel(displayAgent(summary) ?? "", cwd),
     summary.startedAt === null ? "" : summary.startedAt.slice(0, 16).replace("T", " "),
     summary.ended,
     formatDuration(summary.durationMs),
@@ -58,11 +62,22 @@ export function formatRunsList(listing: RunsListing): string {
     String(summary.llmCalls),
     String(summary.toolCalls),
     summary.latestScore === null ? "" : summary.latestScore.toFixed(2),
+    summary.gradingPasses === 0 ? "" : String(summary.gradingPasses),
     summary.hasNotes ? "yes" : "",
     summary.labeled ? "yes" : "",
     summary.input === null ? "" : oneLine(summary.input, 60),
   ]);
   return `${formatTextTable(HEADER, rows)}\n${footer}`;
+}
+
+/** `/home/me/proj/test.agency:main` reads `test.agency:main` when run from
+ *  `/home/me/proj`. Labels outside `cwd`, and command lines, are unchanged. */
+export function relativeAgentLabel(label: string, cwd: string): string {
+  const match = label.match(/^(\/\S+\.agency)(:\S+)?$/);
+  if (match === null) return label;
+  const relative = path.relative(cwd, match[1]);
+  if (relative.startsWith("..")) return label;
+  return relative + (match[2] ?? "");
 }
 
 /** `N runs · mean 0.720 over G graded · S runs wrote no trace`, clauses present

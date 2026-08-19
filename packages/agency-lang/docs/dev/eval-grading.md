@@ -17,7 +17,7 @@ Grading is `agency eval grade <dir>`, whenever you like, as many times as you
 like. `eval run` takes the agent file as its positional argument (or
 `--agent-cmd`), plus `--suite`/`--input`, `--out <dir>` and `-n`. `--out`
 names the directory the run is written into (default
-`<eval.runsDir or runs>/<timestamp>`); it replaced the `--runs-dir`/`--run-id`
+`<eval.runsDir or runs>/<timestamp>-<random suffix>`); it replaced the `--runs-dir`/`--run-id`
 pair, which called one harness invocation a "run" while everywhere else in
 the data model a run is one trace. There is deliberately no `--goal` (grading's business), no
 stop-on-error (`--continue-on-error` is gone: an errored test is a `run` row

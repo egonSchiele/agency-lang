@@ -21,7 +21,7 @@ export type EvalRunCliOptions = {
   suite?: string;
   /** One inline test with this input text; no suite file needed. */
   input?: string;
-  /** Directory to write the run into (default `<eval.runsDir or runs>/<timestamp>`). */
+  /** Directory to write the run into (default `<eval.runsDir or runs>/<timestamp>-<random suffix>`). */
   out?: string;
   config?: AgencyConfig;
   /** Worker-pool size (-n/--parallel); default 1 = sequential. */

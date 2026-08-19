@@ -819,7 +819,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--input <text>", "Run one inline test whose input is this text (no suite file needed)")
     .option(
       "-o, --out <dir>",
-      "Directory to write the run into; must not exist yet (default: runs/<timestamp>, or eval.runsDir in agency.json)",
+      "Directory to write the run into; must not exist yet (default: runs/<timestamp>-<random suffix>, or under eval.runsDir from agency.json)",
     )
     .option(
       "-n, --parallel <count>",

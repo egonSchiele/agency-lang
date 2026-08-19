@@ -41,7 +41,7 @@ export type RunSuiteOptions = {
   agent: string | EvalTarget;
   inputs: Test[];
   /** The directory to write the run into. Must not exist yet. Default:
-   *  `<eval.runsDir or runs>/<timestamp-suffix>`. */
+   *  `<eval.runsDir or runs>/<timestamp>-<random suffix>`. */
   out?: string;
   /** Default true. */
   config?: AgencyConfig;
@@ -361,7 +361,8 @@ async function runPool(args: {
 }
 
 /** Default run directory name: local-time timestamp then a short random
- *  suffix, so runs/ lists in creation order. An explicit --out is used verbatim. */
+ *  suffix, so runs/ lists in creation order. An explicit --out is resolved to
+ *  an absolute path and used as the run directory. */
 function defaultRunDirName(): string {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");

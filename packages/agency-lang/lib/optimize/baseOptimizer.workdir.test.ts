@@ -63,14 +63,12 @@ describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
     fs.writeFileSync(path.join(src, "agent.agency"), "node main() {}\n");
     fs.writeFileSync(path.join(src, "data.txt"), "hello\n");
 
-    mockEval.mockImplementation(
-      async (args: { runsDir: string; runId: string; inputs: Test[] }) => {
-        const input = args.inputs[0];
-        // A real one-input run directory: the optimizer grades it via gradeRun.
-        const runDir = fakeRun(input.id ?? "a", "out", input);
-        return { runDir, tests: [{ testId: input.id ?? "a", traceId: "t", status: "success" }] };
-      },
-    );
+    mockEval.mockImplementation(async (args: { out: string; inputs: Test[] }) => {
+      const input = args.inputs[0];
+      // A real one-input run directory: the optimizer grades it via gradeRun.
+      const runDir = fakeRun(input.id ?? "a", "out", input);
+      return { runDir, tests: [{ testId: input.id ?? "a", traceId: "t", status: "success" }] };
+    });
   });
   afterEach(() => {
     mockEval.mockReset();
@@ -118,7 +116,7 @@ describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
     await p.evaluateAt(ws2, source(), {}, [{ id: "a", input: "t" }]);
 
     expect(ws1.key).not.toBe(ws2.key);
-    expect(mockEval.mock.calls[0][0].runsDir).toContain(ws1.key);
-    expect(mockEval.mock.calls[1][0].runsDir).toContain(ws2.key);
+    expect(mockEval.mock.calls[0][0].out).toContain(ws1.key);
+    expect(mockEval.mock.calls[1][0].out).toContain(ws2.key);
   });
 });

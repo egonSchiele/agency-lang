@@ -15,9 +15,11 @@ import { readTraces, type Trace } from "./traces.js";
  * A run directory is a plain folder holding one run: `statelog.jsonl` (one
  * trace), `annotations.jsonl`, and optional attachments — the agent's code
  * closure directly under `code/`, a working-directory snapshot directly under
- * `workdir/` with its `workdir.json` sidecar, free-form `notes.md` (read into
- * `snapshot.notes`). This module names its paths and reads it into one
- * coherent snapshot. It never writes; `mutations.ts` does.
+ * `workdir/` with its `workdir.json` sidecar, free-form `notes.md`. This
+ * module names its paths and reads it into one snapshot: the statelog and
+ * annotations are paired coherently (see `readRunDirectory`); `notes.md` is
+ * sampled independently, best effort (see `readNotes`). It never writes;
+ * `mutations.ts` does.
  */
 export type RunDirectoryPaths = {
   dir: string;

@@ -5,7 +5,7 @@ description: How to run an Agency agent against a test suite, score it with grad
 
 # Evaluating agent runs
 
-`agency eval` runs, grades and compares agent runs. Everything it produces lives in a **run directory**: a folder with the runs' statelog and an append-only file of annotations (grades, notes, checklist answers). The main commands are:
+`agency eval` runs, grades and compares agent runs. Everything it produces lives in a **run directory**: a folder with the runs' statelog and an append-only file of annotations (grades, checklist answers), plus a free-form `notes.md` you write yourself. The main commands are:
 
 ```
 agency eval run (--agent <file>[:<node>] | --agent-cmd '<command with {task}>') (--suite <file|dir|git-url> | --goal <text>) [-n <count>]
@@ -13,12 +13,11 @@ agency eval grade <runDir> [--graders <file>]
 agency eval logs <runDir> [-f]
 agency eval optimize <file>[:<node>] [--suite <file|dir>] [--goal <text>] [--graders <file>]
 agency label <runDir> --checklist <file> [--annotator <id>]
-agency note <runDir> <text> [--trace <id>]
 agency runs add <runDir> [--statelog <file>]... [--code <entry>] [--workdir <path>]
 agency runs list <runDir>
 ```
 
-`agency label`, `agency note` and `agency runs` also work without the `eval` prefix, as written above.
+`agency label` and `agency runs` also work without the `eval` prefix, as written above.
 
 ## Running a test suite
 
@@ -164,7 +163,8 @@ Each run writes one directory:
 ```text
 runs/<run-id>/
   statelog.jsonl        # every test's trace, one file
-  annotations.jsonl     # what anyone concluded: run rows, grades, notes, labels
+  annotations.jsonl     # what anyone concluded: run rows, grades, labels
+  notes.md              # your free-form notes about the run (optional)
   code/<hash>/          # the agent code that ran, keyed by its content hash
   workdir/<trace-id>/   # the isolated directory each test ran in
   checklists/           # your labeling checklists (see below)
@@ -174,7 +174,7 @@ The statelog is the record of what happened. Everything else is derived from it 
 
 ```
 TRACE     STARTED           ENDED  TIME   COST   LLM  TOOLS  SCORE  NOTES  LABELED  INPUT
-rpGXbww2  2026-08-18 09:14  ok     41s    $0.12  5    12     0.71   1               Write fizzbuzz…
+rpGXbww2  2026-08-18 09:14  ok     41s    $0.12  5    12     0.71   yes             Write fizzbuzz…
 ```
 
 You can also build one by hand. `agency runs add <dir> --statelog run.jsonl` merges a statelog in by trace, `--code agent.agency` stores the agent's code, and `--workdir ./project --trace <id>` snapshots a directory for one trace. `agency run agent.agency --capture-workdir <dir>` does all three for a plain run.
@@ -271,15 +271,17 @@ agent's last message instead and says so.
 
 ### Notes
 
-For a one-off remark, skip the checklist:
+For a one-off remark, skip the checklist and write a `notes.md` file in the
+run directory with any editor:
 
 ```bash
-agency note runs/smoke "too slow, and it never checked the date" --trace rpGXbww2
+echo "too slow, and it never checked the date" > runs/smoke/notes.md
 ```
 
-`--trace` is optional when the directory holds one trace. Notes show up in
-`agency runs list`, in the log viewer, and in the optimizer's reflection
-prompt (see [Optimizing agents](optimize.md)).
+Nothing else writes that file. When it has text, `agency runs list` shows
+`yes` in the `NOTES` column, the log viewer says `notes` on the trace's row,
+and the optimizer's reflection prompt includes it (see
+[Optimizing agents](optimize.md)).
 
 ### Writing a checklist
 

@@ -73,6 +73,9 @@ export function substituteInput(
 ): string[] {
   if (input === undefined) return tokens;
   const text = typeof input === "string" ? input : JSON.stringify(input);
+  if (tokens.some((t) => t.includes(OLD_TASK_PLACEHOLDER))) {
+    throw new Error(OLD_TASK_PLACEHOLDER_ERROR);
+  }
   if (!tokens.some((t) => t.includes(INPUT_PLACEHOLDER))) {
     throw new Error(MISSING_INPUT_PLACEHOLDER_ERROR);
   }

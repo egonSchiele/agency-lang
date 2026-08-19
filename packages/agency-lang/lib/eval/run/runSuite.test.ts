@@ -8,6 +8,7 @@ import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 import { finishedTraceLines } from "@/runDirectory/testFixtures.js";
 
 import { AgencyRunner } from "@/eval/grading/agencyRunner.js";
+import { grader } from "@/eval/grading/functionGrader.js";
 import { gradeRun } from "@/eval/grading/gradeRun.js";
 
 import { runSuite } from "./runSuite.js";
@@ -367,6 +368,67 @@ describe("runSuite", () => {
       config: {},
     });
     expect(scorecard.objective()).toBe(1);
+  });
+
+  it("a config-origin snapshot grades the run, but --goal sets it aside like the config module it came from", async () => {
+    const modulePath = path.join(proj, "graders.ts");
+    fs.writeFileSync(modulePath, "export default [() => 1];");
+    const result = await runSuite(
+      {
+        agent: path.join(proj, "agent.agency"),
+        inputs: [{ id: "a", goal: "g", input: "t" }],
+        out: path.join(proj, "runs", "r-config-graders"),
+        config: { eval: { graders: modulePath } },
+        perRun: { pipeOutput: false },
+      },
+      { runner: traceWritingRunner("done") },
+    );
+    const { runDir, traceId } = result.tests[0];
+    const run = readRunDirectory(runDir, quiet).effectiveAnnotations[traceId].run;
+    expect((run as unknown as { graders: { origin: string } }).graders.origin).toBe("config");
+
+    // Without --goal: the stored copy grades, even with the source deleted.
+    fs.rmSync(modulePath);
+    const fallback = grader(() => 0, { name: "stand-in-goal-judge" });
+    const plain = await gradeRun(runDir, {
+      suiteGraders: { mode: "fallback", graders: [fallback] },
+      runAgency: new AgencyRunner({}),
+      config: {},
+    });
+    expect(plain.objective()).toBe(1);
+
+    // With --goal (defaultGoal): configured modules are set aside, the
+    // run-time copy included — the suite fallback (the goal judge) grades.
+    const withGoal = await gradeRun(runDir, {
+      suiteGraders: { mode: "fallback", graders: [fallback] },
+      runAgency: new AgencyRunner({}),
+      config: {},
+      defaultGoal: "g",
+    });
+    expect(withGoal.objective()).toBe(0);
+  });
+
+  it("a test-owned snapshot still grades under --goal: a goal never overrides a test's own graders", async () => {
+    const modulePath = path.join(proj, "graders.ts");
+    fs.writeFileSync(modulePath, "export default [() => 1];");
+    const result = await runSuite(
+      {
+        agent: path.join(proj, "agent.agency"),
+        inputs: [{ id: "a", goal: "g", input: "t", graders: modulePath }],
+        out: path.join(proj, "runs", "r-test-graders-goal"),
+        config: {},
+        perRun: { pipeOutput: false },
+      },
+      { runner: traceWritingRunner("done") },
+    );
+    fs.rmSync(modulePath);
+    const withGoal = await gradeRun(result.tests[0].runDir, {
+      suiteGraders: { mode: "fallback", graders: [grader(() => 0, { name: "goalish" })] },
+      runAgency: new AgencyRunner({}),
+      config: {},
+      defaultGoal: "g",
+    });
+    expect(withGoal.objective()).toBe(1);
   });
 
   it("a broken grading module fails before any agent runs", async () => {

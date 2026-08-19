@@ -74,7 +74,9 @@ export async function snapshotGradingModule(filePath: string): Promise<GradersSn
   for (const grader of graders) {
     for (const file of grader.externalFiles?.() ?? []) {
       if (judgeFiles[file] !== undefined) continue;
-      const content = fs.readFileSync(path.resolve(file), "utf8");
+      // A relative judge path resolves against the module that declared it,
+      // not the cwd `eval run` happened to start from.
+      const content = fs.readFileSync(path.resolve(path.dirname(bundle.source), file), "utf8");
       const name = `${sha256Text(content)}${path.extname(file)}`;
       judgeFiles[file] = name;
       if (!files.some((entry) => entry.name === name)) files.push({ name, content });

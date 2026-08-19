@@ -40,6 +40,8 @@ export type ScorePayload = {
   kind: "score";
   passId: string;
   passSize: number;
+  /** @deprecated Legacy field on old rows; accepted and ignored. */
+  completesPass?: boolean;
   name: string;
   score: Score;
   weight: number;
@@ -60,6 +62,10 @@ export type GradersIdentity = {
   source: string;
   bundleFile: string;
   judgeFiles: Record<string, string>;
+  /** Whether the module was the test's own or the `eval.graders` config
+   *  fallback. Grading needs the distinction: `--goal` sets configured
+   *  modules aside but never a test's own. */
+  origin: "test" | "config";
 };
 export type RunOutcome = "ok" | "error" | "timeout" | "cost-cap" | "killed";
 
@@ -144,6 +150,9 @@ const ScoreAnnotationSchema = z
     kind: z.literal("score"),
     passId: z.string().min(1),
     passSize: z.number().int().positive(),
+    // Written by rows from before pass completeness was passSize-only;
+    // accepted so old directories keep their scores, ignored by the fold.
+    completesPass: z.boolean().optional(),
     name: z.string().min(1),
     score: ScoreSchema,
     weight: z.number().finite().nonnegative(),
@@ -165,6 +174,7 @@ const RunAnnotationSchema = z
         source: z.string(),
         bundleFile: z.string().min(1),
         judgeFiles: z.record(z.string(), z.string()),
+        origin: z.enum(["test", "config"]),
       })
       .strict()
       .optional(),

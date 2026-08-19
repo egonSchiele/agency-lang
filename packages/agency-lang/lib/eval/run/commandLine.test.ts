@@ -48,5 +48,6 @@ describe("substituteInput", () => {
 
   it("throws when no token carries the placeholder — the task must reach the agent", () => {
     expect(() => substituteInput(["agency", "agent"], "t")).toThrow(/\{input\}/);
+    expect(() => substituteInput(["agency", "{task}"], "t")).toThrow(/renamed: write \{input\}/);
   });
 });

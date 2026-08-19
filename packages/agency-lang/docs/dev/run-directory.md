@@ -138,8 +138,9 @@ The planners (`mergeStatelog.ts`, `attachCode.ts`, `attachWorkdir.ts`):
   not hash to what the trace recorded is reported as corrupt.
 - **Graders** (`gradersFiles` on `recordCompletedRun`) go under `graders/`
   by content-hash name; the run row's `graders: { source, bundleFile,
-  judgeFiles }` says which is the module bundle and which stored file each
-  declared judge path maps to. Same name = same content, so nothing is ever
+  judgeFiles, origin }` says which is the module bundle, which stored file
+  each declared judge path maps to, and whether the module was the test's
+  own or the `eval.graders` config fallback. Same name = same content, so nothing is ever
   rewritten. See docs/dev/eval-grading.md for why grading prefers this copy.
 - **Workdir** copies to `workdir/` and writes the dated `workdir.json`
   sidecar. A workdir attached later may postdate the run; the sidecar says so.

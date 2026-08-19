@@ -73,10 +73,10 @@ export function formatRunsList(listing: RunsListing, cwd: string = process.cwd()
 /** `/home/me/proj/test.agency:main` reads `test.agency:main` when run from
  *  `/home/me/proj`. Labels outside `cwd`, and command lines, are unchanged. */
 export function relativeAgentLabel(label: string, cwd: string): string {
-  const match = label.match(/^(\/\S+\.agency)(:\S+)?$/);
-  if (match === null) return label;
+  const match = label.match(/^(\S+\.agency)(:\S+)?$/);
+  if (match === null || !path.isAbsolute(match[1])) return label;
   const relative = path.relative(cwd, match[1]);
-  if (relative.startsWith("..")) return label;
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return label;
   return relative + (match[2] ?? "");
 }
 

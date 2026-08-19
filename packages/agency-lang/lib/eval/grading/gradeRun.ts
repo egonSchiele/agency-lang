@@ -123,9 +123,12 @@ export function validateGraders(graders: BaseGrader[], test: Test | undefined): 
   }
 }
 
-/** Which graders score this test, per the precedence the SuiteGraders doc
- *  states: override > the snapshot the run directory stored > the test's
- *  recorded module path (a directory from before snapshots) > fallback. */
+/** Which graders score this test. Precedence: override > the test-owned
+ *  snapshot the run directory stored > the test's recorded module path (a
+ *  directory from before snapshots) > a config-origin snapshot > fallback.
+ *  A config-origin snapshot is skipped under `--goal` (`ctx.defaultGoal`):
+ *  the goal promises the goal judge and sets configured modules aside, the
+ *  run-time copy included — only a test's OWN graders survive it. */
 async function effectiveGraders(
   entry: Entry,
   ctx: GradingContext,
@@ -135,11 +138,15 @@ async function effectiveGraders(
   if (ctx.suiteGraders.mode === "override") {
     return ctx.suiteGraders.graders;
   }
-  if (entry.graders !== undefined) {
-    return loadGradingSnapshot(runDirPaths(runDir).gradersDir, entry.graders);
+  const snapshot = entry.graders;
+  if (snapshot !== undefined && snapshot.origin === "test") {
+    return loadGradingSnapshot(runDirPaths(runDir).gradersDir, snapshot);
   }
   if (entry.test.graders !== undefined) {
     return cache(entry.test.graders);
+  }
+  if (snapshot !== undefined && ctx.defaultGoal === undefined) {
+    return loadGradingSnapshot(runDirPaths(runDir).gradersDir, snapshot);
   }
   return ctx.suiteGraders.graders;
 }

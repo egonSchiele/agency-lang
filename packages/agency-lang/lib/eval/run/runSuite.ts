@@ -90,7 +90,10 @@ export async function runSuite(
   // Each test's graders, bundled now and stored in its run directory, so the
   // run grades later by the graders it ran with, wherever the directory goes.
   // A broken grading module fails here, before any agent runs.
-  const gradersByTest = await snapshotGraders(opts.inputs, config);
+  const gradersByTest: Record<string, TestGraders | undefined> = await snapshotGraders(
+    opts.inputs,
+    config,
+  );
 
   // One closure walk per suite; never per test. Command targets have no
   // closure and nothing to compile. Before any directory is created: a
@@ -254,20 +257,27 @@ export async function runSuite(
   };
 }
 
+/** A test's snapshot plus where its module came from: its own spec, or the
+ *  `eval.graders` config fallback. The origin is recorded on the run row so
+ *  grading can honor `--goal`, which sets configured modules aside but never
+ *  a test's own. */
+type TestGraders = GradersSnapshot & { origin: "test" | "config" };
+
 /** The grading module each test will be graded with — its own, else the
  *  project's `eval.graders` — bundled once per distinct module. Tests with
  *  neither get no snapshot: the bundled goal judge needs none. */
 async function snapshotGraders(
   tests: Test[],
   config: AgencyConfig,
-): Promise<Record<string, GradersSnapshot>> {
+): Promise<Record<string, TestGraders | undefined>> {
   const byModule: Record<string, Promise<GradersSnapshot>> = Object.create(null);
-  const byTest: Record<string, GradersSnapshot> = Object.create(null);
+  const byTest: Record<string, TestGraders | undefined> = Object.create(null);
   for (const test of tests) {
     const modulePath = test.graders ?? config.eval?.graders;
     if (modulePath === undefined || test.id === undefined) continue;
     byModule[modulePath] ??= snapshotGradingModule(modulePath);
-    byTest[test.id] = await byModule[modulePath];
+    const origin = test.graders !== undefined ? ("test" as const) : ("config" as const);
+    byTest[test.id] = { ...(await byModule[modulePath]), origin };
   }
   return byTest;
 }
@@ -285,7 +295,7 @@ function foldIntoRunDirectory(args: {
   run: AgentRun;
   harness: { kind: "harness"; id: string };
   suite: SuiteIdentity | undefined;
-  graders: GradersSnapshot | undefined;
+  graders: TestGraders | undefined;
   flags: Record<string, string | number | boolean>;
 }): void {
   const { run } = args;
@@ -325,6 +335,7 @@ function foldIntoRunDirectory(args: {
                 source: args.graders.source,
                 bundleFile: args.graders.bundleFile,
                 judgeFiles: args.graders.judgeFiles,
+                origin: args.graders.origin,
               },
             }),
         ended: endedFrom(run),

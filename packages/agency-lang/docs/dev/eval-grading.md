@@ -108,7 +108,11 @@ any agent runs, and collects the files its graders read by path
 (`BaseGrader.externalFiles()`, which `LlmJudge` implements for a custom
 `agencyFile`). The bundle and those files land in `<runDir>/graders/` by
 content hash, and the run row records `graders: { source, bundleFile,
-judgeFiles }`. `eval grade` loads that copy (`loadGradingSnapshot`, which
+judgeFiles, origin }`. The origin ("test" or "config") keeps the precedence
+distinction: `--goal` sets a config-origin snapshot aside exactly like the
+config module it came from, while a test-owned snapshot survives it, matching
+the live-module rules. Legacy score rows still carry `completesPass`; the
+schema accepts and ignores it. `eval grade` loads the stored copy (`loadGradingSnapshot`, which
 rebinds each judge file to its stored copy via `rebindExternalFile`), so a
 copied run directory grades the same anywhere, and an edited `graders.ts`
 does not silently change what an old run scores; `--graders <file>` is the

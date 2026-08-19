@@ -174,6 +174,32 @@ describe("readAnnotations", () => {
     expect(warnings[0]).toContain(":2:");
   });
 
+  it("accepts a pre-change score row carrying the legacy completesPass field, and it still folds", () => {
+    // Verbatim v1 shape from before pass completeness became passSize-only.
+    const legacy = {
+      v: 1,
+      id: "ann_1111111111111111111111111111111111111111111111111111111111111111",
+      traceId: "t1",
+      createdAt: "2026-08-01T00:00:00Z",
+      annotator: { kind: "judge", id: "goal-judge@1" },
+      kind: "score",
+      passId: "pass_legacy",
+      passSize: 1,
+      completesPass: true,
+      name: "goal",
+      score: { kind: "scalar", value: 0.7 },
+      weight: 1,
+      mustPass: false,
+    };
+    const warnings: string[] = [];
+    const rows = readAnnotations(file(JSON.stringify(legacy) + "\n"), (m) => warnings.push(m));
+    expect(warnings).toEqual([]);
+    expect(rows).toHaveLength(1);
+    const folded = foldAnnotations(rows);
+    expect(folded.t1.scores["judge:goal-judge:goal"].id).toBe(legacy.id);
+    expect(folded.t1.gradingPasses).toBe(1);
+  });
+
   it("rejects a row that fails the schema", () => {
     const bad = { ...row(signOff("t1", "x")), extra: true };
     const warnings: string[] = [];

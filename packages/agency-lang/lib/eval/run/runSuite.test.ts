@@ -45,7 +45,7 @@ describe("runSuite", () => {
     fs.rmSync(proj, { recursive: true, force: true });
   });
 
-  it("writes one run directory: traces, workdirs, code, and a run row per test", async () => {
+  it("writes one run directory per test under --out: trace, workdir, code, and a run row each", async () => {
     const runsDir = path.join(proj, "runs");
     const seen: EvalRunnerJob[] = [];
     const runner = traceWritingRunner("done", (job) => seen.push(job));
@@ -78,28 +78,26 @@ describe("runSuite", () => {
       { rows: [1, 2] },
     ]);
 
-    const snapshot = readRunDirectory(result.runDir, quiet);
-    expect(snapshot.traces.map((trace) => trace.traceId)).toEqual(
-      result.tests.map((test) => test.traceId),
-    );
-    const paths = runDirPaths(result.runDir);
+    expect(result.tests.map((test) => test.runDir)).toEqual([
+      path.join(result.runDir, "a"),
+      path.join(result.runDir, "b"),
+    ]);
     for (const test of result.tests) {
-      expect(
-        fs.readFileSync(path.join(paths.workdirDir, test.traceId, "touched.txt"), "utf8"),
-      ).toBe("by the agent");
+      const snapshot = readRunDirectory(test.runDir, quiet);
+      expect(snapshot.traces.map((trace) => trace.traceId)).toEqual([test.traceId]);
+      const paths = runDirPaths(test.runDir);
+      expect(fs.readFileSync(path.join(paths.workdirDir, "touched.txt"), "utf8")).toBe(
+        "by the agent",
+      );
+      expect(fs.existsSync(paths.workdirSidecar)).toBe(true);
       const run = snapshot.effectiveAnnotations[test.traceId].run;
       expect(run).toMatchObject({ kind: "run", ended: "ok", suite: { source: "inputs.json" } });
       expect((run as unknown as { test: { id: string } }).test.id).toBe(test.testId);
+      // The seeded agent code, flat under code/.
+      expect(fs.existsSync(path.join(paths.codeDir, "agent.agency"))).toBe(true);
     }
-    // The seeded agent code is stored once, by its closure hash.
-    const codeVersions = fs.readdirSync(paths.codeDir);
-    expect(codeVersions).toHaveLength(1);
-    expect(fs.existsSync(path.join(paths.codeDir, codeVersions[0], "agent.agency"))).toBe(true);
-    // No old-format artifacts, and no staging left behind.
-    for (const stale of ["config.json", "summary.json", "inputs", "verifier"]) {
-      expect(fs.existsSync(path.join(result.runDir, stale))).toBe(false);
-    }
-    expect(fs.existsSync(path.join(runsDir, ".staging"))).toBe(false);
+    // The group holds only the run directories; no staging left behind.
+    expect(fs.readdirSync(result.runDir).sort()).toEqual(["a", "b"]);
   });
 
   it("module-dir == cwd: compiled entry lives inside the test's staging workdir", async () => {
@@ -203,12 +201,15 @@ describe("runSuite", () => {
     );
 
     expect(result.tests[0].status).toBe("error");
-    const snapshot = readRunDirectory(result.runDir, quiet);
+    const runDir = result.tests[0].runDir;
+    // Still a run directory (empty statelog), so the walk rule finds it.
+    expect(fs.readFileSync(runDirPaths(runDir).statelog, "utf8")).toBe("");
+    const snapshot = readRunDirectory(runDir, quiet);
     expect(snapshot.traces).toEqual([]);
     const run = snapshot.effectiveAnnotations[result.tests[0].traceId].run;
     expect(run).toMatchObject({ kind: "run", ended: "timeout" });
     expect((run as { error: string }).error).toMatch(/wall clock/);
-    expect(fs.existsSync(runDirPaths(result.runDir).workdirDir)).toBe(false);
+    expect(fs.existsSync(runDirPaths(runDir).workdirDir)).toBe(false);
   });
 
   it("runs a resolved command target end-to-end: substituted argv per test, no code stored", async () => {
@@ -279,7 +280,7 @@ describe("runSuite", () => {
     // results in TEST order regardless of completion order
     expect(result.tests.map((test) => test.testId)).toEqual(["a", "b", "c", "d"]);
     expect(result.okCount).toBe(4);
-    expect(readRunDirectory(result.runDir, quiet).traces).toHaveLength(4);
+    expect(fs.readdirSync(result.runDir).sort()).toEqual(["a", "b", "c", "d"]);
   });
 
   it("parallel: an errored test never stops the others; every test records", async () => {
@@ -325,8 +326,9 @@ describe("runSuite", () => {
       },
       { runner: traceWritingRunner("done") },
     );
-    const run = readRunDirectory(result.runDir, quiet).effectiveAnnotations[result.tests[0].traceId]
-      .run;
+    const run = readRunDirectory(result.tests[0].runDir, quiet).effectiveAnnotations[
+      result.tests[0].traceId
+    ].run;
     expect((run as unknown as { test: { timeoutSec: number } }).test.timeoutSec).toBe(1200);
     expect(result.okCount).toBe(1);
   });
@@ -345,22 +347,35 @@ describe("runSuite", () => {
     // e.g. 2026-07-31-143022-Ab3dEf
     expect(path.basename(result.runDir)).toMatch(/^\d{4}-\d{2}-\d{2}-\d{6}-.{6}$/);
     expect(path.dirname(result.runDir)).toBe(path.join(proj, "runs"));
-    expect(fs.existsSync(path.join(result.runDir, "statelog.jsonl"))).toBe(true);
+    expect(fs.existsSync(path.join(result.runDir, "a", "statelog.jsonl"))).toBe(true);
   });
 
-  it("refuses to reuse an existing run directory", async () => {
-    fs.mkdirSync(path.join(proj, "runs", "taken"), { recursive: true });
-    await expect(
-      runSuite(
-        {
-          agent: path.join(proj, "agent.agency"),
-          inputs: [{ id: "a", goal: "g", input: "t" }],
-          out: path.join(proj, "runs", "taken"),
-          config: {},
-        },
-        { runner: traceWritingRunner("done") },
-      ),
-    ).rejects.toThrow(/already exists/);
+  it("a test whose run directory already exists is an error; the others still run; nothing is overwritten", async () => {
+    const out = path.join(proj, "runs", "taken");
+    fs.mkdirSync(path.join(out, "a"), { recursive: true });
+    fs.writeFileSync(path.join(out, "a", "statelog.jsonl"), "");
+    const runner = traceWritingRunner("done");
+    const result = await runSuite(
+      {
+        agent: path.join(proj, "agent.agency"),
+        inputs: [
+          { id: "a", goal: "g", input: "t" },
+          { id: "b", goal: "g", input: "t" },
+        ],
+        out,
+        config: {},
+        perRun: { pipeOutput: false },
+      },
+      { runner },
+    );
+    expect(result.tests.map((test) => [test.testId, test.status])).toEqual([
+      ["a", "error"],
+      ["b", "success"],
+    ]);
+    expect(result.tests[0].errorMessage).toMatch(/already exists/);
+    expect(runner).toHaveBeenCalledTimes(1);
+    expect(fs.readFileSync(path.join(out, "a", "statelog.jsonl"), "utf8")).toBe("");
+    expect(readRunDirectory(path.join(out, "b"), quiet).traces).toHaveLength(1);
   });
 
   it("SIGINT stops the loop after the in-flight test, which is still folded in", async () => {
@@ -394,7 +409,7 @@ describe("runSuite", () => {
     // The in-flight test finished and was recorded; the rest never ran.
     expect(runner).toHaveBeenCalledTimes(1);
     expect(result.tests.map((test) => test.testId)).toEqual(["input-1"]);
-    expect(readRunDirectory(result.runDir, quiet).traces).toHaveLength(1);
+    expect(readRunDirectory(result.tests[0].runDir, quiet).traces).toHaveLength(1);
     // The listener is gone afterwards.
     expect(process.listeners("SIGINT")).toEqual(before);
   });

@@ -10,14 +10,25 @@ easy to get wrong.
 
 ```
 <dir>/
-  statelog.jsonl        # required; any number of traces (one trace = one run)
-  annotations.jsonl     # every opinion about a trace: note, checklist, score, run
-  code/<closureHash>/   # one copy of the agent's closure per code VERSION
-  workdir/<traceId>/    # filesystem snapshot for that trace
-  workdir/<traceId>.json  # { snapshotAt, source } — when and where from
+  statelog.jsonl        # required; ONE trace (one trace = one run; subagents share the id)
+  annotations.jsonl     # every opinion about the run: note, checklist, score, run
+  notes.md              # free-form notes (reserved; not read yet)
+  code/                 # the agent's closure, as it ran, flat
+  workdir/              # filesystem snapshot, flat
+  workdir.json          # { snapshotAt, source } — when and where from
   checklists/<id>/      # versioned checklist revisions + labeling drafts (docs/dev/eval-labeling.md)
   .lock                 # present only while a writer is open
 ```
+
+**One run per directory.** Writers only ever produce directories with one
+trace, so a run can be moved with `cp -r` and opened anywhere. A **group** is
+any directory of run directories (what `eval run --out` writes); it has no
+index file. `findRunDirectories(paths)` (`findRuns.ts`) is the one walk rule:
+a run directory is itself, a directory of run directories yields its children
+(one level, sorted), anything else is an error. `eval grade` and the logs
+explorer use it; `runs list` and `label` still take a single directory (next
+chunks). The reader still tolerates several traces in one file, because the
+labeling and explorer tests were written for that shape; no writer makes one.
 
 **The statelog is the run.** A directory holding only `statelog.jsonl` is a
 valid run directory; every other entry is an attachment that unlocks more.
@@ -74,8 +85,14 @@ with the pure planners before writing a byte**, repairs a torn final line on
 each append target, applies, and returns a fresh snapshot; the lock is released
 on success or failure.
 
-- `addToRunDirectory({ dir, statelogFiles, codeEntries, workdir?, annotationFiles })`
-- `recordCompletedRun({ dir, stagedStatelogFile, codeEntry?, workdir?, run })` — the eval harness's one call per finished test
+- `wrapTracesAsRunDirectories({ groupDir, statelogFiles, trace?, codeEntries, workdir?, annotationFiles })`
+  — one `<groupDir>/<traceId>/` per trace, each assembled under
+  `<groupDir>/.staging/` and renamed into place; an existing child is skipped,
+  never touched; `--trace` narrows; a workdir needs exactly one trace; code
+  must match at least one trace and attaches to the ones that recorded it;
+  annotation rows go to the child their `traceId` names and must name one of
+  the traces. Used by `runs add` and `run --capture-workdir`.
+- `recordCompletedRun({ dir, stagedStatelogFile, codeEntry?, workdir?, run })` — the eval harness's one call per finished test, on a fresh directory
 - `recordNote({ dir, traceId, annotator, text })`
 - `recordGradingPass({ dir, scores })` — mints one `passId`, stamps `passSize`, marks the last row `completesPass`; an empty `scores` is refused
 
@@ -99,16 +116,15 @@ The planners (`mergeStatelog.ts`, `attachCode.ts`, `attachWorkdir.ts`):
 - **Code** hashes the closure it is given (`computeCodeIdentity`, relative to
   the closure's common ancestor, never cwd) and requires that some trace in the
   directory recorded that hash on `agentStart`; a mismatch is refused, not
-  warned. Stored under `code/<closureHash>/`; a stored tree that is incomplete
-  or does not hash to its own name is reported as corrupt.
-- **Workdir** copies to `workdir/<traceId>/` and writes the dated sidecar. A
-  workdir attached later may postdate the run; the sidecar says so. The trace
-  id comes from the statelog, so the plan checks that both resolved paths are
-  direct children of `workdir/` before anything is written; an id like
-  `../escaped` is refused.
+  warned. Stored flat under `code/`; a stored tree that is incomplete or does
+  not hash to what the trace recorded is reported as corrupt.
+- **Workdir** copies to `workdir/` and writes the dated `workdir.json`
+  sidecar. A workdir attached later may postdate the run; the sidecar says so.
+  The run directory itself, and the optional `excludeDir` (the group a capture
+  is written into), are left out of the copy.
   Replacement goes through `safeDeleteDirectoryWithin(root, target)`
   (`lib/utils.ts`), which deletes only a strict descendant of the run
-  directory's `workdir/` after resolving symlinks.
+  directory after resolving symlinks.
 
 ## The lock (`lock.ts`)
 
@@ -158,19 +174,20 @@ One file per command; none imports the lock or the append helpers.
   source log itself is never a valid output. The viewer's `x` key does the
   same for the focused trace, prompting for a path, and also refuses an
   existing file.
-- `agency runs add <dir> [--statelog f]… [--code entry]… [--workdir p [--trace id]] [--annotations f]… [--replace]`
-  — one `addToRunDirectory` request; prints counts and the listing.
+- `agency runs add <group> [--statelog f]… [--trace id] [--code entry]… [--workdir p] [--annotations f]… [--replace]`
+  — one `wrapTracesAsRunDirectories` request; prints one line per child
+  written or skipped.
 - `agency runs list <dir>` — one line per trace (`summarizeRuns`).
 - `agency note <dir> <text> [--trace id] [--annotator who]` — `recordNote`.
 - `agency run <file> --capture-workdir <dir>` (`lib/cli/commands.ts`) — mints
   a trace id (`AGENCY_TRACE_ID`), points the child's statelog at a private
   staging file (`log.logFile` + `observability` overrides), and after exit
-  makes one `addToRunDirectory` call: that statelog, the entry file's code
-  closure, and the working directory as the trace's workdir snapshot. The
+  wraps that one trace as `<dir>/<traceId>/`: the statelog, the entry file's
+  code closure, and the working directory as the workdir snapshot. The
   snapshot is the whole cwd, so run it from the project you mean to capture.
-  The destination may sit inside that cwd (`--capture-workdir ./runs/x` is
-  the natural call); the run directory is left out of its own snapshot rather
-  than copied into itself. The capture statelog and the code identity always
+  The destination may sit inside that cwd (`--capture-workdir ./runs` is the
+  natural call); `<dir>` is left out of the snapshot rather than copied into
+  itself. The capture statelog and the code identity always
   win over inherited config overrides (`runChildOverrides`), and the temp
   staging directory is removed whether or not the fold succeeded.
 - `agency logs <dir>` — the viewer on the directory's statelog with each

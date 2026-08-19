@@ -16,10 +16,14 @@ input and no goal (`inlineInput`; the suite identity is `inline:--input`).
 Grading is `agency eval grade <dir>`, whenever you like, as many times as you
 like. `eval run` takes the agent file as its positional argument (or
 `--agent-cmd`), plus `--suite`/`--input`, `--out <dir>` and `-n`. `--out`
-names the directory the run is written into (default
-`<eval.runsDir or runs>/<timestamp>-<random suffix>`); it replaced the `--runs-dir`/`--run-id`
-pair, which called one harness invocation a "run" while everywhere else in
-the data model a run is one trace. There is deliberately no `--goal` (grading's business), no
+names the GROUP directory; each test's run directory is written at
+`<out>/<testId>/` (`input-1` for `--input`), assembled in `<out>/.staging/`
+and renamed into place so a child appears whole or not at all. A child that
+already exists is an error result for that test (nothing overwritten; the
+others still run). Default `<eval.runsDir or runs>/<timestamp>-<random suffix>`.
+`eval grade <path>` takes a run directory or a group and grades each run
+with its own pass, printing the mean over the group (`findRunDirectories`,
+`docs/dev/run-directory.md`). There is deliberately no `--goal` (grading's business), no
 stop-on-error (`--continue-on-error` is gone: an errored test is a `run` row
 that grades 0, and stopping the suite half-way only leaves holes), and no
 agent-config flags (`--strict`, `--max-tool-call-rounds`,

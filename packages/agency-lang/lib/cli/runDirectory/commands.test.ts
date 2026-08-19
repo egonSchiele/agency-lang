@@ -72,7 +72,7 @@ describe("formatTextTable", () => {
 });
 
 describe("runs add", () => {
-  it("assembles a directory from a statelog and matching code, idempotently", () => {
+  it("wraps each trace as <dir>/<traceId>/, attaching matching code, and skips existing children", () => {
     const project = writeProject({ "main.agency": "node main() { return 1 }\n" });
     const entry = path.join(project, "main.agency");
     const log = statelogFile(
@@ -85,17 +85,17 @@ describe("runs add", () => {
       { dir, statelog: [log], code: [entry], annotations: [] },
       { report: (m) => reports.push(m) },
     );
-    expect(first.statelogs).toEqual({ added: 2, skipped: 0 });
-    expect(first.code).toEqual({ added: 1, skipped: 0 });
-    expect(reports[0]).toContain("Added 2 trace(s)");
+    expect(first.written).toEqual([path.join(dir, "t1"), path.join(dir, "t2")]);
+    expect(fs.existsSync(path.join(dir, "t1", "code", "main.agency"))).toBe(true);
+    expect(fs.existsSync(path.join(dir, "t2", "code"))).toBe(false);
+    expect(reports[0]).toContain(`wrote ${path.join(dir, "t1")}`);
     const again = runsAdd(
       { dir, statelog: [log], code: [], annotations: [] },
       { report: (message) => reports.push(message) },
     );
-    expect(again.statelogs).toEqual({ added: 0, skipped: 2 });
-    expect(reports[1]).toMatch(
-      /Nothing was added.*all 2 trace\(s\) were already present \(t1, t2\)/,
-    );
+    expect(again.written).toEqual([]);
+    expect(again.skipped.map((skip) => skip.traceId)).toEqual(["t1", "t2"]);
+    expect(reports[1]).toMatch(/skipped t1: .*already exists/);
   });
 
   it("refuses code no trace recorded, naming the recorded hash", () => {
@@ -115,44 +115,43 @@ describe("runs add", () => {
         { report: () => {} },
       ),
     ).toThrow(new RegExp(recorded));
-    expect(fs.existsSync(runDirPaths(dir).codeDir)).toBe(false);
+    expect(fs.existsSync(path.join(dir, "t1"))).toBe(false);
   });
 
-  it("attaches a workdir to the only trace without --trace, and demands it otherwise", () => {
+  it("attaches a workdir when the statelog holds one trace, and demands --trace otherwise", () => {
     const dir = tempDir();
     const workdir = writeProject({ "out.txt": "x" });
     runsAdd(
       { dir, statelog: [statelogFile(agentStartLine("t1"))], code: [], workdir, annotations: [] },
       { report: () => {} },
     );
-    expect(fs.existsSync(path.join(runDirPaths(dir).workdirDir, "t1", "out.txt"))).toBe(true);
+    expect(fs.existsSync(path.join(dir, "t1", "workdir", "out.txt"))).toBe(true);
+    const two = statelogFile(agentStartLine("t2"), agentStartLine("t3"));
+    expect(() =>
+      runsAdd({ dir, statelog: [two], code: [], workdir, annotations: [] }, { report: () => {} }),
+    ).toThrow(/--trace/);
     runsAdd(
-      { dir, statelog: [statelogFile(agentStartLine("t2"))], code: [], annotations: [] },
+      { dir, statelog: [two], code: [], workdir, trace: "t3", annotations: [] },
       { report: () => {} },
     );
-    expect(() =>
-      runsAdd({ dir, statelog: [], code: [], workdir, annotations: [] }, { report: () => {} }),
-    ).toThrow(/--trace/);
+    expect(fs.existsSync(path.join(dir, "t3", "workdir", "out.txt"))).toBe(true);
+    expect(fs.existsSync(path.join(dir, "t2"))).toBe(false);
   });
 });
 
 describe("note and runs list", () => {
   it("notes the only trace, demands --trace with several, and lists counts", () => {
+    // Written by hand: a run directory holds one trace now, but the reader
+    // still accepts several, and note/list are rewritten in later chunks.
     const dir = tempDir();
-    runsAdd(
-      { dir, statelog: [statelogFile(agentStartLine("t1"))], code: [], annotations: [] },
-      { report: () => {} },
-    );
+    fs.writeFileSync(runDirPaths(dir).statelog, agentStartLine("t1") + "\n");
     const deps = { report: vi.fn(), user: () => "adit" };
     const row = note({ dir, text: "too slow" }, deps);
     expect(row.kind).toBe("note");
     expect(readRunDirectory(dir, quiet).effectiveAnnotations.t1.notes).toHaveLength(1);
     expect(() => note({ dir, text: "  " }, deps)).toThrow(/needs some text/);
 
-    runsAdd(
-      { dir, statelog: [statelogFile(agentStartLine("t2"))], code: [], annotations: [] },
-      { report: () => {} },
-    );
+    fs.appendFileSync(runDirPaths(dir).statelog, agentStartLine("t2") + "\n");
     expect(() => note({ dir, text: "x" }, deps)).toThrow(/--trace/);
     note({ dir, text: "second", trace: "t2" }, deps);
 

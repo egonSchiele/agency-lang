@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { completeAnnotation } from "./annotations.js";
 
 import { summarizeRuns } from "./list.js";
-import { addToRunDirectory, recordGradingPass, recordNote } from "./mutations.js";
+import { recordGradingPass, recordNote } from "./mutations.js";
 import { readRunDirectory } from "./runDir.js";
 import { agentStartLine, statelogLine, tempDir } from "./testFixtures.js";
 import * as fs from "fs";
@@ -11,27 +11,19 @@ import * as path from "path";
 
 const quiet = { reportWarning: () => {} };
 
-function statelogFile(...lines: string[]): string {
-  const file = path.join(tempDir("log-"), "statelog.jsonl");
-  fs.writeFileSync(file, lines.join("\n") + "\n");
-  return file;
+function writeStatelog(dir: string, ...lines: string[]): void {
+  fs.writeFileSync(path.join(dir, "statelog.jsonl"), lines.join("\n") + "\n");
 }
 
 describe("summarizeRuns", () => {
   it("summarizes a finished trace with a note and a score", () => {
     const dir = tempDir();
-    addToRunDirectory({
+    writeStatelog(
       dir,
-      statelogFiles: [
-        statelogFile(
-          statelogLine("t1", "agentStart", { entryNode: "main", args: {}, input: "summarize x" }),
-          statelogLine("t1", "agentEnd", { result: "done", timeTaken: 5 }),
-          statelogLine("t2", "agentStart", { entryNode: "main", args: {} }),
-        ),
-      ],
-      codeEntries: [],
-      annotationFiles: [],
-    });
+      statelogLine("t1", "agentStart", { entryNode: "main", args: {}, input: "summarize x" }),
+      statelogLine("t1", "agentEnd", { result: "done", timeTaken: 5 }),
+      statelogLine("t2", "agentStart", { entryNode: "main", args: {} }),
+    );
     recordNote({ dir, traceId: "t1", annotator: { kind: "human", id: "adit" }, text: "fine" });
     recordGradingPass({
       dir,
@@ -75,17 +67,11 @@ describe("summarizeRuns", () => {
 
   it("reports gates as unknown (null) when a must-pass score is scalar, since its threshold is not on the row", () => {
     const dir = tempDir();
-    addToRunDirectory({
+    writeStatelog(
       dir,
-      statelogFiles: [
-        statelogFile(
-          statelogLine("t1", "agentStart", { entryNode: "main", args: {} }),
-          statelogLine("t1", "agentEnd", { result: "done", timeTaken: 1 }),
-        ),
-      ],
-      codeEntries: [],
-      annotationFiles: [],
-    });
+      statelogLine("t1", "agentStart", { entryNode: "main", args: {} }),
+      statelogLine("t1", "agentEnd", { result: "done", timeTaken: 1 }),
+    );
     const score = (name: string, kind: "binary" | "scalar", mustPass: boolean) => ({
       traceId: "t1",
       annotator: { kind: "grader" as const, id: "g@1" },
@@ -105,16 +91,10 @@ describe("summarizeRuns", () => {
 
   it("prefers the harness verdict over the trace's own ending", () => {
     const dir = tempDir();
-    addToRunDirectory({
-      dir,
-      statelogFiles: [statelogFile(agentStartLine("t1"))],
-      codeEntries: [],
-      annotationFiles: [],
-    });
-    // A run row written directly through the annotation import path.
-    const rowFile = path.join(tempDir("ann-"), "annotations.jsonl");
+    writeStatelog(dir, agentStartLine("t1"));
+    // A run row written directly, as an import would.
     fs.writeFileSync(
-      rowFile,
+      path.join(dir, "annotations.jsonl"),
       JSON.stringify(
         completeAnnotation(
           {
@@ -130,7 +110,6 @@ describe("summarizeRuns", () => {
         ),
       ) + "\n",
     );
-    addToRunDirectory({ dir, statelogFiles: [], codeEntries: [], annotationFiles: [rowFile] });
     expect(summarizeRuns(readRunDirectory(dir, quiet))[0].ended).toBe("timeout");
   });
 });

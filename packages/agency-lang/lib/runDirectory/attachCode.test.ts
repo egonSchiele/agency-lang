@@ -19,7 +19,7 @@ function directoryWithTraceFor(project: string): { dir: string; entry: string } 
 const quiet = { reportWarning: () => {} };
 
 describe("code attachment", () => {
-  it("stores a matching closure under code/<hash>/ and is idempotent", () => {
+  it("stores a matching closure under code/ and is idempotent", () => {
     const project = writeProject({
       "main.agency": 'import { f } from "./lib/util.agency"\nnode main() { return f() }\n',
       "lib/util.agency": 'export def f(): string { return "x" }\n',
@@ -29,7 +29,7 @@ describe("code attachment", () => {
     const plan = planCodeAttachment(readRunDirectory(dir, quiet), entry, paths);
     expect(plan.status).toBe("add");
     applyCodeAttachment(paths, plan);
-    const stored = path.join(paths.codeDir, plan.identity.closureHash);
+    const stored = paths.codeDir;
     expect(fs.existsSync(path.join(stored, "main.agency"))).toBe(true);
     expect(fs.existsSync(path.join(stored, "lib", "util.agency"))).toBe(true);
 
@@ -67,7 +67,7 @@ describe("code attachment", () => {
     const paths = runDirPaths(dir);
     const plan = planCodeAttachment(readRunDirectory(dir, quiet), entry, paths);
     applyCodeAttachment(paths, plan);
-    const stored = path.join(paths.codeDir, plan.identity.closureHash, "main.agency");
+    const stored = path.join(paths.codeDir, "main.agency");
     fs.writeFileSync(stored, "node main() { return 999 }\n");
     expect(() => planCodeAttachment(readRunDirectory(dir, quiet), entry, paths)).toThrow(/corrupt/);
     fs.rmSync(stored);

@@ -7,6 +7,8 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { childRunDirectories, isRunDirectory } from "@/runDirectory/findRuns.js";
+
 export type Source = { kind: "runDir"; dir: string } | { kind: "statelog"; file: string };
 
 export type Discovery = {
@@ -92,10 +94,7 @@ function classifyDirectory(
     sources.push({ kind: "runDir", dir: resolved });
     return;
   }
-  const childRuns = fs
-    .readdirSync(resolved)
-    .map((child) => path.join(resolved, child))
-    .filter(isRunDirectory);
+  const childRuns = childRunDirectories(resolved);
   if (childRuns.length === 0) {
     errors.push(`${rawPath}: directory contains no run directories — ${ACCEPTED_KINDS}`);
     return;
@@ -103,10 +102,6 @@ function classifyDirectory(
   for (const dir of childRuns) {
     sources.push({ kind: "runDir", dir });
   }
-}
-
-export function isRunDirectory(dir: string): boolean {
-  return fs.existsSync(path.join(dir, "statelog.jsonl"));
 }
 
 type FirstLineSniff =

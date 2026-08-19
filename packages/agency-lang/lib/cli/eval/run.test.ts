@@ -15,6 +15,7 @@ import type { EvalInputRunner, EvalRunnerJob } from "@/eval/run/subprocess.js";
 import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 import { finishedTraceLines } from "@/runDirectory/testFixtures.js";
 
+import { evalGrade } from "./grade.js";
 import { evalRun, totalRunCostUsd, validateInputSelection } from "./run.js";
 
 /** A runner that behaves like a real child: a finished trace under the
@@ -70,7 +71,7 @@ describe("eval run CLI", () => {
     );
     expect(result.okCount).toBe(1);
     expect(seenInput).toBeUndefined();
-    const run = readRunDirectory(path.join(runsDir, "no-input"), quiet).effectiveAnnotations[
+    const run = readRunDirectory(result.tests[0].runDir, quiet).effectiveAnnotations[
       result.tests[0].traceId
     ].run as unknown as { test: { input?: unknown } };
     expect(run.test.input).toBeUndefined();
@@ -102,7 +103,7 @@ describe("eval run CLI", () => {
 
     expect(result).toMatchObject({ okCount: 1, errorCount: 0 });
     expect(result.tests[0]).toMatchObject({ status: "success" });
-    const snapshot = readRunDirectory(path.join(runsDir, "r1"), quiet);
+    const snapshot = readRunDirectory(path.join(runsDir, "r1", "input-1"), quiet);
     expect(snapshot.traces).toHaveLength(1);
     // Nothing graded: the only annotation is the harness's run row.
     expect(snapshot.annotationRows.map((row) => row.kind)).toEqual(["run"]);
@@ -176,7 +177,7 @@ describe("eval run CLI", () => {
     );
 
     expect(result.tests[0]).toMatchObject({ status: "success" });
-    expect(readRunDirectory(path.join(runsDir, "fallback"), quiet).traces).toHaveLength(1);
+    expect(readRunDirectory(result.tests[0].runDir, quiet).traces).toHaveLength(1);
   });
 
   it("runs every test even after one errors, recording each failure", async () => {
@@ -213,7 +214,7 @@ describe("eval run CLI", () => {
       // The message carries the seeded-file listing for diagnosability.
       errorMessage: expect.stringMatching(/^nope\n\nWorkdir was seeded with/),
     });
-    const snapshot = readRunDirectory(path.join(runsDir, "all"), quiet);
+    const snapshot = readRunDirectory(result.tests[0].runDir, quiet);
     const run = snapshot.effectiveAnnotations[result.tests[0].traceId].run as {
       ended: string;
       error: string;
@@ -261,13 +262,14 @@ describe("eval run CLI", () => {
 
     expect(sawFixture).toBe(true);
     expect(result.tests[0].status).toBe("success");
-    const snapshot = readRunDirectory(result.runDir, quiet);
+    const snapshot = readRunDirectory(result.tests[0].runDir, quiet);
     const run = snapshot.effectiveAnnotations[result.tests[0].traceId].run as {
       suite: { source: string; sha: string };
     };
     expect(run.suite).toEqual({ source: `${suiteRepo}?ref=${suiteSha}`, sha: suiteSha });
-    // The agent's code is stored under the closure hash the trace recorded.
-    expect(fs.readdirSync(runDirPaths(result.runDir).codeDir)).toHaveLength(1);
+    expect(
+      fs.existsSync(path.join(runDirPaths(result.tests[0].runDir).codeDir, "agent.agency")),
+    ).toBe(true);
   });
 
   describe("grading a run directory", () => {
@@ -285,14 +287,14 @@ describe("eval run CLI", () => {
       const summary = await runSuite(opts, { runner: okRunner });
 
       const { grading } = await gradeSuite(
-        summary.runDir,
+        summary.tests[0].runDir,
         { mode: "override", graders: [grader(() => false, { name: "gate", mustPass: true })] },
         {},
       );
 
       expect(grading.gatesPassed).toBe(false);
       expect(grading.graders).toEqual(["gate"]);
-      const scores = readRunDirectory(summary.runDir, quiet).annotationRows.filter(
+      const scores = readRunDirectory(summary.tests[0].runDir, quiet).annotationRows.filter(
         (row) => row.kind === "score",
       );
       expect(scores).toHaveLength(1);
@@ -303,25 +305,19 @@ describe("eval run CLI", () => {
       });
     });
 
-    it("counts a gate-failed test as a zero rather than zeroing the whole run", async () => {
+    it("a failed run scores zero and the mean over the group is 0.5, not 0", async () => {
       const opts = setup("mixed", [
         { id: "a", goal: "g", input: "t" },
         { id: "b", goal: "g", input: "t" },
       ]);
       const summary = await runSuite(opts, { runner: okRunner });
       // Passes on test "a", fails the gate on test "b".
-      const { grading } = await gradeSuite(
-        summary.runDir,
-        {
-          mode: "override",
-          graders: [grader(({ test }) => test.id === "a", { name: "gate", mustPass: true })],
-        },
-        {},
-      );
+      const graders = path.join(tmpDir, "gate.ts");
+      fs.writeFileSync(graders, `export default ({ test }) => (test.id === "a" ? 1 : 0);`);
+      const result = await evalGrade(summary.runDir, { graders, config: {} });
 
-      // One of two tests scored 1, the other 0 — the mean is 0.5, not 0.
-      expect(grading.objective).toBeCloseTo(0.5);
-      expect(grading.gatesPassed).toBe(false);
+      // One of two runs scored 1, the other 0 — the mean is 0.5, not 0.
+      expect(result.mean).toBeCloseTo(0.5);
     });
 
     it("a misconfigured grader is rejected by validation before any agent runs", () => {
@@ -370,25 +366,16 @@ describe("eval run CLI", () => {
         { agent: agentFile, suite: suiteDir, out: path.join(runsDir, "per-test"), config },
         { runner: okRunner },
       );
-      const { resolveGraders } = await import("./graders.js");
 
       // "self" scored 1 by its own grader; "plain" scored 0 by the fallback.
-      const fallback = await gradeSuite(
-        result.runDir,
-        (await resolveGraders(undefined, undefined, config))!,
-        config,
-      );
-      expect(fallback.grading.objective).toBeCloseTo(0.5);
+      const fallback = await evalGrade(result.runDir, { config });
+      expect(fallback.mean).toBeCloseTo(0.5);
 
       // An explicit --graders replaces BOTH tests' graders.
       const overrideModule = path.join(tmpDir, "override.ts");
       fs.writeFileSync(overrideModule, `export default () => 1;`);
-      const overridden = await gradeSuite(
-        result.runDir,
-        (await resolveGraders(overrideModule, undefined, config))!,
-        config,
-      );
-      expect(overridden.grading.objective).toBeCloseTo(1);
+      const overridden = await evalGrade(result.runDir, { graders: overrideModule, config });
+      expect(overridden.mean).toBeCloseTo(1);
     });
   });
 

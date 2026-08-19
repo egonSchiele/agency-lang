@@ -346,7 +346,8 @@ export abstract class BaseOptimizer {
         `agent run failed for input ${input.id ?? "(no id)"}: ${testResult?.errorMessage ?? "unknown error"}`,
       );
     }
-    return result.runDir;
+    // The one test's run directory, `<out>/<id>/`; `gradeRun` sees exactly one input.
+    return testResult.runDir;
   }
 
   protected async eachIteration(step: (iter: number) => Promise<void>): Promise<void> {

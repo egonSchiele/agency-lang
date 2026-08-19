@@ -67,7 +67,10 @@ describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
       const input = args.inputs[0];
       // A real one-input run directory: the optimizer grades it via gradeRun.
       const runDir = fakeRun(input.id ?? "a", "out", input);
-      return { runDir, tests: [{ testId: input.id ?? "a", traceId: "t", status: "success" }] };
+      return {
+        runDir: path.dirname(runDir),
+        tests: [{ testId: input.id ?? "a", traceId: "t", runDir, status: "success" }],
+      };
     });
   });
   afterEach(() => {

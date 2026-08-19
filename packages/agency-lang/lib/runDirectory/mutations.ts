@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as path from "path";
 
 import { nanoid } from "nanoid";
 
@@ -13,11 +14,17 @@ import {
   type RunPayload,
   type Score,
 } from "./annotations.js";
-import { applyCodeAttachment, planCodeAttachment, type CodeAttachmentPlan } from "./attachCode.js";
+import {
+  applyCodeAttachment,
+  CodeMismatchError,
+  planCodeAttachment,
+  recordedClosureHashes,
+  type CodeAttachmentPlan,
+} from "./attachCode.js";
+import { computeCodeIdentity } from "./codeIdentity.js";
 import {
   applyWorkdirAttachment,
   planWorkdirAttachment,
-  type WorkdirAttachmentPlan,
   type WorkdirAttachmentRequest,
 } from "./attachWorkdir.js";
 import { acquireRunDirLock } from "./lock.js";
@@ -28,7 +35,7 @@ import {
   type StatelogMergePlan,
 } from "./mergeStatelog.js";
 import { readRunDirectory, runDirPaths, type RunDirectorySnapshot } from "./runDir.js";
-import { readTracesOrThrow } from "./traces.js";
+import { matchTrace, readTracesOrThrow, type Trace } from "./traces.js";
 
 /**
  * The public writes on a run directory. Each operation describes a domain
@@ -51,75 +58,163 @@ export type MutationOptions = {
   now?(): string;
 };
 
-// --- addToRunDirectory ----------------------------------------------------
+// --- wrapTracesAsRunDirectories --------------------------------------------
 
-export type AddToRunDirectoryRequest = {
-  dir: string;
+export type WrapTracesRequest = {
+  /** The group directory; one `<groupDir>/<traceId>/` is written per trace. */
+  groupDir: string;
   statelogFiles: string[];
+  /** Keep only this trace (full id or unique prefix). */
+  trace?: string;
   codeEntries: string[];
   workdir?: WorkdirAttachmentRequest;
   annotationFiles: string[];
 };
 
-export type MutationCounts = { added: number; skipped: number };
-
-export type AddToRunDirectoryResult = {
-  statelogs: MutationCounts;
-  /** `describeStatelogMerge` for this request: names what was already there. */
-  statelogSummary: string;
-  code: MutationCounts;
-  workdirs: MutationCounts;
-  annotations: MutationCounts;
-  snapshot: RunDirectorySnapshot;
+export type WrapTracesResult = {
+  written: string[];
+  skipped: { traceId: string; reason: string }[];
 };
 
-export function addToRunDirectory(
-  request: AddToRunDirectoryRequest,
+/**
+ * `agency runs add` and `agency run --capture-workdir`: make one run directory
+ * per trace in the given statelogs, under `groupDir`. Each child is assembled
+ * in `<groupDir>/.staging/<traceId>` and renamed into place, so a child is
+ * either whole or absent. A child that already exists is skipped, never
+ * touched. Code is attached to the traces that recorded its closure hash and
+ * must match at least one; annotation rows go to the child their `traceId`
+ * names and must each name one of the traces.
+ */
+export function wrapTracesAsRunDirectories(
+  request: WrapTracesRequest,
   options: MutationOptions = {},
-): AddToRunDirectoryResult {
-  return withWriter(request.dir, options, (paths, snapshot, reportWarning) => {
-    // Plan everything first. Statelogs are planned as one incoming set so a
-    // conflict in the third file also stops the first from being written.
-    const incoming = request.statelogFiles.flatMap(readTracesOrThrow);
-    const statelogPlan = planStatelogMerge(snapshot.traces, incoming);
-    if (statelogPlan.refused.length > 0) {
-      throw new Error(describeStatelogMerge(statelogPlan, request.dir));
-    }
-    // Code and workdir plans need the traces the statelogs are about to add,
-    // so plan them against the merged view.
-    const merged: RunDirectorySnapshot = {
-      ...snapshot,
-      traces: [...snapshot.traces, ...statelogPlan.add],
-    };
-    const codePlans = request.codeEntries.map((entry) => planCodeAttachment(merged, entry, paths));
-    const workdirPlan =
-      request.workdir === undefined
-        ? undefined
-        : planWorkdirAttachment(merged, request.workdir, paths);
-    const annotationDrafts = request.annotationFiles.flatMap((file) =>
-      readAnnotations(file, reportWarning).map(draftOf),
+): WrapTracesResult {
+  const reportWarning = options.reportWarning ?? (() => {});
+  const traces = selectTraces(request);
+  if (request.workdir !== undefined && traces.length > 1) {
+    throw new Error(
+      `--workdir needs --trace <id>: the statelog holds ${traces.length} traces ` +
+        `(${traces.map((trace) => trace.traceId).join(", ")}).`,
     );
+  }
+  const annotationDrafts = request.annotationFiles.flatMap((file) =>
+    readAnnotations(file, reportWarning).map(draftOf),
+  );
+  const ids = traces.map((trace) => trace.traceId);
+  const orphan = annotationDrafts.find((draft) => !ids.includes(draft.traceId));
+  if (orphan !== undefined) {
+    throw new Error(
+      `An annotation row names trace ${orphan.traceId}, which is not among the traces being ` +
+        `wrapped (${ids.join(", ")}). Nothing was written.`,
+    );
+  }
+  const codeIdentities = request.codeEntries.map((entry) => ({
+    entry,
+    hash: computeCodeIdentity(entry).closureHash,
+  }));
+  const recordedAnywhere = recordedClosureHashes(traces);
+  for (const code of codeIdentities) {
+    if (!recordedAnywhere.includes(code.hash)) {
+      const known = recordedAnywhere.length === 0 ? "none recorded" : recordedAnywhere.join(", ");
+      throw new CodeMismatchError(
+        `${code.entry} hashes to ${code.hash}, which none of the traces recorded as its code ` +
+          `(${known}). Attach the code that actually ran.`,
+      );
+    }
+  }
 
-    // Apply, in the order that keeps a crash recoverable: traces before the
-    // things that point at them.
-    applyStatelogMerge(paths, statelogPlan);
+  const result: WrapTracesResult = { written: [], skipped: [] };
+  const stagingRoot = path.join(request.groupDir, ".staging");
+  for (const trace of traces) {
+    const child = childDirFor(request.groupDir, trace.traceId);
+    if (fs.existsSync(child)) {
+      result.skipped.push({ traceId: trace.traceId, reason: `${child} already exists` });
+      continue;
+    }
+    const staging = path.join(stagingRoot, trace.traceId);
+    fs.rmSync(staging, { recursive: true, force: true });
+    fs.mkdirSync(staging, { recursive: true });
+    const recorded = recordedClosureHashes([trace]);
+    assembleRunDirectory(
+      {
+        dir: staging,
+        trace,
+        codeEntries: codeIdentities
+          .filter((code) => recorded.includes(code.hash))
+          .map((code) => code.entry),
+        workdir: request.workdir,
+        annotationDrafts: annotationDrafts.filter((draft) => draft.traceId === trace.traceId),
+      },
+      options,
+    );
+    fs.renameSync(staging, child);
+    result.written.push(child);
+  }
+  removeIfEmpty(stagingRoot);
+  return result;
+}
+
+/** The traces the request is about, with the same id never carrying two
+ *  different event streams, and narrowed to `--trace` when given. */
+function selectTraces(request: WrapTracesRequest): Trace[] {
+  const incoming = request.statelogFiles.flatMap(readTracesOrThrow);
+  const plan = planStatelogMerge([], incoming);
+  if (plan.refused.length > 0) {
+    const ids = plan.refused.map((refusal) => refusal.traceId).join(", ");
+    throw new Error(
+      `Trace id(s) ${ids} appear more than once with different content. Nothing was written.`,
+    );
+  }
+  if (request.trace === undefined) return plan.add;
+  const match = matchTrace(plan.add, request.trace);
+  if (match.kind === "one") return [match.trace];
+  if (match.kind === "none") throw new Error(`No trace matches ${request.trace}.`);
+  throw new Error(`--trace ${request.trace} is ambiguous: ${match.ids.join(", ")}.`);
+}
+
+/** `<groupDir>/<traceId>`, refusing an id that would land outside the group. */
+function childDirFor(groupDir: string, traceId: string): string {
+  const child = path.resolve(groupDir, traceId);
+  if (path.dirname(child) !== path.resolve(groupDir)) {
+    throw new Error(
+      `Refusing to write trace "${traceId}": its id would place the run directory outside ` +
+        `${groupDir}.`,
+    );
+  }
+  return child;
+}
+
+/** Write one trace's statelog into `dir`, then attach code, workdir and rows
+ *  under the directory's writer lock. */
+function assembleRunDirectory(
+  args: {
+    dir: string;
+    trace: Trace;
+    codeEntries: string[];
+    workdir?: WorkdirAttachmentRequest;
+    annotationDrafts: AnnotationDraft[];
+  },
+  options: MutationOptions,
+): void {
+  withWriter(args.dir, options, (paths, snapshot, reportWarning) => {
+    applyStatelogMerge(paths, planStatelogMerge(snapshot.traces, [args.trace]));
+    const merged: RunDirectorySnapshot = { ...snapshot, traces: [args.trace] };
+    const codePlans = args.codeEntries.map((entry) => planCodeAttachment(merged, entry, paths));
+    const workdirPlan =
+      args.workdir === undefined ? undefined : planWorkdirAttachment(merged, args.workdir, paths);
     for (const plan of codePlans) applyCodeAttachment(paths, plan);
     if (workdirPlan !== undefined) applyWorkdirAttachment(paths, workdirPlan, now(options));
-    const annotationCounts = appendAnnotations(
-      paths.annotations,
-      annotationDrafts,
-      options,
-      reportWarning,
-    );
-
-    return {
-      statelogs: { added: statelogPlan.add.length, skipped: statelogPlan.skipped.length },
-      statelogSummary: describeStatelogMerge(statelogPlan, request.dir),
-      code: countPlans(codePlans.map((plan) => plan.status === "add")),
-      workdirs: countWorkdir(workdirPlan),
-      annotations: annotationCounts,
-    };
+    appendRows(paths.annotations, args.annotationDrafts, options, reportWarning);
+    return {};
   });
+}
+
+function removeIfEmpty(dir: string): void {
+  try {
+    fs.rmdirSync(dir);
+  } catch {
+    // not empty, or already gone — either is fine
+  }
 }
 
 // --- recordCompletedRun ---------------------------------------------------
@@ -138,8 +233,8 @@ export type RecordCompletedRunRequest = {
 
 export type RecordCompletedRunResult = { annotation: Annotation; snapshot: RunDirectorySnapshot };
 
-/** The eval harness's one call per finished test: merge the staged statelog,
- *  attach code and workdir, append the `run` row. */
+/** The eval harness's one call per finished test, on a fresh directory:
+ *  write the staged statelog, attach code and workdir, append the `run` row. */
 export function recordCompletedRun(
   request: RecordCompletedRunRequest,
   options: MutationOptions = {},
@@ -367,31 +462,9 @@ function appendRows(
   return rows;
 }
 
-function appendAnnotations(
-  annotationsPath: string,
-  drafts: readonly AnnotationDraft[],
-  options: MutationOptions,
-  reportWarning: (message: string) => void,
-): MutationCounts {
-  const before = readAnnotations(annotationsPath, reportWarning).length;
-  const rows = appendRows(annotationsPath, drafts, options, reportWarning);
-  const after = readAnnotations(annotationsPath, reportWarning).length;
-  return { added: after - before, skipped: rows.length - (after - before) };
-}
-
 function draftOf(row: Annotation): AnnotationDraft {
   const { v: _v, id: _id, createdAt: _createdAt, ...draft } = row;
   return draft;
-}
-
-function countPlans(added: boolean[]): MutationCounts {
-  const count = added.filter(Boolean).length;
-  return { added: count, skipped: added.length - count };
-}
-
-function countWorkdir(plan: WorkdirAttachmentPlan | undefined): MutationCounts {
-  if (plan === undefined) return { added: 0, skipped: 0 };
-  return { added: 1, skipped: 0 };
 }
 
 function now(options: MutationOptions): string {

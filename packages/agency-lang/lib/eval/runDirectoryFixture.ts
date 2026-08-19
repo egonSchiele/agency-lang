@@ -25,9 +25,10 @@ export type FakeRun = {
 };
 
 /**
- * Write a run directory the way `eval run` does — one trace per test, a
- * workdir per trace, and a `run` row per test — for tests of grading, the
- * optimizer, and the CLI. Returns the directory.
+ * Write a run directory the way `eval run` does — the trace, its workdir, and
+ * the `run` row — for tests of grading, the optimizer, and the CLI. Returns
+ * the directory. Several runs in one directory is the pre-atomic shape that
+ * the labeling and explorer tests still read; writers no longer produce it.
  */
 export function writeRunDirectory(runs: FakeRun[], dir: string = tempDir("run-")): string {
   fs.mkdirSync(dir, { recursive: true });
@@ -46,14 +47,14 @@ export function writeRunDirectory(runs: FakeRun[], dir: string = tempDir("run-")
         }).join("\n") + "\n",
       );
     }
-    let workdir: { traceId: string; sourceDir: string } | undefined;
+    let workdir: { sourceDir: string } | undefined;
     if (run.workdirFiles !== undefined && statelogFile !== undefined) {
       const source = path.join(staging, "workdir");
       for (const [rel, text] of Object.entries(run.workdirFiles)) {
         fs.mkdirSync(path.dirname(path.join(source, rel)), { recursive: true });
         fs.writeFileSync(path.join(source, rel), text);
       }
-      workdir = { traceId, sourceDir: source };
+      workdir = { sourceDir: source };
     }
     const ended = run.ended ?? "ok";
     recordCompletedRun({

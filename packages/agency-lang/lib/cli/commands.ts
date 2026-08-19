@@ -9,7 +9,7 @@ import {
   TRACE_ID_ENV,
 } from "@/config.js";
 import { withCodeIdentity } from "@/runDirectory/codeIdentity.js";
-import { addToRunDirectory } from "@/runDirectory/mutations.js";
+import { wrapTracesAsRunDirectories } from "@/runDirectory/mutations.js";
 import { AgencyProgram } from "@/index.js";
 import { spawn } from "child_process";
 import * as fs from "fs";
@@ -275,8 +275,8 @@ export function run(
    *  itself to read — `std::args` is how. They are NOT mapped onto the entry
    *  node's parameters, which receive `undefined` on this path. */
   nodeArgs: string[] = [],
-  /** `--capture-workdir <dir>`: after the run, fold its statelog, code and a
-   *  snapshot of the working directory into that run directory. */
+  /** `--capture-workdir <dir>`: after the run, write its statelog, code and a
+   *  snapshot of the working directory as the run directory `<dir>/<traceId>/`. */
   capture?: { runDir: string },
 ): void {
   const output = compile(config, inputFile, outputFile, {
@@ -370,7 +370,8 @@ export function runChildOverrides(args: {
 }
 
 type Capture = {
-  runDir: string;
+  /** The group directory the run directory is written into. */
+  groupDir: string;
   traceId: string;
   statelogFile: string;
   /** A fresh, empty directory this process created under the OS temp dir. It
@@ -380,40 +381,42 @@ type Capture = {
 
 /** A fresh trace id and a private statelog file for this run, so the fold
  *  into the run directory sees exactly this run's events. */
-function prepareCapture(runDir: string): Capture {
+function prepareCapture(groupDir: string): Capture {
   const traceId = nanoid();
   const captureTempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-capture-"));
   return {
-    runDir,
+    groupDir,
     traceId,
     statelogFile: path.join(captureTempDir, "statelog.jsonl"),
     captureTempDir,
   };
 }
 
-/** One `addToRunDirectory`: the staged statelog, the code that ran, and the
- *  working directory as this trace's workdir snapshot. The temp dir goes
- *  whether or not the fold succeeded. */
+/** One run directory at `<group>/<traceId>/`: the staged statelog, the code
+ *  that ran, and the working directory as its workdir snapshot (the group
+ *  itself left out of the snapshot when it sits inside the working directory).
+ *  The temp dir goes whether or not the write succeeded. */
 function finishCapture(capture: Capture, inputFile: string): void {
+  let written: string[];
   try {
     if (!fs.existsSync(capture.statelogFile)) {
       throw new Error(`the run wrote no statelog at ${capture.statelogFile}`);
     }
-    addToRunDirectory(
+    written = wrapTracesAsRunDirectories(
       {
-        dir: capture.runDir,
+        groupDir: capture.groupDir,
         statelogFiles: [capture.statelogFile],
         codeEntries: [inputFile],
         annotationFiles: [],
-        workdir: { traceId: capture.traceId, sourceDir: process.cwd() },
+        workdir: { sourceDir: process.cwd(), excludeDir: capture.groupDir },
       },
       { reportWarning: (message) => console.warn(message) },
-    );
+    ).written;
   } finally {
     removeCaptureTempDir(capture.captureTempDir);
   }
   console.log(`---
-Captured trace ${capture.traceId} into ${capture.runDir}`);
+Captured trace ${capture.traceId} into ${written[0] ?? capture.groupDir}`);
 }
 
 /** Only ever removes the mkdtemp directory prepareCapture made: it must sit

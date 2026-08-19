@@ -45,10 +45,12 @@ describe("evalGrade", () => {
   it("scores a run directory and records one complete grading pass", async () => {
     const runDir = makeRunDir("hello");
 
-    const grading = await evalGrade(runDir, { graders: makeGraders(), config: {} });
+    const result = await evalGrade(runDir, { graders: makeGraders(), config: {} });
 
-    expect(grading.objective).toBeCloseTo(0.5);
-    expect(grading.graders).toEqual(["len"]);
+    expect(result.runs).toHaveLength(1);
+    expect(result.runs[0].dir).toBe(runDir);
+    expect(result.mean).toBeCloseTo(0.5);
+    expect(result.runs[0].grading.graders).toEqual(["len"]);
     const snapshot = readRunDirectory(runDir, { reportWarning: () => {} });
     const scores = snapshot.annotationRows.filter((row) => row.kind === "score");
     expect(scores).toHaveLength(1);
@@ -72,7 +74,7 @@ describe("evalGrade", () => {
 
     await evalGrade(runDir, { graders: makeGraders(), out, config: {} });
 
-    expect(JSON.parse(fs.readFileSync(out, "utf8")).objective).toBeCloseTo(0.5);
+    expect(JSON.parse(fs.readFileSync(out, "utf8")).mean).toBeCloseTo(0.5);
     expect(fs.existsSync(path.join(runDir, "annotations.jsonl"))).toBe(true);
   });
 
@@ -91,7 +93,27 @@ describe("evalGrade", () => {
     expect(Object.values(effective)[0].id).toBe(scores[1].id);
   });
 
-  it("refuses a folder with no statelog.jsonl, naming how to build a run directory", () => {
+  it("grades every run directory in a group, one pass each, and reports the mean", async () => {
+    const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
+    dirs.push(group);
+    writeRunDirectory([{ test: { id: "a", input: "t" }, output: "hello" }], path.join(group, "a"));
+    writeRunDirectory(
+      [{ test: { id: "b", input: "t" }, output: "hello world" }],
+      path.join(group, "b"),
+    );
+    fs.writeFileSync(path.join(group, "notes.txt"), "not a run");
+
+    const result = await evalGrade(group, { graders: makeGraders(), config: {} });
+
+    expect(result.runs.map((run) => path.basename(run.dir))).toEqual(["a", "b"]);
+    expect(result.mean).toBeCloseTo((0.5 + 1.1) / 2);
+    for (const child of ["a", "b"]) {
+      const snapshot = readRunDirectory(path.join(group, child), { reportWarning: () => {} });
+      expect(snapshot.annotationRows.filter((row) => row.kind === "score")).toHaveLength(1);
+    }
+  });
+
+  it("refuses a folder with no run directories, naming how to build one", () => {
     const folder = fs.mkdtempSync(path.join(process.cwd(), ".test-not-a-run-dir-"));
     dirs.push(folder);
     fs.writeFileSync(path.join(folder, "statelogs.jsonl"), "");

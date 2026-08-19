@@ -48,11 +48,14 @@ export type Test = {
 export type SuiteTestResult = {
   testId: string;
   traceId: string;
+  /** This test's run directory, `<group>/<testId>/`. */
+  runDir: string;
   status: "success" | "error";
   errorMessage?: string;
 };
 
 export type SuiteRunResult = {
+  /** The group directory holding one run directory per test. */
   runDir: string;
   /** Display label, "<absolute agent path>:<node>" or the command string. */
   agentLabel: string;

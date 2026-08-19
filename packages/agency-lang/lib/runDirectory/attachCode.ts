@@ -8,10 +8,10 @@ import type { RunDirectoryPaths, RunDirectorySnapshot } from "./runDir.js";
 import type { Trace } from "./traces.js";
 
 /**
- * Attaching agent code to a run directory, stored by version under
- * `code/<closureHash>/`. The plan is pure: it hashes the closure it is given
- * and checks that some trace in the directory recorded that hash on its
- * `agentStart`. A mismatch is refused, not warned — optimizing the wrong
+ * Attaching agent code to a run directory, stored directly under `code/` (a
+ * run directory holds one run, so one code version). The plan is pure: it
+ * hashes the closure it is given and checks that the directory's trace
+ * recorded that hash on its `agentStart`. A mismatch is refused, not warned — optimizing the wrong
  * program would be silent otherwise.
  */
 export class CodeMismatchError extends Error {}
@@ -51,7 +51,7 @@ export function planCodeAttachment(
     );
   }
   const baseDir = closureBaseDirOf(entryFile, identity);
-  const target = path.join(paths.codeDir, identity.closureHash);
+  const target = paths.codeDir;
   if (fs.existsSync(target)) {
     assertStoredTreeMatches(target, identity);
     return { identity, baseDir, status: "already-present" };
@@ -59,10 +59,10 @@ export function planCodeAttachment(
   return { identity, baseDir, status: "add" };
 }
 
-/** @internal Copies the closure into `code/<hash>/`. Caller holds the lock. */
+/** @internal Copies the closure into `code/`. Caller holds the lock. */
 export function applyCodeAttachment(paths: RunDirectoryPaths, plan: CodeAttachmentPlan): void {
   if (plan.status === "already-present") return;
-  const target = path.join(paths.codeDir, plan.identity.closureHash);
+  const target = paths.codeDir;
   for (const file of plan.identity.closure) {
     const destination = path.join(target, file.file);
     fs.mkdirSync(path.dirname(destination), { recursive: true });
@@ -92,7 +92,7 @@ function assertStoredTreeMatches(target: string, identity: CodeIdentity): void {
   const storedHash = closureHashOf(stored);
   if (storedHash !== identity.closureHash) {
     throw new CodeMismatchError(
-      `${target} is named for closure hash ${identity.closureHash} but its files hash to ` +
+      `${target} should hold closure hash ${identity.closureHash} but its files hash to ` +
         `${storedHash}; the stored code tree is corrupt.`,
     );
   }

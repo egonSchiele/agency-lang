@@ -34,14 +34,22 @@ beforeEach(() => {
 });
 
 describe("agency label", () => {
-  it("labels the run directory it is given", async () => {
-    await run("label", "runs/2026", "--checklist", "news.json", "--annotator", "adit");
+  it("passes every path it is given, in order", async () => {
+    await run(
+      "label",
+      "runs/2026",
+      "runs/2027/a",
+      "--checklist",
+      "news.json",
+      "--annotator",
+      "adit",
+    );
     expect(recorded.label).toEqual([
-      { dir: "runs/2026", checklist: "news.json", annotator: "adit" },
+      { paths: ["runs/2026", "runs/2027/a"], checklist: "news.json", annotator: "adit" },
     ]);
   });
 
-  it("requires the directory positional", async () => {
+  it("requires at least one path", async () => {
     await expect(run("label", "--checklist", "news.json")).rejects.toThrow();
     expect(recorded.label).toHaveLength(0);
   });

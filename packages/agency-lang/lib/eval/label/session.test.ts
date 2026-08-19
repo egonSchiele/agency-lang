@@ -35,7 +35,7 @@ const revision: ChecklistRevision = {
 };
 
 function item(traceId: string, output: string): SessionItem {
-  return { traceId, fields: { input: "an input", output } };
+  return { runDir: `/runs/g/${traceId}`, traceId, fields: { input: "an input", output } };
 }
 
 const items = [item(OUT_A, "first output"), item(OUT_B, "second output")];

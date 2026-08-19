@@ -24,7 +24,11 @@ import type { SessionAction, SessionSnapshot } from "./session.js";
 const TRACE_ID = "trace-1";
 
 function snapshot(over: Partial<SessionSnapshot> = {}): SessionSnapshot {
-  const item = { traceId: TRACE_ID, fields: { input: "a task", output: "some output" } };
+  const item = {
+    runDir: "/runs/g/a",
+    traceId: TRACE_ID,
+    fields: { input: "a task", output: "some output" },
+  };
   return {
     items: [item],
     itemIndex: 0,

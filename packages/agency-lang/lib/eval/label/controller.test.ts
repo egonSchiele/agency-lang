@@ -5,7 +5,7 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { readAnnotations, type ChecklistAnnotation } from "@/runDirectory/annotations.js";
-import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
+import { writeRunGroup } from "@/eval/runDirectoryFixture.js";
 
 import { readCurrentPointer } from "./checklist.js";
 import {
@@ -15,8 +15,10 @@ import {
   type LabelingSessionController,
 } from "./controller.js";
 import { loadDraftFile } from "./draft.js";
+import { resolveLabelingGroup } from "./group.js";
 
 let root: string;
+/** The group: one run directory per trace, `<dir>/<traceId>/`. */
 let dir: string;
 let checklistFile: string;
 const warnings: string[] = [];
@@ -34,10 +36,10 @@ function makeDependencies(over: Partial<ControllerDependencies> = {}): Controlle
   };
 }
 
-/** A run directory with one finished trace per id, in that order. */
+/** A group with one finished run per trace id, at `<dir>/<traceId>/`. */
 function writeTraces(traceIds: string[]): void {
   fs.rmSync(dir, { recursive: true, force: true });
-  writeRunDirectory(
+  writeRunGroup(
     traceIds.map((traceId) => ({
       traceId,
       test: { id: traceId, input: `input ${traceId}` },
@@ -45,6 +47,29 @@ function writeTraces(traceIds: string[]): void {
     })),
     dir,
   );
+}
+
+function runDirs(): string[] {
+  return fs
+    .readdirSync(dir)
+    .filter((name) => fs.existsSync(path.join(dir, name, "statelog.jsonl")))
+    .sort()
+    .map((name) => path.join(dir, name));
+}
+
+/** Every `.lock` anywhere under the group, relative to it. */
+function lockFiles(): string[] {
+  const out: string[] = [];
+  const walk = (current: string): void => {
+    if (!fs.existsSync(current)) return;
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith(".lock")) out.push(path.relative(dir, full));
+    }
+  };
+  walk(dir);
+  return out.sort();
 }
 
 function writeChecklist(questions: string[]): void {
@@ -61,19 +86,25 @@ function writeChecklist(questions: string[]): void {
   );
 }
 
-async function open(dependencies = makeDependencies()): Promise<LabelingSessionController> {
+async function open(
+  dependencies = makeDependencies(),
+  paths: string[] = [dir],
+): Promise<LabelingSessionController> {
   return createLabelingSessionOpener(dependencies)({
-    dir,
+    group: resolveLabelingGroup(paths, { reportWarning: (message) => warnings.push(message) }),
     checklistFile,
     annotator: { kind: "human", id: "adit" },
     reportWarning: (message) => warnings.push(message),
   });
 }
 
+/** Every run's checklist rows, runs in name order. */
 function checklistRows(): ChecklistAnnotation[] {
-  return readAnnotations(path.join(dir, "annotations.jsonl"), (message) =>
-    warnings.push(message),
-  ).filter((row): row is ChecklistAnnotation => row.kind === "checklist");
+  return runDirs().flatMap((run) =>
+    readAnnotations(path.join(run, "annotations.jsonl"), (message) =>
+      warnings.push(message),
+    ).filter((row): row is ChecklistAnnotation => row.kind === "checklist"),
+  );
 }
 
 function checklistId(): string {
@@ -85,7 +116,10 @@ function draftsDir(): string {
 }
 
 function sessionIdOnDisk(): string {
-  return fs.readdirSync(draftsDir())[0].replace(".json", "");
+  return fs
+    .readdirSync(draftsDir())
+    .filter((name) => name.endsWith(".json"))[0]
+    .replace(".json", "");
 }
 
 function draftOnDisk() {
@@ -94,7 +128,7 @@ function draftOnDisk() {
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "label-controller-"));
-  dir = path.join(root, "run");
+  dir = path.join(root, "runs");
   checklistFile = path.join(root, "news.json");
   warnings.length = 0;
   writeTraces(["trace-a", "trace-b"]);
@@ -109,16 +143,19 @@ describe("module import", () => {
   it("has no side effects: importing does not touch the filesystem or terminal", () => {
     // The module was already imported at the top of this file. If it had run a
     // main(), acquired a lock or entered raw mode, these would not hold.
-    expect(fs.existsSync(path.join(dir, ".lock"))).toBe(false);
+    expect(lockFiles()).toEqual([]);
     expect(process.stdin.isRaw).toBeFalsy();
   });
 });
 
 describe("opening", () => {
-  it("lists the traces, publishes version 1, and binds the draft", async () => {
+  it("lists the runs, publishes version 1 in the group, and binds the draft", async () => {
     const controller = await open();
     const snapshot = controller.snapshot();
     expect(snapshot.items.map((item) => item.traceId)).toEqual(["trace-a", "trace-b"]);
+    expect(snapshot.items.map((item) => item.runDir)).toEqual(
+      runDirs().map((run) => fs.realpathSync(run)),
+    );
     expect(snapshot.items[0].fields).toEqual({ input: "input trace-a", output: "output trace-a" });
     expect(snapshot.questions).toHaveLength(2);
     expect(readCurrentPointer(dir, checklistId())?.version).toBe(1);
@@ -133,38 +170,43 @@ describe("opening", () => {
     await controller.close();
   });
 
-  it("writes nothing to the annotation log on a second open", async () => {
+  it("writes nothing to any annotation log on a second open", async () => {
     await (await open()).close();
-    const before = fs.existsSync(path.join(dir, "annotations.jsonl"))
-      ? fs.readFileSync(path.join(dir, "annotations.jsonl"), "utf8")
-      : "";
+    const before = runDirs().map((run) =>
+      fs.readFileSync(path.join(run, "annotations.jsonl"), "utf8"),
+    );
     await (await open()).close();
-    expect(fs.readFileSync(path.join(dir, "annotations.jsonl"), "utf8")).toBe(before);
+    expect(
+      runDirs().map((run) => fs.readFileSync(path.join(run, "annotations.jsonl"), "utf8")),
+    ).toEqual(before);
   });
 
-  it("releases the lock when opening fails", async () => {
+  it("leaves no lock when opening fails", async () => {
     fs.writeFileSync(checklistFile, "{ not json");
     await expect(open()).rejects.toThrow();
-    expect(fs.existsSync(path.join(dir, ".lock"))).toBe(false);
+    expect(lockFiles()).toEqual([]);
   });
 
-  it("refuses when the directory holds nothing to label", async () => {
+  it("refuses when no run in the group has a trace", async () => {
     fs.rmSync(dir, { recursive: true, force: true });
-    fs.mkdirSync(dir);
+    fs.mkdirSync(path.join(dir, "silent"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "silent", "statelog.jsonl"), "");
     await expect(open()).rejects.toThrow(/nothing to label/i);
-    expect(fs.existsSync(path.join(dir, ".lock"))).toBe(false);
+    expect(lockFiles()).toEqual([]);
   });
 
-  it("treats a reordered directory as a separate session, never a corrupted resume", async () => {
+  it("treats the same runs in another order as a separate session, never a corrupted resume", async () => {
     await (await open()).close();
-    writeTraces(["trace-b", "trace-a"]);
-    // The same traces in the opposite order hash to a different session id,
-    // so the earlier draft is never loaded against them. The draft-level guard
-    // is defence in depth for that (see draft.test.ts).
-    const controller = await open();
+    // The same runs listed in the opposite order hash to a different session
+    // id, so the earlier draft is never loaded against them. The draft-level
+    // guard is defence in depth for that (see draft.test.ts).
+    const controller = await open(makeDependencies(), [
+      path.join(dir, "trace-b"),
+      path.join(dir, "trace-a"),
+    ]);
     expect(controller.snapshot().items.map((item) => item.traceId)).toEqual(["trace-b", "trace-a"]);
     await controller.close();
-    expect(fs.readdirSync(draftsDir())).toHaveLength(1);
+    expect(fs.readdirSync(draftsDir()).filter((name) => name.endsWith(".json"))).toHaveLength(2);
   });
 });
 
@@ -207,7 +249,7 @@ describe("dispatch", () => {
 });
 
 describe("sign-off", () => {
-  it("appends one checklist row for the trace, answering every live question", async () => {
+  it("appends one checklist row for the trace, in its own run directory, answering every live question", async () => {
     const controller = await open();
     await controller.dispatch({ kind: "toggleAnswer" });
     await controller.dispatch({ kind: "signOff" });
@@ -215,6 +257,10 @@ describe("sign-off", () => {
     const rows = checklistRows();
     expect(rows).toHaveLength(1);
     expect(rows[0].traceId).toBe("trace-a");
+    const inA = readAnnotations(path.join(dir, "trace-a", "annotations.jsonl"), () => {});
+    expect(inA.some((row) => row.kind === "checklist")).toBe(true);
+    const inB = readAnnotations(path.join(dir, "trace-b", "annotations.jsonl"), () => {});
+    expect(inB.some((row) => row.kind === "checklist")).toBe(false);
     expect(rows[0].checklist).toBe(checklistId());
     expect(rows[0].annotator).toEqual({ kind: "human", id: "adit" });
     expect(Object.values(rows[0].answers)).toEqual([true, false]);
@@ -320,7 +366,7 @@ describe("resume", () => {
     await first.close();
 
     const other = await createLabelingSessionOpener(makeDependencies())({
-      dir,
+      group: resolveLabelingGroup([dir], { reportWarning: (message) => warnings.push(message) }),
       checklistFile,
       annotator: { kind: "human", id: "sam" },
       reportWarning: (message) => warnings.push(message),
@@ -357,8 +403,8 @@ async function crashAt(
   });
   const controller = await open(dependencies);
   await expect(drive(controller)).rejects.toThrow(/injected crash/);
-  // The failed session released the directory; the lock must not be left behind.
-  expect(fs.existsSync(path.join(dir, ".lock"))).toBe(false);
+  // The failed session released its locks; none may be left behind.
+  expect(lockFiles()).toEqual([]);
 }
 
 /** Drive a session that adds a question and signs off, which is the path that
@@ -477,12 +523,12 @@ describe("lifecycle", () => {
     const controller = await open(dependencies);
     await expect(controller.dispatch({ kind: "signOff" })).rejects.toThrow(/injected/);
     await expect(controller.dispatch({ kind: "nextItem" })).rejects.toThrow(/failed/i);
-    expect(fs.existsSync(path.join(dir, ".lock"))).toBe(false);
+    expect(lockFiles()).toEqual([]);
   });
 
   it("releases the lock on close", async () => {
     const controller = await open();
     await controller.close();
-    expect(fs.existsSync(path.join(dir, ".lock"))).toBe(false);
+    expect(lockFiles()).toEqual([]);
   });
 });

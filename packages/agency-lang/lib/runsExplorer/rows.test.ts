@@ -40,15 +40,12 @@ describe("buildRunRowFromDirectory", () => {
     const row = rowFor(writeGradedRun(tmpDir));
     expect(
       row.tests.map((test) => [test.inputId, test.traceId, test.score, test.gatesPassed]),
-    ).toEqual([
-      ["t1", "t1", 1, true],
-      ["t2", "t2", 0, false],
-    ]);
+    ).toEqual([["t1", "t1", 0.5, false]]);
     expect(row.score).toBe(0.5);
     expect(row.gatesPassed).toBe(false);
   });
 
-  it("every test opens the same statelog, so the viewer can focus its trace", () => {
+  it("the test opens the run's statelog, so the viewer can focus its trace", () => {
     const dir = writeGradedRun(tmpDir);
     const row = rowFor(dir);
     expect(new Set(row.tests.map((test) => test.statelogPath))).toEqual(

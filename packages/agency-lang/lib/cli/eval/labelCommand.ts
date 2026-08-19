@@ -29,13 +29,13 @@ export function labelCommandDependencies(): LabelCommandDependencies {
 export function addLabelCommand(parent: Command, dependencies: LabelCommandDependencies): Command {
   return parent
     .command("label")
-    .description("Judge every trace in a run directory against a checklist")
-    .argument("<dir>", "Run directory (statelog.jsonl + annotations.jsonl)")
+    .description("Judge every run against a checklist")
+    .argument("<paths...>", "Run directories, or directories of run directories")
     .option("--checklist <file>", "Checklist JSON: an existing one, or { name, questions }")
     .option("--annotator <id>", "Who is labelling (default: $USER)")
-    .action(async (dir: string, opts: { checklist?: string; annotator?: string }) => {
+    .action(async (paths: string[], opts: { checklist?: string; annotator?: string }) => {
       try {
-        await dependencies.label({ dir, ...opts });
+        await dependencies.label({ paths, ...opts });
       } catch (error) {
         dependencies.fail((error as Error).message);
       }

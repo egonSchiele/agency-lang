@@ -57,7 +57,7 @@ describe("createRunsLoader", () => {
     const rows = upserts(events);
     expect(rows).toHaveLength(1);
     expect(rows[0].score).toBe(0.5);
-    expect(rows[0].tests).toHaveLength(2);
+    expect(rows[0].tests).toHaveLength(1);
     expect(rows[0].backfilled).toBe(true);
     expect(events[events.length - 1].kind).toBe("done");
   });
@@ -86,7 +86,7 @@ describe("createRunsLoader", () => {
     const { events } = runLoaderToEnd([{ kind: "runDir", dir: runDir }]);
     const rows = upserts(events);
     expect(rows).toHaveLength(1);
-    expect(rows[0].tests).toHaveLength(2);
+    expect(rows[0].tests).toHaveLength(1);
     expect(rows[0].warnings.length).toBeGreaterThan(0);
   });
 

@@ -20,6 +20,8 @@ import type {
 
 /** One trace being judged: its id and the named text the screen shows for it. */
 export type SessionItem = {
+  /** The run directory this item is; shown to the person and never re-derived. */
+  runDir: string;
   traceId: string;
   fields: Fields;
 };
@@ -114,6 +116,7 @@ function liveOf(state: SessionState): ChecklistQuestion[] {
 
 export function initSession(args: InitSessionArgs): SessionState {
   const items: SessionItem[] = args.items.map((item) => ({
+    runDir: item.runDir,
     traceId: item.traceId,
     fields: { ...item.fields },
   }));

@@ -3,7 +3,6 @@ import * as fs from "fs";
 import { completeAnnotation, type AnnotationDraft } from "@/runDirectory/annotations.js";
 import { atomicWriteValidated } from "@/runDirectory/durableWrite.js";
 import { openLabelStore, type LabelStore } from "@/runDirectory/labelStore.js";
-import { acquireRunDirLock, type RunDirLock } from "@/runDirectory/lock.js";
 
 import {
   normalizeDefinition,
@@ -13,6 +12,7 @@ import {
   type PrepareChecklistResult,
 } from "./checklist.js";
 import { assertBindingIsCoherent, assertDraftMatches, type Draft } from "./draft.js";
+import type { LabelingGroup } from "./group.js";
 import { own } from "@/utils/ownProperty.js";
 
 import { makeQuestionId, makeSessionId } from "./ids.js";
@@ -40,12 +40,12 @@ export type WallClock = { nowIso(): string };
 export type EntityIds = { questionId(): string };
 
 export type OpenLabelingSessionArgs = {
-  /** The run directory whose traces are being labelled. */
-  dir: string;
+  /** The runs being labelled, already resolved (`resolveLabelingGroup`). */
+  group: LabelingGroup;
   checklistFile: string;
   annotator: Annotator;
   /** Start the cursor on this trace when present; an id that is not in the
-   *  directory is ignored. */
+   *  group is ignored. */
   focusTraceId?: string;
   reportWarning(message: string): void;
 };
@@ -116,52 +116,45 @@ async function openSession(
   args: OpenLabelingSessionArgs,
   dependencies: ControllerDependencies,
 ): Promise<LabelingSessionController> {
-  // Parse the external file before touching the directory: a malformed
+  // Parse the external file before touching the group: a malformed
   // checklist should not leave a lock behind or a half-created lineage.
   const rawDefinition = ChecklistDefinitionSchema.parse(
     JSON.parse(fs.readFileSync(args.checklistFile, "utf8")),
   );
 
-  const lock = acquireRunDirLock({ dir: args.dir, reportWarning: args.reportWarning });
-  let store: LabelStore | undefined;
+  // Allocate lineage ids once, and write them back, before the session id is
+  // derived from the checklist. A crash here leaves a complete definition
+  // nobody has published, which the next open simply publishes.
+  const definition = normalizeDefinition(rawDefinition);
+  if (rawDefinition.checklistId === undefined) {
+    syncChecklistDefinitionIds(args.checklistFile, definition);
+  }
+
+  const items: SessionItem[] = args.group.runs.map((run) => ({
+    runDir: run.dir,
+    traceId: run.traceId,
+    fields: run.fields,
+  }));
+  const traceIds = items.map((item) => item.traceId);
+  const sessionId = makeSessionId({
+    traceIds,
+    checklistId: definition.checklistId,
+    annotator: args.annotator,
+  });
+
+  // The store owns every lock this session holds; it releases them itself
+  // when opening fails, and `close()` releases them afterwards.
+  const store = openLabelStore({
+    group: args.group,
+    identity: { sessionId, checklistId: definition.checklistId, annotator: args.annotator },
+    reportWarning: args.reportWarning,
+    fault: dependencies.fault as FaultHook | undefined,
+  });
   try {
-    store = openLabelStore({
-      dir: args.dir,
-      lock,
-      reportWarning: args.reportWarning,
-      fault: dependencies.fault as FaultHook | undefined,
-    });
-
-    const items: SessionItem[] = store
-      .items()
-      .map((item) => ({ traceId: item.traceId, fields: item.fields }));
-    if (items.length === 0) {
-      throw new Error(
-        `There is nothing to label: ${args.dir} holds no traces. Add some with ` +
-          "`agency runs add <dir> <statelog>`.",
-      );
-    }
-
-    // Allocate lineage ids once, and write them back, before the session id is
-    // derived from the checklist. A crash here leaves a complete definition
-    // nobody has published, which the next open simply publishes.
-    const definition = normalizeDefinition(rawDefinition);
-    if (rawDefinition.checklistId === undefined) {
-      syncChecklistDefinitionIds(args.checklistFile, definition);
-    }
-
-    const traceIds = items.map((item) => item.traceId);
-    const sessionId = makeSessionId({
-      traceIds,
-      checklistId: definition.checklistId,
-      annotator: args.annotator,
-    });
-
     const session = new LabelingSession({
       args,
       dependencies,
       store,
-      lock,
       sessionId,
       traceIds,
       definition,
@@ -176,13 +169,9 @@ async function openSession(
     }
     return controller;
   } catch (error) {
-    // Any opening failure releases the lock: a directory that cannot be opened
-    // must not stay locked against the next attempt.
-    try {
-      store?.close();
-    } finally {
-      lock.release();
-    }
+    // Any opening failure closes the store (idempotent), so a group that
+    // cannot be opened does not stay locked against the next attempt.
+    store.close();
     throw error;
   }
 }
@@ -207,7 +196,6 @@ type SessionConstruction = {
   args: OpenLabelingSessionArgs;
   dependencies: ControllerDependencies;
   store: LabelStore;
-  lock: RunDirLock;
   sessionId: string;
   traceIds: string[];
   definition: NormalizedDefinition;
@@ -235,7 +223,7 @@ class LabelingSession {
 
   open(): void {
     const { store, definition } = this.parts;
-    const snapshot = store.readSession(this.sessionIdentity());
+    const snapshot = store.readSession();
 
     this.draft = (snapshot.draft as Draft | null) ?? this.bootstrapDraft();
     assertDraftMatches(this.draft, {
@@ -251,19 +239,11 @@ class LabelingSession {
     this.state = initSession({
       items: this.parts.items,
       revision,
-      judgements: store.readSession(this.sessionIdentity()).judgements,
+      judgements: store.readSession().judgements,
       annotator: this.parts.args.annotator,
     });
     this.overlayDraft();
     this.startInterval();
-  }
-
-  private sessionIdentity() {
-    return {
-      sessionId: this.parts.sessionId,
-      checklistId: this.parts.definition.checklistId,
-      annotator: this.parts.args.annotator,
-    };
   }
 
   /** A fresh session begins bound to nothing only when its own version-1
@@ -617,11 +597,7 @@ class LabelingSession {
    *  live state may disagree, and writing more would compound it. */
   private fail(): void {
     this.lifecycle = "failed";
-    try {
-      this.parts.store.close();
-    } catch {
-      this.parts.lock.release();
-    }
+    this.parts.store.close();
   }
 
   private async close(): Promise<void> {
@@ -646,7 +622,7 @@ class LabelingSession {
         primary = error;
       } else {
         (primary as Error).message +=
-          `; also failed to release the run directory: ${(error as Error).message}`;
+          `; also failed to close the label store: ${(error as Error).message}`;
       }
     }
     if (primary !== undefined) {

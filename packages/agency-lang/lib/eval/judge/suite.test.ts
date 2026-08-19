@@ -184,17 +184,17 @@ function writeRunDir(args: {
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "judge-suite-"));
   dirs.push(runDir);
   if (args.status === "missing") {
-    return writeRunDirectory([], runDir);
+    // A run directory that holds nothing: the harness's empty statelog, no run.
+    fs.writeFileSync(path.join(runDir, "statelog.jsonl"), "");
+    return runDir;
   }
   return writeRunDirectory(
-    [
-      {
-        test: { id: args.inputId, goal: "Return Paris", input: "t" },
-        output: args.status === "ok" ? "x" : undefined,
-        ended: args.status === "ok" ? "ok" : "error",
-        errorMessage: args.errorMessage,
-      },
-    ],
+    {
+      test: { id: args.inputId, goal: "Return Paris", input: "t" },
+      output: args.status === "ok" ? "x" : undefined,
+      ended: args.status === "ok" ? "ok" : "error",
+      errorMessage: args.errorMessage,
+    },
     runDir,
   );
 }

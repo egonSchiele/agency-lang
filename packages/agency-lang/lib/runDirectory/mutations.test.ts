@@ -5,7 +5,16 @@ import { describe, expect, it } from "vitest";
 
 import { computeCodeIdentity } from "./codeIdentity.js";
 import {
+  normalizeDefinition,
+  prepareRevision,
+  publishPendingRevision,
+} from "@/eval/label/checklist.js";
+import type { ChecklistRevision } from "@/eval/label/types.js";
+
+import { completeAnnotation, type ChecklistAnnotation } from "./annotations.js";
+import {
   wrapTracesAsRunDirectories,
+  recordChecklistRow,
   recordCompletedRun,
   recordGradingPass,
   type ScoreDraft,
@@ -23,7 +32,7 @@ function statelogFile(...lines: string[]): string {
   return file;
 }
 
-/** A run directory written by hand; the reader still accepts several traces. */
+/** A run directory written by hand (one trace; the reader refuses more). */
 function directoryWithTraces(...traceIds: string[]): string {
   const dir = tempDir();
   fs.writeFileSync(
@@ -271,7 +280,7 @@ describe("recordCompletedRun preflight", () => {
     const staged = statelogFile(agentStartLine("t1"), statelogLine("t1", "agentEnd"));
     expect(() =>
       recordCompletedRun({ dir, stagedStatelogFile: staged, run: { traceId: "t2", ...run } }),
-    ).toThrow(/t2.*staged statelog holds t1/);
+    ).toThrow(/t2.*holds trace t1/);
     expect(fs.existsSync(runDirPaths(dir).statelog)).toBe(false);
     expect(fs.existsSync(runDirPaths(dir).annotations)).toBe(false);
   });
@@ -310,14 +319,14 @@ describe("recordCompletedRun preflight", () => {
 
 describe("recordGradingPass", () => {
   function directory(): string {
-    return directoryWithTraces("t1", "t2");
+    return directoryWithTraces("t1");
   }
 
   it("records a complete pass that becomes effective; a second pass supersedes it", () => {
     const dir = directory();
     const first = recordGradingPass({
       dir,
-      scores: [scoreDraft("t1", "cheap", 0.2), scoreDraft("t2", "cheap", 0.4)],
+      scores: [scoreDraft("t1", "cheap", 0.2), scoreDraft("t1", "fast", 0.4)],
     });
     expect(first.annotations).toHaveLength(2);
     expect(first.annotations.map((row) => row.kind === "score" && row.completesPass)).toEqual([
@@ -330,7 +339,7 @@ describe("recordGradingPass", () => {
 
     const second = recordGradingPass({
       dir,
-      scores: [scoreDraft("t1", "cheap", 0.2), scoreDraft("t2", "cheap", 0.4)],
+      scores: [scoreDraft("t1", "cheap", 0.2), scoreDraft("t1", "fast", 0.4)],
     });
     expect(second.passId).not.toBe(first.passId);
     expect(second.snapshot.annotationRows).toHaveLength(4);
@@ -343,12 +352,12 @@ describe("recordGradingPass", () => {
     const dir = directory();
     const first = recordGradingPass({
       dir,
-      scores: [scoreDraft("t1", "cheap", 0.2), scoreDraft("t2", "cheap", 0.4)],
+      scores: [scoreDraft("t1", "cheap", 0.2), scoreDraft("t1", "fast", 0.4)],
     });
     // Simulate a crash mid-pass: write only the first row of a new pass by hand.
     const partial = recordGradingPass({
       dir,
-      scores: [scoreDraft("t1", "cheap", 0.9), scoreDraft("t2", "cheap", 0.9)],
+      scores: [scoreDraft("t1", "cheap", 0.9), scoreDraft("t1", "fast", 0.9)],
     });
     const paths = runDirPaths(dir);
     const rows = fs.readFileSync(paths.annotations, "utf8").split("\n").filter(Boolean);
@@ -385,5 +394,140 @@ describe("torn-tail repair", () => {
     expect(JSON.parse(annotationLines[0]).name).toBe("after-the-crash");
     expect(fs.readFileSync(paths.statelog, "utf8").endsWith("\n")).toBe(true);
     expect(fs.readFileSync(paths.statelog, "utf8")).not.toContain("half");
+  });
+});
+
+describe("the one-run invariant", () => {
+  function bytesOf(dir: string): Record<string, string | null> {
+    const paths = runDirPaths(dir);
+    const read = (file: string) => (fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null);
+    return {
+      statelog: read(paths.statelog),
+      annotations: read(paths.annotations),
+      code: String(fs.existsSync(paths.codeDir)),
+      workdir: String(fs.existsSync(paths.workdirDir)),
+    };
+  }
+
+  function runRow(traceId: string) {
+    return {
+      traceId,
+      annotator: { kind: "harness" as const, id: "eval" },
+      payload: {
+        kind: "run" as const,
+        test: { id: traceId },
+        suite: null,
+        ended: "ok" as const,
+        flags: {},
+      },
+    };
+  }
+
+  it("readRunDirectory refuses a statelog holding two traces, naming them and runs add", () => {
+    const dir = directoryWithTraces("t1", "t2");
+    expect(() => readRunDirectory(dir, quiet)).toThrow(/holds 2 traces \(t1, t2\).*runs add/);
+    expect(readRunDirectory(directoryWithTraces("t1"), quiet).traces).toHaveLength(1);
+    const empty = tempDir();
+    fs.writeFileSync(runDirPaths(empty).statelog, "");
+    expect(readRunDirectory(empty, quiet).traces).toEqual([]);
+  });
+
+  it("recordCompletedRun refuses a second staged trace before writing anything", () => {
+    const dir = directoryWithTraces("t1");
+    const before = bytesOf(dir);
+    expect(() =>
+      recordCompletedRun({
+        dir,
+        stagedStatelogFile: statelogFile(agentStartLine("t2")),
+        run: runRow("t2"),
+      }),
+    ).toThrow(/would then hold 2 traces/);
+    expect(bytesOf(dir)).toEqual(before);
+    expect(fs.existsSync(path.join(dir, ".lock"))).toBe(false);
+  });
+
+  it("recordCompletedRun refuses a run row for another trace when the directory has a trace, staged or not", () => {
+    const dir = directoryWithTraces("t1");
+    const before = bytesOf(dir);
+    expect(() => recordCompletedRun({ dir, run: runRow("t2") })).toThrow(/holds trace t1/);
+    expect(bytesOf(dir)).toEqual(before);
+  });
+
+  it("recordCompletedRun refuses a second silent run beside a silent run for another trace", () => {
+    const dir = tempDir();
+    fs.writeFileSync(runDirPaths(dir).statelog, "");
+    recordCompletedRun({ dir, run: runRow("t1") });
+    const before = bytesOf(dir);
+    expect(() => recordCompletedRun({ dir, run: runRow("t2") })).toThrow(/already records the run/);
+    expect(bytesOf(dir)).toEqual(before);
+    // The same silent run again is a replay, not a second run.
+    expect(() => recordCompletedRun({ dir, run: runRow("t1") })).not.toThrow();
+  });
+});
+
+describe("recordChecklistRow", () => {
+  function groupWithRun(): { group: string; run: string; revision: ChecklistRevision } {
+    const group = tempDir("group-");
+    const run = path.join(group, "a");
+    fs.mkdirSync(run);
+    fs.writeFileSync(runDirPaths(run).statelog, agentStartLine("t1") + "\n");
+    const definition = normalizeDefinition({
+      checklistId: "cl_x",
+      name: "q",
+      questions: [{ id: "q_a", text: "Accurate?" }],
+    });
+    const prepared = prepareRevision({ definition, current: undefined });
+    if (prepared.kind !== "publish") throw new Error(prepared.kind);
+    const definitionPath = path.join(group, "q.json");
+    fs.writeFileSync(definitionPath, JSON.stringify(definition));
+    const { revision } = publishPendingRevision({
+      dir: group,
+      pending: prepared.pending,
+      definitionPath,
+    });
+    return { group, run, revision };
+  }
+
+  function row(revision: ChecklistRevision, over: Partial<ChecklistAnnotation> = {}) {
+    return completeAnnotation(
+      {
+        traceId: "t1",
+        annotator: human,
+        kind: "checklist",
+        checklist: revision.checklistId,
+        version: revision.version,
+        hash: revision.hash,
+        answers: { q_a: true },
+        note: "",
+        ...over,
+      },
+      "2026-08-18T00:00:00.000Z",
+    ) as ChecklistAnnotation;
+  }
+
+  it("appends once, replays after, and returns the post-write snapshot; the lock is gone after", () => {
+    const { group, run, revision } = groupWithRun();
+    const first = recordChecklistRow({ dir: run, groupDir: group, row: row(revision) });
+    expect(first.outcome).toBe("appended");
+    expect(first.snapshot.annotationRows).toHaveLength(1);
+    const second = recordChecklistRow({ dir: run, groupDir: group, row: row(revision) });
+    expect(second.outcome).toBe("replayed");
+    expect(second.snapshot.annotationRows).toHaveLength(1);
+    expect(fs.existsSync(path.join(run, ".lock"))).toBe(false);
+  });
+
+  it("refuses the wrong trace, a missing revision, a mismatched hash and an unknown question, appending nothing", () => {
+    const { group, run, revision } = groupWithRun();
+    const cases: [ChecklistAnnotation, RegExp][] = [
+      [row(revision, { traceId: "t9" }), /not in/],
+      [row(revision, { version: 2 }), /missing from/],
+      [row(revision, { hash: `sha256:${"0".repeat(64)}` }), /hashes to/],
+      [row(revision, { answers: { q_zz: true } }), /does not define/],
+    ];
+    for (const [bad, message] of cases) {
+      expect(() => recordChecklistRow({ dir: run, groupDir: group, row: bad })).toThrow(message);
+    }
+    expect(readRunDirectory(run, quiet).annotationRows).toHaveLength(0);
+    expect(fs.existsSync(path.join(run, ".lock"))).toBe(false);
   });
 });

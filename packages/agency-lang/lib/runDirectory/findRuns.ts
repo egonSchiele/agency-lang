@@ -50,3 +50,12 @@ export function findRunDirectories(paths: string[]): string[] {
   }
   return found;
 }
+
+/** The same run directory once, however many ways the walk reached it.
+ *  First appearance wins. Canonical paths (`realpath`), so identity and any
+ *  later mutation target come from one source of truth: the walk follows
+ *  symlinks while classifying, so two spellings can name one directory. */
+export function uniqueRunDirectories(dirs: string[]): string[] {
+  const canonical = dirs.map((dir) => fs.realpathSync.native(dir));
+  return canonical.filter((dir, index) => canonical.indexOf(dir) === index);
+}

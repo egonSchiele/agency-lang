@@ -331,15 +331,15 @@ describe("eval run CLI", () => {
   it("totalRunCostUsd sums trace costs across the run directories of a group", () => {
     const group = fs.mkdtempSync(path.join(tmpDir, "group-"));
     writeRunDirectory(
-      [{ test: { id: "a", input: "t" }, output: "x", costUsd: 0.25 }],
+      { test: { id: "a", input: "t" }, output: "x", costUsd: 0.25 },
       path.join(group, "a"),
     );
     writeRunDirectory(
-      [{ test: { id: "b", input: "t" }, output: "y", costUsd: 0.5 }],
+      { test: { id: "b", input: "t" }, output: "y", costUsd: 0.5 },
       path.join(group, "b"),
     );
     writeRunDirectory(
-      [{ test: { id: "c", input: "t" }, wroteStatelog: false, ended: "error" }],
+      { test: { id: "c", input: "t" }, wroteStatelog: false, ended: "error" },
       path.join(group, "c"),
     );
     expect(totalRunCostUsd(group)).toBeCloseTo(0.75);

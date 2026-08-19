@@ -103,9 +103,12 @@ letting cells collide.
   explorer waiter would steal the viewer's first keypress (there is an
   assertion at the hand-off and a test that feeds the viewer its own
   key). `"back"` resumes the explorer with its state intact; `"quit"`
-  exits the program — the Esc-backs/q-quits contract. Every test in a
-  run directory shares one `statelog.jsonl`, so the hand-off passes the
-  test's `traceId` as `focusTraceId` and the viewer starts on that trace.
+  exits the program — the Esc-backs/q-quits contract. A run directory
+  holds one run, so Enter on a run row opens its `statelog.jsonl`
+  directly, with the run's `traceId` as `focusTraceId`. The tests
+  overlay (`TestsTableView`, "[pick test]") is reached only by a row
+  with several tests, which no run directory produces any more; it is
+  kept because the explorer is where group comparison will grow.
 - **The loader advances once per macrotask** (`setImmediate`), so `q`
   lands between chunks of a multi-megabyte statelog scan. Never race
   the key waiter against an always-ready microtask.

@@ -126,19 +126,24 @@ describe("runExplorer", () => {
     ]);
   });
 
-  it("Enter drills into tests, Esc unwinds to runs, Esc at runs is inert", async () => {
+  it("Enter on a run opens its trace directly (one run, one trace); back returns to runs, Esc at runs is inert", async () => {
     const runDir = writeGradedRun(tmpDir);
+    const viewerCalls: string[] = [];
     const { options, input, recorder } = makeOptions({
       sources: [{ kind: "runDir", dir: runDir }],
+      runViewerFn: async (viewerOpts) => {
+        viewerCalls.push(viewerOpts.focusTraceId ?? "?");
+        return "back";
+      },
     });
 
     await drive(options, input, recorder, [
       { when: (frame) => frame.includes("[runs]") && frame.includes("regex-log"), key: "enter" },
-      { when: (frame) => frame.includes("[pick test]"), key: "escape" },
-      { when: (frame) => frame.includes("[runs]"), key: "escape" },
+      { when: (frame) => viewerCalls.length === 1 && frame.includes("[runs]"), key: "escape" },
       { when: (frame) => frame.includes("[runs]"), key: "q" },
     ]);
 
+    expect(viewerCalls).toEqual(["t1"]);
     expect(lastFrame(recorder)).toContain("[runs]");
   });
 
@@ -159,9 +164,12 @@ describe("runExplorer", () => {
 
     await drive(options, input, recorder, [
       { when: (frame) => frame.includes("[runs]") && frame.includes("regex-log"), key: "enter" },
-      { when: (frame) => frame.includes("[pick test]"), key: "enter" },
       { when: () => viewerCalls.length === 1 && viewerKeys.length === 0, key: "x" },
-      { when: (frame) => viewerCalls.length === 1 && frame.includes("[pick test]"), key: "enter" },
+      {
+        when: (frame) =>
+          viewerCalls.length === 1 && viewerKeys.length === 1 && frame.includes("[runs]"),
+        key: "enter",
+      },
       { when: () => viewerCalls.length === 2 && viewerKeys.length === 1, key: "y" },
     ]);
 

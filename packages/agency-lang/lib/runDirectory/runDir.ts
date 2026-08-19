@@ -13,7 +13,7 @@ import { readTraces, type Trace } from "./traces.js";
 
 /**
  * A run directory is a plain folder holding one run: `statelog.jsonl` (one
- * trace), `annotations.jsonl`, and optional attachments — the agent's code
+ * trace; more is refused), `annotations.jsonl`, and optional attachments — the agent's code
  * closure directly under `code/`, a working-directory snapshot directly under
  * `workdir/` with its `workdir.json` sidecar, free-form `notes.md`. This
  * module names its paths and reads it into one snapshot: the statelog and
@@ -85,6 +85,7 @@ export function readRunDirectory(
       for (const error of after.errors) {
         options.reportWarning(`${paths.statelog}:${error.line}: ${error.kind}: ${error.detail}`);
       }
+      assertOneRun(paths, after.traces);
       return {
         dir,
         hasStatelog: after.exists,
@@ -97,6 +98,19 @@ export function readRunDirectory(
   }
   throw new Error(
     `${paths.statelog} kept changing while it was being read; retry when the writer is done.`,
+  );
+}
+
+/** The guard that keeps the pre-atomic shape from creeping back through a
+ *  hand-copied file: one run directory, one trace id. */
+function assertOneRun(paths: RunDirectoryPaths, traces: readonly Trace[]): void {
+  if (traces.length <= 1) {
+    return;
+  }
+  const ids = traces.map((trace) => trace.traceId).join(", ");
+  throw new Error(
+    `${paths.statelog} holds ${traces.length} traces (${ids}); a run directory holds one run. ` +
+      `Split it with \`agency runs add <group> --statelog ${paths.statelog}\`.`,
   );
 }
 

@@ -4,7 +4,7 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { acquireRunDirLock } from "./lock.js";
+import { acquireOwnedFileLock, acquireRunDirLock } from "./lock.js";
 
 let dir: string;
 const warnings: string[] = [];
@@ -108,6 +108,42 @@ describe("acquireRunDirLock", () => {
   it("removes its exit listener on release, so sessions do not accumulate", () => {
     const before = process.listenerCount("exit");
     const lock = acquire();
+    lock.release();
+    expect(process.listenerCount("exit")).toBe(before);
+  });
+});
+
+describe("acquireOwnedFileLock", () => {
+  it("locks exactly the named file, creating its directory, and removes only that file", () => {
+    const file = path.join(dir, "checklists", "cl_x", "drafts", "s.lock");
+    const lock = acquireOwnedFileLock({ lockFile: file, reportWarning: () => {} });
+    expect(fs.existsSync(file)).toBe(true);
+    fs.writeFileSync(path.join(path.dirname(file), "s.json"), "{}");
+    lock.release();
+    expect(fs.existsSync(file)).toBe(false);
+    expect(fs.existsSync(path.join(path.dirname(file), "s.json"))).toBe(true);
+    lock.release(); // idempotent
+  });
+
+  it("two paths are two independent locks; the same path excludes a second holder", () => {
+    const a = path.join(dir, "a.lock");
+    const b = path.join(dir, "b.lock");
+    const first = acquireOwnedFileLock({ lockFile: a, reportWarning: () => {} });
+    expect(() => acquireOwnedFileLock({ lockFile: b, reportWarning: () => {} })).not.toThrow();
+    expect(() => acquireOwnedFileLock({ lockFile: a, reportWarning: () => {} })).toThrow(
+      /Another writer holds/,
+    );
+    first.release();
+    expect(() => acquireOwnedFileLock({ lockFile: a, reportWarning: () => {} })).not.toThrow();
+  });
+
+  it("removes its exit listener on release", () => {
+    const before = process.listenerCount("exit");
+    const lock = acquireOwnedFileLock({
+      lockFile: path.join(dir, "x.lock"),
+      reportWarning: () => {},
+    });
+    expect(process.listenerCount("exit")).toBe(before + 1);
     lock.release();
     expect(process.listenerCount("exit")).toBe(before);
   });

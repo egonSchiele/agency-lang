@@ -13,7 +13,11 @@ const ESC = "\x1b";
 const BEL = "\x07";
 
 function snapshot(over: Partial<SessionSnapshot> = {}): SessionSnapshot {
-  const item = { traceId: TRACE_ID, fields: { input: "a task", output: "some output" } };
+  const item = {
+    runDir: "/runs/g/a",
+    traceId: TRACE_ID,
+    fields: { input: "a task", output: "some output" },
+  };
   return {
     items: [item],
     itemIndex: 0,
@@ -107,7 +111,11 @@ describe("sanitizeUntrusted", () => {
 
 describe("untrusted content never reaches the frame raw", () => {
   it("sanitizes a hostile input field", () => {
-    const hostile = { traceId: TRACE_ID, fields: { input: `safe${ESC}[2Jhidden`, output: "x" } };
+    const hostile = {
+      runDir: "/runs/g/a",
+      traceId: TRACE_ID,
+      fields: { input: `safe${ESC}[2Jhidden`, output: "x" },
+    };
     expect(frameCells({ currentItem: hostile, items: [hostile] })).not.toContain(ESC);
   });
 
@@ -144,19 +152,31 @@ describe("untrusted content never reaches the frame raw", () => {
   });
 
   it("escapes style tags in a hostile input field", () => {
-    const hostile = { traceId: TRACE_ID, fields: { input: "{black-fg}hidden", output: "x" } };
+    const hostile = {
+      runDir: "/runs/g/a",
+      traceId: TRACE_ID,
+      fields: { input: "{black-fg}hidden", output: "x" },
+    };
     expect(frameVisible({ currentItem: hostile, items: [hostile] })).toContain("{black-fg}hidden");
   });
 
   it("escapes style tags in a hostile output field", () => {
-    const hostile = { traceId: TRACE_ID, fields: { input: "t", output: "{bg-red}alarming" } };
+    const hostile = {
+      runDir: "/runs/g/a",
+      traceId: TRACE_ID,
+      fields: { input: "t", output: "{bg-red}alarming" },
+    };
     expect(frameVisible({ currentItem: hostile, items: [hostile] })).toContain("{bg-red}alarming");
   });
 
   it("renders a field name as a header without letting a value forge one", () => {
     // Field names come from a charset that cannot express markup, so the only
     // way a header can appear is if the trace put it there.
-    const hostile = { traceId: TRACE_ID, fields: { output: "not_a_field:\nfaked" } };
+    const hostile = {
+      runDir: "/runs/g/a",
+      traceId: TRACE_ID,
+      fields: { output: "not_a_field:\nfaked" },
+    };
     const text = frameVisible({ currentItem: hostile, items: [hostile] });
     expect(text).toContain("output:");
     expect(text).toContain("not_a_field:");

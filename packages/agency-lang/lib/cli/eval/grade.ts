@@ -3,7 +3,7 @@ import * as fs from "fs";
 import type { AgencyConfig } from "@/config.js";
 import { gradeSuite } from "@/eval/grading/gradeSuite.js";
 import type { EvalRunGrading } from "@/eval/runTypes.js";
-import { findRunDirectories } from "@/runDirectory/findRuns.js";
+import { findRunDirectories, uniqueRunDirectories } from "@/runDirectory/findRuns.js";
 
 import { goalJudgeGraders, resolveGraders } from "./graders.js";
 
@@ -42,14 +42,6 @@ export function validateGradeTarget(targets: string[], opts: EvalGradeOptions): 
     );
   }
   return uniqueRunDirectories(findRunDirectories(targets));
-}
-
-/** First appearance wins. Canonical paths, so identity and the mutation
- *  target come from one source of truth (the walk follows symlinks while
- *  classifying, so two spellings can name one directory). */
-function uniqueRunDirectories(dirs: string[]): string[] {
-  const canonical = dirs.map((dir) => fs.realpathSync.native(dir));
-  return canonical.filter((dir, index) => canonical.indexOf(dir) === index);
 }
 
 /** The grader set `eval grade` runs with; see `resolveGraders` for the precedence. */

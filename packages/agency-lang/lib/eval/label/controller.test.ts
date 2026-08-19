@@ -5,6 +5,7 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { readAnnotations, type ChecklistAnnotation } from "@/runDirectory/annotations.js";
+import { acquireOwnedFileLock } from "@/runDirectory/lock.js";
 import { writeRunGroup } from "@/eval/runDirectoryFixture.js";
 
 import { readCurrentPointer } from "./checklist.js";
@@ -126,6 +127,15 @@ function draftOnDisk() {
   return loadDraftFile(dir, checklistId(), sessionIdOnDisk());
 }
 
+/** The draft of one annotator, when several sessions have drafts in the group. */
+function draftOf(annotatorId: string) {
+  return fs
+    .readdirSync(draftsDir())
+    .filter((name) => name.endsWith(".json"))
+    .map((name) => loadDraftFile(dir, checklistId(), name.replace(".json", "")))
+    .find((draft) => draft?.binding.annotator.id === annotatorId);
+}
+
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "label-controller-"));
   dir = path.join(root, "runs");
@@ -207,6 +217,92 @@ describe("opening", () => {
     expect(controller.snapshot().items.map((item) => item.traceId)).toEqual(["trace-b", "trace-a"]);
     await controller.close();
     expect(fs.readdirSync(draftsDir()).filter((name) => name.endsWith(".json"))).toHaveLength(2);
+  });
+});
+
+describe("concurrent openers", () => {
+  it("two first opens of an id-less checklist share one lineage: the second adopts the ids the first wrote", async () => {
+    // Simulate the other opener finishing between this opener's parse and its
+    // id allocation: at that fault point, write a fully identified copy of the
+    // file, as `allocateChecklistIds` in another process would have.
+    const otherIds = {
+      checklistId: "cl_other",
+      questions: [
+        { id: "q_other1", text: "Accurate?" },
+        { id: "q_other2", text: "Today?" },
+      ],
+    };
+    const dependencies = makeDependencies({
+      fault: (point) => {
+        if (point === "before-checklist-id-allocation") {
+          const parsed = JSON.parse(fs.readFileSync(checklistFile, "utf8"));
+          fs.writeFileSync(
+            checklistFile,
+            JSON.stringify({
+              ...parsed,
+              checklistId: otherIds.checklistId,
+              questions: otherIds.questions,
+            }),
+          );
+        }
+      },
+    });
+    const controller = await open(dependencies);
+    expect(checklistId()).toBe("cl_other");
+    expect(controller.snapshot().questions.map((question) => question.id)).toEqual([
+      "q_other1",
+      "q_other2",
+    ]);
+    await controller.close();
+    expect(fs.readdirSync(path.join(dir, "checklists")).filter((n) => n.startsWith("cl_"))).toEqual(
+      ["cl_other"],
+    );
+  });
+
+  it("refuses, clearly, while another session is allocating ids for the same group", async () => {
+    const held = acquireOwnedFileLock({
+      lockFile: path.join(dir, "checklists", ".definition.lock"),
+      reportWarning: () => {},
+    });
+    try {
+      await expect(open()).rejects.toThrow(/giving .*news\.json its ids right now/);
+    } finally {
+      held.release();
+    }
+    expect(lockFiles()).toEqual([]);
+  });
+});
+
+describe("losing a publication race", () => {
+  it("a draft whose pending revision is stale is rebased on reopen: both sessions' questions survive", async () => {
+    // Session one stages a question but crashes before publishing it.
+    await crashAt("after-pending-revision-save", addQuestionAndSignOff, 2);
+    expect(draftOf("adit")?.pendingRevision?.revision.version).toBe(2);
+
+    // Session two (another annotator) publishes version 2 with a different question first.
+    const other = await createLabelingSessionOpener(
+      makeDependencies({ ids: { questionId: () => "q_sam1" } }),
+    )({
+      group: resolveLabelingGroup([dir], { reportWarning: (message) => warnings.push(message) }),
+      checklistFile,
+      annotator: { kind: "human", id: "sam" },
+      reportWarning: (message) => warnings.push(message),
+    });
+    await other.dispatch({ kind: "beginQuestion" });
+    await other.dispatch({ kind: "appendEditorText", text: "Cited?" });
+    await other.dispatch({ kind: "submitEditor" });
+    await other.dispatch({ kind: "signOff" });
+    await other.close();
+    expect(readCurrentPointer(dir, checklistId())?.version).toBe(2);
+
+    // Session one reopens: its pending revision expects parent 1, the lineage
+    // is at 2. It rebases (Sourced? on top of Cited?) and publishes 3.
+    const reopened = await open();
+    const texts = reopened.snapshot().questions.map((question) => question.text);
+    expect(texts).toEqual(["Accurate?", "Today?", "Cited?", "Sourced?"]);
+    expect(readCurrentPointer(dir, checklistId())?.version).toBe(3);
+    expect(draftOf("adit")?.pendingRevision).toBeNull();
+    await reopened.close();
   });
 });
 

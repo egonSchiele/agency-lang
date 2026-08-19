@@ -205,6 +205,20 @@ token inside is still ours):
 - **The run's writer lock**, taken by `recordChecklistRow` around each append
   and released after it, so `eval grade` or `runs add` on that run between
   two sign-offs is not blocked.
+- **One per group for id allocation**, `checklists/.definition.lock`, held
+  only while an id-less checklist file is given its checklist and question
+  ids (`allocateChecklistIds` in `controller.ts`). It cannot be keyed by the
+  checklist id, which does not exist yet. The file is re-read under it, so of
+  two sessions opening the same new file at once the second adopts the ids
+  the first wrote, and the group ends up with one lineage, not two.
+
+A session that loses a publication race (its `pendingRevision` was prepared
+against a parent another session has since moved) is not wedged: on reopen,
+`rebasedPendingRevision` notices the parent moved and re-prepares the staged
+questions on top of the lineage as it is now (`rebaseQuestions`: every
+current question, then the staged ones the lineage lacks), publishing that;
+when the lineage already has exactly those questions, the draft adopts the
+current revision and owes nothing. Both sessions' added questions survive.
 
 The run's `notes.md` is under none of these: a person edits it with any
 editor at any time, and readers sample it best-effort (see

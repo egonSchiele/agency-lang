@@ -93,6 +93,12 @@ describe("label", () => {
     ).rejects.toThrow(/Checklist file not found/);
   });
 
+  it("requires at least one path", async () => {
+    await expect(label({ paths: [], checklist: checklistFile }, dependencies())).rejects.toThrow(
+      /at least one run directory/,
+    );
+  });
+
   it("reports a path that is not a directory", async () => {
     await expect(
       label({ paths: [path.join(root, "nope")], checklist: checklistFile }, dependencies()),

@@ -1,8 +1,11 @@
 import * as fs from "fs";
+import * as path from "path";
 
 import { completeAnnotation, type AnnotationDraft } from "@/runDirectory/annotations.js";
 import { atomicWriteValidated } from "@/runDirectory/durableWrite.js";
 import { openLabelStore, type LabelStore } from "@/runDirectory/labelStore.js";
+import { acquireOwnedFileLock } from "@/runDirectory/lock.js";
+import { runDirPaths } from "@/runDirectory/runDir.js";
 
 import {
   normalizeDefinition,
@@ -30,6 +33,8 @@ import {
 import {
   ChecklistDefinitionSchema,
   type Annotator,
+  type ChecklistDefinition,
+  type ChecklistQuestion,
   type ChecklistRevision,
   type FaultHook,
   type LabelStoreFaultPoint,
@@ -53,6 +58,7 @@ export type OpenLabelingSessionArgs = {
 /** @internal */
 export type ControllerFaultPoint =
   | LabelStoreFaultPoint
+  | "before-checklist-id-allocation"
   | "after-pending-revision-save"
   | "after-draft-rebind"
   | "after-pending-annotation-save"
@@ -121,14 +127,13 @@ async function openSession(
   const rawDefinition = ChecklistDefinitionSchema.parse(
     JSON.parse(fs.readFileSync(args.checklistFile, "utf8")),
   );
-
-  // Allocate lineage ids once, and write them back, before the session id is
-  // derived from the checklist. A crash here leaves a complete definition
-  // nobody has published, which the next open simply publishes.
-  const definition = normalizeDefinition(rawDefinition);
-  if (rawDefinition.checklistId === undefined) {
-    syncChecklistDefinitionIds(args.checklistFile, definition);
-  }
+  const definition = allocateChecklistIds({
+    groupDir: args.group.dir,
+    checklistFile: args.checklistFile,
+    rawDefinition,
+    reportWarning: args.reportWarning,
+    fault: dependencies.fault,
+  });
 
   const items: SessionItem[] = args.group.runs.map((run) => ({
     runDir: run.dir,
@@ -177,6 +182,53 @@ async function openSession(
 }
 
 /**
+ * Give an id-less checklist its lineage and question ids, once, before the
+ * session id is derived from them. Two sessions opening the same new file at
+ * the same time must end up with ONE lineage, so allocation is serialized by
+ * a lock in the group that does not depend on the id being allocated
+ * (`<group>/checklists/.definition.lock`), and the file is re-read under it:
+ * whoever is second adopts the ids the first wrote. A crash after the write
+ * leaves a complete definition nobody has published, which the next open
+ * simply publishes.
+ */
+function allocateChecklistIds(args: {
+  groupDir: string;
+  checklistFile: string;
+  rawDefinition: ChecklistDefinition;
+  reportWarning(message: string): void;
+  fault?(point: ControllerFaultPoint): void;
+}): NormalizedDefinition {
+  if (args.rawDefinition.checklistId !== undefined) {
+    return normalizeDefinition(args.rawDefinition);
+  }
+  args.fault?.("before-checklist-id-allocation");
+  let lock;
+  try {
+    lock = acquireOwnedFileLock({
+      lockFile: path.join(runDirPaths(args.groupDir).checklistsDir, ".definition.lock"),
+      reportWarning: args.reportWarning,
+    });
+  } catch (error) {
+    throw new Error(
+      `Another session is giving ${args.checklistFile} its ids right now; try again in a moment. ` +
+        `(${(error as Error).message})`,
+    );
+  }
+  try {
+    const reread = ChecklistDefinitionSchema.parse(
+      JSON.parse(fs.readFileSync(args.checklistFile, "utf8")),
+    );
+    const definition = normalizeDefinition(reread);
+    if (reread.checklistId === undefined) {
+      syncChecklistDefinitionIds(args.checklistFile, definition);
+    }
+    return definition;
+  } finally {
+    lock.release();
+  }
+}
+
+/**
  * Write the allocated identities back to the checklist file.
  *
  * This must be atomic even though nothing durable references the file yet.
@@ -190,6 +242,33 @@ function syncChecklistDefinitionIds(checklistFile: string, definition: Normalize
     value: definition,
     schema: ChecklistDefinitionSchema,
   });
+}
+
+/**
+ * Staged questions, re-expressed on top of the lineage as it is now: every
+ * current question (with the staged soft-delete or weight when this session
+ * changed one), then the staged questions the lineage does not have yet. This
+ * is what a session that lost a publication race owes the lineage: the
+ * other session's additions are kept, its own are kept, nothing is removed.
+ */
+function rebaseQuestions(
+  current: readonly ChecklistQuestion[],
+  staged: readonly ChecklistQuestion[],
+): ChecklistQuestion[] {
+  const stagedById: Record<string, ChecklistQuestion> = Object.create(null);
+  for (const question of staged) {
+    stagedById[question.id] = question;
+  }
+  const merged = current.map((question) => {
+    const mine = stagedById[question.id];
+    return mine === undefined ? { ...question } : { ...question, ...mine, text: question.text };
+  });
+  for (const question of staged) {
+    if (!current.some((existing) => existing.id === question.id)) {
+      merged.push({ ...question });
+    }
+  }
+  return merged;
 }
 
 type SessionConstruction = {
@@ -282,9 +361,10 @@ class LabelingSession {
    */
   private recoverChecklist(): ChecklistRevision {
     const { store, definition } = this.parts;
-    const pending = this.draft.pendingRevision;
+    const pending = this.rebasedPendingRevision();
 
     if (pending !== null) {
+      this.draft = { ...this.draft, pendingRevision: pending };
       this.saveDraft();
       this.fault("after-pending-revision-save");
       const published = store.publishRevision(pending, this.parts.args.checklistFile);
@@ -318,6 +398,58 @@ class LabelingSession {
     }
     this.draft = { ...this.draft, pendingRevision: prepared.pending };
     return this.recoverChecklist();
+  }
+
+  /**
+   * The draft's pending revision, or a fresh one computed against the lineage
+   * as it is NOW when the lineage moved underneath it (another session
+   * published first). Without this a draft that lost the race would replay
+   * the same stale publication on every reopen and never recover. When the
+   * rebased questions are exactly what the lineage already has, nothing is
+   * owed: the draft adopts the current revision and the pending is cleared.
+   */
+  private rebasedPendingRevision(): PendingRevision | null {
+    const pending = this.draft.pendingRevision;
+    if (pending === null) {
+      return null;
+    }
+    const current = this.parts.store.currentRevision(pending.revision.checklistId);
+    const parentVersion = current?.version ?? null;
+    const parentHash = current?.hash ?? null;
+    if (
+      parentVersion === pending.expectedParentVersion &&
+      parentHash === pending.expectedParentHash
+    ) {
+      return pending;
+    }
+    if (current === undefined) {
+      return pending;
+    }
+    const prepared = this.parts.store.prepareChecklist({
+      name: pending.revision.name,
+      checklistId: current.checklistId,
+      version: current.version,
+      hash: current.hash,
+      questions: rebaseQuestions(current.questions, pending.revision.questions),
+    });
+    if (prepared.kind === "publish") {
+      return prepared.pending;
+    }
+    this.draft = {
+      ...this.draft,
+      binding: {
+        ...this.draft.binding,
+        checklist: {
+          kind: "published",
+          version: prepared.revision.version,
+          hash: prepared.revision.hash,
+        },
+      },
+      pendingRevision: null,
+      stagedQuestions: null,
+    };
+    this.saveDraft();
+    return null;
   }
 
   /**

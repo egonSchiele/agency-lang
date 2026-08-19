@@ -498,11 +498,12 @@ export function recordChecklistRow(
 ): RecordChecklistRowResult {
   const result = withWriter(request.dir, options, (paths, snapshot, reportWarning) => {
     assertChecklistRowGrounded(request.dir, request.groupDir, snapshot, request.row);
-    const before = snapshot.annotationRows.length;
+    // Under the lock nobody else appends, so "already on disk" is the whole
+    // replay test; the id is content-derived, so a rebuilt row matches too.
+    const replayed = snapshot.annotationRows.some((row) => row.id === request.row.id);
     const { v: _v, id: _id, createdAt, ...draft } = request.row;
     appendRows(paths.annotations, [draft], { ...options, now: () => createdAt }, reportWarning);
-    const after = readAnnotations(paths.annotations, reportWarning).length;
-    const outcome: RecordChecklistRowResult["outcome"] = after > before ? "appended" : "replayed";
+    const outcome: RecordChecklistRowResult["outcome"] = replayed ? "replayed" : "appended";
     return { outcome };
   });
   return { outcome: result.outcome, snapshot: result.snapshot };

@@ -77,6 +77,8 @@ export type LabelStore = {
   readSession(): LabelStoreSessionSnapshot;
   saveDraft(draft: Draft): void;
   prepareChecklist(definition: NormalizedDefinition): PrepareChecklistResult;
+  /** The lineage's newest published revision in the group, if any. */
+  currentRevision(checklistId: string): ChecklistRevision | undefined;
   syncChecklistDefinition(definitionPath: string, revision: ChecklistRevision): void;
   publishRevision(pending: PendingRevision, definitionPath: string): PublishRevisionResult;
   /** Append a completed checklist row exactly as given, to the run that holds
@@ -133,6 +135,12 @@ function createOpenStore(args: OpenLabelStoreArgs, sessionLock: OwnedFileLock): 
       throw new LabelStoreValidationError("This label store has been closed");
     }
   };
+  const currentRevision = (checklistId: string): ChecklistRevision | undefined => {
+    const pointer = readCurrentPointer(group.dir, checklistId);
+    return pointer === undefined
+      ? undefined
+      : readRevision(group.dir, checklistId, pointer.version);
+  };
 
   return {
     items(): readonly LabelStoreItem[] {
@@ -168,12 +176,12 @@ function createOpenStore(args: OpenLabelStoreArgs, sessionLock: OwnedFileLock): 
 
     prepareChecklist(definition: NormalizedDefinition): PrepareChecklistResult {
       assertOpen();
-      const pointer = readCurrentPointer(group.dir, definition.checklistId);
-      const current =
-        pointer === undefined
-          ? undefined
-          : readRevision(group.dir, definition.checklistId, pointer.version);
-      return prepareRevision({ definition, current });
+      return prepareRevision({ definition, current: currentRevision(definition.checklistId) });
+    },
+
+    currentRevision(checklistId: string): ChecklistRevision | undefined {
+      assertOpen();
+      return currentRevision(checklistId);
     },
 
     syncChecklistDefinition(definitionPath: string, revision: ChecklistRevision): void {

@@ -123,6 +123,9 @@ export async function label(
   if (!fs.existsSync(options.checklist)) {
     throw new Error(`Checklist file not found: ${options.checklist}`);
   }
+  if (options.paths.length === 0) {
+    throw new Error("Name at least one run directory, or a directory of run directories.");
+  }
   if (!dependencies.isInteractive()) {
     throw new Error(
       "agency label needs an interactive terminal: it shows outputs and reads " +

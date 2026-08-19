@@ -56,6 +56,14 @@ export function findRunDirectories(paths: string[]): string[] {
  *  later mutation target come from one source of truth: the walk follows
  *  symlinks while classifying, so two spellings can name one directory. */
 export function uniqueRunDirectories(dirs: string[]): string[] {
-  const canonical = dirs.map((dir) => fs.realpathSync.native(dir));
-  return canonical.filter((dir, index) => canonical.indexOf(dir) === index);
+  const seen: Record<string, true> = Object.create(null);
+  const unique: string[] = [];
+  for (const dir of dirs) {
+    const canonical = fs.realpathSync.native(dir);
+    if (seen[canonical] !== true) {
+      seen[canonical] = true;
+      unique.push(canonical);
+    }
+  }
+  return unique;
 }

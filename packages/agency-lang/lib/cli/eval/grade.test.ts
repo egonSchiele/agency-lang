@@ -113,6 +113,27 @@ describe("evalGrade", () => {
     }
   });
 
+  it("a group where one run fails a must-pass gate: that run scores 0, gatesPassed is false, the other keeps its score", async () => {
+    const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
+    dirs.push(group);
+    writeRunDirectory([{ test: { id: "a", input: "t" }, output: "hello" }], path.join(group, "a"));
+    writeRunDirectory([{ test: { id: "b", input: "t" }, output: "bye" }], path.join(group, "b"));
+    const dir = fs.mkdtempSync(path.join(process.cwd(), ".test-grading-"));
+    dirs.push(dir);
+    const file = path.join(dir, "graders.ts");
+    fs.writeFileSync(
+      file,
+      `import { grader } from "agency-lang/eval";
+export default [grader(({ output }) => output === "hello", { name: "gate", mustPass: true })];`,
+    );
+
+    const result = await evalGrade(group, { graders: file, config: {} });
+
+    expect(result.runs.map((run) => run.grading.objective)).toEqual([1, 0]);
+    expect(result.gatesPassed).toBe(false);
+    expect(result.mean).toBeCloseTo(0.5);
+  });
+
   it("refuses a folder with no run directories, naming how to build one", () => {
     const folder = fs.mkdtempSync(path.join(process.cwd(), ".test-not-a-run-dir-"));
     dirs.push(folder);

@@ -121,6 +121,29 @@ describe("wrapTracesAsRunDirectories", () => {
     expect(fs.existsSync(path.join(group, "t1"))).toBe(false);
   });
 
+  it("--trace that matches nothing or several is an error; an id that would escape the group is refused", () => {
+    const group = tempDir();
+    const log = statelogFile(agentStartLine("abc-1"), agentStartLine("abc-2"));
+    const request = { groupDir: group, statelogFiles: [log], codeEntries: [], annotationFiles: [] };
+    expect(() => wrapTracesAsRunDirectories({ ...request, trace: "zzz" })).toThrow(/No trace/);
+    expect(() => wrapTracesAsRunDirectories({ ...request, trace: "abc" })).toThrow(/ambiguous/);
+    // A unique prefix is enough.
+    expect(wrapTracesAsRunDirectories({ ...request, trace: "abc-2" }).written).toEqual([
+      path.join(group, "abc-2"),
+    ]);
+
+    const escaping = tempDir();
+    expect(() =>
+      wrapTracesAsRunDirectories({
+        groupDir: escaping,
+        statelogFiles: [statelogFile(agentStartLine("../escaped"))],
+        codeEntries: [],
+        annotationFiles: [],
+      }),
+    ).toThrow(/outside/);
+    expect(fs.existsSync(path.join(escaping, "..", "escaped"))).toBe(false);
+  });
+
   it("routes annotation rows to the child their trace names, idempotently, and refuses orphans", () => {
     const source = tempDir();
     wrapTracesAsRunDirectories({

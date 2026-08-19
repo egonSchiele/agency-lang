@@ -6,7 +6,7 @@ sortable, groupable table with one row per run directory or statelog
 trace, drill-down into a run's tests, and from a test into the existing
 log viewer focused on that test's trace. A **sole** run directory does
 not open the explorer: it opens the viewer on the directory's statelog,
-with each trace's annotations summarised on its row ("2 notes · score
+with each trace's annotations summarised on its row ("notes · score
 0.70 · labeled", from `annotationSummaries` in `lib/runDirectory/list.ts`).
 This page explains how the explorer is built and why the boundaries sit
 where they do. The single-run viewer has its own page

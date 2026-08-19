@@ -27,14 +27,16 @@ export type RunSummary = {
   latestScore: number | null;
   /** False when an effective must-pass score failed; null with no scores. */
   gatesPassed: boolean | null;
-  noteCount: number;
+  /** `notes.md` exists and is not blank. */
+  hasNotes: boolean;
   labeled: boolean;
   codeHash: string | null;
 };
 
 export function summarizeRuns(snapshot: RunDirectorySnapshot): RunSummary[] {
+  const hasNotes = snapshot.notes !== null && snapshot.notes.trim().length > 0;
   return snapshot.traces.map((trace) =>
-    summarizeTrace(trace, snapshot.effectiveAnnotations[trace.traceId], snapshot.dir),
+    summarizeTrace(trace, snapshot.effectiveAnnotations[trace.traceId], snapshot.dir, hasNotes),
   );
 }
 
@@ -42,6 +44,7 @@ function summarizeTrace(
   trace: Trace,
   effective: EffectiveTraceAnnotations | undefined,
   sourcePath: string,
+  hasNotes: boolean,
 ): RunSummary {
   const record = evalRecordFor(trace, sourcePath);
   const start = trace.events.find((event) => event.data.type === "agentStart");
@@ -64,7 +67,7 @@ function summarizeTrace(
     ended: runRow !== null ? runRow.ended : traceEnding(trace),
     latestScore: latestScore(effective),
     gatesPassed: gatesPassed(effective),
-    noteCount: effective?.notes.length ?? 0,
+    hasNotes,
     labeled: Object.keys(effective?.checklists ?? {}).length > 0,
     codeHash:
       typeof start?.data.code?.closureHash === "string" ? start.data.code.closureHash : null,
@@ -72,12 +75,10 @@ function summarizeTrace(
 }
 
 /** One short line about a trace's annotations for a listing or the viewer's
- *  trace row: "2 notes · score 0.70 · labeled". Empty when there are none. */
+ *  trace row: "notes · score 0.70 · labeled". Empty when there are none. */
 export function annotationSummaryText(summary: RunSummary): string {
   const parts: string[] = [];
-  if (summary.noteCount > 0) {
-    parts.push(`${summary.noteCount} ${summary.noteCount === 1 ? "note" : "notes"}`);
-  }
+  if (summary.hasNotes) parts.push("notes");
   if (summary.latestScore !== null) parts.push(`score ${summary.latestScore.toFixed(2)}`);
   if (summary.labeled) parts.push("labeled");
   return parts.join(" · ");

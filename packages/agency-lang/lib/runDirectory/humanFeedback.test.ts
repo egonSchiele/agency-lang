@@ -13,8 +13,7 @@ import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
 import { completeAnnotation } from "./annotations.js";
 import { appendDurably } from "./durableWrite.js";
 import { humanFeedbackFor } from "./humanFeedback.js";
-import { recordNote } from "./mutations.js";
-import { readRunDirectory } from "./runDir.js";
+import { readRunDirectory, runDirPaths } from "./runDir.js";
 
 let dir: string;
 
@@ -62,11 +61,34 @@ describe("humanFeedbackFor", () => {
     expect(humanFeedbackFor(snapshot(), "t1")).toEqual({ notes: [], checked: [], unchecked: [] });
   });
 
-  it("collects notes in append order", () => {
-    recordNote({ dir, traceId: "t1", annotator: { kind: "human", id: "adit" }, text: "too slow" });
-    recordNote({ dir, traceId: "t1", annotator: { kind: "human", id: "sam" }, text: "wrong tone" });
-    expect(humanFeedbackFor(snapshot(), "t1").notes).toEqual(["too slow", "wrong tone"]);
-    expect(humanFeedbackFor(snapshot(), "t2").notes).toEqual([]);
+  it("puts the run's notes.md (trimmed) first, then each checklist sign-off's note", () => {
+    fs.writeFileSync(runDirPaths(dir).notes, "too slow\nwrong tone\n");
+    const checklist = publishChecklist();
+    const row = completeAnnotation(
+      {
+        traceId: "t1",
+        annotator: { kind: "human", id: "adit" },
+        kind: "checklist",
+        checklist: checklist.checklistId,
+        version: checklist.version,
+        hash: checklist.hash,
+        answers: { [checklist.qIds[0]]: true },
+        note: "late by a day",
+      },
+      "2026-08-18T00:00:00.000Z",
+    );
+    appendDurably(path.join(dir, "annotations.jsonl"), JSON.stringify(row) + "\n");
+    expect(humanFeedbackFor(snapshot(), "t1").notes).toEqual([
+      "too slow\nwrong tone",
+      "late by a day",
+    ]);
+    // The file is about the run, so an unannotated trace in the directory sees it too.
+    expect(humanFeedbackFor(snapshot(), "t2").notes).toEqual(["too slow\nwrong tone"]);
+  });
+
+  it("ignores a blank notes.md", () => {
+    fs.writeFileSync(runDirPaths(dir).notes, " \n");
+    expect(humanFeedbackFor(snapshot(), "t1").notes).toEqual([]);
   });
 
   it("names the checklist questions answered yes and no, by their text", () => {

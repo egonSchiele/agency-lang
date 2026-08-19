@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import { completeAnnotation } from "./annotations.js";
 
-import { buildRunsListing, displayAgent, summarizeRuns } from "./list.js";
-import { recordGradingPass, recordNote } from "./mutations.js";
-import { readRunDirectory } from "./runDir.js";
+import { annotationSummaryText, buildRunsListing, displayAgent, summarizeRuns } from "./list.js";
+import { recordGradingPass } from "./mutations.js";
+import { readRunDirectory, runDirPaths } from "./runDir.js";
 import { agentStartLine, statelogLine, tempDir } from "./testFixtures.js";
 import * as fs from "fs";
 import * as path from "path";
@@ -16,7 +16,7 @@ function writeStatelog(dir: string, ...lines: string[]): void {
 }
 
 describe("summarizeRuns", () => {
-  it("summarizes a finished trace with a note and a score", () => {
+  it("summarizes a finished trace with notes.md and a score", () => {
     const dir = tempDir();
     writeStatelog(
       dir,
@@ -24,7 +24,7 @@ describe("summarizeRuns", () => {
       statelogLine("t1", "agentEnd", { result: "done", timeTaken: 5 }),
       statelogLine("t2", "agentStart", { entryNode: "main", args: {} }),
     );
-    recordNote({ dir, traceId: "t1", annotator: { kind: "human", id: "adit" }, text: "fine" });
+    fs.writeFileSync(runDirPaths(dir).notes, "fine\n");
     recordGradingPass({
       dir,
       scores: [
@@ -52,7 +52,7 @@ describe("summarizeRuns", () => {
       input: "summarize x",
       ended: "ok",
       latestScore: 0.75,
-      noteCount: 1,
+      hasNotes: true,
       labeled: false,
       codeHash: null,
     });
@@ -61,8 +61,22 @@ describe("summarizeRuns", () => {
       input: null,
       ended: "unknown",
       latestScore: null,
-      noteCount: 0,
+      hasNotes: true,
     });
+    expect(annotationSummaryText(first)).toBe("notes · score 0.75");
+  });
+
+  it("hasNotes: false without notes.md or when it is only whitespace; true with text", () => {
+    const dir = tempDir();
+    writeStatelog(dir, statelogLine("t1", "agentStart", { entryNode: "main", args: {} }));
+    const summary = () => summarizeRuns(readRunDirectory(dir, quiet))[0];
+    expect(summary().hasNotes).toBe(false);
+    expect(annotationSummaryText(summary())).toBe("");
+    fs.writeFileSync(runDirPaths(dir).notes, "  \n\t\n");
+    expect(summary().hasNotes).toBe(false);
+    fs.writeFileSync(runDirPaths(dir).notes, "step 3 was slow");
+    expect(summary().hasNotes).toBe(true);
+    expect(annotationSummaryText(summary())).toBe("notes");
   });
 
   it("reports gates as unknown (null) when a must-pass score is scalar, since its threshold is not on the row", () => {

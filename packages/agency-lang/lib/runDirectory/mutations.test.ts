@@ -8,7 +8,6 @@ import {
   wrapTracesAsRunDirectories,
   recordCompletedRun,
   recordGradingPass,
-  recordNote,
   type ScoreDraft,
 } from "./mutations.js";
 import { readRunDirectory, runDirPaths } from "./runDir.js";
@@ -194,7 +193,7 @@ describe("wrapTracesAsRunDirectories", () => {
       annotationFiles: [],
     });
     const sourceRun = path.join(source, "t1");
-    recordNote({ dir: sourceRun, traceId: "t1", annotator: human, text: "slow" });
+    recordGradingPass({ dir: sourceRun, scores: [scoreDraft("t1", "len", 0.5)] });
     const rows = runDirPaths(sourceRun).annotations;
 
     const group = tempDir();
@@ -309,19 +308,6 @@ describe("recordCompletedRun preflight", () => {
   });
 });
 
-describe("recordNote", () => {
-  it("is idempotent and refuses an unknown trace", () => {
-    const dir = directoryWithTraces("t1");
-    const first = recordNote({ dir, traceId: "t1", annotator: human, text: "slow" });
-    const second = recordNote({ dir, traceId: "t1", annotator: human, text: "slow" });
-    expect(second.id).toBe(first.id);
-    expect(readRunDirectory(dir, quiet).annotationRows).toHaveLength(1);
-    expect(() => recordNote({ dir, traceId: "nope", annotator: human, text: "x" })).toThrow(
-      /No trace/,
-    );
-  });
-});
-
 describe("recordGradingPass", () => {
   function directory(): string {
     return directoryWithTraces("t1", "t2");
@@ -393,10 +379,10 @@ describe("torn-tail repair", () => {
     const paths = runDirPaths(dir);
     fs.appendFileSync(paths.annotations, '{"v":1,"id":"ann_torn');
     fs.appendFileSync(paths.statelog, '{"trace_id":"half');
-    recordNote({ dir, traceId: "t1", annotator: human, text: "after the crash" });
+    recordGradingPass({ dir, scores: [scoreDraft("t1", "after-the-crash", 1)] });
     const annotationLines = fs.readFileSync(paths.annotations, "utf8").split("\n").filter(Boolean);
     expect(annotationLines).toHaveLength(1);
-    expect(JSON.parse(annotationLines[0]).text).toBe("after the crash");
+    expect(JSON.parse(annotationLines[0]).name).toBe("after-the-crash");
     expect(fs.readFileSync(paths.statelog, "utf8").endsWith("\n")).toBe(true);
     expect(fs.readFileSync(paths.statelog, "utf8")).not.toContain("half");
   });

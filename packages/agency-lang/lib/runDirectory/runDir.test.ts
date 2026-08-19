@@ -33,6 +33,7 @@ describe("readRunDirectory", () => {
       traces: [],
       annotationRows: [],
       effectiveAnnotations: {},
+      notes: null,
     });
   });
 
@@ -43,17 +44,47 @@ describe("readRunDirectory", () => {
       paths.statelog,
       line("t1", "agentStart") + "\n" + line("t2", "agentStart") + "\n",
     );
-    const note = completeAnnotation(
-      { traceId: "t1", annotator: { kind: "human", id: "adit" }, kind: "note", text: "slow" },
+    const score = completeAnnotation(
+      {
+        traceId: "t1",
+        annotator: { kind: "grader", id: "len" },
+        kind: "score",
+        passId: "p1",
+        passSize: 1,
+        completesPass: true,
+        name: "len",
+        score: { kind: "scalar", value: 0.5 },
+        weight: 1,
+        mustPass: false,
+      },
       "2026-08-18T00:00:00Z",
     );
-    fs.writeFileSync(paths.annotations, JSON.stringify(note) + "\n");
+    fs.writeFileSync(paths.annotations, JSON.stringify(score) + "\n");
     const snapshot = readRunDirectory(dir, { reportWarning: () => {} });
     expect(snapshot.hasStatelog).toBe(true);
     expect(snapshot.traces.map((trace) => trace.traceId)).toEqual(["t1", "t2"]);
-    expect(snapshot.annotationRows).toEqual([note]);
-    expect(snapshot.effectiveAnnotations.t1.notes).toEqual([note]);
+    expect(snapshot.annotationRows).toEqual([score]);
+    expect(Object.keys(snapshot.effectiveAnnotations.t1)).toEqual(["scores", "checklists", "run"]);
     expect(snapshot.effectiveAnnotations.t2).toBeUndefined();
+  });
+
+  describe("notes.md", () => {
+    const quiet = { reportWarning: () => {} };
+
+    it("is null without the file (ENOENT is a value, not an error), and the exact text with it (even empty)", () => {
+      const dir = tempDir();
+      expect(readRunDirectory(dir, quiet).notes).toBeNull();
+      fs.writeFileSync(runDirPaths(dir).notes, "");
+      expect(readRunDirectory(dir, quiet).notes).toBe("");
+      fs.writeFileSync(runDirPaths(dir).notes, "step 3 was slow\n");
+      expect(readRunDirectory(dir, quiet).notes).toBe("step 3 was slow\n");
+    });
+
+    it("propagates a read error that is not a missing file", () => {
+      const dir = tempDir();
+      fs.mkdirSync(runDirPaths(dir).notes);
+      expect(() => readRunDirectory(dir, quiet)).toThrow(/EISDIR/);
+    });
   });
 
   it("re-reads when the statelog changed between its two passes", () => {

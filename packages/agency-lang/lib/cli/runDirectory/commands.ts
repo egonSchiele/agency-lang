@@ -3,12 +3,10 @@ import type { Command } from "@/vendor/commander/index.js";
 import { runsAdd } from "./add.js";
 import { logsExtract } from "./extract.js";
 import { runsList } from "./list.js";
-import { note } from "./note.js";
 
 export type RunDirectoryCommandDependencies = {
   runsAdd: typeof runsAdd;
   runsList: typeof runsList;
-  note: typeof note;
   logsExtract: typeof logsExtract;
   fail(message: string): void;
 };
@@ -19,7 +17,7 @@ function defaultFail(message: string): void {
 }
 
 export function runDirectoryCommandDependencies(): RunDirectoryCommandDependencies {
-  return { runsAdd, runsList, note, logsExtract, fail: defaultFail };
+  return { runsAdd, runsList, logsExtract, fail: defaultFail };
 }
 
 /** commander calls this once per repeat of a flag, accumulating the values. */
@@ -27,7 +25,7 @@ function collectRepeated(value: string, previous: string[]): string[] {
   return [...previous, value];
 }
 
-/** `agency runs add|list` and `agency note`. */
+/** `agency runs add|list`. */
 export function addRunDirectoryCommands(
   program: Command,
   dependencies: RunDirectoryCommandDependencies,
@@ -88,21 +86,6 @@ export function addRunDirectoryCommands(
     .action((paths: string[]) => {
       try {
         dependencies.runsList(paths);
-      } catch (error) {
-        dependencies.fail((error as Error).message);
-      }
-    });
-
-  program
-    .command("note")
-    .description("Append a free-text note about one trace in a run directory")
-    .argument("<dir>", "The run directory")
-    .argument("<text>", "What you observed and what you wanted instead")
-    .option("--trace <id>", "Which trace (default: the only one)")
-    .option("--annotator <id>", "Who is writing (default: $USER)")
-    .action((dir: string, text: string, opts: { trace?: string; annotator?: string }) => {
-      try {
-        dependencies.note({ dir, text, ...opts });
       } catch (error) {
         dependencies.fail((error as Error).message);
       }

@@ -6,12 +6,13 @@ import { canonicalize, type JsonValue } from "@/utils/canonicalize.js";
 import { sha256Text } from "@/utils/hash.js";
 
 /**
- * Annotations: every opinion anyone or anything forms about a trace — a note, a
- * checklist answer, a grader score, an LLM judgement, or the eval harness's own
- * record of what it launched. One append-only `annotations.jsonl` per run
- * directory; this module owns the row shapes, the deterministic ids, and the
- * pure fold from rows to effective state. It does no locking and no writing:
- * `mutations.ts` owns those.
+ * Annotations: every structured opinion anyone or anything forms about a trace
+ * — a checklist answer, a grader score, an LLM judgement, or the eval harness's
+ * own record of what it launched. (A person's free-form note is not a row; it
+ * is the run directory's `notes.md`.) One append-only `annotations.jsonl` per
+ * run directory; this module owns the row shapes, the deterministic ids, and
+ * the pure fold from rows to effective state. It does no locking and no
+ * writing: `mutations.ts` owns those.
  */
 
 // --- row shapes -----------------------------------------------------------
@@ -20,8 +21,6 @@ export type AnnotatorKind = "human" | "grader" | "judge" | "harness";
 export type Annotator = { kind: AnnotatorKind; id: string };
 
 export type Score = { kind: "binary"; pass: boolean } | { kind: "scalar"; value: number };
-
-export type NotePayload = { kind: "note"; text: string };
 
 export type ChecklistPayload = {
   kind: "checklist";
@@ -69,7 +68,7 @@ export type RunPayload = {
   error?: string;
 };
 
-export type AnnotationPayload = NotePayload | ChecklistPayload | ScorePayload | RunPayload;
+export type AnnotationPayload = ChecklistPayload | ScorePayload | RunPayload;
 
 /** What a writer supplies; `v`, `id` and `createdAt` are filled at append. */
 export type AnnotationDraft = {
@@ -116,10 +115,6 @@ const common = {
   sessionId: z.string().min(1).optional(),
 };
 
-const NoteAnnotationSchema = z
-  .object({ ...common, kind: z.literal("note"), text: z.string() })
-  .strict();
-
 export const ChecklistAnnotationSchema = z
   .object({
     ...common,
@@ -163,7 +158,6 @@ const RunAnnotationSchema = z
   .strict();
 
 export const AnnotationSchema = z.discriminatedUnion("kind", [
-  NoteAnnotationSchema,
   ChecklistAnnotationSchema,
   ScoreAnnotationSchema,
   RunAnnotationSchema,
@@ -233,7 +227,6 @@ export type EffectiveChecklistJudgement = {
 };
 
 export type EffectiveTraceAnnotations = {
-  notes: Annotation[];
   /** Keyed by `${annotator.kind}:${annotator.id}:${name}`; the latest row from
    *  the latest COMPLETE pass wins. */
   scores: Record<string, Annotation>;
@@ -252,10 +245,8 @@ export function foldAnnotations(
   const byTrace: Record<string, EffectiveTraceAnnotations> = Object.create(null);
   const completePasses = completedPassIds(rows);
   for (const row of rows) {
-    const trace = (byTrace[row.traceId] ??= { notes: [], scores: {}, checklists: {}, run: null });
-    if (row.kind === "note") {
-      trace.notes.push(row);
-    } else if (row.kind === "checklist") {
+    const trace = (byTrace[row.traceId] ??= { scores: {}, checklists: {}, run: null });
+    if (row.kind === "checklist") {
       const key = `${row.checklist}:${row.annotator.kind}:${row.annotator.id}`;
       const existing = trace.checklists[key];
       trace.checklists[key] = {

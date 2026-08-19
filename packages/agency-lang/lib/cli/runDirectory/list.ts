@@ -58,7 +58,7 @@ export function formatRunsList(listing: RunsListing): string {
     String(summary.llmCalls),
     String(summary.toolCalls),
     summary.latestScore === null ? "" : summary.latestScore.toFixed(2),
-    String(summary.noteCount),
+    summary.hasNotes ? "yes" : "",
     summary.labeled ? "yes" : "",
     summary.input === null ? "" : oneLine(summary.input, 60),
   ]);

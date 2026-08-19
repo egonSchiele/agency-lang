@@ -817,8 +817,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "Test suite: a JSON file, a directory, or a git source (URL[//subdir][?ref=...])",
     )
     .option("--input <text>", "Run one inline test whose input is this text (no suite file needed)")
-    .option("--run-id <id>", "Run id / output subdirectory")
-    .option("--runs-dir <path>", "Runs output directory")
+    .option(
+      "-o, --out <dir>",
+      "Directory to write the run into; must not exist yet (default: runs/<timestamp>-<random suffix>, or under eval.runsDir from agency.json)",
+    )
     .option(
       "-n, --parallel <count>",
       "Run up to this many inputs at once (default 1). Above 1, per-agent output is replaced by a status board (name, state, elapsed, cost so far)",
@@ -831,8 +833,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
           agentCmd?: string;
           suite?: string;
           input?: string;
-          runId?: string;
-          runsDir?: string;
+          out?: string;
           parallel?: number;
         },
       ) => {
@@ -841,9 +842,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
         // Agent config (strict types, tool-loop caps) comes from agency.json
         // beside the agent, not from eval flags.
         const result = await evalRun({ agent, ...opts, config: getConfig() });
-        console.log(
-          `Run ${result.runId} completed: ${result.okCount}/${result.tests.length} tests ok`,
-        );
+        console.log(`Run completed: ${result.okCount}/${result.tests.length} tests ok`);
         const costUsd = totalRunCostUsd(result.runDir);
         if (costUsd !== undefined) {
           console.log(`total LLM cost: $${costUsd.toFixed(2)}`);

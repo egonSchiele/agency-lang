@@ -319,8 +319,13 @@ export abstract class BaseOptimizer {
       agent: path.join(source.baseDir, source.entryFile), // used for label/node parsing only
       inputs: [{ ...input, id }],
       suite: { source: "optimize" },
-      runsDir: path.join(this.config.runsDir, this.config.runId, "agent-runs", ws.key),
-      runId: `run-${this.runCounter}`,
+      out: path.join(
+        this.config.runsDir,
+        this.config.runId,
+        "agent-runs",
+        ws.key,
+        `run-${this.runCounter}`,
+      ),
       config: this.config.config,
       // The reporter owns the optimizer's narrative; runSuite's own progress
       // lines would interleave with it (and `--silent` must print nothing).

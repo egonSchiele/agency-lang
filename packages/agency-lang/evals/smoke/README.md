@@ -17,11 +17,11 @@ it.
 ```bash
 # the whole suite
 agency eval run path/to/agent.agency:main --suite evals/smoke
-agency eval grade runs/<run-id>        # the path eval run printed
+agency eval grade runs/<dir>        # the path eval run printed
 
 # one test
 agency eval run path/to/agent.agency:main --suite evals/smoke/hello-file
-agency eval grade runs/<run-id>
+agency eval grade runs/<dir>
 ```
 
 ## The ladder
@@ -49,7 +49,7 @@ LLM**. Running and then grading one must score 1.000:
 
 ```bash
 agency eval run evals/smoke/csv-total/solution.agency:main \
-  --suite evals/smoke/csv-total --run-id csv-solution
+  --suite evals/smoke/csv-total --out runs/csv-solution
 agency eval grade runs/csv-solution
 ```
 

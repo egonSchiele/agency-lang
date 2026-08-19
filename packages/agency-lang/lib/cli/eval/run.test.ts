@@ -60,7 +60,7 @@ describe("eval run CLI", () => {
     const runsDir = path.join(tmpDir, "runs");
     let seenInput: unknown = "unset";
     const result = await evalRun(
-      { agent: agentFile, runsDir, runId: "no-input" },
+      { agent: agentFile, out: path.join(runsDir, "no-input") },
       {
         runner: async (job) => {
           seenInput = job.kind === "file" ? job.input : "not-a-file-job";
@@ -83,10 +83,10 @@ describe("eval run CLI", () => {
     fs.writeFileSync(oneParam, "node main(task: string) {}\n");
     const runsDir = path.join(tmpDir, "runs");
     await expect(
-      evalRun({ agent: noParam, input: "x", runsDir, runId: "a" }, { runner: okRunner }),
+      evalRun({ agent: noParam, input: "x", out: path.join(runsDir, "a") }, { runner: okRunner }),
     ).rejects.toThrow(/takes none/);
     await expect(
-      evalRun({ agent: oneParam, runsDir, runId: "b" }, { runner: okRunner }),
+      evalRun({ agent: oneParam, out: path.join(runsDir, "b") }, { runner: okRunner }),
     ).rejects.toThrow(/no test provides an input/);
   });
 
@@ -96,11 +96,11 @@ describe("eval run CLI", () => {
     const runsDir = path.join(tmpDir, "runs");
 
     const result = await evalRun(
-      { agent: agentFile, input: "do it", runsDir, runId: "r1" },
+      { agent: agentFile, input: "do it", out: path.join(runsDir, "r1") },
       { runner: okRunner },
     );
 
-    expect(result).toMatchObject({ runId: "r1", okCount: 1, errorCount: 0 });
+    expect(result).toMatchObject({ okCount: 1, errorCount: 0 });
     expect(result.tests[0]).toMatchObject({ status: "success" });
     const snapshot = readRunDirectory(path.join(runsDir, "r1"), quiet);
     expect(snapshot.traces).toHaveLength(1);
@@ -121,7 +121,7 @@ describe("eval run CLI", () => {
     fs.writeFileSync(suite, JSON.stringify({ inputs: [{ id: "a", input: "t" }] }));
 
     const result = await evalRun(
-      { agent: agentFile, suite, runsDir: path.join(tmpDir, "runs"), runId: "no-goal" },
+      { agent: agentFile, suite, out: path.join(path.join(tmpDir, "runs"), "no-goal") },
       { runner: okRunner },
     );
     expect(result.okCount).toBe(1);
@@ -136,7 +136,7 @@ describe("eval run CLI", () => {
 
     await expect(
       evalRun(
-        { agent: agentFile, suite: inputsFile, runsDir, runId: "empty" },
+        { agent: agentFile, suite: inputsFile, out: path.join(runsDir, "empty") },
         { runner: okRunner },
       ),
     ).rejects.toThrow(/no inputs loaded from/);
@@ -150,8 +150,7 @@ describe("eval run CLI", () => {
       evalRun({
         agent: path.join(tmpDir, "missing.agency"),
         input: "do it",
-        runsDir,
-        runId: "setup-failed",
+        out: path.join(runsDir, "setup-failed"),
       }),
     ).rejects.toThrow();
 
@@ -164,7 +163,7 @@ describe("eval run CLI", () => {
     const runsDir = path.join(tmpDir, "runs");
 
     const result = await evalRun(
-      { agent: agentFile, input: "do it", runsDir, runId: "fallback" },
+      { agent: agentFile, input: "do it", out: path.join(runsDir, "fallback") },
       {
         runner: async (job) => {
           fs.writeFileSync(
@@ -197,7 +196,7 @@ describe("eval run CLI", () => {
 
     let runs = 0;
     const result = await evalRun(
-      { agent: agentFile, suite: inputsFile, runsDir, runId: "all" },
+      { agent: agentFile, suite: inputsFile, out: path.join(runsDir, "all") },
       {
         runner: async () => {
           runs += 1;
@@ -250,8 +249,7 @@ describe("eval run CLI", () => {
       {
         agent,
         suite: `${suiteRepo}?ref=${suiteSha}`,
-        runsDir: path.join(tmpDir, "runs"),
-        runId: "gitsuite",
+        out: path.join(path.join(tmpDir, "runs"), "gitsuite"),
         config: { eval: { sourceCacheRoot: path.join(tmpDir, "cache") } },
       },
       {
@@ -279,7 +277,7 @@ describe("eval run CLI", () => {
       const agent = path.join(agentDir, "agent.agency");
       fs.writeFileSync(agent, "node main(input: string) {}\n");
       const runsDir = path.join(tmpDir, "runs");
-      return { agent, inputs, runsDir, runId };
+      return { agent, inputs, out: path.join(runsDir, runId) };
     }
 
     it("gradeSuite records score rows and reports a failed gate", async () => {
@@ -369,7 +367,7 @@ describe("eval run CLI", () => {
       const config = { eval: { graders: fallbackModule } };
 
       const result = await evalRun(
-        { agent: agentFile, suite: suiteDir, runsDir, runId: "per-test", config },
+        { agent: agentFile, suite: suiteDir, out: path.join(runsDir, "per-test"), config },
         { runner: okRunner },
       );
       const { resolveGraders } = await import("./graders.js");
@@ -400,7 +398,7 @@ describe("eval run CLI", () => {
       let job: EvalRunnerJob | undefined;
 
       const result = await evalRun(
-        { agentCmd: "some-agent -p -- {task}", input: "do it", runsDir, runId: "r-cmd" },
+        { agentCmd: "some-agent -p -- {task}", input: "do it", out: path.join(runsDir, "r-cmd") },
         { runner: traceRunner("done", (j) => (job = j)) },
       );
 

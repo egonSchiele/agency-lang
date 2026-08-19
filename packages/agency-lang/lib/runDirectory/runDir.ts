@@ -12,16 +12,21 @@ import type { ParseError } from "@/statelog/parse.js";
 import { readTraces, type Trace } from "./traces.js";
 
 /**
- * A run directory is a plain folder: `statelog.jsonl` (any number of traces),
- * `annotations.jsonl`, and optional attachments. This module names its paths
- * and reads it into one coherent snapshot. It never writes; `mutations.ts` does.
+ * A run directory is a plain folder holding one run: `statelog.jsonl` (one
+ * trace), `annotations.jsonl`, and optional attachments — the agent's code
+ * closure directly under `code/`, a working-directory snapshot directly under
+ * `workdir/` with its `workdir.json` sidecar, free-form `notes.md`. This
+ * module names its paths and reads it into one coherent snapshot. It never
+ * writes; `mutations.ts` does.
  */
 export type RunDirectoryPaths = {
   dir: string;
   statelog: string;
   annotations: string;
+  notes: string;
   codeDir: string;
   workdirDir: string;
+  workdirSidecar: string;
   checklistsDir: string;
   lock: string;
 };
@@ -31,8 +36,10 @@ export function runDirPaths(dir: string): RunDirectoryPaths {
     dir,
     statelog: path.join(dir, "statelog.jsonl"),
     annotations: path.join(dir, "annotations.jsonl"),
+    notes: path.join(dir, "notes.md"),
     codeDir: path.join(dir, "code"),
     workdirDir: path.join(dir, "workdir"),
+    workdirSidecar: path.join(dir, "workdir.json"),
     checklistsDir: path.join(dir, "checklists"),
     lock: path.join(dir, ".lock"),
   };

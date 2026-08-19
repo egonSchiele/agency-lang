@@ -1,6 +1,9 @@
 import * as fs from "fs";
+import * as path from "path";
 
 import { nanoid } from "nanoid";
+
+import { safeDeleteDirectoryWithin } from "@/utils.js";
 
 import { appendDurably } from "./durableWrite.js";
 
@@ -13,12 +16,19 @@ import {
   type RunPayload,
   type Score,
 } from "./annotations.js";
-import { applyCodeAttachment, planCodeAttachment, type CodeAttachmentPlan } from "./attachCode.js";
+import {
+  applyCodeAttachment,
+  CodeMismatchError,
+  planCodeAttachment,
+  recordedClosureHashes,
+  type CodeAttachmentPlan,
+} from "./attachCode.js";
+import { computeCodeIdentity } from "./codeIdentity.js";
 import {
   applyWorkdirAttachment,
   planWorkdirAttachment,
-  type WorkdirAttachmentPlan,
   type WorkdirAttachmentRequest,
+  type WorkdirAttachmentPlan,
 } from "./attachWorkdir.js";
 import { acquireRunDirLock } from "./lock.js";
 import {
@@ -28,7 +38,7 @@ import {
   type StatelogMergePlan,
 } from "./mergeStatelog.js";
 import { readRunDirectory, runDirPaths, type RunDirectorySnapshot } from "./runDir.js";
-import { readTracesOrThrow } from "./traces.js";
+import { matchTrace, readTracesOrThrow, type Trace } from "./traces.js";
 
 /**
  * The public writes on a run directory. Each operation describes a domain
@@ -51,75 +61,246 @@ export type MutationOptions = {
   now?(): string;
 };
 
-// --- addToRunDirectory ----------------------------------------------------
+// --- wrapTracesAsRunDirectories --------------------------------------------
 
-export type AddToRunDirectoryRequest = {
-  dir: string;
+export type WrapTracesRequest = {
+  /** The group directory; one `<groupDir>/<traceId>/` is written per trace. */
+  groupDir: string;
   statelogFiles: string[];
+  /** Keep only this trace (full id or unique prefix). */
+  trace?: string;
   codeEntries: string[];
   workdir?: WorkdirAttachmentRequest;
   annotationFiles: string[];
 };
 
-export type MutationCounts = { added: number; skipped: number };
-
-export type AddToRunDirectoryResult = {
-  statelogs: MutationCounts;
-  /** `describeStatelogMerge` for this request: names what was already there. */
-  statelogSummary: string;
-  code: MutationCounts;
-  workdirs: MutationCounts;
-  annotations: MutationCounts;
-  snapshot: RunDirectorySnapshot;
+export type WrapTracesResult = {
+  written: string[];
+  skipped: { traceId: string; reason: string }[];
 };
 
-export function addToRunDirectory(
-  request: AddToRunDirectoryRequest,
+type RunDirectoryAssemblyPlan = {
+  dir: string;
+  statelog: StatelogMergePlan;
+  code: CodeAttachmentPlan[];
+  workdir?: WorkdirAttachmentPlan;
+  annotationDrafts: AnnotationDraft[];
+};
+
+type WrappedRunPlan = {
+  childDir: string;
+  stagingDir: string;
+  assembly: RunDirectoryAssemblyPlan;
+};
+
+type WrapTracesPlan = {
+  stagingRoot: string;
+  writes: WrappedRunPlan[];
+  skipped: { traceId: string; reason: string }[];
+};
+
+/**
+ * `agency runs add` and `agency run --capture-workdir`: make one run directory
+ * per trace in the given statelogs, under `groupDir`. Each child is assembled
+ * below `<groupDir>/.staging/` and renamed into place, so a child is
+ * either whole or absent. A child that already exists is skipped, never
+ * touched. Code is attached to the traces that recorded its closure hash and
+ * must match at least one; annotation rows go to the child their `traceId`
+ * names and must each name one of the traces.
+ */
+export function wrapTracesAsRunDirectories(
+  request: WrapTracesRequest,
   options: MutationOptions = {},
-): AddToRunDirectoryResult {
-  return withWriter(request.dir, options, (paths, snapshot, reportWarning) => {
-    // Plan everything first. Statelogs are planned as one incoming set so a
-    // conflict in the third file also stops the first from being written.
-    const incoming = request.statelogFiles.flatMap(readTracesOrThrow);
-    const statelogPlan = planStatelogMerge(snapshot.traces, incoming);
-    if (statelogPlan.refused.length > 0) {
-      throw new Error(describeStatelogMerge(statelogPlan, request.dir));
-    }
-    // Code and workdir plans need the traces the statelogs are about to add,
-    // so plan them against the merged view.
-    const merged: RunDirectorySnapshot = {
-      ...snapshot,
-      traces: [...snapshot.traces, ...statelogPlan.add],
-    };
-    const codePlans = request.codeEntries.map((entry) => planCodeAttachment(merged, entry, paths));
-    const workdirPlan =
-      request.workdir === undefined
-        ? undefined
-        : planWorkdirAttachment(merged, request.workdir, paths);
-    const annotationDrafts = request.annotationFiles.flatMap((file) =>
-      readAnnotations(file, reportWarning).map(draftOf),
-    );
+): WrapTracesResult {
+  const plan = planWrappedRuns(request, options);
+  return applyWrappedRuns(plan, options);
+}
 
-    // Apply, in the order that keeps a crash recoverable: traces before the
-    // things that point at them.
-    applyStatelogMerge(paths, statelogPlan);
-    for (const plan of codePlans) applyCodeAttachment(paths, plan);
-    if (workdirPlan !== undefined) applyWorkdirAttachment(paths, workdirPlan, now(options));
-    const annotationCounts = appendAnnotations(
-      paths.annotations,
-      annotationDrafts,
-      options,
-      reportWarning,
+/** Resolve and validate every child before creating the group or staging any
+ *  run. The executor therefore receives only complete, writable requests. */
+function planWrappedRuns(request: WrapTracesRequest, options: MutationOptions): WrapTracesPlan {
+  const reportWarning = options.reportWarning ?? (() => {});
+  const traces = selectTraces(request);
+  if (request.workdir !== undefined && traces.length > 1) {
+    throw new Error(
+      `--workdir needs --trace <id>: the statelog holds ${traces.length} traces ` +
+        `(${traces.map((trace) => trace.traceId).join(", ")}).`,
     );
+  }
+  const annotationDrafts = request.annotationFiles.flatMap((file) =>
+    readAnnotations(file, reportWarning).map(draftOf),
+  );
+  const ids = traces.map((trace) => trace.traceId);
+  const orphan = annotationDrafts.find((draft) => !ids.includes(draft.traceId));
+  if (orphan !== undefined) {
+    throw new Error(
+      `An annotation row names trace ${orphan.traceId}, which is not among the traces being ` +
+        `wrapped (${ids.join(", ")}). Nothing was written.`,
+    );
+  }
+  const codeIdentities = request.codeEntries.map((entry) => ({
+    entry,
+    hash: computeCodeIdentity(entry).closureHash,
+  }));
+  const recordedAnywhere = recordedClosureHashes(traces);
+  const unmatchedCode = codeIdentities.find((code) => !recordedAnywhere.includes(code.hash));
+  if (unmatchedCode !== undefined) {
+    const known = recordedAnywhere.length === 0 ? "none recorded" : recordedAnywhere.join(", ");
+    throw new CodeMismatchError(
+      `${unmatchedCode.entry} hashes to ${unmatchedCode.hash}, which none of the traces recorded ` +
+        `as its code (${known}). Attach the code that actually ran.`,
+    );
+  }
 
-    return {
-      statelogs: { added: statelogPlan.add.length, skipped: statelogPlan.skipped.length },
-      statelogSummary: describeStatelogMerge(statelogPlan, request.dir),
-      code: countPlans(codePlans.map((plan) => plan.status === "add")),
-      workdirs: countWorkdir(workdirPlan),
-      annotations: annotationCounts,
-    };
+  const groupDir = path.resolve(request.groupDir);
+  const stagingRoot = path.join(groupDir, ".staging");
+  const children = traces.map((trace) => {
+    const childDir = childDirFor(groupDir, trace.traceId);
+    return { trace, childDir, exists: fs.existsSync(childDir) };
   });
+  const skipped = children
+    .filter((child) => child.exists)
+    .map(({ trace, childDir }) => ({
+      traceId: trace.traceId,
+      reason: `${childDir} already exists`,
+    }));
+  const writes = children
+    .filter((child) => !child.exists)
+    .map(({ trace, childDir }) => {
+      const stagingDir = path.join(stagingRoot, nanoid());
+      const recorded = recordedClosureHashes([trace]);
+      return {
+        childDir,
+        stagingDir,
+        assembly: planRunDirectoryAssembly({
+          dir: stagingDir,
+          trace,
+          codeEntries: codeIdentities
+            .filter((code) => recorded.includes(code.hash))
+            .map((code) => code.entry),
+          workdir: request.workdir,
+          annotationDrafts: annotationDrafts.filter((draft) => draft.traceId === trace.traceId),
+        }),
+      };
+    });
+  return { stagingRoot, writes, skipped };
+}
+
+/** The traces the request is about, with the same id never carrying two
+ *  different event streams, and narrowed to `--trace` when given. */
+function selectTraces(request: WrapTracesRequest): Trace[] {
+  const incoming = request.statelogFiles.flatMap(readTracesOrThrow);
+  const plan = planStatelogMerge([], incoming);
+  if (plan.refused.length > 0) {
+    const ids = plan.refused.map((refusal) => refusal.traceId).join(", ");
+    throw new Error(
+      `Trace id(s) ${ids} appear more than once with different content. Nothing was written.`,
+    );
+  }
+  if (request.trace === undefined) return plan.add;
+  const match = matchTrace(plan.add, request.trace);
+  if (match.kind === "one") return [match.trace];
+  if (match.kind === "none") throw new Error(`No trace matches ${request.trace}.`);
+  throw new Error(`--trace ${request.trace} is ambiguous: ${match.ids.join(", ")}.`);
+}
+
+/** `<groupDir>/<traceId>`, refusing an id that would land outside the group. */
+function childDirFor(groupDir: string, traceId: string): string {
+  const child = path.resolve(groupDir, traceId);
+  if (path.dirname(child) !== path.resolve(groupDir)) {
+    throw new Error(
+      `Refusing to write trace "${traceId}": its id would place the run directory outside ` +
+        `${groupDir}.`,
+    );
+  }
+  if (child === path.join(path.resolve(groupDir), ".staging")) {
+    throw new Error(`Refusing to write trace "${traceId}": .staging is reserved for assembly.`);
+  }
+  return child;
+}
+
+function planRunDirectoryAssembly(args: {
+  dir: string;
+  trace: Trace;
+  codeEntries: string[];
+  workdir?: WorkdirAttachmentRequest;
+  annotationDrafts: AnnotationDraft[];
+}): RunDirectoryAssemblyPlan {
+  const paths = runDirPaths(args.dir);
+  const snapshot: RunDirectorySnapshot = {
+    dir: args.dir,
+    hasStatelog: false,
+    traces: [args.trace],
+    annotationRows: [],
+    effectiveAnnotations: {},
+  };
+  return {
+    dir: args.dir,
+    statelog: planStatelogMerge([], [args.trace]),
+    code: args.codeEntries.map((entry) => planCodeAttachment(snapshot, entry, paths)),
+    workdir:
+      args.workdir === undefined ? undefined : planWorkdirAttachment(snapshot, args.workdir, paths),
+    annotationDrafts: args.annotationDrafts,
+  };
+}
+
+function applyWrappedRuns(plan: WrapTracesPlan, options: MutationOptions): WrapTracesResult {
+  const result: WrapTracesResult = { written: [], skipped: plan.skipped };
+  try {
+    for (const run of plan.writes) {
+      fs.mkdirSync(plan.stagingRoot, { recursive: true });
+      fs.mkdirSync(run.stagingDir);
+      try {
+        applyRunDirectoryAssembly(run.assembly, options);
+        fs.renameSync(run.stagingDir, run.childDir);
+        result.written.push(run.childDir);
+      } catch (error) {
+        removeStagedRun(plan.stagingRoot, run.stagingDir);
+        throw error;
+      }
+    }
+  } finally {
+    removeEmptyDirectory(plan.stagingRoot);
+  }
+  return result;
+}
+
+function applyRunDirectoryAssembly(plan: RunDirectoryAssemblyPlan, options: MutationOptions): void {
+  withWriter(plan.dir, options, (paths, _snapshot, reportWarning) => {
+    applyStatelogMerge(paths, plan.statelog);
+    for (const codePlan of plan.code) {
+      applyCodeAttachment(paths, codePlan);
+    }
+    if (plan.workdir !== undefined) {
+      applyWorkdirAttachment(paths, plan.workdir, now(options));
+    }
+    appendRows(paths.annotations, plan.annotationDrafts, options, reportWarning);
+    return {};
+  });
+}
+
+function removeStagedRun(stagingRoot: string, stagingDir: string): void {
+  if (!fs.existsSync(stagingDir)) {
+    return;
+  }
+  const deleted = safeDeleteDirectoryWithin(stagingRoot, stagingDir);
+  if (!deleted.success) {
+    throw new Error(deleted.message ?? `Could not remove ${stagingDir}.`);
+  }
+}
+
+function removeEmptyDirectory(dir: string): void {
+  if (!fs.existsSync(dir)) {
+    return;
+  }
+  try {
+    fs.rmdirSync(dir);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT" && code !== "ENOTEMPTY") {
+      throw error;
+    }
+  }
 }
 
 // --- recordCompletedRun ---------------------------------------------------
@@ -138,8 +319,8 @@ export type RecordCompletedRunRequest = {
 
 export type RecordCompletedRunResult = { annotation: Annotation; snapshot: RunDirectorySnapshot };
 
-/** The eval harness's one call per finished test: merge the staged statelog,
- *  attach code and workdir, append the `run` row. */
+/** The eval harness's one call per finished test, on a fresh directory:
+ *  write the staged statelog, attach code and workdir, append the `run` row. */
 export function recordCompletedRun(
   request: RecordCompletedRunRequest,
   options: MutationOptions = {},
@@ -367,31 +548,9 @@ function appendRows(
   return rows;
 }
 
-function appendAnnotations(
-  annotationsPath: string,
-  drafts: readonly AnnotationDraft[],
-  options: MutationOptions,
-  reportWarning: (message: string) => void,
-): MutationCounts {
-  const before = readAnnotations(annotationsPath, reportWarning).length;
-  const rows = appendRows(annotationsPath, drafts, options, reportWarning);
-  const after = readAnnotations(annotationsPath, reportWarning).length;
-  return { added: after - before, skipped: rows.length - (after - before) };
-}
-
 function draftOf(row: Annotation): AnnotationDraft {
   const { v: _v, id: _id, createdAt: _createdAt, ...draft } = row;
   return draft;
-}
-
-function countPlans(added: boolean[]): MutationCounts {
-  const count = added.filter(Boolean).length;
-  return { added: count, skipped: added.length - count };
-}
-
-function countWorkdir(plan: WorkdirAttachmentPlan | undefined): MutationCounts {
-  if (plan === undefined) return { added: 0, skipped: 0 };
-  return { added: 1, skipped: 0 };
 }
 
 function now(options: MutationOptions): string {

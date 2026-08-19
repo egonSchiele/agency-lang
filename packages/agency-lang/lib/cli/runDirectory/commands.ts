@@ -38,11 +38,13 @@ export function addRunDirectoryCommands(
 
   runs
     .command("add")
-    .description("Add statelogs, agent code, a workdir, or annotations to a run directory")
-    .argument("<dir>", "The run directory (created if missing)")
+    .description(
+      "Wrap each trace of a statelog as a run directory <dir>/<traceId>/, with its code, workdir, and annotations",
+    )
+    .argument("<dir>", "The directory to write the run directories into (created if missing)")
     .option(
       "--statelog <file>",
-      "A statelog to merge in, by trace (repeatable)",
+      "A statelog whose traces to wrap (repeatable)",
       collectRepeated,
       [],
     )
@@ -52,15 +54,14 @@ export function addRunDirectoryCommands(
       collectRepeated,
       [],
     )
-    .option("--workdir <path>", "A directory to snapshot for one trace")
-    .option("--trace <id>", "Which trace the workdir belongs to (default: the only one)")
+    .option("--workdir <path>", "A directory to snapshot as the run's workdir (one trace only)")
+    .option("--trace <id>", "Wrap only this trace (full id or unique prefix)")
     .option(
       "--annotations <file>",
       "An annotations.jsonl to import (repeatable)",
       collectRepeated,
       [],
     )
-    .option("--replace", "Replace an existing workdir snapshot for that trace")
     .action(
       (
         dir: string,
@@ -70,7 +71,6 @@ export function addRunDirectoryCommands(
           workdir?: string;
           trace?: string;
           annotations: string[];
-          replace?: boolean;
         },
       ) => {
         try {

@@ -84,7 +84,7 @@ node main(task: string) {
 
   // The run directory: one statelog holding the test's trace, plus the
   // harness's `run` row saying which test it was and how it ended.
-  const runDir = join(runsDir, "interrupt-e2e");
+  const runDir = join(runsDir, "interrupt-e2e", "interrupting");
   const rows = readFileSync(join(runDir, "annotations.jsonl"), "utf-8").trim().split("\n").map((line) => JSON.parse(line));
   const runRow = rows.find((row) => row.kind === "run");
   assert(runRow, "no run annotation in annotations.jsonl");
@@ -111,9 +111,10 @@ node main(task: string) {
   assert(started.data.code?.entry === "agent.agency", `agentStart.code.entry: ${JSON.stringify(started.data.code)}`);
   assert(/^[0-9a-f]{64}$/.test(started.data.code?.closureHash ?? ""), "agentStart.code.closureHash missing");
 
-  // The workdir snapshot and the agent's code are attached, keyed by trace and closure hash.
-  assert(existsSync(join(runDir, "workdir", runRow.traceId)), "no workdir snapshot for the trace");
-  assert(existsSync(join(runDir, "code", started.data.code.closureHash, "agent.agency")), "agent code not stored under its closure hash");
+  // The workdir snapshot and the agent's code are attached, flat.
+  assert(existsSync(join(runDir, "workdir")), "no workdir snapshot for the run");
+  assert(existsSync(join(runDir, "workdir.json")), "no workdir sidecar");
+  assert(existsSync(join(runDir, "code", "agent.agency")), "agent code not stored under code/");
 
   console.log("[eval-run-integration] PASS: interrupting agent auto-approved over IPC, verdict recorded");
 
@@ -167,12 +168,12 @@ node main(): string {
   }
   assert(cmdOutput.includes("1/1 tests ok"), `expected a fully-ok command run, got:\n${cmdOutput}`);
 
-  const cmdRunDir = join(runsDir, "cmd-e2e");
+  const cmdRunDir = join(runsDir, "cmd-e2e", "cmd-e2e");
   const cmdRows = readFileSync(join(cmdRunDir, "annotations.jsonl"), "utf-8").trim().split("\n").map((line) => JSON.parse(line));
   const cmdRunRow = cmdRows.find((row) => row.kind === "run");
   assert(cmdRunRow && cmdRunRow.ended === "ok", `command run row: ${JSON.stringify(cmdRunRow)}`);
   // argv delivery through a real CLI: the agent wrote the task text
-  const outTxt = readFileSync(join(cmdRunDir, "workdir", cmdRunRow.traceId, "out.txt"), "utf-8");
+  const outTxt = readFileSync(join(cmdRunDir, "workdir", "out.txt"), "utf-8");
   assert(outTxt === "hello from a command target", `out.txt: ${JSON.stringify(outTxt)}`);
   // the spawned agent's own events landed at the harness statelog path...
   const cmdEvents = readFileSync(join(cmdRunDir, "statelog.jsonl"), "utf-8")
@@ -204,7 +205,7 @@ node main(): string {
   } catch {
     // exit code is not the assertion; error.txt is
   }
-  const clobberRows = readFileSync(join(runsDir, "cmd-clobber", "annotations.jsonl"), "utf-8").trim().split("\n").map((line) => JSON.parse(line));
+  const clobberRows = readFileSync(join(runsDir, "cmd-clobber", "cmd-e2e", "annotations.jsonl"), "utf-8").trim().split("\n").map((line) => JSON.parse(line));
   const clobberRun = clobberRows.find((row) => row.kind === "run");
   assert(clobberRun && clobberRun.ended === "error", `clobber run row: ${JSON.stringify(clobberRun)}`);
   assert(clobberRun.error.includes("If your command passes --log, remove it"),
@@ -258,15 +259,16 @@ node main(): string {
   const capturedMatch = captureOutput.match(/Captured trace (\S+) into/);
   assert(capturedMatch, `no capture line in output:\n${captureOutput}`);
   const capturedTraceId = capturedMatch[1];
-  const capturedEvents = readFileSync(join(captureDir, "statelog.jsonl"), "utf-8")
+  const capturedRunDir = join(captureDir, capturedTraceId);
+  const capturedEvents = readFileSync(join(capturedRunDir, "statelog.jsonl"), "utf-8")
     .trim().split("\n").map((line) => JSON.parse(line));
   assert(capturedEvents.length > 0 && capturedEvents.every((e) => e.trace_id === capturedTraceId),
     "captured statelog does not hold exactly the run's trace");
   const capturedStart = capturedEvents.find((e) => e.data?.type === "agentStart");
   assert(capturedStart?.data.code?.entry === "trivial.agency", `captured code identity: ${JSON.stringify(capturedStart?.data.code)}`);
-  assert(existsSync(join(captureDir, "code", capturedStart.data.code.closureHash, "trivial.agency")), "captured code not stored");
-  assert(readFileSync(join(captureDir, "workdir", capturedTraceId, "note.txt"), "utf-8") === "in the working directory",
-    "working directory not captured under the trace id");
+  assert(existsSync(join(capturedRunDir, "code", "trivial.agency")), "captured code not stored");
+  assert(readFileSync(join(capturedRunDir, "workdir", "note.txt"), "utf-8") === "in the working directory",
+    "working directory not captured");
   console.log("[eval-run-integration] PASS: run --capture-workdir writes a run directory");
 
   // ── Scenario F: the capture destination sits INSIDE the working directory ──
@@ -280,12 +282,12 @@ node main(): string {
   );
   const inTreeMatch = inTreeOutput.match(/Captured trace (\S+) into/);
   assert(inTreeMatch, `no capture line in output:\n${inTreeOutput}`);
-  const inTreeDir = join(captureCwd, "runs", "example");
-  const inTreeWorkdir = join(inTreeDir, "workdir", inTreeMatch[1]);
+  const inTreeDir = join(captureCwd, "runs", "example", inTreeMatch[1]);
+  const inTreeWorkdir = join(inTreeDir, "workdir");
   assert(readFileSync(join(inTreeWorkdir, "note.txt"), "utf-8") === "in the working directory",
     "in-tree capture did not snapshot the working directory");
   assert(!existsSync(join(inTreeWorkdir, "runs", "example")),
-    "in-tree capture copied the run directory into itself");
+    "in-tree capture copied the group directory into itself");
   assert(existsSync(join(inTreeDir, "statelog.jsonl")), "in-tree capture wrote no statelog");
   console.log("[eval-run-integration] PASS: run --capture-workdir with a destination inside cwd");
 

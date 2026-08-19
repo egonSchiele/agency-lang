@@ -143,7 +143,7 @@ node main(task: string): string {
   // annotations.jsonl) and `agency eval grade <dir>` scores it later. This test
   // checks the run plumbing only, so no LLM call and no API key are needed.
   run(dir, "npx agency eval run eval-agent.agency --input \"Say hello\" --out eval-runs/smoke");
-  const evalRunDir = join(dir, "eval-runs", "smoke");
+  const evalRunDir = join(dir, "eval-runs", "smoke", "input-1");
   if (!existsSync(join(evalRunDir, "statelog.jsonl"))) {
     throw new Error("eval run wrote no statelog.jsonl");
   }
@@ -164,7 +164,7 @@ node main(task: string): string {
     AGENCY_LLM_MOCKS: JSON.stringify([{ return: { score: 1, reasoning: "mock judge verdict" } }]),
   };
   const gradeOutput = run(dir, "npx agency eval grade eval-runs/smoke --goal \"Say hello\" 2>&1", { env: gradeMockEnv });
-  assertIncludes(gradeOutput, "objective  1.000");
+  assertIncludes(gradeOutput, "score 1.000");
   // A folder that is not a run directory is refused with a pointer, not scored 0.
   const notRunDir = run(dir, "npx agency eval grade eval-runs 2>&1", { expectFail: true });
   assertIncludes(notRunDir, "not a run directory");
@@ -176,7 +176,7 @@ node main(task: string): string {
 
   // --- Test 6b: agency logs --csv over the run directory just written ---
   console.log("--- Test 6b: agency logs --csv ---");
-  const csvOutput = run(dir, "npx agency logs eval-runs --csv");
+  const csvOutput = run(dir, "npx agency logs eval-runs/smoke --csv");
   assertIncludes(csvOutput, "agent");
   assertIncludes(csvOutput, "run");
   console.log("Test 6b passed");

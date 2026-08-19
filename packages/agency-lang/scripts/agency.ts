@@ -65,7 +65,8 @@ import {
 import { evalGrade } from "@/cli/eval/grade.js";
 import { resolveRunStatelog } from "@/cli/eval/logs.js";
 import { evalRun, totalRunCostUsd } from "@/cli/eval/run.js";
-import { formatGrading } from "@/eval/grading/gradeBreakdown.js";
+import { formatGradeResult } from "@/cli/eval/formatGrade.js";
+import { ttyColor } from "@/utils/termcolors.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
 import { renderDiagnosticText, renderDiagnosticList } from "@/cli/explain.js";
 import { AgencyConfig, applyCliFlags, type CliFlags, redactConfigSecrets } from "@/config.js";
@@ -426,7 +427,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
         )
         .option(
           "--capture-workdir <dir>",
-          "After the run, add its trace, code and a snapshot of the working directory to this run directory (see: agency runs list)",
+          "After the run, write its trace, code and a snapshot of the working directory as the run directory <dir>/<traceId>/ (see: agency runs list)",
         )
     );
   }
@@ -843,11 +844,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
         // beside the agent, not from eval flags.
         const result = await evalRun({ agent, ...opts, config: getConfig() });
         console.log(`Run completed: ${result.okCount}/${result.tests.length} tests ok`);
+        for (const test of result.tests) {
+          if (test.status === "error") {
+            console.log(`  ${ttyColor.red(`${test.testId} error:`)} ${test.errorMessage ?? ""}`);
+          }
+        }
         const costUsd = totalRunCostUsd(result.runDir);
         if (costUsd !== undefined) {
           console.log(`total LLM cost: $${costUsd.toFixed(2)}`);
         }
-        console.log(result.runDir);
+        console.log(`runs written under ${result.runDir}`);
         console.log(`grade it with: agency eval grade ${result.runDir}`);
       },
     );
@@ -881,10 +887,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   evalCmd
     .command("grade")
-    .description("Score a finished eval run without re-running the agent")
+    .description("Score finished runs without re-running the agent")
     .argument(
-      "<runDir>",
-      "A run directory: from `agency eval run`, `agency run --capture-workdir`, or `agency runs add`",
+      "<path>",
+      "A run directory, or a directory of run directories (what `agency eval run --out` writes)",
     )
     .option("--graders <file>", "TypeScript grading module (default-exports graders)")
     .option(
@@ -892,14 +898,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "Judge every trace against this goal with the built-in LLM judge (traces whose test recorded its own goal keep it; not with --graders)",
     )
     .option("-o, --out <path>", "Also write the grading summary here as JSON")
-    .action(async (runDir: string, opts: { graders?: string; goal?: string; out?: string }) => {
-      const grading = await evalGrade(runDir, { ...opts, config: getConfig() }).catch(
+    .action(async (target: string, opts: { graders?: string; goal?: string; out?: string }) => {
+      const result = await evalGrade(target, { ...opts, config: getConfig() }).catch(
         failProjectCommand,
       );
-      for (const line of formatGrading(grading.objective, grading.perInput)) {
-        console.log(line);
-      }
-      if (!grading.gatesPassed) {
+      for (const line of formatGradeResult(result)) console.log(line);
+      if (!result.gatesPassed) {
         process.exit(2);
       }
     });

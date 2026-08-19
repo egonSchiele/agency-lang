@@ -416,21 +416,24 @@ function checkRunDirectory() {
   assert(existsSync(join(rdDir, "hello.jsonl")), "run --log-file wrote no statelog");
 
   const first = runCleanAgency(rdDir, ["runs", "add", "runs/hello", "--statelog", "hello.jsonl"], "runs add");
-  assertIncludes(stripAnsi(first.stdout), "Added 1 trace(s)");
-  const statelogPath = join(rdDir, "runs", "hello", "statelog.jsonl");
-  const annotationsPath = join(rdDir, "runs", "hello", "annotations.jsonl");
+  const written = stripAnsi(first.stdout).match(/wrote (\S+)/);
+  assert(written, `runs add reported no written directory:\n${first.stdout}`);
+  const runDir = written[1];
+  const statelogPath = join(runDir, "statelog.jsonl");
+  const annotationsPath = join(runDir, "annotations.jsonl");
   assert(existsSync(statelogPath), "runs add wrote no statelog.jsonl");
   const traces = readJsonLines(statelogPath);
   assert(traces.length > 0, "statelog.jsonl is empty");
   const traceId = traces[0].trace_id;
+  assert(runDir.endsWith(traceId), `run directory ${runDir} is not named for trace ${traceId}`);
 
-  // Re-adding the same statelog is idempotent: nothing new, bytes unchanged.
+  // Re-adding the same statelog skips the existing child: bytes unchanged.
   const statelogBefore = readFileSync(statelogPath);
   const second = runCleanAgency(rdDir, ["runs", "add", "runs/hello", "--statelog", "hello.jsonl"], "runs add re-run");
-  assertIncludes(stripAnsi(second.stdout), "already present");
+  assertIncludes(stripAnsi(second.stdout), "already exists");
   assert(readFileSync(statelogPath).equals(statelogBefore), "statelog.jsonl bytes changed on re-add");
 
-  const noted = runCleanAgency(rdDir, ["note", "runs/hello", "wanted a greeting", "--annotator", "tier2"], "note");
+  const noted = runCleanAgency(rdDir, ["note", runDir, "wanted a greeting", "--annotator", "tier2"], "note");
   assertIncludes(stripAnsi(noted.stdout), `Noted on trace ${traceId}`);
   const notes = readJsonLines(annotationsPath).filter((row) => row.kind === "note");
   assert(notes.length === 1, `expected 1 note annotation, got ${notes.length}`);
@@ -438,7 +441,7 @@ function checkRunDirectory() {
   assert(notes[0].text === "wanted a greeting", `note text was ${JSON.stringify(notes[0].text)}`);
 
   // `runs list` is one table row per trace; the NOTES column counts them.
-  const listed = runCleanAgency(rdDir, ["runs", "list", "runs/hello"], "runs list");
+  const listed = runCleanAgency(rdDir, ["runs", "list", runDir], "runs list");
   const listRows = stripAnsi(listed.stdout).trim().split("\n");
   assertIncludes(listRows[0], "NOTES");
   const traceRow = listRows.find((row) => row.startsWith(traceId.slice(0, 8)));

@@ -177,7 +177,7 @@ function entryFor(snapshot: RunDirectorySnapshot, trace: Trace): Entry {
   const test = testOf(runRow, trace.traceId);
   const record: EvalRecord = evalRecordFor(trace, snapshot.dir);
   const outputs = record.evalOutputs ?? [];
-  const workdir = path.join(runDirPaths(snapshot.dir).workdirDir, trace.traceId);
+  const workdir = runDirPaths(snapshot.dir).workdirDir;
   const run: LoadedRun = {
     output: outputs.length === 0 ? null : (outputs[outputs.length - 1].value as Json),
     traceId: trace.traceId,

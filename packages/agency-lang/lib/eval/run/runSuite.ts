@@ -40,8 +40,8 @@ export type RunSuiteOptions = {
    *  resolveEvalTarget, including the {task}-placeholder check. */
   agent: string | EvalTarget;
   inputs: Test[];
-  /** The directory to write the run into. Must not exist yet. Default:
-   *  `<eval.runsDir or runs>/<timestamp>-<random suffix>`. */
+  /** The group directory; each test's run directory is written at
+   *  `<out>/<testId>/`. Default: `<eval.runsDir or runs>/<timestamp>-<random suffix>`. */
   out?: string;
   /** Default true. */
   config?: AgencyConfig;
@@ -62,11 +62,12 @@ export type RunSuiteOptions = {
 export type RunSuiteDeps = { runner?: EvalInputRunner };
 
 /**
- * Run an agent against a loaded suite and write ONE run directory: every
- * test's trace in `statelog.jsonl`, its workdir under `workdir/<traceId>/`,
- * the agent's code under `code/<closureHash>/`, and one `run` annotation per
- * test saying which test it was and how it ended. Executes only — grading is
- * a separate pass over the finished directory (docs/dev/eval-grading.md).
+ * Run an agent against a loaded suite and write one run directory per test
+ * at `<out>/<testId>/`: the test's trace in `statelog.jsonl`, its workdir
+ * under `workdir/`, the agent's code under `code/`, and one `run` annotation
+ * saying which test it was and how it ended. A test whose directory already
+ * exists is an error result; the others still run. Executes only — grading is
+ * a separate pass over the finished directories (docs/dev/eval-grading.md).
  */
 export async function runSuite(
   opts: RunSuiteOptions,
@@ -79,15 +80,9 @@ export async function runSuite(
   // per-test run failure.
   assertTargetMatchesInputs(target, opts.inputs);
 
-  const runDir = path.resolve(
-    opts.out ?? path.join(opts.config?.eval?.runsDir ?? "runs", defaultRunDirName()),
+  const groupDir = path.resolve(
+    opts.out ?? path.join(opts.config?.eval?.runsDir ?? "runs", defaultGroupName()),
   );
-  if (fs.existsSync(runDir)) {
-    throw new Error(
-      `Run directory already exists: ${runDir}\nChoose a different --out directory or delete the existing one.`,
-    );
-  }
-  const stagingParent = path.join(path.dirname(runDir), ".staging");
   const config = opts.config ?? {};
   const perRun = opts.perRun ?? {};
 
@@ -97,17 +92,16 @@ export async function runSuite(
   const defaultSeed =
     target.kind === "file" ? (perRun.seed ?? seedFromAgentFile(target.agentFile)) : undefined;
 
-  // Each test runs in its own staging directory OUTSIDE the run directory and
-  // is folded in when it finishes; the staging root lives beside the run
-  // directory so the fold never crosses filesystems.
-  const stagingRoot = path.join(stagingParent, path.basename(runDir));
+  // Each test runs in its own staging directory inside the group and its run
+  // directory is assembled there too, then renamed into place: a child appears
+  // whole or not at all, and the rename never crosses filesystems.
+  const stagingRoot = path.join(groupDir, ".staging");
   fs.mkdirSync(stagingRoot, { recursive: true });
-  fs.mkdirSync(runDir, { recursive: true });
 
   // Up front, not just at the end: a long run's evidence (statelogs, the
   // live `eval logs -f` view) lives here while it is still running.
   const progress = opts.progress ?? true;
-  if (progress) console.error(`run dir: ${runDir}`);
+  if (progress) console.error(`run dir: ${groupDir}`);
 
   // Ctrl-C mid-suite must still produce a run directory the toolchain can
   // read: the in-flight test finishes as an error result (the runner kills
@@ -143,6 +137,21 @@ export async function runSuite(
   ): Promise<SuiteTestResult> => {
     const testId = test.id ?? "";
     const traceId = nanoid();
+    const runDir = path.join(groupDir, testId);
+    const idProblem = testIdProblem(testId, groupDir, runDir);
+    if (idProblem !== undefined) {
+      return { testId, traceId, runDir, status: "error", errorMessage: idProblem };
+    }
+    if (fs.existsSync(runDir)) {
+      // Someone's data; not ours to touch. (Resume is deliberately not here.)
+      return {
+        testId,
+        traceId,
+        runDir,
+        status: "error",
+        errorMessage: `run directory already exists: ${runDir}`,
+      };
+    }
     const stagingDir = path.join(stagingRoot, testId);
     onStarted?.(agentRunPaths(stagingDir).statelogPath);
     try {
@@ -161,10 +170,22 @@ export async function runSuite(
         },
         { runner: deps.runner },
       );
-      foldIntoRunDirectory({ runDir, test, traceId, run, harness, suite: opts.suite, flags });
+      const assembled = path.join(stagingRoot, `${testId}.rundir`);
+      fs.rmSync(assembled, { recursive: true, force: true });
+      foldIntoRunDirectory({
+        runDir: assembled,
+        test,
+        traceId,
+        run,
+        harness,
+        suite: opts.suite,
+        flags,
+      });
+      fs.renameSync(assembled, runDir);
       return {
         testId,
         traceId,
+        runDir,
         status: run.status,
         errorMessage: run.status === "error" ? run.errorMessage : undefined,
       };
@@ -214,12 +235,11 @@ export async function runSuite(
     }
   } finally {
     process.removeListener("SIGINT", onSigint);
-    safeDeleteDirectoryWithin(stagingParent, stagingRoot);
-    removeIfEmpty(stagingParent);
+    removeIfEmpty(stagingRoot);
   }
 
   return {
-    runDir,
+    runDir: groupDir,
     agentLabel: target.label,
     tests: results,
     okCount: results.filter((result) => result.status === "success").length,
@@ -227,11 +247,12 @@ export async function runSuite(
   };
 }
 
-/** Fold one finished run into the run directory: its trace, its workdir, the
- *  agent's code, and the `run` row. A run that never wrote a statelog still
- *  gets its `run` row (keyed by the trace id the harness minted), so a
- *  failure is recorded rather than lost; it gets no workdir, because a
- *  workdir needs a trace to hang off. */
+/** Assemble one finished run's directory: its trace, its workdir, the agent's
+ *  code, and the `run` row. A run that never wrote a statelog still gets its
+ *  `run` row (keyed by the trace id the harness minted) and an empty
+ *  `statelog.jsonl`, so a failure is recorded rather than lost and the
+ *  directory is still a run directory; it gets no workdir, because a workdir
+ *  needs a trace to hang off. */
 function foldIntoRunDirectory(args: {
   runDir: string;
   test: Test;
@@ -242,7 +263,9 @@ function foldIntoRunDirectory(args: {
   flags: Record<string, string | number | boolean>;
 }): void {
   const { run } = args;
+  fs.mkdirSync(args.runDir, { recursive: true });
   const staged = run.statelogPath === null ? [] : readTraces(run.statelogPath).traces;
+  if (staged.length === 0) fs.writeFileSync(path.join(args.runDir, "statelog.jsonl"), "");
   const trace = staged.find((entry) => entry.traceId === args.traceId);
   const traceRecorded = trace !== undefined;
   // Attach the seeded code only when the trace itself recorded that closure
@@ -258,10 +281,7 @@ function foldIntoRunDirectory(args: {
     dir: args.runDir,
     stagedStatelogFile: run.statelogPath === null ? undefined : run.statelogPath,
     codeEntry,
-    workdir:
-      traceRecorded && fs.existsSync(run.workdir)
-        ? { traceId: args.traceId, sourceDir: run.workdir }
-        : undefined,
+    workdir: traceRecorded && fs.existsSync(run.workdir) ? { sourceDir: run.workdir } : undefined,
     run: {
       traceId: args.traceId,
       annotator: args.harness,
@@ -360,10 +380,22 @@ async function runPool(args: {
   return slots.filter((entry): entry is SuiteTestResult => entry !== undefined);
 }
 
-/** Default run directory name: local-time timestamp then a short random
+/** A test id is a directory name under the group: it must be non-empty and
+ *  resolve to a direct child (no separators, no `..`, not `.staging`). Suite
+ *  loaders already restrict ids, but `runSuite` is also called directly. */
+function testIdProblem(testId: string, groupDir: string, runDir: string): string | undefined {
+  if (testId === "") return "test has no id; a run directory needs a name";
+  if (path.dirname(path.resolve(runDir)) !== groupDir || path.basename(runDir) !== testId) {
+    return `test id "${testId}" is not a valid directory name under ${groupDir}`;
+  }
+  if (testId === ".staging") return `test id ".staging" is reserved`;
+  return undefined;
+}
+
+/** Default group directory name: local-time timestamp then a short random
  *  suffix, so runs/ lists in creation order. An explicit --out is resolved to
- *  an absolute path and used as the run directory. */
-function defaultRunDirName(): string {
+ *  an absolute path and used as the group directory. */
+function defaultGroupName(): string {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   const stamp =
@@ -372,8 +404,8 @@ function defaultRunDirName(): string {
   return `${stamp}-${nanoid(6)}`;
 }
 
-/** The staging root is shared by concurrent suites in one runs dir; only the
- *  last one out removes it. */
+/** The staging root is shared by concurrent suites writing one group; only
+ *  the last one out removes it. */
 function removeIfEmpty(dir: string): void {
   try {
     fs.rmdirSync(dir);

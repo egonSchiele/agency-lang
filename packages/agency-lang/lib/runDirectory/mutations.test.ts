@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { computeCodeIdentity } from "./codeIdentity.js";
 import {
-  addToRunDirectory,
+  wrapTracesAsRunDirectories,
   recordCompletedRun,
   recordGradingPass,
   recordNote,
@@ -24,6 +24,16 @@ function statelogFile(...lines: string[]): string {
   return file;
 }
 
+/** A run directory written by hand; the reader still accepts several traces. */
+function directoryWithTraces(...traceIds: string[]): string {
+  const dir = tempDir();
+  fs.writeFileSync(
+    runDirPaths(dir).statelog,
+    traceIds.map((id) => agentStartLine(id)).join("\n") + "\n",
+  );
+  return dir;
+}
+
 function scoreDraft(traceId: string, name: string, value: number): ScoreDraft {
   return {
     traceId,
@@ -35,90 +45,183 @@ function scoreDraft(traceId: string, name: string, value: number): ScoreDraft {
   };
 }
 
-describe("addToRunDirectory", () => {
-  it("adds statelogs, code, workdir and annotations in one request", () => {
+describe("wrapTracesAsRunDirectories", () => {
+  it("writes one run directory per trace, with code where it matches, and skips existing children", () => {
     const project = writeProject({ "main.agency": "node main() { return 1 }\n" });
     const entry = path.join(project, "main.agency");
     const identity = computeCodeIdentity(entry);
-    const dir = tempDir();
-    const log = statelogFile(agentStartLine("t1", identity), statelogLine("t1", "agentEnd"));
-    const workdir = writeProject({ "out.txt": "done" });
+    const group = tempDir();
+    const log = statelogFile(
+      agentStartLine("t1", identity),
+      statelogLine("t1", "agentEnd"),
+      agentStartLine("t2"),
+      agentStartLine("t3"),
+    );
 
-    const result = addToRunDirectory({
-      dir,
-      statelogFiles: [log],
-      codeEntries: [entry],
-      workdir: { traceId: "t1", sourceDir: workdir },
-      annotationFiles: [],
-    });
-    expect(result.statelogs).toEqual({ added: 1, skipped: 0 });
-    expect(result.code).toEqual({ added: 1, skipped: 0 });
-    expect(result.workdirs).toEqual({ added: 1, skipped: 0 });
-    expect(result.snapshot.traces.map((trace) => trace.traceId)).toEqual(["t1"]);
-    const paths = runDirPaths(dir);
-    expect(fs.existsSync(path.join(paths.codeDir, identity.closureHash, "main.agency"))).toBe(true);
-    expect(fs.existsSync(path.join(paths.workdirDir, "t1", "out.txt"))).toBe(true);
-    expect(fs.existsSync(paths.lock)).toBe(false);
-
-    const again = addToRunDirectory({
-      dir,
+    const result = wrapTracesAsRunDirectories({
+      groupDir: group,
       statelogFiles: [log],
       codeEntries: [entry],
       annotationFiles: [],
     });
-    expect(again.statelogs).toEqual({ added: 0, skipped: 1 });
-    expect(again.code).toEqual({ added: 0, skipped: 1 });
+    expect(result.written).toEqual(["t1", "t2", "t3"].map((id) => path.join(group, id)));
+    expect(result.skipped).toEqual([]);
+    const t1 = runDirPaths(path.join(group, "t1"));
+    expect(readRunDirectory(t1.dir, quiet).traces.map((trace) => trace.traceId)).toEqual(["t1"]);
+    expect(fs.existsSync(path.join(t1.codeDir, "main.agency"))).toBe(true);
+    expect(fs.existsSync(runDirPaths(path.join(group, "t2")).codeDir)).toBe(false);
+    expect(fs.existsSync(t1.lock)).toBe(false);
+    expect(fs.existsSync(path.join(group, ".staging"))).toBe(false);
+
+    const again = wrapTracesAsRunDirectories({
+      groupDir: group,
+      statelogFiles: [log],
+      codeEntries: [],
+      annotationFiles: [],
+    });
+    expect(again.written).toEqual([]);
+    expect(again.skipped.map((skip) => skip.traceId)).toEqual(["t1", "t2", "t3"]);
   });
 
-  it("leaves every target byte-identical when any statelog conflicts", () => {
-    const dir = tempDir();
-    const first = statelogFile(agentStartLine("t1"));
-    addToRunDirectory({ dir, statelogFiles: [first], codeEntries: [], annotationFiles: [] });
-    const paths = runDirPaths(dir);
-    const before = fs.readFileSync(paths.statelog, "utf8");
+  it("--trace picks one; a workdir needs one trace; a conflicting id writes nothing", () => {
+    const group = tempDir();
+    const log = statelogFile(agentStartLine("t1"), agentStartLine("t2"));
+    const workdir = writeProject({ "out.txt": "done" });
+    expect(() =>
+      wrapTracesAsRunDirectories({
+        groupDir: group,
+        statelogFiles: [log],
+        codeEntries: [],
+        workdir: { sourceDir: workdir },
+        annotationFiles: [],
+      }),
+    ).toThrow(/--trace/);
+    const one = wrapTracesAsRunDirectories({
+      groupDir: group,
+      statelogFiles: [log],
+      trace: "t2",
+      codeEntries: [],
+      workdir: { sourceDir: workdir },
+      annotationFiles: [],
+    });
+    expect(one.written).toEqual([path.join(group, "t2")]);
+    const t2 = runDirPaths(path.join(group, "t2"));
+    expect(fs.existsSync(path.join(t2.workdirDir, "out.txt"))).toBe(true);
+    expect(fs.existsSync(t2.workdirSidecar)).toBe(true);
 
-    const fresh = statelogFile(agentStartLine("t2"));
     const conflicting = statelogFile(statelogLine("t1", "agentStart", { changed: true }));
     expect(() =>
-      addToRunDirectory({
-        dir,
-        statelogFiles: [fresh, conflicting],
+      wrapTracesAsRunDirectories({
+        groupDir: group,
+        statelogFiles: [log, conflicting],
         codeEntries: [],
         annotationFiles: [],
       }),
     ).toThrow(/t1/);
-    expect(fs.readFileSync(paths.statelog, "utf8")).toBe(before);
-    expect(fs.existsSync(paths.lock)).toBe(false);
+    expect(fs.existsSync(path.join(group, "t1"))).toBe(false);
   });
 
-  it("imports annotation rows idempotently", () => {
-    const dir = tempDir();
-    addToRunDirectory({
-      dir,
+  it("--trace that matches nothing or several is an error; an id that would escape the group is refused", () => {
+    const group = tempDir();
+    const log = statelogFile(agentStartLine("abc-1"), agentStartLine("abc-2"));
+    const request = { groupDir: group, statelogFiles: [log], codeEntries: [], annotationFiles: [] };
+    expect(() => wrapTracesAsRunDirectories({ ...request, trace: "zzz" })).toThrow(/No trace/);
+    expect(() => wrapTracesAsRunDirectories({ ...request, trace: "abc" })).toThrow(/ambiguous/);
+    // A unique prefix is enough.
+    expect(wrapTracesAsRunDirectories({ ...request, trace: "abc-2" }).written).toEqual([
+      path.join(group, "abc-2"),
+    ]);
+
+    const escaping = tempDir();
+    expect(() =>
+      wrapTracesAsRunDirectories({
+        groupDir: escaping,
+        statelogFiles: [statelogFile(agentStartLine("../escaped"))],
+        codeEntries: [],
+        annotationFiles: [],
+      }),
+    ).toThrow(/outside/);
+    expect(fs.existsSync(path.join(escaping, "..", "escaped"))).toBe(false);
+
+    expect(() =>
+      wrapTracesAsRunDirectories({
+        groupDir: escaping,
+        statelogFiles: [statelogFile(agentStartLine(".staging"))],
+        codeEntries: [],
+        annotationFiles: [],
+      }),
+    ).toThrow(/reserved/);
+  });
+
+  it("validates every child path before publishing any run directory", () => {
+    const group = tempDir();
+
+    expect(() =>
+      wrapTracesAsRunDirectories({
+        groupDir: group,
+        statelogFiles: [statelogFile(agentStartLine("valid"), agentStartLine("../escaped"))],
+        codeEntries: [],
+        annotationFiles: [],
+      }),
+    ).toThrow(/outside/);
+
+    expect(fs.existsSync(path.join(group, "valid"))).toBe(false);
+  });
+
+  it("removes staging when assembling a run directory fails", () => {
+    const group = tempDir();
+
+    expect(() =>
+      wrapTracesAsRunDirectories({
+        groupDir: group,
+        statelogFiles: [statelogFile(agentStartLine("t1"))],
+        codeEntries: [],
+        workdir: { sourceDir: path.join(group, "missing") },
+        annotationFiles: [],
+      }),
+    ).toThrow(/not a directory/);
+
+    expect(fs.existsSync(path.join(group, ".staging"))).toBe(false);
+    expect(fs.existsSync(path.join(group, "t1"))).toBe(false);
+  });
+
+  it("routes annotation rows to the child their trace names, idempotently, and refuses orphans", () => {
+    const source = tempDir();
+    wrapTracesAsRunDirectories({
+      groupDir: source,
       statelogFiles: [statelogFile(agentStartLine("t1"))],
       codeEntries: [],
       annotationFiles: [],
     });
-    recordNote({ dir, traceId: "t1", annotator: human, text: "slow" });
+    const sourceRun = path.join(source, "t1");
+    recordNote({ dir: sourceRun, traceId: "t1", annotator: human, text: "slow" });
+    const rows = runDirPaths(sourceRun).annotations;
+
+    const group = tempDir();
+    wrapTracesAsRunDirectories({
+      groupDir: group,
+      statelogFiles: [statelogFile(agentStartLine("t1"), agentStartLine("t2"))],
+      codeEntries: [],
+      annotationFiles: [rows, rows],
+    });
+    expect(readRunDirectory(path.join(group, "t1"), quiet).annotationRows).toHaveLength(1);
+    expect(readRunDirectory(path.join(group, "t2"), quiet).annotationRows).toHaveLength(0);
+
     const other = tempDir();
-    addToRunDirectory({
-      dir: other,
-      statelogFiles: [statelogFile(agentStartLine("t1"))],
-      codeEntries: [],
-      annotationFiles: [],
-    });
-    const imported = addToRunDirectory({
-      dir: other,
-      statelogFiles: [],
-      codeEntries: [],
-      annotationFiles: [runDirPaths(dir).annotations, runDirPaths(dir).annotations],
-    });
-    expect(imported.annotations).toEqual({ added: 1, skipped: 1 });
+    expect(() =>
+      wrapTracesAsRunDirectories({
+        groupDir: other,
+        statelogFiles: [statelogFile(agentStartLine("t9"))],
+        codeEntries: [],
+        annotationFiles: [rows],
+      }),
+    ).toThrow(/t1/);
+    expect(fs.existsSync(path.join(other, "t9"))).toBe(false);
   });
 });
 
 describe("recordCompletedRun", () => {
-  it("merges the staged statelog, attaches code and workdir, and appends the run row", () => {
+  it("writes the staged statelog, attaches code and workdir, and appends the run row", () => {
     const project = writeProject({ "main.agency": "node main() { return 1 }\n" });
     const entry = path.join(project, "main.agency");
     const dir = tempDir();
@@ -131,7 +234,7 @@ describe("recordCompletedRun", () => {
       dir,
       stagedStatelogFile: staged,
       codeEntry: entry,
-      workdir: { traceId: "t1", sourceDir: workdir },
+      workdir: { sourceDir: workdir },
       run: {
         traceId: "t1",
         annotator: { kind: "harness", id: "eval@test" },
@@ -146,7 +249,8 @@ describe("recordCompletedRun", () => {
     });
     expect(result.annotation.kind).toBe("run");
     expect(result.snapshot.effectiveAnnotations.t1.run?.id).toBe(result.annotation.id);
-    expect(fs.existsSync(path.join(runDirPaths(dir).workdirDir, "t1", "out.txt"))).toBe(true);
+    expect(fs.existsSync(path.join(runDirPaths(dir).workdirDir, "out.txt"))).toBe(true);
+    expect(fs.existsSync(path.join(runDirPaths(dir).codeDir, "main.agency"))).toBe(true);
     expect(fs.existsSync(runDirPaths(dir).lock)).toBe(false);
   });
 });
@@ -192,22 +296,22 @@ describe("recordCompletedRun preflight", () => {
       recordCompletedRun({ dir, stagedStatelogFile: staged, run: { traceId: "t1", ...run } }),
     ).toThrow(/could not be parsed/);
     expect(fs.existsSync(runDirPaths(dir).statelog)).toBe(false);
+    const group = tempDir();
     expect(() =>
-      addToRunDirectory({ dir, statelogFiles: [staged], codeEntries: [], annotationFiles: [] }),
+      wrapTracesAsRunDirectories({
+        groupDir: group,
+        statelogFiles: [staged],
+        codeEntries: [],
+        annotationFiles: [],
+      }),
     ).toThrow(/could not be parsed/);
-    expect(fs.existsSync(runDirPaths(dir).statelog)).toBe(false);
+    expect(fs.existsSync(path.join(group, "t1"))).toBe(false);
   });
 });
 
 describe("recordNote", () => {
   it("is idempotent and refuses an unknown trace", () => {
-    const dir = tempDir();
-    addToRunDirectory({
-      dir,
-      statelogFiles: [statelogFile(agentStartLine("t1"))],
-      codeEntries: [],
-      annotationFiles: [],
-    });
+    const dir = directoryWithTraces("t1");
     const first = recordNote({ dir, traceId: "t1", annotator: human, text: "slow" });
     const second = recordNote({ dir, traceId: "t1", annotator: human, text: "slow" });
     expect(second.id).toBe(first.id);
@@ -220,14 +324,7 @@ describe("recordNote", () => {
 
 describe("recordGradingPass", () => {
   function directory(): string {
-    const dir = tempDir();
-    addToRunDirectory({
-      dir,
-      statelogFiles: [statelogFile(agentStartLine("t1"), agentStartLine("t2"))],
-      codeEntries: [],
-      annotationFiles: [],
-    });
-    return dir;
+    return directoryWithTraces("t1", "t2");
   }
 
   it("records a complete pass that becomes effective; a second pass supersedes it", () => {
@@ -292,13 +389,7 @@ describe("recordGradingPass", () => {
 
 describe("torn-tail repair", () => {
   it("truncates a partial final line before appending", () => {
-    const dir = tempDir();
-    addToRunDirectory({
-      dir,
-      statelogFiles: [statelogFile(agentStartLine("t1"))],
-      codeEntries: [],
-      annotationFiles: [],
-    });
+    const dir = directoryWithTraces("t1");
     const paths = runDirPaths(dir);
     fs.appendFileSync(paths.annotations, '{"v":1,"id":"ann_torn');
     fs.appendFileSync(paths.statelog, '{"trace_id":"half');

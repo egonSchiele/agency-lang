@@ -1,11 +1,9 @@
 import * as fs from "fs";
-import * as path from "path";
 
 import type { AgencyConfig } from "@/config.js";
 import { gradeSuite } from "@/eval/grading/gradeSuite.js";
 import type { EvalRunGrading } from "@/eval/runTypes.js";
-
-import { runDirPaths } from "@/runDirectory/runDir.js";
+import { findRunDirectories } from "@/runDirectory/findRuns.js";
 
 import { goalJudgeGraders, resolveGraders } from "./graders.js";
 
@@ -22,24 +20,27 @@ export type EvalGradeOptions = {
   config?: AgencyConfig;
 };
 
+/** One graded run directory and the mean over them all. */
+export type EvalGradeResult = {
+  runs: { dir: string; grading: EvalRunGrading }[];
+  /** Mean objective over the runs graded. */
+  mean: number;
+  /** Every run passed its gates. */
+  gatesPassed: boolean;
+};
+
 /** The command's own preconditions, checked before anything loads: the two
- *  ways of saying "judge against this" are exclusive, and the target must be
- *  a run directory (a bare statelog copied into a folder is the common miss). */
-export function validateGradeTarget(runDir: string, opts: EvalGradeOptions): void {
+ *  ways of saying "judge against this" are exclusive, and the target must
+ *  hold run directories (a bare statelog copied into a folder is the common
+ *  miss). Returns the run directories found. */
+export function validateGradeTarget(target: string, opts: EvalGradeOptions): string[] {
   if (opts.graders !== undefined && opts.goal !== undefined) {
     throw new Error(
       "Provide only one of --graders or --goal: a grading module carries its own criteria " +
         "(give LlmJudge a goal there instead).",
     );
   }
-  const statelog = runDirPaths(runDir).statelog;
-  if (!fs.existsSync(statelog)) {
-    throw new Error(
-      `${runDir} is not a run directory: no ${path.basename(statelog)} in it. Build one with ` +
-        `\`agency runs add ${runDir} --statelog <file>\` or run the agent with ` +
-        `\`agency run --capture-workdir ${runDir} <file.agency>\`.`,
-    );
-  }
+  return findRunDirectories([target]);
 }
 
 /** The grader set `eval grade` runs with; see `resolveGraders` for the precedence. */
@@ -49,14 +50,14 @@ export async function gradersFor(opts: EvalGradeOptions, config: AgencyConfig) {
 }
 
 /**
- * Score a run directory. Never re-executes the agent. Every pass appends
- * `score` annotations to the directory — a re-grade sits beside the earlier
- * ones, never over them — and prints the objective.
+ * Score a run directory, or every run directory in a group. Never re-executes
+ * the agent. Each run gets its own grading pass, appended to ITS
+ * `annotations.jsonl` — a re-grade sits beside the earlier ones, never over
+ * them.
  */
-export async function evalGrade(runDir: string, opts: EvalGradeOptions): Promise<EvalRunGrading> {
+export async function evalGrade(target: string, opts: EvalGradeOptions): Promise<EvalGradeResult> {
   const config = opts.config ?? {};
-  const resolvedRunDir = path.resolve(runDir);
-  validateGradeTarget(resolvedRunDir, opts);
+  const runDirs = validateGradeTarget(target, opts);
   // `grade` is undefined here: there is no point running this command with
   // grading switched off, so the same resolver's default path applies. An
   // explicit --graders overrides every test's recorded graders; otherwise
@@ -70,12 +71,19 @@ export async function evalGrade(runDir: string, opts: EvalGradeOptions): Promise
     throw new Error(`The grading module at ${opts.graders} exported no graders.`);
   }
 
-  const { grading } = await gradeSuite(resolvedRunDir, graders, config, {
-    defaultGoal: opts.goal,
-  });
+  const runs: EvalGradeResult["runs"] = [];
+  for (const dir of runDirs) {
+    const { grading } = await gradeSuite(dir, graders, config, { defaultGoal: opts.goal });
+    runs.push({ dir, grading });
+  }
+  const result: EvalGradeResult = {
+    runs,
+    mean: runs.reduce((sum, run) => sum + run.grading.objective, 0) / runs.length,
+    gatesPassed: runs.every((run) => run.grading.gatesPassed),
+  };
 
   if (opts.out !== undefined) {
-    fs.writeFileSync(opts.out, JSON.stringify(grading, null, 2));
+    fs.writeFileSync(opts.out, JSON.stringify(result, null, 2));
   }
-  return grading;
+  return result;
 }

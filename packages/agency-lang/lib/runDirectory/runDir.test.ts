@@ -60,7 +60,12 @@ describe("readRunDirectory", () => {
     expect(snapshot.hasStatelog).toBe(true);
     expect(snapshot.traces.map((trace) => trace.traceId)).toEqual(["t1"]);
     expect(snapshot.annotationRows).toEqual([score]);
-    expect(Object.keys(snapshot.effectiveAnnotations.t1)).toEqual(["scores", "gradingPasses", "checklists", "run"]);
+    expect(Object.keys(snapshot.effectiveAnnotations.t1)).toEqual([
+      "scores",
+      "gradingPasses",
+      "checklists",
+      "run",
+    ]);
   });
 
   describe("notes.md", () => {

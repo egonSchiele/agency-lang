@@ -9,11 +9,18 @@ export default [
 
   grader(
     async ({ judge, record }) =>
-      (await judge({ goal: `lists news headlines from ${runDate(record)}, not from an earlier or later date` })).score,
+      (
+        await judge({
+          goal: `lists news headlines from ${runDate(record)}, not from an earlier or later date`,
+        })
+      ).score,
     { name: "is-today" },
   ),
 
-  grader(async ({ judge }) => (await judge({ goal: "returns a list of top news headlines" })).score, {
-    name: "headlines",
-  }),
+  grader(
+    async ({ judge }) => (await judge({ goal: "returns a list of top news headlines" })).score,
+    {
+      name: "headlines",
+    },
+  ),
 ];

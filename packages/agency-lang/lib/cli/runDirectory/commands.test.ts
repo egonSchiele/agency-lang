@@ -41,8 +41,8 @@ function writeGroup(): { group: string; a: string; b: string } {
   const a = path.join(group, "a");
   const b = path.join(group, "b");
   const agentLabel = "/abs/agents/greeter.agency:main";
-  writeRunDirectory([{ traceId: "ta", test: { id: "a", input: "t" }, output: "x", agentLabel }], a);
-  writeRunDirectory([{ traceId: "tb", test: { id: "b", input: "t" }, output: "y", agentLabel }], b);
+  writeRunDirectory({ traceId: "ta", test: { id: "a", input: "t" }, output: "x", agentLabel }, a);
+  writeRunDirectory({ traceId: "tb", test: { id: "b", input: "t" }, output: "y", agentLabel }, b);
   return { group, a, b };
 }
 
@@ -234,7 +234,7 @@ describe("runs list over groups", () => {
       ],
     });
     writeRunDirectory(
-      [{ test: { id: "c", input: "t" }, wroteStatelog: false, ended: "error" }],
+      { test: { id: "c", input: "t" }, wroteStatelog: false, ended: "error" },
       path.join(group, "c"),
     );
     const listed: string[] = [];
@@ -246,7 +246,7 @@ describe("runs list over groups", () => {
   it("a group of only silent runs prints no table, just the footer", () => {
     const group = tempDir("group-");
     writeRunDirectory(
-      [{ test: { id: "c", input: "t" }, wroteStatelog: false, ended: "error" }],
+      { test: { id: "c", input: "t" }, wroteStatelog: false, ended: "error" },
       path.join(group, "c"),
     );
     const listed: string[] = [];

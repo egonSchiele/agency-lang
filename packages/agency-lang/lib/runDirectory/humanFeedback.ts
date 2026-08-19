@@ -1,3 +1,5 @@
+import * as path from "path";
+
 import { readCurrentPointer, readRevision } from "@/eval/label/checklist.js";
 import type { ChecklistRevision } from "@/eval/label/types.js";
 
@@ -32,7 +34,7 @@ export function humanFeedbackFor(snapshot: RunDirectorySnapshot, traceId: string
   const revisions: Record<string, ChecklistRevision | null> = Object.create(null);
   for (const [key, judgement] of Object.entries(effective.checklists)) {
     const checklistId = key.slice(0, key.indexOf(":"));
-    revisions[checklistId] ??= newestRevision(snapshot.dir, checklistId);
+    revisions[checklistId] ??= newestRevision(path.dirname(snapshot.dir), checklistId);
     const revision = revisions[checklistId];
     if (revision === null) continue;
     for (const question of revision.questions) {
@@ -46,9 +48,10 @@ export function humanFeedbackFor(snapshot: RunDirectorySnapshot, traceId: string
 }
 
 /** Question ids are allocated once and their text never changes, so the newest
- *  revision names every question any row could have answered. A directory that
- *  carries checklist rows but no lineage (rows merged in from elsewhere) yields
- *  no texts; a lineage that is present but broken throws, as it does everywhere. */
+ *  revision names every question any row could have answered. The lineage
+ *  lives in the run's group (its parent directory); a run copied out of its
+ *  group keeps its rows but yields no texts; a lineage that is present but
+ *  broken throws, as it does everywhere. */
 function newestRevision(dir: string, checklistId: string): ChecklistRevision | null {
   const pointer = readCurrentPointer(dir, checklistId);
   return pointer === undefined ? null : readRevision(dir, checklistId, pointer.version);

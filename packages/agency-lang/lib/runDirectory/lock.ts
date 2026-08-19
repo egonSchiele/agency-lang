@@ -37,8 +37,29 @@ export type RunDirLock = {
  * corrupted data, so an abandoned lock is reported and left for a person.
  */
 export function acquireRunDirLock(args: AcquireRunDirLockArgs): RunDirLock {
-  fs.mkdirSync(args.dir, { recursive: true });
-  const lockFile = path.join(args.dir, LOCK_BASENAME);
+  return acquireOwnedFileLock({
+    lockFile: path.join(args.dir, LOCK_BASENAME),
+    reportWarning: args.reportWarning,
+  });
+}
+
+export type AcquireOwnedFileLockArgs = {
+  lockFile: string;
+  reportWarning(message: string): void;
+};
+
+export type OwnedFileLock = RunDirLock;
+
+/**
+ * @internal Acquire exactly `lockFile` (created `wx`, so an existing file is
+ * another holder); release removes only that same file, after proving the
+ * ownership token inside it is still ours. The run-directory lock and the
+ * labeling locks (one per session draft, one per lineage publication) are
+ * this one primitive at different paths.
+ */
+export function acquireOwnedFileLock(args: AcquireOwnedFileLockArgs): OwnedFileLock {
+  const { lockFile } = args;
+  fs.mkdirSync(path.dirname(lockFile), { recursive: true });
   const holder: LockHolder = {
     pid: process.pid,
     token: nanoid(LOCK_TOKEN_LENGTH),
@@ -63,7 +84,7 @@ export function acquireRunDirLock(args: AcquireRunDirLockArgs): RunDirLock {
     releaseOwnedLock(lockFile, holder, args.reportWarning);
   };
 
-  // Registered so a crash still frees the directory, and removed on release so a
+  // Registered so a crash still frees the file, and removed on release so a
   // long-lived process does not accumulate listeners per session.
   const onExit = (): void => {
     release();
@@ -101,19 +122,15 @@ function describeExistingHolder(lockFile: string): string {
  * Remove the lock only after proving we still hold it.
  *
  * `safeDelete` is not used here: it is oriented at the project root, and a
- * run directory can be anywhere. Instead this checks the exact basename and
- * the recorded ownership token, so the only file it can ever unlink is a lock
- * this process wrote.
+ * run directory can be anywhere. Instead this unlinks only the exact path
+ * this process acquired, and only when the ownership token inside it is
+ * still ours, so the one file it can ever remove is a lock this process wrote.
  */
 function releaseOwnedLock(
   lockFile: string,
   holder: LockHolder,
   reportWarning: (message: string) => void,
 ): void {
-  if (path.basename(lockFile) !== LOCK_BASENAME) {
-    reportWarning(`Refusing to remove ${lockFile}: not a lock file`);
-    return;
-  }
   if (!fs.existsSync(lockFile)) {
     return;
   }

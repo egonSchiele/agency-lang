@@ -49,22 +49,14 @@ export function writeStatelog(filePath: string, events: Record<string, unknown>[
   return filePath;
 }
 
-/** A graded run directory: two finished traces with input, cost and output,
- *  and one complete grading pass over them. Phase 1 completes the row. */
+/** A graded run directory: one finished trace (t1) with input, cost and
+ *  output, and one complete grading pass over it: a scalar 1 and a failed
+ *  must-pass gate, so the row's score is 0.5 and its gates failed. */
 export function writeGradedRun(baseDir: string, runId: string = "graded-run"): string {
   const runDir = path.join(baseDir, runId);
   const agentLabel = "/abs/path/regex-log.agency:main";
   writeRunDirectory(
-    [
-      { traceId: "t1", test: { id: "t1", input: "first" }, output: "a", costUsd: 1.25, agentLabel },
-      {
-        traceId: "t2",
-        test: { id: "t2", input: "second" },
-        output: "b",
-        costUsd: 0.75,
-        agentLabel,
-      },
-    ],
+    { traceId: "t1", test: { id: "t1", input: "first" }, output: "a", costUsd: 2.0, agentLabel },
     runDir,
   );
   const grader = { kind: "grader" as const, id: "fixture@1" };
@@ -80,9 +72,9 @@ export function writeGradedRun(baseDir: string, runId: string = "graded-run"): s
         mustPass: false,
       },
       {
-        traceId: "t2",
+        traceId: "t1",
         annotator: grader,
-        name: "fixture",
+        name: "gate",
         score: { kind: "binary", pass: false },
         weight: 1,
         mustPass: true,
@@ -96,16 +88,14 @@ export function writeGradedRun(baseDir: string, runId: string = "graded-run"): s
 export function writeKilledRun(baseDir: string, runId: string = "killed-run"): string {
   const runDir = path.join(baseDir, runId);
   writeRunDirectory(
-    [
-      {
-        traceId: "k1",
-        test: { id: "t1", input: "x" },
-        ended: "killed",
-        costUsd: 3.0,
-        // Command agents record the command line as their label.
-        agentLabel: "claude -p {task}",
-      },
-    ],
+    {
+      traceId: "k1",
+      test: { id: "t1", input: "x" },
+      ended: "killed",
+      costUsd: 3.0,
+      // Command agents record the command line as their label.
+      agentLabel: "claude -p {task}",
+    },
     runDir,
   );
   return runDir;

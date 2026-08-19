@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as path from "path";
 
 import {
   listRevisionVersions,
@@ -14,6 +15,7 @@ import {
   type PublishRevisionResult,
 } from "@/eval/label/checklist.js";
 import { loadDraftFile, saveDraftFile, type Draft } from "@/eval/label/draft.js";
+import type { LabelingGroup, LabelingRun } from "@/eval/label/group.js";
 import type {
   Annotator,
   ChecklistRevision,
@@ -21,38 +23,41 @@ import type {
   FaultHook,
   Fields,
 } from "@/eval/label/types.js";
-import type { EvalRecord } from "@/eval/types.js";
 
 import type { ChecklistAnnotation, EffectiveChecklistJudgement } from "./annotations.js";
-import { evalRecordFor } from "./evalRecord.js";
-import type { RunDirLock } from "./lock.js";
-import { appendAnnotationsUnderLock } from "./mutations.js";
-import { readRunDirectory, runDirPaths, type RunDirectorySnapshot } from "./runDir.js";
-import type { Trace } from "./traces.js";
-import { traceInputText, traceOutputText } from "./traceText.js";
+import { acquireOwnedFileLock, type OwnedFileLock } from "./lock.js";
+import { assertRowMatchesRevision, recordChecklistRow } from "./mutations.js";
+import { runDirPaths } from "./runDir.js";
 
 /**
- * What a labeling session may do to a run directory, and nothing more.
+ * What a labeling session may do to a group of runs, and nothing more.
  *
  * The store exposes no file paths, no mutable rows and no unrestricted append:
  * those are how the sign-off ordering gets bypassed. It hands out read-only
- * projections and whole idempotent operations. The session holds the writer
- * lock for its whole life (two sessions on one directory would race for the
- * same revision number and share a draft file), so appends here go through
- * the run directory's lock-holding append rather than a public mutation.
+ * projections and whole idempotent operations. Locks are its business:
+ *
+ * - one lock per session draft (`<group>/checklists/<id>/drafts/<session>.lock`),
+ *   held until `close()`, so a second process cannot resume and mutate the
+ *   same draft; other annotators and other checklists are not blocked;
+ * - one short lock around each lineage publication
+ *   (`<group>/checklists/<id>/.publish.lock`), so two sessions cannot race
+ *   for the same revision number;
+ * - the run's own writer lock around each append, taken by the mutation.
+ *
+ * There is no lock on the group as a whole.
  */
 export class LabelStoreValidationError extends Error {}
 
 export type OpenLabelStoreArgs = {
-  dir: string;
-  lock: RunDirLock;
+  group: LabelingGroup;
+  identity: LabelSessionIdentity;
   reportWarning(message: string): void;
   /** @internal Test-only interruption points inside multi-file operations. */
   fault?: FaultHook;
 };
 
-/** One trace as the screen shows it. */
-export type LabelStoreItem = { traceId: string; fields: Fields };
+/** One run as the screen shows it. */
+export type LabelStoreItem = { runDir: string; traceId: string; fields: Fields };
 
 export type LabelSessionIdentity = {
   sessionId: string;
@@ -69,79 +74,114 @@ export type LabelStoreSessionSnapshot = {
 
 export type LabelStore = {
   items(): readonly LabelStoreItem[];
-  readSession(identity: LabelSessionIdentity): LabelStoreSessionSnapshot;
+  readSession(): LabelStoreSessionSnapshot;
   saveDraft(draft: Draft): void;
   prepareChecklist(definition: NormalizedDefinition): PrepareChecklistResult;
+  /** The lineage's newest published revision in the group, if any. */
+  currentRevision(checklistId: string): ChecklistRevision | undefined;
   syncChecklistDefinition(definitionPath: string, revision: ChecklistRevision): void;
   publishRevision(pending: PendingRevision, definitionPath: string): PublishRevisionResult;
-  /** Append a completed checklist row exactly as given. Idempotent: a row
-   *  whose id is already on disk is a replay. */
+  /** Append a completed checklist row exactly as given, to the run that holds
+   *  its trace. Idempotent: a row whose id is already on disk is a replay. */
   appendAnnotation(row: ChecklistAnnotation): "appended" | "replayed";
   close(): void;
 };
 
-/** The field the screen shows when a trace recorded no output. Its text is
- *  marked so nobody mistakes a mid-conversation message for the result. */
-export const LAST_MESSAGE_FIELD = "last_message";
-const LAST_MESSAGE_MARKER = "(no recorded output; this is the agent's last message)\n\n";
-
 /**
- * Open a run directory for labeling, validating what labeling depends on
- * before returning: every checklist lineage is contiguous and unedited, and
- * every existing checklist row names a revision that exists with the hash it
- * recorded. Validation is fatal here where grading is tolerant, because a
- * label is the one artifact nothing can regenerate: a checklist row that
- * points at a missing revision would be labelled around forever.
+ * Open a group for labeling, validating what labeling depends on before
+ * returning: every checklist lineage in the group is contiguous and unedited,
+ * and every existing checklist row in every run names a revision that exists
+ * with the hash it recorded. Validation is fatal here where grading is
+ * tolerant, because a label is the one artifact nothing can regenerate: a
+ * checklist row that points at a missing revision would be labelled around
+ * forever. The session lock is taken first and released if opening fails.
  */
 export function openLabelStore(args: OpenLabelStoreArgs): LabelStore {
-  const paths = runDirPaths(args.dir);
-  let snapshot = readRunDirectory(args.dir, { reportWarning: args.reportWarning });
-  validateChecklists(args.dir, snapshot, args.reportWarning);
+  const sessionLock = acquireOwnedFileLock({
+    lockFile: sessionLockPath(args.group.dir, args.identity),
+    reportWarning: args.reportWarning,
+  });
+  try {
+    return createOpenStore(args, sessionLock);
+  } catch (error) {
+    sessionLock.release();
+    throw error;
+  }
+}
 
-  const knownTraces: Record<string, true> = Object.create(null);
-  for (const trace of snapshot.traces) knownTraces[trace.traceId] = true;
+function sessionLockPath(groupDir: string, identity: LabelSessionIdentity): string {
+  return path.join(
+    runDirPaths(groupDir).checklistsDir,
+    identity.checklistId,
+    "drafts",
+    `${identity.sessionId}.lock`,
+  );
+}
+
+function publicationLockPath(groupDir: string, checklistId: string): string {
+  return path.join(runDirPaths(groupDir).checklistsDir, checklistId, ".publish.lock");
+}
+
+function createOpenStore(args: OpenLabelStoreArgs, sessionLock: OwnedFileLock): LabelStore {
+  const { group, identity } = args;
+  // The one mutable cache: each run's snapshot, replaced by the mutation's
+  // authoritative post-write read after every append.
+  const runs: LabelingRun[] = group.runs.map((run) => ({ ...run }));
+  validateChecklists(group.dir, runs, args.reportWarning);
 
   let open = true;
   const assertOpen = (): void => {
-    if (!open) throw new LabelStoreValidationError("This label store has been closed");
+    if (!open) {
+      throw new LabelStoreValidationError("This label store has been closed");
+    }
+  };
+  const currentRevision = (checklistId: string): ChecklistRevision | undefined => {
+    const pointer = readCurrentPointer(group.dir, checklistId);
+    return pointer === undefined
+      ? undefined
+      : readRevision(group.dir, checklistId, pointer.version);
   };
 
   return {
     items(): readonly LabelStoreItem[] {
       assertOpen();
-      return snapshot.traces.map((trace) => {
-        const record = evalRecordFor(trace, paths.statelog);
-        return { traceId: trace.traceId, fields: fieldsOf(trace, record) };
-      });
+      return runs.map((run) => ({ runDir: run.dir, traceId: run.traceId, fields: run.fields }));
     },
 
-    readSession(identity: LabelSessionIdentity): LabelStoreSessionSnapshot {
+    readSession(): LabelStoreSessionSnapshot {
       assertOpen();
       const key = `${identity.checklistId}:${identity.annotator.kind}:${identity.annotator.id}`;
       const judgements: Record<string, EffectiveChecklistJudgement> = Object.create(null);
-      for (const [traceId, effective] of Object.entries(snapshot.effectiveAnnotations)) {
-        const judgement = effective.checklists[key];
-        if (judgement !== undefined) judgements[traceId] = judgement;
+      for (const run of runs) {
+        const judgement = run.snapshot.effectiveAnnotations[run.traceId]?.checklists[key];
+        if (judgement !== undefined) {
+          judgements[run.traceId] = judgement;
+        }
       }
       return {
-        draft: loadDraftFile(args.dir, identity.checklistId, identity.sessionId) ?? null,
+        draft: loadDraftFile(group.dir, identity.checklistId, identity.sessionId) ?? null,
         judgements,
       };
     },
 
     saveDraft(draft: Draft): void {
       assertOpen();
-      saveDraftFile(args.dir, draft);
+      if (draft.sessionId !== identity.sessionId) {
+        throw new LabelStoreValidationError(
+          `This session (${identity.sessionId}) cannot write the draft of ${draft.sessionId}.`,
+        );
+      }
+      saveDraftFile(group.dir, draft);
     },
 
     prepareChecklist(definition: NormalizedDefinition): PrepareChecklistResult {
       assertOpen();
-      const pointer = readCurrentPointer(args.dir, definition.checklistId);
-      const current =
-        pointer === undefined
-          ? undefined
-          : readRevision(args.dir, definition.checklistId, pointer.version);
-      return prepareRevision({ definition, current });
+      return prepareRevision({ definition, current: currentRevision(definition.checklistId) });
+    },
+
+    currentRevision(checklistId: string): ChecklistRevision | undefined {
+      assertOpen();
+      return currentRevision(checklistId);
     },
 
     syncChecklistDefinition(definitionPath: string, revision: ChecklistRevision): void {
@@ -151,93 +191,106 @@ export function openLabelStore(args: OpenLabelStoreArgs): LabelStore {
 
     publishRevision(pending: PendingRevision, definitionPath: string): PublishRevisionResult {
       assertOpen();
-      return publishPendingRevision({
-        dir: args.dir,
-        pending,
-        definitionPath,
-        fault: args.fault,
+      // Publication re-reads the current pointer under the lock, so a pending
+      // revision prepared against a parent that has since moved fails there
+      // (`assertParentStillMatches`) without touching the lineage.
+      const publication = acquireOwnedFileLock({
+        lockFile: publicationLockPath(group.dir, pending.revision.checklistId),
+        reportWarning: args.reportWarning,
       });
+      try {
+        return publishPendingRevision({
+          dir: group.dir,
+          pending,
+          definitionPath,
+          fault: args.fault,
+        });
+      } finally {
+        publication.release();
+      }
     },
 
     appendAnnotation(row: ChecklistAnnotation): "appended" | "replayed" {
       assertOpen();
-      assertRowIsGrounded(args.dir, knownTraces, row);
-      const before = snapshot.annotationRows.length;
-      const { v: _v, id: _id, createdAt, ...draft } = row;
-      appendAnnotationsUnderLock(args.dir, [draft], {
-        now: () => createdAt,
-        reportWarning: args.reportWarning,
-      });
+      const run = runs.find((candidate) => candidate.traceId === row.traceId);
+      if (run === undefined) {
+        throw new LabelStoreValidationError(
+          `Cannot record a judgement of trace "${row.traceId}": it is not in this session.`,
+        );
+      }
+      const result = recordChecklistRow(
+        { dir: run.dir, groupDir: group.dir, row },
+        { reportWarning: args.reportWarning },
+      );
       args.fault?.("after-annotation-append");
-      snapshot = readRunDirectory(args.dir, { reportWarning: args.reportWarning });
-      return snapshot.annotationRows.length > before ? "appended" : "replayed";
+      run.snapshot = result.snapshot;
+      return result.outcome;
     },
 
     close(): void {
       open = false;
-      args.lock.release();
+      sessionLock.release();
     },
   };
 }
 
-// --- projection -----------------------------------------------------------
-
-function fieldsOf(trace: Trace, record: EvalRecord): Fields {
-  const fields: Fields = {};
-  const input = traceInputText(trace, record);
-  if (input !== null) fields.input = input;
-  const output = traceOutputText(trace, record);
-  if (output.kind === "output") {
-    fields.output = output.text;
-  } else if (output.kind === "lastMessage") {
-    fields[LAST_MESSAGE_FIELD] = LAST_MESSAGE_MARKER + output.text;
-  }
-  return fields;
-}
-
 // --- validation -----------------------------------------------------------
 
-/** Every cross-file invariant labeling relies on, checked once at open. */
+/** Every cross-file invariant labeling relies on, checked once at open:
+ *  lineages in the group, and every run's checklist rows against them. */
 function validateChecklists(
-  dir: string,
-  snapshot: RunDirectorySnapshot,
+  groupDir: string,
+  runs: readonly LabelingRun[],
   reportWarning: (message: string) => void,
 ): void {
   const revisionCache: Record<string, ChecklistRevision> = Object.create(null);
   const readCached = (checklistId: string, version: number): ChecklistRevision => {
     const key = `${checklistId}@${version}`;
-    revisionCache[key] ??= readRevision(dir, checklistId, version);
+    revisionCache[key] ??= readRevision(groupDir, checklistId, version);
     return revisionCache[key];
   };
 
   const checklistIds: string[] = [];
-  for (const row of snapshot.annotationRows) {
-    if (row.kind === "checklist" && !checklistIds.includes(row.checklist)) {
-      checklistIds.push(row.checklist);
+  for (const run of runs) {
+    for (const row of run.snapshot.annotationRows) {
+      if (row.kind === "checklist" && !checklistIds.includes(row.checklist)) {
+        checklistIds.push(row.checklist);
+      }
     }
   }
-  const checklistsDir = runDirPaths(dir).checklistsDir;
+  const checklistsDir = runDirPaths(groupDir).checklistsDir;
   if (fs.existsSync(checklistsDir)) {
     for (const entry of fs.readdirSync(checklistsDir)) {
-      if (!checklistIds.includes(entry)) checklistIds.push(entry);
+      if (!checklistIds.includes(entry)) {
+        checklistIds.push(entry);
+      }
     }
   }
   for (const checklistId of checklistIds) {
-    validateLineage(dir, checklistId, readCached, reportWarning);
+    validateLineage(groupDir, checklistId, readCached, reportWarning);
   }
 
-  for (const row of snapshot.annotationRows) {
-    if (row.kind !== "checklist") continue;
-    let revision: ChecklistRevision;
-    try {
-      revision = readCached(row.checklist, row.version);
-    } catch (error) {
-      throw new LabelStoreValidationError(
-        `Annotation "${row.id}" refers to checklist revision ${row.checklist}@${row.version}, ` +
-          `which is missing: ${(error as Error).message}`,
-      );
+  for (const run of runs) {
+    for (const row of run.snapshot.annotationRows) {
+      if (row.kind !== "checklist") {
+        continue;
+      }
+      let revision: ChecklistRevision;
+      try {
+        revision = readCached(row.checklist, row.version);
+      } catch (error) {
+        throw new LabelStoreValidationError(
+          `${run.dir}: annotation "${row.id}" refers to checklist revision ` +
+            `${row.checklist}@${row.version}, which is missing from ${groupDir}: ` +
+            `${(error as Error).message}`,
+        );
+      }
+      try {
+        assertRowMatchesRevision(row, revision);
+      } catch (error) {
+        throw new LabelStoreValidationError(`${run.dir}: ${(error as Error).message}`);
+      }
     }
-    assertRowMatchesRevision(row, revision);
   }
 }
 
@@ -248,7 +301,9 @@ function validateLineage(
   reportWarning: (message: string) => void,
 ): void {
   const versions = listRevisionVersions(dir, checklistId);
-  if (versions.length === 0) return;
+  if (versions.length === 0) {
+    return;
+  }
   // readRevision proves path/content agreement and recomputes the hash;
   // validateLineageContinuity proves the chain is contiguous and that every
   // adjacent pair obeys the same evolution rules publication enforces.
@@ -287,42 +342,4 @@ function validateLineage(
         `this checklist completes it.`,
     );
   }
-}
-
-/** A row's hash must be the revision's, and every answered question must be
- *  one that revision defines; otherwise the per-question fold would be
- *  reading answers nobody could have given. */
-function assertRowMatchesRevision(row: ChecklistAnnotation, revision: ChecklistRevision): void {
-  if (revision.hash !== row.hash) {
-    throw new LabelStoreValidationError(
-      `Annotation "${row.id}" records checklist hash ${row.hash}, but revision ` +
-        `${row.checklist}@${row.version} hashes to ${revision.hash}.`,
-    );
-  }
-  const known: Record<string, true> = Object.create(null);
-  for (const question of revision.questions) known[question.id] = true;
-  for (const questionId of Object.keys(row.answers)) {
-    if (known[questionId] !== true) {
-      throw new LabelStoreValidationError(
-        `Annotation "${row.id}" answers question "${questionId}", which revision ` +
-          `${row.checklist}@${row.version} does not define.`,
-      );
-    }
-  }
-}
-
-/** Refuse a row for a trace the directory does not hold, or against a
- *  revision that is not on disk as recorded, so no caller can skip the
- *  capture-before-label and publish-before-append orders. */
-function assertRowIsGrounded(
-  dir: string,
-  knownTraces: Record<string, true>,
-  row: ChecklistAnnotation,
-): void {
-  if (knownTraces[row.traceId] !== true) {
-    throw new LabelStoreValidationError(
-      `Cannot record a judgement of trace "${row.traceId}": it is not in ${dir}.`,
-    );
-  }
-  assertRowMatchesRevision(row, readRevision(dir, row.checklist, row.version));
 }

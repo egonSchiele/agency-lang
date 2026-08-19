@@ -8,27 +8,31 @@ import {
   prepareRevision,
   publishPendingRevision,
 } from "@/eval/label/checklist.js";
-import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
+import { writeRunGroup } from "@/eval/runDirectoryFixture.js";
 
 import { completeAnnotation } from "./annotations.js";
 import { appendDurably } from "./durableWrite.js";
 import { humanFeedbackFor } from "./humanFeedback.js";
 import { readRunDirectory, runDirPaths } from "./runDir.js";
 
+/** A group of two runs; `dir` is run `a` (trace t1). The checklist lineage
+ *  lives in the group, which is where `humanFeedbackFor` looks for it. */
+let group: string;
 let dir: string;
 
 beforeEach(() => {
-  dir = writeRunDirectory([
+  group = writeRunGroup([
     { traceId: "t1", test: { id: "a", input: "poem" }, output: "roses" },
     { traceId: "t2", test: { id: "b", input: "haiku" }, output: "leaves" },
   ]);
+  dir = path.join(group, "a");
 });
 
 afterEach(() => {
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(group, { recursive: true, force: true });
 });
 
-/** Publish a two-question checklist into the directory and return its ids. */
+/** Publish a two-question checklist into the group and return its ids. */
 function publishChecklist(): {
   checklistId: string;
   version: number;
@@ -41,9 +45,13 @@ function publishChecklist(): {
   });
   const prepared = prepareRevision({ definition, current: undefined });
   if (prepared.kind !== "publish") throw new Error(prepared.kind);
-  const definitionPath = path.join(dir, "quality.json");
+  const definitionPath = path.join(group, "quality.json");
   fs.writeFileSync(definitionPath, JSON.stringify(definition));
-  const { revision } = publishPendingRevision({ dir, pending: prepared.pending, definitionPath });
+  const { revision } = publishPendingRevision({
+    dir: group,
+    pending: prepared.pending,
+    definitionPath,
+  });
   return {
     checklistId: revision.checklistId,
     version: revision.version,
@@ -82,8 +90,9 @@ describe("humanFeedbackFor", () => {
       "too slow\nwrong tone",
       "late by a day",
     ]);
-    // The file is about the run, so an unannotated trace in the directory sees it too.
-    expect(humanFeedbackFor(snapshot(), "t2").notes).toEqual(["too slow\nwrong tone"]);
+    // The other run has its own notes file (none), so it sees nothing.
+    const other = readRunDirectory(path.join(group, "b"), { reportWarning: () => {} });
+    expect(humanFeedbackFor(other, "t2").notes).toEqual([]);
   });
 
   it("ignores a blank notes.md", () => {

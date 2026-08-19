@@ -27,5 +27,5 @@ export function fakeRun(inputId: string, output: unknown, spec?: Test): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "optimize-run-"));
   fakeRunDirs.push(root);
   const test: Test = { input: "", ...spec, id: inputId };
-  return writeRunDirectory([{ test, output, traceId: `trace-${inputId}` }], root);
+  return writeRunDirectory({ test, output, traceId: `trace-${inputId}` }, root);
 }

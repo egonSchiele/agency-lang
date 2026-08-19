@@ -3,6 +3,8 @@ import * as path from "path";
 
 import { nanoid } from "nanoid";
 
+import { readRevision } from "@/eval/label/checklist.js";
+import type { ChecklistRevision } from "@/eval/label/types.js";
 import { safeDeleteDirectoryWithin } from "@/utils.js";
 
 import { appendDurably } from "./durableWrite.js";
@@ -13,6 +15,7 @@ import {
   type Annotation,
   type AnnotationDraft,
   type Annotator,
+  type ChecklistAnnotation,
   type RunPayload,
   type Score,
 } from "./annotations.js";
@@ -337,19 +340,7 @@ export function recordCompletedRun(
       ...snapshot,
       traces: [...snapshot.traces, ...statelogPlan.add],
     };
-    // A run that died before writing a single event has no trace, and its run
-    // row is the only record it happened; that is allowed. But when the staged
-    // statelog does hold traces, the run row must be about one of them (or one
-    // already in the directory): otherwise the staged trace loses its
-    // completion record and an orphan row points at nothing.
-    const known = merged.traces.some((trace) => trace.traceId === request.run.traceId);
-    if (incoming.length > 0 && !known) {
-      const staged = incoming.map((trace) => trace.traceId).join(", ");
-      throw new Error(
-        `Cannot record run for trace ${request.run.traceId}: it is not in ${request.dir}, and ` +
-          `the staged statelog holds ${staged} instead. Nothing was written.`,
-      );
-    }
+    assertOneRunPlanned(request.dir, snapshot, merged, request.run.traceId);
     const codePlan =
       request.codeEntry === undefined
         ? undefined
@@ -370,6 +361,50 @@ export function recordCompletedRun(
     const [annotation] = appendRows(paths.annotations, [draft], options, reportWarning);
     return { annotation };
   });
+}
+
+/**
+ * A run directory holds one run; refuse, before a byte is written, anything
+ * that would make it hold two. The post-write read would catch a second trace
+ * too, but by then the statelog is already the forbidden shape.
+ *
+ * - the merged trace set has at most one id;
+ * - when a trace exists, the run row names it (also when nothing was staged:
+ *   a run row for another trace would record a second run here);
+ * - when no trace exists, only one silent run may be recorded: a run row
+ *   already on disk for a different trace is a different run.
+ */
+function assertOneRunPlanned(
+  dir: string,
+  snapshot: RunDirectorySnapshot,
+  merged: RunDirectorySnapshot,
+  runTraceId: string,
+): void {
+  if (merged.traces.length > 1) {
+    const ids = merged.traces.map((trace) => trace.traceId).join(", ");
+    throw new Error(
+      `Cannot record run for trace ${runTraceId}: ${dir} would then hold ${merged.traces.length} ` +
+        `traces (${ids}), and a run directory holds one run. Nothing was written.`,
+    );
+  }
+  const [trace] = merged.traces;
+  if (trace !== undefined && trace.traceId !== runTraceId) {
+    throw new Error(
+      `Cannot record run for trace ${runTraceId}: ${dir} holds trace ${trace.traceId}, and a ` +
+        `run directory holds one run. Nothing was written.`,
+    );
+  }
+  if (trace === undefined) {
+    const other = Object.keys(snapshot.effectiveAnnotations).find(
+      (traceId) => traceId !== runTraceId && snapshot.effectiveAnnotations[traceId].run !== null,
+    );
+    if (other !== undefined) {
+      throw new Error(
+        `Cannot record run for trace ${runTraceId}: ${dir} already records the run of trace ` +
+          `${other}, and a run directory holds one run. Nothing was written.`,
+      );
+    }
+  }
 }
 
 // --- recordGradingPass ----------------------------------------------------
@@ -439,20 +474,90 @@ export function newPassId(): string {
   return `pass_${nanoid()}`;
 }
 
-// --- appendAnnotationsUnderLock -------------------------------------------
+// --- recordChecklistRow ---------------------------------------------------
 
-/** @internal For a run-directory owner that already holds the writer lock for
- *  a whole session (the labeling store). Repairs a torn tail, then appends
- *  the drafts idempotently, exactly as the public mutations do. */
-export function appendAnnotationsUnderLock(
-  dir: string,
-  drafts: readonly AnnotationDraft[],
+export type RecordChecklistRowRequest = {
+  dir: string;
+  /** The group the run belongs to: where the checklist lineage lives. */
+  groupDir: string;
+  row: ChecklistAnnotation;
+};
+
+export type RecordChecklistRowResult = {
+  outcome: "appended" | "replayed";
+  snapshot: RunDirectorySnapshot;
+};
+
+/** One labeling sign-off on one run: the row exactly as the session built it
+ *  (its id is already derived from its content, so a replay lands on the same
+ *  id), grounded against the run and the group's lineage immediately before an
+ *  idempotent append under the run's lock. */
+export function recordChecklistRow(
+  request: RecordChecklistRowRequest,
   options: MutationOptions = {},
-): Annotation[] {
-  const reportWarning = options.reportWarning ?? (() => {});
-  const paths = runDirPaths(dir);
-  repairTornTail(paths.annotations);
-  return appendRows(paths.annotations, drafts, options, reportWarning);
+): RecordChecklistRowResult {
+  const result = withWriter(request.dir, options, (paths, snapshot, reportWarning) => {
+    assertChecklistRowGrounded(request.dir, request.groupDir, snapshot, request.row);
+    // Under the lock nobody else appends, so "already on disk" is the whole
+    // replay test; the id is content-derived, so a rebuilt row matches too.
+    const replayed = snapshot.annotationRows.some((row) => row.id === request.row.id);
+    const { v: _v, id: _id, createdAt, ...draft } = request.row;
+    appendRows(paths.annotations, [draft], { ...options, now: () => createdAt }, reportWarning);
+    const outcome: RecordChecklistRowResult["outcome"] = replayed ? "replayed" : "appended";
+    return { outcome };
+  });
+  return { outcome: result.outcome, snapshot: result.snapshot };
+}
+
+/** Refuse a row for a trace the run does not hold, or against a revision that
+ *  is not in the group's lineage as recorded, or answering a question that
+ *  revision does not define: no caller can skip capture-before-label or
+ *  publish-before-append. The immutable revision file is the grounding fact;
+ *  the current pointer may move on without changing what an older row means. */
+function assertChecklistRowGrounded(
+  dir: string,
+  groupDir: string,
+  snapshot: RunDirectorySnapshot,
+  row: ChecklistAnnotation,
+): void {
+  if (!snapshot.traces.some((trace) => trace.traceId === row.traceId)) {
+    throw new Error(`Cannot record a judgement of trace "${row.traceId}": it is not in ${dir}.`);
+  }
+  let revision: ChecklistRevision;
+  try {
+    revision = readRevision(groupDir, row.checklist, row.version);
+  } catch (error) {
+    throw new Error(
+      `Annotation "${row.id}" refers to checklist revision ${row.checklist}@${row.version}, ` +
+        `which is missing from ${groupDir}: ${(error as Error).message}`,
+    );
+  }
+  assertRowMatchesRevision(row, revision);
+}
+
+/** A row's hash must be the revision's, and every answered question must be
+ *  one that revision defines; otherwise the per-question fold would be
+ *  reading answers nobody could have given. */
+export function assertRowMatchesRevision(
+  row: ChecklistAnnotation,
+  revision: ChecklistRevision,
+): void {
+  if (revision.hash !== row.hash) {
+    throw new Error(
+      `Annotation "${row.id}" records checklist hash ${row.hash}, but revision ` +
+        `${row.checklist}@${row.version} hashes to ${revision.hash}.`,
+    );
+  }
+  const known: Record<string, true> = Object.create(null);
+  for (const question of revision.questions) known[question.id] = true;
+  for (const questionId of Object.keys(row.answers)) {
+    if (known[questionId] !== true) {
+      throw new Error(
+        `Annotation "${row.id}" answers question "${questionId}", which revision ` +
+          `${row.checklist}@${row.version} does not define.`,
+      );
+    }
+  }
 }
 
 // --- private machinery ----------------------------------------------------

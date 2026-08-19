@@ -13,7 +13,7 @@ import { gradeRun, type GradingContext } from "./gradeRun.js";
 const capital: Test = { id: "a", goal: "name the capital", input: "t", expected: "New Delhi" };
 
 function makeRun(run: Omit<FakeRun, "test"> & { test?: Test }): string {
-  return writeRunDirectory([{ test: capital, workdirFiles: { "note.txt": "x" }, ...run }]);
+  return writeRunDirectory({ test: capital, workdirFiles: { "note.txt": "x" }, ...run });
 }
 
 function ctx(graders: ReturnType<typeof grader>[]): GradingContext {
@@ -108,28 +108,8 @@ describe("gradeRun", () => {
     expect(card.perInput[0].ungradedReason).toMatch(/timeout/);
   });
 
-  it("a test that died before its first event still counts: scored 0 beside its successful neighbour", async () => {
-    const runDir = writeRunDirectory([
-      { test: { ...capital, id: "ok" }, output: "New Delhi" },
-      {
-        test: { ...capital, id: "never-started" },
-        wroteStatelog: false,
-        ended: "error",
-        errorMessage: "compile failed",
-      },
-    ]);
-    // The silent run did not erase its neighbour's trace from the shared fixture statelog.
-    expect(fs.readFileSync(path.join(runDir, "statelog.jsonl"), "utf8")).toContain("trace-1");
-    const card = await gradeRun(runDir, ctx([grader(() => 1, { name: "one" })]));
-    expect(card.perInput.map((entry) => entry.test.id).sort()).toEqual(["never-started", "ok"]);
-    expect(card.objective()).toBe(0.5);
-    expect(card.gatesPassed()).toBe(false);
-    const dead = card.perInput.find((entry) => entry.test.id === "never-started");
-    expect(dead?.ungradedReason).toMatch(/no trace.*error: compile failed/);
-  });
-
   it("a suite where every test died before its first event does not pass gates vacuously", async () => {
-    const runDir = writeRunDirectory([{ test: capital, wroteStatelog: false, ended: "timeout" }]);
+    const runDir = writeRunDirectory({ test: capital, wroteStatelog: false, ended: "timeout" });
     // Still a run directory by the walk rule: an empty statelog, as the harness writes.
     expect(fs.readFileSync(path.join(runDir, "statelog.jsonl"), "utf8")).toBe("");
     const card = await gradeRun(runDir, ctx([grader(() => 1, { name: "one" })]));

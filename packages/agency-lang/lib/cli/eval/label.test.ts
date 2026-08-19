@@ -4,17 +4,26 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { writeRunGroup } from "@/eval/runDirectoryFixture.js";
+
 import { label, resolveAnnotator, terminalDimension, type LabelDependencies } from "./label.js";
 
 let root: string;
-let runDir: string;
+/** A group of two runs, `a` (trace ta) and `b` (trace tb). */
+let group: string;
 let checklistFile: string;
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "cli-label-"));
-  runDir = path.join(root, "run");
+  group = path.join(root, "runs");
   checklistFile = path.join(root, "news.json");
-  fs.mkdirSync(runDir, { recursive: true });
+  writeRunGroup(
+    [
+      { traceId: "ta", test: { id: "a", input: "t" }, output: "x" },
+      { traceId: "tb", test: { id: "b", input: "t" }, output: "y" },
+    ],
+    group,
+  );
   fs.writeFileSync(checklistFile, JSON.stringify({ name: "n", questions: [{ text: "Q?" }] }));
 });
 
@@ -32,6 +41,7 @@ function dependencies(over: Partial<LabelDependencies> = {}): LabelDependencies 
     runTui: vi.fn(async () => {}),
     makeScreen: () => ({ destroy: () => {} }) as never,
     isInteractive: () => true,
+    reportWarning: () => {},
     environment: { USER: "adit" },
     osUserName: () => "os-account",
     ...over,
@@ -72,37 +82,58 @@ describe("resolveAnnotator", () => {
 
 describe("label", () => {
   it("requires a checklist", async () => {
-    await expect(label({ dir: runDir }, dependencies())).rejects.toThrow(/--checklist is required/);
+    await expect(label({ paths: [group] }, dependencies())).rejects.toThrow(
+      /--checklist is required/,
+    );
   });
 
   it("reports a missing checklist file", async () => {
     await expect(
-      label({ dir: runDir, checklist: path.join(root, "nope.json") }, dependencies()),
+      label({ paths: [group], checklist: path.join(root, "nope.json") }, dependencies()),
     ).rejects.toThrow(/Checklist file not found/);
   });
 
-  it("reports a missing run directory", async () => {
+  it("requires at least one path", async () => {
+    await expect(label({ paths: [], checklist: checklistFile }, dependencies())).rejects.toThrow(
+      /at least one run directory/,
+    );
+  });
+
+  it("reports a path that is not a directory", async () => {
     await expect(
-      label({ dir: path.join(root, "nope"), checklist: checklistFile }, dependencies()),
-    ).rejects.toThrow(/Run directory not found/);
+      label({ paths: [path.join(root, "nope")], checklist: checklistFile }, dependencies()),
+    ).rejects.toThrow(/is not a directory/);
   });
 
   it("refuses a non-interactive terminal before opening a session", async () => {
     const deps = dependencies({ isInteractive: () => false });
-    await expect(label({ dir: runDir, checklist: checklistFile }, deps)).rejects.toThrow(
+    await expect(label({ paths: [group], checklist: checklistFile }, deps)).rejects.toThrow(
       /interactive terminal/i,
     );
     expect(deps.openSession).not.toHaveBeenCalled();
   });
 
-  it("opens the session with the resolved directory, checklist and annotator", async () => {
+  it("opens the session with the one resolved group, the checklist and the annotator", async () => {
     const deps = dependencies();
-    await label({ dir: runDir, checklist: checklistFile }, deps);
-    expect(deps.openSession).toHaveBeenCalledWith({
-      dir: path.resolve(runDir),
-      checklistFile: path.resolve(checklistFile),
-      annotator: { kind: "human", id: "adit" },
-    });
+    await label(
+      { paths: [path.join(group, "b"), path.join(group, "a")], checklist: checklistFile },
+      deps,
+    );
+    expect(deps.openSession).toHaveBeenCalledTimes(1);
+    const request = (deps.openSession as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(request.checklistFile).toBe(path.resolve(checklistFile));
+    expect(request.annotator).toEqual({ kind: "human", id: "adit" });
+    expect(fs.realpathSync(request.group.dir)).toBe(fs.realpathSync(group));
+    // The paths' order is the session's order; the request carries runs, not paths.
+    expect(request.group.runs.map((run: { traceId: string }) => run.traceId)).toEqual(["tb", "ta"]);
+    expect(Object.keys(request)).toEqual(["group", "checklistFile", "annotator"]);
+  });
+
+  it("titles the screen after the group", async () => {
+    const deps = dependencies();
+    await label({ paths: [path.join(group, "a")], checklist: checklistFile }, deps);
+    const call = (deps.runTui as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.title).toBe("runs");
   });
 
   it("closes the session and destroys the screen even when the screen throws", async () => {
@@ -115,7 +146,7 @@ describe("label", () => {
       },
       makeScreen: () => ({ destroy: destroyed }) as never,
     });
-    await expect(label({ dir: runDir, checklist: checklistFile }, deps)).rejects.toThrow(
+    await expect(label({ paths: [group], checklist: checklistFile }, deps)).rejects.toThrow(
       /screen exploded/,
     );
     expect(controller.close).toHaveBeenCalled();
@@ -130,7 +161,7 @@ describe("label", () => {
         throw new Error("no terminal");
       },
     });
-    await expect(label({ dir: runDir, checklist: checklistFile }, deps)).rejects.toThrow(
+    await expect(label({ paths: [group], checklist: checklistFile }, deps)).rejects.toThrow(
       /no terminal/,
     );
     expect(controller.close).toHaveBeenCalled();
@@ -144,7 +175,7 @@ describe("label", () => {
       },
       makeScreen: made as never,
     });
-    await expect(label({ dir: runDir, checklist: checklistFile }, deps)).rejects.toThrow(
+    await expect(label({ paths: [group], checklist: checklistFile }, deps)).rejects.toThrow(
       /directory is locked/,
     );
     expect(made).not.toHaveBeenCalled();

@@ -40,10 +40,7 @@ describe("readRunDirectory", () => {
   it("returns traces plus raw and effective annotations", () => {
     const dir = tempDir();
     const paths = runDirPaths(dir);
-    fs.writeFileSync(
-      paths.statelog,
-      line("t1", "agentStart") + "\n" + line("t2", "agentStart") + "\n",
-    );
+    fs.writeFileSync(paths.statelog, line("t1", "agentStart") + "\n");
     const score = completeAnnotation(
       {
         traceId: "t1",
@@ -62,10 +59,9 @@ describe("readRunDirectory", () => {
     fs.writeFileSync(paths.annotations, JSON.stringify(score) + "\n");
     const snapshot = readRunDirectory(dir, { reportWarning: () => {} });
     expect(snapshot.hasStatelog).toBe(true);
-    expect(snapshot.traces.map((trace) => trace.traceId)).toEqual(["t1", "t2"]);
+    expect(snapshot.traces.map((trace) => trace.traceId)).toEqual(["t1"]);
     expect(snapshot.annotationRows).toEqual([score]);
     expect(Object.keys(snapshot.effectiveAnnotations.t1)).toEqual(["scores", "checklists", "run"]);
-    expect(snapshot.effectiveAnnotations.t2).toBeUndefined();
   });
 
   describe("notes.md", () => {
@@ -95,18 +91,18 @@ describe("readRunDirectory", () => {
     let reads = 0;
     const spy = vi.spyOn(traces, "readTraces").mockImplementation((statelogPath) => {
       reads += 1;
-      // A writer appends a trace after the first pass; the snapshot must not
-      // pair the old statelog with the newer annotations.
+      // A writer appends to the trace after the first pass; the snapshot must
+      // not pair the old statelog with the newer annotations.
       if (reads === 1) {
         const result = real(statelogPath);
-        fs.appendFileSync(paths.statelog, line("t2", "agentStart") + "\n");
+        fs.appendFileSync(paths.statelog, line("t1", "agentEnd") + "\n");
         return result;
       }
       return real(statelogPath);
     });
     try {
       const snapshot = readRunDirectory(dir, { reportWarning: () => {} });
-      expect(snapshot.traces.map((trace) => trace.traceId)).toEqual(["t1", "t2"]);
+      expect(snapshot.traces[0].events).toHaveLength(2);
       expect(reads).toBeGreaterThanOrEqual(3);
     } finally {
       spy.mockRestore();

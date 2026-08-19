@@ -3,6 +3,7 @@ import * as os from "os";
 import * as path from "path";
 
 import { openLabelingSession, type LabelingSessionController } from "@/eval/label/controller.js";
+import { resolveLabelingGroup, type LabelingGroup } from "@/eval/label/group.js";
 import { runLabelTui } from "@/eval/label/labelTui.js";
 import type { Annotator } from "@/eval/label/types.js";
 import { TerminalInput } from "@/tui/input/terminal.js";
@@ -12,15 +13,16 @@ import { Screen } from "@/tui/screen.js";
 const FALLBACK_ANNOTATOR_ID = "human";
 
 export type LabelOptions = {
-  /** The run directory to label. */
-  dir: string;
+  /** Run directories, or directories of run directories. */
+  paths: string[];
   checklist?: string;
   annotator?: string;
 };
 
-/** What a session is opened with, once the CLI has resolved every flag. */
+/** What a session is opened with, once the CLI has resolved every flag and
+ *  path: the one group, never the paths it came from. */
 export type LabelRequest = {
-  dir: string;
+  group: LabelingGroup;
   checklistFile: string;
   annotator: Annotator;
 };
@@ -32,6 +34,7 @@ export type LabelDependencies = {
   makeScreen(): Screen;
   openSession(request: LabelRequest): Promise<LabelingSessionController>;
   runTui: typeof runLabelTui;
+  reportWarning(message: string): void;
   isInteractive(): boolean;
   environment: NodeJS.ProcessEnv;
   osUserName(): string | undefined;
@@ -90,6 +93,7 @@ const defaultDependencies: LabelDependencies = {
   openSession: (request) =>
     openLabelingSession({ ...request, reportWarning: (message) => console.warn(message) }),
   runTui: runLabelTui,
+  reportWarning: (message) => console.warn(message),
   isInteractive: () => process.stdin.isTTY === true && process.stdout.isTTY === true,
   environment: process.env,
   osUserName: () => {
@@ -102,8 +106,9 @@ const defaultDependencies: LabelDependencies = {
   },
 };
 
-/** `agency label <dir> --checklist <file>`: judge every trace in a run
- *  directory against a checklist, on an interactive screen. */
+/** `agency label <path…> --checklist <file>`: judge every run the paths name
+ *  (run directories, or groups of them) against a checklist, on an
+ *  interactive screen. */
 export async function label(
   options: LabelOptions,
   dependencies: LabelDependencies = defaultDependencies,
@@ -118,8 +123,8 @@ export async function label(
   if (!fs.existsSync(options.checklist)) {
     throw new Error(`Checklist file not found: ${options.checklist}`);
   }
-  if (!fs.existsSync(options.dir)) {
-    throw new Error(`Run directory not found: ${options.dir}`);
+  if (options.paths.length === 0) {
+    throw new Error("Name at least one run directory, or a directory of run directories.");
   }
   if (!dependencies.isInteractive()) {
     throw new Error(
@@ -129,7 +134,7 @@ export async function label(
   }
 
   const request: LabelRequest = {
-    dir: path.resolve(options.dir),
+    group: resolveLabelingGroup(options.paths, { reportWarning: dependencies.reportWarning }),
     checklistFile: path.resolve(options.checklist),
     annotator: resolveAnnotator(options, dependencies),
   };
@@ -148,7 +153,7 @@ export async function label(
     await dependencies.runTui({
       controller,
       screen,
-      title: path.basename(request.dir),
+      title: path.basename(request.group.dir),
       currentSize: currentTerminalSize,
     });
   } finally {

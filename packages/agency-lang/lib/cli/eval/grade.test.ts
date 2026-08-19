@@ -20,7 +20,7 @@ afterEach(() => {
 
 /** A finished run directory with one successful trace, as eval run writes it. */
 function makeRunDir(output: string): string {
-  const runDir = writeRunDirectory([{ test: { id: "a", goal: "g", input: "t" }, output }]);
+  const runDir = writeRunDirectory({ test: { id: "a", goal: "g", input: "t" }, output });
   dirs.push(runDir);
   return runDir;
 }
@@ -98,9 +98,9 @@ describe("evalGrade", () => {
   it("grades every run directory in a group, one pass each, and reports the mean", async () => {
     const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
     dirs.push(group);
-    writeRunDirectory([{ test: { id: "a", input: "t" }, output: "hello" }], path.join(group, "a"));
+    writeRunDirectory({ test: { id: "a", input: "t" }, output: "hello" }, path.join(group, "a"));
     writeRunDirectory(
-      [{ test: { id: "b", input: "t" }, output: "hello world" }],
+      { test: { id: "b", input: "t" }, output: "hello world" },
       path.join(group, "b"),
     );
     fs.writeFileSync(path.join(group, "notes.txt"), "not a run");
@@ -118,8 +118,8 @@ describe("evalGrade", () => {
   it("a group where one run fails a must-pass gate: that run scores 0, gatesPassed is false, the other keeps its score", async () => {
     const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
     dirs.push(group);
-    writeRunDirectory([{ test: { id: "a", input: "t" }, output: "hello" }], path.join(group, "a"));
-    writeRunDirectory([{ test: { id: "b", input: "t" }, output: "bye" }], path.join(group, "b"));
+    writeRunDirectory({ test: { id: "a", input: "t" }, output: "hello" }, path.join(group, "a"));
+    writeRunDirectory({ test: { id: "b", input: "t" }, output: "bye" }, path.join(group, "b"));
     const dir = fs.mkdtempSync(path.join(process.cwd(), ".test-grading-"));
     dirs.push(dir);
     const file = path.join(dir, "graders.ts");
@@ -140,7 +140,7 @@ export default [grader(({ output }) => output === "hello", { name: "gate", mustP
     const a = makeRunDir("hello");
     const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
     dirs.push(group);
-    writeRunDirectory([{ test: { id: "b", input: "t" }, output: "hello" }], path.join(group, "b"));
+    writeRunDirectory({ test: { id: "b", input: "t" }, output: "hello" }, path.join(group, "b"));
 
     const result = await evalGrade([a, group], { graders: makeGraders(), config: {} });
 
@@ -157,9 +157,9 @@ export default [grader(({ output }) => output === "hello", { name: "gate", mustP
     const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
     dirs.push(group);
     const a = path.join(group, "a");
-    writeRunDirectory([{ test: { id: "a", input: "t" }, output: "hello" }], a);
+    writeRunDirectory({ test: { id: "a", input: "t" }, output: "hello" }, a);
     writeRunDirectory(
-      [{ test: { id: "b", input: "t" }, output: "hello world" }],
+      { test: { id: "b", input: "t" }, output: "hello world" },
       path.join(group, "b"),
     );
 
@@ -175,7 +175,7 @@ export default [grader(({ output }) => output === "hello", { name: "gate", mustP
     const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
     dirs.push(group);
     const a = path.join(group, "a");
-    writeRunDirectory([{ test: { id: "a", input: "t" }, output: "hello" }], a);
+    writeRunDirectory({ test: { id: "a", input: "t" }, output: "hello" }, a);
     const alias = path.join(group, "alias");
     fs.symlinkSync(a, alias, "dir");
 
@@ -189,9 +189,9 @@ export default [grader(({ output }) => output === "hello", { name: "gate", mustP
   it("an errored run scores zero in eval grade but has no score row, so the listing mean leaves it out", async () => {
     const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
     dirs.push(group);
-    writeRunDirectory([{ test: { id: "a", input: "t" }, output: "hello" }], path.join(group, "a"));
+    writeRunDirectory({ test: { id: "a", input: "t" }, output: "hello" }, path.join(group, "a"));
     writeRunDirectory(
-      [{ test: { id: "b", input: "t" }, output: "hello", ended: "error" }],
+      { test: { id: "b", input: "t" }, output: "hello", ended: "error" },
       path.join(group, "b"),
     );
 

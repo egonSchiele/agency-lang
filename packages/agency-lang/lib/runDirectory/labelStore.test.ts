@@ -3,56 +3,131 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
+import { normalizeDefinition } from "@/eval/label/checklist.js";
+import { LAST_MESSAGE_FIELD, resolveLabelingGroup } from "@/eval/label/group.js";
+import type { ChecklistRevision } from "@/eval/label/types.js";
+import { writeRunGroup } from "@/eval/runDirectoryFixture.js";
 
 import { completeAnnotation, type ChecklistAnnotation } from "./annotations.js";
 import { appendDurably } from "./durableWrite.js";
-import { openLabelStore, LAST_MESSAGE_FIELD, type LabelStore } from "./labelStore.js";
-import { acquireRunDirLock } from "./lock.js";
-import { finishedTraceLines, statelogLine, tempDir } from "./testFixtures.js";
+import {
+  openLabelStore,
+  type LabelSessionIdentity,
+  type LabelStore,
+  type OpenLabelStoreArgs,
+} from "./labelStore.js";
+import { recordGradingPass } from "./mutations.js";
+import { readRunDirectory, runDirPaths } from "./runDir.js";
+import { finishedTraceLines, statelogLine } from "./testFixtures.js";
 
-let dir: string;
+/** A group of two runs: `a` holds t1 (finished, with output), `b` holds t2 (no output). */
+let group: string;
 const warnings: string[] = [];
-let store: LabelStore | undefined;
+const stores: LabelStore[] = [];
+const quiet = { reportWarning: (message: string) => warnings.push(message) };
 
 beforeEach(() => {
   warnings.length = 0;
-  dir = writeRunDirectory([
+  group = writeRunGroup([
     { traceId: "t1", test: { id: "a", input: "write a poem" }, output: "roses are red" },
     { traceId: "t2", test: { id: "b", input: "count to 3" } },
   ]);
 });
 
 afterEach(() => {
-  store?.close();
-  store = undefined;
-  fs.rmSync(dir, { recursive: true, force: true });
+  for (const store of stores) store.close();
+  stores.length = 0;
+  fs.rmSync(group, { recursive: true, force: true });
 });
 
-function open(): LabelStore {
-  const lock = acquireRunDirLock({ dir, reportWarning: (message) => warnings.push(message) });
-  store = openLabelStore({ dir, lock, reportWarning: (message) => warnings.push(message) });
+const adit = { kind: "human" as const, id: "adit" };
+const SESSION_ONE = `session_${"1".repeat(64)}`;
+const SESSION_TWO = `session_${"2".repeat(64)}`;
+
+function identity(over: Partial<LabelSessionIdentity> = {}): LabelSessionIdentity {
+  return { sessionId: SESSION_ONE, checklistId: "cl_x", annotator: adit, ...over };
+}
+
+function open(over: Partial<OpenLabelStoreArgs> = {}): LabelStore {
+  const store = openLabelStore({
+    group: resolveLabelingGroup([group], quiet),
+    identity: identity(),
+    ...quiet,
+    ...over,
+  });
+  stores.push(store);
   return store;
 }
 
-describe("items", () => {
-  it("projects each trace to its input and output, in statelog order", () => {
-    const items = open().items();
-    expect(items.map((item) => item.traceId)).toEqual(["t1", "t2"]);
-    expect(items[0].fields).toEqual({ input: "write a poem", output: "roses are red" });
+/** Publish a one-question checklist `cl_x` through the store, as a session would. */
+function publish(store: LabelStore): ChecklistRevision {
+  const definition = normalizeDefinition({
+    checklistId: "cl_x",
+    name: "quality",
+    questions: [{ id: "q_a", text: "Accurate?" }],
   });
+  const prepared = store.prepareChecklist(definition);
+  if (prepared.kind !== "publish") throw new Error(prepared.kind);
+  const definitionPath = path.join(group, "quality.json");
+  fs.writeFileSync(definitionPath, JSON.stringify(definition));
+  return store.publishRevision(prepared.pending, definitionPath).revision;
+}
 
-  it("omits the output field when the trace recorded none", () => {
-    expect(open().items()[1].fields).toEqual({ input: "count to 3" });
+function row(
+  traceId: string,
+  revision: ChecklistRevision,
+  over: Partial<ChecklistAnnotation> = {},
+) {
+  return completeAnnotation(
+    {
+      traceId,
+      annotator: adit,
+      sessionId: SESSION_ONE,
+      kind: "checklist",
+      checklist: revision.checklistId,
+      version: revision.version,
+      hash: revision.hash,
+      answers: { q_a: true },
+      note: "",
+      ...over,
+    },
+    "2026-08-18T00:00:00.000Z",
+  ) as ChecklistAnnotation;
+}
+
+function lockFiles(): string[] {
+  const out: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith(".lock")) out.push(path.relative(group, full));
+    }
+  };
+  walk(group);
+  return out.sort();
+}
+
+describe("items", () => {
+  it("projects each run to its directory, trace, input and output, in walk order", () => {
+    const items = open().items();
+    expect(items.map((item) => [path.basename(item.runDir), item.traceId])).toEqual([
+      ["a", "t1"],
+      ["b", "t2"],
+    ]);
+    expect(items[0].fields).toEqual({ input: "write a poem", output: "roses are red" });
+    expect(items[1].fields).toEqual({ input: "count to 3" });
   });
 
   it("shows the last assistant message, clearly marked, when there is no output", () => {
+    const c = path.join(group, "c");
+    fs.mkdirSync(c);
     const lines = [
       statelogLine("t3", "agentStart", { entryNode: "main", args: {}, input: "chat" }),
       statelogLine("t3", "promptCompletion", { model: "m", completion: "hello there" }),
       statelogLine("t3", "agentEnd", { timeTaken: 1 }),
     ];
-    appendDurably(path.join(dir, "statelog.jsonl"), lines.join("\n") + "\n");
+    fs.writeFileSync(path.join(c, "statelog.jsonl"), lines.join("\n") + "\n");
     const item = open()
       .items()
       .find((entry) => entry.traceId === "t3");
@@ -60,69 +135,12 @@ describe("items", () => {
     expect(item?.fields[LAST_MESSAGE_FIELD]).toMatch(/^\(no recorded output/);
     expect(item?.fields[LAST_MESSAGE_FIELD]).toContain("hello there");
   });
-});
 
-describe("appendAnnotation", () => {
-  const HASH = `sha256:${"0".repeat(64)}`;
-
-  function row(traceId: string): ChecklistAnnotation {
-    return completeAnnotation(
-      {
-        traceId,
-        annotator: { kind: "human", id: "adit" },
-        kind: "checklist",
-        checklist: "cl_x",
-        version: 1,
-        hash: HASH,
-        answers: { q_a: true },
-        note: "",
-      },
-      "2026-08-18T00:00:00.000Z",
-    ) as ChecklistAnnotation;
-  }
-
-  it("refuses a trace the directory does not hold", () => {
-    expect(() => open().appendAnnotation(row("nope"))).toThrow(/not in/);
-  });
-
-  it("refuses a row whose revision is not on disk", () => {
-    expect(() => open().appendAnnotation(row("t1"))).toThrow(/revision not found/i);
-  });
-});
-
-describe("validation at open", () => {
-  it("refuses a checklist row that names a revision that does not exist", () => {
-    const HASH = `sha256:${"0".repeat(64)}`;
-    const line = JSON.stringify(
-      completeAnnotation(
-        {
-          traceId: "t1",
-          annotator: { kind: "human", id: "adit" },
-          kind: "checklist",
-          checklist: "cl_missing",
-          version: 1,
-          hash: HASH,
-          answers: {},
-          note: "",
-        },
-        "2026-08-18T00:00:00.000Z",
-      ),
-    );
-    appendDurably(path.join(dir, "annotations.jsonl"), line + "\n");
-    expect(() => open()).toThrow(/cl_missing@1, which is missing/);
-  });
-
-  it("opens an empty directory with no traces", () => {
-    fs.rmSync(dir, { recursive: true, force: true });
-    dir = tempDir("empty-");
-    fs.mkdirSync(dir, { recursive: true });
-    expect(open().items()).toEqual([]);
-  });
-
-  it("does not need a statelog to be finished traces only", () => {
-    // A trace with no agentEnd is still a trace someone may want to judge.
-    appendDurably(
-      path.join(dir, "statelog.jsonl"),
+  it("includes a run whose trace never finished", () => {
+    const c = path.join(group, "c");
+    fs.mkdirSync(c);
+    fs.writeFileSync(
+      path.join(c, "statelog.jsonl"),
       finishedTraceLines("t4", { input: "x" }).slice(0, 1).join("\n") + "\n",
     );
     expect(
@@ -130,5 +148,202 @@ describe("validation at open", () => {
         .items()
         .map((item) => item.traceId),
     ).toContain("t4");
+  });
+});
+
+describe("appendAnnotation", () => {
+  it("lands in the named run's annotations.jsonl and nowhere else, and is idempotent", () => {
+    const store = open();
+    const revision = publish(store);
+    expect(store.appendAnnotation(row("t2", revision))).toBe("appended");
+    expect(store.appendAnnotation(row("t2", revision))).toBe("replayed");
+    const a = readRunDirectory(path.join(group, "a"), quiet);
+    const b = readRunDirectory(path.join(group, "b"), quiet);
+    expect(b.annotationRows.filter((r) => r.kind === "checklist")).toHaveLength(1);
+    expect(a.annotationRows.filter((r) => r.kind === "checklist")).toHaveLength(0);
+    expect(fs.existsSync(path.join(group, "annotations.jsonl"))).toBe(false);
+  });
+
+  it("updates the cached snapshot from the mutation, so readSession sees the judgement", () => {
+    const store = open();
+    const revision = publish(store);
+    store.appendAnnotation(row("t1", revision));
+    expect(Object.keys(store.readSession().judgements)).toEqual(["t1"]);
+  });
+
+  it("holds the run's lock only around the append: another writer gets in between", () => {
+    const store = open();
+    const revision = publish(store);
+    store.appendAnnotation(row("t1", revision));
+    expect(() =>
+      recordGradingPass({
+        dir: path.join(group, "a"),
+        scores: [
+          {
+            traceId: "t1",
+            annotator: { kind: "grader", id: "g@1" },
+            name: "g",
+            score: { kind: "binary", pass: true },
+            weight: 1,
+            mustPass: false,
+          },
+        ],
+      }),
+    ).not.toThrow();
+    expect(store.appendAnnotation(row("t1", revision, { note: "again" }))).toBe("appended");
+  });
+
+  it("refuses a trace outside the session", () => {
+    const store = open();
+    const revision = publish(store);
+    expect(() => store.appendAnnotation(row("nope", revision))).toThrow(/not in this session/);
+  });
+
+  it("refuses a row whose revision is not in the group's lineage", () => {
+    const store = open();
+    const fake: ChecklistRevision = {
+      schemaVersion: 1,
+      parentVersion: null,
+      checklistId: "cl_x",
+      version: 1,
+      hash: `sha256:${"0".repeat(64)}`,
+      name: "q",
+      questions: [],
+      createdAt: "2026-08-18T00:00:00.000Z",
+    };
+    expect(() => store.appendAnnotation(row("t1", fake))).toThrow(/missing from/);
+    expect(fs.existsSync(runDirPaths(path.join(group, "a")).annotations)).toBe(true);
+    expect(
+      readRunDirectory(path.join(group, "a"), quiet).annotationRows.filter(
+        (r) => r.kind === "checklist",
+      ),
+    ).toHaveLength(0);
+  });
+});
+
+describe("where session files live", () => {
+  it("revisions and drafts are written under <group>/checklists/<id>/", () => {
+    const store = open();
+    const revision = publish(store);
+    const lineage = path.join(group, "checklists", revision.checklistId);
+    expect(fs.existsSync(path.join(lineage, "1.json"))).toBe(true);
+    expect(fs.existsSync(path.join(lineage, "current.json"))).toBe(true);
+    store.saveDraft({
+      schemaVersion: 1,
+      sessionId: SESSION_ONE,
+      binding: {
+        traceIds: ["t1", "t2"],
+        checklistId: "cl_x",
+        checklist: { kind: "published", version: 1, hash: revision.hash },
+        annotator: adit,
+      },
+      currentIndex: 0,
+      answersByTraceId: {},
+      notesByTraceId: {},
+      reviewedByTraceId: {},
+      stagedQuestions: null,
+      pendingRevision: null,
+      pendingAnnotation: null,
+      activeMsByTraceId: {},
+    });
+    expect(fs.existsSync(path.join(lineage, "drafts", `${SESSION_ONE}.json`))).toBe(true);
+    expect(store.readSession().draft?.sessionId).toBe(SESSION_ONE);
+    for (const run of ["a", "b"]) {
+      expect(fs.existsSync(path.join(group, run, "checklists"))).toBe(false);
+    }
+  });
+});
+
+describe("locks", () => {
+  it("holds one lock per session draft while open, and none after close", () => {
+    const store = open();
+    expect(lockFiles()).toEqual([`checklists/cl_x/drafts/${SESSION_ONE}.lock`]);
+    store.close();
+    expect(lockFiles()).toEqual([]);
+    store.close(); // idempotent
+  });
+
+  it("refuses a second store on the same session; a different annotator opens beside it", () => {
+    open();
+    expect(() => open()).toThrow(/Another writer holds .*session_1+\.lock/);
+    expect(() =>
+      open({ identity: identity({ sessionId: SESSION_TWO, annotator: { ...adit, id: "sam" } }) }),
+    ).not.toThrow();
+    expect(lockFiles()).toEqual([
+      `checklists/cl_x/drafts/${SESSION_ONE}.lock`,
+      `checklists/cl_x/drafts/${SESSION_TWO}.lock`,
+    ]);
+  });
+
+  it("releases the session lock when opening fails validation", () => {
+    const bad = completeAnnotation(
+      {
+        traceId: "t1",
+        annotator: adit,
+        kind: "checklist",
+        checklist: "cl_missing",
+        version: 1,
+        hash: `sha256:${"0".repeat(64)}`,
+        answers: {},
+        note: "",
+      },
+      "2026-08-18T00:00:00.000Z",
+    );
+    appendDurably(path.join(group, "a", "annotations.jsonl"), JSON.stringify(bad) + "\n");
+    expect(() => open()).toThrow(/cl_missing@1, which is missing/);
+    expect(lockFiles()).toEqual([]);
+  });
+
+  it("two sessions racing to publish the same lineage: the stale one loses, the lineage is intact", () => {
+    const first = open();
+    const second = open({ identity: identity({ sessionId: SESSION_TWO }) });
+    const definition = normalizeDefinition({
+      checklistId: "cl_x",
+      name: "quality",
+      questions: [{ id: "q_a", text: "Accurate?" }],
+    });
+    const definitionPath = path.join(group, "quality.json");
+    fs.writeFileSync(definitionPath, JSON.stringify(definition));
+    const preparedFirst = first.prepareChecklist(definition);
+    const preparedSecond = second.prepareChecklist({
+      ...definition,
+      questions: [{ id: "q_b", text: "On time?", weight: 1, deleted: false }],
+    });
+    if (preparedFirst.kind !== "publish" || preparedSecond.kind !== "publish") throw new Error();
+    first.publishRevision(preparedFirst.pending, definitionPath);
+    expect(() => second.publishRevision(preparedSecond.pending, definitionPath)).toThrow(
+      /lineage moved|already exists with different content/,
+    );
+    const lineage = path.join(group, "checklists", "cl_x");
+    expect(fs.readdirSync(lineage).filter((name) => /^\d+\.json$/.test(name))).toEqual(["1.json"]);
+    expect(lockFiles()).toEqual([
+      `checklists/cl_x/drafts/${SESSION_ONE}.lock`,
+      `checklists/cl_x/drafts/${SESSION_TWO}.lock`,
+    ]);
+    // The loser reconciles against the published lineage (the synced file).
+    const synced = normalizeDefinition(JSON.parse(fs.readFileSync(definitionPath, "utf8")));
+    expect(second.prepareChecklist(synced).kind).toBe("current");
+  });
+});
+
+describe("validation at open", () => {
+  it("names the run whose row points at a revision that does not exist", () => {
+    const bad = completeAnnotation(
+      {
+        traceId: "t2",
+        annotator: adit,
+        kind: "checklist",
+        checklist: "cl_missing",
+        version: 1,
+        hash: `sha256:${"0".repeat(64)}`,
+        answers: {},
+        note: "",
+      },
+      "2026-08-18T00:00:00.000Z",
+    );
+    appendDurably(path.join(group, "b", "annotations.jsonl"), JSON.stringify(bad) + "\n");
+    expect(() => open()).toThrow(
+      new RegExp(`${path.join(group, "b")}.*cl_missing@1, which is missing`),
+    );
   });
 });

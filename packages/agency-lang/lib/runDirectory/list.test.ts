@@ -22,7 +22,6 @@ describe("summarizeRuns", () => {
       dir,
       statelogLine("t1", "agentStart", { entryNode: "main", args: {}, input: "summarize x" }),
       statelogLine("t1", "agentEnd", { result: "done", timeTaken: 5 }),
-      statelogLine("t2", "agentStart", { entryNode: "main", args: {} }),
     );
     fs.writeFileSync(runDirPaths(dir).notes, "fine\n");
     recordGradingPass({
@@ -46,7 +45,7 @@ describe("summarizeRuns", () => {
         },
       ],
     });
-    const [first, second] = summarizeRuns(readRunDirectory(dir, quiet));
+    const [first] = summarizeRuns(readRunDirectory(dir, quiet));
     expect(first).toMatchObject({
       traceId: "t1",
       input: "summarize x",
@@ -56,14 +55,17 @@ describe("summarizeRuns", () => {
       labeled: false,
       codeHash: null,
     });
-    expect(second).toMatchObject({
+    expect(annotationSummaryText(first)).toBe("notes · score 0.75");
+
+    const bare = tempDir();
+    writeStatelog(bare, statelogLine("t2", "agentStart", { entryNode: "main", args: {} }));
+    expect(summarizeRuns(readRunDirectory(bare, quiet))[0]).toMatchObject({
       traceId: "t2",
       input: null,
       ended: "unknown",
       latestScore: null,
-      hasNotes: true,
+      hasNotes: false,
     });
-    expect(annotationSummaryText(first)).toBe("notes · score 0.75");
   });
 
   it("hasNotes: false without notes.md or when it is only whitespace; true with text", () => {
@@ -149,8 +151,10 @@ describe("buildRunsListing", () => {
   }
 
   it("counts rows, silent runs, total runs, and the mean over the graded rows, from the snapshots", () => {
-    const twoTraces = tempDir();
-    writeStatelog(twoTraces, agentStartLine("t1"), agentStartLine("t2"));
+    const one = tempDir();
+    writeStatelog(one, agentStartLine("t1"));
+    const two = tempDir();
+    writeStatelog(two, agentStartLine("t2"));
     const graded = tempDir();
     writeStatelog(graded, agentStartLine("t3"));
     recordGradingPass({
@@ -171,7 +175,7 @@ describe("buildRunsListing", () => {
     fs.writeFileSync(path.join(silent, "statelog.jsonl"), "");
 
     const listing = buildRunsListing(
-      [twoTraces, graded, silent].map((dir) => readRunDirectory(dir, quiet)),
+      [one, two, graded, silent].map((dir) => readRunDirectory(dir, quiet)),
     );
     expect(listing.summaries.map((summary) => summary.traceId)).toEqual(["t1", "t2", "t3"]);
     expect(listing.silentRunCount).toBe(1);
@@ -193,28 +197,27 @@ describe("buildRunsListing", () => {
   });
 
   it("displayAgent: the trace's agentName event wins; else the harness label unchanged; else null", () => {
-    const dir = tempDir();
-    writeStatelog(
-      dir,
-      agentStartLine("named"),
-      statelogLine("named", "agentName", { name: "greeter" }),
-      agentStartLine("file"),
-      agentStartLine("command"),
-      agentStartLine("bare"),
-    );
     const command = "/usr/bin/python /tmp/agent.py --workdir /tmp/data";
-    fs.writeFileSync(
-      path.join(dir, "annotations.jsonl"),
-      runRow("named", { agent: "/abs/agents/other.agency:main" }) +
-        runRow("file", { agent: "/abs/agents/greeter.agency:main" }) +
-        runRow("command", { agent: command }),
-    );
-    const byTrace = Object.fromEntries(
-      summarizeRuns(readRunDirectory(dir, quiet)).map((summary) => [
-        summary.traceId,
-        displayAgent(summary),
-      ]),
-    );
+    // One run directory per case; the run row's agent label is the harness's.
+    const runs: [string, string[], string | null][] = [
+      [
+        "named",
+        [agentStartLine("named"), statelogLine("named", "agentName", { name: "greeter" })],
+        "/abs/agents/other.agency:main",
+      ],
+      ["file", [agentStartLine("file")], "/abs/agents/greeter.agency:main"],
+      ["command", [agentStartLine("command")], command],
+      ["bare", [agentStartLine("bare")], null],
+    ];
+    const byTrace: Record<string, string | null> = {};
+    for (const [traceId, lines, agent] of runs) {
+      const dir = tempDir();
+      writeStatelog(dir, ...lines);
+      if (agent !== null)
+        fs.writeFileSync(path.join(dir, "annotations.jsonl"), runRow(traceId, { agent }));
+      const [summary] = summarizeRuns(readRunDirectory(dir, quiet));
+      byTrace[traceId] = displayAgent(summary);
+    }
     expect(byTrace).toEqual({
       named: "greeter",
       file: "/abs/agents/greeter.agency:main",

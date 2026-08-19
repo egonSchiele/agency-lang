@@ -26,8 +26,13 @@ any directory of run directories (what `eval run --out` writes); it has no
 index file. `findRunDirectories(paths)` (`findRuns.ts`) is the one walk rule:
 a run directory is itself, a directory of run directories yields its children
 (one level, sorted), anything else is an error. `eval grade`, `runs list` and
-the logs explorer use it; `label` still takes a single directory (next chunk). The reader still tolerates several traces in one file, because the
-labeling and explorer tests were written for that shape; no writer makes one.
+the logs explorer and `label` use it (`uniqueRunDirectories` drops aliases of
+one physical directory where a command mutates or keys by run). The reader
+refuses a `statelog.jsonl` holding more than one trace id (`assertOneRun`,
+naming the ids and `runs add` to split it), and `recordCompletedRun` refuses,
+before writing a byte, anything that would make a directory hold two runs: a
+second staged trace, a run row for another trace than the one present, or a
+second silent run row. No writer and no reader handles the pre-atomic shape.
 
 **The statelog is the run.** A directory holding only `statelog.jsonl` is a
 valid run directory; every other entry is an attachment that unlocks more.
@@ -86,7 +91,7 @@ Rules:
 
 ## Write side: declarative operations (`mutations.ts`)
 
-Three public writes. Each takes the lock, snapshots, **plans the whole request
+Four public writes. Each takes the lock, snapshots, **plans the whole request
 with the pure planners before writing a byte**, repairs a torn final line on
 each append target, applies, and returns a fresh snapshot; the lock is released
 on success or failure.
@@ -100,6 +105,7 @@ on success or failure.
   the traces. Used by `runs add` and `run --capture-workdir`.
 - `recordCompletedRun({ dir, stagedStatelogFile, codeEntry?, workdir?, run })` — the eval harness's one call per finished test, on a fresh directory
 - `recordGradingPass({ dir, scores })` — mints one `passId`, stamps `passSize`, marks the last row `completesPass`; an empty `scores` is refused
+- `recordChecklistRow({ dir, groupDir, row })` — one labeling sign-off, the completed row as the session built it (its id is content-derived, so a replay lands on the same id): grounded immediately before the append against the run (holds the trace) and the group's lineage (revision exists with that hash; every answer names one of its questions); returns `appended` or `replayed` plus the post-write snapshot
 
 Writer inputs are held to a stricter standard than reads: a statelog file
 with any unparseable line is refused whole (`readTracesOrThrow`), because a
@@ -168,9 +174,13 @@ checklist revisions and labeling drafts use them too.
 ## Labeling (`labelStore.ts`)
 
 `openLabelStore` is the facade `agency label` works through; see
-`docs/dev/eval-labeling.md`. It holds the writer lock for the whole session and
-appends through `appendAnnotationsUnderLock`, the one `@internal` export of
-`mutations.ts`.
+`docs/dev/eval-labeling.md`. It is over a group (`resolveLabelingGroup` in
+`lib/eval/label/group.ts`): session files live in `<group>/checklists/`, a
+sign-off appends to its run through `recordChecklistRow` under that run's
+lock, and the store holds only a per-session draft lock (plus a short one
+around each lineage publication), never a group-wide one. Those locks are
+`acquireOwnedFileLock` (`lock.ts`), the same primitive as the run lock at a
+different path.
 
 ## Commands (`lib/cli/runDirectory/`)
 
@@ -201,6 +211,8 @@ One file per command; none imports the lock or the append helpers.
   can differ for such a group. Footer: `N runs · mean 0.720 over G graded ·
   S runs wrote no trace`, clauses only when they apply (the table is omitted
   when there are no rows). Duplicate paths are duplicate rows.
+- `agency label <path…> --checklist <file>` (`lib/cli/eval/label.ts`) — the
+  same walk into one group; see `docs/dev/eval-labeling.md`.
 - `agency eval grade <path…>` (`lib/cli/eval/grade.ts`) — the same walk, then
   duplicates removed by physical identity (`fs.realpathSync.native`) before
   any pass is written: grading mutates, so `eval grade runs/suite runs/suite/a`

@@ -62,7 +62,6 @@ export function addRunDirectoryCommands(
       collectRepeated,
       [],
     )
-    .option("--replace", "Replace an existing workdir snapshot")
     .action(
       (
         dir: string,
@@ -72,7 +71,6 @@ export function addRunDirectoryCommands(
           workdir?: string;
           trace?: string;
           annotations: string[];
-          replace?: boolean;
         },
       ) => {
         try {

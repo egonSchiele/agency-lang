@@ -39,6 +39,13 @@ describe("findRunDirectories", () => {
     expect(() => findRunDirectories([folder])).toThrow(/holds no run directories.*runs add/s);
   });
 
+  it("a child named statelog.jsonl does not make the group look like a run directory", () => {
+    const group = tempDir();
+    const child = runDirAt(path.join(group, "statelog.jsonl"));
+    expect(isRunDirectory(group)).toBe(false);
+    expect(findRunDirectories([group])).toEqual([child]);
+  });
+
   it("returns absolute paths for a relative argument", () => {
     const group = tempDir();
     runDirAt(path.join(group, "a"));

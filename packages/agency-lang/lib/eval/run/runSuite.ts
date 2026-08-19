@@ -138,6 +138,10 @@ export async function runSuite(
     const testId = test.id ?? "";
     const traceId = nanoid();
     const runDir = path.join(groupDir, testId);
+    const idProblem = testIdProblem(testId, groupDir, runDir);
+    if (idProblem !== undefined) {
+      return { testId, traceId, runDir, status: "error", errorMessage: idProblem };
+    }
     if (fs.existsSync(runDir)) {
       // Someone's data; not ours to touch. (Resume is deliberately not here.)
       return {
@@ -374,6 +378,18 @@ async function runPool(args: {
     board.stop();
   }
   return slots.filter((entry): entry is SuiteTestResult => entry !== undefined);
+}
+
+/** A test id is a directory name under the group: it must be non-empty and
+ *  resolve to a direct child (no separators, no `..`, not `.staging`). Suite
+ *  loaders already restrict ids, but `runSuite` is also called directly. */
+function testIdProblem(testId: string, groupDir: string, runDir: string): string | undefined {
+  if (testId === "") return "test has no id; a run directory needs a name";
+  if (path.dirname(path.resolve(runDir)) !== groupDir || path.basename(runDir) !== testId) {
+    return `test id "${testId}" is not a valid directory name under ${groupDir}`;
+  }
+  if (testId === ".staging") return `test id ".staging" is reserved`;
+  return undefined;
 }
 
 /** Default group directory name: local-time timestamp then a short random

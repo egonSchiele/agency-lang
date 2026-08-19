@@ -8,7 +8,6 @@ export type RunsAddOptions = {
   workdir?: string;
   trace?: string;
   annotations: string[];
-  replace?: boolean;
 };
 
 export type RunsAddDependencies = { report(message: string): void };
@@ -24,10 +23,7 @@ export function runsAdd(
       statelogFiles: options.statelog,
       trace: options.trace,
       codeEntries: options.code,
-      workdir:
-        options.workdir === undefined
-          ? undefined
-          : { sourceDir: options.workdir, replace: options.replace === true },
+      workdir: options.workdir === undefined ? undefined : { sourceDir: options.workdir },
       annotationFiles: options.annotations,
     },
     { reportWarning: (message) => console.warn(message) },

@@ -174,7 +174,7 @@ One file per command; none imports the lock or the append helpers.
   source log itself is never a valid output. The viewer's `x` key does the
   same for the focused trace, prompting for a path, and also refuses an
   existing file.
-- `agency runs add <group> [--statelog f]… [--trace id] [--code entry]… [--workdir p] [--annotations f]… [--replace]`
+- `agency runs add <group> [--statelog f]… [--trace id] [--code entry]… [--workdir p] [--annotations f]…`
   — one `wrapTracesAsRunDirectories` request; prints one line per child
   written or skipped.
 - `agency runs list <dir>` — one line per trace (`summarizeRuns`).

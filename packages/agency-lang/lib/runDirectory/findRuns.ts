@@ -10,7 +10,13 @@ import * as path from "path";
  * anything else is an error. Resolved, absolute paths come back.
  */
 export function isRunDirectory(dir: string): boolean {
-  return fs.existsSync(path.join(dir, "statelog.jsonl"));
+  // A file, not merely present: a test id may itself be `statelog.jsonl`,
+  // making `<group>/statelog.jsonl/` a child run directory, not a statelog.
+  try {
+    return fs.statSync(path.join(dir, "statelog.jsonl")).isFile();
+  } catch {
+    return false;
+  }
 }
 
 export function childRunDirectories(dir: string): string[] {

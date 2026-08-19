@@ -378,6 +378,37 @@ describe("runSuite", () => {
     expect(readRunDirectory(path.join(out, "b"), quiet).traces).toHaveLength(1);
   });
 
+  it("a test id that is empty, escapes the group, or is .staging is an error result; the others run", async () => {
+    const out = path.join(proj, "runs", "ids");
+    const runner = traceWritingRunner("done");
+    const result = await runSuite(
+      {
+        agent: path.join(proj, "agent.agency"),
+        inputs: [
+          { id: "", goal: "g", input: "t" },
+          { id: "../escape", goal: "g", input: "t" },
+          { id: "a/b", goal: "g", input: "t" },
+          { id: ".staging", goal: "g", input: "t" },
+          { id: "fine", goal: "g", input: "t" },
+        ],
+        out,
+        config: {},
+        perRun: { pipeOutput: false },
+      },
+      { runner },
+    );
+    expect(result.tests.map((test) => test.status)).toEqual([
+      "error",
+      "error",
+      "error",
+      "error",
+      "success",
+    ]);
+    expect(runner).toHaveBeenCalledTimes(1);
+    expect(fs.readdirSync(out)).toEqual(["fine"]);
+    expect(fs.existsSync(path.join(proj, "runs", "escape"))).toBe(false);
+  });
+
   it("SIGINT stops the loop after the in-flight test, which is still folded in", async () => {
     const runsDir = path.join(proj, "runs");
     const before = process.listeners("SIGINT");

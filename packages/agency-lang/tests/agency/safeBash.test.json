@@ -250,7 +250,7 @@
     },
     {
       "nodeName": "tildeRedirectQuoting",
-      "description": "unquoted tilde expands; quoted tilde stays beneath the cwd",
+      "description": "unquoted tilde cannot be narrowed and takes the broad bash question; quoted tilde stays beneath the cwd",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [

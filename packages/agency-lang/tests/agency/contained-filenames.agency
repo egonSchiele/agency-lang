@@ -43,7 +43,7 @@ node containedBinaryRoundtrip(): boolean {
 
 node writeEscapeDotDot(): string {
   handle {
-    const r = try write("../cf-escape.txt", "x", __dirname)
+    const r = try write("../cf-escape.txt", "x", __dirname, "create-only")
     if (isFailure(r)) {
       return classify("${r.error}")
     }
@@ -67,7 +67,7 @@ node readEscapeDotDot(): string {
 
 node writeBinaryEscape(): string {
   handle {
-    const r = try writeBinary("../cf-escape.bin", "aGk=", __dirname)
+    const r = try writeBinary("../cf-escape.bin", "aGk=", __dirname, "create-only")
     if (isFailure(r)) {
       return classify("${r.error}")
     }
@@ -91,7 +91,7 @@ node readBinaryEscape(): string {
 
 node writeAbsoluteEscape(): string {
   handle {
-    const r = try write("/cf-absolute-escape.txt", "x", __dirname)
+    const r = try write("/cf-absolute-escape.txt", "x", __dirname, "create-only")
     if (isFailure(r)) {
       return classify("${r.error}")
     }
@@ -103,7 +103,9 @@ node writeAbsoluteEscape(): string {
 
 node writeTildeEscape(): string {
   handle {
-    const r = try write("~/cf-tilde-escape.txt", "x", __dirname)
+    // create-only and an improbable dotted name: if containment ever
+    // breaks, this test must not overwrite anything a user owns.
+    const r = try write("~/.agency-cf-escape-probe-3f9d.txt", "x", __dirname, "create-only")
     if (isFailure(r)) {
       return classify("${r.error}")
     }
@@ -144,7 +146,7 @@ node editEscapeDotDot(): string {
 
 node typecheckFileTildeEscape(): string {
   handle {
-    const r = try typecheckFile(__dirname, "~/cf-escape.agency")
+    const r = try typecheckFile(__dirname, "~/.agency-cf-escape-probe-3f9d.agency")
     if (isFailure(r)) {
       return classify("${r.error}")
     }
@@ -160,7 +162,7 @@ node writeASTTildeEscape(): string {
     return "parse failed"
   }
   handle {
-    const r = try writeAST(parsed.value, __dirname, "~/cf-escape.agency")
+    const r = try writeAST(parsed.value, __dirname, "~/.agency-cf-escape-probe-3f9d.agency", overwrite: false)
     if (isFailure(r)) {
       return classify("${r.error}")
     }
@@ -172,7 +174,7 @@ node writeASTTildeEscape(): string {
 
 node loadTemplateTildeEscape(): string {
   handle {
-    const r = try loadTemplate(__dirname, "~/cf-escape.agency")
+    const r = try loadTemplate(__dirname, "~/.agency-cf-escape-probe-3f9d.agency")
     if (isFailure(r)) {
       return classify("${r.error}")
     }
@@ -184,7 +186,7 @@ node loadTemplateTildeEscape(): string {
 
 node formatFileTildeEscape(): string {
   handle {
-    const r = try formatFile(__dirname, "~/cf-escape.agency")
+    const r = try formatFile(__dirname, "~/.agency-cf-escape-probe-3f9d.agency")
     if (isFailure(r)) {
       return classify("${r.error}")
     }

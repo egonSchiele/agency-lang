@@ -174,11 +174,8 @@ def flagNames(command: SimpleCommand): string[] {
   return out
 }
 
-/** Quote-aware tilde behavior for a redirect target: bash expands `~`
-  only when it is unquoted, so `> ~/f` writes to the home directory while
-  `> '~/f'` and `> "~/f"` name a literal `~/f` beneath the cwd. Only the
-  unquoted word tags expand; everything literalTarget accepts and this
-  does not list stays literal. */
+/** Bash expands `~` only when unquoted, so only the unquoted word tags
+  expand; everything else literalTarget accepts stays literal. */
 def tildeModeFor(word: Word): string {
   return match(word) {
     { tag: "literal" } => "expand"
@@ -187,13 +184,10 @@ def tildeModeFor(word: Word): string {
   }
 }
 
-/** The ONE owner of redirect-write preparation: validates the redirect
-  shape, extracts the fully literal target (a variable target fails, which
-  sends the whole command to the broad std::bash question), applies
-  quote-aware tilde behavior, resolves the complete stable target through
-  the strict symlink walk (dangling links and loops fail, same fallback),
-  and returns the shared payload both the effect and the execution derive
-  from. Neither caller repeats any of this choreography. */
+/** The one owner of redirect-write preparation: validate the redirect,
+  extract the literal target, resolve it (quote-aware tilde, strict
+  symlink walk), and return the payload both plan sides derive from. Any
+  failure sends the whole command to the broad std::bash question. */
 def prepareRedirectWrite(redirect: Redirect, cwd: string, content: string): Result<WritePayload> {
   if (redirect.fd != null) {
     return failure("redirect with an explicit file descriptor")

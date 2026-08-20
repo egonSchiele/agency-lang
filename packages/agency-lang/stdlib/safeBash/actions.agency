@@ -38,9 +38,8 @@ export type WritePayload = {
   mode: WriteMode
 }
 
-/** The one shared description of a planned redirect write. Both the
-  approval side (writeEffect) and the execution side (writeExecution)
-  derive from it, so payload/execution parity holds by construction. */
+/** Both plan sides derive from one WritePayload, so payload/execution
+  parity holds by construction. */
 export def writeEffect(write: WritePayload): Effect {
   return {
     name: "std::write",

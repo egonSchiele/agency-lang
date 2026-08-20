@@ -112,9 +112,11 @@ describe("prepareContainedPath", () => {
 
   it("fails closed on a permission error instead of treating it as a lexical tail", async () => {
     const { root } = sandbox();
-    const fsPromises = await import("fs/promises");
+    const fsSync = await import("fs");
     const denied = Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
-    vi.spyOn(fsPromises.default, "lstat").mockRejectedValueOnce(denied);
+    vi.spyOn(fsSync.default, "lstatSync").mockImplementationOnce(() => {
+      throw denied;
+    });
     await expect(prepareContainedPath(root, "secret/f.txt", "write")).rejects.toThrow(/EACCES/);
   });
 

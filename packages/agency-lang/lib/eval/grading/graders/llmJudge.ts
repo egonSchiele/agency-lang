@@ -3,7 +3,13 @@ import * as fs from "fs";
 import { sha256Text } from "@/utils/hash.js";
 import { z } from "zod";
 
-import { asJudgeText, GOAL_JUDGE_VERSION, goalJudgeFile, ScalarVerdict } from "../goalJudgeFile.js";
+import {
+  asJudgeText,
+  GOAL_JUDGE_VERSION,
+  goalJudgeFile,
+  scalarGrade,
+  ScalarVerdict,
+} from "../goalJudgeFile.js";
 import { BaseGrader } from "../baseGrader.js";
 import { getPath } from "../getPath.js";
 import type { Grade, GraderInput, GraderOptions, JSONPath } from "../types.js";
@@ -79,6 +85,6 @@ export class LlmJudge extends BaseGrader {
       return { score: { kind: "binary", pass: v.pass }, feedback: v.reasoning };
     }
     const v = await runAgency.runStructured(agencyFile, node, args, ScalarVerdict);
-    return { score: { kind: "scalar", value: v.score }, feedback: v.reasoning };
+    return scalarGrade(v);
   }
 }

@@ -47,16 +47,18 @@ describe("FunctionGrader", () => {
     expect(seen).toEqual(["Paris"]);
   });
 
-  it("provides ctx.judge that runs the bundled goal judge and returns its score", async () => {
+  it("provides ctx.judge that runs the bundled goal judge and returns a Grade with its reasoning", async () => {
     const runStructured = vi.fn(async () => ({ score: 0.9, reasoning: "good" }));
     const ctxInput: GraderInput = {
       ...runInput("Paris"),
       runAgency: { runStructured } as unknown as AgencyRunner,
     };
-    const g = new FunctionGrader(
-      async ({ judge, output }) => (await judge({ goal: "capital", output })).score,
-    );
-    expect(await g.run(ctxInput)).toEqual({ score: { kind: "scalar", value: 0.9 } });
+    // The Grade is returnable as-is, so the reasoning lands in the annotation.
+    const g = new FunctionGrader(({ judge, output }) => judge({ goal: "capital", output }));
+    expect(await g.run(ctxInput)).toEqual({
+      score: { kind: "scalar", value: 0.9 },
+      feedback: "good",
+    });
     expect(runStructured).toHaveBeenCalledTimes(1);
   });
 
@@ -67,7 +69,7 @@ describe("FunctionGrader", () => {
       run: loadedRun("New Delhi"),
       runAgency: { runStructured } as unknown as AgencyRunner,
     };
-    const g = new FunctionGrader(async ({ judge }) => (await judge({ goal: "capital" })).score);
+    const g = new FunctionGrader(({ judge }) => judge({ goal: "capital" }));
     await g.run(input);
     expect((runStructured.mock.calls[0] as unknown[])[2]).toEqual([
       "capital",
@@ -83,9 +85,7 @@ describe("FunctionGrader", () => {
       run: loadedRun("Mumbai"),
       runAgency: { runStructured } as unknown as AgencyRunner,
     };
-    const g = new FunctionGrader(
-      async ({ judge }) => (await judge({ goal: "capital", expected: "Delhi" })).score,
-    );
+    const g = new FunctionGrader(({ judge }) => judge({ goal: "capital", expected: "Delhi" }));
     await g.run(input);
     expect((runStructured.mock.calls[0] as unknown[])[2]).toEqual(["capital", "Mumbai", "Delhi"]);
   });

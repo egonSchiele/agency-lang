@@ -1,5 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { checkPolicy, resolveDotDirPattern, validatePolicy } from "./policy.js";
+import { mkdtempSync, mkdirSync, symlinkSync, rmSync, realpathSync } from "fs";
+import { tmpdir } from "os";
+import path from "path";
 import picomatch from "picomatch";
 
 describe("checkPolicy", () => {
@@ -513,5 +516,54 @@ describe("resolveDotDirPattern escaping", () => {
     const resolved = resolveDotDirPattern("./sub/**", "/tmp/plain");
     expect(picomatch.isMatch("/tmp/plain/sub/a/b", resolved)).toBe(true);
     expect(picomatch.isMatch("/tmp/plain/other", resolved)).toBe(false);
+  });
+});
+
+describe("dot expansion canonicalizes the launch directory", () => {
+  it("a symlinked cwd resolves to its real directory in the pattern", () => {
+    const base = mkdtempSync(path.join(tmpdir(), "policy-dot-"));
+    try {
+      const real = path.join(base, "real");
+      mkdirSync(real);
+      const link = path.join(base, "link");
+      symlinkSync(real, link);
+      const resolved = resolveDotDirPattern("{.,./**}", link);
+      const realRoot = realpathSync(real);
+      expect(picomatch.isMatch(realRoot, resolved)).toBe(true);
+      expect(picomatch.isMatch(path.join(realRoot, "sub", "deep"), resolved)).toBe(true);
+      expect(picomatch.isMatch(path.join(base, "outside"), resolved)).toBe(false);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("is wired through checkPolicy, not only the resolver", () => {
+    const base = mkdtempSync(path.join(tmpdir(), "policy-dot-"));
+    const cwdSpy = vi.spyOn(process, "cwd");
+    try {
+      const real = path.join(base, "real");
+      mkdirSync(real);
+      const link = path.join(base, "link");
+      symlinkSync(real, link);
+      cwdSpy.mockReturnValue(link);
+      const policy = { "std::write": [{ match: { dir: "{.,./**}" }, action: "approve" as const }] };
+      const intr = (dir: string) => ({
+        effect: "std::write",
+        message: "",
+        data: { dir, filename: "x.txt" },
+        origin: "",
+      });
+      expect(checkPolicy(policy, intr(realpathSync(real))).type).toBe("approve");
+      expect(checkPolicy(policy, intr(path.join(base, "outside"))).type).toBe("propagate");
+    } finally {
+      cwdSpy.mockRestore();
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the lexical cwd when realpath fails, with escaping intact", () => {
+    const resolved = resolveDotDirPattern("./**", "/nonexistent-policy-cwd*");
+    expect(picomatch.isMatch("/nonexistent-policy-cwd*/x", resolved)).toBe(true);
+    expect(picomatch.isMatch("/nonexistent-policy-cwdX/x", resolved)).toBe(false);
   });
 });

@@ -1,10 +1,9 @@
 import * as readline from "readline";
 import process from "process";
-import { readFile, writeFile, appendFile, open as openFile } from "fs/promises";
+import { readFile, writeFile, appendFile } from "fs/promises";
 import { classifyIterable } from "../utils/iteration.js";
 import { decodeBase64Strict } from "./base64.js";
-import { constants as fsConstants, existsSync } from "fs";
-import { assertContained } from "./assertContained.js";
+import { existsSync } from "fs";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { detectPlatform } from "./utils.js";
@@ -252,7 +251,6 @@ async function _writeBytes(
   filename: string,
   data: string | Buffer,
   mode: WriteMode = "overwrite",
-  allowedPaths: string[] = [],
 ): Promise<boolean> {
   if (!VALID_WRITE_MODES.includes(mode)) {
     throw new Error(`Invalid mode '${mode}'. Must be one of: ${VALID_WRITE_MODES.join(", ")}.`);
@@ -261,47 +259,8 @@ async function _writeBytes(
   if (mode === "create-only" && existsSync(filePath)) {
     throw new Error(`File already exists: '${filePath}' (mode is 'create-only').`);
   }
-  if (allowedPaths.length > 0) {
-    return writeContained(filePath, data, mode, allowedPaths);
-  }
   const doWrite = mode === "append" ? appendFile : writeFile;
   await doWrite(filePath, data);
-  return true;
-}
-
-/** The containment-enforcing write path, taken whenever `allowedPaths` is
- *  set. Enforcement happens AT the write, not as a preflight whose answer
- *  can go stale: `assertContained` pins the (realpathed) parent chain, and
- *  the file itself is opened with O_NOFOLLOW so the kernel refuses a
- *  final-component symlink outright — including a dangling one, and one
- *  swapped in after any earlier check. */
-async function writeContained(
-  filePath: string,
-  data: string | Buffer,
-  mode: WriteMode,
-  allowedPaths: string[],
-): Promise<boolean> {
-  await assertContained(filePath, allowedPaths);
-  const { O_WRONLY, O_CREAT, O_TRUNC, O_APPEND, O_EXCL, O_NOFOLLOW } = fsConstants;
-  const modeFlag = mode === "append" ? O_APPEND : mode === "create-only" ? O_EXCL : O_TRUNC;
-  let handle;
-  try {
-    handle = await openFile(filePath, O_WRONLY | O_CREAT | O_NOFOLLOW | modeFlag);
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    // ELOOP (Linux) / EMLINK (some BSDs) is O_NOFOLLOW hitting a symlink.
-    if (code === "ELOOP" || code === "EMLINK") {
-      throw new Error(
-        `Refusing to write '${filePath}': it is a symlink, and allowedPaths writes never follow symlinks.`,
-      );
-    }
-    throw error;
-  }
-  try {
-    await handle.writeFile(data);
-  } finally {
-    await handle.close();
-  }
   return true;
 }
 
@@ -310,9 +269,8 @@ export async function _write(
   filename: string,
   content: string,
   mode: WriteMode = "overwrite",
-  allowedPaths: string[] = [],
 ): Promise<boolean> {
-  return _writeBytes(dir, filename, content, mode, allowedPaths);
+  return _writeBytes(dir, filename, content, mode);
 }
 
 export async function _writeBinary(
@@ -320,7 +278,6 @@ export async function _writeBinary(
   filename: string,
   base64: string,
   mode: WriteMode = "overwrite",
-  allowedPaths: string[] = [],
 ): Promise<boolean> {
   let bytes: Uint8Array;
   try {
@@ -329,7 +286,7 @@ export async function _writeBinary(
     // Add the operation context to the shared decoder's message.
     throw new Error(`writeBinary: ${(e as Error).message}`);
   }
-  return _writeBytes(dir, filename, Buffer.from(bytes), mode, allowedPaths);
+  return _writeBytes(dir, filename, Buffer.from(bytes), mode);
 }
 
 export async function _readBinary(dir: string, filename: string): Promise<string> {

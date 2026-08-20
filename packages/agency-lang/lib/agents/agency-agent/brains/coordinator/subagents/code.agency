@@ -186,17 +186,6 @@ type SaveTarget = {
   filename: string
 }
 
-/** Where generated files must stay: the agent working directory, or the
-  process launch directory when nothing set one (the same fallback the
-  file tools use). */
-def workRoot(): string {
-  const cwd = getAgentCwd()
-  if (cwd != "") {
-    return cwd
-  }
-  return "."
-}
-
 def saveTargetFor(task: string): string {
   const prompt = """
 Does this task ask for code to be saved to a specific file? Reply with that filename (a relative path) in the filename field, or an empty string if the task does not name a file to save to.
@@ -242,12 +231,7 @@ Deliverable: ONLY the Agency module source that will be saved as ${target}. The 
       return failure("could not write valid Agency code: ${written.error.problems}")
     }
     if (target != "") {
-      // The target comes from a model, so containment is enforced AT the
-      // write (allowedPaths), not as a preflight that could go stale during
-      // the long generation above: the resolved destination must stay under
-      // the working directory, and a final-component symlink is never
-      // followed.
-      const saved = write(target, written.value, useAgentCwd: true, allowedPaths: [workRoot()])
+      const saved = write(target, written.value, useAgentCwd: true)
       if (isFailure(saved)) {
         return failure(
           "wrote valid Agency source but could not save it to ${target}: ${saved.error}",

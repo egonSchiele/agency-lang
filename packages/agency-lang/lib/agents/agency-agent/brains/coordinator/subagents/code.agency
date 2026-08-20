@@ -180,8 +180,29 @@ def consultExpert(task: string, agencyTask: boolean): Result<ExpertGuidance> {
   )
 }
 
-/* agencyCodingAgent returns source rather than writing files, so its result
-   is handed back as the reply for the user to place. */
+/* Where generated Agency source should land: the file the task names, or
+   nowhere ("" — hand the source back as the reply). */
+type SaveTarget = {
+  filename: string
+}
+
+def saveTargetFor(task: string): string {
+  const prompt = """
+Does this task ask for code to be saved to a specific file? Reply with that filename (a relative path) in the filename field, or an empty string if the task does not name a file to save to.
+
+<task>
+${task}
+</task>
+"""
+
+  const target: SaveTarget = llm(prompt)
+  return target.filename
+}
+
+/* agencyCodingAgent returns source rather than writing files — its contract
+   ends at valid code. Placing that code is this caller's job: when the task
+   names a file, write the source there; otherwise hand it back as the reply
+   for the caller to place. */
 def solve(task: string, context: string, agencyTask: boolean): Result<string> {
   if (agencyTask) {
     const written = agencyCodingAgent(
@@ -192,6 +213,16 @@ def solve(task: string, context: string, agencyTask: boolean): Result<string> {
     )
     if (isFailure(written)) {
       return failure("could not write valid Agency code: ${written.error.problems}")
+    }
+    const target = saveTargetFor(task)
+    if (target != "") {
+      const saved = write(target, written.value, useAgentCwd: true)
+      if (isFailure(saved)) {
+        return failure(
+          "wrote valid Agency source but could not save it to ${target}: ${saved.error}",
+        )
+      }
+      return success("Wrote the generated Agency program to ${target}:\n\n${written.value}")
     }
     return success(written.value)
   }

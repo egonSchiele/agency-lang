@@ -67,16 +67,19 @@ export def agencyCli(args: string[]): any {
 
 /** Read a bundled prompt file, or "" when it cannot be read. The prompts
   ship with the agent, so a missing one means a packaging problem, not a
-  runtime condition worth failing the turn over. */
-def promptFile(filename: string): string {
-  const contents = read(filename) with approve
+  runtime condition worth failing the turn over. The empty-string fallback
+  makes a broken path a SILENT failure (the agent runs with no system
+  prompt), which is why tests/agency/agency-agent-code-prompt.agency
+  asserts both prompts load. Exported for that test. */
+export def promptFile(filename: string): string {
+  const contents = read(filename, __dirname + "/../prompts") with approve
   if (isFailure(contents)) {
     return ""
   }
   return contents.value
 }
 
-export static const codeSysPrompt = promptFile("../prompts/code.md")
+export static const codeSysPrompt = promptFile("code.md")
 
 // The file-system / shell tools are partially applied with
 // `useAgentCwd: true` so that, as agent tools, they resolve relative
@@ -99,7 +102,7 @@ and do NOT decline a task as "needs research / out of scope": search for
 what you need and keep going."""
 
 // Appended in one-shot / autonomous mode (`agency agent -p`)
-static const ONE_SHOT_NOTE = promptFile("../prompts/oneShot.md")
+static const ONE_SHOT_NOTE = promptFile("oneShot.md")
 
 // Set by `agent.agency` (`setCodeOneShot`) before the first dispatch when the
 // run is non-interactive. Gates `ONE_SHOT_NOTE`.

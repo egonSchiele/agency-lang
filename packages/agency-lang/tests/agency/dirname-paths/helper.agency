@@ -10,8 +10,21 @@ export def readColocated(): string {
   return "READ_FAILED"
 }
 
+/** Upward traversal in FILENAME is now a containment escape: this pins
+  the rejection, and readUpwardViaDir pins the migrated spelling. */
 export def readUpward(): string {
-  const result = read("../dirname-paths-shared.txt", __dirname) with approve
+  const result = try read("../dirname-paths-shared.txt", __dirname) with approve
+  if (result is success(content)) {
+    return "UNEXPECTED_SUCCESS"
+  }
+  if ("${result.error}" =~ re/pass that directory in dir/) {
+    return "REJECTED"
+  }
+  return "READ_FAILED"
+}
+
+export def readUpwardViaDir(): string {
+  const result = read("dirname-paths-shared.txt", __dirname + "/..") with approve
   if (result is success(content)) {
     return content
   }

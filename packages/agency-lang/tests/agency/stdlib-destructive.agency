@@ -2,11 +2,12 @@ import { write } from "std::index"
 import { read } from "std::index"
 
 // write is destructive; a failure after its extern started must carry
-// destructiveRan. Writing under a nonexistent directory forces the
-// failure inside write's extern (its std::write interrupt is approved).
+// destructiveRan. A contained filename below a missing parent passes
+// preparation but fails inside write's extern (its std::write interrupt
+// is approved), which is exactly the lifecycle this test pins.
 node writeFails() {
   handle {
-    const r = try write("/nonexistent-dir-xyz/f.txt", "hi")
+    const r = try write("nonexistent-dir-xyz/f.txt", "hi", __dirname)
     if (isFailure(r)) {
       return [r.destructiveRan, r.neverStarted]
     }

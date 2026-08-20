@@ -128,6 +128,50 @@ describe("eval run CLI", () => {
     expect(result.okCount).toBe(1);
   });
 
+  it("--test/--tags run only the selected tests; matching nothing is an error, not an empty run", async () => {
+    const agentFile = path.join(tmpDir, "agent.agency");
+    fs.writeFileSync(agentFile, "node main(input: string) {}\n");
+    const runsDir = path.join(tmpDir, "runs");
+    const suite = path.join(tmpDir, "suite.json");
+    fs.writeFileSync(
+      suite,
+      JSON.stringify({
+        inputs: [
+          { id: "sort-a", input: "t", tags: ["easy"] },
+          { id: "sort-b", input: "t", tags: ["hard"] },
+          { id: "find-c", input: "t", tags: ["hard"] },
+        ],
+      }),
+    );
+
+    const result = await evalRun(
+      {
+        agent: agentFile,
+        suite,
+        out: path.join(runsDir, "picked"),
+        test: ["sort-*"],
+        tags: ["hard"],
+      },
+      { runner: okRunner },
+    );
+    expect(result.tests.map((test) => test.testId)).toEqual(["sort-b"]);
+
+    await expect(
+      evalRun(
+        { agent: agentFile, suite, out: path.join(runsDir, "none"), tags: ["nope"] },
+        { runner: okRunner },
+      ),
+    ).rejects.toThrow(/matches none of the 3 tests/);
+    expect(fs.existsSync(path.join(runsDir, "none"))).toBe(false);
+
+    await expect(
+      evalRun(
+        { agent: agentFile, input: "x", out: path.join(runsDir, "inline"), tags: ["easy"] },
+        { runner: okRunner },
+      ),
+    ).rejects.toThrow(/--test\/--tags select from a suite/);
+  });
+
   it("rejects an empty suite instead of succeeding with zero tests", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
     fs.writeFileSync(agentFile, "node main(input: string) {}\n");

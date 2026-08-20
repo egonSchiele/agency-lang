@@ -64,6 +64,33 @@ function stripDotSlash(s: string): string {
   return s.startsWith("./") ? s.slice(2) : s;
 }
 
+// The launch path is data, not pattern: without escaping, a directory
+// whose name contains glob characters (say `v*1`) would widen the rule to
+// its siblings — a safety boundary, so the substituted prefix must match
+// itself only. Glob syntax stays live only in the user-written suffix.
+function escapeForGlob(s: string): string {
+  return s.replace(/[\\*?[\]{}()!+@|]/g, "\\$&");
+}
+
+// In a `dir` pattern, `.` also means "wherever the agent was launched".
+// Tools absolutize the dir they put in interrupt data, so a literal `.` in
+// a policy file could never match those; resolving it lets a static policy
+// say "the current directory, whatever it is" instead of hard-coding an
+// absolute path. The replacement covers `.` standing alone, at the start of
+// a path (`./sub/**`), and as a brace alternative (`{.,./**}`). Note the
+// same caveat as every dir glob: `**` does not descend into dot-led
+// subdirectories (picomatch's dot rule), though a launch directory whose
+// own path contains dot segments is fine — those sit in the literal prefix.
+// Exported for tests, which inject the cwd.
+export function resolveDotDirPattern(pattern: string, cwd: string = process.cwd()): string {
+  // Callback, not a replacement string: a legal cwd containing `$&`/`$'`
+  // would otherwise be interpreted as replacement-string syntax.
+  return pattern.replace(
+    /(^|\{|,)\.(?=$|\/|,|\})/g,
+    (_match, prefix) => prefix + escapeForGlob(cwd),
+  );
+}
+
 function matchesRule(
   rule: PolicyRule,
   interrupt: { effect: string; message: string; data: any; origin: string },
@@ -83,7 +110,15 @@ function matchesRule(
     if (value === undefined) return false;
     if (typeof value !== "string") value = String(value);
 
-    if (!picomatch.isMatch(stripDotSlash(value), stripDotSlash(pattern))) {
+    // The raw pattern first (relative values match relative patterns as
+    // before), then the cwd-resolved form for dir patterns, so `.` gains its
+    // meaning without taking any match away.
+    const raw = picomatch.isMatch(stripDotSlash(value), stripDotSlash(pattern));
+    const viaDot =
+      !raw &&
+      key === "dir" &&
+      picomatch.isMatch(stripDotSlash(value), stripDotSlash(resolveDotDirPattern(pattern)));
+    if (!raw && !viaDot) {
       return false;
     }
   }

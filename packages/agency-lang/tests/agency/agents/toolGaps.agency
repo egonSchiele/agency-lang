@@ -14,13 +14,13 @@ def hasTool(tools: any[], name: string): boolean {
 // value while unable to see any file the program wrote.
 node agencyVerifierCanSeeFiles(): boolean {
   const tools = agencyVerifierTools()
-  return hasTool(tools, "read") && hasTool(tools, "bash")
+  return hasTool(tools, "read") && hasTool(tools, "safeBash")
 }
 
 // The verifier is told to compute values and inspect bytes.
 node verifierCanComputeAndReadBytes(): boolean {
   const tools = verifierTools()
-  return hasTool(tools, "bash") && hasTool(tools, "readBinary")
+  return hasTool(tools, "safeBash") && hasTool(tools, "readBinary")
 }
 
 // The Agency writer could not look up the AG#### codes its own retry prompt
@@ -67,7 +67,7 @@ node reviewersLookUpButCannotWrite(): boolean {
   const plain = reviewTools()
   const agency = agencyReviewTools()
   const canLookUp = hasTool(plain, "fetchMarkdown") && hasTool(agency, "agencyGuide")
-  const cannotWrite = !hasTool(plain, "write") && !hasTool(agency, "write") && !hasTool(agency, "bash")
+  const cannotWrite = !hasTool(plain, "write") && !hasTool(agency, "write") && !hasTool(agency, "bash") && !hasTool(agency, "safeBash")
   return canLookUp && cannotWrite
 }
 

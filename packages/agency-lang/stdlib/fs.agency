@@ -179,4 +179,3 @@ export def remove(target: string, allowedPaths: string[] = [], useAgentCwd: bool
     return try _remove(target, allowedPaths)
   }
 }
-

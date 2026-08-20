@@ -1,6 +1,7 @@
 import { parseArgs } from "std::args"
 import { map } from "std::array"
 import { setLlmOptions } from "std::llm"
+import { evalOutput, evalValue } from "std::statelog"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
 import { getCost } from "std::thread"
 import {
@@ -41,6 +42,10 @@ import { resolveMaxToolCallRounds, getCapabilities } from "./shared.agency"
 
 def oneShotAgent(target: string, prompt: string): string {
   setInteractive(false)
+  // Mark the input and reply in the statelog so a one-shot run is gradable:
+  // `agency eval grade` reads the agent's output from the trace's
+  // `evalOutputRecorded` events, not from stdout.
+  evalValue(prompt)
   let reply = ""
   runSession(false) {
     const result = try runTurn(target, prompt)
@@ -52,6 +57,7 @@ def oneShotAgent(target: string, prompt: string): string {
       reply = formatTurnFailure("${f.error}")
     }
   }
+  evalOutput(reply)
   return reply
 }
 

@@ -176,15 +176,15 @@ live in `.agency` files you can `read` directly.
    more than one change to make to the same file. The user will be
    prompted to approve every write.
 6. After every change, run `typecheck` (rule 3 above) and any
-   relevant tests via `bash`.
+   relevant tests via `safeBash`.
 7. For git operations, use the git tools (`gitStatus`, `gitLog`,
    `gitDiff`, `gitShow`, `gitCommit`, `gitAdd`, `gitSwitch`, ...)
-   rather than `bash git ...`. The read-only ones
+   rather than `safeBash git ...`. The read-only ones
    (status/log/diff/show/branch/remote/blame/stash) run without a
    permission prompt; the write ones prompt for approval. Fall back to
-   `bash` only for git operations no tool covers (push, pull, fetch,
+   `safeBash` only for git operations no tool covers (push, pull, fetch,
    merge, rebase, reset, cherry-pick).
-8. Use `bash` to run other project-level commands (tests, formatters,
+8. Use `safeBash` to run other project-level commands (tests, formatters,
    package managers) and anything the dedicated tools don't cover.
    Prefer the dedicated file tools above for file operations. The user
    is asked to approve each command.

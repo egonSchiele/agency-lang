@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { checkPolicy, validatePolicy } from "./policy.js";
+import { checkPolicy, resolveDotDirPattern, validatePolicy } from "./policy.js";
+import picomatch from "picomatch";
 
 describe("checkPolicy", () => {
   it("returns propagate when no rules exist for the kind", () => {
@@ -440,5 +441,77 @@ describe("checkPolicy for mcp::call", () => {
     expect(
       checkPolicy(argsRule, intr({ server: "fs", tool: "read_file", args: { path: "/a" } })).type,
     ).toBe("propagate");
+  });
+});
+
+describe("dot dir patterns", () => {
+  const write = (dir: string) => ({
+    effect: "std::write",
+    message: "m",
+    data: { dir, filename: "out.txt" },
+    origin: "std::fs",
+  });
+
+  it("`.` in a dir pattern means the launch directory", () => {
+    const policy = {
+      "std::write": [{ match: { dir: "." }, action: "approve" as const }],
+    };
+    expect(checkPolicy(policy, write(process.cwd())).type).toBe("approve");
+    expect(checkPolicy(policy, write("/somewhere/else")).type).toBe("propagate");
+  });
+
+  it("resolves `.` inside brace alternatives and path prefixes", () => {
+    const policy = {
+      "std::write": [{ match: { dir: "{.,./**}" }, action: "approve" as const }],
+    };
+    expect(checkPolicy(policy, write(process.cwd())).type).toBe("approve");
+    expect(checkPolicy(policy, write(process.cwd() + "/sub/deeper")).type).toBe("approve");
+    expect(checkPolicy(policy, write("/somewhere/else")).type).toBe("propagate");
+  });
+
+  // Not asserted: dot-led subdirectories BELOW the launch dir (`cwd/.x/...`)
+  // stay unmatched — picomatch's `**` never matches dot segments. A launch
+  // dir whose own path contains dot segments is fine (literal prefix).
+
+  it("does not resolve `.` in non-dir fields", () => {
+    const policy = {
+      "std::exec": [{ match: { command: "./run.sh" }, action: "approve" as const }],
+    };
+    const intr = {
+      effect: "std::exec",
+      message: "m",
+      data: { command: "./run.sh" },
+      origin: "std::shell",
+    };
+    // stripDotSlash normalizes both sides, so the literal pattern still matches raw.
+    expect(checkPolicy(policy, intr).type).toBe("approve");
+  });
+});
+
+describe("resolveDotDirPattern escaping", () => {
+  it("treats glob characters in the launch path as literal", () => {
+    const resolved = resolveDotDirPattern("{.,./**}", "/tmp/cwd*");
+    expect(picomatch.isMatch("/tmp/cwd*", resolved)).toBe(true);
+    expect(picomatch.isMatch("/tmp/cwd*/sub/deep", resolved)).toBe(true);
+    // Without escaping, the `*` in the path would approve this sibling.
+    expect(picomatch.isMatch("/tmp/cwd-neighbor", resolved)).toBe(false);
+  });
+
+  it("escapes brackets and braces in the launch path", () => {
+    const resolved = resolveDotDirPattern("./**", "/tmp/v[1]{a,b}");
+    expect(picomatch.isMatch("/tmp/v[1]{a,b}/x", resolved)).toBe(true);
+    expect(picomatch.isMatch("/tmp/v1a/x", resolved)).toBe(false);
+  });
+
+  it("inserts a cwd containing replacement-string metacharacters literally", () => {
+    const resolved = resolveDotDirPattern("./**", "/tmp/a$&b");
+    expect(picomatch.isMatch("/tmp/a$&b/x", resolved)).toBe(true);
+    expect(picomatch.isMatch("/tmp/a.b/x", resolved)).toBe(false);
+  });
+
+  it("keeps glob syntax live in the user-written suffix", () => {
+    const resolved = resolveDotDirPattern("./sub/**", "/tmp/plain");
+    expect(picomatch.isMatch("/tmp/plain/sub/a/b", resolved)).toBe(true);
+    expect(picomatch.isMatch("/tmp/plain/other", resolved)).toBe(false);
   });
 });

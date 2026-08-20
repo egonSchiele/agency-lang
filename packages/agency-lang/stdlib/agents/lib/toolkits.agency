@@ -35,7 +35,8 @@ import {
  } from "std::git"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
 import { remember, recall } from "std::memory"
-import { bash, ls, glob, grep, exec } from "std::shell"
+import { ls, glob, grep, exec } from "std::shell"
+import { safeBash } from "std::safeBash"
 import { docsSkill } from "std::skills"
 import {
   search as wikipediaSearch,
@@ -93,10 +94,15 @@ export def writableFileTools(): any[] {
 
 export def shellTools(): any[] {
   """
-  Return tools that run commands: bash for a shell pipeline, exec for a
-  single binary with arguments.
+  Return tools that run commands: safeBash for a shell pipeline, exec for
+  a single binary with arguments. safeBash rather than raw bash: it
+  parses the command and raises the narrowest effects that describe it
+  (a recognized write raises std::write, a git read raises its git
+  effect), so a policy can pre-approve what raw bash never could. It
+  needs no useAgentCwd binding — its empty cwd already resolves to the
+  agent working directory (resolveCwd in std::safeBash).
   """
-  return [bash.partial(useAgentCwd: true), exec.partial(useAgentCwd: true)]
+  return [safeBash, exec.partial(useAgentCwd: true)]
 }
 
 export def readOnlyGitTools(): any[] {

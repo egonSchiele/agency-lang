@@ -210,31 +210,15 @@ export async function runSuite(
   let results: SuiteTestResult[] = [];
   try {
     if (parallel === 1) {
-      for (const test of opts.inputs) {
-        // Progress heartbeat: agents legitimately go quiet for a minute
-        // inside one LLM call, and a silent terminal reads as a hang.
-        // stderr, so piped agent output and result printing stay clean.
-        const startedAt = Date.now();
-        const label = ttyColor.green(test.id ?? "");
-        const ticker = progress
-          ? setInterval(() => {
-              console.error(`[${label}] running… ${formatElapsed(Date.now() - startedAt)}`);
-            }, 15_000)
-          : undefined;
-        let outcome: SuiteTestResult;
-        try {
-          outcome = await executeTest(test, perRun.pipeOutput ?? true);
-        } finally {
-          if (ticker !== undefined) clearInterval(ticker);
-        }
-        if (progress) {
-          const status = outcome.status === "error" ? ttyColor.red("error") : outcome.status;
-          console.error(`[${label}] ${status} in ${formatElapsed(Date.now() - startedAt)}`);
-        }
-        results.push(outcome);
-        if (interrupted) break;
-      }
+      results = await runSequential({
+        tests: opts.inputs,
+        progress,
+        pipeOutput: perRun.pipeOutput ?? true,
+        isInterrupted: () => interrupted,
+        executeTest,
+      });
     } else {
+      if (progress) printLiveStatelogPaths(opts.inputs, stagingRoot, groupDir);
       results = await runPool({
         tests: opts.inputs,
         parallel,
@@ -425,6 +409,75 @@ async function runPool(args: {
     board.stop();
   }
   return slots.filter((entry): entry is SuiteTestResult => entry !== undefined);
+}
+
+/**
+ * Sequential scheduling: one test at a time with piped agent output, a
+ * heartbeat on stderr so an agent quietly inside one long LLM call does not
+ * read as a hang, and the live statelog path announced as each test starts.
+ */
+async function runSequential(args: {
+  tests: Test[];
+  progress: boolean;
+  pipeOutput: boolean;
+  isInterrupted: () => boolean;
+  executeTest: (
+    test: Test,
+    pipeOutput: boolean,
+    onStarted?: (statelogPath: string) => void,
+  ) => Promise<SuiteTestResult>;
+}): Promise<SuiteTestResult[]> {
+  const results: SuiteTestResult[] = [];
+  for (const test of args.tests) {
+    const startedAt = Date.now();
+    const label = ttyColor.green(test.id ?? "");
+    const ticker = args.progress
+      ? setInterval(() => {
+          console.error(`[${label}] running… ${formatElapsed(Date.now() - startedAt)}`);
+        }, 15_000)
+      : undefined;
+    let outcome: SuiteTestResult;
+    try {
+      outcome = await args.executeTest(
+        test,
+        args.pipeOutput,
+        liveStatelogAnnouncer(args.progress, label),
+      );
+    } finally {
+      if (ticker !== undefined) clearInterval(ticker);
+    }
+    if (args.progress) {
+      const status = outcome.status === "error" ? ttyColor.red("error") : outcome.status;
+      console.error(`[${label}] ${status} in ${formatElapsed(Date.now() - startedAt)}`);
+    }
+    results.push(outcome);
+    if (args.isInterrupted()) break;
+  }
+  return results;
+}
+
+/** The only address a watcher can follow while a run is still in staging,
+ *  announced the moment the test starts (sequential mode). */
+function liveStatelogAnnouncer(
+  progress: boolean,
+  label: string,
+): ((statelogPath: string) => void) | undefined {
+  if (!progress) return undefined;
+  return (statelogPath) => console.error(`[${label}] live statelog: ${statelogPath}`);
+}
+
+/** Before the status board takes the screen: each test’s live statelog
+ *  address, so a watcher can follow a run while it is still in staging. The
+ *  paths are deterministic, so they can all be printed up front. */
+function printLiveStatelogPaths(tests: Test[], stagingRoot: string, groupDir: string): void {
+  for (const test of tests) {
+    const testId = test.id ?? "";
+    // An invalid id never stages (executeTest errors first), so a path
+    // built from it would point somewhere no run will ever live.
+    if (testIdProblem(testId, groupDir, path.join(groupDir, testId)) !== undefined) continue;
+    const statelogPath = agentRunPaths(path.join(stagingRoot, testId)).statelogPath;
+    console.error(`[${ttyColor.green(testId)}] live statelog: ${statelogPath}`);
+  }
 }
 
 /** A test id is a directory name under the group: it must be non-empty and

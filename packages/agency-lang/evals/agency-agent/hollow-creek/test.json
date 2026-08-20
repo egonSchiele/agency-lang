@@ -1,4 +1,5 @@
 {
+  "description": "Tests summarizing an article and reading between its lines, using a custom article the model has never seen so it cannot lean on prior knowledge.",
   "input": "Read and summarize the article at article.txt.",
   "goal": "summarizes the article accurately and identifies its unstated implication"
 }

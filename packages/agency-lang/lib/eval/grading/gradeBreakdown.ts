@@ -8,6 +8,8 @@ export type GradeRow =
 
 export type InputBreakdown = {
   inputId: string;
+  /** The test's own description, when it recorded one. Display only. */
+  description?: string;
   output: unknown;
   objective: number;
   gatesPassed: boolean;
@@ -31,6 +33,7 @@ export function breakdown(scorecard: Scorecard): InputBreakdown[] {
   const objectives = scorecard.inputScores(); // reuse the canonical gate→0 rule; don't re-derive it
   return scorecard.perInput.map((i, idx) => ({
     inputId: i.test.id ?? "(no id)",
+    ...(i.test.description === undefined ? {} : { description: i.test.description }),
     output: i.run?.output ?? null,
     objective: objectives[idx],
     gatesPassed: i.gatesPassed,

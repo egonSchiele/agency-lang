@@ -83,6 +83,16 @@ that cause. Concurrent line-appends to the shared statelog stay parseable
 (per-event `appendFileSync`); writes are sequential in the dominant case
 (parents block on children).
 
+One more consequence of "the record is the agent's record": grading reads
+the agent's OUTPUT from the statelog too, never from stdout. A grader's
+`output` is the last `evalOutputRecorded` event (`lastOutput` in
+`lib/eval/run/runAgent.ts`; `gradeRun` reads `evalOutputs` the same way).
+So a command agent must call `evalOutput(reply)` (and `evalValue(prompt)`
+for the input) from `std::statelog`, or every judge sees `output: null`.
+The Agency agent does this in `oneShotAgent` (`agent.agency`), which also
+keeps the recorded output clean — the `Session cost` trailer is printed
+after the reply is recorded.
+
 ## Process-group lifecycle (the part that bites)
 
 The spawned command is `detached: true` — its own process group — and

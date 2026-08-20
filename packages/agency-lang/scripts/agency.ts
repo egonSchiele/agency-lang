@@ -64,6 +64,7 @@ import {
 } from "@/cli/runDirectory/commands.js";
 import { evalGrade } from "@/cli/eval/grade.js";
 import { resolveRunStatelog } from "@/cli/eval/logs.js";
+import { evalLs } from "@/cli/eval/ls.js";
 import { evalRun, totalRunCostUsd } from "@/cli/eval/run.js";
 import { formatGradeResult } from "@/cli/eval/formatGrade.js";
 import { ttyColor } from "@/utils/termcolors.js";
@@ -161,6 +162,15 @@ export function parsePositiveInt(value: string): number {
 // 0 allowed (e.g. to disable a cap).
 export function parseNonNegativeInt(value: string): number {
   return parseBoundedInt(value, 0, "must be a non-negative integer");
+}
+
+// Repeatable-flag accumulators (commander calls the parser with (value, previous)).
+function collectRepeats(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
+function collectCommaSeparated(value: string, previous: string[]): string[] {
+  return [...previous, ...value.split(",").filter((part) => part !== "")];
 }
 
 type CliDependencies = {
@@ -819,6 +829,18 @@ export function createProgram(deps: CliDependencies = {}): Command {
     )
     .option("--input <text>", "Run one inline test whose input is this text (no suite file needed)")
     .option(
+      "--test <pattern>",
+      "Run only tests whose id matches this glob (repeatable; any match selects). Preview with: agency eval ls",
+      collectRepeats,
+      [] as string[],
+    )
+    .option(
+      "--tags <tags>",
+      "Run only tests carrying every one of these comma-separated tags (repeatable). Preview with: agency eval ls",
+      collectCommaSeparated,
+      [] as string[],
+    )
+    .option(
       "-o, --out <dir>",
       "Directory to write the run into; must not exist yet (default: runs/<timestamp>-<random suffix>, or under eval.runsDir from agency.json)",
     )
@@ -834,6 +856,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
           agentCmd?: string;
           suite?: string;
           input?: string;
+          test?: string[];
+          tags?: string[];
           out?: string;
           parallel?: number;
         },
@@ -857,6 +881,37 @@ export function createProgram(deps: CliDependencies = {}): Command {
         console.log(`grade it with: agency eval grade ${result.runDir}`);
       },
     );
+
+  evalCmd
+    .command("ls")
+    .description(
+      "List a suite's tests; with --test/--tags, exactly what eval run with the same flags would run",
+    )
+    .option(
+      "--suite <source>",
+      "Test suite: a JSON file, a directory, or a git source (URL[//subdir][?ref=...])",
+    )
+    .option(
+      "--test <pattern>",
+      "Only tests whose id matches this glob (repeatable; any match selects)",
+      collectRepeats,
+      [] as string[],
+    )
+    .option(
+      "--tags <tags>",
+      "Only tests carrying every one of these comma-separated tags (repeatable)",
+      collectCommaSeparated,
+      [] as string[],
+    )
+    .action((opts: { suite?: string; test?: string[]; tags?: string[] }) => {
+      let lines: string[];
+      try {
+        lines = evalLs({ ...opts, config: getConfig() });
+      } catch (error) {
+        failProjectCommand(error);
+      }
+      for (const line of lines) console.log(line);
+    });
 
   evalCmd
     .command("logs")

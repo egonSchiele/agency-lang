@@ -43,6 +43,22 @@ describe("formatGradeResult", () => {
     ]);
   });
 
+  it("a test's description prints dim under its score line", () => {
+    const withDescription = grading("a", 1, [{ grader: "gate", kind: "binary", pass: true }]);
+    withDescription.perInput[0].description = "checks the agent reads between the lines";
+    const result: EvalGradeResult = {
+      runs: [{ dir: "/runs/x/a", grading: withDescription }],
+      mean: 1,
+      gatesPassed: true,
+    };
+    const lines = formatGradeResult(result).map(stripAnsi);
+    expect(lines).toEqual([
+      "a  score 1.000",
+      "  checks the agent reads between the lines",
+      "  gate         pass",
+    ]);
+  });
+
   it("a group: every run's block, an ungraded reason where there is one, then the mean over the runs", () => {
     const result: EvalGradeResult = {
       runs: [

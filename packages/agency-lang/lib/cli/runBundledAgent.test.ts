@@ -8,6 +8,7 @@ vi.mock("fs", async (importOriginal) => {
 });
 
 import { CONFIG_OVERRIDES_ENV } from "@/config.js";
+import * as os from "os";
 import * as path from "path";
 import { resolveAgentLaunchArgs, runBundledAgent } from "./runBundledAgent.js";
 
@@ -103,6 +104,27 @@ describe("resolveAgentLaunchArgs: agent-home", () => {
   it("null when the flag is absent, stops at the -- terminator", () => {
     expect(resolveAgentLaunchArgs(["--print", "hi"]).agentHome).toBeNull();
     expect(resolveAgentLaunchArgs(["--", "--agent-home", "/x"]).agentHome).toBeNull();
+  });
+});
+
+describe("resolveAgentLaunchArgs: --workdir", () => {
+  it("--workdir <dir> → absolute path, space and attached forms", () => {
+    expect(resolveAgentLaunchArgs(["--workdir", "/tmp/w", "-p", "hi"]).workdir).toBe("/tmp/w");
+    expect(resolveAgentLaunchArgs(["--workdir=/tmp/w"]).workdir).toBe("/tmp/w");
+  });
+
+  it("resolves a relative dir against cwd", () => {
+    expect(resolveAgentLaunchArgs(["--workdir", "w"]).workdir).toBe(path.resolve("w"));
+  });
+
+  it("bare --workdir (or one followed by a flag) is ignored", () => {
+    expect(resolveAgentLaunchArgs(["--workdir"]).workdir).toBeNull();
+    expect(resolveAgentLaunchArgs(["--workdir", "--print"]).workdir).toBeNull();
+  });
+
+  it("null when the flag is absent, stops at the -- terminator", () => {
+    expect(resolveAgentLaunchArgs(["-p", "hi"]).workdir).toBeNull();
+    expect(resolveAgentLaunchArgs(["--", "--workdir", "/x"]).workdir).toBeNull();
   });
 });
 
@@ -299,6 +321,40 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     );
 
     expect(errorMock).toHaveBeenCalledWith(expect.stringMatching(message));
+    expect(exitMock).toHaveBeenCalledWith(2);
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it("--workdir becomes the child's spawn cwd; absent means inherit", () => {
+    const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
+    runBundledAgent(
+      {},
+      "agency-agent",
+      ["--workdir", os.tmpdir(), "-p", "hi"],
+      {},
+      { spawn: spawnMock as never },
+    );
+    expect((spawnMock.mock.calls[0][2] as { cwd?: string }).cwd).toBe(path.resolve(os.tmpdir()));
+
+    spawnMock.mockClear();
+    runBundledAgent({}, "agency-agent", ["-p", "hi"], {}, { spawn: spawnMock as never });
+    expect((spawnMock.mock.calls[0][2] as { cwd?: string }).cwd).toBeUndefined();
+  });
+
+  it("a --workdir that is not a directory exits before spawn", () => {
+    const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
+    const exitMock = vi.fn();
+    const errorMock = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    runBundledAgent(
+      {},
+      "agency-agent",
+      ["--workdir", "/no/such/dir/anywhere", "-p", "hi"],
+      {},
+      { spawn: spawnMock as never, exit: exitMock },
+    );
+
+    expect(errorMock).toHaveBeenCalledWith(expect.stringMatching(/--workdir .* not a directory/));
     expect(exitMock).toHaveBeenCalledWith(2);
     expect(spawnMock).not.toHaveBeenCalled();
   });

@@ -45,6 +45,7 @@ const LAUNCH_FLAG_POLICIES: Record<
   trace: { acceptsNegativeNumber: false },
   log: { acceptsNegativeNumber: false },
   "agent-home": { acceptsNegativeNumber: false },
+  workdir: { acceptsNegativeNumber: false },
   "max-cost": { acceptsNegativeNumber: true },
   "max-time": { acceptsNegativeNumber: true },
   config: { acceptsNegativeNumber: false },
@@ -91,6 +92,10 @@ function scanLaunchValues(args: readonly string[]): Record<string, string> {
 export type ResolvedAgentLaunch = {
   configOverrides: Partial<AgencyConfig>;
   agentHome: string | null;
+  /** A forwarded `--workdir <dir>`: the child's working directory, absolute.
+   *  It must be the SPAWN cwd — the agent's static initializers resolve
+   *  paths and discover agency.json against cwd before main() runs. */
+  workdir: string | null;
   budgetInput: { maxCost?: string; maxTime?: string };
   /** A forwarded `--config <path>`; wins over the root-level `-c`. */
   configPath?: string;
@@ -151,9 +156,11 @@ export function resolveAgentLaunchArgs(args: readonly string[]): ResolvedAgentLa
   const home = scanned["agent-home"];
   const nonEmpty = (value: string | undefined) =>
     value !== undefined && value !== "" ? value : undefined;
+  const workdir = scanned.workdir;
   return {
     configOverrides: applyCliFlags({}, flags),
     agentHome: home !== undefined && home !== "" ? path.resolve(home) : null,
+    workdir: workdir !== undefined && workdir !== "" ? path.resolve(workdir) : null,
     budgetInput: {
       maxCost: nonEmpty(scanned["max-cost"]),
       maxTime: nonEmpty(scanned["max-time"]),
@@ -182,6 +189,14 @@ export function runBundledAgent(
     budget = resolveBudget(launchArgs.budgetInput);
   } catch (error) {
     console.error(`Error: ${(error as Error).message}`);
+    launcher.exit(2);
+    return;
+  }
+
+  // A bad workdir never launches: the agent would silently run somewhere
+  // the user did not intend, which is exactly what the flag exists to fix.
+  if (launchArgs.workdir !== null && !isDirectory(launchArgs.workdir)) {
+    console.error(`Error: --workdir ${launchArgs.workdir} is not a directory.`);
     launcher.exit(2);
     return;
   }
@@ -255,6 +270,9 @@ export function runBundledAgent(
         stdio: "inherit",
         shell: false,
         env,
+        // The child's cwd, not a parent chdir: the launcher keeps resolving
+        // its own files (agent dir, staging) where they actually live.
+        cwd: launchArgs.workdir ?? undefined,
       },
     );
   } catch (error) {
@@ -275,6 +293,14 @@ export function runBundledAgent(
       launcher.exit(code || 1);
     }
   });
+}
+
+function isDirectory(dir: string): boolean {
+  try {
+    return fs.statSync(dir).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 /** Which code the agent is, for the trace's agentStart. A precompiled agent

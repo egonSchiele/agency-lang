@@ -58,6 +58,10 @@ export def parseAgentArgs(brainHelp: string) {
         type: "string",
         description: "Directory to use instead of ~/.agency-agent for settings, policy, and history (equivalent to the AGENCY_AGENT_HOME env var; the flag wins when both are set)"
       },
+      workdir: {
+        type: "string",
+        description: "Run the agent from this directory instead of the current one: file reads and writes, config discovery, and relative paths all resolve there"
+      },
       config: {
         type: "string",
         description: "Path to an agency.json config file for this agent run (the agent is recompiled with it)"

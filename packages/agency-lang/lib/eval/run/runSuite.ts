@@ -218,7 +218,7 @@ export async function runSuite(
         executeTest,
       });
     } else {
-      if (progress) printLiveStatelogPaths(opts.inputs, stagingRoot);
+      if (progress) printLiveStatelogPaths(opts.inputs, stagingRoot, groupDir);
       results = await runPool({
         tests: opts.inputs,
         parallel,
@@ -469,10 +469,14 @@ function liveStatelogAnnouncer(
 /** Before the status board takes the screen: each test’s live statelog
  *  address, so a watcher can follow a run while it is still in staging. The
  *  paths are deterministic, so they can all be printed up front. */
-function printLiveStatelogPaths(tests: Test[], stagingRoot: string): void {
+function printLiveStatelogPaths(tests: Test[], stagingRoot: string, groupDir: string): void {
   for (const test of tests) {
-    const statelogPath = agentRunPaths(path.join(stagingRoot, test.id ?? "")).statelogPath;
-    console.error(`[${ttyColor.green(test.id ?? "")}] live statelog: ${statelogPath}`);
+    const testId = test.id ?? "";
+    // An invalid id never stages (executeTest errors first), so a path
+    // built from it would point somewhere no run will ever live.
+    if (testIdProblem(testId, groupDir, path.join(groupDir, testId)) !== undefined) continue;
+    const statelogPath = agentRunPaths(path.join(stagingRoot, testId)).statelogPath;
+    console.error(`[${ttyColor.green(testId)}] live statelog: ${statelogPath}`);
   }
 }
 

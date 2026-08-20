@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { checkPolicy, validatePolicy } from "./policy.js";
+import { checkPolicy, resolveDotDirPattern, validatePolicy } from "./policy.js";
+import picomatch from "picomatch";
 
 describe("checkPolicy", () => {
   it("returns propagate when no rules exist for the kind", () => {
@@ -484,5 +485,27 @@ describe("dot dir patterns", () => {
     };
     // stripDotSlash normalizes both sides, so the literal pattern still matches raw.
     expect(checkPolicy(policy, intr).type).toBe("approve");
+  });
+});
+
+describe("resolveDotDirPattern escaping", () => {
+  it("treats glob characters in the launch path as literal", () => {
+    const resolved = resolveDotDirPattern("{.,./**}", "/tmp/cwd*");
+    expect(picomatch.isMatch("/tmp/cwd*", resolved)).toBe(true);
+    expect(picomatch.isMatch("/tmp/cwd*/sub/deep", resolved)).toBe(true);
+    // Without escaping, the `*` in the path would approve this sibling.
+    expect(picomatch.isMatch("/tmp/cwd-neighbor", resolved)).toBe(false);
+  });
+
+  it("escapes brackets and braces in the launch path", () => {
+    const resolved = resolveDotDirPattern("./**", "/tmp/v[1]{a,b}");
+    expect(picomatch.isMatch("/tmp/v[1]{a,b}/x", resolved)).toBe(true);
+    expect(picomatch.isMatch("/tmp/v1a/x", resolved)).toBe(false);
+  });
+
+  it("keeps glob syntax live in the user-written suffix", () => {
+    const resolved = resolveDotDirPattern("./sub/**", "/tmp/plain");
+    expect(picomatch.isMatch("/tmp/plain/sub/a/b", resolved)).toBe(true);
+    expect(picomatch.isMatch("/tmp/plain/other", resolved)).toBe(false);
   });
 });

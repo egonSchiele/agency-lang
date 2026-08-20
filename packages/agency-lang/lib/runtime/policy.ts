@@ -64,6 +64,14 @@ function stripDotSlash(s: string): string {
   return s.startsWith("./") ? s.slice(2) : s;
 }
 
+// The launch path is data, not pattern: without escaping, a directory
+// whose name contains glob characters (say `v*1`) would widen the rule to
+// its siblings — a safety boundary, so the substituted prefix must match
+// itself only. Glob syntax stays live only in the user-written suffix.
+function escapeForGlob(s: string): string {
+  return s.replace(/[\\*?[\]{}()!+@|]/g, "\\$&");
+}
+
 // In a `dir` pattern, `.` also means "wherever the agent was launched".
 // Tools absolutize the dir they put in interrupt data, so a literal `.` in
 // a policy file could never match those; resolving it lets a static policy
@@ -73,8 +81,9 @@ function stripDotSlash(s: string): string {
 // same caveat as every dir glob: `**` does not descend into dot-led
 // subdirectories (picomatch's dot rule), though a launch directory whose
 // own path contains dot segments is fine — those sit in the literal prefix.
-function resolveDotDirPattern(pattern: string): string {
-  return pattern.replace(/(^|\{|,)\.(?=$|\/|,|\})/g, `$1${process.cwd()}`);
+// Exported for tests, which inject the cwd.
+export function resolveDotDirPattern(pattern: string, cwd: string = process.cwd()): string {
+  return pattern.replace(/(^|\{|,)\.(?=$|\/|,|\})/g, `$1${escapeForGlob(cwd)}`);
 }
 
 function matchesRule(

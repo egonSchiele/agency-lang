@@ -199,6 +199,16 @@ ${task}
   return target.filename
 }
 
+/** A save target comes from a model, so it is validated like any other
+  untrusted input: it must stay inside the agent working directory.
+  Exported for tests. */
+export def unsafeSaveTarget(name: string): boolean {
+  if (name.startsWith("/") || name.includes("..") || name.includes("\\")) {
+    return true
+  }
+  return name =~ re/^[A-Za-z]:/
+}
+
 /* agencyCodingAgent returns source rather than writing files — its contract
    ends at valid code. Placing that code is this caller's job: when the task
    names a file, write the source there; otherwise hand it back as the reply
@@ -211,6 +221,11 @@ def solve(task: string, context: string, agencyTask: boolean): Result<string> {
     // program that writes the file at runtime — which is then saved AS the
     // file, instead of the module the task actually wanted.
     const target = saveTargetFor(task)
+    if (target != "" && unsafeSaveTarget(target)) {
+      return failure(
+        "refusing to save generated code to an unsafe path from the task: ${target}",
+      )
+    }
     let writerTask = task
     if (target != "") {
       writerTask = """

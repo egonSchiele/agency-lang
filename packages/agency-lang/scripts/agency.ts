@@ -170,7 +170,13 @@ function collectRepeats(value: string, previous: string[]): string[] {
 }
 
 function collectCommaSeparated(value: string, previous: string[]): string[] {
-  return [...previous, ...value.split(",").filter((part) => part !== "")];
+  return [
+    ...previous,
+    ...value
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => part !== ""),
+  ];
 }
 
 type CliDependencies = {

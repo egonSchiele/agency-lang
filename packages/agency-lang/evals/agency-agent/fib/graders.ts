@@ -1,4 +1,5 @@
 import { execFileSync } from "child_process";
+import { fileURLToPath } from "url";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -73,7 +74,7 @@ class FibHarnessGrader extends BaseGrader {
 }
 
 function moduleDir(): string {
-  return path.dirname(new URL(import.meta.url).pathname);
+  return path.dirname(fileURLToPath(import.meta.url));
 }
 
 /** Grading always runs inside the agency CLI (`agency eval grade`), so the

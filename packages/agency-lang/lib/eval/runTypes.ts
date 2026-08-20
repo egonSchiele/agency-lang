@@ -8,11 +8,8 @@ export type Test = {
   /** Stable identifier. Auto-derived when omitted: the loader generates one
    *  via nanoid, the optimizer derives it positionally (`input-<index>`). */
   id?: string;
-  /** Why the test exists, for the person reading a grade report or a run
-   *  directory later — e.g. "checks the agent reads between the lines of an
-   *  article the model has never seen". Documentation only: never shown to
-   *  the agent, and never shown to a judge (a description restating the
-   *  intent would leak grading hints — the criterion is `goal`). */
+  /** Why the test exists. Documentation only: never shown to the agent or
+   *  a judge (the grading criterion is `goal`). */
   description?: string;
   /** Labels for selecting subsets of a suite (`eval run --tags`, previewed
    *  with `eval ls`): difficulty ("easy"), kind ("coding", "research"), or

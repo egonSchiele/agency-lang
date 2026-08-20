@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { BaseGrader } from "./baseGrader.js";
-import { asJudgeText, goalJudgeFile, ScalarVerdict } from "./goalJudgeFile.js";
+import { asJudgeText, goalJudgeFile, scalarGrade, ScalarVerdict } from "./goalJudgeFile.js";
 import type { EvalRecord } from "@/eval/types.js";
 
 import type { Grade, GraderInput, GraderOptions, Test, JSON } from "./types.js";
@@ -16,15 +16,13 @@ export type GraderContext = {
   workdir: string;
   /** The parsed eval record: events, metrics, tool counts, interrupts, cost. */
   record: EvalRecord;
-  /** Run the bundled LLM goal judge and get back its 0..1 score + reasoning.
-   *  Defaults: `output` falls back to `run.output`, `expected` falls back to
-   *  `input.expected` (so the bundled judge grades against the gold answer when
-   *  one is present, matching `LlmJudge`). */
-  judge: (args: {
-    goal: string;
-    output?: JSON;
-    expected?: JSON;
-  }) => Promise<{ score: number; reasoning: string }>;
+  /** Run the bundled LLM goal judge. Returns a full Grade — the 0..1 score
+   *  plus the judge's reasoning as `feedback` — so a metric can return it
+   *  directly and the rationale is stored with the score. Defaults: `output`
+   *  falls back to `run.output`, `expected` falls back to `input.expected`
+   *  (so the bundled judge grades against the gold answer when one is
+   *  present, matching `LlmJudge`). */
+  judge: (args: { goal: string; output?: JSON; expected?: JSON }) => Promise<Grade>;
 };
 
 /** A metric: return a 0..1 number, a pass/fail boolean, or a full Grade. */
@@ -51,7 +49,7 @@ export class FunctionGrader extends BaseGrader {
     // test's gold answer so a metric that calls ctx.judge({ goal }) grades the
     // same way LlmJudge does when test.expected is present.
     const inputExpected = (test as { expected?: JSON }).expected;
-    const judge = ({
+    const judge = async ({
       goal,
       output,
       expected,
@@ -62,12 +60,13 @@ export class FunctionGrader extends BaseGrader {
     }) => {
       const exp = expected ?? inputExpected;
       const expectedText = exp === undefined || exp === null ? "" : asJudgeText(exp);
-      return runAgency.runStructured(
+      const verdict = await runAgency.runStructured(
         goalJudgeFile(),
         "main",
         [goal, asJudgeText(output ?? run.output), expectedText],
         ScalarVerdict,
       );
+      return scalarGrade(verdict);
     };
     const result = await this.fn({
       output: run.output,

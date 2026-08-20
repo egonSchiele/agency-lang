@@ -190,6 +190,11 @@ let globalCliPolicyOpts: CliPolicyOpts = {
 let _policy: Policy | null = null
 let _policyLoaded: boolean = false
 let _pendingSave: boolean = false
+// Whether a user is at a terminal to answer prompts. When false, an
+// interrupt the policy does not decide is rejected with a reason instead
+// of prompting (there is no one to answer, and a pending prompt starves
+// the event loop until the process dies).
+let _interactive: boolean = true
 // True only while the handler is reading or writing its OWN policy file
 // (inside maybeLoadPolicy / maybeFlush / flushPolicy). Those file ops
 // raise std::read / std::write interrupts that re-enter this same
@@ -800,6 +805,16 @@ def _handler(intr: any): any {
     return reject()
   }
 
+  // No rule decided, and no user is at a terminal to ask: reject with a
+  // reason. The reason becomes the failing call's error, so an LLM whose
+  // tool raised this effect reads why and can take another approach
+  // instead of the process dying on a prompt nobody can answer.
+  if (!_interactive) {
+    return reject(
+      "\"${intr.effect}\" was rejected automatically: this is a non-interactive run and the approval policy has no rule for this effect, so there is no one to ask. Take an approach that does not need this permission, or the user must re-run with a policy that decides \"${intr.effect}\".",
+    )
+  }
+
   const answer = askUser(intr)
   if (answer.action == "approve-always") {
     _policy = recordRule(_policy, intr.effect, "approve")
@@ -899,6 +914,7 @@ export def cliPolicyHandler(
   file: string,
   fields: ScopedRuleFields,
   policy: Policy | null = null,
+  interactive: boolean = true,
 ): any {
   """
   CLI sugar for an interactive policy handler. Loads and saves the policy file, prompts the user on new interrupts, records "always" decisions, and returns approve/reject. Install on the outermost `handle`. Call exactly once per program — internal state is module-level.
@@ -906,11 +922,13 @@ export def cliPolicyHandler(
   @param file - Path to the on-disk policy file.
   @param fields - Per-effect config controlling the "approve-always-here" prompt option.
   @param policy - Optional in-memory policy to use directly instead of loading `file` on startup.
+  @param interactive - Whether a user is at a terminal. When false, an interrupt the policy does not decide is rejected with a reason (surfaced to the raise site, and so to an LLM whose tool raised it) instead of prompting.
   """
   globalCliPolicyOpts = {
     file: file,
     fields: fields
   }
+  _interactive = interactive
   if (policy != null) {
     // Seed from the caller and mark loaded so `maybeLoadPolicy` skips the
     // file read; persistence of later decisions still targets `file`.

@@ -95,6 +95,15 @@ export def runSession(interactive: boolean, body: () -> void raises <*>) {
 }
 ```
 
+The `interactive` flag is also threaded into the policy handler
+(`cliPolicyHandler(interactive: ...)`). In a one-shot run there is no user
+at a terminal, so an interrupt the policy does not decide is rejected with
+a reason string instead of prompted — the reason becomes the failing
+call's error, which the tool loop feeds back to the model so it can take
+another approach. Before this, an undecided effect in `-p` mode raised a
+prompt nobody could answer: the pending prompt starved the event loop and
+the process died with exit 13 ("unsettled top-level await").
+
 Why this is enough: handlers in Agency are not try/catch. When a function
 raises an interrupt, *every* handler up the chain is consulted, and if any
 one of them rejects, the interrupt is rejected. So a brain that wraps its

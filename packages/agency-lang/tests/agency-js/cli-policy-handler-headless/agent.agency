@@ -1,0 +1,26 @@
+import { cliPolicyHandler } from "std::policy"
+
+def readSecret(): string {
+  interrupt myapp::secret("Allow reading the secret?", { key: "k" })
+  return "granted"
+}
+
+node main(args: { policyFile: string }): string {
+  // interactive: false — an effect the policy does not decide must be
+  // rejected with a reason, never prompted (there is no user to answer).
+  const handler = cliPolicyHandler(
+    file: args.policyFile,
+    fields: {},
+    interactive: false,
+  )
+  let outcome = ""
+  handle {
+    const result = try readSecret()
+    if (result is success(v)) {
+      outcome = "approved: ${v}"
+    } else if (result is failure(f)) {
+      outcome = "failure: ${f}"
+    }
+  } with handler
+  return outcome
+}

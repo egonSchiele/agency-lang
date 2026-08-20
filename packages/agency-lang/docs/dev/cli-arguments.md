@@ -148,6 +148,14 @@ exists**, and the launcher (`lib/cli/runBundledAgent.ts`,
   unconfigured run cannot inherit the config. A forwarded `agent --config`
   beats a root `-c` (the more specific value); a bad explicit config refuses
   to launch rather than silently running unconfigured;
+- `--workdir` — the child's working directory, passed as the spawn `cwd`
+  (never a parent `chdir`, so the launcher keeps resolving its own files
+  where they live). It must exist before the child does: the agent's static
+  initializers resolve paths and discover `agency.json` against cwd before
+  `main()` could parse a flag. A path that is not a directory refuses to
+  launch. The motivating case: an eval harness seeds fixtures into a staged
+  workdir, but a command like `pnpm run agency agent` re-anchors cwd to the
+  package root, so the agent loses the fixtures — `--workdir` puts it back;
 - `--agent-home` — grandfathered: the agent reads it in static initializers.
   A candidate to move into the agent, not a pattern to extend.
 

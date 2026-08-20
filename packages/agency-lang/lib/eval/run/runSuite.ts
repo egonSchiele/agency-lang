@@ -223,7 +223,12 @@ export async function runSuite(
           : undefined;
         let outcome: SuiteTestResult;
         try {
-          outcome = await executeTest(test, perRun.pipeOutput ?? true);
+          // The run lives in staging until it is folded into the run
+          // directory, so this is the only address a watcher can follow
+          // while the test is still running.
+          outcome = await executeTest(test, perRun.pipeOutput ?? true, (statelogPath) => {
+            if (progress) console.error(`[${label}] live statelog: ${statelogPath}`);
+          });
         } finally {
           if (ticker !== undefined) clearInterval(ticker);
         }
@@ -235,6 +240,16 @@ export async function runSuite(
         if (interrupted) break;
       }
     } else {
+      // Up front rather than as each test starts: the status board owns the
+      // screen once the pool runs, and the staging paths are deterministic.
+      if (progress) {
+        for (const test of opts.inputs) {
+          const statelogPath = agentRunPaths(
+            path.join(stagingRoot, test.id ?? ""),
+          ).statelogPath;
+          console.error(`[${ttyColor.green(test.id ?? "")}] live statelog: ${statelogPath}`);
+        }
+      }
       results = await runPool({
         tests: opts.inputs,
         parallel,

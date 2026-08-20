@@ -20,7 +20,6 @@ import { ExpertGuidance, guidanceOrEmpty, renderGuidance } from "std::agents/lib
 import { Feedback, feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { plannerAgent } from "std::agents/planner"
 import { setAgentCwd, getAgentCwd } from "std::index"
-import { containedIn } from "std::fs"
 import { skillsDir } from "std::skills"
 import { setMemoryId } from "std::memory"
 import { exec } from "std::shell"
@@ -224,15 +223,6 @@ def solve(task: string, context: string, agencyTask: boolean): Result<string> {
     // program that writes the file at runtime — which is then saved AS the
     // file, instead of the module the task actually wanted.
     const target = saveTargetFor(task)
-    // The target comes from a model, so it is validated by where it would
-    // actually land, not by its spelling: containedIn resolves the name the
-    // same way write will (~ expansion, symlinks, relative against the
-    // agent working directory) and refuses anything outside it.
-    if (target != "" && !containedIn(target, workRoot())) {
-      return failure(
-        "refusing to save generated code outside the working directory: ${target}",
-      )
-    }
     let writerTask = task
     if (target != "") {
       writerTask = """
@@ -252,7 +242,12 @@ Deliverable: ONLY the Agency module source that will be saved as ${target}. The 
       return failure("could not write valid Agency code: ${written.error.problems}")
     }
     if (target != "") {
-      const saved = write(target, written.value, useAgentCwd: true)
+      // The target comes from a model, so containment is enforced AT the
+      // write (allowedPaths), not as a preflight that could go stale during
+      // the long generation above: the resolved destination must stay under
+      // the working directory, and a final-component symlink is never
+      // followed.
+      const saved = write(target, written.value, useAgentCwd: true, allowedPaths: [workRoot()])
       if (isFailure(saved)) {
         return failure(
           "wrote valid Agency source but could not save it to ${target}: ${saved.error}",

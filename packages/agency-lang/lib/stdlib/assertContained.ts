@@ -127,18 +127,3 @@ async function realpathOrSelf(p: string): Promise<string> {
     return p;
   }
 }
-
-/**
- * Boolean form of `assertContained` for callers that branch rather than
- * throw: true iff `target` resolves inside `root` (symlink-aware, with the
- * same nearest-existing-ancestor handling for targets that do not exist
- * yet). Relative targets resolve against `root` itself.
- */
-export async function isContainedIn(target: string, root: string): Promise<boolean> {
-  try {
-    await assertContained(target, [root], root);
-    return true;
-  } catch {
-    return false;
-  }
-}

@@ -8,7 +8,6 @@ import { resolveDir } from "./resolveDir.js";
 import { expandPath } from "./expandPath.js";
 
 export { resolvePath } from "./resolvePath.js";
-export { isContainedIn as _containedIn } from "./assertContained.js";
 
 export type MultiEdit = {
   oldText: string;

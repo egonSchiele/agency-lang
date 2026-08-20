@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
-import { assertContained, isContainedIn } from "./assertContained.js";
+import { assertContained } from "./assertContained.js";
 
 describe("assertContained", () => {
   let tmpRoot: string;
@@ -118,23 +118,5 @@ describe("assertContained ~ expansion", () => {
     // applied to the *target* path, not only to allowlist entries.
     const allowedAbs = path.join(os.homedir(), "proj");
     await expect(assertContained("~/proj/file.txt", [allowedAbs])).resolves.toBeUndefined();
-  });
-});
-
-describe("isContainedIn", () => {
-  it("accepts a plain relative name and rejects escapes by destination, not spelling", async () => {
-    const root = process.cwd();
-    expect(await isContainedIn("fib.agency", root)).toBe(true);
-    expect(await isContainedIn("sub/dir/fib.agency", root)).toBe(true);
-    expect(await isContainedIn("../outside.agency", root)).toBe(false);
-    expect(await isContainedIn("/etc/passwd", root)).toBe(false);
-  });
-
-  it("expands ~ before judging, so a home-directory write is refused", async () => {
-    expect(await isContainedIn("~/payload.agency", "/tmp/agent-workdir")).toBe(false);
-  });
-
-  it("fails closed on an empty root", async () => {
-    expect(await isContainedIn("fib.agency", "")).toBe(false);
   });
 });

@@ -195,6 +195,7 @@ export def write(
   dir: string = ".",
   mode: WriteMode = "overwrite",
   useAgentCwd: boolean = false,
+  allowedPaths: string[] = [],
 ): Result {
   """
   Write content to a file.
@@ -204,6 +205,10 @@ export def write(
   @param dir - The directory to resolve the filename against (defaults to ".")
   @param mode - How to handle an existing file
   @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
+  @param allowedPaths - When set, the write is refused unless the resolved
+    destination stays inside one of these roots. Enforced at the write
+    itself (symlink-aware; never writes through a final-component symlink),
+    not as a preflight.
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
@@ -215,7 +220,7 @@ export def write(
     mode: mode
   })
   destructive {
-    return try _write(dir, filename, content, mode)
+    return try _write(dir, filename, content, mode, allowedPaths)
   }
 }
 
@@ -225,6 +230,7 @@ export def writeBinary(
   dir: string = ".",
   mode: WriteMode = "overwrite",
   useAgentCwd: boolean = false,
+  allowedPaths: string[] = [],
 ): Result {
   """
   Write base64-encoded binary data to a file: images, audio, video, PDFs, or any
@@ -235,6 +241,8 @@ export def writeBinary(
   @param dir - The directory to resolve the filename against (defaults to ".")
   @param mode - How to handle an existing file
   @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
+  @param allowedPaths - When set, the write is refused unless the resolved
+    destination stays inside one of these roots (see write).
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
@@ -245,7 +253,7 @@ export def writeBinary(
     mode: mode
   })
   destructive {
-    return try _writeBinary(dir, filename, base64, mode)
+    return try _writeBinary(dir, filename, base64, mode, allowedPaths)
   }
 }
 

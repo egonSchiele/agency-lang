@@ -101,6 +101,9 @@ def policyHandlerFor(interactive: boolean): any {
     file: policyFile,
     fields: ALWAYS_FIELDS,
     policy: sessionPolicy,
+    // One-shot (-p) runs have no user at a terminal: an undecided effect
+    // is rejected with a reason the model reads, never prompted.
+    interactive: interactive,
   )
 }
 

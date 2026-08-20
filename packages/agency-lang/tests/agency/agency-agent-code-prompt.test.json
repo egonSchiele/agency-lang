@@ -1,0 +1,6 @@
+{
+  "tests": [
+    { "nodeName": "codePromptLoads", "description": "the coordinator code prompt loads via the contained read", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "oneShotPromptLoads", "description": "the one-shot note loads via the contained read", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

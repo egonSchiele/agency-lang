@@ -1,0 +1,243 @@
+import { write, read, writeBinary, readBinary } from "std::index"
+import { remove, edit } from "std::fs"
+import { typecheckFile, writeAST, loadTemplate, formatFile, parseAST } from "std::agency"
+
+// Every escape must fail in preparation, BEFORE any interrupt exists. The
+// handler in each escape node returns a unique rejection, so if the error
+// classifies as "handler" the interrupt was raised and containment failed.
+def classify(err: string): string {
+  if (err =~ re/HANDLER_REACHED/) {
+    return "handler"
+  }
+  if (err =~ re/pass that directory in dir/) {
+    return "prep"
+  }
+  return "other: ${err}"
+}
+
+node containedWriteReadRoundtrip(): boolean {
+  const w = write("cf-tmp.txt", "contained", __dirname) with approve
+  const back = read("cf-tmp.txt", __dirname) with approve
+  remove(__dirname + "/cf-tmp.txt") with approve
+  if (w is failure(e)) {
+    return false
+  }
+  if (back is success(content)) {
+    return content == "contained"
+  }
+  return false
+}
+
+node containedBinaryRoundtrip(): boolean {
+  const w = writeBinary("cf-tmp.bin", "aGk=", __dirname) with approve
+  const back = readBinary("cf-tmp.bin", __dirname) with approve
+  remove(__dirname + "/cf-tmp.bin") with approve
+  if (w is failure(e)) {
+    return false
+  }
+  if (back is success(content)) {
+    return content == "aGk="
+  }
+  return false
+}
+
+node writeEscapeDotDot(): string {
+  handle {
+    const r = try write("../cf-escape.txt", "x", __dirname, "create-only")
+    if (isFailure(r)) {
+      return classify("${r.error}")
+    }
+    return "unexpected success"
+  } with (interrupt) {
+    return reject("HANDLER_REACHED")
+  }
+}
+
+node readEscapeDotDot(): string {
+  handle {
+    const r = try read("../cf-escape.txt", __dirname)
+    if (isFailure(r)) {
+      return classify("${r.error}")
+    }
+    return "unexpected success"
+  } with (interrupt) {
+    return reject("HANDLER_REACHED")
+  }
+}
+
+node writeBinaryEscape(): string {
+  handle {
+    const r = try writeBinary("../cf-escape.bin", "aGk=", __dirname, "create-only")
+    if (isFailure(r)) {
+      return classify("${r.error}")
+    }
+    return "unexpected success"
+  } with (interrupt) {
+    return reject("HANDLER_REACHED")
+  }
+}
+
+node readBinaryEscape(): string {
+  handle {
+    const r = try readBinary("../cf-escape.bin", __dirname)
+    if (isFailure(r)) {
+      return classify("${r.error}")
+    }
+    return "unexpected success"
+  } with (interrupt) {
+    return reject("HANDLER_REACHED")
+  }
+}
+
+node writeAbsoluteEscape(): string {
+  handle {
+    const r = try write("/cf-absolute-escape.txt", "x", __dirname, "create-only")
+    if (isFailure(r)) {
+      return classify("${r.error}")
+    }
+    return "unexpected success"
+  } with (interrupt) {
+    return reject("HANDLER_REACHED")
+  }
+}
+
+node writeTildeEscape(): string {
+  handle {
+    // create-only and an improbable dotted name: if containment ever
+    // breaks, this test must not overwrite anything a user owns.
+    const r = try write("~/.agency-cf-escape-probe-3f9d.txt", "x", __dirname, "create-only")
+    if (isFailure(r)) {
+      return classify("${r.error}")
+    }
+    return "unexpected success"
+  } with (interrupt) {
+    return reject("HANDLER_REACHED")
+  }
+}
+
+// The exact teaching sentences, per operation, so the error keeps telling
+// the model the right retry.
+node exactTeachingSentences(): boolean {
+  const w = try write("../x", "x", __dirname) with approve
+  const r = try read("../x", __dirname) with approve
+  if (!isFailure(w) || !isFailure(r)) {
+    return false
+  }
+  const writeOk = "${w.error}" =~ re/To write somewhere else, pass that directory in dir\./
+  const readOk = "${r.error}" =~ re/To read from somewhere else, pass that directory in dir\./
+  return writeOk && readOk
+}
+
+// --- edit (std::fs) ---
+
+node editEscapeDotDot(): string {
+  handle {
+    const r = try edit("../cf-escape.txt", [{ oldText: "a", newText: "b", replaceAll: false }], __dirname)
+    if (isFailure(r)) {
+      return classify("${r.error}")
+    }
+    return "unexpected success"
+  } with (interrupt) {
+    return reject("HANDLER_REACHED")
+  }
+}
+
+// --- the four agency.agency wrappers ---
+
+node typecheckFileTildeEscape(): string {
+  handle {
+    const r = try typecheckFile(__dirname, "~/.agency-cf-escape-probe-3f9d.agency")
+    if (isFailure(r)) {
+      return classify("${r.error}")
+    }
+    return "unexpected success"
+  } with (interrupt) {
+    return reject("HANDLER_REACHED")
+  }
+}
+
+node writeASTTildeEscape(): string {
+  const parsed = parseAST("node main() {\n  return 1\n}")
+  if (parsed is failure(e)) {
+    return "parse failed"
+  }
+  handle {
+    const r = try writeAST(parsed.value, __dirname, "~/.agency-cf-escape-probe-3f9d.agency", overwrite: false)
+    if (isFailure(r)) {
+      return classify("${r.error}")
+    }
+    return "unexpected success"
+  } with (interrupt) {
+    return reject("HANDLER_REACHED")
+  }
+}
+
+node loadTemplateTildeEscape(): string {
+  handle {
+    const r = try loadTemplate(__dirname, "~/.agency-cf-escape-probe-3f9d.agency")
+    if (isFailure(r)) {
+      return classify("${r.error}")
+    }
+    return "unexpected success"
+  } with (interrupt) {
+    return reject("HANDLER_REACHED")
+  }
+}
+
+node formatFileTildeEscape(): string {
+  handle {
+    const r = try formatFile(__dirname, "~/.agency-cf-escape-probe-3f9d.agency")
+    if (isFailure(r)) {
+      return classify("${r.error}")
+    }
+    return "unexpected success"
+  } with (interrupt) {
+    return reject("HANDLER_REACHED")
+  }
+}
+
+// Contained success smokes for the write-shaped wrappers: each reads the
+// resulting file back, so a helper wired only into the payload cannot pass.
+node writeASTContained(): boolean {
+  const parsed = parseAST("node main() {\n  return 1\n}")
+  if (parsed is failure(e)) {
+    return false
+  }
+  const w = writeAST(parsed.value, __dirname, "cf-ast-tmp.agency") with approve
+  const back = read("cf-ast-tmp.agency", __dirname) with approve
+  remove(__dirname + "/cf-ast-tmp.agency") with approve
+  if (w is failure(e2)) {
+    return false
+  }
+  if (back is success(content)) {
+    return content =~ re/node main/
+  }
+  return false
+}
+
+node formatFileContained(): boolean {
+  const w = write("cf-fmt-tmp.agency", "node main() {\n  return 1\n}\n", __dirname) with approve
+  if (w is failure(e)) {
+    return false
+  }
+  const f = formatFile(__dirname, "cf-fmt-tmp.agency") with approve
+  const back = read("cf-fmt-tmp.agency", __dirname) with approve
+  remove(__dirname + "/cf-fmt-tmp.agency") with approve
+  if (f is failure(e2)) {
+    return false
+  }
+  if (back is success(content)) {
+    return content =~ re/node main/
+  }
+  return false
+}
+
+node typecheckFileContained(): boolean {
+  const w = write("cf-tc-tmp.agency", "node main() {\n  return 1\n}\n", __dirname) with approve
+  if (w is failure(e)) {
+    return false
+  }
+  const tc = typecheckFile(__dirname, "cf-tc-tmp.agency") with approve
+  remove(__dirname + "/cf-tc-tmp.agency") with approve
+  return !isFailure(tc)
+}

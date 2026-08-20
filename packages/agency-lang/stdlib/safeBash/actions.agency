@@ -38,6 +38,25 @@ export type WritePayload = {
   mode: WriteMode
 }
 
+/** Both plan sides derive from one WritePayload, so payload/execution
+  parity holds by construction. */
+export def writeEffect(write: WritePayload): Effect {
+  return {
+    name: "std::write",
+    payload: write
+  }
+}
+
+export def writeExecution(write: WritePayload): WriteExec {
+  return {
+    kind: "write",
+    filename: write.filename,
+    dir: write.dir,
+    content: write.content,
+    mode: write.mode
+  }
+}
+
 export type GitDiffPayload = {
   cwd: string;
   ref: string;

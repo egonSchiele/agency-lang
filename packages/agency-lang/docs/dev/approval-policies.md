@@ -54,3 +54,34 @@ by `**`). Either give the eval command `--policy with-writes`, or put a
 `{.,./**}`-scoped rule in the static file (rule 2) — both resolve to the
 staged workdir at launch, where the dot segments are literal prefix and
 match fine.
+
+## Filename containment (the contained-filename wrappers)
+
+The single-file stdlib wrappers (`read`, `write`, `readBinary`,
+`writeBinary`, `edit`, and the four file wrappers in `std::agency`) prepare
+their `(dir, filename)` pair before raising: `dir` is realpathed, the
+filename is normalized, and any stable escape — an absolute path, `~`,
+upward traversal, or a symlink whose target leaves `dir` — is rejected
+BEFORE the interrupt exists. No policy or human can approve an escape,
+because no escape request is ever raised. `prepareContainedPath`
+(`lib/stdlib/prepareContainedPath.ts`) owns the rule; the spec is
+`2026-08-20-contained-filename-spec.md`.
+
+The migration rule doubles as the design principle: **the destination
+belongs in `dir`, because `dir` is the field a policy rule (or a human)
+judges.** `write("/tmp/report.txt")` is refused with an error that teaches
+the fix — `write("report.txt", dir: "/tmp")` — and the interrupt then
+reports `/tmp` truthfully.
+
+safeBash is the exception that proves the trust rule: its whole command is
+untrusted, so there is no trusted `dir` to contain within. Its redirect
+writes instead report the resolved parent of the target (quote-aware: an
+unquoted `~` expands, a quoted one does not), so the policy judges the
+real destination. Targets it cannot resolve (dangling symlinks, loops,
+variables) fall back to the broad `std::bash` question.
+
+What this does NOT defend against: a hostile local process swapping a
+directory for a symlink between approval and execution. Node exposes no
+primitive that closes that race on the platforms we support, and a local
+process with that access already owns the account. Stable escapes are the
+threat model; races are explicitly out of scope.

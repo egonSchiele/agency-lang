@@ -17,6 +17,7 @@ import {
   _pairsOf as _pairsOfImpl,
  } from "agency-lang/stdlib-lib/builtins.js"
 import { _resolve } from "agency-lang/stdlib-lib/path.js"
+import { _prepareContainedPath } from "agency-lang/stdlib-lib/fs.js"
 import {
   syntaxHighlight as _syntaxHighlight,
  } from "agency-lang/stdlib-lib/syntax.js"
@@ -171,7 +172,9 @@ export idempotent def read(
   """
   Read the contents of a file and return it as a string.
 
-  @param filename - The file to read
+  @param filename - The file to read. Must stay inside dir: no absolute
+    paths, `~`, upward traversal, or symlinks that leave it. To touch another
+    directory, pass it in `dir`.
   @param dir - The directory to resolve the filename against (defaults to ".")
   @param offset - 1-indexed line to start at (0 means start of file)
   @param limit - Maximum number of lines to return (0 means read to end of file)
@@ -180,13 +183,17 @@ export idempotent def read(
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
   }
+  const prepared = try _prepareContainedPath(dir, filename, "read")
+  if (isFailure(prepared)) {
+    return prepared
+  }
   return interrupt std::read("Are you sure you want to read this file?", {
-    dir: dir,
-    filename: filename,
+    dir: prepared.value.dir,
+    filename: prepared.value.filename,
     offset: offset,
     limit: limit
   })
-  return try _read(dir, filename, offset, limit)
+  return try _read(prepared.value.dir, prepared.value.filename, offset, limit)
 }
 
 export def write(
@@ -199,7 +206,9 @@ export def write(
   """
   Write content to a file.
 
-  @param filename - The file to write
+  @param filename - The file to write. Must stay inside dir: no absolute
+    paths, `~`, upward traversal, or symlinks that leave it. To touch another
+    directory, pass it in `dir`.
   @param content - The content to write
   @param dir - The directory to resolve the filename against (defaults to ".")
   @param mode - How to handle an existing file
@@ -208,14 +217,18 @@ export def write(
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
   }
+  const prepared = try _prepareContainedPath(dir, filename, "write")
+  if (isFailure(prepared)) {
+    return prepared
+  }
   return interrupt std::write("Are you sure you want to write to this file?", {
-    dir: dir,
-    filename: filename,
+    dir: prepared.value.dir,
+    filename: prepared.value.filename,
     content: content,
     mode: mode
   })
   destructive {
-    return try _write(dir, filename, content, mode)
+    return try _write(prepared.value.dir, prepared.value.filename, content, mode)
   }
 }
 
@@ -230,7 +243,9 @@ export def writeBinary(
   Write base64-encoded binary data to a file: images, audio, video, PDFs, or any
   binary. Decodes the base64 and writes raw bytes rather than UTF-8 text.
 
-  @param filename - The file to write
+  @param filename - The file to write. Must stay inside dir: no absolute
+    paths, `~`, upward traversal, or symlinks that leave it. To touch another
+    directory, pass it in `dir`.
   @param base64 - The binary content, base64-encoded
   @param dir - The directory to resolve the filename against (defaults to ".")
   @param mode - How to handle an existing file
@@ -239,13 +254,17 @@ export def writeBinary(
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
   }
+  const prepared = try _prepareContainedPath(dir, filename, "write")
+  if (isFailure(prepared)) {
+    return prepared
+  }
   return interrupt std::writeBinary("Are you sure you want to write this file?", {
-    dir: dir,
-    filename: filename,
+    dir: prepared.value.dir,
+    filename: prepared.value.filename,
     mode: mode
   })
   destructive {
-    return try _writeBinary(dir, filename, base64, mode)
+    return try _writeBinary(prepared.value.dir, prepared.value.filename, base64, mode)
   }
 }
 
@@ -258,18 +277,24 @@ export idempotent def readBinary(
   Read a file and return its contents as a Base64-encoded string. Works for any
   binary file: images, audio, video, PDFs.
 
-  @param filename - The file to read
+  @param filename - The file to read. Must stay inside dir: no absolute
+    paths, `~`, upward traversal, or symlinks that leave it. To touch another
+    directory, pass it in `dir`.
   @param dir - The directory to resolve the filename against (defaults to ".")
   @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
   }
+  const prepared = try _prepareContainedPath(dir, filename, "read")
+  if (isFailure(prepared)) {
+    return prepared
+  }
   return interrupt std::readBinary("Are you sure you want to read this file?", {
-    dir: dir,
-    filename: filename
+    dir: prepared.value.dir,
+    filename: prepared.value.filename
   })
-  return try _readBinary(dir, filename)
+  return try _readBinary(prepared.value.dir, prepared.value.filename)
 }
 
 export def range(start: number, end: number = -1): number[] {

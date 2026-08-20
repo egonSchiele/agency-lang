@@ -107,7 +107,9 @@ Edit a single file by applying one or more text replacements atomically. Each ed
 
   Prefer one call with multiple edits over many separate calls. Keep each oldText as small as possible while still matching uniquely. Do not pad with unchanged context to bridge distant changes; split them into separate edits instead.
 
-  @param filename - The file to edit
+  @param filename - The file to edit. Must stay inside dir: no absolute
+    paths, `~`, upward traversal, or symlinks that leave it. To edit another
+    directory, pass it in `dir`.
   @param edits - Text replacements to apply in order; each has oldText, newText, and replaceAll (replace every occurrence when true)
   @param dir - The directory to resolve the filename against
   @param useAgentCwd - When true, resolve a relative path against the agent working directory if one is set
@@ -154,7 +156,7 @@ Apply a unified diff to the working tree. Supports file creation (--- /dev/null)
 
 **Throws:** `std::applyPatch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L81))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L89))
 
 ### mkdir
 
@@ -184,7 +186,7 @@ Create a directory, including any missing parent directories. Idempotent: succee
 
 **Throws:** `std::mkdir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L97))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L105))
 
 ### copy
 
@@ -217,7 +219,7 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
 
 **Throws:** `std::copy`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L117))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L125))
 
 ### move
 
@@ -250,7 +252,7 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
 
 **Throws:** `std::move`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L140))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L148))
 
 ### remove
 
@@ -280,4 +282,4 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 
 **Throws:** `std::remove`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L163))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L171))

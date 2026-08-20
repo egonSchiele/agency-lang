@@ -1,0 +1,11 @@
+{
+  "write": true,
+  "read": true,
+  "writeBinary": true,
+  "readBinary": true,
+  "edit": true,
+  "typecheckFile": true,
+  "writeAST": true,
+  "loadTemplate": true,
+  "formatFile": true
+}

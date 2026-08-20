@@ -442,3 +442,47 @@ describe("checkPolicy for mcp::call", () => {
     ).toBe("propagate");
   });
 });
+
+describe("dot dir patterns", () => {
+  const write = (dir: string) => ({
+    effect: "std::write",
+    message: "m",
+    data: { dir, filename: "out.txt" },
+    origin: "std::fs",
+  });
+
+  it("`.` in a dir pattern means the launch directory", () => {
+    const policy = {
+      "std::write": [{ match: { dir: "." }, action: "approve" as const }],
+    };
+    expect(checkPolicy(policy, write(process.cwd())).type).toBe("approve");
+    expect(checkPolicy(policy, write("/somewhere/else")).type).toBe("propagate");
+  });
+
+  it("resolves `.` inside brace alternatives and path prefixes", () => {
+    const policy = {
+      "std::write": [{ match: { dir: "{.,./**}" }, action: "approve" as const }],
+    };
+    expect(checkPolicy(policy, write(process.cwd())).type).toBe("approve");
+    expect(checkPolicy(policy, write(process.cwd() + "/sub/deeper")).type).toBe("approve");
+    expect(checkPolicy(policy, write("/somewhere/else")).type).toBe("propagate");
+  });
+
+  // Not asserted: dot-led subdirectories BELOW the launch dir (`cwd/.x/...`)
+  // stay unmatched — picomatch's `**` never matches dot segments. A launch
+  // dir whose own path contains dot segments is fine (literal prefix).
+
+  it("does not resolve `.` in non-dir fields", () => {
+    const policy = {
+      "std::exec": [{ match: { command: "./run.sh" }, action: "approve" as const }],
+    };
+    const intr = {
+      effect: "std::exec",
+      message: "m",
+      data: { command: "./run.sh" },
+      origin: "std::shell",
+    };
+    // stripDotSlash normalizes both sides, so the literal pattern still matches raw.
+    expect(checkPolicy(policy, intr).type).toBe("approve");
+  });
+});

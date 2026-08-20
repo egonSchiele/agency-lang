@@ -20,6 +20,7 @@ import { ExpertGuidance, guidanceOrEmpty, renderGuidance } from "std::agents/lib
 import { Feedback, feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { plannerAgent } from "std::agents/planner"
 import { setAgentCwd, getAgentCwd } from "std::index"
+import { containedIn } from "std::fs"
 import { skillsDir } from "std::skills"
 import { setMemoryId } from "std::memory"
 import { exec } from "std::shell"
@@ -186,6 +187,17 @@ type SaveTarget = {
   filename: string
 }
 
+/** Where generated files must stay: the agent working directory, or the
+  process launch directory when nothing set one (the same fallback the
+  file tools use). */
+def workRoot(): string {
+  const cwd = getAgentCwd()
+  if (cwd != "") {
+    return cwd
+  }
+  return "."
+}
+
 def saveTargetFor(task: string): string {
   const prompt = """
 Does this task ask for code to be saved to a specific file? Reply with that filename (a relative path) in the filename field, or an empty string if the task does not name a file to save to.
@@ -199,15 +211,6 @@ ${task}
   return target.filename
 }
 
-/** A save target comes from a model, so it is validated like any other
-  untrusted input: it must stay inside the agent working directory.
-  Exported for tests. */
-export def unsafeSaveTarget(name: string): boolean {
-  if (name.startsWith("/") || name.includes("..") || name.includes("\\")) {
-    return true
-  }
-  return name =~ re/^[A-Za-z]:/
-}
 
 /* agencyCodingAgent returns source rather than writing files — its contract
    ends at valid code. Placing that code is this caller's job: when the task
@@ -221,9 +224,13 @@ def solve(task: string, context: string, agencyTask: boolean): Result<string> {
     // program that writes the file at runtime — which is then saved AS the
     // file, instead of the module the task actually wanted.
     const target = saveTargetFor(task)
-    if (target != "" && unsafeSaveTarget(target)) {
+    // The target comes from a model, so it is validated by where it would
+    // actually land, not by its spelling: containedIn resolves the name the
+    // same way write will (~ expansion, symlinks, relative against the
+    // agent working directory) and refuses anything outside it.
+    if (target != "" && !containedIn(target, workRoot())) {
       return failure(
-        "refusing to save generated code to an unsafe path from the task: ${target}",
+        "refusing to save generated code outside the working directory: ${target}",
       )
     }
     let writerTask = task

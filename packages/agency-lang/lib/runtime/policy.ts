@@ -83,7 +83,12 @@ function escapeForGlob(s: string): string {
 // own path contains dot segments is fine — those sit in the literal prefix.
 // Exported for tests, which inject the cwd.
 export function resolveDotDirPattern(pattern: string, cwd: string = process.cwd()): string {
-  return pattern.replace(/(^|\{|,)\.(?=$|\/|,|\})/g, `$1${escapeForGlob(cwd)}`);
+  // Callback, not a replacement string: a legal cwd containing `$&`/`$'`
+  // would otherwise be interpreted as replacement-string syntax.
+  return pattern.replace(
+    /(^|\{|,)\.(?=$|\/|,|\})/g,
+    (_match, prefix) => prefix + escapeForGlob(cwd),
+  );
 }
 
 function matchesRule(

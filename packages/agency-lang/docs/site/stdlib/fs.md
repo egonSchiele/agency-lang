@@ -281,3 +281,29 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 **Throws:** `std::remove`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L163))
+
+### containedIn
+
+```ts
+containedIn(filename: string, root: string): boolean
+```
+
+True when filename resolves inside root. The check is symlink-aware and
+  resolves the same way the file tools do (`~` expands, relative paths
+  resolve against root, a not-yet-existing file resolves through its
+  nearest existing ancestor), so it answers "would a write to this name
+  stay under root?" rather than judging the spelling of the name.
+
+  @param filename - The path to check, relative or absolute
+  @param root - The directory it must stay inside
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| filename | `string` |  |
+| root | `string` |  |
+
+**Returns:** `boolean`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L183))

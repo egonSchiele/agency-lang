@@ -503,6 +503,12 @@ describe("resolveDotDirPattern escaping", () => {
     expect(picomatch.isMatch("/tmp/v1a/x", resolved)).toBe(false);
   });
 
+  it("inserts a cwd containing replacement-string metacharacters literally", () => {
+    const resolved = resolveDotDirPattern("./**", "/tmp/a$&b");
+    expect(picomatch.isMatch("/tmp/a$&b/x", resolved)).toBe(true);
+    expect(picomatch.isMatch("/tmp/a.b/x", resolved)).toBe(false);
+  });
+
   it("keeps glob syntax live in the user-written suffix", () => {
     const resolved = resolveDotDirPattern("./sub/**", "/tmp/plain");
     expect(picomatch.isMatch("/tmp/plain/sub/a/b", resolved)).toBe(true);

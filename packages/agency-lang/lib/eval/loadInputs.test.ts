@@ -161,6 +161,28 @@ describe("eval run input loading", () => {
     }
   });
 
+  it("description is kept when present and must be a non-empty string", () => {
+    const [input] = loadInputsFromFile(
+      writeJson("desc.json", {
+        inputs: [{ id: "t", goal: "g", input: "x", description: "why this test exists" }],
+      }),
+    );
+    expect(input.description).toBe("why this test exists");
+    const [bare] = loadInputsFromFile(
+      writeJson("desc-none.json", { inputs: [{ id: "t", goal: "g", input: "x" }] }),
+    );
+    expect(bare.description).toBeUndefined();
+    for (const bad of ["", 7]) {
+      expect(() =>
+        loadInputsFromFile(
+          writeJson("desc-bad.json", {
+            inputs: [{ id: "t", goal: "g", input: "x", description: bad }],
+          }),
+        ),
+      ).toThrow(/description must be a non-empty string/);
+    }
+  });
+
   it("rejects legacy args/node with a migration message", () => {
     expect(() =>
       loadInputsFromFile(

@@ -218,6 +218,12 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   if (spec.metadata !== undefined && !isPlainObject(spec.metadata)) {
     throw new Error("Eval input metadata must be an object when provided");
   }
+  if (
+    spec.description !== undefined &&
+    (typeof spec.description !== "string" || spec.description.length === 0)
+  ) {
+    throw new Error("Eval input description must be a non-empty string when provided");
+  }
   const out: Test = {
     id: typeof spec.id === "string" ? spec.id : makeId(),
     expected: spec.expected, // any JSON; absent stays undefined
@@ -227,6 +233,7 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
     spec.input !== undefined &&
     !(isPlainObject(spec.input) && Object.keys(spec.input).length === 0);
   if (hasInput) out.input = spec.input as string | Record<string, any>;
+  if (typeof spec.description === "string") out.description = spec.description;
   if (typeof spec.goal === "string") out.goal = spec.goal;
   if (typeof spec.files === "string")
     out.files = resolveFilesDir(spec.files, baseDir, options, out.id ?? "");

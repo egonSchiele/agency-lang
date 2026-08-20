@@ -26,6 +26,7 @@ function formatRun(run: GradedRun): string[] {
 function formatInput(input: GradedInput): string[] {
   return [
     `${ttyColor.green(input.inputId)}  score ${formatScore(input.objective)}`,
+    ...(input.description === undefined ? [] : [`  ${ttyColor.dim(input.description)}`]),
     ...input.grades.flatMap(formatGrade),
     ...formatUngradedReason(input.ungradedReason),
   ];

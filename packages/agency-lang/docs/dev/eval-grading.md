@@ -170,6 +170,64 @@ so editing `graders.ts` in place is a new annotator. `EvalRunGrading` (the
 objective, gates, per-test breakdown) is computed for printing and `-o`; it is
 not stored.
 
+## Coding tests: grading agent-written Agency with the agency test framework
+
+`evals/agency-agent/fib/` is the reference for a coding test whose grader
+runs the agent's code. The reason the agent writes **Agency** rather than
+TypeScript or Python: it is the one language where running the code locally
+is safe without a container, because every effectful stdlib function raises
+an interrupt. Two mechanisms make the guarantee, and both already exist in
+`std::agency`:
+
+1. `compile(source)` allows only `std::` imports — no interop TypeScript, no
+   node builtins, no local files.
+2. `run(compiled, node)` executes in a sandboxed subprocess whose interrupts
+   are all voted on by the parent's handlers, so a harness that wraps the
+   call in `handle { … } with` a reject-everything handler (approving only
+   `std::run`, the sandbox launch itself) vetoes every effect — including a
+   solution's own inline `with approve` and effectful static initializers.
+   Verified empirically in the fib harness against an inline-approved write,
+   a static-initializer write, and a `child_process` import.
+
+The shape, per test directory:
+
+- `files/<x>-harness.agency` + `files/<x>-harness.test.json` — an agency-test
+  harness. It reads the solution file, appends a driver node
+  (`export node __probe(…) { return solution(…) }`), compiles with
+  `std::agency`, and runs assertions in the sandbox, returning `"ok"` or a
+  precise failure string the test's exact-match turns into a diff. Living in
+  `files/`, it is seeded into the agent's workdir, so the agent can check its
+  own work with `agency test <x>-harness.test.json`. Name the harness's
+  `.test.json` differently from the solution file: the test runner derives
+  module names from the json's basename, and `fib.test.json` would collide
+  with `fib.agency`. Harness nodes must be `export`ed.
+- `graders.ts` — a `BaseGrader` subclass that copies ONLY the solution file
+  from the run's workdir into a scratch directory, lays down a fresh harness,
+  and spawns `agency test` there (`process.execPath` + `process.argv[1]`,
+  which is the agency CLI in every grading process). Pass = exit 0; feedback
+  = the run's output tail, which carries the harness diff.
+
+Three rules that are easy to get wrong:
+
+- **Never run the harness from the workdir.** The agent can edit its seeded
+  copy; the grader's copy comes from the graders snapshot (declared via
+  `externalFiles()`, rebound by `rebindExternalFile` when grading from a run
+  directory, resolved against the module dir when grading live).
+- **Spawn `agency test`; do not call `lib/cli/test.ts`'s `test()`
+  in-process.** It `process.exit`s on compile failure, and agent code that
+  fails to compile is a normal grading outcome, not a reason to kill the
+  grading process.
+- **The scratch dir goes under `process.cwd()`, not `os.tmpdir()`** —
+  compiled Agency resolves `agency-lang` from the directory it runs in.
+
+Integration status: this is deliberately a suite-local pattern, not framework
+surface. The framework already carries everything it needs (`workdir` on the
+grader input, the `externalFiles` snapshot, `GraderInput` exported from
+`agency-lang/eval`). When a second coding test wants the same grader, promote
+the pattern to a framework-owned `AgencyTestGrader` (constructor takes the
+harness files and the workdir files to copy; the framework owns the
+scratch-dir, spawn, and feedback mechanics) rather than copy-pasting it.
+
 ## What is gone
 
 `config.json`, `summary.json`, per-input `input.json`, `eval-record.json` on

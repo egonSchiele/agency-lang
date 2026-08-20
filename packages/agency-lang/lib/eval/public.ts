@@ -13,6 +13,7 @@ export { LlmJudge } from "./grading/graders/llmJudge.js";
 export { goalJudgeFile } from "./grading/goalJudgeFile.js"; // for users who want a custom judge but the bundled prompt
 export type {
   LoadedRun,
+  GraderInput,
   Grade,
   GraderOptions,
   Test,

@@ -10,11 +10,16 @@ import { bash } from "std::shell"
 import {
   Effect,
   Plan,
+  WritePayload,
+  WriteExec,
+  writeEffect,
+  writeExecution,
   runBash,
   runWrite,
   truncate,
  } from "./safeBash/actions.agency"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
+import { _resolveRedirectTarget } from "agency-lang/stdlib-lib/fs.js"
 
 export { MAX_STDOUT_LEN } from "./safeBash/actions.agency"
 
@@ -169,6 +174,49 @@ def flagNames(command: SimpleCommand): string[] {
   return out
 }
 
+/** Quote-aware tilde behavior for a redirect target: bash expands `~`
+  only when it is unquoted, so `> ~/f` writes to the home directory while
+  `> '~/f'` and `> "~/f"` name a literal `~/f` beneath the cwd. Only the
+  unquoted word tags expand; everything literalTarget accepts and this
+  does not list stays literal. */
+def tildeModeFor(word: Word): string {
+  return match(word) {
+    { tag: "literal" } => "expand"
+    { tag: "path" } => "expand"
+    _ => "literal"
+  }
+}
+
+/** The ONE owner of redirect-write preparation: validates the redirect
+  shape, extracts the fully literal target (a variable target fails, which
+  sends the whole command to the broad std::bash question), applies
+  quote-aware tilde behavior, resolves the complete stable target through
+  the strict symlink walk (dangling links and loops fail, same fallback),
+  and returns the shared payload both the effect and the execution derive
+  from. Neither caller repeats any of this choreography. */
+def prepareRedirectWrite(redirect: Redirect, cwd: string, content: string): Result<WritePayload> {
+  if (redirect.fd != null) {
+    return failure("redirect with an explicit file descriptor")
+  }
+  if (redirect.op != ">" && redirect.op != ">>") {
+    return failure("`${redirect.op}` is not an output redirect")
+  }
+  const target = literalTarget(redirect.target)
+  if (target is failure(why)) {
+    return failure(why)
+  }
+  const resolved = try _resolveRedirectTarget(target.value, cwd, tildeModeFor(redirect.target))
+  if (resolved is failure(why)) {
+    return failure("${why}")
+  }
+  return success({
+    dir: resolved.value.dir,
+    filename: resolved.value.filename,
+    content: content,
+    mode: writeMode(redirect.op)
+  })
+}
+
 def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
   """
   What a command's redirects contribute, independently of its verb.
@@ -190,30 +238,11 @@ def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
     return failure("more than one redirect")
   }
   const only = redirects[0]
-  if (only.fd != null) {
-    return failure("redirect with an explicit file descriptor")
-  }
-  if (only.op != ">" && only.op != ">>") {
-    return failure("`${only.op}` is not an output redirect")
-  }
-  const target = literalTarget(only.target)
-  if (target is failure(why)) {
+  const prepared = prepareRedirectWrite(only, cwd, "")
+  if (prepared is failure(why)) {
     return failure(why)
   }
-  const mode = writeMode(only.op)
-  return success(
-    [
-    {
-    name: "std::write",
-    payload: {
-      dir: cwd,
-      filename: target.value,
-      content: "",
-      mode: mode
-    }
-  },
-  ],
-  )
+  return success([writeEffect(prepared.value)])
 }
 
 def literalTarget(word: Word): Result<string> {
@@ -563,41 +592,18 @@ def writePlan(command: SimpleCommand, cwd: string): Result<Plan> {
     return failure("`echo` with flags prints differently")
   }
   const only = command.redirects[0]
-  if (only.fd != null) {
-    return failure("redirect with an explicit file descriptor")
-  }
-  if (only.op != ">" && only.op != ">>") {
-    return failure("`${only.op}` is not an output redirect")
-  }
-  const target = literalTarget(only.target)
-  if (target is failure(why)) {
-    return failure(why)
-  }
   const words = echoWords(command)
   if (words is failure(why)) {
     return failure(why)
   }
-  const content = echoOutput(words.value)
-  const mode = writeMode(only.op)
-  const effect: Effect = {
-    name: "std::write",
-    payload: {
-      dir: cwd,
-      filename: target.value,
-      content: content,
-      mode: mode
-    }
+  const prepared = prepareRedirectWrite(only, cwd, echoOutput(words.value))
+  if (prepared is failure(why)) {
+    return failure(why)
   }
   return success(
     {
-    effects: [effect],
-    execution: {
-      kind: "write",
-      filename: target.value,
-      dir: cwd,
-      content: content,
-      mode: mode
-    }
+    effects: [writeEffect(prepared.value)],
+    execution: writeExecution(prepared.value)
   },
   )
 }

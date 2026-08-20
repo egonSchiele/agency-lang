@@ -38,6 +38,26 @@ export type WritePayload = {
   mode: WriteMode
 }
 
+/** The one shared description of a planned redirect write. Both the
+  approval side (writeEffect) and the execution side (writeExecution)
+  derive from it, so payload/execution parity holds by construction. */
+export def writeEffect(write: WritePayload): Effect {
+  return {
+    name: "std::write",
+    payload: write
+  }
+}
+
+export def writeExecution(write: WritePayload): WriteExec {
+  return {
+    kind: "write",
+    filename: write.filename,
+    dir: write.dir,
+    content: write.content,
+    mode: write.mode
+  }
+}
+
 export type GitDiffPayload = {
   cwd: string;
   ref: string;

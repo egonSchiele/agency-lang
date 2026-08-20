@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "fs";
 import { realpath } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
-import { prepareContainedPath } from "./prepareContainedPath.js";
+import { prepareContainedPath, resolveRedirectTarget } from "./prepareContainedPath.js";
 
 const sandboxes: string[] = [];
 
@@ -107,9 +107,7 @@ describe("prepareContainedPath", () => {
   it("rejects a regular file used as a directory with ENOTDIR", async () => {
     const { root } = sandbox();
     writeFileSync(path.join(root, "plain.txt"), "x");
-    await expect(prepareContainedPath(root, "plain.txt/child", "write")).rejects.toThrow(
-      /ENOTDIR/,
-    );
+    await expect(prepareContainedPath(root, "plain.txt/child", "write")).rejects.toThrow(/ENOTDIR/);
   });
 
   it("fails closed on a permission error instead of treating it as a lexical tail", async () => {
@@ -138,9 +136,7 @@ describe("prepareContainedPath", () => {
 
   it("requires dir to exist", async () => {
     const { root } = sandbox();
-    await expect(
-      prepareContainedPath(path.join(root, "nope"), "f.txt", "write"),
-    ).rejects.toThrow();
+    await expect(prepareContainedPath(path.join(root, "nope"), "f.txt", "write")).rejects.toThrow();
   });
 
   it("rejects an empty dir instead of silently using cwd", async () => {
@@ -158,4 +154,66 @@ describe("prepareContainedPath", () => {
 
 async function realDir(p: string): Promise<string> {
   return realpath(p);
+}
+
+describe("resolveRedirectTarget", () => {
+  it("splits absolute and relative targets into real parent + name", async () => {
+    const { root, outside } = sandbox();
+    expect(await resolveRedirectTarget(join2(outside, "out.txt"), root, "expand")).toEqual({
+      dir: await realDir(outside),
+      filename: "out.txt",
+    });
+    expect(await resolveRedirectTarget("sub/out.txt", root, "expand")).toEqual({
+      dir: path.join(await realDir(root), "sub"),
+      filename: "out.txt",
+    });
+  });
+
+  it("expands or preserves ~ per tildeMode", async () => {
+    const { root } = sandbox();
+    const expanded = await resolveRedirectTarget("~/cf-rrt.txt", root, "expand");
+    expect(expanded.dir.includes("~")).toBe(false);
+    expect(expanded.filename).toBe("cf-rrt.txt");
+    const literal = await resolveRedirectTarget("~/cf-rrt.txt", root, "literal");
+    expect(literal.dir).toBe(path.join(await realDir(root), "~"));
+  });
+
+  it("resolves symlinked parents and existing final symlinks to real locations", async () => {
+    const { root, outside } = sandbox();
+    symlinkSync(outside, path.join(root, "plink"));
+    expect(await resolveRedirectTarget("plink/out.txt", root, "expand")).toEqual({
+      dir: await realDir(outside),
+      filename: "out.txt",
+    });
+    writeFileSync(path.join(outside, "real.txt"), "x");
+    symlinkSync(path.join(outside, "real.txt"), path.join(root, "flink"));
+    expect(await resolveRedirectTarget("flink", root, "expand")).toEqual({
+      dir: await realDir(outside),
+      filename: "real.txt",
+    });
+  });
+
+  it("follows a two-link chain and fails closed on loops and dangling links", async () => {
+    const { root, outside } = sandbox();
+    writeFileSync(path.join(outside, "end.txt"), "x");
+    symlinkSync(path.join(outside, "end.txt"), path.join(root, "hop2"));
+    symlinkSync(path.join(root, "hop2"), path.join(root, "hop1"));
+    expect((await resolveRedirectTarget("hop1", root, "expand")).filename).toBe("end.txt");
+    symlinkSync(path.join(root, "loopB"), path.join(root, "loopA"));
+    symlinkSync(path.join(root, "loopA"), path.join(root, "loopB"));
+    await expect(resolveRedirectTarget("loopA", root, "expand")).rejects.toThrow(/ELOOP/);
+    symlinkSync(path.join(outside, "missing"), path.join(root, "dangle"));
+    await expect(resolveRedirectTarget("dangle", root, "expand")).rejects.toThrow(/dangling/);
+    await expect(resolveRedirectTarget("dangle/deep.txt", root, "expand")).rejects.toThrow(
+      /dangling/,
+    );
+  });
+
+  it("rejects an empty cwd", async () => {
+    await expect(resolveRedirectTarget("f.txt", "", "expand")).rejects.toThrow(/cwd/);
+  });
+});
+
+function join2(a: string, b: string): string {
+  return path.join(a, b);
 }

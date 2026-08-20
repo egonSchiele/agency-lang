@@ -225,6 +225,39 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "absoluteRedirectReportsParent",
+      "description": "an absolute redirect target reports its own parent directory",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "payloadExecutionParity",
+      "description": "write payload and execution derive from one shared WritePayload",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "tildeRedirectQuoting",
+      "description": "unquoted tilde expands; quoted tilde stays beneath the cwd",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

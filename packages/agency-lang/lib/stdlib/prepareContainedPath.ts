@@ -114,3 +114,29 @@ function escapeError(
       `directory in dir.`,
   );
 }
+
+export type TildeMode = "expand" | "literal";
+
+/**
+ * Where a safeBash redirect will actually land. safeBash has no trusted
+ * dir — the whole command is one untrusted string — so instead of
+ * containment this resolves the COMPLETE target (healthy final symlinks
+ * included, via the same strict walk: dangling links, loops, and
+ * non-directories fail closed) and splits it, so the payload's dir is the
+ * real parent the policy should judge. tildeMode is quote-aware: an
+ * unquoted `~/f` expands, a quoted one stays a literal filename.
+ */
+export async function resolveRedirectTarget(
+  target: string,
+  cwd: string,
+  tildeMode: TildeMode,
+): Promise<ContainedPath> {
+  if (cwd.trim() === "") {
+    throw new Error("redirect refused: cwd must not be empty.");
+  }
+  const baseDir = await resolveDir(cwd);
+  const expanded = tildeMode === "expand" ? expandPath(target) : target;
+  const lexical = path.resolve(baseDir, expanded);
+  const resolved = await resolveExistingStrict(lexical);
+  return { dir: path.dirname(resolved), filename: path.basename(resolved) };
+}

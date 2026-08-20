@@ -809,9 +809,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
     )
     .option(
       "--agent-cmd <command>",
-      "Run this command as the agent instead of an agent file; {task} is replaced with each input's task. " +
+      "Run this command as the agent instead of an agent file; {input} is replaced with each test's input. " +
         "Agency CLIs only — the command's process must write the statelog the harness points it at, " +
-        "and it must run headless and one-shot (e.g. agency agent --policy approve-all -p -- {task})",
+        "and it must run headless and one-shot (e.g. agency agent --policy approve-all -p -- {input})",
     )
     .option(
       "--suite <source>",

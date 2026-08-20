@@ -393,13 +393,13 @@ describe("eval run CLI", () => {
       let job: EvalRunnerJob | undefined;
 
       const result = await evalRun(
-        { agentCmd: "some-agent -p -- {task}", input: "do it", out: path.join(runsDir, "r-cmd") },
+        { agentCmd: "some-agent -p -- {input}", input: "do it", out: path.join(runsDir, "r-cmd") },
         { runner: traceRunner("done", (j) => (job = j)) },
       );
 
       expect(result.okCount).toBe(1);
       expect(job?.kind).toBe("command");
-      // --input is the substituted {task}, so the argv carries it
+      // --input is the substituted {input}, so the argv carries it
       expect(job?.kind === "command" && job.argv).toEqual(["some-agent", "-p", "--", "do it"]);
     });
   });

@@ -4,14 +4,14 @@ import { substituteInput, tokenizeCommand } from "./commandLine.js";
 
 describe("tokenizeCommand", () => {
   it("splits on whitespace and honors single and double quotes", () => {
-    expect(tokenizeCommand(`agency agent --policy approve-all -p -- {task}`)).toEqual([
+    expect(tokenizeCommand(`agency agent --policy approve-all -p -- {input}`)).toEqual([
       "agency",
       "agent",
       "--policy",
       "approve-all",
       "-p",
       "--",
-      "{task}",
+      "{input}",
     ]);
     expect(tokenizeCommand(`run "a b" 'c d' e`)).toEqual(["run", "a b", "c d", "e"]);
   });
@@ -35,7 +35,7 @@ describe("tokenizeCommand", () => {
 
 describe("substituteInput", () => {
   it("replaces every occurrence, inside tokens too", () => {
-    expect(substituteInput(["-p", "{task}", "--again={task}"], "do it")).toEqual([
+    expect(substituteInput(["-p", "{input}", "--again={input}"], "do it")).toEqual([
       "-p",
       "do it",
       "--again=do it",
@@ -43,10 +43,11 @@ describe("substituteInput", () => {
   });
 
   it("serializes an object task as JSON", () => {
-    expect(substituteInput(["-p", "{task}"], { rows: [1] })).toEqual(["-p", `{"rows":[1]}`]);
+    expect(substituteInput(["-p", "{input}"], { rows: [1] })).toEqual(["-p", `{"rows":[1]}`]);
   });
 
   it("throws when no token carries the placeholder — the task must reach the agent", () => {
-    expect(() => substituteInput(["agency", "agent"], "t")).toThrow(/\{task\}/);
+    expect(() => substituteInput(["agency", "agent"], "t")).toThrow(/\{input\}/);
+    expect(() => substituteInput(["agency", "{task}"], "t")).toThrow(/renamed: write \{input\}/);
   });
 });

@@ -51,11 +51,30 @@ describe("summarizeRuns", () => {
       input: "summarize x",
       ended: "ok",
       latestScore: 0.75,
+      gradingPasses: 1,
       hasNotes: true,
       labeled: false,
       codeHash: null,
     });
     expect(annotationSummaryText(first)).toBe("notes · score 0.75");
+
+    // A re-grade: the newer pass is the score, and the count says it was not the first.
+    recordGradingPass({
+      dir,
+      scores: [
+        {
+          traceId: "t1",
+          annotator: { kind: "grader", id: "g@2" },
+          name: "a",
+          score: { kind: "binary", pass: false },
+          weight: 1,
+          mustPass: false,
+        },
+      ],
+    });
+    const [regraded] = summarizeRuns(readRunDirectory(dir, quiet));
+    expect(regraded).toMatchObject({ latestScore: 0.25, gradingPasses: 2 });
+    expect(annotationSummaryText(regraded)).toBe("notes · score 0.25 (2 passes)");
 
     const bare = tempDir();
     writeStatelog(bare, statelogLine("t2", "agentStart", { entryNode: "main", args: {} }));

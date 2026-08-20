@@ -1,0 +1,5 @@
+{
+  "id": "news",
+  "input": "What are the top news headlines for today?",
+  "goal": "returns today's news headlines"
+}

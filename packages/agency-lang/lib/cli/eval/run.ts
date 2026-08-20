@@ -16,7 +16,7 @@ import { resolveEvalTarget } from "@/agentTarget.js";
 export type EvalRunCliOptions = {
   /** File agent target. Exactly one of agent / agentCmd. */
   agent?: string;
-  /** Command agent target: the command string with a {task} placeholder. */
+  /** Command agent target: the command string with a {input} placeholder. */
   agentCmd?: string;
   /** The test suite: a JSON file, a directory, or a git source. */
   suite?: string;
@@ -52,7 +52,7 @@ export async function evalRun(
   /** Test seam — the CLI has no flag for it. */
   deps: { runner?: EvalInputRunner } = {},
 ): Promise<SuiteRunResult> {
-  // Resolve first: exactly-one-of and the {task}-placeholder check belong
+  // Resolve first: exactly-one-of and the {input}-placeholder check belong
   // before anything loads or runs.
   const target = resolveEvalTarget({ agent: opts.agent, agentCmd: opts.agentCmd });
   const selection = validateInputSelection(opts);

@@ -149,7 +149,7 @@ node main(): string {
   writeFileSync(join(TMP_ROOT, "cmd-inputs.json"), JSON.stringify({
     inputs: [{ id: "cmd-e2e", goal: "writes the input to out.txt", input: "hello from a command target", files: cmdFixtures }],
   }));
-  const agentCmd = `node ${AGENCY_CLI} run --policy approve-all writer.agency -- {task}`;
+  const agentCmd = `node ${AGENCY_CLI} run --policy approve-all writer.agency -- {input}`;
   let cmdOutput;
   try {
     cmdOutput = execSync(
@@ -197,7 +197,7 @@ node main(): string {
   try {
     execSync(
       `node ${JSON.stringify(AGENCY_CLI)} eval run` +
-      ` --agent-cmd ${JSON.stringify(`node -e 1+1 {task}`)}` +
+      ` --agent-cmd ${JSON.stringify(`node -e 1+1 {input}`)}` +
       ` --suite ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
       ` --out ${JSON.stringify(join(runsDir, "cmd-clobber"))}`,
       { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
@@ -212,7 +212,7 @@ node main(): string {
     `the run row's error should name the --log clobber cause, got:\n${clobberRun.error}`);
   console.log("[eval-run-integration] PASS: missing statelog names the --log/non-Agency causes");
 
-  // ── Scenario D: a command without {task} fails at resolution, before any run dir exists ──
+  // ── Scenario D: a command without {input} fails at resolution, before any run dir exists ──
   let noPlaceholderFailed = false;
   try {
     execSync(
@@ -224,11 +224,11 @@ node main(): string {
   } catch (err) {
     noPlaceholderFailed = true;
     const text = `${err.stdout ?? ""}${err.stderr ?? ""}`;
-    assert(text.includes("{task}"), `error should name the {task} requirement, got:\n${text}`);
+    assert(text.includes("{input}"), `error should name the {input} requirement, got:\n${text}`);
   }
-  assert(noPlaceholderFailed, "a command without {task} must be rejected");
+  assert(noPlaceholderFailed, "a command without {input} must be rejected");
   assert(!existsSync(join(runsDir, "cmd-noplaceholder")), "no run directory should exist for a resolution-time failure");
-  console.log("[eval-run-integration] PASS: missing {task} rejected before any run");
+  console.log("[eval-run-integration] PASS: missing {input} rejected before any run");
 
   // ── Scenario E: `agency run --capture-workdir <dir>` writes a run directory ──
   // A plain run, no harness: the trace, the code and the working directory

@@ -27,6 +27,9 @@ export type RunDirectoryPaths = {
   annotations: string;
   notes: string;
   codeDir: string;
+  /** The graders the run was executed with: the bundled module and any judge
+   *  files, named by content hash; the `run` row says which is which. */
+  gradersDir: string;
   workdirDir: string;
   workdirSidecar: string;
   checklistsDir: string;
@@ -40,6 +43,7 @@ export function runDirPaths(dir: string): RunDirectoryPaths {
     annotations: path.join(dir, "annotations.jsonl"),
     notes: path.join(dir, "notes.md"),
     codeDir: path.join(dir, "code"),
+    gradersDir: path.join(dir, "graders"),
     workdirDir: path.join(dir, "workdir"),
     workdirSidecar: path.join(dir, "workdir.json"),
     checklistsDir: path.join(dir, "checklists"),

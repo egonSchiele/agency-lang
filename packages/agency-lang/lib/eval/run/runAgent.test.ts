@@ -173,8 +173,8 @@ describe("runAgent", () => {
     fs.writeFileSync(path.join(filesDir, "data.txt"), "fixture");
     const target = {
       kind: "command" as const,
-      tokens: ["node", "run.js", "-p", "{task}"],
-      label: "node run.js -p {task}",
+      tokens: ["node", "run.js", "-p", "{input}"],
+      label: "node run.js -p {input}",
     };
     let job: unknown;
 
@@ -202,7 +202,7 @@ describe("runAgent", () => {
   });
 
   it("command targets: a missing statelog error names the --log clobber cause", async () => {
-    const target = { kind: "command" as const, tokens: ["x", "{task}"], label: "x {task}" };
+    const target = { kind: "command" as const, tokens: ["x", "{input}"], label: "x {input}" };
     const run = await runAgent(
       target,
       "t",
@@ -225,8 +225,8 @@ describe("runAgent", () => {
   it("command targets: an oversized substituted task is an error result naming the size", async () => {
     const target = {
       kind: "command" as const,
-      tokens: ["node", "-e", "{task}"],
-      label: "node -e {task}",
+      tokens: ["node", "-e", "{input}"],
+      label: "node -e {input}",
     };
     const run = await runAgent(target, "x".repeat(128 * 1024 + 1), {
       runDir: path.join(tmp(), "run-cmd-big"),

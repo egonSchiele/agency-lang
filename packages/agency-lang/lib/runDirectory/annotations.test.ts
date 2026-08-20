@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   annotationId,
   completeAnnotation,
+  annotatorLineage,
   foldAnnotations,
   readAnnotations,
   type Annotation,
@@ -34,7 +35,7 @@ function score(
   passId: string,
   name: string,
   value: number,
-  options: { passSize?: number; completesPass?: boolean; annotator?: Annotation["annotator"] } = {},
+  options: { passSize?: number; annotator?: Annotation["annotator"] } = {},
 ): AnnotationDraft {
   return {
     traceId: "t1",
@@ -42,7 +43,6 @@ function score(
     kind: "score",
     passId,
     passSize: options.passSize ?? 1,
-    completesPass: options.completesPass ?? true,
     name,
     score: { kind: "scalar", value },
     weight: 1,
@@ -90,7 +90,7 @@ describe("foldAnnotations", () => {
     };
     const folded = foldAnnotations([row(run)]);
     expect(folded.t1.run?.kind).toBe("run");
-    expect(Object.keys(folded.t1)).toEqual(["scores", "checklists", "run"]);
+    expect(Object.keys(folded.t1)).toEqual(["scores", "gradingPasses", "checklists", "run"]);
   });
 
   it("folds checklist answers per question in append order, keyed per annotator", () => {
@@ -115,27 +115,40 @@ describe("foldAnnotations", () => {
     expect(folded.t1.checklists["news:human:sam"].answers).toEqual({ q_a: false });
   });
 
-  it("takes the latest complete score pass and keeps annotator revisions apart", () => {
+  it("takes the latest complete score pass; a new revision of the same grader supersedes, and passes are counted", () => {
     const rows = [
       row(score("pass_1", "cheap", 0.2)),
       row(score("pass_2", "cheap", 0.9)),
       row(score("pass_3", "cheap", 0.5, { annotator: grader("bbb") })),
+      row(score("pass_4", "fast", 0.1, { annotator: { kind: "judge", id: "goal-judge@1" } })),
+      row(score("pass_5", "fast", 0.3, { annotator: { kind: "judge", id: "goal-judge@2" } })),
     ];
     const folded = foldAnnotations(rows);
-    expect(folded.t1.scores["grader:graders.ts@aaa:cheap"].id).toBe(rows[1].id);
-    expect(folded.t1.scores["grader:graders.ts@bbb:cheap"].id).toBe(rows[2].id);
+    expect(Object.keys(folded.t1.scores).sort()).toEqual([
+      "grader:graders.ts:cheap",
+      "judge:goal-judge:fast",
+    ]);
+    expect(folded.t1.scores["grader:graders.ts:cheap"].id).toBe(rows[2].id);
+    expect(folded.t1.scores["judge:goal-judge:fast"].id).toBe(rows[4].id);
+    expect(folded.t1.gradingPasses).toBe(5);
+  });
+
+  it("annotatorLineage strips the revision and leaves ids without one alone", () => {
+    expect(annotatorLineage("goal-judge@1")).toBe("goal-judge");
+    expect(annotatorLineage("graders.ts@abc")).toBe("graders.ts");
+    expect(annotatorLineage("inline:cheap")).toBe("inline:cheap");
+    expect(annotatorLineage("@odd")).toBe("@odd");
   });
 
   it("ignores a pass that never completed", () => {
     const rows = [
       row(score("pass_1", "cheap", 0.2)),
-      // pass_2 expects two rows but only the first (non-completing) landed
-      row(score("pass_2", "cheap", 0.9, { passSize: 2, completesPass: false })),
-      // pass_3 claims completion but is missing a row
-      row(score("pass_3", "cheap", 0.7, { passSize: 2, completesPass: true })),
+      // pass_2 expects two rows but only one landed
+      row(score("pass_2", "cheap", 0.9, { passSize: 2 })),
     ];
     const folded = foldAnnotations(rows);
-    expect(folded.t1.scores["grader:graders.ts@aaa:cheap"].id).toBe(rows[0].id);
+    expect(folded.t1.scores["grader:graders.ts:cheap"].id).toBe(rows[0].id);
+    expect(folded.t1.gradingPasses).toBe(1);
   });
 });
 
@@ -159,6 +172,32 @@ describe("readAnnotations", () => {
     expect(rows.map((r) => r.id)).toEqual([good.id]);
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain(":2:");
+  });
+
+  it("accepts a pre-change score row carrying the legacy completesPass field, and it still folds", () => {
+    // Verbatim v1 shape from before pass completeness became passSize-only.
+    const legacy = {
+      v: 1,
+      id: "ann_1111111111111111111111111111111111111111111111111111111111111111",
+      traceId: "t1",
+      createdAt: "2026-08-01T00:00:00Z",
+      annotator: { kind: "judge", id: "goal-judge@1" },
+      kind: "score",
+      passId: "pass_legacy",
+      passSize: 1,
+      completesPass: true,
+      name: "goal",
+      score: { kind: "scalar", value: 0.7 },
+      weight: 1,
+      mustPass: false,
+    };
+    const warnings: string[] = [];
+    const rows = readAnnotations(file(JSON.stringify(legacy) + "\n"), (m) => warnings.push(m));
+    expect(warnings).toEqual([]);
+    expect(rows).toHaveLength(1);
+    const folded = foldAnnotations(rows);
+    expect(folded.t1.scores["judge:goal-judge:goal"].id).toBe(legacy.id);
+    expect(folded.t1.gradingPasses).toBe(1);
   });
 
   it("rejects a row that fails the schema", () => {

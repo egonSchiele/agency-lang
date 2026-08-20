@@ -168,6 +168,14 @@ export default defineConfig({
           ],
         },
         {
+          text: "10. Evals",
+          items: [
+            { text: "Eval Basics", link: "/guide/eval-basics.md" },
+            { text: "Graders", link: "/guide/graders.md" },
+            { text: "Suites", link: "/guide/suites.md" },
+          ]
+        },
+        {
           text: "Appendix",
           collapsed: true,
           items: [

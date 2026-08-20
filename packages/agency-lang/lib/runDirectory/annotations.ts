@@ -34,14 +34,14 @@ export type ChecklistPayload = {
 };
 
 /** One grader's verdict on one trace in one grading pass. A pass is `passSize`
- *  rows sharing a `passId`, the last of which carries `completesPass: true`;
- *  the fold counts a pass only when it is complete, so a crash mid-pass can
- *  never move effective scores. */
+ *  rows sharing a `passId`; the fold counts a pass only when all of them are
+ *  present, so a crash mid-pass can never move effective scores. */
 export type ScorePayload = {
   kind: "score";
   passId: string;
   passSize: number;
-  completesPass: boolean;
+  /** @deprecated Legacy field on old rows; accepted and ignored. */
+  completesPass?: boolean;
   name: string;
   score: Score;
   weight: number;
@@ -53,6 +53,20 @@ export type ScorePayload = {
 };
 
 export type SuiteIdentity = { source: string; sha?: string };
+
+/** Where a run's graders came from and what the directory's `graders/` holds
+ *  for them: the bundled module under `bundleFile`, and each judge file the
+ *  graders read by path under its stored name. Grading prefers this
+ *  snapshot, so a copied run grades the same anywhere. */
+export type GradersIdentity = {
+  source: string;
+  bundleFile: string;
+  judgeFiles: Record<string, string>;
+  /** Whether the module was the test's own or the `eval.graders` config
+   *  fallback. Grading needs the distinction: `--goal` sets configured
+   *  modules aside but never a test's own. */
+  origin: "test" | "config";
+};
 export type RunOutcome = "ok" | "error" | "timeout" | "cost-cap" | "killed";
 
 /** The eval harness's own row for a trace it launched: which test, which
@@ -62,6 +76,8 @@ export type RunPayload = {
   kind: "run";
   test: JsonValue;
   suite: SuiteIdentity | null;
+  /** Absent when the run had no grading module (the goal judge grades it). */
+  graders?: GradersIdentity;
   ended: RunOutcome;
   flags: Record<string, JsonValue>;
   /** The harness's error message when `ended` is not "ok". */
@@ -134,7 +150,9 @@ const ScoreAnnotationSchema = z
     kind: z.literal("score"),
     passId: z.string().min(1),
     passSize: z.number().int().positive(),
-    completesPass: z.boolean(),
+    // Written by rows from before pass completeness was passSize-only;
+    // accepted so old directories keep their scores, ignored by the fold.
+    completesPass: z.boolean().optional(),
     name: z.string().min(1),
     score: ScoreSchema,
     weight: z.number().finite().nonnegative(),
@@ -151,6 +169,15 @@ const RunAnnotationSchema = z
     kind: z.literal("run"),
     test: JsonValueSchema,
     suite: z.object({ source: z.string(), sha: z.string().optional() }).strict().nullable(),
+    graders: z
+      .object({
+        source: z.string(),
+        bundleFile: z.string().min(1),
+        judgeFiles: z.record(z.string(), z.string()),
+        origin: z.enum(["test", "config"]),
+      })
+      .strict()
+      .optional(),
     ended: z.enum(["ok", "error", "timeout", "cost-cap", "killed"]),
     flags: z.record(z.string(), JsonValueSchema),
     error: z.string().optional(),
@@ -227,9 +254,14 @@ export type EffectiveChecklistJudgement = {
 };
 
 export type EffectiveTraceAnnotations = {
-  /** Keyed by `${annotator.kind}:${annotator.id}:${name}`; the latest row from
-   *  the latest COMPLETE pass wins. */
+  /** Keyed by `${annotator.kind}:${lineage}:${name}`, where the lineage is the
+   *  annotator id without its `@<revision>` suffix, so every version of one
+   *  grader or judge shares a key; the latest row from the latest COMPLETE pass
+   *  wins. */
   scores: Record<string, Annotation>;
+  /** How many complete grading passes scored this trace. The effective scores
+   *  come from the latest; the earlier ones are history, still on disk. */
+  gradingPasses: number;
   /** Keyed by `${checklist}:${annotator.kind}:${annotator.id}`, answers folded
    *  per question in append order so a restored question keeps its answer. */
   checklists: Record<string, EffectiveChecklistJudgement>;
@@ -244,8 +276,14 @@ export function foldAnnotations(
 ): Record<string, EffectiveTraceAnnotations> {
   const byTrace: Record<string, EffectiveTraceAnnotations> = Object.create(null);
   const completePasses = completedPassIds(rows);
+  const passesByTrace: Record<string, Record<string, true>> = Object.create(null);
   for (const row of rows) {
-    const trace = (byTrace[row.traceId] ??= { scores: {}, checklists: {}, run: null });
+    const trace = (byTrace[row.traceId] ??= {
+      scores: {},
+      gradingPasses: 0,
+      checklists: {},
+      run: null,
+    });
     if (row.kind === "checklist") {
       const key = `${row.checklist}:${row.annotator.kind}:${row.annotator.id}`;
       const existing = trace.checklists[key];
@@ -256,7 +294,11 @@ export function foldAnnotations(
       };
     } else if (row.kind === "score") {
       if (completePasses[row.passId]) {
-        trace.scores[`${row.annotator.kind}:${row.annotator.id}:${row.name}`] = row;
+        if (!(passesByTrace[row.traceId] ??= Object.create(null))[row.passId]) {
+          passesByTrace[row.traceId][row.passId] = true;
+          trace.gradingPasses += 1;
+        }
+        trace.scores[scoreKey(row)] = row;
       }
     } else {
       trace.run = row;
@@ -265,24 +307,29 @@ export function foldAnnotations(
   return byTrace;
 }
 
-/** A pass is complete when exactly `passSize` distinct rows carry its id and
- *  one of them says `completesPass`. Anything else is a crash's leftovers. */
+/** `goal-judge@1` and `goal-judge@2` are one judge at two revisions; the
+ *  newer supersedes the older rather than averaging with it. */
+export function annotatorLineage(id: string): string {
+  const at = id.lastIndexOf("@");
+  return at <= 0 ? id : id.slice(0, at);
+}
+
+function scoreKey(row: Annotation & { kind: "score" }): string {
+  return `${row.annotator.kind}:${annotatorLineage(row.annotator.id)}:${row.name}`;
+}
+
+/** A pass is complete when exactly `passSize` distinct rows carry its id.
+ *  Fewer is a crash's leftovers. */
 function completedPassIds(rows: readonly Annotation[]): Record<string, true> {
-  const seen: Record<string, { ids: Record<string, true>; size: number; completed: boolean }> =
-    Object.create(null);
+  const seen: Record<string, { ids: Record<string, true>; size: number }> = Object.create(null);
   for (const row of rows) {
     if (row.kind !== "score") continue;
-    const pass = (seen[row.passId] ??= {
-      ids: Object.create(null),
-      size: row.passSize,
-      completed: false,
-    });
+    const pass = (seen[row.passId] ??= { ids: Object.create(null), size: row.passSize });
     pass.ids[row.id] = true;
-    if (row.completesPass) pass.completed = true;
   }
   const complete: Record<string, true> = Object.create(null);
   for (const [passId, pass] of Object.entries(seen)) {
-    if (pass.completed && Object.keys(pass.ids).length === pass.size) complete[passId] = true;
+    if (Object.keys(pass.ids).length === pass.size) complete[passId] = true;
   }
   return complete;
 }

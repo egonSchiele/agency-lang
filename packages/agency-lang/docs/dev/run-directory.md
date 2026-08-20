@@ -14,6 +14,7 @@ easy to get wrong.
   annotations.jsonl     # every structured opinion about the run: checklist, score, run
   notes.md              # a person's free-form notes, written with any editor
   code/                 # the agent's closure, as it ran, flat
+  graders/              # the grading module it ran with, bundled, + judge files; content-hash names
   workdir/              # filesystem snapshot, flat
   workdir.json          # { snapshotAt, source } — when and where from
   checklists/<id>/      # versioned checklist revisions + labeling drafts (docs/dev/eval-labeling.md)
@@ -69,7 +70,7 @@ is `notes.md`):
 | kind | who | what |
 |---|---|---|
 | `checklist` | human | one sign-off: `checklist`, `version`, `hash`, `answers`, `note` |
-| `score` | grader / judge | one grader's verdict in one pass: `passId`, `passSize`, `completesPass`, `name`, `score`, `weight`, `mustPass` |
+| `score` | grader / judge | one grader's verdict in one pass: `passId`, `passSize`, `name`, `score`, `weight`, `mustPass` |
 | `run` | harness | which `test`, which `suite`, how it `ended`, `flags` |
 
 Rules:
@@ -84,8 +85,14 @@ Rules:
 - **The fold is per key, append order decides**: checklist
   answers fold per question per `(checklist, annotator)`, so a restored
   question keeps its earlier answer; scores count only from **complete**
-  passes (exactly `passSize` distinct rows and one `completesPass`), so a crash
+  passes (exactly `passSize` distinct rows share the `passId`), so a crash
   mid-pass never moves effective state; the latest `run` row wins.
+- **Score keys are per grader lineage, not per revision**: the key is
+  `kind:lineage:name` where the lineage is the annotator id with its
+  `@<revision>` stripped (`annotatorLineage`), so `goal-judge@2` supersedes
+  `goal-judge@1` rather than averaging with it. Earlier passes stay on disk
+  and are counted in `gradingPasses`, which `runs list` shows as `PASSES` and
+  the summary line as `score 0.70 (3 passes)`.
 - Reading is tolerant (malformed row → warning, torn tail ignored); writing
   validates against `AnnotationSchema` before append.
 
@@ -104,7 +111,7 @@ on success or failure.
   annotation rows go to the child their `traceId` names and must name one of
   the traces. Used by `runs add` and `run --capture-workdir`.
 - `recordCompletedRun({ dir, stagedStatelogFile, codeEntry?, workdir?, run })` — the eval harness's one call per finished test, on a fresh directory
-- `recordGradingPass({ dir, scores })` — mints one `passId`, stamps `passSize`, marks the last row `completesPass`; an empty `scores` is refused
+- `recordGradingPass({ dir, scores })` — mints one `passId`, stamps `passSize`; an empty `scores` is refused
 - `recordChecklistRow({ dir, groupDir, row })` — one labeling sign-off, the completed row as the session built it (its id is content-derived, so a replay lands on the same id): grounded immediately before the append against the run (holds the trace) and the group's lineage (revision exists with that hash; every answer names one of its questions); returns `appended` or `replayed` plus the post-write snapshot
 
 Writer inputs are held to a stricter standard than reads: a statelog file
@@ -129,6 +136,12 @@ The planners (`mergeStatelog.ts`, `attachCode.ts`, `attachWorkdir.ts`):
   directory recorded that hash on `agentStart`; a mismatch is refused, not
   warned. Stored flat under `code/`; a stored tree that is incomplete or does
   not hash to what the trace recorded is reported as corrupt.
+- **Graders** (`gradersFiles` on `recordCompletedRun`) go under `graders/`
+  by content-hash name; the run row's `graders: { source, bundleFile,
+  judgeFiles, origin }` says which is the module bundle, which stored file
+  each declared judge path maps to, and whether the module was the test's
+  own or the `eval.graders` config fallback. Same name = same content, so nothing is ever
+  rewritten. See docs/dev/eval-grading.md for why grading prefers this copy.
 - **Workdir** copies to `workdir/` and writes the dated `workdir.json`
   sidecar. A workdir attached later may postdate the run; the sidecar says so.
   The run directory itself, and the optional `excludeDir` (the group a capture

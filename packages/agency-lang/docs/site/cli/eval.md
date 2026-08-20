@@ -8,7 +8,7 @@ description: How to run an Agency agent against a test suite, score it with grad
 `agency eval` runs, grades and compares agent runs. Everything it produces lives in a **run directory**: a folder with the runs' statelog and an append-only file of annotations (grades, checklist answers), plus a free-form `notes.md` you write yourself. The main commands are:
 
 ```
-agency eval run (--agent <file>[:<node>] | --agent-cmd '<command with {task}>') (--suite <file|dir|git-url> | --goal <text>) [-n <count>]
+agency eval run (--agent <file>[:<node>] | --agent-cmd '<command with {input}>') (--suite <file|dir|git-url> | --goal <text>) [-n <count>]
 agency eval grade <runDir> [--graders <file>]
 agency eval logs <runDir> [-f]
 agency eval optimize <file>[:<node>] [--suite <file|dir>] [--goal <text>] [--graders <file>]
@@ -85,11 +85,11 @@ file — the way to benchmark `agency agent` itself:
 
 ```bash
 agency eval run \
-  --agent-cmd 'agency agent --agent code --policy approve-all --max-tool-call-rounds 100 --verbose -p -- {task}' \
+  --agent-cmd 'agency agent --agent code --policy approve-all --max-tool-call-rounds 100 --verbose -p -- {input}' \
   --suite evals/terminal-bench-mini
 ```
 
-The command string must contain `{task}`; every occurrence is replaced with
+The command string must contain `{input}`; every occurrence is replaced with
 each test's input. The string is tokenized by a minimal quote-aware splitter
 and **never passes through a shell**: no expansion, no operators — and
 substitution happens after tokenization, per token, so a hostile task is
@@ -111,7 +111,7 @@ A non-Agency command writes no statelog and the run fails saying so.
 Rules that follow from the mechanism:
 
 - **The command must run headless and one-shot** (`agency agent --policy
-  approve-all -p -- {task}`). There is no IPC channel, so eval's interrupt
+  approve-all -p -- {input}`). There is no IPC channel, so eval's interrupt
   auto-approval cannot reach a command agent — an interactive command just
   waits for input that never comes until the wall clock kills it.
 - **Do not pass `--log` inside the command** — it overrides the statelog

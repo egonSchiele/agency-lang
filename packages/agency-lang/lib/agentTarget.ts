@@ -2,8 +2,10 @@ import * as fs from "fs";
 import * as path from "path";
 
 import {
-  MISSING_TASK_PLACEHOLDER_ERROR,
-  TASK_PLACEHOLDER,
+  MISSING_INPUT_PLACEHOLDER_ERROR,
+  INPUT_PLACEHOLDER,
+  OLD_TASK_PLACEHOLDER,
+  OLD_TASK_PLACEHOLDER_ERROR,
   tokenizeCommand,
 } from "@/eval/run/commandLine.js";
 import { parseAgency } from "@/parser.js";
@@ -53,7 +55,7 @@ export type EvalTarget =
   | { kind: "command"; tokens: string[]; label: string };
 
 /** Resolve the runner-side agent choice. Exactly one of --agent /
- *  --agent-cmd; the command's {task} placeholder is validated here, before
+ *  --agent-cmd; the command's {input} placeholder is validated here, before
  *  any run. Commands come ONLY from these flags, never from suite content —
  *  suites can be remote git sources, and a suite that named its own command
  *  would be remote code execution. */
@@ -70,7 +72,7 @@ export function resolveEvalTarget(opts: { agent?: string; agentCmd?: string }): 
 /**
  * Fail fast when the agent's shape does not match what the tests deliver.
  * A test's input reaches a file agent as the entry node's single positional
- * parameter and a command agent as `{task}`; a test with no input reaches a
+ * parameter and a command agent as `{input}`; a test with no input reaches a
  * node that takes none / a command with no placeholder. Within one suite the
  * tests must agree (all carry an input, or none does), so the agent has one
  * shape to be. Checked before any workdir is seeded or agent compiled: a
@@ -91,11 +93,14 @@ export function assertTargetMatchesInputs(target: EvalTarget, tests: { input?: u
   }
   const hasInput = withInput > 0;
   if (target.kind === "command") {
-    const hasPlaceholder = target.tokens.some((t) => t.includes(TASK_PLACEHOLDER));
-    if (hasInput && !hasPlaceholder) throw new Error(MISSING_TASK_PLACEHOLDER_ERROR);
+    if (target.tokens.some((t) => t.includes(OLD_TASK_PLACEHOLDER))) {
+      throw new Error(OLD_TASK_PLACEHOLDER_ERROR);
+    }
+    const hasPlaceholder = target.tokens.some((t) => t.includes(INPUT_PLACEHOLDER));
+    if (hasInput && !hasPlaceholder) throw new Error(MISSING_INPUT_PLACEHOLDER_ERROR);
     if (!hasInput && hasPlaceholder) {
       throw new Error(
-        `--agent-cmd contains ${TASK_PLACEHOLDER} but no test provides an input — pass --input <text> ` +
+        `--agent-cmd contains ${INPUT_PLACEHOLDER} but no test provides an input — pass --input <text> ` +
           `(or give the tests an "input"), or drop the placeholder for an agent that takes none.`,
       );
     }

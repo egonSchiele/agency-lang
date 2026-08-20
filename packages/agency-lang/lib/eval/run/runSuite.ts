@@ -15,6 +15,7 @@ import type { RunOutcome, SuiteIdentity } from "@/runDirectory/annotations.js";
 import { recordedClosureHashes } from "@/runDirectory/attachCode.js";
 import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";
 import { recordCompletedRun } from "@/runDirectory/mutations.js";
+import { snapshotGradingModule, type GradersSnapshot } from "@/eval/grading/gradingModule.js";
 import { readTraces } from "@/runDirectory/traces.js";
 import { safeDeleteDirectoryWithin } from "@/utils.js";
 
@@ -37,7 +38,7 @@ export type RunSuiteOptions = {
   /** The agent. A string is file-target convenience (path, path:node, or a
    *  directory meaning main.agency) and is resolved here; a resolved
    *  EvalTarget passes through with no re-validation — it already passed
-   *  resolveEvalTarget, including the {task}-placeholder check. */
+   *  resolveEvalTarget, including the {input}-placeholder check. */
   agent: string | EvalTarget;
   inputs: Test[];
   /** The group directory; each test's run directory is written at
@@ -85,6 +86,14 @@ export async function runSuite(
   );
   const config = opts.config ?? {};
   const perRun = opts.perRun ?? {};
+
+  // Each test's graders, bundled now and stored in its run directory, so the
+  // run grades later by the graders it ran with, wherever the directory goes.
+  // A broken grading module fails here, before any agent runs.
+  const gradersByTest: Record<string, TestGraders | undefined> = await snapshotGraders(
+    opts.inputs,
+    config,
+  );
 
   // One closure walk per suite; never per test. Command targets have no
   // closure and nothing to compile. Before any directory is created: a
@@ -179,6 +188,7 @@ export async function runSuite(
         run,
         harness,
         suite: opts.suite,
+        graders: gradersByTest[testId],
         flags,
       });
       fs.renameSync(assembled, runDir);
@@ -247,6 +257,31 @@ export async function runSuite(
   };
 }
 
+/** A test's snapshot plus where its module came from: its own spec, or the
+ *  `eval.graders` config fallback. The origin is recorded on the run row so
+ *  grading can honor `--goal`, which sets configured modules aside but never
+ *  a test's own. */
+type TestGraders = GradersSnapshot & { origin: "test" | "config" };
+
+/** The grading module each test will be graded with — its own, else the
+ *  project's `eval.graders` — bundled once per distinct module. Tests with
+ *  neither get no snapshot: the bundled goal judge needs none. */
+async function snapshotGraders(
+  tests: Test[],
+  config: AgencyConfig,
+): Promise<Record<string, TestGraders | undefined>> {
+  const byModule: Record<string, Promise<GradersSnapshot>> = Object.create(null);
+  const byTest: Record<string, TestGraders | undefined> = Object.create(null);
+  for (const test of tests) {
+    const modulePath = test.graders ?? config.eval?.graders;
+    if (modulePath === undefined || test.id === undefined) continue;
+    byModule[modulePath] ??= snapshotGradingModule(modulePath);
+    const origin = test.graders !== undefined ? ("test" as const) : ("config" as const);
+    byTest[test.id] = { ...(await byModule[modulePath]), origin };
+  }
+  return byTest;
+}
+
 /** Assemble one finished run's directory: its trace, its workdir, the agent's
  *  code, and the `run` row. A run that never wrote a statelog still gets its
  *  `run` row (keyed by the trace id the harness minted) and an empty
@@ -260,6 +295,7 @@ function foldIntoRunDirectory(args: {
   run: AgentRun;
   harness: { kind: "harness"; id: string };
   suite: SuiteIdentity | undefined;
+  graders: TestGraders | undefined;
   flags: Record<string, string | number | boolean>;
 }): void {
   const { run } = args;
@@ -282,6 +318,7 @@ function foldIntoRunDirectory(args: {
     stagedStatelogFile: run.statelogPath === null ? undefined : run.statelogPath,
     codeEntry,
     workdir: traceRecorded && fs.existsSync(run.workdir) ? { sourceDir: run.workdir } : undefined,
+    gradersFiles: args.graders?.files,
     run: {
       traceId: args.traceId,
       annotator: args.harness,
@@ -291,6 +328,16 @@ function foldIntoRunDirectory(args: {
         // which is not a JSON value; on disk they are simply absent.
         test: JSON.parse(JSON.stringify(args.test)),
         suite: args.suite ?? null,
+        ...(args.graders === undefined
+          ? {}
+          : {
+              graders: {
+                source: args.graders.source,
+                bundleFile: args.graders.bundleFile,
+                judgeFiles: args.graders.judgeFiles,
+                origin: args.graders.origin,
+              },
+            }),
         ended: endedFrom(run),
         flags: args.flags,
         ...(run.status === "error" ? { error: run.errorMessage } : {}),

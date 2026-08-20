@@ -329,11 +329,8 @@ describe("recordGradingPass", () => {
       scores: [scoreDraft("t1", "cheap", 0.2), scoreDraft("t1", "fast", 0.4)],
     });
     expect(first.annotations).toHaveLength(2);
-    expect(first.annotations.map((row) => row.kind === "score" && row.completesPass)).toEqual([
-      false,
-      true,
-    ]);
-    expect(first.snapshot.effectiveAnnotations.t1.scores["grader:graders.ts@aaa:cheap"].id).toBe(
+    expect(first.annotations.map((row) => row.kind === "score" && row.passSize)).toEqual([2, 2]);
+    expect(first.snapshot.effectiveAnnotations.t1.scores["grader:graders.ts:cheap"].id).toBe(
       first.annotations[0].id,
     );
 
@@ -343,7 +340,7 @@ describe("recordGradingPass", () => {
     });
     expect(second.passId).not.toBe(first.passId);
     expect(second.snapshot.annotationRows).toHaveLength(4);
-    expect(second.snapshot.effectiveAnnotations.t1.scores["grader:graders.ts@aaa:cheap"].id).toBe(
+    expect(second.snapshot.effectiveAnnotations.t1.scores["grader:graders.ts:cheap"].id).toBe(
       second.annotations[0].id,
     );
   });
@@ -363,7 +360,7 @@ describe("recordGradingPass", () => {
     const rows = fs.readFileSync(paths.annotations, "utf8").split("\n").filter(Boolean);
     fs.writeFileSync(paths.annotations, rows.slice(0, 3).join("\n") + "\n"); // drop the completing row of pass 2
     const snapshot = readRunDirectory(dir, quiet);
-    expect(snapshot.effectiveAnnotations.t1.scores["grader:graders.ts@aaa:cheap"].id).toBe(
+    expect(snapshot.effectiveAnnotations.t1.scores["grader:graders.ts:cheap"].id).toBe(
       first.annotations[0].id,
     );
     expect(partial.passId).toBeDefined();

@@ -4,7 +4,11 @@ import * as path from "path";
 import type { AgencyConfig } from "@/config.js";
 import type { Test } from "@/eval/runTypes.js";
 import type { EvalRecord } from "@/eval/types.js";
-import type { Annotation, EffectiveTraceAnnotations } from "@/runDirectory/annotations.js";
+import type {
+  Annotation,
+  EffectiveTraceAnnotations,
+  GradersIdentity,
+} from "@/runDirectory/annotations.js";
 import { evalRecordFor, traceEnding } from "@/runDirectory/evalRecord.js";
 import { humanFeedbackFor, type HumanFeedback } from "@/runDirectory/humanFeedback.js";
 import { readRunDirectory, runDirPaths, type RunDirectorySnapshot } from "@/runDirectory/runDir.js";
@@ -12,7 +16,7 @@ import type { Trace } from "@/runDirectory/traces.js";
 
 import type { AgencyRunner } from "./agencyRunner.js";
 import type { BaseGrader } from "./baseGrader.js";
-import { loadGradingModule } from "./gradingModule.js";
+import { loadGradingModule, loadGradingSnapshot } from "./gradingModule.js";
 import { Scorecard, type GraderGrade, type InputGrades } from "./scorecard.js";
 import type { LoadedRun, JSON as Json } from "./types.js";
 
@@ -55,7 +59,7 @@ export async function gradeSnapshot(
   const perInput = await Promise.all(
     gradableEntries(snapshot).map(async (bare) => {
       const entry = withDefaultGoal(bare, ctx.defaultGoal);
-      const graders = await effectiveGraders(entry.test, ctx, moduleCache);
+      const graders = await effectiveGraders(entry, ctx, moduleCache, snapshot.dir);
       return gradeEntry(entry, ctx, graders);
     }),
   );
@@ -119,18 +123,30 @@ export function validateGraders(graders: BaseGrader[], test: Test | undefined): 
   }
 }
 
-/** Which graders score this test, per the precedence the SuiteGraders doc
- *  states: override > the test's own recorded module > fallback. */
+/** Which graders score this test. Precedence: override > the test-owned
+ *  snapshot the run directory stored > the test's recorded module path (a
+ *  directory from before snapshots) > a config-origin snapshot > fallback.
+ *  A config-origin snapshot is skipped under `--goal` (`ctx.defaultGoal`):
+ *  the goal promises the goal judge and sets configured modules aside, the
+ *  run-time copy included — only a test's OWN graders survive it. */
 async function effectiveGraders(
-  test: Test,
+  entry: Entry,
   ctx: GradingContext,
   cache: (modulePath: string) => Promise<BaseGrader[]>,
+  runDir: string,
 ): Promise<BaseGrader[]> {
   if (ctx.suiteGraders.mode === "override") {
     return ctx.suiteGraders.graders;
   }
-  if (test.graders !== undefined) {
-    return cache(test.graders);
+  const snapshot = entry.graders;
+  if (snapshot !== undefined && snapshot.origin === "test") {
+    return loadGradingSnapshot(runDirPaths(runDir).gradersDir, snapshot);
+  }
+  if (entry.test.graders !== undefined) {
+    return cache(entry.test.graders);
+  }
+  if (snapshot !== undefined && ctx.defaultGoal === undefined) {
+    return loadGradingSnapshot(runDirPaths(runDir).gradersDir, snapshot);
   }
   return ctx.suiteGraders.graders;
 }
@@ -152,10 +168,11 @@ export function makeGraderModuleCache(
 
 /** What grading needs from one trace: the test it ran, its evidence, and
  *  optionally a reason not to grade at all. */
-type Entry =
-  | { test: Test; run: LoadedRun; humanFeedback: HumanFeedback }
+type Entry = { test: Test; humanFeedback: HumanFeedback; graders?: GradersIdentity } & (
+  | { run: LoadedRun }
   /** The trace cannot be graded at all: skip straight to a scored zero. */
-  | { test: Test; humanFeedback: HumanFeedback; ungradedReason: string };
+  | { ungradedReason: string }
+);
 
 /**
  * One entry from a run directory. THE POLICY LIVES HERE: a run that did not
@@ -185,15 +202,16 @@ function entryFor(snapshot: RunDirectorySnapshot, trace: Trace): Entry {
     record,
   };
   const humanFeedback = humanFeedbackFor(snapshot, trace.traceId);
+  const graders = runRow !== null && runRow.kind === "run" ? runRow.graders : undefined;
   const ended = runRow !== null && runRow.kind === "run" ? runRow.ended : traceEnding(trace);
   if (ended === "ok") {
-    return { test, run, humanFeedback };
+    return { test, run, humanFeedback, graders };
   }
   const detail =
     runRow !== null && runRow.kind === "run" && runRow.error !== undefined
       ? `: ${runRow.error}`
       : "";
-  return { test, humanFeedback, ungradedReason: `the run ended with ${ended}${detail}` };
+  return { test, humanFeedback, graders, ungradedReason: `the run ended with ${ended}${detail}` };
 }
 
 /** The test a trace ran, from the harness's `run` row; an ad-hoc trace with

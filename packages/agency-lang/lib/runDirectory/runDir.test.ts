@@ -48,7 +48,6 @@ describe("readRunDirectory", () => {
         kind: "score",
         passId: "p1",
         passSize: 1,
-        completesPass: true,
         name: "len",
         score: { kind: "scalar", value: 0.5 },
         weight: 1,
@@ -61,7 +60,12 @@ describe("readRunDirectory", () => {
     expect(snapshot.hasStatelog).toBe(true);
     expect(snapshot.traces.map((trace) => trace.traceId)).toEqual(["t1"]);
     expect(snapshot.annotationRows).toEqual([score]);
-    expect(Object.keys(snapshot.effectiveAnnotations.t1)).toEqual(["scores", "checklists", "run"]);
+    expect(Object.keys(snapshot.effectiveAnnotations.t1)).toEqual([
+      "scores",
+      "gradingPasses",
+      "checklists",
+      "run",
+    ]);
   });
 
   describe("notes.md", () => {

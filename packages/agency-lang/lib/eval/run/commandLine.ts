@@ -11,11 +11,15 @@ import {
   type Parser,
 } from "tarsec";
 
-export const TASK_PLACEHOLDER = "{task}";
+export const INPUT_PLACEHOLDER = "{input}";
+/** The placeholder's old name, refused with a pointer rather than silently
+ *  passed to the agent as literal text. */
+export const OLD_TASK_PLACEHOLDER = "{task}";
 
 /** One message, used by both the early check (resolveEvalTarget) and the
- *  invariant guard (substituteTask), so the two cannot drift. */
-export const MISSING_TASK_PLACEHOLDER_ERROR = `--agent-cmd must contain ${TASK_PLACEHOLDER} — the command never receives the input's task without it`;
+ *  invariant guard (substituteInput), so the two cannot drift. */
+export const MISSING_INPUT_PLACEHOLDER_ERROR = `--agent-cmd must contain ${INPUT_PLACEHOLDER} — the command never receives the test's input without it`;
+export const OLD_TASK_PLACEHOLDER_ERROR = `--agent-cmd uses ${OLD_TASK_PLACEHOLDER}, which was renamed: write ${INPUT_PLACEHOLDER} where the test's input should go`;
 
 // The grammar: a command is tokens separated by whitespace; a token is one
 // or more adjacent chunks; a chunk is a double-quoted span, a single-quoted
@@ -58,9 +62,8 @@ export function tokenizeCommand(command: string): string[] {
   return result.result;
 }
 
-/** Replace every {task} occurrence with the test's input. (The placeholder
- *  token stays `{task}` — it is user-facing; renaming it is a separate
- *  decision.) Objects serialize as JSON. With an input, at least one
+/** Replace every {input} occurrence with the test's input. Objects
+ *  serialize as JSON. With an input, at least one
  *  occurrence is required — a command that never receives the input is the
  *  silent-drop bug in new clothing. A test with no input leaves the command
  *  as written (the preflight already refused a placeholder in that case). */
@@ -70,8 +73,11 @@ export function substituteInput(
 ): string[] {
   if (input === undefined) return tokens;
   const text = typeof input === "string" ? input : JSON.stringify(input);
-  if (!tokens.some((t) => t.includes(TASK_PLACEHOLDER))) {
-    throw new Error(MISSING_TASK_PLACEHOLDER_ERROR);
+  if (tokens.some((t) => t.includes(OLD_TASK_PLACEHOLDER))) {
+    throw new Error(OLD_TASK_PLACEHOLDER_ERROR);
   }
-  return tokens.map((t) => t.split(TASK_PLACEHOLDER).join(text));
+  if (!tokens.some((t) => t.includes(INPUT_PLACEHOLDER))) {
+    throw new Error(MISSING_INPUT_PLACEHOLDER_ERROR);
+  }
+  return tokens.map((t) => t.split(INPUT_PLACEHOLDER).join(text));
 }

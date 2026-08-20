@@ -1,6 +1,6 @@
 # Command agents: running a CLI under `agency eval run`
 
-`--agent-cmd '<command with {task}>'` runs a CLI as the agent instead of
+`--agent-cmd '<command with {input}>'` runs a CLI as the agent instead of
 compiling an `.agency` file (the positional `<agent>` argument) — the way
 the bundled `agency agent` is benchmarked. This page is the architecture; user-facing rules live in
 `docs/site/cli/eval.md` ("Command agents").
@@ -30,8 +30,8 @@ The command string is tokenized by a tarsec grammar
 (`lib/eval/run/commandLine.ts`): whitespace splits, single/double quotes
 group, adjacent chunks join (`--flag="a b"` is one token), and NOTHING
 shell-like — no expansion, operators, or escapes, because no shell ever
-runs. `{task}` substitution happens AFTER tokenization, per token, so a
-hostile task is inert bytes inside one argv entry. `{task}` is required
+runs. `{input}` substitution happens AFTER tokenization, per token, so a
+hostile task is inert bytes inside one argv entry. `{input}` is required
 exactly when the tests carry an input, and refused when they carry none —
 `assertTargetMatchesInputs` (`lib/agentTarget.ts`) checks that once, before
 any run, for command and file agents alike; an object task substitutes as

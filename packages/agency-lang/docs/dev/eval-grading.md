@@ -23,6 +23,17 @@ names the GROUP directory; each test's run directory is written at
 and renamed into place so a child appears whole or not at all. A child that
 already exists is an error result for that test (nothing overwritten; the
 others still run). Default `<eval.runsDir or runs>/<timestamp>-<random suffix>`.
+
+**Selecting a subset of a suite.** `--test <glob>` (repeatable, any match
+selects, picomatch on the test id) and `--tags <a,b>` (repeatable; a test
+must carry EVERY listed tag, so `--tags coding,hard` means hard coding
+tests) narrow which tests run; tags live on the test (`tags: ["easy",
+"coding"]`, multiple allowed). Both flags go through one function,
+`selectTests` (`lib/eval/selectTests.ts`), and `agency eval ls --suite …`
+applies the same flags through the same function — so the listing is
+exactly what a run would run, by construction. A filter matching nothing is
+an error naming the suite's ids and tags, never a silent empty run; filter
+flags with `--input` are an error too.
 `eval grade <path…>` takes run directories and groups, grades each run found
 with its own pass, and prints the mean over them (`findRunDirectories`,
 `docs/dev/run-directory.md`); a run named twice, or through a symlink alias,

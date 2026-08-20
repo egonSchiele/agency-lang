@@ -6,6 +6,12 @@ import { runSuite } from "@/eval/run/runSuite.js";
 import type { EvalInputRunner } from "@/eval/run/subprocess.js";
 import type { SuiteRunResult, Test } from "@/eval/runTypes.js";
 import { parseSource, resolveSource } from "@/eval/sources.js";
+import {
+  describeEmptySelection,
+  isEmptyFilter,
+  selectTests,
+  type TestFilter,
+} from "@/eval/selectTests.js";
 import type { SuiteIdentity } from "@/runDirectory/annotations.js";
 import { evalRecordFor } from "@/runDirectory/evalRecord.js";
 import { findRunDirectories } from "@/runDirectory/findRuns.js";
@@ -28,6 +34,10 @@ export type EvalRunCliOptions = {
   config?: AgencyConfig;
   /** Worker-pool size (-n/--parallel); default 1 = sequential. */
   parallel?: number;
+  /** `--test` id patterns; only matching tests run (suite runs only). */
+  test?: string[];
+  /** `--tags` values; only tests carrying every one run (suite runs only). */
+  tags?: string[];
 };
 
 /** `--suite` runs a suite; otherwise the run is one inline test, with
@@ -56,17 +66,25 @@ export async function evalRun(
   // before anything loads or runs.
   const target = resolveEvalTarget({ agent: opts.agent, agentCmd: opts.agentCmd });
   const selection = validateInputSelection(opts);
+  const filter: TestFilter = { ids: opts.test, tags: opts.tags };
+  if (selection === "input" && !isEmptyFilter(filter)) {
+    throw new Error("--test/--tags select from a suite; they do nothing with --input");
+  }
   const suite = loadSuite({
     selection,
     source: opts.suite,
     input: opts.input,
     cacheRoot: opts.config?.eval?.sourceCacheRoot,
   });
+  const tests = selectTests(suite.tests, filter);
+  if (tests.length === 0) {
+    throw new Error(describeEmptySelection(suite.tests, filter));
+  }
 
   return runSuite(
     {
       agent: target,
-      inputs: suite.tests,
+      inputs: tests,
       suite: suite.identity,
       out: opts.out,
       config: opts.config,
@@ -76,13 +94,14 @@ export async function evalRun(
   );
 }
 
-type LoadedSuite = { tests: Test[]; identity: SuiteIdentity };
+export type LoadedSuite = { tests: Test[]; identity: SuiteIdentity };
 
 /** Load the suite named by --suite/--input, resolving a git source when given
  *  one and recording the resolved sha as the suite's identity. Running never
  *  needs a `goal`, so none is required here; `eval grade` takes one (`--goal`)
- *  or reads each test's own when its judge needs it. */
-function loadSuite(args: {
+ *  or reads each test's own when its judge needs it. Exported for `eval ls`,
+ *  which must see the suite exactly as a run would. */
+export function loadSuite(args: {
   selection: "suite" | "input";
   source?: string;
   input?: string;

@@ -183,6 +183,22 @@ describe("eval run input loading", () => {
     }
   });
 
+  it("tags are kept when present and must be non-empty strings", () => {
+    const [input] = loadInputsFromFile(
+      writeJson("tags.json", {
+        inputs: [{ id: "t", goal: "g", input: "x", tags: ["easy", "coding"] }],
+      }),
+    );
+    expect(input.tags).toEqual(["easy", "coding"]);
+    for (const bad of ["easy", [""], [7]]) {
+      expect(() =>
+        loadInputsFromFile(
+          writeJson("tags-bad.json", { inputs: [{ id: "t", goal: "g", input: "x", tags: bad }] }),
+        ),
+      ).toThrow(/tags must be an array of non-empty strings/);
+    }
+  });
+
   it("rejects legacy args/node with a migration message", () => {
     expect(() =>
       loadInputsFromFile(

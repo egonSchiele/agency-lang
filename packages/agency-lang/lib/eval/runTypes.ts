@@ -14,6 +14,11 @@ export type Test = {
    *  the agent, and never shown to a judge (a description restating the
    *  intent would leak grading hints — the criterion is `goal`). */
   description?: string;
+  /** Labels for selecting subsets of a suite (`eval run --tags`, previewed
+   *  with `eval ls`): difficulty ("easy"), kind ("coding", "research"), or
+   *  anything else. A test may carry several. Selection only — tags never
+   *  reach the agent or a judge. */
+  tags?: string[];
   /** What the agent is given: an instruction string, or a JSON object for
    *  agents that take structured data. Delivered as the entry node's single
    *  positional parameter (or as `{input}` for a command agent). Optional:

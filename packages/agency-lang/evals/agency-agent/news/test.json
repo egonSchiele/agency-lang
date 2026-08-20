@@ -1,5 +1,5 @@
 {
   "id": "news",
-  "input": "What are the top news headlines for today?",
+  "input": "What are the top news headlines for today? Please return a response in 5 minutes or less.",
   "goal": "returns today's news headlines"
 }

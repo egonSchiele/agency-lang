@@ -186,3 +186,27 @@ describe("precompileTestSources", () => {
     expect(fs.existsSync(path.join(root, "t/main.js"))).toBe(true);
   });
 });
+
+describe("declared sourceFile", () => {
+  test("grouping compiles the declared source, not the basename sibling", () => {
+    const root = writeTree({
+      declared: {
+        "impl.agency": TRIVIAL,
+        "suite.test.json": JSON.stringify({
+          sourceFile: "impl.agency",
+          tests: [
+            {
+              nodeName: "main",
+              input: "",
+              expectedOutput: "1",
+              evaluationCriteria: [{ type: "exact" }],
+            },
+          ],
+        }),
+      },
+    });
+    const groups = groupTestSources({}, [path.join(root, "declared/suite.test.json")]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].files).toEqual([path.join(root, "declared/impl.agency")]);
+  });
+});

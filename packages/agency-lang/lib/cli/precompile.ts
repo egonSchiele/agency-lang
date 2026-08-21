@@ -20,6 +20,7 @@ import path from "path";
 import { AgencyConfig } from "../config.js";
 import { loadConfig } from "./commands.js";
 import { createBuildSession, type CompileGroup } from "../compiler/buildSession.js";
+import { parseTestFileFull, resolveSourceFile, type FullTestFile } from "../testFormat/schema.js";
 
 const BASE_GROUP_LABEL = "<base config>";
 
@@ -37,13 +38,34 @@ export type { CompileGroup as PrecompileGroup };
 //     fixture.
 // Malformed .test.json is treated as live; the runner will surface the
 // real error.
-function isExcludedFromPrecompile(testJsonFile: string): boolean {
+// Parsed through the shared owner so this pass and the runner agree on
+// every field — including which source file a json declares.
+function readTestFile(testJsonFile: string): FullTestFile | null {
   try {
-    const tests = JSON.parse(fs.readFileSync(testJsonFile, "utf-8"));
+    return parseTestFileFull(fs.readFileSync(testJsonFile, "utf-8"), testJsonFile);
+  } catch {
+    return null;
+  }
+}
+
+function isExcludedFromPrecompile(testJsonFile: string, tests: FullTestFile | null): boolean {
+  if (tests !== null) {
     return (
       tests.skip === true ||
       (tests.skipOnCI === true && !!process.env.CI) ||
       tests.expectedCompileError !== undefined
+    );
+  }
+  // The strict parser rejected the file. PRESENCE of expectedCompileError —
+  // even wrongly typed — must still keep its (deliberately broken) source
+  // out of this pass: precompiling it would process.exit(1) before the
+  // runner can report the type error. Same rule for the skip flags.
+  try {
+    const raw = JSON.parse(fs.readFileSync(testJsonFile, "utf-8"));
+    return (
+      raw.skip === true ||
+      (raw.skipOnCI === true && !!process.env.CI) ||
+      raw.expectedCompileError !== undefined
     );
   } catch {
     return false;
@@ -58,9 +80,14 @@ export function groupTestSources(
   // house pattern on string-keyed registries).
   const groups: Record<string, CompileGroup> = Object.create(null);
   for (const testJsonFile of testJsonFiles) {
-    const sourceFile = path.resolve(testJsonFile).replace(/\.test\.json$/, ".agency");
+    const tests = readTestFile(testJsonFile);
+    // Malformed .test.json stays live; the runner surfaces the real error.
+    const sourceFile = path.resolve(
+      path.dirname(testJsonFile),
+      resolveSourceFile(tests?.sourceFile, testJsonFile),
+    );
     if (!fs.existsSync(sourceFile)) continue;
-    if (isExcludedFromPrecompile(testJsonFile)) continue;
+    if (isExcludedFromPrecompile(testJsonFile, tests)) continue;
 
     const dir = path.dirname(sourceFile);
     const localConfigPath = path.join(dir, "agency.json");

@@ -126,7 +126,7 @@ If your node raises [interrupts](/guide/interrupts), list the responses in order
 ]
 ```
 
-- **`action`** — one of `"approve"`, `"reject"`, `"modify"`, or `"resolve"`.
+- **`action`** — one of `"approve"`, `"reject"`, or `"resolve"`.
 - **`resolvedValue`** — the value to return when the action is `"resolve"`.
 - **`expectedMessage`** — asserts the interrupt's message matches before responding.
 

@@ -206,7 +206,7 @@ describe("parseTestFileFull", () => {
     expect(parsed.tests?.length).toBeGreaterThan(0);
   });
 
-  test("accepts compile-error, mock, clock, argv, skip, resolve, and modify fixtures", () => {
+  test("accepts compile-error, mock, clock, argv, skip, and resolve fixtures", () => {
     expect(
       parseTestFileFull(JSON.stringify({ expectedCompileError: "AG8001" }), "x.test.json")
         .expectedCompileError,
@@ -229,14 +229,14 @@ describe("parseTestFileFull", () => {
           useTestLLMProvider: true,
           retry: 2,
           interruptHandlers: [
-            { action: "modify", modifiedArgs: { a: 1 } },
+            { action: "approve", expectedMessage: "ok?" },
             { action: "resolve", resolvedValue: "42" },
           ],
         },
       ],
     };
     const parsed = parseTestFileFull(JSON.stringify(kitchenSink), "x.test.json");
-    expect(parsed.tests?.[0].interruptHandlers?.[0].action).toBe("modify");
+    expect(parsed.tests?.[0].interruptHandlers?.[0].action).toBe("approve");
     // resolvedValue must survive parsing: the runner answers a `resolve`
     // action with it.
     expect(parsed.tests?.[0].interruptHandlers?.[1].resolvedValue).toBe("42");
@@ -267,6 +267,24 @@ describe("parseTestFileFull", () => {
         tests: [{ ...base.tests[0], evaluationCriteria: [{ type: "exact", judgePrompt: "x" }] }],
       }),
     ).toThrow(/criteria|judgePrompt/i);
+  });
+
+  test("the full profile refuses action modify: the runtime never supported it", () => {
+    const withHandler = (handler: object) =>
+      JSON.stringify({
+        tests: [
+          {
+            nodeName: "n",
+            input: "",
+            expectedOutput: "1",
+            evaluationCriteria: [{ type: "exact" }],
+            interruptHandlers: [handler],
+          },
+        ],
+      });
+    expect(() =>
+      parseTestFileFull(withHandler({ action: "modify", modifiedArgs: { a: 1 } }), "x.test.json"),
+    ).toThrow(/modify|modifiedArgs/);
   });
 
   test("desiredAccuracy is a 0–100 judge-score threshold, not a fraction", () => {

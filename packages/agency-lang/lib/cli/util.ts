@@ -133,8 +133,7 @@ export async function promptForArgs(selectedNode: GraphNodeDefinition): Promise<
 }
 
 export type InterruptHandler = {
-  action: "approve" | "reject" | "modify" | "resolve";
-  modifiedArgs?: Record<string, any>;
+  action: "approve" | "reject" | "resolve";
   resolvedValue?: any;
   expectedMessage?: string;
 };

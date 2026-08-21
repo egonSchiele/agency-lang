@@ -240,6 +240,43 @@ describe("compileSandboxed", () => {
     }
   });
 
+  test("a nested package.json inside a package does not shadow the named root", () => {
+    const dir = makeDir(".cs-pkg-nested-");
+    try {
+      // pkg::foo/sub/tool resolves to <foo>/sub/tool.agency, and <foo>/sub
+      // carries its own package.json (a module-type boundary). The anchor
+      // must still be <foo> — the nearest-package.json rule would link
+      // node_modules/foo -> <foo>/sub and the subpath would resolve
+      // twice-nested.
+      const fooDir = path.join(dir, "node_modules", "foo");
+      fs.mkdirSync(path.join(fooDir, "sub"), { recursive: true });
+      fs.writeFileSync(
+        path.join(fooDir, "package.json"),
+        JSON.stringify({ name: "foo", version: "1.0.0", agency: "./index.agency" }),
+      );
+      fs.writeFileSync(
+        path.join(fooDir, "sub", "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      fs.writeFileSync(
+        path.join(fooDir, "sub", "tool.agency"),
+        "export def value(): number { return 7 }\n",
+      );
+      fs.writeFileSync(
+        path.join(dir, "main.agency"),
+        'import { value } from "pkg::foo/sub/tool"\nexport node main(): number { return value() }\n',
+      );
+      const result = compileSandboxed({ entry: { file: "main.agency" }, dir });
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.pkgAnchors).toEqual([
+        { packageName: "foo", packageRoot: fs.realpathSync(fooDir) },
+      ]);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
   test("dir '' with a relative import fails from validation", () => {
     const result = compileSandboxed({
       entry: {

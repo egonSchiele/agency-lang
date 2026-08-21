@@ -170,16 +170,23 @@ describe("AgencyTestGrader through the real wrapper", () => {
       const solution =
         'export def spend(): string {\n  const r = llm("Reply with: hi")\n  return "done"\n}\n';
       const grader = new AgencyTestGrader({ ...pair, name: "suite-tests", maxCost: 0.0000001 });
-      const prev = process.env.AGENCY_USE_TEST_LLM_PROVIDER;
-      process.env.AGENCY_USE_TEST_LLM_PROVIDER = "1";
+      // AGENCY_LLM_MOCKS is what actually activates the DeterministicClient
+      // in compiled code (the generated imports template reads it); the
+      // AGENCY_USE_TEST_LLM_PROVIDER flag alone is only honored by the
+      // `agency test` runner, not by a plain `agency run` of the wrapper.
+      // The env inherits through execFileSync → wrapper → tested fork, so
+      // the deterministic per-call cost trips the whole-call cap without
+      // any real provider.
+      const prev = process.env.AGENCY_LLM_MOCKS;
+      process.env.AGENCY_LLM_MOCKS = JSON.stringify([{ return: "hi" }]);
       try {
         const grade = await grader.run(input(workdirWith({ "fib.agency": solution })));
         expect(grade.score).toEqual({ kind: "scalar", value: 0 });
         expect(grade.feedback).toContain("limit_exceeded");
         expect(grade.feedback).toContain("cost");
       } finally {
-        if (prev === undefined) delete process.env.AGENCY_USE_TEST_LLM_PROVIDER;
-        else process.env.AGENCY_USE_TEST_LLM_PROVIDER = prev;
+        if (prev === undefined) delete process.env.AGENCY_LLM_MOCKS;
+        else process.env.AGENCY_LLM_MOCKS = prev;
       }
     },
   );

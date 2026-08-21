@@ -17,7 +17,12 @@ import * as path from "path";
 import { nanoid } from "nanoid";
 import { parseAgency } from "@/parser.js";
 import { getAllImports } from "@/analysis/imports.js";
-import { findFileUp, importKind, parsePkgImport, resolveAgencyImportPath } from "@/importPaths.js";
+import {
+  findPackageRoot,
+  importKind,
+  parsePkgImport,
+  resolveAgencyImportPath,
+} from "@/importPaths.js";
 import { splicesIn } from "@/preprocessors/expandSplices.js";
 import { isStrictDescendant } from "@/utils.js";
 import type { SourceLocation } from "@/types/base.js";
@@ -241,14 +246,17 @@ class ClosureWalker {
       this.violations.push(`import '${pkgPath}' cannot be resolved: ${messageOf(e)}`);
       return;
     }
+    const { packageName } = parsePkgImport(pkgPath);
     let pkgRootReal: string;
     let canonical: string;
     try {
       canonical = fs.realpathSync(resolved);
-      // The package's confinement boundary is its own root: the nearest
-      // directory holding package.json.
-      const pkgJson = findFileUp(path.dirname(canonical), "package.json");
-      pkgRootReal = pkgJson === null ? path.dirname(canonical) : path.dirname(pkgJson);
+      // The package's confinement boundary is its NAMED root. Nearest
+      // package.json is wrong: a nested one (a module-type boundary inside
+      // the package) would become the anchor, and the mirror's
+      // node_modules/<name> link would point at the subdirectory, so a
+      // subpath import resolves twice-nested and fails.
+      pkgRootReal = findPackageRoot(path.dirname(canonical), packageName);
     } catch (e) {
       this.violations.push(`import '${pkgPath}' cannot be read: ${messageOf(e)}`);
       return;
@@ -257,7 +265,6 @@ class ClosureWalker {
     // Only caller-level imports compile from the mirror and need an anchor;
     // package-internal pkg imports resolve from the real package files.
     if (ctx.collect) {
-      const { packageName } = parsePkgImport(pkgPath);
       const existing = this.pkgAnchors.find((a) => a.packageName === packageName);
       if (existing === undefined) {
         this.pkgAnchors.push({ packageName, packageRoot: pkgRootReal });

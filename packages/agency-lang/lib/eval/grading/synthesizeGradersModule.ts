@@ -20,7 +20,11 @@ import type { SuiteIdentity } from "@/runDirectory/annotations.js";
 import type { AgencyTestDefinition, Test } from "../runTypes.js";
 import { parseTestFileSandbox } from "../../testFormat/schema.js";
 import { sha256Text } from "@/utils/hash.js";
-import { snapshotGradingModule, type GradersSnapshot } from "./gradingModule.js";
+import {
+  bundleGradingModule,
+  snapshotGradingModule,
+  type GradersSnapshot,
+} from "./gradingModule.js";
 import { makeAgencyTempDir } from "../../utils/agencyTempDir.js";
 import { safeDeleteDirectoryWithin } from "../../utils.js";
 
@@ -107,12 +111,19 @@ export async function snapshotAgencyTestGraders(args: {
     fs.writeFileSync(modulePath, moduleSource, "utf-8");
     const snapshot = await snapshotGradingModule(modulePath);
     const sourceIdentity = agencyTestsSourceIdentity(args.suite, testId);
+    // The sibling is hashed as its BUNDLE, from its own stable path (never
+    // the staging dir), so an edit anywhere in its transitive import
+    // closure — not just the entry file — changes the revision.
+    const siblingSha256 =
+      args.test.graders === undefined
+        ? null
+        : (await bundleGradingModule(args.test.graders)).sha256;
     return {
       ...snapshot,
       source: sourceIdentity,
       revision: {
         sourceIdentity,
-        sha256: revisionSha256(defs, args.test.graders),
+        sha256: revisionSha256(defs, siblingSha256),
       },
     };
   } finally {
@@ -124,7 +135,7 @@ export async function snapshotAgencyTestGraders(args: {
  *  NAME is bound to its content — swapping contents between two named
  *  harnesses changes the revision even though the content multiset does
  *  not. JSON-serialized, never delimiter-concatenated. */
-function revisionSha256(defs: AgencyTestDefinition[], siblingGradersPath?: string): string {
+function revisionSha256(defs: AgencyTestDefinition[], siblingGradersSha256: string | null): string {
   const pairs = [...defs]
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((d) => ({
@@ -132,10 +143,6 @@ function revisionSha256(defs: AgencyTestDefinition[], siblingGradersPath?: strin
       agencySha256: sha256Text(fs.readFileSync(d.harnessAgency, "utf-8")),
       jsonSha256: sha256Text(fs.readFileSync(d.harnessJson, "utf-8")),
     }));
-  const siblingGradersSha256 =
-    siblingGradersPath === undefined
-      ? null
-      : sha256Text(fs.readFileSync(siblingGradersPath, "utf-8"));
   return sha256Text(JSON.stringify({ pairs, siblingGradersSha256 }));
 }
 

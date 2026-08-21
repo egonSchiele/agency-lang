@@ -117,10 +117,13 @@ deterministic grading module (sibling `graders.ts` composed in, normalized
 single-or-array), and feeds it through `snapshotGradingModule`. The
 snapshot carries an explicit `revision: { sourceIdentity, sha256 }` —
 `agency-tests:<suite digest>/<test id>`, hashing the module's LOGICAL
-inputs: each harness pair's name bound to its two content hashes, plus the
-sibling graders source. Bundle bytes are excluded (they embed the staging
-path, so hashing them minted a fresh revision every run), and binding
-names to hashes means swapping contents between two harnesses changes the
+inputs: each harness pair's name bound to its two content hashes, plus a
+hash of the sibling graders module's BUNDLE built from its own stable
+path — the bundle covers the sibling's transitive imports, so editing a
+helper it imports changes the revision. The synthesized module's own
+bundle bytes are excluded (they embed the per-run staging path, so
+hashing them minted a fresh revision every run), and binding names to
+hashes means swapping contents between two harnesses changes the
 revision even though the content multiset does not. The generic identity
 (physical path @ bundle hash) would mint a new revision every run while
 ignoring harness edits.

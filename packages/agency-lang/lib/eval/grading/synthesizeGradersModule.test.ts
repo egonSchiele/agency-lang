@@ -265,6 +265,27 @@ describe("snapshotAgencyTestGraders", () => {
   );
 
   test(
+    "editing a file the sibling graders.ts imports changes the revision",
+    { timeout: 60_000 },
+    async () => {
+      const suiteDir = makeEvalTestDir({
+        gradersTs:
+          'import { grader } from "agency-lang/eval";\n' +
+          'import { threshold } from "./gradersHelper.ts";\n' +
+          'export default grader(() => threshold > 0, { name: "sibling-check" });\n',
+      });
+      const helperPath = path.join(suiteDir, "mytest", "gradersHelper.ts");
+      fs.writeFileSync(helperPath, "export const threshold = 1;\n");
+      const before = await snapshotAgencyTestGraders({ test: loaded(suiteDir), suite: undefined });
+      // Only the transitively imported helper changes; the entry file text
+      // is untouched, so an entry-only hash would keep the old revision.
+      fs.writeFileSync(helperPath, "export const threshold = 2;\n");
+      const after = await snapshotAgencyTestGraders({ test: loaded(suiteDir), suite: undefined });
+      expect(after.revision!.sha256).not.toBe(before.revision!.sha256);
+    },
+  );
+
+  test(
     "a sibling graders.ts composes into the snapshot with distinct names",
     { timeout: 60_000 },
     async () => {

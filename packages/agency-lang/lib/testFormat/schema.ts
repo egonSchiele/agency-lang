@@ -17,8 +17,8 @@ import * as path from "path";
 // Shared pieces
 // ---------------------------------------------------------------------------
 
-/** The sandbox profile allows exactly these; `modify` and `resolve` are
- *  full-profile-only (they need the CLI runner's authoritative answering). */
+/** The sandbox profile allows exactly these; `resolve` is
+ *  full-profile-only (it needs the CLI runner's authoritative answering). */
 const sandboxInterruptSchema = z
   .strictObject({
     action: z.enum(["approve", "reject"], {
@@ -36,10 +36,12 @@ const sandboxInterruptSchema = z
     }
   });
 
+// `modify` is deliberately absent: the runtime interrupt-response API has
+// only approve/reject, and both execution templates throw on it — a config
+// declaring it could never run.
 const fullInterruptSchema = z.strictObject({
-  action: z.enum(["approve", "reject", "modify", "resolve"]),
+  action: z.enum(["approve", "reject", "resolve"]),
   expectedMessage: z.string().optional(),
-  modifiedArgs: z.record(z.string(), z.unknown()).optional(),
   value: z.unknown().optional(),
   /** The answer a `resolve` action responds with. */
   resolvedValue: z.unknown().optional(),

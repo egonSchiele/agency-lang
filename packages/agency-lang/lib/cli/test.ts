@@ -272,7 +272,6 @@ export async function fixtures(config: AgencyConfig, target?: string) {
         choices: [
           { title: "Approve", value: "approve" },
           { title: "Reject", value: "reject" },
-          { title: "Modify arguments", value: "modify" },
           { title: "Resolve (provide value)", value: "resolve" },
         ],
       },
@@ -306,29 +305,6 @@ export async function fixtures(config: AgencyConfig, target?: string) {
         handler.resolvedValue = JSON.parse(resolveResponse.value);
       } catch {
         handler.resolvedValue = resolveResponse.value;
-      }
-    } else if (actionResponse.action === "modify") {
-      let invalidJSON = true;
-      while (invalidJSON) {
-        const modifyResponse = await prompts(
-          {
-            type: "text",
-            name: "args",
-            message: "Enter modified arguments as JSON object:",
-          },
-          { onCancel },
-        );
-        if (!modifyResponse.args) {
-          console.log("Interrupt handling cancelled.");
-          return;
-        }
-        try {
-          handler.modifiedArgs = JSON.parse(modifyResponse.args);
-          invalidJSON = false;
-        } catch (e) {
-          console.error("Invalid JSON:", e);
-          return;
-        }
       }
     }
 

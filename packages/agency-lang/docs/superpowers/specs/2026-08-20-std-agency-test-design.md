@@ -1,6 +1,16 @@
 # std::agency `test()` and the eval AgencyTestGrader
 
-Date: 2026-08-20. Status: designed, revised per review (v2), not yet planned.
+Date: 2026-08-20. Status: designed, revised per review (v2, v3), not yet
+planned.
+
+v3 addresses the re-review's six findings: compilation consumes the exact
+validated closure snapshot instead of re-reading files (re-review finding 1),
+the synthesized grader module gets a stable logical identity whose revision
+covers the harness files (2), the wrapper writes a tagged envelope so
+`failure` survives the transport (3), the local-machine guarantee is
+explicitly scoped to Agency code and excludes sibling `graders.ts` (4),
+`input` binding follows the language's real arity rules (5), and the new
+`dir` anchors on `compile`/`runCode` have exact signatures (6).
 
 v2 addresses all nine findings in
 `2026-08-20-std-agency-test-design-REVIEW.md`: dir-confined imports replace
@@ -120,12 +130,27 @@ veto, and results vary by machine. The revised policy:
   hermeticity trade for `pkg::` specifically, not a general one.
 
 `compile(source)` and `runCode(source)` take strings, which have no anchor.
-Both grow an optional `dir` parameter: absent, only `std::` and `pkg::` are
-importable (relative paths have nothing to resolve against — today's
-behavior, minus the new `pkg::` allowance); present, it names the sandbox
-directory local imports are confined to. File-based entry points (`runFile`,
-`test`, `testFile`) anchor at their own directory. One rule everywhere a dir
-exists; no other policy knobs.
+Both grow an optional `dir` parameter — exact signatures, appended as
+trailing optional parameters so every existing call site keeps working:
+
+```ts
+export def compile(source: string, dir: string = ""): Result
+export def runCode(source, node, args, wallClock, memory, ipcPayload,
+                   stdout, maxCost, cwd, dir: string = ""): Result
+```
+
+`dir` is **compile-only**: the base directory relative imports resolve
+against and the confinement boundary for the closure. `runCode`'s existing
+`cwd` is **execution-only**: the subprocess's working directory. The two are
+independent (compile from the seeded files, run in a scratch dir, or vice
+versa); passing neither keeps today's behavior. Absent `dir`, only `std::`
+and `pkg::` are importable — relative paths have nothing to resolve against.
+Internally the string form uses a base-directory compile option consuming
+the validated snapshot (finding 1 above); it must NOT be plumbed through
+`compileSource`'s `sourcePath`, which re-reads from disk and ignores the
+passed source. File-based entry points (`runFile`, `test`, `testFile`)
+anchor at their own directory. One rule everywhere a dir exists; no other
+policy knobs.
 
 Hermeticity now follows honestly: with confinement, a run directory's
 workdir + graders snapshot really is everything a grading compile can read
@@ -143,15 +168,28 @@ execution hook, so the sandboxed compile path is its own entry point:
 1. Parse the entry file and walk the raw import graph — resolving and
    parsing each reachable module, following re-export edges and `pkg::`
    modules — applying the closure validator (including splice detection on
-   the raw ASTs) as each file is parsed.
-2. Only after the whole closure is validated, hand off to the normal compile
-   pipeline (which may then run its splice machinery — there is nothing left
-   for it to find, and refusing before step 2 is what carries the guarantee).
+   the raw ASTs) as each file is parsed. The walk produces a **closure
+   snapshot**: canonical realpath → the source bytes read and the AST parsed
+   from exactly those bytes.
+2. Compilation consumes that snapshot. The compile pipeline is given the
+   validated bytes/ASTs and must not reopen or re-resolve any user file —
+   otherwise a file or symlink swapped between the validation read and a
+   second compile read could smuggle in a splice or JS import the validator
+   never saw (a filesystem time-of-check/time-of-use hole). This matters
+   beyond eval grading: the same entry point backs public `compile`,
+   `runCode`, and `runFile`, and the invariant must not depend on nobody
+   writing to a caller-owned directory mid-compile. Note the current
+   pipeline does the opposite — `compileSource` with a `sourcePath`
+   deliberately re-reads the file from disk (`lib/compiler/compile.ts:120`)
+   — so the sandboxed path needs a source-bytes-in, no-reread mode, not just
+   a validation pass bolted on front.
 
-The pinned test: a fixture whose splice generator has an observable side
-effect (writes a sentinel file); assert the compile is refused AND the
-sentinel does not exist. A test that only checks the diagnostic cannot prove
-the ordering.
+Two pinned tests: (a) a fixture whose splice generator has an observable
+side effect (writes a sentinel file) — assert the compile is refused AND the
+sentinel does not exist; a diagnostic-only test cannot prove the ordering.
+(b) a controlled swap seam that replaces a closure file's content after
+validation — compilation must either use the validated bytes or fail closed,
+never execute the swapped splice.
 
 ## The authoring model
 
@@ -351,8 +389,17 @@ sandbox profile:
    expression (a call, an identifier, an interpolation) is refused, naming
    the case and the expression.
 4. Bind the values positionally to the named node's declared parameters
-   (parameter names come from the parsed harness AST). Arity mismatch is
-   refused, naming the node, expected, and got.
+   (parameter names come from the parsed harness AST), following the
+   language's real call rules rather than a naive count comparison:
+   required non-defaulted parameters set the minimum, fixed parameters set
+   the maximum unless the node is variadic, omitted defaulted parameters
+   stay absent so runtime defaults apply, and extra values bind to a
+   variadic parameter in the shape `run()` expects. The type checker
+   already distinguishes exact, minimum, and ranged arity (AG6016–AG6018);
+   the converter reuses the existing parameter/argument resolution owner
+   instead of re-deriving those rules in the parser package. A genuine
+   arity violation is refused, naming the node, the accepted range, and
+   what was given.
 
 All conversion happens up front for every case — a bad `input` is a
 whole-call `failure` before any case runs, not a mid-batch surprise.
@@ -431,7 +478,8 @@ Concretely, a `Test` owns at most one `graders` module path, and
 `snapshotGradingModule` bundles exactly one module and records one bundle
 identity on the run row. Discovery therefore **synthesizes a grading
 module** per eval test at `eval run` time and feeds it through that existing
-single-module path unmodified:
+single-module path, extended only where the revision identity requires it
+(see the snapshot bullet):
 
 - The framework writes a small TS module (to the run's staging area) that
   imports `AgencyTestGrader` from `agency-lang/eval` and default-exports one
@@ -444,15 +492,26 @@ single-module path unmodified:
   any other import. Explicit `--graders` still overrides everything, and
   the `eval.graders` config fallback stays irrelevant when discovery found
   anything (discovery output is the test's own graders).
-- **Snapshot and revision:** the synthesized module goes through
-  `snapshotGradingModule` exactly like a hand-written one — bundled with
-  esbuild, harness pairs collected via `externalFiles()`, stored by content
-  hash, run row records `graders: { source, bundleFile, judgeFiles,
-  origin: "test" }`. The annotator revision is `<source>@<sha256 of the
-  bundle>` as today; since the synthesized source is deterministic (sorted
-  discovery, fixed template), an unchanged test dir yields an unchanged
-  revision, and editing any harness changes it. Per-grader lineage is the
-  basename via the grader `name`, so re-grades supersede correctly.
+- **Snapshot and revision:** the synthesized module is bundled and stored
+  like a hand-written one (esbuild bundle, harness pairs collected via
+  `externalFiles()`, content-hash storage, `graders: { source, bundleFile,
+  judgeFiles, origin: "test" }` on the run row) — but NOT through
+  `snapshotGradingModule` verbatim, because the existing revision is
+  `<source>@<sha256 of bundle>` where `source` is the module's absolute
+  physical path and the hash covers only the bundle code
+  (`lib/eval/grading/gradingModule.ts`). For a module generated into a
+  per-run staging path that would make every run a new revision while
+  edits to harness files (which live outside the bundle, as external
+  files) change nothing — the opposite of what lineage needs. So the
+  snapshot path gains an entry point taking `{ physicalPath,
+  sourceIdentity, revisionInputs }`: `sourceIdentity` derives from the
+  eval test directory (stable across runs and machines), and
+  `revisionInputs` is the sorted list of content hashes of every
+  discovered harness pair, folded into the revision hash alongside the
+  bundle. Hand-written modules keep today's identity untouched. Pinned
+  tests: two runs of the same suite produce identical revisions; editing
+  only a harness changes the revision. Per-grader lineage is the basename
+  via the grader `name`, so re-grades supersede correctly.
 - `threshold: 1` is load-bearing: `BaseGrader.passes` is
   `value >= (threshold ?? 0)`, so a fractional score with bare
   `mustPass: true` would gate nothing — even 0 passes a 0 threshold. The
@@ -482,20 +541,28 @@ author republishing run directories publicly ships the holdouts with them.
    framework-chosen **report path outside the scratch dir**. It calls
    `testFile()` inside a reject-all handler — approve `std::run` and the two
    known `std::read`s, reject every other effect with a message naming it —
-   then writes the `TestReport` as JSON to the report path with its own
-   approved write. The wrapper is the only sandbox-policy owner; it ships
-   with the framework, never with suites.
-4. The TypeScript grader reads the report file. **Stdout is diagnostics
+   then writes a **report envelope** to the report path with its own
+   approved write. `testFile` returns `Result<TestReport>`, and on
+   `failure` there is no report to write — so the envelope is a tagged
+   union, written for every normally completed call:
+   `{ status: "tested", report: TestReport }` or
+   `{ status: "could-not-test", error: <serialized failure> }`. The
+   wrapper is the only sandbox-policy owner; it ships with the framework,
+   never with suites.
+4. The TypeScript grader reads the envelope. **Stdout is diagnostics
    only**: `_run` pipes the tested subprocess's stdout through to the
    parent, so tested code can print anything — including a forged report —
    and stdout can never be the data channel. Tested code cannot write the
    report file because its every `std::write` is rejected; the wrapper's own
    write happens outside the `handle` block, after the tests.
 5. Score = **fraction of cases passed**, `mustPass: true, threshold: 1`.
-   Feedback = the failing cases' feedback lines; a `failure` from
-   `testFile` (e.g. compile error) is score 0 with the error verbatim;
-   wrapper crash, timeout, or a missing/unparseable report file is score 0
-   with the stdout tail as diagnostics. No workdir on the run → score 0,
+   Feedback = the failing cases' feedback lines; a `could-not-test`
+   envelope (compile error, malformed test JSON, cost guard) is score 0
+   with the serialized error verbatim — pinned by tests that drive a
+   compile failure and a malformed JSON through the actual wrapper
+   transport, not only through direct `testFile()` calls. Wrapper crash,
+   timeout, or a missing/malformed envelope file is score 0 with the
+   stdout tail as diagnostics. No workdir on the run → score 0,
    "run left no workdir".
 
 The spawn exists for one reason: the veto chain is made of Agency handlers,
@@ -513,8 +580,20 @@ is the end-to-end acceptance test for the feature.
 ## The local-machine guardrail, end to end
 
 The question this design must answer: "if I run `eval grade` on my laptop,
-what stops agent-written code — or a hostile test suite — from deleting my
-home directory?" The chain:
+what stops agent-written code — or hostile Agency test files in a suite —
+from deleting my home directory?"
+
+Scope first, honestly: the guarantee covers **Agency code** — the agent's
+solution, and a suite's harness `.agency` and `.test.json` files. It does
+NOT cover a sibling `graders.ts`: that is suite-authored TypeScript the
+grading process executes directly, per the eval framework's existing,
+documented trust boundary ("graders are code the harness executes — pulling
+a remote suite means trusting it"). No closure validator or wrapper handler
+constrains TypeScript running in the grading process. What this feature
+changes is that coding tests no longer *need* a `graders.ts` at all — a
+suite shipping only `.test.json` + harness files sits entirely inside the
+sandbox guarantee, which is a strictly smaller trust surface than today.
+For the Agency side, the chain:
 
 1. The tested code can only produce effects through interrupts (closure
    validator: nothing in the compile closure escapes to TS/node, and splices
@@ -547,12 +626,14 @@ home directory?" The chain:
   (via `..` and via a symlink) refused with the confinement error
 - closure-validator refusals: a TS import, a node builtin
 - **splice ordering**: the side-effect fixture described above — refusal
-  AND no sentinel file
+  AND no sentinel file; the swap-seam test (content replaced after
+  validation → validated bytes used, or fail closed)
 - per-case timeout (case-level `wallClock` override) → case-level
   `limit_exceeded` feedback
 - `testFile`: JSON mapping incl. `defaultTimeoutMs`; `sourceFile`
-  defaulting; the `input` algorithm (multi-arg positional bind, non-literal
-  refused, arity mismatch refused, all up front); one refusal test per
+  defaulting; the `input` algorithm (multi-arg positional bind, defaulted
+  and variadic nodes accepted per the language's arity rules, non-literal
+  refused, genuine arity violations refused, all up front); one refusal test per
   unsupported field/action; empty `tests`; unparseable `expectedOutput`;
   empty/unknown `evaluationCriteria`
 
@@ -565,7 +646,9 @@ the shared parser/verdict (the fixture audit above); a regression test that
 an empty `evaluationCriteria` array now errors instead of passing.
 
 **Eval framework (vitest):** grader auto-discovery and module synthesis
-(deterministic output, stable revision); composition with a sibling
+(two runs of the same suite → identical revisions; a harness edit → a new
+revision); envelope transport (compile failure and malformed JSON driven
+through the actual wrapper, not only direct `testFile()`); composition with a sibling
 `graders.ts`; holdout not seeded (a seeding test on `runAgent`);
 basename-collision refusal and approve-answer refusal at preflight; tamper
 defense (agent-edited harness overwritten from snapshot); fraction score
@@ -627,3 +710,24 @@ Changed in v2 (per review):
 - Eval preflight refuses `approve` scripted answers (the wrapper's rejects
   would silently defeat them; refusing keeps self-check and grading
   honest).
+
+Changed in v3 (per re-review):
+
+- Compilation consumes the validated closure snapshot (bytes + ASTs);
+  never validate, discard, and re-read — the TOCTOU hole. Swap-seam test
+  pinned; `compileSource`'s re-read-from-`sourcePath` behavior explicitly
+  not the plumbing route.
+- Synthesized grader modules get a stable `sourceIdentity` (from the eval
+  test dir) and a revision that folds in the harness pairs' content
+  hashes, via a new snapshot entry point; the existing physical-path @
+  bundle-hash identity could be neither stable across runs nor sensitive
+  to harness edits. Hand-written modules unchanged.
+- The wrapper writes a tagged envelope (`tested` / `could-not-test`) so a
+  `failure` from `testFile` survives the file transport with its error.
+- The local-machine guarantee is scoped to Agency code; a sibling
+  `graders.ts` remains trusted suite TypeScript per the existing eval
+  contract (and coding tests no longer need one).
+- `input` binding follows the language's arity rules (defaults, variadic;
+  AG6016–AG6018), reusing the existing resolution owner.
+- Exact `compile`/`runCode` signatures for the `dir` anchor; `dir` is
+  compile-only, `cwd` execution-only, both trailing optional.

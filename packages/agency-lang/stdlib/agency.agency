@@ -18,6 +18,9 @@ import {
   _subprocessDepth,
   _exactVerdictFeedback,
   _failureFeedback,
+  _readTestFileSandbox,
+  _readNodeBindingTable,
+  _bindTestFileCases,
  } from "agency-lang/stdlib-lib/agency.js"
 import {
   _loadTemplate,
@@ -434,6 +437,74 @@ export def test(
     }
   }
   return guarded
+}
+
+export def testFile(dir: string, filename: string): Result<TestReport> {
+  """
+  Run the test cases a .test.json file declares against its source file, in the sandboxed subprocess, and return a per-case report. The portable form of test(): the same file `agency test` runs, restricted to the sandbox subset (exact criteria; approve/reject scripted answers; per-case timeoutMs).
+
+  @param dir - The directory holding the .test.json and the file it tests
+  @param filename - The .test.json file
+  """
+  return _testFileForGrading(dir, filename, null)
+}
+
+/** @internal stdlib ABI for the shipped eval grader wrapper; not user-facing
+API. Identical to testFile plus the framework-owned whole-call cost cap.
+The exact gate-before-read sequence (the typecheckFile idiom): gate the
+JSON, read+parse it, gate the declared source file, read it once for the
+node binding table, bind EVERY case up front, then delegate to test(). */
+export def _testFileForGrading(
+  dir: string,
+  filename: string,
+  maxCost: number | null,
+): Result<TestReport> {
+  return interrupt std::read("Read this test file?", {
+    dir: dir,
+    filename: filename
+  })
+  const parsed = try _readTestFileSandbox(dir, filename)
+  if (parsed is failure) {
+    return parsed
+  }
+  if (parsed is success(wire)) {
+    return interrupt std::read("Read the tested source file?", {
+      dir: dir,
+      filename: wire.sourceFile
+    })
+    const table = try _readNodeBindingTable(dir, wire.sourceFile)
+    if (table is failure) {
+      return table
+    }
+    if (table is success(bindings)) {
+      const bound = try _bindTestFileCases(wire, bindings)
+      if (bound is failure) {
+        return bound
+      }
+      if (bound is success(boundCases)) {
+        const cases: AgencyTestCase[] = []
+        for (b in boundCases) {
+          cases.push(
+            {
+            node: b.node,
+            args: b.args,
+            expected: b.expected,
+            interrupts: b.interrupts,
+            wallClock: b.wallClock
+          },
+          )
+        }
+        return test(
+          dir,
+          wire.sourceFile,
+          cases,
+          wallClock: wire.defaultTimeoutMs ?? 60s,
+          maxCost: maxCost,
+        )
+      }
+    }
+  }
+  return failure("unreachable")
 }
 
 // Reject out-of-range limit values with a message the model can act on.

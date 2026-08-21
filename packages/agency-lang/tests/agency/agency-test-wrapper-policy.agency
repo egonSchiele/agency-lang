@@ -1,0 +1,51 @@
+// The eval wrapper's pure policy decision, phase by phase. The imperative
+// handler only applies these decisions; driving the function directly
+// covers transitions no spawned run can reach deterministically.
+import { decideWrapperInterrupt } from "../../lib/agents/eval/agencyTestWrapper.agency"
+
+const DIR = "/scratch"
+
+export node bootstrapPhases(): string {
+  // Exact first read advances; anything else rejects without advancing.
+  if (decideWrapperInterrupt("awaitingJsonRead", DIR, "suite.test.json", "std::read", DIR, "suite.test.json") != "approveAndAdvance") {
+    return "exact json read should advance"
+  }
+  if (decideWrapperInterrupt("awaitingJsonRead", DIR, "suite.test.json", "std::read", DIR, "other.json") != "reject") {
+    return "wrong filename should reject"
+  }
+  if (decideWrapperInterrupt("awaitingJsonRead", DIR, "suite.test.json", "std::read", "/elsewhere", "suite.test.json") != "reject") {
+    return "wrong dir should reject"
+  }
+  if (decideWrapperInterrupt("awaitingJsonRead", DIR, "suite.test.json", "std::write", DIR, "suite.test.json") != "reject") {
+    return "wrong effect should reject"
+  }
+  if (decideWrapperInterrupt("awaitingJsonRead", DIR, "suite.test.json", "std::run", DIR, "") != "reject") {
+    return "no launch may happen before runningTests"
+  }
+  if (decideWrapperInterrupt("awaitingSourceRead", DIR, "harness.agency", "std::read", DIR, "harness.agency") != "approveAndAdvance") {
+    return "exact source read should advance"
+  }
+  if (decideWrapperInterrupt("awaitingSourceRead", DIR, "harness.agency", "std::read", DIR, "suite.test.json") != "reject") {
+    return "a repeated json read should reject"
+  }
+  return "ok"
+}
+
+export node runningAndWritingPhases(): string {
+  if (decideWrapperInterrupt("runningTests", DIR, "", "std::run", "", "") != "approve") {
+    return "launches are allowed while running"
+  }
+  if (decideWrapperInterrupt("runningTests", DIR, "", "std::read", DIR, "anything.txt") != "reject") {
+    return "scratch-local reads must reject while running"
+  }
+  if (decideWrapperInterrupt("runningTests", DIR, "", "std::write", DIR, "x") != "reject") {
+    return "writes must reject while running"
+  }
+  if (decideWrapperInterrupt("writingReport", DIR, "", "std::read", DIR, "x") != "reject") {
+    return "the writing phase has no broad approvals"
+  }
+  if (decideWrapperInterrupt("writingReport", DIR, "", "std::run", "", "") != "reject") {
+    return "no launches while writing"
+  }
+  return "ok"
+}

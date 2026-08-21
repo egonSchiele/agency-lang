@@ -1,0 +1,6 @@
+{
+  "tests": [
+    { "nodeName": "bootstrapPhases", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "runningAndWritingPhases", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

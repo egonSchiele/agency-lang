@@ -367,31 +367,15 @@ export class AgencyFunction {
   }
 
   private resolvePositional(args: unknown[]): unknown[] {
-    // Fast path: exact arg count, no variadics — no work needed
-    if (args.length === this._nonVariadicUnbound.length && !this._hasVariadic) {
-      return args;
-    }
-
-    // Pad missing optional args with UNSET
-    let result = args;
-    if (args.length < this._nonVariadicUnbound.length) {
-      result = [...args];
-      for (let i = args.length; i < this._nonVariadicUnbound.length; i++) {
-        if (!this._nonVariadicUnbound[i].hasDefault) break;
-        result.push(UNSET);
-      }
-    }
-
-    // Wrap trailing args for variadic param
-    if (this._hasVariadic) {
-      const nonVariadicCount = this._nonVariadicUnbound.length;
-      const regularArgs = result.slice(0, nonVariadicCount);
-      const variadicArgs = result.slice(nonVariadicCount);
-      regularArgs.push(variadicArgs);
-      return regularArgs;
-    }
-
-    return result;
+    const plan = planArgumentBindings(
+      this._unboundParams.map((p) => ({
+        name: p.name,
+        hasDefault: p.hasDefault,
+        variadic: p.variadic,
+      })),
+      args,
+    );
+    return renderRuntimeArguments(plan);
   }
 
   private resolveNamed(
@@ -540,4 +524,103 @@ function buildReducedSchema(originalSchema: any, unboundParams: FuncParam[]): an
     }
   }
   return z.object(reducedShape);
+}
+
+// ---------------------------------------------------------------------------
+// Positional argument binding, as a declarative plan.
+//
+// One decision owner, two renderings: the runtime adapter below emits the
+// positional array AgencyFunction dispatches (UNSET for defaults, one
+// gathered array for a variadic), and std::agency's testFile adapter
+// (lib/testFormat/inputArgs.ts) renders the same plan as run()'s named-args
+// record. The plan records arity problems instead of throwing; each adapter
+// decides what a violation means.
+// ---------------------------------------------------------------------------
+
+export type BindingParameter = {
+  name: string;
+  hasDefault: boolean;
+  variadic: boolean;
+};
+export type SuppliedBindingSlot = {
+  kind: "supplied";
+  parameterIndex: number;
+  valueIndex: number;
+};
+export type DefaultBindingSlot = {
+  kind: "default";
+  parameterIndex: number;
+};
+export type VariadicBindingSlot = {
+  kind: "variadic";
+  parameterIndex: number;
+  valueIndexes: number[];
+};
+export type BindingSlot = SuppliedBindingSlot | DefaultBindingSlot | VariadicBindingSlot;
+export type ArgumentBindingPlan = {
+  parameters: BindingParameter[];
+  values: unknown[];
+  /** In parameter order; a missing required parameter has no slot. */
+  slots: BindingSlot[];
+  missingRequiredParameterIndexes: number[];
+  /** Values beyond the fixed parameters when there is no variadic to
+   *  gather them. */
+  extraValueIndexes: number[];
+};
+
+export function planArgumentBindings(
+  parameters: BindingParameter[],
+  values: unknown[],
+): ArgumentBindingPlan {
+  const variadicIndex = parameters.findIndex((p) => p.variadic);
+  const fixed = variadicIndex === -1 ? parameters : parameters.slice(0, variadicIndex);
+  const slots: BindingSlot[] = [];
+  const missingRequiredParameterIndexes: number[] = [];
+  for (let i = 0; i < fixed.length; i++) {
+    if (i < values.length) {
+      slots.push({ kind: "supplied", parameterIndex: i, valueIndex: i });
+    } else if (fixed[i].hasDefault) {
+      slots.push({ kind: "default", parameterIndex: i });
+    } else {
+      missingRequiredParameterIndexes.push(i);
+    }
+  }
+  const extraValueIndexes: number[] = [];
+  if (variadicIndex !== -1) {
+    const valueIndexes: number[] = [];
+    for (let i = fixed.length; i < values.length; i++) valueIndexes.push(i);
+    slots.push({ kind: "variadic", parameterIndex: variadicIndex, valueIndexes });
+  } else {
+    for (let i = fixed.length; i < values.length; i++) extraValueIndexes.push(i);
+  }
+  return { parameters, values, slots, missingRequiredParameterIndexes, extraValueIndexes };
+}
+
+/** The runtime rendering AgencyFunction.resolvePositional dispatches on.
+ *  It deliberately preserves the pre-extraction behavior for INVALID direct
+ *  runtime calls (this is not an arity behavior change): default padding
+ *  stops at the first missing required parameter, and extra values without
+ *  a variadic pass straight through. */
+function renderRuntimeArguments(plan: ArgumentBindingPlan): unknown[] {
+  const firstMissing =
+    plan.missingRequiredParameterIndexes.length > 0
+      ? plan.missingRequiredParameterIndexes[0]
+      : Infinity;
+  const out: unknown[] = [];
+  for (const slot of plan.slots) {
+    if (slot.kind === "variadic") {
+      out.push(slot.valueIndexes.map((i) => plan.values[i]));
+      continue;
+    }
+    if (slot.parameterIndex > firstMissing) continue;
+    if (slot.kind === "supplied") {
+      out.push(plan.values[slot.valueIndex]);
+    } else {
+      out.push(UNSET);
+    }
+  }
+  for (const i of plan.extraValueIndexes) {
+    out.push(plan.values[i]);
+  }
+  return out;
 }

@@ -33,91 +33,40 @@ import { CompileClosureError } from "../compiler/compileClosure.js";
 import type { LLMMock, ScopedLLMMocks } from "../runtime/deterministicClient.js";
 import type { FetchMock } from "../runtime/fetchMock.js";
 import { resolveFetchMocks, writeFetchMocksTempFile } from "./fetchMockResolve.js";
-type Exact = { type: "exact" };
-type LLMJudge = {
-  type: "llmJudge";
-  judgePrompt: string;
-  desiredAccuracy: number;
-};
-type Criteria = Exact | LLMJudge;
-type TestCase = {
-  nodeName: string;
-  input: string;
-  expectedOutput: string;
-  evaluationCriteria: Criteria[];
-  interruptHandlers?: InterruptHandler[];
-  description?: string;
-  retry?: number;
-  skip?: boolean;
-  // If true, skip this test when running in CI (i.e. when the CI=true
-  // env var is set, the standard GitHub Actions / generic CI marker).
-  // Use for tests that depend on a developer machine's environment, such
-  // as macOS-only builtins (notify) or interactive prompts.
-  skipOnCI?: boolean;
-  // Per-test timeout in milliseconds. Overrides the file-level
-  // `defaultTimeoutMs`. Falls back to DEFAULT_PER_TEST_MS when unset.
-  // Clamped to TIMEOUT_CEILINGS.perTestMs.
-  timeoutMs?: number;
-  // Ordered list of LLM mocks consumed by the deterministic LLM client
-  // when running under AGENCY_USE_TEST_LLM_PROVIDER=1. Each entry maps to
-  // one llm() call in the agency code, in source order.
+import {
+  parseTestFileFull,
+  resolveSourceFile,
+  type FullTestCase,
+  type FullTestFile,
+} from "../testFormat/schema.js";
+import { exactVerdict } from "../testFormat/verdict.js";
+
+// The schema (lib/testFormat/schema.ts) is the one owner of the .test.json
+// format; these aliases only narrow the mock/handler payloads to the types
+// their executors take. Mock internals are validated by their owners
+// (deterministicClient, fetchMock) at use time.
+type Criteria = FullTestCase["evaluationCriteria"][number];
+type TestCase = Omit<FullTestCase, "llmMocks" | "fetchMocks" | "interruptHandlers"> & {
   llmMocks?: LLMMock[] | ScopedLLMMocks;
-  // Force the deterministic LLM provider even when the suite is not
-  // launched with AGENCY_USE_TEST_LLM_PROVIDER=1. Use for tests whose
-  // assertions depend on the deterministic client's fixed per-call cost /
-  // token output (see SYNTHETIC_COST in lib/runtime/deterministicClient.ts).
-  // Without this flag such tests would silently fall through to the real
-  // OpenAI client on push-to-main CI (where the env var is unset) and
-  // become flaky or expensive.
-  useTestLLMProvider?: boolean;
-  // Optional process command-line arguments to pass to the spawned
-  // subprocess. These show up as `process.argv.slice(2)` in the running
-  // agent — handy for testing CLI flag parsers (std::args) and any
-  // other code that reads argv. Defaults to no extra args.
-  argv?: string[];
-  // Per-test fetch mocks; merged over file-level `fetchMocks` (this wins).
   fetchMocks?: FetchMock[];
-  // Install a deterministic fake clock for this test case. Guard fixtures use
-  // it with the `_advanceTime` seam (import test from "std::date") to trip time
-  // guards without spending real time. Off by default: the run keeps the real
-  // clock. See docs/superpowers/specs/2026-07-19-fake-clock-time-guards-design.md.
-  fakeClock?: boolean;
+  interruptHandlers?: InterruptHandler[];
 };
-type Tests = {
-  sourceFile?: string;
-  // Optional because a file with `expectedCompileError` has no cases to
-  // run: the compile itself is the test.
+type Tests = Omit<FullTestFile, "tests" | "fetchMocks"> & {
   tests?: TestCase[];
-  // When set, this file asserts that its sibling .agency FAILS to compile
-  // and that the failure text contains this substring. Diagnostic codes
-  // ("AG8001") are the intended values; a distinctive phrase works too,
-  // which is what parse errors need since they carry no code.
-  //
-  // The compile runs in a child `agency compile` process. That is not an
-  // implementation detail: compile() reports parse failures, strict type
-  // errors, and closure failures with process.exit(1) rather than a throw
-  // (lib/compiler/buildSession.ts), so compiling in-process would kill the
-  // test runner. Such files are also skipped by the precompile pass
-  // (lib/cli/precompile.ts) for the same reason.
-  expectedCompileError?: string;
-  // Printed when the file runs, same role as the per-case field.
-  description?: string;
-  // File-level fetch mocks applied to every test; overridden per-test.
   fetchMocks?: FetchMock[];
-  // If true, skip every test in this file. Equivalent to setting `skip: true`
-  // on each test case individually.
-  skip?: boolean;
-  // If true, skip every test in this file when running in CI. Equivalent
-  // to setting `skipOnCI: true` on each test case.
-  skipOnCI?: boolean;
-  // Optional human-readable reason for the skip; printed when the file is
-  // skipped. No semantic effect.
-  skipReason?: string;
-  // File-level default timeout (ms) applied to every test in this file
-  // unless the individual TestCase sets its own `timeoutMs`. Falls back
-  // to DEFAULT_PER_TEST_MS when unset.
-  defaultTimeoutMs?: number;
 };
+
+/** Read + validate a .test.json through the shared parser. Throws with the
+ *  filename and the offending field on a malformed file. */
+export function loadTests(testFile: string): Tests {
+  return parseTestFileFull(fs.readFileSync(testFile, "utf-8"), testFile) as Tests;
+}
+
+/** The declared sourceFile (resolved beside the json), else the sibling
+ *  `<basename>.agency` — the same rule precompile groups by. */
+export function resolveTestSourcePath(tests: Tests, testFile: string): string {
+  return path.join(path.dirname(testFile), resolveSourceFile(tests.sourceFile, testFile));
+}
 
 // ── Test runner timeout limits ──
 // Pattern mirrors LIMIT_CEILINGS in lib/runtime/ipc.ts: hardcoded ceilings
@@ -236,7 +185,7 @@ function writeTestCase(
   const testFilePath = agencyFilename.replace(".agency", ".test.json");
   let tests: Tests;
   if (fs.existsSync(testFilePath)) {
-    tests = JSON.parse(fs.readFileSync(testFilePath, "utf-8"));
+    tests = loadTests(testFilePath);
   } else {
     tests = { tests: [] };
   }
@@ -619,7 +568,7 @@ type SingleTestOutcome = "passed" | "failed" | "aborted";
 
 async function runSingleTest(
   config: AgencyConfig,
-  testFile: string,
+  sourceFilePath: string,
   testCase: TestCase,
   fetchMocks: FetchMock[] | undefined,
   timeoutMs: number,
@@ -627,7 +576,7 @@ async function runSingleTest(
   log: Logger,
 ): Promise<SingleTestOutcome> {
   const hasArgs = testCase.input !== "";
-  const relativeSourceFilePath = testFile.replace(".test.json", ".agency");
+  const relativeSourceFilePath = sourceFilePath;
   let result: { data: any; stdout: string; stderr: string };
   try {
     result = await executeNodeAsync({
@@ -671,7 +620,10 @@ async function runSingleTest(
   for (const criterion of testCase.evaluationCriteria) {
     if (criterion.type === "exact") {
       const actual = JSON.stringify(result.data);
-      if (actual === testCase.expectedOutput) {
+      const verdict = exactVerdict(result.data, testCase.expectedOutput, {
+        rawStringFallback: true,
+      });
+      if (verdict.pass) {
         log(color.green("  ✓ Exact match passed"));
       } else {
         log(color.red("  ✗ Exact match failed"));
@@ -740,7 +692,7 @@ function collectTestFiles(inputPath: string): string[] {
 // suite is shutting down.
 async function runTestWithRetries(
   config: AgencyConfig,
-  testFile: string,
+  sourceFilePath: string,
   testCase: TestCase,
   fetchMocks: FetchMock[] | undefined,
   timeoutMs: number,
@@ -754,7 +706,7 @@ async function runTestWithRetries(
       log(color.yellow(`  Retry ${attempt - 1}/${testCase.retry}...`));
     }
     try {
-      outcome = await runSingleTest(config, testFile, testCase, fetchMocks, timeoutMs, signal, log);
+      outcome = await runSingleTest(config, sourceFilePath, testCase, fetchMocks, timeoutMs, signal, log);
       if (outcome === "passed" || outcome === "aborted") break;
     } catch (e) {
       exitIfSignal(e);
@@ -831,7 +783,7 @@ async function runExpectedCompileError(
   const expected = tests.expectedCompileError;
   // Absolute, because the child runs with cwd set to the fixture's
   // directory — a runner-relative path would no longer resolve there.
-  const sourcePath = path.resolve(testFile.replace(/\.test\.json$/, ".agency"));
+  const sourcePath = path.resolve(resolveTestSourcePath(tests, testFile));
   const siblingJs = sourcePath.replace(/\.agency$/, ".js");
 
   log(color.cyan(`Expecting compile to fail with: ${expected}`));
@@ -914,7 +866,7 @@ async function runTestFile(
   try {
     log(color.yellow(`Running tests for ${testFile}...`));
 
-    const tests: Tests = JSON.parse(fs.readFileSync(testFile, "utf-8"));
+    const tests: Tests = loadTests(testFile);
 
     // Merge a sibling agency.json (next to the .test.json) on top of the
     // project-level config. Keeps default behavior intact for tests that
@@ -1032,7 +984,7 @@ async function runTestFile(
       const startTime = performance.now();
       const outcome = await runTestWithRetries(
         config,
-        testFile,
+        resolveTestSourcePath(tests, testFile),
         testCase,
         fetchMocks,
         timeoutMs,

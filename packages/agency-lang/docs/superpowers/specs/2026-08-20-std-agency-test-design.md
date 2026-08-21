@@ -1,6 +1,16 @@
 # std::agency `test()` and the eval AgencyTestGrader
 
-Date: 2026-08-20. Status: designed, not yet planned.
+Date: 2026-08-20. Status: designed, revised per review (v2), not yet planned.
+
+v2 addresses all nine findings in
+`2026-08-20-std-agency-test-design-REVIEW.md`: dir-confined imports replace
+the unconfined policy (finding 1), splice refusal is ordered before splice
+expansion by design (2), per-case limits join the case type (3), the eval
+grader gates with `threshold: 1` (4), the CLI migrates to the shared parser
+and verdict in this change (5), the `input` conversion has an algorithm and
+the field ledger is complete (6), grader discovery synthesizes a grading
+module (7), the wrapper reports through a file, not stdout (8), and approving
+scripted answers are refused at eval preflight (9).
 
 ## Background
 
@@ -41,22 +51,20 @@ charge.
 - Eval coding tests become declarative: a test directory ships test files and
   nothing else — no per-test `graders.ts`, no hand-written sandbox handler.
 - Held-out tests: a set the agent never sees, so solutions must generalize.
-- Open up imports for sandboxed code, module-wide, without weakening the
-  safety guarantee (details below — this fell out of the design and is a
-  deliberate scope addition).
+- Sandboxed code may span several files: a harness imports the solution, the
+  solution imports its own helpers. This requires loosening the current
+  std::-only import rule; how far it loosens is defined below.
 
 ## Non-goals
 
-- Full parity with the `agency test` CLI runner. `llmMocks`, `fetchMocks`,
-  `fakeClock`, `argv`, `expectedCompileError`, `retry`, `llmJudge` criteria,
-  and the `modify` interrupt action are out of scope for v1; `testFile()`
-  refuses files that use them (loudly, never by ignoring the field).
-- Replacing the CLI runner. `agency test` tests *your* code (arbitrary
-  imports, interrupts answered authoritatively); `test()` tests *someone
-  else's* (sandboxed, handler-gated). Those are two trust postures, not two
-  implementations of one thing. What they must share is the JSON schema and
-  the pass/fail verdict logic, each with a single TypeScript owner, so a test
-  cannot pass under one runner and fail under the other on the same output.
+- Full parity with the `agency test` CLI runner. The sandbox profile of the
+  format (defined below) supports a deliberate subset; everything else is
+  refused loudly, never ignored.
+- Replacing the CLI runner's execution path. `agency test` tests *your* code
+  (arbitrary imports, interrupts answered authoritatively); `test()` tests
+  *someone else's* (sandboxed, handler-gated). Those are two trust postures.
+  What they share — in this change, not "later" — is one test-file parser and
+  one exact-match verdict helper (details in "One parser, one verdict").
   If the subset ever grows to parity and one execution engine is wanted, the
   migration is the CLI runner adopting the IPC subprocess runner with a
   trusted mode — a separate project this design must not block or assume.
@@ -65,58 +73,85 @@ charge.
   instead of escaped strings); the `.test.json` file stays the portable wire
   format. No third format.
 
-## The safety invariant, and opening up imports
+## The safety invariant and the import policy
 
-The sandbox guarantee rests on exactly one thing: **the transitive compile
-closure contains nothing but Agency source and `std::` imports.** TypeScript
-or JavaScript anywhere in the closure means destructive code with no
-interrupt. Everything else — which directories the files sit in, whether a
-package is involved — is policy, not safety.
+Two separate things, deliberately kept apart:
 
-Today `compile()`/`runFile()` enforce a much narrower rule (only `std::`
-imports, nothing else at all), which makes the natural test-authoring shape
-impossible: a harness cannot `import { fib } from "fib.agency"`. Decision:
-open imports up, module-wide, and enforce the actual invariant instead.
-
-**New rule, applied uniformly to `compile`, `runCode`, `runFile`, and
-`test`/`testFile`:** imports may name `std::` modules, relative or absolute
-`.agency` file paths, and `pkg::` packages. A **closure validator** — one
-new, single-purpose check in the compile path — walks the transitive import
-closure and refuses, naming the file and the offending import:
+**The safety invariant** — what makes sandboxed execution safe at all: the
+transitive compile closure contains nothing but Agency source and `std::`
+imports. TypeScript or JavaScript anywhere in the closure means destructive
+code with no interrupt. A **closure validator** owns this invariant for every
+sandboxed compile (`compile`, `runCode`, `runFile`, `test`, `testFile`). It
+walks the transitive import closure and refuses, naming the file and the
+offending import:
 
 - any TypeScript/JavaScript file (interop by the back door),
 - any node builtin (`process`, `fs`, `child_process`, ...),
 - any `pkg::` package whose own closure reaches either of the above,
-- any compile-time splice (`$( ... )`) anywhere in the closure. Splices
-  execute code at compile time in the compiling process, outside the sandbox;
-  untrusted code gets no compile-time execution hook regardless of imports.
+- any compile-time splice (`$( ... )`) anywhere in the closure (ordering
+  rules below).
 
-Everything that passes the validator compiles under the same discipline as
-the root file, so every effect it can produce is interrupt-gated, and the
-parent-veto story is unchanged. Static initializers included: the subprocess
-routes their interrupts through the parent's chain like everything else
-(verified empirically during the fib work).
+Everything that passes compiles under the same discipline as the root file,
+so every effect it can produce is interrupt-gated. Static initializers
+included: the subprocess routes their interrupts through the parent's chain
+like everything else (verified empirically during the fib work).
 
-`compile(source)` and `runCode(source)` take strings, which have no anchor to
-resolve `"./fib.agency"` against. Both grow an **optional `dir` parameter**:
-absent, relative imports simply cannot resolve (today's behavior); present,
-it is the base directory for relative imports. File-based entry points
-(`runFile`, `test`, `testFile`) anchor at their own directory.
+**The import policy** — which files may be in the closure. v1 of this spec
+allowed any relative or absolute `.agency` path and claimed the eval grader's
+scratch directory made outside files "simply absent". The review showed that
+claim false: imports resolve against the host filesystem in the compiling
+process, so `../../secret.agency` and absolute paths escape the scratch
+directory, those reads happen with no `std::read` interrupt the wrapper could
+veto, and results vary by machine. The revised policy:
 
-**Verification task for the planner:** confirm what `_compile` does today
-with a splice in the source (the AG8001/AG8002 refusal machinery exists for
-template Agency; the untrusted-compile path must be shown to refuse splices,
-with a test that would fail if it didn't). This is load-bearing for the
-whole design.
+- **`std::` modules**: always allowed.
+- **Local `.agency` files, confined to the sandbox directory**: allowed when
+  the compile has a `dir` anchor. Every non-stdlib, non-pkg module in the
+  closure must resolve — after `fs.realpath` on the resolved file, so a
+  symlink cannot point out — to a path inside the realpath of `dir`
+  (subdirectories included). `..` segments and absolute paths that land
+  inside `dir` are therefore fine; anything resolving outside is refused
+  with the file and the escaping import named.
+- **`pkg::` packages**: allowed, subject to the closure validator walking
+  the package's own Agency closure under the same rules (the package's
+  files live in `node_modules`, outside `dir`; the confinement boundary for
+  a package is its own package root). A suite using `pkg::` grades only on
+  machines where the package is installed — an accepted, documented
+  hermeticity trade for `pkg::` specifically, not a general one.
 
-Deliberately NOT built: per-directory confinement, allow/deny lists, any
-policy knob about which roots are importable. The validator owns the
-invariant; there are no other rules to maintain. Out-of-dir imports cost
-hermeticity (a harness importing a file outside the test directory grades
-differently on different machines) — for eval grading that is mitigated
-structurally, because the grader runs everything from a scratch directory it
-populated itself, so anything not in the workdir or the graders snapshot is
-simply absent.
+`compile(source)` and `runCode(source)` take strings, which have no anchor.
+Both grow an optional `dir` parameter: absent, only `std::` and `pkg::` are
+importable (relative paths have nothing to resolve against — today's
+behavior, minus the new `pkg::` allowance); present, it names the sandbox
+directory local imports are confined to. File-based entry points (`runFile`,
+`test`, `testFile`) anchor at their own directory. One rule everywhere a dir
+exists; no other policy knobs.
+
+Hermeticity now follows honestly: with confinement, a run directory's
+workdir + graders snapshot really is everything a grading compile can read
+(pkg:: aside, as documented above).
+
+### Splice refusal must precede splice execution
+
+This ordering is design, not a planner verification note. `compileSource`
+today calls `expandSplices` (`lib/compiler/compile.ts:142`) before building
+the symbol table or closure — a validator bolted on at the natural
+post-resolution point would run after the entry file's splices had already
+executed in the compiling process. Untrusted code must get no compile-time
+execution hook, so the sandboxed compile path is its own entry point:
+
+1. Parse the entry file and walk the raw import graph — resolving and
+   parsing each reachable module, following re-export edges and `pkg::`
+   modules — applying the closure validator (including splice detection on
+   the raw ASTs) as each file is parsed.
+2. Only after the whole closure is validated, hand off to the normal compile
+   pipeline (which may then run its splice machinery — there is nothing left
+   for it to find, and refusing before step 2 is what carries the guarantee).
+
+The pinned test: a fixture whose splice generator has an observable side
+effect (writes a sentinel file); assert the compile is refused AND the
+sentinel does not exist. A test that only checks the diagnostic cannot prove
+the ordering.
 
 ## The authoring model
 
@@ -181,6 +216,9 @@ export type TestCase = {
   // handler still sees the interrupt, and any reject wins. A test file can
   // never approve something the caller's handler would reject.
   interrupts?: InterruptAnswer[];
+  // Per-case overrides of the call-wide limits. Everything else about a
+  // case's subprocess uses the call-wide values.
+  wallClock?: number;
   description?: string;
 }
 
@@ -210,12 +248,13 @@ export type TestReport = {
 
 ```ts
 // Core. dir/filename name the harness file; the harness imports the
-// solution like any agency test does.
+// solution like any agency test does. dir is also the import-confinement
+// boundary for the whole closure.
 export def test(
   dir: string,
   filename: string,
   cases: TestCase[],
-  wallClock: number = 60s,      // per case
+  wallClock: number = 60s,      // per case, unless the case overrides it
   memory: number = 512mb,       // per case
   ipcPayload: number = 100mb,   // per case
   stdout: number = 1mb,         // per case
@@ -226,12 +265,17 @@ export def test(
 export def testFile(dir: string, filename: string): Result<TestReport>
 ```
 
+`testFile` delegates cleanly because per-case timeouts live on `TestCase`:
+the JSON's per-case `timeoutMs` becomes that case's `wallClock` override, and
+the file-level `defaultTimeoutMs` becomes the call-wide `wallClock` argument.
+
 Result semantics — the line between the two failure levels:
 
 - **`failure` = couldn't test.** Harness compile failure (including closure
   validator refusals and "solution doesn't export X"), malformed or
-  unsupported `.test.json`, the whole-call cost guard tripping. Fix the
-  input and call again.
+  unsupported `.test.json`, an `input` that fails the conversion algorithm
+  or arity check (validated for every case up front, before any case runs),
+  the whole-call cost guard tripping. Fix the input and call again.
 - **`success` with `pass: false` entries = tested, and it's wrong.** Wrong
   values, rejected interrupts, per-case limits, scripted-answer mismatches.
   A failing case never stops the batch; the report carries every case's
@@ -241,32 +285,83 @@ Effects: `testFile` raises `std::read` for the JSON and the harness file
 (canonical `{ dir, filename }` payload); each case's subprocess launch raises
 `std::run` exactly as `run()` does. No new effect labels in v1.
 
-### `testFile` JSON mapping
+## One parser, one verdict — shared with the CLI runner NOW
 
-`sourceFile` resolves relative to `dir`; default is the sibling `.agency`
-with the same basename (matching the CLI runner). Field mapping:
+v1 of this spec promised a shared schema and verdict but let the CLI adopt
+them "later". The review is right that this is incompatible with the
+invariant "the same output cannot pass under one runner and fail under the
+other": today `lib/cli/test.ts` compares `JSON.stringify(actual)` against the
+raw `expectedOutput` string (key-order and whitespace sensitive), defines its
+JSON shape as unchecked TypeScript types, ignores a documented `sourceFile`
+field in favor of filename derivation, and accidentally treats an empty
+`evaluationCriteria` array as a pass. So this feature migrates the CLI in the
+same change, keeping its trusted execution path untouched:
 
-| JSON | TestCase |
-|---|---|
-| `nodeName` | `node` |
-| `input` (argument-literal string) | `args` |
-| `expectedOutput` (JSON string) | `expected` (parsed) |
-| `interruptHandlers` | `interrupts` |
-| `timeoutMs` | that case's `wallClock` |
-| `description` | `description` |
+**One parser** (`lib/testFormat/` — new home, one concept) owns the
+`.test.json` schema, with two profiles:
 
-`expectedOutput` must parse as JSON; the error for a bare unquoted string
-says how to quote it. Unsupported fields (`llmMocks`, `fetchMocks`,
-`fakeClock`, `retry`, `skip`/`skipOnCI`, `expectedCompileError`, `llmJudge`
-criteria, `modify` actions) are refused with an error naming the field — a
-silently ignored mock would make a test pass for the wrong reason. An empty
+- **Full profile** (CLI): every existing field, validated instead of
+  unchecked. `sourceFile` is honored (with the filename-derivation default
+  kept for files that omit it).
+- **Sandbox profile** (`testFile`): the subset below; any other field is
+  refused with an error naming it.
+
+Both profiles require `evaluationCriteria` to be well-formed: the sandbox
+profile requires exactly `[{ "type": "exact" }]`; the full profile requires
+at least one criterion of a known type. Missing, empty, or unknown criteria
+are errors in both — the current empty-array-passes accident does not become
+contract. Migration item: audit `tests/**/*.test.json` for fixtures that
+violate the validated schema (empty criteria, unknown fields, unused
+`sourceFile` mismatches) and fix them.
+
+**One verdict helper** (in `stdlib-lib`, imported by both the stdlib and the
+CLI runner): structural equality on canonicalized values (key-order
+insensitive) between the actual result and the JSON-parsed `expectedOutput`,
+plus the diff rendering. One documented divergence, by profile: when
+`expectedOutput` does not parse as JSON, the full profile falls back to the
+CLI's legacy raw-string comparison (existing fixtures depend on it); the
+sandbox profile refuses the file with an error saying how to quote a string.
+A refusal is not a divergent verdict.
+
+### The sandbox profile, complete field ledger
+
+Supported: `sourceFile`, file-level `description`, `defaultTimeoutMs`;
+per-case `nodeName`, `input`, `expectedOutput`,
+`evaluationCriteria` (exactly one `exact`), `interruptHandlers` with actions
+`approve`/`reject` and `expectedMessage`, `timeoutMs`, `description`.
+
+Refused, each with an error naming the field: `llmMocks`, `fetchMocks` (file
+and case level), `fakeClock`, `argv`, `retry`, `skip`, `skipOnCI`,
+`skipReason`, `useTestLLMProvider`, `expectedCompileError`, `llmJudge`
+criteria, interrupt actions `modify` and `resolve`, `modifiedArgs`. An empty
 `tests` array is an error (mirrors `loadInputs`' empty-suite rule).
+
+### The `input` conversion algorithm
+
+The wire format's `input` is an Agency argument-expression string (possibly
+several positional expressions: `"alice", "coffee"` or `10, 5`), while the
+core takes named `args`. The conversion, owned by the shared parser's
+sandbox profile:
+
+1. Empty string → no args.
+2. Otherwise parse the string as an Agency argument list with the language
+   parser (never `eval`, `Function`, or string splitting).
+3. Require every argument to be a literal JSON-representable value (string,
+   number, boolean, null, and arrays/objects of those). A non-literal
+   expression (a call, an identifier, an interpolation) is refused, naming
+   the case and the expression.
+4. Bind the values positionally to the named node's declared parameters
+   (parameter names come from the parsed harness AST). Arity mismatch is
+   refused, naming the node, expected, and got.
+
+All conversion happens up front for every case — a bad `input` is a
+whole-call `failure` before any case runs, not a mid-batch surprise.
 
 ## Execution semantics
 
-**One compile per call.** The harness file is compiled once (closure
-validator over the whole import tree — harness plus solution plus anything
-they import); every case runs against that one `CompiledProgram`.
+**One compile per call.** The harness file is compiled once through the
+sandboxed compile entry point (validate raw closure, then compile); every
+case runs against that one `CompiledProgram`.
 
 **Cases run sequentially**, each in its own `run()` subprocess. Deterministic
 ordering is what makes scripted answers meaningful.
@@ -289,15 +384,14 @@ stdlib handler:
   interrupts, saw M"). Scripted answers are assertions about behavior, not
   just permissions.
 
-**Verdict.** Structural equality on canonicalized values, implemented as a
-TypeScript helper in `stdlib-lib` — the shared owner from the convergence
-decision, placed where `lib/cli/test.ts` can adopt the same helper later.
-Failure feedback is a rendered expected/actual diff, or the run failure text
-when the case died rather than returned.
+**Verdict.** The shared helper described above. Failure feedback is the
+rendered expected/actual diff, or the run failure text when the case died
+rather than returned.
 
-**Budget.** Per-case limits forward to each `run()`. `maxCost` wraps the
-whole case loop in `guard(cost:)` — the same pattern `run()` itself uses — so
-N cases cannot multiply the budget by N. The guard tripping is a whole-call
+**Budget.** Per-case limits forward to each `run()` (a case's own
+`wallClock` overrides the call-wide value). `maxCost` wraps the whole case
+loop in `guard(cost:)` — the same pattern `run()` itself uses — so N cases
+cannot multiply the budget by N. The guard tripping is a whole-call
 `failure` in the same `limit_exceeded` shape as `run()`'s other limits.
 
 ## Eval framework: the AgencyTestGrader
@@ -306,33 +400,67 @@ N cases cannot multiply the budget by N. The guard tripping is a whole-call
 
 - `files/*.test.json` (+ harness `.agency` beside each) — **visible tests**.
   Seeded into the agent's workdir like everything in `files/`, so the agent
-  self-checks with the exact same `agency test fib-tests.test.json` it will
-  be graded by. Graded too.
+  self-checks with `agency test fib-tests.test.json`. Graded too.
 - `holdout/*.test.json` (+ harness beside each) — **held-out tests**. Same
   format, same mechanics, never seeded; the agent never sees them. This is
   the generalization check: a solution written to the visible tests fails
   here, and the reward-hacking failure mode the optimizer work surfaced
   (agents writing to the visible test) becomes a visible score split.
 
-Each `.test.json` in either set becomes one framework-attached grader and
-one score row, named by basename (`fib-tests`, `fib-holdout`). A basename
-collision between the two sets is refused at `eval run` preflight, naming
+Each `.test.json` in either set becomes one grader and one score row, named
+by basename (`fib-tests`, `fib-holdout`). Basenames must be unique across
+the union of both directories (uniqueness within one directory comes free
+from the filesystem); a collision is refused at `eval run` preflight, naming
 both files. `fib-tests` passing while `fib-holdout` fails is the overfitting
-signature, visible in `runs list` and usable by optimizers. Both sets carry
-`mustPass: true` — the split is about information, not leniency.
+signature, visible in `runs list` and usable by optimizers.
 
-Auto-discovered graders count as the *test's own* graders in the existing
-precedence chain (flag > snapshot > test's own > config > goal judge), so an
-explicit `--graders` still overrides, and they coexist with a test's `goal`
-the way any test-owned graders do.
+**Preflight also refuses `approve` scripted answers in eval test files.**
+The eval wrapper rejects every tested-code effect, and any reject wins, so a
+scripted approval can never take effect during grading — a file that passed
+under `agency test` on the strength of an approval would silently fail under
+grading. Refusing at preflight ("eval grading rejects all effects; this
+scripted approval cannot take effect — remove it or restructure the test")
+keeps the visible test file honestly identical under self-check and grading.
+Scripted `reject` answers are fine: the wrapper rejects anyway, so the
+semantics agree.
 
-### Snapshot story (unchanged in kind)
+### Ownership: discovery synthesizes a grading module
 
-Harness `.agency` + `.test.json` pairs are the grader's `externalFiles()`,
-so `eval run` stores them in `<runDir>/graders/` by content hash and grading
-a copied run directory uses the stored copies — the existing mechanism.
-Every harness JSON is validated at `eval run` preflight (parse, supported
-fields), matching the "broken graders fail before any agent runs" rule.
+v1 hand-waved this as "the existing snapshot mechanism, unchanged in kind".
+Concretely, a `Test` owns at most one `graders` module path, and
+`snapshotGradingModule` bundles exactly one module and records one bundle
+identity on the run row. Discovery therefore **synthesizes a grading
+module** per eval test at `eval run` time and feeds it through that existing
+single-module path unmodified:
+
+- The framework writes a small TS module (to the run's staging area) that
+  imports `AgencyTestGrader` from `agency-lang/eval` and default-exports one
+  instance per discovered `.test.json`, each constructed with the pair's
+  declared paths and `{ name: <basename>, mustPass: true, threshold: 1 }`.
+- **Composition with a sibling `graders.ts`:** the synthesized module
+  re-exports the sibling module's default list (when present) and appends
+  the discovered graders. The test's `graders` path on the run row points at
+  the synthesized module; the sibling module travels into the bundle like
+  any other import. Explicit `--graders` still overrides everything, and
+  the `eval.graders` config fallback stays irrelevant when discovery found
+  anything (discovery output is the test's own graders).
+- **Snapshot and revision:** the synthesized module goes through
+  `snapshotGradingModule` exactly like a hand-written one — bundled with
+  esbuild, harness pairs collected via `externalFiles()`, stored by content
+  hash, run row records `graders: { source, bundleFile, judgeFiles,
+  origin: "test" }`. The annotator revision is `<source>@<sha256 of the
+  bundle>` as today; since the synthesized source is deterministic (sorted
+  discovery, fixed template), an unchanged test dir yields an unchanged
+  revision, and editing any harness changes it. Per-grader lineage is the
+  basename via the grader `name`, so re-grades supersede correctly.
+- `threshold: 1` is load-bearing: `BaseGrader.passes` is
+  `value >= (threshold ?? 0)`, so a fractional score with bare
+  `mustPass: true` would gate nothing — even 0 passes a 0 threshold. The
+  eval tests pin both behaviors: partial credit in the objective, all-cases
+  gate via `mustPass` + `threshold: 1`.
+
+Every discovered harness JSON is validated (sandbox profile) at `eval run`
+preflight, matching the "broken graders fail before any agent runs" rule.
 Consequence worth knowing: holdout files travel inside run directories, so
 the secrecy boundary is "during the agent's run", not forever; a suite
 author republishing run directories publicly ships the holdouts with them.
@@ -341,25 +469,34 @@ author republishing run directories publicly ships the holdouts with them.
 
 1. Make a scratch directory under `process.cwd()` (compiled Agency resolves
    `agency-lang` from the directory it runs in — never `os.tmpdir()`).
-2. Copy the run's **workdir wholesale** — with open imports the solution may
-   be several files and only the agent knows which — then overwrite the
-   harness `.agency` and `.test.json` with fresh copies from the graders
-   snapshot. That is the whole tamper defense: everything the agent wrote is
-   testable input; everything that judges comes from the snapshot.
+2. Copy the run's **workdir wholesale** — with multi-file solutions only the
+   agent knows which files matter — then overwrite the harness `.agency` and
+   `.test.json` with fresh copies from the graders snapshot. That is the
+   whole tamper defense: everything the agent wrote is testable input;
+   everything that judges comes from the snapshot. (Import confinement to
+   the scratch dir's realpath means a symlink the agent planted cannot pull
+   in files from outside it, either.)
 3. Spawn the framework-owned Agency **wrapper** via `agency run`
    (`process.execPath` + `process.argv[1]`; grading always runs inside the
-   agency CLI). The wrapper takes the scratch dir and the JSON filename,
-   calls `testFile()` inside a reject-all handler — approve `std::run` and
-   the two known `std::read`s, reject every other effect with a message
-   naming it — and prints the `TestReport` as JSON on stdout. The wrapper is
-   the only sandbox-policy owner; it ships with the framework, never with
-   suites. The stdlib `test()`/`testFile()` machinery does all test-shaped
-   work; `agency test` (the CLI runner) is not involved in grading.
-4. Score = **fraction of cases passed** (richer signal for optimizers than
-   binary), `mustPass: true`. Feedback = the failing cases' feedback lines;
-   a `failure` from `testFile` (e.g. compile error) is score 0 with the
-   error verbatim; wrapper crash/timeout/unparseable stdout is score 0 with
-   the output tail. No workdir on the run → score 0, "run left no workdir".
+   agency CLI). The wrapper takes the scratch dir, the JSON filename, and a
+   framework-chosen **report path outside the scratch dir**. It calls
+   `testFile()` inside a reject-all handler — approve `std::run` and the two
+   known `std::read`s, reject every other effect with a message naming it —
+   then writes the `TestReport` as JSON to the report path with its own
+   approved write. The wrapper is the only sandbox-policy owner; it ships
+   with the framework, never with suites.
+4. The TypeScript grader reads the report file. **Stdout is diagnostics
+   only**: `_run` pipes the tested subprocess's stdout through to the
+   parent, so tested code can print anything — including a forged report —
+   and stdout can never be the data channel. Tested code cannot write the
+   report file because its every `std::write` is rejected; the wrapper's own
+   write happens outside the `handle` block, after the tests.
+5. Score = **fraction of cases passed**, `mustPass: true, threshold: 1`.
+   Feedback = the failing cases' feedback lines; a `failure` from
+   `testFile` (e.g. compile error) is score 0 with the error verbatim;
+   wrapper crash, timeout, or a missing/unparseable report file is score 0
+   with the stdout tail as diagnostics. No workdir on the run → score 0,
+   "run left no workdir".
 
 The spawn exists for one reason: the veto chain is made of Agency handlers,
 and the grading process is TypeScript. One thin Agency parent holds the
@@ -380,16 +517,20 @@ what stops agent-written code — or a hostile test suite — from deleting my
 home directory?" The chain:
 
 1. The tested code can only produce effects through interrupts (closure
-   validator: nothing in the compile closure escapes to TS/node).
-2. Every interrupt from the subprocess is voted on by the wrapper's
+   validator: nothing in the compile closure escapes to TS/node, and splices
+   are refused before anything expands).
+2. Compile-time file access is confined: every local file in the closure
+   must realpath-resolve inside the scratch directory, so compilation cannot
+   even read outside it (the one read class interrupts cannot see).
+3. Every interrupt from the subprocess is voted on by the wrapper's
    reject-all handler, and any reject wins — including over the code's own
-   `with approve` and over scripted answers in a hostile `.test.json`
-   (one-vote rule).
-3. The wrapper is framework code the user already trusts by running the CLI;
+   `with approve` (scripted approvals never reach grading; preflight refused
+   them).
+4. The wrapper is framework code the user already trusts by running the CLI;
    suites cannot substitute it (the harness and solution both run *inside*
    the sandbox the wrapper polices).
-4. The only approvals in the chain are the sandbox launch itself and the two
-   known harness-file reads.
+5. The only approvals in the chain are the sandbox launch itself, the two
+   known harness-file reads, and the wrapper's own report write.
 
 ## Testing
 
@@ -402,34 +543,53 @@ home directory?" The chain:
 - scripted answers: approve with value; reject; `expectedMessage` mismatch;
   leftover answers fail the case; exhausted answers propagate to an outer
   handler
-- a two-file solution with a local import
-- closure-validator refusals: a TS import, a node builtin, a splice
-- per-case timeout → case-level `limit_exceeded` feedback
-- `testFile`: JSON mapping, `sourceFile` defaulting, one refusal test per
-  unsupported field, empty `tests`, unparseable `expectedOutput`
+- a two-file solution with a local import; an import escaping the dir
+  (via `..` and via a symlink) refused with the confinement error
+- closure-validator refusals: a TS import, a node builtin
+- **splice ordering**: the side-effect fixture described above — refusal
+  AND no sentinel file
+- per-case timeout (case-level `wallClock` override) → case-level
+  `limit_exceeded` feedback
+- `testFile`: JSON mapping incl. `defaultTimeoutMs`; `sourceFile`
+  defaulting; the `input` algorithm (multi-arg positional bind, non-literal
+  refused, arity mismatch refused, all up front); one refusal test per
+  unsupported field/action; empty `tests`; unparseable `expectedOutput`;
+  empty/unknown `evaluationCriteria`
 
-**TS unit tests (vitest):** closure validator (its own file, one concept),
-shared verdict/diff helper, JSON schema parser.
+**TS unit tests (vitest):** closure validator (its own file, one concept);
+the shared parser, both profiles; the shared verdict/diff helper including
+the full profile's raw-string fallback.
 
-**Eval framework (vitest):** grader auto-discovery (`files/` + `holdout/`),
-holdout not seeded (a seeding test on `runAgent`), basename-collision
-refusal at preflight, tamper defense (agent-edited harness overwritten from
-snapshot), fraction scoring + `mustPass`, snapshot rebind (grade a copied
-run directory).
+**CLI migration tests:** the existing `agency test` suite keeps passing on
+the shared parser/verdict (the fixture audit above); a regression test that
+an empty `evaluationCriteria` array now errors instead of passing.
+
+**Eval framework (vitest):** grader auto-discovery and module synthesis
+(deterministic output, stable revision); composition with a sibling
+`graders.ts`; holdout not seeded (a seeding test on `runAgent`);
+basename-collision refusal and approve-answer refusal at preflight; tamper
+defense (agent-edited harness overwritten from snapshot); fraction score
+with the `threshold: 1` gate pinned; snapshot rebind (grade a copied run
+directory); report-file transport (a tested case that prints a forged
+report to stdout does not affect the score).
 
 **End to end:** the fib migration above, exercised by CI's eval coverage.
 
 ## Documentation
 
 - New `docs/dev/std-agency-test.md`: the contract, the closure-validator
-  invariant, the one-vote scripted-answer rule, wrapper/tamper-defense
-  mechanics, holdout, and the CLI-runner convergence stance (shared schema +
-  verdict; execution deliberately split by trust posture).
+  invariant and confinement rule, splice-before-expansion ordering, the
+  one-vote scripted-answer rule, wrapper/report-file/tamper-defense
+  mechanics, holdout, grader-module synthesis, and the CLI-runner
+  convergence (shared parser + verdict now; execution split by trust
+  posture).
 - Update `docs/dev/eval-grading.md`'s coding-test section: the suite-local
   pattern is now framework surface.
 - CLAUDE.md pointers for both. Site docs (`docs/site/**`) stay owner-side.
 
-## Decisions log (from the brainstorm)
+## Decisions log
+
+From the brainstorm:
 
 - v1 scope: minimal, evals-first; sandbox-safe subset of the test format.
 - Input shape: typed core + JSON file wrapper; no separate Agency config
@@ -437,10 +597,33 @@ run directory).
 - Scripted answers are one vote; parents can veto (same story as `run()`).
 - Eval integration: framework-owned grader, convention-based discovery.
 - Sandbox stance: reject-all, no escape hatch in v1.
-- Imports: opened module-wide to anything whose closure is pure Agency +
-  `std::`; the closure validator owns the invariant; no confinement or
-  policy knobs. Chosen explicitly to minimize current and future machinery.
 - One eval test directory = one agent run; multiple `.test.json` files =
   multiple named grader scores, never multiple eval directories.
 - Held-out tests live in `holdout/` (the name carries the rule; `tests/` is
   overloaded and doesn't distinguish the sets).
+
+Changed in v2 (per review):
+
+- Import policy: dir-confined local imports (realpath, symlinks resolved)
+  replace unconfined relative/absolute paths. `pkg::` stays allowed with a
+  validated closure and a documented hermeticity caveat. This walks back
+  part of the "open it all the way up" brainstorm decision: the review
+  showed the unconfined version made compile-time reads the wrapper can
+  neither veto nor observe, and broke the hermetic-grading claim.
+- Splice refusal ordered before expansion via a dedicated untrusted compile
+  entry point; side-effect test pinned.
+- Per-case `wallClock` on `TestCase`; `defaultTimeoutMs` mapped.
+- `{ mustPass: true, threshold: 1 }` on every discovered grader.
+- CLI migrates to the shared parser + verdict in this change; strict
+  `evaluationCriteria`; documented raw-string fallback in the full profile.
+- `input` conversion algorithm defined (language parser, literals only,
+  positional bind, up-front validation); complete field ledger including
+  `resolve` and `modifiedArgs`.
+- Grader discovery synthesizes a deterministic grading module through the
+  existing single-module snapshot path; composition and revision identity
+  specified.
+- Wrapper reports through a framework-chosen file; stdout is diagnostics
+  only (tested code shares the stdout pipe and could forge it).
+- Eval preflight refuses `approve` scripted answers (the wrapper's rejects
+  would silently defeat them; refusing keeps self-check and grading
+  honest).

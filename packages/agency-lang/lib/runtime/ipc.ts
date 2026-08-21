@@ -9,7 +9,7 @@ import { dirname } from "path";
 import { fileURLToPath } from "url";
 import { fork } from "child_process";
 import type { ForkOptions } from "child_process";
-import { rmSync, writeFileSync, mkdirSync } from "fs";
+import { rmSync, writeFileSync, mkdirSync, symlinkSync } from "fs";
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config.js";
 import { getRuntimeContext, agencyStore } from "./asyncContext.js";
@@ -685,7 +685,12 @@ export function buildForkOptions(args: { limits: RunLimits; cwd?: string }): For
  * Node resolves agency-lang package imports via the project's node_modules)
  * and return the script path. Called at every fork — initial run and resume
  * alike — and paired with cleanupTempDir when the session settles. */
-export function materializeCompiledScript(compiled: { moduleId: string; code: string }): string {
+export function materializeCompiledScript(compiled: {
+  moduleId: string;
+  code: string;
+  modules?: Record<string, string>;
+  pkgAnchors?: { packageName: string; packageRoot: string }[];
+}): string {
   // The user-facing CompiledProgram type only declares moduleId, so a
   // hand-built `{ moduleId: "x" }` (or an old `{ moduleId, path }` value
   // persisted before code-in-value) typechecks and reaches here. Fail with
@@ -700,6 +705,29 @@ export function materializeCompiledScript(compiled: { moduleId: string; code: st
   mkdirSync(tempDir, { recursive: true });
   const scriptPath = path.join(tempDir, `${compiled.moduleId}.js`);
   writeFileSync(scriptPath, compiled.code, "utf-8");
+  // Multi-file programs carry every non-entry module's JS, keyed by the
+  // relative path the entry's rewritten imports use. Keys were derived
+  // from validated relPaths, but re-check containment before writing.
+  for (const [rel, code] of Object.entries(compiled.modules ?? {})) {
+    const target = path.resolve(tempDir, rel);
+    if (!target.startsWith(tempDir + path.sep)) {
+      throw new Error(`CompiledProgram module '${rel}' escapes its script directory`);
+    }
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, code, "utf-8");
+  }
+  // Sandbox-compiled pkg:: imports emit bare specifiers; link each
+  // validated package root under the script's own node_modules so Node
+  // resolves them even when the package lives only under the sandbox dir.
+  // Containment is re-checked because compiled values can be hand-built.
+  for (const anchor of compiled.pkgAnchors ?? []) {
+    const link = path.resolve(tempDir, "node_modules", ...anchor.packageName.split("/"));
+    if (!link.startsWith(path.join(tempDir, "node_modules") + path.sep)) {
+      throw new Error(`CompiledProgram package '${anchor.packageName}' escapes node_modules`);
+    }
+    mkdirSync(dirname(link), { recursive: true });
+    symlinkSync(anchor.packageRoot, link);
+  }
   return scriptPath;
 }
 
@@ -1331,7 +1359,7 @@ async function invokeSubprocess(args: {
   stateStack: any;
   parentStore?: any;
   parentFrame: State;
-  compiled: { moduleId: string; code: string };
+  compiled: { moduleId: string; code: string; modules?: Record<string, string> };
   node: string;
   nodeArgs: Record<string, any>;
   limits: RunLimits;

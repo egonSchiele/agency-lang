@@ -132,7 +132,7 @@ describe("_compileFile sandbox containment", () => {
       "utf-8",
     );
     expect(() => _compileFile(sandbox, "imports-fs.agency")).toThrowError(
-      /Import 'fs' is not allowed/,
+      /imports 'fs', which is not Agency source/,
     );
   });
 });

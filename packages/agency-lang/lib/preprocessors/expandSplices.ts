@@ -99,7 +99,7 @@ const ORIGIN_UNKNOWN = { line: 0, col: 0, start: 0, end: 0 };
  * leaves a splice inside `[| ... |]` alone. That body belongs to the
  * program being generated, so its splices are that program's business.
  */
-function splicesIn(program: AgencyProgram): Splice[] {
+export function splicesIn(program: AgencyProgram): Splice[] {
   return [...walkNodesArray(program.nodes)]
     .map((visit) => visit.node)
     .filter((node): node is Splice => node.type === "splice");

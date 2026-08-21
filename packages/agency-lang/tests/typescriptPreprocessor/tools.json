@@ -13,6 +13,12 @@
         }
       ],
       "modulePath": "std::http",
+      "modulePathLoc": {
+        "line": 0,
+        "col": 23,
+        "start": 23,
+        "end": 32
+      },
       "isAgencyImport": true,
       "loc": {
         "line": 0,

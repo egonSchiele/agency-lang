@@ -28,6 +28,17 @@ type CompileSuccess = {
   success: true;
   code: string;
   moduleId: string;
+  /** Multi-file compiles only (compileValidatedClosure): compiled JS for
+   *  every non-entry module in the closure, keyed by the POSIX relative
+   *  path its import rewrites point at ("helper.js"). The runtime
+   *  materializes these beside the entry script. */
+  modules?: Record<string, string>;
+  /** Sandboxed compiles with pkg:: imports: the validated real root of
+   *  each caller-level package. The runtime links these under the
+   *  materialized script's node_modules so the emitted bare specifiers
+   *  resolve even when the package is installed only under the sandbox
+   *  dir, not the host project. */
+  pkgAnchors?: { packageName: string; packageRoot: string }[];
 };
 
 type CompileFailure = {

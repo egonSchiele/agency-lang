@@ -1,9 +1,12 @@
 import type { ListTrivia } from "./dataStructures.js";
-import { BaseNode } from "./base.js";
+import { BaseNode, SourceLocation } from "./base.js";
 
 export type ExportFromStatement = BaseNode & {
   type: "exportFromStatement";
   modulePath: string;
+  /** Location of the module-path characters (quotes excluded). Set by the
+   *  parser; absent on generated nodes. Stripped by toEqualWithoutLoc. */
+  modulePathLoc?: SourceLocation;
   isAgencyImport: boolean;
   body: NamedExportBody | StarExportBody;
 };

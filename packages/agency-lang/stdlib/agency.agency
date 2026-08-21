@@ -97,13 +97,14 @@ export type TypeCheckReport = {
   warnings: TypeCheckDiagnostic[]
 }
 
-export idempotent def compile(source: string): Result {
+export idempotent def compile(source: string, dir: string = ""): Result {
   """
-  Compile Agency source code. Returns a CompiledProgram on success, or a failure with compilation errors. Only standard library (`std::`) imports are allowed in the compiled code.
+  Compile Agency source code. Returns a CompiledProgram on success, or a failure with compilation errors. Imports may name standard library (`std::`) modules, `.agency` files inside `dir`, and `pkg::` packages whose own code is pure Agency. TypeScript/JavaScript files, Node modules, and compile-time splices are refused anywhere in the import closure.
 
   @param source - Agency source code as a string
+  @param dir - Directory relative imports resolve against, and the boundary they are confined to. Empty (the default) means local imports cannot resolve.
   """
-  return try _compile(source)
+  return try _compile(source, dir)
 }
 
 /** Runs agent-generated Agency code in a child process.
@@ -230,9 +231,11 @@ export def runFile(
 ): Result {
   """
   Compile and execute an Agency file in a subprocess and return the node's result.
-  Only standard-library (`std::`) imports are allowed in the file.
+  Imports may name standard library (`std::`) modules, `.agency` files inside `dir`,
+  and `pkg::` packages whose own code is pure Agency; TypeScript/JavaScript files,
+  Node modules, and compile-time splices are refused anywhere in the import closure.
 
-  @param dir - The directory containing the file
+  @param dir - The directory containing the file; also the boundary its local imports are confined to
   @param filename - The agency file to compile and run
   @param node - Which node to run
   @param args - Arguments to pass to the node
@@ -327,13 +330,17 @@ export def runCode(
   stdout: number = 1mb,
   maxCost: number | null = null,
   cwd: string = "",
+  dir: string = "",
 ): Result {
   """
   Compile Agency source code and execute one of its nodes in a subprocess,
   returning the value the node returned. Prefer this over separate
-  compile() and run() calls. Only standard-library (`std::`) imports are
-  allowed in the source. Compile errors are returned as a failure without
-  running anything; fix the source and call again.
+  compile() and run() calls. Imports may name standard library (`std::`)
+  modules, `.agency` files inside `dir`, and `pkg::` packages whose own code
+  is pure Agency; TypeScript/JavaScript files, Node modules, and
+  compile-time splices are refused anywhere in the import closure. Compile
+  errors are returned as a failure without running anything; fix the source
+  and call again.
 
   @param source - Agency source code as a string
   @param node - Which exported node to run (default "main")
@@ -343,13 +350,14 @@ export def runCode(
   @param ipcPayload - Max single IPC message size in BYTES (default 104857600 = 100mb, max 1073741824 = 1gb). Pass null for the default.
   @param stdout - Max combined stdout+stderr output in BYTES (default 1048576 = 1mb, max 104857600 = 100mb). Pass null for the default.
   @param maxCost - Max subprocess LLM spend in dollars (e.g. 0.50). null = no cost limit.
-  @param cwd - Working directory for the subprocess. Empty inherits the caller's process cwd (which may be the package dir, not where you want files); pass the agent working directory so the generated program's file writes land there.
+  @param cwd - Working directory for the subprocess AT RUN TIME. Empty inherits the caller's process cwd (which may be the package dir, not where you want files); pass the agent working directory so the generated program's file writes land there. Independent of dir.
+  @param dir - Directory relative imports resolve against AT COMPILE TIME, and the boundary they are confined to. Empty (the default) means local imports cannot resolve. Independent of cwd.
   """
   const limitError = checkRunCodeLimits(wallClock, memory, ipcPayload, stdout)
   if (limitError != "") {
     return failure(limitError)
   }
-  const compileResult = try _compile(source)
+  const compileResult = try _compile(source, dir)
   if (compileResult is failure(compileErr)) {
     return compileResult
   }

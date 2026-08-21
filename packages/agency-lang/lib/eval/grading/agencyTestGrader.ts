@@ -18,7 +18,7 @@ import * as path from "path";
 import { BaseGrader } from "./baseGrader.js";
 import type { Grade, GraderInput } from "./types.js";
 import { parseReportEnvelope } from "./reportEnvelope.js";
-import { getAgentsDir } from "../../importPaths.js";
+import { getAgentsDir, getPackageRoot } from "../../importPaths.js";
 import { safeDeleteDirectoryWithin } from "../../utils.js";
 
 const WRAPPER_TIMEOUT_MS = 10 * 60 * 1000;
@@ -48,9 +48,18 @@ export function wrapperPath(): string {
   return path.join(getAgentsDir(), "eval", "agencyTestWrapper.agency");
 }
 
+/** The agency CLI entry. Inside `agency eval grade` it IS argv[1]; under
+ *  a test runner (vitest) argv[1] is the runner, so fall back to the
+ *  package's own CLI script. */
+function agencyCliPath(): string {
+  const argv1 = process.argv[1] ?? "";
+  if (path.basename(argv1) === "agency.js") return argv1;
+  return path.join(getPackageRoot(), "dist", "scripts", "agency.js");
+}
+
 const spawnWrapper: RunWrapper = (args) => {
   const argv = [
-    process.argv[1],
+    agencyCliPath(),
     "run",
     wrapperPath(),
     args.scratchDir,

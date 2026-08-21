@@ -180,7 +180,7 @@ describe("AgencyTestGrader through the real wrapper", () => {
     fs.writeFileSync(path.join(controlDir, "canary.txt"), "CANARY");
     fs.writeFileSync(
       path.join(controlDir, "probe.agency"),
-      'import { runFile } from "std::agency"\n\nnode main(): string {\n  handle {\n    const r = runFile(dir: ".", filename: "fib.agency", node: "probeNode")\n    if (r is success(env)) {\n      return env.data\n    }\n    return "control failed"\n  } with approve\n  return "x"\n}\n',
+      'import { runFile } from "std::agency"\n\nnode main(): string {\n  handle {\n    const r = runFile(dir: ".", filename: "fib.agency", node: "probeNode")\n    if (r is success(env)) {\n      print("GOT:" + env.data)\n      return env.data\n    }\n    print("control failed")\n    return "control failed"\n  } with approve\n  return "x"\n}\n',
     );
     // runFile needs an exported node; append one calling peek.
     fs.appendFileSync(
@@ -192,7 +192,7 @@ describe("AgencyTestGrader through the real wrapper", () => {
       stdio: "pipe",
       timeout: SPAWN_TIMEOUT_MS,
     }).toString();
-    expect(controlOut).toContain("CANARY");
+    expect(controlOut).toContain("GOT:CANARY");
 
     const pair = writePair({
       agency: 'import { peek } from "./fib.agency"\n\nexport node peeks(): string {\n  return peek()\n}\n',

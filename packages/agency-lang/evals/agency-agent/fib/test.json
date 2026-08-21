@@ -1,5 +1,8 @@
 {
-  "description": "Basic coding: write a Fibonacci function in Agency. Graded by the shipped agency-test harness, which compiles the solution with std::agency (stdlib-only imports) and runs it in a sandboxed subprocess with every effect rejected.",
-  "tags": ["coding", "easy"],
-  "input": "Write an Agency function that returns the nth Fibonacci number (fib(0) = 0, fib(1) = 1) and save it to a file named fib.agency in the current directory. The file must contain: export def fib(n: number): number. Use only Agency standard library (std::) imports, or no imports at all. Your working directory contains a test harness; you can check your solution by running: agency test fib-harness.test.json"
+  "description": "Basic coding: write a Fibonacci function in Agency. Graded by the framework agency-test grader, which runs the sibling test harnesses through the std::agency sandbox with every effect rejected; holdout/ carries tests the agent never sees.",
+  "tags": [
+    "coding",
+    "easy"
+  ],
+  "input": "Write an Agency function that returns the nth Fibonacci number (fib(0) = 0, fib(1) = 1) and save it to a file named fib.agency in the current directory. The file must contain: export def fib(n: number): number. Use only Agency standard library (std::) imports, or no imports at all. Your working directory contains a test harness; you can check your solution by running: agency test fib-tests.test.json"
 }

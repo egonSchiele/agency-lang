@@ -220,13 +220,16 @@ Three rules that are easy to get wrong:
 - **The scratch dir goes under `process.cwd()`, not `os.tmpdir()`** —
   compiled Agency resolves `agency-lang` from the directory it runs in.
 
-Integration status: this is deliberately a suite-local pattern, not framework
-surface. The framework already carries everything it needs (`workdir` on the
-grader input, the `externalFiles` snapshot, `GraderInput` exported from
-`agency-lang/eval`). When a second coding test wants the same grader, promote
-the pattern to a framework-owned `AgencyTestGrader` (constructor takes the
-harness files and the workdir files to copy; the framework owns the
-scratch-dir, spawn, and feedback mechanics) rather than copy-pasting it.
+Integration status: PROMOTED to framework surface. A coding test now ships
+only harness pairs — `files/*.test.json` (+ sibling `.agency`; seeded, so
+the agent self-checks with the same file) and `holdout/*.test.json` (never
+seeded) — and the framework attaches one `AgencyTestGrader` per pair, run
+through the shipped reject-all wrapper and std::agency's `testFile()`. See
+`docs/dev/std-agency-test.md` for the whole mechanism (discovery,
+synthesized grading module, persisted revision, wrapper policy, envelope).
+`evals/agency-agent/fib/` is the reference shape; the hand-written
+`graders.ts` + sandbox-harness pattern this section used to describe is
+gone.
 
 ## What is gone
 

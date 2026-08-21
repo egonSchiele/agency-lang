@@ -16,6 +16,7 @@ import { recordedClosureHashes } from "@/runDirectory/attachCode.js";
 import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";
 import { recordCompletedRun } from "@/runDirectory/mutations.js";
 import { snapshotGradingModule, type GradersSnapshot } from "@/eval/grading/gradingModule.js";
+import { snapshotAgencyTestGraders } from "@/eval/grading/synthesizeGradersModule.js";
 import { readTraces } from "@/runDirectory/traces.js";
 import { safeDeleteDirectoryWithin } from "@/utils.js";
 
@@ -93,6 +94,7 @@ export async function runSuite(
   const gradersByTest: Record<string, TestGraders | undefined> = await snapshotGraders(
     opts.inputs,
     config,
+    opts.suite,
   );
 
   // One closure walk per suite; never per test. Command targets have no
@@ -253,10 +255,19 @@ type TestGraders = GradersSnapshot & { origin: "test" | "config" };
 async function snapshotGraders(
   tests: Test[],
   config: AgencyConfig,
+  suite: SuiteIdentity | undefined,
 ): Promise<Record<string, TestGraders | undefined>> {
   const byModule: Record<string, Promise<GradersSnapshot>> = Object.create(null);
   const byTest: Record<string, TestGraders | undefined> = Object.create(null);
   for (const test of tests) {
+    if (test.agencyTests !== undefined && test.agencyTests.length > 0 && test.id !== undefined) {
+      // Discovered agency tests: synthesize one module (sibling graders.ts
+      // composed in) with a stable revision. Preflight refusals inside —
+      // malformed json, approve answers, non-sibling sourceFile — happen
+      // here, before any agent runs.
+      byTest[test.id] = { ...(await snapshotAgencyTestGraders({ test, suite })), origin: "test" };
+      continue;
+    }
     const modulePath = test.graders ?? config.eval?.graders;
     if (modulePath === undefined || test.id === undefined) continue;
     byModule[modulePath] ??= snapshotGradingModule(modulePath);
@@ -320,6 +331,9 @@ function foldIntoRunDirectory(args: {
                 bundleFile: args.graders.bundleFile,
                 judgeFiles: args.graders.judgeFiles,
                 origin: args.graders.origin,
+                ...(args.graders.revision === undefined
+                  ? {}
+                  : { revision: args.graders.revision }),
               },
             }),
         ended: endedFrom(run),

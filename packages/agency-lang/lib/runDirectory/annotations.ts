@@ -66,6 +66,10 @@ export type GradersIdentity = {
    *  fallback. Grading needs the distinction: `--goal` sets configured
    *  modules aside but never a test's own. */
   origin: "test" | "config";
+  /** Synthesized agency-test modules: the stable logical identity + the
+   *  hash covering bundle AND harness files. Optional so pre-revision
+   *  directories stay readable. */
+  revision?: { sourceIdentity: string; sha256: string };
 };
 export type RunOutcome = "ok" | "error" | "timeout" | "cost-cap" | "killed";
 
@@ -175,6 +179,10 @@ const RunAnnotationSchema = z
         bundleFile: z.string().min(1),
         judgeFiles: z.record(z.string(), z.string()),
         origin: z.enum(["test", "config"]),
+        revision: z
+          .object({ sourceIdentity: z.string(), sha256: z.string() })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),

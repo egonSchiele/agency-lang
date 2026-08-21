@@ -305,4 +305,25 @@ describe("snapshotAgencyTestGraders", () => {
       );
     },
   );
+
+  test(
+    "preflight clearly refuses external files from a sibling grader",
+    { timeout: 60_000 },
+    async () => {
+      const suiteDir = makeEvalTestDir({
+        gradersTs: `
+          export default {
+            run: async () => 1,
+            name: () => "sibling-check",
+            mustPass: () => false,
+            externalFiles: () => ["judge.txt"],
+          };
+        `,
+      });
+      fs.writeFileSync(path.join(suiteDir, "mytest", "judge.txt"), "judge prompt");
+      await expect(
+        snapshotAgencyTestGraders({ test: loaded(suiteDir), suite: undefined }),
+      ).rejects.toThrow(/combined with Agency test graders cannot use externalFiles/);
+    },
+  );
 });

@@ -56,6 +56,15 @@ export function synthesizeGradersModule(
     // importBundle normalizes single-vs-array only at LOAD time; this
     // spread runs before that, so normalize here.
     lines.push("const siblingList = Array.isArray(sibling) ? sibling : [sibling];");
+    lines.push("for (const grader of siblingList) {");
+    lines.push("  if ((grader.externalFiles?.() ?? []).length > 0) {");
+    lines.push(
+      `    throw new Error(${JSON.stringify(
+        `${args.siblingGradersPath}: custom graders combined with Agency test graders cannot use externalFiles() yet`,
+      )});`,
+    );
+    lines.push("  }");
+    lines.push("}");
   }
   lines.push("export default [");
   if (args.siblingGradersPath !== undefined) {
@@ -111,8 +120,8 @@ export async function snapshotAgencyTestGraders(args: {
     fs.writeFileSync(modulePath, moduleSource, "utf-8");
     const snapshot = await snapshotGradingModule(modulePath);
     const sourceIdentity = agencyTestsSourceIdentity(args.suite, testId);
-    // The sibling is hashed as its BUNDLE, from its own stable path (never
-    // the staging dir), so an edit anywhere in its transitive import
+    // The sibling is hashed as its BUNDLE from its source path (never the
+    // staging dir), so an edit anywhere in its transitive import
     // closure — not just the entry file — changes the revision.
     const siblingSha256 =
       args.test.graders === undefined

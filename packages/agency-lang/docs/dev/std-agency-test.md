@@ -118,8 +118,8 @@ single-or-array), and feeds it through `snapshotGradingModule`. The
 snapshot carries an explicit `revision: { sourceIdentity, sha256 }` —
 `agency-tests:<suite digest>/<test id>`, hashing the module's LOGICAL
 inputs: each harness pair's name bound to its two content hashes, plus a
-hash of the sibling graders module's BUNDLE built from its own stable
-path — the bundle covers the sibling's transitive imports, so editing a
+hash of the sibling graders module's BUNDLE built from its source path.
+The bundle covers the sibling's transitive imports, so editing a
 helper it imports changes the revision. The synthesized module's own
 bundle bytes are excluded (they embed the per-run staging path, so
 hashing them minted a fresh revision every run), and binding names to
@@ -129,6 +129,17 @@ revision even though the content multiset does not. The generic identity
 ignoring harness edits.
 `loadGradingSnapshot` assigns the recorded revision; its absence keeps the
 legacy code-only identity, so old run directories stay readable.
+
+This composition has two deliberate limits. A sibling `graders.ts` cannot
+declare `externalFiles()`. Preflight rejects such a grader with a direct
+error instead of resolving its relative files from the generated module's
+temporary directory. Also, the sibling bundle hash can include paths emitted
+by esbuild. Two unchanged copies in different checkout directories may
+therefore receive different revisions. Neither limit changes grading within
+one checkout. Supporting external files and checkout-independent revisions
+requires one design because the revision must cover every file that can
+change grading behavior. The follow-up design is
+`docs/superpowers/specs/2026-08-21-combined-grader-external-files-design.md`.
 
 `AgencyTestGrader` (`lib/eval/grading/agencyTestGrader.ts`) copies the
 run's workdir wholesale into a scratch dir (symlinks copied AS symlinks,

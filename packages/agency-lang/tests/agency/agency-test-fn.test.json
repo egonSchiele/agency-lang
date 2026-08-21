@@ -1,0 +1,23 @@
+{
+  "defaultTimeoutMs": 90000,
+  "tests": [
+    { "nodeName": "emptyCasesPass", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "passAndFailInOneBatch", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "writeSucceedsUnderPermissiveParent", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "parentVetoBeatsScriptedApprove", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "parentRejectsLaunch", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "scriptedApproveValueRoundTrips", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "scriptedRejectFailsCaseAndBatchContinues", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "expectedMessageMismatchFails", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "leftoverAnswersFail", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "exhaustedAnswersPropagate", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "nestedLaunchIsNotAutoApproved", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "perCaseTimeoutThenNextCaseRuns", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "unknownNodeFailsOnlyItsCase", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "compileFailureIsWholeCallFailure", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "defaultsWorkThroughTest", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "compilesOnceForTheWholeBatch", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "limitsReachTheLaunchPayload", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "maxCostTripsWholeCall", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }], "useTestLLMProvider": true, "llmMocks": [{ "return": "hi" }] }
+  ]
+}

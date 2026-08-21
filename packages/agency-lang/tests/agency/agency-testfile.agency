@@ -1,0 +1,243 @@
+// std::agency testFile(): gates before reads, whole-file conversion up front.
+import { testFile } from "std::agency"
+import { mkdir } from "std::fs"
+
+const SOLUTION = """
+export def add(a: number, b: number): number {
+  return a + b
+}
+"""
+
+const HARNESS = """
+import { add } from "./solution.agency"
+
+export node sum(a: number, b: number = 1): number {
+  return add(a, b)
+}
+"""
+
+const GOOD_JSON = """
+{
+  "sourceFile": "harness.agency",
+  "tests": [
+    { "nodeName": "sum", "input": "3, 4", "expectedOutput": "7", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "sum", "input": "3", "expectedOutput": "99", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}
+"""
+
+def seed(dir: string, json: string) {
+  mkdir(dir) with approve
+  write("solution.agency", SOLUTION, dir) with approve
+  write("harness.agency", HARNESS, dir) with approve
+  write("suite.test.json", json, dir) with approve
+}
+
+export node multiCaseReport(): string {
+  const dir = "./.tfl-multi"
+  seed(dir, GOOD_JSON)
+  handle {
+    const r = testFile(dir, "suite.test.json")
+    if (r is success(report)) {
+      if (!report.cases[0].pass) {
+        return "case 1 should pass: ${report.cases[0].feedback}"
+      }
+      if (report.cases[1].pass) {
+        return "case 2 should fail (default b=1 makes 4, not 99)"
+      }
+      return "ok"
+    }
+    return "failed"
+  } with approve
+  return "unreachable"
+}
+
+export node refusedFieldNamesIt(): string {
+  const dir = "./.tfl-refused"
+  seed(dir, "{ \"tests\": [{ \"nodeName\": \"sum\", \"input\": \"\", \"expectedOutput\": \"1\", \"evaluationCriteria\": [{ \"type\": \"exact\" }], \"llmMocks\": [] }] }")
+  handle {
+    const r = testFile(dir, "suite.test.json")
+    if (r is failure(err)) {
+      const errText = "${err}"
+      if (errText.includes("llmMocks")) {
+        return "ok"
+      }
+      return "wrong error: ${errText}"
+    }
+    return "should have failed"
+  } with approve
+  return "unreachable"
+}
+
+export node unquotedExpectedOutputGuidance(): string {
+  const dir = "./.tfl-unquoted"
+  seed(dir, "{ \"tests\": [{ \"nodeName\": \"sum\", \"input\": \"1, 2\", \"expectedOutput\": \"ok\", \"evaluationCriteria\": [{ \"type\": \"exact\" }] }] }")
+  handle {
+    const r = testFile(dir, "suite.test.json")
+    if (r is failure(err)) {
+      const errText = "${err}"
+      if (errText.includes("quoted")) {
+        return "ok"
+      }
+      return "wrong error: ${errText}"
+    }
+    return "should have failed"
+  } with approve
+  return "unreachable"
+}
+
+// Gate 1: a rejecting parent stops the JSON read BEFORE it happens. The
+// JSON on disk is malformed, so reaching the parser would surface a parse
+// error — a rejection instead proves the file was never read. The
+// permissive control proves the parse error IS reachable.
+export node firstGateBlocksTheRead(): string {
+  const dir = "./.tfl-gate1"
+  seed(dir, "{ this is not json")
+  let controlError = ""
+  handle {
+    const control = testFile(dir, "suite.test.json")
+    if (control is failure(err)) {
+      controlError = "${err}"
+    }
+  } with approve
+  if (!controlError.includes("not valid JSON")) {
+    return "control did not reach the parser: ${controlError}"
+  }
+  const seenReads = []
+  let r = null
+  handle {
+    r = testFile(dir, "suite.test.json")
+  } with (intr) {
+    if (intr.effect == "std::read") {
+      seenReads.push(intr.data.filename)
+      return reject("no reads")
+    }
+    return reject("nothing allowed")
+  }
+  if (r is failure(err2)) {
+    const err2Text = "${err2}"
+    if (err2Text.includes("not valid JSON")) {
+      return "the file was read despite the rejected gate"
+    }
+    if (seenReads.length != 1) {
+      return "expected exactly one read gate, saw ${seenReads.length}"
+    }
+    if (seenReads[0] != "suite.test.json") {
+      return "wrong gate payload: ${seenReads[0]}"
+    }
+    return "ok"
+  }
+  return "should have failed"
+}
+
+// Gate 2: valid JSON pointing at a malformed harness. Rejecting the SECOND
+// read yields the rejection (not the harness parse error), exactly two read
+// gates fire with the declared source filename, and no std::run launches.
+export node secondGateBlocksTheSourceRead(): string {
+  const dir = "./.tfl-gate2"
+  mkdir(dir) with approve
+  write("harness.agency", "this does not parse {{{", dir) with approve
+  write("suite.test.json", GOOD_JSON, dir) with approve
+  let controlError = ""
+  handle {
+    const control = testFile(dir, "suite.test.json")
+    if (control is failure(err)) {
+      controlError = "${err}"
+    }
+  } with approve
+  if (!controlError.includes("failed to parse")) {
+    return "control did not reach the harness error: ${controlError}"
+  }
+  const seenReads = []
+  let launches = 0
+  let r = null
+  handle {
+    r = testFile(dir, "suite.test.json")
+  } with (intr) {
+    if (intr.effect == "std::run") {
+      launches = launches + 1
+      return reject("no launches")
+    }
+    if (intr.effect == "std::read") {
+      seenReads.push(intr.data.filename)
+      if (seenReads.length == 1) {
+        return approve()
+      }
+      return reject("second read blocked")
+    }
+    return reject("nothing else allowed")
+  }
+  if (r is failure(err2)) {
+    const err2Text = "${err2}"
+    if (err2Text.includes("failed to parse")) {
+      return "the harness was read despite the rejected gate"
+    }
+    if (seenReads.length != 2) {
+      return "expected two read gates, saw ${seenReads.length}"
+    }
+    if (seenReads[1] != "harness.agency") {
+      return "second gate should carry the declared source: ${seenReads[1]}"
+    }
+    if (launches != 0) {
+      return "a launch happened"
+    }
+    return "ok"
+  }
+  return "should have failed"
+}
+
+// All-up-front conversion: a valid first case followed by an invalid one
+// (unknown node / arity) is a whole-call failure with ZERO launches — the
+// launch count is the evidence, not the absent report.
+export node conversionFailuresPreventEveryLaunch(): string {
+  const dir = "./.tfl-upfront"
+  seed(dir, "{ \"sourceFile\": \"harness.agency\", \"tests\": [ { \"nodeName\": \"sum\", \"input\": \"1, 2\", \"expectedOutput\": \"3\", \"evaluationCriteria\": [{ \"type\": \"exact\" }] }, { \"nodeName\": \"missing\", \"input\": \"\", \"expectedOutput\": \"1\", \"evaluationCriteria\": [{ \"type\": \"exact\" }] } ] }")
+  let launches = 0
+  let r = null
+  handle {
+    r = testFile(dir, "suite.test.json")
+  } with (intr) {
+    if (intr.effect == "std::run") {
+      launches = launches + 1
+      return approve()
+    }
+    return approve()
+  }
+  if (r is failure(err)) {
+    const errText = "${err}"
+    if (launches != 0) {
+      return "a case launched before conversion finished: ${launches}"
+    }
+    if (!errText.includes("missing")) {
+      return "error should name the unknown node: ${errText}"
+    }
+    return "ok"
+  }
+  return "should have failed"
+}
+
+export node arityViolationIsWholeCallFailure(): string {
+  const dir = "./.tfl-arity"
+  seed(dir, "{ \"sourceFile\": \"harness.agency\", \"tests\": [ { \"nodeName\": \"sum\", \"input\": \"1, 2, 3\", \"expectedOutput\": \"3\", \"evaluationCriteria\": [{ \"type\": \"exact\" }] } ] }")
+  let launches = 0
+  let r = null
+  handle {
+    r = testFile(dir, "suite.test.json")
+  } with (intr) {
+    if (intr.effect == "std::run") {
+      launches = launches + 1
+    }
+    return approve()
+  }
+  if (r is failure(err)) {
+    const errText = "${err}"
+    if (launches != 0) {
+      return "launched despite the arity failure"
+    }
+    if (!errText.includes("argument")) {
+      return "error should describe the arity: ${errText}"
+    }
+    return "ok"
+  }
+  return "should have failed"
+}

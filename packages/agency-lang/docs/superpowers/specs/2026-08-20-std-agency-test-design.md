@@ -1,7 +1,13 @@
 # std::agency `test()` and the eval AgencyTestGrader
 
-Date: 2026-08-20. Status: designed, revised per review (v2, v3), not yet
-planned.
+Date: 2026-08-20. Status: designed, revised per review (v2, v3, v4), not
+yet planned.
+
+v4 folds in the v3 re-review's three localized amendments: the combined
+grader revision is persisted on the run row where snapshot grading can
+recover it (with `sourceIdentity` defined), workdir copies preserve
+symlinks so confinement sees them, and the report envelope's failure
+branch is a defined `feedback: string`, not a serialized runtime object.
 
 v3 addresses the re-review's six findings: compilation consumes the exact
 validated closure snapshot instead of re-reading files (re-review finding 1),
@@ -504,14 +510,36 @@ single-module path, extended only where the revision identity requires it
   edits to harness files (which live outside the bundle, as external
   files) change nothing — the opposite of what lineage needs. So the
   snapshot path gains an entry point taking `{ physicalPath,
-  sourceIdentity, revisionInputs }`: `sourceIdentity` derives from the
-  eval test directory (stable across runs and machines), and
-  `revisionInputs` is the sorted list of content hashes of every
-  discovered harness pair, folded into the revision hash alongside the
-  bundle. Hand-written modules keep today's identity untouched. Pinned
-  tests: two runs of the same suite produce identical revisions; editing
-  only a harness changes the revision. Per-grader lineage is the basename
-  via the grader `name`, so re-grades supersede correctly.
+  sourceIdentity, revisionInputs }`, where `revisionInputs` is the sorted
+  list of content hashes of every discovered harness pair, folded into
+  the revision hash alongside the bundle.
+
+  `sourceIdentity` is defined, not hand-waved: `agency-tests:<suite
+  identity>/<test id>`, where the suite identity is what the run row
+  already records (`suite` — a git source string for remote suites, a
+  path for local ones, `inline:--input` for one-offs). For git-source
+  suites this is stable across machines; for local-path suites it is as
+  stable as the path, which is stated here rather than claimed away. The
+  test-id half is always stable.
+
+  **The combined revision is persisted, or it is lost at exactly the
+  boundary snapshots exist for.** Today `loadGradingSnapshot` re-derives
+  the revision by hashing the stored bundle's code — a later `eval grade`
+  would silently reconstruct the old code-only identity, and naming the
+  bundle file after the combined hash would not help, since the loader
+  hashes contents and ignores filenames. So `RecordedGraders` (and the
+  run-row schema) gains an optional `revision: { sourceIdentity,
+  sha256 }`; both the live path and the snapshot loader assign exactly
+  `${sourceIdentity}@${sha256}` when present, and absence takes the
+  existing code-only path so old run directories stay readable.
+  Hand-written modules keep today's identity untouched.
+
+  Pinned tests, all grading from stored snapshots in fresh loads (not
+  in-memory preflight graders): two runs of the same suite produce
+  identical revisions; editing only a harness changes the revision; a
+  **copied run directory** grades under the same revision — the contract
+  this metadata serves. Per-grader lineage is the basename via the grader
+  `name`, so re-grades supersede correctly.
 - `threshold: 1` is load-bearing: `BaseGrader.passes` is
   `value >= (threshold ?? 0)`, so a fractional score with bare
   `mustPass: true` would gate nothing — even 0 passes a 0 threshold. The
@@ -532,9 +560,15 @@ author republishing run directories publicly ships the holdouts with them.
    agent knows which files matter — then overwrite the harness `.agency` and
    `.test.json` with fresh copies from the graders snapshot. That is the
    whole tamper defense: everything the agent wrote is testable input;
-   everything that judges comes from the snapshot. (Import confinement to
-   the scratch dir's realpath means a symlink the agent planted cannot pull
-   in files from outside it, either.)
+   everything that judges comes from the snapshot. Both copies on this
+   path — the run-directory workdir snapshot (already `fs.cpSync` with its
+   default `dereference: false`) and the grader's workdir-to-scratch copy
+   (new contract, same rule) — **copy symlinks as symlinks, never
+   following them**: a followed link would read and copy the external file
+   before the closure validator ever saw it. The link then lands in the
+   scratch dir, where realpath confinement rejects any import through it.
+   Pinned end-to-end test: a solution import symlinked to an external
+   sentinel file — the sentinel's content is neither copied nor compiled.
 3. Spawn the framework-owned Agency **wrapper** via `agency run`
    (`process.execPath` + `process.argv[1]`; grading always runs inside the
    agency CLI). The wrapper takes the scratch dir, the JSON filename, and a
@@ -546,9 +580,17 @@ author republishing run directories publicly ships the holdouts with them.
    `failure` there is no report to write — so the envelope is a tagged
    union, written for every normally completed call:
    `{ status: "tested", report: TestReport }` or
-   `{ status: "could-not-test", error: <serialized failure> }`. The
-   wrapper is the only sandbox-policy owner; it ships with the framework,
-   never with suites.
+   `{ status: "could-not-test", feedback: string }`. The second branch is
+   a JSON-safe presentation value the wrapper owns — one shared formatter
+   renders string failures and structured `limit_exceeded` failures into
+   deterministic feedback text, and never serializes the runtime failure
+   object itself (which carries checkpoint/boundary metadata, can hold
+   non-JSON values, and would make the envelope large and unstable; a
+   naively serialized `Error` is `{}`). The grader validates the envelope
+   strictly against this schema before scoring. Pinned through the actual
+   transport: a string compile error and a structured cost-limit failure.
+   The wrapper is the only sandbox-policy owner; it ships with the
+   framework, never with suites.
 4. The TypeScript grader reads the envelope. **Stdout is diagnostics
    only**: `_run` pipes the tested subprocess's stdout through to the
    parent, so tested code can print anything — including a forged report —
@@ -558,7 +600,7 @@ author republishing run directories publicly ships the holdouts with them.
 5. Score = **fraction of cases passed**, `mustPass: true, threshold: 1`.
    Feedback = the failing cases' feedback lines; a `could-not-test`
    envelope (compile error, malformed test JSON, cost guard) is score 0
-   with the serialized error verbatim — pinned by tests that drive a
+   with the envelope's feedback text — pinned by tests that drive a
    compile failure and a malformed JSON through the actual wrapper
    transport, not only through direct `testFile()` calls. Wrapper crash,
    timeout, or a missing/malformed envelope file is score 0 with the
@@ -731,3 +773,22 @@ Changed in v3 (per re-review):
   AG6016–AG6018), reusing the existing resolution owner.
 - Exact `compile`/`runCode` signatures for the `dir` anchor; `dir` is
   compile-only, `cwd` execution-only, both trailing optional.
+
+Changed in v4 (per v3 re-review):
+
+- The combined grader revision is persisted: `RecordedGraders`/run-row
+  gain optional `revision: { sourceIdentity, sha256 }`, assigned
+  identically by live and snapshot loaders (the snapshot loader otherwise
+  re-derives the old code-only identity by rehashing the bundle); absence
+  keeps old directories readable. `sourceIdentity` defined as
+  `agency-tests:<recorded suite identity>/<test id>`, with the local-path
+  stability caveat stated. Revision tests grade from stored snapshots in
+  fresh loads, including a copied run directory.
+- Workdir copies (run-directory snapshot and grader scratch copy) never
+  dereference symlinks; realpath confinement then rejects escaping
+  imports. End-to-end symlinked-sentinel test pinned.
+- The `could-not-test` envelope branch carries `feedback: string` — a
+  wrapper-owned presentation value from one shared formatter — never the
+  serialized runtime failure object; envelope validated strictly before
+  scoring; string and structured-limit failures pinned through the
+  transport.

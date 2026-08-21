@@ -331,9 +331,7 @@ function foldIntoRunDirectory(args: {
                 bundleFile: args.graders.bundleFile,
                 judgeFiles: args.graders.judgeFiles,
                 origin: args.graders.origin,
-                ...(args.graders.revision === undefined
-                  ? {}
-                  : { revision: args.graders.revision }),
+                ...(args.graders.revision === undefined ? {} : { revision: args.graders.revision }),
               },
             }),
         ended: endedFrom(run),

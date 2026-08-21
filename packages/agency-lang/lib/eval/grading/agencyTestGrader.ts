@@ -65,7 +65,10 @@ const spawnWrapper: RunWrapper = (args) => {
     args.scratchDir,
     args.jsonFilename,
     args.sourceFilename,
-    args.reportPath,
+    // write() refuses an absolute filename, so the destination travels
+    // as dir + basename.
+    path.dirname(args.reportPath),
+    path.basename(args.reportPath),
   ];
   if (args.maxCost !== undefined) argv.push(String(args.maxCost));
   try {
@@ -105,8 +108,8 @@ export class AgencyTestGrader extends BaseGrader {
   }
 
   /** Snapshot grading rebinds each declared path to the stored copy; live
-   *  grading resolves against the grading module's directory (the bundle
-   *  is imported from there). */
+   *  grading resolves a relative declared path against process.cwd()
+   *  (`eval run` is launched from the suite's project root). */
   private harnessPath(declared: string): string {
     return this.bound[declared] ?? path.resolve(declared);
   }
@@ -121,11 +124,14 @@ export class AgencyTestGrader extends BaseGrader {
     const reportDir = fs.mkdtempSync(path.join(process.cwd(), ".agency-test-report-"));
     const reportPath = path.join(reportDir, "report.json");
     try {
-      fs.cpSync(run.workdir, scratch, { recursive: true });
+      fs.cpSync(run.workdir, scratch, { recursive: true, dereference: false });
       const jsonFilename = path.basename(this.opts.harnessJson);
       const sourceFilename = path.basename(this.opts.harnessAgency);
-      fs.copyFileSync(this.harnessPath(this.opts.harnessAgency), path.join(scratch, sourceFilename));
-      fs.copyFileSync(this.harnessPath(this.opts.harnessJson), path.join(scratch, jsonFilename));
+      installHarnessFile(
+        this.harnessPath(this.opts.harnessAgency),
+        path.join(scratch, sourceFilename),
+      );
+      installHarnessFile(this.harnessPath(this.opts.harnessJson), path.join(scratch, jsonFilename));
 
       let stdout = "";
       try {
@@ -150,9 +156,7 @@ export class AgencyTestGrader extends BaseGrader {
       try {
         envelope = parseReportEnvelope(fs.readFileSync(reportPath, "utf-8"));
       } catch (e) {
-        return fail(
-          `${e instanceof Error ? e.message : String(e)}\n${diagnosticTail(stdout)}`,
-        );
+        return fail(`${e instanceof Error ? e.message : String(e)}\n${diagnosticTail(stdout)}`);
       }
       if (envelope.status === "could-not-test") {
         return fail(envelope.feedback);
@@ -174,6 +178,15 @@ export class AgencyTestGrader extends BaseGrader {
   }
 }
 
+/** The agent controls the scratch copy, so the destination may be a
+ *  symlink (copyFileSync would follow it and clobber the host target) or
+ *  a directory. Remove whatever sits there WITHOUT following it, then
+ *  create the harness exclusively as a fresh regular file. */
+function installHarnessFile(src: string, dest: string): void {
+  fs.rmSync(dest, { force: true, recursive: true });
+  fs.writeFileSync(dest, fs.readFileSync(src), { flag: "wx" });
+}
+
 function fail(feedback: string): Grade {
   return { score: { kind: "scalar", value: 0 }, feedback };
 }
@@ -182,7 +195,5 @@ function fail(feedback: string): Grade {
 function diagnosticTail(text: string): string {
   // eslint-disable-next-line no-control-regex
   const clean = text.replace(/\x1b\[[0-9;]*m/g, "").trim();
-  return clean.length > MAX_DIAGNOSTIC_CHARS
-    ? `…${clean.slice(-MAX_DIAGNOSTIC_CHARS)}`
-    : clean;
+  return clean.length > MAX_DIAGNOSTIC_CHARS ? `…${clean.slice(-MAX_DIAGNOSTIC_CHARS)}` : clean;
 }

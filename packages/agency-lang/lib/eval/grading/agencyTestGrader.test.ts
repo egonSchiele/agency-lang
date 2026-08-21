@@ -23,7 +23,9 @@ function makeHarnessPair(): { harnessAgency: string; harnessJson: string } {
     harnessJson,
     JSON.stringify({
       sourceFile: "suite-tests.agency",
-      tests: [{ nodeName: "t", input: "", expectedOutput: "1", evaluationCriteria: [{ type: "exact" }] }],
+      tests: [
+        { nodeName: "t", input: "", expectedOutput: "1", evaluationCriteria: [{ type: "exact" }] },
+      ],
     }),
   );
   return { harnessAgency, harnessJson };
@@ -40,9 +42,10 @@ function graderInput(workdir: string): GraderInput {
 }
 
 /** Stub wrapper writing a fixed envelope; records its calls. */
-function stubWrapper(
-  envelope: ReportEnvelope | "skip-write" | "malformed",
-): { runWrapper: RunWrapper; calls: Parameters<RunWrapper>[0][] } {
+function stubWrapper(envelope: ReportEnvelope | "skip-write" | "malformed"): {
+  runWrapper: RunWrapper;
+  calls: Parameters<RunWrapper>[0][];
+} {
   const calls: Parameters<RunWrapper>[0][] = [];
   const runWrapper: RunWrapper = (args) => {
     calls.push(args);
@@ -120,12 +123,18 @@ describe("AgencyTestGrader (seam-injected)", () => {
   });
 
   test("missing and malformed envelopes score 0 with the stdout tail", async () => {
-    const missing = new AgencyTestGrader({ ...pair, name: "n" }, stubWrapper("skip-write").runWrapper);
+    const missing = new AgencyTestGrader(
+      { ...pair, name: "n" },
+      stubWrapper("skip-write").runWrapper,
+    );
     const g1 = await missing.run(graderInput(makeWorkdir({})));
     expect(g1.score).toEqual({ kind: "scalar", value: 0 });
     expect(g1.feedback).toContain("no report");
 
-    const malformed = new AgencyTestGrader({ ...pair, name: "n" }, stubWrapper("malformed").runWrapper);
+    const malformed = new AgencyTestGrader(
+      { ...pair, name: "n" },
+      stubWrapper("malformed").runWrapper,
+    );
     const g2 = await malformed.run(graderInput(makeWorkdir({})));
     expect(g2.score).toEqual({ kind: "scalar", value: 0 });
     expect(g2.feedback).toMatch(/envelope/);
@@ -141,7 +150,7 @@ describe("AgencyTestGrader (seam-injected)", () => {
   });
 
   test("copies the workdir wholesale, overwrites both harness files from the snapshot, preserves symlinks", async () => {
-    let observed: Record<string, string> = {};
+    const observed: Record<string, string> = {};
     let sawSymlink = false;
     const runWrapper: RunWrapper = (args) => {
       for (const name of fs.readdirSync(args.scratchDir)) {
@@ -169,6 +178,61 @@ describe("AgencyTestGrader (seam-injected)", () => {
     expect(observed["suite-tests.agency"]).toBe(fs.readFileSync(pair.harnessAgency, "utf-8"));
     expect(observed["suite-tests.test.json"]).toBe(fs.readFileSync(pair.harnessJson, "utf-8"));
     expect(sawSymlink).toBe(true);
+  });
+
+  test("a symlink planted at a harness destination never clobbers its target", async () => {
+    // The attack: the solution ships suite-tests.agency as a symlink to a
+    // writable host file; a following copy would overwrite that file with
+    // the snapshot harness.
+    const hostDir = fs.mkdtempSync(path.join(os.tmpdir(), "atg-host-"));
+    const targetAgency = path.join(hostDir, "precious-a.txt");
+    const targetJson = path.join(hostDir, "precious-b.txt");
+    fs.writeFileSync(targetAgency, "HOST CONTENT A");
+    fs.writeFileSync(targetJson, "HOST CONTENT B");
+    const workdir = makeWorkdir({ "fib.agency": "the solution" });
+    fs.symlinkSync(targetAgency, path.join(workdir, "suite-tests.agency"));
+    fs.symlinkSync(targetJson, path.join(workdir, "suite-tests.test.json"));
+
+    const observed: Record<string, string> = {};
+    const links: string[] = [];
+    const runWrapper: RunWrapper = (args) => {
+      for (const name of fs.readdirSync(args.scratchDir)) {
+        const p = path.join(args.scratchDir, name);
+        if (fs.lstatSync(p).isSymbolicLink()) links.push(name);
+        else observed[name] = fs.readFileSync(p, "utf-8");
+      }
+      fs.writeFileSync(args.reportPath, JSON.stringify(TESTED([])));
+      return { stdout: "" };
+    };
+    const grader = new AgencyTestGrader({ ...pair, name: "n" }, runWrapper);
+    await grader.run(graderInput(workdir));
+    expect(fs.readFileSync(targetAgency, "utf-8")).toBe("HOST CONTENT A");
+    expect(fs.readFileSync(targetJson, "utf-8")).toBe("HOST CONTENT B");
+    // The scratch copies became fresh regular files holding the snapshot.
+    expect(links).toEqual([]);
+    expect(observed["suite-tests.agency"]).toBe(fs.readFileSync(pair.harnessAgency, "utf-8"));
+    expect(observed["suite-tests.test.json"]).toBe(fs.readFileSync(pair.harnessJson, "utf-8"));
+  });
+
+  test("a directory planted at a harness destination is replaced by the snapshot file", async () => {
+    const workdir = makeWorkdir({ "fib.agency": "the solution" });
+    fs.mkdirSync(path.join(workdir, "suite-tests.agency"));
+    fs.writeFileSync(path.join(workdir, "suite-tests.agency", "inner.txt"), "x");
+    fs.mkdirSync(path.join(workdir, "suite-tests.test.json"));
+
+    const observed: Record<string, string> = {};
+    const runWrapper: RunWrapper = (args) => {
+      for (const name of fs.readdirSync(args.scratchDir)) {
+        const p = path.join(args.scratchDir, name);
+        if (fs.lstatSync(p).isFile()) observed[name] = fs.readFileSync(p, "utf-8");
+      }
+      fs.writeFileSync(args.reportPath, JSON.stringify(TESTED([])));
+      return { stdout: "" };
+    };
+    const grader = new AgencyTestGrader({ ...pair, name: "n" }, runWrapper);
+    await grader.run(graderInput(workdir));
+    expect(observed["suite-tests.agency"]).toBe(fs.readFileSync(pair.harnessAgency, "utf-8"));
+    expect(observed["suite-tests.test.json"]).toBe(fs.readFileSync(pair.harnessJson, "utf-8"));
   });
 
   test("forwards sourceFilename and maxCost; cleans up scratch and report dirs", async () => {
@@ -199,7 +263,7 @@ describe("AgencyTestGrader (seam-injected)", () => {
     const snapJson = path.join(snapDir, "stored-json");
     fs.writeFileSync(snapAgency, "SNAPSHOT AGENCY");
     fs.writeFileSync(snapJson, "SNAPSHOT JSON");
-    let observed: Record<string, string> = {};
+    const observed: Record<string, string> = {};
     const runWrapper: RunWrapper = (args) => {
       for (const name of fs.readdirSync(args.scratchDir)) {
         observed[name] = fs.readFileSync(path.join(args.scratchDir, name), "utf-8");

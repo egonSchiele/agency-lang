@@ -6,11 +6,13 @@
  * useless for a module generated into a per-run staging path (every run a
  * new revision) whose harness files live OUTSIDE the bundle (edits change
  * nothing). So the synthesized snapshot carries an explicit revision: a
- * logical source identity derived from the suite + test id, and a hash
- * folding the harness pair contents in beside the bundle. Both loaders
- * assign `${sourceIdentity}@${sha256}` when it is recorded; its absence
- * takes the legacy code-only identity, so old run directories stay
- * readable.
+ * logical source identity derived from the suite + test id, and a hash of
+ * the grading module's LOGICAL inputs — each harness pair's name bound to
+ * its two content hashes, plus the sibling graders source when present.
+ * Bundle bytes are deliberately excluded: they embed the staging path, so
+ * hashing them minted a fresh revision every run. Both loaders assign
+ * `${sourceIdentity}@${sha256}` when it is recorded; its absence takes
+ * the legacy code-only identity, so old run directories stay readable.
  */
 import * as fs from "fs";
 import * as os from "os";
@@ -104,24 +106,37 @@ export async function snapshotAgencyTestGraders(args: {
     const modulePath = path.join(staging, "agencyTests.graders.ts");
     fs.writeFileSync(modulePath, moduleSource, "utf-8");
     const snapshot = await snapshotGradingModule(modulePath);
-    const bundleCode =
-      snapshot.files.find((entry) => entry.name === snapshot.bundleFile)?.content ?? "";
-    const revisionInputs = defs
-      .flatMap((d) => [d.harnessAgency, d.harnessJson])
-      .map((file) => sha256Text(fs.readFileSync(file, "utf-8")))
-      .sort();
     const sourceIdentity = agencyTestsSourceIdentity(args.suite, testId);
     return {
       ...snapshot,
       source: sourceIdentity,
       revision: {
         sourceIdentity,
-        sha256: sha256Text(bundleCode + revisionInputs.join("")),
+        sha256: revisionSha256(defs, args.test.graders),
       },
     };
   } finally {
     safeDeleteDirectoryWithin(os.tmpdir(), staging);
   }
+}
+
+/** Hash of the grading module's logical inputs, keyed so each harness's
+ *  NAME is bound to its content — swapping contents between two named
+ *  harnesses changes the revision even though the content multiset does
+ *  not. JSON-serialized, never delimiter-concatenated. */
+function revisionSha256(defs: AgencyTestDefinition[], siblingGradersPath?: string): string {
+  const pairs = [...defs]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((d) => ({
+      name: d.name,
+      agencySha256: sha256Text(fs.readFileSync(d.harnessAgency, "utf-8")),
+      jsonSha256: sha256Text(fs.readFileSync(d.harnessJson, "utf-8")),
+    }));
+  const siblingGradersSha256 =
+    siblingGradersPath === undefined
+      ? null
+      : sha256Text(fs.readFileSync(siblingGradersPath, "utf-8"));
+  return sha256Text(JSON.stringify({ pairs, siblingGradersSha256 }));
 }
 
 function validateHarnessPair(def: AgencyTestDefinition): void {

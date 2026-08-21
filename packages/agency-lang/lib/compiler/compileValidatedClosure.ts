@@ -8,7 +8,11 @@
  * into the caller's directory. `pkg::` files are the one documented re-read
  * boundary: they resolve from node_modules at compile time, which is
  * already-trusted executable content (whoever can write it can write this
- * process's own JS), unlike caller-owned directories.
+ * process's own JS), unlike caller-owned directories. The mirror has no
+ * node_modules of its own, so each validated package is linked under
+ * `<mirror>/node_modules/<name>` pointing at its real root — otherwise
+ * createRequire from the mirrored files could not resolve `pkg::` imports
+ * that validation already accepted.
  */
 import * as fs from "fs";
 import * as os from "os";
@@ -41,11 +45,21 @@ export function compileValidatedClosure(closure: ValidatedClosure): CompileResul
         entrySource = rewritten.source;
         entryMirrorPath = target;
       } else {
-        mirrored.push({ moduleId, relPath: mod.relPath, source: rewritten.source, mirrorPath: target });
+        mirrored.push({
+          moduleId,
+          relPath: mod.relPath,
+          source: rewritten.source,
+          mirrorPath: target,
+        });
       }
     }
     if (entryMirrorPath === "") {
       return { success: false, errors: ["internal: validated closure has no entry module"] };
+    }
+    for (const anchor of data.pkgAnchors) {
+      const linkPath = path.join(mirrorRoot, "node_modules", ...anchor.packageName.split("/"));
+      fs.mkdirSync(path.dirname(linkPath), { recursive: true });
+      fs.symlinkSync(anchor.packageRoot, linkPath);
     }
     const sandboxOptions = {
       typechecker: { enabled: true },
@@ -76,10 +90,11 @@ export function compileValidatedClosure(closure: ValidatedClosure): CompileResul
       }
       modules[mod.relPath.replace(/\.agency$/, ".js")] = result.code;
     }
+    const anchors = data.pkgAnchors.length > 0 ? { pkgAnchors: data.pkgAnchors } : {};
     if (mirrored.length === 0) {
-      return entryResult;
+      return { ...entryResult, ...anchors };
     }
-    return { ...entryResult, modules };
+    return { ...entryResult, modules, ...anchors };
   } finally {
     safeDeleteDirectoryWithin(os.tmpdir(), mirrorRoot);
   }

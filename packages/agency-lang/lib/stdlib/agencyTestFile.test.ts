@@ -22,7 +22,12 @@ describe("_readTestFileSandbox", () => {
         sourceFile: "harness.agency",
         defaultTimeoutMs: 5000,
         tests: [
-          { nodeName: "testFive", input: "3, 4", expectedOutput: "9", evaluationCriteria: [{ type: "exact" }] },
+          {
+            nodeName: "testFive",
+            input: "3, 4",
+            expectedOutput: "9",
+            evaluationCriteria: [{ type: "exact" }],
+          },
         ],
       }),
     );
@@ -39,7 +44,13 @@ describe("_readTestFileSandbox", () => {
       path.join(dir, "bad.test.json"),
       JSON.stringify({
         tests: [
-          { nodeName: "n", input: "", expectedOutput: "1", evaluationCriteria: [{ type: "exact" }], llmMocks: [] },
+          {
+            nodeName: "n",
+            input: "",
+            expectedOutput: "1",
+            evaluationCriteria: [{ type: "exact" }],
+            llmMocks: [],
+          },
         ],
       }),
     );

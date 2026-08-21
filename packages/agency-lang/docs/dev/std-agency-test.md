@@ -116,18 +116,27 @@ self-check and grading honest) and non-sibling `sourceFile`s, synthesizes a
 deterministic grading module (sibling `graders.ts` composed in, normalized
 single-or-array), and feeds it through `snapshotGradingModule`. The
 snapshot carries an explicit `revision: { sourceIdentity, sha256 }` —
-`agency-tests:<suite digest>/<test id>`, hash folding the harness files in
-beside the bundle — because the generic identity (physical path @ bundle
-hash) would mint a new revision every run while ignoring harness edits.
+`agency-tests:<suite digest>/<test id>`, hashing the module's LOGICAL
+inputs: each harness pair's name bound to its two content hashes, plus the
+sibling graders source. Bundle bytes are excluded (they embed the staging
+path, so hashing them minted a fresh revision every run), and binding
+names to hashes means swapping contents between two harnesses changes the
+revision even though the content multiset does not. The generic identity
+(physical path @ bundle hash) would mint a new revision every run while
+ignoring harness edits.
 `loadGradingSnapshot` assigns the recorded revision; its absence keeps the
 legacy code-only identity, so old run directories stay readable.
 
 `AgencyTestGrader` (`lib/eval/grading/agencyTestGrader.ts`) copies the
-run's workdir wholesale into a scratch dir (symlinks copied AS symlinks —
-`cpSync`'s default `dereference: false` is load-bearing: a followed link
-would read the external file before realpath confinement could refuse the
-import), overwrites BOTH harness files from the snapshot (the tamper
-defense), and spawns the shipped wrapper via the agency CLI. Score =
+run's workdir wholesale into a scratch dir (symlinks copied AS symlinks,
+`dereference: false` — a followed link would read the external file
+before realpath confinement could refuse the import), then installs BOTH
+harness files from the snapshot (the tamper defense). Installation
+removes whatever sits at the destination WITHOUT following it and writes
+a fresh regular file exclusively: the agent controls the scratch copy, so
+a planted `suite-tests.agency -> /host/file` symlink would otherwise be
+followed by the copy and clobber the host file. It then spawns the
+shipped wrapper via the agency CLI. Score =
 fraction of passing cases, `{ mustPass: true, threshold: 1 }` — partial
 credit feeds the objective, anything short of all-green gates (a bare
 `mustPass` would gate nothing: `passes` is `value >= threshold ?? 0`).

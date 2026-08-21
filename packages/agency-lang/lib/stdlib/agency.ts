@@ -88,10 +88,14 @@ export const _callback = new AgencyFunction({
   toolDefinition: null,
 });
 
-function compileToProgram(
-  entry: ClosureEntry,
-  dir: string,
-): { moduleId: string; code: string; modules?: Record<string, string> } {
+type CompiledProgramValue = {
+  moduleId: string;
+  code: string;
+  modules?: Record<string, string>;
+  pkgAnchors?: { packageName: string; packageRoot: string }[];
+};
+
+function compileToProgram(entry: ClosureEntry, dir: string): CompiledProgramValue {
   // Sandboxed compile: the closure validator enforces the pure-Agency
   // invariant (std:: + dir-local .agency + validated pkg::; no TS/JS, node
   // builtins, or splices) and compilation reads only the validated mirror.
@@ -106,16 +110,15 @@ function compileToProgram(
   // generated at runtime and cannot be assumed present on disk at resume
   // time. `_run` materializes it to .agency-tmp/ at fork time; `modules`
   // carries the rest of a multi-file closure, materialized beside it.
-  if (result.modules !== undefined) {
-    return { moduleId: result.moduleId, code: result.code, modules: result.modules };
-  }
-  return { moduleId: result.moduleId, code: result.code };
+  return {
+    moduleId: result.moduleId,
+    code: result.code,
+    ...(result.modules !== undefined ? { modules: result.modules } : {}),
+    ...(result.pkgAnchors !== undefined ? { pkgAnchors: result.pkgAnchors } : {}),
+  };
 }
 
-export function _compile(
-  source: string,
-  dir: string = "",
-): { moduleId: string; code: string; modules?: Record<string, string> } {
+export function _compile(source: string, dir: string = ""): CompiledProgramValue {
   return compileToProgram({ source }, dir);
 }
 
@@ -172,10 +175,7 @@ export function resolveInSandbox(
 // stdlib-only restriction as _compile. The (dir, filename) split mirrors
 // std::read / std::write so callers can use partial application to bind
 // `dir` to a sandbox path: `runFile.bind(dir: "/safe/dir")`.
-export function _compileFile(
-  dir: string,
-  filename: string,
-): { moduleId: string; code: string; modules?: Record<string, string> } {
+export function _compileFile(dir: string, filename: string): CompiledProgramValue {
   // Containment + existence check up front for a precise error; the
   // sandboxed compile then reads the file itself as part of validation.
   resolveInSandbox(dir, filename);

@@ -7,7 +7,9 @@ import {
   UNSET,
 } from "../runtime/agencyFunction.js";
 
-function params(...specs: [string, { hasDefault?: boolean; variadic?: boolean }?][]): BindingParameter[] {
+function params(
+  ...specs: [string, { hasDefault?: boolean; variadic?: boolean }?][]
+): BindingParameter[] {
   return specs.map(([name, opts]) => ({
     name,
     hasDefault: opts?.hasDefault ?? false,
@@ -106,7 +108,9 @@ describe("renderNamedArguments", () => {
 
   test("over-arity without a variadic throws naming the range", () => {
     expect(() =>
-      renderNamedArguments(planArgumentBindings(params(["a"], ["b", { hasDefault: true }]), [1, 2, 3])),
+      renderNamedArguments(
+        planArgumentBindings(params(["a"], ["b", { hasDefault: true }]), [1, 2, 3]),
+      ),
     ).toThrow(/expected 1-2 argument/);
   });
 

@@ -179,10 +179,7 @@ const RunAnnotationSchema = z
         bundleFile: z.string().min(1),
         judgeFiles: z.record(z.string(), z.string()),
         origin: z.enum(["test", "config"]),
-        revision: z
-          .object({ sourceIdentity: z.string(), sha256: z.string() })
-          .strict()
-          .optional(),
+        revision: z.object({ sourceIdentity: z.string(), sha256: z.string() }).strict().optional(),
       })
       .strict()
       .optional(),

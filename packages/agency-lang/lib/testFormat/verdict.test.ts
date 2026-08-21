@@ -3,9 +3,9 @@ import { exactVerdict, exactVerdictValue } from "./verdict.js";
 
 describe("exactVerdictValue", () => {
   test("nested object key order is ignored", () => {
-    expect(
-      exactVerdictValue({ b: { d: 4, c: 3 }, a: 1 }, { a: 1, b: { c: 3, d: 4 } }).pass,
-    ).toBe(true);
+    expect(exactVerdictValue({ b: { d: 4, c: 3 }, a: 1 }, { a: 1, b: { c: 3, d: 4 } }).pass).toBe(
+      true,
+    );
   });
 
   test("arrays, booleans, null, negative and exponent numbers compare correctly", () => {

@@ -195,7 +195,12 @@ describe("declared sourceFile", () => {
         "suite.test.json": JSON.stringify({
           sourceFile: "impl.agency",
           tests: [
-            { nodeName: "main", input: "", expectedOutput: "1", evaluationCriteria: [{ type: "exact" }] },
+            {
+              nodeName: "main",
+              input: "",
+              expectedOutput: "1",
+              evaluationCriteria: [{ type: "exact" }],
+            },
           ],
         }),
       },

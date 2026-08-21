@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { parseShardSpec, partitionByShard, loadTests, resolveTestSourcePath, type Shard } from "./test.js";
+import {
+  parseShardSpec,
+  partitionByShard,
+  loadTests,
+  resolveTestSourcePath,
+  type Shard,
+} from "./test.js";
 
 const id = (s: string) => s;
 

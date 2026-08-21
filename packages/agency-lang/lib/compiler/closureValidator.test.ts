@@ -95,7 +95,9 @@ describe("validateClosure", () => {
         path.join(dir, "main.agency"),
         'import { helperValue } from "../outside.agency"\nexport node main(): number { return helperValue() }\n',
       );
-      const violations = violationsOf(() => validateClosure({ entry: { file: "main.agency" }, dir }));
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "main.agency" }, dir }),
+      );
       expect(violations.join("\n")).toMatch(/outside the sandbox dir/);
       expect(violations.join("\n")).toContain("../outside.agency");
     } finally {
@@ -114,7 +116,9 @@ describe("validateClosure", () => {
         path.join(dir, "main.agency"),
         'import { helperValue } from "./link.agency"\nexport node main(): number { return helperValue() }\n',
       );
-      const violations = violationsOf(() => validateClosure({ entry: { file: "main.agency" }, dir }));
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "main.agency" }, dir }),
+      );
       expect(violations.join("\n")).toMatch(/outside the sandbox dir/);
     } finally {
       cleanup(parent);
@@ -128,7 +132,9 @@ describe("validateClosure", () => {
         path.join(dir, "main.agency"),
         'import { x } from "./helper.ts"\nexport node main(): number { return x }\n',
       );
-      const violations = violationsOf(() => validateClosure({ entry: { file: "main.agency" }, dir }));
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "main.agency" }, dir }),
+      );
       expect(violations.join("\n")).toMatch(/not Agency source/);
       expect(violations.join("\n")).toContain("./helper.ts");
     } finally {
@@ -143,7 +149,9 @@ describe("validateClosure", () => {
         path.join(dir, "main.agency"),
         'import fs from "fs"\nimport cp from "child_process"\nexport node main(): number { return 1 }\n',
       );
-      const violations = violationsOf(() => validateClosure({ entry: { file: "main.agency" }, dir }));
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "main.agency" }, dir }),
+      );
       const text = violations.join("\n");
       expect(text).toMatch(/'fs'/);
       expect(text).toMatch(/'child_process'/);
@@ -164,7 +172,9 @@ describe("validateClosure", () => {
         path.join(dir, "main.agency"),
         'import { g } from "./gen.agency"\nimport fs from "fs"\nexport node main(): number { return g() }\n',
       );
-      const violations = violationsOf(() => validateClosure({ entry: { file: "main.agency" }, dir }));
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "main.agency" }, dir }),
+      );
       const text = violations.join("\n");
       expect(text).toMatch(/compile-time splice/);
       expect(text).toMatch(/'fs'/);
@@ -176,9 +186,14 @@ describe("validateClosure", () => {
   test("an unsafe file reached through a re-export edge is refused", () => {
     const dir = makeDir(".cv-reexp-");
     try {
-      fs.writeFileSync(path.join(dir, "y.agency"), 'import fs from "fs"\nexport def x(): number { return 1 }\n');
+      fs.writeFileSync(
+        path.join(dir, "y.agency"),
+        'import fs from "fs"\nexport def x(): number { return 1 }\n',
+      );
       fs.writeFileSync(path.join(dir, "main.agency"), 'export { x } from "./y.agency"\n');
-      const violations = violationsOf(() => validateClosure({ entry: { file: "main.agency" }, dir }));
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "main.agency" }, dir }),
+      );
       expect(violations.join("\n")).toMatch(/'fs'/);
     } finally {
       cleanup(dir);
@@ -196,7 +211,9 @@ describe("validateClosure", () => {
         path.join(dir, "main.agency"),
         'import nodes { helper } from "./nodes.agency"\nexport node main(): number { return 1 }\n',
       );
-      const violations = violationsOf(() => validateClosure({ entry: { file: "main.agency" }, dir }));
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "main.agency" }, dir }),
+      );
       expect(violations.join("\n")).toMatch(/'fs'/);
     } finally {
       cleanup(dir);
@@ -245,7 +262,9 @@ describe("validateClosure", () => {
         path.join(dir, "main.agency"),
         'import { x } from "pkg::badpkg"\nexport node main(): number { return x() }\n',
       );
-      const violations = violationsOf(() => validateClosure({ entry: { file: "main.agency" }, dir }));
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "main.agency" }, dir }),
+      );
       const text = violations.join("\n");
       expect(text).toMatch(/'child_process'/);
       expect(text).toContain("index.agency");
@@ -276,7 +295,10 @@ describe("validateClosure", () => {
   test("dir '' refuses any local import and never resolves to cwd", () => {
     const violations = violationsOf(() =>
       validateClosure({
-        entry: { source: 'import { x } from "./package.json.agency"\nexport node main(): number { return 1 }\n' },
+        entry: {
+          source:
+            'import { x } from "./package.json.agency"\nexport node main(): number { return 1 }\n',
+        },
         dir: "",
       }),
     );
@@ -305,7 +327,9 @@ describe("validateClosure", () => {
           'import { c } from "./bad.agency"\n' +
           "export node main(): number { return 1 }\n",
       );
-      const violations = violationsOf(() => validateClosure({ entry: { file: "main.agency" }, dir }));
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "main.agency" }, dir }),
+      );
       const text = violations.join("\n");
       expect(text).toContain("./missing.agency");
       expect(text).toContain("./broken.agency");
@@ -368,7 +392,10 @@ describe("validateClosure", () => {
     try {
       const dir = path.join(parent, "inner");
       fs.mkdirSync(dir);
-      fs.writeFileSync(path.join(parent, "main.agency"), "export node main(): number { return 1 }\n");
+      fs.writeFileSync(
+        path.join(parent, "main.agency"),
+        "export node main(): number { return 1 }\n",
+      );
       const violations = violationsOf(() =>
         validateClosure({ entry: { file: "../main.agency" }, dir }),
       );

@@ -143,105 +143,145 @@ describe("snapshotAgencyTestGraders", () => {
     return loadOne(suiteDir);
   }
 
-  test("two snapshots of one suite share a revision; a harness edit changes it", { timeout: 60_000 }, async () => {
-    const suiteDir = makeEvalTestDir();
-    const test1 = loaded(suiteDir);
-    const suite = { source: "git:example" };
-    const snap1 = await snapshotAgencyTestGraders({ test: test1, suite });
-    const snap2 = await snapshotAgencyTestGraders({ test: test1, suite });
-    expect(snap1.revision).toBeDefined();
-    expect(snap1.revision).toEqual(snap2.revision);
-    expect(snap1.source).toBe(agencyTestsSourceIdentity(suite, test1.id!));
+  test(
+    "two snapshots of one suite share a revision; a harness edit changes it",
+    { timeout: 60_000 },
+    async () => {
+      const suiteDir = makeEvalTestDir();
+      const test1 = loaded(suiteDir);
+      const suite = { source: "git:example" };
+      const snap1 = await snapshotAgencyTestGraders({ test: test1, suite });
+      const snap2 = await snapshotAgencyTestGraders({ test: test1, suite });
+      expect(snap1.revision).toBeDefined();
+      expect(snap1.revision).toEqual(snap2.revision);
+      expect(snap1.source).toBe(agencyTestsSourceIdentity(suite, test1.id!));
 
-    fs.appendFileSync(
-      path.join(suiteDir, "mytest", "files", "suite-tests.agency"),
-      "// edited\n",
-    );
-    const snap3 = await snapshotAgencyTestGraders({ test: loaded(suiteDir), suite });
-    expect(snap3.revision!.sha256).not.toBe(snap1.revision!.sha256);
-    expect(snap3.revision!.sourceIdentity).toBe(snap1.revision!.sourceIdentity);
-  });
+      fs.appendFileSync(
+        path.join(suiteDir, "mytest", "files", "suite-tests.agency"),
+        "// edited\n",
+      );
+      const snap3 = await snapshotAgencyTestGraders({ test: loaded(suiteDir), suite });
+      expect(snap3.revision!.sha256).not.toBe(snap1.revision!.sha256);
+      expect(snap3.revision!.sourceIdentity).toBe(snap1.revision!.sourceIdentity);
+    },
+  );
 
-  test("a recorded revision survives a fresh snapshot load, including a copied directory", { timeout: 60_000 }, async () => {
-    const suiteDir = makeEvalTestDir();
-    const snap = await snapshotAgencyTestGraders({
-      test: loaded(suiteDir),
-      suite: { source: "s" },
-    });
-    const writeStore = (snapshot: GradersSnapshot): string => {
-      const dir = makeDir("sgm-store-");
-      for (const file of snapshot.files) {
-        fs.writeFileSync(path.join(dir, file.name), file.content);
-      }
-      return dir;
-    };
-    const store = writeStore(snap);
-    const recorded = {
-      source: snap.source,
-      bundleFile: snap.bundleFile,
-      judgeFiles: snap.judgeFiles,
-      revision: snap.revision!,
-    };
-    const graders = await loadGradingSnapshot(store, recorded);
-    const expected = `${snap.revision!.sourceIdentity}@${snap.revision!.sha256}`;
-    expect(graders.map((g) => g.revision)).toEqual([expected]);
+  test(
+    "swapping contents between two named harnesses changes the revision",
+    { timeout: 60_000 },
+    async () => {
+      const suiteDir = makeEvalTestDir();
+      const filesDir = path.join(suiteDir, "mytest", "files");
+      const otherAgency = "export node t(): number {\n  return 2\n}\n";
+      fs.writeFileSync(path.join(filesDir, "other-tests.agency"), otherAgency);
+      fs.writeFileSync(path.join(filesDir, "other-tests.test.json"), harnessJson());
+      const before = await snapshotAgencyTestGraders({ test: loaded(suiteDir), suite: undefined });
+      // The content MULTISET is unchanged; only which name holds which
+      // content flips — an anonymous sorted-hash revision would miss this.
+      fs.writeFileSync(path.join(filesDir, "suite-tests.agency"), otherAgency);
+      fs.writeFileSync(path.join(filesDir, "other-tests.agency"), HARNESS_AGENCY);
+      const after = await snapshotAgencyTestGraders({ test: loaded(suiteDir), suite: undefined });
+      expect(after.revision!.sha256).not.toBe(before.revision!.sha256);
+    },
+  );
 
-    // The contract this metadata serves: a copied run directory grades
-    // under the SAME revision.
-    const copy = makeDir("sgm-copy-");
-    fs.cpSync(store, copy, { recursive: true });
-    const copied = await loadGradingSnapshot(copy, recorded);
-    expect(copied.map((g) => g.revision)).toEqual([expected]);
+  test(
+    "a recorded revision survives a fresh snapshot load, including a copied directory",
+    { timeout: 60_000 },
+    async () => {
+      const suiteDir = makeEvalTestDir();
+      const snap = await snapshotAgencyTestGraders({
+        test: loaded(suiteDir),
+        suite: { source: "s" },
+      });
+      const writeStore = (snapshot: GradersSnapshot): string => {
+        const dir = makeDir("sgm-store-");
+        for (const file of snapshot.files) {
+          fs.writeFileSync(path.join(dir, file.name), file.content);
+        }
+        return dir;
+      };
+      const store = writeStore(snap);
+      const recorded = {
+        source: snap.source,
+        bundleFile: snap.bundleFile,
+        judgeFiles: snap.judgeFiles,
+        revision: snap.revision!,
+      };
+      const graders = await loadGradingSnapshot(store, recorded);
+      const expected = `${snap.revision!.sourceIdentity}@${snap.revision!.sha256}`;
+      expect(graders.map((g) => g.revision)).toEqual([expected]);
 
-    // Legacy shape (no revision): the code-only identity, untouched.
-    const legacy = await loadGradingSnapshot(store, {
-      source: snap.source,
-      bundleFile: snap.bundleFile,
-      judgeFiles: snap.judgeFiles,
-    });
-    expect(legacy[0].revision).toMatch(new RegExp(`^${snap.source}@`));
-    expect(legacy[0].revision).not.toBe(expected);
-  });
+      // The contract this metadata serves: a copied run directory grades
+      // under the SAME revision.
+      const copy = makeDir("sgm-copy-");
+      fs.cpSync(store, copy, { recursive: true });
+      const copied = await loadGradingSnapshot(copy, recorded);
+      expect(copied.map((g) => g.revision)).toEqual([expected]);
 
-  test("preflight refuses approve answers and non-sibling sourceFiles by name", { timeout: 60_000 }, async () => {
-    const approveDir = makeEvalTestDir();
-    fs.writeFileSync(
-      path.join(approveDir, "mytest", "files", "suite-tests.test.json"),
-      harnessJson({ interruptHandlers: [{ action: "approve" }] }),
-    );
-    await expect(
-      snapshotAgencyTestGraders({ test: loadOne(approveDir), suite: undefined }),
-    ).rejects.toThrow(/scripted approval cannot take effect/);
+      // Legacy shape (no revision): the code-only identity, untouched.
+      const legacy = await loadGradingSnapshot(store, {
+        source: snap.source,
+        bundleFile: snap.bundleFile,
+        judgeFiles: snap.judgeFiles,
+      });
+      expect(legacy[0].revision).toMatch(new RegExp(`^${snap.source}@`));
+      expect(legacy[0].revision).not.toBe(expected);
+    },
+  );
 
-    const foreignDir = makeEvalTestDir();
-    fs.writeFileSync(
-      path.join(foreignDir, "mytest", "files", "suite-tests.test.json"),
-      JSON.stringify({
-        sourceFile: "other.agency",
-        tests: [
-          { nodeName: "t", input: "", expectedOutput: "1", evaluationCriteria: [{ type: "exact" }] },
-        ],
-      }),
-    );
-    await expect(
-      snapshotAgencyTestGraders({ test: loadOne(foreignDir), suite: undefined }),
-    ).rejects.toThrow(/sibling harness/);
-  });
+  test(
+    "preflight refuses approve answers and non-sibling sourceFiles by name",
+    { timeout: 60_000 },
+    async () => {
+      const approveDir = makeEvalTestDir();
+      fs.writeFileSync(
+        path.join(approveDir, "mytest", "files", "suite-tests.test.json"),
+        harnessJson({ interruptHandlers: [{ action: "approve" }] }),
+      );
+      await expect(
+        snapshotAgencyTestGraders({ test: loadOne(approveDir), suite: undefined }),
+      ).rejects.toThrow(/scripted approval cannot take effect/);
 
-  test("a sibling graders.ts composes into the snapshot with distinct names", { timeout: 60_000 }, async () => {
-    const suiteDir = makeEvalTestDir({
-      gradersTs:
-        'import { grader } from "agency-lang/eval";\n' +
-        'export default grader(() => true, { name: "sibling-check" });\n',
-    });
-    const snap = await snapshotAgencyTestGraders({
-      test: loadOne(suiteDir),
-      suite: undefined,
-    });
-    expect(snap.bundleFile).toMatch(/\.mjs$/);
-    // The harness pair rode along as external files.
-    expect(Object.keys(snap.judgeFiles).sort()).toEqual(
-      expect.arrayContaining([expect.stringContaining("suite-tests")]),
-    );
-  });
+      const foreignDir = makeEvalTestDir();
+      fs.writeFileSync(
+        path.join(foreignDir, "mytest", "files", "suite-tests.test.json"),
+        JSON.stringify({
+          sourceFile: "other.agency",
+          tests: [
+            {
+              nodeName: "t",
+              input: "",
+              expectedOutput: "1",
+              evaluationCriteria: [{ type: "exact" }],
+            },
+          ],
+        }),
+      );
+      await expect(
+        snapshotAgencyTestGraders({ test: loadOne(foreignDir), suite: undefined }),
+      ).rejects.toThrow(/sibling harness/);
+    },
+  );
+
+  test(
+    "a sibling graders.ts composes into the snapshot with distinct names",
+    { timeout: 60_000 },
+    async () => {
+      const suiteDir = makeEvalTestDir({
+        gradersTs:
+          'import { grader } from "agency-lang/eval";\n' +
+          'export default grader(() => true, { name: "sibling-check" });\n',
+      });
+      const snap = await snapshotAgencyTestGraders({
+        test: loadOne(suiteDir),
+        suite: undefined,
+      });
+      expect(snap.bundleFile).toMatch(/\.mjs$/);
+      // The harness pair rode along as external files.
+      expect(Object.keys(snap.judgeFiles).sort()).toEqual(
+        expect.arrayContaining([expect.stringContaining("suite-tests")]),
+      );
+    },
+  );
 });

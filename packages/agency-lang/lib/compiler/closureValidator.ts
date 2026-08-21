@@ -17,7 +17,7 @@ import * as path from "path";
 import { nanoid } from "nanoid";
 import { parseAgency } from "@/parser.js";
 import { getAllImports } from "@/analysis/imports.js";
-import { importKind, resolveAgencyImportPath } from "@/importPaths.js";
+import { importKind, parsePkgImport, resolveAgencyImportPath } from "@/importPaths.js";
 import { splicesIn } from "@/preprocessors/expandSplices.js";
 import { isStrictDescendant } from "@/utils.js";
 import type { SourceLocation } from "@/types/base.js";
@@ -56,6 +56,10 @@ type ValidatedClosureData = {
   localEdges: LocalImportEdge[];
   entryModuleId: string;
   pkgModules: string[];
+  /** Caller-level pkg imports resolve via createRequire from the importing
+   *  file; the mirror has no node_modules, so compilation needs each
+   *  package's validated real root to link under the mirror. */
+  pkgAnchors: { packageName: string; packageRoot: string }[];
 };
 
 export class ClosureValidationError extends Error {
@@ -105,38 +109,33 @@ type WalkContext = {
   collect: boolean;
 };
 
-export function validateClosure(args: ValidateClosureArgs): ValidatedClosure {
-  const violations: string[] = [];
-  const modules: Record<string, ValidatedModule> = {};
-  const localEdges: LocalImportEdge[] = [];
-  const pkgModules: string[] = [];
-  const visited: Record<string, true> = {};
+/** The recursive walk and its accumulators, extracted so validateClosure
+ *  stays a short orchestration: resolve the root, walk the entry, throw
+ *  or freeze. */
+class ClosureWalker {
+  readonly violations: string[] = [];
+  readonly modules: Record<string, ValidatedModule> = {};
+  readonly localEdges: LocalImportEdge[] = [];
+  readonly pkgModules: string[] = [];
+  readonly pkgAnchors: { packageName: string; packageRoot: string }[] = [];
+  private readonly visited: Record<string, true> = {};
+  /** Local imports written in the string entry resolve against the root,
+   *  as if the entry sat at the root itself. */
+  readonly virtualEntryBase: string | null;
 
-  let root: string | null = null;
-  if (args.dir !== "") {
-    try {
-      root = fs.realpathSync(path.resolve(args.dir));
-    } catch (e) {
-      throw new ClosureValidationError([
-        `sandbox dir '${args.dir}' cannot be resolved: ${messageOf(e)}`,
-      ]);
-    }
+  constructor(root: string | null) {
+    this.virtualEntryBase = root === null ? null : path.join(root, "__virtual_entry__.agency");
   }
 
-  // Resolve local imports written in the string entry against the root, as
-  // if the entry sat at the root itself.
-  const virtualEntryBase = root === null ? null : path.join(root, "__virtual_entry__.agency");
-
-  const walkParsed = (
+  walkParsed(
     moduleId: string,
     filePath: string | null,
-    source: string,
     program: AgencyProgram,
     ctx: WalkContext,
-  ): void => {
+  ): void {
     const label = filePath ?? "<entry source>";
     if (splicesIn(program).length > 0) {
-      violations.push(
+      this.violations.push(
         `${label} contains a compile-time splice, which sandboxed compilation refuses`,
       );
     }
@@ -144,91 +143,102 @@ export function validateClosure(args: ValidateClosureArgs): ValidatedClosure {
       const kind = importKind(imp.path);
       if (kind === "stdlib") continue;
       if (kind === "node") {
-        violations.push(
+        this.violations.push(
           `${label} imports '${imp.path}', which is not Agency source (Node/JS modules are not allowed in sandboxed code)`,
         );
         continue;
       }
       if (kind === "pkg") {
-        walkPackage(imp.path, filePath ?? virtualEntryBase ?? entryBaseForPkg());
+        this.walkPackage(imp.path, filePath ?? this.virtualEntryBase ?? entryBaseForPkg(), ctx);
         continue;
       }
-      // kind === "local"
-      if (!imp.path.endsWith(".agency")) {
-        violations.push(
-          `${label} imports '${imp.path}', which is not Agency source (only .agency files may be imported in sandboxed code)`,
-        );
-        continue;
-      }
-      if (ctx.root === null) {
-        violations.push(
-          `${label} imports '${imp.path}', but there is no sandbox dir to resolve local imports against (pass dir)`,
-        );
-        continue;
-      }
-      const base = filePath === null ? (virtualEntryBase as string) : filePath;
-      const resolved = path.resolve(path.dirname(base), imp.path);
-      let canonical: string;
-      try {
-        canonical = fs.realpathSync(resolved);
-      } catch (e) {
-        violations.push(`${label}: import '${imp.path}' cannot be read: ${messageOf(e)}`);
-        continue;
-      }
-      if (!isStrictDescendant(ctx.root, canonical)) {
-        violations.push(
-          `${label}: import '${imp.path}' resolves to '${canonical}', which is outside the sandbox dir '${ctx.root}'`,
-        );
-        continue;
-      }
-      if (ctx.collect) {
-        if (imp.pathLoc === undefined) {
-          violations.push(
-            `${label}: internal diagnostic — parsed import '${imp.path}' carries no module-path location`,
-          );
-          continue;
-        }
-        localEdges.push({
-          fromModuleId: moduleId,
-          importPath: imp.path,
-          toModuleId: canonical,
-          modulePathLoc: imp.pathLoc,
-        });
-      }
-      walkFile(canonical, ctx, label);
+      this.walkLocalImport(moduleId, label, filePath, imp, ctx);
     }
-  };
+  }
 
-  const walkFile = (canonical: string, ctx: WalkContext, importedFrom: string): void => {
-    if (visited[canonical]) return;
-    visited[canonical] = true;
+  private walkLocalImport(
+    moduleId: string,
+    label: string,
+    filePath: string | null,
+    imp: { path: string; pathLoc?: SourceLocation },
+    ctx: WalkContext,
+  ): void {
+    if (!imp.path.endsWith(".agency")) {
+      this.violations.push(
+        `${label} imports '${imp.path}', which is not Agency source (only .agency files may be imported in sandboxed code)`,
+      );
+      return;
+    }
+    if (ctx.root === null) {
+      this.violations.push(
+        `${label} imports '${imp.path}', but there is no sandbox dir to resolve local imports against (pass dir)`,
+      );
+      return;
+    }
+    const base = filePath === null ? (this.virtualEntryBase as string) : filePath;
+    const resolved = path.resolve(path.dirname(base), imp.path);
+    let canonical: string;
+    try {
+      canonical = fs.realpathSync(resolved);
+    } catch (e) {
+      this.violations.push(`${label}: import '${imp.path}' cannot be read: ${messageOf(e)}`);
+      return;
+    }
+    if (!isStrictDescendant(ctx.root, canonical)) {
+      this.violations.push(
+        `${label}: import '${imp.path}' resolves to '${canonical}', which is outside the sandbox dir '${ctx.root}'`,
+      );
+      return;
+    }
+    if (ctx.collect) {
+      if (imp.pathLoc === undefined) {
+        this.violations.push(
+          `${label}: internal diagnostic — parsed import '${imp.path}' carries no module-path location`,
+        );
+        return;
+      }
+      this.localEdges.push({
+        fromModuleId: moduleId,
+        importPath: imp.path,
+        toModuleId: canonical,
+        modulePathLoc: imp.pathLoc,
+      });
+    }
+    this.walkFile(canonical, ctx, label);
+  }
+
+  walkFile(canonical: string, ctx: WalkContext, importedFrom: string): void {
+    if (this.visited[canonical]) return;
+    this.visited[canonical] = true;
     let source: string;
     try {
       source = fs.readFileSync(canonical, "utf-8");
     } catch (e) {
-      violations.push(`${importedFrom}: '${canonical}' cannot be read: ${messageOf(e)}`);
+      this.violations.push(`${importedFrom}: '${canonical}' cannot be read: ${messageOf(e)}`);
       return;
     }
     const parsed = parseAgency(source, {}, false);
     if (!parsed.success) {
-      violations.push(`${canonical} failed to parse: ${parsed.message ?? "unknown parse error"}`);
+      this.violations.push(
+        `${canonical} failed to parse: ${parsed.message ?? "unknown parse error"}`,
+      );
       return;
     }
     if (ctx.collect && ctx.root !== null) {
-      modules[canonical] = {
+      this.modules[canonical] = {
         source,
         relPath: toPosixRelPath(ctx.root, canonical),
       };
     }
-    walkParsed(canonical, canonical, source, parsed.result, ctx);
-  };
+    this.walkParsed(canonical, canonical, parsed.result, ctx);
+  }
 
-  const walkPackage = (pkgPath: string, fromFile: string): void => {
+  private walkPackage(pkgPath: string, fromFile: string, ctx: WalkContext): void {
     let resolved: string;
     try {
       resolved = resolveAgencyImportPath(pkgPath, fromFile);
     } catch (e) {
-      violations.push(`import '${pkgPath}' cannot be resolved: ${messageOf(e)}`);
+      this.violations.push(`import '${pkgPath}' cannot be resolved: ${messageOf(e)}`);
       return;
     }
     let pkgRootReal: string;
@@ -246,19 +256,50 @@ export function validateClosure(args: ValidateClosureArgs): ValidatedClosure {
       }
       pkgRootReal = probe;
     } catch (e) {
-      violations.push(`import '${pkgPath}' cannot be read: ${messageOf(e)}`);
+      this.violations.push(`import '${pkgPath}' cannot be read: ${messageOf(e)}`);
       return;
     }
-    if (!pkgModules.includes(pkgPath)) pkgModules.push(pkgPath);
-    walkFile(canonical, { root: pkgRootReal, collect: false }, `pkg import '${pkgPath}'`);
-  };
+    if (!this.pkgModules.includes(pkgPath)) this.pkgModules.push(pkgPath);
+    // Only caller-level imports compile from the mirror and need an anchor;
+    // package-internal pkg imports resolve from the real package files.
+    if (ctx.collect) {
+      const { packageName } = parsePkgImport(pkgPath);
+      const existing = this.pkgAnchors.find((a) => a.packageName === packageName);
+      if (existing === undefined) {
+        this.pkgAnchors.push({ packageName, packageRoot: pkgRootReal });
+      } else if (existing.packageRoot !== pkgRootReal) {
+        this.violations.push(
+          `package '${packageName}' resolves to two different installations ` +
+            `('${existing.packageRoot}' and '${pkgRootReal}'), which sandboxed compilation cannot mirror`,
+        );
+        return;
+      }
+    }
+    this.walkFile(canonical, { root: pkgRootReal, collect: false }, `pkg import '${pkgPath}'`);
+  }
+}
 
-  // Only pkg resolution from a string entry with no dir needs SOME anchor:
-  // createRequire walks node_modules upward from it. The invoking process's
-  // cwd is the natural anchor there (matching where the process would
-  // resolve its own dependencies); local imports never use this.
-  const entryBaseForPkg = (): string => path.join(process.cwd(), "__virtual_entry__.agency");
+// Only pkg resolution from a string entry with no dir needs SOME anchor:
+// createRequire walks node_modules upward from it. The invoking process's
+// cwd is the natural anchor there (matching where the process would
+// resolve its own dependencies); local imports never use this.
+function entryBaseForPkg(): string {
+  return path.join(process.cwd(), "__virtual_entry__.agency");
+}
 
+export function validateClosure(args: ValidateClosureArgs): ValidatedClosure {
+  let root: string | null = null;
+  if (args.dir !== "") {
+    try {
+      root = fs.realpathSync(path.resolve(args.dir));
+    } catch (e) {
+      throw new ClosureValidationError([
+        `sandbox dir '${args.dir}' cannot be resolved: ${messageOf(e)}`,
+      ]);
+    }
+  }
+
+  const walker = new ClosureWalker(root);
   const callerCtx: WalkContext = { root, collect: true };
 
   let entryModuleId: string;
@@ -288,31 +329,30 @@ export function validateClosure(args: ValidateClosureArgs): ValidatedClosure {
         `entry '${args.entry.file}' resolves to '${entryModuleId}', which is outside the sandbox dir '${root}'`,
       ]);
     }
-    walkFile(entryModuleId, callerCtx, `entry '${args.entry.file}'`);
+    walker.walkFile(entryModuleId, callerCtx, `entry '${args.entry.file}'`);
   } else {
     entryModuleId = `<entry:${nanoid()}>`;
-    const source = args.entry.source;
-    const parsed = parseAgency(source, {}, false);
+    const parsed = parseAgency(args.entry.source, {}, false);
     if (!parsed.success) {
       throw new ClosureValidationError([
         `entry source failed to parse: ${parsed.message ?? "unknown parse error"}`,
       ]);
     }
-    modules[entryModuleId] = {
-      source,
+    walker.modules[entryModuleId] = {
+      source: args.entry.source,
       relPath: pickEntryRelPath(),
     };
-    walkParsed(entryModuleId, null, source, parsed.result, callerCtx);
+    walker.walkParsed(entryModuleId, null, parsed.result, callerCtx);
   }
 
-  if (violations.length > 0) {
-    throw new ClosureValidationError(violations);
+  if (walker.violations.length > 0) {
+    throw new ClosureValidationError(walker.violations);
   }
 
   // The entry relPath must not collide with any real module's relPath.
-  const entryModule = modules[entryModuleId];
+  const entryModule = walker.modules[entryModuleId];
   if (entryModule !== undefined && "source" in args.entry) {
-    const taken = Object.entries(modules)
+    const taken = Object.entries(walker.modules)
       .filter(([id]) => id !== entryModuleId)
       .map(([, m]) => m.relPath);
     while (taken.includes(entryModule.relPath)) {
@@ -322,10 +362,11 @@ export function validateClosure(args: ValidateClosureArgs): ValidatedClosure {
 
   const data: ValidatedClosureData = Object.freeze({
     root,
-    modules,
-    localEdges,
+    modules: walker.modules,
+    localEdges: walker.localEdges,
     entryModuleId,
-    pkgModules,
+    pkgModules: walker.pkgModules,
+    pkgAnchors: walker.pkgAnchors,
   });
   return data as unknown as ValidatedClosure;
 }

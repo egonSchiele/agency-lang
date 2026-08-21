@@ -12,7 +12,9 @@
 // could print a forged envelope.
 //
 // argv (via std::args positionals): scratchDir jsonFilename sourceFilename
-// reportPath [maxCost]
+// reportDir reportFilename [maxCost]. The report destination is split
+// because write() requires a filename contained in its dir — an absolute
+// filename is refused.
 import { _testFileForGrading, _formatFailurePayload } from "std::agency"
 import { parseArgs } from "std::args"
 
@@ -51,8 +53,9 @@ export node main(): string {
   const scratchDir = parsed.positionals[0]
   const jsonFilename = parsed.positionals[1]
   const sourceFilename = parsed.positionals[2]
-  const reportPath = parsed.positionals[3]
-  const maxCostArg = parsed.positionals[4] ?? ""
+  const reportDir = parsed.positionals[3]
+  const reportFilename = parsed.positionals[4]
+  const maxCostArg = parsed.positionals[5] ?? ""
   const maxCost = if maxCostArg == "" then null else Number(maxCostArg)
 
   const state = { phase: "awaitingJsonRead" }
@@ -95,7 +98,7 @@ export node main(): string {
   if (result is success(report)) {
     envelope = { status: "tested", report: report }
   }
-  const written = write(reportPath, JSON.stringify(envelope), ".") with approve
+  const written = write(reportFilename, JSON.stringify(envelope), reportDir) with approve
   if (isFailure(written)) {
     return "report write failed"
   }

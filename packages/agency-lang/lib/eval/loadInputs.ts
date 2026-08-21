@@ -152,8 +152,7 @@ function loadTestDir(testDir: string, makeId: MakeId, options: LoadOptions): Tes
   }
   const agencyTests = discoverAgencyTests(testDir);
   // A test graded by discovered agency tests needs no goal of its own.
-  const testOptions =
-    agencyTests.length > 0 ? { ...options, requireGoal: false } : options;
+  const testOptions = agencyTests.length > 0 ? { ...options, requireGoal: false } : options;
   const test = normalizeInput(spec, testDir, makeId, testOptions);
   if (agencyTests.length > 0) {
     test.agencyTests = agencyTests;

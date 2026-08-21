@@ -706,7 +706,15 @@ async function runTestWithRetries(
       log(color.yellow(`  Retry ${attempt - 1}/${testCase.retry}...`));
     }
     try {
-      outcome = await runSingleTest(config, sourceFilePath, testCase, fetchMocks, timeoutMs, signal, log);
+      outcome = await runSingleTest(
+        config,
+        sourceFilePath,
+        testCase,
+        fetchMocks,
+        timeoutMs,
+        signal,
+        log,
+      );
       if (outcome === "passed" || outcome === "aborted") break;
     } catch (e) {
       exitIfSignal(e);

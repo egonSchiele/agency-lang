@@ -5,7 +5,9 @@ import * as os from "os";
 import { compileSandboxed, compileValidatedClosure } from "./compileSandboxed.js";
 import { validateClosure } from "./closureValidator.js";
 import { compileSource } from "./compile.js";
+import { materializeCompiledScript } from "../runtime/ipc.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
+import { createRequire } from "module";
 
 // ESM live bindings can't be spied on after the fact, so wrap runGenerator
 // at module-mock time: the wrapper counts calls and delegates to the real
@@ -150,10 +152,13 @@ describe("compileSandboxed", () => {
       // below could never fail.
       writeSpliceFixture(trustedDir);
       const controlBefore = generatorCalls.count;
-      const trusted = compileSource(fs.readFileSync(path.join(trustedDir, "main.agency"), "utf-8"), {
-        typechecker: { enabled: true },
-        sourcePath: path.join(trustedDir, "main.agency"),
-      });
+      const trusted = compileSource(
+        fs.readFileSync(path.join(trustedDir, "main.agency"), "utf-8"),
+        {
+          typechecker: { enabled: true },
+          sourcePath: path.join(trustedDir, "main.agency"),
+        },
+      );
       expect(trusted.success).toBe(true);
       expect(generatorCalls.count).toBeGreaterThan(controlBefore);
 
@@ -173,9 +178,73 @@ describe("compileSandboxed", () => {
     }
   });
 
+  test("pkg:: imports compile from the mirror and their bare specifiers resolve at runtime", () => {
+    const dir = makeDir(".cs-pkg-");
+    try {
+      // Same package shape as closureValidator.test.ts, plus compiled JS so
+      // the emitted bare specifier is resolvable the way runtime Node
+      // resolution would do it.
+      const writePkg = (name: string, dirName: string) => {
+        const pkgDir = path.join(dir, "node_modules", ...dirName.split("/"));
+        fs.mkdirSync(pkgDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(pkgDir, "package.json"),
+          JSON.stringify({ name, version: "1.0.0", agency: "./index.agency", main: "./index.js" }),
+        );
+        fs.writeFileSync(path.join(pkgDir, "index.agency"), HELPER);
+        fs.writeFileSync(path.join(pkgDir, "index.js"), "export const helperValue = () => 7;\n");
+        return pkgDir;
+      };
+      const pkgDir = writePkg("testpkg", "testpkg");
+      const scopedDir = writePkg("@scope/tools", "@scope/tools");
+      fs.writeFileSync(
+        path.join(dir, "main.agency"),
+        'import { helperValue } from "pkg::testpkg"\n' +
+          'import { helperValue as scoped } from "pkg::@scope/tools"\n' +
+          "export node main(): number { return helperValue() + scoped() }\n",
+      );
+      const result = compileSandboxed({ entry: { file: "main.agency" }, dir });
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      // The generated JS names the packages by bare specifier.
+      expect(result.code).toContain('"testpkg"');
+      expect(result.code).toContain('"@scope/tools"');
+      expect(result.pkgAnchors).toEqual([
+        { packageName: "testpkg", packageRoot: fs.realpathSync(pkgDir) },
+        { packageName: "@scope/tools", packageRoot: fs.realpathSync(scopedDir) },
+      ]);
+
+      // Runtime leg: the materialized script dir gets node_modules links, so
+      // Node resolution from the script finds each package's compiled JS.
+      const scriptPath = materializeCompiledScript({
+        moduleId: result.moduleId,
+        code: result.code,
+        pkgAnchors: result.pkgAnchors,
+      });
+      try {
+        const req = createRequire(scriptPath);
+        expect(fs.realpathSync(req.resolve("testpkg"))).toBe(
+          fs.realpathSync(path.join(pkgDir, "index.js")),
+        );
+        expect(fs.realpathSync(req.resolve("@scope/tools"))).toBe(
+          fs.realpathSync(path.join(scopedDir, "index.js")),
+        );
+      } finally {
+        safeDeleteDirectoryWithin(
+          path.join(process.cwd(), ".agency-tmp"),
+          path.dirname(scriptPath),
+        );
+      }
+    } finally {
+      cleanup(dir);
+    }
+  });
+
   test("dir '' with a relative import fails from validation", () => {
     const result = compileSandboxed({
-      entry: { source: 'import { x } from "./x.agency"\nexport node main(): number { return 1 }\n' },
+      entry: {
+        source: 'import { x } from "./x.agency"\nexport node main(): number { return 1 }\n',
+      },
       dir: "",
     });
     expect(result.success).toBe(false);

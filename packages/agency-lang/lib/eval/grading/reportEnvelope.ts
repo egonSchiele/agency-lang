@@ -44,7 +44,9 @@ export function parseReportEnvelope(text: string): ReportEnvelope {
   }
   const result = envelopeSchema.safeParse(raw);
   if (!result.success) {
-    throw new Error(`report envelope is malformed: ${result.error.issues[0]?.message ?? "invalid"}`);
+    throw new Error(
+      `report envelope is malformed: ${result.error.issues[0]?.message ?? "invalid"}`,
+    );
   }
   return result.data;
 }

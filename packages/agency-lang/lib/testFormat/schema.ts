@@ -36,11 +36,13 @@ const sandboxInterruptSchema = z
     }
   });
 
-const fullInterruptSchema = z.object({
+const fullInterruptSchema = z.strictObject({
   action: z.enum(["approve", "reject", "modify", "resolve"]),
   expectedMessage: z.string().optional(),
   modifiedArgs: z.record(z.string(), z.unknown()).optional(),
   value: z.unknown().optional(),
+  /** The answer a `resolve` action responds with. */
+  resolvedValue: z.unknown().optional(),
 });
 
 const positiveMs = (field: string) =>
@@ -99,28 +101,25 @@ const SANDBOX_REFUSED_CASE_FIELDS = [
   "useTestLLMProvider",
 ] as const;
 
-const sandboxCriteriaSchema = z
-  .array(z.unknown())
-  .superRefine((criteria, ctx) => {
-    if (criteria.length !== 1) {
-      ctx.addIssue({
-        code: "custom",
-        message: `evaluationCriteria must be exactly [{ "type": "exact" }] in the sandbox profile (got ${criteria.length} entries)`,
-      });
-      return;
-    }
-    const only = criteria[0];
-    if (
-      typeof only !== "object" ||
-      only === null ||
-      (only as Record<string, unknown>).type !== "exact"
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        message: `evaluationCriteria must be exactly [{ "type": "exact" }] in the sandbox profile`,
-      });
-    }
-  });
+// Strict: `{ type: "exact", judgePrompt: "…" }` must fail rather than
+// silently dropping the extra configuration.
+const exactCriterionSchema = z.strictObject({ type: z.literal("exact") });
+
+const sandboxCriteriaSchema = z.array(z.unknown()).superRefine((criteria, ctx) => {
+  if (criteria.length !== 1) {
+    ctx.addIssue({
+      code: "custom",
+      message: `evaluationCriteria must be exactly [{ "type": "exact" }] in the sandbox profile (got ${criteria.length} entries)`,
+    });
+    return;
+  }
+  if (!exactCriterionSchema.safeParse(criteria[0]).success) {
+    ctx.addIssue({
+      code: "custom",
+      message: `evaluationCriteria must be exactly [{ "type": "exact" }] in the sandbox profile`,
+    });
+  }
+});
 
 const sandboxCaseSchema = z
   .strictObject({
@@ -212,26 +211,32 @@ export function parseTestFileSandbox(jsonText: string, jsonFilename: string): Pa
 }
 
 // ---------------------------------------------------------------------------
-// Full profile — the complete field set the CLI runner supports. Mock and
-// clock internals are validated by their owners (deterministicClient,
-// fetchMock) at use time; here they are shape-checked as arrays/records so
-// a typo'd field name still fails loudly.
+// Full profile — the complete field set the CLI runner supports, strict at
+// every level so a typo'd field name fails loudly instead of silently
+// falling back to a default. Mock and clock ENTRY internals are validated
+// by their owners (deterministicClient, fetchMock) at use time; here they
+// are shape-checked as arrays/records.
 // ---------------------------------------------------------------------------
 
 const fullCriteriaSchema = z
   .array(
     z.union([
-      z.object({ type: z.literal("exact") }),
-      z.object({
+      exactCriterionSchema,
+      z.strictObject({
         type: z.literal("llmJudge"),
         judgePrompt: z.string(),
-        desiredAccuracy: z.number(),
+        // The judge returns a 0–100 score; desiredAccuracy is compared
+        // against it, so a fraction like 0.9 would pass vacuously.
+        desiredAccuracy: z
+          .number()
+          .min(0)
+          .max(100, { message: "desiredAccuracy is a 0–100 judge-score threshold" }),
       }),
     ]),
   )
   .min(1, { message: "evaluationCriteria must name at least one criterion" });
 
-const fullCaseSchema = z.object({
+const fullCaseSchema = z.strictObject({
   nodeName: z.string().min(1),
   input: z.string(),
   expectedOutput: z.string(),
@@ -241,6 +246,9 @@ const fullCaseSchema = z.object({
   retry: z.number().optional(),
   skip: z.boolean().optional(),
   skipOnCI: z.boolean().optional(),
+  /** Documentation beside a per-case `skip`; only the file-level
+   *  skipReason is printed by the runner. */
+  skipReason: z.string().optional(),
   timeoutMs: z.number().optional(),
   llmMocks: z.union([z.array(z.unknown()), z.record(z.string(), z.unknown())]).optional(),
   useTestLLMProvider: z.boolean().optional(),
@@ -249,7 +257,7 @@ const fullCaseSchema = z.object({
   fakeClock: z.boolean().optional(),
 });
 
-const fullFileSchema = z.object({
+const fullFileSchema = z.strictObject({
   sourceFile: z.string().optional(),
   tests: z.array(fullCaseSchema).optional(),
   expectedCompileError: z.string().optional(),

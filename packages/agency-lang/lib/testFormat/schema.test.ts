@@ -54,7 +54,12 @@ describe("parseTestFileSandbox", () => {
       sandbox({
         ...VALID,
         tests: [
-          { nodeName: "n", input: "", expectedOutput: "ok", evaluationCriteria: [{ type: "exact" }] },
+          {
+            nodeName: "n",
+            input: "",
+            expectedOutput: "ok",
+            evaluationCriteria: [{ type: "exact" }],
+          },
         ],
       }),
     ).toThrow(/quote|JSON/i);
@@ -64,7 +69,10 @@ describe("parseTestFileSandbox", () => {
     expect(() => parseTestFileSandbox("{ not json", "x.test.json")).toThrow(/x\.test\.json/);
   });
 
-  test.each([["missing", undefined], ["empty", []]])("%s tests array is an error", (_, tests) => {
+  test.each([
+    ["missing", undefined],
+    ["empty", []],
+  ])("%s tests array is an error", (_, tests) => {
     const json: Record<string, unknown> = { ...VALID };
     if (tests === undefined) delete json.tests;
     else json.tests = tests;
@@ -147,19 +155,33 @@ describe("parseTestFileSandbox", () => {
 
   test("unknown top-level and case fields are refused by name", () => {
     expect(() => sandbox({ ...VALID, surprise: 1 })).toThrow(/surprise/);
+    expect(() => sandbox({ ...VALID, tests: [{ ...VALID.tests[0], surprise: 1 }] })).toThrow(
+      /surprise/,
+    );
+  });
+
+  test("an exact criterion carrying extra configuration is refused", () => {
     expect(() =>
-      sandbox({ ...VALID, tests: [{ ...VALID.tests[0], surprise: 1 }] }),
-    ).toThrow(/surprise/);
+      sandbox({
+        ...VALID,
+        tests: [
+          {
+            ...VALID.tests[0],
+            evaluationCriteria: [{ type: "exact", judgePrompt: "ignored" }],
+          },
+        ],
+      }),
+    ).toThrow(/exactly \[\{ "type": "exact" \}\]/);
   });
 
   test("invalid field types and timeouts are refused", () => {
     expect(() => sandbox({ ...VALID, defaultTimeoutMs: "soon" })).toThrow(/defaultTimeoutMs/);
-    expect(() =>
-      sandbox({ ...VALID, tests: [{ ...VALID.tests[0], timeoutMs: -5 }] }),
-    ).toThrow(/timeoutMs/);
-    expect(() =>
-      sandbox({ ...VALID, tests: [{ ...VALID.tests[0], nodeName: 7 }] }),
-    ).toThrow(/nodeName/);
+    expect(() => sandbox({ ...VALID, tests: [{ ...VALID.tests[0], timeoutMs: -5 }] })).toThrow(
+      /timeoutMs/,
+    );
+    expect(() => sandbox({ ...VALID, tests: [{ ...VALID.tests[0], nodeName: 7 }] })).toThrow(
+      /nodeName/,
+    );
   });
 
   test("valid timeouts are carried through", () => {
@@ -199,9 +221,7 @@ describe("parseTestFileFull", () => {
           nodeName: "n",
           input: "",
           expectedOutput: "1",
-          evaluationCriteria: [
-            { type: "llmJudge", judgePrompt: "good?", desiredAccuracy: 0.9 },
-          ],
+          evaluationCriteria: [{ type: "llmJudge", judgePrompt: "good?", desiredAccuracy: 90 }],
           llmMocks: [{ response: "hi" }],
           fakeClock: true,
           argv: ["--flag"],
@@ -210,13 +230,59 @@ describe("parseTestFileFull", () => {
           retry: 2,
           interruptHandlers: [
             { action: "modify", modifiedArgs: { a: 1 } },
-            { action: "resolve" },
+            { action: "resolve", resolvedValue: "42" },
           ],
         },
       ],
     };
     const parsed = parseTestFileFull(JSON.stringify(kitchenSink), "x.test.json");
     expect(parsed.tests?.[0].interruptHandlers?.[0].action).toBe("modify");
+    // resolvedValue must survive parsing: the runner answers a `resolve`
+    // action with it.
+    expect(parsed.tests?.[0].interruptHandlers?.[1].resolvedValue).toBe("42");
+  });
+
+  test("unknown keys fail loudly at every nesting level", () => {
+    const base = {
+      tests: [
+        {
+          nodeName: "n",
+          input: "",
+          expectedOutput: "1",
+          evaluationCriteria: [{ type: "exact" }] as unknown[],
+          interruptHandlers: [{ action: "approve" }] as unknown[],
+        },
+      ],
+    };
+    const parse = (raw: object) => () => parseTestFileFull(JSON.stringify(raw), "x.test.json");
+    expect(parse({ ...base, defaultTimeoutMS: 1 })).toThrow(/defaultTimeoutMS/);
+    expect(parse({ tests: [{ ...base.tests[0], timeoutMS: 1 }] })).toThrow(/timeoutMS/);
+    expect(
+      parse({
+        tests: [{ ...base.tests[0], interruptHandlers: [{ action: "approve", vale: 1 }] }],
+      }),
+    ).toThrow(/vale/);
+    expect(
+      parse({
+        tests: [{ ...base.tests[0], evaluationCriteria: [{ type: "exact", judgePrompt: "x" }] }],
+      }),
+    ).toThrow(/criteria|judgePrompt/i);
+  });
+
+  test("desiredAccuracy is a 0–100 judge-score threshold, not a fraction", () => {
+    const withAccuracy = (desiredAccuracy: number) =>
+      JSON.stringify({
+        tests: [
+          {
+            nodeName: "n",
+            input: "",
+            expectedOutput: "1",
+            evaluationCriteria: [{ type: "llmJudge", judgePrompt: "good?", desiredAccuracy }],
+          },
+        ],
+      });
+    expect(() => parseTestFileFull(withAccuracy(70), "x.test.json")).not.toThrow();
+    expect(() => parseTestFileFull(withAccuracy(101), "x.test.json")).toThrow(/0–100|100/);
   });
 
   test("empty and unknown evaluationCriteria are errors in the full profile too", () => {

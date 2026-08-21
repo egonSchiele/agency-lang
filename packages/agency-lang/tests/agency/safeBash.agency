@@ -276,3 +276,62 @@ node longOutputIsTruncated() {
   }
   return [result.value.length, result.value.endsWith("\n[truncated]")]
 }
+
+// --- resolved redirect targets (contained-filenames spec) ---
+
+def writeExecOf(source: string, cwd: string): any {
+  return match(planFor(source, cwd).execution) {
+    { kind: "write", content, filename, dir, mode } => {
+      return { dir: dir, filename: filename, content: content, mode: mode }
+    }
+    { kind } => {
+      return { kind: kind }
+    }
+  }
+}
+
+def writePayloadOf(source: string, cwd: string): any {
+  const plan = planFor(source, cwd)
+  for (e in plan.effects) {
+    if (e.name == "std::write") {
+      return e.payload
+    }
+  }
+  return { kind: "no-write-effect" }
+}
+
+// An absolute redirect target reports its own parent, not the cwd: the
+// policy judges the real destination.
+node absoluteRedirectReportsParent(): boolean {
+  const exec = writeExecOf("echo hi > /cf-sb-nonexistent-abs/out.txt", "/repo")
+  return exec.dir == "/cf-sb-nonexistent-abs" && exec.filename == "out.txt"
+}
+
+// The payload and the execution derive from one shared WritePayload, so
+// they must agree field for field — on the shell-free echo path AND the
+// recognized-command path (git status > target).
+node payloadExecutionParity(): boolean {
+  const exec = writeExecOf("echo hi > sub/out.txt", "/repo")
+  const payload = writePayloadOf("echo hi > sub/out.txt", "/repo")
+  const fieldsAgree = exec.dir == payload.dir && exec.filename == payload.filename
+  const contentAgrees = exec.content == payload.content && exec.mode == payload.mode
+  const resolvedRight = exec.dir == "/repo/sub" && exec.filename == "out.txt"
+  const gitPayload = writePayloadOf("git status > sub/g.txt", "/repo")
+  const gitOk = gitPayload.dir == "/repo/sub" && gitPayload.filename == "g.txt"
+  return fieldsAgree && contentAgrees && resolvedRight && gitOk
+}
+
+// Quote-aware tilde. The bash word grammar refuses an unquoted `~`
+// outright, so that spelling can never reach the narrow write path: the
+// whole command falls back to the broad std::bash question, which is
+// strictly safer than expanding it ourselves. Quoted tildes parse and
+// stay a literal name beneath the cwd, exactly as bash treats them.
+node tildeRedirectQuoting(): boolean {
+  const unquoted = writeExecOf("echo hi > ~/cf-sb-tilde.txt", "/repo")
+  const single = writeExecOf("echo hi > '~/cf-sb-tilde.txt'", "/repo")
+  const double = writeExecOf("echo hi > \"~/cf-sb-tilde.txt\"", "/repo")
+  const unquotedBroad = unquoted.kind == "bash"
+  const singleLiteral = single.dir == "/repo/~" && single.filename == "cf-sb-tilde.txt"
+  const doubleLiteral = double.dir == "/repo/~" && double.filename == "cf-sb-tilde.txt"
+  return unquotedBroad && singleLiteral && doubleLiteral
+}

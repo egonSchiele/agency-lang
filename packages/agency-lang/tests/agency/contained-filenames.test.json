@@ -1,0 +1,191 @@
+{
+  "tests": [
+    {
+      "nodeName": "containedWriteReadRoundtrip",
+      "description": "a contained write and read round-trip inside dir",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "containedBinaryRoundtrip",
+      "description": "a contained binary write and read round-trip inside dir",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "writeEscapeDotDot",
+      "description": "an upward write escape fails in preparation, before any interrupt",
+      "input": "",
+      "expectedOutput": "\"prep\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "readEscapeDotDot",
+      "description": "an upward read escape fails in preparation, before any interrupt",
+      "input": "",
+      "expectedOutput": "\"prep\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "writeBinaryEscape",
+      "description": "an upward binary write escape fails in preparation",
+      "input": "",
+      "expectedOutput": "\"prep\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "readBinaryEscape",
+      "description": "an upward binary read escape fails in preparation",
+      "input": "",
+      "expectedOutput": "\"prep\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "writeAbsoluteEscape",
+      "description": "an absolute filename fails in preparation",
+      "input": "",
+      "expectedOutput": "\"prep\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "writeTildeEscape",
+      "description": "a tilde filename fails in preparation",
+      "input": "",
+      "expectedOutput": "\"prep\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "exactTeachingSentences",
+      "description": "escape errors carry the exact per-operation teaching sentence",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "editEscapeDotDot",
+      "description": "an upward edit escape fails in preparation",
+      "input": "",
+      "expectedOutput": "\"prep\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "typecheckFileTildeEscape",
+      "description": "typecheckFile rejects a tilde filename in preparation",
+      "input": "",
+      "expectedOutput": "\"prep\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "writeASTTildeEscape",
+      "description": "writeAST rejects a tilde filename in preparation",
+      "input": "",
+      "expectedOutput": "\"prep\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "loadTemplateTildeEscape",
+      "description": "loadTemplate rejects a tilde filename in preparation",
+      "input": "",
+      "expectedOutput": "\"prep\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "formatFileTildeEscape",
+      "description": "formatFile rejects a tilde filename in preparation",
+      "input": "",
+      "expectedOutput": "\"prep\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "writeASTContained",
+      "description": "writeAST still writes a contained file",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "formatFileContained",
+      "description": "formatFile still formats a contained file",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "typecheckFileContained",
+      "description": "typecheckFile still checks a contained file",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

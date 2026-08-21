@@ -1,0 +1,11 @@
+{
+  "outsideRejectedByPolicy": true,
+  "workApproved": true,
+  "noOutsideReport": true,
+  "tildePrep": true,
+  "absolutePrep": true,
+  "upwardPrep": true,
+  "outLinkPrep": true,
+  "inLinkApproved": true,
+  "dirLinkRejected": true
+}

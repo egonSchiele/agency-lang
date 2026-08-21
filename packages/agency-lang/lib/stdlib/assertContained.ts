@@ -81,7 +81,7 @@ export async function assertContained(
  * would become `//`/`C:\\` and a naive `startsWith` check would refuse
  * every descendant. Path comparison is case-insensitive on Windows.
  */
-function isContained(target: string, root: string): boolean {
+export function isContained(target: string, root: string): boolean {
   const t = process.platform === "win32" ? target.toLowerCase() : target;
   const r = process.platform === "win32" ? root.toLowerCase() : root;
   if (t === r) return true;

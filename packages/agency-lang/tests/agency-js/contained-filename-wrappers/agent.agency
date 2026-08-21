@@ -1,0 +1,188 @@
+import { write, read, writeBinary, readBinary } from "std::index"
+import { remove, edit } from "std::fs"
+import { typecheckFile, writeAST, loadTemplate, formatFile, parseAST } from "std::agency"
+
+// One recording slot, reset before each wrapper call. The handler stores
+// the interrupt payload so the test can prove the wrapper raised the
+// PREPARED values (real dir, normalized filename), not the raw arguments.
+let recorded: any = null
+
+def payloadMatches(realDir: string, filename: string): boolean {
+  if (recorded == null) {
+    return false
+  }
+  return recorded.dir == realDir && recorded.filename == filename
+}
+
+def checkWrite(realDir: string, linkDir: string): boolean {
+  recorded = null
+  handle {
+    write("nested/../probe.txt", "cf", linkDir)
+  } with (interrupt) {
+    recorded = interrupt.data
+    return approve()
+  }
+  const back = read("probe.txt", realDir) with approve
+  remove(realDir + "/probe.txt") with approve
+  if (back is success(content)) {
+    return payloadMatches(realDir, "probe.txt") && content == "cf"
+  }
+  return false
+}
+
+def checkRead(realDir: string, linkDir: string): boolean {
+  write("probe-read.txt", "cf-read", realDir) with approve
+  recorded = null
+  let value = ""
+  handle {
+    const r = read("nested/../probe-read.txt", linkDir)
+    if (r is success(content)) {
+      value = content
+    }
+  } with (interrupt) {
+    recorded = interrupt.data
+    return approve()
+  }
+  remove(realDir + "/probe-read.txt") with approve
+  return payloadMatches(realDir, "probe-read.txt") && value == "cf-read"
+}
+
+def checkWriteBinary(realDir: string, linkDir: string): boolean {
+  recorded = null
+  handle {
+    writeBinary("nested/../probe.bin", "aGk=", linkDir)
+  } with (interrupt) {
+    recorded = interrupt.data
+    return approve()
+  }
+  const back = readBinary("probe.bin", realDir) with approve
+  remove(realDir + "/probe.bin") with approve
+  if (back is success(content)) {
+    return payloadMatches(realDir, "probe.bin") && content == "aGk="
+  }
+  return false
+}
+
+def checkReadBinary(realDir: string, linkDir: string): boolean {
+  writeBinary("probe-rb.bin", "aGk=", realDir) with approve
+  recorded = null
+  let value = ""
+  handle {
+    const r = readBinary("nested/../probe-rb.bin", linkDir)
+    if (r is success(content)) {
+      value = content
+    }
+  } with (interrupt) {
+    recorded = interrupt.data
+    return approve()
+  }
+  remove(realDir + "/probe-rb.bin") with approve
+  return payloadMatches(realDir, "probe-rb.bin") && value == "aGk="
+}
+
+
+def checkEdit(realDir: string, linkDir: string): boolean {
+  write("probe-edit.txt", "before-text", realDir) with approve
+  recorded = null
+  handle {
+    edit("nested/../probe-edit.txt", [{ oldText: "before", newText: "after", replaceAll: false }], linkDir)
+  } with (interrupt) {
+    recorded = interrupt.data
+    return approve()
+  }
+  const back = read("probe-edit.txt", realDir) with approve
+  remove(realDir + "/probe-edit.txt") with approve
+  if (recorded == null) {
+    return false
+  }
+  const target = recorded.dir == realDir && recorded.filename == "probe-edit.txt"
+  const preview = recorded.before == "before-text" && recorded.after == "after-text"
+  const payloadOk = target && preview
+  if (back is success(content)) {
+    return payloadOk && content == "after-text"
+  }
+  return false
+}
+
+static const TINY_PROGRAM = "node main() {\n  return 1\n}\n"
+
+def checkTypecheckFile(realDir: string, linkDir: string): boolean {
+  write("probe-tc.agency", TINY_PROGRAM, realDir) with approve
+  recorded = null
+  let ok = false
+  handle {
+    const r = typecheckFile(linkDir, "nested/../probe-tc.agency")
+    ok = !isFailure(r)
+  } with (interrupt) {
+    recorded = interrupt.data
+    return approve()
+  }
+  remove(realDir + "/probe-tc.agency") with approve
+  return payloadMatches(realDir, "probe-tc.agency") && ok
+}
+
+def checkWriteAST(realDir: string, linkDir: string): boolean {
+  const parsed = parseAST(TINY_PROGRAM)
+  if (parsed is failure(e)) {
+    return false
+  }
+  recorded = null
+  handle {
+    writeAST(parsed.value, linkDir, "nested/../probe-ast.agency")
+  } with (interrupt) {
+    recorded = interrupt.data
+    return approve()
+  }
+  const back = read("probe-ast.agency", realDir) with approve
+  remove(realDir + "/probe-ast.agency") with approve
+  if (back is success(content)) {
+    return payloadMatches(realDir, "probe-ast.agency") && content =~ re/node main/
+  }
+  return false
+}
+
+def checkLoadTemplate(realDir: string, linkDir: string): boolean {
+  write("probe-tpl.agency", TINY_PROGRAM, realDir) with approve
+  recorded = null
+  let ok = false
+  handle {
+    const r = loadTemplate(linkDir, "nested/../probe-tpl.agency")
+    ok = !isFailure(r)
+  } with (interrupt) {
+    recorded = interrupt.data
+    return approve()
+  }
+  remove(realDir + "/probe-tpl.agency") with approve
+  return payloadMatches(realDir, "probe-tpl.agency") && ok
+}
+
+def checkFormatFile(realDir: string, linkDir: string): boolean {
+  write("probe-fmt.agency", TINY_PROGRAM, realDir) with approve
+  recorded = null
+  handle {
+    formatFile(linkDir, "nested/../probe-fmt.agency")
+  } with (interrupt) {
+    recorded = interrupt.data
+    return approve()
+  }
+  const back = read("probe-fmt.agency", realDir) with approve
+  remove(realDir + "/probe-fmt.agency") with approve
+  if (back is success(content)) {
+    return payloadMatches(realDir, "probe-fmt.agency") && content =~ re/node main/
+  }
+  return false
+}
+
+node main(args: { realDir: string; linkDir: string }): any {
+  return {
+    write: checkWrite(args.realDir, args.linkDir),
+    read: checkRead(args.realDir, args.linkDir),
+    writeBinary: checkWriteBinary(args.realDir, args.linkDir),
+    readBinary: checkReadBinary(args.realDir, args.linkDir),
+    edit: checkEdit(args.realDir, args.linkDir),
+    typecheckFile: checkTypecheckFile(args.realDir, args.linkDir),
+    writeAST: checkWriteAST(args.realDir, args.linkDir),
+    loadTemplate: checkLoadTemplate(args.realDir, args.linkDir),
+    formatFile: checkFormatFile(args.realDir, args.linkDir)
+  }
+}

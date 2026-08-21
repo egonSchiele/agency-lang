@@ -1,0 +1,43 @@
+import { planFor, safeBash } from "std::safeBash"
+
+// Real-symlink redirect behavior, with fixtures the JS side creates:
+// a final symlink resolves to its real target in the plan and the write
+// lands there; dangling links and loops cannot be narrowed, so the plan
+// falls back to the broad std::bash question.
+node main(args: {
+  base: string;
+  realTargetDir: string;
+  linkPath: string;
+  danglePath: string;
+  loopPath: string
+}): any {
+  const linkPlan = planFor("echo via-link > ${args.linkPath}", args.base)
+  const linkFields = match(linkPlan.execution) {
+    { kind: "write", dir, filename, mode } => {
+      return { kind: "write", dir: dir, filename: filename, mode: mode }
+    }
+    { kind } => {
+      return { kind: kind }
+    }
+  }
+
+  let writeResult = ""
+  handle {
+    const r = safeBash("echo via-link > ${args.linkPath}", args.base)
+    if (r is success(out)) {
+      writeResult = "ok"
+    } else {
+      writeResult = "failed: ${r.error}"
+    }
+  } with approve
+
+  const danglePlan = planFor("echo x > ${args.danglePath}", args.base)
+  const loopPlan = planFor("echo x > ${args.loopPath}", args.base)
+
+  return {
+    linkFields: linkFields,
+    writeResult: writeResult,
+    dangleKind: danglePlan.execution.kind,
+    loopKind: loopPlan.execution.kind
+  }
+}

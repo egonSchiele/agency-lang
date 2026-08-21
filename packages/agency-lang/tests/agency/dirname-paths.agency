@@ -1,4 +1,4 @@
-import { readColocated, readUpward } from "./dirname-paths/helper.agency"
+import { readColocated, readUpward, readUpwardViaDir } from "./dirname-paths/helper.agency"
 import { ls, exists } from "std::shell"
 import { remove } from "std::fs"
 
@@ -8,10 +8,14 @@ node colocatedRead(): string {
   return readColocated()
 }
 
-// Upward traversal through __dirname: the old resolvePath guards
-// rejected this even with the right anchor.
+// Upward traversal in a FILENAME is now a containment escape; the
+// migrated spelling puts the parent in dir instead.
 node upwardRead(): string {
   return readUpward()
+}
+
+node upwardReadViaDir(): string {
+  return readUpwardViaDir()
 }
 
 // A write anchored to this file via an absolute dir argument.
@@ -29,13 +33,13 @@ node dirAnchoredWrite(): boolean {
   return false
 }
 
-// Absolute FILENAME (not just dir) now allowed: resolvePath previously
-// hard-threw on any absolute filename.
+// Migrated from the old absolute-FILENAME spelling: the destination now
+// travels in dir, and the interrupt reports it truthfully.
 node absoluteFilenameAllowed(): boolean {
-  const outPath = __dirname + "/dirname-paths/tmp-abs.txt"
-  const w = write(outPath, "abs") with approve
-  const back = read(outPath) with approve
-  remove(outPath) with approve
+  const outDir = __dirname + "/dirname-paths"
+  const w = write("tmp-abs.txt", "abs", outDir) with approve
+  const back = read("tmp-abs.txt", outDir) with approve
+  remove(outDir + "/tmp-abs.txt") with approve
   if (w is failure(e)) {
     return false
   }

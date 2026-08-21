@@ -1,0 +1,9 @@
+{
+  "planReportsRealParent": true,
+  "planReportsRealName": true,
+  "planMode": "overwrite",
+  "writeResult": "ok",
+  "realTargetReceivedWrite": true,
+  "dangleFallsBackToBash": true,
+  "loopFallsBackToBash": true
+}

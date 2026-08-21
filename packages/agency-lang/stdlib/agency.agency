@@ -22,6 +22,7 @@ import {
   _readNodeBindingTable,
   _bindTestFileCases,
  } from "agency-lang/stdlib-lib/agency.js"
+import { _prepareContainedPath } from "agency-lang/stdlib-lib/fs.js"
 import {
   _loadTemplate,
   _holesOf,
@@ -740,13 +741,18 @@ export idempotent def typecheckFile(dir: string, filename: string): Result {
   with relative imports inside it resolved against the file's directory.
 
   @param dir - The directory containing the file
-  @param filename - The agency file to type-check
+  @param filename - The agency file to type-check. Must stay inside dir; to
+    read another directory, pass it in `dir`.
   """
+  const prepared = try _prepareContainedPath(dir, filename, "read")
+  if (isFailure(prepared)) {
+    return prepared
+  }
   return interrupt std::read("Are you sure you want to read this file?", {
-    dir: dir,
-    filename: filename
+    dir: prepared.value.dir,
+    filename: prepared.value.filename
   })
-  return try _typecheckFile(dir, filename)
+  return try _typecheckFile(prepared.value.dir, prepared.value.filename)
 }
 
 /** A parsed Agency program, the value `parseAST` returns on success.
@@ -786,12 +792,16 @@ export def writeAST(
   @param filename - The agency file to write, resolved relative to dir
   @param overwrite - If false, fail when the file already exists (default true)
   """
+  const prepared = try _prepareContainedPath(dir, filename, "write")
+  if (isFailure(prepared)) {
+    return prepared
+  }
   return interrupt std::write("Are you sure you want to write this file?", {
-    dir: dir,
-    filename: filename,
+    dir: prepared.value.dir,
+    filename: prepared.value.filename,
     overwrite: overwrite
   })
-  return try _writeAST(ast, dir, filename, overwrite)
+  return try _writeAST(ast, prepared.value.dir, prepared.value.filename, overwrite)
 }
 
 export idempotent def format(source: string): Result {
@@ -827,13 +837,18 @@ export def loadTemplate(dir: string, filename: string): Result<Code> {
   Load an Agency file containing holes as a template.
 
   @param dir - The sandbox directory
-  @param filename - The template file, resolved relative to dir
+  @param filename - The template file, resolved relative to dir. Must stay
+    inside dir; to read another directory, pass it in `dir`.
   """
+  const prepared = try _prepareContainedPath(dir, filename, "read")
+  if (isFailure(prepared)) {
+    return prepared
+  }
   return interrupt std::read("Can I read this template?", {
-    dir: dir,
-    filename: filename
+    dir: prepared.value.dir,
+    filename: prepared.value.filename
   })
-  return try _loadTemplate(dir, filename)
+  return try _loadTemplate(prepared.value.dir, prepared.value.filename)
 }
 
 export idempotent def holesOf(template: Code): HoleInfo[] {
@@ -902,13 +917,18 @@ export idempotent def formatFile(dir: string, filename: string): Result {
   Format an Agency file in place using the standard Agency formatter.
 
   @param dir - The directory containing the file
-  @param filename - The agency file to format
+  @param filename - The agency file to format. Must stay inside dir; to
+    write another directory, pass it in `dir`.
   """
+  const prepared = try _prepareContainedPath(dir, filename, "write")
+  if (isFailure(prepared)) {
+    return prepared
+  }
   return interrupt std::write("Are you sure you want to format this file in place?", {
-    dir: dir,
-    filename: filename
+    dir: prepared.value.dir,
+    filename: prepared.value.filename
   })
-  return try _formatFile(dir, filename)
+  return try _formatFile(prepared.value.dir, prepared.value.filename)
 }
 
 /**

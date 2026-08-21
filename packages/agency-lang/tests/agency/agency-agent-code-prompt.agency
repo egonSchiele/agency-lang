@@ -1,0 +1,13 @@
+import test { promptFile } from "../../lib/agents/agency-agent/brains/coordinator/subagents/code.agency"
+
+// The coordinator loads its prompts through the contained read wrapper,
+// and promptFile falls back to "" on failure — a SILENT empty system
+// prompt. These two nodes are the guard: each prompt must load
+// independently, so one healthy prompt cannot hide the other's failure.
+node codePromptLoads(): boolean {
+  return promptFile("code.md") != ""
+}
+
+node oneShotPromptLoads(): boolean {
+  return promptFile("oneShot.md") != ""
+}

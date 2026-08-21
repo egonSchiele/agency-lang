@@ -8,6 +8,8 @@ import { resolveDir } from "./resolveDir.js";
 import { expandPath } from "./expandPath.js";
 
 export { resolvePath } from "./resolvePath.js";
+export { prepareContainedPath as _prepareContainedPath } from "./prepareContainedPath.js";
+export { resolveRedirectTarget as _resolveRedirectTarget } from "./prepareContainedPath.js";
 
 export type MultiEdit = {
   oldText: string;

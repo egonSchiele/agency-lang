@@ -1,0 +1,73 @@
+import { cliPolicyHandler } from "std::policy"
+import { write } from "std::index"
+
+// Inner recording handler + outer noninteractive policy: the recorder
+// proves WHAT the policy was shown (the prepared dir), and handlerReached
+// proves WHETHER an interrupt existed at all — escapes must fail in
+// preparation with the flag still false.
+let recorded: any = null
+let handlerReached = false
+
+def recordedDir(): string {
+  if (recorded == null) {
+    return ""
+  }
+  return recorded.dir
+}
+
+def attempt(filename: string, dir: string): any {
+  recorded = null
+  handlerReached = false
+  const r = try write(filename, "cf-e2e", dir)
+  let outcome = "ok"
+  if (isFailure(r)) {
+    if ("${r.error}" =~ re/pass that directory in dir/) {
+      outcome = "prep-rejected"
+    } else {
+      outcome = "policy-rejected"
+    }
+  }
+  return {
+    outcome: outcome,
+    reached: handlerReached,
+    dir: recordedDir()
+  }
+}
+
+node main(args: {
+  policyFile: string;
+  workDir: string;
+  outsideDir: string;
+  homeProbe: string
+}): any {
+  const policyHandler = cliPolicyHandler(
+    file: args.policyFile,
+    fields: {},
+    interactive: false,
+  )
+  let results: any = {}
+  handle {
+    handle {
+      results = {
+        outsideDir: attempt("report.txt", args.outsideDir),
+        workDir: attempt("report.txt", args.workDir),
+        tildeEscape: attempt(args.homeProbe, args.workDir),
+        absoluteEscape: attempt(args.outsideDir + "/abs-escape.txt", args.workDir),
+        upwardEscape: attempt("../outside/up-escape.txt", args.workDir),
+        outLinkEscape: attempt("out-link/link-escape.txt", args.workDir),
+        inLinkWrite: attempt("in-link/linked.txt", args.workDir),
+        dirLinkWrite: attempt("f.txt", args.workDir + "/../dir-link")
+      }
+    } with (interrupt) {
+      // Only the write under test: the policy handler lazily reads its
+      // policy.json through this same chain on its first decision, and
+      // that read must not clobber the recorded write payload.
+      if (interrupt.effect == "std::write") {
+        handlerReached = true
+        recorded = interrupt.data
+      }
+      return pass()
+    }
+  } with policyHandler
+  return results
+}

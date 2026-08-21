@@ -1,4 +1,5 @@
 import picomatch from "picomatch";
+import { realpathSync } from "fs";
 import { z } from "zod";
 
 export const PolicyRuleSchema = z.object({
@@ -81,13 +82,24 @@ function escapeForGlob(s: string): string {
 // same caveat as every dir glob: `**` does not descend into dot-led
 // subdirectories (picomatch's dot rule), though a launch directory whose
 // own path contains dot segments is fine — those sit in the literal prefix.
+// The cwd is realpathed so a symlinked launch directory (a linked
+// checkout, macOS /tmp) shares one path identity with interrupt payloads,
+// which the contained-filename wrappers now canonicalize the same way.
 // Exported for tests, which inject the cwd.
 export function resolveDotDirPattern(pattern: string, cwd: string = process.cwd()): string {
+  let realCwd: string;
+  try {
+    realCwd = realpathSync(cwd);
+  } catch {
+    // A cwd that cannot be resolved keeps its lexical spelling: matching
+    // stays exactly as before rather than failing every rule.
+    realCwd = cwd;
+  }
   // Callback, not a replacement string: a legal cwd containing `$&`/`$'`
   // would otherwise be interpreted as replacement-string syntax.
   return pattern.replace(
     /(^|\{|,)\.(?=$|\/|,|\})/g,
-    (_match, prefix) => prefix + escapeForGlob(cwd),
+    (_match, prefix) => prefix + escapeForGlob(realCwd),
   );
 }
 

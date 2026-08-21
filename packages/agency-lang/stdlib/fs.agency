@@ -1,4 +1,4 @@
-import { _multiedit, _previewEdit, _applyPatch, _mkdir, _copy, _move, _remove } from "agency-lang/stdlib-lib/fs.js"
+import { _multiedit, _previewEdit, _applyPatch, _mkdir, _copy, _move, _remove, _prepareContainedPath } from "agency-lang/stdlib-lib/fs.js"
 import { bash, glob, ls, grep } from "std::shell"
 import { applyAgentCwd } from "std::index"
 
@@ -51,7 +51,9 @@ export def edit(filename: string, edits: Edit[], dir: string = ".", useAgentCwd:
 
   Prefer one call with multiple edits over many separate calls. Keep each oldText as small as possible while still matching uniquely. Do not pad with unchanged context to bridge distant changes; split them into separate edits instead.
 
-  @param filename - The file to edit
+  @param filename - The file to edit. Must stay inside dir: no absolute
+    paths, `~`, upward traversal, or symlinks that leave it. To edit another
+    directory, pass it in `dir`.
   @param edits - Text replacements to apply in order; each has oldText, newText, and replaceAll (replace every occurrence when true)
   @param dir - The directory to resolve the filename against
   @param useAgentCwd - When true, resolve a relative path against the agent working directory if one is set
@@ -59,17 +61,23 @@ export def edit(filename: string, edits: Edit[], dir: string = ".", useAgentCwd:
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
   }
-  const preview = _previewEdit(dir, filename, edits)
+  // Prepared BEFORE the preview: the preview, the interrupt payload, and
+  // the eventual write must all refer to the same spelling.
+  const prepared = try _prepareContainedPath(dir, filename, "write")
+  if (isFailure(prepared)) {
+    return prepared
+  }
+  const preview = _previewEdit(prepared.value.dir, prepared.value.filename, edits)
   return interrupt std::edit("Are you sure you want to apply these edits?", {
-    dir: dir,
-    filename: filename,
+    dir: prepared.value.dir,
+    filename: prepared.value.filename,
     edits: edits,
     before: preview.before,
     after: preview.after
   })
 
   destructive {
-    return try _multiedit(dir, filename, edits)
+    return try _multiedit(prepared.value.dir, prepared.value.filename, edits)
   }
 }
 

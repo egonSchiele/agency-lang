@@ -4852,6 +4852,20 @@ const singleQuotedPath: Parser<{ path: string }> = seqC(
 
 const quotedPath: Parser<string> = map(or(doubleQuotedPath, singleQuotedPath), (res) => res.path);
 
+// Like quotedPath, but also records where the path characters sit in the
+// source (quotes excluded), so consumers such as the sandboxed-compile
+// mirror can rewrite exactly those bytes.
+const locatedPathContent = (closeQuote: Parser<string>) =>
+  withLoc(map(many1Till(closeQuote), (s) => ({ value: s })));
+
+const locatedQuotedPath: Parser<{ path: string; pathLoc: SourceLocation }> = map(
+  or(
+    seqC(char('"'), capture(locatedPathContent(char('"')), "located"), char('"')),
+    seqC(char("'"), capture(locatedPathContent(char("'")), "located"), char("'")),
+  ),
+  (r) => ({ path: r.located.value, pathLoc: r.located.loc }),
+);
+
 export const importNodeStatmentParser: Parser<ImportNodeStatement> = withLoc(
   memo(
     "importNodeStatement",
@@ -4879,7 +4893,9 @@ export const importNodeStatmentParser: Parser<ImportNodeStatement> = withLoc(
           spaces,
           str("from"),
           spaces,
-          capture(quotedPath, "agencyFile"),
+          captureCaptures(
+            map(locatedQuotedPath, (r) => ({ agencyFile: r.path, modulePathLoc: r.pathLoc })),
+          ),
           optionalSemicolon,
           optional(newline),
         ),
@@ -5036,9 +5052,9 @@ export const importStatmentParser: Parser<ImportStatement> = withLoc(
             spaces,
             str("from"),
             spaces,
-            oneOf(`'"`),
-            capture(many1Till(oneOf(`'"`)), "modulePath"),
-            oneOf(`'"`),
+            captureCaptures(
+              map(locatedQuotedPath, (r) => ({ modulePath: r.path, modulePathLoc: r.pathLoc })),
+            ),
             optionalSemicolon,
             optional(newline),
           ),
@@ -5128,9 +5144,9 @@ export const exportFromStatementParser: Parser<ExportFromStatement> = withLoc(
         spaces,
         str("from"),
         spaces,
-        oneOf(`'"`),
-        capture(many1Till(oneOf(`'"`)), "modulePath"),
-        oneOf(`'"`),
+        captureCaptures(
+          map(locatedQuotedPath, (r) => ({ modulePath: r.path, modulePathLoc: r.pathLoc })),
+        ),
         optionalSemicolon,
         optional(newline),
       ),

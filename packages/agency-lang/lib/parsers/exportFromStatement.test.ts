@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { exportFromStatementParser } from "./parsers.js";
+import { parseAgency } from "../parser.js";
 
 describe("exportFromStatementParser", () => {
   it("parses a simple named re-export", () => {
@@ -106,5 +107,20 @@ describe("exportFromStatementParser", () => {
   it("rejects malformed export-from (missing braces)", () => {
     const result = exportFromStatementParser('export foo from "./x.agency"');
     expect(result.success).toBe(false);
+  });
+});
+
+describe("module-path locations", () => {
+  it("records the path location, quotes excluded", () => {
+    const source = 'export { x } from "./y.agency"';
+    const parsed = parseAgency(source, {}, false);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      const stmt = parsed.result.nodes.find((n: any) => n.type === "exportFromStatement") as any;
+      const loc = stmt.modulePathLoc!;
+      expect(source.slice(loc.start, loc.end)).toBe("./y.agency");
+      expect(source[loc.start - 1]).toBe('"');
+      expect(source[loc.end]).toBe('"');
+    }
   });
 });

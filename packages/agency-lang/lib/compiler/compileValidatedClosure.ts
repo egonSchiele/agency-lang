@@ -14,6 +14,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { compileSource, CompileResult } from "./compile.js";
+import type { ImportKind } from "../importPaths.js";
 import { openValidatedClosure, ValidatedClosure } from "./closureValidator.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
 
@@ -26,6 +27,8 @@ export function compileValidatedClosure(closure: ValidatedClosure): CompileResul
   try {
     let entrySource = "";
     let entryMirrorPath = "";
+    const mirrored: { moduleId: string; relPath: string; source: string; mirrorPath: string }[] =
+      [];
     for (const [moduleId, mod] of Object.entries(data.modules)) {
       const rewritten = rewriteLocalImports(moduleId, mod.source, data);
       if (!rewritten.ok) {
@@ -37,18 +40,46 @@ export function compileValidatedClosure(closure: ValidatedClosure): CompileResul
       if (moduleId === data.entryModuleId) {
         entrySource = rewritten.source;
         entryMirrorPath = target;
+      } else {
+        mirrored.push({ moduleId, relPath: mod.relPath, source: rewritten.source, mirrorPath: target });
       }
     }
     if (entryMirrorPath === "") {
       return { success: false, errors: ["internal: validated closure has no entry module"] };
     }
-    return compileSource(entrySource, {
+    const sandboxOptions = {
       typechecker: { enabled: true },
-      sourcePath: entryMirrorPath,
       // Belt on top of validation: the mirror contains only validated
       // content, but keep the policy on so a regression fails closed.
-      imports: { allowKinds: ["stdlib", "local", "pkg"] },
+      imports: { allowKinds: ["stdlib", "local", "pkg"] as ImportKind[] },
+    };
+    const entryResult = compileSource(entrySource, {
+      ...sandboxOptions,
+      sourcePath: entryMirrorPath,
     });
+    if (!entryResult.success) return entryResult;
+    // The entry's generated JS imports each local module by its rewritten
+    // relative path ("./helper.js"), so every module in the closure must be
+    // compiled and carried in the result — the runtime materializes them
+    // beside the entry script at fork time.
+    const modules: Record<string, string> = {};
+    for (const mod of mirrored) {
+      const result = compileSource(mod.source, {
+        ...sandboxOptions,
+        sourcePath: mod.mirrorPath,
+      });
+      if (!result.success) {
+        return {
+          success: false,
+          errors: result.errors.map((err) => `${mod.relPath}: ${err}`),
+        };
+      }
+      modules[mod.relPath.replace(/\.agency$/, ".js")] = result.code;
+    }
+    if (mirrored.length === 0) {
+      return entryResult;
+    }
+    return { ...entryResult, modules };
   } finally {
     safeDeleteDirectoryWithin(os.tmpdir(), mirrorRoot);
   }

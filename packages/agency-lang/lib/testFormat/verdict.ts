@@ -52,9 +52,12 @@ export function exactVerdictValue(actual: unknown, expected: unknown): Verdict {
   };
 }
 
-/** Deterministic JSON text: object keys sorted at every depth. */
+/** Deterministic JSON text: object keys sorted at every depth. `undefined`
+ *  (JSON.stringify yields no string at all) renders as the literal text
+ *  "undefined" so a missing value diffs legibly instead of crashing. */
 function canonicalize(value: unknown): string {
-  return JSON.stringify(sortKeys(value));
+  const text = JSON.stringify(sortKeys(value));
+  return text === undefined ? "undefined" : text;
 }
 
 function sortKeys(value: unknown): unknown {

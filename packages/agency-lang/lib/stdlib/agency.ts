@@ -14,6 +14,7 @@ import { variableTypeToString } from "../backends/typescriptGenerator/typeToStri
 import { declaredName } from "../types/hole.js";
 import { deepCopy, isStrictDescendant } from "../utils.js";
 import { compileSandboxed } from "../compiler/compileSandboxed.js";
+import { exactVerdictValue } from "../testFormat/verdict.js";
 import type { ClosureEntry } from "../compiler/closureValidator.js";
 import { ImportKind, ImportPolicy, isImportAllowed } from "../importPaths.js";
 import type { AgencyMultiLineComment, AgencyProgram, AgencyNode } from "../types.js";
@@ -581,4 +582,22 @@ export function _filterImports(
   );
   const filtered = ast.nodes.length !== originalCount;
   return { source: generateAgency(ast), filtered };
+}
+
+/** Deterministic text for a run failure carried into case feedback:
+ *  strings verbatim, structured failures as stable JSON. */
+export function _failureFeedback(err: unknown): string {
+  if (typeof err === "string") return err;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}
+
+/** "" = pass; otherwise the failing diff. Backs std::agency's test():
+ *  the one exact-match verdict shared with the CLI runner. */
+export function _exactVerdictFeedback(actual: unknown, expected: unknown): string {
+  const verdict = exactVerdictValue(actual, expected);
+  return verdict.pass ? "" : verdict.feedback;
 }

@@ -17,7 +17,7 @@ import * as path from "path";
 import { nanoid } from "nanoid";
 import { parseAgency } from "@/parser.js";
 import { getAllImports } from "@/analysis/imports.js";
-import { importKind, parsePkgImport, resolveAgencyImportPath } from "@/importPaths.js";
+import { findFileUp, importKind, parsePkgImport, resolveAgencyImportPath } from "@/importPaths.js";
 import { splicesIn } from "@/preprocessors/expandSplices.js";
 import { isStrictDescendant } from "@/utils.js";
 import type { SourceLocation } from "@/types/base.js";
@@ -245,16 +245,10 @@ class ClosureWalker {
     let canonical: string;
     try {
       canonical = fs.realpathSync(resolved);
-      pkgRootReal = path.dirname(canonical);
-      // The package's confinement boundary is its own root: walk up to the
+      // The package's confinement boundary is its own root: the nearest
       // directory holding package.json.
-      let probe = pkgRootReal;
-      while (!fs.existsSync(path.join(probe, "package.json"))) {
-        const parent = path.dirname(probe);
-        if (parent === probe) break;
-        probe = parent;
-      }
-      pkgRootReal = probe;
+      const pkgJson = findFileUp(path.dirname(canonical), "package.json");
+      pkgRootReal = pkgJson === null ? path.dirname(canonical) : path.dirname(pkgJson);
     } catch (e) {
       this.violations.push(`import '${pkgPath}' cannot be read: ${messageOf(e)}`);
       return;

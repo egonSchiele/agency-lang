@@ -19,6 +19,7 @@ import { BaseGrader } from "./baseGrader.js";
 import type { Grade, GraderInput } from "./types.js";
 import { parseReportEnvelope } from "./reportEnvelope.js";
 import { getAgentsDir, getPackageRoot } from "../../importPaths.js";
+import { makeAgencyTempDir } from "../../utils/agencyTempDir.js";
 import { safeDeleteDirectoryWithin } from "../../utils.js";
 
 const WRAPPER_TIMEOUT_MS = 10 * 60 * 1000;
@@ -118,10 +119,10 @@ export class AgencyTestGrader extends BaseGrader {
     if (run.workdir === "" || !fs.existsSync(run.workdir)) {
       return fail("run left no workdir");
     }
-    // Under process.cwd(), never os.tmpdir(): compiled Agency resolves
-    // agency-lang from the directory it runs in.
-    const scratch = fs.mkdtempSync(path.join(process.cwd(), ".agency-test-grade-"));
-    const reportDir = fs.mkdtempSync(path.join(process.cwd(), ".agency-test-report-"));
+    // Under the project's .agency-tmp/, never os.tmpdir(): compiled Agency
+    // resolves agency-lang from the directory it runs in.
+    const scratch = makeAgencyTempDir("test-grade");
+    const reportDir = makeAgencyTempDir("test-report");
     const reportPath = path.join(reportDir, "report.json");
     try {
       fs.cpSync(run.workdir, scratch, { recursive: true, dereference: false });

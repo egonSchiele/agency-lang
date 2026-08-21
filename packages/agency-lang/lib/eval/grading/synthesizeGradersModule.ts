@@ -15,13 +15,13 @@
  * the legacy code-only identity, so old run directories stay readable.
  */
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import type { SuiteIdentity } from "@/runDirectory/annotations.js";
 import type { AgencyTestDefinition, Test } from "../runTypes.js";
 import { parseTestFileSandbox } from "../../testFormat/schema.js";
 import { sha256Text } from "@/utils/hash.js";
 import { snapshotGradingModule, type GradersSnapshot } from "./gradingModule.js";
+import { makeAgencyTempDir } from "../../utils/agencyTempDir.js";
 import { safeDeleteDirectoryWithin } from "../../utils.js";
 
 export type HarnessPair = {
@@ -101,7 +101,7 @@ export async function snapshotAgencyTestGraders(args: {
       name: d.name,
     })),
   });
-  const staging = fs.mkdtempSync(path.join(os.tmpdir(), "agency-tests-graders-"));
+  const staging = makeAgencyTempDir("tests-graders");
   try {
     const modulePath = path.join(staging, "agencyTests.graders.ts");
     fs.writeFileSync(modulePath, moduleSource, "utf-8");
@@ -116,7 +116,7 @@ export async function snapshotAgencyTestGraders(args: {
       },
     };
   } finally {
-    safeDeleteDirectoryWithin(os.tmpdir(), staging);
+    safeDeleteDirectoryWithin(path.join(process.cwd(), ".agency-tmp"), staging);
   }
 }
 

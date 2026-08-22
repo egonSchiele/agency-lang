@@ -28,6 +28,15 @@ type CompileSuccess = {
   success: true;
   code: string;
   moduleId: string;
+  /** Multi-file compiles only (compileValidatedClosure): compiled JS for
+   *  every non-entry module in the closure, keyed by the POSIX relative
+   *  path its import rewrites point at ("helper.js"). The runtime
+   *  materializes these beside the entry script. */
+  modules?: Record<string, string>;
+  /** Multi-file compiles only: where the entry script sits in that same
+   *  layout ("sub/main.js"), so its relative imports resolve. Absent means
+   *  the entry is materialized alone at the root. */
+  entryPath?: string;
 };
 
 type CompileFailure = {

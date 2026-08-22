@@ -685,7 +685,12 @@ export function buildForkOptions(args: { limits: RunLimits; cwd?: string }): For
  * Node resolves agency-lang package imports via the project's node_modules)
  * and return the script path. Called at every fork — initial run and resume
  * alike — and paired with cleanupTempDir when the session settles. */
-export function materializeCompiledScript(compiled: { moduleId: string; code: string }): string {
+export function materializeCompiledScript(compiled: {
+  moduleId: string;
+  code: string;
+  modules?: Record<string, string>;
+  entryPath?: string;
+}): string {
   // The user-facing CompiledProgram type only declares moduleId, so a
   // hand-built `{ moduleId: "x" }` (or an old `{ moduleId, path }` value
   // persisted before code-in-value) typechecks and reaches here. Fail with
@@ -696,10 +701,34 @@ export function materializeCompiledScript(compiled: { moduleId: string; code: st
         "Values from older Agency versions carried a file path instead and must be recompiled.",
     );
   }
+  // moduleId names the script file; a hand-built value could smuggle a
+  // path into it.
+  if (!/^[A-Za-z0-9_-]+$/.test(compiled.moduleId)) {
+    throw new Error(`CompiledProgram moduleId '${compiled.moduleId}' is not a plain identifier`);
+  }
   const tempDir = path.join(agencyPackageRoot, ".agency-tmp", nanoid());
-  mkdirSync(tempDir, { recursive: true });
-  const scriptPath = path.join(tempDir, `${compiled.moduleId}.js`);
+  // Every path below is re-checked for containment before writing: the
+  // values were derived from validated relative paths, but compiled
+  // values can be hand-built.
+  const contained = (rel: string, what: string): string => {
+    const target = path.resolve(tempDir, rel);
+    if (!target.startsWith(tempDir + path.sep)) {
+      throw new Error(`CompiledProgram ${what} '${rel}' escapes its script directory`);
+    }
+    return target;
+  };
+  // A multi-file program's entry keeps its place in the layout so its
+  // relative imports resolve; a single-file program sits at the root.
+  const scriptPath = contained(compiled.entryPath ?? `${compiled.moduleId}.js`, "entry");
+  const moduleTargets = Object.entries(compiled.modules ?? {}).map(
+    ([rel, code]) => [contained(rel, "module"), code] as const,
+  );
+  mkdirSync(dirname(scriptPath), { recursive: true });
   writeFileSync(scriptPath, compiled.code, "utf-8");
+  for (const [target, code] of moduleTargets) {
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, code, "utf-8");
+  }
   return scriptPath;
 }
 
@@ -721,8 +750,14 @@ export function materializeCompiledScript(compiled: { moduleId: string; code: st
  */
 function cleanupTempDir(compiledPath: string): void {
   try {
-    const tempDir = path.resolve(dirname(compiledPath));
     const allowedPrefix = path.resolve(agencyPackageRoot, ".agency-tmp");
+    // The per-run dir is the first segment under .agency-tmp; the script
+    // itself may sit deeper (a nested entry keeps its layout). Anything
+    // not strictly inside the prefix is left alone.
+    const rel = path.relative(allowedPrefix, path.resolve(compiledPath));
+    const first = rel.split(path.sep)[0];
+    if (first === "" || first === "." || first === ".." || path.isAbsolute(rel)) return;
+    const tempDir = path.join(allowedPrefix, first);
     if (tempDir.startsWith(allowedPrefix + path.sep)) {
       rmSync(tempDir, { recursive: true, force: true });
     }
@@ -1331,7 +1366,7 @@ async function invokeSubprocess(args: {
   stateStack: any;
   parentStore?: any;
   parentFrame: State;
-  compiled: { moduleId: string; code: string };
+  compiled: { moduleId: string; code: string; modules?: Record<string, string> };
   node: string;
   nodeArgs: Record<string, any>;
   limits: RunLimits;

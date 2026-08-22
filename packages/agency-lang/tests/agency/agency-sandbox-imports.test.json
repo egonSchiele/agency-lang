@@ -1,0 +1,53 @@
+{
+  "tests": [
+    {
+      "nodeName": "runFileWithNestedEntry",
+      "description": "a nested entry file importing its sibling runs (the entry keeps its place in the layout)",
+      "input": "",
+      "expectedOutput": "\"value:7\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "runFileWithLocalImport",
+      "description": "runFile compiles a file whose import names a sibling in dir",
+      "input": "",
+      "expectedOutput": "\"value:7\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "compileWithLocalImportAndRun",
+      "description": "compile(source, dir) resolves local imports and the program runs",
+      "input": "",
+      "expectedOutput": "\"value:7\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "dirAndCwdAreIndependent",
+      "description": "runCode's dir anchors compile-time imports; cwd is the run-time working directory",
+      "input": "",
+      "expectedOutput": "\"value:7 marker-in-cwd-only\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "tsImportRefused",
+      "description": "a local .ts import is refused as not Agency source",
+      "input": "",
+      "expectedOutput": "\"refused\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "nodeBuiltinRefused",
+      "description": "node builtins are refused",
+      "input": "",
+      "expectedOutput": "\"refused\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "spliceRefused",
+      "description": "a compile-time splice is refused before anything expands",
+      "input": "",
+      "expectedOutput": "\"refused\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

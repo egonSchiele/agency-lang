@@ -20,8 +20,10 @@ export function getImports(program: AgencyProgram): string[] {
 // agency code (`.agency` / `std::` / `pkg::`) or a raw npm/Node module
 // (e.g. `fs`, `child_process`). Use this when you need to inspect or
 // validate the full import surface — `getImports` filters out non-agency
-// imports, which is the wrong behavior for restriction checks.
-export type AnyImport = { path: string; kind: "module" | "node" };
+// imports, which is the wrong behavior for restriction checks. Re-export
+// statements (`export { x } from "..."`) are import edges too and appear
+// with kind "reexport".
+export type AnyImport = { path: string; kind: "module" | "node" | "reexport" };
 export function getAllImports(program: AgencyProgram): AnyImport[] {
   return program.nodes.flatMap((node): AnyImport[] => {
     if (node.type === "importStatement") {
@@ -29,6 +31,9 @@ export function getAllImports(program: AgencyProgram): AnyImport[] {
     }
     if (node.type === "importNodeStatement") {
       return [{ path: node.agencyFile.trim(), kind: "node" }];
+    }
+    if (node.type === "exportFromStatement") {
+      return [{ path: node.modulePath.trim(), kind: "reexport" }];
     }
     return [];
   });

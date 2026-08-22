@@ -1,9 +1,4 @@
-import {
-  compileSource,
-  typeCheckSource,
-  getEffectsFromSource,
-  TypeCheckReport,
-} from "../compiler/compile.js";
+import { typeCheckSource, getEffectsFromSource, TypeCheckReport } from "../compiler/compile.js";
 import { writeFileSync, readFileSync, realpathSync, existsSync } from "fs";
 import { resolve, sep } from "path";
 import { parseAgency, replaceBlankLines } from "../parser.js";
@@ -17,7 +12,9 @@ import { resolveAgencyImportPath, isStdlibImport } from "../importPaths.js";
 import type { ExportFromStatement, NamedExportBody } from "../types.js";
 import { variableTypeToString } from "../backends/typescriptGenerator/typeToString.js";
 import { declaredName } from "../types/hole.js";
-import { deepCopy } from "../utils.js";
+import { deepCopy, isStrictDescendant } from "../utils.js";
+import { compileSandboxed } from "../compiler/compileSandboxed.js";
+import type { ClosureEntry } from "../compiler/closureValidator.js";
 import { ImportKind, ImportPolicy, isImportAllowed } from "../importPaths.js";
 import type { AgencyMultiLineComment, AgencyProgram, AgencyNode } from "../types.js";
 import type { ImportStatement } from "../types/importStatement.js";
@@ -83,11 +80,18 @@ export const _callback = new AgencyFunction({
   toolDefinition: null,
 });
 
-function compileToProgram(source: string): { moduleId: string; code: string } {
-  const result = compileSource(source, {
-    typechecker: { enabled: true },
-    imports: { allowKinds: ["stdlib"] },
-  });
+type CompiledProgramValue = {
+  moduleId: string;
+  code: string;
+  modules?: Record<string, string>;
+  entryPath?: string;
+};
+
+function compileToProgram(entry: ClosureEntry, dir: string): CompiledProgramValue {
+  // Sandboxed compile: the closure validator enforces the pure-Agency
+  // invariant (std:: + dir-local .agency; no TS/JS, node builtins, pkg::,
+  // or splices) and compilation reads only the validated mirror.
+  const result = compileSandboxed({ entry, dir });
 
   if (!result.success) {
     throw new Error(result.errors.join("\n"));
@@ -96,12 +100,18 @@ function compileToProgram(source: string): { moduleId: string; code: string } {
   // The compiled JS travels IN the CompiledProgram value so that any
   // checkpoint containing it is fully self-contained — the code is
   // generated at runtime and cannot be assumed present on disk at resume
-  // time. `_run` materializes it to .agency-tmp/ at fork time.
-  return { moduleId: result.moduleId, code: result.code };
+  // time. `_run` materializes it to .agency-tmp/ at fork time; `modules`
+  // carries the rest of a multi-file closure, materialized beside it.
+  return {
+    moduleId: result.moduleId,
+    code: result.code,
+    ...(result.modules !== undefined ? { modules: result.modules } : {}),
+    ...(result.entryPath !== undefined ? { entryPath: result.entryPath } : {}),
+  };
 }
 
-export function _compile(source: string): { moduleId: string; code: string } {
-  return compileToProgram(source);
+export function _compile(source: string, dir: string = ""): CompiledProgramValue {
+  return compileToProgram({ source }, dir);
 }
 
 // Resolve `filename` against `dir`, requiring the result to live strictly
@@ -145,7 +155,7 @@ export function resolveInSandbox(
   } else {
     target = resolved;
   }
-  if (!target.startsWith(sandboxRoot + sep)) {
+  if (!isStrictDescendant(sandboxRoot, target)) {
     throw new Error(
       `Sandbox violation: '${filename}' resolves to '${target}', which is outside the sandbox dir '${sandboxRoot}'.`,
     );
@@ -157,9 +167,11 @@ export function resolveInSandbox(
 // stdlib-only restriction as _compile. The (dir, filename) split mirrors
 // std::read / std::write so callers can use partial application to bind
 // `dir` to a sandbox path: `runFile.bind(dir: "/safe/dir")`.
-export function _compileFile(dir: string, filename: string): { moduleId: string; code: string } {
-  const source = readFileSync(resolveInSandbox(dir, filename), "utf-8");
-  return compileToProgram(source);
+export function _compileFile(dir: string, filename: string): CompiledProgramValue {
+  // Containment + existence check up front for a precise error; the
+  // sandboxed compile then reads the file itself as part of validation.
+  resolveInSandbox(dir, filename);
+  return compileToProgram({ file: filename }, dir);
 }
 
 /** The current process's subprocess nesting depth (0 = root). Backs the

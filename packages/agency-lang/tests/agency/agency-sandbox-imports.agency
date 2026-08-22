@@ -1,0 +1,149 @@
+// Sandboxed compile with dir-confined local imports: runFile / compile /
+// runCode accept .agency imports inside dir, keep cwd and dir independent,
+// and refuse TS files, node builtins, and splices.
+import { compile, run, runCode, runFile } from "std::agency"
+import { mkdir } from "std::fs"
+
+const HELPER = "export def helperValue(): number { return 7 }"
+
+const MAIN_SOURCE = """
+import { helperValue } from "./helper.agency"
+export node main(): number {
+  return helperValue()
+}
+"""
+
+def seed(dir: string) {
+  write("helper.agency", HELPER, dir) with approve
+  write("main.agency", MAIN_SOURCE, dir) with approve
+}
+
+export node runFileWithLocalImport(): string {
+  const dir = "./.sandbox-imports-runfile"
+  mkdir(dir) with approve
+  seed(dir)
+  handle {
+    const result = runFile(dir: dir, filename: "main.agency", node: "main")
+    if (result is success(envelope)) {
+      return "value:${envelope.data}"
+    }
+    if (result is failure(err)) {
+      return "failed:${err}"
+    }
+  } with approve
+  return "unreachable"
+}
+
+export node compileWithLocalImportAndRun(): string {
+  const dir = "./.sandbox-imports-compile"
+  mkdir(dir) with approve
+  write("helper.agency", HELPER, dir) with approve
+  const compiled = compile(MAIN_SOURCE, dir)
+  if (compiled is failure(err)) {
+    return "compile failed:${err}"
+  }
+  if (compiled is success(program)) {
+    handle {
+      const result = run(program, "main")
+      if (result is success(envelope)) {
+        return "value:${envelope.data}"
+      }
+      if (result is failure(runErr)) {
+        return "run failed:${runErr}"
+      }
+    } with approve
+  }
+  return "unreachable"
+}
+
+// dir anchors COMPILE-time imports; cwd is the RUN-time working directory.
+// The child writes a marker with a relative path, so the marker's location
+// proves which directory the subprocess ran in.
+export node dirAndCwdAreIndependent(): string {
+  const compileDir = "./.sandbox-imports-dir"
+  const runCwd = "./.sandbox-imports-cwd"
+  mkdir(compileDir) with approve
+  mkdir(runCwd) with approve
+  write("helper.agency", HELPER, compileDir) with approve
+  const source = """
+import { helperValue } from "./helper.agency"
+export node main(): number {
+  write("marker.txt", "here") with approve
+  return helperValue()
+}
+"""
+  handle {
+    const result = runCode(source: source, node: "main", cwd: runCwd, dir: compileDir)
+    if (result is failure(err)) {
+      return "runCode failed:${err}"
+    }
+    if (result is success(value)) {
+      const inCwd = read("marker.txt", runCwd)
+      const inDir = read("marker.txt", compileDir)
+      if (inCwd is success(marker)) {
+        if (inDir is failure(missing)) {
+          return "value:${value} marker-in-cwd-only"
+        }
+        return "marker leaked into compile dir"
+      }
+      return "marker missing from cwd"
+    }
+  } with approve
+  return "unreachable"
+}
+
+export node tsImportRefused(): string {
+  const result = compile("import { x } from \"./nope.ts\"\nexport node main(): number { return 1 }")
+  if (result is failure(err)) {
+    if (err.includes("not Agency source")) {
+      return "refused"
+    }
+    return "wrong error:${err}"
+  }
+  return "compiled but should not have"
+}
+
+export node nodeBuiltinRefused(): string {
+  const result = compile("import cp from \"child_process\"\nexport node main(): number { return 1 }")
+  if (result is failure(err)) {
+    if (err.includes("child_process")) {
+      return "refused"
+    }
+    return "wrong error:${err}"
+  }
+  return "compiled but should not have"
+}
+
+export node spliceRefused(): string {
+  const source = """
+$( makeCode() )
+export node main(): number {
+  return 1
+}
+"""
+  const result = compile(source)
+  if (result is failure(err)) {
+    if (err.includes("splice")) {
+      return "refused"
+    }
+    return "wrong error:${err}"
+  }
+  return "compiled but should not have"
+}
+
+export node runFileWithNestedEntry(): string {
+  const dir = "./.sandbox-imports-nested"
+  mkdir(dir) with approve
+  mkdir("${dir}/sub") with approve
+  seed("${dir}/sub")
+  handle {
+    const result = runFile(dir: dir, filename: "sub/main.agency", node: "main")
+    if (result is success(envelope)) {
+      return "value:${envelope.data}"
+    }
+    if (result is failure(err)) {
+      return "failed:${err}"
+    }
+  } with approve
+  return "unreachable"
+}

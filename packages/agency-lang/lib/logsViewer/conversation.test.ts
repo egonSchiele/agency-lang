@@ -91,6 +91,16 @@ describe("formatConversation", () => {
     ]);
   });
 
+  it("escapes control characters other than newline", () => {
+    const lines = formatConversation([
+      { role: "tool", name: "bash", content: "\x1b[2Jcleared\x1b[1;1H\r\tdone\nnext" },
+    ]);
+    expect(lines).toEqual([
+      `${color.green("[tool: bash]")} \\u001b[2Jcleared\\u001b[1;1H\\r\\tdone`,
+      "  next",
+    ]);
+  });
+
   it("emits a placeholder row for empty turns", () => {
     const lines = formatConversation([{ role: "assistant", content: null }]);
     expect(lines).toEqual([color.green("[assistant]")]);

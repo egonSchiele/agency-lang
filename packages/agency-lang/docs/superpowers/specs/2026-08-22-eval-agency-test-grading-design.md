@@ -57,8 +57,8 @@ runs each test case, so the tested code's effects are all voted on by a
 policy the caller chose. `--pure-agency` compiles each tested file through
 the #878 closure validator, so the closure cannot contain anything that
 escapes the interrupt system. `--json` prints the results as one JSON
-document. A new built-in policy, `reject-all`, rejects every effect. The
-eval grader then is: copy the agent's workdir to a scratch directory, put the
+document. `--reject '*'` (already meaningful on `agency run`) rejects every
+effect. The eval grader then is: copy the agent's workdir to a scratch directory, put the
 framework's own copy of the harness pair in place, run
 `agency test --json --pure-agency --reject '*' <harness>.test.json`
 there, and score the passing fraction. The harness files are kept in the run

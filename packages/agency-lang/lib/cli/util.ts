@@ -216,6 +216,9 @@ type ExecuteNodeArgs = {
   env?: Record<string, string>;
   /** Keys removed from the inherited environment before `env` is applied. */
   unsetEnv?: string[];
+  /** The caller already compiled this file (e.g. `--agency-only`); run that
+   *  script instead of compiling or looking for a sibling. */
+  compiledPath?: string;
 };
 
 export type RunAgencyNodeArgs = {
@@ -237,6 +240,9 @@ export type RunAgencyNodeArgs = {
    *  the test runner's policy/budget carriers must come from its own flags
    *  only, never from the parent shell (lib/cli/testChildEnv.ts). */
   unsetEnv?: string[];
+  /** The caller already compiled this file: run exactly this script. Checked
+   *  before every other way of finding the compiled output. */
+  compiledPath?: string;
   /**
    * Reuse a precompiled `.js` sitting next to the `.agency` source instead of
    * recompiling, when one exists. Bundled agents (judges, proposers) ship such
@@ -270,6 +276,7 @@ export async function runAgencyNode({
   quietCompile,
   env,
   unsetEnv,
+  compiledPath: providedCompiledPath,
   preferCompiled,
   allowTestImports,
 }: RunAgencyNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
@@ -280,7 +287,9 @@ export async function runAgencyNode({
     const siblingJs = agencyFile.replace(/\.agency$/, ".js");
     let compiledPath: string;
 
-    if (distDir) {
+    if (providedCompiledPath !== undefined) {
+      compiledPath = providedCompiledPath;
+    } else if (distDir) {
       compiledPath = resolveCompiledFile(distDir, agencyFile);
     } else if (preferCompiled && agencyFile.endsWith(".agency") && fs.existsSync(siblingJs)) {
       // A precompiled sibling exists (bundled agents in dist) — reuse it

@@ -684,7 +684,7 @@ export function buildForkOptions(args: { limits: RunLimits; cwd?: string }): For
 /** Write the compiled JS to a fresh .agency-tmp/<nanoid>/ dir (under cwd so
  * Node resolves agency-lang package imports via the project's node_modules)
  * and return the script path. Called at every fork — initial run and resume
- * alike — and paired with cleanupTempDir when the session settles. */
+ * alike — and paired with removeCompiledScriptDir when the session settles. */
 export function materializeCompiledScript(compiled: {
   moduleId: string;
   code: string;
@@ -748,7 +748,7 @@ export function materializeCompiledScript(compiled: {
  * do is recursively rm a subdirectory of `<cwd>/.agency-tmp/` — never
  * `~`, `/`, or anything outside the project's tmp area.
  */
-function cleanupTempDir(compiledPath: string): void {
+export function removeCompiledScriptDir(compiledPath: string): void {
   try {
     const allowedPrefix = path.resolve(agencyPackageRoot, ".agency-tmp");
     // The per-run dir is the first segment under .agency-tmp; the script
@@ -1457,7 +1457,7 @@ async function invokeSubprocess(args: {
     });
     throw err;
   } finally {
-    cleanupTempDir(scriptPath);
+    removeCompiledScriptDir(scriptPath);
   }
 }
 

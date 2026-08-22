@@ -19,6 +19,8 @@ import * as os from "os";
 import * as path from "path";
 
 import { RunStrategy } from "../importStrategy.js";
+import { compileAgencyOnly } from "./agencyOnlyCompile.js";
+import { removeCompiledScriptDir } from "../runtime/ipc.js";
 import {
   AGENCY_RUN_POLICY,
   AGENCY_RUN_POLICY_INTERACTIVE,
@@ -278,13 +280,28 @@ export function run(
   /** `--capture-workdir <dir>`: after the run, write its statelog, code and a
    *  snapshot of the working directory as the run directory `<dir>/<traceId>/`. */
   capture?: { runDir: string },
+  /** `--agency-only`: compile through the closure validator; a refusal is
+   *  the run's failure (exit 1 with the diagnostics). */
+  compileMode: { agencyOnly: boolean } = { agencyOnly: false },
 ): void {
-  const output = compile(config, inputFile, outputFile, {
-    importStrategy: new RunStrategy(),
-  });
-  if (output === null) {
-    console.error("Error: No output file generated.");
-    process.exit(1);
+  let output: string;
+  if (compileMode.agencyOnly) {
+    const compiled = compileAgencyOnly(inputFile);
+    if (!compiled.ok) {
+      console.error("Error: agency-only compile refused:");
+      for (const error of compiled.errors) console.error(`  ${error}`);
+      process.exit(1);
+    }
+    output = compiled.scriptPath;
+  } else {
+    const compiledOutput = compile(config, inputFile, outputFile, {
+      importStrategy: new RunStrategy(),
+    });
+    if (compiledOutput === null) {
+      console.error("Error: No output file generated.");
+      process.exit(1);
+    }
+    output = compiledOutput;
   }
 
   console.log(`Running ${output}...`);
@@ -335,6 +352,7 @@ export function run(
   });
 
   nodeProcess.on("exit", (code) => {
+    if (compileMode.agencyOnly) removeCompiledScriptDir(output);
     if (captured !== undefined) {
       try {
         finishCapture(captured, inputFile);

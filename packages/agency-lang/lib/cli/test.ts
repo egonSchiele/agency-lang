@@ -42,6 +42,8 @@ import {
 import { exactVerdict } from "../testFormat/verdict.js";
 import type { ResolvedRunPolicy } from "./runPolicy.js";
 import { testChildEnv } from "./testChildEnv.js";
+import { compileAgencyOnly } from "./agencyOnlyCompile.js";
+import { removeCompiledScriptDir } from "../runtime/ipc.js";
 
 // The schema (lib/testFormat/schema.ts) is the one owner of the .test.json
 // format; these aliases only narrow the mock/handler payloads to the types
@@ -418,7 +420,14 @@ export type TestRunOptions = {
   policy?: ResolvedRunPolicy;
   /** Root budget, in `resolveBudget`'s string shape (`--max-cost/--max-time`). */
   budget?: { maxCost?: string; maxTime?: string };
+  /** `--agency-only`: compile each tested file through the closure validator
+   *  (no TS/JS, Node built-ins, pkg::, splices, or symlinks in its imports). */
+  agencyOnly?: boolean;
 };
+
+/** One test file's run: the command-line options plus, under
+ *  `--agency-only`, the script the file was compiled to. */
+type FileRun = { options: TestRunOptions; compiledPath?: string };
 
 export type TestStats = {
   passed: number;
@@ -561,10 +570,10 @@ async function runSingleTest(
   timeoutMs: number,
   signal: AbortSignal,
   log: Logger,
-  options: TestRunOptions,
+  run: FileRun,
 ): Promise<SingleTestOutcome> {
   const hasArgs = testCase.input !== undefined && testCase.input !== "";
-  const childEnv = testChildEnv(options);
+  const childEnv = testChildEnv(run.options);
   const relativeSourceFilePath = sourceFilePath;
   let result: { data: any; stdout: string; stderr: string };
   try {
@@ -589,6 +598,7 @@ async function runSingleTest(
       fetchMocks,
       env: childEnv.set,
       unsetEnv: childEnv.unset,
+      compiledPath: run.compiledPath,
     });
     if (result.stdout) log(result.stdout.trimEnd());
     if (result.stderr) log(result.stderr.trimEnd(), "stderr");
@@ -689,7 +699,7 @@ async function runTestWithRetries(
   timeoutMs: number,
   signal: AbortSignal,
   log: Logger,
-  options: TestRunOptions,
+  run: FileRun,
 ): Promise<SingleTestOutcome> {
   const maxAttempts = (testCase.retry ?? 0) + 1;
   let outcome: SingleTestOutcome = "failed";
@@ -706,7 +716,7 @@ async function runTestWithRetries(
         timeoutMs,
         signal,
         log,
-        options,
+        run,
       );
       if (outcome === "passed" || outcome === "aborted") break;
     } catch (e) {
@@ -861,6 +871,7 @@ async function runTestFile(
 ): Promise<TestStats> {
   const logger = createBufferedLogger();
   const log = logger.log;
+  let agencyOnlyScript: string | undefined;
 
   suite.inFlight.add(testFile);
   suite.pending.delete(testFile);
@@ -926,6 +937,28 @@ async function runTestFile(
         failedFiles: [testFile],
         slowTests: [],
       };
+    }
+
+    // --agency-only: one validated compile per file. A refusal is this
+    // file's failure, reported like any other; the suite continues.
+    const fileRun: FileRun = { options };
+    if (options.agencyOnly) {
+      const compiled = compileAgencyOnly(resolveTestSourcePath(tests, testFile));
+      if (!compiled.ok) {
+        log(color.red(`  ✗ ${testFile}: agency-only compile refused`));
+        for (const error of compiled.errors) log(color.red(`    ${error}`));
+        suite.completed.push(testFile);
+        return {
+          passed: 0,
+          failed: total,
+          filesPassed: 0,
+          filesFailed: 1,
+          failedFiles: [testFile],
+          slowTests: [],
+        };
+      }
+      fileRun.compiledPath = compiled.scriptPath;
+      agencyOnlyScript = compiled.scriptPath;
     }
 
     let skipped = 0;
@@ -995,7 +1028,7 @@ async function runTestFile(
         timeoutMs,
         suite.abortController.signal,
         log,
-        options,
+        fileRun,
       );
       const durationMs = performance.now() - startTime;
 
@@ -1032,6 +1065,7 @@ async function runTestFile(
     };
   } finally {
     suite.inFlight.delete(testFile);
+    if (agencyOnlyScript !== undefined) removeCompiledScriptDir(agencyOnlyScript);
     logger.flush();
   }
 }
@@ -1088,7 +1122,8 @@ export async function test(
   // exit here, matching the old per-case compile behavior (those compiles
   // ran in this process and exited too).
   try {
-    precompileTestSources(config, testFiles);
+    // --agency-only compiles each file itself, through the validator.
+    if (!options.agencyOnly) precompileTestSources(config, testFiles);
   } catch (e) {
     if (e instanceof CompileClosureError) {
       console.error(color.red(e.message));

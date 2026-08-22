@@ -139,6 +139,7 @@ type RunOptions = Omit<CliFlags, "trace"> & {
   maxTime?: string;
   local?: string;
   captureWorkdir?: string;
+  agencyOnly?: boolean;
 };
 
 // commander option parsers. Match the WHOLE string against digits so
@@ -302,6 +303,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       budget,
       nodeArgs,
       options.captureWorkdir === undefined ? undefined : { runDir: options.captureWorkdir },
+      { agencyOnly: options.agencyOnly ?? false },
     );
   }
 
@@ -440,6 +442,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
         .option(
           "--max-time <duration>",
           "Abort if the run's working time exceeds this duration (e.g. 30s, 5m, 1h, 2d). Waiting on a human is not counted; zero/negative = no limit",
+        )
+        .option(
+          "--agency-only",
+          "Refuse anything in the import closure that is not Agency source (TypeScript/JavaScript, Node built-ins, pkg:: packages, splices, symlinks), so every effect the program can perform is an interrupt",
         )
         .option(
           "--capture-workdir <dir>",
@@ -1172,6 +1178,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "--max-time <duration>",
       "Abort a test case if its working time exceeds this duration (e.g. 30s, 5m). Zero/negative = no limit",
     )
+    .option(
+      "--agency-only",
+      "Compile each tested file through the closure validator: anything in its imports that is not Agency source is refused and the file fails",
+    )
     .option("--coverage", "Enable coverage collection and report")
     .option("--accumulate", "Preserve existing coverage data (use with --coverage)")
     .option(
@@ -1196,6 +1206,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
           reject?: string;
           maxCost?: string;
           maxTime?: string;
+          agencyOnly?: boolean;
         },
       ) => {
         const config = getConfig();
@@ -1210,6 +1221,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
                 cwd: process.cwd(),
               }) ?? undefined,
             budget: resolveBudget({ maxCost: opts.maxCost, maxTime: opts.maxTime }),
+            agencyOnly: opts.agencyOnly ?? false,
           };
         } catch (e) {
           console.error(`Error: ${(e as Error).message}`);

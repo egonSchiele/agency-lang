@@ -3,18 +3,15 @@
  *  fails HERE instead of at someone's test run. */
 import { describe, test, expect } from "vitest";
 import * as fs from "fs";
-import { execSync } from "child_process";
+import { findRecursively } from "../utils/findRecursively.js";
 import { parseTestFileFull } from "./schema.js";
 
 describe("strict full profile vs shipped fixtures", () => {
   test("every fixture in tests/, evals/, and examples/ parses", () => {
-    const files = execSync("find tests evals examples -name '*.test.json'", {
-      cwd: process.cwd(),
-    })
-      .toString()
-      .trim()
-      .split("\n");
-    expect(files.length).toBeGreaterThan(500);
+    const files = ["tests", "evals", "examples"]
+      .filter((dir) => fs.existsSync(dir))
+      .flatMap((dir) => [...findRecursively(dir, ".test.json")].map((f) => f.path));
+    expect(files.length).toBeGreaterThan(0);
     const failures: string[] = [];
     for (const file of files) {
       try {

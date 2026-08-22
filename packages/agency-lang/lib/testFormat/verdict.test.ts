@@ -46,4 +46,14 @@ describe("exactVerdict (wire form)", () => {
   test("rawStringFallback=false: unparseable expectedOutput throws with quoting guidance", () => {
     expect(() => exactVerdict("ok", "ok", { rawStringFallback: false })).toThrow(/quoted/i);
   });
+
+  test("an undefined actual never hands a non-string to the diff (both paths)", () => {
+    const fallback = exactVerdict(undefined, "not json", { rawStringFallback: true });
+    expect(fallback.pass).toBe(false);
+    if (!fallback.pass) expect(fallback.feedback).toContain("undefined");
+    expect(exactVerdict(undefined, "undefined", { rawStringFallback: true }).pass).toBe(true);
+    const value = exactVerdict(undefined, "1", { rawStringFallback: true });
+    expect(value.pass).toBe(false);
+    if (!value.pass) expect(value.feedback).toContain("undefined");
+  });
 });

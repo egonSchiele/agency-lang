@@ -209,4 +209,24 @@ describe("declared sourceFile", () => {
     expect(groups).toHaveLength(1);
     expect(groups[0].files).toEqual([path.join(root, "declared/impl.agency")]);
   });
+
+  test("config is anchored at the .test.json, not at a declared source in a configured subdir", () => {
+    const root = writeTree({
+      suite: {
+        "suite.test.json": JSON.stringify({ sourceFile: "src/main.agency", tests: [] }),
+        "agency.json": JSON.stringify({ typechecker: { enabled: true } }),
+      },
+      "suite/src": {
+        "main.agency": TRIVIAL,
+        "agency.json": JSON.stringify({ typechecker: { enabled: false } }),
+      },
+    });
+    const groups = groupTestSources({}, [path.join(root, "suite/suite.test.json")]);
+    expect(groups).toHaveLength(1);
+    // The runner merges suite/agency.json (beside the test file); the
+    // precompile group must use the same one, not src/agency.json.
+    expect(groups[0].label).toBe(path.join(root, "suite"));
+    expect(groups[0].config.typechecker?.enabled).toBe(true);
+    expect(groups[0].files).toEqual([path.join(root, "suite/src/main.agency")]);
+  });
 });

@@ -50,7 +50,7 @@ import type { RemoteCommandContext } from "@/cli/remote/commands/util.js";
 import { lintSource } from "@/linter/registry.js";
 import { formatFindings } from "@/cli/lint.js";
 import { resolveBudget } from "@/cli/budget.js";
-import { fixtures, test, testTs, SlowTest, parseShardSpec } from "@/cli/test.js";
+import { fixtures, test, testTs, SlowTest, parseShardSpec, TestRunOptions } from "@/cli/test.js";
 import { generateReport, cleanCoverage } from "@/cli/coverage.js";
 import { createBundle, extractBundle } from "@/cli/bundle.js";
 import { traceLog } from "@/cli/events.js";
@@ -1152,6 +1152,26 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Run Agency test files")
     .argument("[inputs...]", "Paths to .test.json files or directories")
     .option("-p, --parallel <number>", "Number of test files to run in parallel", parseInt)
+    .option(
+      "--policy <name|path>",
+      "Interrupt policy installed as the outermost handler of every test case: a built-in (recommended|minimal|with-writes|approve-all) or a policy JSON file. A reject here wins over the tested code's own approvals.",
+    )
+    .option(
+      "--approve <effects>",
+      "Comma-separated interrupt effects to auto-approve in every test case",
+    )
+    .option(
+      "--reject <effects>",
+      "Comma-separated interrupt effects to auto-reject in every test case ('*' rejects every effect)",
+    )
+    .option(
+      "--max-cost <dollars>",
+      "Abort a test case if its LLM spend exceeds this many dollars (e.g. 0.50). 0 = no paid spend; negative = no limit",
+    )
+    .option(
+      "--max-time <duration>",
+      "Abort a test case if its working time exceeds this duration (e.g. 30s, 5m). Zero/negative = no limit",
+    )
     .option("--coverage", "Enable coverage collection and report")
     .option("--accumulate", "Preserve existing coverage data (use with --coverage)")
     .option(
@@ -1171,9 +1191,30 @@ export function createProgram(deps: CliDependencies = {}): Command {
           accumulate?: boolean;
           shard?: string;
           collectOnly?: boolean;
+          policy?: string;
+          approve?: string;
+          reject?: string;
+          maxCost?: string;
+          maxTime?: string;
         },
       ) => {
         const config = getConfig();
+        let runOptions: TestRunOptions = {};
+        try {
+          runOptions = {
+            policy:
+              resolveRunPolicy({
+                policy: opts.policy,
+                approve: opts.approve,
+                reject: opts.reject,
+                cwd: process.cwd(),
+              }) ?? undefined,
+            budget: resolveBudget({ maxCost: opts.maxCost, maxTime: opts.maxTime }),
+          };
+        } catch (e) {
+          console.error(`Error: ${(e as Error).message}`);
+          process.exit(2);
+        }
         if (opts.coverage) {
           process.env.AGENCY_COVERAGE = "1";
           // Resolve to an absolute path so subprocesses spawned with a different
@@ -1186,7 +1227,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
         }
         const shard = opts.shard ? parseShardSpec(opts.shard) : undefined;
         const parallel = opts.parallel ?? config.test?.parallel ?? 1;
-        const totals = await test(config, testFile, parallel, shard);
+        const totals = await test(config, testFile, parallel, shard, runOptions);
         const totalFiles = totals.filesPassed + totals.filesFailed;
         const totalTests = totals.passed + totals.failed;
         if (totalFiles > 0) {

@@ -40,6 +40,8 @@ import {
   type FullTestFile,
 } from "../testFormat/schema.js";
 import { exactVerdict } from "../testFormat/verdict.js";
+import type { ResolvedRunPolicy } from "./runPolicy.js";
+import { testChildEnv } from "./testChildEnv.js";
 
 // The schema (lib/testFormat/schema.ts) is the one owner of the .test.json
 // format; these aliases only narrow the mock/handler payloads to the types
@@ -409,6 +411,15 @@ export type SlowTest = {
   durationMs: number;
 };
 
+/** What the `agency test` command line asked for beyond the file list.
+ *  Threaded as one object from `test()` down to each case's subprocess. */
+export type TestRunOptions = {
+  /** Root interrupt policy for every case's child (`--policy/--approve/--reject`). */
+  policy?: ResolvedRunPolicy;
+  /** Root budget, in `resolveBudget`'s string shape (`--max-cost/--max-time`). */
+  budget?: { maxCost?: string; maxTime?: string };
+};
+
 export type TestStats = {
   passed: number;
   failed: number;
@@ -550,8 +561,10 @@ async function runSingleTest(
   timeoutMs: number,
   signal: AbortSignal,
   log: Logger,
+  options: TestRunOptions,
 ): Promise<SingleTestOutcome> {
   const hasArgs = testCase.input !== undefined && testCase.input !== "";
+  const childEnv = testChildEnv(options);
   const relativeSourceFilePath = sourceFilePath;
   let result: { data: any; stdout: string; stderr: string };
   try {
@@ -574,6 +587,8 @@ async function runSingleTest(
       useTestLLMProvider: testCase.useTestLLMProvider,
       argv: testCase.argv,
       fetchMocks,
+      env: childEnv.set,
+      unsetEnv: childEnv.unset,
     });
     if (result.stdout) log(result.stdout.trimEnd());
     if (result.stderr) log(result.stderr.trimEnd(), "stderr");
@@ -674,6 +689,7 @@ async function runTestWithRetries(
   timeoutMs: number,
   signal: AbortSignal,
   log: Logger,
+  options: TestRunOptions,
 ): Promise<SingleTestOutcome> {
   const maxAttempts = (testCase.retry ?? 0) + 1;
   let outcome: SingleTestOutcome = "failed";
@@ -690,6 +706,7 @@ async function runTestWithRetries(
         timeoutMs,
         signal,
         log,
+        options,
       );
       if (outcome === "passed" || outcome === "aborted") break;
     } catch (e) {
@@ -840,6 +857,7 @@ async function runTestFile(
   config: AgencyConfig,
   testFile: string,
   suite: SuiteContext,
+  options: TestRunOptions,
 ): Promise<TestStats> {
   const logger = createBufferedLogger();
   const log = logger.log;
@@ -977,6 +995,7 @@ async function runTestFile(
         timeoutMs,
         suite.abortController.signal,
         log,
+        options,
       );
       const durationMs = performance.now() - startTime;
 
@@ -1045,6 +1064,7 @@ export async function test(
   inputPaths: string[],
   parallel: number = 1,
   shard?: Shard,
+  options: TestRunOptions = {},
 ): Promise<TestStats> {
   const collected: string[] = [];
   for (const inputPath of inputPaths) {
@@ -1103,7 +1123,7 @@ export async function test(
     results = await runWithConcurrency(
       testFiles,
       sanitizeParallel(parallel),
-      (testFile) => runTestFile(config, testFile, suite),
+      (testFile) => runTestFile(config, testFile, suite, options),
       (testFile, error) => {
         console.error(color.red(`  ✗ Test file error: ${testFile}: ${error}`));
         return {

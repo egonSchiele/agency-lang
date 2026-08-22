@@ -23,6 +23,7 @@ import { parseAgency } from "@/parser.js";
 import type { LLMMock, ScopedLLMMocks } from "../runtime/deterministicClient.js";
 import type { FetchMock } from "../runtime/fetchMock.js";
 import { writeFetchMocksTempFile } from "./fetchMockResolve.js";
+import { childEnvironment } from "./testChildEnv.js";
 export async function promptForTarget(): Promise<{
   filename: string;
   nodeName: string;
@@ -210,6 +211,11 @@ type ExecuteNodeArgs = {
   // Set solely by the test runner (lib/cli/test.ts); every other caller
   // omits it, so it defaults to deny.
   allowTestImports?: boolean;
+  /** Extra env merged over process.env for the spawned subprocess, after
+   *  `unsetEnv` is applied. See RunAgencyNodeArgs. */
+  env?: Record<string, string>;
+  /** Keys removed from the inherited environment before `env` is applied. */
+  unsetEnv?: string[];
 };
 
 export type RunAgencyNodeArgs = {
@@ -227,6 +233,10 @@ export type RunAgencyNodeArgs = {
   quietCompile?: boolean;
   /** Extra env merged over process.env for the spawned subprocess. */
   env?: Record<string, string>;
+  /** Keys removed from the inherited environment before `env` is applied:
+   *  the test runner's policy/budget carriers must come from its own flags
+   *  only, never from the parent shell (lib/cli/testChildEnv.ts). */
+  unsetEnv?: string[];
   /**
    * Reuse a precompiled `.js` sitting next to the `.agency` source instead of
    * recompiling, when one exists. Bundled agents (judges, proposers) ship such
@@ -259,6 +269,7 @@ export async function runAgencyNode({
   maxBufferBytes,
   quietCompile,
   env,
+  unsetEnv,
   preferCompiled,
   allowTestImports,
 }: RunAgencyNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
@@ -320,7 +331,7 @@ export async function runAgencyNode({
       ...(timeoutMs !== undefined ? { timeout: timeoutMs } : {}),
       ...(signal !== undefined ? { signal } : {}),
       ...(wantsKill ? { killSignal: "SIGKILL" as const } : {}),
-      env: { ...process.env, ...(env ?? {}) },
+      env: childEnvironment(process.env, unsetEnv ?? [], env ?? {}),
     });
     const results = readFileSync(resultsFile, "utf-8");
     return { data: JSON.parse(results).data, stdout, stderr };
@@ -344,12 +355,16 @@ export async function executeNodeAsync({
   useTestLLMProvider,
   fetchMocks,
   fakeClock,
+  env: callerEnv,
   ...rest
 }: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
   const useDeterministic = !!process.env.AGENCY_USE_TEST_LLM_PROVIDER || !!useTestLLMProvider;
-  const env: Record<string, string> = useDeterministic
-    ? { AGENCY_LLM_MOCKS: JSON.stringify(llmMocks ?? []) }
-    : {};
+  // The caller's entries (policy, budget) come first; the mock entries this
+  // wrapper owns are added on top.
+  const env: Record<string, string> = {
+    ...(callerEnv ?? {}),
+    ...(useDeterministic ? { AGENCY_LLM_MOCKS: JSON.stringify(llmMocks ?? []) } : {}),
+  };
 
   // Independent of deterministic mode: a fixture opts into the fake clock, and
   // the subprocess installs it when constructing the RuntimeContext.

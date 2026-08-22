@@ -1,0 +1,9 @@
+// A node that approves its own write. Under `agency test --reject '*'` the
+// root policy handler is outermost and its reject wins over this approve.
+export node writeIt(): string {
+  const r = write("x.txt", "hi", ".") with approve
+  if (isFailure(r)) {
+    return "rejected"
+  }
+  return "written"
+}

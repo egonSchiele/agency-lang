@@ -1035,106 +1035,9 @@ async function runTestFile(
       agencyOnlyScript = compiled.scriptPath;
     }
 
-    let skipped = 0;
-    const slowTests: SlowTest[] = [];
-    let aborted = false;
-    const caseReports: TestCaseReport[] = [];
-    const describeCase = (c: TestCase): Pick<TestCaseReport, "node" | "description" | "input"> => ({
-      node: c.nodeName,
-      ...(c.description === undefined ? {} : { description: c.description }),
-      ...(c.input === undefined || c.input === "" ? {} : { input: c.input }),
-    });
-
-    for (let i = 0; i < total; i++) {
-      // Bail between test cases if the suite is aborting. The currently
-      // in-flight execFile (if any) is killed via its AbortSignal.
-      if (suite.aborted) {
-        aborted = true;
-        break;
-      }
-
-      const testCase = cases[i];
-      const interruptInfo = testCase.interruptHandlers
-        ? ` interrupts=${testCase.interruptHandlers.length}`
-        : "";
-      const testNum = color.cyan(`Test ${i + 1}/${total}:`);
-      log(
-        `\n${testNum} node=${testCase.nodeName} input=${testCase.input || "(none)"}${interruptInfo}`,
-      );
-      if (testCase.description) {
-        log(color.cyan("Description:", testCase.description) + "\n");
-      }
-
-      if (testCase.skip) {
-        log(color.yellow(`  ⊘ Skipped`));
-        skipped++;
-        caseReports.push({ ...describeCase(testCase), status: "skipped", durationMs: 0 });
-        continue;
-      }
-
-      if (testCase.skipOnCI && process.env.CI) {
-        log(color.yellow(`  ⊘ Skipped on CI`));
-        skipped++;
-        caseReports.push({ ...describeCase(testCase), status: "skipped", durationMs: 0 });
-        continue;
-      }
-
-      // Under deterministic LLM mode, llmJudge tests cannot run because
-      // the judge itself is an LLM call without a mock. Skip these so CI
-      // gets a clear `skipped` rather than a confusing "no mock provided"
-      // failure.
-      if (
-        (process.env.AGENCY_USE_TEST_LLM_PROVIDER || testCase.useTestLLMProvider) &&
-        testCase.evaluationCriteria.some((c) => c.type === "llmJudge")
-      ) {
-        log(color.yellow(`  ⊘ Skipped (LLM-as-judge requires real client)`));
-        skipped++;
-        caseReports.push({ ...describeCase(testCase), status: "skipped", durationMs: 0 });
-        continue;
-      }
-
-      // Preserve "not declared" (undefined -> no shim) vs "declared, possibly
-      // empty" ([] -> shim installed, every fetch throws). Only resolve when at
-      // least one level declares fetchMocks.
-      const fetchMocksDeclared =
-        tests.fetchMocks !== undefined || testCase.fetchMocks !== undefined;
-      const fetchMocks = fetchMocksDeclared
-        ? resolveFetchMocks(tests.fetchMocks, testCase.fetchMocks, path.dirname(testFile))
-        : undefined;
-      const timeoutMs = resolveTimeoutMs(testCase, tests);
-      const startTime = performance.now();
-      const outcome = await runTestWithRetries(
-        config,
-        resolveTestSourcePath(tests, testFile),
-        testCase,
-        fetchMocks,
-        timeoutMs,
-        suite.abortController.signal,
-        log,
-        fileRun,
-      );
-      const durationMs = performance.now() - startTime;
-
-      if (outcome.status === "aborted") {
-        caseReports.push({ ...describeCase(testCase), status: "aborted", durationMs });
-        aborted = true;
-        break;
-      }
-      caseReports.push({
-        ...describeCase(testCase),
-        status: outcome.status,
-        ...(outcome.feedback === undefined ? {} : { feedback: outcome.feedback }),
-        durationMs,
-        attempts: outcome.attempts,
-      });
-
-      const testName = testCase.description
-        ? `${testFile} > ${testCase.nodeName} > ${testCase.description}`
-        : `${testFile} > ${testCase.nodeName}(${testCase.input || ""})`;
-      slowTests.push({ name: testName, durationMs });
-
-      if (outcome.status === "passed") passed++;
-    }
+    const loop = await runCases({ config, tests, cases, testFile, suite, log, fileRun });
+    passed = loop.passed;
+    const { skipped, slowTests, aborted, caseReports } = loop;
 
     const ran = total - skipped;
     const failed = ran - passed;
@@ -1167,6 +1070,130 @@ async function runTestFile(
     if (agencyOnlyScript !== undefined) removeCompiledScriptDir(agencyOnlyScript);
     logger.flush();
   }
+}
+
+/** What one file's case loop produced: counts, timings, and the report
+ *  entries. The loop itself is here so `runTestFile` stays readable. */
+type CaseLoopResult = {
+  passed: number;
+  skipped: number;
+  aborted: boolean;
+  slowTests: SlowTest[];
+  caseReports: TestCaseReport[];
+};
+
+async function runCases(args: {
+  config: AgencyConfig;
+  tests: Tests;
+  cases: TestCase[];
+  testFile: string;
+  suite: SuiteContext;
+  log: Logger;
+  fileRun: FileRun;
+}): Promise<CaseLoopResult> {
+  const { config, tests, cases, testFile, suite, log, fileRun } = args;
+  const total = cases.length;
+  let passed = 0;
+  let skipped = 0;
+  const slowTests: SlowTest[] = [];
+  let aborted = false;
+  const caseReports: TestCaseReport[] = [];
+  const describeCase = (c: TestCase): Pick<TestCaseReport, "node" | "description" | "input"> => ({
+    node: c.nodeName,
+    ...(c.description === undefined ? {} : { description: c.description }),
+    ...(c.input === undefined || c.input === "" ? {} : { input: c.input }),
+  });
+
+  for (let i = 0; i < total; i++) {
+    // Bail between test cases if the suite is aborting. The currently
+    // in-flight execFile (if any) is killed via its AbortSignal.
+    if (suite.aborted) {
+      aborted = true;
+      break;
+    }
+
+    const testCase = cases[i];
+    const interruptInfo = testCase.interruptHandlers
+      ? ` interrupts=${testCase.interruptHandlers.length}`
+      : "";
+    const testNum = color.cyan(`Test ${i + 1}/${total}:`);
+    log(
+      `\n${testNum} node=${testCase.nodeName} input=${testCase.input || "(none)"}${interruptInfo}`,
+    );
+    if (testCase.description) {
+      log(color.cyan("Description:", testCase.description) + "\n");
+    }
+
+    if (testCase.skip) {
+      log(color.yellow(`  ⊘ Skipped`));
+      skipped++;
+      caseReports.push({ ...describeCase(testCase), status: "skipped", durationMs: 0 });
+      continue;
+    }
+
+    if (testCase.skipOnCI && process.env.CI) {
+      log(color.yellow(`  ⊘ Skipped on CI`));
+      skipped++;
+      caseReports.push({ ...describeCase(testCase), status: "skipped", durationMs: 0 });
+      continue;
+    }
+
+    // Under deterministic LLM mode, llmJudge tests cannot run because
+    // the judge itself is an LLM call without a mock. Skip these so CI
+    // gets a clear `skipped` rather than a confusing "no mock provided"
+    // failure.
+    if (
+      (process.env.AGENCY_USE_TEST_LLM_PROVIDER || testCase.useTestLLMProvider) &&
+      testCase.evaluationCriteria.some((c) => c.type === "llmJudge")
+    ) {
+      log(color.yellow(`  ⊘ Skipped (LLM-as-judge requires real client)`));
+      skipped++;
+      caseReports.push({ ...describeCase(testCase), status: "skipped", durationMs: 0 });
+      continue;
+    }
+
+    // Preserve "not declared" (undefined -> no shim) vs "declared, possibly
+    // empty" ([] -> shim installed, every fetch throws). Only resolve when at
+    // least one level declares fetchMocks.
+    const fetchMocksDeclared = tests.fetchMocks !== undefined || testCase.fetchMocks !== undefined;
+    const fetchMocks = fetchMocksDeclared
+      ? resolveFetchMocks(tests.fetchMocks, testCase.fetchMocks, path.dirname(testFile))
+      : undefined;
+    const timeoutMs = resolveTimeoutMs(testCase, tests);
+    const startTime = performance.now();
+    const outcome = await runTestWithRetries(
+      config,
+      resolveTestSourcePath(tests, testFile),
+      testCase,
+      fetchMocks,
+      timeoutMs,
+      suite.abortController.signal,
+      log,
+      fileRun,
+    );
+    const durationMs = performance.now() - startTime;
+
+    if (outcome.status === "aborted") {
+      caseReports.push({ ...describeCase(testCase), status: "aborted", durationMs });
+      aborted = true;
+      break;
+    }
+    caseReports.push({
+      ...describeCase(testCase),
+      status: outcome.status,
+      ...(outcome.feedback === undefined ? {} : { feedback: outcome.feedback }),
+      durationMs,
+      attempts: outcome.attempts,
+    });
+
+    const testName = testCase.description
+      ? `${testFile} > ${testCase.nodeName} > ${testCase.description}`
+      : `${testFile} > ${testCase.nodeName}(${testCase.input || ""})`;
+    slowTests.push({ name: testName, durationMs });
+
+    if (outcome.status === "passed") passed++;
+  }
+  return { passed, skipped, aborted, slowTests, caseReports };
 }
 
 // Print the suite-abort summary after the runner has drained.

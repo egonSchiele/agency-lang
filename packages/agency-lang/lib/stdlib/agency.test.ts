@@ -20,6 +20,7 @@ import {
   _walkAST,
   _getNodesOfType,
   _filterImports,
+  _exactVerdictFeedback,
 } from "./agency.js";
 import type { AgencyNode } from "../types.js";
 import type { ImportStatement } from "../types/importStatement.js";
@@ -771,5 +772,14 @@ describe("_describe (reify): re-exports, consts, module summary", () => {
       "",
     ].join("\n");
     expect(_describe(src).description).toBe("News tools.");
+  });
+});
+
+describe("_exactVerdictFeedback", () => {
+  it("returns empty on a structural match and a diff on mismatch", () => {
+    expect(_exactVerdictFeedback({ a: 1, b: 2 }, { b: 2, a: 1 })).toBe("");
+    const feedback = _exactVerdictFeedback(5, 6);
+    expect(feedback).toContain("6");
+    expect(feedback).toContain("5");
   });
 });

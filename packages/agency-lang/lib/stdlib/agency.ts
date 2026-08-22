@@ -1,6 +1,7 @@
 import { typeCheckSource, getEffectsFromSource, TypeCheckReport } from "../compiler/compile.js";
 import { writeFileSync, readFileSync, realpathSync, existsSync } from "fs";
-import { resolve, sep } from "path";
+import { resolve, sep, join, dirname } from "path";
+import { readContainedFile } from "../utils/readContainedFile.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
 import { AgencyGenerator, generateAgency } from "../backends/agencyGenerator.js";
 import { TypescriptPreprocessor } from "../preprocessors/typescriptPreprocessor.js";
@@ -14,6 +15,8 @@ import { variableTypeToString } from "../backends/typescriptGenerator/typeToStri
 import { declaredName } from "../types/hole.js";
 import { deepCopy, isStrictDescendant } from "../utils.js";
 import { compileSandboxed } from "../compiler/compileSandboxed.js";
+import { exactVerdictValue } from "../testFormat/verdict.js";
+import { parseTestFileSandbox, type ParsedInterrupt } from "../testFormat/schema.js";
 import type { ClosureEntry } from "../compiler/closureValidator.js";
 import { ImportKind, ImportPolicy, isImportAllowed } from "../importPaths.js";
 import type { AgencyMultiLineComment, AgencyProgram, AgencyNode } from "../types.js";
@@ -581,4 +584,72 @@ export function _filterImports(
   );
   const filtered = ast.nodes.length !== originalCount;
   return { source: generateAgency(ast), filtered };
+}
+
+/** Deterministic text for a run failure carried into case feedback:
+ *  strings verbatim, structured failures as stable JSON. */
+export function _failureFeedback(err: unknown): string {
+  if (typeof err === "string") return err;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}
+
+/** "" = pass; otherwise the failing diff. Backs std::agency's test():
+ *  the one exact-match verdict shared with the CLI runner. */
+export function _exactVerdictFeedback(actual: unknown, expected: unknown): string {
+  const verdict = exactVerdictValue(actual, expected);
+  return verdict.pass ? "" : verdict.feedback;
+}
+
+// ---------------------------------------------------------------------------
+// testFile() seam. It performs its read ONLY when called, so the Agency
+// layer gates it with a std::read interrupt first.
+// ---------------------------------------------------------------------------
+
+export type TestFileCaseWire = {
+  node: string;
+  args: Record<string, unknown>;
+  expected: unknown;
+  interrupts: ParsedInterrupt[];
+  wallClock?: number;
+  description?: string;
+};
+
+export type ParsedTestFileWire = {
+  sourceFile: string;
+  defaultTimeoutMs?: number;
+  cases: TestFileCaseWire[];
+};
+
+/** Reads and validates a sandbox-profile .test.json. Every case is
+ *  converted up front, so a bad file is a whole-call failure before
+ *  test() can launch anything. An escaping filename is refused by
+ *  resolveInSandbox BEFORE any read. */
+export function _readTestFileSandbox(dir: string, filename: string): ParsedTestFileWire {
+  const target = resolveInSandbox(dir, filename);
+  // The std::read vote authorized this sandbox-relative path; the read
+  // validates the opened descriptor itself, so a swap after
+  // resolveInSandbox cannot redirect it outside dir.
+  const parsed = parseTestFileSandbox(readContainedFile(dir, target), filename);
+  const wire: ParsedTestFileWire = {
+    // sourceFile is declared relative to the .test.json, so a nested
+    // suite ("sub/suite.test.json") tests "sub/<source>", not "<source>".
+    sourceFile: join(dirname(filename), parsed.sourceFile),
+    cases: parsed.cases.map((c) => {
+      const wireCase: TestFileCaseWire = {
+        node: c.nodeName,
+        args: c.args,
+        expected: c.expected,
+        interrupts: c.interrupts,
+      };
+      if (c.timeoutMs !== undefined) wireCase.wallClock = c.timeoutMs;
+      if (c.description !== undefined) wireCase.description = c.description;
+      return wireCase;
+    }),
+  };
+  if (parsed.defaultTimeoutMs !== undefined) wire.defaultTimeoutMs = parsed.defaultTimeoutMs;
+  return wire;
 }

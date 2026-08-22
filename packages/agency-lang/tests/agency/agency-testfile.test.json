@@ -1,0 +1,12 @@
+{
+  "defaultTimeoutMs": 90000,
+  "tests": [
+    { "nodeName": "multiCaseReport", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "refusedFieldNamesIt", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "unquotedExpectedOutputGuidance", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "firstGateBlocksTheRead", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "cliInputStringIsRefused", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "nestedSuiteUsesItsOwnDirectory", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "unknownNodeIsACaseFailure", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

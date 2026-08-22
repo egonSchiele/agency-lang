@@ -1,0 +1,627 @@
+// std::agency test(): sandboxed agency tests with parent-handler vetoes.
+// Every safety case has a positive control proving the fixture can perform
+// the behavior, plus the restricted run with an independent observable.
+import { test } from "std::agency"
+import { mkdir } from "std::fs"
+
+const SOLUTION = """
+import { runCode } from "std::agency"
+
+export def fibLike(n: number): number {
+  if (n < 2) {
+    return n
+  }
+  return fibLike(n - 1) + fibLike(n - 2)
+}
+
+export def writeSentinel(dir: string): string {
+  const r = write("sentinel.txt", "written", dir)
+  if (isFailure(r)) {
+    return "write rejected"
+  }
+  return "wrote"
+}
+
+export def askValue(): string {
+  const v = interrupt("gimme")
+  return v
+}
+
+export def loopForever(): number {
+  let n = 0
+  while (true) {
+    n = n + 1
+  }
+  return n
+}
+
+export def callsLLM(): string {
+  const r = llm("Reply with: hi")
+  return "llm done"
+}
+
+export def launchNested(): any {
+  const r = runCode("export node main(): number { return 7 }")
+  if (isFailure(r)) {
+    return "nested rejected"
+  }
+  return r.value
+}
+"""
+
+const HARNESS = """
+import { fibLike, writeSentinel, askValue, loopForever, launchNested, callsLLM } from "./solution.agency"
+
+export node five(): number {
+  return fibLike(5)
+}
+
+export node writes(dir: string): string {
+  return writeSentinel(dir)
+}
+
+export node asks(): string {
+  return askValue()
+}
+
+export node loops(): number {
+  return loopForever()
+}
+
+export node nested(): any {
+  return launchNested()
+}
+
+export node withDefaults(a: number, b: number = 5): number {
+  return a + b
+}
+
+export node spends(): string {
+  return callsLLM()
+}
+"""
+
+def seed(dir: string) {
+  mkdir(dir) with approve
+  write("solution.agency", SOLUTION, dir) with approve
+  write("harness.agency", HARNESS, dir) with approve
+}
+
+def sentinelExists(dir: string): boolean {
+  const r = read("sentinel.txt", dir) with approve
+  return isSuccess(r)
+}
+
+export node emptyCasesPass(): string {
+  const dir = "./.tfn-empty"
+  seed(dir)
+  handle {
+    const r = test(dir, "harness.agency", [])
+    if (r is success(report)) {
+      if (report.pass && report.cases.length == 0) {
+        return "ok"
+      }
+      return "wrong report"
+    }
+    return "failed"
+  } with approve
+  return "unreachable"
+}
+
+export node passAndFailInOneBatch(): string {
+  const dir = "./.tfn-batch"
+  seed(dir)
+  handle {
+    const r = test(dir, "harness.agency", [
+      { node: "five", expected: 5 },
+      { node: "five", expected: 99 },
+    ])
+    if (r is success(report)) {
+      if (report.pass) {
+        return "should not all pass"
+      }
+      if (!report.cases[0].pass) {
+        return "case 1 should pass"
+      }
+      if (report.cases[1].pass) {
+        return "case 2 should fail"
+      }
+      if (report.cases[1].feedback == "") {
+        return "case 2 needs feedback"
+      }
+      return "ok"
+    }
+    return "failed"
+  } with approve
+  return "unreachable"
+}
+
+// Positive control for the veto test: a permissive parent lets the tested
+// code write its sentinel, even though the write is scripted-approved too.
+export node writeSucceedsUnderPermissiveParent(): string {
+  const dir = "./.tfn-write-control"
+  seed(dir)
+  handle {
+    const r = test(dir, "harness.agency", [
+      {
+      node: "writes",
+      args: { dir: dir },
+      expected: "wrote",
+      interrupts: [{ action: "approve" }]
+    },
+    ])
+    if (r is success(report)) {
+      if (!report.pass) {
+        return "control should pass: ${report.cases[0].feedback}"
+      }
+      if (!sentinelExists(dir)) {
+        return "control sentinel missing"
+      }
+      return "ok"
+    }
+    return "failed"
+  } with approve
+  return "unreachable"
+}
+
+// The load-bearing veto: a scripted approve is one vote, and the parent's
+// reject wins. Fresh dir, so the sentinel observable is independent.
+export node parentVetoBeatsScriptedApprove(): string {
+  const dir = "./.tfn-write-veto"
+  seed(dir)
+  let sawWrite = false
+  let r = null
+  handle {
+    r = test(dir, "harness.agency", [
+      {
+      node: "writes",
+      args: { dir: dir },
+      expected: "wrote",
+      interrupts: [{ action: "approve" }]
+    },
+    ])
+  } with (intr) {
+    if (intr.effect == "std::run") {
+      return approve()
+    }
+    if (intr.effect == "std::write") {
+      sawWrite = true
+    }
+    return reject("parent rejected ${intr.effect}")
+  }
+  if (r is success(report)) {
+    if (report.pass) {
+      return "veto failed: the case passed"
+    }
+    if (!sawWrite) {
+      return "parent never saw the write"
+    }
+    if (sentinelExists(dir)) {
+      return "sentinel exists despite veto"
+    }
+    return "ok"
+  }
+  return "failed"
+}
+
+export node parentRejectsLaunch(): string {
+  const dir = "./.tfn-launch"
+  seed(dir)
+  let r = null
+  handle {
+    r = test(dir, "harness.agency", [{ node: "five", expected: 5 }])
+  } with (intr) {
+    return reject("no launches allowed")
+  }
+  if (r is success(report)) {
+    if (report.pass) {
+      return "launch was not rejected"
+    }
+    return "ok"
+  }
+  return "failed"
+}
+
+export node scriptedApproveValueRoundTrips(): string {
+  const dir = "./.tfn-value"
+  seed(dir)
+  let r = null
+  handle {
+    r = test(dir, "harness.agency", [
+      {
+      node: "asks",
+      expected: "granted",
+      interrupts: [{ action: "approve", value: "granted" }]
+    },
+    ])
+  } with (intr) {
+    // Approve the launch; stay SILENT otherwise. A valueless outer
+    // approve() would overwrite the scripted value (the in-process
+    // approval merge is outer-wins), so the scripted answer must be the
+    // only approver here.
+    if (intr.effect == "std::run") {
+      return approve()
+    }
+  }
+  if (r is success(report)) {
+    if (report.pass) {
+      return "ok"
+    }
+    return "case failed: ${report.cases[0].feedback}"
+  }
+  return "failed"
+}
+
+export node scriptedRejectFailsCaseAndBatchContinues(): string {
+  const dir = "./.tfn-sreject"
+  seed(dir)
+  let r = null
+  handle {
+    r = test(dir, "harness.agency", [
+      {
+      node: "asks",
+      expected: "never",
+      interrupts: [{ action: "reject" }]
+    },
+      { node: "five", expected: 5 },
+    ])
+  } with (intr) {
+    if (intr.effect == "std::run") {
+      return approve()
+    }
+  }
+  if (r is success(report)) {
+    if (report.cases[0].pass) {
+      return "rejected case should fail"
+    }
+    if (!report.cases[1].pass) {
+      return "batch did not continue"
+    }
+    return "ok"
+  }
+  return "failed"
+}
+
+export node expectedMessageMismatchFails(): string {
+  const dir = "./.tfn-msg"
+  seed(dir)
+  handle {
+    const r = test(dir, "harness.agency", [
+      {
+      node: "asks",
+      expected: "x",
+      interrupts: [{ action: "approve", value: "x", expectedMessage: "different" }]
+    },
+    ])
+    if (r is success(report)) {
+      if (report.cases[0].pass) {
+        return "mismatch should fail"
+      }
+      if (!report.cases[0].feedback.includes("different")) {
+        return "feedback missing the expectation"
+      }
+      return "ok"
+    }
+    return "failed"
+  } with approve
+  return "unreachable"
+}
+
+// An explicit empty expectation is still an expectation: it must be
+// compared, and "gimme" is not "".
+export node emptyExpectedMessageIsChecked(): string {
+  const dir = "./.tfn-emptymsg"
+  seed(dir)
+  handle {
+    const r = test(dir, "harness.agency", [
+      {
+      node: "asks",
+      expected: "x",
+      interrupts: [{ action: "approve", value: "x", expectedMessage: "" }]
+    },
+    ])
+    if (r is success(report)) {
+      if (report.cases[0].pass) {
+        return "an empty expectation must not be skipped"
+      }
+      if (!report.cases[0].feedback.includes("gimme")) {
+        return "feedback missing the actual message: ${report.cases[0].feedback}"
+      }
+      return "ok"
+    }
+    return "failed"
+  } with approve
+  return "unreachable"
+}
+
+export node leftoverAnswersFail(): string {
+  const dir = "./.tfn-leftover"
+  seed(dir)
+  handle {
+    const r = test(dir, "harness.agency", [
+      {
+      node: "five",
+      expected: 5,
+      interrupts: [{ action: "approve" }]
+    },
+    ])
+    if (r is success(report)) {
+      if (report.cases[0].pass) {
+        return "leftover should fail"
+      }
+      if (!report.cases[0].feedback.includes("expected 1 interrupt")) {
+        return "wrong feedback: ${report.cases[0].feedback}"
+      }
+      return "ok"
+    }
+    return "failed"
+  } with approve
+  return "unreachable"
+}
+
+// Exhausted answers stay silent: the interrupt reaches BOTH outer handlers
+// and the approving one's value reaches the tested code.
+export node exhaustedAnswersPropagate(): string {
+  const dir = "./.tfn-exhaust"
+  seed(dir)
+  let innerSaw = false
+  let outerSaw = false
+  let r = null
+  handle {
+    handle {
+      r = test(dir, "harness.agency", [{ node: "asks", expected: "fromOuter" }])
+    } with (intr) {
+      if (intr.effect == "std::run") {
+        return approve()
+      }
+      innerSaw = true
+    }
+  } with (intr) {
+    if (intr.effect == "std::run") {
+      return approve()
+    }
+    outerSaw = true
+    return approve("fromOuter")
+  }
+  if (r is success(report)) {
+    if (!report.pass) {
+      return "case failed: ${report.cases[0].feedback}"
+    }
+    if (!innerSaw) {
+      return "inner handler never ran"
+    }
+    if (!outerSaw) {
+      return "outer handler never ran"
+    }
+    return "ok"
+  }
+  return "failed"
+}
+
+// A std::run raised by the TESTED code (different moduleId) must not be
+// auto-approved: the scripted reject consumes it. If test() auto-approved
+// nested launches, runCode would succeed, the node would return 7, and
+// this case would PASS — which is exactly what the assertion refuses.
+export node nestedLaunchIsNotAutoApproved(): string {
+  const dir = "./.tfn-nested"
+  seed(dir)
+  handle {
+    const r = test(dir, "harness.agency", [
+      {
+      node: "nested",
+      expected: 7,
+      interrupts: [{ action: "reject" }]
+    },
+    ])
+    if (r is success(report)) {
+      if (report.cases[0].pass) {
+        return "nested launch was auto-approved"
+      }
+      return "ok"
+    }
+    return "failed"
+  } with approve
+  return "unreachable"
+}
+
+export node perCaseTimeoutThenNextCaseRuns(): string {
+  const dir = "./.tfn-timeout"
+  seed(dir)
+  handle {
+    const r = test(dir, "harness.agency", [
+      {
+      node: "loops",
+      expected: 0,
+      wallClock: 500
+    },
+      { node: "five", expected: 5 },
+    ])
+    if (r is success(report)) {
+      if (report.cases[0].pass) {
+        return "loop case should time out"
+      }
+      if (!report.cases[0].feedback.includes("limit_exceeded")) {
+        return "wrong feedback: ${report.cases[0].feedback}"
+      }
+      if (!report.cases[1].pass) {
+        return "batch did not continue"
+      }
+      return "ok"
+    }
+    return "failed"
+  } with approve
+  return "unreachable"
+}
+
+export node unknownNodeFailsOnlyItsCase(): string {
+  const dir = "./.tfn-unknown"
+  seed(dir)
+  handle {
+    const r = test(dir, "harness.agency", [
+      { node: "nope", expected: 1 },
+      { node: "five", expected: 5 },
+    ])
+    if (r is success(report)) {
+      if (report.cases[0].pass) {
+        return "unknown node should fail"
+      }
+      if (!report.cases[1].pass) {
+        return "batch did not continue"
+      }
+      return "ok"
+    }
+    return "failed"
+  } with approve
+  return "unreachable"
+}
+
+export node compileFailureIsWholeCallFailure(): string {
+  const dir = "./.tfn-broken"
+  mkdir(dir) with approve
+  write("solution.agency", "this does not parse {{{", dir) with approve
+  write("harness.agency", HARNESS, dir) with approve
+  handle {
+    const r = test(dir, "harness.agency", [{ node: "five", expected: 5 }])
+    if (r is failure(err)) {
+      return "ok"
+    }
+    return "compile failure should fail the call"
+  } with approve
+  return "unreachable"
+}
+
+export node defaultsWorkThroughTest(): string {
+  const dir = "./.tfn-defaults"
+  seed(dir)
+  handle {
+    const r = test(dir, "harness.agency", [
+      {
+      node: "withDefaults",
+      args: { a: 1 },
+      expected: 6
+    },
+      {
+      node: "withDefaults",
+      args: { a: 1, b: 10 },
+      expected: 11
+    },
+    ])
+    if (r is success(report)) {
+      if (report.pass) {
+        return "ok"
+      }
+      return "failed: ${report.cases[0].feedback} / ${report.cases[1].feedback}"
+    }
+    return "failed"
+  } with approve
+  return "unreachable"
+}
+
+// Compile-once, observed without implementation coupling: case 1 destroys
+// the SOURCE file on disk; case 2 still runs a different node from the
+// already compiled program. A per-case recompile would fail case 2.
+export node compilesOnceForTheWholeBatch(): string {
+  const dir = "./.tfn-once"
+  seed(dir)
+  handle {
+    const r = test(dir, "harness.agency", [
+      {
+      node: "writes",
+      args: { dir: dir },
+      expected: "wrote",
+      interrupts: [{ action: "approve" }]
+    },
+      { node: "five", expected: 5 },
+    ])
+    if (r is failure) {
+      return "call failed"
+    }
+    // Now corrupt the source and run a SECOND batch call to prove the
+    // corruption bites a fresh compile (the falsifiability control) …
+    write("solution.agency", "garbage {{{", dir) with approve
+    const r2 = test(dir, "harness.agency", [{ node: "five", expected: 5 }])
+    if (r2 is failure) {
+      if (r is success(report)) {
+        if (report.pass) {
+          return "ok"
+        }
+        return "first batch failed"
+      }
+    }
+    return "second call should have failed on the corrupted source"
+  } with approve
+  return "unreachable"
+}
+
+// Non-default limits reach the per-case std::run payload.
+export node limitsReachTheLaunchPayload(): string {
+  const dir = "./.tfn-limits"
+  seed(dir)
+  const seen = { wallClock: 0, memory: 0, ipcPayload: 0, stdout: 0 }
+  let r = null
+  handle {
+    r = test(
+      dir,
+      "harness.agency",
+      [{ node: "five", expected: 5 }],
+      wallClock: 12345,
+      memory: 100000000,
+      ipcPayload: 5000000,
+      stdout: 400000,
+    )
+  } with (intr) {
+    if (intr.effect == "std::run") {
+      seen.wallClock = intr.data.limits.wallClock
+      seen.memory = intr.data.limits.memory
+      seen.ipcPayload = intr.data.limits.ipcPayload
+      seen.stdout = intr.data.limits.stdout
+      return approve()
+    }
+    return approve()
+  }
+  if (r is success(report)) {
+    if (!report.pass) {
+      return "case failed"
+    }
+    if (seen.wallClock != 12345) {
+      return "wallClock did not reach the payload: ${seen.wallClock}"
+    }
+    if (seen.memory != 100000000) {
+      return "memory did not reach the payload"
+    }
+    if (seen.ipcPayload != 5000000) {
+      return "ipcPayload did not reach the payload"
+    }
+    if (seen.stdout != 400000) {
+      return "stdout did not reach the payload"
+    }
+    return "ok"
+  }
+  return "failed"
+}
+
+// The whole-call cost guard genuinely trips: the child runs an llm() call
+// on the deterministic test provider (fixed synthetic cost), and the cap
+// sits below one call's worth.
+export node maxCostTripsWholeCall(): string {
+  const dir = "./.tfn-cost"
+  seed(dir)
+  handle {
+    const r = test(
+      dir,
+      "harness.agency",
+      [{ node: "spends", expected: "llm done" }],
+      maxCost: 0.0000001,
+    )
+    if (r is failure(err)) {
+      if (err.reason == "limit_exceeded") {
+        if (err.limit == "cost") {
+          return "ok"
+        }
+      }
+      return "wrong failure shape"
+    }
+    return "cost guard did not trip"
+  } with approve
+  return "unreachable"
+}

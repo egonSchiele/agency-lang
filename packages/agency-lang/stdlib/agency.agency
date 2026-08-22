@@ -16,6 +16,9 @@ import {
   _getNodesOfType,
   _filterImports,
   _subprocessDepth,
+  _exactVerdictFeedback,
+  _failureFeedback,
+  _readTestFileSandbox,
  } from "agency-lang/stdlib-lib/agency.js"
 import { _prepareContainedPath } from "agency-lang/stdlib-lib/fs.js"
 import {
@@ -259,6 +262,228 @@ export def runFile(
     stdout: stdout,
     maxCost: maxCost,
   )
+}
+
+export type InterruptAnswer = {
+  action: "approve" | "reject";
+  value?: any;
+  expectedMessage?: string
+}
+
+export type TestArguments = Record<string, any>
+
+export type AgencyTestCase = {
+  node: string;
+  args?: TestArguments;
+  expected: any;
+  interrupts?: InterruptAnswer[];
+  wallClock?: number;
+  description?: string
+}
+
+export type CaseReport = {
+  node: string;
+  pass: boolean;
+  feedback: string
+}
+
+export type TestReport = {
+  pass: boolean;
+  cases: CaseReport[]
+}
+
+/** Runs agency tests the way run() runs a node: each case executes in the
+sandboxed subprocess, so every interrupt the tested code raises — and the
+per-case std::run launch itself — is voted on by the caller's handlers, and
+any reject wins.
+
+A case's scripted `interrupts` answers are ONE VOTE each, consumed in
+order by a handler wrapped closest around the case; parents still see
+every interrupt, so a test file can never approve something the caller's
+handler would reject. Exhausted answers stay silent (the interrupt
+propagates outward); leftover answers fail the case; an `expectedMessage`
+mismatch fails the case.
+
+A compile failure (including "the tested file does not export X's import")
+is a whole-call failure: fix the input and call again. A case failing —
+wrong value, rejected interrupt, per-case limit — is a `pass: false` entry
+in a success report, and never stops the batch. `maxCost` guards the WHOLE
+call, in the same limit_exceeded shape as run()'s other limits. */
+export def test(
+  dir: string,
+  filename: string,
+  cases: AgencyTestCase[],
+  wallClock: number = 60s,
+  memory: number = 512mb,
+  ipcPayload: number = 100mb,
+  stdout: number = 1mb,
+  maxCost: number | null = null,
+): Result<TestReport> {
+  """
+  Run test cases against an Agency file in the sandboxed subprocess and return a per-case report. The file's imports may name std:: modules, .agency files inside dir, and pkg:: packages with a pure-Agency closure.
+
+  @param dir - The directory containing the tested file; also the boundary its local imports are confined to
+  @param filename - The agency file whose exported nodes the cases run
+  @param cases - The cases: which node, what args, what value to expect
+  @param wallClock - Max wall-clock time per case in MILLISECONDS (default 60000 = 60s); a case's own wallClock overrides it
+  @param memory - Max V8 heap size per case in BYTES (default 536870912 = 512mb)
+  @param ipcPayload - Max single IPC message size per case in BYTES (default 104857600 = 100mb)
+  @param stdout - Max combined stdout+stderr output per case in BYTES (default 1048576 = 1mb)
+  @param maxCost - Max LLM spend in dollars for the WHOLE call. null = no cost limit.
+  """
+  const compiled = try _compileFile(dir, filename)
+  if (compiled is failure(compileErr)) {
+    return compiled
+  }
+  let program = null
+  if (compiled is success(value)) {
+    program = value
+  }
+
+  // Same guard pattern as run(): a negative cap disables the dimension, so
+  // one guarded call site serves both cases.
+  const NO_COST_CAP = -1.0
+  const cap = if maxCost != null then maxCost else NO_COST_CAP
+  const guarded = guard(cost: cap) {
+    const caseReports: CaseReport[] = []
+    let allPass = true
+    for (testCase in cases) {
+      // The scripted-answer state the inline handler mutates: which answer
+      // is next, and whether an expectedMessage mismatch already decided
+      // this case.
+      const scripted = { index: 0, mismatch: "" }
+      const answers = testCase.interrupts ?? []
+      let runResult = null
+      handle {
+        runResult = run(
+          compiled: program,
+          node: testCase.node,
+          args: testCase.args ?? {},
+          wallClock: testCase.wallClock ?? wallClock,
+          memory: memory,
+          ipcPayload: ipcPayload,
+          stdout: stdout,
+        )
+      } with (intr) {
+        // The case's own sandbox launch: approve. The parent still sees it
+        // and any parent reject wins. A std::run for a DIFFERENT module
+        // (tested code launching its own subprocess) falls through to the
+        // scripted answers like any other effect.
+        if (intr.effect == "std::run") {
+          if (intr.data.moduleId == program.moduleId) {
+            return approve()
+          }
+        }
+        if (scripted.index < answers.length) {
+          const answer = answers[scripted.index]
+          scripted.index = scripted.index + 1
+          // Presence decides whether the message is checked (== null also
+          // matches undefined); an empty string is a real expectation.
+          if (answer.expectedMessage != null) {
+            if (answer.expectedMessage != intr.message) {
+              scripted.mismatch = "expected interrupt message \"${answer.expectedMessage}\", got \"${intr.message}\""
+              return reject(scripted.mismatch)
+            }
+          }
+          if (answer.action == "approve") {
+            return approve(answer.value)
+          }
+          return reject("scripted answer rejected effect \"${intr.effect}\"")
+        }
+        // Answers exhausted: stay silent, so the interrupt propagates to
+        // parent handlers (and the user) per the normal rules. Nothing is
+        // approved by omission.
+      }
+
+      let feedback = ""
+      if (scripted.mismatch != "") {
+        feedback = scripted.mismatch
+      } else if (scripted.index < answers.length) {
+        feedback = "expected ${answers.length} interrupt(s), saw ${scripted.index}"
+      } else if (runResult is failure(runErr)) {
+        feedback = "run failed: ${_failureFeedback(runErr)}"
+      } else if (runResult is success(envelope)) {
+        // A tested node can RETURN a failure (a rejected interrupt inside
+        // it, or its own failure()). Unwrap before the TS verdict seam —
+        // failure propagation forbids handing tagged failures to TS.
+        if (envelope.data is failure(nodeErr)) {
+          feedback = "the node returned a failure: ${_failureFeedback(nodeErr)}"
+        } else {
+          feedback = _exactVerdictFeedback(envelope.data, testCase.expected)
+        }
+      }
+
+      const casePassed = feedback == ""
+      if (!casePassed) {
+        allPass = false
+      }
+      caseReports.push({ node: testCase.node, pass: casePassed, feedback: feedback })
+    }
+    return success({ pass: allPass, cases: caseReports })
+  }
+  if (guarded is failure(err)) {
+    if (err.type == "guardFailure") {
+      // Same limit_exceeded shape as run()'s other limits (mirrors
+      // makeLimitFailure in lib/runtime/ipc.ts — keep the two in sync).
+      return failure(
+        {
+        reason: "limit_exceeded",
+        limit: "cost",
+        threshold: maxCost,
+        value: err.actualCost,
+        message: "Test run exceeded cost limit of ${maxCost} (used ${err.actualCost})"
+      },
+      )
+    }
+  }
+  return guarded
+}
+
+export def testFile(
+  dir: string,
+  filename: string,
+  maxCost: number | null = null,
+): Result<TestReport> {
+  """
+  Run the test cases a .test.json file declares against its source file, in the sandboxed subprocess, and return a per-case report. The portable form of test(): the same file `agency test` runs, restricted to the sandbox subset (exact criteria; approve/reject scripted answers; per-case timeoutMs; named args instead of the CLI's input string).
+
+  @param dir - The directory holding the .test.json and the file it tests
+  @param filename - The .test.json file
+  @param maxCost - Max LLM spend in dollars for the WHOLE call. null = no cost limit.
+  """
+  // Gate the read BEFORE the TS seam performs it (the typecheckFile idiom).
+  // The whole file is validated and converted up front, so a malformed file
+  // is a whole-call failure with zero launches.
+  return interrupt std::read("Read this test file?", {
+    dir: dir,
+    filename: filename
+  })
+  const parsed = try _readTestFileSandbox(dir, filename)
+  if (parsed is failure) {
+    return parsed
+  }
+  if (parsed is success(wire)) {
+    const cases: AgencyTestCase[] = []
+    for (c in wire.cases) {
+      cases.push(
+        {
+        node: c.node,
+        args: c.args,
+        expected: c.expected,
+        interrupts: c.interrupts,
+        wallClock: c.wallClock
+      },
+      )
+    }
+    return test(
+      dir,
+      wire.sourceFile,
+      cases,
+      wallClock: wire.defaultTimeoutMs ?? 60s,
+      maxCost: maxCost,
+    )
+  }
+  return failure("unreachable")
 }
 
 // Reject out-of-range limit values with a message the model can act on.

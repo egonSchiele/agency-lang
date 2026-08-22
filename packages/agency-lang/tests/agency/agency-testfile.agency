@@ -1,0 +1,194 @@
+// std::agency testFile(): gates before the read, whole-file conversion up front.
+import { testFile } from "std::agency"
+import { mkdir } from "std::fs"
+
+const SOLUTION = """
+export def add(a: number, b: number): number {
+  return a + b
+}
+"""
+
+const HARNESS = """
+import { add } from "./solution.agency"
+
+export node sum(a: number, b: number = 1): number {
+  return add(a, b)
+}
+"""
+
+const GOOD_JSON = """
+{
+  "sourceFile": "harness.agency",
+  "tests": [
+    { "nodeName": "sum", "args": { "a": 3, "b": 4 }, "expectedOutput": "7", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "sum", "args": { "a": 3 }, "expectedOutput": "99", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}
+"""
+
+def seed(dir: string, json: string) {
+  mkdir(dir) with approve
+  write("solution.agency", SOLUTION, dir) with approve
+  write("harness.agency", HARNESS, dir) with approve
+  write("suite.test.json", json, dir) with approve
+}
+
+export node multiCaseReport(): string {
+  const dir = "./.tfl-multi"
+  seed(dir, GOOD_JSON)
+  handle {
+    const r = testFile(dir, "suite.test.json")
+    if (r is success(report)) {
+      if (!report.cases[0].pass) {
+        return "case 1 should pass: ${report.cases[0].feedback}"
+      }
+      if (report.cases[1].pass) {
+        return "case 2 should fail (default b=1 makes 4, not 99)"
+      }
+      return "ok"
+    }
+    return "failed"
+  } with approve
+  return "unreachable"
+}
+
+export node refusedFieldNamesIt(): string {
+  const dir = "./.tfl-refused"
+  seed(dir, "{ \"tests\": [{ \"nodeName\": \"sum\", \"expectedOutput\": \"1\", \"evaluationCriteria\": [{ \"type\": \"exact\" }], \"llmMocks\": [] }] }")
+  handle {
+    const r = testFile(dir, "suite.test.json")
+    if (r is failure(err)) {
+      const errText = "${err}"
+      if (errText.includes("llmMocks")) {
+        return "ok"
+      }
+      return "wrong error: ${errText}"
+    }
+    return "should have failed"
+  } with approve
+  return "unreachable"
+}
+
+export node unquotedExpectedOutputGuidance(): string {
+  const dir = "./.tfl-unquoted"
+  seed(dir, "{ \"tests\": [{ \"nodeName\": \"sum\", \"args\": { \"a\": 1, \"b\": 2 }, \"expectedOutput\": \"ok\", \"evaluationCriteria\": [{ \"type\": \"exact\" }] }] }")
+  handle {
+    const r = testFile(dir, "suite.test.json")
+    if (r is failure(err)) {
+      const errText = "${err}"
+      if (errText.includes("quoted")) {
+        return "ok"
+      }
+      return "wrong error: ${errText}"
+    }
+    return "should have failed"
+  } with approve
+  return "unreachable"
+}
+
+// Gate 1: a rejecting parent stops the JSON read BEFORE it happens. The
+// JSON on disk is malformed, so reaching the parser would surface a parse
+// error — a rejection instead proves the file was never read. The
+// permissive control proves the parse error IS reachable.
+export node firstGateBlocksTheRead(): string {
+  const dir = "./.tfl-gate1"
+  seed(dir, "{ this is not json")
+  let controlError = ""
+  handle {
+    const control = testFile(dir, "suite.test.json")
+    if (control is failure(err)) {
+      controlError = "${err}"
+    }
+  } with approve
+  if (!controlError.includes("not valid JSON")) {
+    return "control did not reach the parser: ${controlError}"
+  }
+  const seenReads = []
+  let r = null
+  handle {
+    r = testFile(dir, "suite.test.json")
+  } with (intr) {
+    if (intr.effect == "std::read") {
+      seenReads.push(intr.data.filename)
+      return reject("no reads")
+    }
+    return reject("nothing allowed")
+  }
+  if (r is failure(err2)) {
+    const err2Text = "${err2}"
+    if (err2Text.includes("not valid JSON")) {
+      return "the file was read despite the rejected gate"
+    }
+    if (seenReads.length != 1) {
+      return "expected exactly one read gate, saw ${seenReads.length}"
+    }
+    if (seenReads[0] != "suite.test.json") {
+      return "wrong gate payload: ${seenReads[0]}"
+    }
+    return "ok"
+  }
+  return "should have failed"
+}
+
+export node cliInputStringIsRefused(): string {
+  const dir = "./.tfl-input"
+  seed(dir, "{ \"tests\": [{ \"nodeName\": \"sum\", \"input\": \"1, 2\", \"expectedOutput\": \"3\", \"evaluationCriteria\": [{ \"type\": \"exact\" }] }] }")
+  handle {
+    const r = testFile(dir, "suite.test.json")
+    if (r is failure(err)) {
+      const errText = "${err}"
+      if (errText.includes("args")) {
+        return "ok"
+      }
+      return "wrong error: ${errText}"
+    }
+    return "should have failed"
+  } with approve
+  return "unreachable"
+}
+
+// An unknown node is a per-case failure in a success report, like any
+// other launch failure: the file itself is well-formed.
+export node unknownNodeIsACaseFailure(): string {
+  const dir = "./.tfl-unknown"
+  seed(dir, "{ \"sourceFile\": \"harness.agency\", \"tests\": [ { \"nodeName\": \"sum\", \"args\": { \"a\": 1, \"b\": 2 }, \"expectedOutput\": \"3\", \"evaluationCriteria\": [{ \"type\": \"exact\" }] }, { \"nodeName\": \"missing\", \"expectedOutput\": \"1\", \"evaluationCriteria\": [{ \"type\": \"exact\" }] } ] }")
+  handle {
+    const r = testFile(dir, "suite.test.json")
+    if (r is success(report)) {
+      if (!report.cases[0].pass) {
+        return "case 1 should pass: ${report.cases[0].feedback}"
+      }
+      if (report.cases[1].pass) {
+        return "case 2 should fail"
+      }
+      if (!report.cases[1].feedback.includes("missing")) {
+        return "feedback should name the node: ${report.cases[1].feedback}"
+      }
+      return "ok"
+    }
+    return "failed: ${r}"
+  } with approve
+  return "unreachable"
+}
+
+// A nested suite: the json sits in sub/, so its default source is
+// sub/suite.agency and the harness import resolves from there.
+export node nestedSuiteUsesItsOwnDirectory(): string {
+  const dir = "./.tfl-nested"
+  mkdir(dir) with approve
+  mkdir("${dir}/sub") with approve
+  write("solution.agency", SOLUTION, "${dir}/sub") with approve
+  write("suite.agency", HARNESS, "${dir}/sub") with approve
+  write("suite.test.json", "{ \"tests\": [{ \"nodeName\": \"sum\", \"args\": { \"a\": 3, \"b\": 4 }, \"expectedOutput\": \"7\", \"evaluationCriteria\": [{ \"type\": \"exact\" }] }] }", "${dir}/sub") with approve
+  handle {
+    const r = testFile(dir, "sub/suite.test.json")
+    if (r is success(report)) {
+      if (!report.cases[0].pass) {
+        return "case should pass: ${report.cases[0].feedback}"
+      }
+      return "ok"
+    }
+    return "failed: ${r}"
+  } with approve
+  return "unreachable"
+}

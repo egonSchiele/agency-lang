@@ -18,6 +18,29 @@ In a non-interactive run (`-p`), an effect no rule decides is
 auto-rejected with an explanatory message (`stdlib/policy.agency`) — there
 is no one to ask.
 
+## What `recommended` lets the agent read
+
+The read-only file effects (`std::read`, `std::readBinary`, `std::ls`,
+`std::glob`, `std::grep`) are approved in two places only
+(`readScopeRules` in `lib/runtime/builtinPolicies.ts`):
+
+- the launch directory and everything under it, written as `{.,./**}` so
+  the rule keeps meaning "wherever the agent runs" after the policy is
+  saved to a file (rule 2 below);
+- the agency install's own `stdlib/` and `dist/` trees. The docs tools
+  (`agencyGuide`, `agencyStdlib`, ...) are `read` partially applied to
+  `stdlib/docs/<section>`, and the bundled skills are read the same way, so
+  without this rule those tools return rejections in a headless run.
+
+There is deliberately no trailing `reject`: a read elsewhere is undecided,
+which prompts in an interactive session and auto-rejects in a headless one.
+The agent's own reads of its home directory (`~/.agency-agent`) do not go
+through the policy at all (`_internalIo` in `stdlib/policy.agency`).
+
+Before this, `recommended` approved every read anywhere, and a verifier
+under eval used that to list the home directory and read the repo's
+`package.json` while hunting for an `agency` binary.
+
 ## Rule matching
 
 A rule is `{ match?: Record<string, string>, action }`. Each match value is

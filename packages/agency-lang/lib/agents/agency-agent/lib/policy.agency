@@ -41,7 +41,7 @@ export def givePolicyChoice() {
   },
     {
     key: "recommended",
-    label: "recommended default policy, allow reading files and browsing the web, no writes"
+    label: "recommended default policy, allow reading files in the current directory and browsing the web, no writes"
   },
   ]
 

@@ -1,0 +1,44 @@
+/*
+ * The recommended policy approves the read-only file tools only inside the
+ * launch directory (and the agency install, which the docs tools read). A
+ * read anywhere else is left undecided, so an interactive session prompts
+ * and a headless run rejects. Pure policy logic: no LLM, no file access.
+ */
+import { checkPolicy, recommendedAutoApprovePolicy } from "std::policy"
+import { cwd } from "std::system"
+
+def readIntr(effect: string, dir: string): any {
+  return { effect: effect, data: { dir: dir, filename: "x" } }
+}
+
+def decision(effect: string, dir: string): string {
+  return checkPolicy(recommendedAutoApprovePolicy, readIntr(effect, dir)).type
+}
+
+node readsInsideCwd(): string[] {
+  const here = cwd()
+  return [
+    decision("std::read", here),
+    decision("std::read", "${here}/sub/deeper"),
+    decision("std::ls", here),
+    decision("std::glob", "${here}/a"),
+    decision("std::grep", "${here}/a/b"),
+    decision("std::readBinary", here),
+  ]
+}
+
+node readsOutsideCwd(): string[] {
+  return [
+    decision("std::read", "/"),
+    decision("std::read", "/Users/someone"),
+    decision("std::ls", "/Users/someone"),
+    decision("std::glob", "/"),
+    decision("std::grep", "/etc"),
+    decision("std::readBinary", "/Users/someone"),
+  ]
+}
+
+node readsTheParentDirectory(): string {
+  // One level up from the launch directory is outside it.
+  return decision("std::read", "${cwd()}/..")
+}

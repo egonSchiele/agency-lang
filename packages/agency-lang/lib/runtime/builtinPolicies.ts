@@ -1,4 +1,6 @@
+import path from "path";
 import type { Policy, PolicyRule } from "./policy.js";
+import { getStdlibDir } from "../importPaths.js";
 
 // Read-only `agency` subcommands the code agent runs via its exec-based
 // `agencyCli` tool. Matched on command + subcommand (no shell chaining);
@@ -25,6 +27,22 @@ function agencyExecApproveRules(): PolicyRule[] {
 
 const approve: PolicyRule[] = [{ action: "approve" }];
 
+// Where the read-only file tools may look without asking: the launch
+// directory and, because the agent's docs tools (`agencyGuide` and friends)
+// and bundled skills are plain reads of shipped files, the agency install
+// itself. `.` is resolved against the process cwd by the matcher
+// (docs/dev/approval-policies.md, rule 2), so a saved copy of this policy
+// still means "wherever the agent is running" on the next launch. Reads
+// anywhere else fall through: a prompt in an interactive session, an
+// automatic rejection in a headless one.
+function readScopeRules(): PolicyRule[] {
+  const install = escapeGlob(path.dirname(getStdlibDir()));
+  return [
+    { match: { dir: "{.,./**}" }, action: "approve" },
+    { match: { dir: `{${install}/stdlib/**,${install}/dist/**}` }, action: "approve" },
+  ];
+}
+
 export const minimalAutoApprovePolicy: Policy = {
   "std::memory::remember": approve,
   "std::memory::forget": approve,
@@ -39,11 +57,11 @@ export const recommendedAutoApprovePolicy: Policy = {
   // A sandboxed subprocess: the code it runs raises its own effects back
   // through this same policy, so approving the launch grants nothing more.
   "std::run": approve,
-  "std::read": approve,
-  "std::readBinary": approve,
-  "std::ls": approve,
-  "std::glob": approve,
-  "std::grep": approve,
+  "std::read": readScopeRules(),
+  "std::readBinary": readScopeRules(),
+  "std::ls": readScopeRules(),
+  "std::glob": readScopeRules(),
+  "std::grep": readScopeRules(),
   "std::wikipedia::search": approve,
   "std::wikipedia::summary": approve,
   "std::wikipedia::article": approve,
@@ -119,7 +137,8 @@ export const approveAllPolicy: Policy = {
 export const BUILTIN_POLICIES: { name: string; description: string }[] = [
   {
     name: "recommended",
-    description: "Auto-approve reads and web/search; prompt for writes, shell, and git changes.",
+    description:
+      "Auto-approve reads under the current directory (and the agency install's own docs and skills) and web/search; prompt for reads elsewhere, writes, shell, and git changes.",
   },
   {
     name: "minimal",

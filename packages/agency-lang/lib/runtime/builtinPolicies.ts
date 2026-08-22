@@ -36,6 +36,9 @@ export const minimalAutoApprovePolicy: Policy = {
 
 export const recommendedAutoApprovePolicy: Policy = {
   ...minimalAutoApprovePolicy,
+  // A sandboxed subprocess: the code it runs raises its own effects back
+  // through this same policy, so approving the launch grants nothing more.
+  "std::run": approve,
   "std::read": approve,
   "std::readBinary": approve,
   "std::ls": approve,

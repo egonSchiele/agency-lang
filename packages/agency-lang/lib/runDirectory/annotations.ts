@@ -67,6 +67,19 @@ export type GradersIdentity = {
    *  modules aside but never a test's own. */
   origin: "test" | "config";
 };
+/** One harness pair the run directory keeps under `graders/` (stored names
+ *  are `<sha256 of content><extension>`), so `eval grade` can run it later
+ *  from the directory alone. `sha256` covers both files and is the
+ *  harness grader's revision. */
+export type HarnessRecord = {
+  name: string;
+  visibility: "visible" | "holdout";
+  agency: string;
+  json: string;
+  sha256: string;
+  maxCost?: number;
+};
+
 export type RunOutcome = "ok" | "error" | "timeout" | "cost-cap" | "killed";
 
 /** The eval harness's own row for a trace it launched: which test, which
@@ -78,6 +91,9 @@ export type RunPayload = {
   suite: SuiteIdentity | null;
   /** Absent when the run had no grading module (the goal judge grades it). */
   graders?: GradersIdentity;
+  /** The harness pairs this run is graded by, as stored. Absent when the
+   *  test has none. */
+  harness?: HarnessRecord[];
   ended: RunOutcome;
   flags: Record<string, JsonValue>;
   /** The harness's error message when `ended` is not "ok". */
@@ -177,6 +193,20 @@ const RunAnnotationSchema = z
         origin: z.enum(["test", "config"]),
       })
       .strict()
+      .optional(),
+    harness: z
+      .array(
+        z
+          .object({
+            name: z.string().min(1),
+            visibility: z.enum(["visible", "holdout"]),
+            agency: z.string().min(1),
+            json: z.string().min(1),
+            sha256: z.string().min(1),
+            maxCost: z.number().optional(),
+          })
+          .strict(),
+      )
       .optional(),
     ended: z.enum(["ok", "error", "timeout", "cost-cap", "killed"]),
     flags: z.record(z.string(), JsonValueSchema),

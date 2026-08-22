@@ -145,6 +145,58 @@ describe("eval run input loading", () => {
     expect(fromTestDir[0].graders).toBe(path.join(testDir, "graders.ts"));
   });
 
+  it("test-directory form discovers files/ and holdout/ harness pairs and needs no goal", () => {
+    const testDir = path.join(tmpDir, "suite-h", "fib");
+    fs.mkdirSync(path.join(testDir, "files"), { recursive: true });
+    fs.mkdirSync(path.join(testDir, "holdout"));
+    fs.writeFileSync(
+      path.join(testDir, "test.json"),
+      JSON.stringify({ input: "t", harnessMaxCost: 2 }),
+    );
+    for (const [dir, name] of [
+      ["files", "fib-tests"],
+      ["holdout", "fib-holdout"],
+    ]) {
+      fs.writeFileSync(path.join(testDir, dir, `${name}.agency`), "");
+      fs.writeFileSync(path.join(testDir, dir, `${name}.test.json`), "{}");
+    }
+    const [test] = loadInputs(testDir);
+    expect(test.goal).toBeUndefined();
+    expect(test.harnessMaxCost).toBe(2);
+    expect(test.agencyTests?.map((t) => [t.name, t.visibility])).toEqual([
+      ["fib-tests", "visible"],
+      ["fib-holdout", "holdout"],
+    ]);
+    expect(test.agencyTests?.[1].harnessAgency).toBe(
+      path.join(testDir, "holdout", "fib-holdout.agency"),
+    );
+  });
+
+  it("a harness json without its sibling .agency, or a duplicate basename, is refused", () => {
+    const testDir = path.join(tmpDir, "suite-h2", "t");
+    fs.mkdirSync(path.join(testDir, "files"), { recursive: true });
+    fs.writeFileSync(path.join(testDir, "test.json"), JSON.stringify({ input: "t", goal: "g" }));
+    fs.writeFileSync(path.join(testDir, "files", "lonely.test.json"), "{}");
+    expect(() => loadInputs(testDir)).toThrow(/no sibling harness lonely\.agency/);
+    fs.writeFileSync(path.join(testDir, "files", "lonely.agency"), "");
+    fs.mkdirSync(path.join(testDir, "holdout"));
+    fs.writeFileSync(path.join(testDir, "holdout", "lonely.test.json"), "{}");
+    fs.writeFileSync(path.join(testDir, "holdout", "lonely.agency"), "");
+    expect(() => loadInputs(testDir)).toThrow(/appears twice/);
+  });
+
+  it("harnessMaxCost must be a non-negative number when provided", () => {
+    for (const bad of [-1, "5", NaN]) {
+      expect(() =>
+        loadInputsFromFile(
+          writeJson("hmc-bad.json", {
+            inputs: [{ id: "t", goal: "g", input: "x", harnessMaxCost: bad }],
+          }),
+        ),
+      ).toThrow(/harnessMaxCost/);
+    }
+  });
+
   it("timeoutSec must be a positive number when provided", () => {
     const [input] = loadInputsFromFile(
       writeJson("timeout.json", { inputs: [{ id: "t", goal: "g", input: "x", timeoutSec: 1200 }] }),

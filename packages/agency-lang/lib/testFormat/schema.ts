@@ -292,6 +292,72 @@ export function parseTestFileFull(jsonText: string, jsonFilename: string): FullT
 }
 
 // ---------------------------------------------------------------------------
+// Eval harness profile — a full-profile file that the eval framework will run
+// with `agency test --agency-only --reject '*'`. Fields that cannot mean
+// anything under that policy, or that make a harness grade nothing, are
+// refused by name before any agent runs.
+// ---------------------------------------------------------------------------
+
+const EVAL_HARNESS_REFUSED_FILE_FIELDS = [
+  "fetchMocks",
+  "skip",
+  "skipOnCI",
+  "skipReason",
+  "expectedCompileError",
+] as const;
+const EVAL_HARNESS_REFUSED_CASE_FIELDS = [
+  "interruptHandlers",
+  "llmMocks",
+  "fetchMocks",
+  "fakeClock",
+  "useTestLLMProvider",
+  "argv",
+  "skip",
+  "skipOnCI",
+  "skipReason",
+] as const;
+
+/** Parse a harness `.test.json` for eval grading: the full profile, then
+ *  the eval refusals. `siblingAgencyBasename` is the harness source the
+ *  json must test (a json naming another file would test something other
+ *  than its pair). */
+export function parseTestFileEvalHarness(
+  jsonText: string,
+  jsonFilename: string,
+  siblingAgencyBasename: string,
+): FullTestFile {
+  const file = parseTestFileFull(jsonText, jsonFilename);
+  const refuse = (what: string): never => {
+    throw new Error(`${jsonFilename}: ${what}`);
+  };
+  for (const field of EVAL_HARNESS_REFUSED_FILE_FIELDS) {
+    if (file[field] !== undefined) refuse(`${field} is not allowed in an eval harness`);
+  }
+  if (file.sourceFile !== undefined && file.sourceFile !== siblingAgencyBasename) {
+    refuse(
+      `declares sourceFile ${JSON.stringify(file.sourceFile)}, but an eval harness tests its sibling ${siblingAgencyBasename}`,
+    );
+  }
+  (file.tests ?? []).forEach((testCase, i) => {
+    const where = `test ${i + 1} (${testCase.nodeName})`;
+    for (const field of EVAL_HARNESS_REFUSED_CASE_FIELDS) {
+      if (testCase[field] !== undefined) {
+        refuse(
+          field === "interruptHandlers"
+            ? `${where}: interruptHandlers are not allowed in an eval harness (grading rejects every effect before a scripted answer could apply)`
+            : `${where}: ${field} is not allowed in an eval harness`,
+        );
+      }
+    }
+    const criteria = testCase.evaluationCriteria;
+    if (criteria.length !== 1 || criteria[0].type !== "exact") {
+      refuse(
+        `${where}: evaluationCriteria must be exactly [{ "type": "exact" }] in an eval harness`,
+      );
+    }
+  });
+  return file;
+}
 
 function parseJsonOrThrow(jsonText: string, jsonFilename: string): unknown {
   try {

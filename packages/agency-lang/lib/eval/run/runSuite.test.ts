@@ -12,6 +12,8 @@ import { grader } from "@/eval/grading/functionGrader.js";
 import { gradeRun } from "@/eval/grading/gradeRun.js";
 
 import { runSuite } from "./runSuite.js";
+import { loadInputs } from "@/eval/loadInputs.js";
+import type { HarnessRecord } from "@/runDirectory/annotations.js";
 import type { EvalRunnerJob } from "./subprocess.js";
 
 /** A fake runner that behaves like a real child: writes a finished trace under
@@ -335,6 +337,51 @@ describe("runSuite", () => {
     ].run;
     expect((run as unknown as { test: { timeoutSec: number } }).test.timeoutSec).toBe(1200);
     expect(result.okCount).toBe(1);
+  });
+
+  it("stores each test's harness pairs in its run directory as hash-named files with a harness record", async () => {
+    const testDir = path.join(proj, "suite", "fib");
+    fs.mkdirSync(path.join(testDir, "files"), { recursive: true });
+    fs.mkdirSync(path.join(testDir, "holdout"));
+    fs.writeFileSync(path.join(testDir, "test.json"), JSON.stringify({ input: "t" }));
+    const json = JSON.stringify({
+      tests: [{ nodeName: "t", expectedOutput: "1", evaluationCriteria: [{ type: "exact" }] }],
+    });
+    fs.writeFileSync(
+      path.join(testDir, "files", "vis.agency"),
+      "export node t(): number {\n  return 1\n}\n",
+    );
+    fs.writeFileSync(path.join(testDir, "files", "vis.test.json"), json);
+    fs.writeFileSync(
+      path.join(testDir, "holdout", "hid.agency"),
+      "export node t(): number {\n  return 2\n}\n",
+    );
+    fs.writeFileSync(path.join(testDir, "holdout", "hid.test.json"), json);
+    const [test] = loadInputs(testDir);
+    const result = await runSuite(
+      {
+        agent: path.join(proj, "agent.agency"),
+        inputs: [test],
+        out: path.join(proj, "runs", "r-harness"),
+        config: {},
+        perRun: { pipeOutput: false },
+      },
+      { runner: traceWritingRunner("done") },
+    );
+    const { runDir, traceId } = result.tests[0];
+    const run = readRunDirectory(runDir, quiet).effectiveAnnotations[traceId].run;
+    const harness = (run as unknown as { harness: HarnessRecord[] }).harness;
+    expect(harness.map((h) => [h.name, h.visibility])).toEqual([
+      ["vis", "visible"],
+      ["hid", "holdout"],
+    ]);
+    for (const record of harness) {
+      expect(record.agency).toMatch(/^[0-9a-f]{64}\.agency$/);
+      expect(fs.existsSync(path.join(runDirPaths(runDir).gradersDir, record.agency))).toBe(true);
+      expect(fs.existsSync(path.join(runDirPaths(runDir).gradersDir, record.json))).toBe(true);
+    }
+    // No grading module: the row carries harness records only.
+    expect((run as unknown as { graders?: unknown }).graders).toBeUndefined();
   });
 
   it("stores each test's grading module in its run directory, and grading uses that copy even after the source changes", async () => {

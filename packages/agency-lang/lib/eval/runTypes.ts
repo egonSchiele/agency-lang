@@ -4,6 +4,17 @@ import type { InputBreakdown } from "./grading/gradeBreakdown.js";
  *  here describes the agent — which file, which node, how the task lands is
  *  the runner's side of the line (--agent). Shared by the eval runner and
  *  every optimizer. */
+export type AgencyTestVisibility = "visible" | "holdout";
+/** One harness pair discovered in a test directory: `files/<name>.test.json`
+ *  + `files/<name>.agency` (seeded, the agent sees it) or the same under
+ *  `holdout/` (never seeded). Absolute paths. */
+export type AgencyTestDefinition = {
+  harnessJson: string;
+  harnessAgency: string;
+  name: string;
+  visibility: AgencyTestVisibility;
+};
+
 export type Test = {
   /** Stable identifier. Auto-derived when omitted: the loader generates one
    *  via nanoid, the optimizer derives it positionally (`input-<index>`). */
@@ -43,6 +54,12 @@ export type Test = {
    *  Trust note: graders are code the harness executes — pulling a remote
    *  suite means trusting it. */
   graders?: string;
+  /** Discovered harness pairs (`files/*.test.json` visible, `holdout/*.test.json`
+   *  hidden). Set by directory-convention discovery, never by suite JSON. */
+  agencyTests?: AgencyTestDefinition[];
+  /** Dollars each harness case may spend on LLM calls while being graded;
+   *  the grader's default applies when absent. */
+  harnessMaxCost?: number;
   /** Per-test wall-clock override in seconds, test-side like terminal-bench's
    *  task.toml timeout_sec — a hard task may deserve more time than the
    *  suite default (eval.limits.wallClockSec). */

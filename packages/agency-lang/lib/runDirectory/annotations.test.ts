@@ -12,6 +12,7 @@ import {
   readAnnotations,
   type Annotation,
   type AnnotationDraft,
+  AnnotationSchema,
 } from "./annotations.js";
 
 const human = { kind: "human" as const, id: "adit" };
@@ -131,6 +132,44 @@ describe("foldAnnotations", () => {
     expect(folded.t1.scores["grader:graders.ts:cheap"].id).toBe(rows[2].id);
     expect(folded.t1.scores["judge:goal-judge:fast"].id).toBe(rows[4].id);
     expect(folded.t1.gradingPasses).toBe(5);
+  });
+
+  it("a run row may carry harness records, each strictly shaped", () => {
+    const base = {
+      traceId: "t1",
+      annotator: { kind: "harness", id: "agency-eval@1" },
+      kind: "run",
+      test: { id: "fib" },
+      suite: null,
+      ended: "ok",
+      flags: {},
+    };
+    const record = {
+      name: "fib-holdout",
+      visibility: "holdout",
+      agency: "ab.agency",
+      json: "cd.test.json",
+      sha256: "ef",
+      maxCost: 5,
+    };
+    expect(
+      AnnotationSchema.safeParse({
+        ...base,
+        v: 1,
+        id: `ann_${"0".repeat(64)}`,
+        createdAt: "now",
+        harness: [record],
+      }).success,
+    ).toBe(true);
+    expect(
+      AnnotationSchema.safeParse({
+        ...base,
+        v: 1,
+        id: "x",
+        createdAt: "now",
+        harness: [{ ...record, extra: true }],
+      }).success,
+    ).toBe(false);
   });
 
   it("annotatorLineage strips the revision and leaves ids without one alone", () => {

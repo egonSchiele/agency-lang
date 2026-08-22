@@ -89,7 +89,10 @@ export function groupTestSources(
     if (!fs.existsSync(sourceFile)) continue;
     if (isExcludedFromPrecompile(testJsonFile, tests)) continue;
 
-    const dir = path.dirname(sourceFile);
+    // Config is anchored at the .test.json, not the declared source: the
+    // runner merges the agency.json beside the test file (runTestFile in
+    // lib/cli/test.ts), and the compiled JS must come from that same config.
+    const dir = path.dirname(path.resolve(testJsonFile));
     const localConfigPath = path.join(dir, "agency.json");
     let label = BASE_GROUP_LABEL;
     let config = baseConfig;

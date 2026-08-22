@@ -595,15 +595,15 @@ async function runSingleTest(
   const baseName = relativeSourceFilePath.replace(".agency", "");
   for (const criterion of testCase.evaluationCriteria) {
     if (criterion.type === "exact") {
-      const actual = JSON.stringify(result.data);
       const verdict = exactVerdict(result.data, testCase.expectedOutput, {
         rawStringFallback: true,
+        colorize: true,
       });
       if (verdict.pass) {
         log(color.green("  ✓ Exact match passed"));
       } else {
         log(color.red("  ✗ Exact match failed"));
-        log(formatDiff(testCase.expectedOutput, actual));
+        log(verdict.feedback);
         testPassed = false;
       }
     } else if (criterion.type === "llmJudge") {
@@ -856,6 +856,9 @@ async function runTestFile(
     // project-level config. Keeps default behavior intact for tests that
     // don't ship one, but lets fixtures opt into config-driven features
     // like the memory layer with a directory-scoped override.
+    // The same anchor precompile groups by (lib/cli/precompile.ts), so a
+    // declared sourceFile elsewhere never runs JS compiled under one
+    // config against another.
     const localConfigPath = path.join(path.dirname(testFile), "agency.json");
     if (fs.existsSync(localConfigPath)) {
       config = { ...config, ...loadConfig(localConfigPath) };

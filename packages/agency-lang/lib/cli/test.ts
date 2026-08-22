@@ -40,6 +40,16 @@ import {
   type FullTestFile,
 } from "../testFormat/schema.js";
 import { exactVerdict } from "../testFormat/verdict.js";
+import type { ResolvedRunPolicy } from "./runPolicy.js";
+import { compileAgencyOnly } from "@/compiler/compileSandboxed.js";
+import {
+  buildTestReport,
+  fileFailureReport,
+  type TestCaseReport,
+  type TestFileReport,
+  type TestReport,
+} from "./testReport.js";
+import { humanOutput, type TestOutput } from "./testOutput.js";
 
 // The schema (lib/testFormat/schema.ts) is the one owner of the .test.json
 // format; these aliases only narrow the mock/handler payloads to the types
@@ -128,7 +138,7 @@ function isAbortError(e: unknown): boolean {
 // Bundled per the RunSession pattern in lib/runtime/ipc.ts so helpers can
 // be passed one object instead of N closure parameters.
 type AbortReason = "sigint" | "ceiling";
-type SuiteContext = {
+export type SuiteContext = {
   aborted: boolean;
   abortReason: AbortReason | null;
   abortController: AbortController;
@@ -146,7 +156,7 @@ type SuiteContext = {
   inFlightAtAbort: string[];
 };
 
-function createSuiteContext(allFiles: string[]): SuiteContext {
+export function createSuiteContext(allFiles: string[]): SuiteContext {
   return {
     aborted: false,
     abortReason: null,
@@ -404,56 +414,23 @@ export async function fixtures(config: AgencyConfig, target?: string) {
   console.log(`Test case saved to ${testFilePath}`);
 }
 
-export type SlowTest = {
-  name: string;
-  durationMs: number;
+/** What the `agency test` command line asked for beyond the file list. */
+export type TestRunOptions = {
+  policy?: ResolvedRunPolicy;
+  budget?: { maxCost?: string; maxTime?: string };
+  /** Compile each tested file through the closure validator. */
+  agencyOnly?: boolean;
+  output: TestOutput;
 };
-
-export type TestStats = {
-  passed: number;
-  failed: number;
-  filesPassed: number;
-  filesFailed: number;
-  failedFiles: string[];
-  slowTests: SlowTest[];
-};
-
-function emptyStats(): TestStats {
-  return {
-    passed: 0,
-    failed: 0,
-    filesPassed: 0,
-    filesFailed: 0,
-    failedFiles: [],
-    slowTests: [],
-  };
-}
-
-export function mergeStats(a: TestStats, b: TestStats): TestStats {
-  return {
-    passed: a.passed + b.passed,
-    failed: a.failed + b.failed,
-    filesPassed: a.filesPassed + b.filesPassed,
-    filesFailed: a.filesFailed + b.filesFailed,
-    failedFiles: [...a.failedFiles, ...b.failedFiles],
-    slowTests: [...a.slowTests, ...b.slowTests],
-  };
-}
 
 type Logger = (msg: string, stream?: "stdout" | "stderr") => void;
 
-function createBufferedLogger(): { log: Logger; flush: () => void } {
+function createBufferedLogger(output: TestOutput): { log: Logger; flush: () => void } {
   const lines: { msg: string; stream: "stdout" | "stderr" }[] = [];
   return {
     log: (msg: string, stream: "stdout" | "stderr" = "stdout") => lines.push({ msg, stream }),
     flush: () => {
-      for (const line of lines) {
-        if (line.stream === "stderr") {
-          console.error(line.msg);
-        } else {
-          console.log(line.msg);
-        }
-      }
+      for (const line of lines) output.line(line.msg, line.stream);
     },
   };
 }
@@ -540,7 +517,12 @@ async function runWithConcurrency<T, R>(
 // AbortSignal fired (ceiling or SIGINT) — distinct from a per-test
 // timeout, because the runner shouldn't keep retrying or print a per-test
 // failure message in that case.
-type SingleTestOutcome = "passed" | "failed" | "aborted";
+/** One attempt's result. `feedback` is the failure text the human output
+ *  prints, kept so the report can carry it. */
+type CaseOutcome = {
+  status: "passed" | "failed" | "aborted";
+  feedback?: string;
+};
 
 async function runSingleTest(
   config: AgencyConfig,
@@ -550,7 +532,8 @@ async function runSingleTest(
   timeoutMs: number,
   signal: AbortSignal,
   log: Logger,
-): Promise<SingleTestOutcome> {
+  options: TestRunOptions,
+): Promise<CaseOutcome> {
   const hasArgs = testCase.input !== undefined && testCase.input !== "";
   const relativeSourceFilePath = sourceFilePath;
   let result: { data: any; stdout: string; stderr: string };
@@ -574,24 +557,28 @@ async function runSingleTest(
       useTestLLMProvider: testCase.useTestLLMProvider,
       argv: testCase.argv,
       fetchMocks,
+      rootCarriers: { policy: options.policy, budget: options.budget },
     });
     if (result.stdout) log(result.stdout.trimEnd());
     if (result.stderr) log(result.stderr.trimEnd(), "stderr");
   } catch (e) {
     if (isAbortError(e)) {
       // Don't print a failure — the suite-abort summary will explain.
-      return "aborted";
+      return { status: "aborted" };
     }
     if (isTimeoutError(e)) {
-      log(color.red(`  ✗ Test exceeded ${formatTimeout(timeoutMs)} timeout`));
-      return "failed";
+      const feedback = `Test exceeded ${formatTimeout(timeoutMs)} timeout`;
+      log(color.red(`  ✗ ${feedback}`));
+      return { status: "failed", feedback };
     }
     exitIfSignal(e);
-    log(color.red(`  ✗ Test execution error: ${e}`));
-    return "failed";
+    const feedback = `Test execution error: ${e}`;
+    log(color.red(`  ✗ ${feedback}`));
+    return { status: "failed", feedback };
   }
 
   let testPassed = true;
+  const feedback: string[] = [];
   const baseName = relativeSourceFilePath.replace(".agency", "");
   for (const criterion of testCase.evaluationCriteria) {
     if (criterion.type === "exact") {
@@ -604,6 +591,11 @@ async function runSingleTest(
       } else {
         log(color.red("  ✗ Exact match failed"));
         log(verdict.feedback);
+        // The same diff without terminal colors, for the report.
+        const plain = exactVerdict(result.data, testCase.expectedOutput, {
+          rawStringFallback: true,
+        });
+        if (!plain.pass) feedback.push(plain.feedback);
         testPassed = false;
       }
     } else if (criterion.type === "llmJudge") {
@@ -632,15 +624,20 @@ async function runSingleTest(
           );
           log(`    Reasoning: ${judgeResult.reasoning}`);
           log(`    Actual Output:\n${actual}`);
+          feedback.push(
+            `LLM Judge failed (score: ${judgeResult.score}/${criterion.desiredAccuracy}): ${judgeResult.reasoning}`,
+          );
           testPassed = false;
         }
       } catch (e) {
         log(color.red(`  ✗ LLM Judge error: ${e}`));
+        feedback.push(`LLM Judge error: ${e}`);
         testPassed = false;
       }
     }
   }
-  return testPassed ? "passed" : "failed";
+  if (testPassed) return { status: "passed" };
+  return { status: "failed", feedback: feedback.join("\n") };
 }
 
 function collectTestFiles(inputPath: string): string[] {
@@ -674,10 +671,13 @@ async function runTestWithRetries(
   timeoutMs: number,
   signal: AbortSignal,
   log: Logger,
-): Promise<SingleTestOutcome> {
+  options: TestRunOptions,
+): Promise<CaseOutcome & { attempts: number }> {
   const maxAttempts = (testCase.retry ?? 0) + 1;
-  let outcome: SingleTestOutcome = "failed";
+  let outcome: CaseOutcome = { status: "failed" };
+  let attempts = 0;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    attempts = attempt;
     if (attempt > 1) {
       log(color.yellow(`  Retry ${attempt - 1}/${testCase.retry}...`));
     }
@@ -690,15 +690,16 @@ async function runTestWithRetries(
         timeoutMs,
         signal,
         log,
+        options,
       );
-      if (outcome === "passed" || outcome === "aborted") break;
+      if (outcome.status === "passed" || outcome.status === "aborted") break;
     } catch (e) {
       exitIfSignal(e);
       log(color.red(`  ✗ Test error: ${e}`));
-      outcome = "failed";
+      outcome = { status: "failed", feedback: `Test error: ${e}` };
     }
   }
-  return outcome;
+  return { ...outcome, attempts };
 }
 
 /**
@@ -763,7 +764,7 @@ async function runExpectedCompileError(
   testFile: string,
   suite: SuiteContext,
   log: (msg: string) => void,
-): Promise<TestStats> {
+): Promise<TestFileReport> {
   const expected = tests.expectedCompileError;
   // Absolute, because the child runs with cwd set to the fixture's
   // directory — a runner-relative path would no longer resolve there.
@@ -775,16 +776,24 @@ async function runExpectedCompileError(
     log(color.cyan("Description:", tests.description) + "\n");
   }
 
-  const fail = (reason: string): TestStats => {
+  // The compile is the one "case" of this file, so the report lists it as
+  // one: a consumer counting cases sees one failed or one passed.
+  const report = (status: "passed" | "failed", feedback?: string): TestFileReport => ({
+    file: testFile,
+    sourceFile: resolveTestSourcePath(tests, testFile),
+    status: "ran",
+    cases: [
+      {
+        node: "expectedCompileError",
+        status,
+        ...(feedback === undefined ? {} : { feedback }),
+        durationMs: 0,
+      },
+    ],
+  });
+  const fail = (reason: string): TestFileReport => {
     log(color.red(`  ✗ ${reason}`));
-    return {
-      passed: 0,
-      failed: 1,
-      filesPassed: 0,
-      filesFailed: 1,
-      failedFiles: [testFile],
-      slowTests: [],
-    };
+    return report("failed", reason);
   };
 
   // The precompile pass excludes these files on field PRESENCE, so a
@@ -826,22 +835,16 @@ async function runExpectedCompileError(
   if (!verdict.ok) return fail(verdict.reason);
 
   log(color.green(`  ✓ Compile failed as expected`));
-  return {
-    passed: 1,
-    failed: 0,
-    filesPassed: 1,
-    filesFailed: 0,
-    failedFiles: [],
-    slowTests: [],
-  };
+  return report("passed");
 }
 
 async function runTestFile(
   config: AgencyConfig,
   testFile: string,
   suite: SuiteContext,
-): Promise<TestStats> {
-  const logger = createBufferedLogger();
+  options: TestRunOptions,
+): Promise<TestFileReport> {
+  const logger = createBufferedLogger(options.output);
   const log = logger.log;
 
   suite.inFlight.add(testFile);
@@ -864,9 +867,9 @@ async function runTestFile(
       config = { ...config, ...loadConfig(localConfigPath) };
     }
 
-    let passed = 0;
     const cases = Array.isArray(tests.tests) ? tests.tests : [];
     const total = cases.length;
+    const sourceFile = resolveTestSourcePath(tests, testFile);
 
     // File-level skip: if the .test.json has `"skip": true` at the top
     // level, skip every test in the file. This makes top-level skip work
@@ -877,12 +880,10 @@ async function runTestFile(
       const reasonStr = tests.skipReason ? ` (${tests.skipReason})` : "";
       log(color.yellow(`  ⊘ Skipped${skipKind} ${total} test(s) in ${testFile}${reasonStr}`));
       return {
-        passed: 0,
-        failed: 0,
-        filesPassed: 1,
-        filesFailed: 0,
-        failedFiles: [],
-        slowTests: [],
+        file: testFile,
+        sourceFile,
+        status: "skipped",
+        cases: cases.map((c) => ({ node: c.nodeName, status: "skipped", durationMs: 0 })),
       };
     }
 
@@ -898,103 +899,48 @@ async function runTestFile(
     // TypeError; passing silently as "0/0" would be quieter than either.
     // (An explicit empty `tests: []` keeps its longstanding 0/0 pass.)
     if (!Array.isArray(tests.tests)) {
-      log(color.red(`  ✗ ${testFile} has no 'tests' array and no 'expectedCompileError'`));
+      const error = `${testFile} has no 'tests' array and no 'expectedCompileError'`;
+      log(color.red(`  ✗ ${error}`));
       suite.completed.push(testFile);
-      return {
-        passed: 0,
-        failed: 1,
-        filesPassed: 0,
-        filesFailed: 1,
-        failedFiles: [testFile],
-        slowTests: [],
-      };
+      return fileFailureReport({
+        file: testFile,
+        sourceFile,
+        status: "error",
+        error,
+        caseNodes: [],
+      });
     }
 
-    let skipped = 0;
-    const slowTests: SlowTest[] = [];
-    let aborted = false;
-
-    for (let i = 0; i < total; i++) {
-      // Bail between test cases if the suite is aborting. The currently
-      // in-flight execFile (if any) is killed via its AbortSignal.
-      if (suite.aborted) {
-        aborted = true;
-        break;
+    // A refusal is this file's failure; the suite continues. The compiled
+    // sibling .js is what the cases run (preferCompiled).
+    if (options.agencyOnly) {
+      const compiled = compileAgencyOnly(sourceFile);
+      if (!compiled.ok) {
+        log(color.red(`  ✗ ${testFile}: agency-only compile refused`));
+        for (const error of compiled.errors) log(color.red(`    ${error}`));
+        suite.completed.push(testFile);
+        return fileFailureReport({
+          file: testFile,
+          sourceFile,
+          status: "compile-failed",
+          error: compiled.errors.join("\n"),
+          caseNodes: cases.map((c) => c.nodeName),
+        });
       }
-
-      const testCase = cases[i];
-      const interruptInfo = testCase.interruptHandlers
-        ? ` interrupts=${testCase.interruptHandlers.length}`
-        : "";
-      const testNum = color.cyan(`Test ${i + 1}/${total}:`);
-      log(
-        `\n${testNum} node=${testCase.nodeName} input=${testCase.input || "(none)"}${interruptInfo}`,
-      );
-      if (testCase.description) {
-        log(color.cyan("Description:", testCase.description) + "\n");
-      }
-
-      if (testCase.skip) {
-        log(color.yellow(`  ⊘ Skipped`));
-        skipped++;
-        continue;
-      }
-
-      if (testCase.skipOnCI && process.env.CI) {
-        log(color.yellow(`  ⊘ Skipped on CI`));
-        skipped++;
-        continue;
-      }
-
-      // Under deterministic LLM mode, llmJudge tests cannot run because
-      // the judge itself is an LLM call without a mock. Skip these so CI
-      // gets a clear `skipped` rather than a confusing "no mock provided"
-      // failure.
-      if (
-        (process.env.AGENCY_USE_TEST_LLM_PROVIDER || testCase.useTestLLMProvider) &&
-        testCase.evaluationCriteria.some((c) => c.type === "llmJudge")
-      ) {
-        log(color.yellow(`  ⊘ Skipped (LLM-as-judge requires real client)`));
-        skipped++;
-        continue;
-      }
-
-      // Preserve "not declared" (undefined -> no shim) vs "declared, possibly
-      // empty" ([] -> shim installed, every fetch throws). Only resolve when at
-      // least one level declares fetchMocks.
-      const fetchMocksDeclared =
-        tests.fetchMocks !== undefined || testCase.fetchMocks !== undefined;
-      const fetchMocks = fetchMocksDeclared
-        ? resolveFetchMocks(tests.fetchMocks, testCase.fetchMocks, path.dirname(testFile))
-        : undefined;
-      const timeoutMs = resolveTimeoutMs(testCase, tests);
-      const startTime = performance.now();
-      const outcome = await runTestWithRetries(
-        config,
-        resolveTestSourcePath(tests, testFile),
-        testCase,
-        fetchMocks,
-        timeoutMs,
-        suite.abortController.signal,
-        log,
-      );
-      const durationMs = performance.now() - startTime;
-
-      if (outcome === "aborted") {
-        aborted = true;
-        break;
-      }
-
-      const testName = testCase.description
-        ? `${testFile} > ${testCase.nodeName} > ${testCase.description}`
-        : `${testFile} > ${testCase.nodeName}(${testCase.input || ""})`;
-      slowTests.push({ name: testName, durationMs });
-
-      if (outcome === "passed") passed++;
     }
 
+    const { aborted, caseReports } = await runCases({
+      config,
+      tests,
+      cases,
+      testFile,
+      suite,
+      log,
+      options,
+    });
+    const passed = caseReports.filter((c) => c.status === "passed").length;
+    const skipped = caseReports.filter((c) => c.status === "skipped").length;
     const ran = total - skipped;
-    const failed = ran - passed;
     const skipMsg = skipped > 0 ? ` (${skipped} skipped)` : "";
     if (!aborted) {
       log(`\n${passed}/${ran} tests passed${skipMsg}`);
@@ -1002,41 +948,141 @@ async function runTestFile(
     } else {
       log(color.yellow(`\n  ⚠️  ${testFile} aborted (${passed}/${ran} tests passed before abort)`));
     }
-
-    return {
-      passed,
-      failed,
-      filesPassed: failed === 0 ? 1 : 0,
-      filesFailed: failed === 0 ? 0 : 1,
-      failedFiles: failed > 0 ? [testFile] : [],
-      slowTests,
-    };
+    return { file: testFile, sourceFile, status: aborted ? "aborted" : "ran", cases: caseReports };
   } finally {
     suite.inFlight.delete(testFile);
     logger.flush();
   }
 }
 
+/** Run a file's cases in order. On a suite abort the remaining cases are
+ *  reported `aborted`, so every declared case has an entry. */
+async function runCases(args: {
+  config: AgencyConfig;
+  tests: Tests;
+  cases: TestCase[];
+  testFile: string;
+  suite: SuiteContext;
+  log: Logger;
+  options: TestRunOptions;
+}): Promise<{ aborted: boolean; caseReports: TestCaseReport[] }> {
+  const { config, tests, cases, testFile, suite, log, options } = args;
+  const total = cases.length;
+  let aborted = false;
+  const caseReports: TestCaseReport[] = [];
+  const describeCase = (c: TestCase): Pick<TestCaseReport, "node" | "description" | "input"> => ({
+    node: c.nodeName,
+    ...(c.description === undefined ? {} : { description: c.description }),
+    ...(c.input === undefined || c.input === "" ? {} : { input: c.input }),
+  });
+
+  let i = 0;
+  for (; i < total; i++) {
+    // Bail between test cases if the suite is aborting. The currently
+    // in-flight execFile (if any) is killed via its AbortSignal.
+    if (suite.aborted) {
+      aborted = true;
+      break;
+    }
+
+    const testCase = cases[i];
+    const interruptInfo = testCase.interruptHandlers
+      ? ` interrupts=${testCase.interruptHandlers.length}`
+      : "";
+    const testNum = color.cyan(`Test ${i + 1}/${total}:`);
+    log(
+      `\n${testNum} node=${testCase.nodeName} input=${testCase.input || "(none)"}${interruptInfo}`,
+    );
+    if (testCase.description) {
+      log(color.cyan("Description:", testCase.description) + "\n");
+    }
+
+    if (testCase.skip) {
+      log(color.yellow(`  ⊘ Skipped`));
+      caseReports.push({ ...describeCase(testCase), status: "skipped", durationMs: 0 });
+      continue;
+    }
+
+    if (testCase.skipOnCI && process.env.CI) {
+      log(color.yellow(`  ⊘ Skipped on CI`));
+      caseReports.push({ ...describeCase(testCase), status: "skipped", durationMs: 0 });
+      continue;
+    }
+
+    // Under deterministic LLM mode, llmJudge tests cannot run because
+    // the judge itself is an LLM call without a mock. Skip these so CI
+    // gets a clear `skipped` rather than a confusing "no mock provided"
+    // failure.
+    if (
+      (process.env.AGENCY_USE_TEST_LLM_PROVIDER || testCase.useTestLLMProvider) &&
+      testCase.evaluationCriteria.some((c) => c.type === "llmJudge")
+    ) {
+      log(color.yellow(`  ⊘ Skipped (LLM-as-judge requires real client)`));
+      caseReports.push({ ...describeCase(testCase), status: "skipped", durationMs: 0 });
+      continue;
+    }
+
+    // Preserve "not declared" (undefined -> no shim) vs "declared, possibly
+    // empty" ([] -> shim installed, every fetch throws). Only resolve when at
+    // least one level declares fetchMocks.
+    const fetchMocksDeclared = tests.fetchMocks !== undefined || testCase.fetchMocks !== undefined;
+    const fetchMocks = fetchMocksDeclared
+      ? resolveFetchMocks(tests.fetchMocks, testCase.fetchMocks, path.dirname(testFile))
+      : undefined;
+    const timeoutMs = resolveTimeoutMs(testCase, tests);
+    const startTime = performance.now();
+    const outcome = await runTestWithRetries(
+      config,
+      resolveTestSourcePath(tests, testFile),
+      testCase,
+      fetchMocks,
+      timeoutMs,
+      suite.abortController.signal,
+      log,
+      options,
+    );
+    const durationMs = performance.now() - startTime;
+
+    if (outcome.status === "aborted") {
+      caseReports.push({ ...describeCase(testCase), status: "aborted", durationMs });
+      aborted = true;
+      i++;
+      break;
+    }
+    caseReports.push({
+      ...describeCase(testCase),
+      status: outcome.status,
+      ...(outcome.feedback === undefined ? {} : { feedback: outcome.feedback }),
+      durationMs,
+      attempts: outcome.attempts,
+    });
+  }
+  for (const testCase of cases.slice(i)) {
+    caseReports.push({ ...describeCase(testCase), status: "aborted", durationMs: 0 });
+  }
+  return { aborted, caseReports };
+}
+
 // Print the suite-abort summary after the runner has drained.
 // Three categories: completed, in-flight when abort fired, never started.
-function printSuiteAbortSummary(suite: SuiteContext): void {
+export function printSuiteAbortSummary(suite: SuiteContext, output: TestOutput): void {
   const header =
     suite.abortReason === "sigint"
       ? "⚠️  Interrupted by user"
       : `⚠️  Suite-wide timeout of ${formatTimeout(TIMEOUT_CEILINGS.suiteMs)} exceeded`;
-  console.log(color.yellow(`\n${header}. Aborting.\n`));
+  output.line(color.yellow(`\n${header}. Aborting.\n`));
 
   if (suite.completed.length > 0) {
-    console.log("Completed test files:");
-    for (const f of suite.completed) console.log(`  ✓ ${f}`);
+    output.line("Completed test files:");
+    for (const f of suite.completed) output.line(`  ✓ ${f}`);
   }
   if (suite.inFlightAtAbort.length > 0) {
-    console.log("\nTest files in flight when aborted:");
-    for (const f of suite.inFlightAtAbort) console.log(color.yellow(`  - ${f}`));
+    output.line("\nTest files in flight when aborted:");
+    for (const f of suite.inFlightAtAbort) output.line(color.yellow(`  - ${f}`));
   }
   if (suite.pending.size > 0) {
-    console.log("\nTest files that did not start:");
-    for (const f of suite.pending) console.log(color.yellow(`  - ${f}`));
+    output.line("\nTest files that did not start:");
+    for (const f of suite.pending) output.line(color.yellow(`  - ${f}`));
   }
 }
 
@@ -1044,8 +1090,10 @@ export async function test(
   config: AgencyConfig,
   inputPaths: string[],
   parallel: number = 1,
-  shard?: Shard,
-): Promise<TestStats> {
+  shard: Shard | undefined,
+  options: TestRunOptions,
+): Promise<TestReport> {
+  const output = options.output;
   const collected: string[] = [];
   for (const inputPath of inputPaths) {
     collected.push(...collectTestFiles(inputPath));
@@ -1055,7 +1103,7 @@ export async function test(
   // than just splitting the run phase.
   const testFiles = shard ? partitionByShard(collected, shard, (f) => f) : collected;
   if (shard) {
-    console.log(
+    output.line(
       color.cyan(
         `Shard ${shard.index}/${shard.total}: running ${testFiles.length} of ${collected.length} test file(s).`,
       ),
@@ -1068,10 +1116,13 @@ export async function test(
   // exit here, matching the old per-case compile behavior (those compiles
   // ran in this process and exited too).
   try {
-    precompileTestSources(config, testFiles);
+    // --agency-only compiles each file itself, through the validator.
+    if (!options.agencyOnly) {
+      precompileTestSources(config, testFiles, { quiet: output.kind === "json" });
+    }
   } catch (e) {
     if (e instanceof CompileClosureError) {
-      console.error(color.red(e.message));
+      output.line(color.red(e.message), "stderr");
       process.exit(1);
     }
     throw e;
@@ -1098,22 +1149,23 @@ export async function test(
   };
   process.once("SIGINT", sigintHandler);
 
-  let results: (TestStats | undefined)[] = [];
+  const defaultSource = (testFile: string) => testFile.replace(/\.test\.json$/, ".agency");
+  let results: (TestFileReport | undefined)[] = [];
   try {
     results = await runWithConcurrency(
       testFiles,
       sanitizeParallel(parallel),
-      (testFile) => runTestFile(config, testFile, suite),
+      (testFile) => runTestFile(config, testFile, suite, options),
       (testFile, error) => {
-        console.error(color.red(`  ✗ Test file error: ${testFile}: ${error}`));
-        return {
-          passed: 0,
-          failed: 1,
-          filesPassed: 0,
-          filesFailed: 1,
-          failedFiles: [testFile],
-          slowTests: [],
-        };
+        const message = `Test file error: ${testFile}: ${error}`;
+        output.line(color.red(`  ✗ ${message}`), "stderr");
+        return fileFailureReport({
+          file: testFile,
+          sourceFile: defaultSource(testFile),
+          status: "error",
+          error: message,
+          caseNodes: [],
+        });
       },
       () => suite.aborted,
     );
@@ -1122,14 +1174,18 @@ export async function test(
     process.removeListener("SIGINT", sigintHandler);
   }
 
-  let stats = emptyStats();
-  for (const result of results) {
-    if (result) stats = mergeStats(stats, result);
-  }
-
-  if (suite.aborted) printSuiteAbortSummary(suite);
-
-  return stats;
+  // A file the abort kept from starting is still in the report.
+  const files = testFiles.map(
+    (testFile, i) =>
+      results[i] ?? {
+        file: testFile,
+        sourceFile: defaultSource(testFile),
+        status: "aborted" as const,
+        cases: [],
+      },
+  );
+  if (suite.aborted) printSuiteAbortSummary(suite, output);
+  return buildTestReport(files);
 }
 
 function findTsTestDirs(_inputPath: string): string[] {
@@ -1169,7 +1225,7 @@ async function runTsTestDir(
   config: AgencyConfig,
   dir: string,
 ): Promise<{ success: boolean; dir: string }> {
-  const logger = createBufferedLogger();
+  const logger = createBufferedLogger(humanOutput());
   const log = logger.log;
 
   try {

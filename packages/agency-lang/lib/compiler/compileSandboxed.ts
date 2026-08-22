@@ -4,6 +4,8 @@
  * validation errors become CompileResult failures — the stdlib caller never
  * receives a throw.
  */
+import * as fs from "fs";
+import * as path from "path";
 import { CompileResult } from "./compile.js";
 import { ClosureEntry, ClosureValidationError, validateClosure } from "./closureValidator.js";
 import { compileValidatedClosure } from "./compileValidatedClosure.js";
@@ -26,4 +28,22 @@ export function compileSandboxed(args: CompileSandboxedArgs): CompileResult {
     }
     return { success: false, errors: [e instanceof Error ? e.message : String(e)] };
   }
+}
+
+export type AgencyOnlyCompile = { ok: true; scriptPath: string } | { ok: false; errors: string[] };
+
+/** `--agency-only`: compile `sourceFile` through the validator and write the
+ *  result beside the sources, `<name>.js` next to each `<name>.agency`, the
+ *  same layout `compile()` produces. A refusal is returned, not thrown. */
+export function compileAgencyOnly(sourceFile: string): AgencyOnlyCompile {
+  const absolute = path.resolve(sourceFile);
+  const dir = path.dirname(absolute);
+  const result = compileSandboxed({ entry: { file: path.basename(absolute) }, dir });
+  if (!result.success) return { ok: false, errors: result.errors };
+  for (const [relPath, code] of Object.entries(result.modules ?? {})) {
+    fs.writeFileSync(path.join(dir, relPath), code);
+  }
+  const scriptPath = absolute.replace(/\.agency$/, ".js");
+  fs.writeFileSync(scriptPath, result.code);
+  return { ok: true, scriptPath };
 }

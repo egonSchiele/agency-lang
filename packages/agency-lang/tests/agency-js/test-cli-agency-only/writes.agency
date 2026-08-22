@@ -1,0 +1,7 @@
+export node main(): string {
+  const r = write("y.txt", "hi", ".") with approve
+  if (isFailure(r)) {
+    return "rejected"
+  }
+  return "written"
+}

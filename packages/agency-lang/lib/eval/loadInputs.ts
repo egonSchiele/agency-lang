@@ -4,7 +4,7 @@ import * as path from "path";
 import { nanoid } from "nanoid";
 
 import { assertEvalInputId } from "./ids.js";
-import type { Test } from "./runTypes.js";
+import type { AgencyTestDefinition, AgencyTestVisibility, Test } from "./runTypes.js";
 import { parseSource, resolveSource } from "./sources.js";
 
 type MakeId = () => string;
@@ -150,7 +150,48 @@ function loadTestDir(testDir: string, makeId: MakeId, options: LoadOptions): Tes
   if (spec.graders === undefined && fs.existsSync(path.join(testDir, "graders.ts"))) {
     spec.graders = "./graders.ts";
   }
-  return normalizeInput(spec, testDir, makeId, options);
+  const agencyTests = discoverAgencyTests(testDir);
+  // A test graded by discovered harness pairs needs no goal of its own.
+  const testOptions = agencyTests.length > 0 ? { ...options, requireGoal: false } : options;
+  const test = normalizeInput(spec, testDir, makeId, testOptions);
+  if (agencyTests.length > 0) test.agencyTests = agencyTests;
+  return test;
+}
+
+/** Every `<name>.test.json` directly inside `files/` or `holdout/`, with its
+ *  sibling `<name>.agency`. Names must be unique: they become grader names. */
+function discoverAgencyTests(testDir: string): AgencyTestDefinition[] {
+  const found: AgencyTestDefinition[] = [];
+  const byName: Record<string, string> = Object.create(null);
+  const dirs: { sub: string; visibility: AgencyTestVisibility }[] = [
+    { sub: "files", visibility: "visible" },
+    { sub: "holdout", visibility: "holdout" },
+  ];
+  for (const { sub, visibility } of dirs) {
+    const dir = path.join(testDir, sub);
+    if (!fs.existsSync(dir)) continue;
+    for (const entry of fs.readdirSync(dir).sort()) {
+      if (!entry.endsWith(".test.json")) continue;
+      const testJsonFile = path.join(dir, entry);
+      const name = entry.replace(/\.test\.json$/, "");
+      const agencyFile = path.join(dir, `${name}.agency`);
+      if (!fs.existsSync(agencyFile)) {
+        throw new Error(
+          `${testJsonFile} has no sibling harness ${name}.agency — eval harnesses are ` +
+            `discovered as sibling pairs`,
+        );
+      }
+      if (byName[name] !== undefined) {
+        throw new Error(
+          `harness name '${name}' appears twice: ${byName[name]} and ${testJsonFile}. ` +
+            `Basenames become grader names and must be unique across files/ and holdout/.`,
+        );
+      }
+      byName[name] = testJsonFile;
+      found.push({ testJsonFile, agencyFile, name, visibility });
+    }
+  }
+  return found;
 }
 
 function readJson(filePath: string): unknown {
@@ -219,6 +260,16 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
     throw new Error("Eval input metadata must be an object when provided");
   }
   if (
+    spec.harnessMaxCost !== undefined &&
+    (typeof spec.harnessMaxCost !== "number" ||
+      !Number.isFinite(spec.harnessMaxCost) ||
+      spec.harnessMaxCost < 0)
+  ) {
+    throw new Error(
+      "Eval input harnessMaxCost must be a non-negative number of dollars when provided",
+    );
+  }
+  if (
     spec.description !== undefined &&
     (typeof spec.description !== "string" || spec.description.length === 0)
   ) {
@@ -248,6 +299,7 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   if (typeof spec.graders === "string")
     out.graders = resolveGradersFile(spec.graders, baseDir, out.id ?? "");
   if (typeof spec.timeoutSec === "number") out.timeoutSec = spec.timeoutSec;
+  if (typeof spec.harnessMaxCost === "number") out.harnessMaxCost = spec.harnessMaxCost;
   if (isPlainObject(spec.metadata)) out.metadata = spec.metadata as Record<string, any>;
   return out;
 }

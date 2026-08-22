@@ -13,6 +13,7 @@
 import { filter } from "std::array"
 import { agencyCodingAgent } from "std::agents/agency/coding"
 import { agencyExpertAgent } from "std::agents/agency/expert"
+import { testFile } from "std::agency"
 import { codingAgent, buildTools as codingAgentTools } from "std::agents/coding"
 import { expertAgent } from "std::agents/expert"
 import { verifierAgent } from "std::agents/verifier"
@@ -89,6 +90,7 @@ export static const codeSysPrompt = promptFile("code.md")
 export static const codeTools: any[] = [
   ...codingAgentTools(),
   agencyCli,
+  testFile,
   superpowersSkill,
   oracleAgent,
 ]

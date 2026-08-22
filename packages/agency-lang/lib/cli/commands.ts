@@ -19,13 +19,9 @@ import * as os from "os";
 import * as path from "path";
 
 import { RunStrategy } from "../importStrategy.js";
-import {
-  AGENCY_RUN_POLICY,
-  AGENCY_RUN_POLICY_INTERACTIVE,
-  AGENCY_RUN_POLICY_INTERACTIVE_ON,
-  AGENCY_MAX_COST,
-  AGENCY_MAX_TIME,
-} from "@/constants.js";
+import { compileAgencyOnly } from "../compiler/compileSandboxed.js";
+import { withRootCarriers } from "./childEnv.js";
+import {} from "@/constants.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
 import { fileURLToPath, pathToFileURL } from "url";
 import { classifyInstall, installDirFromUrl, type InstallKind } from "./installLocation.js";
@@ -278,19 +274,32 @@ export function run(
   /** `--capture-workdir <dir>`: after the run, write its statelog, code and a
    *  snapshot of the working directory as the run directory `<dir>/<traceId>/`. */
   capture?: { runDir: string },
+  compileMode: { agencyOnly: boolean } = { agencyOnly: false },
 ): void {
-  const output = compile(config, inputFile, outputFile, {
-    importStrategy: new RunStrategy(),
-  });
-  if (output === null) {
-    console.error("Error: No output file generated.");
-    process.exit(1);
+  let output: string;
+  if (compileMode.agencyOnly) {
+    const compiled = compileAgencyOnly(inputFile);
+    if (!compiled.ok) {
+      console.error("Error: agency-only compile refused:");
+      for (const error of compiled.errors) console.error(`  ${error}`);
+      process.exit(1);
+    }
+    output = compiled.scriptPath;
+  } else {
+    const compiledOutput = compile(config, inputFile, outputFile, {
+      importStrategy: new RunStrategy(),
+    });
+    if (compiledOutput === null) {
+      console.error("Error: No output file generated.");
+      process.exit(1);
+    }
+    output = compiledOutput;
   }
 
   console.log(`Running ${output}...`);
   console.log("---");
 
-  const env: NodeJS.ProcessEnv = { ...process.env };
+  const env = withRootCarriers(process.env, { policy: runPolicy, budget });
   const captured = capture === undefined ? undefined : prepareCapture(capture.runDir);
   env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(
     runChildOverrides({
@@ -301,24 +310,6 @@ export function run(
   );
   if (captured !== undefined) env[TRACE_ID_ENV] = captured.traceId;
   if (resumeFile) env.AGENCY_RESUME_FILE = resumeFile;
-  // Make the child's policy behavior fully determined by THIS run's flags — never
-  // by a stray AGENCY_RUN_POLICY* inherited from the parent shell or an outer run
-  // (e.g. a leftover ...INTERACTIVE=1 would otherwise silently enable prompting).
-  delete env[AGENCY_RUN_POLICY];
-  delete env[AGENCY_RUN_POLICY_INTERACTIVE];
-  if (runPolicy) {
-    env[AGENCY_RUN_POLICY] = runPolicy.policyJson;
-    if (runPolicy.interactive) {
-      env[AGENCY_RUN_POLICY_INTERACTIVE] = AGENCY_RUN_POLICY_INTERACTIVE_ON;
-    }
-  }
-  // Same clear-then-set discipline for the root budget: the env vars are an
-  // internal carrier from THIS run's flags to the child, never a knob a
-  // parent shell can set behind the user's back.
-  delete env[AGENCY_MAX_COST];
-  delete env[AGENCY_MAX_TIME];
-  if (budget?.maxCost !== undefined) env[AGENCY_MAX_COST] = budget.maxCost;
-  if (budget?.maxTime !== undefined) env[AGENCY_MAX_TIME] = budget.maxTime;
 
   // Use process.execPath so the child runs under the same Node as the CLI,
   // and pass our resolver shim so the compiled output's `import "agency-lang"`

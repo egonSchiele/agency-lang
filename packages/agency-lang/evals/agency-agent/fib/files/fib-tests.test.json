@@ -1,0 +1,9 @@
+{
+  "sourceFile": "fib-tests.agency",
+  "tests": [
+    { "nodeName": "base0", "expectedOutput": "0", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "base1", "expectedOutput": "1", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "small", "expectedOutput": "13", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "ten", "expectedOutput": "55", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

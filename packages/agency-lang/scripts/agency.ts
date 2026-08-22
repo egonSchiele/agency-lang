@@ -50,7 +50,9 @@ import type { RemoteCommandContext } from "@/cli/remote/commands/util.js";
 import { lintSource } from "@/linter/registry.js";
 import { formatFindings } from "@/cli/lint.js";
 import { resolveBudget } from "@/cli/budget.js";
-import { fixtures, test, testTs, SlowTest, parseShardSpec } from "@/cli/test.js";
+import { fixtures, test, testTs, parseShardSpec, TestRunOptions } from "@/cli/test.js";
+import { caseTimings, failedFiles } from "@/cli/testReport.js";
+import { humanOutput, jsonOutput, type TestOutput } from "@/cli/testOutput.js";
 import { generateReport, cleanCoverage } from "@/cli/coverage.js";
 import { createBundle, extractBundle } from "@/cli/bundle.js";
 import { traceLog } from "@/cli/events.js";
@@ -139,6 +141,7 @@ type RunOptions = Omit<CliFlags, "trace"> & {
   maxTime?: string;
   local?: string;
   captureWorkdir?: string;
+  agencyOnly?: boolean;
 };
 
 // commander option parsers. Match the WHOLE string against digits so
@@ -302,6 +305,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       budget,
       nodeArgs,
       options.captureWorkdir === undefined ? undefined : { runDir: options.captureWorkdir },
+      { agencyOnly: options.agencyOnly ?? false },
     );
   }
 
@@ -440,6 +444,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
         .option(
           "--max-time <duration>",
           "Abort if the run's working time exceeds this duration (e.g. 30s, 5m, 1h, 2d). Waiting on a human is not counted; zero/negative = no limit",
+        )
+        .option(
+          "--agency-only",
+          "Refuse anything in the import closure that is not Agency source (TypeScript/JavaScript, Node built-ins, pkg:: packages, splices, symlinks), so every effect the program can perform is an interrupt",
         )
         .option(
           "--capture-workdir <dir>",
@@ -1133,13 +1141,17 @@ export function createProgram(deps: CliDependencies = {}): Command {
     return `${(ms / 1000).toFixed(2)}s`;
   }
 
-  function printSlowestTests(slowTests: SlowTest[], count: number = 10): void {
+  function printSlowestTests(
+    slowTests: { name: string; durationMs: number }[],
+    output: TestOutput = humanOutput(),
+    count: number = 10,
+  ): void {
     if (slowTests.length === 0) return;
     const sorted = [...slowTests].sort((a, b) => b.durationMs - a.durationMs);
     const top = sorted.slice(0, count);
-    console.log(color.yellow(`\n Slowest ${Math.min(count, top.length)} tests:`));
+    output.line(color.yellow(`\n Slowest ${Math.min(count, top.length)} tests:`));
     for (const t of top) {
-      console.log(`   ${color.yellow(formatDuration(t.durationMs))}  ${t.name}`);
+      output.line(`   ${color.yellow(formatDuration(t.durationMs))}  ${t.name}`);
     }
   }
 
@@ -1152,6 +1164,34 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Run Agency test files")
     .argument("[inputs...]", "Paths to .test.json files or directories")
     .option("-p, --parallel <number>", "Number of test files to run in parallel", parseInt)
+    .option(
+      "--policy <name|path>",
+      "Interrupt policy installed as the outermost handler of every test case: a built-in (recommended|minimal|with-writes|approve-all) or a policy JSON file. A reject here wins over the tested code's own approvals.",
+    )
+    .option(
+      "--approve <effects>",
+      "Comma-separated interrupt effects to auto-approve in every test case",
+    )
+    .option(
+      "--reject <effects>",
+      "Comma-separated interrupt effects to auto-reject in every test case ('*' rejects every effect)",
+    )
+    .option(
+      "--max-cost <dollars>",
+      "Abort a test case if its LLM spend exceeds this many dollars (e.g. 0.50). 0 = no paid spend; negative = no limit",
+    )
+    .option(
+      "--max-time <duration>",
+      "Abort a test case if its working time exceeds this duration (e.g. 30s, 5m). Zero/negative = no limit",
+    )
+    .option(
+      "--agency-only",
+      "Compile each tested file through the closure validator: anything in its imports that is not Agency source is refused and the file fails",
+    )
+    .option(
+      "--json",
+      "Print one JSON document of every file and case to stdout; all human-readable output goes to stderr",
+    )
     .option("--coverage", "Enable coverage collection and report")
     .option("--accumulate", "Preserve existing coverage data (use with --coverage)")
     .option(
@@ -1171,9 +1211,43 @@ export function createProgram(deps: CliDependencies = {}): Command {
           accumulate?: boolean;
           shard?: string;
           collectOnly?: boolean;
+          policy?: string;
+          approve?: string;
+          reject?: string;
+          maxCost?: string;
+          maxTime?: string;
+          agencyOnly?: boolean;
+          json?: boolean;
         },
       ) => {
         const config = getConfig();
+        const output = opts.json ? jsonOutput() : humanOutput();
+        if (opts.json && opts.coverage && !opts.collectOnly) {
+          // The coverage report prints to stdout, which --json reserves
+          // for the document. Collecting is fine; reporting is not.
+          console.error(
+            "Error: --json cannot be combined with --coverage unless --collect-only is also given (the coverage report would share stdout with the JSON document)",
+          );
+          process.exit(2);
+        }
+        let runOptions: TestRunOptions = { output };
+        try {
+          runOptions = {
+            policy:
+              resolveRunPolicy({
+                policy: opts.policy,
+                approve: opts.approve,
+                reject: opts.reject,
+                cwd: process.cwd(),
+              }) ?? undefined,
+            budget: resolveBudget({ maxCost: opts.maxCost, maxTime: opts.maxTime }),
+            agencyOnly: opts.agencyOnly ?? false,
+            output,
+          };
+        } catch (e) {
+          console.error(`Error: ${(e as Error).message}`);
+          process.exit(2);
+        }
         if (opts.coverage) {
           process.env.AGENCY_COVERAGE = "1";
           // Resolve to an absolute path so subprocesses spawned with a different
@@ -1186,38 +1260,40 @@ export function createProgram(deps: CliDependencies = {}): Command {
         }
         const shard = opts.shard ? parseShardSpec(opts.shard) : undefined;
         const parallel = opts.parallel ?? config.test?.parallel ?? 1;
-        const totals = await test(config, testFile, parallel, shard);
-        const totalFiles = totals.filesPassed + totals.filesFailed;
-        const totalTests = totals.passed + totals.failed;
+        const report = await test(config, testFile, parallel, shard, runOptions);
+        const totalFiles = report.files.length;
+        const totalTests = report.passed + report.failed;
         if (totalFiles > 0) {
           const filesStatus = [
-            totals.filesFailed > 0 ? `${totals.filesFailed} failed` : "",
-            `${totals.filesPassed} passed`,
+            report.filesFailed > 0 ? `${report.filesFailed} failed` : "",
+            `${totalFiles - report.filesFailed} passed`,
           ]
             .filter(Boolean)
             .join(" | ");
           const testsStatus = [
-            totals.failed > 0 ? `${totals.failed} failed` : "",
-            `${totals.passed} passed`,
+            report.failed > 0 ? `${report.failed} failed` : "",
+            `${report.passed} passed`,
           ]
             .filter(Boolean)
             .join(" | ");
-          if (totals.failedFiles.length > 0) {
-            console.log("");
-            for (const file of totals.failedFiles) {
-              console.log(color.red(` FAIL  ${file}`));
+          const failing = failedFiles(report);
+          if (failing.length > 0) {
+            output.line("");
+            for (const file of failing) {
+              output.line(color.red(` FAIL  ${file}`));
             }
           }
-          const colorFn = totals.failed > 0 ? color.red : color.green;
-          console.log(colorFn(`\n Test Files  ${filesStatus} (${totalFiles})`));
-          console.log(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
+          const colorFn = report.filesFailed > 0 ? color.red : color.green;
+          output.line(colorFn(`\n Test Files  ${filesStatus} (${totalFiles})`));
+          output.line(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
         }
-        printSlowestTests(totals.slowTests);
+        printSlowestTests(caseTimings(report), output);
+        output.document(report);
         if (opts.coverage && !opts.collectOnly) {
           const reportTargets = testFile.length > 0 ? testFile : ["."];
           await generateReport(config, reportTargets);
         }
-        if (totals.failed > 0) {
+        if (report.filesFailed > 0) {
           process.exit(1);
         }
       },

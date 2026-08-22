@@ -16,6 +16,7 @@ import { recordedClosureHashes } from "@/runDirectory/attachCode.js";
 import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";
 import { recordCompletedRun } from "@/runDirectory/mutations.js";
 import { snapshotGradingModule, type GradersSnapshot } from "@/eval/grading/gradingModule.js";
+import { snapshotHarness, type HarnessSnapshot } from "@/eval/grading/harnessSnapshot.js";
 import { readTraces } from "@/runDirectory/traces.js";
 import { safeDeleteDirectoryWithin } from "@/utils.js";
 
@@ -90,10 +91,7 @@ export async function runSuite(
   // Each test's graders, bundled now and stored in its run directory, so the
   // run grades later by the graders it ran with, wherever the directory goes.
   // A broken grading module fails here, before any agent runs.
-  const gradersByTest: Record<string, TestGraders | undefined> = await snapshotGraders(
-    opts.inputs,
-    config,
-  );
+  const snapshotsByTest: Record<string, TestSnapshots> = await snapshotGraders(opts.inputs, config);
 
   // One closure walk per suite; never per test. Command targets have no
   // closure and nothing to compile. Before any directory is created: a
@@ -188,7 +186,7 @@ export async function runSuite(
         run,
         harness,
         suite: opts.suite,
-        graders: gradersByTest[testId],
+        snapshots: snapshotsByTest[testId] ?? {},
         flags,
       });
       fs.renameSync(assembled, runDir);
@@ -247,21 +245,34 @@ export async function runSuite(
  *  a test's own. */
 type TestGraders = GradersSnapshot & { origin: "test" | "config" };
 
+/** What a run directory keeps for grading later: the grading module and/or
+ *  the harness pairs. */
+type TestSnapshots = { module?: TestGraders; harness?: HarnessSnapshot };
+
 /** The grading module each test will be graded with — its own, else the
- *  project's `eval.graders` — bundled once per distinct module. Tests with
- *  neither get no snapshot: the bundled goal judge needs none. */
+ *  project's `eval.graders` — bundled once per distinct module, plus its
+ *  discovered harness pairs, preflighted and read now. Tests with neither
+ *  get nothing: the bundled goal judge needs none. A broken module or
+ *  harness fails here, before any agent runs. */
 async function snapshotGraders(
   tests: Test[],
   config: AgencyConfig,
-): Promise<Record<string, TestGraders | undefined>> {
+): Promise<Record<string, TestSnapshots>> {
   const byModule: Record<string, Promise<GradersSnapshot>> = Object.create(null);
-  const byTest: Record<string, TestGraders | undefined> = Object.create(null);
+  const byTest: Record<string, TestSnapshots> = Object.create(null);
   for (const test of tests) {
+    if (test.id === undefined) continue;
+    const snapshots: TestSnapshots = {};
     const modulePath = test.graders ?? config.eval?.graders;
-    if (modulePath === undefined || test.id === undefined) continue;
-    byModule[modulePath] ??= snapshotGradingModule(modulePath);
-    const origin = test.graders !== undefined ? ("test" as const) : ("config" as const);
-    byTest[test.id] = { ...(await byModule[modulePath]), origin };
+    if (modulePath !== undefined) {
+      byModule[modulePath] ??= snapshotGradingModule(modulePath);
+      const origin = test.graders !== undefined ? ("test" as const) : ("config" as const);
+      snapshots.module = { ...(await byModule[modulePath]), origin };
+    }
+    if (test.agencyTests !== undefined && test.agencyTests.length > 0) {
+      snapshots.harness = snapshotHarness(test.agencyTests, test.harnessMaxCost);
+    }
+    byTest[test.id] = snapshots;
   }
   return byTest;
 }
@@ -279,10 +290,12 @@ function foldIntoRunDirectory(args: {
   run: AgentRun;
   harness: { kind: "harness"; id: string };
   suite: SuiteIdentity | undefined;
-  graders: TestGraders | undefined;
+  snapshots: TestSnapshots;
   flags: Record<string, string | number | boolean>;
 }): void {
   const { run } = args;
+  const graders = args.snapshots.module;
+  const harness = args.snapshots.harness;
   fs.mkdirSync(args.runDir, { recursive: true });
   const staged = run.statelogPath === null ? [] : readTraces(run.statelogPath).traces;
   if (staged.length === 0) fs.writeFileSync(path.join(args.runDir, "statelog.jsonl"), "");
@@ -302,7 +315,7 @@ function foldIntoRunDirectory(args: {
     stagedStatelogFile: run.statelogPath === null ? undefined : run.statelogPath,
     codeEntry,
     workdir: traceRecorded && fs.existsSync(run.workdir) ? { sourceDir: run.workdir } : undefined,
-    gradersFiles: args.graders?.files,
+    gradersFiles: [...(graders?.files ?? []), ...(harness?.files ?? [])],
     run: {
       traceId: args.traceId,
       annotator: args.harness,
@@ -312,16 +325,17 @@ function foldIntoRunDirectory(args: {
         // which is not a JSON value; on disk they are simply absent.
         test: JSON.parse(JSON.stringify(args.test)),
         suite: args.suite ?? null,
-        ...(args.graders === undefined
+        ...(graders === undefined
           ? {}
           : {
               graders: {
-                source: args.graders.source,
-                bundleFile: args.graders.bundleFile,
-                judgeFiles: args.graders.judgeFiles,
-                origin: args.graders.origin,
+                source: graders.source,
+                bundleFile: graders.bundleFile,
+                judgeFiles: graders.judgeFiles,
+                origin: graders.origin,
               },
             }),
+        ...(harness === undefined ? {} : { harness: harness.records }),
         ended: endedFrom(run),
         flags: args.flags,
         ...(run.status === "error" ? { error: run.errorMessage } : {}),

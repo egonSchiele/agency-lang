@@ -1,0 +1,4 @@
+{
+  "control": { "exitCode": 0, "fileWritten": true },
+  "restricted": { "exitCode": 1, "fileWritten": false, "mentionsRejected": true }
+}

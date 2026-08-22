@@ -8,6 +8,7 @@ import type {
   Annotation,
   EffectiveTraceAnnotations,
   GradersIdentity,
+  HarnessRecord,
 } from "@/runDirectory/annotations.js";
 import { evalRecordFor, traceEnding } from "@/runDirectory/evalRecord.js";
 import { humanFeedbackFor, type HumanFeedback } from "@/runDirectory/humanFeedback.js";
@@ -16,6 +17,7 @@ import type { Trace } from "@/runDirectory/traces.js";
 
 import type { AgencyRunner } from "./agencyRunner.js";
 import type { BaseGrader } from "./baseGrader.js";
+import { AgencyTestGrader } from "./agencyTestGrader.js";
 import { loadGradingModule, loadGradingSnapshot } from "./gradingModule.js";
 import { Scorecard, type GraderGrade, type InputGrades } from "./scorecard.js";
 import type { LoadedRun, JSON as Json } from "./types.js";
@@ -135,6 +137,17 @@ async function effectiveGraders(
   cache: (modulePath: string) => Promise<BaseGrader[]>,
   runDir: string,
 ): Promise<BaseGrader[]> {
+  // Harness graders are the test's own: --graders and --goal leave them.
+  const harness = harnessGraders(entry, runDir);
+  return [...(await moduleGraders(entry, ctx, cache, runDir)), ...harness];
+}
+
+async function moduleGraders(
+  entry: Entry,
+  ctx: GradingContext,
+  cache: (modulePath: string) => Promise<BaseGrader[]>,
+  runDir: string,
+): Promise<BaseGrader[]> {
   if (ctx.suiteGraders.mode === "override") {
     return ctx.suiteGraders.graders;
   }
@@ -149,6 +162,26 @@ async function effectiveGraders(
     return loadGradingSnapshot(runDirPaths(runDir).gradersDir, snapshot);
   }
   return ctx.suiteGraders.graders;
+}
+
+/** One grader per harness record, over the run directory's stored copy. */
+function harnessGraders(entry: Entry, runDir: string): BaseGrader[] {
+  const gradersDir = runDirPaths(runDir).gradersDir;
+  return (entry.harness ?? []).map((record) => {
+    for (const stored of [record.agency, record.json]) {
+      if (!fs.existsSync(path.join(gradersDir, stored))) {
+        throw new Error(
+          `Harness snapshot not found: ${path.join(gradersDir, stored)} (recorded for ${record.name}).`,
+        );
+      }
+    }
+    return new AgencyTestGrader({
+      name: record.name,
+      agencyFile: path.join(gradersDir, record.agency),
+      testJsonFile: path.join(gradersDir, record.json),
+      ...(record.maxCost === undefined ? {} : { maxCost: record.maxCost }),
+    });
+  });
 }
 
 /** One esbuild+import per module path per call, however many tests share a
@@ -168,7 +201,12 @@ export function makeGraderModuleCache(
 
 /** What grading needs from one trace: the test it ran, its evidence, and
  *  optionally a reason not to grade at all. */
-type Entry = { test: Test; humanFeedback: HumanFeedback; graders?: GradersIdentity } & (
+type Entry = {
+  test: Test;
+  humanFeedback: HumanFeedback;
+  graders?: GradersIdentity;
+  harness?: HarnessRecord[];
+} & (
   | { run: LoadedRun }
   /** The trace cannot be graded at all: skip straight to a scored zero. */
   | { ungradedReason: string }
@@ -203,15 +241,22 @@ function entryFor(snapshot: RunDirectorySnapshot, trace: Trace): Entry {
   };
   const humanFeedback = humanFeedbackFor(snapshot, trace.traceId);
   const graders = runRow !== null && runRow.kind === "run" ? runRow.graders : undefined;
+  const harness = runRow !== null && runRow.kind === "run" ? runRow.harness : undefined;
   const ended = runRow !== null && runRow.kind === "run" ? runRow.ended : traceEnding(trace);
   if (ended === "ok") {
-    return { test, run, humanFeedback, graders };
+    return { test, run, humanFeedback, graders, harness };
   }
   const detail =
     runRow !== null && runRow.kind === "run" && runRow.error !== undefined
       ? `: ${runRow.error}`
       : "";
-  return { test, humanFeedback, graders, ungradedReason: `the run ended with ${ended}${detail}` };
+  return {
+    test,
+    humanFeedback,
+    graders,
+    harness,
+    ungradedReason: `the run ended with ${ended}${detail}`,
+  };
 }
 
 /** The test a trace ran, from the harness's `run` row; an ad-hoc trace with

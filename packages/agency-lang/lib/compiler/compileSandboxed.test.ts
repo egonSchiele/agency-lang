@@ -2,7 +2,11 @@ import { describe, test, expect, vi, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { compileSandboxed, compileValidatedClosure } from "./compileSandboxed.js";
+import {
+  compileAgencyOnly,
+  compileSandboxed,
+  compileValidatedClosure,
+} from "./compileSandboxed.js";
 import { validateClosure } from "./closureValidator.js";
 import { compileSource } from "./compile.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
@@ -259,6 +263,38 @@ describe("compileSandboxed", () => {
 
       const leaked = listMirrors().filter((name) => !before.includes(name));
       expect(leaked).toEqual([]);
+    } finally {
+      cleanup(dir);
+    }
+  });
+});
+
+describe("compileAgencyOnly", () => {
+  test("writes the entry and each module in its closure beside the sources", () => {
+    const dir = makeDir(".aoc-ok-");
+    try {
+      fs.mkdirSync(path.join(dir, "sub"));
+      fs.writeFileSync(path.join(dir, "sub", "helper.agency"), HELPER);
+      fs.writeFileSync(path.join(dir, "sub", "main.agency"), MAIN);
+      const result = compileAgencyOnly(path.join(dir, "sub", "main.agency"));
+      expect(result).toEqual({ ok: true, scriptPath: path.join(dir, "sub", "main.js") });
+      expect(fs.existsSync(path.join(dir, "sub", "helper.js"))).toBe(true);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("a refusal comes back as errors and writes nothing", () => {
+    const dir = makeDir(".aoc-fs-");
+    try {
+      fs.writeFileSync(
+        path.join(dir, "main.agency"),
+        'import fs from "fs"\nexport node main(): number { return 1 }\n',
+      );
+      const result = compileAgencyOnly(path.join(dir, "main.agency"));
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors.join("\n")).toMatch(/not Agency source/);
+      expect(fs.existsSync(path.join(dir, "main.js"))).toBe(false);
     } finally {
       cleanup(dir);
     }

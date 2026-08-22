@@ -67,6 +67,17 @@ export type GradersIdentity = {
    *  modules aside but never a test's own. */
   origin: "test" | "config";
 };
+/** A harness pair stored under `graders/` as `<sha256 of content><ext>`.
+ *  `sha256` covers both files and is the grader's revision. */
+export type HarnessRecord = {
+  name: string;
+  visibility: "visible" | "holdout";
+  agency: string;
+  json: string;
+  sha256: string;
+  maxCost?: number;
+};
+
 export type RunOutcome = "ok" | "error" | "timeout" | "cost-cap" | "killed";
 
 /** The eval harness's own row for a trace it launched: which test, which
@@ -78,6 +89,8 @@ export type RunPayload = {
   suite: SuiteIdentity | null;
   /** Absent when the run had no grading module (the goal judge grades it). */
   graders?: GradersIdentity;
+  /** The harness pairs this run is graded by. */
+  harness?: HarnessRecord[];
   ended: RunOutcome;
   flags: Record<string, JsonValue>;
   /** The harness's error message when `ended` is not "ok". */
@@ -177,6 +190,21 @@ const RunAnnotationSchema = z
         origin: z.enum(["test", "config"]),
       })
       .strict()
+      .optional(),
+    harness: z
+      .array(
+        z
+          .object({
+            // Plain names: the grader joins them onto directories.
+            name: z.string().regex(/^[A-Za-z0-9._-]+$/),
+            visibility: z.enum(["visible", "holdout"]),
+            agency: z.string().regex(/^[0-9a-f]{64}\.agency$/),
+            json: z.string().regex(/^[0-9a-f]{64}\.test\.json$/),
+            sha256: z.string().regex(/^[0-9a-f]{64}$/),
+            maxCost: z.number().optional(),
+          })
+          .strict(),
+      )
       .optional(),
     ended: z.enum(["ok", "error", "timeout", "cost-cap", "killed"]),
     flags: z.record(z.string(), JsonValueSchema),

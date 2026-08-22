@@ -1,0 +1,7 @@
+// Not pure Agency: a Node built-in in the closure. Compiles and runs under
+// the ordinary runner (positive control); refused under --agency-only.
+import fs from "fs"
+
+export node main(): number {
+  return 1
+}

@@ -1,0 +1,7 @@
+export node spin(): number {
+  let i = 0
+  while (i >= 0) {
+    i = i + 1
+  }
+  return i
+}

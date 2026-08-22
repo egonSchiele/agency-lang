@@ -14,7 +14,7 @@ easy to get wrong.
   annotations.jsonl     # every structured opinion about the run: checklist, score, run
   notes.md              # a person's free-form notes, written with any editor
   code/                 # the agent's closure, as it ran, flat
-  graders/              # the grading module it ran with, bundled, + judge files; content-hash names
+  graders/              # the grading module it ran with, bundled, + judge files + harness pairs; content-hash names
   workdir/              # filesystem snapshot, flat
   workdir.json          # { snapshotAt, source } — when and where from
   checklists/<id>/      # versioned checklist revisions + labeling drafts (docs/dev/eval-labeling.md)
@@ -136,6 +136,10 @@ The planners (`mergeStatelog.ts`, `attachCode.ts`, `attachWorkdir.ts`):
   directory recorded that hash on `agentStart`; a mismatch is refused, not
   warned. Stored flat under `code/`; a stored tree that is incomplete or does
   not hash to what the trace recorded is reported as corrupt.
+- **Harness pairs** (a coding test's `files/` and `holdout/` `.test.json` +
+  `.agency`) go under `graders/` too, as `<sha256>.agency` / `<sha256>.test.json`,
+  and the run row's `harness` array maps each name to its stored files and a
+  hash over both (`docs/dev/eval-grading.md`).
 - **Graders** (`gradersFiles` on `recordCompletedRun`) go under `graders/`
   by content-hash name; the run row's `graders: { source, bundleFile,
   judgeFiles, origin }` says which is the module bundle, which stored file

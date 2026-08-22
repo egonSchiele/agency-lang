@@ -1,7 +1,12 @@
 import { describe, test, expect } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
-import { parseTestFileSandbox, parseTestFileFull, resolveSourceFile } from "./schema.js";
+import {
+  parseTestFileSandbox,
+  parseTestFileFull,
+  parseTestFileEvalHarness,
+  resolveSourceFile,
+} from "./schema.js";
 
 const VALID = {
   sourceFile: "fib-tests.agency",
@@ -350,5 +355,61 @@ describe("resolveSourceFile", () => {
   test("explicit sourceFile wins; default derives from the json basename", () => {
     expect(resolveSourceFile(undefined, "abc.test.json")).toBe("abc.agency");
     expect(resolveSourceFile("other.agency", "abc.test.json")).toBe("other.agency");
+  });
+});
+
+describe("parseTestFileEvalHarness", () => {
+  const CASE = { nodeName: "n", expectedOutput: "1", evaluationCriteria: [{ type: "exact" }] };
+  const harness = (json: unknown) =>
+    parseTestFileEvalHarness(JSON.stringify(json), "fib-tests.test.json", "fib-tests.agency");
+
+  test("a plain exact-match harness is accepted, with or without the sibling sourceFile", () => {
+    expect(harness({ tests: [CASE] }).tests?.length).toBe(1);
+    expect(harness({ sourceFile: "fib-tests.agency", tests: [CASE] }).sourceFile).toBe(
+      "fib-tests.agency",
+    );
+  });
+
+  test.each([
+    ["interruptHandlers", { interruptHandlers: [{ action: "reject" }] }],
+    ["llmMocks", { llmMocks: [] }],
+    ["fetchMocks", { fetchMocks: [] }],
+    ["fakeClock", { fakeClock: true }],
+    ["useTestLLMProvider", { useTestLLMProvider: true }],
+    ["argv", { argv: ["x"] }],
+    ["skip", { skip: true }],
+    ["skipOnCI", { skipOnCI: true }],
+    ["skipReason", { skipReason: "why" }],
+  ])("case field %s is refused by name", (field, extra) => {
+    expect(() => harness({ tests: [{ ...CASE, ...extra }] })).toThrow(new RegExp(field));
+  });
+
+  test.each([
+    ["fetchMocks", { fetchMocks: [] }],
+    ["skip", { skip: true }],
+    ["skipOnCI", { skipOnCI: true }],
+    ["skipReason", { skipReason: "why" }],
+    ["expectedCompileError", { expectedCompileError: "AG1" }],
+  ])("file field %s is refused by name", (field, extra) => {
+    expect(() => harness({ tests: [CASE], ...extra })).toThrow(new RegExp(field));
+  });
+
+  test("a missing or empty tests array is refused", () => {
+    expect(() => harness({})).toThrow(/non-empty tests/);
+    expect(() => harness({ tests: [] })).toThrow(/non-empty tests/);
+  });
+
+  test("a non-sibling sourceFile and a non-exact criterion are refused", () => {
+    expect(() => harness({ sourceFile: "other.agency", tests: [CASE] })).toThrow(/sibling/);
+    expect(() =>
+      harness({
+        tests: [
+          {
+            ...CASE,
+            evaluationCriteria: [{ type: "llmJudge", judgePrompt: "p", desiredAccuracy: 90 }],
+          },
+        ],
+      }),
+    ).toThrow(/exactly/);
   });
 });

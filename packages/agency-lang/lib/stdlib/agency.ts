@@ -84,6 +84,7 @@ type CompiledProgramValue = {
   moduleId: string;
   code: string;
   modules?: Record<string, string>;
+  entryPath?: string;
 };
 
 function compileToProgram(entry: ClosureEntry, dir: string): CompiledProgramValue {
@@ -105,6 +106,7 @@ function compileToProgram(entry: ClosureEntry, dir: string): CompiledProgramValu
     moduleId: result.moduleId,
     code: result.code,
     ...(result.modules !== undefined ? { modules: result.modules } : {}),
+    ...(result.entryPath !== undefined ? { entryPath: result.entryPath } : {}),
   };
 }
 

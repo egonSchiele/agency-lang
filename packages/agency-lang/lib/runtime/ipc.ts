@@ -689,6 +689,7 @@ export function materializeCompiledScript(compiled: {
   moduleId: string;
   code: string;
   modules?: Record<string, string>;
+  entryPath?: string;
 }): string {
   // The user-facing CompiledProgram type only declares moduleId, so a
   // hand-built `{ moduleId: "x" }` (or an old `{ moduleId, path }` value
@@ -700,18 +701,31 @@ export function materializeCompiledScript(compiled: {
         "Values from older Agency versions carried a file path instead and must be recompiled.",
     );
   }
+  // moduleId names the script file; a hand-built value could smuggle a
+  // path into it.
+  if (!/^[A-Za-z0-9_-]+$/.test(compiled.moduleId)) {
+    throw new Error(`CompiledProgram moduleId '${compiled.moduleId}' is not a plain identifier`);
+  }
   const tempDir = path.join(agencyPackageRoot, ".agency-tmp", nanoid());
-  mkdirSync(tempDir, { recursive: true });
-  const scriptPath = path.join(tempDir, `${compiled.moduleId}.js`);
-  writeFileSync(scriptPath, compiled.code, "utf-8");
-  // Multi-file programs carry every non-entry module's JS, keyed by the
-  // relative path the entry's rewritten imports use. Keys were derived
-  // from validated relPaths, but re-check containment before writing.
-  for (const [rel, code] of Object.entries(compiled.modules ?? {})) {
+  // Every path below is re-checked for containment before writing: the
+  // values were derived from validated relative paths, but compiled
+  // values can be hand-built.
+  const contained = (rel: string, what: string): string => {
     const target = path.resolve(tempDir, rel);
     if (!target.startsWith(tempDir + path.sep)) {
-      throw new Error(`CompiledProgram module '${rel}' escapes its script directory`);
+      throw new Error(`CompiledProgram ${what} '${rel}' escapes its script directory`);
     }
+    return target;
+  };
+  // A multi-file program's entry keeps its place in the layout so its
+  // relative imports resolve; a single-file program sits at the root.
+  const scriptPath = contained(compiled.entryPath ?? `${compiled.moduleId}.js`, "entry");
+  const moduleTargets = Object.entries(compiled.modules ?? {}).map(
+    ([rel, code]) => [contained(rel, "module"), code] as const,
+  );
+  mkdirSync(dirname(scriptPath), { recursive: true });
+  writeFileSync(scriptPath, compiled.code, "utf-8");
+  for (const [target, code] of moduleTargets) {
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, code, "utf-8");
   }
@@ -736,8 +750,14 @@ export function materializeCompiledScript(compiled: {
  */
 function cleanupTempDir(compiledPath: string): void {
   try {
-    const tempDir = path.resolve(dirname(compiledPath));
     const allowedPrefix = path.resolve(agencyPackageRoot, ".agency-tmp");
+    // The per-run dir is the first segment under .agency-tmp; the script
+    // itself may sit deeper (a nested entry keeps its layout). Anything
+    // not strictly inside the prefix is left alone.
+    const rel = path.relative(allowedPrefix, path.resolve(compiledPath));
+    const first = rel.split(path.sep)[0];
+    if (first === "" || first === "." || first === ".." || path.isAbsolute(rel)) return;
+    const tempDir = path.join(allowedPrefix, first);
     if (tempDir.startsWith(allowedPrefix + path.sep)) {
       rmSync(tempDir, { recursive: true, force: true });
     }

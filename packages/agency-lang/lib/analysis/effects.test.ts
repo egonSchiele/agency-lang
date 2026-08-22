@@ -23,8 +23,13 @@ import { safeDeleteDirectory } from "../utils.js";
  * Excluding it here keeps this tripwire strict about everything else instead
  * of failing permanently on a gap this branch did not introduce. Removing the
  * exclusion is the test for a fix.
+ *
+ * `assignment.matchSource` is skipped because it is not code: it is a deep
+ * clone of each arm's pattern and guard, kept on the lowered scrutinee for the
+ * exhaustiveness check (see Assignment.matchSource). The guards themselves are
+ * lowered into `if` conditions, which the walk does visit.
  */
-const WALKER_GAPS = ["matchYield.typeSource"];
+const WALKER_GAPS = ["matchYield.typeSource", "assignment.matchSource"];
 
 function scanRaw(
   value: unknown,

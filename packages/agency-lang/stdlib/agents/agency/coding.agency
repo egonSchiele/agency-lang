@@ -18,8 +18,8 @@ import {
   readOnlyGitTools,
  } from "std::agents/lib/toolkits"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
-import { Critique, revise } from "std::strategy"
 import { agentSkill } from "std::skills"
+import { Critique, revise } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 
 /** A failed generation: the last source attempted, with the problems found
@@ -142,7 +142,10 @@ def outcomeToResult(outcome: WriteOutcome): Result<string, WriteFailure> {
   if (outcome.valid) {
     return success(outcome.source)
   }
-  return failure({ source: outcome.source, problems: outcome.problems })
+  return failure({
+    source: outcome.source,
+    problems: outcome.problems
+  })
 }
 
 // Judge one generated program. The critique it returns becomes the repair
@@ -154,23 +157,26 @@ def checkSource(source: string, requireMain: boolean): Critique {
     const findings = renderFeedback(reviewed)
     return {
       accepted: false,
-      feedback: "That code has problems:\n${findings}\nReturn a corrected complete program.",
+      feedback: "That code has problems:\n${findings}\nReturn a corrected complete program."
     }
   }
   const compiled = compile(source)
   if (compiled is failure(compileErr)) {
     return {
       accepted: false,
-      feedback: "That code failed to compile:\n${compileErr}\nReturn a corrected complete program.",
+      feedback: "That code failed to compile:\n${compileErr}\nReturn a corrected complete program."
     }
   }
   if (requireMain && !hasMainNode(source)) {
     return {
       accepted: false,
-      feedback: "The program compiles but has no `node main`. Every program MUST have a node named `main` as its entry point. Add one and return the complete program.",
+      feedback: "The program compiles but has no `node main`. Every program MUST have a node named `main` as its entry point. Add one and return the complete program."
     }
   }
-  return { accepted: true, feedback: "" }
+  return {
+    accepted: true,
+    feedback: ""
+  }
 }
 
 // The critique doubles as the record of what was wrong with the attempt, so
@@ -179,16 +185,30 @@ def checkSource(source: string, requireMain: boolean): Critique {
 def outcomeFor(source: string, requireMain: boolean): WriteOutcome {
   const critique = checkSource(source, requireMain: requireMain)
   if (critique.accepted) {
-    return { valid: true, source: source, problems: [] }
+    return {
+      valid: true,
+      source: source,
+      problems: []
+    }
   }
-  return { valid: false, source: source, problems: [critique.feedback] }
+  return {
+    valid: false,
+    source: source,
+    problems: [critique.feedback]
+  }
 }
 
 def critiqueOf(outcome: WriteOutcome): Critique {
   if (outcome.valid) {
-    return { accepted: true, feedback: "" }
+    return {
+      accepted: true,
+      feedback: ""
+    }
   }
-  return { accepted: false, feedback: outcome.problems[0] }
+  return {
+    accepted: false,
+    feedback: outcome.problems[0]
+  }
 }
 
 def generateLoop(
@@ -210,10 +230,7 @@ def generateLoop(
     deliverable = "Write Agency module source for this task. The deliverable is the module contents itself: define and export what the task names. A `node main` is not required."
   }
   const opening = "${deliverable}\n<task>\n${withContext(task: task, context: context)}\n</task>"
-  return revise(
-    maxAttempts: maxAttempts,
-    check: critiqueOf,
-  ) as critique {
+  return revise(maxAttempts: maxAttempts, check: critiqueOf) as critique {
     // if/else, not a ternary: a ternary inside a block evaluates to null.
     // See tests/agency/agents/blockProbe.agency.
     let prompt = critique
@@ -265,7 +282,11 @@ export def agencyCodingAgent(
     when the deliverable is a library module whose exports the caller places.
   """
   const captured = guard(cost: maxCost, time: maxTime, label: "agencyCodingAgent") {
-    let outcome: WriteOutcome = { valid: false, source: "", problems: ["generation never ran"] }
+    let outcome: WriteOutcome = {
+      valid: false,
+      source: "",
+      problems: ["generation never ran"]
+    }
     thread(label: "agencyCodingAgent", session: session) {
       outcome = generateLoop(
         task: task,
@@ -292,10 +313,12 @@ export def agencyCodingAgent(
   // interpolated rather than a .type field that only guard trips carry.
   if (isFailure(captured)) {
     // Nothing was ever drafted: the run stopped before the first attempt.
-    return failure({
-      source: "",
-      problems: ["agencyCodingAgent stopped before generating: ${captured.error}"],
-    })
+    return failure(
+      {
+        source: "",
+        problems: ["agencyCodingAgent stopped before generating: ${captured.error}"]
+      },
+    )
   }
   // A rejected trip with a saved draft arrives success-shaped carrying the
   // draft, which has the same WriteOutcome shape as a normal return, so

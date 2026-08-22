@@ -40,9 +40,11 @@ function formatMessage(msg: ConvoMessage): string[] {
   const role = msg.role ?? "unknown";
   const prefix = formatRole(role, msg);
   const lines: string[] = [];
-  const text = stringifyContent(msg.content);
+  const text = contentText(msg.content);
   if (text !== undefined && text.length > 0) {
-    lines.push(`${prefix} ${text}`);
+    const [first, ...rest] = text.split("\n");
+    lines.push(`${prefix} ${first}`);
+    for (const line of rest) lines.push(`  ${line}`);
   }
   const toolCalls = msg.toolCalls ?? msg.tool_calls ?? [];
   for (const tc of toolCalls) {
@@ -65,19 +67,19 @@ function formatRole(role: string, msg: ConvoMessage): string {
 }
 
 // Content can be a string, null, or (for some providers) a structured
-// array of content parts. Normalize to a single short string.
-function stringifyContent(content: unknown): string | undefined {
+// array of content parts. Text is shown as written, newlines included;
+// anything else is shown as JSON.
+function contentText(content: unknown): string | undefined {
   if (content === null || content === undefined) return undefined;
-  if (typeof content === "string") return JSON.stringify(content);
+  if (typeof content === "string") return content;
   if (Array.isArray(content)) {
     const parts = content
       .map((p) => contentPartText(p))
       .filter((s): s is string => s !== undefined);
-    // A multimodal content-parts array yields text parts. A plain data
-    // array (e.g. a tool result like [0,1,1,2,3]) yields none — render
-    // the whole value as JSON rather than showing nothing.
+    // A plain data array (e.g. a tool result like [0,1,1,2,3]) has no
+    // text parts; show the whole value rather than nothing.
     if (parts.length === 0) return JSON.stringify(content);
-    return JSON.stringify(parts.join(" "));
+    return parts.join(" ");
   }
   return JSON.stringify(content);
 }

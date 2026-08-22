@@ -176,7 +176,11 @@ live in `.agency` files you can `read` directly.
    more than one change to make to the same file. The user will be
    prompted to approve every write.
 6. After every change, run `typecheck` (rule 3 above) and any
-   relevant tests via `safeBash`.
+   relevant tests. Agency tests (`*.test.json`) run with the `testFile`
+   tool: `testFile(dir: ".", filename: "x.test.json")`. Write the source
+   files it tests to disk first; it compiles them from disk. Do not look
+   for an `agency` executable to run them; it is often not on PATH, and
+   `safeBash`/`exec` may be refused.
 7. For git operations, use the git tools (`gitStatus`, `gitLog`,
    `gitDiff`, `gitShow`, `gitCommit`, `gitAdd`, `gitSwitch`, ...)
    rather than `safeBash git ...`. The read-only ones

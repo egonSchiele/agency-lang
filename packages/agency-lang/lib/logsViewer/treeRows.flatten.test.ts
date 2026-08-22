@@ -70,7 +70,7 @@ describe("llmCall span flatten", () => {
       ]),
     );
     const convos = convoSummaries(rows);
-    expect(convos).toEqual(['[user] "hello"', '[assistant] "hi there"']);
+    expect(convos).toEqual(["[user] hello", "[assistant] hi there"]);
     // No toolExecution row, but a raw-data toggle should be present.
     expect(rows.some((r) => r.node.nodeKind === "rawDataToggle")).toBe(true);
     // The intermediate promptCompletion leaf is absorbed (not shown).
@@ -136,10 +136,10 @@ describe("llmCall span flatten", () => {
     // Conversation appears once, in order, with no duplication.
     const convos = convoSummaries(rows);
     expect(convos).toEqual([
-      '[user] "Get the area of France"',
+      "[user] Get the area of France",
       '[assistant] tool call: getArea({"country":"France"})',
-      '[tool: getArea] "551695"',
-      '[assistant] "The area of France is 551,695 km²"',
+      "[tool: getArea] 551695",
+      "[assistant] The area of France is 551,695 km²",
     ]);
 
     // The toolExecution span is spliced between the assistant tool-call
@@ -152,11 +152,11 @@ describe("llmCall span flatten", () => {
       )
       .map((r) => (r.node.nodeKind === "span" ? "toolExecution" : stripAnsi(r.node.summary)));
     expect(kinds).toEqual([
-      '[user] "Get the area of France"',
+      "[user] Get the area of France",
       '[assistant] tool call: getArea({"country":"France"})',
       "toolExecution",
-      '[tool: getArea] "551695"',
-      '[assistant] "The area of France is 551,695 km²"',
+      "[tool: getArea] 551695",
+      "[assistant] The area of France is 551,695 km²",
     ]);
 
     // Exactly one llmCall span node at the top level (no sibling rounds).
@@ -297,9 +297,9 @@ describe("llmCall span flatten", () => {
     );
     const convos = convoSummaries(rows);
     // Outer conversation + the nested call's own conversation both show.
-    expect(convos).toContain('[user] "outer"');
-    expect(convos).toContain('[user] "What is the area?"');
-    expect(convos).toContain('[assistant] "about 551,695"');
-    expect(convos).toContain('[assistant] "final"');
+    expect(convos).toContain("[user] outer");
+    expect(convos).toContain("[user] What is the area?");
+    expect(convos).toContain("[assistant] about 551,695");
+    expect(convos).toContain("[assistant] final");
   });
 });

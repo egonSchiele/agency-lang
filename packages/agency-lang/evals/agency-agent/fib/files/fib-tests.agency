@@ -1,7 +1,5 @@
-// Visible tests for the fib coding eval: plain import-and-assert nodes.
-// The eval framework runs this pair through std::agency's testFile() inside
-// the reject-all sandbox wrapper; the agent self-checks with
-// `agency test fib-tests.test.json`.
+// Visible tests for the fib coding eval. The framework grades with
+// `agency test --agency-only --reject '*'`; the agent can run the same file.
 import { fib } from "./fib.agency"
 
 export node base0(): number {

@@ -50,7 +50,8 @@ import type { RemoteCommandContext } from "@/cli/remote/commands/util.js";
 import { lintSource } from "@/linter/registry.js";
 import { formatFindings } from "@/cli/lint.js";
 import { resolveBudget } from "@/cli/budget.js";
-import { fixtures, test, testTs, SlowTest, parseShardSpec, TestRunOptions } from "@/cli/test.js";
+import { fixtures, test, testTs, parseShardSpec, TestRunOptions } from "@/cli/test.js";
+import { caseTimings, failedFiles } from "@/cli/testReport.js";
 import { humanOutput, jsonOutput, type TestOutput } from "@/cli/testOutput.js";
 import { generateReport, cleanCoverage } from "@/cli/coverage.js";
 import { createBundle, extractBundle } from "@/cli/bundle.js";
@@ -1141,7 +1142,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
   }
 
   function printSlowestTests(
-    slowTests: SlowTest[],
+    slowTests: { name: string; durationMs: number }[],
     output: TestOutput = humanOutput(),
     count: number = 10,
   ): void {
@@ -1229,7 +1230,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
           );
           process.exit(2);
         }
-        let runOptions: TestRunOptions = {};
+        let runOptions: TestRunOptions = { output };
         try {
           runOptions = {
             policy:
@@ -1259,41 +1260,40 @@ export function createProgram(deps: CliDependencies = {}): Command {
         }
         const shard = opts.shard ? parseShardSpec(opts.shard) : undefined;
         const parallel = opts.parallel ?? config.test?.parallel ?? 1;
-        const totals = await test(config, testFile, parallel, shard, runOptions);
-        const totalFiles = totals.filesPassed + totals.filesFailed;
-        const totalTests = totals.passed + totals.failed;
+        const report = await test(config, testFile, parallel, shard, runOptions);
+        const totalFiles = report.files.length;
+        const totalTests = report.passed + report.failed;
         if (totalFiles > 0) {
           const filesStatus = [
-            totals.filesFailed > 0 ? `${totals.filesFailed} failed` : "",
-            `${totals.filesPassed} passed`,
+            report.filesFailed > 0 ? `${report.filesFailed} failed` : "",
+            `${totalFiles - report.filesFailed} passed`,
           ]
             .filter(Boolean)
             .join(" | ");
           const testsStatus = [
-            totals.failed > 0 ? `${totals.failed} failed` : "",
-            `${totals.passed} passed`,
+            report.failed > 0 ? `${report.failed} failed` : "",
+            `${report.passed} passed`,
           ]
             .filter(Boolean)
             .join(" | ");
-          if (totals.failedFiles.length > 0) {
+          const failing = failedFiles(report);
+          if (failing.length > 0) {
             output.line("");
-            for (const file of totals.failedFiles) {
+            for (const file of failing) {
               output.line(color.red(` FAIL  ${file}`));
             }
           }
-          const colorFn = totals.failed > 0 ? color.red : color.green;
+          const colorFn = report.filesFailed > 0 ? color.red : color.green;
           output.line(colorFn(`\n Test Files  ${filesStatus} (${totalFiles})`));
           output.line(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
         }
-        printSlowestTests(totals.slowTests, output);
-        output.document(totals.report);
+        printSlowestTests(caseTimings(report), output);
+        output.document(report);
         if (opts.coverage && !opts.collectOnly) {
           const reportTargets = testFile.length > 0 ? testFile : ["."];
           await generateReport(config, reportTargets);
         }
-        // A file that never ran its cases (malformed json, a refused
-        // --agency-only compile) may leave `failed` at zero.
-        if (totals.failed > 0 || totals.filesFailed > 0) {
+        if (report.filesFailed > 0) {
           process.exit(1);
         }
       },

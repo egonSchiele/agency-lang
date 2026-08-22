@@ -1,5 +1,5 @@
 {
-  "description": "Basic coding: write a Fibonacci function in Agency. Graded by the framework agency-test grader, which runs the sibling test harnesses through the std::agency sandbox with every effect rejected; holdout/ carries tests the agent never sees.",
+  "description": "Basic coding: write a Fibonacci function in Agency. Graded by running the harness pairs in files/ and holdout/ with agency test --agency-only --reject *; the agent never sees holdout/.",
   "tags": [
     "coding",
     "easy"

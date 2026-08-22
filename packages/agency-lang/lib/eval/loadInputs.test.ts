@@ -167,7 +167,7 @@ describe("eval run input loading", () => {
       ["fib-tests", "visible"],
       ["fib-holdout", "holdout"],
     ]);
-    expect(test.agencyTests?.[1].harnessAgency).toBe(
+    expect(test.agencyTests?.[1].agencyFile).toBe(
       path.join(testDir, "holdout", "fib-holdout.agency"),
     );
   });

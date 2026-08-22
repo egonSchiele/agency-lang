@@ -4,8 +4,8 @@
 // precompile pass ends the command before any document (exit 1, nothing on
 // stdout), while under --agency-only the same file is a `compile-failed`
 // entry in the document; and --coverage is refused alongside --json.
-import { execFileSync } from "child_process";
-import { unlinkSync, writeFileSync } from "fs";
+import { execFileSync, spawn } from "child_process";
+import { existsSync, rmSync, unlinkSync, writeFileSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 
@@ -60,6 +60,28 @@ const b = summarize(brokenAgencyOnly);
 
 const withCoverage = agencyTest(["--coverage", "one.test.json"]);
 
+// A suite abort keeps every file and case in the document. slow.agency
+// spins forever; Ctrl+C arrives once the runner is past its precompile
+// (slow.js exists), so two.test.json never starts.
+async function abortedRun() {
+  rmSync(resolve(here, "slow.js"), { force: true });
+  const child = spawn(
+    process.execPath,
+    [cli, "test", "run", "--json", "-p", "1", "slow.test.json", "two.test.json"],
+    { cwd: here, stdio: ["ignore", "pipe", "pipe"] },
+  );
+  let stdout = "";
+  child.stdout.on("data", (d) => (stdout += d));
+  child.stderr.on("data", () => {});
+  const exitCode = new Promise((done) => child.on("exit", (code) => done(code)));
+  while (!existsSync(resolve(here, "slow.js"))) await new Promise((r) => setTimeout(r, 100));
+  await new Promise((r) => setTimeout(r, 500));
+  child.kill("SIGINT");
+  return { exitCode: await exitCode, stdout };
+}
+const aborted = await abortedRun();
+const a = summarize(aborted);
+
 writeFileSync(
   "__result.json",
   JSON.stringify(
@@ -98,6 +120,13 @@ writeFileSync(
         exitCode: withCoverage.exitCode,
         stdoutEmpty: withCoverage.stdout.trim() === "",
         refusedOnStderr: withCoverage.stderr.includes("--collect-only"),
+      },
+      aborted: {
+        exitCode: aborted.exitCode,
+        stdoutLines: a.lines.length,
+        fileStatuses: a.doc?.files?.map((f) => f.status) ?? null,
+        slowCaseStatuses: a.doc?.files?.[0]?.cases?.map((c) => c.status) ?? null,
+        filesFailed: a.doc?.filesFailed ?? null,
       },
     },
     null,

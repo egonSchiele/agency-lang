@@ -16,8 +16,8 @@ function pair(dir: string, name: string, json = JSON_OK, agency = AGENCY): Agenc
   return {
     name,
     visibility: "visible",
-    harnessJson: path.join(dir, `${name}.test.json`),
-    harnessAgency: path.join(dir, `${name}.agency`),
+    testJsonFile: path.join(dir, `${name}.test.json`),
+    agencyFile: path.join(dir, `${name}.agency`),
   };
 }
 

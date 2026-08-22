@@ -1,0 +1,6 @@
+{
+  "tests": [
+    { "nodeName": "spin", "expectedOutput": "1", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "spin", "expectedOutput": "2", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

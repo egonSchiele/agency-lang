@@ -11,7 +11,7 @@ import { resolveBudget } from "./budget.js";
 import { stageConfiguredAgent } from "./stageConfiguredAgent.js";
 import { compiledOutputNodeArgs } from "./commands.js";
 import { compile } from "@/compiler/defaultSession.js";
-import { AGENCY_MAX_COST, AGENCY_MAX_TIME } from "@/constants.js";
+import { withRootCarriers } from "./childEnv.js";
 import { spawn as realSpawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
@@ -232,7 +232,7 @@ export function runBundledAgent(
     return;
   }
 
-  const env = { ...process.env };
+  const env = withRootCarriers(process.env, { budget });
   // Inherited overrides matter: an eval harness hands this process its
   // statelog path via this env var, and flags must layer on top, not
   // replace it. The code identity goes on last: it names the agent that is
@@ -252,12 +252,6 @@ export function runBundledAgent(
   if (launchArgs.agentHome !== null) {
     env.AGENCY_AGENT_HOME = launchArgs.agentHome;
   }
-  // Root budget carrier: cleared-then-set like AGENCY_RUN_POLICY, so a
-  // stale value from the parent shell never constrains the agent.
-  delete env[AGENCY_MAX_COST];
-  delete env[AGENCY_MAX_TIME];
-  if (budget.maxCost !== undefined) env[AGENCY_MAX_COST] = budget.maxCost;
-  if (budget.maxTime !== undefined) env[AGENCY_MAX_TIME] = budget.maxTime;
 
   // Cleanup ownership: staging owns it until spawn succeeds, then the
   // child's handlers own it. A synchronous spawn throw cleans up here.

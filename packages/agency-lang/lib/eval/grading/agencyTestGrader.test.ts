@@ -53,7 +53,7 @@ describe("AgencyTestGrader (stubbed CLI)", () => {
       ]),
     });
     const grader = new AgencyTestGrader(
-      { name: "suite", harnessAgency: pair.agency, harnessJson: pair.json },
+      { name: "suite", agencyFile: pair.agency, testJsonFile: pair.json },
       stub,
     );
     expect(grader.revision).toMatch(/^agency-tests\/suite@[0-9a-f]{64}$/);
@@ -71,7 +71,7 @@ describe("AgencyTestGrader (stubbed CLI)", () => {
       return { stdout: ran([{ node: "t", status: "passed", durationMs: 1 }]) };
     };
     const grader = new AgencyTestGrader(
-      { name: "suite", harnessAgency: pair.agency, harnessJson: pair.json },
+      { name: "suite", agencyFile: pair.agency, testJsonFile: pair.json },
       stub,
     );
     const workdir = workdirWith({ "suite.test.json": '{"tests": []}', "suite.agency": "tampered" });
@@ -90,7 +90,7 @@ describe("AgencyTestGrader (stubbed CLI)", () => {
       return { stdout: ran([]) };
     };
     await new AgencyTestGrader(
-      { name: "suite", harnessAgency: pair.agency, harnessJson: pair.json },
+      { name: "suite", agencyFile: pair.agency, testJsonFile: pair.json },
       stub,
     ).run(input(workdir));
     expect(entries).toContain("real.txt");
@@ -112,7 +112,7 @@ describe("AgencyTestGrader (stubbed CLI)", () => {
     );
     const make = (stdout: string) =>
       new AgencyTestGrader(
-        { name: "suite", harnessAgency: pair.agency, harnessJson: pair.json },
+        { name: "suite", agencyFile: pair.agency, testJsonFile: pair.json },
         () => ({ stdout }),
       );
     const none = await make(ran([])).run(input(""));

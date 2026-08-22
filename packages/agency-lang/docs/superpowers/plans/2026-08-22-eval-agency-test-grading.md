@@ -1,5 +1,13 @@
 # Eval grading of Agency coding tests: implementation plan (v2)
 
+Post-review (PR #882) the implementation departs from Tasks 1–3 in three
+ways: the env carriers have one owner, `withRootCarriers` in
+`lib/cli/childEnv.ts`, used by `run`, `agent`, and the test runner (no
+`testChildEnv.ts`); `--agency-only` writes sibling `.js` files like a normal
+compile (`compileAgencyOnly` in `lib/compiler/compileSandboxed.ts`, no temp
+directory, no `agencyOnlyCompile.ts`); and the runner returns the report
+only, with counts, the failed-file list, and timings derived from it.
+
 v2 addresses the review in
 `docs/superpowers/plans/2026-08-22-eval-agency-test-grading-REVIEW.md`:
 Task 3 now changes the per-case outcome contract and routes every line of
@@ -134,7 +142,7 @@ Background: `foldIntoRunDirectory` in `runSuite.ts` calls `recordCompletedRun({ 
 
 **Files:** `lib/eval/grading/agencyTestGrader.ts` (rewrite), `agencyTestGrader.test.ts`, `agencyTestGrader.spawn.test.ts`, `lib/eval/public.ts` (export unchanged).
 
-- [ ] Options: `{ name, harnessAgency, harnessJson, maxCost?: number }` where the two paths are absolute (the loader resolves them; the grader never resolves against cwd). Drop `externalFiles`/`rebindExternalFile`: binding is the loader's job now (Task 8).
+- [ ] Options: `{ name, agencyFile, testJsonFile, maxCost?: number }` where the two paths are absolute (the loader resolves them; the grader never resolves against cwd). Drop `externalFiles`/`rebindExternalFile`: binding is the loader's job now (Task 8).
 - [ ] `_run`: steps 1–8 of the spec. The workdir copy uses `cpSync` with a `filter` that returns false for anything whose `lstat` is a symbolic link; one comment says why (no link support, by rule). Default `maxCost` 5 when the option is absent. The spawn seam stays injectable (`RunWrapper`-style) so unit tests stub it; the spawn test drives the real CLI. Parse stdout with the `testReport` zod schema from Task 3; on failure, feedback = "agency test produced no report" + stderr tail.
 - [ ] `revision` = `agency-tests/<name>@<sha256>` where the sha is computed from the two files' contents (same rule as Task 6, shared helper in `harnessSnapshot.ts`).
 - [ ] Unit tests (stubbed spawn): all pass → 1; one of two fails → 0.5 with feedback naming the node; file `compile-failed` → 0 with the error; no workdir → 0 with "no workdir"; the agent's copy of the harness json in the workdir is overwritten (the stub asserts on the bytes it is handed); a symlink at the harness destination is replaced, not followed (assert the link target is untouched).

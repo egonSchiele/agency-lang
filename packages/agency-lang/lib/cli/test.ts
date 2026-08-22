@@ -41,9 +41,7 @@ import {
 } from "../testFormat/schema.js";
 import { exactVerdict } from "../testFormat/verdict.js";
 import type { ResolvedRunPolicy } from "./runPolicy.js";
-import { testChildEnv } from "./testChildEnv.js";
-import { compileAgencyOnly } from "./agencyOnlyCompile.js";
-import { removeCompiledScriptDir } from "../runtime/ipc.js";
+import { compileAgencyOnly } from "@/compiler/compileSandboxed.js";
 import {
   buildTestReport,
   fileFailureReport,
@@ -416,66 +414,14 @@ export async function fixtures(config: AgencyConfig, target?: string) {
   console.log(`Test case saved to ${testFilePath}`);
 }
 
-export type SlowTest = {
-  name: string;
-  durationMs: number;
-};
-
-/** What the `agency test` command line asked for beyond the file list.
- *  Threaded as one object from `test()` down to each case's subprocess. */
+/** What the `agency test` command line asked for beyond the file list. */
 export type TestRunOptions = {
-  /** Root interrupt policy for every case's child (`--policy/--approve/--reject`). */
   policy?: ResolvedRunPolicy;
-  /** Root budget, in `resolveBudget`'s string shape (`--max-cost/--max-time`). */
   budget?: { maxCost?: string; maxTime?: string };
-  /** `--agency-only`: compile each tested file through the closure validator
-   *  (no TS/JS, Node built-ins, pkg::, splices, or symlinks in its imports). */
+  /** Compile each tested file through the closure validator. */
   agencyOnly?: boolean;
-  /** Where every human-readable line goes (`--json` sends them to stderr). */
-  output?: TestOutput;
+  output: TestOutput;
 };
-
-/** What `test()` hands back: the totals the CLI summarizes, plus the
- *  per-case report `--json` prints. */
-export type TestRunResult = TestStats & { report: TestReport };
-
-/** One file's run: its contribution to the totals and its report entry. */
-type FileResult = { stats: TestStats; report: TestFileReport };
-
-/** One test file's run: the command-line options plus, under
- *  `--agency-only`, the script the file was compiled to. */
-type FileRun = { options: TestRunOptions; compiledPath?: string };
-
-export type TestStats = {
-  passed: number;
-  failed: number;
-  filesPassed: number;
-  filesFailed: number;
-  failedFiles: string[];
-  slowTests: SlowTest[];
-};
-
-function emptyStats(): TestStats {
-  return {
-    passed: 0,
-    failed: 0,
-    filesPassed: 0,
-    filesFailed: 0,
-    failedFiles: [],
-    slowTests: [],
-  };
-}
-
-export function mergeStats(a: TestStats, b: TestStats): TestStats {
-  return {
-    passed: a.passed + b.passed,
-    failed: a.failed + b.failed,
-    filesPassed: a.filesPassed + b.filesPassed,
-    filesFailed: a.filesFailed + b.filesFailed,
-    failedFiles: [...a.failedFiles, ...b.failedFiles],
-    slowTests: [...a.slowTests, ...b.slowTests],
-  };
-}
 
 type Logger = (msg: string, stream?: "stdout" | "stderr") => void;
 
@@ -586,10 +532,9 @@ async function runSingleTest(
   timeoutMs: number,
   signal: AbortSignal,
   log: Logger,
-  run: FileRun,
+  options: TestRunOptions,
 ): Promise<CaseOutcome> {
   const hasArgs = testCase.input !== undefined && testCase.input !== "";
-  const childEnv = testChildEnv(run.options);
   const relativeSourceFilePath = sourceFilePath;
   let result: { data: any; stdout: string; stderr: string };
   try {
@@ -612,9 +557,7 @@ async function runSingleTest(
       useTestLLMProvider: testCase.useTestLLMProvider,
       argv: testCase.argv,
       fetchMocks,
-      env: childEnv.set,
-      unsetEnv: childEnv.unset,
-      compiledPath: run.compiledPath,
+      rootCarriers: { policy: options.policy, budget: options.budget },
     });
     if (result.stdout) log(result.stdout.trimEnd());
     if (result.stderr) log(result.stderr.trimEnd(), "stderr");
@@ -648,11 +591,11 @@ async function runSingleTest(
       } else {
         log(color.red("  ✗ Exact match failed"));
         log(verdict.feedback);
-        // The report carries the same diff without terminal colors.
+        // The same diff without terminal colors, for the report.
         const plain = exactVerdict(result.data, testCase.expectedOutput, {
           rawStringFallback: true,
         });
-        feedback.push(plain.pass ? "Exact match failed" : plain.feedback);
+        if (!plain.pass) feedback.push(plain.feedback);
         testPassed = false;
       }
     } else if (criterion.type === "llmJudge") {
@@ -728,7 +671,7 @@ async function runTestWithRetries(
   timeoutMs: number,
   signal: AbortSignal,
   log: Logger,
-  run: FileRun,
+  options: TestRunOptions,
 ): Promise<CaseOutcome & { attempts: number }> {
   const maxAttempts = (testCase.retry ?? 0) + 1;
   let outcome: CaseOutcome = { status: "failed" };
@@ -747,7 +690,7 @@ async function runTestWithRetries(
         timeoutMs,
         signal,
         log,
-        run,
+        options,
       );
       if (outcome.status === "passed" || outcome.status === "aborted") break;
     } catch (e) {
@@ -821,7 +764,7 @@ async function runExpectedCompileError(
   testFile: string,
   suite: SuiteContext,
   log: (msg: string) => void,
-): Promise<FileResult> {
+): Promise<TestFileReport> {
   const expected = tests.expectedCompileError;
   // Absolute, because the child runs with cwd set to the fixture's
   // directory — a runner-relative path would no longer resolve there.
@@ -848,19 +791,9 @@ async function runExpectedCompileError(
       },
     ],
   });
-  const fail = (reason: string): FileResult => {
+  const fail = (reason: string): TestFileReport => {
     log(color.red(`  ✗ ${reason}`));
-    return {
-      stats: {
-        passed: 0,
-        failed: 1,
-        filesPassed: 0,
-        filesFailed: 1,
-        failedFiles: [testFile],
-        slowTests: [],
-      },
-      report: report("failed", reason),
-    };
+    return report("failed", reason);
   };
 
   // The precompile pass excludes these files on field PRESENCE, so a
@@ -902,10 +835,7 @@ async function runExpectedCompileError(
   if (!verdict.ok) return fail(verdict.reason);
 
   log(color.green(`  ✓ Compile failed as expected`));
-  return {
-    stats: { passed: 1, failed: 0, filesPassed: 1, filesFailed: 0, failedFiles: [], slowTests: [] },
-    report: report("passed"),
-  };
+  return report("passed");
 }
 
 async function runTestFile(
@@ -913,11 +843,9 @@ async function runTestFile(
   testFile: string,
   suite: SuiteContext,
   options: TestRunOptions,
-  output: TestOutput,
-): Promise<FileResult> {
-  const logger = createBufferedLogger(output);
+): Promise<TestFileReport> {
+  const logger = createBufferedLogger(options.output);
   const log = logger.log;
-  let agencyOnlyScript: string | undefined;
 
   suite.inFlight.add(testFile);
   suite.pending.delete(testFile);
@@ -939,7 +867,6 @@ async function runTestFile(
       config = { ...config, ...loadConfig(localConfigPath) };
     }
 
-    let passed = 0;
     const cases = Array.isArray(tests.tests) ? tests.tests : [];
     const total = cases.length;
     const sourceFile = resolveTestSourcePath(tests, testFile);
@@ -953,20 +880,10 @@ async function runTestFile(
       const reasonStr = tests.skipReason ? ` (${tests.skipReason})` : "";
       log(color.yellow(`  ⊘ Skipped${skipKind} ${total} test(s) in ${testFile}${reasonStr}`));
       return {
-        stats: {
-          passed: 0,
-          failed: 0,
-          filesPassed: 1,
-          filesFailed: 0,
-          failedFiles: [],
-          slowTests: [],
-        },
-        report: {
-          file: testFile,
-          sourceFile,
-          status: "skipped",
-          cases: cases.map((c) => ({ node: c.nodeName, status: "skipped", durationMs: 0 })),
-        },
+        file: testFile,
+        sourceFile,
+        status: "skipped",
+        cases: cases.map((c) => ({ node: c.nodeName, status: "skipped", durationMs: 0 })),
       };
     }
 
@@ -985,62 +902,45 @@ async function runTestFile(
       const error = `${testFile} has no 'tests' array and no 'expectedCompileError'`;
       log(color.red(`  ✗ ${error}`));
       suite.completed.push(testFile);
-      return {
-        stats: {
-          passed: 0,
-          failed: 1,
-          filesPassed: 0,
-          filesFailed: 1,
-          failedFiles: [testFile],
-          slowTests: [],
-        },
-        report: fileFailureReport({
-          file: testFile,
-          sourceFile,
-          status: "error",
-          error,
-          caseNodes: [],
-        }),
-      };
+      return fileFailureReport({
+        file: testFile,
+        sourceFile,
+        status: "error",
+        error,
+        caseNodes: [],
+      });
     }
 
-    // --agency-only: one validated compile per file. A refusal is this
-    // file's failure, reported like any other; the suite continues.
-    const fileRun: FileRun = { options };
+    // A refusal is this file's failure; the suite continues. The compiled
+    // sibling .js is what the cases run (preferCompiled).
     if (options.agencyOnly) {
       const compiled = compileAgencyOnly(sourceFile);
       if (!compiled.ok) {
         log(color.red(`  ✗ ${testFile}: agency-only compile refused`));
         for (const error of compiled.errors) log(color.red(`    ${error}`));
         suite.completed.push(testFile);
-        return {
-          stats: {
-            passed: 0,
-            failed: total,
-            filesPassed: 0,
-            filesFailed: 1,
-            failedFiles: [testFile],
-            slowTests: [],
-          },
-          report: fileFailureReport({
-            file: testFile,
-            sourceFile,
-            status: "compile-failed",
-            error: compiled.errors.join("\n"),
-            caseNodes: cases.map((c) => c.nodeName),
-          }),
-        };
+        return fileFailureReport({
+          file: testFile,
+          sourceFile,
+          status: "compile-failed",
+          error: compiled.errors.join("\n"),
+          caseNodes: cases.map((c) => c.nodeName),
+        });
       }
-      fileRun.compiledPath = compiled.scriptPath;
-      agencyOnlyScript = compiled.scriptPath;
     }
 
-    const loop = await runCases({ config, tests, cases, testFile, suite, log, fileRun });
-    passed = loop.passed;
-    const { skipped, slowTests, aborted, caseReports } = loop;
-
+    const { aborted, caseReports } = await runCases({
+      config,
+      tests,
+      cases,
+      testFile,
+      suite,
+      log,
+      options,
+    });
+    const passed = caseReports.filter((c) => c.status === "passed").length;
+    const skipped = caseReports.filter((c) => c.status === "skipped").length;
     const ran = total - skipped;
-    const failed = ran - passed;
     const skipMsg = skipped > 0 ? ` (${skipped} skipped)` : "";
     if (!aborted) {
       log(`\n${passed}/${ran} tests passed${skipMsg}`);
@@ -1048,40 +948,15 @@ async function runTestFile(
     } else {
       log(color.yellow(`\n  ⚠️  ${testFile} aborted (${passed}/${ran} tests passed before abort)`));
     }
-
-    return {
-      stats: {
-        passed,
-        failed,
-        filesPassed: failed === 0 ? 1 : 0,
-        filesFailed: failed === 0 ? 0 : 1,
-        failedFiles: failed > 0 ? [testFile] : [],
-        slowTests,
-      },
-      report: {
-        file: testFile,
-        sourceFile,
-        status: aborted ? "aborted" : "ran",
-        cases: caseReports,
-      },
-    };
+    return { file: testFile, sourceFile, status: aborted ? "aborted" : "ran", cases: caseReports };
   } finally {
     suite.inFlight.delete(testFile);
-    if (agencyOnlyScript !== undefined) removeCompiledScriptDir(agencyOnlyScript);
     logger.flush();
   }
 }
 
-/** What one file's case loop produced: counts, timings, and the report
- *  entries. The loop itself is here so `runTestFile` stays readable. */
-type CaseLoopResult = {
-  passed: number;
-  skipped: number;
-  aborted: boolean;
-  slowTests: SlowTest[];
-  caseReports: TestCaseReport[];
-};
-
+/** Run a file's cases in order. On a suite abort the remaining cases are
+ *  reported `aborted`, so every declared case has an entry. */
 async function runCases(args: {
   config: AgencyConfig;
   tests: Tests;
@@ -1089,13 +964,10 @@ async function runCases(args: {
   testFile: string;
   suite: SuiteContext;
   log: Logger;
-  fileRun: FileRun;
-}): Promise<CaseLoopResult> {
-  const { config, tests, cases, testFile, suite, log, fileRun } = args;
+  options: TestRunOptions;
+}): Promise<{ aborted: boolean; caseReports: TestCaseReport[] }> {
+  const { config, tests, cases, testFile, suite, log, options } = args;
   const total = cases.length;
-  let passed = 0;
-  let skipped = 0;
-  const slowTests: SlowTest[] = [];
   let aborted = false;
   const caseReports: TestCaseReport[] = [];
   const describeCase = (c: TestCase): Pick<TestCaseReport, "node" | "description" | "input"> => ({
@@ -1104,7 +976,8 @@ async function runCases(args: {
     ...(c.input === undefined || c.input === "" ? {} : { input: c.input }),
   });
 
-  for (let i = 0; i < total; i++) {
+  let i = 0;
+  for (; i < total; i++) {
     // Bail between test cases if the suite is aborting. The currently
     // in-flight execFile (if any) is killed via its AbortSignal.
     if (suite.aborted) {
@@ -1126,14 +999,12 @@ async function runCases(args: {
 
     if (testCase.skip) {
       log(color.yellow(`  ⊘ Skipped`));
-      skipped++;
       caseReports.push({ ...describeCase(testCase), status: "skipped", durationMs: 0 });
       continue;
     }
 
     if (testCase.skipOnCI && process.env.CI) {
       log(color.yellow(`  ⊘ Skipped on CI`));
-      skipped++;
       caseReports.push({ ...describeCase(testCase), status: "skipped", durationMs: 0 });
       continue;
     }
@@ -1147,7 +1018,6 @@ async function runCases(args: {
       testCase.evaluationCriteria.some((c) => c.type === "llmJudge")
     ) {
       log(color.yellow(`  ⊘ Skipped (LLM-as-judge requires real client)`));
-      skipped++;
       caseReports.push({ ...describeCase(testCase), status: "skipped", durationMs: 0 });
       continue;
     }
@@ -1169,13 +1039,14 @@ async function runCases(args: {
       timeoutMs,
       suite.abortController.signal,
       log,
-      fileRun,
+      options,
     );
     const durationMs = performance.now() - startTime;
 
     if (outcome.status === "aborted") {
       caseReports.push({ ...describeCase(testCase), status: "aborted", durationMs });
       aborted = true;
+      i++;
       break;
     }
     caseReports.push({
@@ -1185,15 +1056,11 @@ async function runCases(args: {
       durationMs,
       attempts: outcome.attempts,
     });
-
-    const testName = testCase.description
-      ? `${testFile} > ${testCase.nodeName} > ${testCase.description}`
-      : `${testFile} > ${testCase.nodeName}(${testCase.input || ""})`;
-    slowTests.push({ name: testName, durationMs });
-
-    if (outcome.status === "passed") passed++;
   }
-  return { passed, skipped, aborted, slowTests, caseReports };
+  for (const testCase of cases.slice(i)) {
+    caseReports.push({ ...describeCase(testCase), status: "aborted", durationMs: 0 });
+  }
+  return { aborted, caseReports };
 }
 
 // Print the suite-abort summary after the runner has drained.
@@ -1223,10 +1090,10 @@ export async function test(
   config: AgencyConfig,
   inputPaths: string[],
   parallel: number = 1,
-  shard?: Shard,
-  options: TestRunOptions = {},
-): Promise<TestRunResult> {
-  const output = options.output ?? humanOutput();
+  shard: Shard | undefined,
+  options: TestRunOptions,
+): Promise<TestReport> {
+  const output = options.output;
   const collected: string[] = [];
   for (const inputPath of inputPaths) {
     collected.push(...collectTestFiles(inputPath));
@@ -1250,9 +1117,8 @@ export async function test(
   // ran in this process and exited too).
   try {
     // --agency-only compiles each file itself, through the validator.
-    // Under --json the pass's progress lines would land on stdout: quiet.
     if (!options.agencyOnly) {
-      precompileTestSources(config, testFiles, { quiet: options.output !== undefined });
+      precompileTestSources(config, testFiles, { quiet: output.kind === "json" });
     }
   } catch (e) {
     if (e instanceof CompileClosureError) {
@@ -1283,32 +1149,23 @@ export async function test(
   };
   process.once("SIGINT", sigintHandler);
 
-  let results: (FileResult | undefined)[] = [];
+  const defaultSource = (testFile: string) => testFile.replace(/\.test\.json$/, ".agency");
+  let results: (TestFileReport | undefined)[] = [];
   try {
     results = await runWithConcurrency(
       testFiles,
       sanitizeParallel(parallel),
-      (testFile) => runTestFile(config, testFile, suite, options, output),
+      (testFile) => runTestFile(config, testFile, suite, options),
       (testFile, error) => {
         const message = `Test file error: ${testFile}: ${error}`;
         output.line(color.red(`  ✗ ${message}`), "stderr");
-        return {
-          stats: {
-            passed: 0,
-            failed: 1,
-            filesPassed: 0,
-            filesFailed: 1,
-            failedFiles: [testFile],
-            slowTests: [],
-          },
-          report: fileFailureReport({
-            file: testFile,
-            sourceFile: testFile.replace(/\.test\.json$/, ".agency"),
-            status: "error",
-            error: message,
-            caseNodes: [],
-          }),
-        };
+        return fileFailureReport({
+          file: testFile,
+          sourceFile: defaultSource(testFile),
+          status: "error",
+          error: message,
+          caseNodes: [],
+        });
       },
       () => suite.aborted,
     );
@@ -1317,17 +1174,18 @@ export async function test(
     process.removeListener("SIGINT", sigintHandler);
   }
 
-  let stats = emptyStats();
-  const fileReports: TestFileReport[] = [];
-  for (const result of results) {
-    if (result === undefined) continue;
-    stats = mergeStats(stats, result.stats);
-    fileReports.push(result.report);
-  }
-
+  // A file the abort kept from starting is still in the report.
+  const files = testFiles.map(
+    (testFile, i) =>
+      results[i] ?? {
+        file: testFile,
+        sourceFile: defaultSource(testFile),
+        status: "aborted" as const,
+        cases: [],
+      },
+  );
   if (suite.aborted) printSuiteAbortSummary(suite, output);
-
-  return { ...stats, report: buildTestReport(fileReports) };
+  return buildTestReport(files);
 }
 
 function findTsTestDirs(_inputPath: string): string[] {

@@ -560,15 +560,15 @@ export function parseReportEnvelope(text: string): ReportEnvelope;
 
 // agencyTestGrader.ts
 export type AgencyTestGraderOptions = {
-  harnessAgency: string;
-  harnessJson: string;
+  agencyFile: string;
+  testJsonFile: string;
   name: string;
   /** Framework-owned whole-batch limit. Omitted means no cost cap. */
   maxCost?: number | null;
 };
 export class AgencyTestGrader extends BaseGrader {
   constructor(opts: AgencyTestGraderOptions);
-  // externalFiles(): [harnessAgency, harnessJson]; rebindExternalFile per contract
+  // externalFiles(): [agencyFile, testJsonFile]; rebindExternalFile per contract
   // score: { kind: "scalar", value: passed/total }  ← "scalar", NOT "numeric"
   //   (lib/eval/grading/types.ts:26 — the only kinds are binary|scalar);
   // constructed with { mustPass: true, threshold: 1 }
@@ -579,7 +579,7 @@ export class AgencyTestGrader extends BaseGrader {
 
 In `awaitingJsonRead`, approve only `std::read` with exact `{ dir: scratchDir, filename: jsonFilename }`, then advance. In `awaitingSourceRead`, approve only `std::read` with exact `{ dir: scratchDir, filename: sourceFilename }`, then advance. No tested program has launched during either bootstrap phase, so phase + effect + exact payload is the authorization boundary; do not depend on an undocumented `origin` shape. In `runningTests`, approve initial `std::run` votes but reject every `std::read` (including scratch-local reads) and every other tested-code effect, naming the effect and phase. Unexpected, repeated, reordered, or wrong-payload reads are rejected without advancing. Call `_testFileForGrading(scratchDir, jsonFilename, maxCost)` inside the handler; then set `writingReport`, leave the handler, build the envelope, and write the report with a narrow inline approval. A per-case wall-clock failure remains `tested`; only whole-call failures such as cost exhaustion become `could-not-test`. Use one shared failure formatter: string failures verbatim; `limit_exceeded` rendered with limit, threshold, and used values.
 
-**Grader `_run`** (mechanics mirror `evals/agency-agent/fib/graders.ts`): no workdir → fail "run left no workdir". Scratch via `mkdtempSync` under `process.cwd()`. `fs.cpSync(workdir, scratch, { recursive: true })`—default `dereference: false`; comment: symlinks copy as links; confinement rejects escapes (spec v4 finding 2). Overwrite both harness files from `this.harnessPath(...)` (snapshot-rebound). Pass `path.basename(harnessAgency)` as the wrapper's expected source read; an inconsistent JSON `sourceFile` is therefore rejected at the second gate rather than widening authorization.
+**Grader `_run`** (mechanics mirror `evals/agency-agent/fib/graders.ts`): no workdir → fail "run left no workdir". Scratch via `mkdtempSync` under `process.cwd()`. `fs.cpSync(workdir, scratch, { recursive: true })`—default `dereference: false`; comment: symlinks copy as links; confinement rejects escapes (spec v4 finding 2). Overwrite both harness files from `this.harnessPath(...)` (snapshot-rebound). Pass `path.basename(agencyFile)` as the wrapper's expected source read; an inconsistent JSON `sourceFile` is therefore rejected at the second gate rather than widening authorization.
 
 ```ts
 execFileSync(process.execPath,
@@ -622,8 +622,8 @@ execFileSync(process.execPath,
 ```ts
 export type AgencyTestVisibility = "visible" | "holdout";
 export type AgencyTestDefinition = {
-  harnessJson: string;
-  harnessAgency: string;
+  testJsonFile: string;
+  agencyFile: string;
   name: string;
   visibility: AgencyTestVisibility;
 };
@@ -635,8 +635,8 @@ export type GraderRevision = {
 };
 
 export type HarnessPair = {
-  harnessAgency: string;
-  harnessJson: string;
+  agencyFile: string;
+  testJsonFile: string;
   name: string;
 };
 export type SynthesizedGradersModule = { moduleSource: string };
@@ -656,7 +656,7 @@ export function synthesizeGradersModule(
 //   import sibling from "<siblingGradersPath>";            // when present
 //   const siblingList = Array.isArray(sibling) ? sibling : [sibling];
 //   export default [...siblingList,
-//     new AgencyTestGrader({ harnessAgency: "...", harnessJson: "...", name: "fib-tests" }),
+//     new AgencyTestGrader({ agencyFile: "...", testJsonFile: "...", name: "fib-tests" }),
 //   ];
 
 // gradingModule.ts

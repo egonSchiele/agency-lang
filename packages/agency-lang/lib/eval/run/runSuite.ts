@@ -245,9 +245,8 @@ export async function runSuite(
  *  a test's own. */
 type TestGraders = GradersSnapshot & { origin: "test" | "config" };
 
-/** Everything a test's run directory keeps for grading it later: the
- *  grading module (its own or the config's), and the harness pairs the
- *  test directory ships. Either may be absent; both may be present. */
+/** What a run directory keeps for grading later: the grading module and/or
+ *  the harness pairs. */
 type TestSnapshots = { module?: TestGraders; harness?: HarnessSnapshot };
 
 /** The grading module each test will be graded with — its own, else the

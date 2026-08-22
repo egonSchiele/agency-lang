@@ -5,13 +5,12 @@ import type { InputBreakdown } from "./grading/gradeBreakdown.js";
  *  the runner's side of the line (--agent). Shared by the eval runner and
  *  every optimizer. */
 export type AgencyTestVisibility = "visible" | "holdout";
-/** One harness pair discovered in a test directory: `files/<name>.test.json`
- *  + `files/<name>.agency` (seeded, the agent sees it) or the same under
- *  `holdout/` (never seeded). Absolute paths. */
+/** A harness pair, `<name>.agency` + `<name>.test.json`, from the test's
+ *  `files/` (the agent sees it) or `holdout/` (it does not). Absolute paths. */
 export type AgencyTestDefinition = {
-  harnessJson: string;
-  harnessAgency: string;
   name: string;
+  agencyFile: string;
+  testJsonFile: string;
   visibility: AgencyTestVisibility;
 };
 

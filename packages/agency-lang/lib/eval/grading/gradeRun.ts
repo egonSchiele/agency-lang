@@ -137,8 +137,7 @@ async function effectiveGraders(
   cache: (modulePath: string) => Promise<BaseGrader[]>,
   runDir: string,
 ): Promise<BaseGrader[]> {
-  // Harness graders are the test's own, always: neither `--graders` nor
-  // `--goal` sets them aside.
+  // Harness graders are the test's own: --graders and --goal leave them.
   const harness = harnessGraders(entry, runDir);
   return [...(await moduleGraders(entry, ctx, cache, runDir)), ...harness];
 }
@@ -165,8 +164,7 @@ async function moduleGraders(
   return ctx.suiteGraders.graders;
 }
 
-/** One AgencyTestGrader per harness record, bound to the run directory's
- *  stored copy of the pair. */
+/** One grader per harness record, over the run directory's stored copy. */
 function harnessGraders(entry: Entry, runDir: string): BaseGrader[] {
   const gradersDir = runDirPaths(runDir).gradersDir;
   return (entry.harness ?? []).map((record) => {
@@ -179,8 +177,8 @@ function harnessGraders(entry: Entry, runDir: string): BaseGrader[] {
     }
     return new AgencyTestGrader({
       name: record.name,
-      harnessAgency: path.join(gradersDir, record.agency),
-      harnessJson: path.join(gradersDir, record.json),
+      agencyFile: path.join(gradersDir, record.agency),
+      testJsonFile: path.join(gradersDir, record.json),
       ...(record.maxCost === undefined ? {} : { maxCost: record.maxCost }),
     });
   });

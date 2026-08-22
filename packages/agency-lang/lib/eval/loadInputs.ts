@@ -158,12 +158,8 @@ function loadTestDir(testDir: string, makeId: MakeId, options: LoadOptions): Tes
   return test;
 }
 
-/** Directory-convention discovery: every *.test.json directly inside
- *  `files/` (seeded, visible to the agent) and `holdout/` (never seeded)
- *  becomes one harness, named by basename. Non-recursive by design — a
- *  nested .test.json is the agent's own business. Each json needs its
- *  sibling `.agency`; basenames must be unique across the union (they
- *  become grader names and score-row names). */
+/** Every `<name>.test.json` directly inside `files/` or `holdout/`, with its
+ *  sibling `<name>.agency`. Names must be unique: they become grader names. */
 function discoverAgencyTests(testDir: string): AgencyTestDefinition[] {
   const found: AgencyTestDefinition[] = [];
   const byName: Record<string, string> = Object.create(null);
@@ -176,23 +172,23 @@ function discoverAgencyTests(testDir: string): AgencyTestDefinition[] {
     if (!fs.existsSync(dir)) continue;
     for (const entry of fs.readdirSync(dir).sort()) {
       if (!entry.endsWith(".test.json")) continue;
-      const harnessJson = path.join(dir, entry);
+      const testJsonFile = path.join(dir, entry);
       const name = entry.replace(/\.test\.json$/, "");
-      const harnessAgency = path.join(dir, `${name}.agency`);
-      if (!fs.existsSync(harnessAgency)) {
+      const agencyFile = path.join(dir, `${name}.agency`);
+      if (!fs.existsSync(agencyFile)) {
         throw new Error(
-          `${harnessJson} has no sibling harness ${name}.agency — eval harnesses are ` +
+          `${testJsonFile} has no sibling harness ${name}.agency — eval harnesses are ` +
             `discovered as sibling pairs`,
         );
       }
       if (byName[name] !== undefined) {
         throw new Error(
-          `harness name '${name}' appears twice: ${byName[name]} and ${harnessJson}. ` +
+          `harness name '${name}' appears twice: ${byName[name]} and ${testJsonFile}. ` +
             `Basenames become grader names and must be unique across files/ and holdout/.`,
         );
       }
-      byName[name] = harnessJson;
-      found.push({ harnessJson, harnessAgency, name, visibility });
+      byName[name] = testJsonFile;
+      found.push({ testJsonFile, agencyFile, name, visibility });
     }
   }
   return found;

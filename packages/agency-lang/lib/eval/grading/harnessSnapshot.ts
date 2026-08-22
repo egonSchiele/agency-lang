@@ -1,12 +1,6 @@
-/**
- * What a run directory keeps of a test's harness pairs: both files of every
- * pair, named by content hash like judge files are, plus the `harness`
- * records the run row carries so `eval grade` can find them again.
- *
- * This is where a harness is preflighted. A malformed json, a field the
- * grading policy makes meaningless, or a json naming a file other than its
- * sibling all fail here, before any agent runs.
- */
+/** Copies a test's harness pairs into the run directory (content-hash
+ *  names, like judge files) and the `harness` records that point at them.
+ *  Each json is preflighted here, before any agent runs. */
 import * as fs from "fs";
 import * as path from "path";
 import type { HarnessRecord } from "@/runDirectory/annotations.js";
@@ -36,9 +30,9 @@ export function snapshotHarness(
     return name;
   };
   for (const def of defs) {
-    const jsonText = fs.readFileSync(def.harnessJson, "utf-8");
-    parseTestFileEvalHarness(jsonText, def.harnessJson, path.basename(def.harnessAgency));
-    const agencySource = fs.readFileSync(def.harnessAgency, "utf-8");
+    const jsonText = fs.readFileSync(def.testJsonFile, "utf-8");
+    parseTestFileEvalHarness(jsonText, def.testJsonFile, path.basename(def.agencyFile));
+    const agencySource = fs.readFileSync(def.agencyFile, "utf-8");
     records.push({
       name: def.name,
       visibility: def.visibility,

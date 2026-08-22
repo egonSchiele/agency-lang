@@ -53,8 +53,8 @@ describe("AgencyTestGrader through the real agency CLI", () => {
     const pair = pairDir();
     const grader = new AgencyTestGrader({
       name: "fib-tests",
-      harnessAgency: pair.agency,
-      harnessJson: pair.json,
+      agencyFile: pair.agency,
+      testJsonFile: pair.json,
     });
     const grade = await grader.run(input(workdirWith({ "fib.agency": GOOD })));
     expect(grade).toEqual({ score: { kind: "scalar", value: 1 } });
@@ -67,8 +67,8 @@ describe("AgencyTestGrader through the real agency CLI", () => {
       "export def fib(n: number): number {\n  if (n == 6) {\n    return 9\n  }\n  if (n < 2) {\n    return n\n  }\n  return fib(n - 1) + fib(n - 2)\n}\n";
     const grader = new AgencyTestGrader({
       name: "fib-tests",
-      harnessAgency: pair.agency,
-      harnessJson: pair.json,
+      agencyFile: pair.agency,
+      testJsonFile: pair.json,
     });
     const grade = await grader.run(input(workdirWith({ "fib.agency": wrong })));
     expect(grade.score).toEqual({ kind: "scalar", value: 0.5 });
@@ -79,8 +79,8 @@ describe("AgencyTestGrader through the real agency CLI", () => {
     const pair = pairDir();
     const grader = new AgencyTestGrader({
       name: "fib-tests",
-      harnessAgency: pair.agency,
-      harnessJson: pair.json,
+      agencyFile: pair.agency,
+      testJsonFile: pair.json,
     });
     const grade = await grader.run(
       input(workdirWith({ "fib.agency": `import fs from "fs"\n${GOOD}` })),
@@ -109,8 +109,8 @@ describe("AgencyTestGrader through the real agency CLI", () => {
     const workdir = workdirWith({ "fib.agency": writing });
     const grader = new AgencyTestGrader({
       name: "fib-tests",
-      harnessAgency: pair.agency,
-      harnessJson: pair.json,
+      agencyFile: pair.agency,
+      testJsonFile: pair.json,
     });
     const grade = await grader.run(input(workdir));
     // The rejected write is a failure value inside probe; probe still

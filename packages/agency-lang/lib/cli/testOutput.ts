@@ -1,16 +1,14 @@
-/**
- * Where the `agency test` command's output goes. Every human-readable line
- * the command prints passes through one of these, so that under `--json`
- * stdout can carry exactly one document and nothing else.
- */
+/** Where `agency test` prints. Under `--json`, stdout carries exactly one
+ *  document and every human line goes to stderr. */
 import type { TestReport } from "./testReport.js";
 
 export type OutputStream = "stdout" | "stderr";
 
 export type TestOutput = {
+  kind: "human" | "json";
   /** A human-readable line. Defaults to stdout. */
   line(msg: string, stream?: OutputStream): void;
-  /** The machine-readable document, once, at the end. A no-op in human mode. */
+  /** The document, once, at the end. A no-op in human mode. */
   document(report: TestReport): void;
 };
 
@@ -24,17 +22,17 @@ const processWriters: OutputWriters = {
   stderr: (text) => process.stderr.write(text),
 };
 
-/** Today's behavior: lines go where they were asked to; no document. */
 export function humanOutput(writers: OutputWriters = processWriters): TestOutput {
   return {
+    kind: "human",
     line: (msg, stream = "stdout") => writers[stream](`${msg}\n`),
     document: () => {},
   };
 }
 
-/** `--json`: every line goes to stderr; stdout receives the document only. */
 export function jsonOutput(writers: OutputWriters = processWriters): TestOutput {
   return {
+    kind: "json",
     line: (msg) => writers.stderr(`${msg}\n`),
     document: (report) => writers.stdout(`${JSON.stringify(report)}\n`),
   };

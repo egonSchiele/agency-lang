@@ -117,12 +117,10 @@ a `process.exit`, because "the agent's code does not compile" is a normal
 grading outcome (this is the rule `docs/dev/eval-grading.md` already
 states for the old `graders.ts`).
 
-The compiled output (entry code, plus every non-entry module and the
-entry's relative path, from `CompileResult.modules` / `entryPath`) is
-written into a per-file scratch directory under the project's `.agency-tmp/`
-with the same relative layout, using `materializeCompiledScript`
-(`lib/runtime/ipc.ts`), and the evaluate script imports the entry from
-there. The precompile pass and `preferCompiled` are bypassed for the file.
+The compiled output (entry code, plus every non-entry module from
+`CompileResult.modules`) is written beside the sources as `<name>.js`, the
+same layout a normal compile produces, and the cases run it through the
+existing `preferCompiled` path. The precompile pass is skipped for the file.
 
 The same flag goes on `agency run`: its one compile call
 (`lib/cli/commands.ts:282`) is replaced by the same helper when the flag is
@@ -173,7 +171,7 @@ stdout.
   "passed": 1,
   "failed": 1,
   "skipped": 0,
-  "filesFailed": 0
+  "filesFailed": 2
 }
 ```
 

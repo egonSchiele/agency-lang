@@ -214,8 +214,8 @@ describe("harness graders from the run row", () => {
         {
           name: "h",
           visibility: "holdout",
-          harnessAgency: path.join(dir, "h.agency"),
-          harnessJson: path.join(dir, "h.test.json"),
+          agencyFile: path.join(dir, "h.agency"),
+          testJsonFile: path.join(dir, "h.test.json"),
         },
       ],
       3,

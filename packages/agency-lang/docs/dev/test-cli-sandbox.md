@@ -6,9 +6,9 @@ harness run code it does not trust: an agent's solution in an eval, or any
 
 | Flag | What it guarantees | Where it lives |
 |---|---|---|
-| `--policy <name\|path>`, `--approve <effects>`, `--reject <effects>` | A root interrupt handler the caller chose, installed before the entry node's body runs. A reject from it wins over the tested code's own `with approve`. | `lib/cli/testChildEnv.ts` (test runner), `lib/cli/commands.ts` (`run`); the runtime installs it in `lib/runtime/node.ts` (`installRunPolicyHandler`) from `AGENCY_RUN_POLICY` |
+| `--policy <name\|path>`, `--approve <effects>`, `--reject <effects>` | A root interrupt handler the caller chose, installed before the entry node's body runs. A reject from it wins over the tested code's own `with approve`. | `lib/cli/childEnv.ts` (every CLI spawner); the runtime installs it in `lib/runtime/node.ts` (`installRunPolicyHandler`) from `AGENCY_RUN_POLICY` |
 | `--max-cost <dollars>`, `--max-time <duration>` | The root budget, per process (so per test case). `llm()` is not an interrupt; this is what bounds it. | same files; `AGENCY_MAX_COST` / `AGENCY_MAX_TIME`, `installRootBudget` |
-| `--agency-only` | The import closure is Agency source plus `std::` and nothing else: no TypeScript/JavaScript, Node built-ins, `pkg::` packages, compile-time splices, absolute imports, or symlinks. Compiled from a private mirror of the validated bytes. | `lib/cli/agencyOnlyCompile.ts` over `lib/compiler/compileSandboxed.ts` (#878) |
+| `--agency-only` | The import closure is Agency source plus `std::` and nothing else: no TypeScript/JavaScript, Node built-ins, `pkg::` packages, compile-time splices, absolute imports, or symlinks. Compiled from a private mirror of the validated bytes and written beside the sources as `<name>.js`, like a normal compile. | `compileAgencyOnly` in `lib/compiler/compileSandboxed.ts` (#878) |
 | `--json` (test only) | Exactly one JSON document on stdout (`lib/cli/testReport.ts`, version 1); every human line on stderr (`lib/cli/testOutput.ts`). | `lib/cli/test.ts` |
 
 `--reject '*'` is a reject-everything policy: the policy's catch-all key is
@@ -35,12 +35,14 @@ under each name it is given.
 
 ## Environment discipline
 
-Both carriers are internal: the four variables (`AGENCY_RUN_POLICY`,
-`AGENCY_RUN_POLICY_INTERACTIVE`, `AGENCY_MAX_COST`, `AGENCY_MAX_TIME`) are
-deleted from the child's inherited environment and set again only from this
-invocation's flags (`testChildEnv`, the same clear-then-set rule `run` uses).
-A test run's behavior is decided by its own command line, never by an outer
-`agency run --policy` that happened to spawn it.
+The policy and budget reach the child as env vars (`AGENCY_RUN_POLICY`,
+`AGENCY_RUN_POLICY_INTERACTIVE`, `AGENCY_MAX_COST`, `AGENCY_MAX_TIME`),
+read by `installRunPolicyHandler` and `rootBudget` in the runtime. One
+function writes them: `withRootCarriers` in `lib/cli/childEnv.ts`, used by
+`agency run`, `agency agent`, and the test runner. It deletes all four from
+the inherited environment and sets only what this invocation's flags
+resolved, so a child's behavior never comes from a parent shell or an outer
+`agency run --policy`.
 
 ## Two things that are easy to get wrong
 
@@ -63,6 +65,10 @@ A test run's behavior is decided by its own command line, never by an outer
   a separate change.
 - `--json` refuses `--coverage` unless `--collect-only` is also given: the
   coverage report prints to stdout, which `--json` reserves for the document.
+- A suite abort (Ctrl+C, the 30-minute ceiling) keeps every file and case
+  in the document: files that never started are `aborted` with no cases,
+  unrun cases in the interrupted file are `aborted`, and an aborted file
+  counts in `filesFailed`, so the command exits 1.
 
 Tests: `tests/agency-js/test-cli-policy`, `test-cli-agency-only`,
 `test-cli-json` (each with a positive control), and the unit suites beside

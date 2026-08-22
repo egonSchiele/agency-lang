@@ -292,10 +292,8 @@ export function parseTestFileFull(jsonText: string, jsonFilename: string): FullT
 }
 
 // ---------------------------------------------------------------------------
-// Eval harness profile — a full-profile file that the eval framework will run
-// with `agency test --agency-only --reject '*'`. Fields that cannot mean
-// anything under that policy, or that make a harness grade nothing, are
-// refused by name before any agent runs.
+// Eval harness profile: the full profile minus fields that mean nothing
+// under `agency test --agency-only --reject '*'`.
 // ---------------------------------------------------------------------------
 
 const EVAL_HARNESS_REFUSED_FILE_FIELDS = [
@@ -317,10 +315,7 @@ const EVAL_HARNESS_REFUSED_CASE_FIELDS = [
   "skipReason",
 ] as const;
 
-/** Parse a harness `.test.json` for eval grading: the full profile, then
- *  the eval refusals. `siblingAgencyBasename` is the harness source the
- *  json must test (a json naming another file would test something other
- *  than its pair). */
+/** `siblingAgencyBasename`: the json must test its own pair. */
 export function parseTestFileEvalHarness(
   jsonText: string,
   jsonFilename: string,
@@ -338,8 +333,7 @@ export function parseTestFileEvalHarness(
       `declares sourceFile ${JSON.stringify(file.sourceFile)}, but an eval harness tests its sibling ${siblingAgencyBasename}`,
     );
   }
-  // An empty harness would grade every submission as perfect (a file that
-  // ran with nothing to fail scores 1), so it must test something.
+  // An empty harness would grade every submission as perfect.
   const cases = file.tests ?? [];
   if (cases.length === 0) refuse("an eval harness must have a non-empty tests array");
   cases.forEach((testCase, i) => {

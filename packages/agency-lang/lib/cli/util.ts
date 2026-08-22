@@ -23,7 +23,7 @@ import { parseAgency } from "@/parser.js";
 import type { LLMMock, ScopedLLMMocks } from "../runtime/deterministicClient.js";
 import type { FetchMock } from "../runtime/fetchMock.js";
 import { writeFetchMocksTempFile } from "./fetchMockResolve.js";
-import { childEnvironment } from "./testChildEnv.js";
+import { withRootCarriers, type RootCarriers } from "./childEnv.js";
 export async function promptForTarget(): Promise<{
   filename: string;
   nodeName: string;
@@ -211,14 +211,9 @@ type ExecuteNodeArgs = {
   // Set solely by the test runner (lib/cli/test.ts); every other caller
   // omits it, so it defaults to deny.
   allowTestImports?: boolean;
-  /** Extra env merged over process.env for the spawned subprocess, after
-   *  `unsetEnv` is applied. See RunAgencyNodeArgs. */
+  /** Extra env merged over process.env for the spawned subprocess. */
   env?: Record<string, string>;
-  /** Keys removed from the inherited environment before `env` is applied. */
-  unsetEnv?: string[];
-  /** The caller already compiled this file (e.g. `--agency-only`); run that
-   *  script instead of compiling or looking for a sibling. */
-  compiledPath?: string;
+  rootCarriers?: RootCarriers;
 };
 
 export type RunAgencyNodeArgs = {
@@ -236,13 +231,8 @@ export type RunAgencyNodeArgs = {
   quietCompile?: boolean;
   /** Extra env merged over process.env for the spawned subprocess. */
   env?: Record<string, string>;
-  /** Keys removed from the inherited environment before `env` is applied:
-   *  the test runner's policy/budget carriers must come from its own flags
-   *  only, never from the parent shell (lib/cli/testChildEnv.ts). */
-  unsetEnv?: string[];
-  /** The caller already compiled this file: run exactly this script. Checked
-   *  before every other way of finding the compiled output. */
-  compiledPath?: string;
+  /** Root policy and budget for the child; see `withRootCarriers`. */
+  rootCarriers?: RootCarriers;
   /**
    * Reuse a precompiled `.js` sitting next to the `.agency` source instead of
    * recompiling, when one exists. Bundled agents (judges, proposers) ship such
@@ -275,8 +265,7 @@ export async function runAgencyNode({
   maxBufferBytes,
   quietCompile,
   env,
-  unsetEnv,
-  compiledPath: providedCompiledPath,
+  rootCarriers,
   preferCompiled,
   allowTestImports,
 }: RunAgencyNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
@@ -287,9 +276,7 @@ export async function runAgencyNode({
     const siblingJs = agencyFile.replace(/\.agency$/, ".js");
     let compiledPath: string;
 
-    if (providedCompiledPath !== undefined) {
-      compiledPath = providedCompiledPath;
-    } else if (distDir) {
+    if (distDir) {
       compiledPath = resolveCompiledFile(distDir, agencyFile);
     } else if (preferCompiled && agencyFile.endsWith(".agency") && fs.existsSync(siblingJs)) {
       // A precompiled sibling exists (bundled agents in dist) — reuse it
@@ -340,7 +327,7 @@ export async function runAgencyNode({
       ...(timeoutMs !== undefined ? { timeout: timeoutMs } : {}),
       ...(signal !== undefined ? { signal } : {}),
       ...(wantsKill ? { killSignal: "SIGKILL" as const } : {}),
-      env: childEnvironment(process.env, unsetEnv ?? [], env ?? {}),
+      env: withRootCarriers({ ...process.env, ...env }, rootCarriers ?? {}),
     });
     const results = readFileSync(resultsFile, "utf-8");
     return { data: JSON.parse(results).data, stdout, stderr };

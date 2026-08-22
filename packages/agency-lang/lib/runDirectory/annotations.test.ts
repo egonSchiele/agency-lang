@@ -144,23 +144,28 @@ describe("foldAnnotations", () => {
       ended: "ok",
       flags: {},
     };
+    const hash = "a".repeat(64);
     const record = {
       name: "fib-holdout",
       visibility: "holdout",
-      agency: "ab.agency",
-      json: "cd.test.json",
-      sha256: "ef",
+      agency: `${hash}.agency`,
+      json: `${hash}.test.json`,
+      sha256: hash,
       maxCost: 5,
     };
-    expect(
+    const row = (harness: unknown[]) =>
       AnnotationSchema.safeParse({
         ...base,
         v: 1,
         id: `ann_${"0".repeat(64)}`,
         createdAt: "now",
-        harness: [record],
-      }).success,
-    ).toBe(true);
+        harness,
+      }).success;
+    expect(row([record])).toBe(true);
+    // The grader joins these onto directories: no path segments allowed.
+    expect(row([{ ...record, name: "../x" }])).toBe(false);
+    expect(row([{ ...record, agency: "../../etc/passwd" }])).toBe(false);
+    expect(row([{ ...record, json: "cd.test.json" }])).toBe(false);
     expect(
       AnnotationSchema.safeParse({
         ...base,

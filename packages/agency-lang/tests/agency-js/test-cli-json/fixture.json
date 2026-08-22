@@ -32,5 +32,12 @@
     "exitCode": 2,
     "stdoutEmpty": true,
     "refusedOnStderr": true
+  },
+  "aborted": {
+    "exitCode": 1,
+    "stdoutLines": 1,
+    "fileStatuses": ["aborted", "aborted"],
+    "slowCaseStatuses": ["aborted", "aborted"],
+    "filesFailed": 2
   }
 }

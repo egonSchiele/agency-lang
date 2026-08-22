@@ -63,9 +63,8 @@ export type ParsedInterrupt = {
 
 export type ParsedTestCase = {
   nodeName: string;
-  /** Raw argument-expression string; binding happens at the conversion
-   *  boundary (lib/testFormat/inputArgs.ts). */
-  input: string;
+  /** Named arguments, exactly as run() takes them. */
+  args: Record<string, unknown>;
   /** JSON.parse of expectedOutput — parsed at parse time so a malformed
    *  expectation is a whole-file error before anything runs. */
   expected: unknown;
@@ -126,7 +125,7 @@ const sandboxCriteriaSchema = z.array(z.unknown()).superRefine((criteria, ctx) =
 const sandboxCaseSchema = z
   .strictObject({
     nodeName: z.string({ message: "nodeName must be a string" }).min(1),
-    input: z.string({ message: "input must be a string" }),
+    args: z.record(z.string(), z.unknown()).optional(),
     expectedOutput: z.string({ message: "expectedOutput must be a string" }),
     evaluationCriteria: sandboxCriteriaSchema,
     interruptHandlers: z.array(sandboxInterruptSchema).optional(),
@@ -189,7 +188,7 @@ export function parseTestFileSandbox(jsonText: string, jsonFilename: string): Pa
     }
     const parsed: ParsedTestCase = {
       nodeName: testCase.nodeName,
-      input: testCase.input,
+      args: testCase.args ?? {},
       expected,
       criteria: "exact",
       interrupts: (testCase.interruptHandlers ?? []).map((h) => {
@@ -240,7 +239,10 @@ const fullCriteriaSchema = z
 
 const fullCaseSchema = z.strictObject({
   nodeName: z.string().min(1),
-  input: z.string(),
+  /** A JavaScript argument list pasted into the generated runner (#881).
+   *  Optional so a no-argument case can omit it and stay valid in the
+   *  sandbox profile too, which refuses this field. */
+  input: z.string().optional(),
   expectedOutput: z.string(),
   evaluationCriteria: fullCriteriaSchema,
   interruptHandlers: z.array(fullInterruptSchema).optional(),
@@ -300,7 +302,11 @@ function formatZodError(error: z.ZodError): string {
     .map((issue) => {
       const where = issue.path.length > 0 ? `${issue.path.join(".")}: ` : "";
       if (issue.code === "unrecognized_keys") {
-        return `${where}unsupported field(s): ${issue.keys.join(", ")}`;
+        // The CLI's `input` string is the one field people will reach for.
+        const hint = issue.keys.includes("input")
+          ? ' (input is not supported in sandboxed test files; pass named arguments as args: { "n": 10 })'
+          : "";
+        return `${where}unsupported field(s): ${issue.keys.join(", ")}${hint}`;
       }
       return `${where}${issue.message}`;
     })

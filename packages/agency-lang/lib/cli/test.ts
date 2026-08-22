@@ -551,7 +551,7 @@ async function runSingleTest(
   signal: AbortSignal,
   log: Logger,
 ): Promise<SingleTestOutcome> {
-  const hasArgs = testCase.input !== "";
+  const hasArgs = testCase.input !== undefined && testCase.input !== "";
   const relativeSourceFilePath = sourceFilePath;
   let result: { data: any; stdout: string; stderr: string };
   try {
@@ -560,7 +560,7 @@ async function runSingleTest(
       agencyFile: relativeSourceFilePath,
       nodeName: testCase.nodeName,
       hasArgs,
-      argsString: testCase.input,
+      argsString: testCase.input ?? "",
       allowTestImports: true,
       // The precompile pass in test() already compiled this source (with
       // allowTestImports enforcement); reuse the sibling .js instead of

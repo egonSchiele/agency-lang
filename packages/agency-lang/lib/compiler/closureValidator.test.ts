@@ -1,6 +1,7 @@
 import { describe, test, expect } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
+import { execFileSync } from "child_process";
 import {
   validateClosure,
   snapshotValidatedClosureForTest,
@@ -114,6 +115,26 @@ describe("validateClosure", () => {
         validateClosure({ entry: { file: "main.agency" }, dir }),
       );
       expect(violations.join("\n")).toMatch(/symlink/);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("a FIFO named like a module is refused without blocking the compiler", () => {
+    const dir = makeDir(".cv-fifo-");
+    try {
+      // No writer ever opens the pipe, so a blocking open or read would
+      // hang this test forever; the validator must open non-blocking and
+      // refuse on fstat.
+      execFileSync("mkfifo", [path.join(dir, "pipe.agency")]);
+      fs.writeFileSync(
+        path.join(dir, "main.agency"),
+        'import { x } from "./pipe.agency"\nexport node main(): number { return 1 }\n',
+      );
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "main.agency" }, dir }),
+      );
+      expect(violations.join("\n")).toMatch(/not a regular file/);
     } finally {
       cleanup(dir);
     }

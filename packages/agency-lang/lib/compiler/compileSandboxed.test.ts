@@ -5,9 +5,7 @@ import * as os from "os";
 import { compileSandboxed, compileValidatedClosure } from "./compileSandboxed.js";
 import { validateClosure } from "./closureValidator.js";
 import { compileSource } from "./compile.js";
-import { materializeCompiledScript } from "../runtime/ipc.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
-import { createRequire } from "module";
 
 // ESM live bindings can't be spied on after the fact, so wrap runGenerator
 // at module-mock time: the wrapper counts calls and delegates to the real
@@ -171,6 +169,23 @@ describe("compileSandboxed", () => {
     } finally {
       cleanup(trustedDir);
       cleanup(sandboxDir);
+    }
+  });
+
+  test("a nested entry keeps its place in the layout so its sibling import resolves", () => {
+    const dir = makeDir(".cs-nested-");
+    try {
+      fs.mkdirSync(path.join(dir, "sub"));
+      fs.writeFileSync(path.join(dir, "sub", "helper.agency"), HELPER);
+      fs.writeFileSync(path.join(dir, "sub", "main.agency"), MAIN);
+      const result = compileSandboxed({ entry: { file: "sub/main.agency" }, dir });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.entryPath).toBe("sub/main.js");
+        expect(Object.keys(result.modules ?? {})).toEqual(["sub/helper.js"]);
+      }
+    } finally {
+      cleanup(dir);
     }
   });
 

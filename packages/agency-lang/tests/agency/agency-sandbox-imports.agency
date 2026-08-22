@@ -130,3 +130,20 @@ export node main(): number {
   }
   return "compiled but should not have"
 }
+
+export node runFileWithNestedEntry(): string {
+  const dir = "./.sandbox-imports-nested"
+  mkdir(dir) with approve
+  mkdir("${dir}/sub") with approve
+  seed("${dir}/sub")
+  handle {
+    const result = runFile(dir: dir, filename: "sub/main.agency", node: "main")
+    if (result is success(envelope)) {
+      return "value:${envelope.data}"
+    }
+    if (result is failure(err)) {
+      return "failed:${err}"
+    }
+  } with approve
+  return "unreachable"
+}

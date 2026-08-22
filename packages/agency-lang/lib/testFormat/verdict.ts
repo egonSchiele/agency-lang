@@ -10,7 +10,11 @@ export type PassingVerdict = { pass: true };
 export type FailingVerdict = { pass: false; feedback: string };
 export type Verdict = PassingVerdict | FailingVerdict;
 
-export type ExactVerdictOptions = { rawStringFallback: boolean };
+export type ExactVerdictOptions = {
+  rawStringFallback: boolean;
+  /** Colorize the failing diff (terminal output). Default off. */
+  colorize?: boolean;
+};
 
 /** Wire form: `expectedOutput` is the raw string from a `.test.json`.
  *
@@ -34,22 +38,31 @@ export function exactVerdict(
           `A plain string must be quoted: "\\"ok\\"" means the string ok.`,
       );
     }
-    const actualText = JSON.stringify(actual);
+    // JSON.stringify(undefined) is undefined, not a string; render it the
+    // way canonicalText does so the diff never receives a non-string.
+    const actualText = JSON.stringify(actual) ?? "undefined";
     if (actualText === expectedOutput) return { pass: true };
-    return { pass: false, feedback: formatDiff(expectedOutput, actualText, { colorize: false }) };
+    return {
+      pass: false,
+      feedback: formatDiff(expectedOutput, actualText, { colorize: options.colorize ?? false }),
+    };
   }
-  return exactVerdictValue(actual, expected);
+  return exactVerdictValue(actual, expected, options.colorize ?? false);
 }
 
 /** Value form: both sides already parsed. Canonical structural equality —
  *  object key order is irrelevant, everything else must match. */
-export function exactVerdictValue(actual: unknown, expected: unknown): Verdict {
+export function exactVerdictValue(
+  actual: unknown,
+  expected: unknown,
+  colorize: boolean = false,
+): Verdict {
   const expectedCanonical = canonicalText(expected);
   const actualCanonical = canonicalText(actual);
   if (expectedCanonical === actualCanonical) return { pass: true };
   return {
     pass: false,
-    feedback: formatDiff(expectedCanonical, actualCanonical, { colorize: false }),
+    feedback: formatDiff(expectedCanonical, actualCanonical, { colorize }),
   };
 }
 

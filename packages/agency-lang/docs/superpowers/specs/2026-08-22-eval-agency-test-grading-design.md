@@ -1,4 +1,4 @@
-# Eval grading of Agency coding tests: `agency test --pure-agency --reject '*'`
+# Eval grading of Agency coding tests: `agency test --agency-only --reject '*'`
 
 Date: 2026-08-22. Status: designed, awaiting owner review. Supersedes the
 "Eval AgencyTestGrader" half of
@@ -54,13 +54,13 @@ harness files were preserved by generating and bundling source code.
 `--policy <name|path>` (with `--approve` / `--reject`) installs the same
 root handler `agency run --policy` already installs, inside the process that
 runs each test case, so the tested code's effects are all voted on by a
-policy the caller chose. `--pure-agency` compiles each tested file through
+policy the caller chose. `--agency-only` compiles each tested file through
 the #878 closure validator, so the closure cannot contain anything that
 escapes the interrupt system. `--json` prints the results as one JSON
 document. `--reject '*'` (already meaningful on `agency run`) rejects every
 effect. The eval grader then is: copy the agent's workdir to a scratch directory, put the
 framework's own copy of the harness pair in place, run
-`agency test --json --pure-agency --reject '*' <harness>.test.json`
+`agency test --json --agency-only --reject '*' <harness>.test.json`
 there, and score the passing fraction. The harness files are kept in the run
 directory as plain files so `eval grade` can repeat this later from the
 directory alone.
@@ -98,7 +98,7 @@ intended and is corrected here.
 because `llm()` is not an interrupt: a reject-all policy stops a solution
 from touching the filesystem but not from spending money. A cost cap does.
 
-### `--pure-agency`
+### `--agency-only`
 
 For each test file, the tested source is compiled through
 `compileSandboxed({ entry: { file: <basename> }, dir: <source's directory> })`
@@ -127,11 +127,11 @@ there. The precompile pass and `preferCompiled` are bypassed for the file.
 The same flag goes on `agency run`: its one compile call
 (`lib/cli/commands.ts:282`) is replaced by the same helper when the flag is
 set, and `agency run` already has `--policy`. A user can then run agent-
-written Agency code directly with `agency run --pure-agency --reject '*'
+written Agency code directly with `agency run --agency-only --reject '*'
 solution.agency`; the grader is that command line with `test` in place of
 `run`.
 
-`--pure-agency` does not imply `--policy`, and the reverse. They answer
+`--agency-only` does not imply `--policy`, and the reverse. They answer
 different questions (can the code escape the interrupt system; what does the
 interrupt system answer) and the grader passes both. A future `agency.json`
 default for either is out of scope.
@@ -295,7 +295,7 @@ grader binds to the test directory's files directly.
    sits at the destination (`rmSync` with `force` and `recursive`; after
    step 2 it can only be a regular file or directory the agent wrote), then
    write with the `wx` flag.
-4. Spawn `node <agency cli> test --json --pure-agency --reject '*'
+4. Spawn `node <agency cli> test --json --agency-only --reject '*'
    --max-cost 5 <json basename>` with `cwd` = scratch and a wall-clock
    timeout (10 minutes, as today). The CLI path is `process.argv[1]` when
    grading runs inside the agency CLI, else the package's own
@@ -322,7 +322,7 @@ cases from the statelog; that is not in this change.
 
 ### Why this is safe (the argument, in one place)
 
-- `--pure-agency` means the closure is `std::` plus relative `.agency`
+- `--agency-only` means the closure is `std::` plus relative `.agency`
   files the validator read itself. There is no TypeScript, no Node
   built-in, no package, no splice, no symlink, and the mirror compile reads
   only the bytes that were validated (#878). So every effect the tested
@@ -402,21 +402,20 @@ full profile and the eval refusal list. `graders.ts` stays deleted.
 - `--json`, not `--reporter json`.
 - Default harness cost cap $5, per case; `harnessMaxCost` in `test.json`.
 - Symlinks: never add code to support them; the workdir copy skips them.
-- `--pure-agency` goes on `agency run` as well, in this change.
+- `--agency-only` goes on `agency run` as well, in this change.
+- Flag name: `--agency-only` (`--sandbox` promises isolation the flag does
+  not provide; `--pure-agency` was the runner-up).
 
 ## Open questions for the reviewer
 
-1. The name `--pure-agency`. Alternatives considered: `--agency-only`,
-   `--no-interop`, `--strict-imports`. `--sandbox` is rejected because it
-   promises isolation the flag does not provide.
-2. Named policies. Today `run`, `agent`, `test`, and `remote call` all
+1. Named policies. Today `run`, `agent`, `test`, and `remote call` all
    resolve `--policy` through one list (`lib/runtime/builtinPolicies.ts`),
    so the names are shared, but each built-in is a hand-written list of
    effects. `std::capabilities` already names the groups (`FileRead`,
    `Shell`, `Network`, …) as compile-time effect sets. The clean-up: let
    `--approve` / `--reject` accept a capability set name as well as an
    effect name, expanded from `std::capabilities` when the policy is
-   resolved, and rewrite the built-ins as unions of sets. That is its own
-   change; this spec only needs `--reject '*'`.
-3. Inherited `AGENCY_RUN_POLICY` (spec says `agency test` clears it when
+   resolved, and rewrite the built-ins as unions of sets. Decided: out of
+   scope for this change; this spec only needs `--reject '*'`.
+2. Inherited `AGENCY_RUN_POLICY` (spec says `agency test` clears it when
    run without a policy flag, as `agency run` does).

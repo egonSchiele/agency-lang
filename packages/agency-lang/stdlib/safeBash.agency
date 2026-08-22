@@ -6,6 +6,7 @@
 import { gitStatus } from "std::git"
 import { WriteMode } from "std::index"
 import { bash } from "std::shell"
+import { cli, CLI_NOT_AVAILABLE } from "std::agency"
 
 import {
   Effect,
@@ -488,6 +489,47 @@ def trySeeIfShellFree(command: SimpleCommand, cwd: string): Result<Plan> {
   return shellFreePlan(command, cwd)
 }
 
+def tryAgencyPlan(command: SimpleCommand): Result<Plan> {
+  """
+  `agency <subcommand> <file>` runs in-process through std::agency's cli();
+  looking for the binary (`which agency`, `type agency`) is answered with
+  the functions to call instead. Anything else is not this plan's.
+  """
+  const name = command.command
+  if (name == null || name.tag != "literal" || command.assignments.length > 0) {
+    return failure("not an agency command")
+  }
+  if (name.text == "which" || name.text == "type" || name.text == "command") {
+    const lookedUp = literalArgs(command)
+    if (lookedUp is success(names)) {
+      if (names.includes("agency")) {
+        return success(refusePlan(CLI_NOT_AVAILABLE))
+      }
+    }
+    return failure("not about agency")
+  }
+  if (name.text != "agency") {
+    return failure("not an agency command")
+  }
+  if (command.redirects.length > 0) {
+    return success(refusePlan(CLI_NOT_AVAILABLE))
+  }
+  const words = echoWords(command)
+  if (words is failure(why)) {
+    return success(refusePlan(CLI_NOT_AVAILABLE))
+  }
+  if (words is success(args)) {
+    return success({
+      effects: [],
+      execution: {
+        kind: "agency",
+        args: args
+      }
+    })
+  }
+  return failure("not an agency command")
+}
+
 def echoWords(command: SimpleCommand): Result<string[]> {
   """
   `echo`'s arguments as text, but only when every one is fully literal.
@@ -635,6 +677,10 @@ export def planFor(source: string, cwd: string): Plan {
   if (commands.length == 1) {
     const only = commands[0]
     if (only.tag == "simpleCommand") {
+      const agency = tryAgencyPlan(only)
+      if (agency is success(plan)) {
+        return plan
+      }
       const shellFree = trySeeIfShellFree(only, cwd)
       if (shellFree is success(plan)) {
         return plan
@@ -823,7 +869,7 @@ export def resolveCwd(cwd: string): string {
 export def safeBash(
   command: string,
   cwd: string = "",
-): Result<string> raises <std::bash, std::write, std::git::status, std::git::diff, std::git::log> {
+): Result<string> raises <std::bash, std::write, std::git::status, std::git::diff, std::git::log, std::read, std::run, std::guard> {
   """
   Run a shell command, asking the narrowest question that describes it.
 
@@ -867,11 +913,30 @@ export def safeBash(
   return match(exec) {
     { kind: "write" } => runWrite(exec)
     { kind: "echo", content } => success(truncate(content))
+    { kind: "agency", args } => runAgency(args, dir)
     { kind: "bash", command as text } => runBash(text, dir)
     // Unreachable — the early return above already handled refusal. The
     // arm exists only to keep the match exhaustive over Execution.
     { kind: "refuse", reason } => failure(reason)
   }
+}
+
+def runAgency(args: string[], cwd: string): Result<string> {
+  """
+  What the CLI would have printed. A non-zero exit is a failure carrying
+  the output, the way a failing bash command is.
+  """
+  const ran = cli(args, cwd)
+  if (ran is failure(err)) {
+    return failure("${err}")
+  }
+  if (ran is success(result)) {
+    if (result.exitCode != 0) {
+      return failure(truncate(result.stdout + result.stderr))
+    }
+    return success(truncate(result.stdout))
+  }
+  return failure(CLI_NOT_AVAILABLE)
 }
 
 def raiseAll(effects: Effect[], fullCommand: string, cwd: string): Result {

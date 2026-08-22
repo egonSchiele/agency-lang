@@ -86,7 +86,12 @@ What happens if every effect in the plan is approved.
  * fields that way needs. The dispatch in `safeBash` matches over this
  * union exhaustively, so adding a variant is a type error at the dispatch
  * rather than a silent fall-through. */
-export type Execution = BashExec | EchoExec | WriteExec | RefuseExec
+export type Execution =
+  | BashExec
+  | EchoExec
+  | WriteExec
+  | AgencyExec
+  | RefuseExec
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L74))
@@ -113,6 +118,20 @@ export type EchoExec = {
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L81))
 
+### AgencyExec
+
+An `agency <subcommand> <file>` line, run through std::agency's cli().
+
+```ts
+/** An `agency <subcommand> <file>` line, run through std::agency's cli(). */
+export type AgencyExec = {
+  kind: "agency";
+  args: string[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L87))
+
 ### WriteExec
 
 ```ts
@@ -125,7 +144,7 @@ export type WriteExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L92))
 
 ### RefuseExec
 
@@ -136,7 +155,7 @@ export type RefuseExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L94))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L100))
 
 ### Plan
 
@@ -150,7 +169,7 @@ export type Plan = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L100))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L106))
 
 ## Constants
 
@@ -226,7 +245,7 @@ Run a command string through bash and return what it printed.
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L111))
 
 ### truncate
 
@@ -245,7 +264,7 @@ Cap output length. Raw output with no bound is a context-window hazard,
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L154))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L160))
 
 ### runWrite
 
@@ -268,4 +287,4 @@ Perform the write a redirected echo asked for. Returns the empty string,
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L165))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L171))

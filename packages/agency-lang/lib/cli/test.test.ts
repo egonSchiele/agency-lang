@@ -97,15 +97,18 @@ describe("parseShardSpec", () => {
 describe("loadTests (shared parser)", () => {
   it("errors on an empty evaluationCriteria array instead of passing vacuously", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-loadtests-"));
-    const file = path.join(dir, "x.test.json");
-    fs.writeFileSync(
-      file,
-      JSON.stringify({
-        tests: [{ nodeName: "n", input: "", expectedOutput: "1", evaluationCriteria: [] }],
-      }),
-    );
-    expect(() => loadTests(file)).toThrow(/criteria/i);
-    fs.rmSync(dir, { recursive: true, force: true });
+    try {
+      const file = path.join(dir, "x.test.json");
+      fs.writeFileSync(
+        file,
+        JSON.stringify({
+          tests: [{ nodeName: "n", input: "", expectedOutput: "1", evaluationCriteria: [] }],
+        }),
+      );
+      expect(() => loadTests(file)).toThrow(/criteria/i);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

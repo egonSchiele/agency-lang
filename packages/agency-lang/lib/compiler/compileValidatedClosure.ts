@@ -26,6 +26,7 @@ export function compileValidatedClosure(closure: ValidatedClosure): CompileResul
   try {
     let entrySource = "";
     let entryMirrorPath = "";
+    let entryRelPath = "";
     const mirrored: { relPath: string; source: string; mirrorPath: string }[] = [];
     for (const [moduleId, mod] of Object.entries(data.modules)) {
       const target = path.join(mirrorRoot, ...mod.relPath.split(path.posix.sep));
@@ -34,6 +35,7 @@ export function compileValidatedClosure(closure: ValidatedClosure): CompileResul
       if (moduleId === data.entryModuleId) {
         entrySource = mod.source;
         entryMirrorPath = target;
+        entryRelPath = mod.relPath;
       } else {
         mirrored.push({ relPath: mod.relPath, source: mod.source, mirrorPath: target });
       }
@@ -73,7 +75,9 @@ export function compileValidatedClosure(closure: ValidatedClosure): CompileResul
     if (mirrored.length === 0) {
       return entryResult;
     }
-    return { ...entryResult, modules };
+    // The entry keeps its place in the layout: a nested entry importing a
+    // sibling emits "./helper.js", which only resolves from the same dir.
+    return { ...entryResult, modules, entryPath: entryRelPath.replace(/\.agency$/, ".js") };
   } finally {
     safeDeleteDirectoryWithin(os.tmpdir(), mirrorRoot);
   }

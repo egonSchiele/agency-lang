@@ -1,5 +1,8 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import path from "path";
+import { materializeCompiledScript } from "./ipc.js";
+import * as fs from "fs";
+import { safeDeleteDirectoryWithin } from "../utils.js";
 import {
   clampLimits,
   serializeInterruptsForIpc,
@@ -998,5 +1001,47 @@ describe("resolveNodeCallArgs", () => {
     expect(resolveNodeCallArgs({ node: "main", args: { b: 2, a: 1 } }, ["a", "b"])).toEqual({
       args: [1, 2],
     });
+  });
+});
+
+describe("materializeCompiledScript", () => {
+  // scriptPath is <root>/.agency-tmp/<id>/... ; delete exactly <id>, and
+  // only if it really sits inside a .agency-tmp directory.
+  const cleanup = (scriptPath: string, depthBelowRun: number) => {
+    let runDir = scriptPath;
+    for (let i = 0; i < depthBelowRun; i++) runDir = path.dirname(runDir);
+    const tmpRoot = path.dirname(runDir);
+    expect(path.basename(tmpRoot)).toBe(".agency-tmp");
+    expect(safeDeleteDirectoryWithin(tmpRoot, runDir).success).toBe(true);
+  };
+
+  it("rejects a moduleId that is not a plain identifier, before writing anything", () => {
+    expect(() => materializeCompiledScript({ moduleId: "../escape", code: "export {};" })).toThrow(
+      /plain identifier/,
+    );
+  });
+
+  it("refuses an entryPath or module path that escapes the script directory", () => {
+    expect(() =>
+      materializeCompiledScript({ moduleId: "agency_x", code: "x", entryPath: "../out.js" }),
+    ).toThrow(/escapes/);
+    expect(() =>
+      materializeCompiledScript({ moduleId: "agency_x", code: "x", modules: { "../m.js": "x" } }),
+    ).toThrow(/escapes/);
+  });
+
+  it("keeps a nested entry in its layout beside its modules", () => {
+    const scriptPath = materializeCompiledScript({
+      moduleId: "agency_x",
+      code: "export {};",
+      entryPath: "sub/main.js",
+      modules: { "sub/helper.js": "export const h = 1;" },
+    });
+    try {
+      expect(path.basename(path.dirname(scriptPath))).toBe("sub");
+      expect(fs.existsSync(path.join(path.dirname(scriptPath), "helper.js"))).toBe(true);
+    } finally {
+      cleanup(scriptPath, 2);
+    }
   });
 });

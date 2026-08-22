@@ -1,6 +1,13 @@
 {
   "tests": [
     {
+      "nodeName": "runFileWithNestedEntry",
+      "description": "a nested entry file importing its sibling runs (the entry keeps its place in the layout)",
+      "input": "",
+      "expectedOutput": "\"value:7\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "runFileWithLocalImport",
       "description": "runFile compiles a file whose import names a sibling in dir",
       "input": "",

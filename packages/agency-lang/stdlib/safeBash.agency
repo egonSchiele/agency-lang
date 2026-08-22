@@ -5,7 +5,7 @@
 // typecheck clean. `std::write` is covered by the auto-imported prelude.
 import { gitStatus } from "std::git"
 import { WriteMode } from "std::index"
-import { bash } from "std::shell"
+import { bash, ExecResult } from "std::shell"
 import { cli, CLI_NOT_AVAILABLE } from "std::agency"
 
 import {
@@ -491,49 +491,59 @@ def trySeeIfShellFree(command: SimpleCommand, cwd: string): Result<Plan> {
 
 def tryAgencyPlan(command: SimpleCommand): Result<Plan> {
   """
-  `agency <subcommand> <file>` runs in-process through std::agency's cli();
-  looking for the binary (`which agency`, `type agency`) is answered with
-  the functions to call instead. Anything else is not this plan's.
+  The plan (what to raise, what to run) for a command line about the
+  agency CLI, or a failure meaning "not one of those". `agency <sub>
+  <file>` runs in-process through std::agency's cli(). Looking the binary
+  up is refused with the functions to call: `which`/`type` look up every
+  argument; `command` runs or looks up its first, so `command echo
+  agency` is an ordinary echo.
   """
   const name = command.command
   if (name == null || name.tag != "literal" || command.assignments.length > 0) {
     return failure("not an agency command")
   }
-  // `which`/`type` look names up; `command` runs or (with -v/-V) looks
-  // up its FIRST argument, so `command echo agency` is an ordinary echo.
-  if (name.text == "which" || name.text == "type" || name.text == "command") {
-    const lookedUp = literalArgs(command)
-    if (lookedUp is success(names)) {
-      if (name.text == "command") {
-        if (names.length > 0 && names[0] == "agency") {
-          return success(refusePlan(CLI_NOT_AVAILABLE))
-        }
-      } else if (names.includes("agency")) {
-        return success(refusePlan(CLI_NOT_AVAILABLE))
-      }
-    }
-    return failure("not about agency")
+  const names = literalNames(command)
+  return match(name.text) {
+    "agency" => agencyCommandPlan(command)
+    "which" => refuseIfLookingUpAgency(names.includes("agency"))
+    "type" => refuseIfLookingUpAgency(names.includes("agency"))
+    "command" => refuseIfLookingUpAgency(names.length > 0 && names[0] == "agency")
+    _ => failure("not an agency command")
   }
-  if (name.text != "agency") {
-    return failure("not an agency command")
+}
+
+/** The literal non-flag arguments, or none when any is not literal. */
+def literalNames(command: SimpleCommand): string[] {
+  return match(literalArgs(command)) {
+    success(names) => names
+    failure(why) => []
   }
+}
+
+def refuseIfLookingUpAgency(lookingUp: boolean): Result<Plan> {
+  if (lookingUp) {
+    return success(refusePlan(CLI_NOT_AVAILABLE))
+  }
+  return failure("not about agency")
+}
+
+def agencyCommandPlan(command: SimpleCommand): Result<Plan> {
+  """
+  A redirect or a non-literal argument has no in-process meaning.
+  """
   if (command.redirects.length > 0) {
     return success(refusePlan(CLI_NOT_AVAILABLE))
   }
-  const words = echoWords(command)
-  if (words is failure(why)) {
-    return success(refusePlan(CLI_NOT_AVAILABLE))
-  }
-  if (words is success(args)) {
-    return success({
+  return match(echoWords(command)) {
+    success(args) => success({
       effects: [],
       execution: {
         kind: "agency",
         args: args
       }
     })
+    failure(why) => success(refusePlan(CLI_NOT_AVAILABLE))
   }
-  return failure("not an agency command")
 }
 
 def echoWords(command: SimpleCommand): Result<string[]> {
@@ -932,17 +942,17 @@ def runAgency(args: string[], cwd: string): Result<string> {
   What the CLI would have printed. A non-zero exit is a failure carrying
   the output, the way a failing bash command is.
   """
-  const ran = cli(args, cwd)
-  if (ran is failure(err)) {
-    return failure(truncate("${err}"))
+  return match(cli(args, cwd)) {
+    success(result) => cliOutcome(result)
+    failure(err) => failure(truncate("${err}"))
   }
-  if (ran is success(result)) {
-    if (result.exitCode != 0) {
-      return failure(truncate(result.stdout + result.stderr))
-    }
-    return success(truncate(result.stdout))
+}
+
+def cliOutcome(result: ExecResult): Result<string> {
+  if (result.exitCode != 0) {
+    return failure(truncate(result.stdout + result.stderr))
   }
-  return failure(CLI_NOT_AVAILABLE)
+  return success(truncate(result.stdout))
 }
 
 def raiseAll(effects: Effect[], fullCommand: string, cwd: string): Result {

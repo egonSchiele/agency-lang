@@ -103,21 +103,29 @@ export node astAndFmtReadTheFile(): string {
 def classify(r: any): string {
   if (r is failure(err)) {
     const text = "${err}"
-    if (text.includes("Only `agency test <file>`")) {
-      return "only-file-form"
+    if (text.includes("takes a file, not a flag")) {
+      return "flag"
     }
-    if (text.includes("not available here")) {
-      return "pointer"
+    if (text.includes("takes exactly one argument")) {
+      return "arity"
+    }
+    if (text.includes("no function runs")) {
+      return "unsupported"
+    }
+    if (text.includes("no subcommand given")) {
+      return "none"
     }
     return text
   }
   return "succeeded"
 }
 
-export node otherFormsNameTheTools(): string[] {
+export node otherFormsSayWhatTheCallShouldBe(): string[] {
   return [
     classify(cli(["help"])),
-    classify(cli(["test", "--json", "suite.test.json"])),
+    classify(cli(["test", "--json"])),
+    classify(cli(["test", "a.test.json", "b.test.json"])),
+    classify(cli(["test"])),
     classify(cli([])),
   ]
 }

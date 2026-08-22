@@ -1056,81 +1056,75 @@ export idempotent def cliHandles(subcommand: string): boolean {
 
 export def cli(args: string[], cwd: string = "."): Result<ExecResult> {
   """
-  Run an `agency` command line through the matching function: `test` runs testFile, `typecheck`/`tc` runs typecheckFile, `ast` runs parseAST, `fmt` runs format, `run` runs runFile on node main. Only the form `agency <subcommand> <file>` is accepted; flags and other subcommands fail with a message naming the function to call instead.
+  Run an `agency <subcommand> <file>` command line through the matching function: `test` runs testFile, `typecheck`/`tc` runs typecheckFile, `ast` runs parseAST, `fmt` runs format, `run` runs runFile on node main. The result has the CLI's shape: stdout, stderr, exitCode. Anything else (a flag, another subcommand, a missing file argument) is a failure saying what the call should have been.
 
   @param args - The CLI arguments, subcommand first, e.g. ["test", "x.test.json"]
   @param cwd - The directory the file argument is inside
   """
-  if (args.length == 0 || !cliHandles(args[0])) {
-    return failure(CLI_NOT_AVAILABLE)
+  const supported = CLI_SUBCOMMANDS.join(", ")
+  return match(args) {
+    [sub, file] if (file.startsWith("-")) => failure("cli: `${sub}` takes a file, not a flag (${file}); call the function behind it for options")
+    ["test", file] => cliTest(cwd, file)
+    ["typecheck", file] => cliTypecheck(cwd, file)
+    ["tc", file] => cliTypecheck(cwd, file)
+    ["run", file] => cliRun(cwd, file)
+    ["ast", file] => cliAst(cwd, file)
+    ["fmt", file] => cliFmt(cwd, file)
+    [sub, ...rest] if (cliHandles(sub)) => failure("cli: `${sub}` takes exactly one argument, the file; got ${rest.length}")
+    [sub, ...rest] => failure("cli: no function runs `agency ${sub}`; the subcommands that run here are ${supported}")
+    _ => failure("cli: no subcommand given; the subcommands that run here are ${supported}")
   }
-  const sub = args[0]
-  if (args.length != 2 || args[1].startsWith("-")) {
-    return failure("Only `agency ${sub} <file>` runs here. ${CLI_NOT_AVAILABLE}")
+}
+
+def cliTest(cwd: string, file: string): Result<ExecResult> {
+  return match(testFile(cwd, file)) {
+    success(report) => success(renderTestReport(report))
+    failure(err) => failure(err)
   }
-  const file = args[1]
-  if (sub == "test") {
-    const report = testFile(cwd, file)
-    if (report is failure(err)) {
-      return failure("${err}")
-    }
-    if (report is success(r)) {
-      return success(renderTestReport(r))
-    }
+}
+
+def cliTypecheck(cwd: string, file: string): Result<ExecResult> {
+  return match(typecheckFile(cwd, file)) {
+    success(report) => success(renderTypeCheck(report))
+    failure(err) => failure(err)
   }
-  if (sub == "typecheck" || sub == "tc") {
-    const checked = typecheckFile(cwd, file)
-    if (checked is failure(err)) {
-      return failure("${err}")
-    }
-    if (checked is success(r)) {
-      return success(renderTypeCheck(r))
-    }
+}
+
+def cliRun(cwd: string, file: string): Result<ExecResult> {
+  return match(runFile(cwd, file, "main")) {
+    success(value) => success(cliOutput(JSON.stringify(value)))
+    failure(err) => failure(err)
   }
-  if (sub == "run") {
-    const ran = runFile(cwd, file, "main")
-    if (ran is failure(err)) {
-      return failure("${err}")
-    }
-    if (ran is success(value)) {
-      return success({
-        stdout: JSON.stringify(value),
-        stderr: "",
-        exitCode: 0
-      })
-    }
-  }
+}
+
+def cliAst(cwd: string, file: string): Result<ExecResult> {
   const source = read(file, cwd)
   if (source is failure(err)) {
-    return failure("${err}")
+    return failure(err)
   }
-  if (source is success(text)) {
-    if (sub == "ast") {
-      const ast = parseAST(text)
-      if (ast is failure(err)) {
-        return failure("${err}")
-      }
-      if (ast is success(tree)) {
-        return success({
-          stdout: JSON.stringify(tree, null, 2),
-          stderr: "",
-          exitCode: 0
-        })
-      }
-    }
-    const formatted = format(text)
-    if (formatted is failure(err)) {
-      return failure("${err}")
-    }
-    if (formatted is success(out)) {
-      return success({
-        stdout: "${out}",
-        stderr: "",
-        exitCode: 0
-      })
-    }
+  return match(parseAST(source.value)) {
+    success(tree) => success(cliOutput(JSON.stringify(tree, null, 2)))
+    failure(err) => failure(err)
   }
-  return failure(CLI_NOT_AVAILABLE)
+}
+
+def cliFmt(cwd: string, file: string): Result<ExecResult> {
+  const source = read(file, cwd)
+  if (source is failure(err)) {
+    return failure(err)
+  }
+  return match(format(source.value)) {
+    success(formatted) => success(cliOutput("${formatted}"))
+    failure(err) => failure(err)
+  }
+}
+
+def cliOutput(stdout: string): ExecResult {
+  return {
+    stdout: stdout,
+    stderr: "",
+    exitCode: 0
+  }
 }
 
 def renderTestReport(report: TestReport): ExecResult {

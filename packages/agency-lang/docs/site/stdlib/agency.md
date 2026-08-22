@@ -1173,7 +1173,7 @@ Whether `cli` runs this agency subcommand in-process.
 cli(args: string[], cwd: string = "."): Result<ExecResult>
 ```
 
-Run an `agency` command line through the matching function: `test` runs testFile, `typecheck`/`tc` runs typecheckFile, `ast` runs parseAST, `fmt` runs format, `run` runs runFile on node main. Only the form `agency <subcommand> <file>` is accepted; flags and other subcommands fail with a message naming the function to call instead.
+Run an `agency <subcommand> <file>` command line through the matching function: `test` runs testFile, `typecheck`/`tc` runs typecheckFile, `ast` runs parseAST, `fmt` runs format, `run` runs runFile on node main. The result has the CLI's shape: stdout, stderr, exitCode. Anything else (a flag, another subcommand, a missing file argument) is a failure saying what the call should have been.
 
   @param args - The CLI arguments, subcommand first, e.g. ["test", "x.test.json"]
   @param cwd - The directory the file argument is inside

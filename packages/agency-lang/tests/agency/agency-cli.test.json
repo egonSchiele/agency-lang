@@ -45,10 +45,10 @@
       ]
     },
     {
-      "nodeName": "otherFormsNameTheTools",
-      "description": "Unhandled subcommands, flags, and an empty command line fail with a message naming the functions to call.",
+      "nodeName": "otherFormsSayWhatTheCallShouldBe",
+      "description": "An unsupported subcommand, a flag, the wrong number of arguments, and an empty command line each fail saying what the call should have been.",
       "input": "",
-      "expectedOutput": "[\"pointer\",\"only-file-form\",\"pointer\"]",
+      "expectedOutput": "[\"unsupported\", \"flag\", \"arity\", \"arity\", \"none\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

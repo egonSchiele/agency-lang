@@ -4,5 +4,5 @@
     "coding",
     "easy"
   ],
-  "input": "Write an Agency function that returns the nth Fibonacci number (fib(0) = 0, fib(1) = 1) and save it to a file named fib.agency in the current directory. The file must contain: export def fib(n: number): number. Use only Agency standard library (std::) imports, or no imports at all. Your working directory contains a test harness; you can check your solution by running: agency test fib-tests.test.json"
+  "input": "Write an Agency function that returns the nth Fibonacci number (fib(0) = 0, fib(1) = 1) and save it to a file named fib.agency in the current directory. The file must contain: export def fib(n: number): number. Use only Agency standard library (std::) imports, or no imports at all. Your working directory contains a test harness, fib-tests.test.json, which tests fib-tests.agency (it imports your fib.agency). Check your solution with the testFile tool: testFile(dir: \".\", filename: \"fib-tests.test.json\"). Do not try to run the agency command line; it is not available."
 }

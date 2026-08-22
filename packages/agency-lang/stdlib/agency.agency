@@ -29,7 +29,7 @@ import {
   _parseStatements,
   _toSource,
   _combine,
-} from "agency-lang/stdlib-lib/template.js"
+ } from "agency-lang/stdlib-lib/template.js"
 import { VERSION } from "agency-lang/stdlib-lib/version.js"
 
 /** @module
@@ -205,12 +205,12 @@ export def run(
       // — keep the two in sync).
       return failure(
         {
-        reason: "limit_exceeded",
-        limit: "cost",
-        threshold: maxCost,
-        value: err.actualCost,
-        message: "Subprocess exceeded cost limit of ${maxCost} (used ${err.actualCost})"
-      },
+          reason: "limit_exceeded",
+          limit: "cost",
+          threshold: maxCost,
+          value: err.actualCost,
+          message: "Subprocess exceeded cost limit of ${maxCost} (used ${err.actualCost})"
+        },
       )
     }
   }
@@ -351,7 +351,10 @@ export def test(
       // The scripted-answer state the inline handler mutates: which answer
       // is next, and whether an expectedMessage mismatch already decided
       // this case.
-      const scripted = { index: 0, mismatch: "" }
+      const scripted = {
+        index: 0,
+        mismatch: ""
+      }
       const answers = testCase.interrupts ?? []
       let runResult = null
       handle {
@@ -417,9 +420,18 @@ export def test(
       if (!casePassed) {
         allPass = false
       }
-      caseReports.push({ node: testCase.node, pass: casePassed, feedback: feedback })
+      caseReports.push(
+        {
+          node: testCase.node,
+          pass: casePassed,
+          feedback: feedback
+        },
+      )
     }
-    return success({ pass: allPass, cases: caseReports })
+    return success({
+      pass: allPass,
+      cases: caseReports
+    })
   }
   if (guarded is failure(err)) {
     if (err.type == "guardFailure") {
@@ -427,12 +439,12 @@ export def test(
       // makeLimitFailure in lib/runtime/ipc.ts — keep the two in sync).
       return failure(
         {
-        reason: "limit_exceeded",
-        limit: "cost",
-        threshold: maxCost,
-        value: err.actualCost,
-        message: "Test run exceeded cost limit of ${maxCost} (used ${err.actualCost})"
-      },
+          reason: "limit_exceeded",
+          limit: "cost",
+          threshold: maxCost,
+          value: err.actualCost,
+          message: "Test run exceeded cost limit of ${maxCost} (used ${err.actualCost})"
+        },
       )
     }
   }
@@ -445,7 +457,7 @@ export def testFile(
   maxCost: number | null = null,
 ): Result<TestReport> {
   """
-  Run the test cases a .test.json file declares against its source file, in the sandboxed subprocess, and return a per-case report. The portable form of test(): the same file `agency test` runs, restricted to the sandbox subset (exact criteria; approve/reject scripted answers; per-case timeoutMs; named args instead of the CLI's input string).
+  Run the test cases a .test.json file declares against its source file.
 
   @param dir - The directory holding the .test.json and the file it tests
   @param filename - The .test.json file
@@ -467,12 +479,12 @@ export def testFile(
     for (c in wire.cases) {
       cases.push(
         {
-        node: c.node,
-        args: c.args,
-        expected: c.expected,
-        interrupts: c.interrupts,
-        wallClock: c.wallClock
-      },
+          node: c.node,
+          args: c.args,
+          expected: c.expected,
+          interrupts: c.interrupts,
+          wallClock: c.wallClock
+        },
       )
     }
     return test(
@@ -496,29 +508,29 @@ def checkRunCodeLimits(
 ): string {
   const checks = [
     {
-    name: "wallClock",
-    value: wallClock,
-    max: 3600s,
-    unit: "milliseconds"
-  },
+      name: "wallClock",
+      value: wallClock,
+      max: 3600s,
+      unit: "milliseconds"
+    },
     {
-    name: "memory",
-    value: memory,
-    max: 4096mb,
-    unit: "bytes"
-  },
+      name: "memory",
+      value: memory,
+      max: 4096mb,
+      unit: "bytes"
+    },
     {
-    name: "ipcPayload",
-    value: ipcPayload,
-    max: 1024mb,
-    unit: "bytes"
-  },
+      name: "ipcPayload",
+      value: ipcPayload,
+      max: 1024mb,
+      unit: "bytes"
+    },
     {
-    name: "stdout",
-    value: stdout,
-    max: 100mb,
-    unit: "bytes"
-  },
+      name: "stdout",
+      value: stdout,
+      max: 100mb,
+      unit: "bytes"
+    },
   ]
   for (check in checks) {
     if (check.value <= 0) {
@@ -611,7 +623,10 @@ export def runCode(
 `typecheck` does not restrict imports to the standard library only.
 Relative imports (./foo.agency) cannot be resolved from a source string.
 */
-export idempotent def typecheck(source: string, ignoreCodes: string[] = []): Result<TypeCheckReport> {
+export idempotent def typecheck(
+  source: string,
+  ignoreCodes: string[] = [],
+): Result<TypeCheckReport> {
   """
   Type-check Agency source code.
 
@@ -637,7 +652,10 @@ export idempotent def typecheck(source: string, ignoreCodes: string[] = []): Res
       warnings.push(diag)
     }
   }
-  return success({ errors: errors, warnings: warnings })
+  return success({
+    errors: errors,
+    warnings: warnings
+  })
 }
 
 /** Per-exported-symbol effect lists, keyed by node/function name. */
@@ -671,18 +689,18 @@ when re-exports chain); when that module cannot be read from a source
 string (relative paths), the entry has kind "reexport" and its effects
 are ["unknown"] rather than silently missing. */
 export type ExportInfo = {
-  name: string,
-  kind: "def" | "node" | "type" | "const" | "reexport",
-  signature: string,
-  docstring: string | null,
-  effects: string[],
-  destructive: boolean,
-  idempotent: boolean,
+  name: string;
+  kind: "def" | "node" | "type" | "const" | "reexport";
+  signature: string;
+  docstring: string | null;
+  effects: string[];
+  destructive: boolean;
+  idempotent: boolean;
   reexportedFrom: string | null
 }
 
 export type ModuleInfo = {
-  description: string | null,
+  description: string | null;
   exports: ExportInfo[]
 }
 
@@ -699,7 +717,6 @@ export idempotent def describe(source: string): Result<ModuleInfo> {
   """
   return try _describe(source)
 }
-
 
 type FilterImportsResult = {
   source: string;
@@ -796,10 +813,10 @@ export type Code = {
 }
 
 export type HoleInfo = {
-  name: string,
-  sort: "expr" | "statements" | "identifier" | "decl",
-  splice: boolean,
-  type: string | null,
+  name: string;
+  sort: "expr" | "statements" | "identifier" | "decl";
+  splice: boolean;
+  type: string | null;
   origin: string | null
 }
 
@@ -831,7 +848,10 @@ export idempotent def holesOf(template: Code): HoleInfo[] {
   return _holesOf(template)
 }
 
-export idempotent def fill(template: Code, values: Record<string, Json | Code>): Result<Code> {
+export idempotent def fill(
+  template: Code,
+  values: Record<string, Json | Code>,
+): Result<Code> {
   """
   Fill holes in a template. Plain values become literals and are never parsed; Code values are grafted as trees. Filling some holes and not others returns a template with the rest still in it.
 

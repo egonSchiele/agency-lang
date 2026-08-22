@@ -44,6 +44,14 @@ async function until(check: () => boolean, ms = 2_000): Promise<void> {
   }
 }
 
+// The rendered row the cursor is on ("> " marker), colors stripped.
+function cursorRow(out: FrameRecorder): string {
+  if (out.frames.length === 0) return "";
+  // eslint-disable-next-line no-control-regex
+  const text = out.lastText().replace(/\x1b\[[0-9;]*m/g, "");
+  return text.split("\n").find((line) => line.trimStart().startsWith("> ")) ?? "";
+}
+
 describe("follow mode", () => {
   let dir: string;
   let file: string;
@@ -94,6 +102,32 @@ describe("follow mode", () => {
     await done;
     expect(out.lastText()).toContain("lateTool");
     expect(out.lastText()).toContain("earlyTool");
+  });
+
+  it("an append keeps the cursor on a conversation line (a synthetic row)", async () => {
+    // Synthetic rows (conversation lines, raw data) are built at render time
+    // and are not in the forest; setData must resolve them through their leaf.
+    fs.appendFileSync(
+      file,
+      envelope("s1", "promptCompletion", 500, {
+        messages: [{ role: "user", content: "hello there" }],
+        completion: { output: "hi back" },
+      }),
+    );
+    const input = new ScriptedInput([]);
+    const out = new FrameRecorder();
+    const done = start(input, out);
+    input.feedKey({ key: "z" }); // expand every span
+    input.feedKey({ key: "G" }); // the promptCompletion leaf is the last row
+    input.feedKey({ key: "Enter" }); // expand it into conversation lines
+    input.feedKey({ key: "j" }); // onto "[user] hello there"
+    await until(() => cursorRow(out).includes("hello there"));
+    input.feedKey({ key: "f" });
+    fs.appendFileSync(file, toolLines("s2", "laterTool", 1_000));
+    await until(() => out.lastText().includes("laterTool"));
+    input.feedKey({ key: "q" });
+    await done;
+    expect(cursorRow(out)).toContain("hello there");
   });
 
   it("a truncated file resets the view without crashing", async () => {

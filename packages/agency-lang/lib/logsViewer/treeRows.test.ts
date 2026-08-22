@@ -171,7 +171,7 @@ describe("promptCompletion expansion", () => {
     // trace, leaf, [user], [assistant], raw-data toggle
     expect(rows).toHaveLength(5);
     expect(rows[2].node.nodeKind).toBe("convoLine");
-    expect(rows[2].node.summary).toBe(`${color.green("[user]")} "hi"`);
+    expect(rows[2].node.summary).toBe(`${color.green("[user]")} hi`);
     expect(rows[3].node.nodeKind).toBe("convoLine");
     expect(rows[4].node.nodeKind).toBe("rawDataToggle");
     expect(rows[4].node.id).toBe("evt-0:raw");

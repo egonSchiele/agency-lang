@@ -10,7 +10,7 @@
   at call time. An agent whose list includes searchTools() must build that
   list inside a function too, or it freezes the environment at module load.
 */
-import { typecheck, parseAST } from "std::agency"
+import { typecheck, parseAST, testFile } from "std::agency"
 import { todoWrite, todoList } from "std::agent"
 import { edit } from "std::fs"
 import {
@@ -35,8 +35,8 @@ import {
  } from "std::git"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
 import { remember, recall } from "std::memory"
-import { ls, glob, grep, exec } from "std::shell"
 import { safeBash } from "std::safeBash"
+import { ls, glob, grep, exec } from "std::shell"
 import { docsSkill } from "std::skills"
 import {
   search as wikipediaSearch,
@@ -174,10 +174,10 @@ export def agencyDocTools(): any[] {
 
 export def agencyCodeTools(): any[] {
   """
-  Return tools that inspect Agency source without running it: the type
-  checker and the parser.
+  Return tools for checking Agency source: the type checker, the parser,
+  and testFile, which runs a .test.json harness in a sandboxed subprocess.
   """
-  return [typecheck, parseAST]
+  return [typecheck, parseAST, testFile]
 }
 
 export def memoryTools(): any[] {

@@ -144,7 +144,9 @@ export class TreeView implements View {
     // rotated to nothing), not a transient to ignore: clearing it keeps the
     // cursor — and so `cursorTraceId()` and the `l` label action — from pointing
     // at a trace no longer in the file.
-    const stillThere = findNode(roots, this.state.cursorId);
+    // A synthetic row (a conversation line, "raw data") is rebuilt from its
+    // leaf on render, so the cursor survives as long as the leaf does.
+    const stillThere = findNode(roots, realIdOf(this.state.cursorId));
     this.state = {
       ...this.state,
       roots,
@@ -205,8 +207,7 @@ export class TreeView implements View {
     const id = this.state.cursorId;
     if (id === "") return undefined;
     if (findNode(this.state.roots, id) !== undefined) return id;
-    const colon = id.indexOf(":");
-    return colon > 0 ? id.slice(0, colon) : id;
+    return realIdOf(id);
   }
 
   private paginate(event: KeyEvent, viewport: Viewport): ViewerState | undefined {
@@ -303,6 +304,12 @@ export class TreeView implements View {
     if (state.messageBar) parts.push(state.messageBar);
     return line(bottomHints(parts.join("  "), "tree", viewport.cols), { fg: "gray" });
   }
+}
+
+/** The leaf a synthetic row id (`<leafId>:convo:…`, `<leafId>:raw`) belongs to. */
+function realIdOf(id: string): string {
+  const colon = id.indexOf(":");
+  return colon > 0 ? id.slice(0, colon) : id;
 }
 
 function findNode(roots: TreeNode[], id: string): TreeNode | undefined {

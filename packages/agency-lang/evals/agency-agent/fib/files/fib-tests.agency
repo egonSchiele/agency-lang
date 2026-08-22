@@ -1,5 +1,6 @@
 // Visible tests for the fib coding eval. The framework grades with
-// `agency test --agency-only --reject '*'`; the agent can run the same file.
+// `agency test --agency-only --reject '*'`; the agent runs the same file
+// with the testFile tool.
 import { fib } from "./fib.agency"
 
 export node base0(): number {

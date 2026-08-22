@@ -8,10 +8,7 @@ describe("formatConversation", () => {
       { role: "user", content: "hi" },
       { role: "assistant", content: "hello" },
     ]);
-    expect(lines).toEqual([
-      `${color.green("[user]")} "hi"`,
-      `${color.green("[assistant]")} "hello"`,
-    ]);
+    expect(lines).toEqual([`${color.green("[user]")} hi`, `${color.green("[assistant]")} hello`]);
   });
 
   it("formats an assistant tool call (camelCase shape)", () => {
@@ -26,10 +23,10 @@ describe("formatConversation", () => {
       { role: "assistant", content: "Hello, Alice!" },
     ]);
     expect(lines).toEqual([
-      `${color.green("[user]")} "Greet Alice using the greet tool"`,
+      `${color.green("[user]")} Greet Alice using the greet tool`,
       `${color.green("[assistant]")} tool call: greet({"name":"Alice"})`,
-      `${color.green("[tool: greet]")} "Hello, Alice!"`,
-      `${color.green("[assistant]")} "Hello, Alice!"`,
+      `${color.green("[tool: greet]")} Hello, Alice!`,
+      `${color.green("[assistant]")} Hello, Alice!`,
     ]);
   });
 
@@ -58,7 +55,7 @@ describe("formatConversation", () => {
         ],
       },
     ]);
-    expect(lines).toEqual([`${color.green("[user]")} "first second"`]);
+    expect(lines).toEqual([`${color.green("[user]")} first second`]);
   });
 
   it("renders a non-content-part array (e.g. a tool result) as JSON", () => {
@@ -77,6 +74,31 @@ describe("formatConversation", () => {
       { role: "tool", name: "t", content: { response: [1, 2] }, tool_call_id: "x" },
     ]);
     expect(lines).toEqual([`${color.green("[tool: t]")} {"response":[1,2]}`]);
+  });
+
+  it("renders newlines as separate rows, continuation lines indented", () => {
+    const lines = formatConversation([
+      { role: "system", content: "You are helpful.\nBe brief.\n\nAnswer in English." },
+      { role: "tool", name: "read", content: "line 1\nline 2", tool_call_id: "x" },
+    ]);
+    expect(lines).toEqual([
+      `${color.green("[system]")} You are helpful.`,
+      "  Be brief.",
+      "  ",
+      "  Answer in English.",
+      `${color.green("[tool: read]")} line 1`,
+      "  line 2",
+    ]);
+  });
+
+  it("escapes control characters other than newline", () => {
+    const lines = formatConversation([
+      { role: "tool", name: "bash", content: "\x1b[2Jcleared\x1b[1;1H\r\tdone\nnext" },
+    ]);
+    expect(lines).toEqual([
+      `${color.green("[tool: bash]")} \\u001b[2Jcleared\\u001b[1;1H\\r\\tdone`,
+      "  next",
+    ]);
   });
 
   it("emits a placeholder row for empty turns", () => {

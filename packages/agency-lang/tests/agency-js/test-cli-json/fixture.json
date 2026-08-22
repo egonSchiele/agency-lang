@@ -15,5 +15,22 @@
     "files": 1,
     "shardLineOnStderr": true,
     "shardLineOnStdout": false
+  },
+  "brokenShared": {
+    "exitCode": 1,
+    "stdoutEmpty": true,
+    "diagnosticOnStderr": true
+  },
+  "brokenAgencyOnly": {
+    "exitCode": 1,
+    "stdoutLines": 1,
+    "fileStatus": "compile-failed",
+    "filesFailed": 1,
+    "failed": 1
+  },
+  "withCoverage": {
+    "exitCode": 2,
+    "stdoutEmpty": true,
+    "refusedOnStderr": true
   }
 }

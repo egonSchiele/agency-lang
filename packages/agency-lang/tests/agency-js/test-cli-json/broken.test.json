@@ -1,0 +1,5 @@
+{
+  "tests": [
+    { "nodeName": "main", "expectedOutput": "1", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

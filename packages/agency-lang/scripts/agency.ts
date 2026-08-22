@@ -1221,6 +1221,14 @@ export function createProgram(deps: CliDependencies = {}): Command {
       ) => {
         const config = getConfig();
         const output = opts.json ? jsonOutput() : humanOutput();
+        if (opts.json && opts.coverage && !opts.collectOnly) {
+          // The coverage report prints to stdout, which --json reserves
+          // for the document. Collecting is fine; reporting is not.
+          console.error(
+            "Error: --json cannot be combined with --coverage unless --collect-only is also given (the coverage report would share stdout with the JSON document)",
+          );
+          process.exit(2);
+        }
         let runOptions: TestRunOptions = {};
         try {
           runOptions = {
@@ -1283,7 +1291,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
           const reportTargets = testFile.length > 0 ? testFile : ["."];
           await generateReport(config, reportTargets);
         }
-        if (totals.failed > 0) {
+        // A file that never ran its cases (malformed json, a refused
+        // --agency-only compile) may leave `failed` at zero.
+        if (totals.failed > 0 || totals.filesFailed > 0) {
           process.exit(1);
         }
       },

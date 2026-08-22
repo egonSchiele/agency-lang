@@ -50,7 +50,19 @@ A test run's behavior is decided by its own command line, never by an outer
 - Under `--agency-only` a refusal is a **file failure**, not a process exit:
   the file's cases are reported failed with the diagnostics, the suite goes
   on, and the exit code is 1 at the end. "The agent's code does not compile"
-  is an ordinary grading outcome.
+  is an ordinary grading outcome. The exit code follows `filesFailed` as
+  well as `failed`, so a refused file that declared no cases still fails
+  the command.
+- Without `--agency-only`, sources are compiled by the shared precompile
+  pass (`lib/cli/precompile.ts`), which goes through `BuildSession` and
+  calls `process.exit(1)` on a parse or type error. Under `--json` that
+  means **no document at all**: exit 1, diagnostics on stderr, empty
+  stdout. A consumer must treat a missing document as a failure (the eval
+  grader does). The document is only guaranteed for invocations that reach
+  the run phase. Lifting this needs a non-exiting `BuildSession`, which is
+  a separate change.
+- `--json` refuses `--coverage` unless `--collect-only` is also given: the
+  coverage report prints to stdout, which `--json` reserves for the document.
 
 Tests: `tests/agency-js/test-cli-policy`, `test-cli-agency-only`,
 `test-cli-json` (each with a positive control), and the unit suites beside

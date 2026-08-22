@@ -41,6 +41,10 @@ export const TestReportSchema = z.strictObject({
   passed: z.number(),
   failed: z.number(),
   skipped: z.number(),
+  /** Files that did not run (`compile-failed`, `error`) plus files with a
+   *  failed case. Non-zero means the command exited 1, even when `failed`
+   *  is 0 (a refused file that declared no cases). */
+  filesFailed: z.number(),
 });
 
 export type TestCaseReport = z.infer<typeof TestCaseReportSchema>;
@@ -52,14 +56,19 @@ export function buildTestReport(files: TestFileReport[]): TestReport {
   let passed = 0;
   let failed = 0;
   let skipped = 0;
+  let filesFailed = 0;
   for (const file of files) {
+    let fileFailed = file.status === "compile-failed" || file.status === "error";
     for (const testCase of file.cases) {
       if (testCase.status === "passed") passed++;
-      else if (testCase.status === "failed") failed++;
-      else if (testCase.status === "skipped") skipped++;
+      else if (testCase.status === "failed") {
+        failed++;
+        fileFailed = true;
+      } else if (testCase.status === "skipped") skipped++;
     }
+    if (fileFailed) filesFailed++;
   }
-  return { version: TEST_REPORT_VERSION, files, passed, failed, skipped };
+  return { version: TEST_REPORT_VERSION, files, passed, failed, skipped, filesFailed };
 }
 
 /** A file that never ran its cases (compile refusal, runner error): every

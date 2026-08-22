@@ -394,6 +394,11 @@ describe("parseTestFileEvalHarness", () => {
     expect(() => harness({ tests: [CASE], ...extra })).toThrow(new RegExp(field));
   });
 
+  test("a missing or empty tests array is refused", () => {
+    expect(() => harness({})).toThrow(/non-empty tests/);
+    expect(() => harness({ tests: [] })).toThrow(/non-empty tests/);
+  });
+
   test("a non-sibling sourceFile and a non-exact criterion are refused", () => {
     expect(() => harness({ sourceFile: "other.agency", tests: [CASE] })).toThrow(/sibling/);
     expect(() =>

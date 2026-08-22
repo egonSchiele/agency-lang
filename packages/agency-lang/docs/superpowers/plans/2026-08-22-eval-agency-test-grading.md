@@ -1,7 +1,7 @@
 # Eval grading of Agency coding tests: implementation plan (v2)
 
 v2 addresses the review in
-`/Users/adityabhargava/agency-lang/packages/agency-lang/docs/superpowers/plans/2026-08-22-eval-agency-test-grading-REVIEW.md`:
+`docs/superpowers/plans/2026-08-22-eval-agency-test-grading-REVIEW.md`:
 Task 3 now changes the per-case outcome contract and routes every line of
 human output through one sink; Task 1 clears and sets the budget keys the
 way `agency run` does, as strings; the `revision` removal lives in Task 9
@@ -10,7 +10,7 @@ only; Task 6 names its combined snapshot type and uses the existing
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task (this project does NOT use subagent-driven development). Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Spec:** `/Users/adityabhargava/agency-lang/packages/agency-lang/docs/superpowers/specs/2026-08-22-eval-agency-test-grading-design.md`. Read it first; every task names its section.
+**Spec:** `docs/superpowers/specs/2026-08-22-eval-agency-test-grading-design.md`. Read it first; every task names its section.
 
 **Branch:** `adit/split-4-eval-grader` (PR #880, based on `main`). The branch currently carries the wrapper-based grader. This plan rewrites it in place: the first tasks add the `agency test` flags (which stand on their own), the middle tasks rebuild the grader on them, the last tasks delete what the old design needed.
 
@@ -64,7 +64,7 @@ Background: `runAgencyNode` picks `compiledPath` from `distDir`, a sibling `.js`
 - [ ] New `lib/cli/agencyOnlyCompile.ts`: `compileAgencyOnly(sourceFile): { ok: true; scriptPath: string } | { ok: false; errors: string[] }`. Calls `compileSandboxed({ entry: { file: basename(sourceFile) }, dir: dirname(sourceFile) })`; on success calls `materializeCompiledScript(result)` and returns the script path. No `process.exit`, no throw on refusal.
 - [ ] `runAgencyNode` gains an optional `compiledPath?: string` argument that short-circuits the three existing branches. Keep the branches' order and comments intact; the new argument is checked first and documented as "the caller already compiled this file".
 - [ ] `runTestFile`: under `options.agencyOnly`, call `compileAgencyOnly` once per file before the cases loop. On `ok: false`, log the errors, mark every case failed with that text as feedback, record the file in `failedFiles`, and return; do not `process.exit`. On success pass `scriptPath` as `compiledPath` to every case. Skip the precompile pass for these files (`test()` already groups files for precompile; exclude them when `agencyOnly` is set).
-- [ ] Cleanup: the materialized directory is deleted after the file's cases finish, through `safeDeleteDirectoryWithin(<.agency-tmp>, <dir>)`. Never derive the directory by path arithmetic; `materializeCompiledScript` returns the script path and the per-run dir is its parent only for single-file programs, so have `compileAgencyOnly` also return the run directory it created (the first segment under `.agency-tmp`, the same rule `cleanupTempDir` in `ipc.ts` uses; expose that rule as a named helper rather than copying it).
+- [ ] Cleanup: the materialized directory is deleted after the file's cases finish, through `safeDeleteDirectoryWithin(<.agency-tmp>, <dir>)`. Never derive the directory by path arithmetic; `materializeCompiledScript` returns the script path and the per-run dir is its parent only for single-file programs, so have `compileAgencyOnly` also return the run directory it created (the first segment under `.agency-tmp`, the same rule the runtime's own cleanup in `ipc.ts` uses; expose that rule as a named, exported helper rather than copying it — it became `removeCompiledScriptDir`).
 - [ ] Unit tests: a source importing a sibling `.agency` compiles and the script exists at the returned path; a source importing `fs` returns `ok: false` with "not Agency source" in the errors and no script; a source in `sub/` importing `./helper.agency` gets a script under `sub/` (nested entry, the #878 fix).
 - [ ] `agency run --agency-only`: in `lib/cli/commands.ts` `runCommand`, when the flag is set, replace the `compile(...)` call (line 282) with `compileAgencyOnly(inputFile)`; on `ok: false` print the errors and exit 1 (a refusal IS the run's failure here; `run` already exits 1 on a compile error). Add the flag in `scripts/agency.ts` next to `--policy`. Agency-js test: `agency run --agency-only bad.agency` (imports `fs`) exits 1 with "Sandboxed compilation refused"; `agency run --agency-only --reject '*' writes.agency` exits 0 and the file it tried to write does not exist; positive control: without the flags the file exists.
 - [ ] Agency-js test `tests/agency-js/test-cli-agency-only/`: the same fixture directory holds `good.agency` (std:: only) and `bad.agency` (imports `fs`). Positive control: `agency test bad.test.json` without the flag compiles and runs. With `--agency-only`: `good` passes, `bad` fails with "Sandboxed compilation refused" in the output and the exit code is 1, and the process did not exit before printing the summary line for `good` (proves no `process.exit` on the refusal).

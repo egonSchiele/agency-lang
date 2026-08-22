@@ -2,9 +2,9 @@
 
 Date: 2026-08-22. Status: designed, awaiting owner review. Supersedes the
 "Eval AgencyTestGrader" half of
-`/Users/adityabhargava/agency-lang/packages/agency-lang/docs/superpowers/specs/2026-08-20-std-agency-test-design.md`
+`docs/superpowers/specs/2026-08-20-std-agency-test-design.md`
 and all of
-`/Users/adityabhargava/agency-lang/packages/agency-lang/docs/superpowers/specs/2026-08-21-combined-grader-external-files-design.md`
+`docs/superpowers/specs/2026-08-21-combined-grader-external-files-design.md`
 (the synthesized grading module, which this design removes).
 
 ## Background: what we are trying to do, and why Agency makes it possible
@@ -139,8 +139,14 @@ default for either is out of scope.
 ### `--json`
 
 With `--json`, everything the runner prints today goes to stderr, and stdout
-receives exactly one JSON document when the run ends. The exit code is
-unchanged (1 when any case failed or any file could not run).
+receives exactly one JSON document when the run ends. The exit code is 1
+when any case failed or any file could not run (the document's `filesFailed`
+count, which is non-zero even when the file declared no cases). Two edges:
+a compile failure in the shared precompile pass (not `--agency-only`) ends
+the command with exit 1 before any document, so a missing document is a
+failure; and `--coverage` is refused alongside `--json` unless
+`--collect-only` is also given, because the coverage report prints to
+stdout.
 
 ```json
 {
@@ -166,7 +172,8 @@ unchanged (1 when any case failed or any file could not run).
   ],
   "passed": 1,
   "failed": 1,
-  "skipped": 0
+  "skipped": 0,
+  "filesFailed": 0
 }
 ```
 

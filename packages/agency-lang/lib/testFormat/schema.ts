@@ -338,7 +338,11 @@ export function parseTestFileEvalHarness(
       `declares sourceFile ${JSON.stringify(file.sourceFile)}, but an eval harness tests its sibling ${siblingAgencyBasename}`,
     );
   }
-  (file.tests ?? []).forEach((testCase, i) => {
+  // An empty harness would grade every submission as perfect (a file that
+  // ran with nothing to fail scores 1), so it must test something.
+  const cases = file.tests ?? [];
+  if (cases.length === 0) refuse("an eval harness must have a non-empty tests array");
+  cases.forEach((testCase, i) => {
     const where = `test ${i + 1} (${testCase.nodeName})`;
     for (const field of EVAL_HARNESS_REFUSED_CASE_FIELDS) {
       if (testCase[field] !== undefined) {

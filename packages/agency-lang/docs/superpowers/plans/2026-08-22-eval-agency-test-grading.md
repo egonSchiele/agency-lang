@@ -1,4 +1,12 @@
-# Eval grading of Agency coding tests: implementation plan
+# Eval grading of Agency coding tests: implementation plan (v2)
+
+v2 addresses the review in
+`/Users/adityabhargava/agency-lang/packages/agency-lang/docs/superpowers/plans/2026-08-22-eval-agency-test-grading-REVIEW.md`:
+Task 3 now changes the per-case outcome contract and routes every line of
+human output through one sink; Task 1 clears and sets the budget keys the
+way `agency run` does, as strings; the `revision` removal lives in Task 9
+only; Task 6 names its combined snapshot type and uses the existing
+`<sha256><ext>` file naming; Task 8 has no live-grading placeholder.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task (this project does NOT use subagent-driven development). Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -30,15 +38,16 @@ Tasks 1–4 change `agency test` only and are independently useful. Task 5 is th
 - `scripts/agency.ts` (the `test` command definition, around line 1140)
 - `lib/cli/test.ts` (`test()`, `runTestFile`, `runSingleTest`)
 - `lib/cli/testChildEnv.ts` (new, one concept: the environment a test case's child gets)
-- `lib/cli/util.ts` (`executeNodeAsync` already accepts `env`)
-- `lib/cli/test.test.ts`, `lib/cli/testChildEnv.test.ts`
+- `lib/cli/util.ts` (`runAgencyNode` / `executeNodeAsync`)
+- `lib/cli/testChildEnv.test.ts`
 
-Background: `agency run --policy/--approve/--reject` resolves a policy with `resolveRunPolicy` (`lib/cli/runPolicy.ts`) and puts its JSON into the child's environment as `AGENCY_RUN_POLICY` (`lib/cli/commands.ts:304-313`). The runtime's `runNode` installs the handler from that variable (`lib/runtime/node.ts:201`). The test runner spawns each case through `executeNodeAsync`, which merges an `env` object over `process.env`. So the work is: resolve once, pass the variables through. `--reject '*'` is already reject-all because the policy's wildcard key is `"*"`; no built-in is added.
+Background: `agency run` resolves `--policy/--approve/--reject` with `resolveRunPolicy` (`lib/cli/runPolicy.ts`) and `--max-cost/--max-time` with `resolveBudget` (`lib/cli/budget.ts`, which returns **strings**: dollars as a number string, time already converted to milliseconds). It then builds the child's environment with a clear-then-set rule for all four variables (`lib/cli/commands.ts:304-321`): delete `AGENCY_RUN_POLICY`, `AGENCY_RUN_POLICY_INTERACTIVE`, `AGENCY_MAX_COST`, `AGENCY_MAX_TIME`, then set the ones this invocation resolved. The runtime installs the handler and the budget from those variables in `runNode` (`lib/runtime/node.ts:201-202`). The test runner spawns each case through `runAgencyNode`, which merges an `env` object over `process.env`; it has no way to *delete* a key today. `--reject '*'` is already reject-all because the policy's wildcard key is `"*"`; no built-in policy is added.
 
-- [ ] Add a `TestRunOptions` type in `lib/cli/test.ts`: `{ policy?: ResolvedRunPolicy; maxCost?: number; maxTime?: number; agencyOnly?: boolean; json?: boolean }`. Thread it from `test()` to `runTestFile` to `runSingleTest` as one object (no new positional parameters).
-- [ ] New `lib/cli/testChildEnv.ts`: `testChildEnv(options): Record<string, string>` and `clearedPolicyKeys` — a pure function returning the entries to merge over `process.env`, plus the keys to delete: always delete `AGENCY_RUN_POLICY` and `AGENCY_RUN_POLICY_INTERACTIVE` (clear-then-set, copy the comment from `commands.ts`), set `AGENCY_RUN_POLICY` from `options.policy.policyJson` when present, set `AGENCY_MAX_COST` / `AGENCY_MAX_TIME` when given. `executeNodeAsync` needs to honor a "delete these keys" input; add it beside `env` rather than special-casing inside.
-- [ ] In `scripts/agency.ts`, add `--policy <name|path>`, `--approve <effects>`, `--reject <effects>`, `--max-cost <dollars>`, `--max-time <duration>` to the `test` command, resolved with the same helpers the `run` command uses (do not re-parse durations by hand).
-- [ ] Unit test: `testChildEnv` with no policy yields the two keys to delete and no policy entry; with `--reject '*'` yields a JSON policy whose `"*"` rule is `reject`; cost and time map to their env names.
+- [ ] `TestRunOptions` in `lib/cli/test.ts`: `{ policy?: ResolvedRunPolicy; budget?: { maxCost?: string; maxTime?: string }; agencyOnly?: boolean; json?: boolean }`. `budget` is exactly `resolveBudget`'s return, so the conversion boundary is the CLI flag parser and nothing downstream re-parses. Thread it from `test()` to `runTestFile` to `runSingleTest` as one object (no new positional parameters).
+- [ ] New `lib/cli/testChildEnv.ts`: `testChildEnv(options): { set: Record<string, string>; unset: string[] }`. `unset` is always the four keys (`AGENCY_RUN_POLICY`, `AGENCY_RUN_POLICY_INTERACTIVE`, `AGENCY_MAX_COST`, `AGENCY_MAX_TIME`), with the comment from `commands.ts` ("an internal carrier from THIS run's flags to the child, never a knob a parent shell can set"). `set` holds `AGENCY_RUN_POLICY` from `options.policy.policyJson` and the two budget strings when present. Pure function, no I/O.
+- [ ] `runAgencyNode` gains `unsetEnv?: string[]` beside `env`: the child environment is `process.env` minus `unsetEnv`, plus `env`. `executeNodeAsync` passes it through. No other caller changes.
+- [ ] `scripts/agency.ts`: add `--policy <name|path>`, `--approve <effects>`, `--reject <effects>`, `--max-cost <dollars>`, `--max-time <duration>` to the `test` command, resolved with `resolveRunPolicy` and `resolveBudget` exactly as the `run` command does (reuse its option descriptions).
+- [ ] Unit tests (`testChildEnv.test.ts`): no flags → `unset` has the four keys and `set` is empty (the no-budget, no-policy inheritance case the review raised); `--reject '*'` → `set.AGENCY_RUN_POLICY` parses to a policy whose `"*"` rule is `reject`; a budget `{ maxCost: "5", maxTime: "60000" }` maps to the two env names unchanged. Plus one test of `runAgencyNode`'s env assembly: a key present in `process.env` and listed in `unsetEnv` is absent from the spawned env (stub the spawn; assert on the env it receives).
 - [ ] Agency-js test `tests/agency-js/test-cli-policy/`: a tested node does `write("x.txt", "hi", ".") with approve` and returns whether the write succeeded. Positive control: `agency test` without a policy writes the file and the case expecting `"written"` passes. With `--reject '*'`: the file is not written and the case fails with feedback containing the reject. Both in one `test.js`. Check `docs/misc/TESTING.md` for the agency-js layout.
 - [ ] Commit: "agency test --policy/--approve/--reject/--max-cost/--max-time: the run's root handler and budget, in the test runner".
 
@@ -64,19 +73,34 @@ Background: `runAgencyNode` picks `compiledPath` from `distDir`, a sibling `.js`
 ## Task 3: `--json` (spec Part 1, "--json")
 
 **Files:**
-- `lib/cli/testReport.ts` (new: the JSON document type, its zod schema, and the builder from `TestStats`-level data)
-- `lib/cli/test.ts` (collect per-case outcomes; route human output to stderr under `--json`; print the document at the end)
-- `scripts/agency.ts` (`--json` flag)
-- `lib/cli/testReport.test.ts`
+- `lib/cli/testReport.ts` (new: the JSON document type, its zod schema, totals)
+- `lib/cli/testOutput.ts` (new: the one sink every human line of the test command goes through)
+- `lib/cli/test.ts` (outcome contract, sink threading, precompile quiet)
+- `scripts/agency.ts` (`--json` flag; the action's summary and slow-test printing go through the sink)
+- `lib/cli/testReport.test.ts`, `lib/cli/testOutput.test.ts`, `lib/cli/test.test.ts`
 
-Background: `runTestFile` already computes per-case outcomes (`SingleTestOutcome`) and durations (`slowTests`), and returns a per-file summary that `test()` folds into `TestStats`. The JSON document is that data, kept per case instead of summed. The buffered logger (`createBufferedLogger`) is where stdout/stderr routing lives.
+Background, and why this task is bigger than "print JSON at the end": today `runSingleTest` returns only `"passed" | "failed" | "aborted"` and the failure text (the exact-match diff, the judge verdict, the execution error, the interrupt mismatch) exists only as `log(...)` calls, so there is nothing to put in a case's `feedback`. And stdout is written from more places than the buffered logger: `test()` prints the shard line and the suite-abort summary with `console.log` (`lib/cli/test.ts:1027-1039, 1058`), the precompile pass prints unless called with `{ quiet: true }` (`lib/cli/precompile.ts:117`), and the command action in `scripts/agency.ts` prints the file/test totals and the slowest-tests table with `console.log` (`1205-1215`, `printSlowestTests`). One JSON document on stdout means every one of those goes elsewhere under `--json`.
 
-- [ ] `lib/cli/testReport.ts`: the types from the spec (`TestReport`, `TestFileReport`, `TestCaseReport`, with `version: 1`), a zod schema exported for the grader's strict parse, and `emptyReport()`. One file, one concept.
-- [ ] `runTestFile` records a `TestCaseReport` per case: `node`, optional `description`/`input`, `status`, `feedback` (the same text the human output prints for a failure: exact diff, judge explanation, execution error, interrupt mismatch), `durationMs`. Return it alongside the existing summary. File-level `status`: `ran`, `compile-failed` (Task 2's path, with `error`), `skipped`, `aborted`.
-- [ ] Under `options.json`, the buffered logger sends every line to stderr; `test()` prints `JSON.stringify(report)` to stdout once, after the suite summary, and `scripts/agency.ts` exits with the same code as today.
-- [ ] Unit tests: the builder turns a mix of passed/failed/skipped cases and one compile-failed file into the documented shape; totals match; `version` is 1; the schema round-trips it.
-- [ ] Agency-js test: `agency test --json` on a fixture with one passing and one failing case prints a single JSON document on stdout that parses and validates, has `passed: 1, failed: 1`, and the failing case's `feedback` contains the expected/actual values; stderr still contains "tests passed".
-- [ ] Commit: "agency test --json: one machine-readable document on stdout".
+**Outcome contract.**
+- [ ] Replace `SingleTestOutcome` with `CaseOutcome = { status: "passed" | "failed" | "aborted"; feedback?: string; durationMs: number }`. `runSingleTest` builds `feedback` from the same strings it logs today (keep logging them; the sink decides where they go): the exact verdict's feedback, the judge's explanation, `Test execution error: …`, the interrupt mismatch. `runTestWithRetries` returns the **last attempt's** outcome, so the feedback is the final failure, and adds `attempts` to it.
+- [ ] `runTestFile` returns, beside today's summary, `TestFileReport` (from `testReport.ts`): `file`, `sourceFile`, `status` (`ran` | `compile-failed` with `error` | `skipped` | `aborted`), and one `TestCaseReport` per case (`node`, optional `description`/`input`, `status`, `feedback`, `durationMs`, `attempts`). A case skipped by `skip`/`skipOnCI` is `skipped`. Under `compile-failed` (Task 2's refusal path) the cases array lists every case as `failed` with the file's error as feedback, so a consumer counting cases sees the right denominator.
+- [ ] `test()` returns `TestStats` plus the full `TestReport` (`version: 1`, `files`, totals computed by `testReport.ts`, never by hand in the caller).
+
+**Output routing.**
+- [ ] New `lib/cli/testOutput.ts`: `TestOutput = { line(msg, stream?): void; flushDocument(doc): void }` with two constructors: `humanOutput()` (stdout/stderr as today) and `jsonOutput()` (every `line` goes to stderr; `flushDocument` writes `JSON.stringify(doc)` + newline to stdout once). The buffered per-file logger (`createBufferedLogger`) writes into a `TestOutput` instead of `console`.
+- [ ] Thread one `TestOutput` through `test()`, `runTestFile`, `printSuiteAbortSummary`, and the shard line. Call `precompileTestSources(config, files, { quiet: options.json })`; the `CompileClosureError` path prints through the sink's stderr and still exits 1.
+- [ ] `scripts/agency.ts` test action: construct the sink from `opts.json`, pass it to `test()`, print the totals and `printSlowestTests` through it (they become stderr under `--json`), then `flushDocument(report)` when `--json`, then the existing exit code.
+- [ ] Audit: `git grep -n "console\.\(log\|error\)" lib/cli/test.ts scripts/agency.ts` restricted to the `test` code paths (not `fixtures`, not `test js`) must show nothing left outside the sink; record the grep in the commit message.
+
+**Tests.**
+- [ ] `testReport.test.ts`: totals over a mix of passed/failed/skipped cases and one `compile-failed` file; `version` is 1; the zod schema round-trips the document; a `compile-failed` file contributes its cases to `failed`.
+- [ ] `testOutput.test.ts`: `jsonOutput().line("x")` lands on stderr, not stdout; `flushDocument` writes exactly one line to stdout; `humanOutput` is the current behavior (capture both streams).
+- [ ] `test.test.ts`: `runTestWithRetries` returns the final attempt's feedback when every attempt fails (stub `runSingleTest`).
+- [ ] Agency-js tests, three fixtures in one `tests/agency-js/test-cli-json/` test.js, each asserting stdout is **exactly one** parseable line and stderr still carries the human summary:
+  - a normal run: one passing and one failing case; `passed: 1, failed: 1`; the failing case's `feedback` contains the expected and actual values;
+  - a sharded run: `--shard 1/2` over two files; the document lists only the shard's file and the shard line is on stderr;
+  - an aborted run: a case with `timeoutMs` far below a node that sleeps (`std::system` `sleep` or a busy loop), under a suite-wide ceiling the fixture cannot set — so instead drive the abort summary directly in a unit test: `printSuiteAbortSummary(suite, jsonOutput())` writes nothing to stdout. The suite-abort path cannot be triggered deterministically from outside; the unit test pins the routing and the report builder test pins the `aborted` status.
+- [ ] Commit: "agency test --json: structured case outcomes, one output sink, one document on stdout".
 
 ## Task 4: documentation for the flags
 
@@ -95,15 +119,15 @@ Background: `runTestFile` already computes per-case outcomes (`SingleTestOutcome
 
 ## Task 6: the run row's `harness` record (spec Part 2, "Run time")
 
-**Files:** `lib/runDirectory/annotations.ts`, `lib/eval/runTypes.ts`, `lib/eval/run/runSuite.ts`, `lib/eval/grading/harnessSnapshot.ts` (new), tests beside each.
+**Files:** `lib/runDirectory/annotations.ts`, `lib/eval/runTypes.ts`, `lib/eval/loadInputs.ts`, `lib/eval/run/runSuite.ts`, `lib/eval/grading/harnessSnapshot.ts` (new), tests beside each.
 
-Background: `foldIntoRunDirectory` in `runSuite.ts` calls `recordCompletedRun({ gradersFiles, run: { payload } })`; `gradersFiles` are `{ name, content }` pairs stored under `graders/` with content-hash names (`writeGradersFiles`). The module-grader snapshot uses this for judge files. The harness record uses the same store.
+Background: `foldIntoRunDirectory` in `runSuite.ts` calls `recordCompletedRun({ gradersFiles, run: { payload } })`; `gradersFiles` are `{ name, content }` pairs stored under `graders/` (`writeGradersFiles` in `lib/runDirectory/mutations.ts`, which skips a name already present). The module-grader snapshot names a judge file `<sha256 of content><extension>` (`snapshotGradingModule`, `lib/eval/grading/gradingModule.ts:88`); there is no shared naming helper, and none is added: harness files use the same rule inline, so a harness `.agency` is stored as `<sha256>.agency` and its json as `<sha256>.test.json`. The run row's `harness` record maps logical names to those stored names, so the basename is never needed in the store. This task does **not** touch `revision`; that is Task 9's.
 
-- [ ] `annotations.ts`: add `harness?: HarnessRecord[]` to the `run` payload type and `RunAnnotationSchema`, where `HarnessRecord = { name, visibility: "visible" | "holdout", agency: string, json: string, sha256: string, maxCost?: number }`. `GradersIdentity` loses its `revision` field (Task 9 removes the writer; do the type here so the schema is final).
-- [ ] New `lib/eval/grading/harnessSnapshot.ts`: `snapshotHarness(defs: AgencyTestDefinition[], maxCost?: number): { files: { name, content }[]; records: HarnessRecord[] }`. Stored name = `<sha256 of content>-<basename>` (what judge files do; check `snapshotGradingModule` for the exact naming helper and reuse it). `sha256` on the record = hash of `agency + "\0" + json`. Runs the Task 5 preflight on each pair first, so a refusal happens here, before any agent runs.
-- [ ] `runSuite.ts`: `snapshotGraders` no longer special-cases `agencyTests`; a test with both `graders` and `agencyTests` gets both. `foldIntoRunDirectory` passes harness files into `gradersFiles` (concatenated with the module snapshot's files) and the records into the payload's `harness`.
-- [ ] `runTypes.ts`: keep `AgencyTestDefinition`; add optional `harnessMaxCost?: number` to `Test` (read from `test.json` in `loadInputs.ts`, validated as a non-negative number).
-- [ ] Tests: `harnessSnapshot.test.ts` (two pairs → four files with hash names, two records, sha stable across calls, preflight refusal surfaces with the file name); `runSuite` test that a test with harness pairs writes `graders/<hash>-…` files and a `harness` array on the run row (look for the existing `runSuite` tests that assert on the run row and extend one); `annotations.test.ts` schema accepts the field and rejects an unknown key inside a record.
+- [ ] `annotations.ts`: add `harness?: HarnessRecord[]` to the `run` payload type and `RunAnnotationSchema`, where `HarnessRecord = { name: string; visibility: "visible" | "holdout"; agency: string; json: string; sha256: string; maxCost?: number }`. `GradersIdentity` is unchanged here.
+- [ ] New `lib/eval/grading/harnessSnapshot.ts`: `HarnessSnapshot = { files: { name: string; content: string }[]; records: HarnessRecord[] }` and `snapshotHarness(defs: AgencyTestDefinition[], maxCost?: number): HarnessSnapshot`. Runs the Task 5 preflight on each pair first (a refusal throws, naming the file), reads both files, names them `<sha256>.agency` / `<sha256>.test.json`, sets `sha256` on the record to the hash of `agency + "\0" + json`, and dedupes `files` by name.
+- [ ] `runSuite.ts`: `snapshotGraders` returns one `TestSnapshots = { module?: TestGraders; harness?: HarnessSnapshot }` per test (today it returns `TestGraders | undefined`; the `agencyTests` special case that synthesized a module is removed). `executeTest` passes the pair through unchanged. `foldIntoRunDirectory` writes `gradersFiles: [...(module?.files ?? []), ...(harness?.files ?? [])]` and the payload gets `graders` from `module` (as today) and `harness` from `harness.records`. Show the type in the commit, not just the behavior.
+- [ ] `runTypes.ts` / `loadInputs.ts`: keep `AgencyTestDefinition`; add optional `harnessMaxCost?: number` to `Test`, read from `test.json`, validated as a finite non-negative number with a message naming the file.
+- [ ] Tests: `harnessSnapshot.test.ts` (two pairs → four files named by hash and extension, two records, `sha256` stable across calls, a preflight refusal surfaces with the file name, the same content in two pairs is stored once); `runSuite` test that a test with harness pairs writes `graders/<sha256>.agency` etc. and a `harness` array on the run row (extend an existing run-row test); `annotations.test.ts` accepts the field and rejects an unknown key inside a record.
 - [ ] Commit: "Run directory keeps each harness pair as plain files with a `harness` record".
 
 ## Task 7: `AgencyTestGrader` on `agency test --json` (spec Part 2, "Grade time")
@@ -119,18 +143,19 @@ Background: `foldIntoRunDirectory` in `runSuite.ts` calls `recordCompletedRun({ 
 
 ## Task 8: loading harness graders at grade time (spec Part 2, "Grade time")
 
-**Files:** `lib/eval/grading/gradeRun.ts` (`effectiveGraders`, `entryFor`), `lib/eval/grading/gradingModule.ts` (remove the `revision` branch), `lib/eval/run/runSuite.ts` or wherever live graders are assembled for `eval run`'s pre-run validation, tests.
+**Files:** `lib/eval/grading/gradeRun.ts` (`effectiveGraders`, `entryFor`), tests.
 
-- [ ] `entryFor` carries `harness` from the run row into `Entry`.
-- [ ] `effectiveGraders` returns `[...moduleGraders, ...harnessGraders]` where `harnessGraders` builds one `AgencyTestGrader` per record bound to `path.join(gradersDir, record.agency / record.json)` and `maxCost: record.maxCost`. The override mode (`--graders`) replaces module graders only; harness graders always apply (they are the test's own).
-- [ ] Live grading (a suite graded without a run directory, if that path exists; check `gradeRun.ts` callers): bind to the test directory's files from `test.agencyTests`.
-- [ ] Tests: a run directory with a `harness` record and stored files grades with one grader per record whose `revision` matches the record's sha; a directory without the field grades exactly as before (regression: reuse an existing fixture); `--goal` keeps harness graders.
+Background: grading's only input is a run directory (`gradeRun`/`gradeSnapshot` in `gradeRun.ts`; callers are `gradeSuite.ts` and the optimizer). There is no live-from-suite grading path, so harness graders are built from the run row only. `eval run`'s pre-run validation loads module graders through `makeGraderModuleCache`; harness pairs are validated by Task 6's preflight instead, and nothing else is needed there.
+
+- [ ] `entryFor` carries `harness` from the run row into `Entry` (beside `graders`).
+- [ ] `effectiveGraders` returns `[...moduleGraders, ...harnessGraders]`: module graders keep today's precedence (override > test-owned snapshot > recorded module path > config-origin snapshot > fallback); `harnessGraders` is one `AgencyTestGrader` per record, bound to `path.join(gradersDir, record.agency)` / `record.json`, with `maxCost: record.maxCost`. Harness graders apply under `--graders <override>` and under `--goal`, because they are the test's own.
+- [ ] Tests: a run directory with a `harness` record and stored files grades with one grader per record whose `revision` is `agency-tests/<name>@<sha256>`; a directory without the field grades exactly as before (reuse an existing fixture); `--goal` and `--graders` keep harness graders; a record whose stored file is missing fails grading with a message naming the stored name (mirror `loadGradingSnapshot`'s "snapshot not found" wording).
 - [ ] Commit: "eval grade builds harness graders from the run row".
 
 ## Task 9: remove the old design (spec Part 3)
 
 - [ ] Delete `lib/agents/eval/agencyTestWrapper.agency`, `tests/agency/agency-test-wrapper-policy.agency` + `.test.json`, `lib/eval/grading/reportEnvelope.ts`, `lib/eval/grading/synthesizeGradersModule.ts` + `.test.ts`.
-- [ ] Remove `GraderRevision`, the `revision` field on `GradersSnapshot`/`RecordedGraders`, and the `loadGradingSnapshot` branch in `gradingModule.ts`; remove `revision` from `GradersIdentity` and the zod schema (Task 6 may have done the type already).
+- [ ] Remove, all in this one task and in one commit so each step typechecks: the synthesized-grader writer in `runSuite.ts` (already gone in Task 6), `GraderRevision`, the `revision` field on `GradersSnapshot` and `RecordedGraders`, the `revision` branch of `loadGradingSnapshot` in `gradingModule.ts`, and `revision` on `GradersIdentity` plus its zod schema in `annotations.ts`. Run the `gradingModule`, `annotations`, and `gradeRun` suites after.
 - [ ] Remove `_formatFailurePayload` from `stdlib/agency.agency` (then `make`).
 - [ ] Delete `docs/superpowers/specs/2026-08-21-combined-grader-external-files-design.md` (it is on `main`; deleting it in this PR is fine, the spec says why).
 - [ ] `git grep` for every removed name (`agencyTestWrapper`, `reportEnvelope`, `synthesizeGradersModule`, `_formatFailurePayload`, `sourceIdentity`, `GraderRevision`) and fix every hit, including docs.

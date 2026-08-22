@@ -249,7 +249,7 @@ today. The run row records them:
 ```json
 "harness": [
   { "name": "fib-tests", "visibility": "visible",
-    "agency": "3f1c…-fib-tests.agency", "json": "9a02…-fib-tests.test.json",
+    "agency": "3f1c….agency", "json": "9a02….test.json",
     "sha256": "c41d…" },
   { "name": "fib-holdout", "visibility": "holdout",
     "agency": "…", "json": "…", "sha256": "…" }
@@ -259,8 +259,9 @@ today. The run row records them:
 `harness` is a new optional field on the `run` annotation
 (`RunAnnotationSchema` in `lib/runDirectory/annotations.ts`), beside the
 existing `graders` field, which is untouched. `agency` and `json` are the
-stored names; `sha256` is the hash of the two contents concatenated with a
-`\0` between, and is the grader's revision. Nothing is generated, bundled,
+stored names, `<sha256 of content><extension>`, the same rule judge files
+already use (`snapshotGradingModule`); `sha256` is the hash of the two
+contents concatenated with a `\0` between, and is the grader's revision. Nothing is generated, bundled,
 or given a synthetic identity. A directory from before this field has no
 `harness` and grades exactly as before.
 

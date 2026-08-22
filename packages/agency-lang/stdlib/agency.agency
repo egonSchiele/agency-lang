@@ -440,6 +440,13 @@ export def test(
   return guarded
 }
 
+/** @internal Deterministic feedback text for a failure payload: strings
+verbatim, structured failures as stable JSON. Shared by test() and the
+shipped eval wrapper. */
+export def _formatFailurePayload(err: any): string {
+  return _failureFeedback(err)
+}
+
 export def testFile(dir: string, filename: string): Result<TestReport> {
   """
   Run the test cases a .test.json file declares against its source file, in the sandboxed subprocess, and return a per-case report. The portable form of test(): the same file `agency test` runs, restricted to the sandbox subset (exact criteria; approve/reject scripted answers; per-case timeoutMs).

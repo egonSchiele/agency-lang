@@ -4,6 +4,7 @@ export { grader, FunctionGrader, toGrader } from "./grading/functionGrader.js";
 export type { Grader, GraderFn, GraderContext } from "./grading/functionGrader.js";
 export { scalar, binary } from "./grading/grade.js";
 export { BaseGrader } from "./grading/baseGrader.js";
+export { AgencyTestGrader } from "./grading/agencyTestGrader.js";
 export {
   ExactMatchGrader as ExactMatch,
   ContainsGrader as Contains,

@@ -1,0 +1,106 @@
+// The framework-owned sandbox wrapper for eval agency-test grading.
+//
+// The grading process is TypeScript and cannot hold Agency handlers, so
+// this thin Agency parent owns the whole sandbox policy: a phased handler
+// that approves exactly the two known reads (the .test.json, then the
+// declared source file), approves per-case std::run launches while tests
+// run, and rejects every other effect the tested code raises — any reject
+// wins, so nothing a suite or an agent wrote can approve its way past it.
+//
+// The report travels as a FILE the wrapper writes with its own approved
+// write, never stdout: the tested subprocess shares the stdout pipe and
+// could print a forged envelope.
+//
+// argv (via std::args positionals): scratchDir jsonFilename sourceFilename
+// reportDir reportFilename [maxCost]. The report destination is split
+// because write() requires a filename contained in its dir — an absolute
+// filename is refused.
+import { _testFileForGrading, _formatFailurePayload } from "std::agency"
+import { parseArgs } from "std::args"
+
+/** The pure policy decision, separated from the imperative handler so the
+tests can drive every phase and payload without spawning anything. */
+export def decideWrapperInterrupt(
+  phase: string,
+  expectedDir: string,
+  expectedFilename: string,
+  effect: string,
+  dir: string,
+  filename: string,
+): string {
+  if (phase == "awaitingJsonRead" || phase == "awaitingSourceRead") {
+    // No tested program has launched yet, so phase + effect + exact
+    // payload is the authorization boundary.
+    if (effect == "std::read") {
+      if (dir == expectedDir && filename == expectedFilename) {
+        return "approveAndAdvance"
+      }
+    }
+    return "reject"
+  }
+  if (phase == "runningTests") {
+    if (effect == "std::run") {
+      return "approve"
+    }
+    return "reject"
+  }
+  // writingReport and anything unexpected: no broad approvals.
+  return "reject"
+}
+
+export node main(): string {
+  const parsed = parseArgs({ programName: "agencyTestWrapper", flags: {} })
+  const scratchDir = parsed.positionals[0]
+  const jsonFilename = parsed.positionals[1]
+  const sourceFilename = parsed.positionals[2]
+  const reportDir = parsed.positionals[3]
+  const reportFilename = parsed.positionals[4]
+  const maxCostArg = parsed.positionals[5] ?? ""
+  const maxCost = if maxCostArg == "" then null else Number(maxCostArg)
+
+  const state = { phase: "awaitingJsonRead" }
+  let result = null
+  handle {
+    result = _testFileForGrading(scratchDir, jsonFilename, maxCost)
+  } with (intr) {
+    const expected = if state.phase == "awaitingJsonRead" then jsonFilename else sourceFilename
+    const decision = decideWrapperInterrupt(
+      state.phase,
+      scratchDir,
+      expected,
+      intr.effect,
+      intr.data.dir ?? "",
+      intr.data.filename ?? "",
+    )
+    if (decision == "approveAndAdvance") {
+      if (state.phase == "awaitingJsonRead") {
+        state.phase = "awaitingSourceRead"
+      } else {
+        state.phase = "runningTests"
+      }
+      return approve()
+    }
+    if (decision == "approve") {
+      return approve()
+    }
+    return reject("eval sandbox rejected effect \"${intr.effect}\" in phase ${state.phase}")
+  }
+  state.phase = "writingReport"
+
+  // Build the envelope OUTSIDE the reject-all handle. A per-case failure
+  // (wall clock, rejected effect) is still status "tested"; only a
+  // whole-call failure — compile error, malformed json, cost cap — becomes
+  // could-not-test.
+  let envelope = null
+  if (result is failure(err)) {
+    envelope = { status: "could-not-test", feedback: _formatFailurePayload(err) }
+  }
+  if (result is success(report)) {
+    envelope = { status: "tested", report: report }
+  }
+  const written = write(reportFilename, JSON.stringify(envelope), reportDir) with approve
+  if (isFailure(written)) {
+    return "report write failed"
+  }
+  return "report written"
+}

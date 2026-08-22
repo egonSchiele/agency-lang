@@ -56,11 +56,19 @@ export async function bundleGradingModule(filePath: string): Promise<GradingBund
  * by path (a custom judge prompt). Names are content hashes. `judgeFiles`
  * maps each path as the grader declared it to its stored name.
  */
+export type GraderRevision = {
+  sourceIdentity: string;
+  sha256: string;
+};
+
 export type GradersSnapshot = {
   source: string;
   bundleFile: string;
   judgeFiles: Record<string, string>;
   files: { name: string; content: string }[];
+  /** Synthesized modules only: the stable logical identity whose hash also
+   *  covers the harness files (see synthesizeGradersModule.ts). */
+  revision?: GraderRevision;
 };
 
 /** Bundle a grading module and collect its external files. Loads the module
@@ -91,6 +99,9 @@ export type RecordedGraders = {
   source: string;
   bundleFile: string;
   judgeFiles: Record<string, string>;
+  /** Optional so pre-revision run directories stay readable; absent takes
+   *  the code-only identity below. */
+  revision?: GraderRevision;
 };
 
 /** Load graders from a run directory's snapshot. The revision is the stored
@@ -113,6 +124,12 @@ export async function loadGradingSnapshot(
   for (const grader of graders) {
     for (const [original, stored] of Object.entries(recorded.judgeFiles)) {
       grader.rebindExternalFile?.(original, path.join(gradersDir, stored));
+    }
+    // A recorded combined revision (synthesized modules) wins over the
+    // code-only derivation: re-deriving here would silently reconstruct
+    // the physical-path@bundle-hash identity the revision exists to fix.
+    if (recorded.revision !== undefined) {
+      grader.revision = `${recorded.revision.sourceIdentity}@${recorded.revision.sha256}`;
     }
   }
   return graders;

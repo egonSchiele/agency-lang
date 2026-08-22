@@ -4,7 +4,7 @@ import * as path from "path";
 import { nanoid } from "nanoid";
 
 import { assertEvalInputId } from "./ids.js";
-import type { Test } from "./runTypes.js";
+import type { AgencyTestDefinition, AgencyTestVisibility, Test } from "./runTypes.js";
 import { parseSource, resolveSource } from "./sources.js";
 
 type MakeId = () => string;
@@ -150,7 +150,54 @@ function loadTestDir(testDir: string, makeId: MakeId, options: LoadOptions): Tes
   if (spec.graders === undefined && fs.existsSync(path.join(testDir, "graders.ts"))) {
     spec.graders = "./graders.ts";
   }
-  return normalizeInput(spec, testDir, makeId, options);
+  const agencyTests = discoverAgencyTests(testDir);
+  // A test graded by discovered agency tests needs no goal of its own.
+  const testOptions = agencyTests.length > 0 ? { ...options, requireGoal: false } : options;
+  const test = normalizeInput(spec, testDir, makeId, testOptions);
+  if (agencyTests.length > 0) {
+    test.agencyTests = agencyTests;
+  }
+  return test;
+}
+
+/** Directory-convention discovery: every *.test.json directly inside
+ *  `files/` (seeded, visible to the agent) and `holdout/` (never seeded)
+ *  becomes one grader, named by basename. Non-recursive by design — a
+ *  nested .test.json is the agent's own business. Each json needs its
+ *  sibling harness `.agency`; basenames must be unique across the union
+ *  (they become score-row names). */
+function discoverAgencyTests(testDir: string): AgencyTestDefinition[] {
+  const found: AgencyTestDefinition[] = [];
+  const byName: Record<string, string> = Object.create(null);
+  const dirs: { sub: string; visibility: AgencyTestVisibility }[] = [
+    { sub: "files", visibility: "visible" },
+    { sub: "holdout", visibility: "holdout" },
+  ];
+  for (const { sub, visibility } of dirs) {
+    const dir = path.join(testDir, sub);
+    if (!fs.existsSync(dir)) continue;
+    for (const entry of fs.readdirSync(dir).sort()) {
+      if (!entry.endsWith(".test.json")) continue;
+      const harnessJson = path.join(dir, entry);
+      const name = entry.replace(/\.test\.json$/, "");
+      const harnessAgency = path.join(dir, `${name}.agency`);
+      if (!fs.existsSync(harnessAgency)) {
+        throw new Error(
+          `${harnessJson} has no sibling harness ${name}.agency — eval agency tests are ` +
+            `discovered as sibling pairs`,
+        );
+      }
+      if (byName[name] !== undefined) {
+        throw new Error(
+          `agency-test name '${name}' appears twice: ${byName[name]} and ${harnessJson}. ` +
+            `Basenames become grader names and must be unique across files/ and holdout/.`,
+        );
+      }
+      byName[name] = harnessJson;
+      found.push({ harnessJson, harnessAgency, name, visibility });
+    }
+  }
+  return found;
 }
 
 function readJson(filePath: string): unknown {

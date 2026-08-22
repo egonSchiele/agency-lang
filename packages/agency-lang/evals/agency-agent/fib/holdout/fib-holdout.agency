@@ -1,0 +1,11 @@
+// Held-out tests the agent never sees: larger values, so a solution
+// written to the visible examples must actually generalize.
+import { fib } from "./fib.agency"
+
+export node fifteen(): number {
+  return fib(15)
+}
+
+export node twenty(): number {
+  return fib(20)
+}

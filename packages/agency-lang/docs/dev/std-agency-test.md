@@ -1,4 +1,4 @@
-# std::agency test()/testFile()
+# std::agency test()/testFile() and the eval AgencyTestGrader
 
 The spec and its review history live in
 `docs/superpowers/specs/2026-08-20-std-agency-test-design.md`. This page maps
@@ -12,12 +12,14 @@ the per-case `std::run` launch itself — is voted on by the caller's handlers.
 Any reject wins, so a parent that rejects everything vetoes every effect,
 including the tested code's own inline `with approve`. `testFile()` is the
 portable form: it runs the same `.test.json` file `agency test` runs,
-restricted to the sandbox subset.
+restricted to the sandbox subset. On top of them, the eval framework grades
+coding tests declaratively: a test directory ships harness pairs and nothing
+else.
 
 The public API is `test`, `testFile`, and the types they use
 (`AgencyTestCase`, `InterruptAnswer`, `CaseReport`, `TestReport`) in
-`stdlib/agency.agency`. `_testFileForGrading` is
-framework-only stdlib ABI (the eval grader wrapper adds a whole-call cost cap). Everything under
+`stdlib/agency.agency`. `_testFileForGrading` and `_formatFailurePayload` are
+framework-only stdlib ABI for the shipped wrapper. Everything under
 `lib/compiler/closureValidator.ts` and `compileValidatedClosure.ts` is
 compiler-private. `snapshotValidatedClosureForTest` is a test seam.
 
@@ -96,6 +98,84 @@ calls.
 `std::read` interrupt for the JSON, then the TS read+parse; a `std::read`
 for the declared source, then ONE read builds the node binding table; every
 case binds up front. A bad case is a whole-call failure with zero launches.
+
+## Eval grading (the framework grader)
+
+Discovery (`discoverAgencyTests` in `lib/eval/loadInputs.ts`): every
+`*.test.json` directly inside an eval test directory's `files/` (seeded,
+visible — the agent self-checks with the same file) and `holdout/` (NEVER
+seeded — the generalization check) becomes one grader named by basename.
+Non-recursive; sibling `.agency` required; basenames unique across the
+union. `holdout/` is outside the seeded `files/` dir by construction.
+
+`snapshotAgencyTestGraders` (`lib/eval/grading/synthesizeGradersModule.ts`)
+runs at `eval run` preflight, before any agent: it validates every JSON
+(sandbox profile), refuses `approve` scripted answers (the wrapper rejects
+all effects, so such an approval could never take effect — refusing keeps
+self-check and grading honest) and non-sibling `sourceFile`s, synthesizes a
+deterministic grading module (sibling `graders.ts` composed in, normalized
+single-or-array), and feeds it through `snapshotGradingModule`. The
+snapshot carries an explicit `revision: { sourceIdentity, sha256 }` —
+`agency-tests:<suite digest>/<test id>`, hashing the module's LOGICAL
+inputs: each harness pair's name bound to its two content hashes, plus a
+hash of the sibling graders module's BUNDLE built from its source path.
+The bundle covers the sibling's transitive imports, so editing a
+helper it imports changes the revision. The synthesized module's own
+bundle bytes are excluded (they embed the per-run staging path, so
+hashing them minted a fresh revision every run), and binding names to
+hashes means swapping contents between two harnesses changes the
+revision even though the content multiset does not. The generic identity
+(physical path @ bundle hash) would mint a new revision every run while
+ignoring harness edits.
+`loadGradingSnapshot` assigns the recorded revision; its absence keeps the
+legacy code-only identity, so old run directories stay readable.
+
+This composition has two deliberate limits. A sibling `graders.ts` cannot
+declare `externalFiles()`. Preflight rejects such a grader with a direct
+error instead of resolving its relative files from the generated module's
+temporary directory. Also, the sibling bundle hash can include paths emitted
+by esbuild. Two unchanged copies in different checkout directories may
+therefore receive different revisions. Neither limit changes grading within
+one checkout. Supporting external files and checkout-independent revisions
+requires one design because the revision must cover every file that can
+change grading behavior. The follow-up design is
+`docs/superpowers/specs/2026-08-21-combined-grader-external-files-design.md`.
+
+`AgencyTestGrader` (`lib/eval/grading/agencyTestGrader.ts`) copies the
+run's workdir wholesale into a scratch dir (symlinks copied AS symlinks,
+`dereference: false` — a followed link would read the external file
+before realpath confinement could refuse the import), then installs BOTH
+harness files from the snapshot (the tamper defense). Installation
+removes whatever sits at the destination WITHOUT following it and writes
+a fresh regular file exclusively: the agent controls the scratch copy, so
+a planted `suite-tests.agency -> /host/file` symlink would otherwise be
+followed by the copy and clobber the host file. It then spawns the
+shipped wrapper via the agency CLI. Score =
+fraction of passing cases, `{ mustPass: true, threshold: 1 }` — partial
+credit feeds the objective, anything short of all-green gates (a bare
+`mustPass` would gate nothing: `passes` is `value >= threshold ?? 0`).
+
+The wrapper (`lib/agents/eval/agencyTestWrapper.agency`, shipped because
+`AGENT_DIRS` already stages `lib/agents/eval/**`) is the only
+sandbox-policy owner. It is a phased state machine: approve exactly the
+JSON read, then exactly the declared-source read (the grader passes the
+snapshot harness basename, so a foreign `sourceFile` is rejected at the
+gate rather than widening authorization), then approve only `std::run`
+while tests run, reject everything else naming the effect and phase. The
+pure decision (`decideWrapperInterrupt`) is tested phase by phase in
+`tests/agency/agency-test-wrapper-policy.agency`.
+
+The report travels as a FILE (`reportEnvelope.ts`, strict zod, a
+`tested` / `could-not-test` tagged union whose failure branch is
+presentation text, never the runtime failure object). Stdout is
+diagnostics only: the tested subprocess shares the pipe and could print a
+forged envelope. A per-case wall-clock kill stays `tested`; only
+whole-call failures (compile error, malformed json, cost cap) become
+`could-not-test`, which scores 0 with the feedback verbatim.
+
+`evals/agency-agent/fib/` is the reference shape: `files/fib-tests.*`
+(visible), `holdout/fib-holdout.*` (hidden, larger n), no `graders.ts`, no
+hand-written sandbox code.
 
 ## Convergence with the CLI runner
 

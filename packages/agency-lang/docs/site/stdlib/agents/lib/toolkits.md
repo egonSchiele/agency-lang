@@ -164,8 +164,8 @@ Return the bundled Agency documentation tools: the language guide, the CLI
 agencyCodeTools(): any[]
 ```
 
-Return tools that inspect Agency source without running it: the type
-  checker and the parser.
+Return tools for checking Agency source: the type checker, the parser,
+  and testFile, which runs a .test.json harness in a sandboxed subprocess.
 
 **Returns:** `any[]`
 

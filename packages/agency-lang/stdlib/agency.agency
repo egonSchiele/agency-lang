@@ -692,15 +692,15 @@ export type ExportInfo = {
   name: string;
   kind: "def" | "node" | "type" | "const" | "reexport";
   signature: string;
-  docstring?: string;
+  docstring: string | null;
   effects: string[];
   destructive: boolean;
   idempotent: boolean;
-  reexportedFrom?: string
+  reexportedFrom: string | null
 }
 
 export type ModuleInfo = {
-  description?: string;
+  description: string | null;
   exports: ExportInfo[]
 }
 
@@ -816,8 +816,8 @@ export type HoleInfo = {
   name: string;
   sort: "expr" | "statements" | "identifier" | "decl";
   splice: boolean;
-  type?: string;
-  origin?: string
+  type: string | null;
+  origin: string | null
 }
 
 export def loadTemplate(dir: string, filename: string): Result<Code> {

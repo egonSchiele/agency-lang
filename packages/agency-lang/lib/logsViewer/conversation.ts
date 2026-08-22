@@ -42,7 +42,7 @@ function formatMessage(msg: ConvoMessage): string[] {
   const lines: string[] = [];
   const text = contentText(msg.content);
   if (text !== undefined && text.length > 0) {
-    const [first, ...rest] = text.split("\n");
+    const [first, ...rest] = escapeControls(text).split("\n");
     lines.push(`${prefix} ${first}`);
     for (const line of rest) lines.push(`  ${line}`);
   }
@@ -82,6 +82,14 @@ function contentText(content: unknown): string | undefined {
     return parts.join(" ");
   }
   return JSON.stringify(content);
+}
+
+// Message text reaches the terminal as-is, so every control character
+// except the newline is shown escaped (`\r`, `\t`, `\u001b`): a recorded
+// escape sequence must not clear the screen or move the cursor.
+function escapeControls(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/[\x00-\x09\x0b-\x1f\x7f]/g, (ch) => JSON.stringify(ch).slice(1, -1));
 }
 
 function contentPartText(part: unknown): string | undefined {

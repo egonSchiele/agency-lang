@@ -84,13 +84,12 @@ type CompiledProgramValue = {
   moduleId: string;
   code: string;
   modules?: Record<string, string>;
-  pkgAnchors?: { packageName: string; packageRoot: string }[];
 };
 
 function compileToProgram(entry: ClosureEntry, dir: string): CompiledProgramValue {
   // Sandboxed compile: the closure validator enforces the pure-Agency
-  // invariant (std:: + dir-local .agency + validated pkg::; no TS/JS, node
-  // builtins, or splices) and compilation reads only the validated mirror.
+  // invariant (std:: + dir-local .agency; no TS/JS, node builtins, pkg::,
+  // or splices) and compilation reads only the validated mirror.
   const result = compileSandboxed({ entry, dir });
 
   if (!result.success) {
@@ -106,7 +105,6 @@ function compileToProgram(entry: ClosureEntry, dir: string): CompiledProgramValu
     moduleId: result.moduleId,
     code: result.code,
     ...(result.modules !== undefined ? { modules: result.modules } : {}),
-    ...(result.pkgAnchors !== undefined ? { pkgAnchors: result.pkgAnchors } : {}),
   };
 }
 
@@ -582,4 +580,3 @@ export function _filterImports(
   const filtered = ast.nodes.length !== originalCount;
   return { source: generateAgency(ast), filtered };
 }
-

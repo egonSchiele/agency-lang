@@ -9,7 +9,7 @@ import { dirname } from "path";
 import { fileURLToPath } from "url";
 import { fork } from "child_process";
 import type { ForkOptions } from "child_process";
-import { rmSync, writeFileSync, mkdirSync, symlinkSync } from "fs";
+import { rmSync, writeFileSync, mkdirSync } from "fs";
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config.js";
 import { getRuntimeContext, agencyStore } from "./asyncContext.js";
@@ -689,7 +689,6 @@ export function materializeCompiledScript(compiled: {
   moduleId: string;
   code: string;
   modules?: Record<string, string>;
-  pkgAnchors?: { packageName: string; packageRoot: string }[];
 }): string {
   // The user-facing CompiledProgram type only declares moduleId, so a
   // hand-built `{ moduleId: "x" }` (or an old `{ moduleId, path }` value
@@ -715,18 +714,6 @@ export function materializeCompiledScript(compiled: {
     }
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, code, "utf-8");
-  }
-  // Sandbox-compiled pkg:: imports emit bare specifiers; link each
-  // validated package root under the script's own node_modules so Node
-  // resolves them even when the package lives only under the sandbox dir.
-  // Containment is re-checked because compiled values can be hand-built.
-  for (const anchor of compiled.pkgAnchors ?? []) {
-    const link = path.resolve(tempDir, "node_modules", ...anchor.packageName.split("/"));
-    if (!link.startsWith(path.join(tempDir, "node_modules") + path.sep)) {
-      throw new Error(`CompiledProgram package '${anchor.packageName}' escapes node_modules`);
-    }
-    mkdirSync(dirname(link), { recursive: true });
-    symlinkSync(anchor.packageRoot, link);
   }
   return scriptPath;
 }

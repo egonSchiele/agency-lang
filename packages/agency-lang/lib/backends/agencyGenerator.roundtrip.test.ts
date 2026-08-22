@@ -47,9 +47,7 @@ type Partitioned = { code: unknown[]; imports: string[]; comments: string[] };
 
 function normalized(nodes: unknown): Partitioned {
   const stripped = JSON.parse(
-    JSON.stringify(nodes, (key, value) =>
-      key === "loc" || key === "modulePathLoc" ? undefined : value,
-    ),
+    JSON.stringify(nodes, (key, value) => (key === "loc" ? undefined : value)),
   ) as { type?: string }[];
   for (const node of stripped) normalizePolicyFields(node);
   const code: unknown[] = [];

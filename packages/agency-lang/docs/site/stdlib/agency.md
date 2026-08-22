@@ -240,7 +240,7 @@ effect std::run {
 compile(source: string, dir: string = ""): Result
 ```
 
-Compile Agency source code. Returns a CompiledProgram on success, or a failure with compilation errors. Imports may name standard library (`std::`) modules, `.agency` files inside `dir`, and `pkg::` packages whose own code is pure Agency. TypeScript/JavaScript files, Node modules, and compile-time splices are refused anywhere in the import closure.
+Compile Agency source code. Returns a CompiledProgram on success, or a failure with compilation errors. Imports may name standard library (`std::`) modules and `.agency` files inside `dir`. TypeScript/JavaScript files, Node modules, `pkg::` packages, symlinks, and compile-time splices are refused anywhere in the import closure.
 
   @param source - Agency source code as a string
   @param dir - Directory relative imports resolve against, and the boundary they are confined to. Empty (the default) means local imports cannot resolve.
@@ -338,9 +338,9 @@ runFile(
 ```
 
 Compile and execute an Agency file in a subprocess and return the node's result.
-  Imports may name standard library (`std::`) modules, `.agency` files inside `dir`,
-  and `pkg::` packages whose own code is pure Agency; TypeScript/JavaScript files,
-  Node modules, and compile-time splices are refused anywhere in the import closure.
+  Imports may name standard library (`std::`) modules and `.agency` files inside
+  `dir`; TypeScript/JavaScript files, Node modules, `pkg::` packages, symlinks, and
+  compile-time splices are refused anywhere in the import closure.
 
   @param dir - The directory containing the file; also the boundary its local imports are confined to
   @param filename - The agency file to compile and run
@@ -396,9 +396,9 @@ runCode(
 Compile Agency source code and execute one of its nodes in a subprocess,
   returning the value the node returned. Prefer this over separate
   compile() and run() calls. Imports may name standard library (`std::`)
-  modules, `.agency` files inside `dir`, and `pkg::` packages whose own code
-  is pure Agency; TypeScript/JavaScript files, Node modules, and
-  compile-time splices are refused anywhere in the import closure. Compile
+  modules and `.agency` files inside `dir`; TypeScript/JavaScript files,
+  Node modules, `pkg::` packages, symlinks, and compile-time splices are
+  refused anywhere in the import closure. Compile
   errors are returned as a failure without running anything; fix the source
   and call again.
 

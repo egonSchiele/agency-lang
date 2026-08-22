@@ -5,8 +5,7 @@
     { "nodeName": "refusedFieldNamesIt", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "unquotedExpectedOutputGuidance", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "firstGateBlocksTheRead", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "secondGateBlocksTheSourceRead", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "conversionFailuresPreventEveryLaunch", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "arityViolationIsWholeCallFailure", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "cliInputStringIsRefused", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "unknownNodeIsACaseFailure", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

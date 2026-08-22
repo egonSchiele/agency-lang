@@ -1,14 +1,11 @@
 import type { ListTrivia } from "./dataStructures.js";
-import { BaseNode, SourceLocation } from "./base.js";
+import { BaseNode } from "./base.js";
 import { Hole } from "./hole.js";
 
 export type ImportStatement = BaseNode & {
   type: "importStatement";
   importedNames: ImportNameType[];
   modulePath: string;
-  /** Location of the module-path characters (quotes excluded). Set by the
-   *  parser; absent on generated nodes. Stripped by toEqualWithoutLoc. */
-  modulePathLoc?: SourceLocation;
   isAgencyImport: boolean;
   /** True when written `import test { … }`. Absent (never null/false) on
    *  normal imports so exact-match AST comparisons and JSON output stay
@@ -68,9 +65,6 @@ export type ImportNodeStatement = BaseNode & {
   /** Comments between items in this list. */
   nodeTrivia?: ListTrivia[];
   agencyFile: string;
-  /** Location of the agencyFile path characters (quotes excluded). Same
-   *  contract as ImportStatement.modulePathLoc. */
-  modulePathLoc?: SourceLocation;
   /**
    * When true, the typescript builder also emits a JS-level re-export of each
    * node's `__<name>NodeParams` from the source file, so consumers of THIS

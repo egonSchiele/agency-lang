@@ -8,7 +8,6 @@ const VALID = {
   tests: [
     {
       nodeName: "testFive",
-      input: "",
       expectedOutput: "5",
       evaluationCriteria: [{ type: "exact" }],
     },
@@ -24,23 +23,33 @@ describe("parseTestFileSandbox", () => {
     const parsed = sandbox({
       ...VALID,
       tests: [
-        { nodeName: "n1", input: "", expectedOutput: "5", evaluationCriteria: [{ type: "exact" }] },
+        {
+          nodeName: "n1",
+          args: { n: 5 },
+          expectedOutput: "5",
+          evaluationCriteria: [{ type: "exact" }],
+        },
         {
           nodeName: "n2",
-          input: "",
           expectedOutput: '"ok"',
           evaluationCriteria: [{ type: "exact" }],
         },
         {
           nodeName: "n3",
-          input: "",
           expectedOutput: '{"a":1}',
           evaluationCriteria: [{ type: "exact" }],
         },
       ],
     });
     expect(parsed.cases.map((c) => c.expected)).toEqual([5, "ok", { a: 1 }]);
+    expect(parsed.cases.map((c) => c.args)).toEqual([{ n: 5 }, {}, {}]);
     expect(parsed.sourceFile).toBe("fib-tests.agency");
+  });
+
+  test("the CLI's input string is refused with guidance toward args", () => {
+    expect(() => sandbox({ ...VALID, tests: [{ ...VALID.tests[0], input: "5" }] })).toThrow(
+      /input is not supported.*args/,
+    );
   });
 
   test("sourceFile defaults from the json basename and explicit override wins", () => {
@@ -56,7 +65,6 @@ describe("parseTestFileSandbox", () => {
         tests: [
           {
             nodeName: "n",
-            input: "",
             expectedOutput: "ok",
             evaluationCriteria: [{ type: "exact" }],
           },
@@ -87,7 +95,6 @@ describe("parseTestFileSandbox", () => {
   ])("%s evaluationCriteria is an error", (_, criteria) => {
     const testCase: Record<string, unknown> = {
       nodeName: "n",
-      input: "",
       expectedOutput: "1",
     };
     if (criteria !== undefined) testCase.evaluationCriteria = criteria;
@@ -240,6 +247,16 @@ describe("parseTestFileFull", () => {
     // resolvedValue must survive parsing: the runner answers a `resolve`
     // action with it.
     expect(parsed.tests?.[0].interruptHandlers?.[1].resolvedValue).toBe("42");
+  });
+
+  test("input is optional: a no-argument case may omit it", () => {
+    const parsed = parseTestFileFull(
+      JSON.stringify({
+        tests: [{ nodeName: "n", expectedOutput: "1", evaluationCriteria: [{ type: "exact" }] }],
+      }),
+      "x.test.json",
+    );
+    expect(parsed.tests?.[0].input).toBeUndefined();
   });
 
   test("unknown keys fail loudly at every nesting level", () => {

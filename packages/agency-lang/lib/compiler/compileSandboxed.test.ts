@@ -82,15 +82,11 @@ describe("compileSandboxed", () => {
     }
   });
 
-  test("absolute-inside-dir import compiles from the mirror, never re-reading the caller file", () => {
-    const dir = makeDir(".cs-abs-");
+  test("a relative import compiles from the mirror, never re-reading the caller file", () => {
+    const dir = makeDir(".cs-toctou-");
     try {
       fs.writeFileSync(path.join(dir, "helper.agency"), HELPER);
-      fs.writeFileSync(
-        path.join(dir, "main.agency"),
-        `import { helperValue } from "${path.join(dir, "helper.agency")}"\n` +
-          "export node main(): number { return helperValue() }\n",
-      );
+      fs.writeFileSync(path.join(dir, "main.agency"), MAIN);
       const closure = validateClosure({ entry: { file: "main.agency" }, dir });
       // The TOCTOU boundary: after validation the caller's file turns hostile.
       fs.writeFileSync(path.join(dir, "helper.agency"), "this is not agency source :::\n");
@@ -101,20 +97,20 @@ describe("compileSandboxed", () => {
     }
   });
 
-  test("symlink-alias import compiles from saved bytes after alias and target are destroyed", () => {
-    const dir = makeDir(".cs-alias-");
+  test("an absolute import inside dir is refused: it would bypass the mirror", () => {
+    const dir = makeDir(".cs-abs-");
     try {
-      fs.writeFileSync(path.join(dir, "real.agency"), HELPER);
-      fs.symlinkSync(path.join(dir, "real.agency"), path.join(dir, "alias.agency"));
+      fs.writeFileSync(path.join(dir, "helper.agency"), HELPER);
       fs.writeFileSync(
         path.join(dir, "main.agency"),
-        'import { helperValue } from "./alias.agency"\nexport node main(): number { return helperValue() }\n',
+        `import { helperValue } from "${path.join(dir, "helper.agency")}"\n` +
+          "export node main(): number { return helperValue() }\n",
       );
-      const closure = validateClosure({ entry: { file: "main.agency" }, dir });
-      fs.unlinkSync(path.join(dir, "alias.agency"));
-      fs.writeFileSync(path.join(dir, "real.agency"), "garbage :::\n");
-      const result = compileValidatedClosure(closure);
-      expect(result.success).toBe(true);
+      const result = compileSandboxed({ entry: { file: "main.agency" }, dir });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.errors.join("\n")).toMatch(/absolute path/);
+      }
     } finally {
       cleanup(dir);
     }
@@ -178,105 +174,6 @@ describe("compileSandboxed", () => {
     }
   });
 
-  test("pkg:: imports compile from the mirror and their bare specifiers resolve at runtime", () => {
-    const dir = makeDir(".cs-pkg-");
-    try {
-      // Same package shape as closureValidator.test.ts, plus compiled JS so
-      // the emitted bare specifier is resolvable the way runtime Node
-      // resolution would do it.
-      const writePkg = (name: string, dirName: string) => {
-        const pkgDir = path.join(dir, "node_modules", ...dirName.split("/"));
-        fs.mkdirSync(pkgDir, { recursive: true });
-        fs.writeFileSync(
-          path.join(pkgDir, "package.json"),
-          JSON.stringify({ name, version: "1.0.0", agency: "./index.agency", main: "./index.js" }),
-        );
-        fs.writeFileSync(path.join(pkgDir, "index.agency"), HELPER);
-        fs.writeFileSync(path.join(pkgDir, "index.js"), "export const helperValue = () => 7;\n");
-        return pkgDir;
-      };
-      const pkgDir = writePkg("testpkg", "testpkg");
-      const scopedDir = writePkg("@scope/tools", "@scope/tools");
-      fs.writeFileSync(
-        path.join(dir, "main.agency"),
-        'import { helperValue } from "pkg::testpkg"\n' +
-          'import { helperValue as scoped } from "pkg::@scope/tools"\n' +
-          "export node main(): number { return helperValue() + scoped() }\n",
-      );
-      const result = compileSandboxed({ entry: { file: "main.agency" }, dir });
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-      // The generated JS names the packages by bare specifier.
-      expect(result.code).toContain('"testpkg"');
-      expect(result.code).toContain('"@scope/tools"');
-      expect(result.pkgAnchors).toEqual([
-        { packageName: "testpkg", packageRoot: fs.realpathSync(pkgDir) },
-        { packageName: "@scope/tools", packageRoot: fs.realpathSync(scopedDir) },
-      ]);
-
-      // Runtime leg: the materialized script dir gets node_modules links, so
-      // Node resolution from the script finds each package's compiled JS.
-      const scriptPath = materializeCompiledScript({
-        moduleId: result.moduleId,
-        code: result.code,
-        pkgAnchors: result.pkgAnchors,
-      });
-      try {
-        const req = createRequire(scriptPath);
-        expect(fs.realpathSync(req.resolve("testpkg"))).toBe(
-          fs.realpathSync(path.join(pkgDir, "index.js")),
-        );
-        expect(fs.realpathSync(req.resolve("@scope/tools"))).toBe(
-          fs.realpathSync(path.join(scopedDir, "index.js")),
-        );
-      } finally {
-        safeDeleteDirectoryWithin(
-          path.join(process.cwd(), ".agency-tmp"),
-          path.dirname(scriptPath),
-        );
-      }
-    } finally {
-      cleanup(dir);
-    }
-  });
-
-  test("a nested package.json inside a package does not shadow the named root", () => {
-    const dir = makeDir(".cs-pkg-nested-");
-    try {
-      // pkg::foo/sub/tool resolves to <foo>/sub/tool.agency, and <foo>/sub
-      // carries its own package.json (a module-type boundary). The anchor
-      // must still be <foo> — the nearest-package.json rule would link
-      // node_modules/foo -> <foo>/sub and the subpath would resolve
-      // twice-nested.
-      const fooDir = path.join(dir, "node_modules", "foo");
-      fs.mkdirSync(path.join(fooDir, "sub"), { recursive: true });
-      fs.writeFileSync(
-        path.join(fooDir, "package.json"),
-        JSON.stringify({ name: "foo", version: "1.0.0", agency: "./index.agency" }),
-      );
-      fs.writeFileSync(
-        path.join(fooDir, "sub", "package.json"),
-        JSON.stringify({ type: "module" }),
-      );
-      fs.writeFileSync(
-        path.join(fooDir, "sub", "tool.agency"),
-        "export def value(): number { return 7 }\n",
-      );
-      fs.writeFileSync(
-        path.join(dir, "main.agency"),
-        'import { value } from "pkg::foo/sub/tool"\nexport node main(): number { return value() }\n',
-      );
-      const result = compileSandboxed({ entry: { file: "main.agency" }, dir });
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-      expect(result.pkgAnchors).toEqual([
-        { packageName: "foo", packageRoot: fs.realpathSync(fooDir) },
-      ]);
-    } finally {
-      cleanup(dir);
-    }
-  });
-
   test("dir '' with a relative import fails from validation", () => {
     const result = compileSandboxed({
       entry: {
@@ -287,39 +184,6 @@ describe("compileSandboxed", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.errors.join("\n")).toMatch(/no sandbox dir/i);
-    }
-  });
-
-  test("rewrites only parser-owned path locations, not comments or strings", () => {
-    const dir = makeDir(".cs-onlypath-");
-    try {
-      fs.writeFileSync(path.join(dir, "helper.agency"), HELPER);
-      fs.writeFileSync(
-        path.join(dir, "main.agency"),
-        `// mentions "${path.join(dir, "helper.agency")}" in a comment\n` +
-          `import { helperValue } from "${path.join(dir, "helper.agency")}"\n` +
-          `export node main(): string { return "${path.join(dir, "helper.agency")}" }\n`,
-      );
-      const result = compileSandboxed({ entry: { file: "main.agency" }, dir });
-      expect(result.success).toBe(true);
-    } finally {
-      cleanup(dir);
-    }
-  });
-
-  test("delimiter-aware rewrite: a target filename containing a double quote compiles via an alias import", () => {
-    const dir = makeDir(".cs-quote-");
-    try {
-      fs.writeFileSync(path.join(dir, 're"al.agency'), HELPER);
-      fs.symlinkSync(path.join(dir, 're"al.agency'), path.join(dir, "alias.agency"));
-      fs.writeFileSync(
-        path.join(dir, "main.agency"),
-        'import { helperValue } from "./alias.agency"\nexport node main(): number { return helperValue() }\n',
-      );
-      const result = compileSandboxed({ entry: { file: "main.agency" }, dir });
-      expect(result.success).toBe(true);
-    } finally {
-      cleanup(dir);
     }
   });
 

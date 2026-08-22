@@ -71,6 +71,7 @@ When writing Agency code (in plans, specs, tests, or examples), you MUST use the
 **When writing plans or specs:** Always verify Agency code snippets by checking docs/site/guide/basic-syntax.md and existing test fixtures (tests/agency/, tests/typescriptGenerator/). If unsure about syntax, run `pnpm run ast` on a test file to confirm it parses.
 
 ## General code Guidelines
+- Do not add code to support symlinks. Symlink support is not important right now; where a feature would need extra machinery to handle symlinks, refuse symlinks instead.
 - NEVER use dynamic imports
 - Use objects instead of maps.
 - Use arrays instead of sets.

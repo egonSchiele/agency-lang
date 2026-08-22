@@ -335,3 +335,21 @@ node tildeRedirectQuoting(): boolean {
   const doubleLiteral = double.dir == "/repo/~" && double.filename == "cf-sb-tilde.txt"
   return unquotedBroad && singleLiteral && doubleLiteral
 }
+
+def planKind(source: string): string {
+  return planFor(source, "/repo").execution.kind
+}
+
+node agencyCommandLines() {
+  return [
+    planKind("agency test x.test.json"),
+    planKind("agency typecheck ./x.agency"),
+    planKind("which agency"),
+    planKind("type agency"),
+    planKind("command -v agency"),
+    planKind("agency test $f"),
+    planKind("agency test x.test.json > out"),
+    planKind("ls agency-lang"),
+    planKind("which git"),
+  ]
+}

@@ -290,6 +290,16 @@ effect std::run {
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L64))
 
+## Constants
+
+### CLI_NOT_AVAILABLE
+
+```ts
+export static const CLI_NOT_AVAILABLE = "The agency command line is not available here. Use the tools instead: typecheck(source) or typecheckFile(dir, filename) for type errors; testFile(dir, filename) to run a .test.json harness (write the files it tests first); runFile(dir, filename, node) to run a program; parseAST, format, describe for source analysis."
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1044))
+
 ## Functions
 
 ### compile
@@ -1136,3 +1146,47 @@ Get the current version of the Agency standard library.
 **Returns:** `string`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1034))
+
+### cliHandles
+
+```ts
+cliHandles(subcommand: string): boolean
+```
+
+Whether `cli` runs this agency subcommand in-process.
+
+  @param subcommand - The first CLI argument, e.g. "test"
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| subcommand | `string` |  |
+
+**Returns:** `boolean`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1048))
+
+### cli
+
+```ts
+cli(args: string[], cwd: string = "."): Result<ExecResult>
+```
+
+Run an `agency` command line through the matching function: `test` runs testFile, `typecheck`/`tc` runs typecheckFile, `ast` runs parseAST, `fmt` runs format, `run` runs runFile on node main. Only the form `agency <subcommand> <file>` is accepted; flags and other subcommands fail with a message naming the function to call instead.
+
+  @param args - The CLI arguments, subcommand first, e.g. ["test", "x.test.json"]
+  @param cwd - The directory the file argument is inside
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| args | `string[]` |  |
+| cwd | `string` | "." |
+
+**Returns:** `Result<ExecResult>`
+
+**Throws:** `std::read`, `std::guard`, `std::run`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1057))

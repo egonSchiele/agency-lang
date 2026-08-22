@@ -10,6 +10,7 @@
  * (`setAgentCwd`/`getAgentCwd`), which `agent.agency` pins to the user's
  * cwd at startup.
  */
+import { cli, cliHandles, CLI_NOT_AVAILABLE } from "std::agency"
 import { filter } from "std::array"
 import { agencyCodingAgent } from "std::agents/agency/coding"
 import { agencyExpertAgent } from "std::agents/agency/expert"
@@ -50,19 +51,36 @@ static const superpowersSkill = skillsDir(__dirname + "/skills/superpowers", "fl
 export def agencyCli(args: string[]): any {
   """
   Run the `agency` CLI with the given arguments. Returns an object with
-  `stdout`, `stderr`, and `exitCode` (same shape as `bash`). Use this for
-  agency subcommands such as `parse`, `ast`, and `typecheck` — e.g.
-  agencyCli(["ast", "foo.agency"]) or agencyCli(["typecheck",
-  "foo.agency"]). Arguments are passed directly to the executable (no
-  shell interpretation), so they cannot be chained or redirected. The
-  default agent policies auto-approve the read-only agency subcommands;
-  other subcommands still prompt for approval. Prefer this over `bash`
-  for running agency.
+  `stdout`, `stderr`, and `exitCode` (same shape as `bash`). `test`,
+  `typecheck`, `ast`, `fmt`, and `run <file>` run in-process through the
+  matching std::agency function (testFile, typecheckFile, parseAST,
+  format, runFile), which you can also call directly. Other subcommands
+  run the executable, which may not be installed. Arguments are passed
+  directly (no shell interpretation).
 
   @param args - CLI arguments, e.g. ["typecheck", "foo.agency"]. The
     first element is the subcommand.
   """
-  return exec("agency", args, useAgentCwd: true)
+  if (args.length > 0 && cliHandles(args[0])) {
+    const ran = cli(args, getAgentCwd())
+    if (ran is failure(err)) {
+      return {
+        stdout: "",
+        stderr: "${err}",
+        exitCode: 1
+      }
+    }
+    return ran.value
+  }
+  const result = exec("agency", args, useAgentCwd: true)
+  if (result.exitCode != 0 && result.stderr.includes("ENOENT")) {
+    return {
+      stdout: "",
+      stderr: CLI_NOT_AVAILABLE,
+      exitCode: result.exitCode
+    }
+  }
+  return result
 }
 
 /** Read a bundled prompt file, or "" when it cannot be read. The prompts

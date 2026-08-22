@@ -1,0 +1,123 @@
+// std::agency cli(): an `agency` command line run as function calls.
+import { cli, cliHandles } from "std::agency"
+import { mkdir } from "std::fs"
+
+const SOLUTION = """
+export def add(a: number, b: number): number {
+  return a + b
+}
+"""
+
+const HARNESS = """
+import { add } from "./solution.agency"
+
+export node sum(a: number, b: number = 1): number {
+  return add(a, b)
+}
+"""
+
+const SUITE = """
+{
+  "sourceFile": "harness.agency",
+  "tests": [
+    { "nodeName": "sum", "args": { "a": 3, "b": 4 }, "expectedOutput": "7", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}
+"""
+
+const BAD_TYPES = """
+export def f(): number {
+  return "x"
+}
+"""
+
+def seed(dir: string) {
+  mkdir(dir) with approve
+  write("solution.agency", SOLUTION, dir) with approve
+  write("harness.agency", HARNESS, dir) with approve
+  write("suite.test.json", SUITE, dir) with approve
+  write("bad.agency", BAD_TYPES, dir) with approve
+}
+
+export node handles(): boolean[] {
+  return [cliHandles("test"), cliHandles("tc"), cliHandles("help"), cliHandles("")]
+}
+
+export node testRunsTheHarness(): string {
+  const dir = "./.cli-test"
+  seed(dir)
+  handle {
+    const r = cli(["test", "suite.test.json"], dir)
+    if (r is failure(err)) {
+      return "failed: ${err}"
+    }
+    if (r is success(out)) {
+      if (out.exitCode == 0 && out.stdout.includes("1/1 tests passed")) {
+        return "ok"
+      }
+      return "unexpected: ${out.stdout}"
+    }
+    return "unreachable"
+  } with approve
+  return "unreachable"
+}
+
+export node typecheckReportsErrors(): string {
+  const dir = "./.cli-typecheck"
+  seed(dir)
+  handle {
+    const r = cli(["typecheck", "bad.agency"], dir)
+    if (r is failure(err)) {
+      return "failed: ${err}"
+    }
+    if (r is success(out)) {
+      if (out.exitCode == 1 && out.stdout.includes("error AG")) {
+        return "ok"
+      }
+      return "unexpected: ${out.exitCode} ${out.stdout}"
+    }
+    return "unreachable"
+  } with approve
+  return "unreachable"
+}
+
+export node astAndFmtReadTheFile(): string {
+  const dir = "./.cli-ast"
+  seed(dir)
+  handle {
+    const ast = cli(["ast", "solution.agency"], dir)
+    const fmt = cli(["fmt", "solution.agency"], dir)
+    if (ast is success(a)) {
+      if (fmt is success(f)) {
+        if (a.exitCode == 0 && a.stdout.includes("\"type\"") && f.exitCode == 0 && f.stdout.includes("export def add")) {
+          return "ok"
+        }
+        return "unexpected: ${a.stdout} ${f.stdout}"
+      }
+    }
+    return "failed"
+  } with approve
+  return "unreachable"
+}
+
+def classify(r: any): string {
+  if (r is failure(err)) {
+    const text = "${err}"
+    if (text.includes("Only `agency test <file>`")) {
+      return "only-file-form"
+    }
+    if (text.includes("not available here")) {
+      return "pointer"
+    }
+    return text
+  }
+  return "succeeded"
+}
+
+export node otherFormsNameTheTools(): string[] {
+  return [
+    classify(cli(["help"])),
+    classify(cli(["test", "--json", "suite.test.json"])),
+    classify(cli([])),
+  ]
+}

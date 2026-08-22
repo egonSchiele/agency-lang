@@ -1,4 +1,4 @@
-import { ls, glob, grep, exec } from "std::shell"
+import { ls, glob, grep, exec, ExecResult } from "std::shell"
 import { Json } from "std::validation"
 
 import {
@@ -1036,4 +1036,144 @@ export idempotent def getVersion(): string {
   Get the current version of the Agency standard library.
   """
   return VERSION
+}
+
+/** The `agency` command line is often not installed where an agent runs.
+These run the subcommands that have a function here in-process, and name
+the functions for the rest. */
+export static const CLI_NOT_AVAILABLE = "The agency command line is not available here. Use the tools instead: typecheck(source) or typecheckFile(dir, filename) for type errors; testFile(dir, filename) to run a .test.json harness (write the files it tests first); runFile(dir, filename, node) to run a program; parseAST, format, describe for source analysis."
+
+static const CLI_SUBCOMMANDS = ["test", "typecheck", "tc", "ast", "fmt", "run"]
+
+export idempotent def cliHandles(subcommand: string): boolean {
+  """
+  Whether `cli` runs this agency subcommand in-process.
+
+  @param subcommand - The first CLI argument, e.g. "test"
+  """
+  return CLI_SUBCOMMANDS.includes(subcommand)
+}
+
+export def cli(args: string[], cwd: string = "."): Result<ExecResult> {
+  """
+  Run an `agency` command line through the matching function: `test` runs testFile, `typecheck`/`tc` runs typecheckFile, `ast` runs parseAST, `fmt` runs format, `run` runs runFile on node main. Only the form `agency <subcommand> <file>` is accepted; flags and other subcommands fail with a message naming the function to call instead.
+
+  @param args - The CLI arguments, subcommand first, e.g. ["test", "x.test.json"]
+  @param cwd - The directory the file argument is inside
+  """
+  if (args.length == 0 || !cliHandles(args[0])) {
+    return failure(CLI_NOT_AVAILABLE)
+  }
+  const sub = args[0]
+  if (args.length != 2 || args[1].startsWith("-")) {
+    return failure("Only `agency ${sub} <file>` runs here. ${CLI_NOT_AVAILABLE}")
+  }
+  const file = args[1]
+  if (sub == "test") {
+    const report = testFile(cwd, file)
+    if (report is failure(err)) {
+      return failure("${err}")
+    }
+    if (report is success(r)) {
+      return success(renderTestReport(r))
+    }
+  }
+  if (sub == "typecheck" || sub == "tc") {
+    const checked = typecheckFile(cwd, file)
+    if (checked is failure(err)) {
+      return failure("${err}")
+    }
+    if (checked is success(r)) {
+      return success(renderTypeCheck(r))
+    }
+  }
+  if (sub == "run") {
+    const ran = runFile(cwd, file, "main")
+    if (ran is failure(err)) {
+      return failure("${err}")
+    }
+    if (ran is success(value)) {
+      return success({
+        stdout: JSON.stringify(value),
+        stderr: "",
+        exitCode: 0
+      })
+    }
+  }
+  const source = read(file, cwd)
+  if (source is failure(err)) {
+    return failure("${err}")
+  }
+  if (source is success(text)) {
+    if (sub == "ast") {
+      const ast = parseAST(text)
+      if (ast is failure(err)) {
+        return failure("${err}")
+      }
+      if (ast is success(tree)) {
+        return success({
+          stdout: JSON.stringify(tree, null, 2),
+          stderr: "",
+          exitCode: 0
+        })
+      }
+    }
+    const formatted = format(text)
+    if (formatted is failure(err)) {
+      return failure("${err}")
+    }
+    if (formatted is success(out)) {
+      return success({
+        stdout: "${out}",
+        stderr: "",
+        exitCode: 0
+      })
+    }
+  }
+  return failure(CLI_NOT_AVAILABLE)
+}
+
+def renderTestReport(report: TestReport): ExecResult {
+  let lines: string[] = []
+  let passed = 0
+  for (c in report.cases) {
+    if (c.pass) {
+      passed = passed + 1
+      lines.push("✓ ${c.node}")
+    } else {
+      lines.push("✗ ${c.node}\n${c.feedback}")
+    }
+  }
+  lines.push("${passed}/${report.cases.length} tests passed")
+  let exitCode = 1
+  if (report.pass) {
+    exitCode = 0
+  }
+  return {
+    stdout: lines.join("\n") + "\n",
+    stderr: "",
+    exitCode: exitCode
+  }
+}
+
+def renderTypeCheck(report: any): ExecResult {
+  let lines: string[] = []
+  for (d in report.errors) {
+    lines.push("error ${d.code}: ${d.message}")
+  }
+  for (d in report.warnings) {
+    lines.push("warning ${d.code}: ${d.message}")
+  }
+  if (lines.length == 0) {
+    lines.push("No type errors found.")
+  }
+  let exitCode = 0
+  if (report.errors.length > 0) {
+    exitCode = 1
+  }
+  return {
+    stdout: lines.join("\n") + "\n",
+    stderr: "",
+    exitCode: exitCode
+  }
 }

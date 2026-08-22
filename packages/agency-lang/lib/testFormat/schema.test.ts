@@ -46,6 +46,19 @@ describe("parseTestFileSandbox", () => {
     expect(parsed.sourceFile).toBe("fib-tests.agency");
   });
 
+  test("an empty expectedMessage is refused in both profiles", () => {
+    const withEmpty = {
+      ...VALID,
+      tests: [
+        { ...VALID.tests[0], interruptHandlers: [{ action: "approve", expectedMessage: "" }] },
+      ],
+    };
+    expect(() => sandbox(withEmpty)).toThrow(/expectedMessage must not be empty/);
+    expect(() => parseTestFileFull(JSON.stringify(withEmpty), "x.test.json")).toThrow(
+      /expectedMessage must not be empty/,
+    );
+  });
+
   test("the CLI's input string is refused with guidance toward args", () => {
     expect(() => sandbox({ ...VALID, tests: [{ ...VALID.tests[0], input: "5" }] })).toThrow(
       /input is not supported.*args/,

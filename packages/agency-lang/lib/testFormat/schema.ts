@@ -17,6 +17,12 @@ import * as path from "path";
 // Shared pieces
 // ---------------------------------------------------------------------------
 
+// Presence means "check the message"; an empty expectation could never be
+// checked against a real interrupt, so it is a mistake, not a wildcard.
+const expectedMessageSchema = z
+  .string()
+  .min(1, { message: "expectedMessage must not be empty (omit it to skip the check)" });
+
 /** The sandbox profile allows exactly these; `resolve` is
  *  full-profile-only (it needs the CLI runner's authoritative answering). */
 const sandboxInterruptSchema = z
@@ -28,7 +34,7 @@ const sandboxInterruptSchema = z
           : undefined,
     }),
     value: z.unknown().optional(),
-    expectedMessage: z.string().optional(),
+    expectedMessage: expectedMessageSchema.optional(),
   })
   .superRefine((val, ctx) => {
     if ("modifiedArgs" in (val as Record<string, unknown>)) {
@@ -41,7 +47,7 @@ const sandboxInterruptSchema = z
 // declaring it could never run.
 const fullInterruptSchema = z.strictObject({
   action: z.enum(["approve", "reject", "resolve"]),
-  expectedMessage: z.string().optional(),
+  expectedMessage: expectedMessageSchema.optional(),
   value: z.unknown().optional(),
   /** The answer a `resolve` action responds with. */
   resolvedValue: z.unknown().optional(),

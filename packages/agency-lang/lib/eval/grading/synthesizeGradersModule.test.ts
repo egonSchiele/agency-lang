@@ -22,7 +22,6 @@ function harnessJson(extra: object = {}): string {
     tests: [
       {
         nodeName: "t",
-        input: "",
         expectedOutput: "1",
         evaluationCriteria: [{ type: "exact" }],
         ...extra,
@@ -251,7 +250,6 @@ describe("snapshotAgencyTestGraders", () => {
           tests: [
             {
               nodeName: "t",
-              input: "",
               expectedOutput: "1",
               evaluationCriteria: [{ type: "exact" }],
             },

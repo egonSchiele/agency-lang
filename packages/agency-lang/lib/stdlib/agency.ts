@@ -15,13 +15,7 @@ import { declaredName } from "../types/hole.js";
 import { deepCopy, isStrictDescendant } from "../utils.js";
 import { compileSandboxed } from "../compiler/compileSandboxed.js";
 import { exactVerdictValue } from "../testFormat/verdict.js";
-import {
-  parseTestFileSandbox,
-  type ParsedInterrupt,
-  type ParsedTestCase,
-} from "../testFormat/schema.js";
-import { bindInputArgs } from "../testFormat/inputArgs.js";
-import type { BindingParameter } from "../runtime/agencyFunction.js";
+import { parseTestFileSandbox, type ParsedInterrupt } from "../testFormat/schema.js";
 import type { ClosureEntry } from "../compiler/closureValidator.js";
 import { ImportKind, ImportPolicy, isImportAllowed } from "../importPaths.js";
 import type { AgencyMultiLineComment, AgencyProgram, AgencyNode } from "../types.js";
@@ -92,13 +86,12 @@ type CompiledProgramValue = {
   moduleId: string;
   code: string;
   modules?: Record<string, string>;
-  pkgAnchors?: { packageName: string; packageRoot: string }[];
 };
 
 function compileToProgram(entry: ClosureEntry, dir: string): CompiledProgramValue {
   // Sandboxed compile: the closure validator enforces the pure-Agency
-  // invariant (std:: + dir-local .agency + validated pkg::; no TS/JS, node
-  // builtins, or splices) and compilation reads only the validated mirror.
+  // invariant (std:: + dir-local .agency; no TS/JS, node builtins, pkg::,
+  // or splices) and compilation reads only the validated mirror.
   const result = compileSandboxed({ entry, dir });
 
   if (!result.success) {
@@ -114,7 +107,6 @@ function compileToProgram(entry: ClosureEntry, dir: string): CompiledProgramValu
     moduleId: result.moduleId,
     code: result.code,
     ...(result.modules !== undefined ? { modules: result.modules } : {}),
-    ...(result.pkgAnchors !== undefined ? { pkgAnchors: result.pkgAnchors } : {}),
   };
 }
 
@@ -610,20 +602,11 @@ export function _exactVerdictFeedback(actual: unknown, expected: unknown): strin
 }
 
 // ---------------------------------------------------------------------------
-// testFile() seams. Read seams perform their read ONLY when called, so the
-// Agency layer gates each with a std::read interrupt first;
-// _bindTestFileCases is a pure conversion with no reads and no execution.
+// testFile() seam. It performs its read ONLY when called, so the Agency
+// layer gates it with a std::read interrupt first.
 // ---------------------------------------------------------------------------
 
-export type NodeBindingTable = Record<string, BindingParameter[]>;
-
-export type ParsedTestFileWire = {
-  sourceFile: string;
-  defaultTimeoutMs?: number;
-  rawCases: ParsedTestCase[];
-};
-
-export type BoundCaseWire = {
+export type TestFileCaseWire = {
   node: string;
   args: Record<string, unknown>;
   expected: unknown;
@@ -632,67 +615,33 @@ export type BoundCaseWire = {
   description?: string;
 };
 
+export type ParsedTestFileWire = {
+  sourceFile: string;
+  defaultTimeoutMs?: number;
+  cases: TestFileCaseWire[];
+};
+
+/** Reads and validates a sandbox-profile .test.json. Every case is
+ *  converted up front, so a bad file is a whole-call failure before
+ *  test() can launch anything. An escaping filename is refused by
+ *  resolveInSandbox BEFORE any read. */
 export function _readTestFileSandbox(dir: string, filename: string): ParsedTestFileWire {
   const target = resolveInSandbox(dir, filename);
   const parsed = parseTestFileSandbox(readFileSync(target, "utf-8"), filename);
-  const wire: ParsedTestFileWire = { sourceFile: parsed.sourceFile, rawCases: parsed.cases };
+  const wire: ParsedTestFileWire = {
+    sourceFile: parsed.sourceFile,
+    cases: parsed.cases.map((c) => {
+      const wireCase: TestFileCaseWire = {
+        node: c.nodeName,
+        args: c.args,
+        expected: c.expected,
+        interrupts: c.interrupts,
+      };
+      if (c.timeoutMs !== undefined) wireCase.wallClock = c.timeoutMs;
+      if (c.description !== undefined) wireCase.description = c.description;
+      return wireCase;
+    }),
+  };
   if (parsed.defaultTimeoutMs !== undefined) wire.defaultTimeoutMs = parsed.defaultTimeoutMs;
   return wire;
-}
-
-/** One read + one parse serves every case: the table maps each exported
- *  node to its binding parameters. An escaping sourceFile is refused by
- *  resolveInSandbox BEFORE any read. */
-export function _readNodeBindingTable(dir: string, sourceFile: string): NodeBindingTable {
-  const target = resolveInSandbox(dir, sourceFile);
-  const source = readFileSync(target, "utf-8");
-  const parsed = parseAgency(source, {}, false);
-  if (!parsed.success) {
-    throw new Error(`${sourceFile} failed to parse: ${parsed.message ?? "parse error"}`);
-  }
-  const table: NodeBindingTable = {};
-  for (const node of parsed.result.nodes) {
-    if (node.type !== "graphNode") continue;
-    if (typeof node.nodeName !== "string") continue;
-    table[node.nodeName] = node.parameters.map((p) => ({
-      name: p.name,
-      hasDefault: p.defaultValue !== undefined,
-      variadic: p.variadic ?? false,
-    }));
-  }
-  return table;
-}
-
-/** Binds EVERY case up front: an unknown node or a bad input is a
- *  whole-call failure before test() can launch anything. */
-export function _bindTestFileCases(
-  parsed: ParsedTestFileWire,
-  table: NodeBindingTable,
-): BoundCaseWire[] {
-  return parsed.rawCases.map((rawCase, i) => {
-    const params = table[rawCase.nodeName];
-    if (params === undefined) {
-      throw new Error(
-        `case ${i + 1} names node '${rawCase.nodeName}', but ${parsed.sourceFile} has no node ` +
-          `with that name (nodes: ${Object.keys(table).join(", ") || "none"})`,
-      );
-    }
-    let args: Record<string, unknown>;
-    try {
-      args = bindInputArgs(rawCase.input, params);
-    } catch (e) {
-      throw new Error(
-        `case ${i + 1} (${rawCase.nodeName}): ${e instanceof Error ? e.message : String(e)}`,
-      );
-    }
-    const bound: BoundCaseWire = {
-      node: rawCase.nodeName,
-      args,
-      expected: rawCase.expected,
-      interrupts: rawCase.interrupts,
-    };
-    if (rawCase.timeoutMs !== undefined) bound.wallClock = rawCase.timeoutMs;
-    if (rawCase.description !== undefined) bound.description = rawCase.description;
-    return bound;
-  });
 }

@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { importStatmentParser, importNodeStatmentParser } from "./parsers.js";
-import { parseAgency } from "../parser.js";
 
 describe("importStatmentParser", () => {
   // Default imports
@@ -674,46 +673,6 @@ describe("importNodeStatmentParser", () => {
         const result = importNodeStatmentParser(input);
         expect(result.success).toBe(false);
       });
-    }
-  });
-});
-
-describe("module-path locations", () => {
-  // The recorded span covers exactly the path characters, quotes excluded,
-  // even when the same text appears elsewhere in the statement.
-  it("records the path location for a double-quoted import", () => {
-    const source = 'import { foo } from "./helper.agency" // "./helper.agency"';
-    const parsed = parseAgency(source, {}, false);
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      const stmt = parsed.result.nodes.find((n: any) => n.type === "importStatement") as any;
-      const loc = stmt.modulePathLoc!;
-      expect(source.slice(loc.start, loc.end)).toBe("./helper.agency");
-      expect(source[loc.start - 1]).toBe('"');
-      expect(source[loc.end]).toBe('"');
-    }
-  });
-
-  it("records the path location for a single-quoted import", () => {
-    const source = "import { foo } from './helper.agency'";
-    const parsed = parseAgency(source, {}, false);
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      const stmt = parsed.result.nodes.find((n: any) => n.type === "importStatement") as any;
-      const loc = stmt.modulePathLoc!;
-      expect(source.slice(loc.start, loc.end)).toBe("./helper.agency");
-      expect(source[loc.start - 1]).toBe("'");
-    }
-  });
-
-  it("records the path location for import node statements", () => {
-    const source = 'import nodes { a, b } from "./nodes.agency"';
-    const parsed = parseAgency(source, {}, false);
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      const stmt = parsed.result.nodes.find((n: any) => n.type === "importNodeStatement") as any;
-      const loc = stmt.modulePathLoc!;
-      expect(source.slice(loc.start, loc.end)).toBe("./nodes.agency");
     }
   });
 });

@@ -22,12 +22,6 @@ export node bootstrapPhases(): string {
   if (decideWrapperInterrupt("awaitingJsonRead", DIR, "suite.test.json", "std::run", DIR, "") != "reject") {
     return "no launch may happen before runningTests"
   }
-  if (decideWrapperInterrupt("awaitingSourceRead", DIR, "harness.agency", "std::read", DIR, "harness.agency") != "approveAndAdvance") {
-    return "exact source read should advance"
-  }
-  if (decideWrapperInterrupt("awaitingSourceRead", DIR, "harness.agency", "std::read", DIR, "suite.test.json") != "reject") {
-    return "a repeated json read should reject"
-  }
   return "ok"
 }
 

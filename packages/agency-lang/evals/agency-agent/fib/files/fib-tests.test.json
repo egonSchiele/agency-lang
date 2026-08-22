@@ -1,9 +1,9 @@
 {
   "sourceFile": "fib-tests.agency",
   "tests": [
-    { "nodeName": "base0", "input": "", "expectedOutput": "0", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "base1", "input": "", "expectedOutput": "1", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "small", "input": "", "expectedOutput": "13", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "ten", "input": "", "expectedOutput": "55", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "base0", "expectedOutput": "0", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "base1", "expectedOutput": "1", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "small", "expectedOutput": "13", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "ten", "expectedOutput": "55", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

@@ -50,8 +50,8 @@ const HARNESS_AGENCY =
 const HARNESS_JSON = JSON.stringify({
   sourceFile: "suite-tests.agency",
   tests: [
-    { nodeName: "five", input: "", expectedOutput: "5", evaluationCriteria: [{ type: "exact" }] },
-    { nodeName: "eight", input: "", expectedOutput: "8", evaluationCriteria: [{ type: "exact" }] },
+    { nodeName: "five", expectedOutput: "5", evaluationCriteria: [{ type: "exact" }] },
+    { nodeName: "eight", expectedOutput: "8", evaluationCriteria: [{ type: "exact" }] },
   ],
 });
 
@@ -100,7 +100,6 @@ describe("AgencyTestGrader through the real wrapper", () => {
           tests: [
             {
               nodeName: "five",
-              input: "",
               expectedOutput: "5",
               evaluationCriteria: [{ type: "exact" }],
               llmMocks: [],
@@ -127,14 +126,12 @@ describe("AgencyTestGrader through the real wrapper", () => {
           tests: [
             {
               nodeName: "loops",
-              input: "",
               expectedOutput: "0",
               evaluationCriteria: [{ type: "exact" }],
               timeoutMs: 500,
             },
             {
               nodeName: "five",
-              input: "",
               expectedOutput: "5",
               evaluationCriteria: [{ type: "exact" }],
             },
@@ -160,7 +157,6 @@ describe("AgencyTestGrader through the real wrapper", () => {
           tests: [
             {
               nodeName: "spends",
-              input: "",
               expectedOutput: '"done"',
               evaluationCriteria: [{ type: "exact" }],
             },
@@ -203,7 +199,6 @@ describe("AgencyTestGrader through the real wrapper", () => {
           tests: [
             {
               nodeName: "lies",
-              input: "",
               expectedOutput: "999",
               evaluationCriteria: [{ type: "exact" }],
             },
@@ -258,7 +253,6 @@ describe("AgencyTestGrader through the real wrapper", () => {
           tests: [
             {
               nodeName: "peeks",
-              input: "",
               expectedOutput: '"CANARY"',
               evaluationCriteria: [{ type: "exact" }],
             },
@@ -288,7 +282,6 @@ describe("AgencyTestGrader through the real wrapper", () => {
           tests: [
             {
               nodeName: "writes",
-              input: "",
               expectedOutput: '"wrote"',
               evaluationCriteria: [{ type: "exact" }],
             },

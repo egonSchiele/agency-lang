@@ -29,7 +29,7 @@ function violationsOf(fn: () => unknown): string[] {
 const HELPER = "export def helperValue(): number { return 7 }\n";
 
 describe("validateClosure", () => {
-  test("entry + relative local import: both modules, one edge", () => {
+  test("entry + relative local import: both modules", () => {
     const dir = makeDir(".cv-rel-");
     try {
       fs.writeFileSync(path.join(dir, "helper.agency"), HELPER);
@@ -40,46 +40,7 @@ describe("validateClosure", () => {
       const closure = validateClosure({ entry: { file: "main.agency" }, dir });
       const snap = snapshotValidatedClosureForTest(closure);
       expect(snap.moduleRelativePaths.sort()).toEqual(["helper.agency", "main.agency"]);
-      expect(snap.localEdgeCount).toBe(1);
       expect(snap.root).not.toBeNull();
-    } finally {
-      cleanup(dir);
-    }
-  });
-
-  test("absolute import inside dir stays valid and is recorded as an edge", () => {
-    const dir = makeDir(".cv-abs-");
-    try {
-      fs.writeFileSync(path.join(dir, "helper.agency"), HELPER);
-      fs.writeFileSync(
-        path.join(dir, "main.agency"),
-        `import { helperValue } from "${path.join(dir, "helper.agency")}"\n` +
-          "export node main(): number { return helperValue() }\n",
-      );
-      const closure = validateClosure({ entry: { file: "main.agency" }, dir });
-      expect(snapshotValidatedClosureForTest(closure)).toMatchObject({
-        moduleRelativePaths: expect.arrayContaining(["main.agency", "helper.agency"]),
-        localEdgeCount: 1,
-      });
-    } finally {
-      cleanup(dir);
-    }
-  });
-
-  test("symlink alias inside dir is valid: one edge, one canonical target module", () => {
-    const dir = makeDir(".cv-alias-");
-    try {
-      fs.writeFileSync(path.join(dir, "real.agency"), HELPER);
-      fs.symlinkSync(path.join(dir, "real.agency"), path.join(dir, "alias.agency"));
-      fs.writeFileSync(
-        path.join(dir, "main.agency"),
-        'import { helperValue } from "./alias.agency"\nexport node main(): number { return helperValue() }\n',
-      );
-      const snap = snapshotValidatedClosureForTest(
-        validateClosure({ entry: { file: "main.agency" }, dir }),
-      );
-      expect(snap.moduleRelativePaths.sort()).toEqual(["main.agency", "real.agency"]);
-      expect(snap.localEdgeCount).toBe(1);
     } finally {
       cleanup(dir);
     }
@@ -122,6 +83,73 @@ describe("validateClosure", () => {
       expect(violations.join("\n")).toMatch(/outside the sandbox dir/);
     } finally {
       cleanup(parent);
+    }
+  });
+
+  test("a symlink inside dir is refused even when its target is inside dir", () => {
+    const dir = makeDir(".cv-alias-");
+    try {
+      fs.writeFileSync(path.join(dir, "real.agency"), HELPER);
+      fs.symlinkSync(path.join(dir, "real.agency"), path.join(dir, "alias.agency"));
+      fs.writeFileSync(
+        path.join(dir, "main.agency"),
+        'import { helperValue } from "./alias.agency"\nexport node main(): number { return helperValue() }\n',
+      );
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "main.agency" }, dir }),
+      );
+      expect(violations.join("\n")).toMatch(/symlink/);
+      expect(violations.join("\n")).toContain("./alias.agency");
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("a symlinked entry file is refused", () => {
+    const dir = makeDir(".cv-entrylink-");
+    try {
+      fs.writeFileSync(path.join(dir, "real.agency"), "export node main(): number { return 1 }\n");
+      fs.symlinkSync(path.join(dir, "real.agency"), path.join(dir, "main.agency"));
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "main.agency" }, dir }),
+      );
+      expect(violations.join("\n")).toMatch(/symlink/);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("an absolute local import is refused", () => {
+    const dir = makeDir(".cv-abs-");
+    try {
+      fs.writeFileSync(path.join(dir, "helper.agency"), HELPER);
+      fs.writeFileSync(
+        path.join(dir, "main.agency"),
+        `import { helperValue } from "${path.join(dir, "helper.agency")}"\n` +
+          "export node main(): number { return helperValue() }\n",
+      );
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "main.agency" }, dir }),
+      );
+      expect(violations.join("\n")).toMatch(/absolute path/);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("pkg:: imports are refused", () => {
+    const dir = makeDir(".cv-pkg-");
+    try {
+      fs.writeFileSync(
+        path.join(dir, "main.agency"),
+        'import { helperValue } from "pkg::testpkg"\nexport node main(): number { return helperValue() }\n',
+      );
+      const violations = violationsOf(() =>
+        validateClosure({ entry: { file: "main.agency" }, dir }),
+      );
+      expect(violations.join("\n")).toMatch(/pkg:: imports are not supported/);
+    } finally {
+      cleanup(dir);
     }
   });
 
@@ -220,59 +248,6 @@ describe("validateClosure", () => {
     }
   });
 
-  test("pkg:: with a pure-agency closure validates and is recorded", () => {
-    const dir = makeDir(".cv-pkg-");
-    try {
-      const pkgDir = path.join(dir, "node_modules", "testpkg");
-      fs.mkdirSync(pkgDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(pkgDir, "package.json"),
-        JSON.stringify({ name: "testpkg", version: "1.0.0", agency: "./index.agency" }),
-      );
-      fs.writeFileSync(path.join(pkgDir, "index.agency"), HELPER);
-      fs.writeFileSync(
-        path.join(dir, "main.agency"),
-        'import { helperValue } from "pkg::testpkg"\nexport node main(): number { return helperValue() }\n',
-      );
-      const snap = snapshotValidatedClosureForTest(
-        validateClosure({ entry: { file: "main.agency" }, dir }),
-      );
-      expect(snap.pkgModules).toEqual(["pkg::testpkg"]);
-      // pkg files are the trusted re-read boundary: not mirrored as modules.
-      expect(snap.moduleRelativePaths).toEqual(["main.agency"]);
-    } finally {
-      cleanup(dir);
-    }
-  });
-
-  test("pkg:: whose agency code reaches a node builtin is refused, naming the package file", () => {
-    const dir = makeDir(".cv-pkgbad-");
-    try {
-      const pkgDir = path.join(dir, "node_modules", "badpkg");
-      fs.mkdirSync(pkgDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(pkgDir, "package.json"),
-        JSON.stringify({ name: "badpkg", version: "1.0.0", agency: "./index.agency" }),
-      );
-      fs.writeFileSync(
-        path.join(pkgDir, "index.agency"),
-        'import cp from "child_process"\nexport def x(): number { return 1 }\n',
-      );
-      fs.writeFileSync(
-        path.join(dir, "main.agency"),
-        'import { x } from "pkg::badpkg"\nexport node main(): number { return x() }\n',
-      );
-      const violations = violationsOf(() =>
-        validateClosure({ entry: { file: "main.agency" }, dir }),
-      );
-      const text = violations.join("\n");
-      expect(text).toMatch(/'child_process'/);
-      expect(text).toContain("index.agency");
-    } finally {
-      cleanup(dir);
-    }
-  });
-
   test("string entry with a relative import resolving inside dir works", () => {
     const dir = makeDir(".cv-strentry-");
     try {
@@ -286,7 +261,6 @@ describe("validateClosure", () => {
       });
       const snap = snapshotValidatedClosureForTest(closure);
       expect(snap.moduleRelativePaths).toContain("helper.agency");
-      expect(snap.localEdgeCount).toBe(1);
     } finally {
       cleanup(dir);
     }
@@ -340,7 +314,7 @@ describe("validateClosure", () => {
     }
   });
 
-  test("an import cycle terminates; each module recorded once, every edge kept", () => {
+  test("an import cycle terminates; each module recorded once", () => {
     const dir = makeDir(".cv-cycle-");
     try {
       fs.writeFileSync(
@@ -359,29 +333,6 @@ describe("validateClosure", () => {
         validateClosure({ entry: { file: "main.agency" }, dir }),
       );
       expect(snap.moduleRelativePaths.sort()).toEqual(["a.agency", "b.agency", "main.agency"]);
-      expect(snap.localEdgeCount).toBe(3);
-    } finally {
-      cleanup(dir);
-    }
-  });
-
-  test("two aliases to one canonical target record two edges, one module", () => {
-    const dir = makeDir(".cv-twoalias-");
-    try {
-      fs.writeFileSync(path.join(dir, "real.agency"), HELPER);
-      fs.symlinkSync(path.join(dir, "real.agency"), path.join(dir, "alias1.agency"));
-      fs.symlinkSync(path.join(dir, "real.agency"), path.join(dir, "alias2.agency"));
-      fs.writeFileSync(
-        path.join(dir, "main.agency"),
-        'import { helperValue } from "./alias1.agency"\n' +
-          'import { helperValue as hv2 } from "./alias2.agency"\n' +
-          "export node main(): number { return helperValue() }\n",
-      );
-      const snap = snapshotValidatedClosureForTest(
-        validateClosure({ entry: { file: "main.agency" }, dir }),
-      );
-      expect(snap.moduleRelativePaths.sort()).toEqual(["main.agency", "real.agency"]);
-      expect(snap.localEdgeCount).toBe(2);
     } finally {
       cleanup(dir);
     }

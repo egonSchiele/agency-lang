@@ -38,9 +38,6 @@ function normalize(obj: unknown): unknown {
   for (const [key, value] of Object.entries(obj)) {
     if (key === "loc") continue;
     if (key === "delimiter") continue;
-    // Same reason as delimiter: module-path locations are parser bookkeeping
-    // (sandboxed-compile rewrites); tests that care check the field directly.
-    if (key === "modulePathLoc") continue;
     result[key] = normalize(value);
   }
   return result;

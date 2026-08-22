@@ -2,9 +2,9 @@
 //
 // The grading process is TypeScript and cannot hold Agency handlers, so
 // this thin Agency parent owns the whole sandbox policy: a phased handler
-// that approves exactly the two known reads (the .test.json, then the
-// declared source file), approves per-case std::run launches while tests
-// run, and rejects every other effect the tested code raises — any reject
+// that approves exactly one known read (the .test.json), approves per-case
+// std::run launches while tests run, and rejects every other effect the
+// tested code raises — any reject
 // wins, so nothing a suite or an agent wrote can approve its way past it.
 //
 // The report travels as a FILE the wrapper writes with its own approved
@@ -12,10 +12,12 @@
 // could print a forged envelope.
 //
 // argv (via std::args positionals): scratchDir jsonFilename sourceFilename
-// reportDir reportFilename [maxCost]. The report destination is split
+// reportDir reportFilename [maxCost]. sourceFilename is accepted for the
+// grader's argv contract but unused: the json names its own source file,
+// and eval preflight already requires that to be the sibling harness. The report destination is split
 // because write() requires a filename contained in its dir — an absolute
 // filename is refused.
-import { _testFileForGrading, _formatFailurePayload } from "std::agency"
+import { testFile, _formatFailurePayload } from "std::agency"
 import { parseArgs } from "std::args"
 
 /** The pure policy decision, separated from the imperative handler so the
@@ -28,7 +30,7 @@ export def decideWrapperInterrupt(
   dir: string,
   filename: string,
 ): string {
-  if (phase == "awaitingJsonRead" || phase == "awaitingSourceRead") {
+  if (phase == "awaitingJsonRead") {
     // No tested program has launched yet, so phase + effect + exact
     // payload is the authorization boundary.
     if (effect == "std::read") {
@@ -52,7 +54,6 @@ export node main(): string {
   const parsed = parseArgs({ programName: "agencyTestWrapper", flags: {} })
   const scratchDir = parsed.positionals[0]
   const jsonFilename = parsed.positionals[1]
-  const sourceFilename = parsed.positionals[2]
   const reportDir = parsed.positionals[3]
   const reportFilename = parsed.positionals[4]
   const maxCostArg = parsed.positionals[5] ?? ""
@@ -61,23 +62,18 @@ export node main(): string {
   const state = { phase: "awaitingJsonRead" }
   let result = null
   handle {
-    result = _testFileForGrading(scratchDir, jsonFilename, maxCost)
+    result = testFile(scratchDir, jsonFilename, maxCost)
   } with (intr) {
-    const expected = if state.phase == "awaitingJsonRead" then jsonFilename else sourceFilename
     const decision = decideWrapperInterrupt(
       state.phase,
       scratchDir,
-      expected,
+      jsonFilename,
       intr.effect,
       intr.data.dir ?? "",
       intr.data.filename ?? "",
     )
     if (decision == "approveAndAdvance") {
-      if (state.phase == "awaitingJsonRead") {
-        state.phase = "awaitingSourceRead"
-      } else {
-        state.phase = "runningTests"
-      }
+      state.phase = "runningTests"
       return approve()
     }
     if (decision == "approve") {

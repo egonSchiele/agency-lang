@@ -24,7 +24,7 @@ function makeHarnessPair(): { harnessAgency: string; harnessJson: string } {
     JSON.stringify({
       sourceFile: "suite-tests.agency",
       tests: [
-        { nodeName: "t", input: "", expectedOutput: "1", evaluationCriteria: [{ type: "exact" }] },
+        { nodeName: "t", expectedOutput: "1", evaluationCriteria: [{ type: "exact" }] },
       ],
     }),
   );

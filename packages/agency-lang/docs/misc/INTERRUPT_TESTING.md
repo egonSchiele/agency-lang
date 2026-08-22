@@ -4,7 +4,7 @@ This document describes the interrupt testing functionality added to the Agency 
 
 ## Overview
 
-The Agency testing framework now supports programmatic testing of interrupts. You can define test cases that specify how interrupts should be handled (approve, reject, or modify) without requiring manual user input.
+The Agency testing framework supports programmatic testing of interrupts. You can define test cases that specify how interrupts should be handled without requiring manual user input.
 
 ## Test Case Structure
 
@@ -24,8 +24,7 @@ Test cases are defined in `.test.json` files with the following structure:
       "interruptHandlers": [
         {
           "action": "approve",
-          "expectedMessage": "optional message to validate",
-          "modifiedArgs": { "optional": "for modify action" }
+          "expectedMessage": "optional message to validate"
         }
       ]
     }
@@ -40,11 +39,11 @@ Each interrupt handler in the `interruptHandlers` array can have:
 - **`action`** (required): One of:
   - `"approve"` - Approve the interrupt and continue execution
   - `"reject"` - Reject the interrupt
-  - `"modify"` - Approve with modified arguments
+  - `"resolve"` - Resolve the interrupt with a supplied value
 
 - **`expectedMessage`** (optional): If provided, validates that the interrupt message matches this value. Test fails if it doesn't match.
 
-- **`modifiedArgs`** (optional): For `"modify"` action, provides new arguments as a JSON object.
+- **`resolvedValue`** (optional): The value returned by a `"resolve"` action.
 
 ## Example
 
@@ -91,19 +90,6 @@ Create a test file `example.test.json`:
           "expectedMessage": "About to perform: delete database"
         }
       ]
-    },
-    {
-      "nodeName": "main",
-      "input": "\"delete database\"",
-      "expectedOutput": "\"Operation completed: backup database\"",
-      "evaluationCriteria": [{ "type": "exact" }],
-      "interruptHandlers": [
-        {
-          "action": "modify",
-          "modifiedArgs": { "action": "backup database" },
-          "expectedMessage": "About to perform: delete database"
-        }
-      ]
     }
   ]
 }
@@ -139,7 +125,7 @@ When you run `agency fixtures`, if the execution encounters an interrupt:
 2. You'll be prompted to choose how to handle it:
    - Approve
    - Reject
-   - Modify arguments (you'll be prompted for new args as JSON)
+   - Resolve (you'll be prompted for the value to return)
 3. The interrupt handler will be saved to the test case
 4. Execution continues to check for additional interrupts
 5. Once all interrupts are handled, you'll see the final output
@@ -169,7 +155,7 @@ The test framework validates:
 
 3. **`lib/templates/cli/evaluate.mustache`**:
    - Added interrupt handling loop
-   - Imports `isInterrupt`, `approveInterrupt`, `rejectInterrupt`, `modifyInterrupt`
+   - Imports the interrupt response helpers
    - Validates interrupt messages against `expectedMessage`
    - Applies handlers in sequence
    - Throws errors for mismatches or missing handlers
@@ -190,8 +176,8 @@ The system supports multiple sequential interrupts. Handlers are applied in the 
       "expectedMessage": "Second interrupt"
     },
     {
-      "action": "modify",
-      "modifiedArgs": { "param": "new value" },
+      "action": "resolve",
+      "resolvedValue": "new value",
       "expectedMessage": "Third interrupt"
     }
   ]

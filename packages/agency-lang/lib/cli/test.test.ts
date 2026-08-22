@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { parseShardSpec, partitionByShard, type Shard } from "./test.js";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import {
+  parseShardSpec,
+  partitionByShard,
+  loadTests,
+  resolveTestSourcePath,
+  type Shard,
+} from "./test.js";
 
 const id = (s: string) => s;
 
@@ -82,5 +91,32 @@ describe("parseShardSpec", () => {
       exit.mockClear();
     }
     vi.restoreAllMocks();
+  });
+});
+
+describe("loadTests (shared parser)", () => {
+  it("errors on an empty evaluationCriteria array instead of passing vacuously", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-loadtests-"));
+    try {
+      const file = path.join(dir, "x.test.json");
+      fs.writeFileSync(
+        file,
+        JSON.stringify({
+          tests: [{ nodeName: "n", input: "", expectedOutput: "1", evaluationCriteria: [] }],
+        }),
+      );
+      expect(() => loadTests(file)).toThrow(/criteria/i);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("resolveTestSourcePath", () => {
+  it("honors an explicit sourceFile and defaults to the sibling basename", () => {
+    expect(resolveTestSourcePath({ sourceFile: "other.agency" }, "/a/b/x.test.json")).toBe(
+      "/a/b/other.agency",
+    );
+    expect(resolveTestSourcePath({}, "/a/b/x.test.json")).toBe("/a/b/x.agency");
   });
 });

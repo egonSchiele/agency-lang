@@ -377,10 +377,11 @@ export def test(
         if (scripted.index < answers.length) {
           const answer = answers[scripted.index]
           scripted.index = scripted.index + 1
-          const expectedMessage = answer.expectedMessage ?? ""
-          if (expectedMessage != "") {
-            if (expectedMessage != intr.message) {
-              scripted.mismatch = "expected interrupt message \"${expectedMessage}\", got \"${intr.message}\""
+          // Presence decides whether the message is checked (== null also
+          // matches undefined); an empty string is a real expectation.
+          if (answer.expectedMessage != null) {
+            if (answer.expectedMessage != intr.message) {
+              scripted.mismatch = "expected interrupt message \"${answer.expectedMessage}\", got \"${intr.message}\""
               return reject(scripted.mismatch)
             }
           }

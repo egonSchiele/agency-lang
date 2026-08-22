@@ -1,6 +1,7 @@
 import { typeCheckSource, getEffectsFromSource, TypeCheckReport } from "../compiler/compile.js";
 import { writeFileSync, readFileSync, realpathSync, existsSync } from "fs";
-import { resolve, sep } from "path";
+import { resolve, sep, join, dirname } from "path";
+import { readContainedFile } from "../utils/readContainedFile.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
 import { AgencyGenerator, generateAgency } from "../backends/agencyGenerator.js";
 import { TypescriptPreprocessor } from "../preprocessors/typescriptPreprocessor.js";
@@ -629,9 +630,14 @@ export type ParsedTestFileWire = {
  *  resolveInSandbox BEFORE any read. */
 export function _readTestFileSandbox(dir: string, filename: string): ParsedTestFileWire {
   const target = resolveInSandbox(dir, filename);
-  const parsed = parseTestFileSandbox(readFileSync(target, "utf-8"), filename);
+  // The std::read vote authorized this sandbox-relative path; the read
+  // validates the opened descriptor itself, so a swap after
+  // resolveInSandbox cannot redirect it outside dir.
+  const parsed = parseTestFileSandbox(readContainedFile(dir, target), filename);
   const wire: ParsedTestFileWire = {
-    sourceFile: parsed.sourceFile,
+    // sourceFile is declared relative to the .test.json, so a nested
+    // suite ("sub/suite.test.json") tests "sub/<source>", not "<source>".
+    sourceFile: join(dirname(filename), parsed.sourceFile),
     cases: parsed.cases.map((c) => {
       const wireCase: TestFileCaseWire = {
         node: c.nodeName,

@@ -38,6 +38,26 @@ describe("_readTestFileSandbox", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
+  test("sourceFile is relative to the .test.json, so a nested suite tests its own sibling", () => {
+    const dir = makeDir();
+    fs.mkdirSync(path.join(dir, "sub"));
+    const body = JSON.stringify({
+      tests: [{ nodeName: "t", expectedOutput: "1", evaluationCriteria: [{ type: "exact" }] }],
+    });
+    fs.writeFileSync(path.join(dir, "sub", "suite.test.json"), body);
+    fs.writeFileSync(
+      path.join(dir, "sub", "explicit.test.json"),
+      JSON.stringify({ ...JSON.parse(body), sourceFile: "harness.agency" }),
+    );
+    expect(_readTestFileSandbox(dir, "sub/suite.test.json").sourceFile).toBe(
+      path.join("sub", "suite.agency"),
+    );
+    expect(_readTestFileSandbox(dir, "sub/explicit.test.json").sourceFile).toBe(
+      path.join("sub", "harness.agency"),
+    );
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
   test("refused fields error by name; escaping json path refused before read", () => {
     const dir = makeDir();
     fs.writeFileSync(

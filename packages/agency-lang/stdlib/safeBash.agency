@@ -499,10 +499,16 @@ def tryAgencyPlan(command: SimpleCommand): Result<Plan> {
   if (name == null || name.tag != "literal" || command.assignments.length > 0) {
     return failure("not an agency command")
   }
+  // `which`/`type` look names up; `command` runs or (with -v/-V) looks
+  // up its FIRST argument, so `command echo agency` is an ordinary echo.
   if (name.text == "which" || name.text == "type" || name.text == "command") {
     const lookedUp = literalArgs(command)
     if (lookedUp is success(names)) {
-      if (names.includes("agency")) {
+      if (name.text == "command") {
+        if (names.length > 0 && names[0] == "agency") {
+          return success(refusePlan(CLI_NOT_AVAILABLE))
+        }
+      } else if (names.includes("agency")) {
         return success(refusePlan(CLI_NOT_AVAILABLE))
       }
     }
@@ -928,7 +934,7 @@ def runAgency(args: string[], cwd: string): Result<string> {
   """
   const ran = cli(args, cwd)
   if (ran is failure(err)) {
-    return failure("${err}")
+    return failure(truncate("${err}"))
   }
   if (ran is success(result)) {
     if (result.exitCode != 0) {

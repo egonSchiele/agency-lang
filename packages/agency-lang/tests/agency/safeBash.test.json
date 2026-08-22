@@ -261,9 +261,9 @@
     },
     {
       "nodeName": "agencyCommandLines",
-      "description": "A single `agency <subcommand> <file>` runs in-process (kind agency). Looking for the binary, a variable argument, or a redirect is refused with the functions to call. Other commands that merely mention agency are ordinary bash.",
+      "description": "A single `agency <subcommand> <file>` runs in-process (kind agency). Looking the binary up (which/type, or command as the first argument), a variable argument, or a redirect is refused with the functions to call. `command echo agency` and other commands that merely mention agency are ordinary bash.",
       "input": "",
-      "expectedOutput": "[\"agency\", \"agency\", \"refuse\", \"refuse\", \"refuse\", \"refuse\", \"refuse\", \"bash\", \"bash\"]",
+      "expectedOutput": "[\"agency\", \"agency\", \"refuse\", \"refuse\", \"refuse\", \"refuse\", \"bash\", \"refuse\", \"refuse\", \"refuse\", \"bash\", \"bash\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

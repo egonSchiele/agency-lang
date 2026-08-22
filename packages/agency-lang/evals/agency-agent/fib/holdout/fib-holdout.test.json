@@ -1,0 +1,7 @@
+{
+  "sourceFile": "fib-holdout.agency",
+  "tests": [
+    { "nodeName": "fifteen", "expectedOutput": "610", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "twenty", "expectedOutput": "6765", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

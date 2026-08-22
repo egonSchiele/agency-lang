@@ -7,6 +7,7 @@ import { runDirPaths } from "@/runDirectory/runDir.js";
 import { finishedTraceLines, tempDir } from "@/runDirectory/testFixtures.js";
 
 import type { Test } from "./runTypes.js";
+import type { HarnessSnapshot } from "./grading/harnessSnapshot.js";
 
 /** One fake test run to write into a run directory. */
 export type FakeRun = {
@@ -23,6 +24,9 @@ export type FakeRun = {
   wroteStatelog?: boolean;
   /** The harness's agent label, recorded as `flags.agent` on the run row. */
   agentLabel?: string;
+  /** Harness pairs to store under graders/ and record on the run row, as
+   *  `eval run` does for a test directory with files/ and holdout/. */
+  harness?: HarnessSnapshot;
 };
 
 /**
@@ -69,6 +73,7 @@ export function writeRunDirectory(run: FakeRun, dir: string = tempDir("run-")): 
     dir,
     stagedStatelogFile: statelogFile,
     workdir,
+    gradersFiles: run.harness?.files,
     run: {
       traceId,
       annotator: { kind: "harness", id: "agency-eval@test" },
@@ -78,6 +83,7 @@ export function writeRunDirectory(run: FakeRun, dir: string = tempDir("run-")): 
         suite: null,
         ended,
         flags: run.agentLabel === undefined ? {} : { agent: run.agentLabel },
+        ...(run.harness === undefined ? {} : { harness: run.harness.records }),
         ...(ended === "ok" ? {} : { error: run.errorMessage ?? `ended with ${ended}` }),
       },
     },

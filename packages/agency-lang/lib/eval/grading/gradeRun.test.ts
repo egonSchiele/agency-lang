@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { describe, expect, it } from "vitest";
 
@@ -9,6 +10,7 @@ import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 import { AgencyRunner } from "./agencyRunner.js";
 import { grader } from "./functionGrader.js";
 import { gradeRun, type GradingContext } from "./gradeRun.js";
+import { snapshotHarness } from "./harnessSnapshot.js";
 
 const capital: Test = { id: "a", goal: "name the capital", input: "t", expected: "New Delhi" };
 
@@ -194,5 +196,51 @@ describe("gradeRun", () => {
     const card = await gradeRun(runDir, ctx([spy]));
     expect(seenId).toBe("adhoc");
     expect(card.objective()).toBe(1);
+  });
+});
+
+describe("harness graders from the run row", () => {
+  function harnessFixture() {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "harness-fixture-"));
+    fs.writeFileSync(path.join(dir, "h.agency"), "export node t(): number {\n  return 1\n}\n");
+    fs.writeFileSync(
+      path.join(dir, "h.test.json"),
+      JSON.stringify({
+        tests: [{ nodeName: "t", expectedOutput: "1", evaluationCriteria: [{ type: "exact" }] }],
+      }),
+    );
+    return snapshotHarness(
+      [
+        {
+          name: "h",
+          visibility: "holdout",
+          harnessAgency: path.join(dir, "h.agency"),
+          harnessJson: path.join(dir, "h.test.json"),
+        },
+      ],
+      3,
+    );
+  }
+
+  it("builds one AgencyTestGrader per record, bound to the stored files, under --graders and --goal alike", async () => {
+    const harness = harnessFixture();
+    const runDir = makeRun({ output: "x", harness });
+    const spy = grader(() => 1, { name: "spy" });
+    // The spy stands in for a --graders override; the harness grader must still be there.
+    const card = await gradeRun(runDir, { ...ctx([spy]), defaultGoal: "g" });
+    const names = card.perInput[0].grades.map((g) => g.grader.name());
+    expect(names).toContain("spy");
+    expect(names).toContain("h");
+    const harnessGrade = card.perInput[0].grades.find((g) => g.grader.name() === "h");
+    expect(harnessGrade?.grader.annotator().id).toBe(`agency-tests/h@${harness.records[0].sha256}`);
+  });
+
+  it("a record whose stored file is missing fails grading by name", async () => {
+    const harness = harnessFixture();
+    const runDir = makeRun({ output: "x", harness });
+    fs.rmSync(path.join(runDirPaths(runDir).gradersDir, harness.records[0].json));
+    await expect(gradeRun(runDir, ctx([]))).rejects.toThrow(
+      /Harness snapshot not found.*recorded for h/,
+    );
   });
 });

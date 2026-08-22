@@ -6,7 +6,7 @@
 
 **Branch:** `adit/split-4-eval-grader` (PR #880, based on `main`). The branch currently carries the wrapper-based grader. This plan rewrites it in place: the first tasks add the `agency test` flags (which stand on their own), the middle tasks rebuild the grader on them, the last tasks delete what the old design needed.
 
-**Goal:** `agency test` can run a test file with a caller-chosen root interrupt policy, a pure-Agency import closure, and machine-readable output; the eval framework grades a coding test by running `agency test --json --pure-agency --policy reject-all` against the agent's workdir with the framework's copy of each harness pair, and keeps those pairs in the run directory as plain files.
+**Goal:** `agency test` (and `agency run`) can run with a caller-chosen root interrupt policy and a pure-Agency import closure, and `agency test` can print machine-readable output; the eval framework grades a coding test by running `agency test --json --pure-agency --reject '*'` against the agent's workdir with the framework's copy of each harness pair, and keeps those pairs in the run directory as plain files.
 
 ## Global constraints
 
@@ -15,6 +15,7 @@
 - Save every test run's output to a file under the scratchpad and read it from there. Run only the suites that cover changed files. Never run the whole agency execution suite locally.
 - `make` only after a change to `stdlib/**`, `lib/agents/**`, or templates. After TypeScript-only changes, `npx tsc --noEmit -p .` and vitest are enough.
 - Deleting a directory in tests goes through `safeDeleteDirectoryWithin`, never a hand-rolled `rmSync` on a computed path.
+- **Symlinks: do not write code to support them.** If a step would need link-aware logic (copying links, resolving them, protecting against them), choose the rule that makes links irrelevant instead (skip them, refuse them) and say so in a comment.
 - No force pushes, no amends, no commits on `main`.
 
 ## Sequencing
@@ -23,26 +24,25 @@ Tasks 1–4 change `agency test` only and are independently useful. Task 5 is th
 
 ---
 
-## Task 1: `--policy`, `--max-cost`, `--max-time` on `agency test` (spec Part 1, "--policy")
+## Task 1: `--policy`, `--approve`, `--reject`, `--max-cost`, `--max-time` on `agency test` (spec Part 1, "--policy")
 
 **Files:**
 - `scripts/agency.ts` (the `test` command definition, around line 1140)
 - `lib/cli/test.ts` (`test()`, `runTestFile`, `runSingleTest`)
+- `lib/cli/testChildEnv.ts` (new, one concept: the environment a test case's child gets)
 - `lib/cli/util.ts` (`executeNodeAsync` already accepts `env`)
-- `lib/runtime/builtinPolicies.ts` (`reject-all`)
-- `lib/cli/test.test.ts`, `lib/runtime/builtinPolicies.test.ts` (or policy.test.ts)
+- `lib/cli/test.test.ts`, `lib/cli/testChildEnv.test.ts`
 
-Background: `agency run --policy` resolves a policy with `resolveRunPolicy` (`lib/cli/runPolicy.ts`) and puts its JSON into the child's environment as `AGENCY_RUN_POLICY` (`lib/cli/commands.ts:304-313`). The runtime's `runNode` installs the handler from that variable (`lib/runtime/node.ts:201`). The test runner spawns each case through `executeNodeAsync`, which merges an `env` object over `process.env`. So the work is: resolve once, pass the variables through.
+Background: `agency run --policy/--approve/--reject` resolves a policy with `resolveRunPolicy` (`lib/cli/runPolicy.ts`) and puts its JSON into the child's environment as `AGENCY_RUN_POLICY` (`lib/cli/commands.ts:304-313`). The runtime's `runNode` installs the handler from that variable (`lib/runtime/node.ts:201`). The test runner spawns each case through `executeNodeAsync`, which merges an `env` object over `process.env`. So the work is: resolve once, pass the variables through. `--reject '*'` is already reject-all because the policy's wildcard key is `"*"`; no built-in is added.
 
-- [ ] Add `"reject-all"` to `BUILTIN_POLICIES` and `builtinPolicy()` in `lib/runtime/builtinPolicies.ts`: `{ "*": [{ action: "reject" }] }`. Unit test: `checkPolicyExplicit(rejectAll, anyInterrupt)` is `{ type: "reject" }` for an effect with no rule of its own.
 - [ ] Add a `TestRunOptions` type in `lib/cli/test.ts`: `{ policy?: ResolvedRunPolicy; maxCost?: number; maxTime?: number; pureAgency?: boolean; json?: boolean }`. Thread it from `test()` to `runTestFile` to `runSingleTest` as one object (no new positional parameters).
-- [ ] In `runSingleTest`, build the child `env`: always delete `AGENCY_RUN_POLICY` and `AGENCY_RUN_POLICY_INTERACTIVE` (clear-then-set, copying the comment from `commands.ts`), then set `AGENCY_RUN_POLICY` from `options.policy.policyJson` when present; set `AGENCY_MAX_COST` / `AGENCY_MAX_TIME` when given. Pass it as `env` to `executeNodeAsync`. Note the existing `executeNodeAsync` may already set env entries (LLM mocks); merge, do not replace.
-- [ ] In `scripts/agency.ts`, add `--policy <name|path>`, `--max-cost <dollars>`, `--max-time <duration>` to the `test` command, resolved the same way the `run` command resolves them (reuse the helpers `run` uses; do not re-parse durations by hand).
-- [ ] Unit test in `lib/cli/test.test.ts`: the env builder deletes an inherited `AGENCY_RUN_POLICY` when no policy is given, and sets it to the resolved JSON when one is. (Extract the env builder as a small pure function so this is a plain test.)
-- [ ] Agency execution test `tests/agency/test-cli-policy/` (an agency-js test is the right tier, since it drives the CLI): a tested node does `write("x.txt", "hi", ".") with approve` and returns whether the write succeeded. Positive control: `agency test` without `--policy` writes the file and the case expecting `"written"` passes. With `--policy reject-all`: the file is not written and the case fails with feedback containing the reject. Both assertions in one `test.js`, so the control and the restricted run share the fixture. Check `docs/misc/TESTING.md` for the agency-js layout.
-- [ ] Commit: "agency test --policy/--max-cost/--max-time: the run's root handler and budget, in the test runner".
+- [ ] New `lib/cli/testChildEnv.ts`: `testChildEnv(options): Record<string, string>` and `clearedPolicyKeys` — a pure function returning the entries to merge over `process.env`, plus the keys to delete: always delete `AGENCY_RUN_POLICY` and `AGENCY_RUN_POLICY_INTERACTIVE` (clear-then-set, copy the comment from `commands.ts`), set `AGENCY_RUN_POLICY` from `options.policy.policyJson` when present, set `AGENCY_MAX_COST` / `AGENCY_MAX_TIME` when given. `executeNodeAsync` needs to honor a "delete these keys" input; add it beside `env` rather than special-casing inside.
+- [ ] In `scripts/agency.ts`, add `--policy <name|path>`, `--approve <effects>`, `--reject <effects>`, `--max-cost <dollars>`, `--max-time <duration>` to the `test` command, resolved with the same helpers the `run` command uses (do not re-parse durations by hand).
+- [ ] Unit test: `testChildEnv` with no policy yields the two keys to delete and no policy entry; with `--reject '*'` yields a JSON policy whose `"*"` rule is `reject`; cost and time map to their env names.
+- [ ] Agency-js test `tests/agency-js/test-cli-policy/`: a tested node does `write("x.txt", "hi", ".") with approve` and returns whether the write succeeded. Positive control: `agency test` without a policy writes the file and the case expecting `"written"` passes. With `--reject '*'`: the file is not written and the case fails with feedback containing the reject. Both in one `test.js`. Check `docs/misc/TESTING.md` for the agency-js layout.
+- [ ] Commit: "agency test --policy/--approve/--reject/--max-cost/--max-time: the run's root handler and budget, in the test runner".
 
-## Task 2: `--pure-agency` (spec Part 1, "--pure-agency")
+## Task 2: `--pure-agency` on `agency test` and `agency run` (spec Part 1, "--pure-agency")
 
 **Files:**
 - `lib/cli/test.ts` (`runTestFile`: the compile step; `runSingleTest`: where the compiled path is chosen)
@@ -57,6 +57,7 @@ Background: `runAgencyNode` picks `compiledPath` from `distDir`, a sibling `.js`
 - [ ] `runTestFile`: under `options.pureAgency`, call `compilePureAgency` once per file before the cases loop. On `ok: false`, log the errors, mark every case failed with that text as feedback, record the file in `failedFiles`, and return; do not `process.exit`. On success pass `scriptPath` as `compiledPath` to every case. Skip the precompile pass for these files (`test()` already groups files for precompile; exclude them when `pureAgency` is set).
 - [ ] Cleanup: the materialized directory is deleted after the file's cases finish, through `safeDeleteDirectoryWithin(<.agency-tmp>, <dir>)`. Never derive the directory by path arithmetic; `materializeCompiledScript` returns the script path and the per-run dir is its parent only for single-file programs, so have `compilePureAgency` also return the run directory it created (the first segment under `.agency-tmp`, the same rule `cleanupTempDir` in `ipc.ts` uses; expose that rule as a named helper rather than copying it).
 - [ ] Unit tests: a source importing a sibling `.agency` compiles and the script exists at the returned path; a source importing `fs` returns `ok: false` with "not Agency source" in the errors and no script; a source in `sub/` importing `./helper.agency` gets a script under `sub/` (nested entry, the #878 fix).
+- [ ] `agency run --pure-agency`: in `lib/cli/commands.ts` `runCommand`, when the flag is set, replace the `compile(...)` call (line 282) with `compilePureAgency(inputFile)`; on `ok: false` print the errors and exit 1 (a refusal IS the run's failure here; `run` already exits 1 on a compile error). Add the flag in `scripts/agency.ts` next to `--policy`. Agency-js test: `agency run --pure-agency bad.agency` (imports `fs`) exits 1 with "Sandboxed compilation refused"; `agency run --pure-agency --reject '*' writes.agency` exits 0 and the file it tried to write does not exist; positive control: without the flags the file exists.
 - [ ] Agency-js test `tests/agency-js/test-cli-pure-agency/`: the same fixture directory holds `good.agency` (std:: only) and `bad.agency` (imports `fs`). Positive control: `agency test bad.test.json` without the flag compiles and runs. With `--pure-agency`: `good` passes, `bad` fails with "Sandboxed compilation refused" in the output and the exit code is 1, and the process did not exit before printing the summary line for `good` (proves no `process.exit` on the refusal).
 - [ ] Commit: "agency test --pure-agency: validated closure compile, refusals are file failures".
 
@@ -110,11 +111,11 @@ Background: `foldIntoRunDirectory` in `runSuite.ts` calls `recordCompletedRun({ 
 **Files:** `lib/eval/grading/agencyTestGrader.ts` (rewrite), `agencyTestGrader.test.ts`, `agencyTestGrader.spawn.test.ts`, `lib/eval/public.ts` (export unchanged).
 
 - [ ] Options: `{ name, harnessAgency, harnessJson, maxCost?: number }` where the two paths are absolute (the loader resolves them; the grader never resolves against cwd). Drop `externalFiles`/`rebindExternalFile`: binding is the loader's job now (Task 8).
-- [ ] `_run`: steps 1–8 of the spec. The spawn seam stays injectable (`RunWrapper`-style) so unit tests stub it; the spawn test drives the real CLI. Parse stdout with the `testReport` zod schema from Task 3; on failure, feedback = "agency test produced no report" + stderr tail.
+- [ ] `_run`: steps 1–8 of the spec. The workdir copy uses `cpSync` with a `filter` that returns false for anything whose `lstat` is a symbolic link; one comment says why (no link support, by rule). Default `maxCost` 5 when the option is absent. The spawn seam stays injectable (`RunWrapper`-style) so unit tests stub it; the spawn test drives the real CLI. Parse stdout with the `testReport` zod schema from Task 3; on failure, feedback = "agency test produced no report" + stderr tail.
 - [ ] `revision` = `agency-tests/<name>@<sha256>` where the sha is computed from the two files' contents (same rule as Task 6, shared helper in `harnessSnapshot.ts`).
 - [ ] Unit tests (stubbed spawn): all pass → 1; one of two fails → 0.5 with feedback naming the node; file `compile-failed` → 0 with the error; no workdir → 0 with "no workdir"; the agent's copy of the harness json in the workdir is overwritten (the stub asserts on the bytes it is handed); a symlink at the harness destination is replaced, not followed (assert the link target is untouched).
-- [ ] Spawn tests (real CLI, as today's `agencyTestGrader.spawn.test.ts`): a good fib solution scores 1; a wrong one scores 0.5 with the diff in feedback; a solution that `import fs` scores 0 with "Sandboxed compilation refused"; a solution whose node does `write(...) with approve` scores 0 and the file does not exist afterwards (positive control: the same solution under plain `agency test` writes it); a solution calling `llm()` scores 0 with the cost-cap message (positive control not needed; assert the message). Keep these under the existing spawn-test timeout.
-- [ ] Commit: "AgencyTestGrader runs agency test --json --pure-agency --policy reject-all".
+- [ ] Spawn tests (real CLI, as today's `agencyTestGrader.spawn.test.ts`): a good fib solution scores 1; a wrong one scores 0.5 with the diff in feedback; a solution that `import fs` scores 0 with "Sandboxed compilation refused"; a solution whose node does `write(...) with approve` scores 0 and the file does not exist afterwards (positive control: the same solution under plain `agency test` writes it); a workdir containing a symlink grades without the link being present in the scratch copy. The cost cap is covered by a unit test of the env (Task 1), not by a paid call. Keep these under the existing spawn-test timeout.
+- [ ] Commit: "AgencyTestGrader runs agency test --json --pure-agency --reject '*'".
 
 ## Task 8: loading harness graders at grade time (spec Part 2, "Grade time")
 
@@ -138,7 +139,7 @@ Background: `foldIntoRunDirectory` in `runSuite.ts` calls `recordCompletedRun({ 
 ## Task 10: docs
 
 - [ ] `docs/dev/std-agency-test.md`: replace the "Eval grading" section with the new mechanism (discovery, preflight, harness record, grader command line, the safety argument with its five bullets), and update the CLAUDE.md pointer line.
-- [ ] `docs/dev/eval-grading.md`: rewrite "Coding tests" to describe `agency test --json --pure-agency --policy reject-all` and the three rules that survive (never run the harness from the workdir; spawn, never call `test()` in-process; scratch under `.agency-tmp`).
+- [ ] `docs/dev/eval-grading.md`: rewrite "Coding tests" to describe `agency test --json --pure-agency --reject '*'` and the three rules that survive (never run the harness from the workdir; spawn, never call `test()` in-process; scratch under `.agency-tmp`).
 - [ ] `docs/dev/run-directory.md`: the `graders/` directory now also holds harness pairs; the run row has `harness`.
 - [ ] Stdlib docs regenerate via `make` after Task 9 (do not hand-edit `docs/site/**`). The `agency test` CLI reference under `docs/site/cli/` is the owner's; list the three flags in the PR description for them.
 - [ ] Commit: "Docs: eval grading on agency test".
@@ -146,7 +147,7 @@ Background: `foldIntoRunDirectory` in `runSuite.ts` calls `recordCompletedRun({ 
 ## Task 11: verification and the PR
 
 - [ ] `npx tsc --noEmit -p .`; `pnpm run fmt:ts`; `pnpm run lint:structure`; `npx vitest run lib/sourceIsText.test.ts` (the repo-wide guard that scoped runs miss); `git diff --numstat origin/main | awk '$1=="-"'` must print nothing (no binary files).
-- [ ] Vitest for every changed file's suite: `lib/cli/test.test.ts`, `pureAgencyCompile`, `testReport`, `lib/testFormat`, `harnessSnapshot`, `agencyTestGrader` (+ spawn), `gradeRun`, `runSuite`, `annotations`, `builtinPolicies`/`policy`. Save output to the scratchpad; read failures from the file.
+- [ ] Vitest for every changed file's suite: `lib/cli/test.test.ts`, `pureAgencyCompile`, `testReport`, `lib/testFormat`, `harnessSnapshot`, `agencyTestGrader` (+ spawn), `gradeRun`, `runSuite`, `annotations`, `runPolicy`. Save output to the scratchpad; read failures from the file.
 - [ ] Agency-js tests from Tasks 1–3 with `pnpm run agency test js <dir>`; the fib eval end to end: `agency eval run evals/agency-agent/fib --out <dir>` with a cheap model if one is configured, then `agency eval grade <dir>` and confirm two score rows per run (`fib-tests`, `fib-holdout`) with revisions of the form `agency-tests/<name>@<sha>`. If no model is available, the spawn tests in Task 7 are the evidence; say so in the PR.
 - [ ] Anti-pattern audit of the diff against `docs/dev/anti-patterns.md` before pushing.
 - [ ] Update PR #880's description: the new design in one paragraph, the three flags (and that `docs/site/cli/test.md` needs the owner's edit), the deletions, and the verification list. Push (fast-forward; no force).
@@ -155,5 +156,6 @@ Background: `foldIntoRunDirectory` in `runSuite.ts` calls `recordCompletedRun({ 
 
 - Moving the CLI's `input` string to an `args` object (#881).
 - A per-test custom grading policy (`harnessPolicy` in `test.json`).
+- Capability-set names in `--approve` / `--reject`, and rewriting the built-in policies as unions of `std::capabilities` sets (the policy clean-up; its own change).
 - `pkg::` imports in the sandbox.
 - Any change to `std::agency`'s `test()`/`testFile()` beyond deleting `_formatFailurePayload`.

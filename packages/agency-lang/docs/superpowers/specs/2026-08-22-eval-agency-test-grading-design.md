@@ -1,4 +1,4 @@
-# Eval grading of Agency coding tests: `agency test --pure-agency --policy reject-all`
+# Eval grading of Agency coding tests: `agency test --pure-agency --reject '*'`
 
 Date: 2026-08-22. Status: designed, awaiting owner review. Supersedes the
 "Eval AgencyTestGrader" half of
@@ -50,7 +50,8 @@ harness files were preserved by generating and bundling source code.
 
 ## The design in one paragraph
 
-`agency test` gains three flags. `--policy <name|path>` installs the same
+`agency test` gains the run command's policy flags and two of its own.
+`--policy <name|path>` (with `--approve` / `--reject`) installs the same
 root handler `agency run --policy` already installs, inside the process that
 runs each test case, so the tested code's effects are all voted on by a
 policy the caller chose. `--pure-agency` compiles each tested file through
@@ -59,7 +60,7 @@ escapes the interrupt system. `--json` prints the results as one JSON
 document. A new built-in policy, `reject-all`, rejects every effect. The
 eval grader then is: copy the agent's workdir to a scratch directory, put the
 framework's own copy of the harness pair in place, run
-`agency test --json --pure-agency --policy reject-all <harness>.test.json`
+`agency test --json --pure-agency --reject '*' <harness>.test.json`
 there, and score the passing fraction. The harness files are kept in the run
 directory as plain files so `eval grade` can repeat this later from the
 directory alone.
@@ -123,6 +124,13 @@ with the same relative layout, using `materializeCompiledScript`
 (`lib/runtime/ipc.ts`), and the evaluate script imports the entry from
 there. The precompile pass and `preferCompiled` are bypassed for the file.
 
+The same flag goes on `agency run`: its one compile call
+(`lib/cli/commands.ts:282`) is replaced by the same helper when the flag is
+set, and `agency run` already has `--policy`. A user can then run agent-
+written Agency code directly with `agency run --pure-agency --reject '*'
+solution.agency`; the grader is that command line with `test` in place of
+`run`.
+
 `--pure-agency` does not imply `--policy`, and the reverse. They answer
 different questions (can the code escape the interrupt system; what does the
 interrupt system answer) and the grader passes both. A future `agency.json`
@@ -176,16 +184,15 @@ unchanged (1 when any case failed or any file could not run).
 The human summary line (`N/M tests passed`) is unchanged on stderr. Nothing
 else in the human output is part of the contract.
 
-### Built-in policy `reject-all`
+### Reject-all: `--reject '*'`
 
-```json
-{ "*": [{ "action": "reject" }] }
-```
-
-Added to `lib/runtime/builtinPolicies.ts` with the others (`recommended`,
-`minimal`, `with-writes`, `approve-all`). It uses the existing wildcard rule
-(`lib/runtime/policy.ts:44-56`), which applies to any effect that has no
-rule of its own.
+`agency run` already has `--approve <effects>` / `--reject <effects>`
+(`resolveRunPolicy`, `lib/cli/runPolicy.ts`), and a policy's wildcard key
+is the literal `"*"` (`lib/runtime/policy.ts:44`), so `--reject '*'` is
+already a reject-every-effect policy on `agency run`. `agency test` gets
+the same two flags alongside `--policy`, and the grader uses `--reject '*'`.
+No new built-in policy is added in this change; see "Open questions" for
+the larger policy clean-up.
 
 ## Part 2: the eval grader
 
@@ -207,7 +214,7 @@ checked against an eval-only refusal list, in a new
 `parseTestFileEvalHarness` beside the other profiles in
 `lib/testFormat/schema.ts`:
 
-- `interruptHandlers` on any case: refused. Under `reject-all` the policy
+- `interruptHandlers` on any case: refused. Under `--reject '*'` the policy
   answers every effect before a scripted answer could, so a scripted
   `approve` can never take effect and a scripted `reject` is redundant; a
   file declaring them would fail with "expected N interrupts, saw 0" for a
@@ -279,14 +286,17 @@ grader binds to the test directory's files directly.
 2. Create a scratch directory under the project's `.agency-tmp/`
    (`makeAgencyTempDir`; never `os.tmpdir()`, because compiled Agency
    resolves `agency-lang` from the directory it runs in) and copy the
-   workdir into it with `cpSync(..., { dereference: false })`, so a symlink
-   the agent planted is copied as a symlink and the validator sees it.
+   workdir into it, **skipping symlinks** (a `cpSync` filter on `lstat`).
+   No code is written to support links: a link the agent planted is simply
+   not there in the copy, so nothing can follow it, and the validator's own
+   symlink refusal is never even reached. This is the same rule as CLAUDE.md
+   ("do not add code to support symlinks").
 3. Install both harness files from the framework's copy: remove whatever
-   sits at the destination without following it (`rmSync` with `force`
-   and `recursive`), then write with the `wx` flag so the write cannot
-   follow a link either.
-4. Spawn `node <agency cli> test --json --pure-agency --policy reject-all
-   --max-cost 0 <json basename>` with `cwd` = scratch and a wall-clock
+   sits at the destination (`rmSync` with `force` and `recursive`; after
+   step 2 it can only be a regular file or directory the agent wrote), then
+   write with the `wx` flag.
+4. Spawn `node <agency cli> test --json --pure-agency --reject '*'
+   --max-cost 5 <json basename>` with `cwd` = scratch and a wall-clock
    timeout (10 minutes, as today). The CLI path is `process.argv[1]` when
    grading runs inside the agency CLI, else the package's own
    `dist/scripts/agency.js` (the argv[1]-or-package-root rule from #880,
@@ -301,10 +311,14 @@ grader binds to the test directory's files directly.
    `error`, or the spawn diagnostics tail (ANSI stripped, last 2000 chars).
 8. Delete the scratch directory with `safeDeleteDirectoryWithin`.
 
-`--max-cost 0` is the default because a coding harness should not need a
-model call; a test directory can raise it with a `harnessMaxCost` field in
-its `test.json` (dollars), recorded on the harness entry so `eval grade`
-uses the same cap.
+The default cap is **$5**: a solution may legitimately call `llm()`, and
+the cap is there to bound a runaway, not to forbid model use. A test
+directory can change it with a `harnessMaxCost` field in its `test.json`
+(dollars), recorded on the harness entry so `eval grade` uses the same cap.
+The cap is the runtime's root budget, which lives in the process that runs
+one case, so it is **per case**: a ten-case harness can spend up to ten
+times the cap. A per-harness total would need the grader to sum spend across
+cases from the statelog; that is not in this change.
 
 ### Why this is safe (the argument, in one place)
 
@@ -313,7 +327,7 @@ uses the same cap.
   built-in, no package, no splice, no symlink, and the mirror compile reads
   only the bytes that were validated (#878). So every effect the tested
   code can perform is an interrupt.
-- `--policy reject-all` installs the root handler before the entry node's
+- `--reject '*'` installs the root handler before the entry node's
   body runs, and the chain resolves reject over approve, so the tested
   code's own `with approve` is a vote that loses.
 - Code that runs before the handler exists (static initializers, top-level
@@ -324,8 +338,8 @@ uses the same cap.
 - A subprocess the tested code launches through `std::run` is an IPC child,
   which forwards its interrupts to this root chain and installs no policy
   of its own (`installRunPolicyHandler` is root-only).
-- Money: `llm()` is not an interrupt; `--max-cost 0` trips the root budget
-  on the first paid call. Time: the case `timeoutMs` and the grader's
+- Money: `llm()` is not an interrupt; `--max-cost` trips the root budget
+  when a case's spend crosses the cap, and the case fails. Time: the case `timeoutMs` and the grader's
   wall-clock kill. Disk: the scratch directory is the only writable place
   and it is deleted.
 - The harness files come from the framework's copy, installed after the
@@ -383,11 +397,26 @@ full profile and the eval refusal list. `graders.ts` stays deleted.
   names before implementation; they are the one thing here that is hard to
   change later.
 
+## Decided in review (2026-08-22)
+
+- `--json`, not `--reporter json`.
+- Default harness cost cap $5, per case; `harnessMaxCost` in `test.json`.
+- Symlinks: never add code to support them; the workdir copy skips them.
+- `--pure-agency` goes on `agency run` as well, in this change.
+
 ## Open questions for the reviewer
 
-1. Flag names: `--pure-agency` vs `--sandbox`, and whether `--json` should
-   instead be `--reporter json`.
-2. Whether `agency test` should delete an inherited `AGENCY_RUN_POLICY`
-   when run without `--policy` (this spec says yes, matching `agency run`).
-3. Whether `--max-cost 0` is the right grading default, and whether
-   `harnessMaxCost` belongs in `test.json` or nowhere yet.
+1. The name `--pure-agency`. Alternatives considered: `--agency-only`,
+   `--no-interop`, `--strict-imports`. `--sandbox` is rejected because it
+   promises isolation the flag does not provide.
+2. Named policies. Today `run`, `agent`, `test`, and `remote call` all
+   resolve `--policy` through one list (`lib/runtime/builtinPolicies.ts`),
+   so the names are shared, but each built-in is a hand-written list of
+   effects. `std::capabilities` already names the groups (`FileRead`,
+   `Shell`, `Network`, …) as compile-time effect sets. The clean-up: let
+   `--approve` / `--reject` accept a capability set name as well as an
+   effect name, expanded from `std::capabilities` when the policy is
+   resolved, and rewrite the built-ins as unions of sets. That is its own
+   change; this spec only needs `--reject '*'`.
+3. Inherited `AGENCY_RUN_POLICY` (spec says `agency test` clears it when
+   run without a policy flag, as `agency run` does).

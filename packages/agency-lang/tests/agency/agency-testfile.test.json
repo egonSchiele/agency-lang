@@ -6,6 +6,7 @@
     { "nodeName": "unquotedExpectedOutputGuidance", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "firstGateBlocksTheRead", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "cliInputStringIsRefused", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "nestedSuiteUsesItsOwnDirectory", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "unknownNodeIsACaseFailure", "input": "", "expectedOutput": "\"ok\"", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

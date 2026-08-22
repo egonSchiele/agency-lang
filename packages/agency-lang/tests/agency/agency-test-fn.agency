@@ -307,6 +307,33 @@ export node expectedMessageMismatchFails(): string {
   return "unreachable"
 }
 
+// An explicit empty expectation is still an expectation: it must be
+// compared, and "gimme" is not "".
+export node emptyExpectedMessageIsChecked(): string {
+  const dir = "./.tfn-emptymsg"
+  seed(dir)
+  handle {
+    const r = test(dir, "harness.agency", [
+      {
+      node: "asks",
+      expected: "x",
+      interrupts: [{ action: "approve", value: "x", expectedMessage: "" }]
+    },
+    ])
+    if (r is success(report)) {
+      if (report.cases[0].pass) {
+        return "an empty expectation must not be skipped"
+      }
+      if (!report.cases[0].feedback.includes("gimme")) {
+        return "feedback missing the actual message: ${report.cases[0].feedback}"
+      }
+      return "ok"
+    }
+    return "failed"
+  } with approve
+  return "unreachable"
+}
+
 export node leftoverAnswersFail(): string {
   const dir = "./.tfn-leftover"
   seed(dir)

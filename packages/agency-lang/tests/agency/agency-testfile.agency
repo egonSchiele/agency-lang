@@ -170,3 +170,25 @@ export node unknownNodeIsACaseFailure(): string {
   } with approve
   return "unreachable"
 }
+
+// A nested suite: the json sits in sub/, so its default source is
+// sub/suite.agency and the harness import resolves from there.
+export node nestedSuiteUsesItsOwnDirectory(): string {
+  const dir = "./.tfl-nested"
+  mkdir(dir) with approve
+  mkdir("${dir}/sub") with approve
+  write("solution.agency", SOLUTION, "${dir}/sub") with approve
+  write("suite.agency", HARNESS, "${dir}/sub") with approve
+  write("suite.test.json", "{ \"tests\": [{ \"nodeName\": \"sum\", \"args\": { \"a\": 3, \"b\": 4 }, \"expectedOutput\": \"7\", \"evaluationCriteria\": [{ \"type\": \"exact\" }] }] }", "${dir}/sub") with approve
+  handle {
+    const r = testFile(dir, "sub/suite.test.json")
+    if (r is success(report)) {
+      if (!report.cases[0].pass) {
+        return "case should pass: ${report.cases[0].feedback}"
+      }
+      return "ok"
+    }
+    return "failed: ${r}"
+  } with approve
+  return "unreachable"
+}

@@ -23,6 +23,7 @@ import { getAllImports } from "@/analysis/imports.js";
 import { importKind } from "@/importPaths.js";
 import { splicesIn } from "@/preprocessors/expandSplices.js";
 import { isStrictDescendant } from "@/utils.js";
+import { readContainedFile } from "@/utils/readContainedFile.js";
 import type { AgencyProgram } from "@/types.js";
 
 declare const validatedClosureBrand: unique symbol;
@@ -163,6 +164,8 @@ class ClosureWalker {
     // its real path, so any difference here means a symlink somewhere in
     // the import's own path. Refused rather than followed: the mirror
     // copies files at their written paths and does not reproduce links.
+    // (readContainedFile re-checks this on the opened descriptor, so a
+    // link swapped in after this point is refused too.)
     if (canonical !== resolved) {
       this.violations.push(
         `${label}: import '${importPath}' goes through a symlink ('${resolved}' is really '${canonical}'); sandboxed imports must be regular files`,
@@ -177,7 +180,7 @@ class ClosureWalker {
     this.visited[filePath] = true;
     let source: string;
     try {
-      source = readRegularFile(filePath);
+      source = readContainedFile(this.root as string, filePath);
     } catch (e) {
       this.violations.push(`${importedFrom}: '${filePath}' cannot be read: ${messageOf(e)}`);
       return;
@@ -280,23 +283,6 @@ export function validateClosure(args: ValidateClosureArgs): ValidatedClosure {
     entryModuleId,
   });
   return data as unknown as ValidatedClosure;
-}
-
-/** Reads a regular file through one descriptor: opened without following
- *  a final symlink and without blocking (so a FIFO returns instead of
- *  hanging the compiler), checked with fstat, then read from that same
- *  descriptor so nothing can be swapped between the check and the read. */
-function readRegularFile(filePath: string): string {
-  const flags = fs.constants.O_RDONLY | fs.constants.O_NONBLOCK | fs.constants.O_NOFOLLOW;
-  const fd = fs.openSync(filePath, flags);
-  try {
-    if (!fs.fstatSync(fd).isFile()) {
-      throw new Error("not a regular file");
-    }
-    return fs.readFileSync(fd, "utf-8");
-  } finally {
-    fs.closeSync(fd);
-  }
 }
 
 function pickEntryRelPath(): string {

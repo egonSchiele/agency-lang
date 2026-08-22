@@ -7,13 +7,12 @@
   agencyVerifierAgent on the result, and retry with its findings folded into
   the task.
 */
-import { compile } from "std::agency"
+import { compile, typecheck, parseAST } from "std::agency"
 import { agencyReviewAgent } from "std::agents/agency/review"
 import { renderFeedback, feedbackHasErrors } from "std::agents/lib/feedback"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import {
   agencyDocTools,
-  agencyCodeTools,
   readOnlyFileTools,
   readOnlyGitTools,
  } from "std::agents/lib/toolkits"
@@ -94,6 +93,9 @@ guessing at the fix.
 
 Typecheck your draft before returning it, and fix what it reports. An
 attempt you already know does not typecheck wastes a whole round.
+You cannot save files or run tests from here: the caller saves the code
+you return and runs any tests after that. Do not look for the file or try
+to run its tests; when the draft typechecks, return it.
 Return only the complete program in the code field."""
 
 // No hosted web search here, unlike codingAgent. This agent writes one
@@ -107,11 +109,14 @@ export def buildTools(): any[] {
   """
   Return the Agency writer's tools: the bundled documentation, the source
   inspectors it checks drafts with, read-only access to the project it is
-  writing for, and fetches for a named external resource.
+  writing for, and fetches for a named external resource. Not testFile: the
+  writer returns source it has not saved, so there is nothing on disk for a
+  harness to test yet.
   """
   return [
     ...agencyDocTools(),
-    ...agencyCodeTools(),
+    typecheck,
+    parseAST,
     ...readOnlyFileTools(),
     ...readOnlyGitTools(),
     fetch,

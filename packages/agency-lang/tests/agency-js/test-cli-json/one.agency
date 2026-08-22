@@ -1,0 +1,7 @@
+export node passes(): number {
+  return 1
+}
+
+export node fails(): number {
+  return 2
+}

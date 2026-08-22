@@ -51,6 +51,7 @@ import { lintSource } from "@/linter/registry.js";
 import { formatFindings } from "@/cli/lint.js";
 import { resolveBudget } from "@/cli/budget.js";
 import { fixtures, test, testTs, SlowTest, parseShardSpec, TestRunOptions } from "@/cli/test.js";
+import { humanOutput, jsonOutput, type TestOutput } from "@/cli/testOutput.js";
 import { generateReport, cleanCoverage } from "@/cli/coverage.js";
 import { createBundle, extractBundle } from "@/cli/bundle.js";
 import { traceLog } from "@/cli/events.js";
@@ -1139,13 +1140,17 @@ export function createProgram(deps: CliDependencies = {}): Command {
     return `${(ms / 1000).toFixed(2)}s`;
   }
 
-  function printSlowestTests(slowTests: SlowTest[], count: number = 10): void {
+  function printSlowestTests(
+    slowTests: SlowTest[],
+    output: TestOutput = humanOutput(),
+    count: number = 10,
+  ): void {
     if (slowTests.length === 0) return;
     const sorted = [...slowTests].sort((a, b) => b.durationMs - a.durationMs);
     const top = sorted.slice(0, count);
-    console.log(color.yellow(`\n Slowest ${Math.min(count, top.length)} tests:`));
+    output.line(color.yellow(`\n Slowest ${Math.min(count, top.length)} tests:`));
     for (const t of top) {
-      console.log(`   ${color.yellow(formatDuration(t.durationMs))}  ${t.name}`);
+      output.line(`   ${color.yellow(formatDuration(t.durationMs))}  ${t.name}`);
     }
   }
 
@@ -1182,6 +1187,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "--agency-only",
       "Compile each tested file through the closure validator: anything in its imports that is not Agency source is refused and the file fails",
     )
+    .option(
+      "--json",
+      "Print one JSON document of every file and case to stdout; all human-readable output goes to stderr",
+    )
     .option("--coverage", "Enable coverage collection and report")
     .option("--accumulate", "Preserve existing coverage data (use with --coverage)")
     .option(
@@ -1207,9 +1216,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
           maxCost?: string;
           maxTime?: string;
           agencyOnly?: boolean;
+          json?: boolean;
         },
       ) => {
         const config = getConfig();
+        const output = opts.json ? jsonOutput() : humanOutput();
         let runOptions: TestRunOptions = {};
         try {
           runOptions = {
@@ -1222,6 +1233,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
               }) ?? undefined,
             budget: resolveBudget({ maxCost: opts.maxCost, maxTime: opts.maxTime }),
             agencyOnly: opts.agencyOnly ?? false,
+            output,
           };
         } catch (e) {
           console.error(`Error: ${(e as Error).message}`);
@@ -1256,16 +1268,17 @@ export function createProgram(deps: CliDependencies = {}): Command {
             .filter(Boolean)
             .join(" | ");
           if (totals.failedFiles.length > 0) {
-            console.log("");
+            output.line("");
             for (const file of totals.failedFiles) {
-              console.log(color.red(` FAIL  ${file}`));
+              output.line(color.red(` FAIL  ${file}`));
             }
           }
           const colorFn = totals.failed > 0 ? color.red : color.green;
-          console.log(colorFn(`\n Test Files  ${filesStatus} (${totalFiles})`));
-          console.log(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
+          output.line(colorFn(`\n Test Files  ${filesStatus} (${totalFiles})`));
+          output.line(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
         }
-        printSlowestTests(totals.slowTests);
+        printSlowestTests(totals.slowTests, output);
+        output.document(totals.report);
         if (opts.coverage && !opts.collectOnly) {
           const reportTargets = testFile.length > 0 ? testFile : ["."];
           await generateReport(config, reportTargets);

@@ -1,0 +1,3 @@
+export node main(): string {
+  return "two"
+}

@@ -9,6 +9,8 @@ import {
   resolveTestSourcePath,
   type Shard,
 } from "./test.js";
+import { createSuiteContext, printSuiteAbortSummary } from "./test.js";
+import { jsonOutput } from "./testOutput.js";
 
 const id = (s: string) => s;
 
@@ -118,5 +120,22 @@ describe("resolveTestSourcePath", () => {
       "/a/b/other.agency",
     );
     expect(resolveTestSourcePath({}, "/a/b/x.test.json")).toBe("/a/b/x.agency");
+  });
+});
+
+describe("printSuiteAbortSummary", () => {
+  it("writes nothing to stdout under --json", () => {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const out = jsonOutput({ stdout: (t) => stdout.push(t), stderr: (t) => stderr.push(t) });
+    const suite = createSuiteContext(["a.test.json", "b.test.json"]);
+    suite.aborted = true;
+    suite.abortReason = "sigint";
+    suite.completed.push("a.test.json");
+    suite.inFlightAtAbort = ["b.test.json"];
+    printSuiteAbortSummary(suite, out);
+    expect(stdout).toEqual([]);
+    expect(stderr.join("")).toContain("Interrupted by user");
+    expect(stderr.join("")).toContain("b.test.json");
   });
 });

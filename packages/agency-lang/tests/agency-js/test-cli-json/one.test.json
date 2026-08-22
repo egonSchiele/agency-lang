@@ -1,0 +1,6 @@
+{
+  "tests": [
+    { "nodeName": "passes", "expectedOutput": "1", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "fails", "expectedOutput": "3", "retry": 1, "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

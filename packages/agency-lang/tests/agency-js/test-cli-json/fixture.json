@@ -1,0 +1,19 @@
+{
+  "normal": {
+    "exitCode": 1,
+    "stdoutLines": 1,
+    "version": 1,
+    "passed": 1,
+    "failed": 1,
+    "fileStatus": "ran",
+    "failingAttempts": 2,
+    "failingFeedbackHasBoth": true,
+    "summaryOnStderr": true
+  },
+  "sharded": {
+    "stdoutLines": 1,
+    "files": 1,
+    "shardLineOnStderr": true,
+    "shardLineOnStdout": false
+  }
+}

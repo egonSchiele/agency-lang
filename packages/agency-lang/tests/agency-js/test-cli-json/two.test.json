@@ -1,0 +1,1 @@
+{ "tests": [{ "nodeName": "main", "expectedOutput": "\"two\"", "evaluationCriteria": [{ "type": "exact" }] }] }

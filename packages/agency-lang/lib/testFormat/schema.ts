@@ -239,7 +239,10 @@ const fullCriteriaSchema = z
 
 const fullCaseSchema = z.strictObject({
   nodeName: z.string().min(1),
-  input: z.string(),
+  /** A JavaScript argument list pasted into the generated runner (#881).
+   *  Optional so a no-argument case can omit it and stay valid in the
+   *  sandbox profile too, which refuses this field. */
+  input: z.string().optional(),
   expectedOutput: z.string(),
   evaluationCriteria: fullCriteriaSchema,
   interruptHandlers: z.array(fullInterruptSchema).optional(),

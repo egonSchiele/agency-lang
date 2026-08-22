@@ -249,6 +249,16 @@ describe("parseTestFileFull", () => {
     expect(parsed.tests?.[0].interruptHandlers?.[1].resolvedValue).toBe("42");
   });
 
+  test("input is optional: a no-argument case may omit it", () => {
+    const parsed = parseTestFileFull(
+      JSON.stringify({
+        tests: [{ nodeName: "n", expectedOutput: "1", evaluationCriteria: [{ type: "exact" }] }],
+      }),
+      "x.test.json",
+    );
+    expect(parsed.tests?.[0].input).toBeUndefined();
+  });
+
   test("unknown keys fail loudly at every nesting level", () => {
     const base = {
       tests: [

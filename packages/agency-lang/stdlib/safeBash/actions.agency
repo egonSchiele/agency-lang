@@ -71,7 +71,7 @@ export type GitDiffPayload = {
  * fields that way needs. The dispatch in `safeBash` matches over this
  * union exhaustively, so adding a variant is a type error at the dispatch
  * rather than a silent fall-through. */
-export type Execution = BashExec | EchoExec | WriteExec | RefuseExec
+export type Execution = BashExec | EchoExec | WriteExec | AgencyExec | RefuseExec
 
 export type BashExec = {
   kind: "bash";
@@ -81,6 +81,12 @@ export type BashExec = {
 export type EchoExec = {
   kind: "echo";
   content: string
+}
+
+/** An `agency <subcommand> <file>` line, run through std::agency's cli(). */
+export type AgencyExec = {
+  kind: "agency";
+  args: string[]
 }
 
 export type WriteExec = {

@@ -1,0 +1,59 @@
+{
+  "tests": [
+    {
+      "nodeName": "handles",
+      "description": "The subcommands cli() runs in-process.",
+      "input": "",
+      "expectedOutput": "[true,true,false,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "testRunsTheHarness",
+      "description": "agency test <file> runs testFile and renders the report like the CLI.",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "typecheckReportsErrors",
+      "description": "agency typecheck <file> runs typecheckFile; errors exit 1.",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "astAndFmtReadTheFile",
+      "description": "agency ast and agency fmt read the file and run parseAST / format.",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "otherFormsSayWhatTheCallShouldBe",
+      "description": "An unsupported subcommand, a flag, the wrong number of arguments, and an empty command line each fail saying what the call should have been.",
+      "input": "",
+      "expectedOutput": "[\"unsupported\", \"flag\", \"arity\", \"arity\", \"none\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

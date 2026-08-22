@@ -1,4 +1,4 @@
-import { ls, glob, grep, exec } from "std::shell"
+import { ls, glob, grep, exec, ExecResult } from "std::shell"
 import { Json } from "std::validation"
 
 import {
@@ -1036,4 +1036,138 @@ export idempotent def getVersion(): string {
   Get the current version of the Agency standard library.
   """
   return VERSION
+}
+
+/** The `agency` command line is often not installed where an agent runs.
+These run the subcommands that have a function here in-process, and name
+the functions for the rest. */
+export static const CLI_NOT_AVAILABLE = "The agency command line is not available here. Use the tools instead: typecheck(source) or typecheckFile(dir, filename) for type errors; testFile(dir, filename) to run a .test.json harness (write the files it tests first); runFile(dir, filename, node) to run a program; parseAST, format, describe for source analysis."
+
+static const CLI_SUBCOMMANDS = ["test", "typecheck", "tc", "ast", "fmt", "run"]
+
+export idempotent def cliHandles(subcommand: string): boolean {
+  """
+  Whether `cli` runs this agency subcommand in-process.
+
+  @param subcommand - The first CLI argument, e.g. "test"
+  """
+  return CLI_SUBCOMMANDS.includes(subcommand)
+}
+
+export def cli(args: string[], cwd: string = "."): Result<ExecResult> {
+  """
+  Run an `agency <subcommand> <file>` command line through the matching function: `test` runs testFile, `typecheck`/`tc` runs typecheckFile, `ast` runs parseAST, `fmt` runs format, `run` runs runFile on node main. The result has the CLI's shape: stdout, stderr, exitCode. Anything else (a flag, another subcommand, a missing file argument) is a failure saying what the call should have been.
+
+  @param args - The CLI arguments, subcommand first, e.g. ["test", "x.test.json"]
+  @param cwd - The directory the file argument is inside
+  """
+  const supported = CLI_SUBCOMMANDS.join(", ")
+  return match(args) {
+    [sub, file] if (file.startsWith("-")) => failure("cli: `${sub}` takes a file, not a flag (${file}); call the function behind it for options")
+    ["test", file] => cliTest(cwd, file)
+    ["typecheck", file] => cliTypecheck(cwd, file)
+    ["tc", file] => cliTypecheck(cwd, file)
+    ["run", file] => cliRun(cwd, file)
+    ["ast", file] => cliAst(cwd, file)
+    ["fmt", file] => cliFmt(cwd, file)
+    [sub, ...rest] if (cliHandles(sub)) => failure("cli: `${sub}` takes exactly one argument, the file; got ${rest.length}")
+    [sub, ...rest] => failure("cli: no function runs `agency ${sub}`; the subcommands that run here are ${supported}")
+    _ => failure("cli: no subcommand given; the subcommands that run here are ${supported}")
+  }
+}
+
+def cliTest(cwd: string, file: string): Result<ExecResult> {
+  return match(testFile(cwd, file)) {
+    success(report) => success(renderTestReport(report))
+    failure(err) => failure(err)
+  }
+}
+
+def cliTypecheck(cwd: string, file: string): Result<ExecResult> {
+  return match(typecheckFile(cwd, file)) {
+    success(report) => success(renderTypeCheck(report))
+    failure(err) => failure(err)
+  }
+}
+
+def cliRun(cwd: string, file: string): Result<ExecResult> {
+  return match(runFile(cwd, file, "main")) {
+    success(value) => success(cliOutput(JSON.stringify(value)))
+    failure(err) => failure(err)
+  }
+}
+
+def cliAst(cwd: string, file: string): Result<ExecResult> {
+  const source = read(file, cwd)
+  if (source is failure(err)) {
+    return failure(err)
+  }
+  return match(parseAST(source.value)) {
+    success(tree) => success(cliOutput(JSON.stringify(tree, null, 2)))
+    failure(err) => failure(err)
+  }
+}
+
+def cliFmt(cwd: string, file: string): Result<ExecResult> {
+  const source = read(file, cwd)
+  if (source is failure(err)) {
+    return failure(err)
+  }
+  return match(format(source.value)) {
+    success(formatted) => success(cliOutput("${formatted}"))
+    failure(err) => failure(err)
+  }
+}
+
+def cliOutput(stdout: string): ExecResult {
+  return {
+    stdout: stdout,
+    stderr: "",
+    exitCode: 0
+  }
+}
+
+def renderTestReport(report: TestReport): ExecResult {
+  let lines: string[] = []
+  let passed = 0
+  for (c in report.cases) {
+    if (c.pass) {
+      passed = passed + 1
+      lines.push("✓ ${c.node}")
+    } else {
+      lines.push("✗ ${c.node}\n${c.feedback}")
+    }
+  }
+  lines.push("${passed}/${report.cases.length} tests passed")
+  let exitCode = 1
+  if (report.pass) {
+    exitCode = 0
+  }
+  return {
+    stdout: lines.join("\n") + "\n",
+    stderr: "",
+    exitCode: exitCode
+  }
+}
+
+def renderTypeCheck(report: any): ExecResult {
+  let lines: string[] = []
+  for (d in report.errors) {
+    lines.push("error ${d.code}: ${d.message}")
+  }
+  for (d in report.warnings) {
+    lines.push("warning ${d.code}: ${d.message}")
+  }
+  if (lines.length == 0) {
+    lines.push("No type errors found.")
+  }
+  let exitCode = 0
+  if (report.errors.length > 0) {
+    exitCode = 1
+  }
+  return {
+    stdout: lines.join("\n") + "\n",
+    stderr: "",
+    exitCode: exitCode
+  }
 }

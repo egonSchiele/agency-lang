@@ -3,8 +3,9 @@
   "tags": [
     "clean"
   ],
+  "files": "./files",
   "input": {
     "task": "Write an Agency function fib(n) that returns the nth Fibonacci number, where fib(0) = 0 and fib(1) = 1.",
-    "source": "export def fib(n: number): number {\n  if (n == 0) {\n    return 0\n  }\n  if (n == 1) {\n    return 1\n  }\n  return fib(n - 1) + fib(n - 2)\n}\n"
+    "sourceFile": "solution.agency"
   }
 }

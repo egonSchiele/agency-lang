@@ -60,7 +60,6 @@ export abstract class BaseGrader {
     return this.options.weight ?? 1;
   }
 
-
   /** Orchestration: run `_run` k times, aggregate by score kind. */
   async run(input: GraderInput): Promise<Grade> {
     const samples = this.options.samples ?? 1;

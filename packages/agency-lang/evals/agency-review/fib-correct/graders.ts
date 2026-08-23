@@ -1,4 +1,6 @@
-// A correct fib: the reviewer must not flag an error. Deterministic.
+// A correct fib: the reviewer must not flag an error. Deterministic. No
+// grader is a mustPass gate: a wrong verdict costs its own score but the
+// rest still run, so improvement shows up incrementally.
 import { grader } from "agency-lang/eval";
 
 type Feedback = { error: boolean; feedback: string };
@@ -13,7 +15,7 @@ export default [
         .map((item) => item.feedback)
         .join(" | ")}`,
     }),
-    { name: "no-false-positive", mustPass: true },
+    { name: "no-false-positive" },
   ),
   grader(({ output }) => findings(output).length <= 5, { name: "concise" }),
 ];

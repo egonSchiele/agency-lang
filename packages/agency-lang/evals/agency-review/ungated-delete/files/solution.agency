@@ -1,0 +1,11 @@
+import { remove } from "std::fs"
+import { glob } from "std::shell"
+
+node main() {
+  const logs = glob("*.log", "./tmp")
+  if (logs is success(files)) {
+    for (file in files) {
+      remove(file) with approve
+    }
+  }
+}

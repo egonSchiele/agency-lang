@@ -154,7 +154,10 @@ async function effectiveGraders(
   if (source.kind === "override") {
     return [...source.graders, ...harness];
   }
-  return [...(await snapshotModuleGraders(entry, ctx, cache, runDir, harness.length > 0)), ...harness];
+  return [
+    ...(await snapshotModuleGraders(entry, ctx, cache, runDir, harness.length > 0)),
+    ...harness,
+  ];
 }
 
 /** The bundled goal judge: what scores a test that carries no graders. */

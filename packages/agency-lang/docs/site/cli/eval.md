@@ -8,7 +8,7 @@ description: How to run an Agency agent against a test suite, score it with grad
 `agency eval` runs, grades and compares agent runs. Everything it produces lives in a **run directory**: a folder with the runs' statelog and an append-only file of annotations (grades, checklist answers), plus a free-form `notes.md` you write yourself. The main commands are:
 
 ```
-agency eval run (<file>[:<node>] | --agent-cmd '<command with {input}>') (--suite <file|dir|git-url> | --goal <text>) [-n <count>]
+agency eval run (<file>[:<node>] | --agent-cmd '<command with {input}>') (--suite <file|dir|git-url> | --input <text>) [-n <count>] [--trials <count>]
 agency eval grade <runDir> [--suite <file|dir|git-url>] [--goal <text>]
 agency eval logs <runDir> [-f]
 agency eval optimize <file>[:<node>] [--suite <file|dir>] [--goal <text>] [--graders <file>]
@@ -24,7 +24,7 @@ agency runs list <runDir>
 `agency eval run` runs an Agency agent against every test in a suite and writes a run directory:
 
 ```bash
-agency eval run agent.agency:evalMain --suite suite.json --run-id smoke
+agency eval run agent.agency:evalMain --suite suite.json --out runs/smoke
 ```
 
 A suite is a JSON file with `{ "inputs": [...] }` or a directory with one `.json` file per test. A test looks like this:
@@ -40,14 +40,14 @@ A suite is a JSON file with `{ "inputs": [...] }` or a directory with one `.json
 
 A test says nothing about the agent. Tests describe the work; whoever runs the eval names the agent as the positional argument, `file.agency:node`.
 
-`input` is required. It is what the agent is told: a string, or a JSON object for agents that take structured data. The runner passes it as the entry node's single parameter, so **eval entry nodes take exactly one parameter**, whatever it is named. An agent that needs no input still declares one and ignores it: `node main(input: string) { ... }`. The runner checks the parameter count before anything runs.
+`input` is what the agent is told: a string, or a JSON object for agents that take structured data. The runner passes it as the entry node's single parameter, whatever it is named. An agent that takes no input runs a test with none — then the entry node takes no parameter. Within one suite, either every test has an input or none does; the runner checks the parameter count before anything runs.
 
 `goal` is the success criterion. The agent never sees it. The default LLM judge needs it; a test with its own graders makes it optional (see [Custom graders](#custom-graders)). `id` defaults to a generated id and must be filesystem-safe when you supply one. `expected` is an optional gold output that match graders read. `files` names the test's fixture directory (see [Test files and suites](#test-files-and-suites)). `timeoutSec` overrides the suite's wall clock for one test. `graders` names the test's own grading module, resolved relative to the test; in the test-directory form a `graders.ts` beside `test.json` is picked up automatically. Graders are code the harness runs, so pulling a remote suite means trusting it.
 
-For a single ad-hoc run, use `--goal` instead of `--suite`:
+For a single ad-hoc run, use `--input` instead of `--suite` (grade it afterwards with `eval grade --goal`):
 
 ```bash
-agency eval run agent.agency --goal "Answer with a concise summary"
+agency eval run agent.agency --input "Summarize the README in one sentence"
 ```
 
 Options:

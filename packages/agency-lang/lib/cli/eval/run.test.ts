@@ -328,7 +328,10 @@ describe("eval run CLI", () => {
   });
 
   describe("grading a run directory", () => {
-    function setup(runId: string, inputs: { id: string; goal: string; input: string }[]) {
+    function setup(
+      runId: string,
+      inputs: { id: string; goal: string; input: string; graders?: string }[],
+    ) {
       const agentDir = path.join(tmpDir, "agent");
       fs.mkdirSync(agentDir, { recursive: true });
       const agent = path.join(agentDir, "agent.agency");

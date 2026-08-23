@@ -26,14 +26,20 @@ implementation, point the first command at its `file.agency:node`.
 
 ## The contract
 
-Every test gives the reviewer a task and the source written for it, and
-expects findings back.
+Every test gives the reviewer the task some code was written for and the
+file holding that code, and expects findings back.
 
 Input, the entry node's single parameter (`ReviewEvalInput` in the stdlib):
 
 ```
-{ "task": string, "source": string }
+{ "task": string, "sourceFile": string }
 ```
+
+`task` is the assignment the code under review was answering (so it often
+reads "Write an Agency program that…"); the reviewer judges the code
+against it. `sourceFile` names a file the test seeds into the working
+directory from its `files/` directory, so planted sources are ordinary
+`.agency` files you can open and typecheck directly.
 
 Output, the entry node's return value. This is the stdlib's `Feedback`
 shape (`std::agents/lib/feedback`):
@@ -51,14 +57,19 @@ Each test directory carries its own `graders.ts`, picked up automatically
 beside `test.json`, so a test states what it expects in code next to the
 input it gives. The pattern so far:
 
-- a deterministic **gate** (`mustPass`) on the verdict: an `error: true`
-  finding exists for a planted bug, and none for clean code. No model is
-  consulted, so re-grading is free and the headline number is stable;
+- a deterministic verdict check (`rejects` / `no-false-positive`): an
+  `error: true` finding exists for a planted bug, and none for clean code.
+  No model is consulted, so re-grading it is free;
 - an LLM-judged **names-the-bug** on bug tests: some error finding
   describes the planted problem, not just *a* problem;
 - where the first run showed invented complaints, an LLM-judged
   **no-invented-errors**: every error finding is real;
 - **concise**: at most 5 findings.
+
+No grader is a `mustPass` gate: a wrong verdict costs that grader's share
+of the score while the others still run, so a reviewer that improves at
+naming bugs or cutting noise shows it even while its verdict is still
+wrong, instead of pinning at 0.
 
 ## The tests
 
@@ -72,6 +83,7 @@ bugs a reviewer that only runs the typechecker cannot see.
 
 ## Adding a test
 
-Make a directory with a `test.json` (`description`, `tags`, `input`) and
-a `graders.ts` beside it. Typecheck the planted source first; a source
+Make a directory with a `test.json` (`description`, `tags`, `files`,
+`input`), the planted source under `files/`, and a `graders.ts` beside it.
+Typecheck the planted source first (`agency typecheck <file>`); a source
 that fails to typecheck tests the typechecker, not the reviewer.

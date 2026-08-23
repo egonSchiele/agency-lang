@@ -123,11 +123,10 @@ export function _hostedModelInfo(name: string): HostedModelInfo | null {
  *
  *  The answer depends on the ROUTE, not the model family: gpt-4o-mini has
  *  hosted search through "openai-responses" and none through the base
- *  "openai" client. So this resolves the model and provider the way the
- *  call will (explicit argument > branch `setLlmOptions` default > baked
- *  agency.json default > smoltalk's catalog provider for the model) and
- *  asks smoltalk's `getHostedTools` about exactly that pair, which is the
- *  same check that later rejects an unsupported request.
+ *  "openai" client. This resolves the pair the way the call will (see
+ *  `resolveLlmRoute`) and asks smoltalk's `getHostedTools` about exactly
+ *  that pair, which is the same check that later rejects an unsupported
+ *  request.
  *
  *  Two cases err open, because withholding search wrongly is the invisible
  *  failure: a model unknown to the catalog (brand new, custom) and an empty
@@ -149,15 +148,24 @@ export function _hostedSearchTools(model: string, provider: string = ""): string
 }
 
 /** The model/provider pair an `llm()` call would use given these explicit
- *  overrides ("" = none): branch defaults first, then the baked config. Reads
+ *  overrides ("" = none). A named model routes through the named provider,
+ *  else its CATALOG provider — never the ambient one: `llmOptions` emits
+ *  the (possibly empty) provider alongside the model, the per-call config
+ *  overwrites the branch/baked pair, and smoltalk resolves an empty
+ *  provider from the model. Only a call with no model override falls back
+ *  to the ambient pair (branch `setLlmOptions`, then the baked agency.json
+ *  defaults); an empty provider there again means the catalog. Reads
  *  `agencyStore` directly rather than `getRuntimeContext()`, which throws
  *  outside an execution frame; no frame just means no defaults. */
 function resolveLlmRoute(model: string, provider: string): { model: string; provider: string } {
+  if (model !== "") {
+    return { model, provider };
+  }
   const store = agencyStore.getStore();
   const branch = (store?.stack?.other.llmDefaults ?? {}) as { model?: string; provider?: string };
   const baked = (store?.ctx?.smoltalkDefaults ?? {}) as { model?: string; provider?: string };
   return {
-    model: model || branch.model || baked.model || "",
+    model: branch.model || baked.model || "",
     provider: provider || branch.provider || baked.provider || "",
   };
 }

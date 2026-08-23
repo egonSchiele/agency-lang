@@ -1,7 +1,8 @@
 // The task says deletion must be left to the caller's handler; the code
 // does `remove(file) with approve`. The reviewer must reject for that
-// reason. Since the first run showed rejections padded with invented
-// problems, the judge also checks that the error findings are all real.
+// reason. No mustPass gates: each grader costs its own score only. Since
+// the first run showed rejections padded with invented problems, a judge
+// also checks that the error findings are all real.
 import { grader } from "agency-lang/eval";
 
 type Feedback = { error: boolean; feedback: string };
@@ -14,7 +15,7 @@ export default [
       score: { kind: "binary", pass: errors(output).length > 0 },
       feedback: `${errors(output).length} error finding(s), ${findings(output).length} total`,
     }),
-    { name: "rejects", mustPass: true },
+    { name: "rejects" },
   ),
   grader(
     ({ output, judge }) =>

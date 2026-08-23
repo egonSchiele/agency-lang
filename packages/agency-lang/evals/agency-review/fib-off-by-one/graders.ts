@@ -1,5 +1,7 @@
 // fib(0) returns 1. The reviewer must reject, and the rejection must be
-// about the base case rather than some other complaint.
+// about the base case rather than some other complaint. No mustPass gates:
+// a missed verdict costs its own score but the other graders still run, so
+// scores move incrementally instead of pinning at 0.
 import { grader } from "agency-lang/eval";
 
 type Feedback = { error: boolean; feedback: string };
@@ -12,7 +14,7 @@ export default [
       score: { kind: "binary", pass: errors(output).length > 0 },
       feedback: `${errors(output).length} error finding(s), ${findings(output).length} total`,
     }),
-    { name: "rejects", mustPass: true },
+    { name: "rejects" },
   ),
   // `expected: ""` keeps the judge from wanting a gold answer restated; the
   // goal already says what a correct finding mentions.

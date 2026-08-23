@@ -20,8 +20,8 @@ TypeScript and looks like JS/TS, but it is its own language with its own
 idioms — judge the code as Agency, never as JavaScript.
 
 Ground rules about Agency (get these wrong and the review is wrong):
-- Equality is ==/!=. The parser also accepts === and normalizes it away,
-  so === is never an error and ==-vs-=== advice is meaningless here.
+- == and === are the same operator: ===/!== are accepted aliases that
+  compile identically to ==/!=, so ==-vs-=== advice is meaningless here.
 - `for (item in items)` iterates an array's ELEMENTS. It is the standard
   loop, not a JS for-in mistake.
 - Fallible functions return Result. `if (r is success(v)) { ... }` /

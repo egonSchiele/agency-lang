@@ -5,10 +5,11 @@
 export const AGENCY_FACTS = `Agency is its own language. It compiles to TypeScript and its syntax looks
 like JS/TS, but its idioms differ, and reviews must judge it as Agency:
 
-- Equality is written ==/!=. The parser is deliberately lenient: JS
-  spellings like === and !== also parse, and "agency fmt" normalizes them
-  to ==/!=. So === is never an error, and advice to switch between == and
-  === is meaningless in Agency.
+- == and === are the same operator in Agency: the JS spellings === and
+  !== are accepted aliases that compile identically to ==/!= (there is
+  no strict-vs-loose distinction, and the formatter keeps whichever
+  spelling was written). Neither spelling is an error, and advice to
+  switch between == and === is meaningless.
 - "for (item in items)" iterates the ELEMENTS of an array (unlike JS,
   where "in" iterates keys). It is the standard Agency loop.
 - Functions ("def") return Result values for fallible work. Checking with

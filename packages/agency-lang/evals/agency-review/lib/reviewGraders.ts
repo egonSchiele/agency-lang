@@ -16,12 +16,16 @@ const advisories = (output: unknown) => findings(output).filter((item) => item?.
 
 type TestShape = { input?: unknown };
 
-/** The reviewed source, read from the test's seeded workdir. */
+/** The reviewed source, read from the test's seeded workdir. Fixture paths
+ *  are authored, but a path that escapes the workdir reads as missing. */
 function sourceOf(workdir: string, test: TestShape): string {
   const input = test.input as { sourceFile?: string } | undefined;
   if (!input?.sourceFile) return "";
+  const root = path.resolve(workdir);
+  const resolved = path.resolve(root, input.sourceFile);
+  if (!resolved.startsWith(root + path.sep)) return "";
   try {
-    return fs.readFileSync(path.join(workdir, input.sourceFile), "utf8");
+    return fs.readFileSync(resolved, "utf8");
   } catch {
     return "";
   }

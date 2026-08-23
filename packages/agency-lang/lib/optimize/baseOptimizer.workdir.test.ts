@@ -80,7 +80,10 @@ describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
 
   function probe(): Probe {
     return new Probe({
-      graders: [new FixedGrader({ score: { kind: "scalar", value: 1 } })],
+      graders: {
+        kind: "override",
+        graders: [new FixedGrader({ score: { kind: "scalar", value: 1 } })],
+      },
       iterations: 1,
       config: {},
       runsDir: root,

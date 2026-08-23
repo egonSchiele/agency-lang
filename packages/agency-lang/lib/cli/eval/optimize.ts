@@ -5,8 +5,7 @@ import { nanoid } from "nanoid";
 
 import type { AgencyConfig } from "@/config.js";
 import { loadInputs } from "@/eval/loadInputs.js";
-import type { BaseGrader } from "@/eval/grading/baseGrader.js";
-import { LlmJudge } from "@/eval/grading/graders/llmJudge.js";
+import type { GraderSource } from "@/eval/grading/gradeRun.js";
 import type { Test } from "@/eval/grading/types.js";
 import { loadGradingModule } from "@/eval/grading/gradingModule.js";
 import { loadOptimizerModule } from "@/optimize/optimizerModule.js";
@@ -65,7 +64,10 @@ export async function evalOptimize(
       (target.validationInputs?.length ?? 0) > 0 && result.validationObjective === undefined;
     writeReport(result.runDir, result, {
       optimizer: optimizer.name,
-      graders: config.graders.map((g) => g.name()),
+      graders:
+        config.graders.kind === "override"
+          ? config.graders.graders.map((g) => g.name())
+          : ["(per-test)"],
       trainObjective: result.trainObjective,
       validationObjective: result.validationObjective,
       validationConfiguredButUnused,
@@ -187,16 +189,19 @@ function goalTarget(opts: EvalOptimizeOptions): OptimizeTarget {
   };
 }
 
-/** Build the optimizer config: the grader set (custom module or the default goal judge) plus run policy. */
+/** Build the optimizer config: the grader source (an explicit --graders module
+ *  overrides every test's own; otherwise each test grades itself by the copy
+ *  its run directory stores, the goal judge for tests with none) plus run
+ *  policy. */
 export async function buildConfig(
   opts: EvalOptimizeOptions,
   deps: EvalOptimizeDeps,
 ): Promise<BaseOptimizerConfig> {
   const config = opts.config ?? {};
   const s = resolveOptimizeSettings(opts);
-  const graders: BaseGrader[] = s.gradersPath
-    ? await loadGradingModule(s.gradersPath, config)
-    : [new LlmJudge({ name: "goal" })];
+  const graders: GraderSource = s.gradersPath
+    ? { kind: "override", graders: await loadGradingModule(s.gradersPath, config) }
+    : { kind: "snapshot" };
   const base: BaseOptimizerConfig = {
     graders,
     iterations: opts.iterations ?? DEFAULT_ITERATIONS,

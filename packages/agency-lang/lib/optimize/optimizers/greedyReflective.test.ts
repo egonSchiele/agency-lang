@@ -89,7 +89,14 @@ describe("GreedyReflective (pointwise)", () => {
     let n = 0;
     const grader = new ValueGrader(() => 0.1 * ++n); // baseline 0.1, then 0.2, 0.3 ... each candidate beats champion
     const opt = new GreedyReflective(
-      { graders: [grader], iterations: 2, config: {}, runsDir: root, runId: "r", writeback: false },
+      {
+        graders: { kind: "override", graders: [grader] },
+        iterations: 2,
+        config: {},
+        runsDir: root,
+        runId: "r",
+        writeback: false,
+      },
       deps(),
     );
     const result = await opt.optimize({
@@ -104,7 +111,7 @@ describe("GreedyReflective (pointwise)", () => {
     const grader = new ValueGrader(() => 0.5); // constant — no candidate beats the champion
     const opt = new GreedyReflective(
       {
-        graders: [grader],
+        graders: { kind: "override", graders: [grader] },
         iterations: 2,
         config: {},
         runsDir: root,
@@ -135,7 +142,7 @@ describe("GreedyReflective (pointwise)", () => {
     const scalar = new ValueGrader(() => 0.5);
     const opt = new GreedyReflective(
       {
-        graders: [gate, scalar],
+        graders: { kind: "override", graders: [gate, scalar] },
         iterations: 1,
         config: {},
         runsDir: root,
@@ -158,7 +165,7 @@ describe("GreedyReflective (pointwise)", () => {
     });
     const opt = new GreedyReflective(
       {
-        graders: [new ValueGrader(() => 0.5)],
+        graders: { kind: "override", graders: [new ValueGrader(() => 0.5)] },
         iterations: 1,
         config: {},
         runsDir: root,
@@ -180,7 +187,7 @@ describe("GreedyReflective (pointwise)", () => {
     const propose = vi.fn(async () => ({ rationale: "x", operations: [] }));
     const opt = new GreedyReflective(
       {
-        graders: [new ValueGrader(() => 1)],
+        graders: { kind: "override", graders: [new ValueGrader(() => 1)] },
         iterations: 3,
         config: {},
         runsDir: root,
@@ -206,7 +213,7 @@ describe("GreedyReflective (pointwise)", () => {
     const propose = vi.fn(async () => ({ rationale: "x", operations: [] }));
     const opt = new GreedyReflective(
       {
-        graders: [scalar],
+        graders: { kind: "override", graders: [scalar] },
         iterations: 5,
         config: {},
         runsDir: root,
@@ -241,7 +248,7 @@ describe("GreedyReflective (pointwise)", () => {
     });
     const opt = new GreedyReflective(
       {
-        graders: [grader],
+        graders: { kind: "override", graders: [grader] },
         iterations: 1,
         config: {},
         runsDir: root,
@@ -275,7 +282,7 @@ describe("GreedyReflective (pointwise)", () => {
     })();
     const opt = new GreedyReflective(
       {
-        graders: [keyed],
+        graders: { kind: "override", graders: [keyed] },
         iterations: 2,
         config: {},
         runsDir: root,
@@ -297,7 +304,7 @@ describe("GreedyReflective (pointwise)", () => {
     const grader = new ValueGrader(() => 0.5); // every grade 0.5 → baseline obj 0.5, no gates
     const opt = new GreedyReflective(
       {
-        graders: [grader],
+        graders: { kind: "override", graders: [grader] },
         iterations: 2,
         config: {},
         runsDir: root,
@@ -390,7 +397,7 @@ describe("typed target end-to-end guarantee", () => {
     const opt = new GreedyReflective(
       // 0.5 keeps the baseline below the max objective so the iteration runs.
       {
-        graders: [new ValueGrader(() => 0.5)],
+        graders: { kind: "override", graders: [new ValueGrader(() => 0.5)] },
         iterations: 1,
         config: {},
         runsDir: root,

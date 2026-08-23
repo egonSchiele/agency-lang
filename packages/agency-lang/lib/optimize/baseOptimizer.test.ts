@@ -87,7 +87,13 @@ describe("BaseOptimizer.evaluate", () => {
 
   function probe(graders: BaseGrader[], runInput: RunInput): Probe {
     return new Probe(
-      { graders, iterations: 1, config: {}, runsDir: root, runId: "r" },
+      {
+        graders: { kind: "override", graders },
+        iterations: 1,
+        config: {},
+        runsDir: root,
+        runId: "r",
+      },
       { runInput },
     );
   }
@@ -157,7 +163,13 @@ describe("BaseOptimizer.evaluate", () => {
         return {} as OptimizeResult;
       }
     })(
-      { graders: [new NeedsExpected()], iterations: 1, config: {}, runsDir: root, runId: "ff" },
+      {
+        graders: { kind: "override", graders: [new NeedsExpected()] },
+        iterations: 1,
+        config: {},
+        runsDir: root,
+        runId: "ff",
+      },
       {
         runInput,
         discover: () => ({
@@ -187,6 +199,52 @@ describe("BaseOptimizer.evaluate", () => {
     expect(runInput).not.toHaveBeenCalled();
   });
 
+  it("snapshot preflight validates a validation input's own graders before any agent run", async () => {
+    // The champion is selected on validation inputs, so a broken graders.ts
+    // there must fail now, not after the search has paid for every candidate.
+    const modDir = fs.mkdtempSync(path.join(process.cwd(), ".test-optimize-graders-"));
+    try {
+      const broken = path.join(modDir, "broken.ts");
+      fs.writeFileSync(broken, "export const notDefault = 1;");
+      const runInput = vi.fn(fixedRun);
+      const p = new Probe(
+        { graders: { kind: "snapshot" }, iterations: 1, config: {}, runsDir: root, runId: "r" },
+        {
+          runInput,
+          discover: () => ({
+            baseDir: src,
+            entryFile: "agent.agency",
+            typeAliases: {},
+            files: {},
+            targets: [
+              {
+                id: "t",
+                kind: "variable",
+                file: "agent.agency",
+                absoluteFile: path.join(src, "agent.agency"),
+                scope: "global",
+                name: "p",
+                valueKind: "string",
+                value: "x",
+                declaredType: null,
+              },
+            ],
+          }),
+        },
+      );
+      await expect(
+        p.optimize({
+          agent: path.join(src, "agent.agency"),
+          inputs: [{ id: "a", input: "t" }],
+          validationInputs: [{ id: "v", input: "t", graders: broken }],
+        }),
+      ).rejects.toThrow(/grader|default/i);
+      expect(runInput).not.toHaveBeenCalled();
+    } finally {
+      fs.rmSync(modDir, { recursive: true, force: true });
+    }
+  });
+
   it("short-circuits advisory graders when a gate fails for an input", async () => {
     const gate = new FixedGrader({ score: { kind: "binary", pass: false } }, { mustPass: true });
     const advisory = new FixedGrader({ score: { kind: "scalar", value: 1 } });
@@ -195,6 +253,38 @@ describe("BaseOptimizer.evaluate", () => {
     const sc = await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, [{ id: "a", input: "t" }]);
     expect(sc.gatesPassed()).toBe(false);
     expect(advisorySpy).not.toHaveBeenCalled();
+  });
+
+  it("snapshot mode selects each input's own graders, not one shared set", async () => {
+    // Two inputs whose fake runs record different grading modules. This
+    // proves per-test SELECTION at the optimizer level; that grading then
+    // prefers a run directory's stored copy over the live file is the
+    // grading layer's contract, covered in runSuite.test.ts ("grading uses
+    // that copy even after the source changes").
+    const modDir = fs.mkdtempSync(path.join(process.cwd(), ".test-optimize-graders-"));
+    try {
+      const one = path.join(modDir, "one.ts");
+      const zero = path.join(modDir, "zero.ts");
+      fs.writeFileSync(one, "export default () => 1;");
+      fs.writeFileSync(zero, "export default () => 0;");
+      const byOwn: RunInput = async (_ws, _source, _files, input, id) =>
+        fakeRun(id, "out", { ...input, graders: id === "a" ? one : zero });
+      const p = new Probe(
+        {
+          graders: { kind: "snapshot" },
+          iterations: 1,
+          config: {},
+          runsDir: root,
+          runId: "r",
+        },
+        { runInput: byOwn },
+      );
+      const sc = await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, inputs);
+      // input "a" scores 1 by its module, "b" scores 0 by its own → mean 0.5.
+      expect(sc.objective()).toBeCloseTo(0.5, 10);
+    } finally {
+      fs.rmSync(modDir, { recursive: true, force: true });
+    }
   });
 
   it("gives id-less inputs distinct cache keys so they do not collide", async () => {

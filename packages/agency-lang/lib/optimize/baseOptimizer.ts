@@ -2,7 +2,12 @@ import * as path from "path";
 
 import { resolveEvalRunTarget } from "@/agentTarget.js";
 import { runSuite } from "@/eval/run/runSuite.js";
-import { gradeRun, type GradingContext } from "@/eval/grading/gradeRun.js";
+import {
+  gradeRun,
+  makeGraderModuleCache,
+  validateGraders,
+  type GradingContext,
+} from "@/eval/grading/gradeRun.js";
 
 import { EvalCache } from "./evalCache.js";
 import { breakdown } from "@/eval/grading/gradeBreakdown.js";
@@ -98,21 +103,47 @@ export abstract class BaseOptimizer {
       );
     }
     this.validationInputs = target.validationInputs ?? [];
-    this.echoAndValidateGrading(target.inputs);
+    await this.echoAndValidateGrading(target.inputs);
     return this.optimizeTargets(source, target.inputs);
   }
 
-  /** Print the resolved grading setup and fail fast on a misconfigured grader,
-   *  checked against the first input before any agent run. */
-  private echoAndValidateGrading(inputs: Test[]): void {
+  /** Print the resolved grading setup and fail fast on a misconfigured grader
+   *  before any agent run. An override set is validated against the first
+   *  input; in snapshot mode each input's own grading module is loaded once
+   *  and validated against its own test, so a broken graders.ts costs
+   *  nothing but this preflight. */
+  private async echoAndValidateGrading(inputs: Test[]): Promise<void> {
+    const source = this.config.graders;
+    // Validation inputs are graded too (champion selection), so a broken
+    // grader there must also fail now, not after the search has run.
+    const everyInput = [...inputs, ...this.validationInputs];
+    if (source.kind === "override") {
+      this.reporter.gradingSetup({
+        graders: source.graders.map((g) => ({ name: g.name(), describe: g.describe() })),
+        firstInput: inputs[0] ? { id: inputs[0].id ?? "(no id)", goal: inputs[0].goal } : undefined,
+      });
+      for (const input of [inputs[0], this.validationInputs[0]]) {
+        if (input === undefined) continue;
+        for (const grader of source.graders) {
+          grader.validateInput(input);
+        }
+      }
+      return;
+    }
     this.reporter.gradingSetup({
-      graders: this.config.graders.map((g) => ({ name: g.name(), describe: g.describe() })),
+      graders: [
+        {
+          name: "(per-test)",
+          describe:
+            "each input's own graders module and harness pairs; the goal judge for inputs with neither",
+        },
+      ],
       firstInput: inputs[0] ? { id: inputs[0].id ?? "(no id)", goal: inputs[0].goal } : undefined,
     });
-    const first = inputs[0];
-    if (!first) return;
-    for (const grader of this.config.graders) {
-      grader.validateInput(first);
+    const cache = makeGraderModuleCache(this.config.config);
+    for (const input of everyInput) {
+      if (input.graders === undefined) continue;
+      validateGraders(await cache(input.graders), input);
     }
   }
 
@@ -274,10 +305,14 @@ export abstract class BaseOptimizer {
     files: Record<string, string>,
     inputs: Test[],
   ): Promise<Scorecard> {
-    // "override": the optimizer's grader set IS its objective — a suite
-    // input's own graders must not silently change what is being optimized.
+    // The configured GraderSource IS the objective. In snapshot mode each
+    // input's run directory stores its test's graders as the candidate runs,
+    // so every candidate is judged by the test's own criteria; an override
+    // set replaces them all. The grader files are read from the suite per
+    // candidate run — editing them mid-search changes the objective, the
+    // same way it would change what eval run records.
     const ctx: GradingContext = {
-      graders: { kind: "override", graders: this.config.graders },
+      graders: this.config.graders,
       runAgency: this.agencyRunner,
       config: this.config.config ?? {},
     };
@@ -352,10 +387,6 @@ export abstract class BaseOptimizer {
 
   protected async eachIteration(step: (iter: number) => Promise<void>): Promise<void> {
     for (let iter = 1; iter <= this.config.iterations; iter += 1) await step(iter);
-  }
-
-  protected get graders(): BaseGrader[] {
-    return this.config.graders;
   }
 
   /** Refuse to optimize a program whose baseline already fails a must-pass grader. */

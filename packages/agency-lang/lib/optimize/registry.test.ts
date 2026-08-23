@@ -5,7 +5,7 @@ import { DEFAULT_OPTIMIZER, getOptimizer, listOptimizers, registerOptimizer } fr
 import type { OptimizeResult } from "./types.js";
 
 const config: BaseOptimizerConfig = {
-  graders: [],
+  graders: { kind: "override", graders: [] },
   iterations: 1,
   config: {},
   runsDir: ".",

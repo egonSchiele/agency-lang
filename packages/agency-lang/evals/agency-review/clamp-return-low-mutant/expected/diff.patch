@@ -1,0 +1,9 @@
+@@ -3,7 +3,7 @@
+     return low
+   }
+   if (value > high) {
+-    return high
++    return low
+   }
+   return value
+ }

@@ -1,4 +1,4 @@
-import { plantedBugGraders } from "../lib/reviewGraders";
+import { plantedBugGraders } from "../lib/reviewGraders.js";
 
 export default plantedBugGraders({
   reason:

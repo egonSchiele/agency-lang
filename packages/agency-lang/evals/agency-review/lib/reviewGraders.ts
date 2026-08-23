@@ -7,7 +7,7 @@ import * as path from "path";
 
 import { grader, type Grader } from "agency-lang/eval";
 
-import { AGENCY_FACTS } from "./agencyFacts";
+import { AGENCY_FACTS } from "./agencyFacts.js";
 
 type Feedback = { error: boolean; feedback: string };
 const findings = (output: unknown): Feedback[] => (Array.isArray(output) ? output : []);

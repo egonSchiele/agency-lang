@@ -1,0 +1,13 @@
+{
+  "description": "Mutation-derived: the high branch returns low (copy-paste bug). Verified at authoring: typechecks, fails the expected/ harness on above(). The diff in expected/diff.patch is the graders' ground truth.",
+  "tags": [
+    "bug",
+    "logic",
+    "mutant"
+  ],
+  "files": "./files",
+  "input": {
+    "assignment": "Write an Agency module exporting def clamp(value: number, low: number, high: number): number that returns value limited to the inclusive range [low, high]: low when value is below it, high when value is above it, value itself otherwise.",
+    "sourceFile": "solution.agency"
+  }
+}

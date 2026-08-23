@@ -1,0 +1,10 @@
+{
+  "sourceFile": "checks.agency",
+  "tests": [
+    { "nodeName": "inside", "expectedOutput": "5", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "atLow", "expectedOutput": "0", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "atHigh", "expectedOutput": "10", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "below", "expectedOutput": "0", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "above", "expectedOutput": "10", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

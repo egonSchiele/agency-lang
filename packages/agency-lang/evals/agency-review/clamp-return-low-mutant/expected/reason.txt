@@ -1,0 +1,1 @@
+a copy-paste bug: the above-range branch returns low instead of high, so a value above the range clamps to the bottom of the range instead of the top.

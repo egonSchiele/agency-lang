@@ -1,3 +1,29 @@
+## Aug 23 2026 — v0.16.0
+
+### Standard Library
+- **`std::agency test`** — run Agency tests from Agency code
+- **`std::agency cli`** — the Agency command line as function calls
+
+### Eval framework
+- **Run directories are atomic** — every writer produces one run per directory, and one directory holds exactly one trace. `notes.md` replaces the old note annotation and `agency note`.
+- **`agency eval run --trials <k>`** — repeat each test k times + compute stats
+- **`agency eval upload`** — push eval runs to statelog
+- **`agency eval run`/`grade` reshaped** — goal moves to `grade`, agent is positional, input optional, and `--runs-dir`/`--run-id` are replaced by `--out <dir>`.
+- Subset selection and tags for picking which tests to run
+- `agency label` and `agency runs list` walk a whole group of run directories
+
+### Agents
+- **`--brain`** — the agent harness is split into pluggable brains
+- **`--workdir`** for `agency agent`
+- The recommended policy allows reads only inside the launch directory
+
+### Logs
+- Statelog records the identity of the code that produced the logs
+- Log viewer: `Y` copies every event of the focused trace to the clipboard
+
+### Build
+- Prettier for hand-written TypeScript, enforced in CI
+
 ## Aug 13 2026 — v0.15.1
 
 ### Local models

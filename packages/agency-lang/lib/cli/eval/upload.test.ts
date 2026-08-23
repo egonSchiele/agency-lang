@@ -179,7 +179,7 @@ describe("evalUpload", () => {
       ["first", "failed"],
       ["second", "uploaded"],
     ]);
-    expect(posted.map((post) => post.traceId)).toEqual(["first", "second"]);
+    expect(posted.map((post) => post.traceId).sort()).toEqual(["first", "second"]);
   });
 
   it("a second upload skips the events the server has and still upserts the annotations", async () => {

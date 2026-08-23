@@ -186,8 +186,19 @@ node main(task: string): string {
   assertIncludes(listOutput, "AGENT");
   assertIncludes(listOutput, "input-1");
   assertIncludes(listOutput.trim().split("\n").at(-1), "2 runs · mean 1.000 over 2 graded");
-  // A folder that is not a run directory is refused with a pointer, not scored 0.
-  const notRunDir = run(dir, "npx agency eval grade eval-runs 2>&1", { expectFail: true });
+  // A directory of groups is walked two levels down (eval-runs/<group>/<test>),
+  // so grading `eval-runs` finds both runs.
+  const nestedMockEnv = {
+    AGENCY_LLM_MOCKS: JSON.stringify([
+      { return: { score: 1, reasoning: "mock judge verdict 3" } },
+      { return: { score: 1, reasoning: "mock judge verdict 4" } },
+    ]),
+  };
+  const nestedOutput = stripAnsi(run(dir, "npx agency eval grade eval-runs --goal \"Say hello\" 2>&1", { env: nestedMockEnv }));
+  assertIncludes(nestedOutput, "mean 1.000 over 2 runs");
+  // A folder that holds no run directory is refused with a pointer, not scored 0.
+  run(dir, "mkdir -p not-runs && touch not-runs/statelogs.jsonl");
+  const notRunDir = run(dir, "npx agency eval grade not-runs 2>&1", { expectFail: true });
   assertIncludes(notRunDir, "not a run directory");
   assertIncludes(notRunDir, "agency runs add");
   // --graders and --goal are exclusive.

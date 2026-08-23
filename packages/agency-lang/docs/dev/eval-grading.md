@@ -27,8 +27,8 @@ others still run). Default `<eval.runsDir or runs>/<timestamp>-<random suffix>`.
 **Repeating a suite: `--trials k`.** Each test runs `k` times, trial-major
 (`a/1, b/1, a/2, b/2`), each repetition in its own run directory at
 `<out>/<testId>/<trial>/` (one trial keeps `<out>/<testId>/`). Every `run`
-row records `batch` (the group directory's name) and `trial` (1-based), and
-`flags.trials`. `eval grade` then prints per-test `mean ± SE` and the
+row records `batch` (the group directory's name plus a unique per-invocation
+suffix), `trial` (1-based), and `flags.trials`. `eval grade` then prints per-test `mean ± SE` and the
 batch's accuracy over the complete trial grid; `docs/dev/eval-tracking.md`
 has the statistics and the upload to statelog.
 

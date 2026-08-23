@@ -74,6 +74,16 @@ describe("traceUploadState", () => {
     const error = await failureOf(client().traceUploadState("t1"));
     expect(error.message).toMatch(/unexpected upload-state response/);
   });
+
+  it("rejects a bulk-prefix whose event count and next sequence disagree", async () => {
+    requestMock.mockResolvedValueOnce({
+      ok: true,
+      value: { kind: "bulk-prefix", eventCount: 2, nextSequence: 100 },
+      status: 200,
+    });
+    const error = await failureOf(client().traceUploadState("t1"));
+    expect(error.message).toMatch(/bulk-prefix has 2 events but nextSequence 100/);
+  });
 });
 
 describe("postEvents", () => {

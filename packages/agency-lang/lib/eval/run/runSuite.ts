@@ -13,6 +13,7 @@ import type { AgencyConfig } from "@/config.js";
 import type { SuiteRunResult, SuiteTestResult, Test } from "@/eval/runTypes.js";
 import type { RunOutcome, SuiteIdentity } from "@/runDirectory/annotations.js";
 import { recordedClosureHashes } from "@/runDirectory/attachCode.js";
+import { isRunDirectory } from "@/runDirectory/findRuns.js";
 import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";
 import { recordCompletedRun } from "@/runDirectory/mutations.js";
 import { snapshotGradingModule, type GradersSnapshot } from "@/eval/grading/gradingModule.js";
@@ -141,9 +142,11 @@ export async function runSuite(
     trials,
   };
   const harness = { kind: "harness" as const, id: `agency-eval@${harnessVersion()}` };
-  // The batch is the group directory's name: one suite invocation, so every
-  // trial of every test in it carries the same id wherever the rows travel.
-  const batch = path.basename(groupDir);
+  // One id per suite invocation, carried by every run row it writes. The
+  // group name is the readable part; the suffix keeps two groups that happen
+  // to share a name (`team-a/nightly`, `team-b/nightly`) from merging once
+  // their rows sit side by side in a grade or on statelog.
+  const batch = `${path.basename(groupDir)}-${nanoid(8)}`;
 
   // One test, executed, folded into the run directory, and its staging
   // removed — shared by both scheduling modes. Prepare failures become error
@@ -162,6 +165,18 @@ export async function runSuite(
     const idProblem = testIdProblem(testId, groupDir, testDir);
     if (idProblem !== undefined) {
       return { testId, trial, traceId, runDir, status: "error", errorMessage: idProblem };
+    }
+    if (trials > 1 && isRunDirectory(testDir)) {
+      // A flat run from an earlier single-trial suite. Writing `<trial>/`
+      // under it would hide the trials: discovery takes the parent as the run.
+      return {
+        testId,
+        trial,
+        traceId,
+        runDir,
+        status: "error",
+        errorMessage: `${testDir} is already a run directory (a single-trial run); use another --out`,
+      };
     }
     if (fs.existsSync(runDir)) {
       // Someone's data; not ours to touch. (Resume is deliberately not here.)

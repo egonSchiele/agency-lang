@@ -13,8 +13,10 @@ pull requests; this note records what they can rely on.
   `annotations.jsonl` (`docs/dev/run-directory.md`). Still the only thing
   grading reads and the only thing upload sends.
 - **Batch**: one invocation of `eval run` over a suite. Its id is the group
-  directory's name (the default `<timestamp>-<suffix>`, or whatever `--out`
-  named). Every run the invocation writes carries it.
+  directory's name plus a unique suffix (`nightly-Xy12Zk9q`), minted once
+  per invocation, so two groups that share a name (`team-a/nightly`,
+  `team-b/nightly`) never merge when graded or uploaded together. Every run
+  the invocation writes carries it.
 - **Trial**: one repetition of one test inside a batch, numbered from 1.
 - **Silent run**: a run that died before writing a single event. The
   harness still records its `run` row, so the failure is evidence, not a
@@ -24,13 +26,16 @@ pull requests; this note records what they can rely on.
 
 ## What `eval run --trials k` writes
 
-Every harness `run` row now carries `batch` (the group name) and `trial`
+Every harness `run` row now carries `batch` and `trial`
 (1-based). `flags.trials` records how many were asked for. With one trial
 the layout is unchanged, `<out>/<testId>/`; with more it is
 `<out>/<testId>/<trial>/`, so a test's repetitions sit together and the old
 flat groups keep working. Jobs are scheduled trial-major (`a/1, b/1, a/2,
 b/2`): an interrupted suite leaves behind complete trials, which is what
-the statistics need.
+the statistics need. Running `--trials` into a group that already holds a
+flat single-trial run for a test is an error for that test: trial
+directories beneath an existing run would be invisible to discovery, which
+takes the parent as the run.
 
 `findRunDirectories` looks at most two levels down a group and never enters
 `.staging`. The trial count is validated in `runSuite` itself (a finite
@@ -97,7 +102,8 @@ arithmetic; none of those internals are exported.
 (`agency remote link`, key from `$STATELOG_API_KEY`); there are no host,
 project, or key flags on purpose.
 
-Per run, in order:
+Runs upload concurrently (they are independent traces); within one run, in
+order:
 
 1. Read the directory once and summarize it. The trace id comes from the
    trace, or from the sole `run` row for a silent run.
@@ -106,7 +112,8 @@ Per run, in order:
    `missing`, `empty`, `live` (rows streamed while the agent ran, no
    sequence), `bulk-prefix` (every row sequenced, exactly
    `0..nextSequence-1`), or `invalid` (mixed, duplicated, or gapped). The
-   **server** proves the state; the client only parses it.
+   **server** proves the state; the client only parses it, and rejects a
+   `bulk-prefix` whose `eventCount` and `nextSequence` disagree.
 3. Decide with the pure `eventPlan(state, fileEvents)`:
 
    | server says | file has | plan |

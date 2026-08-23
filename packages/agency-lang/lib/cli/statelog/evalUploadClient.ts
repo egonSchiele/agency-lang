@@ -66,6 +66,18 @@ const remoteTraceStateSchema: z.ZodType<RemoteTraceState> = z.discriminatedUnion
   }),
 ]);
 
+/** A bulk prefix is exactly `0..nextSequence-1`, so the two counts must
+ *  agree; a server that says otherwise cannot be resumed safely. */
+function consistentState(state: RemoteTraceState): RemoteTraceState {
+  if (state.kind === "bulk-prefix" && state.eventCount !== state.nextSequence) {
+    throw new EvalUploadError(
+      `unexpected upload-state response: bulk-prefix has ${state.eventCount} events ` +
+        `but nextSequence ${state.nextSequence}`,
+    );
+  }
+  return state;
+}
+
 export function createEvalUploadClient(
   origin: string,
   projectSlug: string,
@@ -130,7 +142,7 @@ export function createEvalUploadClient(
           `unexpected upload-state response: ${parsed.error.issues[0]?.message ?? "invalid"}`,
         );
       }
-      return parsed.data;
+      return consistentState(parsed.data);
     },
     async postEvents(traceId, events) {
       if (events.length > EVENTS_PER_REQUEST) {

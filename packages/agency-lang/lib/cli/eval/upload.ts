@@ -65,10 +65,8 @@ export async function evalUpload(
     dependencies.client ?? createEvalUploadClient(target.origin, target.projectSlug, target.apiKey);
   const reportWarning = dependencies.reportWarning ?? ((message) => console.warn(message));
   const dirs = uniqueRunDirectories(findRunDirectories(targets));
-  const records: RunRecord[] = [];
-  for (const dir of dirs) {
-    records.push(await uploadRun(dir, client, reportWarning));
-  }
+  // Runs are independent traces, so they upload at once; results keep input order.
+  const records = await Promise.all(dirs.map((dir) => uploadRun(dir, client, reportWarning)));
   return { runs: records.map((record) => record.outcome), batchUrl: batchUrlFor(records, target) };
 }
 

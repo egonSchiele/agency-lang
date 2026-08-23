@@ -831,6 +831,13 @@ export function applyCliFlags(config: AgencyConfig, flags: CliFlags, input?: str
   return next;
 }
 
+/** The model every LLM call uses when neither agency.json nor the call names
+ *  one, and the provider it routes through. The provider is named rather than
+ *  inferred because the inferred route for an OpenAI model is the base "openai"
+ *  client, which has no hosted web search; "openai-responses" does. */
+export const DEFAULT_MODEL = "gpt-5-mini";
+export const DEFAULT_PROVIDER = "openai-responses";
+
 /** The one env var carrying a JSON Partial<AgencyConfig> into an already-compiled
  *  process (see the source-of-truth note above, source 3). */
 export const CONFIG_OVERRIDES_ENV = "AGENCY_CONFIG_OVERRIDES";

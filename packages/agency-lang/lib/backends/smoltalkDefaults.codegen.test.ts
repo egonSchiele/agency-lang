@@ -61,8 +61,14 @@ describe("smoltalkDefaults codegen", () => {
     expect(out).toContain("https://proxy.test/v1");
   });
 
-  it("omits provider when defaultProvider is unset", () => {
+  it("bakes the built-in provider with the built-in model when nothing is configured", () => {
     const out = generate(PROGRAM);
+    expect(out).toMatch(/model:\s*"gpt-5-mini"/);
+    expect(out).toMatch(/provider:\s*"openai-responses"/);
+  });
+
+  it("omits provider when the user names a model but no provider: smoltalk infers it", () => {
+    const out = generate(PROGRAM, { client: { defaultModel: "claude-opus-4-8" } });
     // anchor to a baked `provider: "<literal>"` pair, not the bare token —
     // `provider` appears elsewhere in generated output (metadata, embed calls).
     expect(out).not.toMatch(/provider:\s*"/);

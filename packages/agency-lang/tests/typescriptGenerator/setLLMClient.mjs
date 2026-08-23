@@ -65,14 +65,15 @@ const __globalCtx = new RuntimeContext({
       liteLlm: __process.env["LITELLM_BASE_URL"] || "",
       openAiCompat: __process.env["OPENAI_COMPAT_BASE_URL"] || ""
     },
-    model: "gpt-4o-mini",
+    model: "gpt-5-mini",
     logLevel: "warn",
     statelog: {
       host: "https://statelog.adit.io",
       projectId: "smoltalk",
       apiKey: __process.env["STATELOG_SMOLTALK_API_KEY"] || "",
       traceId: nanoid()
-    }
+    },
+    provider: "openai-responses"
   },
   dirname: __dirname,
   logLevel: "info",

@@ -17,21 +17,33 @@ import type { Trace } from "@/runDirectory/traces.js";
 
 import type { AgencyRunner } from "./agencyRunner.js";
 import type { BaseGrader } from "./baseGrader.js";
+import { LlmJudge } from "./graders/llmJudge.js";
 import { AgencyTestGrader } from "./agencyTestGrader.js";
 import { loadGradingModule, loadGradingSnapshot } from "./gradingModule.js";
 import { Scorecard, type GraderGrade, type InputGrades } from "./scorecard.js";
 import type { LoadedRun, JSON as Json } from "./types.js";
 
-/** The suite-level grader set and what it means against a test's own graders
- *  (a test's recorded `graders` module). "override" (an explicit --graders
- *  flag) replaces every test's own graders — the experiment knob. "fallback"
- *  (eval.graders config, or the bundled goal judge) applies only to tests
- *  that carry none. */
-export type SuiteGraders = { mode: "override" | "fallback"; graders: BaseGrader[] };
+/** Where each test's graders come from. Graders are test-side, like goal and
+ *  expected: a test's own `graders.ts` and its harness pairs. The question
+ *  is which copy.
+ *  - "snapshot": the copy the run directory stored when the agent ran (the
+ *    default; a run grades the same days later, wherever it is read).
+ *  - "suite": the test's CURRENT graders in this loaded suite, matched by
+ *    test id (`eval grade --suite`: improve a grader, re-score old runs
+ *    without re-running the agent). A run whose test is not in the suite is
+ *    an error, not a silent fallback.
+ *  - "override": one set for every test, ignoring what the tests carry. The
+ *    optimizer's objective; never a CLI option.
+ *  A test with no graders of its own is scored by the bundled goal judge
+ *  against its `goal`. */
+export type GraderSource =
+  | { kind: "snapshot" }
+  | { kind: "suite"; tests: Test[] }
+  | { kind: "override"; graders: BaseGrader[] };
 
 /** What grading needs besides the run directory itself. */
 export type GradingContext = {
-  suiteGraders: SuiteGraders;
+  graders: GraderSource;
   /** Capability to execute a judge .agency file. Built from an AgencyConfig. */
   runAgency: AgencyRunner;
   /** For loading per-test grading modules. */
@@ -119,40 +131,51 @@ export function validateGraders(graders: BaseGrader[], test: Test | undefined): 
     return;
   }
   for (const grader of graders) {
-    if (grader.gradesInput(test)) {
-      grader.validateInput(test);
-    }
+    grader.validateInput(test);
   }
 }
 
-/** Which graders score this test. Precedence: override > the test-owned
- *  snapshot the run directory stored > the test's recorded module path (a
- *  directory from before snapshots) > a config-origin snapshot > fallback.
- *  A config-origin snapshot is skipped under `--goal` (`ctx.defaultGoal`):
- *  the goal promises the goal judge and sets configured modules aside, the
- *  run-time copy included — only a test's OWN graders survive it. */
+/** Which graders score this test: its module graders and its harness
+ *  graders, each from the source `ctx.graders` names. */
 async function effectiveGraders(
   entry: Entry,
   ctx: GradingContext,
   cache: (modulePath: string) => Promise<BaseGrader[]>,
   runDir: string,
 ): Promise<BaseGrader[]> {
-  // Harness graders are the test's own: --graders and --goal leave them.
-  const harness = harnessGraders(entry, runDir);
-  const modules = await moduleGraders(entry, ctx, cache, runDir, harness.length > 0);
-  return [...modules, ...harness];
+  const source = ctx.graders;
+  if (source.kind === "suite") {
+    const test = suiteTestFor(entry, source.tests);
+    const harness = liveHarnessGraders(test);
+    return [...(await suiteModuleGraders(test, cache, harness.length > 0)), ...harness];
+  }
+  // Harness graders are the test's own: an override leaves them.
+  const harness = snapshotHarnessGraders(entry, runDir);
+  if (source.kind === "override") {
+    return [...source.graders, ...harness];
+  }
+  return [...(await snapshotModuleGraders(entry, ctx, cache, runDir, harness.length > 0)), ...harness];
 }
 
-async function moduleGraders(
+/** The bundled goal judge: what scores a test that carries no graders. */
+function goalJudge(): BaseGrader[] {
+  return [new LlmJudge({ name: "goal" })];
+}
+
+/** The module graders from the run directory. Precedence: the snapshot the
+ *  directory stored > the test's recorded module path (a directory from
+ *  before snapshots) > the goal judge. A test with harness pairs already has
+ *  graders of its own, so the goal judge, which would demand a goal the test
+ *  never needed, does not apply to it. Under `--goal` (`ctx.defaultGoal`) a
+ *  snapshot that came from the old config fallback is set aside: the goal
+ *  promises the goal judge. */
+async function snapshotModuleGraders(
   entry: Entry,
   ctx: GradingContext,
   cache: (modulePath: string) => Promise<BaseGrader[]>,
   runDir: string,
   hasAgencyTests: boolean,
 ): Promise<BaseGrader[]> {
-  if (ctx.suiteGraders.mode === "override") {
-    return ctx.suiteGraders.graders;
-  }
   const snapshot = entry.graders;
   if (snapshot !== undefined && snapshot.origin === "test") {
     return loadGradingSnapshot(runDirPaths(runDir).gradersDir, snapshot);
@@ -160,21 +183,55 @@ async function moduleGraders(
   if (entry.test.graders !== undefined) {
     return cache(entry.test.graders);
   }
-  // A test with Agency tests to run (its `agencyTests`, stored on the run
-  // row as harness records) already has graders of its own, so the
-  // fallback, a config module or the goal judge, which would demand a goal
-  // the test never needed, does not apply to it.
   if (hasAgencyTests) {
     return [];
   }
   if (snapshot !== undefined && ctx.defaultGoal === undefined) {
     return loadGradingSnapshot(runDirPaths(runDir).gradersDir, snapshot);
   }
-  return ctx.suiteGraders.graders;
+  return goalJudge();
+}
+
+/** The suite test this run belongs to, by test id. */
+function suiteTestFor(entry: Entry, tests: Test[]): Test {
+  const id = entry.test.id;
+  const test = tests.find((candidate) => candidate.id === id);
+  if (test === undefined) {
+    throw new Error(
+      `Run for test "${id}" has no test with that id in the suite given by --suite ` +
+        `(${tests.length} test(s) there: ${tests.map((candidate) => candidate.id).join(", ")}).`,
+    );
+  }
+  return test;
+}
+
+/** The suite test's current module graders, loaded from its `graders` path. */
+async function suiteModuleGraders(
+  test: Test,
+  cache: (modulePath: string) => Promise<BaseGrader[]>,
+  hasAgencyTests: boolean,
+): Promise<BaseGrader[]> {
+  if (test.graders !== undefined) {
+    return cache(test.graders);
+  }
+  return hasAgencyTests ? [] : goalJudge();
+}
+
+/** One grader per harness pair the suite test has now, over the suite's files. */
+function liveHarnessGraders(test: Test): BaseGrader[] {
+  return (test.agencyTests ?? []).map(
+    (def) =>
+      new AgencyTestGrader({
+        name: def.name,
+        agencyFile: def.agencyFile,
+        testJsonFile: def.testJsonFile,
+        ...(test.harnessMaxCost === undefined ? {} : { maxCost: test.harnessMaxCost }),
+      }),
+  );
 }
 
 /** One grader per harness record, over the run directory's stored copy. */
-function harnessGraders(entry: Entry, runDir: string): BaseGrader[] {
+function snapshotHarnessGraders(entry: Entry, runDir: string): BaseGrader[] {
   const gradersDir = runDirPaths(runDir).gradersDir;
   return (entry.harness ?? []).map((record) => {
     for (const stored of [record.agency, record.json]) {
@@ -311,9 +368,8 @@ async function gradeInput(
   ctx: GradingContext,
   graders: BaseGrader[],
 ): Promise<InputGrades> {
-  const applicable = graders.filter((grader) => grader.gradesInput(test));
-  const gates = applicable.filter((grader) => grader.mustPass());
-  const advisory = applicable.filter((grader) => !grader.mustPass());
+  const gates = graders.filter((grader) => grader.mustPass());
+  const advisory = graders.filter((grader) => !grader.mustPass());
 
   const gateGrades: GraderGrade[] = [];
   for (const grader of gates) {

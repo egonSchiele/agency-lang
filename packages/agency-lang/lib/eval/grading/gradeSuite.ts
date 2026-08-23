@@ -5,7 +5,7 @@ import { readRunDirectory } from "@/runDirectory/runDir.js";
 
 import { AgencyRunner } from "./agencyRunner.js";
 import { breakdown } from "./gradeBreakdown.js";
-import { gradeSnapshot, type SuiteGraders } from "./gradeRun.js";
+import { gradeSnapshot, type GraderSource } from "./gradeRun.js";
 import type { Scorecard } from "./scorecard.js";
 
 export type GradeSuiteResult = {
@@ -28,7 +28,7 @@ export type GradeSuiteResult = {
  */
 export async function gradeSuite(
   runDir: string,
-  suiteGraders: SuiteGraders,
+  graders: GraderSource,
   config: AgencyConfig,
   options: { record?: boolean; defaultGoal?: string } = {},
 ): Promise<GradeSuiteResult> {
@@ -36,7 +36,7 @@ export async function gradeSuite(
     reportWarning: (message) => console.warn(`grading: ${message}`),
   });
   const scorecard = await gradeSnapshot(snapshot, {
-    suiteGraders,
+    graders,
     runAgency: new AgencyRunner(config),
     config,
     defaultGoal: options.defaultGoal,

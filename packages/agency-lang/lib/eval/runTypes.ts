@@ -48,8 +48,8 @@ export type Test = {
   /** The test's own grading module (a TS file default-exporting graders) —
    *  success criteria are test-side, like goal and expected. Relative in a
    *  raw spec, absolute after loading. Auto-discovered in the test-directory
-   *  form: a graders.ts beside test.json. Precedence at grading time:
-   *  explicit --graders flag > this > eval.graders config > the goal judge.
+   *  form: a graders.ts beside test.json. A test without one is scored by
+   *  the bundled goal judge against its `goal`.
    *  Trust note: graders are code the harness executes — pulling a remote
    *  suite means trusting it. */
   graders?: string;

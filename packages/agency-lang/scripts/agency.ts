@@ -965,13 +965,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("grade")
     .description("Score finished runs without re-running the agent")
     .argument("<paths...>", "Run directories, or directories of run directories")
-    .option("--graders <file>", "TypeScript grading module (default-exports graders)")
+    .option(
+      "--suite <source>",
+      "Grade with each test's current graders from this suite (matched by test id) instead of the copy each run stored",
+    )
     .option(
       "--goal <text>",
-      "Judge every trace against this goal with the built-in LLM judge (traces whose test recorded its own goal keep it; not with --graders)",
+      "Judge every trace against this goal with the built-in LLM judge (traces whose test recorded its own goal keep it; not with --suite)",
     )
     .option("-o, --out <path>", "Also write the grading summary here as JSON")
-    .action(async (paths: string[], opts: { graders?: string; goal?: string; out?: string }) => {
+    .action(async (paths: string[], opts: { suite?: string; goal?: string; out?: string }) => {
       const result = await evalGrade(paths, { ...opts, config: getConfig() }).catch(
         failProjectCommand,
       );

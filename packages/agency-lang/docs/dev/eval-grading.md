@@ -72,12 +72,10 @@ for the built-in judge, applied to every trace whose test recorded no goal
 of its own (`withDefaultGoal` in `gradeRun.ts`, threaded as
 `GradingContext.defaultGoal` / `gradeSuite`'s `defaultGoal` option). A
 test's own goal always wins, so a suite with goals is unaffected. `--goal`
-and `--graders` are exclusive (`validateGradeTarget`): a grading module
-carries its own criteria, and `LlmJudge({ goal })` is the place to put one
-there. For the same reason `--goal` sets aside a configured `eval.graders`
-module: `gradersFor` in `lib/cli/eval/grade.ts` returns the bundled goal
-judge whenever `--goal` is given, so the flag always means "judge against
-this text" (per-test graders still apply, as fallback mode always allows).
+and `--suite` are exclusive (`validateGradeTarget`): the suite's graders
+carry their own criteria, and `LlmJudge({ goal })` is the place to put one
+there. A test's own graders always apply under `--goal`; the flag only
+decides what the goal judge scores against for tests that have none.
 Because the goal no longer has to live in the run row, every judge score
 records the goal it scored against (`ScorePayload.goal`, set in
 `scoreDrafts` for annotators of kind `judge`): two passes over the same run
@@ -107,38 +105,42 @@ the output is the last recorded eval output. There is no in-memory handoff, so
 grading right after a run reads the same directory `eval grade` reads days
 later.
 
-**Tests grade themselves; the suite level is override or fallback.** A test
-may carry its own grading module (`graders` in its spec; auto-discovered as
+**Graders belong to tests; the only question is which copy.** A test may
+carry its own grading module (`graders` in its spec; auto-discovered as
 `graders.ts` beside `test.json`), recorded on its `run` row as an absolute
-path. The suite-level set is `SuiteGraders`: `override` (an explicit
-`--graders` flag) replaces every test's own graders — the experiment knob —
-while `fallback` (the `eval.graders` config module, else the bundled goal
-judge) applies only to tests that carry none. A test's Agency tests
-(`agencyTests`, the harness pairs) count as its own graders, so a test that
-has Agency tests but no grading module gets no fallback at all: the goal
-judge would demand a goal the test never needed. Precedence, one line: flag >
-the run directory's stored snapshot > test's own recorded path (directories
-from before snapshots) > Agency tests only > config > goal judge. Live modules load once per path
-per pass (`makeGraderModuleCache`). Trust note: graders are code the harness
-executes.
+path. There is no suite-wide module and no per-grader input scope: both
+existed once (`eval.graders`, `--graders`, `inputScope`) and were removed
+because every suite wrote graders per test anyway and the extra paths only
+confused the precedence. `GradingContext.graders` is a `GraderSource`:
+`snapshot` (the default: the copy the run directory stored), `suite`
+(`eval grade --suite`: the test's current graders in a loaded suite, found
+by test id; a run whose test is not there is an error), or `override` (one
+set for every test: the optimizer's objective, never a CLI option). A test
+with no module is scored by the bundled goal judge against its `goal`; a
+test's Agency tests (`agencyTests`, the harness pairs) count as its own
+graders, so a test that has Agency tests but no module gets no goal judge,
+which would demand a goal the test never needed. Under `snapshot`, one
+line: the stored snapshot > the test's recorded path (directories from
+before snapshots) > Agency tests only > goal judge. Live modules load once
+per path per pass (`makeGraderModuleCache`). Trust note: graders are code
+the harness executes.
 
-**The run directory stores the graders it ran with.** `eval run` decides
-each test's module up front (its own, else `eval.graders`), bundles it with
+**The run directory stores the graders it ran with.** `eval run` takes
+each test's own module up front, bundles it with
 esbuild (`snapshotGradingModule`: one self-contained `.mjs`, everything
 inlined except `agency-lang`), loads it once so a broken module fails before
 any agent runs, and collects the files its graders read by path
 (`BaseGrader.externalFiles()`, which `LlmJudge` implements for a custom
 `agencyFile`). The bundle and those files land in `<runDir>/graders/` by
 content hash, and the run row records `graders: { source, bundleFile,
-judgeFiles, origin }`. The origin ("test" or "config") keeps the precedence
-distinction: `--goal` sets a config-origin snapshot aside exactly like the
-config module it came from, while a test-owned snapshot survives it, matching
-the live-module rules. Legacy score rows still carry `completesPass`; the
+judgeFiles, origin }`. `origin` is always "test" now; runs written while
+the `eval.graders` fallback existed carry "config", and `--goal` sets
+those aside the way it set the config module aside. Legacy score rows still carry `completesPass`; the
 schema accepts and ignores it. `eval grade` loads the stored copy (`loadGradingSnapshot`, which
 rebinds each judge file to its stored copy via `rebindExternalFile`), so a
 copied run directory grades the same anywhere, and an edited `graders.ts`
-does not silently change what an old run scores; `--graders <file>` is the
-way to grade with a live module. The bundle is imported from a temp file
+does not silently change what an old run scores; `--suite <dir>` is the
+way to grade with the suite's live modules. The bundle is imported from a temp file
 next to the snapshot so its `agency-lang` import resolves from there; when
 that fails (a directory copied outside any project) it retries from this
 package's own root, where the name resolves to the package itself. A module's
@@ -223,8 +225,8 @@ agency test run --json --agency-only --reject '*' --max-cost <n> <name>.test.jso
 in the scratch dir. Score = passing fraction of the file's cases (0 when the
 file did not run, 1 when it ran with nothing to fail), `mustPass` with
 `threshold: 1`. `eval grade` rebuilds one grader per `harness` record from
-the stored files; they are the test's own, so `--graders` and `--goal` leave
-them in place. The grader's revision is `agency-tests/<name>@<sha256>`.
+the stored files; they are the test's own, so an override and `--goal` leave
+them in place, and `--suite` rebuilds them from the suite's current pairs. The grader's revision is `agency-tests/<name>@<sha256>`.
 
 Three rules that are easy to get wrong:
 

@@ -116,7 +116,6 @@ export interface AgencyConfig {
   eval?: {
     runsDir?: string;
     optimizeRunsDir?: string;
-    graders?: string; // path to a TS grading module
     sourceCacheRoot?: string; // git-source clone cache override
 
     /** Per-run resource limits for the agent subprocess. Unset fields keep the
@@ -486,7 +485,6 @@ export const AgencyConfigSchema = z
       .object({
         runsDir: z.string(),
         optimizeRunsDir: z.string(),
-        graders: z.string().optional(),
         sourceCacheRoot: z.string().optional(),
         // Positive int only: the value feeds setTimeout (×1000), where 0 and
         // negatives don't mean "no limit" — they fire immediately and fail

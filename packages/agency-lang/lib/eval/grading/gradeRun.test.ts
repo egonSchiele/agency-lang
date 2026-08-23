@@ -20,7 +20,7 @@ function makeRun(run: Omit<FakeRun, "test"> & { test?: Test }): string {
 
 function ctx(graders: ReturnType<typeof grader>[]): GradingContext {
   return {
-    suiteGraders: { mode: "override", graders },
+    graders: { kind: "override", graders },
     runAgency: new AgencyRunner({}),
     config: {},
   };
@@ -222,11 +222,11 @@ describe("harness graders from the run row", () => {
     );
   }
 
-  it("builds one AgencyTestGrader per record, bound to the stored files, under --graders and --goal alike", async () => {
+  it("builds one AgencyTestGrader per record, bound to the stored files, under an override and --goal alike", async () => {
     const harness = harnessFixture();
     const runDir = makeRun({ output: "x", harness });
     const spy = grader(() => 1, { name: "spy" });
-    // The spy stands in for a --graders override; the harness grader must still be there.
+    // The spy is an override set (the optimizer's); the harness grader must still be there.
     const card = await gradeRun(runDir, { ...ctx([spy]), defaultGoal: "g" });
     const names = card.perInput[0].grades.map((g) => g.grader.name());
     expect(names).toContain("spy");
@@ -235,16 +235,11 @@ describe("harness graders from the run row", () => {
     expect(harnessGrade?.grader.annotator().id).toBe(`agency-tests/h@${harness.records[0].sha256}`);
   });
 
-  it("a test with Agency tests gets no fallback grader: those tests are its graders", async () => {
+  it("a test with Agency tests gets no goal judge: those tests are its graders", async () => {
     const harness = harnessFixture();
+    // No goal on the test: the goal judge would refuse to run if it were added.
     const runDir = makeRun({ output: "x", harness, test: { id: "a", input: "t" } });
-    // The spy stands in for the suite fallback (a config module or the goal
-    // judge). With no goal on the test, the goal judge would refuse to run.
-    const fallback = grader(() => 1, { name: "fallback" });
-    const card = await gradeRun(runDir, {
-      ...ctx([fallback]),
-      suiteGraders: { mode: "fallback", graders: [fallback] },
-    });
+    const card = await gradeRun(runDir, { ...ctx([]), graders: { kind: "snapshot" } });
     const names = card.perInput[0].grades.map((g) => g.grader.name());
     expect(names).toEqual(["h"]);
   });

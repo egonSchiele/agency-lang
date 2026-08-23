@@ -197,17 +197,6 @@ describe("BaseOptimizer.evaluate", () => {
     expect(advisorySpy).not.toHaveBeenCalled();
   });
 
-  it("only runs graders whose inputScope matches the input", async () => {
-    const scoped = new FixedGrader(
-      { score: { kind: "scalar", value: 1 } },
-      { inputScope: { ids: ["a"] } },
-    );
-    const p = probe([scoped], fixedRun);
-    const sc = await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, inputs);
-    // input "a" scores 1; input "b" has no contributing grader → 0; mean = 0.5
-    expect(sc.objective()).toBeCloseTo(0.5, 10);
-  });
-
   it("gives id-less inputs distinct cache keys so they do not collide", async () => {
     const runInput = vi.fn(fixedRun);
     const p = probe([new FixedGrader({ score: { kind: "scalar", value: 1 } })], runInput);

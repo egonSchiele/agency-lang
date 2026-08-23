@@ -9,7 +9,7 @@ description: How to run an Agency agent against a test suite, score it with grad
 
 ```
 agency eval run (<file>[:<node>] | --agent-cmd '<command with {input}>') (--suite <file|dir|git-url> | --goal <text>) [-n <count>]
-agency eval grade <runDir> [--graders <file>]
+agency eval grade <runDir> [--suite <file|dir|git-url>] [--goal <text>]
 agency eval logs <runDir> [-f]
 agency eval optimize <file>[:<node>] [--suite <file|dir>] [--goal <text>] [--graders <file>]
 agency label <runDir> --checklist <file> [--annotator <id>]
@@ -192,7 +192,7 @@ agency eval grade runs/smoke
 
 Each grader's verdict is appended to `annotations.jsonl` as a **score**. Grading again appends another pass rather than rewriting anything, so every grading pass survives and the latest complete pass is the one listings show. Re-grading costs nothing for `ExactMatch`, `Contains`, `Similarity` and function graders that do not call `judge`; an `LlmJudge` still makes a live LLM call each time.
 
-With no `--graders`, each test grades itself with the `graders` module it carries. Tests without one fall back to `eval.graders` in `agency.json`, then to the bundled goal judge scoring against the test's `goal`. `--graders <file>` overrides every test's own graders for this pass, which is the experiment knob.
+Each test grades itself with the `graders` module it carries; a test without one is scored by the bundled goal judge against its `goal`. `eval run` stores a copy of every test's graders in the run directory, and `eval grade` uses that copy, so a run scores the same days later wherever it is read. When you improve a grader and want old runs re-scored without re-running the agent, pass the suite: `eval grade runs/smoke --suite evals/smoke` grades each run with its test's *current* graders, matched by test id. A run whose test is missing from the suite is an error.
 
 `agency eval logs <runDir>` opens the run in the interactive viewer, one trace per test, with each trace's grades, notes and labels summarised on its row. Press `t` for the timeline views (see the observability guide).
 
@@ -221,13 +221,9 @@ export default [
 ];
 ```
 
-The module can be a test's own (`"graders"` in its spec, or a `graders.ts`
-beside its `test.json`), the suite-wide fallback (`eval.graders` in
-`agency.json`), or a run-wide override (`--graders`):
-
-```bash
-agency eval grade runs/smoke --graders graders.ts
-```
+A test names its module with `"graders"` in its spec, or, in the
+test-directory form, by a `graders.ts` beside its `test.json`. Graders are
+test-side, like `goal` and `expected`: there is no suite-wide module.
 
 A grader function receives `{ output, test, workdir, record, judge }` and returns
 a number from 0 to 1, a boolean, or a full `Grade`. A `Grade` pairs a score with
@@ -243,8 +239,7 @@ grader(({ output }) => ({
 
 `judge(...)` already returns a `Grade`, so a metric can return its result directly. Options control how it counts:
 `mustPass` makes it a gate, `weight` sets its share of the objective, `threshold`
-sets the passing bar for scalar scores, `samples` runs it k times, and
-`inputScope` restricts it to a subset of tests.
+sets the passing bar for scalar scores, and `samples` runs it k times.
 
 When a grading module is supplied, `goal` becomes optional on your tests.
 

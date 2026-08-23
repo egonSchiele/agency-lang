@@ -87,7 +87,13 @@ describe("BaseOptimizer.evaluate", () => {
 
   function probe(graders: BaseGrader[], runInput: RunInput): Probe {
     return new Probe(
-      { graders, iterations: 1, config: {}, runsDir: root, runId: "r" },
+      {
+        graders: { kind: "override", graders },
+        iterations: 1,
+        config: {},
+        runsDir: root,
+        runId: "r",
+      },
       { runInput },
     );
   }
@@ -157,7 +163,13 @@ describe("BaseOptimizer.evaluate", () => {
         return {} as OptimizeResult;
       }
     })(
-      { graders: [new NeedsExpected()], iterations: 1, config: {}, runsDir: root, runId: "ff" },
+      {
+        graders: { kind: "override", graders: [new NeedsExpected()] },
+        iterations: 1,
+        config: {},
+        runsDir: root,
+        runId: "ff",
+      },
       {
         runInput,
         discover: () => ({
@@ -195,6 +207,36 @@ describe("BaseOptimizer.evaluate", () => {
     const sc = await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, [{ id: "a", input: "t" }]);
     expect(sc.gatesPassed()).toBe(false);
     expect(advisorySpy).not.toHaveBeenCalled();
+  });
+
+  it("snapshot mode grades each input by its own recorded graders module", async () => {
+    // Two inputs whose fake runs record different grading modules — the
+    // per-test graders an eval-run directory stores. The objective must be
+    // their per-test scores, not one shared set.
+    const modDir = fs.mkdtempSync(path.join(process.cwd(), ".test-optimize-graders-"));
+    try {
+      const one = path.join(modDir, "one.ts");
+      const zero = path.join(modDir, "zero.ts");
+      fs.writeFileSync(one, "export default () => 1;");
+      fs.writeFileSync(zero, "export default () => 0;");
+      const byOwn: RunInput = async (_ws, _source, _files, input, id) =>
+        fakeRun(id, "out", { ...input, graders: id === "a" ? one : zero });
+      const p = new Probe(
+        {
+          graders: { kind: "snapshot" },
+          iterations: 1,
+          config: {},
+          runsDir: root,
+          runId: "r",
+        },
+        { runInput: byOwn },
+      );
+      const sc = await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, inputs);
+      // input "a" scores 1 by its module, "b" scores 0 by its own → mean 0.5.
+      expect(sc.objective()).toBeCloseTo(0.5, 10);
+    } finally {
+      fs.rmSync(modDir, { recursive: true, force: true });
+    }
   });
 
   it("gives id-less inputs distinct cache keys so they do not collide", async () => {

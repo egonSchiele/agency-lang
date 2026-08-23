@@ -117,7 +117,10 @@ export default [grader(({ output }) => (output === "x" ? 1 : 0), { name: "mine" 
         suite: inputsFile,
         graders: gradingFile,
       });
-      expect(config?.graders.map((g) => g.name())).toEqual(["mine"]);
+      expect(config?.graders).toMatchObject({ kind: "override" });
+      expect(
+        config?.graders.kind === "override" ? config.graders.graders.map((g) => g.name()) : [],
+      ).toEqual(["mine"]);
     } finally {
       fs.rmSync(gradingDir, { recursive: true, force: true });
     }
@@ -132,10 +135,10 @@ export default [grader(({ output }) => (output === "x" ? 1 : 0), { name: "mine" 
     expect(target?.inputs).toEqual([{ id: "input-1", input: "g", goal: "g" }]);
   });
 
-  it("configures a single goal LlmJudge grader plus run policy", async () => {
+  it("with no --graders, each test grades itself by its stored copy (snapshot mode)", async () => {
     const agentFile = writeAgent();
     const { config } = await capture({ agent: agentFile, goal: "g" });
-    expect(config?.graders.map((g) => g.name())).toEqual(["goal"]);
+    expect(config?.graders).toEqual({ kind: "snapshot" });
     expect(config?.iterations).toBe(5);
     expect(config?.writeback).toBe(true);
     expect(config?.runId).toBe("run-id");

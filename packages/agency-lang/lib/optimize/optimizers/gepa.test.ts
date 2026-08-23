@@ -109,7 +109,7 @@ describe("Gepa (reflective Pareto optimizer)", () => {
   }
 
   const config = (over: Partial<GepaConfig>): GepaConfig => ({
-    graders: [new OutputScoreGrader()],
+    graders: { kind: "override", graders: [new OutputScoreGrader()] },
     iterations: 3,
     minibatch: 2,
     seed: 1,

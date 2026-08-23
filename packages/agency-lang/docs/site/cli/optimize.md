@@ -175,11 +175,15 @@ Calculates the levenshtein distance and returns a score between 0 and 1 (0 = no 
 #### LLM Judge
 Asks an LLM to return a score between 0 and 1 (0 = no match, 1 = perfect match) for how well the response matches the goal — and, when an input sets `expected`, grades against that gold answer too (so `expected` tightens the default judge even without a custom grader).
 
-This is the default grader.
+This is the grader for an input that carries no graders of its own.
+
+### Per-test graders
+
+When `--suite` points at a directory of test directories, each test's own `graders.ts` (auto-discovered beside its `test.json`, exactly as `eval run`/`eval grade` use it) is the objective for that input, and harness pairs count too. A test with neither falls back to the goal judge above. So a suite you already grade with `eval grade` optimizes against the same criteria with no extra setup.
 
 ### Custom graders
 
-So far, we have just been using the LLM Judge, which is the default grader. But we can also specify a custom grader using the `--graders` flag.
+We can also specify one grading module for every input with the `--graders` flag; it replaces each test's own graders for the whole run — the experiment knob, same as it would be on `eval grade`.
 
 First write a grader file:
 

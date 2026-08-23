@@ -89,7 +89,7 @@ describe("ExampleOptimizer", () => {
   }
 
   const config = (graders: BaseGrader[], runId: string): BaseOptimizerConfig => ({
-    graders,
+    graders: { kind: "override", graders },
     iterations: 1,
     config: {},
     runsDir: root,

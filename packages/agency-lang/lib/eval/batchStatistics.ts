@@ -38,7 +38,8 @@ export type BatchStatistics = {
 export function batchStatisticsByBatch(runs: readonly RunSummary[]): BatchStatistics[] {
   const groups: { batch: string | null; runs: RunSummary[] }[] = [];
   for (const run of runs) {
-    const group = run.batch === null ? undefined : groups.find((entry) => entry.batch === run.batch);
+    const group =
+      run.batch === null ? undefined : groups.find((entry) => entry.batch === run.batch);
     if (group === undefined) {
       groups.push({ batch: run.batch, runs: [run] });
     } else {

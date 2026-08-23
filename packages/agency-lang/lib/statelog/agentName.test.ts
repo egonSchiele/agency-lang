@@ -13,10 +13,17 @@ function batchPath(agent: string): string {
 
 describe("agentNameProblem", () => {
   it("accepts names made of letters, digits, dots, underscores, dashes, and slash-separated segments", () => {
-    for (const name of ["agency-agent/coordinator", "gcode.v2_1", "a", "x".repeat(AGENT_NAME_MAX_LENGTH)]) {
+    for (const name of [
+      "agency-agent/coordinator",
+      "gcode.v2_1",
+      "a",
+      "x".repeat(AGENT_NAME_MAX_LENGTH),
+    ]) {
       expect(agentNameProblem(name), name).toBeNull();
       // The name is one route parameter, unchanged by URL parsing.
-      expect(batchPath(name)).toBe(`/projects/p/evals/agents/${encodeURIComponent(name)}/batches/b`);
+      expect(batchPath(name)).toBe(
+        `/projects/p/evals/agents/${encodeURIComponent(name)}/batches/b`,
+      );
     }
   });
 

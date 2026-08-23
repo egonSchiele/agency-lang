@@ -39,7 +39,14 @@ export type UploadRunOutcome =
       fileEvents: number;
       annotations: number;
     }
-  | { dir: string; traceId: string; status: "resumed"; from: number; events: number; annotations: number }
+  | {
+      dir: string;
+      traceId: string;
+      status: "resumed";
+      from: number;
+      events: number;
+      annotations: number;
+    }
   | { dir: string; traceId: string | null; status: "failed"; error: string };
 
 export type EvalUploadResult = {
@@ -55,8 +62,7 @@ export async function evalUpload(
   dependencies: EvalUploadDependencies = {},
 ): Promise<EvalUploadResult> {
   const client =
-    dependencies.client ??
-    createEvalUploadClient(target.origin, target.projectSlug, target.apiKey);
+    dependencies.client ?? createEvalUploadClient(target.origin, target.projectSlug, target.apiKey);
   const reportWarning = dependencies.reportWarning ?? ((message) => console.warn(message));
   const dirs = uniqueRunDirectories(findRunDirectories(targets));
   const records: RunRecord[] = [];
@@ -244,7 +250,10 @@ function messageOf(error: unknown): string {
 }
 
 /** One line per run, a count line, and the batch page when there is one. */
-export function formatUploadResult(result: EvalUploadResult, cwd: string = process.cwd()): string[] {
+export function formatUploadResult(
+  result: EvalUploadResult,
+  cwd: string = process.cwd(),
+): string[] {
   const lines = result.runs.map((run) => `${shownDir(run.dir, cwd)}: ${describeOutcome(run)}`);
   const counts = ["uploaded", "present", "resumed", "failed"].flatMap((status) => {
     const count = result.runs.filter((run) => run.status === status).length;

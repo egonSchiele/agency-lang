@@ -129,8 +129,16 @@ describe("postAnnotations", () => {
 
 describe("failure mapping", () => {
   const cases: [StatelogFailure, RegExp, number | undefined][] = [
-    [{ kind: "unreachable", cause: "ECONNREFUSED" }, /could not reach https:\/\/h \(ECONNREFUSED\)/, undefined],
-    [{ kind: "http", status: 404, serverError: "Project not found" }, /project 'proj' not found/, 404],
+    [
+      { kind: "unreachable", cause: "ECONNREFUSED" },
+      /could not reach https:\/\/h \(ECONNREFUSED\)/,
+      undefined,
+    ],
+    [
+      { kind: "http", status: 404, serverError: "Project not found" },
+      /project 'proj' not found/,
+      404,
+    ],
     [{ kind: "http", status: 404 }, /does not support eval upload/, 404],
     [{ kind: "http", status: 500, serverError: "boom" }, /^boom$/, 500],
     [{ kind: "http", status: 502 }, /HTTP 502/, 502],

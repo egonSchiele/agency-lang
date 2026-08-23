@@ -378,7 +378,11 @@ describe("summarizeEvalRun and summarizeRunDirectory", () => {
       latestScore: 0.75,
       score: 0.75,
     });
-    const killed = writeRunDirectory({ test: { id: "a", input: "t" }, output: "x", ended: "timeout" });
+    const killed = writeRunDirectory({
+      test: { id: "a", input: "t" },
+      output: "x",
+      ended: "timeout",
+    });
     score(killed);
     expect(summarizeRunDirectory(readRunDirectory(killed, quiet))).toMatchObject({
       status: "killed",

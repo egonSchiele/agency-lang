@@ -63,7 +63,10 @@ describe("eventPlan", () => {
     expect(eventPlan({ kind: "missing" }, 3)).toEqual({ kind: "upload-all" });
     expect(eventPlan({ kind: "empty" }, 0)).toEqual({ kind: "skip", serverEvents: 0 });
     expect(eventPlan({ kind: "empty" }, 3)).toEqual({ kind: "upload-all" });
-    expect(eventPlan({ kind: "live", eventCount: 3 }, 3)).toEqual({ kind: "skip", serverEvents: 3 });
+    expect(eventPlan({ kind: "live", eventCount: 3 }, 3)).toEqual({
+      kind: "skip",
+      serverEvents: 3,
+    });
     expect(eventPlan({ kind: "live", eventCount: 2 }, 3)).toMatchObject({ kind: "refuse" });
     expect(eventPlan({ kind: "live", eventCount: 4 }, 3)).toMatchObject({ kind: "refuse" });
     expect(eventPlan({ kind: "bulk-prefix", eventCount: 3, nextSequence: 3 }, 3)).toEqual({
@@ -91,7 +94,13 @@ describe("evalUpload", () => {
     const { client, posted, annotations } = fakeClient({});
     const result = await evalUpload([dir], target, { client });
     expect(result.runs).toEqual([
-      { dir: fs.realpathSync(dir), traceId: "big", status: "uploaded", events: 603, annotations: 0 },
+      {
+        dir: fs.realpathSync(dir),
+        traceId: "big",
+        status: "uploaded",
+        events: 603,
+        annotations: 0,
+      },
     ]);
     expect(posted.map((post) => post.events.length)).toEqual([500, 103]);
     const sequences = posted.flatMap((post) => post.events.map((event) => event.sequence));
@@ -262,7 +271,14 @@ describe("formatUploadResult", () => {
             fileEvents: 9,
             annotations: 2,
           },
-          { dir: "/runs/b1/c", traceId: "tc", status: "resumed", from: 500, events: 3, annotations: 1 },
+          {
+            dir: "/runs/b1/c",
+            traceId: "tc",
+            status: "resumed",
+            from: 500,
+            events: 3,
+            annotations: 1,
+          },
           { dir: "/runs/b1/d", traceId: null, status: "failed", error: "could not reach h" },
         ],
         batchUrl: "https://h/projects/p/evals/agents/x/batches/b1",

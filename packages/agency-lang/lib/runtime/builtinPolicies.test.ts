@@ -8,10 +8,17 @@ import {
 } from "./builtinPolicies.js";
 
 describe("builtinPolicy", () => {
-  it("resolves 'recommended' with reads approved and no write rule", () => {
+  it("resolves 'recommended' with reads scoped by token and no write rule", () => {
     const p = builtinPolicy("recommended", "/tmp/base");
     expect(p).not.toBeNull();
-    expect(p!["std::read"]).toEqual([{ action: "approve" }]);
+    // Both rules are tokens the matcher resolves at match time, so a saved
+    // copy pins neither the launch directory nor the install path.
+    for (const effect of ["std::read", "std::readBinary", "std::ls", "std::glob", "std::grep"]) {
+      expect(p![effect]).toEqual([
+        { match: { dir: "{.,./**}" }, action: "approve" },
+        { match: { dir: "{<agency>/stdlib/**,<agency>/dist/**}" }, action: "approve" },
+      ]);
+    }
     expect(p!["std::write"]).toBeUndefined();
   });
 

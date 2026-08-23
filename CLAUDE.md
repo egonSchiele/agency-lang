@@ -126,6 +126,7 @@ Pipeline and architecture:
 - `docs/dev/supply-chain.md` — Dependency supply-chain hardening: the 7-day release-age cooldown and its first-party exclusions, exotic-subdep blocking, install-script denials, and why the pnpm version is pinned in the root package.json (older pnpm silently ignores all of it)
 - `docs/dev/debugger.md` — Interactive debugger for stepping through and rewinding execution
 - `docs/dev/concurrent-interrupts.md` — Supporting multiple concurrent threads that interrupt simultaneously
+- `docs/dev/tool-loop-guards.md` — The two refusals in the tool loop: a call repeated with the same arguments and the same result (`maxRepeatedToolCalls`, default 3, `0` disables) and a string argument that is really tool-call markup (`</antml…`); both before hooks, neither counts as a failure
 - `docs/dev/runBatch.md` — The `runBatch` primitive: signature, three modes, slice rule, invoke no-throw contract, defensive guards
 - `docs/dev/saveDraft.md` — saveDraft salvage-on-abort: aborted functions return their draft (`AbortedResult`), the salvage rules and why they are structural, trade-offs, and easy-to-miss nuances
 - `docs/dev/reply-attachments.md` — How tools hand images back to the model: attachToReply, branch-local queues, harvest/inject in the tool loop, marker-string API

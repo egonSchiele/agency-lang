@@ -7,7 +7,7 @@
 */
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { llmOptions } from "std::agents/lib/shared"
-import { readOnlyFileTools, readOnlyGitTools, shellTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
+import { readOnlyFileTools, readOnlyGitTools, shellTools, agencyCodeTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
 import { concurrencyPool } from "std::concurrency"
 import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
@@ -23,11 +23,14 @@ export def buildTools(): any[] {
   Return the verifier's tools. It measures with shell pipelines and reads
   bytes, because a criterion checked by eye is a criterion not checked. It
   has no write tools: a verifier that can fix things is no longer a verifier.
+  Agency code is checked with the type checker and test harness tools, since
+  the `agency` command line is not available from inside the agent.
   """
   return [
     ...readOnlyFileTools(),
     ...readOnlyGitTools(),
     ...shellTools(),
+    ...agencyCodeTools(),
     ...communicationTools(),
     readBinary.partial(useAgentCwd: true),
     skills,
@@ -41,6 +44,7 @@ The grading tests are hidden and NOT in this environment, so you must reconstruc
 Method:
 1. Enumerate EVERY explicit success criterion in the task. Two kinds: the output contract (exact file path and name, format, JSON keys, field types, units, signed-vs-unsigned, the stated whitespace / trailing-newline requirement) AND every quantitative rule (lengths, ranges, counts, thresholds, temperatures, GC content, percentages, etc.).
 2. For EACH criterion, use the `exec` tool to COMPUTE the artifact's actual value and compare it to the requirement. If the task names a specific tool or command to compute a value (e.g. a CLI with exact flags), install if needed and run THAT tool — it is the ground truth; do not approximate it with your own estimate.
+   For Agency code there is no `agency` command line here: run a `.test.json` harness with `testFile(dir, filename)` and check a source file with `typecheck`. Do not search for an `agency` executable.
 3. A criterion you did NOT computationally verify is itself a gap — report it as one. A near-miss on any numeric constraint is an error: report the actual computed value vs. the requirement (e.g. "Tm difference 6.5°C, limit 5°C").
 
 Never say the artifact "appears" or "should" satisfy something. Run it, measure it, and report a concrete pass/fail per criterion with the numbers.${SAVE_DRAFT_HINT}"""

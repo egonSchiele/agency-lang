@@ -28,7 +28,7 @@ export type WriteFailure = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L26))
 
 ## Functions
 
@@ -40,11 +40,13 @@ buildTools(): any[]
 
 Return the Agency writer's tools: the bundled documentation, the source
   inspectors it checks drafts with, read-only access to the project it is
-  writing for, and fetches for a named external resource.
+  writing for, and fetches for a named external resource. Not testFile: the
+  writer returns source it has not saved, so there is nothing on disk for a
+  harness to test yet.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L106))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L108))
 
 ### agencyCodingAgent
 
@@ -99,4 +101,4 @@ Write an Agency program for the task. Iterates until the source parses,
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L254))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L259))

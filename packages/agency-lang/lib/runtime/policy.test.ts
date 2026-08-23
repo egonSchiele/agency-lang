@@ -1,8 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
-import { checkPolicy, resolveDotDirPattern, validatePolicy } from "./policy.js";
+import {
+  checkPolicy,
+  resolveDotDirPattern,
+  expandAgencyInstallDir,
+  validatePolicy,
+} from "./policy.js";
+import { getStdlibDir } from "../importPaths.js";
+import path from "path";
 import { mkdtempSync, mkdirSync, symlinkSync, rmSync, realpathSync } from "fs";
 import { tmpdir } from "os";
-import path from "path";
 import picomatch from "picomatch";
 
 describe("checkPolicy", () => {
@@ -488,6 +494,49 @@ describe("dot dir patterns", () => {
     };
     // stripDotSlash normalizes both sides, so the literal pattern still matches raw.
     expect(checkPolicy(policy, intr).type).toBe("approve");
+  });
+});
+
+describe("<agency> dir patterns", () => {
+  const read = (dir: string) => ({
+    effect: "std::read",
+    message: "m",
+    data: { dir, filename: "x" },
+    origin: "std::fs",
+  });
+  const policy = {
+    "std::read": [
+      { match: { dir: "{<agency>/stdlib/**,<agency>/dist/**}" }, action: "approve" as const },
+    ],
+  };
+
+  it("`<agency>` means the install root, resolved at match time", () => {
+    const stdlib = getStdlibDir();
+    expect(checkPolicy(policy, read(path.join(stdlib, "docs", "guide"))).type).toBe("approve");
+    expect(checkPolicy(policy, read(path.join(stdlib, "agents", "skills", "verifier"))).type).toBe(
+      "approve",
+    );
+    expect(
+      checkPolicy(policy, read(path.join(path.dirname(stdlib), "dist", "lib", "agents"))).type,
+    ).toBe("approve");
+    // The package root itself, its parent, and a home directory: not covered.
+    expect(checkPolicy(policy, read(path.dirname(stdlib))).type).toBe("propagate");
+    expect(checkPolicy(policy, read(path.dirname(path.dirname(stdlib)))).type).toBe("propagate");
+    expect(checkPolicy(policy, read("/Users/someone")).type).toBe("propagate");
+  });
+
+  it("escapes the root so glob characters in the install path stay literal", () => {
+    expect(expandAgencyInstallDir("<agency>/stdlib/**", () => "/opt/v*1")).toBe(
+      "/opt/v\\*1/stdlib/**",
+    );
+  });
+
+  it("leaves the token unresolved, and nothing thrown, when the root cannot be found", () => {
+    const unresolvable = () => {
+      throw new Error("no package.json");
+    };
+    expect(expandAgencyInstallDir("<agency>/stdlib/**", unresolvable)).toBe("<agency>/stdlib/**");
+    expect(expandAgencyInstallDir("/plain/**", unresolvable)).toBe("/plain/**");
   });
 });
 

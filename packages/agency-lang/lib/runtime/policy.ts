@@ -1,6 +1,7 @@
 import picomatch from "picomatch";
 import { realpathSync } from "fs";
 import { z } from "zod";
+import { getPackageRoot } from "../importPaths.js";
 
 export const PolicyRuleSchema = z.object({
   match: z.record(z.string(), z.string()).optional(),
@@ -103,6 +104,30 @@ export function resolveDotDirPattern(pattern: string, cwd: string = process.cwd(
   );
 }
 
+/** In a `dir` pattern, `<agency>` stands for the directory the agency
+ *  package is installed in. A rule approving reads of the shipped docs and
+ *  skills can then be saved to a policy file without pinning the install
+ *  path of one machine or one version. */
+export const AGENCY_INSTALL_DIR_PLACEHOLDER = "<agency>";
+
+// Expanded at match time, like `.`: a saved policy keeps saying "wherever
+// agency is installed now". A root that cannot be found (a bundled build with
+// no package.json above it) leaves the placeholder as written, so the rule
+// simply never matches; nothing throws. Exported for tests, which inject the root.
+export function expandAgencyInstallDir(
+  pattern: string,
+  root: () => string = getPackageRoot,
+): string {
+  if (!pattern.includes(AGENCY_INSTALL_DIR_PLACEHOLDER)) return pattern;
+  let resolved: string;
+  try {
+    resolved = root();
+  } catch {
+    return pattern;
+  }
+  return pattern.split(AGENCY_INSTALL_DIR_PLACEHOLDER).join(escapeForGlob(resolved));
+}
+
 function matchesRule(
   rule: PolicyRule,
   interrupt: { effect: string; message: string; data: any; origin: string },
@@ -130,7 +155,12 @@ function matchesRule(
       !raw &&
       key === "dir" &&
       picomatch.isMatch(stripDotSlash(value), stripDotSlash(resolveDotDirPattern(pattern)));
-    if (!raw && !viaDot) {
+    const viaInstall =
+      !raw &&
+      !viaDot &&
+      key === "dir" &&
+      picomatch.isMatch(stripDotSlash(value), expandAgencyInstallDir(pattern));
+    if (!raw && !viaDot && !viaInstall) {
       return false;
     }
   }

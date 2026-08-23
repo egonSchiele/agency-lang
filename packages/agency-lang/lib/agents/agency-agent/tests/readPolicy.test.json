@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "nodeName": "readsInsideCwd",
+      "input": "",
+      "expectedOutput": "[\"approve\",\"approve\",\"approve\",\"approve\",\"approve\",\"approve\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "readsOutsideCwd",
+      "input": "",
+      "expectedOutput": "[\"propagate\",\"propagate\",\"propagate\",\"propagate\",\"propagate\",\"propagate\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "readsTheParentDirectory",
+      "input": "",
+      "expectedOutput": "\"propagate\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

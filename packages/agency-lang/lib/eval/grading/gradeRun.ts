@@ -139,7 +139,8 @@ async function effectiveGraders(
 ): Promise<BaseGrader[]> {
   // Harness graders are the test's own: --graders and --goal leave them.
   const harness = harnessGraders(entry, runDir);
-  return [...(await moduleGraders(entry, ctx, cache, runDir)), ...harness];
+  const modules = await moduleGraders(entry, ctx, cache, runDir, harness.length > 0);
+  return [...modules, ...harness];
 }
 
 async function moduleGraders(
@@ -147,6 +148,7 @@ async function moduleGraders(
   ctx: GradingContext,
   cache: (modulePath: string) => Promise<BaseGrader[]>,
   runDir: string,
+  hasAgencyTests: boolean,
 ): Promise<BaseGrader[]> {
   if (ctx.suiteGraders.mode === "override") {
     return ctx.suiteGraders.graders;
@@ -157,6 +159,13 @@ async function moduleGraders(
   }
   if (entry.test.graders !== undefined) {
     return cache(entry.test.graders);
+  }
+  // A test with Agency tests to run (its `agencyTests`, stored on the run
+  // row as harness records) already has graders of its own, so the
+  // fallback, a config module or the goal judge, which would demand a goal
+  // the test never needed, does not apply to it.
+  if (hasAgencyTests) {
+    return [];
   }
   if (snapshot !== undefined && ctx.defaultGoal === undefined) {
     return loadGradingSnapshot(runDirPaths(runDir).gradersDir, snapshot);

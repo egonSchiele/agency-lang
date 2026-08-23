@@ -93,6 +93,10 @@ const llmOptionProperties: { key: string; value: VariableType }[] = [
   // Per-call cap on characters of a tool result fed back to the LLM
   // (overrides agency.json `client.maxToolResultChars`). `0` disables.
   { key: "maxToolResultChars", value: optional(number) },
+  // Refuse a tool call once the same call has returned the same result this
+  // many times in a row (default 3; `0` disables). `setLlmOptions` sets the
+  // same per-branch.
+  { key: "maxRepeatedToolCalls", value: optional(number) },
   // Resilience policy. Defaults: retries 2, timeout 10min, backoff 500ms
   // x2 capped at 10s. `retries: 0` / `timeout: 0` disable. `setLlmOptions`
   // sets the same per-branch.

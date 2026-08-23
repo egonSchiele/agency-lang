@@ -34,6 +34,18 @@ import { PromptBailout, PromptRunner } from "./promptRunner.js";
 import { findIntrinsic, partitionIntrinsicCalls, runIntrinsicCall } from "./intrinsicTools.js";
 import type { RunBatchResult } from "./runBatch.js";
 import { warnOnOversizedToolSchemas } from "./toolSchemaSize.js";
+import {
+  DEFAULT_MAX_REPEATED_TOOL_CALLS,
+  freshRepeatStreak,
+  markupArgument,
+  markupArgumentMessage,
+  noteRepeat,
+  repeatedCallMessage,
+  repeatKey,
+  repeatsBefore,
+  resetRepeat,
+  type RepeatStreak,
+} from "./toolLoopGuards.js";
 import { GuardTripRetry, raiseGuardTripsUntilClear } from "./guardTripInterrupt.js";
 import { failure, isFailure, isSuccess, markDestructiveWork } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
@@ -636,6 +648,7 @@ export async function runPrompt(args: {
     self.__initialized = true;
     self.removedTools = args.removedTools || [];
     self.toolErrorCounts = {};
+    self.repeatStreak = freshRepeatStreak();
     self.toolCallRound = 0;
     self.validationAttempt = 0;
     self.messagesJSON = null;
@@ -644,6 +657,7 @@ export async function runPrompt(args: {
 
   const removedTools: string[] = self.removedTools;
   const toolErrorCounts: Record<string, number> = self.toolErrorCounts;
+  const repeatStreak: RepeatStreak = self.repeatStreak;
   // The calling function's locals, for decision 8. Read from `args` (not the
   // frame) because it belongs to the CALLER, not to runPrompt's own frame.
   const destructiveSink: { __destructiveRan?: boolean } | undefined = args.destructiveSink;
@@ -700,6 +714,7 @@ export async function runPrompt(args: {
     tools: _extractedTools,
     memory: memoryOption,
     maxToolResultChars: callMaxToolResultChars,
+    maxRepeatedToolCalls: ccMaxRepeatedToolCalls,
     retries: ccRetries,
     timeout: ccTimeout,
     backoff: ccBackoff,
@@ -711,6 +726,7 @@ export async function runPrompt(args: {
       tools?: any[];
       memory?: boolean | { model?: string };
       maxToolResultChars?: number;
+      maxRepeatedToolCalls?: number;
       label?: string;
     };
 
@@ -747,8 +763,11 @@ export async function runPrompt(args: {
   const {
     maxToolResultChars: stackMaxToolResultChars,
     maxToolCallRounds: stackMaxToolCallRounds,
+    maxRepeatedToolCalls: stackMaxRepeatedToolCalls,
     ...stackSmolDefaults
   } = stackDefaults;
+  const maxRepeatedToolCalls =
+    ccMaxRepeatedToolCalls ?? stackMaxRepeatedToolCalls ?? DEFAULT_MAX_REPEATED_TOOL_CALLS;
   // maxToolCallRounds precedence: a branch default (setLlmOptions) overrides the
   // baked per-call value (agency.json → codegen literal, default 10). Kept out
   // of stackSmolDefaults above — it isn't a smoltalk config field.
@@ -1353,6 +1372,36 @@ export async function runPrompt(args: {
               const branchStack = stack.getOrCreateBranch(branchKey).stack;
               const namedArgs = dropNullDefaultedArgs(toolCall.arguments, handler.params);
 
+              // Two refusals that never reach the tool (so no start/end hooks
+              // and no failure count): an argument that is really tool-call
+              // markup, and a call the model keeps making with nothing changing.
+              const markupArg = markupArgument(namedArgs, handler.params);
+              if (markupArg !== null) {
+                await b.step(`round.${round}.tool.${callSlug}.markup`, async () => {
+                  messages.push(
+                    smoltalk.toolMessage(markupArgumentMessage(handler.name, markupArg), {
+                      tool_call_id: toolCall.id,
+                      name: toolCall.name,
+                    }),
+                  );
+                });
+                return;
+              }
+              const callKey = repeatKey(handler.name, namedArgs);
+              const priorRuns = repeatsBefore(repeatStreak, callKey);
+              if (maxRepeatedToolCalls > 0 && priorRuns >= maxRepeatedToolCalls) {
+                await b.step(`round.${round}.tool.${callSlug}.repeated`, async () => {
+                  resetRepeat(repeatStreak);
+                  messages.push(
+                    smoltalk.toolMessage(repeatedCallMessage(handler.name, priorRuns), {
+                      tool_call_id: toolCall.id,
+                      name: toolCall.name,
+                    }),
+                  );
+                });
+                return;
+              }
+
               await b.step(`round.${round}.tool.${callSlug}.start`, async () => {
                 // Pass `branchStack` so scoped callbacks registered inside
                 // the branch's frame chain are discovered by
@@ -1418,6 +1467,11 @@ export async function runPrompt(args: {
                   invokeOutcome = outcome.invokeOutcome;
                   if (outcome.invokeOutcome === "success") {
                     self.runnerState.toolTimings[callSlug] = performance.now() - toolCallStartTime;
+                  }
+                  // Inside the idempotent invoke step, so a resume does not
+                  // count the same run twice.
+                  if (outcome.invokeOutcome !== "interrupted") {
+                    noteRepeat(repeatStreak, callKey, stringifyToolResult(toolResult));
                   }
                   return outcome.interrupts;
                 });

@@ -18,6 +18,44 @@ In a non-interactive run (`-p`), an effect no rule decides is
 auto-rejected with an explanatory message (`stdlib/policy.agency`) — there
 is no one to ask.
 
+## What `recommended` lets the agent read
+
+The read-only file effects (`std::read`, `std::readBinary`, `std::ls`,
+`std::glob`, `std::grep`) are approved in two places only
+(`readScopeRules` in `lib/runtime/builtinPolicies.ts`):
+
+- the launch directory and everything under it, written as `{.,./**}` so
+  the rule keeps meaning "wherever the agent runs" after the policy is
+  saved to a file (rule 2 below);
+- the agency install's own `stdlib/` and `dist/` trees, written as
+  `{<agency>/stdlib/**,<agency>/dist/**}`. The docs tools (`agencyGuide`,
+  `agencyStdlib`, ...) are `read` partially applied to
+  `stdlib/docs/<section>`, and the bundled skills are read the same way, so
+  without this rule those tools return rejections in a headless run.
+
+Both rules are placeholders, not paths. `.` expands to the process cwd and
+`<agency>` to the directory the agency package is installed in
+(`AGENCY_INSTALL_DIR_PLACEHOLDER`, `expandAgencyInstallDir`,
+`getPackageRoot`), each at match time, so the copy the agent saves to
+`~/.agency-agent/policy.json` pins neither the directory it was first run
+in nor the install path of one version; after an upgrade moves the package,
+the same rule still matches. A root that cannot be found (a bundled build
+with no `package.json` above it) leaves `<agency>` as written and the rule
+simply never matches.
+
+A policy file saved before this change keeps its old catch-all read rules;
+there is no migration. Delete the file (the agent writes a fresh
+recommended policy on the next launch) or edit the five read effects.
+
+There is deliberately no trailing `reject`: a read elsewhere is undecided,
+which prompts in an interactive session and auto-rejects in a headless one.
+The agent's own reads of its home directory (`~/.agency-agent`) do not go
+through the policy at all (`_internalIo` in `stdlib/policy.agency`).
+
+Before this, `recommended` approved every read anywhere, and a verifier
+under eval used that to list the home directory and read the repo's
+`package.json` while hunting for an `agency` binary.
+
 ## Rule matching
 
 A rule is `{ match?: Record<string, string>, action }`. Each match value is

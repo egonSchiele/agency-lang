@@ -21,6 +21,8 @@ buildTools(): any[]
 Return the verifier's tools. It measures with shell pipelines and reads
   bytes, because a criterion checked by eye is a criterion not checked. It
   has no write tools: a verifier that can fix things is no longer a verifier.
+  Agency code is checked with the type checker and test harness tools, since
+  the `agency` command line is not available from inside the agent.
 
 **Returns:** `any[]`
 
@@ -74,4 +76,4 @@ Verify work on disk against a task: derive measurable success criteria,
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/verifier.agency#L67))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/verifier.agency#L71))

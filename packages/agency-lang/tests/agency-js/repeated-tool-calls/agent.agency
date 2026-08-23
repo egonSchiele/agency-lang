@@ -1,0 +1,16 @@
+// Exercises the two tool-loop refusals through the REAL wiring (the unit
+// tests cover only the pure helpers): a scripted model asks for the same
+// probe call over and over, and once asks with an argument that is really
+// tool-call markup. The refusals must reach the model as tool messages and
+// the tool body must not run for them.
+def probe(query: string, flags: string = ""): string {
+  return "ok:${query}"
+}
+
+node main() {
+  return llm("use the tool", { tools: [probe] })
+}
+
+node disabled() {
+  return llm("use the tool", { tools: [probe], maxRepeatedToolCalls: 0 })
+}

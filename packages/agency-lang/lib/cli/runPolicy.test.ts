@@ -3,6 +3,7 @@ import { writeFileSync, mkdtempSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
 import { resolveRunPolicy } from "./runPolicy.js";
+import { readScopeRules } from "../runtime/builtinPolicies.js";
 
 describe("resolveRunPolicy", () => {
   it("returns null when no policy flags are set", () => {
@@ -12,7 +13,7 @@ describe("resolveRunPolicy", () => {
   it("resolves a built-in name", () => {
     const r = resolveRunPolicy({ policy: "recommended", cwd: "/x" });
     const p = JSON.parse(r!.policyJson);
-    expect(p["std::read"]).toEqual([{ action: "approve" }]);
+    expect(p["std::read"]).toEqual(readScopeRules());
     expect(r!.interactive).toBe(false);
   });
 
@@ -62,8 +63,8 @@ describe("resolveRunPolicy", () => {
       cwd: "/x",
     });
     const p = JSON.parse(r!.policyJson);
-    // reject rule prepended ahead of the built-in's approve rule
-    expect(p["std::read"]).toEqual([{ action: "reject" }, { action: "approve" }]);
+    // reject rule prepended ahead of the built-in's approve rules
+    expect(p["std::read"]).toEqual([{ action: "reject" }, ...readScopeRules()]);
   });
 
   it("rejects on overlap: reject rule sits ahead of approve", () => {
@@ -96,8 +97,8 @@ describe("resolveRunPolicy", () => {
       cwd: "/x",
     });
     const p = JSON.parse(r!.policyJson);
-    // std::read (in base, not in inline flags) keeps its built-in rule
-    expect(p["std::read"]).toEqual([{ action: "approve" }]);
+    // std::read (in base, not in inline flags) keeps its built-in rules
+    expect(p["std::read"]).toEqual(readScopeRules());
     expect(p["std::write"]).toEqual([{ action: "reject" }]);
   });
 

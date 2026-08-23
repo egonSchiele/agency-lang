@@ -1,6 +1,7 @@
 import picomatch from "picomatch";
 import { realpathSync } from "fs";
 import { z } from "zod";
+import { getPackageRoot } from "../importPaths.js";
 
 export const PolicyRuleSchema = z.object({
   match: z.record(z.string(), z.string()).optional(),
@@ -103,6 +104,29 @@ export function resolveDotDirPattern(pattern: string, cwd: string = process.cwd(
   );
 }
 
+/** The token a `dir` pattern uses for the agency install itself, so a rule
+ *  approving reads of the shipped docs and skills can be saved to a policy
+ *  file without pinning the install path of one machine or one version. */
+export const INSTALL_TOKEN = "<agency>";
+
+// Resolved at match time, like `.`: a saved policy keeps saying "wherever
+// agency is installed now". A root that cannot be found (a bundled build with
+// no package.json above it) leaves the token unresolved, so the rule simply
+// never matches; nothing throws. Exported for tests, which inject the root.
+export function resolveInstallDirPattern(
+  pattern: string,
+  root: () => string = getPackageRoot,
+): string {
+  if (!pattern.includes(INSTALL_TOKEN)) return pattern;
+  let resolved: string;
+  try {
+    resolved = root();
+  } catch {
+    return pattern;
+  }
+  return pattern.split(INSTALL_TOKEN).join(escapeForGlob(resolved));
+}
+
 function matchesRule(
   rule: PolicyRule,
   interrupt: { effect: string; message: string; data: any; origin: string },
@@ -130,7 +154,12 @@ function matchesRule(
       !raw &&
       key === "dir" &&
       picomatch.isMatch(stripDotSlash(value), stripDotSlash(resolveDotDirPattern(pattern)));
-    if (!raw && !viaDot) {
+    const viaInstall =
+      !raw &&
+      !viaDot &&
+      key === "dir" &&
+      picomatch.isMatch(stripDotSlash(value), resolveInstallDirPattern(pattern));
+    if (!raw && !viaDot && !viaInstall) {
       return false;
     }
   }

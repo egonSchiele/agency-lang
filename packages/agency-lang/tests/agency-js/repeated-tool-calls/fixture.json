@@ -1,6 +1,6 @@
 {
-  "guardedRan": 3,
-  "guardedRefused": 2,
+  "guardedRan": 4,
+  "guardedRefused": 1,
   "refusalNamesCall": true,
   "markupRefused": true,
   "markupNeverRan": true,

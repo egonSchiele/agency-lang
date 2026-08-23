@@ -20,6 +20,8 @@ const {
   markupArgument,
   repeatKey,
   noteRepeat,
+  repeatsBefore,
+  resetRepeat,
 } = _internal;
 
 describe("failureTier", () => {
@@ -56,22 +58,47 @@ describe("failureTier", () => {
 });
 
 describe("markupArgument", () => {
-  it("names a string argument that holds the model's own call markup", () => {
-    // Both shapes seen in eval statelogs: the closing tag alone, and the
-    // closing tag with the next parameter leaking in.
-    expect(markupArgument({ command: "which", stdin: '</antml name="stdin">' })).toBe("stdin");
+  const param = (name: string, hasDefault: boolean) => ({
+    name,
+    hasDefault,
+    defaultValue: undefined,
+    variadic: false,
+  });
+  const execParams = [param("command", false), param("stdin", true)];
+  const grepParams = [param("pattern", false), param("flags", true)];
+
+  it("names an optional string argument that is the model's own call markup", () => {
+    // The shapes seen in eval statelogs: the closing tag named for the
+    // argument, alone or with the next parameter leaking in, and a garbled
+    // tag followed by leaked parameter markup.
+    expect(markupArgument({ command: "which", stdin: '</antml name="stdin">' }, execParams)).toBe(
+      "stdin",
+    );
     expect(
-      markupArgument({
-        pattern: "import",
-        flags: '</antml name="flags">\n<parameter name="maxResults">50',
-      }),
+      markupArgument(
+        { pattern: "import", flags: '</antml name="flags">\n<parameter name="maxResults">50' },
+        grepParams,
+      ),
+    ).toBe("flags");
+    expect(
+      markupArgument(
+        { pattern: "x", flags: '</antmlःparameter>\n<parameter name="maxResults">50' },
+        grepParams,
+      ),
     ).toBe("flags");
   });
 
-  it("leaves ordinary arguments alone, including ones that mention tags", () => {
-    expect(markupArgument({ pattern: "<div>", dir: ".", maxResults: 50 })).toBeNull();
-    expect(markupArgument({ source: 'def f(): string { return "</b>" }' })).toBeNull();
-    expect(markupArgument({})).toBeNull();
+  it("leaves data alone: required parameters, and strings that merely contain such text", () => {
+    // A transcript tool given a captured Anthropic reply as its required input.
+    expect(markupArgument({ command: '</antml name="stdin"> and more' }, execParams)).toBeNull();
+    // An XML tool given parameter markup in the middle of a document.
+    expect(
+      markupArgument({ pattern: 'a <parameter name="x"> b', flags: "i" }, grepParams),
+    ).toBeNull();
+    // A closing tag for some OTHER name, with nothing leaked after it, is not this pattern.
+    expect(markupArgument({ pattern: "x", flags: "</antml-other>g" }, grepParams)).toBeNull();
+    expect(markupArgument({ pattern: "<div>", flags: "" }, grepParams)).toBeNull();
+    expect(markupArgument({}, grepParams)).toBeNull();
   });
 });
 
@@ -84,20 +111,40 @@ describe("repeated tool calls", () => {
     expect(repeatKey("grep", { pattern: "x" })).not.toBe(repeatKey("glob", { pattern: "x" }));
   });
 
-  it("counts consecutive identical results and starts over when the result changes", () => {
-    const records = {};
+  const fresh = () => ({ key: "", result: "", count: 0 });
+
+  it("counts identical results in a row and starts over when the result changes", () => {
+    const streak = fresh();
     const key = repeatKey("typecheck", { source: "def f() {}" });
-    expect(noteRepeat(records, key, '{"errors":[]}')).toBe(1);
-    expect(noteRepeat(records, key, '{"errors":[]}')).toBe(2);
-    expect(noteRepeat(records, key, '{"errors":[]}')).toBe(3);
-    expect(noteRepeat(records, key, '{"errors":["AG1"]}')).toBe(1);
-    expect(noteRepeat(records, key, '{"errors":[]}')).toBe(1);
+    expect(noteRepeat(streak, key, '{"errors":[]}')).toBe(1);
+    expect(noteRepeat(streak, key, '{"errors":[]}')).toBe(2);
+    expect(noteRepeat(streak, key, '{"errors":[]}')).toBe(3);
+    expect(repeatsBefore(streak, key)).toBe(3);
+    // The world changed: a new result is a new streak.
+    expect(noteRepeat(streak, key, '{"errors":["AG1"]}')).toBe(1);
+    expect(noteRepeat(streak, key, '{"errors":[]}')).toBe(1);
   });
 
-  it("keeps tools apart", () => {
-    const records = {};
-    noteRepeat(records, repeatKey("a", {}), "r");
-    expect(noteRepeat(records, repeatKey("b", {}), "r")).toBe(1);
+  it("any other call in between resets the count", () => {
+    // readStatus → advanceJob → readStatus: the poll is not a loop.
+    const streak = fresh();
+    const poll = repeatKey("readStatus", { id: 1 });
+    const advance = repeatKey("advanceJob", { id: 1 });
+    for (let i = 0; i < 5; i++) {
+      expect(noteRepeat(streak, poll, "pending")).toBe(1);
+      expect(noteRepeat(streak, advance, "ok")).toBe(1);
+    }
+    expect(repeatsBefore(streak, poll)).toBe(0);
+  });
+
+  it("a refusal restarts the count, so the call is interrupted, not banned", () => {
+    const streak = fresh();
+    const poll = repeatKey("readStatus", { id: 1 });
+    for (let i = 0; i < 3; i++) noteRepeat(streak, poll, "pending");
+    expect(repeatsBefore(streak, poll)).toBe(3);
+    resetRepeat(streak);
+    expect(repeatsBefore(streak, poll)).toBe(0);
+    expect(noteRepeat(streak, poll, "done")).toBe(1);
   });
 
   it("DEFAULT_MAX_REPEATED_TOOL_CALLS is the documented default", () => {

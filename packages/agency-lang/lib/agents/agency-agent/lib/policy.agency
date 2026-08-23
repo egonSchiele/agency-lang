@@ -3,6 +3,7 @@ import {
   cliPolicyHandler,
   parsePolicyFile,
   setPolicy,
+  migrateCatchAllReads,
   minimalAutoApprovePolicy,
   recommendedAutoApprovePolicy,
   builtinPolicy,
@@ -41,7 +42,7 @@ export def givePolicyChoice() {
   },
     {
     key: "recommended",
-    label: "recommended default policy, allow reading files in the current directory and browsing the web, no writes"
+    label: "recommended default policy, allow reading files in the current directory (and agency's own docs and skills) and browsing the web, no writes"
   },
   ]
 
@@ -78,7 +79,18 @@ export def getPolicyForAgent(
         process.exit(1)
       }
     } else {
-      setPolicy(POLICY_PATH, policy.value)
+      // A saved copy of an older recommended policy approved every read
+      // anywhere. Scope those rules the way the built-in now does, once,
+      // and say so; a read rule the user wrote stays as written.
+      const updated = migrateCatchAllReads(policy.value)
+      if (updated.migrated.length > 0) {
+        print(
+          color.yellow(
+            "Updated ${POLICY_PATH}: ${updated.migrated.join(", ")} now approve reads only in the current directory and the agency install (they approved reads anywhere). Edit the file to change this.",
+          ),
+        )
+      }
+      setPolicy(POLICY_PATH, updated.policy)
     }
   } else {
     const builtin = builtinPolicy(_policyArg, cwd())

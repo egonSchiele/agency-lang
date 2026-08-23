@@ -52,6 +52,8 @@ function toolMessages(client) {
 }
 
 // Five identical calls (argument order varies once), then one garbled call.
+// With the default of 3: calls 1-3 run, call 4 is refused (which restarts
+// the count), call 5 runs again.
 const same = { query: "x" };
 const script = [
   [same],

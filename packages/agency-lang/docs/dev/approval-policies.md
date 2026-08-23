@@ -27,10 +27,29 @@ The read-only file effects (`std::read`, `std::readBinary`, `std::ls`,
 - the launch directory and everything under it, written as `{.,./**}` so
   the rule keeps meaning "wherever the agent runs" after the policy is
   saved to a file (rule 2 below);
-- the agency install's own `stdlib/` and `dist/` trees. The docs tools
-  (`agencyGuide`, `agencyStdlib`, ...) are `read` partially applied to
+- the agency install's own `stdlib/` and `dist/` trees, written as
+  `{<agency>/stdlib/**,<agency>/dist/**}`. The docs tools (`agencyGuide`,
+  `agencyStdlib`, ...) are `read` partially applied to
   `stdlib/docs/<section>`, and the bundled skills are read the same way, so
   without this rule those tools return rejections in a headless run.
+
+Both rules are tokens, not paths. `.` resolves against the process cwd and
+`<agency>` against the package root (`resolveInstallDirPattern`,
+`getPackageRoot`), each at match time, so the copy the agent saves to
+`~/.agency-agent/policy.json` pins neither the directory it was first run
+in nor the install path of one version; after an upgrade moves the package,
+the same rule still matches. A root that cannot be found (a bundled build
+with no `package.json` above it) leaves `<agency>` unresolved and the rule
+simply never matches.
+
+**Migration of saved files.** The agent writes the recommended policy to
+`~/.agency-agent/policy.json` once and reloads that file on every later
+launch, so a change to the built-in never reaches an existing user by
+itself. `migrateCatchAllReads` (`lib/runtime/builtinPolicies.ts`, called
+from `getPolicyForAgent`) replaces a read effect's rules when they are still
+exactly the old catch-all `[{ action: "approve" }]`, prints one line naming
+the effects it changed, and saves. A read rule the user edited is left as
+written.
 
 There is deliberately no trailing `reject`: a read elsewhere is undecided,
 which prompts in an interactive session and auto-rejects in a headless one.

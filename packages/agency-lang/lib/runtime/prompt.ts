@@ -174,21 +174,39 @@ function toolErrorMessage(error: any): string {
 const MAX_TOOL_FAILURES = 5;
 
 /** A call is refused once the same tool, with the same arguments, has
- *  returned the same result this many times in a row. That is the loop
- *  signature: nothing changed, yet the model asks again (a writer once
- *  made 45 identical, successful typecheck calls). `0` disables. */
+ *  returned the same result this many times in a row, with no other call in
+ *  between. That is the loop signature: nothing changed, yet the model asks
+ *  again (a writer once made 45 identical, successful typecheck calls). The
+ *  refusal also restarts the count, so the call is interrupted every N
+ *  repeats rather than banned: a status poll that really is waiting on the
+ *  world gets to run again after the model says so. `0` disables. */
 const DEFAULT_MAX_REPEATED_TOOL_CALLS = 3;
 
-/** The name of a string argument that holds tool-call markup instead of a
- *  value, or null. Claude sometimes emits the closing tag of its own call
- *  syntax where an optional string it meant to leave empty belongs, and the
- *  next parameter's text leaks in: `stdin: "</antml name=\"stdin\">\n<parameter
- *  name=\"allowedExecutables\">[]"`. Running that call wastes a round at best
- *  (`grep` rejects the regex flags) and at worst executes with garbage. */
-function markupArgument(args: Record<string, unknown>): string | null {
-  for (const [name, value] of Object.entries(args)) {
+/** The name of an optional string argument whose value is the model's own
+ *  tool-call markup, or null. Claude sometimes emits the closing tag of its
+ *  call syntax where an optional string it meant to leave empty belongs,
+ *  and the next parameter's text leaks in:
+ *  `stdin: "</antml name=\"stdin\">\n<parameter name=\"allowedExecutables\">[]"`.
+ *  Running that call wastes a round at best (`grep` rejects the regex
+ *  flags) and at worst executes with garbage. Deliberately narrow: only a
+ *  parameter with a default, and only a value that IS the closing tag
+ *  (named for this argument, or followed by leaked parameter markup). A
+ *  required parameter, or a string that merely contains such text, is data
+ *  a transcript or XML tool may legitimately be given. */
+function markupArgument(
+  args: Record<string, unknown>,
+  params: readonly FuncParam[],
+): string | null {
+  for (const param of params) {
+    if (!param.hasDefault) continue;
+    const value = args[param.name];
     if (typeof value !== "string") continue;
-    if (value.startsWith("</antml") || value.includes("<parameter name=")) return name;
+    const tag = /^<\/antml[^>]*>/.exec(value);
+    if (tag === null) continue;
+    const rest = value.slice(tag[0].length);
+    if (tag[0].includes(param.name) || rest.trimStart().startsWith("<parameter")) {
+      return param.name;
+    }
   }
   return null;
 }
@@ -210,15 +228,32 @@ function repeatKey(toolName: string, args: Record<string, unknown>): string {
   return `${toolName}\u0000${canonicalJson(args)}`;
 }
 
-type RepeatRecord = { count: number; result: string };
+/** The current run of identical calls: one record, because only calls in a
+ *  row count. Any other call, a different result, or a refusal resets it. */
+type RepeatStreak = { key: string; result: string; count: number };
+
+const NO_STREAK: RepeatStreak = { key: "", result: "", count: 0 };
 
 /** Record one completed call and return how many times in a row this exact
- *  call has now produced this exact result. A different result starts over. */
-function noteRepeat(records: Record<string, RepeatRecord>, key: string, result: string): number {
-  const previous = records[key];
-  const count = previous !== undefined && previous.result === result ? previous.count + 1 : 1;
-  records[key] = { count, result };
-  return count;
+ *  call has now produced this exact result. */
+function noteRepeat(streak: RepeatStreak, key: string, result: string): number {
+  if (streak.key === key && streak.result === result) {
+    streak.count += 1;
+  } else {
+    streak.key = key;
+    streak.result = result;
+    streak.count = 1;
+  }
+  return streak.count;
+}
+
+/** How many identical runs in a row precede a call with this key. */
+function repeatsBefore(streak: RepeatStreak, key: string): number {
+  return streak.key === key ? streak.count : 0;
+}
+
+function resetRepeat(streak: RepeatStreak): void {
+  Object.assign(streak, NO_STREAK);
 }
 
 function repeatedCallMessage(toolName: string, count: number): string {
@@ -315,6 +350,8 @@ export const _internal = {
   markupArgument,
   repeatKey,
   noteRepeat,
+  repeatsBefore,
+  resetRepeat,
   armCallTimeout,
   runWithRetry,
   dropNullDefaultedArgs,
@@ -704,7 +741,7 @@ export async function runPrompt(args: {
     self.__initialized = true;
     self.removedTools = args.removedTools || [];
     self.toolErrorCounts = {};
-    self.repeatedCalls = {};
+    self.repeatStreak = { ...NO_STREAK };
     self.toolCallRound = 0;
     self.validationAttempt = 0;
     self.messagesJSON = null;
@@ -713,7 +750,7 @@ export async function runPrompt(args: {
 
   const removedTools: string[] = self.removedTools;
   const toolErrorCounts: Record<string, number> = self.toolErrorCounts;
-  const repeatedCalls: Record<string, RepeatRecord> = self.repeatedCalls;
+  const repeatStreak: RepeatStreak = self.repeatStreak;
   // The calling function's locals, for decision 8. Read from `args` (not the
   // frame) because it belongs to the CALLER, not to runPrompt's own frame.
   const destructiveSink: { __destructiveRan?: boolean } | undefined = args.destructiveSink;
@@ -1431,7 +1468,7 @@ export async function runPrompt(args: {
               // Two refusals that never reach the tool (so no start/end hooks
               // and no failure count): an argument that is really tool-call
               // markup, and a call the model keeps making with nothing changing.
-              const markupArg = markupArgument(namedArgs);
+              const markupArg = markupArgument(namedArgs, handler.params);
               if (markupArg !== null) {
                 await b.step(`round.${round}.tool.${callSlug}.markup`, async () => {
                   messages.push(
@@ -1444,9 +1481,10 @@ export async function runPrompt(args: {
                 return;
               }
               const callKey = repeatKey(handler.name, namedArgs);
-              const priorRuns = repeatedCalls[callKey]?.count ?? 0;
+              const priorRuns = repeatsBefore(repeatStreak, callKey);
               if (maxRepeatedToolCalls > 0 && priorRuns >= maxRepeatedToolCalls) {
                 await b.step(`round.${round}.tool.${callSlug}.repeated`, async () => {
+                  resetRepeat(repeatStreak);
                   messages.push(
                     smoltalk.toolMessage(repeatedCallMessage(handler.name, priorRuns), {
                       tool_call_id: toolCall.id,
@@ -1526,7 +1564,7 @@ export async function runPrompt(args: {
                   // Inside the idempotent invoke step, so a resume does not
                   // count the same run twice.
                   if (outcome.invokeOutcome !== "interrupted") {
-                    noteRepeat(repeatedCalls, callKey, stringifyToolResult(toolResult));
+                    noteRepeat(repeatStreak, callKey, stringifyToolResult(toolResult));
                   }
                   return outcome.interrupts;
                 });

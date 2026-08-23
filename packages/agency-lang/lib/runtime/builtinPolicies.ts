@@ -1,6 +1,4 @@
-import path from "path";
-import type { Policy, PolicyRule } from "./policy.js";
-import { getStdlibDir } from "../importPaths.js";
+import { INSTALL_TOKEN, type Policy, type PolicyRule } from "./policy.js";
 
 // Read-only `agency` subcommands the code agent runs via its exec-based
 // `agencyCli` tool. Matched on command + subcommand (no shell chaining);
@@ -27,20 +25,46 @@ function agencyExecApproveRules(): PolicyRule[] {
 
 const approve: PolicyRule[] = [{ action: "approve" }];
 
+/** The effects the read-only file tools raise. */
+export const READ_EFFECTS = ["std::read", "std::readBinary", "std::ls", "std::glob", "std::grep"];
+
 // Where the read-only file tools may look without asking: the launch
 // directory and, because the agent's docs tools (`agencyGuide` and friends)
 // and bundled skills are plain reads of shipped files, the agency install
-// itself. `.` is resolved against the process cwd by the matcher
-// (docs/dev/approval-policies.md, rule 2), so a saved copy of this policy
-// still means "wherever the agent is running" on the next launch. Reads
-// anywhere else fall through: a prompt in an interactive session, an
+// itself. Both are tokens the matcher resolves at match time (`.` against
+// the process cwd, `<agency>` against the package root; see
+// docs/dev/approval-policies.md), so a saved copy of this policy keeps
+// meaning "wherever the agent runs, wherever agency is installed now".
+// Reads anywhere else fall through: a prompt in an interactive session, an
 // automatic rejection in a headless one.
-function readScopeRules(): PolicyRule[] {
-  const install = escapeGlob(path.dirname(getStdlibDir()));
+export function readScopeRules(): PolicyRule[] {
   return [
     { match: { dir: "{.,./**}" }, action: "approve" },
-    { match: { dir: `{${install}/stdlib/**,${install}/dist/**}` }, action: "approve" },
+    { match: { dir: `{${INSTALL_TOKEN}/stdlib/**,${INSTALL_TOKEN}/dist/**}` }, action: "approve" },
   ];
+}
+
+/** The rule the recommended policy used to have for every read effect. */
+const CATCH_ALL_APPROVE: PolicyRule[] = [{ action: "approve" }];
+
+/**
+ * Bring a saved policy's read rules up to date. The agent writes the
+ * recommended policy to `~/.agency-agent/policy.json` once and reloads that
+ * file on every later launch, so a change to the built-in never reaches an
+ * existing user by itself. A read effect whose rules are still exactly the
+ * old catch-all gets the scoped rules; anything the user edited is left
+ * alone. Returns the effects that changed, so the caller can say so.
+ */
+export function migrateCatchAllReads(policy: Policy): { policy: Policy; migrated: string[] } {
+  const out: Policy = { ...policy };
+  const migrated: string[] = [];
+  for (const effect of READ_EFFECTS) {
+    if (JSON.stringify(out[effect]) === JSON.stringify(CATCH_ALL_APPROVE)) {
+      out[effect] = readScopeRules();
+      migrated.push(effect);
+    }
+  }
+  return { policy: out, migrated };
 }
 
 export const minimalAutoApprovePolicy: Policy = {

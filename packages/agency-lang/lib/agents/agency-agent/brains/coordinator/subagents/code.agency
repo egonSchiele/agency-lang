@@ -410,9 +410,11 @@ def escalateToExpert(task: string, agencyTask: boolean): string {
     alternatives: alternatives,
   )
   let summary = ""
+  let solvedOk = false
   if (isFailure(solved)) {
     summary = "Coding agent stopped: ${solved.error}"
   } else {
+    solvedOk = true
     summary = solved.value
     // Milestone draft: a completed solve is worth keeping even if the
     // verify or fix round below is cut short by an outer budget guard —
@@ -442,7 +444,13 @@ Fix each problem exactly.
     }
     return summary
   }
-  return withVerification(summary, checked)
+  // Only a completed solve gets its findings attached: after a failed one
+  // the verifier has judged whatever was already on disk, and "stopped"
+  // followed by "Verified:" would report that as this attempt's work.
+  if (solvedOk) {
+    return withVerification(summary, checked)
+  }
+  return summary
 }
 
 /* The verifier's findings travel back with the result. Without them the

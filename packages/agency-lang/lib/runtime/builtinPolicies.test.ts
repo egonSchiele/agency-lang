@@ -1,41 +1,47 @@
 import { describe, it, expect } from "vitest";
 import picomatch from "picomatch";
-import path from "path";
 import {
   builtinPolicy,
   builtinPolicyNames,
   BUILTIN_POLICIES,
   approveAllPolicy,
+  migrateCatchAllReads,
+  readScopeRules,
+  READ_EFFECTS,
 } from "./builtinPolicies.js";
-import { getStdlibDir } from "../importPaths.js";
 
 describe("builtinPolicy", () => {
-  it("resolves 'recommended' with reads scoped and no write rule", () => {
+  it("resolves 'recommended' with reads scoped by token and no write rule", () => {
     const p = builtinPolicy("recommended", "/tmp/base");
     expect(p).not.toBeNull();
-    // The matcher resolves `.` against the launch directory; the second
-    // rule is the agency install, which the docs and skills tools read.
-    for (const effect of ["std::read", "std::readBinary", "std::ls", "std::glob", "std::grep"]) {
-      expect(p![effect][0]).toEqual({ match: { dir: "{.,./**}" }, action: "approve" });
-      expect(p![effect]).toHaveLength(2);
+    // Both rules are tokens the matcher resolves at match time, so a saved
+    // copy pins neither the launch directory nor the install path.
+    for (const effect of READ_EFFECTS) {
+      expect(p![effect]).toEqual([
+        { match: { dir: "{.,./**}" }, action: "approve" },
+        { match: { dir: "{<agency>/stdlib/**,<agency>/dist/**}" }, action: "approve" },
+      ]);
     }
     expect(p!["std::write"]).toBeUndefined();
   });
 
-  it("lets 'recommended' read the shipped docs and skills but not the rest of the disk", () => {
-    const install = builtinPolicy("recommended", "/tmp/base")!["std::read"][1].match!.dir;
-    const stdlib = getStdlibDir();
-    expect(picomatch.isMatch(path.join(stdlib, "docs", "guide"), install)).toBe(true);
-    expect(picomatch.isMatch(path.join(stdlib, "agents", "skills", "verifier"), install)).toBe(
-      true,
-    );
-    expect(
-      picomatch.isMatch(path.join(path.dirname(stdlib), "dist", "lib", "agents"), install),
-    ).toBe(true);
-    // The package root itself, its parent, and the home directory: not covered.
-    expect(picomatch.isMatch(path.dirname(stdlib), install)).toBe(false);
-    expect(picomatch.isMatch(path.dirname(path.dirname(stdlib)), install)).toBe(false);
-    expect(picomatch.isMatch("/Users/someone", install)).toBe(false);
+  it("migrates a saved policy's catch-all reads and leaves edited rules alone", () => {
+    const saved = {
+      "std::read": [{ action: "approve" as const }],
+      "std::ls": [{ action: "approve" as const }],
+      // The user scoped this one by hand: not the catch-all, so untouched.
+      "std::glob": [{ match: { dir: "/data/**" }, action: "approve" as const }],
+      "std::write": [{ action: "approve" as const }],
+    };
+    const { policy, migrated } = migrateCatchAllReads(saved);
+    expect(migrated).toEqual(["std::read", "std::ls"]);
+    expect(policy["std::read"]).toEqual(readScopeRules());
+    expect(policy["std::ls"]).toEqual(readScopeRules());
+    expect(policy["std::glob"]).toEqual(saved["std::glob"]);
+    // Only read effects are considered, and the input is not mutated.
+    expect(policy["std::write"]).toEqual([{ action: "approve" }]);
+    expect(saved["std::read"]).toEqual([{ action: "approve" }]);
+    expect(migrateCatchAllReads(policy).migrated).toEqual([]);
   });
 
   it("resolves 'minimal' with memory approved but reads absent", () => {

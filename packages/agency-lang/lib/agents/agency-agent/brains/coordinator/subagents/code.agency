@@ -440,8 +440,22 @@ Fix each problem exactly.
       summary = fixed.value
       saveDraft(summary)
     }
+    return summary
   }
-  return summary
+  return withVerification(summary, checked)
+}
+
+/* The verifier's findings travel back with the result. Without them the
+   reply to "write fib.agency and report the test results" was only the
+   file contents, and a coordinator that had asked for results kept asking:
+   four codeAgent rounds, an oracle, and two reviews for work that had
+   passed in the first minute. */
+def withVerification(summary: string, checked: Result<Feedback[]>): string {
+  const findings = renderFeedback(checked)
+  if (findings == "") {
+    return summary
+  }
+  return "${summary}\n\nVerified:\n${findings}"
 }
 
 /* `agency agent -p`: nobody is here to answer a question and there is no next
@@ -458,7 +472,7 @@ def solveUnattended(task: string, agencyTask: boolean): string {
   saveDraft(solved.value)
   const checked = verifierAgent(task: task, maxCost: $5.00, maxTime: 5m)
   if (!feedbackHasErrors(checked)) {
-    return solved.value
+    return withVerification(solved.value, checked)
   }
   const fixMsg = """
 ${task}

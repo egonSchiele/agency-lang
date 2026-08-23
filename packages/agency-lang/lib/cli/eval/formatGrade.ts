@@ -89,9 +89,17 @@ function formatUngradedReason(reason: string | undefined): string[] {
   return [`  ${ttyColor.red(`not graded — ${reason}`)}`];
 }
 
+/** Sub-cent but nonzero shows as "<$0.01" so a printed cost never reads $0.00. */
+export function formatUsd(usd: number): string {
+  if (usd > 0 && usd < 0.005) {
+    return "<$0.01";
+  }
+  return `$${usd.toFixed(2)}`;
+}
+
 function formatGroupSummary(result: EvalGradeResult): string[] {
   // Judge calls cost money; deterministic graders are free and get no line.
-  const cost = result.judgeCostUsd > 0 ? [`grading cost: $${result.judgeCostUsd.toFixed(2)}`] : [];
+  const cost = result.judgeCostUsd > 0 ? [`grading cost: ${formatUsd(result.judgeCostUsd)}`] : [];
   if (result.runs.length > 1) {
     return [`mean ${formatScore(result.mean)} over ${result.runs.length} runs`, ...cost];
   }

@@ -39,6 +39,20 @@ describe("formatGradeResult", () => {
     expect(lines).toContain("grading cost: $0.12");
   });
 
+  it("shows a sub-cent but nonzero cost as <$0.01, never $0.00", () => {
+    const result: EvalGradeResult = {
+      runs: [
+        { dir: "/runs/x/a", grading: grading("a", 1, [{ grader: "j", kind: "scalar", value: 1 }]) },
+        { dir: "/runs/x/b", grading: grading("b", 1, [{ grader: "j", kind: "scalar", value: 1 }]) },
+      ],
+      judgeCostUsd: 0.0004,
+      mean: 1,
+      gatesPassed: true,
+      batches: [],
+    };
+    expect(formatGradeResult(result).map(stripAnsi)).toContain("grading cost: <$0.01");
+  });
+
   it("one block per test: the score line, then one line per grader with feedback, no mean for a single run", () => {
     const result: EvalGradeResult = {
       runs: [

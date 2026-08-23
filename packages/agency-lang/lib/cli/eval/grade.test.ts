@@ -120,9 +120,11 @@ describe("evalGrade", () => {
     // Walk order in the report, whatever the completion order was.
     expect(result.runs.map((run) => path.basename(run.dir))).toEqual(["a", "b", "c"]);
     expect(result.judgeCostUsd).toBe(0); // function graders make no LLM calls
-    // One progress line per run, numbered by completion.
+    // One progress line per run, numbered by completion: the ordinals are
+    // exactly 1..3 in some order.
     expect(progress).toHaveLength(3);
-    expect([...progress].sort()).toEqual(progress.map((_, i) => progress[i]).sort());
+    const ordinals = progress.map((line) => Number(/^graded (\d+)\/3 /.exec(line)?.[1]));
+    expect([...ordinals].sort()).toEqual([1, 2, 3]);
     for (const line of progress) {
       expect(line).toMatch(/^graded [123]\/3 .* — objective 0\.500 \(\$0\.00, \d+s\)$/);
     }

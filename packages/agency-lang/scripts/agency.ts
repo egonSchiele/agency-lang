@@ -64,11 +64,10 @@ import {
   addRunDirectoryCommands,
   runDirectoryCommandDependencies,
 } from "@/cli/runDirectory/commands.js";
-import { evalGrade } from "@/cli/eval/grade.js";
+import { runGradeCommand } from "@/cli/eval/grade.js";
 import { resolveRunStatelog } from "@/cli/eval/logs.js";
 import { evalLs } from "@/cli/eval/ls.js";
 import { evalRun, totalRunCostUsd } from "@/cli/eval/run.js";
-import { formatGradeResult } from "@/cli/eval/formatGrade.js";
 import { evalUpload, formatUploadResult } from "@/cli/eval/upload.js";
 import { ttyColor } from "@/utils/termcolors.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
@@ -989,13 +988,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
         paths: string[],
         opts: { suite?: string; goal?: string; out?: string; parallel?: number },
       ) => {
-        const result = await evalGrade(paths, {
-          ...opts,
-          progress: (message) => process.stderr.write(`${message}\n`),
-          config: getConfig(),
-        }).catch(failProjectCommand);
-        for (const line of formatGradeResult(result)) console.log(line);
-        if (!result.gatesPassed) {
+        const gatesPassed = await runGradeCommand(paths, { ...opts, config: getConfig() }).catch(
+          failProjectCommand,
+        );
+        if (!gatesPassed) {
           process.exit(2);
         }
       },

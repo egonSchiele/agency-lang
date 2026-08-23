@@ -173,6 +173,17 @@ describe("agency CLI command tree", () => {
     ).rejects.toThrow(/positive integer/);
   });
 
+  it("`eval upload` targets the linked project only: no host, project, or key flags", () => {
+    const program = createProgram();
+    const evalCommand = program.commands.find((command) => command.name() === "eval");
+    const upload = evalCommand?.commands.find((command) => command.name() === "upload");
+    expect(upload).toBeDefined();
+    const optionNames = upload?.options.map((option) => option.long) ?? [];
+    expect(optionNames).not.toContain("--host");
+    expect(optionNames).not.toContain("--project");
+    expect(optionNames).not.toContain("--api-key-env");
+  });
+
   it("makes `view` the default for `logs` so `agency logs <file>` works without the subcommand", () => {
     const program = createProgram();
     const logsCommand = program.commands.find((command) => command.name() === "logs");

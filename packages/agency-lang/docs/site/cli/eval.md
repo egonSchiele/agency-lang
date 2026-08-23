@@ -53,20 +53,21 @@ agency eval run agent.agency --goal "Answer with a concise summary"
 Options:
 
 - `<file>[:<node>]` (positional): the agent. A directory resolves to `main.agency` inside it. The node defaults to `main`.
-- `--suite <file|dir|git-url>`: the tests. A JSON file, a directory, or a git source (`URL[//subdir][?ref=...]`). Mutually exclusive with `--goal`.
-- `--goal <text>`: one inline test whose input and goal are both this text. Mutually exclusive with `--suite`.
-- `--run-id <id>`: the run directory's name. Defaults to a timestamp-prefixed id such as `2026-07-31-143022-Ab3dEf`, so run directories list in creation order.
-- `--runs-dir <path>`: where run directories go. Defaults to `eval.runsDir` in `agency.json`, or `runs/`.
-- `--no-continue-on-error`: stop after the first test failure. By default the remaining tests still run.
+- `--suite <file|dir|git-url>`: the tests. A JSON file, a directory, or a git source (`URL[//subdir][?ref=...]`). Mutually exclusive with `--input`.
+- `--input <text>`: one inline test whose input is this text, no suite file needed. Mutually exclusive with `--suite`.
+- `--test <pattern>`, `--tags <tags>`: run a subset of the suite (a glob over test ids, or tests carrying every listed tag). Preview the selection with `agency eval ls`.
+- `-o, --out <dir>`: the run directory. It must not exist yet. Defaults to `runs/<timestamp>-<random suffix>` (or under `eval.runsDir` from `agency.json`), so run directories list in creation order.
 - `-n, --parallel <count>`: run up to this many tests at once. Above 1, per-agent output is replaced by a live status board on stderr with each test's name, state, elapsed time and cost so far. Drill into a live run with `agency eval logs <runDir> -f`.
-- `--max-tool-call-rounds <n>`, `--max-tool-result-chars <n>`, `--strict`: the same compile-time flags `agency run` takes.
+- `--trials <count>`: run every test this many times, each repetition in its own run directory at `<out>/<test>/<trial>`.
 
-Running never grades. When the run finishes it prints the run directory and the grade command:
+Agent configuration (strict types, tool-loop caps) comes from the `agency.json` beside the agent, not from eval flags.
+
+Every test runs whatever the others did: a test whose agent errored is a `run` row that grades 0, not a reason to stop. Running never grades. When the run finishes it prints the run directory and the grade command, and exits 1 if any test errored (the run directory is complete either way):
 
 ```
-Run smoke completed: 3/3 tests ok
+Run completed: 3/3 tests ok
 total LLM cost: $0.42
-runs/smoke
+runs written under runs/smoke
 grade it with: agency eval grade runs/smoke
 ```
 

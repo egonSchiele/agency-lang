@@ -900,6 +900,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
         }
         console.log(`runs written under ${result.runDir}`);
         console.log(`grade it with: agency eval grade ${result.runDir}`);
+        // The run is complete and written; the exit code still reports that
+        // not every test ran to an end (a harness refusal or an agent crash).
+        if (result.errorCount > 0) {
+          process.exit(1);
+        }
       },
     );
 

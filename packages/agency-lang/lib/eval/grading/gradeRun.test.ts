@@ -235,6 +235,20 @@ describe("harness graders from the run row", () => {
     expect(harnessGrade?.grader.annotator().id).toBe(`agency-tests/h@${harness.records[0].sha256}`);
   });
 
+  it("a harness-graded test gets no fallback grader: the harness is its own", async () => {
+    const harness = harnessFixture();
+    const runDir = makeRun({ output: "x", harness, test: { id: "a", input: "t" } });
+    // The spy stands in for the suite fallback (a config module or the goal
+    // judge). With no goal on the test, the goal judge would refuse to run.
+    const fallback = grader(() => 1, { name: "fallback" });
+    const card = await gradeRun(runDir, {
+      ...ctx([fallback]),
+      suiteGraders: { mode: "fallback", graders: [fallback] },
+    });
+    const names = card.perInput[0].grades.map((g) => g.grader.name());
+    expect(names).toEqual(["h"]);
+  });
+
   it("a record whose stored file is missing fails grading by name", async () => {
     const harness = harnessFixture();
     const runDir = makeRun({ output: "x", harness });

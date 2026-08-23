@@ -139,7 +139,8 @@ async function effectiveGraders(
 ): Promise<BaseGrader[]> {
   // Harness graders are the test's own: --graders and --goal leave them.
   const harness = harnessGraders(entry, runDir);
-  return [...(await moduleGraders(entry, ctx, cache, runDir)), ...harness];
+  const modules = await moduleGraders(entry, ctx, cache, runDir, harness.length > 0);
+  return [...modules, ...harness];
 }
 
 async function moduleGraders(
@@ -147,6 +148,7 @@ async function moduleGraders(
   ctx: GradingContext,
   cache: (modulePath: string) => Promise<BaseGrader[]>,
   runDir: string,
+  hasHarness: boolean,
 ): Promise<BaseGrader[]> {
   if (ctx.suiteGraders.mode === "override") {
     return ctx.suiteGraders.graders;
@@ -157,6 +159,12 @@ async function moduleGraders(
   }
   if (entry.test.graders !== undefined) {
     return cache(entry.test.graders);
+  }
+  // A harness-graded test carries its own graders, so the fallback (a
+  // config module or the goal judge, which would demand a goal the test
+  // never needed) does not apply to it.
+  if (hasHarness) {
+    return [];
   }
   if (snapshot !== undefined && ctx.defaultGoal === undefined) {
     return loadGradingSnapshot(runDirPaths(runDir).gradersDir, snapshot);

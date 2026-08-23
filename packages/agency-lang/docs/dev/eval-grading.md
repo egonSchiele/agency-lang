@@ -105,9 +105,12 @@ may carry its own grading module (`graders` in its spec; auto-discovered as
 path. The suite-level set is `SuiteGraders`: `override` (an explicit
 `--graders` flag) replaces every test's own graders — the experiment knob —
 while `fallback` (the `eval.graders` config module, else the bundled goal
-judge) applies only to tests that carry none. Precedence, one line: flag >
+judge) applies only to tests that carry none. A test's harness pairs
+(`agencyTests`) count as its own graders, so a harness-graded test with no
+grading module gets no fallback at all: the goal judge would demand a goal
+the test never needed. Precedence, one line: flag >
 the run directory's stored snapshot > test's own recorded path (directories
-from before snapshots) > config > goal judge. Live modules load once per path
+from before snapshots) > harness-only > config > goal judge. Live modules load once per path
 per pass (`makeGraderModuleCache`). Trust note: graders are code the harness
 executes.
 

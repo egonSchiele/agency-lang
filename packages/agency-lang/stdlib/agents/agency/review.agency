@@ -12,6 +12,7 @@ import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { llmOptions } from "std::agents/lib/shared"
 import { agencyDocTools, webTools } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
+import { evalValue } from "std::statelog"
 import { systemMessage, threadIsNew } from "std::thread"
 
 static const systemPrompt = """You review Agency-language code. Return a list of feedback items. Set error=true only if the code does not accomplish the task. Keep feedback brief and concrete."""
@@ -140,4 +141,25 @@ export def agencyReviewAgent(
     }
   }
   return mergeFeedback(feedback, failOpenFeedback(captured))
+}
+
+/** What an eval hands the reviewer: the task and the source written for it.
+  The shape the `evals/agency-review` suite uses as its input. */
+export type ReviewEvalInput = {
+  task: string;
+  source: string
+}
+
+/** Eval entry point: `agency eval run stdlib/agents/agency/review.agency:evalMain
+  --suite <dir>`. A node in a library module never runs when the module is
+  imported; it only exists so a suite can score this reviewer without a
+  wrapper file. Any other reviewer scored on the same suite supplies a node
+  with this signature. */
+node evalMain(input: ReviewEvalInput): Feedback[] {
+  evalValue(input)
+  const reviewed = agencyReviewAgent(source: input.source, task: input.task)
+  if (reviewed is failure(err)) {
+    return [{ error: true, feedback: "review agent failed: ${err}" }]
+  }
+  return reviewed.value
 }

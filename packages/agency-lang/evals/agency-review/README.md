@@ -3,16 +3,17 @@
 **PROTOTYPE.** This suite exists to see what evaluating a single stdlib
 agent looks like, as opposed to evaluating the whole agency agent.
 
-The suite describes the job. It does not name an agent. Any reviewer
-implementation can be scored on it by supplying a small adapter file; the
-adapters live in `agents/`, and the one there today wraps the stdlib's
-`agencyReviewAgent`.
+The suite describes the job. It does not name an agent. A reviewer is
+scored on it through an eval entry node with the contract below; the
+stdlib's `agencyReviewAgent` carries one (`evalMain` in
+`stdlib/agents/agency/review.agency`), and any other implementation
+supplies its own.
 
 ## Run it
 
 ```bash
 pnpm run agency eval run \
-  evals/agency-review/agents/stdlib.agency \
+  stdlib/agents/agency/review.agency:evalMain \
   --suite evals/agency-review \
   --out runs/agency-review
 
@@ -20,15 +21,14 @@ pnpm run agency eval grade runs/agency-review
 ```
 
 Add `--trials 3` to get means with error bars. To compare a second
-implementation, write `agents/<name>.agency` with the same node shape and
-run the same two commands pointing at it.
+implementation, point the first command at its `file.agency:node`.
 
 ## The contract
 
 Every test gives the reviewer a task and the source written for it, and
 expects findings back.
 
-Input, the entry node's single parameter:
+Input, the entry node's single parameter (`ReviewEvalInput` in the stdlib):
 
 ```
 { "task": string, "source": string }

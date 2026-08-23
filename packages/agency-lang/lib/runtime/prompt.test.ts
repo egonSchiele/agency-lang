@@ -16,6 +16,10 @@ const {
   failureTier,
   TIER_SUFFIX,
   MAX_TOOL_FAILURES,
+  DEFAULT_MAX_REPEATED_TOOL_CALLS,
+  markupArgument,
+  repeatKey,
+  noteRepeat,
 } = _internal;
 
 describe("failureTier", () => {
@@ -48,6 +52,56 @@ describe("failureTier", () => {
 
   it("MAX_TOOL_FAILURES is the documented circuit-breaker cap", () => {
     expect(MAX_TOOL_FAILURES).toBe(5);
+  });
+});
+
+describe("markupArgument", () => {
+  it("names a string argument that holds the model's own call markup", () => {
+    // Both shapes seen in eval statelogs: the closing tag alone, and the
+    // closing tag with the next parameter leaking in.
+    expect(markupArgument({ command: "which", stdin: '</antml name="stdin">' })).toBe("stdin");
+    expect(
+      markupArgument({
+        pattern: "import",
+        flags: '</antml name="flags">\n<parameter name="maxResults">50',
+      }),
+    ).toBe("flags");
+  });
+
+  it("leaves ordinary arguments alone, including ones that mention tags", () => {
+    expect(markupArgument({ pattern: "<div>", dir: ".", maxResults: 50 })).toBeNull();
+    expect(markupArgument({ source: 'def f(): string { return "</b>" }' })).toBeNull();
+    expect(markupArgument({})).toBeNull();
+  });
+});
+
+describe("repeated tool calls", () => {
+  it("keys a call by tool and arguments, ignoring argument order", () => {
+    expect(repeatKey("grep", { pattern: "x", dir: "." })).toBe(
+      repeatKey("grep", { dir: ".", pattern: "x" }),
+    );
+    expect(repeatKey("grep", { pattern: "x" })).not.toBe(repeatKey("grep", { pattern: "y" }));
+    expect(repeatKey("grep", { pattern: "x" })).not.toBe(repeatKey("glob", { pattern: "x" }));
+  });
+
+  it("counts consecutive identical results and starts over when the result changes", () => {
+    const records = {};
+    const key = repeatKey("typecheck", { source: "def f() {}" });
+    expect(noteRepeat(records, key, '{"errors":[]}')).toBe(1);
+    expect(noteRepeat(records, key, '{"errors":[]}')).toBe(2);
+    expect(noteRepeat(records, key, '{"errors":[]}')).toBe(3);
+    expect(noteRepeat(records, key, '{"errors":["AG1"]}')).toBe(1);
+    expect(noteRepeat(records, key, '{"errors":[]}')).toBe(1);
+  });
+
+  it("keeps tools apart", () => {
+    const records = {};
+    noteRepeat(records, repeatKey("a", {}), "r");
+    expect(noteRepeat(records, repeatKey("b", {}), "r")).toBe(1);
+  });
+
+  it("DEFAULT_MAX_REPEATED_TOOL_CALLS is the documented default", () => {
+    expect(DEFAULT_MAX_REPEATED_TOOL_CALLS).toBe(3);
   });
 });
 

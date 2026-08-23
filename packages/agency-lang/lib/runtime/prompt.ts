@@ -173,6 +173,70 @@ function toolErrorMessage(error: any): string {
  *  breaker against retry spirals), or immediately on the destructive tier. */
 const MAX_TOOL_FAILURES = 5;
 
+/** A call is refused once the same tool, with the same arguments, has
+ *  returned the same result this many times in a row. That is the loop
+ *  signature: nothing changed, yet the model asks again (a writer once
+ *  made 45 identical, successful typecheck calls). `0` disables. */
+const DEFAULT_MAX_REPEATED_TOOL_CALLS = 3;
+
+/** The name of a string argument that holds tool-call markup instead of a
+ *  value, or null. Claude sometimes emits the closing tag of its own call
+ *  syntax where an optional string it meant to leave empty belongs, and the
+ *  next parameter's text leaks in: `stdin: "</antml name=\"stdin\">\n<parameter
+ *  name=\"allowedExecutables\">[]"`. Running that call wastes a round at best
+ *  (`grep` rejects the regex flags) and at worst executes with garbage. */
+function markupArgument(args: Record<string, unknown>): string | null {
+  for (const [name, value] of Object.entries(args)) {
+    if (typeof value !== "string") continue;
+    if (value.startsWith("</antml") || value.includes("<parameter name=")) return name;
+  }
+  return null;
+}
+
+/** JSON with object keys sorted at every level, so two calls that pass the
+ *  same arguments in a different order get the same key. */
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`);
+    return `{${entries.join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+function repeatKey(toolName: string, args: Record<string, unknown>): string {
+  return `${toolName}\u0000${canonicalJson(args)}`;
+}
+
+type RepeatRecord = { count: number; result: string };
+
+/** Record one completed call and return how many times in a row this exact
+ *  call has now produced this exact result. A different result starts over. */
+function noteRepeat(records: Record<string, RepeatRecord>, key: string, result: string): number {
+  const previous = records[key];
+  const count = previous !== undefined && previous.result === result ? previous.count + 1 : 1;
+  records[key] = { count, result };
+  return count;
+}
+
+function repeatedCallMessage(toolName: string, count: number): string {
+  return (
+    `Error: this is call ${count + 1} to ${toolName} with exactly these arguments, and ` +
+    `the previous ${count} all returned the same result. It was not run. Say what you ` +
+    `expected to change, then either call it with different arguments or continue without it.`
+  );
+}
+
+function markupArgumentMessage(toolName: string, argument: string): string {
+  return (
+    `Error: the \`${argument}\` argument contains tool-call markup (\`</antml...\`), which ` +
+    `means it was meant to be empty. This call was not run. Call ${toolName} again and ` +
+    `leave \`${argument}\` out.`
+  );
+}
+
 type FailureTier = "destructive" | "neverStarted" | "idempotent" | "neutral";
 
 /** Classify a tool failure. Most-specific fact wins: a started destructive
@@ -247,6 +311,10 @@ export const _internal = {
   failureTier,
   TIER_SUFFIX,
   MAX_TOOL_FAILURES,
+  DEFAULT_MAX_REPEATED_TOOL_CALLS,
+  markupArgument,
+  repeatKey,
+  noteRepeat,
   armCallTimeout,
   runWithRetry,
   dropNullDefaultedArgs,
@@ -636,6 +704,7 @@ export async function runPrompt(args: {
     self.__initialized = true;
     self.removedTools = args.removedTools || [];
     self.toolErrorCounts = {};
+    self.repeatedCalls = {};
     self.toolCallRound = 0;
     self.validationAttempt = 0;
     self.messagesJSON = null;
@@ -644,6 +713,7 @@ export async function runPrompt(args: {
 
   const removedTools: string[] = self.removedTools;
   const toolErrorCounts: Record<string, number> = self.toolErrorCounts;
+  const repeatedCalls: Record<string, RepeatRecord> = self.repeatedCalls;
   // The calling function's locals, for decision 8. Read from `args` (not the
   // frame) because it belongs to the CALLER, not to runPrompt's own frame.
   const destructiveSink: { __destructiveRan?: boolean } | undefined = args.destructiveSink;
@@ -700,6 +770,7 @@ export async function runPrompt(args: {
     tools: _extractedTools,
     memory: memoryOption,
     maxToolResultChars: callMaxToolResultChars,
+    maxRepeatedToolCalls: ccMaxRepeatedToolCalls,
     retries: ccRetries,
     timeout: ccTimeout,
     backoff: ccBackoff,
@@ -711,6 +782,7 @@ export async function runPrompt(args: {
       tools?: any[];
       memory?: boolean | { model?: string };
       maxToolResultChars?: number;
+      maxRepeatedToolCalls?: number;
       label?: string;
     };
 
@@ -747,8 +819,11 @@ export async function runPrompt(args: {
   const {
     maxToolResultChars: stackMaxToolResultChars,
     maxToolCallRounds: stackMaxToolCallRounds,
+    maxRepeatedToolCalls: stackMaxRepeatedToolCalls,
     ...stackSmolDefaults
   } = stackDefaults;
+  const maxRepeatedToolCalls =
+    ccMaxRepeatedToolCalls ?? stackMaxRepeatedToolCalls ?? DEFAULT_MAX_REPEATED_TOOL_CALLS;
   // maxToolCallRounds precedence: a branch default (setLlmOptions) overrides the
   // baked per-call value (agency.json → codegen literal, default 10). Kept out
   // of stackSmolDefaults above — it isn't a smoltalk config field.
@@ -1353,6 +1428,35 @@ export async function runPrompt(args: {
               const branchStack = stack.getOrCreateBranch(branchKey).stack;
               const namedArgs = dropNullDefaultedArgs(toolCall.arguments, handler.params);
 
+              // Two refusals that never reach the tool (so no start/end hooks
+              // and no failure count): an argument that is really tool-call
+              // markup, and a call the model keeps making with nothing changing.
+              const markupArg = markupArgument(namedArgs);
+              if (markupArg !== null) {
+                await b.step(`round.${round}.tool.${callSlug}.markup`, async () => {
+                  messages.push(
+                    smoltalk.toolMessage(markupArgumentMessage(handler.name, markupArg), {
+                      tool_call_id: toolCall.id,
+                      name: toolCall.name,
+                    }),
+                  );
+                });
+                return;
+              }
+              const callKey = repeatKey(handler.name, namedArgs);
+              const priorRuns = repeatedCalls[callKey]?.count ?? 0;
+              if (maxRepeatedToolCalls > 0 && priorRuns >= maxRepeatedToolCalls) {
+                await b.step(`round.${round}.tool.${callSlug}.repeated`, async () => {
+                  messages.push(
+                    smoltalk.toolMessage(repeatedCallMessage(handler.name, priorRuns), {
+                      tool_call_id: toolCall.id,
+                      name: toolCall.name,
+                    }),
+                  );
+                });
+                return;
+              }
+
               await b.step(`round.${round}.tool.${callSlug}.start`, async () => {
                 // Pass `branchStack` so scoped callbacks registered inside
                 // the branch's frame chain are discovered by
@@ -1418,6 +1522,11 @@ export async function runPrompt(args: {
                   invokeOutcome = outcome.invokeOutcome;
                   if (outcome.invokeOutcome === "success") {
                     self.runnerState.toolTimings[callSlug] = performance.now() - toolCallStartTime;
+                  }
+                  // Inside the idempotent invoke step, so a resume does not
+                  // count the same run twice.
+                  if (outcome.invokeOutcome !== "interrupted") {
+                    noteRepeat(repeatedCalls, callKey, stringifyToolResult(toolResult));
                   }
                   return outcome.interrupts;
                 });

@@ -1,0 +1,8 @@
+{
+  "guardedRan": 3,
+  "guardedRefused": 2,
+  "refusalNamesCall": true,
+  "markupRefused": true,
+  "markupNeverRan": true,
+  "unguardedRan": 5
+}

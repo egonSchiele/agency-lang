@@ -33,6 +33,8 @@ export type LlmDefaults = RetryConfig & {
   maxTokens?: number;
   maxToolResultChars?: number;
   maxToolCallRounds?: number;
+  /** Refuse a tool call after this many identical runs with the same result; 0 disables. */
+  maxRepeatedToolCalls?: number;
 };
 
 /**

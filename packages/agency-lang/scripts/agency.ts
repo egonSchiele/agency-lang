@@ -44,7 +44,7 @@ import {
   requireRemoteLogsEnvironment,
 } from "@/cli/remote/commands/logsMode.js";
 import type { RemoteLogsMode } from "@/cli/remote/commands/logsMode.js";
-import { failProjectCommand } from "@/cli/remote/commands/util.js";
+import { failProjectCommand, resolveProjectTarget } from "@/cli/remote/commands/util.js";
 import type { AccountCommandOptions, ProjectCommandOptions } from "@/cli/remote/commands/util.js";
 import type { RemoteCommandContext } from "@/cli/remote/commands/util.js";
 import { lintSource } from "@/linter/registry.js";
@@ -69,6 +69,7 @@ import { resolveRunStatelog } from "@/cli/eval/logs.js";
 import { evalLs } from "@/cli/eval/ls.js";
 import { evalRun, totalRunCostUsd } from "@/cli/eval/run.js";
 import { formatGradeResult } from "@/cli/eval/formatGrade.js";
+import { evalUpload, formatUploadResult } from "@/cli/eval/upload.js";
 import { ttyColor } from "@/utils/termcolors.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
 import { renderDiagnosticText, renderDiagnosticList } from "@/cli/explain.js";
@@ -863,6 +864,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "Run up to this many inputs at once (default 1). Above 1, per-agent output is replaced by a status board (name, state, elapsed, cost so far)",
       parsePositiveInt,
     )
+    .option(
+      "--trials <count>",
+      "Run every test this many times (default 1); each repetition is its own run directory at <out>/<test>/<trial>",
+      parsePositiveInt,
+    )
     .action(
       async (
         agent: string | undefined,
@@ -874,6 +880,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
           tags?: string[];
           out?: string;
           parallel?: number;
+          trials?: number;
         },
       ) => {
         // Every test in the suite always runs, whatever the others did: an
@@ -971,6 +978,23 @@ export function createProgram(deps: CliDependencies = {}): Command {
       for (const line of formatGradeResult(result)) console.log(line);
       if (!result.gatesPassed) {
         process.exit(2);
+      }
+    });
+
+  evalCmd
+    .command("upload")
+    .description(
+      "Upload finished runs and their grades to the linked statelog project (agency remote link)",
+    )
+    .argument("<paths...>", "Run directories, or directories of run directories")
+    .action(async (paths: string[]) => {
+      // The linked project is the only target: no host or key flags here,
+      // linking and $STATELOG_API_KEY own that.
+      const target = resolveProjectTarget(getConfigContext(), {});
+      const result = await evalUpload(paths, target).catch(failProjectCommand);
+      for (const line of formatUploadResult(result)) console.log(line);
+      if (result.runs.some((run) => run.status === "failed")) {
+        process.exitCode = 1;
       }
     });
 

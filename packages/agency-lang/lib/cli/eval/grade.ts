@@ -1,9 +1,12 @@
 import * as fs from "fs";
 
 import type { AgencyConfig } from "@/config.js";
+import { batchStatisticsByBatch, type BatchStatistics } from "@/eval/batchStatistics.js";
 import { gradeSuite } from "@/eval/grading/gradeSuite.js";
 import type { EvalRunGrading } from "@/eval/runTypes.js";
 import { findRunDirectories, uniqueRunDirectories } from "@/runDirectory/findRuns.js";
+import { summarizeRunDirectory } from "@/runDirectory/list.js";
+import { readRunDirectory } from "@/runDirectory/runDir.js";
 
 import { goalJudgeGraders, resolveGraders } from "./graders.js";
 
@@ -20,6 +23,20 @@ export type EvalGradeOptions = {
   config?: AgencyConfig;
 };
 
+/** The per-batch trial statistics over the graded directories, read back
+ *  after grading so the effective scores are the ones just written. A
+ *  directory that is not a run (no trace, no run row) contributes nothing;
+ *  batches of one trial are left out, the run blocks already say it all. */
+function trialBatches(runDirs: readonly string[]): BatchStatistics[] {
+  const summaries = runDirs.flatMap((dir) => {
+    const summary = summarizeRunDirectory(
+      readRunDirectory(dir, { reportWarning: (message) => console.warn(message) }),
+    );
+    return summary === null ? [] : [summary];
+  });
+  return batchStatisticsByBatch(summaries).filter((batch) => batch.trials > 1);
+}
+
 /** One graded run directory and the mean over them all. */
 export type EvalGradeResult = {
   runs: { dir: string; grading: EvalRunGrading }[];
@@ -27,6 +44,9 @@ export type EvalGradeResult = {
   mean: number;
   /** Every run passed its gates. */
   gatesPassed: boolean;
+  /** Trial statistics for each selected batch that ran more than one trial,
+   *  in the order the batches were met. Unrelated batches never merge. */
+  batches: BatchStatistics[];
 };
 
 /** The command's own preconditions, checked before anything loads: the two
@@ -84,6 +104,7 @@ export async function evalGrade(
     runs,
     mean: runs.reduce((sum, run) => sum + run.grading.objective, 0) / runs.length,
     gatesPassed: runs.every((run) => run.grading.gatesPassed),
+    batches: trialBatches(runDirs),
   };
 
   if (opts.out !== undefined) {

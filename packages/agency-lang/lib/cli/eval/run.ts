@@ -38,6 +38,8 @@ export type EvalRunCliOptions = {
   test?: string[];
   /** `--tags` values; only tests carrying every one run (suite runs only). */
   tags?: string[];
+  /** `--trials`: run every selected test this many times (default 1). */
+  trials?: number;
 };
 
 /** `--suite` runs a suite; otherwise the run is one inline test, with
@@ -89,6 +91,7 @@ export async function evalRun(
       out: opts.out,
       config: opts.config,
       parallel: opts.parallel,
+      trials: opts.trials,
     },
     { runner: deps.runner },
   );

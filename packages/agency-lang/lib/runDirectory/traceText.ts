@@ -1,5 +1,6 @@
 import type { EvalRecord } from "@/eval/types.js";
 import { completionOf } from "@/statelog/wireAccessors.js";
+import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
 import type { Trace } from "./traces.js";
 
@@ -13,7 +14,10 @@ import type { Trace } from "./traces.js";
 /** The input as text: what `agentStart` recorded when the caller named it,
  *  else the last `evalValue()` (or the extractor's inferred user message);
  *  null when the trace recorded neither. */
-export function traceInputText(trace: Trace, record: EvalRecord): string | null {
+export function traceInputText(
+  trace: { events: readonly EventEnvelope[] },
+  record: EvalRecord,
+): string | null {
   const start = trace.events.find((event) => event.data.type === "agentStart");
   const recorded: unknown = start?.data.input;
   const value = recorded !== undefined ? recorded : record.evalValues.at(-1)?.value;

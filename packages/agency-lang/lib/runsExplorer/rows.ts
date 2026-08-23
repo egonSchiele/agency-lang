@@ -60,9 +60,10 @@ export type RunRow = {
 const CUT_SHORT_ENDINGS = ["timeout", "cost-cap", "killed", "unknown"];
 
 /**
- * One row for a run directory, from its snapshot. Every trace is a test
- * row: the harness `run` row names the test and how it ended; scores come
- * from the effective annotations; cost, time and models from the trace.
+ * One row for a run directory, from its summary. The run is a test row
+ * whether or not it wrote a trace: the harness `run` row names the test and
+ * how it ended; scores come from the effective annotations; cost, time and
+ * models from the trace (zero for a run that died before its first event).
  */
 export function buildRunRowFromDirectory(snapshot: RunDirectorySnapshot, source: Source): RunRow {
   const summaries = summarizeRuns(snapshot);
@@ -82,7 +83,7 @@ export function buildRunRowFromDirectory(snapshot: RunDirectorySnapshot, source:
     };
     // A run the harness cut short (timeout, cost cap, kill) is the explorer's
     // "killed": events exist, but nothing finished. An error is a plain failure.
-    if (CUT_SHORT_ENDINGS.includes(summary.ended)) {
+    if (summary.eventCount > 0 && CUT_SHORT_ENDINGS.includes(summary.ended)) {
       test.statelogHadEvents = true;
     }
     if (summary.agentName !== null) {
@@ -91,13 +92,12 @@ export function buildRunRowFromDirectory(snapshot: RunDirectorySnapshot, source:
     return test;
   });
 
-  const firstRun = firstRunRow(snapshot);
   const row: RunRow = {
     key: snapshot.dir,
     source,
     startedAtMs: null,
     agent: "",
-    suite: suiteFromSource(firstRun?.suite?.source),
+    suite: suiteFromSource(summaries[0]?.suiteSource),
     score: meanScore(tests),
     gatesPassed: runGatesPassed(tests),
     status: "failed",
@@ -108,22 +108,12 @@ export function buildRunRowFromDirectory(snapshot: RunDirectorySnapshot, source:
     warnings: [],
     backfilled: true,
   };
-  const agentLabel = firstRun?.flags.agent;
+  const agentLabel = summaries[0]?.agentLabel;
   if (typeof agentLabel === "string") {
     row.agentLabel = agentLabel;
   }
   recomputeRunAggregates(row);
   return row;
-}
-
-/** The harness row of the first trace that has one: suite and agent label
- *  are per run, so any trace's row will do. */
-function firstRunRow(snapshot: RunDirectorySnapshot) {
-  for (const trace of snapshot.traces) {
-    const run = snapshot.effectiveAnnotations[trace.traceId]?.run;
-    if (run !== undefined && run !== null && run.kind === "run") return run;
-  }
-  return null;
 }
 
 /** False if any test failed a gate, true if any passed and none failed,

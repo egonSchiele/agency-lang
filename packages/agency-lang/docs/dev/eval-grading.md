@@ -24,6 +24,14 @@ and renamed into place so a child appears whole or not at all. A child that
 already exists is an error result for that test (nothing overwritten; the
 others still run). Default `<eval.runsDir or runs>/<timestamp>-<random suffix>`.
 
+**Repeating a suite: `--trials k`.** Each test runs `k` times, trial-major
+(`a/1, b/1, a/2, b/2`), each repetition in its own run directory at
+`<out>/<testId>/<trial>/` (one trial keeps `<out>/<testId>/`). Every `run`
+row records `batch` (the group directory's name plus a unique per-invocation
+suffix), `trial` (1-based), and `flags.trials`. `eval grade` then prints per-test `mean ± SE` and the
+batch's accuracy over the complete trial grid; `docs/dev/eval-tracking.md`
+has the statistics and the upload to statelog.
+
 **Selecting a subset of a suite.** `--test <glob>` (repeatable, any match
 selects, picomatch on the test id) and `--tags <a,b>` (repeatable; a test
 must carry EVERY listed tag, so `--tags coding,hard` means hard coding

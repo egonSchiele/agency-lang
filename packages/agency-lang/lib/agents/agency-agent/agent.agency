@@ -1,7 +1,7 @@
 import { parseArgs } from "std::args"
 import { map } from "std::array"
 import { setLlmOptions } from "std::llm"
-import { evalOutput, evalValue } from "std::statelog"
+import { evalOutput, evalValue, setAgentName } from "std::statelog"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
 import { getCost } from "std::thread"
 import {
@@ -12,6 +12,7 @@ import {
  } from "std::ui/cli"
 
 import { brainByName, allBrains, brainFlagHelp } from "./brains/registry.agency"
+import { agentNameFor } from "./lib/agentName.agency"
 import { parseAgentArgs } from "./lib/args.agency"
 import { getHeader } from "./lib/header.agency"
 import { maybeLoadMcp } from "./lib/mcp.agency"
@@ -101,6 +102,8 @@ node main() {
     return
   }
   setBrain(brain)
+  // Group this trace under its brain wherever runs are compared.
+  setAgentName(agentNameFor(brain))
 
   // Validate the --agent target up front, before any model or session setup.
   const requestedStartTarget = args.flags.agent ?? ""

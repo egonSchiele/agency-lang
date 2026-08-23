@@ -2,7 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import { completeAnnotation } from "./annotations.js";
 
-import { annotationSummaryText, buildRunsListing, displayAgent, summarizeRuns } from "./list.js";
+import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
+
+import {
+  annotationSummaryText,
+  buildRunsListing,
+  displayAgent,
+  summarizeEvalRun,
+  summarizeRunDirectory,
+  summarizeRuns,
+} from "./list.js";
 import { recordGradingPass } from "./mutations.js";
 import { readRunDirectory, runDirPaths } from "./runDir.js";
 import { agentStartLine, statelogLine, tempDir } from "./testFixtures.js";
@@ -189,14 +198,19 @@ describe("buildRunsListing", () => {
         },
       ],
     });
-    const silent = tempDir();
-    writeStatelog(silent);
-    fs.writeFileSync(path.join(silent, "statelog.jsonl"), "");
+    // A run that died before its first event: an empty statelog and the
+    // harness's run row, as `eval run` leaves it.
+    const silent = writeRunDirectory({
+      traceId: "t4",
+      test: { id: "d", input: "t" },
+      wroteStatelog: false,
+      ended: "error",
+    });
 
     const listing = buildRunsListing(
       [one, two, graded, silent].map((dir) => readRunDirectory(dir, quiet)),
     );
-    expect(listing.summaries.map((summary) => summary.traceId)).toEqual(["t1", "t2", "t3"]);
+    expect(listing.summaries.map((summary) => summary.traceId)).toEqual(["t1", "t2", "t3", "t4"]);
     expect(listing.silentRunCount).toBe(1);
     expect(listing.runCount).toBe(4);
     expect(listing.gradedCount).toBe(1);
@@ -243,5 +257,180 @@ describe("buildRunsListing", () => {
       command,
       bare: null,
     });
+  });
+});
+
+describe("summarizeEvalRun and summarizeRunDirectory", () => {
+  it("a finished suite run: batch, trial, event count, status, and the run row's time as endedAt", () => {
+    const dir = writeRunDirectory({
+      test: { id: "a", input: "t" },
+      output: "x",
+      costUsd: 0.5,
+      batch: "batch-1",
+      trial: 2,
+    });
+    const snapshot = readRunDirectory(dir, quiet);
+    const summary = summarizeRunDirectory(snapshot);
+    const runRow = snapshot.effectiveAnnotations["trace-1"].run;
+    expect(summary).toMatchObject({
+      traceId: "trace-1",
+      testId: "a",
+      batch: "batch-1",
+      trial: 2,
+      eventCount: 4,
+      costUsd: 0.5,
+      llmCalls: 1,
+      status: "ok",
+      ended: "ok",
+      endedAt: runRow?.createdAt,
+      suiteSource: null,
+    });
+  });
+
+  it("the canonical-row summary equals the directory summary for the same run", () => {
+    const dir = writeRunDirectory({
+      test: { id: "a", input: "t" },
+      output: "x",
+      batch: "batch-1",
+      trial: 1,
+    });
+    fs.writeFileSync(runDirPaths(dir).notes, "fine\n");
+    const snapshot = readRunDirectory(dir, quiet);
+    const fromRows = summarizeEvalRun({
+      traceId: "trace-1",
+      events: snapshot.traces[0].events,
+      annotations: snapshot.annotationRows,
+      source: snapshot.dir,
+      notes: snapshot.notes,
+    });
+    expect(fromRows).toEqual(summarizeRunDirectory(snapshot));
+    expect(fromRows.hasNotes).toBe(true);
+  });
+
+  it("a run that never wrote a trace is a failed summary with zero metrics, keeping its identity and score", () => {
+    const dir = writeRunDirectory({
+      traceId: "silent-1",
+      test: { id: "a", input: "t" },
+      wroteStatelog: false,
+      ended: "error",
+      errorMessage: "agent crashed at startup",
+      batch: "batch-1",
+      trial: 3,
+    });
+    const snapshot = readRunDirectory(dir, quiet);
+    const summary = summarizeRunDirectory(snapshot);
+    // Grading writes no score row for a run that never ran; its grade is the
+    // rule "did not finish scores zero", carried as `score`.
+    expect(summary).toMatchObject({
+      traceId: "silent-1",
+      testId: "a",
+      status: "failed",
+      ended: "error",
+      eventCount: 0,
+      costUsd: 0,
+      llmCalls: 0,
+      toolCalls: 0,
+      durationMs: 0,
+      startedAt: null,
+      models: [],
+      latestScore: null,
+      score: 0,
+      batch: "batch-1",
+      trial: 3,
+      endedAt: snapshot.effectiveAnnotations["silent-1"].run?.createdAt,
+    });
+    expect(summarizeRuns(snapshot)).toEqual([summary]);
+    const listing = buildRunsListing([snapshot]);
+    expect(listing.runCount).toBe(1);
+    expect(listing.silentRunCount).toBe(1);
+    expect(
+      summarizeEvalRun({
+        traceId: "silent-1",
+        events: [],
+        annotations: snapshot.annotationRows,
+        source: snapshot.dir,
+      }),
+    ).toEqual(summary);
+  });
+
+  it("score: the effective score for a run that ended ok, 0 for one that did not, null when ungraded", () => {
+    const ok = writeRunDirectory({ test: { id: "a", input: "t" }, output: "x" });
+    expect(summarizeRunDirectory(readRunDirectory(ok, quiet))).toMatchObject({
+      latestScore: null,
+      score: null,
+    });
+    const score = (dir: string) =>
+      recordGradingPass({
+        dir,
+        scores: [
+          {
+            traceId: "trace-1",
+            annotator: { kind: "grader", id: "g@1" },
+            name: "a",
+            score: { kind: "scalar", value: 0.75 },
+            weight: 1,
+            mustPass: false,
+          },
+        ],
+      });
+    score(ok);
+    expect(summarizeRunDirectory(readRunDirectory(ok, quiet))).toMatchObject({
+      latestScore: 0.75,
+      score: 0.75,
+    });
+    const killed = writeRunDirectory({
+      test: { id: "a", input: "t" },
+      output: "x",
+      ended: "timeout",
+    });
+    score(killed);
+    expect(summarizeRunDirectory(readRunDirectory(killed, quiet))).toMatchObject({
+      status: "killed",
+      latestScore: 0.75,
+      score: 0,
+    });
+  });
+
+  it("a trace with no harness row is status trace, ending at its last event", () => {
+    const dir = tempDir();
+    writeStatelog(
+      dir,
+      agentStartLine("t1"),
+      statelogLine("t1", "agentEnd", { result: "done", timeTaken: 1 }),
+    );
+    expect(summarizeRunDirectory(readRunDirectory(dir, quiet))).toMatchObject({
+      status: "trace",
+      ended: "ok",
+      endedAt: "2026-08-18T00:00:00Z",
+      batch: null,
+      trial: null,
+    });
+  });
+
+  it("an empty directory with no run row is not a run", () => {
+    const dir = tempDir();
+    writeStatelog(dir);
+    expect(summarizeRunDirectory(readRunDirectory(dir, quiet))).toBeNull();
+  });
+
+  it("refuses rows of another trace, naming both ids", () => {
+    const dir = writeRunDirectory({ traceId: "t1", test: { id: "a", input: "t" }, output: "x" });
+    const snapshot = readRunDirectory(dir, quiet);
+    expect(() =>
+      summarizeEvalRun({
+        traceId: "t2",
+        events: snapshot.traces[0].events,
+        annotations: [],
+        source: "x",
+      }),
+    ).toThrow(/run t2 was given an event of trace t1/);
+    expect(() =>
+      summarizeEvalRun({
+        traceId: "t2",
+        events: [],
+        annotations: snapshot.annotationRows,
+        source: "x",
+      }),
+    ).toThrow(/run t2 was given an annotation of trace t1/);
   });
 });

@@ -33,6 +33,7 @@ describe("formatGradeResult", () => {
       ],
       mean: 0.75,
       gatesPassed: true,
+      batches: [],
     };
     const lines = formatGradeResult(result).map(stripAnsi);
     expect(lines).toEqual([
@@ -50,6 +51,7 @@ describe("formatGradeResult", () => {
       runs: [{ dir: "/runs/x/a", grading: withDescription }],
       mean: 1,
       gatesPassed: true,
+      batches: [],
     };
     const lines = formatGradeResult(result).map(stripAnsi);
     expect(lines).toEqual([
@@ -70,6 +72,7 @@ describe("formatGradeResult", () => {
       ],
       mean: 0.5,
       gatesPassed: false,
+      batches: [],
     };
     const lines = formatGradeResult(result).map(stripAnsi);
     expect(lines).toEqual([
@@ -78,6 +81,89 @@ describe("formatGradeResult", () => {
       "b  score 0.000",
       "  not graded — the run ended with timeout",
       "mean 0.500 over 2 runs",
+    ]);
+  });
+});
+
+describe("formatGradeResult with trial batches", () => {
+  const fib = grading("fib", 1, [{ grader: "g", kind: "binary", pass: true }]);
+
+  it("one batch of several trials: per-test mean ± SE and the batch accuracy after the run blocks", () => {
+    const result: EvalGradeResult = {
+      runs: [{ dir: "/runs/b1/fib/1", grading: fib }],
+      mean: 1,
+      gatesPassed: true,
+      batches: [
+        {
+          batch: "b1",
+          trials: 3,
+          accuracy: 0.5,
+          standardError: 0.1,
+          totalCostUsd: 6,
+          totalDurationMs: 0,
+          tests: [
+            {
+              testId: "fib",
+              trials: 3,
+              mean: 2 / 3,
+              standardError: 1 / 3,
+              meanCostUsd: 1,
+              meanDurationMs: 0,
+            },
+            {
+              testId: "sum",
+              trials: 3,
+              mean: null,
+              standardError: null,
+              meanCostUsd: 1,
+              meanDurationMs: 0,
+            },
+          ],
+        },
+      ],
+    };
+    const lines = formatGradeResult(result).map(stripAnsi);
+    expect(lines).toEqual([
+      "fib  score 1.000",
+      "  g            pass",
+      "fib  score 0.667 ± 0.333 (3 trials, $1.00 each)",
+      "sum  score no scores (3 trials, $1.00 each)",
+      "accuracy 0.500 ± 0.100 over 2 tests × 3 trials, $6.00",
+    ]);
+  });
+
+  it("several batches: each block is headed by its batch id, in order", () => {
+    const batch = (id: string, accuracy: number) => ({
+      batch: id,
+      trials: 2,
+      accuracy,
+      standardError: 0,
+      totalCostUsd: 0,
+      totalDurationMs: 0,
+      tests: [
+        {
+          testId: "fib",
+          trials: 2,
+          mean: accuracy,
+          standardError: 0,
+          meanCostUsd: 0,
+          meanDurationMs: 0,
+        },
+      ],
+    });
+    const result: EvalGradeResult = {
+      runs: [],
+      mean: 0,
+      gatesPassed: true,
+      batches: [batch("b1", 1), batch("b2", 0)],
+    };
+    expect(formatGradeResult(result).map(stripAnsi)).toEqual([
+      "batch b1",
+      "fib  score 1.000 ± 0.000 (2 trials, $0.00 each)",
+      "accuracy 1.000 ± 0.000 over 1 test × 2 trials, $0.00",
+      "batch b2",
+      "fib  score 0.000 ± 0.000 (2 trials, $0.00 each)",
+      "accuracy 0.000 ± 0.000 over 1 test × 2 trials, $0.00",
     ]);
   });
 });

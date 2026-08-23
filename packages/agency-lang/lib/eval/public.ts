@@ -26,3 +26,29 @@ export { Scorecard, inputObjective } from "./grading/scorecard.js";
 export type { GraderGrade, InputGrades } from "./grading/scorecard.js";
 export { breakdown } from "./grading/gradeBreakdown.js";
 export type { InputBreakdown, GradeRow } from "./grading/gradeBreakdown.js";
+
+// The eval tracking contract statelog imports (`agency-lang/eval`): summarize
+// one run from its canonical rows, compute batch statistics over summaries,
+// validate annotation rows and agent names. Deliberately narrow: no run
+// directory reader, trace parser, or annotation fold is exported, so a
+// consumer cannot rebuild agency-lang's internal snapshot and derive a second
+// definition of score, status, cost, or timestamps.
+export { summarizeEvalRun } from "../runDirectory/list.js";
+export type { EvalRunInput, RunSummary, RunStatus } from "../runDirectory/list.js";
+export { batchStatistics, batchStatisticsByBatch } from "./batchStatistics.js";
+export type { BatchStatistics, TestStatistics } from "./batchStatistics.js";
+export { AnnotationSchema, annotationId } from "../runDirectory/annotations.js";
+export type {
+  Annotation,
+  AnnotationDraft,
+  AnnotationPayload,
+  RunPayload,
+  ScorePayload,
+  ChecklistPayload,
+} from "../runDirectory/annotations.js";
+export type { EventEnvelope } from "../statelog/wireTypes.js";
+export {
+  AGENT_NAME_MAX_LENGTH,
+  AGENT_NAME_PATTERN,
+  agentNameProblem,
+} from "../statelog/agentName.js";

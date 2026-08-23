@@ -125,6 +125,20 @@ describe("std::statelog eval annotations", () => {
     await expect(_setAgentName("gcode-v2")).resolves.toBeUndefined();
   });
 
+  it("setAgentName rejects a name that cannot be a URL segment, before looking for a frame", async () => {
+    await expect(_setAgentName("gcode v2")).rejects.toThrow(/setAgentName: .*letters, digits/);
+    await expect(_setAgentName("..")).rejects.toThrow(/setAgentName: .*segment/);
+    const ctx = makeCtx();
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    const spies = spyClient(ctx);
+    await runInTestContext(ctx, new StateStack(), threads, async () => {
+      await expect(_setAgentName("agent\n")).rejects.toThrow(/setAgentName/);
+      await _setAgentName("agency-agent/coordinator");
+    });
+    expect(spies.agentName).toHaveBeenCalledOnce();
+    expect(spies.agentName).toHaveBeenCalledWith({ name: "agency-agent/coordinator" });
+  });
+
   it("round-trips plain objects before recording", async () => {
     const ctx = makeCtx();
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);

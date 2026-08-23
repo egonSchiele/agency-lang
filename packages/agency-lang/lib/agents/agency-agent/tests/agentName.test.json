@@ -1,0 +1,6 @@
+{
+  "sourceFile": "agentName.agency",
+  "tests": [
+    { "nodeName": "coordinatorName", "input": "", "expectedOutput": "\"agency-agent/coordinator\"", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

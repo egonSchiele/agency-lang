@@ -13,6 +13,7 @@ import type { AgencyConfig } from "@/config.js";
 import type { SuiteRunResult, SuiteTestResult, Test } from "@/eval/runTypes.js";
 import type { RunOutcome, SuiteIdentity } from "@/runDirectory/annotations.js";
 import { recordedClosureHashes } from "@/runDirectory/attachCode.js";
+import { isRunDirectory } from "@/runDirectory/findRuns.js";
 import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";
 import { recordCompletedRun } from "@/runDirectory/mutations.js";
 import { snapshotGradingModule, type GradersSnapshot } from "@/eval/grading/gradingModule.js";
@@ -57,8 +58,15 @@ export type RunSuiteOptions = {
   progress?: boolean;
   /** Where the suite came from, recorded on every test's `run` annotation. */
   suite?: SuiteIdentity;
+  /** Run every test this many times, each as its own run directory at
+   *  `<out>/<testId>/<trial>/`; 1 (the default) keeps `<out>/<testId>/`.
+   *  A finite positive integer. */
+  trials?: number;
   perRun?: PerRunOptions;
 };
+
+/** One unit of work: a test and which repetition of it this is (1-based). */
+type RunJob = { test: Test; trial: number };
 
 /** Test seam, same pattern as RunAgentDeps. */
 export type RunSuiteDeps = { runner?: EvalInputRunner };
@@ -75,6 +83,7 @@ export async function runSuite(
   opts: RunSuiteOptions,
   deps: RunSuiteDeps = {},
 ): Promise<SuiteRunResult> {
+  const trials = trialCount(opts.trials);
   const target: EvalTarget =
     typeof opts.agent === "string" ? resolveEvalTarget({ agent: opts.agent }) : opts.agent;
   // Before any workdir is seeded or agent compiled: an agent whose shape
@@ -130,36 +139,35 @@ export async function runSuite(
   const flags: Record<string, string | number | boolean> = {
     parallel,
     agent: target.label,
+    trials,
   };
   const harness = { kind: "harness" as const, id: `agency-eval@${harnessVersion()}` };
+  // One id per suite invocation, carried by every run row it writes. The
+  // group name is the readable part; the suffix keeps two groups that happen
+  // to share a name (`team-a/nightly`, `team-b/nightly`) from merging once
+  // their rows sit side by side in a grade or on statelog.
+  const batch = `${path.basename(groupDir)}-${nanoid(8)}`;
 
   // One test, executed, folded into the run directory, and its staging
   // removed — shared by both scheduling modes. Prepare failures become error
   // results, not throws. `onStarted` fires before the agent starts, so the
   // pool can begin tailing the statelog while the run is live.
   const executeTest = async (
-    test: Test,
+    job: RunJob,
     pipeOutput: boolean,
     onStarted?: (statelogPath: string) => void,
   ): Promise<SuiteTestResult> => {
+    const { test, trial } = job;
     const testId = test.id ?? "";
     const traceId = nanoid();
-    const runDir = path.join(groupDir, testId);
-    const idProblem = testIdProblem(testId, groupDir, runDir);
-    if (idProblem !== undefined) {
-      return { testId, traceId, runDir, status: "error", errorMessage: idProblem };
+    const testDir = path.join(groupDir, testId);
+    const runDir = runDirFor(testDir, trial, trials);
+    const problem = runDirProblem(testId, groupDir, testDir, runDir, trials);
+    if (problem !== undefined) {
+      return { testId, trial, traceId, runDir, status: "error", errorMessage: problem };
     }
-    if (fs.existsSync(runDir)) {
-      // Someone's data; not ours to touch. (Resume is deliberately not here.)
-      return {
-        testId,
-        traceId,
-        runDir,
-        status: "error",
-        errorMessage: `run directory already exists: ${runDir}`,
-      };
-    }
-    const stagingDir = path.join(stagingRoot, testId);
+    // Staged under the job's label, so a test's trials never share a path.
+    const stagingDir = path.join(stagingRoot, jobLabel(job, trials));
     onStarted?.(agentRunPaths(stagingDir).statelogPath);
     try {
       const run = await runAgent(
@@ -177,7 +185,7 @@ export async function runSuite(
         },
         { runner: deps.runner },
       );
-      const assembled = path.join(stagingRoot, `${testId}.rundir`);
+      const assembled = `${stagingDir}.rundir`;
       fs.rmSync(assembled, { recursive: true, force: true });
       foldIntoRunDirectory({
         runDir: assembled,
@@ -188,10 +196,15 @@ export async function runSuite(
         suite: opts.suite,
         snapshots: snapshotsByTest[testId] ?? {},
         flags,
+        batch,
+        trial,
       });
+      // With trials, the test's directory is the parent of its runs.
+      fs.mkdirSync(path.dirname(runDir), { recursive: true });
       fs.renameSync(assembled, runDir);
       return {
         testId,
+        trial,
         traceId,
         runDir,
         status: run.status,
@@ -202,23 +215,27 @@ export async function runSuite(
       if (!deleted.success && fs.existsSync(stagingDir)) {
         console.warn(`[runSuite] could not remove staging ${stagingDir}: ${deleted.message}`);
       }
+      if (trials > 1) removeIfEmpty(path.dirname(stagingDir));
     }
   };
 
+  const jobs = scheduleJobs(opts.inputs, trials);
   let results: SuiteTestResult[] = [];
   try {
     if (parallel === 1) {
       results = await runSequential({
-        tests: opts.inputs,
+        jobs,
+        trials,
         progress,
         pipeOutput: perRun.pipeOutput ?? true,
         isInterrupted: () => interrupted,
         executeTest,
       });
     } else {
-      if (progress) printLiveStatelogPaths(opts.inputs, stagingRoot, groupDir);
+      if (progress) printLiveStatelogPaths(jobs, trials, stagingRoot, groupDir);
       results = await runPool({
-        tests: opts.inputs,
+        jobs,
+        trials,
         parallel,
         progress,
         isInterrupted: () => interrupted,
@@ -237,6 +254,40 @@ export async function runSuite(
     okCount: results.filter((result) => result.status === "success").length,
     errorCount: results.filter((result) => result.status === "error").length,
   };
+}
+
+/** The trial count a caller asked for: 1 when unspecified, else a finite
+ *  positive integer. The CLI parses its flag, but `runSuite` is an API. */
+function trialCount(value: number | undefined): number {
+  const count = value ?? 1;
+  if (!Number.isFinite(count) || !Number.isInteger(count) || count < 1) {
+    throw new Error("trials must be a positive integer");
+  }
+  return count;
+}
+
+/** Trial-major order (`a/1, b/1, a/2, b/2`): an interrupted suite leaves
+ *  whole trials behind rather than one test's every repetition. */
+function scheduleJobs(tests: Test[], trials: number): RunJob[] {
+  const jobs: RunJob[] = [];
+  for (let trial = 1; trial <= trials; trial += 1) {
+    for (const test of tests) {
+      jobs.push({ test, trial });
+    }
+  }
+  return jobs;
+}
+
+/** What progress output and the status board call a job: the test id, with
+ *  its trial index when the suite runs more than one. */
+function jobLabel(job: RunJob, trials: number): string {
+  const testId = job.test.id ?? "";
+  return trials === 1 ? testId : `${testId}/${job.trial}`;
+}
+
+/** One trial keeps the flat `<group>/<testId>/`; more nest `<trial>/` under it. */
+function runDirFor(testDir: string, trial: number, trials: number): string {
+  return trials === 1 ? testDir : path.join(testDir, String(trial));
 }
 
 /** A test's snapshot plus where its module came from: its own spec, or the
@@ -292,6 +343,8 @@ function foldIntoRunDirectory(args: {
   suite: SuiteIdentity | undefined;
   snapshots: TestSnapshots;
   flags: Record<string, string | number | boolean>;
+  batch: string;
+  trial: number;
 }): void {
   const { run } = args;
   const graders = args.snapshots.module;
@@ -338,6 +391,8 @@ function foldIntoRunDirectory(args: {
         ...(harness === undefined ? {} : { harness: harness.records }),
         ended: endedFrom(run),
         flags: args.flags,
+        batch: args.batch,
+        trial: args.trial,
         ...(run.status === "error" ? { error: run.errorMessage } : {}),
       },
     },
@@ -366,20 +421,21 @@ function endedFrom(run: AgentRun): RunOutcome {
  * keep input order.
  */
 async function runPool(args: {
-  tests: Test[];
+  jobs: RunJob[];
+  trials: number;
   parallel: number;
   progress: boolean;
   isInterrupted: () => boolean;
   executeTest: (
-    test: Test,
+    job: RunJob,
     pipeOutput: boolean,
     onStarted?: (statelogPath: string) => void,
   ) => Promise<SuiteTestResult>;
 }): Promise<SuiteTestResult[]> {
   const board = args.progress
-    ? startStatusBoard(args.tests.map((test) => test.id ?? ""))
+    ? startStatusBoard(args.jobs.map((job) => jobLabel(job, args.trials)))
     : { update: () => {}, stop: () => {} };
-  const slots: (SuiteTestResult | undefined)[] = new Array(args.tests.length);
+  const slots: (SuiteTestResult | undefined)[] = new Array(args.jobs.length);
   const costTails: (() => number)[] = [];
   let nextIndex = 0;
 
@@ -391,12 +447,12 @@ async function runPool(args: {
     for (;;) {
       if (args.isInterrupted()) return;
       const index = nextIndex++;
-      if (index >= args.tests.length) return;
-      const test = args.tests[index];
-      const id = test.id ?? "";
+      if (index >= args.jobs.length) return;
+      const job = args.jobs[index];
+      const id = jobLabel(job, args.trials);
       board.update(id, { status: "running", startedAt: Date.now() });
 
-      const outcome = await args.executeTest(test, false, (statelogPath) => {
+      const outcome = await args.executeTest(job, false, (statelogPath) => {
         // Tail this run's statelog for the board's cost column, from run
         // start; the tail stays registered afterwards so the final cost
         // sticks.
@@ -431,20 +487,21 @@ async function runPool(args: {
  * read as a hang, and the live statelog path announced as each test starts.
  */
 async function runSequential(args: {
-  tests: Test[];
+  jobs: RunJob[];
+  trials: number;
   progress: boolean;
   pipeOutput: boolean;
   isInterrupted: () => boolean;
   executeTest: (
-    test: Test,
+    job: RunJob,
     pipeOutput: boolean,
     onStarted?: (statelogPath: string) => void,
   ) => Promise<SuiteTestResult>;
 }): Promise<SuiteTestResult[]> {
   const results: SuiteTestResult[] = [];
-  for (const test of args.tests) {
+  for (const job of args.jobs) {
     const startedAt = Date.now();
-    const label = ttyColor.green(test.id ?? "");
+    const label = ttyColor.green(jobLabel(job, args.trials));
     const ticker = args.progress
       ? setInterval(() => {
           console.error(`[${label}] running… ${formatElapsed(Date.now() - startedAt)}`);
@@ -453,7 +510,7 @@ async function runSequential(args: {
     let outcome: SuiteTestResult;
     try {
       outcome = await args.executeTest(
-        test,
+        job,
         args.pipeOutput,
         liveStatelogAnnouncer(args.progress, label),
       );
@@ -483,23 +540,53 @@ function liveStatelogAnnouncer(
 /** Before the status board takes the screen: each test’s live statelog
  *  address, so a watcher can follow a run while it is still in staging. The
  *  paths are deterministic, so they can all be printed up front. */
-function printLiveStatelogPaths(tests: Test[], stagingRoot: string, groupDir: string): void {
-  for (const test of tests) {
-    const testId = test.id ?? "";
+function printLiveStatelogPaths(
+  jobs: RunJob[],
+  trials: number,
+  stagingRoot: string,
+  groupDir: string,
+): void {
+  for (const job of jobs) {
+    const testId = job.test.id ?? "";
     // An invalid id never stages (executeTest errors first), so a path
     // built from it would point somewhere no run will ever live.
     if (testIdProblem(testId, groupDir, path.join(groupDir, testId)) !== undefined) continue;
-    const statelogPath = agentRunPaths(path.join(stagingRoot, testId)).statelogPath;
-    console.error(`[${ttyColor.green(testId)}] live statelog: ${statelogPath}`);
+    const label = jobLabel(job, trials);
+    const statelogPath = agentRunPaths(path.join(stagingRoot, label)).statelogPath;
+    console.error(`[${ttyColor.green(label)}] live statelog: ${statelogPath}`);
   }
+}
+
+/** Why a job cannot be written where it would go: a bad test id, a flat run
+ *  from an earlier single-trial suite where `<trial>/` directories would now
+ *  be hidden (discovery takes the parent as the run), or a run directory that
+ *  already exists (someone's data; resume is deliberately not here). */
+function runDirProblem(
+  testId: string,
+  groupDir: string,
+  testDir: string,
+  runDir: string,
+  trials: number,
+): string | undefined {
+  const idProblem = testIdProblem(testId, groupDir, testDir);
+  if (idProblem !== undefined) {
+    return idProblem;
+  }
+  if (trials > 1 && isRunDirectory(testDir)) {
+    return `${testDir} is already a run directory (a single-trial run); use another --out`;
+  }
+  if (fs.existsSync(runDir)) {
+    return `run directory already exists: ${runDir}`;
+  }
+  return undefined;
 }
 
 /** A test id is a directory name under the group: it must be non-empty and
  *  resolve to a direct child (no separators, no `..`, not `.staging`). Suite
  *  loaders already restrict ids, but `runSuite` is also called directly. */
-function testIdProblem(testId: string, groupDir: string, runDir: string): string | undefined {
+function testIdProblem(testId: string, groupDir: string, testDir: string): string | undefined {
   if (testId === "") return "test has no id; a run directory needs a name";
-  if (path.dirname(path.resolve(runDir)) !== groupDir || path.basename(runDir) !== testId) {
+  if (path.dirname(path.resolve(testDir)) !== groupDir || path.basename(testDir) !== testId) {
     return `test id "${testId}" is not a valid directory name under ${groupDir}`;
   }
   if (testId === ".staging") return `test id ".staging" is reserved`;

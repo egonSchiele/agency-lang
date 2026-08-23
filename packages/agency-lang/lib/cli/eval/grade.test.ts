@@ -206,6 +206,57 @@ export default [grader(({ output }) => output === "hello", { name: "gate", mustP
     expect(listing.meanScore).toBeCloseTo(0.5);
   });
 
+  it("a batch of trials: per-test statistics include a silent failed trial as zero", async () => {
+    const group = fs.mkdtempSync(path.join(process.cwd(), ".test-batch-"));
+    dirs.push(group);
+    const batch = path.basename(group);
+    writeRunDirectory(
+      { test: { id: "a", input: "t" }, output: "hello", batch, trial: 1 },
+      path.join(group, "a", "1"),
+    );
+    writeRunDirectory(
+      { test: { id: "a", input: "t" }, wroteStatelog: false, ended: "error", batch, trial: 2 },
+      path.join(group, "a", "2"),
+    );
+
+    const result = await evalGrade([group], { graders: makeGraders(), config: {} });
+
+    expect(result.batches).toHaveLength(1);
+    expect(result.batches[0]).toMatchObject({ batch, trials: 2, accuracy: 0.25 });
+    expect(result.batches[0].tests).toEqual([
+      expect.objectContaining({ testId: "a", trials: 2, mean: 0.25 }),
+    ]);
+  });
+
+  it("two selected batches that reuse test and trial ids are reported separately, never merged", async () => {
+    const groups = ["one", "two"].map((name) => {
+      const group = fs.mkdtempSync(path.join(process.cwd(), `.test-batch-${name}-`));
+      dirs.push(group);
+      const batch = path.basename(group);
+      for (const trial of [1, 2]) {
+        writeRunDirectory(
+          { test: { id: "a", input: "t" }, output: "hello", batch, trial },
+          path.join(group, "a", String(trial)),
+        );
+      }
+      return group;
+    });
+
+    const result = await evalGrade(groups, { graders: makeGraders(), config: {} });
+
+    expect(result.runs).toHaveLength(4);
+    expect(result.batches.map((batch) => batch.batch)).toEqual(groups.map((g) => path.basename(g)));
+    expect(result.batches.map((batch) => batch.trials)).toEqual([2, 2]);
+  });
+
+  it("a single-trial group reports no batch statistics", async () => {
+    const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
+    dirs.push(group);
+    writeRunDirectory({ test: { id: "a", input: "t" }, output: "hello" }, path.join(group, "a"));
+    const result = await evalGrade([group], { graders: makeGraders(), config: {} });
+    expect(result.batches).toEqual([]);
+  });
+
   it("refuses a folder with no run directories, naming how to build one", () => {
     const folder = fs.mkdtempSync(path.join(process.cwd(), ".test-not-a-run-dir-"));
     dirs.push(folder);

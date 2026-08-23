@@ -19,7 +19,7 @@ describe("findRunDirectories", () => {
     const a = runDirAt(path.join(group, "a"));
     fs.writeFileSync(path.join(group, "notes.txt"), "not a run");
     fs.mkdirSync(path.join(group, "empty-folder"));
-    runDirAt(path.join(group, "deeper", "nested")); // two levels down: not found
+    runDirAt(path.join(group, "deeper", "nested", "three")); // three levels down: not found
 
     expect(findRunDirectories([a])).toEqual([a]);
     expect(findRunDirectories([group])).toEqual([a, b]);
@@ -27,6 +27,21 @@ describe("findRunDirectories", () => {
     expect(childRunDirectories(group)).toEqual([a, b]);
     expect(isRunDirectory(group)).toBe(false);
     expect(isRunDirectory(a)).toBe(true);
+  });
+
+  it("a test run as several trials is `<group>/<test>/<trial>`; trials sit beside flat runs, sorted", () => {
+    const group = tempDir();
+    const b = runDirAt(path.join(group, "b"));
+    const a2 = runDirAt(path.join(group, "a", "2"));
+    const a1 = runDirAt(path.join(group, "a", "1"));
+    expect(findRunDirectories([group])).toEqual([a1, a2, b]);
+  });
+
+  it("never enters a suite's .staging directory, and goes no deeper than a trial", () => {
+    const group = tempDir();
+    runDirAt(path.join(group, ".staging", "a"));
+    runDirAt(path.join(group, "a", "deeper", "1"));
+    expect(() => findRunDirectories([group])).toThrow(/holds no run directories/);
   });
 
   it("refuses a missing path, a file, and a directory holding no run directories", () => {

@@ -25,8 +25,10 @@ easy to get wrong.
 trace, so a run can be moved with `cp -r` and opened anywhere. A **group** is
 any directory of run directories (what `eval run --out` writes); it has no
 index file. `findRunDirectories(paths)` (`findRuns.ts`) is the one walk rule:
-a run directory is itself, a directory of run directories yields its children
-(one level, sorted), anything else is an error. `eval grade`, `runs list` and
+a run directory is itself; a directory of run directories yields them, sorted,
+at most two levels down (`<group>/<testId>/` for a plain suite run,
+`<group>/<testId>/<trial>/` when `eval run --trials` repeated a test), never
+entering `.staging`; anything else is an error. `eval grade`, `runs list` and
 the logs explorer and `label` use it (`uniqueRunDirectories` drops aliases of
 one physical directory where a command mutates or keys by run). The reader
 refuses a `statelog.jsonl` holding more than one trace id (`assertOneRun`,

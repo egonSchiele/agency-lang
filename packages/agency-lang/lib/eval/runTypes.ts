@@ -71,8 +71,11 @@ export type Test = {
  *  how each ended. Everything durable is in the run directory. */
 export type SuiteTestResult = {
   testId: string;
+  /** Which repetition of the test this was, 1-based; 1 for a single-trial suite. */
+  trial: number;
   traceId: string;
-  /** This test's run directory, `<group>/<testId>/`. */
+  /** This test's run directory: `<group>/<testId>/`, or
+   *  `<group>/<testId>/<trial>/` when the suite ran more than one trial. */
   runDir: string;
   status: "success" | "error";
   errorMessage?: string;

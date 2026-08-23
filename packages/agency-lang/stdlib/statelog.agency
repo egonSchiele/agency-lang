@@ -77,13 +77,19 @@ export def emit(data: any) {
  * references and `bigint` throw at the call site.
  */
 /**
- * Names this agent in the statelog. Cross-run tools (the runs explorer)
- * group runs under this identity instead of the launch command. Call it
- * once, early; the last call in a trace wins.
+ * Names this agent in the statelog. Cross-run tools (the runs explorer,
+ * statelog's eval pages) group runs under this identity instead of the
+ * launch command. Call it once, early; the last call in a trace wins. The
+ * name is also a URL path segment on statelog, so an invalid one throws
+ * rather than producing a trace that cannot be grouped.
  */
 export def setAgentName(name: string) {
   """
   Set a stable display name for this agent, used to group its runs.
+
+  Names use letters, digits, ".", "_", "-" and "/" (to nest a family's
+  variants, as in "agency-agent/coordinator"): no spaces, at most 200
+  characters, and no empty, "." or ".." segment between slashes.
 
   @param name - The agent name, e.g. "gcode-v2".
   """

@@ -3,6 +3,7 @@ import { StatelogParser } from "../eval/statelogParser.js";
 import type { EvalRecord, EvalValue } from "../eval/types.js";
 import type { StatelogClient } from "../statelogClient.js";
 import { resolveDir } from "./resolveDir.js";
+import { agentNameProblem } from "../statelog/agentName.js";
 
 type EvalPayload = {
   value: unknown;
@@ -45,7 +46,13 @@ function serializeEvalValue(value: unknown): unknown {
   return JSON.parse(json);
 }
 
+/** Rejects an invalid name even outside an Agency frame, so a bad name is a
+ *  bug at the call site rather than a trace that silently cannot be grouped. */
 export async function _setAgentName(name: string): Promise<void> {
+  const problem = agentNameProblem(String(name));
+  if (problem !== null) {
+    throw new Error(`setAgentName: ${problem}`);
+  }
   const frame = agencyStore.getStore();
   if (!frame) {
     return;

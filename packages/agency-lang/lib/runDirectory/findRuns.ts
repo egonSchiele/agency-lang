@@ -4,10 +4,11 @@ import * as path from "path";
 /**
  * The one rule every command over "several runs" uses to turn paths into run
  * directories: a path that is a run directory (has `statelog.jsonl`) is that
- * run; a directory whose children include run directories is a group, and
- * yields those children, sorted, ONE level down (a suite run is
- * `<group>/<testId>/`; going deeper would make `runs/` mean every run ever);
- * anything else is an error. Resolved, absolute paths come back.
+ * run; a directory holding run directories is a group and yields them,
+ * sorted, at most TWO levels down: a suite run is `<group>/<testId>/`, and a
+ * suite run with repeated trials is `<group>/<testId>/<trial>/`. Nothing
+ * deeper is looked at, and `.staging` (a suite still running) is never
+ * entered. Anything else is an error. Resolved, absolute paths come back.
  */
 export function isRunDirectory(dir: string): boolean {
   // A file, not merely present: a test id may itself be `statelog.jsonl`,
@@ -20,11 +21,32 @@ export function isRunDirectory(dir: string): boolean {
 }
 
 export function childRunDirectories(dir: string): string[] {
+  const found: string[] = [];
+  for (const child of childDirectories(dir)) {
+    if (isRunDirectory(child)) {
+      found.push(child);
+    } else if (path.basename(child) !== STAGING_DIR) {
+      found.push(...childDirectories(child).filter(isRunDirectory));
+    }
+  }
+  return found;
+}
+
+/** Where `eval run` assembles a test before it is renamed into the group. */
+const STAGING_DIR = ".staging";
+
+function childDirectories(dir: string): string[] {
   return fs
     .readdirSync(dir)
     .sort()
     .map((child) => path.join(dir, child))
-    .filter(isRunDirectory);
+    .filter((child) => {
+      try {
+        return fs.statSync(child).isDirectory();
+      } catch {
+        return false;
+      }
+    });
 }
 
 export function findRunDirectories(paths: string[]): string[] {

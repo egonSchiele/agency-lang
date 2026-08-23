@@ -12,6 +12,8 @@ export type GradeSuiteResult = {
   grading: EvalRunGrading;
   scorecard: Scorecard;
   passId: string | null;
+  /** LLM spend of this pass's judge calls, in USD. */
+  judgeCostUsd: number;
 };
 
 /**
@@ -35,9 +37,10 @@ export async function gradeSuite(
   const snapshot = readRunDirectory(runDir, {
     reportWarning: (message) => console.warn(`grading: ${message}`),
   });
+  const runAgency = new AgencyRunner(config);
   const scorecard = await gradeSnapshot(snapshot, {
     graders,
-    runAgency: new AgencyRunner(config),
+    runAgency,
     config,
     defaultGoal: options.defaultGoal,
   });
@@ -46,7 +49,7 @@ export async function gradeSuite(
   if (options.record !== false && drafts.length > 0) {
     passId = recordGradingPass({ dir: runDir, scores: drafts }).passId;
   }
-  return { grading: toGrading(scorecard), scorecard, passId };
+  return { grading: toGrading(scorecard), scorecard, passId, judgeCostUsd: runAgency.costUsd };
 }
 
 /** One draft per grade that actually ran. A gate-failed or ungraded trace

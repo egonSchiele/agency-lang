@@ -20,6 +20,25 @@ function grading(
 }
 
 describe("formatGradeResult", () => {
+  it("prints the grading cost after the mean when judge calls cost money", () => {
+    const result: EvalGradeResult = {
+      runs: [
+        { dir: "/runs/x/a", grading: grading("a", 1, [{ grader: "j", kind: "scalar", value: 1 }]) },
+        {
+          dir: "/runs/x/b",
+          grading: grading("b", 0.5, [{ grader: "j", kind: "scalar", value: 0.5 }]),
+        },
+      ],
+      judgeCostUsd: 0.1234,
+      mean: 0.75,
+      gatesPassed: true,
+      batches: [],
+    };
+    const lines = formatGradeResult(result).map(stripAnsi);
+    expect(lines).toContain("mean 0.750 over 2 runs");
+    expect(lines).toContain("grading cost: $0.12");
+  });
+
   it("one block per test: the score line, then one line per grader with feedback, no mean for a single run", () => {
     const result: EvalGradeResult = {
       runs: [
@@ -31,6 +50,7 @@ describe("formatGradeResult", () => {
           ]),
         },
       ],
+      judgeCostUsd: 0,
       mean: 0.75,
       gatesPassed: true,
       batches: [],
@@ -49,6 +69,7 @@ describe("formatGradeResult", () => {
     withDescription.perInput[0].description = "checks the agent reads between the lines";
     const result: EvalGradeResult = {
       runs: [{ dir: "/runs/x/a", grading: withDescription }],
+      judgeCostUsd: 0,
       mean: 1,
       gatesPassed: true,
       batches: [],
@@ -70,6 +91,7 @@ describe("formatGradeResult", () => {
         },
         { dir: "/runs/x/b", grading: grading("b", 0, [], "the run ended with timeout") },
       ],
+      judgeCostUsd: 0,
       mean: 0.5,
       gatesPassed: false,
       batches: [],
@@ -91,6 +113,7 @@ describe("formatGradeResult with trial batches", () => {
   it("one batch of several trials: per-test mean ± SE and the batch accuracy after the run blocks", () => {
     const result: EvalGradeResult = {
       runs: [{ dir: "/runs/b1/fib/1", grading: fib }],
+      judgeCostUsd: 0,
       mean: 1,
       gatesPassed: true,
       batches: [
@@ -105,6 +128,7 @@ describe("formatGradeResult with trial batches", () => {
             {
               testId: "fib",
               trials: 3,
+              judgeCostUsd: 0,
               mean: 2 / 3,
               standardError: 1 / 3,
               meanCostUsd: 1,
@@ -113,6 +137,7 @@ describe("formatGradeResult with trial batches", () => {
             {
               testId: "sum",
               trials: 3,
+              judgeCostUsd: 0,
               mean: null,
               standardError: null,
               meanCostUsd: 1,
@@ -144,6 +169,7 @@ describe("formatGradeResult with trial batches", () => {
         {
           testId: "fib",
           trials: 2,
+          judgeCostUsd: 0,
           mean: accuracy,
           standardError: 0,
           meanCostUsd: 0,
@@ -153,6 +179,7 @@ describe("formatGradeResult with trial batches", () => {
     });
     const result: EvalGradeResult = {
       runs: [],
+      judgeCostUsd: 0,
       mean: 0,
       gatesPassed: true,
       batches: [batch("b1", 1), batch("b2", 0)],

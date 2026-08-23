@@ -90,8 +90,10 @@ function formatUngradedReason(reason: string | undefined): string[] {
 }
 
 function formatGroupSummary(result: EvalGradeResult): string[] {
+  // Judge calls cost money; deterministic graders are free and get no line.
+  const cost = result.judgeCostUsd > 0 ? [`grading cost: $${result.judgeCostUsd.toFixed(2)}`] : [];
   if (result.runs.length > 1) {
-    return [`mean ${formatScore(result.mean)} over ${result.runs.length} runs`];
+    return [`mean ${formatScore(result.mean)} over ${result.runs.length} runs`, ...cost];
   }
-  return [];
+  return cost;
 }

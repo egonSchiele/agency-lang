@@ -23,6 +23,12 @@ export type EvalGradeOptions = {
   goal?: string;
   /** Also write the grading summary here, as JSON. */
   out?: string;
+  /** Grade up to this many run directories at once (default 1). Judge calls
+   *  are LLM calls, so a big group grades much faster in parallel. */
+  parallel?: number;
+  /** Called once per graded run directory, in completion order — the CLI's
+   *  progress line. Omitted (tests, programmatic use) = silent. */
+  progress?: (message: string) => void;
   config?: AgencyConfig;
 };
 
@@ -45,6 +51,8 @@ export type EvalGradeResult = {
   runs: { dir: string; grading: EvalRunGrading }[];
   /** Mean objective over the runs graded. */
   mean: number;
+  /** Total LLM spend of this pass's judge calls, in USD. */
+  judgeCostUsd: number;
   /** Every run passed its gates. */
   gatesPassed: boolean;
   /** Trial statistics for each selected batch that ran more than one trial,
@@ -95,14 +103,38 @@ export async function evalGrade(
   const runDirs = validateGradeTarget(targets, opts);
   const graders = graderSourceFor(opts, config);
 
-  const runs: EvalGradeResult["runs"] = [];
-  for (const dir of runDirs) {
-    const { grading } = await gradeSuite(dir, graders, config, { defaultGoal: opts.goal });
-    runs.push({ dir, grading });
-  }
+  // A bounded worker pool over run directories; slots keep the report in
+  // walk order however completion interleaves. Each directory is one
+  // gradeSuite call (its own pass id and its own judge-cost meter).
+  const parallel = Math.max(1, Math.floor(opts.parallel ?? 1));
+  const slots: (EvalGradeResult["runs"][number] & { judgeCostUsd: number })[] = new Array(
+    runDirs.length,
+  );
+  let nextIndex = 0;
+  let doneCount = 0;
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const index = nextIndex++;
+      const dir = runDirs[index];
+      if (dir === undefined) return;
+      const startedAt = Date.now();
+      const { grading, judgeCostUsd } = await gradeSuite(dir, graders, config, {
+        defaultGoal: opts.goal,
+      });
+      slots[index] = { dir, grading, judgeCostUsd };
+      doneCount += 1;
+      opts.progress?.(
+        `graded ${doneCount}/${runDirs.length} ${dir} — objective ${grading.objective.toFixed(3)}` +
+          ` ($${judgeCostUsd.toFixed(2)}, ${Math.round((Date.now() - startedAt) / 1000)}s)`,
+      );
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(parallel, runDirs.length) }, () => worker()));
+  const runs: EvalGradeResult["runs"] = slots.map(({ dir, grading }) => ({ dir, grading }));
   const result: EvalGradeResult = {
     runs,
     mean: runs.reduce((sum, run) => sum + run.grading.objective, 0) / runs.length,
+    judgeCostUsd: slots.reduce((sum, slot) => sum + slot.judgeCostUsd, 0),
     gatesPassed: runs.every((run) => run.grading.gatesPassed),
     batches: trialBatches(runDirs),
   };

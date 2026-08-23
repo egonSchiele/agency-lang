@@ -103,6 +103,35 @@ describe("evalGrade", () => {
     expect(Object.values(effective)[0].id).toBe(scores[1].id);
   });
 
+  it("parallel grading grades every run once, keeps walk order, and reports progress", async () => {
+    const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
+    dirs.push(group);
+    for (const child of ["a", "b", "c"]) {
+      writeRunDirectory({ test: lenTest(child), output: "hello" }, path.join(group, child));
+    }
+    const progress: string[] = [];
+
+    const result = await evalGrade([group], {
+      parallel: 3,
+      progress: (message) => progress.push(message),
+      config: {},
+    });
+
+    // Walk order in the report, whatever the completion order was.
+    expect(result.runs.map((run) => path.basename(run.dir))).toEqual(["a", "b", "c"]);
+    expect(result.judgeCostUsd).toBe(0); // function graders make no LLM calls
+    // One progress line per run, numbered by completion.
+    expect(progress).toHaveLength(3);
+    expect([...progress].sort()).toEqual(progress.map((_, i) => progress[i]).sort());
+    for (const line of progress) {
+      expect(line).toMatch(/^graded [123]\/3 .* — objective 0\.500 \(\$0\.00, \d+s\)$/);
+    }
+    for (const child of ["a", "b", "c"]) {
+      const snapshot = readRunDirectory(path.join(group, child), { reportWarning: () => {} });
+      expect(snapshot.annotationRows.filter((row) => row.kind === "score")).toHaveLength(1);
+    }
+  });
+
   it("grades every run directory in a group, one pass each, and reports the mean", async () => {
     const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
     dirs.push(group);

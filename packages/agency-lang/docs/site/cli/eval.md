@@ -9,7 +9,7 @@ description: How to run an Agency agent against a test suite, score it with grad
 
 ```
 agency eval run (<file>[:<node>] | --agent-cmd '<command with {input}>') (--suite <file|dir|git-url> | --input <text>) [-n <count>] [--trials <count>]
-agency eval grade <runDir> [--suite <file|dir|git-url>] [--goal <text>]
+agency eval grade <runDir> [--suite <file|dir|git-url>] [--goal <text>] [-n <count>]
 agency eval logs <runDir> [-f]
 agency eval optimize <file>[:<node>] [--suite <file|dir>] [--goal <text>] [--graders <file>]
 agency label <runDir> --checklist <file> [--annotator <id>]
@@ -190,6 +190,8 @@ agency eval grade runs/smoke
 #   objective  0.71
 #     goal  0.71
 ```
+
+`-n, --parallel <count>` grades up to that many run directories at once — judge calls are LLM calls, so a big group grades much faster in parallel. A progress line per graded run (`graded 3/15 <dir> — objective 0.933 ($0.02, 12s)`) goes to stderr, and when the pass's judges cost money the report ends with `grading cost: $x.xx`.
 
 Each grader's verdict is appended to `annotations.jsonl` as a **score**. Grading again appends another pass rather than rewriting anything, so every grading pass survives and the latest complete pass is the one listings show. Re-grading costs nothing for `ExactMatch`, `Contains`, `Similarity` and function graders that do not call `judge`; an `LlmJudge` still makes a live LLM call each time.
 

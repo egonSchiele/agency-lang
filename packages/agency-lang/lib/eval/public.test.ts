@@ -36,6 +36,36 @@ describe("agency-lang/eval public surface", () => {
   });
 });
 
+/** What statelog imports to summarize uploaded runs and chart batches. */
+const TRACKING_NAMES = [
+  "summarizeEvalRun",
+  "batchStatistics",
+  "batchStatisticsByBatch",
+  "AnnotationSchema",
+  "annotationId",
+  "agentNameProblem",
+  "AGENT_NAME_PATTERN",
+  "AGENT_NAME_MAX_LENGTH",
+];
+
+// Type-level contract for the same consumer; erased at runtime, guarded by typecheck.
+import type { EvalRunInput, RunSummary, RunStatus, BatchStatistics, Annotation } from "./public.js";
+type _TrackingTypesAreContract = [EvalRunInput, RunSummary, RunStatus, BatchStatistics, Annotation];
+
+describe("agency-lang/eval tracking contract", () => {
+  it("exports the run summary, batch statistics, annotation schema, and agent-name rule", () => {
+    for (const name of TRACKING_NAMES) {
+      expect(evalApi, `missing export: ${name}`).toHaveProperty(name);
+    }
+  });
+
+  it("does not export the run directory internals a consumer could rebuild a snapshot from", () => {
+    for (const name of ["readRunDirectory", "readTraces", "tracesFromText", "foldAnnotations"]) {
+      expect(evalApi, `leaked internal: ${name}`).not.toHaveProperty(name);
+    }
+  });
+});
+
 describe("agency-lang/optimize public surface", () => {
   it("still exports every grading name, so existing modules keep working", () => {
     for (const name of GRADING_NAMES) {

@@ -128,7 +128,6 @@ describe("formatGradeResult with trial batches", () => {
             {
               testId: "fib",
               trials: 3,
-              judgeCostUsd: 0,
               mean: 2 / 3,
               standardError: 1 / 3,
               meanCostUsd: 1,
@@ -137,7 +136,6 @@ describe("formatGradeResult with trial batches", () => {
             {
               testId: "sum",
               trials: 3,
-              judgeCostUsd: 0,
               mean: null,
               standardError: null,
               meanCostUsd: 1,

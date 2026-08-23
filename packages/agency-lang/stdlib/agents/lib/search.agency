@@ -58,14 +58,17 @@ export def searchTools(): any[] {
   return map(available, boundTool)
 }
 
-export def hostedSearchTools(model: string = ""): string[] {
+export def hostedSearchTools(model: string = "", provider: string = ""): string[] {
   """
-  Return the provider-hosted search capabilities available to the model, or
-  an empty array when its provider offers none (e.g. local models).
+  Return the provider-hosted search capabilities available to a call on this
+  model through this provider, or an empty array when that route offers none
+  (the base "openai" client, local models). Pass the same model and provider
+  the call will use: the answer depends on the route, not the model alone.
 
-  @param model - The model that will run the call, or "" for the branch default
+  @param model - The model that will run the call, or "" for the ambient default
+  @param provider - The provider the call will route through, or "" for the ambient default
   """
-  return _hostedSearchTools(model)
+  return _hostedSearchTools(model, provider)
 }
 
 export def searchProviderNames(): string[] {

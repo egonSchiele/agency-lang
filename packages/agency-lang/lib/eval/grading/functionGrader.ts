@@ -98,7 +98,7 @@ function coerce(result: number | boolean | Grade): Grade {
   );
 }
 
-/** Wrap a metric function so it carries policy (mustPass/weight/threshold/inputScope/samples/name). */
+/** Wrap a metric function so it carries policy (mustPass/weight/threshold/samples/name). */
 export function grader(fn: GraderFn, options: GraderOptions = {}): BaseGrader {
   return new FunctionGrader(fn, options);
 }

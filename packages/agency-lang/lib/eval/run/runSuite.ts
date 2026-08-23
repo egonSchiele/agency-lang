@@ -100,7 +100,7 @@ export async function runSuite(
   // Each test's graders, bundled now and stored in its run directory, so the
   // run grades later by the graders it ran with, wherever the directory goes.
   // A broken grading module fails here, before any agent runs.
-  const snapshotsByTest: Record<string, TestSnapshots> = await snapshotGraders(opts.inputs, config);
+  const snapshotsByTest: Record<string, TestSnapshots> = await snapshotGraders(opts.inputs);
 
   // One closure walk per suite; never per test. Command targets have no
   // closure and nothing to compile. Before any directory is created: a
@@ -300,25 +300,20 @@ type TestGraders = GradersSnapshot & { origin: "test" | "config" };
  *  the harness pairs. */
 type TestSnapshots = { module?: TestGraders; harness?: HarnessSnapshot };
 
-/** The grading module each test will be graded with — its own, else the
- *  project's `eval.graders` — bundled once per distinct module, plus its
- *  discovered harness pairs, preflighted and read now. Tests with neither
- *  get nothing: the bundled goal judge needs none. A broken module or
- *  harness fails here, before any agent runs. */
-async function snapshotGraders(
-  tests: Test[],
-  config: AgencyConfig,
-): Promise<Record<string, TestSnapshots>> {
+/** Each test's own grading module, bundled once per distinct module, plus
+ *  its discovered harness pairs, preflighted and read now. Tests with
+ *  neither get nothing: the bundled goal judge needs none. A broken module
+ *  or harness fails here, before any agent runs. */
+async function snapshotGraders(tests: Test[]): Promise<Record<string, TestSnapshots>> {
   const byModule: Record<string, Promise<GradersSnapshot>> = Object.create(null);
   const byTest: Record<string, TestSnapshots> = Object.create(null);
   for (const test of tests) {
     if (test.id === undefined) continue;
     const snapshots: TestSnapshots = {};
-    const modulePath = test.graders ?? config.eval?.graders;
+    const modulePath = test.graders;
     if (modulePath !== undefined) {
       byModule[modulePath] ??= snapshotGradingModule(modulePath);
-      const origin = test.graders !== undefined ? ("test" as const) : ("config" as const);
-      snapshots.module = { ...(await byModule[modulePath]), origin };
+      snapshots.module = { ...(await byModule[modulePath]), origin: "test" };
     }
     if (test.agencyTests !== undefined && test.agencyTests.length > 0) {
       snapshots.harness = snapshotHarness(test.agencyTests, test.harnessMaxCost);

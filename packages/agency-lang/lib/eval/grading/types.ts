@@ -28,9 +28,6 @@ export type Score = { kind: "binary"; pass: boolean } | { kind: "scalar"; value:
 /** A grader's output: a score plus optional natural-language feedback. */
 export type Grade = { score: Score; feedback?: string };
 
-/** Restricts a grader to a subset of inputs. */
-export type GraderScope = { tag: string } | { ids: string[] };
-
 /** Options common to every grader; subclasses extend this with their own fields. */
 export type GraderOptions = {
   mustPass?: boolean; // gate: failure fails the whole iteration for this input
@@ -38,7 +35,6 @@ export type GraderOptions = {
   weight?: number; // contribution to the scalarized objective (default 1)
   samples?: number; // k repetitions (default 1; must be a positive integer)
   aggregate?: "any" | "all"; // binary only; scalar always averages
-  inputScope?: GraderScope; // restrict to a subset of inputs (default: all)
   name?: string; // overrides the grader's defaultName
 };
 

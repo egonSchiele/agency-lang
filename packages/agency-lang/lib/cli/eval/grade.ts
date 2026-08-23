@@ -8,15 +8,18 @@ import { findRunDirectories, uniqueRunDirectories } from "@/runDirectory/findRun
 import { summarizeRunDirectory } from "@/runDirectory/list.js";
 import { readRunDirectory } from "@/runDirectory/runDir.js";
 
-import { goalJudgeGraders, resolveGraders } from "./graders.js";
+import type { GraderSource } from "@/eval/grading/gradeRun.js";
+
+import { loadSuite } from "./run.js";
 
 export type EvalGradeOptions = {
-  /** Path to a TypeScript grading module. Defaults to `eval.graders`, then the goal judge. */
-  graders?: string;
+  /** Grade with each test's CURRENT graders from this suite (a file, a
+   *  directory, or a git source), matched to runs by test id, instead of the
+   *  copy each run directory stored. Improve a grader, re-score old runs. */
+  suite?: string;
   /** Judge every trace against this goal with the bundled goal judge (a test's
-   *  own recorded goal still wins). Not combined with `graders`, and it sets
-   *  aside a configured `eval.graders` module too: a module brings its own
-   *  criteria, and `--goal` names the criterion. */
+   *  own recorded goal still wins). Not combined with `suite`: the suite's
+   *  graders bring their own criteria, and `--goal` names the criterion. */
   goal?: string;
   /** Also write the grading summary here, as JSON. */
   out?: string;
@@ -55,19 +58,27 @@ export type EvalGradeResult = {
  *  miss). Returns canonical run directories to grade, duplicates removed by
  *  physical identity: `eval grade runs/suite runs/suite/a` grades `a` once. */
 export function validateGradeTarget(targets: string[], opts: EvalGradeOptions): string[] {
-  if (opts.graders !== undefined && opts.goal !== undefined) {
+  if (opts.suite !== undefined && opts.goal !== undefined) {
     throw new Error(
-      "Provide only one of --graders or --goal: a grading module carries its own criteria " +
-        "(give LlmJudge a goal there instead).",
+      "Provide only one of --suite or --goal: the suite's graders carry their own criteria " +
+        "(give LlmJudge a goal in a test's graders.ts instead).",
     );
   }
   return uniqueRunDirectories(findRunDirectories(targets));
 }
 
-/** The grader set `eval grade` runs with; see `resolveGraders` for the precedence. */
-export async function gradersFor(opts: EvalGradeOptions, config: AgencyConfig) {
-  if (opts.goal !== undefined) return goalJudgeGraders();
-  return resolveGraders(opts.graders, undefined, config);
+/** Where `eval grade` takes each run's graders from: the suite named by
+ *  `--suite`, else the copy the run directory stored. */
+export function graderSourceFor(opts: EvalGradeOptions, config: AgencyConfig): GraderSource {
+  if (opts.suite === undefined) {
+    return { kind: "snapshot" };
+  }
+  const loaded = loadSuite({
+    selection: "suite",
+    source: opts.suite,
+    cacheRoot: config.eval?.sourceCacheRoot,
+  });
+  return { kind: "suite", tests: loaded.tests };
 }
 
 /**
@@ -82,18 +93,7 @@ export async function evalGrade(
 ): Promise<EvalGradeResult> {
   const config = opts.config ?? {};
   const runDirs = validateGradeTarget(targets, opts);
-  // `grade` is undefined here: there is no point running this command with
-  // grading switched off, so the same resolver's default path applies. An
-  // explicit --graders overrides every test's recorded graders; otherwise
-  // per-test graders apply, with the config module / goal judge as fallback.
-  // --goal promises the goal judge, so it never reaches the config module.
-  const graders = await gradersFor(opts, config);
-  // resolveGraders only returns undefined for --no-grade, which this command never
-  // passes, and otherwise falls back to the goal judge — so the reachable case is a
-  // grading module that default-exports an empty array.
-  if (!graders || (graders.mode === "override" && graders.graders.length === 0)) {
-    throw new Error(`The grading module at ${opts.graders} exported no graders.`);
-  }
+  const graders = graderSourceFor(opts, config);
 
   const runs: EvalGradeResult["runs"] = [];
   for (const dir of runDirs) {

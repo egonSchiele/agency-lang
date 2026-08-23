@@ -8,8 +8,8 @@ description: How to run an Agency agent against a test suite, score it with grad
 `agency eval` runs, grades and compares agent runs. Everything it produces lives in a **run directory**: a folder with the runs' statelog and an append-only file of annotations (grades, checklist answers), plus a free-form `notes.md` you write yourself. The main commands are:
 
 ```
-agency eval run (--agent <file>[:<node>] | --agent-cmd '<command with {input}>') (--suite <file|dir|git-url> | --goal <text>) [-n <count>]
-agency eval grade <runDir> [--graders <file>]
+agency eval run (<file>[:<node>] | --agent-cmd '<command with {input}>') (--suite <file|dir|git-url> | --input <text>) [-n <count>] [--trials <count>]
+agency eval grade <runDir> [--suite <file|dir|git-url>] [--goal <text>]
 agency eval logs <runDir> [-f]
 agency eval optimize <file>[:<node>] [--suite <file|dir>] [--goal <text>] [--graders <file>]
 agency label <runDir> --checklist <file> [--annotator <id>]
@@ -24,7 +24,7 @@ agency runs list <runDir>
 `agency eval run` runs an Agency agent against every test in a suite and writes a run directory:
 
 ```bash
-agency eval run --agent agent.agency:evalMain --suite suite.json --run-id smoke
+agency eval run agent.agency:evalMain --suite suite.json --out runs/smoke
 ```
 
 A suite is a JSON file with `{ "inputs": [...] }` or a directory with one `.json` file per test. A test looks like this:
@@ -38,35 +38,36 @@ A suite is a JSON file with `{ "inputs": [...] }` or a directory with one `.json
 }
 ```
 
-A test says nothing about the agent. Tests describe the work; whoever runs the eval picks the agent with `--agent file.agency:node`.
+A test says nothing about the agent. Tests describe the work; whoever runs the eval names the agent as the positional argument, `file.agency:node`.
 
-`input` is required. It is what the agent is told: a string, or a JSON object for agents that take structured data. The runner passes it as the entry node's single parameter, so **eval entry nodes take exactly one parameter**, whatever it is named. An agent that needs no input still declares one and ignores it: `node main(input: string) { ... }`. The runner checks the parameter count before anything runs.
+`input` is what the agent is told: a string, or a JSON object for agents that take structured data. The runner passes it as the entry node's single parameter, whatever it is named. An agent that takes no input runs a test with none — then the entry node takes no parameter. Within one suite, either every test has an input or none does; the runner checks the parameter count before anything runs.
 
 `goal` is the success criterion. The agent never sees it. The default LLM judge needs it; a test with its own graders makes it optional (see [Custom graders](#custom-graders)). `id` defaults to a generated id and must be filesystem-safe when you supply one. `expected` is an optional gold output that match graders read. `files` names the test's fixture directory (see [Test files and suites](#test-files-and-suites)). `timeoutSec` overrides the suite's wall clock for one test. `graders` names the test's own grading module, resolved relative to the test; in the test-directory form a `graders.ts` beside `test.json` is picked up automatically. Graders are code the harness runs, so pulling a remote suite means trusting it.
 
-For a single ad-hoc run, use `--goal` instead of `--suite`:
+For a single ad-hoc run, use `--input` instead of `--suite` (grade it afterwards with `eval grade --goal`):
 
 ```bash
-agency eval run --agent agent.agency --goal "Answer with a concise summary"
+agency eval run agent.agency --input "Summarize the README in one sentence"
 ```
 
 Options:
 
-- `--agent <file>[:<node>]`: the agent. A directory resolves to `main.agency` inside it. The node defaults to `main`.
-- `--suite <file|dir|git-url>`: the tests. A JSON file, a directory, or a git source (`URL[//subdir][?ref=...]`). Mutually exclusive with `--goal`.
-- `--goal <text>`: one inline test whose input and goal are both this text. Mutually exclusive with `--suite`.
-- `--run-id <id>`: the run directory's name. Defaults to a timestamp-prefixed id such as `2026-07-31-143022-Ab3dEf`, so run directories list in creation order.
-- `--runs-dir <path>`: where run directories go. Defaults to `eval.runsDir` in `agency.json`, or `runs/`.
-- `--no-continue-on-error`: stop after the first test failure. By default the remaining tests still run.
+- `<file>[:<node>]` (positional): the agent. A directory resolves to `main.agency` inside it. The node defaults to `main`.
+- `--suite <file|dir|git-url>`: the tests. A JSON file, a directory, or a git source (`URL[//subdir][?ref=...]`). Mutually exclusive with `--input`.
+- `--input <text>`: one inline test whose input is this text, no suite file needed. Mutually exclusive with `--suite`.
+- `--test <pattern>`, `--tags <tags>`: run a subset of the suite (a glob over test ids, or tests carrying every listed tag). Preview the selection with `agency eval ls`.
+- `-o, --out <dir>`: the run directory. It must not exist yet. Defaults to `runs/<timestamp>-<random suffix>` (or under `eval.runsDir` from `agency.json`), so run directories list in creation order.
 - `-n, --parallel <count>`: run up to this many tests at once. Above 1, per-agent output is replaced by a live status board on stderr with each test's name, state, elapsed time and cost so far. Drill into a live run with `agency eval logs <runDir> -f`.
-- `--max-tool-call-rounds <n>`, `--max-tool-result-chars <n>`, `--strict`: the same compile-time flags `agency run` takes.
+- `--trials <count>`: run every test this many times, each repetition in its own run directory at `<out>/<test>/<trial>`.
 
-Running never grades. When the run finishes it prints the run directory and the grade command:
+Agent configuration (strict types, tool-loop caps) comes from the `agency.json` beside the agent, not from eval flags.
+
+Every test runs whatever the others did: a test whose agent errored is a `run` row that grades 0, not a reason to stop. Running never grades. When the run finishes it prints the run directory and the grade command, and exits 1 if any test errored (the run directory is complete either way):
 
 ```
-Run smoke completed: 3/3 tests ok
+Run completed: 3/3 tests ok
 total LLM cost: $0.42
-runs/smoke
+runs written under runs/smoke
 grade it with: agency eval grade runs/smoke
 ```
 
@@ -149,7 +150,7 @@ For file-heavy tests there is a directory form: a directory of test directories,
 Suites and fixtures can come from git. Anywhere a directory is accepted, a git source works too:
 
 ```bash
-agency eval run --agent a.agency --suite 'github.com/you/evals//tests?ref=v1.2'
+agency eval run a.agency --suite 'github.com/you/evals//tests?ref=v1.2'
 ```
 
 `//subdir` names a directory inside the repo. `?ref=` takes a branch, tag, or commit sha. Whatever you wrote, the run records the resolved sha, so any past run is pinnable by copying its sha into `?ref=`. Clones cache under `~/.agency/cache/git/`; branch refs re-fetch per run, shas never do.
@@ -192,7 +193,7 @@ agency eval grade runs/smoke
 
 Each grader's verdict is appended to `annotations.jsonl` as a **score**. Grading again appends another pass rather than rewriting anything, so every grading pass survives and the latest complete pass is the one listings show. Re-grading costs nothing for `ExactMatch`, `Contains`, `Similarity` and function graders that do not call `judge`; an `LlmJudge` still makes a live LLM call each time.
 
-With no `--graders`, each test grades itself with the `graders` module it carries. Tests without one fall back to `eval.graders` in `agency.json`, then to the bundled goal judge scoring against the test's `goal`. `--graders <file>` overrides every test's own graders for this pass, which is the experiment knob.
+Each test grades itself with the `graders` module it carries; a test without one is scored by the bundled goal judge against its `goal`. `eval run` stores a copy of every test's graders in the run directory, and `eval grade` uses that copy, so a run scores the same days later wherever it is read. When you improve a grader and want old runs re-scored without re-running the agent, pass the suite: `eval grade runs/smoke --suite evals/smoke` grades each run with its test's *current* graders, matched by test id. A run whose test is missing from the suite is an error.
 
 `agency eval logs <runDir>` opens the run in the interactive viewer, one trace per test, with each trace's grades, notes and labels summarised on its row. Press `t` for the timeline views (see the observability guide).
 
@@ -221,19 +222,25 @@ export default [
 ];
 ```
 
-The module can be a test's own (`"graders"` in its spec, or a `graders.ts`
-beside its `test.json`), the suite-wide fallback (`eval.graders` in
-`agency.json`), or a run-wide override (`--graders`):
-
-```bash
-agency eval grade runs/smoke --graders graders.ts
-```
+A test names its module with `"graders"` in its spec, or, in the
+test-directory form, by a `graders.ts` beside its `test.json`. Graders are
+test-side, like `goal` and `expected`: there is no suite-wide module.
 
 A grader function receives `{ output, test, workdir, record, judge }` and returns
-a number from 0 to 1, a boolean, or a full `Grade`. Options control how it counts:
+a number from 0 to 1, a boolean, or a full `Grade`. A `Grade` pairs a score with
+the reasoning that is stored next to it, and its score is tagged with its kind:
+
+```ts
+grader(({ output }) => ({
+  score: { kind: "binary", pass: String(output).includes("done") },
+  feedback: "looked for the word done",
+}), { name: "says-done" });
+// scalar form: { score: { kind: "scalar", value: 0.75 }, feedback: "..." }
+```
+
+`judge(...)` already returns a `Grade`, so a metric can return its result directly. Options control how it counts:
 `mustPass` makes it a gate, `weight` sets its share of the objective, `threshold`
-sets the passing bar for scalar scores, `samples` runs it k times, and
-`inputScope` restricts it to a subset of tests.
+sets the passing bar for scalar scores, and `samples` runs it k times.
 
 When a grading module is supplied, `goal` becomes optional on your tests.
 

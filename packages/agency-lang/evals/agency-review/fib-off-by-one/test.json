@@ -1,0 +1,12 @@
+{
+  "description": "Typechecks, but fib(0) returns 1: the base case is wrong. A reviewer that only runs the typechecker passes this.",
+  "tags": [
+    "bug",
+    "logic"
+  ],
+  "files": "./files",
+  "input": {
+    "assignment": "Write an Agency function fib(n) that returns the nth Fibonacci number, where fib(0) = 0 and fib(1) = 1.",
+    "sourceFile": "solution.agency"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "description": "A correct fib. Measures false positives: the reviewer must not flag an error.",
+  "tags": [
+    "clean"
+  ],
+  "files": "./files",
+  "input": {
+    "assignment": "Write an Agency function fib(n) that returns the nth Fibonacci number, where fib(0) = 0 and fib(1) = 1.",
+    "sourceFile": "solution.agency"
+  }
+}

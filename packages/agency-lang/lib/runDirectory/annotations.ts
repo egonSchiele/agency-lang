@@ -62,9 +62,9 @@ export type GradersIdentity = {
   source: string;
   bundleFile: string;
   judgeFiles: Record<string, string>;
-  /** Whether the module was the test's own or the `eval.graders` config
-   *  fallback. Grading needs the distinction: `--goal` sets configured
-   *  modules aside but never a test's own. */
+  /** "test": the test's own module. "config": the former `eval.graders`
+   *  fallback, which runs written before it was removed may still carry;
+   *  `--goal` sets those aside but never a test's own. */
   origin: "test" | "config";
 };
 /** A harness pair stored under `graders/` as `<sha256 of content><ext>`.

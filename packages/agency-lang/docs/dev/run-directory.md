@@ -145,9 +145,9 @@ The planners (`mergeStatelog.ts`, `attachCode.ts`, `attachWorkdir.ts`):
 - **Graders** (`gradersFiles` on `recordCompletedRun`) go under `graders/`
   by content-hash name; the run row's `graders: { source, bundleFile,
   judgeFiles, origin }` says which is the module bundle, which stored file
-  each declared judge path maps to, and whether the module was the test's
-  own or the `eval.graders` config fallback. Same name = same content, so nothing is ever
-  rewritten. See docs/dev/eval-grading.md for why grading prefers this copy.
+  each declared judge path maps to, and the module's origin (always the
+  test's own now; "config" marks runs from before the suite-wide fallback
+  was removed). Same name = same content, so nothing is ever rewritten. See docs/dev/eval-grading.md for why grading prefers this copy.
 - **Workdir** copies to `workdir/` and writes the dated `workdir.json`
   sidecar. A workdir attached later may postdate the run; the sidecar says so.
   The run directory itself, and the optional `excludeDir` (the group a capture

@@ -112,7 +112,7 @@ export abstract class BaseOptimizer {
     const first = inputs[0];
     if (!first) return;
     for (const grader of this.config.graders) {
-      if (grader.gradesInput(first)) grader.validateInput(first);
+      grader.validateInput(first);
     }
   }
 
@@ -277,7 +277,7 @@ export abstract class BaseOptimizer {
     // "override": the optimizer's grader set IS its objective — a suite
     // input's own graders must not silently change what is being optimized.
     const ctx: GradingContext = {
-      suiteGraders: { mode: "override", graders: this.config.graders },
+      graders: { kind: "override", graders: this.config.graders },
       runAgency: this.agencyRunner,
       config: this.config.config ?? {},
     };

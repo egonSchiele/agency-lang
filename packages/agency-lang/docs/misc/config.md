@@ -98,10 +98,6 @@ Configuration for `agency eval` commands:
 ```
 
 - `runsDir` — where run directories land (default `runs/` under the cwd).
-- `graders` — a suite-wide fallback grading module, used by tests that carry
-  no `graders` of their own. An explicit `--graders` flag overrides
-  everything; with neither, the bundled goal judge grades against each
-  input's `goal`.
 - `limits.wallClockSec` — wall clock per agent run (default 60; a test's
   `timeoutSec` overrides it for that test).
 - `limits.maxCostUsd` — defensive LLM-spend ceiling per agent run (default

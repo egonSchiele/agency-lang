@@ -2,10 +2,10 @@
 
 ### Grading with code instead of an LLM
 
-An LLM judge is flexible but slow, costs money, and is a little different every time. When you can say what "correct" means in code, do that instead. You write a **grading module**: a TypeScript file that default-exports one grader or a list of them, and pass it with `--graders`:
+An LLM judge is flexible but slow, costs money, and is a little different every time. When you can say what "correct" means in code, do that instead. You write a **grading module**: a TypeScript file that default-exports one grader or a list of them, saved as `graders.ts` beside the test's `test.json`:
 
 ```ts
-// graders.ts
+// einstein/graders.ts
 import { grader, ExactMatch, Contains, Similarity } from "agency-lang/eval";
 
 export default [
@@ -20,10 +20,11 @@ export default [
 ```
 
 ```bash
-agency eval grade runs/einstein --graders graders.ts
+agency eval run agent.agency --suite evals/einstein --out runs/einstein
+agency eval grade runs/einstein
 ```
 
-This appends one score row per grader, all in one pass. The built-in graders are:
+Grading appends one score row per grader, all in one pass. The built-in graders are:
 
 - `ExactMatch` — pass if the output deep-equals the test's `expected` value.
 - `Contains` — pass if the stringified output contains `expected`.
@@ -68,13 +69,11 @@ Each test's scores are folded into one number, the **objective**, between 0 and 
 
 ### Where the graders come from
 
-When you don't pass `--graders` or `--goal`, `eval grade` picks graders in this order:
+Graders belong to tests. A test names its module with `graders` in its spec, or a `graders.ts` beside its `test.json` is picked up automatically. A test with no graders is scored by the bundled goal judge against its `goal`.
 
-1. The test's own graders, if the input named a `graders` module (or, in the test-directory form, a `graders.ts` sits beside `test.json`).
-2. The `eval.graders` module in `agency.json`, for tests that have none of their own.
-3. The bundled goal judge, scoring against the test's `goal`.
+`eval run` stores a copy of each test's graders in the run directory, and `eval grade` scores with that copy, so an edit to `graders.ts` never silently changes what an old run scores. To re-score old runs with the graders you have now, name the suite: `eval grade runs/einstein --suite evals/einstein` grades each run with its test's current graders, matched by test id.
 
-`--graders <file>` overrides all of that for every test in the pass. `--goal` is the other override and always means the bundled goal judge; the two flags can't be combined, because a grading module brings its own criteria (give `LlmJudge` a `goal` there instead).
+`--goal <text>` judges every trace against that text with the bundled goal judge (a test that recorded its own goal keeps it). It can't be combined with `--suite`, because the suite's graders bring their own criteria (give `LlmJudge` a `goal` in `graders.ts` instead).
 
 ### Grading by hand
 

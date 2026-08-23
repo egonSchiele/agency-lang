@@ -71,22 +71,4 @@ describe("BaseGrader", () => {
     expect(g.passes({ score: { kind: "scalar", value: 0.8 } })).toBe(true);
     expect(g.passes({ score: { kind: "scalar", value: 0.6 } })).toBe(false);
   });
-
-  it("gradesInput: default all; tag scope matches metadata.tags; ids scope matches input.id", () => {
-    const all = new StubGrader(() => ({ score: { kind: "binary", pass: true } }));
-    expect(all.gradesInput(input())).toBe(true);
-
-    const tagged = new StubGrader(() => ({ score: { kind: "binary", pass: true } }), {
-      inputScope: { tag: "review" },
-    });
-    expect(tagged.gradesInput(input({ metadata: { tags: ["review"] } }))).toBe(true);
-    expect(tagged.gradesInput(input({ metadata: { tags: ["other"] } }))).toBe(false);
-    expect(tagged.gradesInput(input())).toBe(false);
-
-    const byId = new StubGrader(() => ({ score: { kind: "binary", pass: true } }), {
-      inputScope: { ids: ["i1"] },
-    });
-    expect(byId.gradesInput(input({ id: "i1" }))).toBe(true);
-    expect(byId.gradesInput(input({ id: "i2" }))).toBe(false);
-  });
 });

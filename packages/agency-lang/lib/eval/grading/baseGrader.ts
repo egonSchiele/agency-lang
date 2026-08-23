@@ -60,17 +60,6 @@ export abstract class BaseGrader {
     return this.options.weight ?? 1;
   }
 
-  /** Whether this grader runs on `input`. Default (no inputScope) → every input. */
-  gradesInput(input: Test): boolean {
-    const scope = this.options.inputScope;
-    if (!scope) return true;
-    if ("tag" in scope) {
-      const tags = input.metadata?.tags;
-      return Array.isArray(tags) && tags.includes(scope.tag);
-    }
-    return input.id !== undefined && scope.ids.includes(input.id);
-  }
-
   /** Orchestration: run `_run` k times, aggregate by score kind. */
   async run(input: GraderInput): Promise<Grade> {
     const samples = this.options.samples ?? 1;

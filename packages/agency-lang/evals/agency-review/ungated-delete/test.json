@@ -1,0 +1,12 @@
+{
+  "description": "Agency-specific: the task says deletion must wait for the user's approval, but the code approves its own destructive effect with `with approve`. Typechecks cleanly.",
+  "tags": [
+    "bug",
+    "handlers"
+  ],
+  "files": "./files",
+  "input": {
+    "assignment": "Write an Agency program with a node main that deletes every file in ./tmp whose name ends in .log. The deletion is destructive, so it must be left for the caller to approve or reject: do not approve it inside the program.",
+    "sourceFile": "solution.agency"
+  }
+}

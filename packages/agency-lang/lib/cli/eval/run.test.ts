@@ -328,7 +328,10 @@ describe("eval run CLI", () => {
   });
 
   describe("grading a run directory", () => {
-    function setup(runId: string, inputs: { id: string; goal: string; input: string }[]) {
+    function setup(
+      runId: string,
+      inputs: { id: string; goal: string; input: string; graders?: string }[],
+    ) {
       const agentDir = path.join(tmpDir, "agent");
       fs.mkdirSync(agentDir, { recursive: true });
       const agent = path.join(agentDir, "agent.agency");
@@ -343,7 +346,7 @@ describe("eval run CLI", () => {
 
       const { grading } = await gradeSuite(
         summary.tests[0].runDir,
-        { mode: "override", graders: [grader(() => false, { name: "gate", mustPass: true })] },
+        { kind: "override", graders: [grader(() => false, { name: "gate", mustPass: true })] },
         {},
       );
 
@@ -361,15 +364,15 @@ describe("eval run CLI", () => {
     });
 
     it("a failed run scores zero and the mean over the group is 0.5, not 0", async () => {
-      const opts = setup("mixed", [
-        { id: "a", goal: "g", input: "t" },
-        { id: "b", goal: "g", input: "t" },
-      ]);
-      const summary = await runSuite(opts, { runner: okRunner });
       // Passes on test "a", fails the gate on test "b".
       const graders = path.join(tmpDir, "gate.ts");
       fs.writeFileSync(graders, `export default ({ test }) => (test.id === "a" ? 1 : 0);`);
-      const result = await evalGrade([summary.runDir], { graders, config: {} });
+      const opts = setup("mixed", [
+        { id: "a", goal: "g", input: "t", graders },
+        { id: "b", goal: "g", input: "t", graders },
+      ]);
+      const summary = await runSuite(opts, { runner: okRunner });
+      const result = await evalGrade([summary.runDir], { config: {} });
 
       // One of two runs scored 1, the other 0 — the mean is 0.5, not 0.
       expect(result.mean).toBeCloseTo(0.5);
@@ -405,13 +408,13 @@ describe("eval run CLI", () => {
   });
 
   describe("per-test graders", () => {
-    it("each test grades itself; a config module is the fallback; --graders overrides everything", async () => {
+    it("each test grades itself by the stored copy; --suite re-grades with the suite's current graders", async () => {
       const agentFile = path.join(tmpDir, "agent.agency");
       fs.writeFileSync(agentFile, "node main(input: string) {}\n");
       const runsDir = path.join(tmpDir, "runs");
 
-      // Two test dirs: "self" carries its own grader (scores 1 on "hello"),
-      // "plain" has none and falls back to the config module (scores 0).
+      // Two test dirs, each with its own grader: "self" scores 1 on "hello",
+      // "other" scores 0 on anything.
       const suiteDir = path.join(tmpDir, "suite");
       fs.mkdirSync(path.join(suiteDir, "self"), { recursive: true });
       fs.writeFileSync(path.join(suiteDir, "self", "test.json"), JSON.stringify({ input: "t" }));
@@ -419,26 +422,26 @@ describe("eval run CLI", () => {
         path.join(suiteDir, "self", "graders.ts"),
         `export default ({ output }) => (output === "hello" ? 1 : 0);`,
       );
-      fs.mkdirSync(path.join(suiteDir, "plain"), { recursive: true });
-      fs.writeFileSync(path.join(suiteDir, "plain", "test.json"), JSON.stringify({ input: "t" }));
-      const fallbackModule = path.join(tmpDir, "fallback.ts");
-      fs.writeFileSync(fallbackModule, `export default () => 0;`);
-      const config = { eval: { graders: fallbackModule } };
+      fs.mkdirSync(path.join(suiteDir, "other"), { recursive: true });
+      fs.writeFileSync(path.join(suiteDir, "other", "test.json"), JSON.stringify({ input: "t" }));
+      fs.writeFileSync(path.join(suiteDir, "other", "graders.ts"), `export default () => 0;`);
 
       const result = await evalRun(
-        { agent: agentFile, suite: suiteDir, out: path.join(runsDir, "per-test"), config },
+        { agent: agentFile, suite: suiteDir, out: path.join(runsDir, "per-test"), config: {} },
         { runner: okRunner },
       );
 
-      // "self" scored 1 by its own grader; "plain" scored 0 by the fallback.
-      const fallback = await evalGrade([result.runDir], { config });
-      expect(fallback.mean).toBeCloseTo(0.5);
+      // "self" scored 1 by its own grader; "other" scored 0 by its own.
+      const stored = await evalGrade([result.runDir], { config: {} });
+      expect(stored.mean).toBeCloseTo(0.5);
 
-      // An explicit --graders replaces BOTH tests' graders.
-      const overrideModule = path.join(tmpDir, "override.ts");
-      fs.writeFileSync(overrideModule, `export default () => 1;`);
-      const overridden = await evalGrade([result.runDir], { graders: overrideModule, config });
-      expect(overridden.mean).toBeCloseTo(1);
+      // "other" gets a better grader. The stored copy still grades 0.5;
+      // --suite grades with what the suite has now.
+      fs.writeFileSync(path.join(suiteDir, "other", "graders.ts"), `export default () => 1;`);
+      const again = await evalGrade([result.runDir], { config: {} });
+      expect(again.mean).toBeCloseTo(0.5);
+      const current = await evalGrade([result.runDir], { suite: suiteDir, config: {} });
+      expect(current.mean).toBeCloseTo(1);
     });
   });
 

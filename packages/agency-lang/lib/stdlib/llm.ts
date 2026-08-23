@@ -115,47 +115,59 @@ export function _hostedModelInfo(name: string): HostedModelInfo | null {
   return model && model.type === "text" ? toHostedInfo(model) : null;
 }
 
-/** Hosted-search capability names to request for `model`, backing
- *  `std::agents/lib/search.hostedSearchTools`. Every smoltalk client keys the
- *  request on the literal string "web_search", so that is the only name this
- *  ever returns (the catalog's per-provider tool names like "google_search"
- *  are catalog entries, not request keys).
+/** Hosted-search capability names to request for a call on `model` via
+ *  `provider`, backing `std::agents/lib/search.hostedSearchTools`. Every
+ *  smoltalk client keys the request on the literal string "web_search", so
+ *  that is the only name this ever returns (the catalog's per-provider tool
+ *  names like "google_search" are catalog entries, not request keys).
  *
- *  The gate errs open by design. Withholding search wrongly makes an agent
- *  quietly stop searching, which is invisible; requesting it wrongly makes
- *  the provider return an error, which is visible. So:
- *  - unknown model (not in the catalog: brand new, local, custom) → request it
- *  - empty model with no branch default → request it (historical behavior;
- *    the baked default is a cloud model that supports it)
- *  - known model → request it if any hosted web_search entry belongs to the
- *    model's provider family. The catalog keys models by family ("openai")
- *    but hosted tools by provider API ("openai-responses"), so the family
- *    rule matches either the exact provider or a "family-" API variant.
- *  Only a model whose provider family positively offers no hosted search
- *  (e.g. a registered local provider) gets an empty array. */
-export function _hostedSearchTools(model: string): string[] {
-  let effective = model;
-  if (effective === "") {
-    // agencyStore directly rather than getRuntimeContext(), which throws
-    // outside an execution frame; no frame just means no branch default.
-    const stack = agencyStore.getStore()?.stack;
-    const defaults = (stack?.other.llmDefaults ?? {}) as { model?: string };
-    effective = defaults.model ?? "";
-  }
-  if (effective === "") {
+ *  The answer depends on the ROUTE, not the model family: gpt-4o-mini has
+ *  hosted search through "openai-responses" and none through the base
+ *  "openai" client. This resolves the pair the way the call will (see
+ *  `resolveLlmRoute`) and asks smoltalk's `getHostedTools` about exactly
+ *  that pair, which is the same check that later rejects an unsupported
+ *  request.
+ *
+ *  Two cases err open, because withholding search wrongly is the invisible
+ *  failure: a model unknown to the catalog (brand new, custom) and an empty
+ *  model with no default anywhere. */
+export function _hostedSearchTools(model: string, provider: string = ""): string[] {
+  const route = resolveLlmRoute(model, provider);
+  if (route.model === "") {
     return ["web_search"];
   }
-  const family = getModel(effective as any)?.provider;
-  if (!family) {
+  if (!getModel(route.model as any)) {
     return ["web_search"];
   }
-  const entries = getHostedTools({ category: "web_search" });
-  for (const entry of entries) {
-    if (entry.provider === family || entry.provider.startsWith(family + "-")) {
-      return ["web_search"];
-    }
+  const entries = getHostedTools({
+    category: "web_search",
+    model: route.model as any,
+    ...(route.provider === "" ? {} : { provider: route.provider }),
+  });
+  return entries.length > 0 ? ["web_search"] : [];
+}
+
+/** The model/provider pair an `llm()` call would use given these explicit
+ *  overrides ("" = none). A named model routes through the named provider,
+ *  else its CATALOG provider — never the ambient one: `llmOptions` emits
+ *  the (possibly empty) provider alongside the model, the per-call config
+ *  overwrites the branch/baked pair, and smoltalk resolves an empty
+ *  provider from the model. Only a call with no model override falls back
+ *  to the ambient pair (branch `setLlmOptions`, then the baked agency.json
+ *  defaults); an empty provider there again means the catalog. Reads
+ *  `agencyStore` directly rather than `getRuntimeContext()`, which throws
+ *  outside an execution frame; no frame just means no defaults. */
+function resolveLlmRoute(model: string, provider: string): { model: string; provider: string } {
+  if (model !== "") {
+    return { model, provider };
   }
-  return [];
+  const store = agencyStore.getStore();
+  const branch = (store?.stack?.other.llmDefaults ?? {}) as { model?: string; provider?: string };
+  const baked = (store?.ctx?.smoltalkDefaults ?? {}) as { model?: string; provider?: string };
+  return {
+    model: branch.model || baked.model || "",
+    provider: provider || branch.provider || baked.provider || "",
+  };
 }
 
 /** Tri-state modality probe backing `std::llm.modelSupportsInput`. Returns

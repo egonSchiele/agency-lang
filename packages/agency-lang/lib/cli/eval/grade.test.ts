@@ -7,7 +7,7 @@ import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
 import { buildRunsListing } from "@/runDirectory/list.js";
 import { readRunDirectory } from "@/runDirectory/runDir.js";
 
-import { evalGrade, gradersFor, validateGradeTarget } from "./grade.js";
+import { evalGrade, graderSourceFor, validateGradeTarget } from "./grade.js";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -18,35 +18,45 @@ afterEach(() => {
   }
 });
 
-/** A finished run directory with one successful trace, as eval run writes it. */
-function makeRunDir(output: string): string {
-  const runDir = writeRunDirectory({ test: { id: "a", goal: "g", input: "t" }, output });
-  dirs.push(runDir);
-  return runDir;
-}
-
 /**
- * A grading module that scores by output length. Written inside the package, not
- * a temp dir, so its `import "agency-lang/eval"` resolves against the workspace
- * node_modules — the same reason optimize.test.ts does this.
+ * A grading module. Written inside the package, not a temp dir, so its
+ * `import "agency-lang/eval"` resolves against the workspace node_modules —
+ * the same reason optimize.test.ts does this.
  */
-function makeGraders(): string {
-  const dir = fs.mkdtempSync(path.join(process.cwd(), ".test-grading-"));
+function writeGraders(
+  source: string,
+  dir = fs.mkdtempSync(path.join(process.cwd(), ".test-grading-")),
+): string {
   dirs.push(dir);
   const file = path.join(dir, "graders.ts");
-  fs.writeFileSync(
-    file,
-    `import { grader } from "agency-lang/eval";
-export default [grader(({ output }) => String(output).length / 10, { name: "len" })];`,
-  );
+  fs.writeFileSync(file, `import { grader } from "agency-lang/eval";\n${source}`);
   return file;
+}
+
+/** Scores by output length: "hello" → 0.5. */
+function lengthGraders(): string {
+  return writeGraders(
+    `export default [grader(({ output }) => String(output).length / 10, { name: "len" })];`,
+  );
+}
+
+/** A test that carries the length grader, the way a suite test does. */
+function lenTest(id: string, extra: Record<string, unknown> = {}) {
+  return { id, input: "t", graders: lengthGraders(), ...extra };
+}
+
+/** A finished run directory with one successful trace, as eval run writes it. */
+function makeRunDir(output: string): string {
+  const runDir = writeRunDirectory({ test: lenTest("a", { goal: "g" }), output });
+  dirs.push(runDir);
+  return runDir;
 }
 
 describe("evalGrade", () => {
   it("scores a run directory and records one complete grading pass", async () => {
     const runDir = makeRunDir("hello");
 
-    const result = await evalGrade([runDir], { graders: makeGraders(), config: {} });
+    const result = await evalGrade([runDir], { config: {} });
 
     expect(result.runs).toHaveLength(1);
     // Reported directories are canonical (realpath), the same path the pass was written to.
@@ -73,18 +83,17 @@ describe("evalGrade", () => {
     const runDir = makeRunDir("hello");
     const out = path.join(runDir, "custom.json");
 
-    await evalGrade([runDir], { graders: makeGraders(), out, config: {} });
+    await evalGrade([runDir], { out, config: {} });
 
     expect(JSON.parse(fs.readFileSync(out, "utf8")).mean).toBeCloseTo(0.5);
     expect(fs.existsSync(path.join(runDir, "annotations.jsonl"))).toBe(true);
   });
 
   it("a second pass appends beside the first and becomes the effective one", async () => {
-    const runDir = makeRunDir("hello");
-    const graders = makeGraders(); // the SAME module both times: one annotator, two passes
+    const runDir = makeRunDir("hello"); // the run's own module both times: one annotator, two passes
 
-    await evalGrade([runDir], { graders, config: {} });
-    await evalGrade([runDir], { graders, config: {} });
+    await evalGrade([runDir], { config: {} });
+    await evalGrade([runDir], { config: {} });
 
     const snapshot = readRunDirectory(runDir, { reportWarning: () => {} });
     const scores = snapshot.annotationRows.filter((row) => row.kind === "score");
@@ -97,14 +106,11 @@ describe("evalGrade", () => {
   it("grades every run directory in a group, one pass each, and reports the mean", async () => {
     const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
     dirs.push(group);
-    writeRunDirectory({ test: { id: "a", input: "t" }, output: "hello" }, path.join(group, "a"));
-    writeRunDirectory(
-      { test: { id: "b", input: "t" }, output: "hello world" },
-      path.join(group, "b"),
-    );
+    writeRunDirectory({ test: lenTest("a"), output: "hello" }, path.join(group, "a"));
+    writeRunDirectory({ test: lenTest("b"), output: "hello world" }, path.join(group, "b"));
     fs.writeFileSync(path.join(group, "notes.txt"), "not a run");
 
-    const result = await evalGrade([group], { graders: makeGraders(), config: {} });
+    const result = await evalGrade([group], { config: {} });
 
     expect(result.runs.map((run) => path.basename(run.dir))).toEqual(["a", "b"]);
     expect(result.mean).toBeCloseTo((0.5 + 1.1) / 2);
@@ -117,18 +123,19 @@ describe("evalGrade", () => {
   it("a group where one run fails a must-pass gate: that run scores 0, gatesPassed is false, the other keeps its score", async () => {
     const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
     dirs.push(group);
-    writeRunDirectory({ test: { id: "a", input: "t" }, output: "hello" }, path.join(group, "a"));
-    writeRunDirectory({ test: { id: "b", input: "t" }, output: "bye" }, path.join(group, "b"));
-    const dir = fs.mkdtempSync(path.join(process.cwd(), ".test-grading-"));
-    dirs.push(dir);
-    const file = path.join(dir, "graders.ts");
-    fs.writeFileSync(
-      file,
-      `import { grader } from "agency-lang/eval";
-export default [grader(({ output }) => output === "hello", { name: "gate", mustPass: true })];`,
+    const file = writeGraders(
+      `export default [grader(({ output }) => output === "hello", { name: "gate", mustPass: true })];`,
+    );
+    writeRunDirectory(
+      { test: { id: "a", input: "t", graders: file }, output: "hello" },
+      path.join(group, "a"),
+    );
+    writeRunDirectory(
+      { test: { id: "b", input: "t", graders: file }, output: "bye" },
+      path.join(group, "b"),
     );
 
-    const result = await evalGrade([group], { graders: file, config: {} });
+    const result = await evalGrade([group], { config: {} });
 
     expect(result.runs.map((run) => run.grading.objective)).toEqual([1, 0]);
     expect(result.gatesPassed).toBe(false);
@@ -139,9 +146,9 @@ export default [grader(({ output }) => output === "hello", { name: "gate", mustP
     const a = makeRunDir("hello");
     const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
     dirs.push(group);
-    writeRunDirectory({ test: { id: "b", input: "t" }, output: "hello" }, path.join(group, "b"));
+    writeRunDirectory({ test: lenTest("b"), output: "hello" }, path.join(group, "b"));
 
-    const result = await evalGrade([a, group], { graders: makeGraders(), config: {} });
+    const result = await evalGrade([a, group], { config: {} });
 
     expect(result.runs.map((run) => run.dir)).toEqual(
       [a, path.join(group, "b")].map((dir) => fs.realpathSync(dir)),
@@ -156,13 +163,10 @@ export default [grader(({ output }) => output === "hello", { name: "gate", mustP
     const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
     dirs.push(group);
     const a = path.join(group, "a");
-    writeRunDirectory({ test: { id: "a", input: "t" }, output: "hello" }, a);
-    writeRunDirectory(
-      { test: { id: "b", input: "t" }, output: "hello world" },
-      path.join(group, "b"),
-    );
+    writeRunDirectory({ test: lenTest("a"), output: "hello" }, a);
+    writeRunDirectory({ test: lenTest("b"), output: "hello world" }, path.join(group, "b"));
 
-    const result = await evalGrade([group, a], { graders: makeGraders(), config: {} });
+    const result = await evalGrade([group, a], { config: {} });
 
     expect(result.runs.map((run) => path.basename(run.dir))).toEqual(["a", "b"]);
     expect(result.mean).toBeCloseTo((0.5 + 1.1) / 2);
@@ -174,11 +178,11 @@ export default [grader(({ output }) => output === "hello", { name: "gate", mustP
     const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
     dirs.push(group);
     const a = path.join(group, "a");
-    writeRunDirectory({ test: { id: "a", input: "t" }, output: "hello" }, a);
+    writeRunDirectory({ test: lenTest("a"), output: "hello" }, a);
     const alias = path.join(group, "alias");
     fs.symlinkSync(a, alias, "dir");
 
-    const result = await evalGrade([a, alias], { graders: makeGraders(), config: {} });
+    const result = await evalGrade([a, alias], { config: {} });
 
     expect(result.runs).toHaveLength(1);
     const rows = readRunDirectory(a, { reportWarning: () => {} }).annotationRows;
@@ -188,13 +192,13 @@ export default [grader(({ output }) => output === "hello", { name: "gate", mustP
   it("an errored run scores zero in eval grade but has no score row, so the listing mean leaves it out", async () => {
     const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
     dirs.push(group);
-    writeRunDirectory({ test: { id: "a", input: "t" }, output: "hello" }, path.join(group, "a"));
+    writeRunDirectory({ test: lenTest("a"), output: "hello" }, path.join(group, "a"));
     writeRunDirectory(
-      { test: { id: "b", input: "t" }, output: "hello", ended: "error" },
+      { test: lenTest("b"), output: "hello", ended: "error" },
       path.join(group, "b"),
     );
 
-    const result = await evalGrade([group], { graders: makeGraders(), config: {} });
+    const result = await evalGrade([group], { config: {} });
 
     expect(result.mean).toBeCloseTo(0.5 / 2);
     const listing = buildRunsListing(
@@ -211,15 +215,15 @@ export default [grader(({ output }) => output === "hello", { name: "gate", mustP
     dirs.push(group);
     const batch = path.basename(group);
     writeRunDirectory(
-      { test: { id: "a", input: "t" }, output: "hello", batch, trial: 1 },
+      { test: lenTest("a"), output: "hello", batch, trial: 1 },
       path.join(group, "a", "1"),
     );
     writeRunDirectory(
-      { test: { id: "a", input: "t" }, wroteStatelog: false, ended: "error", batch, trial: 2 },
+      { test: lenTest("a"), wroteStatelog: false, ended: "error", batch, trial: 2 },
       path.join(group, "a", "2"),
     );
 
-    const result = await evalGrade([group], { graders: makeGraders(), config: {} });
+    const result = await evalGrade([group], { config: {} });
 
     expect(result.batches).toHaveLength(1);
     expect(result.batches[0]).toMatchObject({ batch, trials: 2, accuracy: 0.25 });
@@ -235,14 +239,14 @@ export default [grader(({ output }) => output === "hello", { name: "gate", mustP
       const batch = path.basename(group);
       for (const trial of [1, 2]) {
         writeRunDirectory(
-          { test: { id: "a", input: "t" }, output: "hello", batch, trial },
+          { test: lenTest("a"), output: "hello", batch, trial },
           path.join(group, "a", String(trial)),
         );
       }
       return group;
     });
 
-    const result = await evalGrade(groups, { graders: makeGraders(), config: {} });
+    const result = await evalGrade(groups, { config: {} });
 
     expect(result.runs).toHaveLength(4);
     expect(result.batches.map((batch) => batch.batch)).toEqual(groups.map((g) => path.basename(g)));
@@ -252,8 +256,8 @@ export default [grader(({ output }) => output === "hello", { name: "gate", mustP
   it("a single-trial group reports no batch statistics", async () => {
     const group = fs.mkdtempSync(path.join(process.cwd(), ".test-group-"));
     dirs.push(group);
-    writeRunDirectory({ test: { id: "a", input: "t" }, output: "hello" }, path.join(group, "a"));
-    const result = await evalGrade([group], { graders: makeGraders(), config: {} });
+    writeRunDirectory({ test: lenTest("a"), output: "hello" }, path.join(group, "a"));
+    const result = await evalGrade([group], { config: {} });
     expect(result.batches).toEqual([]);
   });
 
@@ -267,29 +271,51 @@ export default [grader(({ output }) => output === "hello", { name: "gate", mustP
     expect(() => validateGradeTarget([makeRunDir("x")], {})).not.toThrow();
   });
 
-  it("refuses --goal together with --graders", () => {
-    expect(() => validateGradeTarget([makeRunDir("x")], { goal: "g", graders: "g.ts" })).toThrow(
-      /only one of --graders or --goal/,
+  it("refuses --goal together with --suite", () => {
+    expect(() => validateGradeTarget([makeRunDir("x")], { goal: "g", suite: "s" })).toThrow(
+      /only one of --suite or --goal/,
     );
   });
 
-  it("--goal sets aside a configured grading module and runs the goal judge", async () => {
-    // A configured module carries its own criteria, just as --graders does; --goal
-    // names the criterion, so it must reach the bundled goal judge, not the module.
-    const dir = fs.mkdtempSync(path.join(process.cwd(), ".test-grading-"));
-    dirs.push(dir);
-    const file = path.join(dir, "graders.ts");
-    fs.writeFileSync(
-      file,
-      `import { grader } from "agency-lang/eval";
-export default [grader(() => 1, { name: "module" })];`,
+  it("--suite grades with each test's current graders, matched by test id", async () => {
+    // The run stored the length grader. The suite has the same test with a
+    // different grader now: --suite uses the suite's.
+    const runDir = makeRunDir("hello");
+    const suite = fs.mkdtempSync(path.join(process.cwd(), ".test-suite-"));
+    dirs.push(suite);
+    fs.mkdirSync(path.join(suite, "a"));
+    fs.writeFileSync(path.join(suite, "a", "test.json"), JSON.stringify({ input: "t" }));
+    writeGraders(`export default [grader(() => 1, { name: "current" })];`, path.join(suite, "a"));
+
+    const stored = await evalGrade([runDir], { config: {} });
+    expect(stored.runs[0].grading.graders).toEqual(["len"]);
+    expect(stored.mean).toBeCloseTo(0.5);
+
+    const current = await evalGrade([runDir], { suite, config: {} });
+    expect(current.runs[0].grading.graders).toEqual(["current"]);
+    expect(current.mean).toBe(1);
+  });
+
+  it("--suite refuses a run whose test is not in the suite", async () => {
+    const runDir = makeRunDir("hello");
+    const suite = fs.mkdtempSync(path.join(process.cwd(), ".test-suite-"));
+    dirs.push(suite);
+    fs.mkdirSync(path.join(suite, "other"));
+    fs.writeFileSync(path.join(suite, "other", "test.json"), JSON.stringify({ input: "t" }));
+    writeGraders(`export default [grader(() => 1, { name: "g" })];`, path.join(suite, "other"));
+
+    await expect(evalGrade([runDir], { suite, config: {} })).rejects.toThrow(
+      /test "a" has no test with that id in the suite.*other/,
     );
-    const withGoal = await gradersFor({ goal: "be nice" }, { eval: { graders: file } });
-    expect(withGoal?.mode).toBe("fallback");
-    expect(withGoal?.graders.map((g) => g.name())).toEqual(["goal"]);
-    expect(withGoal?.graders[0].annotator().kind).toBe("judge");
-    // Without --goal the configured module is the fallback, as before.
-    const withoutGoal = await gradersFor({}, { eval: { graders: file } });
-    expect(withoutGoal?.graders.map((g) => g.name())).toEqual(["module"]);
+  });
+
+  it("graderSourceFor: the stored copy by default, the suite's tests under --suite", () => {
+    expect(graderSourceFor({}, {})).toEqual({ kind: "snapshot" });
+    const suite = fs.mkdtempSync(path.join(process.cwd(), ".test-suite-"));
+    dirs.push(suite);
+    fs.writeFileSync(path.join(suite, "a.json"), JSON.stringify({ id: "a", input: "t" }));
+    const source = graderSourceFor({ suite }, {});
+    expect(source.kind).toBe("suite");
+    if (source.kind === "suite") expect(source.tests.map((test) => test.id)).toEqual(["a"]);
   });
 });

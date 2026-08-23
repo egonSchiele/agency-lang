@@ -1,0 +1,21 @@
+import { clamp } from "../files/solution.agency"
+
+export node inside(): number {
+  return clamp(5, 0, 10)
+}
+
+export node atLow(): number {
+  return clamp(0, 0, 10)
+}
+
+export node atHigh(): number {
+  return clamp(10, 0, 10)
+}
+
+export node below(): number {
+  return clamp(-3, 0, 10)
+}
+
+export node above(): number {
+  return clamp(15, 0, 10)
+}

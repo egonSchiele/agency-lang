@@ -1,0 +1,12 @@
+{
+  "description": "The mutant's clean sibling: the unmutated program, verified to pass the expected/ harness. Measures false positives on the exact same assignment.",
+  "tags": [
+    "clean",
+    "mutant-sibling"
+  ],
+  "files": "./files",
+  "input": {
+    "assignment": "Write an Agency module exporting def clamp(value: number, low: number, high: number): number that returns value limited to the inclusive range [low, high]: low when value is below it, high when value is above it, value itself otherwise.",
+    "sourceFile": "solution.agency"
+  }
+}

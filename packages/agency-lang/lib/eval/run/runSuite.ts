@@ -162,32 +162,9 @@ export async function runSuite(
     const traceId = nanoid();
     const testDir = path.join(groupDir, testId);
     const runDir = runDirFor(testDir, trial, trials);
-    const idProblem = testIdProblem(testId, groupDir, testDir);
-    if (idProblem !== undefined) {
-      return { testId, trial, traceId, runDir, status: "error", errorMessage: idProblem };
-    }
-    if (trials > 1 && isRunDirectory(testDir)) {
-      // A flat run from an earlier single-trial suite. Writing `<trial>/`
-      // under it would hide the trials: discovery takes the parent as the run.
-      return {
-        testId,
-        trial,
-        traceId,
-        runDir,
-        status: "error",
-        errorMessage: `${testDir} is already a run directory (a single-trial run); use another --out`,
-      };
-    }
-    if (fs.existsSync(runDir)) {
-      // Someone's data; not ours to touch. (Resume is deliberately not here.)
-      return {
-        testId,
-        trial,
-        traceId,
-        runDir,
-        status: "error",
-        errorMessage: `run directory already exists: ${runDir}`,
-      };
+    const problem = runDirProblem(testId, groupDir, testDir, runDir, trials);
+    if (problem !== undefined) {
+      return { testId, trial, traceId, runDir, status: "error", errorMessage: problem };
     }
     // Staged under the job's label, so a test's trials never share a path.
     const stagingDir = path.join(stagingRoot, jobLabel(job, trials));
@@ -578,6 +555,30 @@ function printLiveStatelogPaths(
     const statelogPath = agentRunPaths(path.join(stagingRoot, label)).statelogPath;
     console.error(`[${ttyColor.green(label)}] live statelog: ${statelogPath}`);
   }
+}
+
+/** Why a job cannot be written where it would go: a bad test id, a flat run
+ *  from an earlier single-trial suite where `<trial>/` directories would now
+ *  be hidden (discovery takes the parent as the run), or a run directory that
+ *  already exists (someone's data; resume is deliberately not here). */
+function runDirProblem(
+  testId: string,
+  groupDir: string,
+  testDir: string,
+  runDir: string,
+  trials: number,
+): string | undefined {
+  const idProblem = testIdProblem(testId, groupDir, testDir);
+  if (idProblem !== undefined) {
+    return idProblem;
+  }
+  if (trials > 1 && isRunDirectory(testDir)) {
+    return `${testDir} is already a run directory (a single-trial run); use another --out`;
+  }
+  if (fs.existsSync(runDir)) {
+    return `run directory already exists: ${runDir}`;
+  }
+  return undefined;
 }
 
 /** A test id is a directory name under the group: it must be non-empty and

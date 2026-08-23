@@ -1,0 +1,10 @@
+import { brainByName } from "../brains/registry.agency"
+import { agentNameFor } from "../lib/agentName.agency"
+
+node coordinatorName(): string {
+  const brain = brainByName("coordinator")
+  if (brain == null) {
+    return "null"
+  }
+  return agentNameFor(brain)
+}

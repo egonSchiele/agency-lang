@@ -1,0 +1,10 @@
+/** @module
+  @summary The name the agency agent records in the statelog: its family and
+  the brain that drove the trace, so cross-run tools group runs per brain.
+*/
+import { AgentBrain } from "../brains/brain.agency"
+
+/** "agency-agent/<brain name>", a valid std::statelog agent name. */
+export def agentNameFor(brain: AgentBrain): string {
+  return "agency-agent/" + brain.name
+}

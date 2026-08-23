@@ -162,6 +162,17 @@ describe("agency CLI command tree", () => {
     expect(evalCommands).not.toContain("optimize");
   });
 
+  it("`eval run` takes --trials as a positive integer", async () => {
+    const program = createProgram();
+    const evalCommand = program.commands.find((command) => command.name() === "eval");
+    const runCommand = evalCommand?.commands.find((command) => command.name() === "run");
+    expect(runCommand?.options.map((option) => option.long)).toContain("--trials");
+    runCommand?.exitOverride().configureOutput({ writeErr: () => {} });
+    await expect(
+      program.parseAsync(["eval", "run", "agent.agency", "--trials", "0"], { from: "user" }),
+    ).rejects.toThrow(/positive integer/);
+  });
+
   it("makes `view` the default for `logs` so `agency logs <file>` works without the subcommand", () => {
     const program = createProgram();
     const logsCommand = program.commands.find((command) => command.name() === "logs");

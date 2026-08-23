@@ -863,6 +863,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "Run up to this many inputs at once (default 1). Above 1, per-agent output is replaced by a status board (name, state, elapsed, cost so far)",
       parsePositiveInt,
     )
+    .option(
+      "--trials <count>",
+      "Run every test this many times (default 1); each repetition is its own run directory at <out>/<test>/<trial>",
+      parsePositiveInt,
+    )
     .action(
       async (
         agent: string | undefined,
@@ -874,6 +879,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
           tags?: string[];
           out?: string;
           parallel?: number;
+          trials?: number;
         },
       ) => {
         // Every test in the suite always runs, whatever the others did: an

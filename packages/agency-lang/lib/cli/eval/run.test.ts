@@ -55,6 +55,17 @@ describe("eval run CLI", () => {
     expect(validateInputSelection({})).toBe("input");
   });
 
+  it("--trials reaches runSuite: every test runs that many times", async () => {
+    const agentFile = path.join(tmpDir, "agent.agency");
+    fs.writeFileSync(agentFile, "node main(input: string) { return 1 }\n");
+    const result = await evalRun(
+      { agent: agentFile, input: "x", out: path.join(tmpDir, "runs", "t"), trials: 3 },
+      { runner: okRunner },
+    );
+    expect(result.tests.map((test) => test.trial)).toEqual([1, 2, 3]);
+    expect(result.okCount).toBe(3);
+  });
+
   it("runs an agent that takes no input when neither --suite nor --input is given", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
     fs.writeFileSync(agentFile, "node main() {}\n");

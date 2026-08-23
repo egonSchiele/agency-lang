@@ -106,6 +106,94 @@ describe("runSuite", () => {
     expect(fs.readdirSync(result.runDir).sort()).toEqual(["a", "b"]);
   });
 
+  it("--trials k: each test runs k times under <out>/<test>/<trial>, sharing the batch id, each its own trace", async () => {
+    const out = path.join(proj, "runs", "r-trials");
+    const runner = traceWritingRunner("done");
+    const result = await runSuite(
+      {
+        agent: path.join(proj, "agent.agency"),
+        inputs: [
+          { id: "fib", goal: "g", input: "first" },
+          { id: "sum", goal: "g", input: "second" },
+        ],
+        out,
+        config: {},
+        trials: 2,
+        perRun: { pipeOutput: false },
+      },
+      { runner },
+    );
+
+    // Trial-major: every test's first trial before any second trial.
+    expect(result.tests.map((test) => [test.testId, test.trial, test.status])).toEqual([
+      ["fib", 1, "success"],
+      ["sum", 1, "success"],
+      ["fib", 2, "success"],
+      ["sum", 2, "success"],
+    ]);
+    expect(result.tests.map((test) => path.relative(out, test.runDir))).toEqual([
+      path.join("fib", "1"),
+      path.join("sum", "1"),
+      path.join("fib", "2"),
+      path.join("sum", "2"),
+    ]);
+    const traceIds = result.tests.map((test) => test.traceId);
+    expect(traceIds[0]).not.toBe(traceIds[2]);
+    for (const test of result.tests) {
+      const snapshot = readRunDirectory(test.runDir, quiet);
+      expect(snapshot.effectiveAnnotations[test.traceId].run).toMatchObject({
+        batch: "r-trials",
+        trial: test.trial,
+        flags: { trials: 2 },
+      });
+    }
+    expect(fs.readdirSync(out).sort()).toEqual(["fib", "sum"]);
+    expect(fs.readdirSync(path.join(out, "fib")).sort()).toEqual(["1", "2"]);
+  });
+
+  it("one trial keeps the flat layout and records trial 1", async () => {
+    const out = path.join(proj, "runs", "r-flat");
+    const result = await runSuite(
+      {
+        agent: path.join(proj, "agent.agency"),
+        inputs: [{ id: "fib", goal: "g", input: "first" }],
+        out,
+        config: {},
+        perRun: { pipeOutput: false },
+      },
+      { runner: traceWritingRunner("done") },
+    );
+    expect(result.tests.map((test) => [test.trial, test.runDir])).toEqual([
+      [1, path.join(out, "fib")],
+    ]);
+    const snapshot = readRunDirectory(result.tests[0].runDir, quiet);
+    expect(snapshot.effectiveAnnotations[result.tests[0].traceId].run).toMatchObject({
+      batch: "r-flat",
+      trial: 1,
+      flags: { trials: 1 },
+    });
+  });
+
+  it("rejects a trial count that is not a positive integer before creating anything", async () => {
+    const out = path.join(proj, "runs", "r-bad");
+    for (const trials of [0, -1, 1.5, Number.NaN]) {
+      await expect(
+        runSuite(
+          {
+            agent: path.join(proj, "agent.agency"),
+            inputs: [{ id: "fib", goal: "g", input: "first" }],
+            out,
+            config: {},
+            trials,
+            perRun: { pipeOutput: false },
+          },
+          { runner: traceWritingRunner("done") },
+        ),
+      ).rejects.toThrow(/trials must be a positive integer/);
+    }
+    expect(fs.existsSync(out)).toBe(false);
+  });
+
   it("module-dir == cwd: compiled entry lives inside the test's staging workdir", async () => {
     const seen: { compiledEntryPath: string; cwd: string }[] = [];
     const runner = vi.fn(async (job: EvalRunnerJob) => {

@@ -2,14 +2,13 @@ import { describe, it, expect, vi } from "vitest";
 import {
   checkPolicy,
   resolveDotDirPattern,
-  resolveInstallDirPattern,
+  expandAgencyInstallDir,
   validatePolicy,
 } from "./policy.js";
 import { getStdlibDir } from "../importPaths.js";
 import path from "path";
 import { mkdtempSync, mkdirSync, symlinkSync, rmSync, realpathSync } from "fs";
 import { tmpdir } from "os";
-import path from "path";
 import picomatch from "picomatch";
 
 describe("checkPolicy", () => {
@@ -527,7 +526,7 @@ describe("<agency> dir patterns", () => {
   });
 
   it("escapes the root so glob characters in the install path stay literal", () => {
-    expect(resolveInstallDirPattern("<agency>/stdlib/**", () => "/opt/v*1")).toBe(
+    expect(expandAgencyInstallDir("<agency>/stdlib/**", () => "/opt/v*1")).toBe(
       "/opt/v\\*1/stdlib/**",
     );
   });
@@ -536,8 +535,8 @@ describe("<agency> dir patterns", () => {
     const unresolvable = () => {
       throw new Error("no package.json");
     };
-    expect(resolveInstallDirPattern("<agency>/stdlib/**", unresolvable)).toBe("<agency>/stdlib/**");
-    expect(resolveInstallDirPattern("/plain/**", unresolvable)).toBe("/plain/**");
+    expect(expandAgencyInstallDir("<agency>/stdlib/**", unresolvable)).toBe("<agency>/stdlib/**");
+    expect(expandAgencyInstallDir("/plain/**", unresolvable)).toBe("/plain/**");
   });
 });
 

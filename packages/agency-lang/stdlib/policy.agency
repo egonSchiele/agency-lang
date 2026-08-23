@@ -17,7 +17,6 @@ import {
   _BUILTIN_POLICIES,
   _minimalAutoApprovePolicy,
   _recommendedAutoApprovePolicy,
-  _migrateCatchAllReads,
   _withWritesPolicy,
   _approveAllPolicy,
  } from "agency-lang/stdlib-lib/policy.js"
@@ -122,13 +121,6 @@ export def builtinPolicy(name: string, baseDir: string): Policy | null {
 export def builtinPolicyNames(): string[] {
   """The names accepted by builtinPolicy, e.g. for an approval prompt."""
   return _builtinPolicyNames()
-}
-
-export def migrateCatchAllReads(policy: Policy): { policy: Policy; migrated: string[] } {
-  """Replace read rules that are still the old recommended catch-all with the
-  current scoped rules. Returns the updated policy and the effects that
-  changed; rules the user edited are left alone."""
-  return _migrateCatchAllReads(policy)
 }
 
 /**

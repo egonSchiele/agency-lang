@@ -5,9 +5,6 @@ import {
   builtinPolicyNames,
   BUILTIN_POLICIES,
   approveAllPolicy,
-  migrateCatchAllReads,
-  readScopeRules,
-  READ_EFFECTS,
 } from "./builtinPolicies.js";
 
 describe("builtinPolicy", () => {
@@ -16,32 +13,13 @@ describe("builtinPolicy", () => {
     expect(p).not.toBeNull();
     // Both rules are tokens the matcher resolves at match time, so a saved
     // copy pins neither the launch directory nor the install path.
-    for (const effect of READ_EFFECTS) {
+    for (const effect of ["std::read", "std::readBinary", "std::ls", "std::glob", "std::grep"]) {
       expect(p![effect]).toEqual([
         { match: { dir: "{.,./**}" }, action: "approve" },
         { match: { dir: "{<agency>/stdlib/**,<agency>/dist/**}" }, action: "approve" },
       ]);
     }
     expect(p!["std::write"]).toBeUndefined();
-  });
-
-  it("migrates a saved policy's catch-all reads and leaves edited rules alone", () => {
-    const saved = {
-      "std::read": [{ action: "approve" as const }],
-      "std::ls": [{ action: "approve" as const }],
-      // The user scoped this one by hand: not the catch-all, so untouched.
-      "std::glob": [{ match: { dir: "/data/**" }, action: "approve" as const }],
-      "std::write": [{ action: "approve" as const }],
-    };
-    const { policy, migrated } = migrateCatchAllReads(saved);
-    expect(migrated).toEqual(["std::read", "std::ls"]);
-    expect(policy["std::read"]).toEqual(readScopeRules());
-    expect(policy["std::ls"]).toEqual(readScopeRules());
-    expect(policy["std::glob"]).toEqual(saved["std::glob"]);
-    // Only read effects are considered, and the input is not mutated.
-    expect(policy["std::write"]).toEqual([{ action: "approve" }]);
-    expect(saved["std::read"]).toEqual([{ action: "approve" }]);
-    expect(migrateCatchAllReads(policy).migrated).toEqual([]);
   });
 
   it("resolves 'minimal' with memory approved but reads absent", () => {

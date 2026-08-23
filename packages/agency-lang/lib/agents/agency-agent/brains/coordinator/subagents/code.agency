@@ -438,11 +438,19 @@ ${renderFeedback(checked)}
 Fix each problem exactly.
 """
     const fixed = supervisedSolve(task: fixMsg, context: "", agencyTask: agencyTask, alternatives: alternatives)
-    if (!isFailure(fixed)) {
-      summary = fixed.value
-      saveDraft(summary)
+    if (isFailure(fixed)) {
+      return summary
     }
-    return summary
+    summary = fixed.value
+    saveDraft(summary)
+    // The repair is re-checked, and its findings travel back too.
+    const rechecked = verifierAgent(
+      task: task,
+      criteria: guidance.checklist,
+      maxCost: $5.00,
+      maxTime: 5m,
+    )
+    return withVerification(summary, rechecked)
   }
   // Only a completed solve gets its findings attached: after a failed one
   // the verifier has judged whatever was already on disk, and "stopped"
@@ -457,11 +465,15 @@ Fix each problem exactly.
    reply to "write fib.agency and report the test results" was only the
    file contents, and a coordinator that had asked for results kept asking:
    four codeAgent rounds, an oracle, and two reviews for work that had
-   passed in the first minute. */
+   passed in the first minute. A re-check that still finds problems says
+   so instead of claiming verification. */
 def withVerification(summary: string, checked: Result<Feedback[]>): string {
   const findings = renderFeedback(checked)
   if (findings == "") {
     return summary
+  }
+  if (feedbackHasErrors(checked)) {
+    return "${summary}\n\nRe-check found these problems:\n${findings}"
   }
   return "${summary}\n\nVerified:\n${findings}"
 }
@@ -496,7 +508,9 @@ Fix each one; your work will be re-checked.
     return solved.value
   }
   saveDraft(fixed.value)
-  return fixed.value
+  // The prompt above promised a re-check; its findings travel back too.
+  const rechecked = verifierAgent(task: task, maxCost: $5.00, maxTime: 5m)
+  return withVerification(fixed.value, rechecked)
 }
 
 /* The interactive turn, which is the part that is genuinely this agent's own:

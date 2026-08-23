@@ -1,4 +1,8 @@
-import { INSTALL_TOKEN, type Policy, type PolicyRule } from "./policy.js";
+import {
+  AGENCY_INSTALL_DIR_PLACEHOLDER as INSTALL,
+  type Policy,
+  type PolicyRule,
+} from "./policy.js";
 
 // Read-only `agency` subcommands the code agent runs via its exec-based
 // `agencyCli` tool. Matched on command + subcommand (no shell chaining);
@@ -25,14 +29,11 @@ function agencyExecApproveRules(): PolicyRule[] {
 
 const approve: PolicyRule[] = [{ action: "approve" }];
 
-/** The effects the read-only file tools raise. */
-export const READ_EFFECTS = ["std::read", "std::readBinary", "std::ls", "std::glob", "std::grep"];
-
 // Where the read-only file tools may look without asking: the launch
 // directory and, because the agent's docs tools (`agencyGuide` and friends)
 // and bundled skills are plain reads of shipped files, the agency install
-// itself. Both are tokens the matcher resolves at match time (`.` against
-// the process cwd, `<agency>` against the package root; see
+// itself. Both are placeholders the matcher expands at match time (`.` to
+// the process cwd, `<agency>` to the package root; see
 // docs/dev/approval-policies.md), so a saved copy of this policy keeps
 // meaning "wherever the agent runs, wherever agency is installed now".
 // Reads anywhere else fall through: a prompt in an interactive session, an
@@ -40,31 +41,8 @@ export const READ_EFFECTS = ["std::read", "std::readBinary", "std::ls", "std::gl
 export function readScopeRules(): PolicyRule[] {
   return [
     { match: { dir: "{.,./**}" }, action: "approve" },
-    { match: { dir: `{${INSTALL_TOKEN}/stdlib/**,${INSTALL_TOKEN}/dist/**}` }, action: "approve" },
+    { match: { dir: `{${INSTALL}/stdlib/**,${INSTALL}/dist/**}` }, action: "approve" },
   ];
-}
-
-/** The rule the recommended policy used to have for every read effect. */
-const CATCH_ALL_APPROVE: PolicyRule[] = [{ action: "approve" }];
-
-/**
- * Bring a saved policy's read rules up to date. The agent writes the
- * recommended policy to `~/.agency-agent/policy.json` once and reloads that
- * file on every later launch, so a change to the built-in never reaches an
- * existing user by itself. A read effect whose rules are still exactly the
- * old catch-all gets the scoped rules; anything the user edited is left
- * alone. Returns the effects that changed, so the caller can say so.
- */
-export function migrateCatchAllReads(policy: Policy): { policy: Policy; migrated: string[] } {
-  const out: Policy = { ...policy };
-  const migrated: string[] = [];
-  for (const effect of READ_EFFECTS) {
-    if (JSON.stringify(out[effect]) === JSON.stringify(CATCH_ALL_APPROVE)) {
-      out[effect] = readScopeRules();
-      migrated.push(effect);
-    }
-  }
-  return { policy: out, migrated };
 }
 
 export const minimalAutoApprovePolicy: Policy = {

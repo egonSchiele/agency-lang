@@ -1,7 +1,8 @@
 # Tool-loop guards: repeated calls and markup arguments
 
-Two refusals in `runPrompt`'s tool loop (`lib/runtime/prompt.ts`) that
-stop a model from wasting rounds. Both happen before the tool's
+Two refusals in `runPrompt`'s tool loop that stop a model from wasting
+rounds. The helpers live in `lib/runtime/toolLoopGuards.ts`; `prompt.ts`
+only calls them. Both happen before the tool's
 `onToolCallStart` hook, so a refused call never runs, never fires hooks,
 and never counts toward `MAX_TOOL_FAILURES`. The model sees the refusal as
 an ordinary tool message, which is where it reads results.
@@ -12,9 +13,13 @@ Seen in an eval: the Agency writer made 45 identical `typecheck` calls,
 each returning "no errors", over four minutes. Nothing changed between
 calls, and nothing was going to.
 
-`repeatKey` identifies a call by tool name plus the arguments as
-canonical JSON (keys sorted at every level, so argument order does not
-make a new key). The loop keeps ONE streak record (`RepeatStreak`: key,
+`repeatKey` identifies a call by tool name plus a SHA-256 of the arguments
+as canonical JSON (keys sorted at every level, so argument order does not
+make a new key), and results are compared by digest too, so the streak
+record never holds a large argument or result: a tool can take a whole
+source file or return megabytes, and the record lives on the serialized
+frame. Hashing is linear in the size, which the loop already pays to
+stringify the result for the model. The loop keeps ONE streak record (`RepeatStreak`: key,
 result, count), because only calls in a row count: after every run,
 `noteRepeat` extends the streak when the key and the stringified result
 both match the previous call, and otherwise starts a new streak of one. So

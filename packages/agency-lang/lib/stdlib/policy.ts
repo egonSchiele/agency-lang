@@ -18,7 +18,6 @@ export {
   recommendedAutoApprovePolicy as _recommendedAutoApprovePolicy,
   withWritesPolicy as _withWritesPolicy,
   approveAllPolicy as _approveAllPolicy,
-  migrateCatchAllReads as _migrateCatchAllReads,
 } from "@/runtime/builtinPolicies.js";
 
 export async function _writePolicyFile(filePath: string, policy: Policy, allowedPaths?: string[]) {

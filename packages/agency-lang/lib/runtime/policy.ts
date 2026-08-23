@@ -104,27 +104,28 @@ export function resolveDotDirPattern(pattern: string, cwd: string = process.cwd(
   );
 }
 
-/** The token a `dir` pattern uses for the agency install itself, so a rule
- *  approving reads of the shipped docs and skills can be saved to a policy
- *  file without pinning the install path of one machine or one version. */
-export const INSTALL_TOKEN = "<agency>";
+/** In a `dir` pattern, `<agency>` stands for the directory the agency
+ *  package is installed in. A rule approving reads of the shipped docs and
+ *  skills can then be saved to a policy file without pinning the install
+ *  path of one machine or one version. */
+export const AGENCY_INSTALL_DIR_PLACEHOLDER = "<agency>";
 
-// Resolved at match time, like `.`: a saved policy keeps saying "wherever
+// Expanded at match time, like `.`: a saved policy keeps saying "wherever
 // agency is installed now". A root that cannot be found (a bundled build with
-// no package.json above it) leaves the token unresolved, so the rule simply
-// never matches; nothing throws. Exported for tests, which inject the root.
-export function resolveInstallDirPattern(
+// no package.json above it) leaves the placeholder as written, so the rule
+// simply never matches; nothing throws. Exported for tests, which inject the root.
+export function expandAgencyInstallDir(
   pattern: string,
   root: () => string = getPackageRoot,
 ): string {
-  if (!pattern.includes(INSTALL_TOKEN)) return pattern;
+  if (!pattern.includes(AGENCY_INSTALL_DIR_PLACEHOLDER)) return pattern;
   let resolved: string;
   try {
     resolved = root();
   } catch {
     return pattern;
   }
-  return pattern.split(INSTALL_TOKEN).join(escapeForGlob(resolved));
+  return pattern.split(AGENCY_INSTALL_DIR_PLACEHOLDER).join(escapeForGlob(resolved));
 }
 
 function matchesRule(
@@ -158,7 +159,7 @@ function matchesRule(
       !raw &&
       !viaDot &&
       key === "dir" &&
-      picomatch.isMatch(stripDotSlash(value), resolveInstallDirPattern(pattern));
+      picomatch.isMatch(stripDotSlash(value), expandAgencyInstallDir(pattern));
     if (!raw && !viaDot && !viaInstall) {
       return false;
     }

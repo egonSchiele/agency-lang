@@ -235,7 +235,7 @@ describe("harness graders from the run row", () => {
     expect(harnessGrade?.grader.annotator().id).toBe(`agency-tests/h@${harness.records[0].sha256}`);
   });
 
-  it("a harness-graded test gets no fallback grader: the harness is its own", async () => {
+  it("a test with Agency tests gets no fallback grader: those tests are its graders", async () => {
     const harness = harnessFixture();
     const runDir = makeRun({ output: "x", harness, test: { id: "a", input: "t" } });
     // The spy stands in for the suite fallback (a config module or the goal

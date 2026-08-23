@@ -201,9 +201,9 @@ node main(task: string): string {
   const notRunDir = run(dir, "npx agency eval grade not-runs 2>&1", { expectFail: true });
   assertIncludes(notRunDir, "not a run directory");
   assertIncludes(notRunDir, "agency runs add");
-  // --graders and --goal are exclusive.
-  const both = run(dir, "npx agency eval grade eval-runs/smoke --goal x --graders g.ts 2>&1", { expectFail: true });
-  assertIncludes(both, "only one of --graders or --goal");
+  // --suite and --goal are exclusive.
+  const both = run(dir, "npx agency eval grade eval-runs/smoke --goal x --suite eval-runs 2>&1", { expectFail: true });
+  assertIncludes(both, "only one of --suite or --goal");
   console.log("Test 6a passed");
 
   // --- Test 6b: agency logs --csv over the run directory just written ---

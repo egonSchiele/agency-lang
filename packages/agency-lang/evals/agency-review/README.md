@@ -1,7 +1,8 @@
 # agency-review: an eval suite for Agency code reviewers
 
-**PROTOTYPE.** This suite exists to see what evaluating a single stdlib
-agent looks like, as opposed to evaluating the whole agency agent.
+The first suite aimed at one stdlib agent rather than the whole agency
+agent: a reviewer has one input and one structured output, so it can be
+scored cheaply and its failures point at one thing.
 
 The suite describes the job. It does not name an agent. A reviewer is
 scored on it through an eval entry node with the contract below; the

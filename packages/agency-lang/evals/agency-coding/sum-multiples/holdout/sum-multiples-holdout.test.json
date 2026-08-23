@@ -1,0 +1,10 @@
+{
+  "sourceFile": "sum-multiples-holdout.agency",
+  "tests": [
+    { "nodeName": "ten", "expectedOutput": "23", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "twenty", "expectedOutput": "78", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "nothingBelowThree", "expectedOutput": "0", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "zero", "expectedOutput": "0", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "projectEuler", "expectedOutput": "233168", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

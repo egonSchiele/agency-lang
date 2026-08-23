@@ -1,0 +1,22 @@
+// Held-out oracle the writer never sees. Imports the file evalMain saved.
+import { sumMultiples } from "./solution.agency"
+
+export node ten(): number {
+  return sumMultiples(10)
+}
+
+export node twenty(): number {
+  return sumMultiples(20)
+}
+
+export node nothingBelowThree(): number {
+  return sumMultiples(3)
+}
+
+export node zero(): number {
+  return sumMultiples(0)
+}
+
+export node projectEuler(): number {
+  return sumMultiples(1000)
+}

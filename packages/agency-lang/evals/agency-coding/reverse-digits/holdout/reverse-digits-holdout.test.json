@@ -1,0 +1,10 @@
+{
+  "sourceFile": "reverse-digits-holdout.agency",
+  "tests": [
+    { "nodeName": "fourDigits", "expectedOutput": "4321", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "trailingZeros", "expectedOutput": "21", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "oneDigit", "expectedOutput": "5", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "zero", "expectedOutput": "0", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "palindrome", "expectedOutput": "7337", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

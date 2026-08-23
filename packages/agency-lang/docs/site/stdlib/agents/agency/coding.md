@@ -28,7 +28,28 @@ export type WriteFailure = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L27))
+
+### CodingEvalInput
+
+What an eval hands the writer: the assignment, the file to save the
+  returned program as, and whether a `node main` entry point is required
+  (false when the deliverable is a module whose exports a harness imports).
+  The shape the `evals/agency-coding` suite uses as its input.
+
+```ts
+/** What an eval hands the writer: the assignment, the file to save the
+  returned program as, and whether a `node main` entry point is required
+  (false when the deliverable is a module whose exports a harness imports).
+  The shape the `evals/agency-coding` suite uses as its input. */
+export type CodingEvalInput = {
+  assignment: string;
+  outFile: string;
+  requireMain: boolean
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L339))
 
 ## Functions
 
@@ -46,7 +67,7 @@ Return the Agency writer's tools: the bundled documentation, the source
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L108))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L109))
 
 ### agencyCodingAgent
 
@@ -101,4 +122,34 @@ Write an Agency program for the task. Iterates until the source parses,
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L259))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L260))
+
+## Nodes
+
+### evalMain
+
+```ts
+evalMain(input: CodingEvalInput): string
+```
+
+Eval entry point: `agency eval run stdlib/agents/agency/coding.agency:evalMain
+  --suite <dir>`. A node in a library module never runs when the module is
+  imported; it only exists so a suite can score this writer without a
+  wrapper file. Any other writer scored on the same suite supplies a node
+  with this signature. The writer returns source without saving it, so
+  saving into the workdir — where the suite's harness pairs grade it — is
+  this node's own doing (`with approve`). A budget trip inside the writer is
+  rejected (`with reject`) so the caps stay caps. A failed run still saves
+  its last draft: the harness scores whatever partial credit it earns.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| input | [CodingEvalInput](#codingevalinput) |  |
+
+**Returns:** `string`
+
+**Throws:** `std::write`, `std::guard`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L354))

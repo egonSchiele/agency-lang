@@ -17,6 +17,7 @@ import {
   readOnlyGitTools,
  } from "std::agents/lib/toolkits"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
+import { evalValue } from "std::statelog"
 import { agentSkill } from "std::skills"
 import { Critique, revise } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
@@ -329,4 +330,46 @@ export def agencyCodingAgent(
   // draft, which has the same WriteOutcome shape as a normal return, so
   // this covers both.
   return outcomeToResult(outcome: captured.value)
+}
+
+/** What an eval hands the writer: the assignment, the file to save the
+  returned program as, and whether a `node main` entry point is required
+  (false when the deliverable is a module whose exports a harness imports).
+  The shape the `evals/agency-coding` suite uses as its input. */
+export type CodingEvalInput = {
+  assignment: string;
+  outFile: string;
+  requireMain: boolean
+}
+
+/** Eval entry point: `agency eval run stdlib/agents/agency/coding.agency:evalMain
+  --suite <dir>`. A node in a library module never runs when the module is
+  imported; it only exists so a suite can score this writer without a
+  wrapper file. Any other writer scored on the same suite supplies a node
+  with this signature. The writer returns source without saving it, so
+  saving into the workdir — where the suite's harness pairs grade it — is
+  this node's own doing (`with approve`). A budget trip inside the writer is
+  rejected (`with reject`) so the caps stay caps. A failed run still saves
+  its last draft: the harness scores whatever partial credit it earns. */
+node evalMain(input: CodingEvalInput): string {
+  evalValue(input)
+  const written = agencyCodingAgent(task: input.assignment, requireMain: input.requireMain) with reject
+  let source = ""
+  if (written is success(code)) {
+    source = code
+  }
+  if (written is failure(gaveUp)) {
+    source = gaveUp.source
+  }
+  if (source == "") {
+    return "the writer produced no source"
+  }
+  const saved = write(input.outFile, source) with approve
+  if (saved is failure(writeErr)) {
+    return "could not save ${input.outFile}: ${writeErr}"
+  }
+  if (written is failure(err)) {
+    return "saved the last draft, but the writer gave up: ${err.problems}"
+  }
+  return source
 }

@@ -54,22 +54,35 @@ else is advisory.
 ## Grading
 
 Each test directory carries its own `graders.ts`, picked up automatically
-beside `test.json`, so a test states what it expects in code next to the
-input it gives. The pattern so far:
+beside `test.json` — a one-liner over the shared library in
+`lib/reviewGraders.ts`, so the judge prompts live once and improve for
+every test at once. The graders:
 
-- a deterministic verdict check (`rejects` / `no-false-positive`): an
-  `error: true` finding exists for a planted bug, and none for clean code.
-  No model is consulted, so re-grading it is free;
-- an LLM-judged **names-the-bug** on bug tests: some error finding
-  describes the planted problem, not just *a* problem;
-- where the first run showed invented complaints, an LLM-judged
-  **no-invented-errors**: every error finding is real;
-- **concise**: at most 5 findings.
+- **`rejects` / `no-false-positive`** (deterministic): an `error: true`
+  finding exists for a planted bug, and none for clean code. No model is
+  consulted, so re-grading it is free.
+- **`names-the-bug`** (judged, bug tests): some error finding identifies
+  the planted problem. Ground truth is the test's data — the mutation
+  diff plus the author's one-sentence reason (`mutantGraders`), or the
+  reason alone for hand-planted bugs (`plantedBugGraders`) — never
+  free-floating prose.
+- **`no-invented-errors`** (judged, bug tests): every error finding is
+  the planted problem or genuinely real, judged against the source plus
+  the same ground truth.
+- **`agency-true`** (judged, every test): every claim the findings make
+  about Agency syntax, semantics, or idiom is true of Agency, judged
+  against the facts card in `lib/agencyFacts.ts` — the shared, versioned
+  statement of what JS-trained models get wrong about Agency. This is
+  where "use `===`" costs points, on error and advisory findings alike.
+- **`advisory-useful`** (judged, every test): advisory findings are
+  accurate, non-generic pointers — performance, idiom, robustness — for
+  this code and assignment. Advice is welcome, not demanded: a review
+  with no advisory findings passes vacuously.
 
-No grader is a `mustPass` gate: a wrong verdict costs that grader's share
-of the score while the others still run, so a reviewer that improves at
-naming bugs or cutting noise shows it even while its verdict is still
-wrong, instead of pinning at 0.
+There is no findings-count metric: noise is graded by quality
+(`advisory-useful`), not volume. No grader is a `mustPass` gate: a wrong
+verdict costs that grader's share of the score while the others still
+run, so improvement shows up incrementally instead of pinning at 0.
 
 ## The tests
 

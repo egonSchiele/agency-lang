@@ -31,7 +31,7 @@ export type ReviewEvalInput = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L150))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L185))
 
 ## Functions
 
@@ -52,7 +52,7 @@ Convert a typecheck report into findings: one error item per error,
 
 **Returns:** `Feedback[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L20))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L55))
 
 ### buildTools
 
@@ -65,7 +65,7 @@ Return the Agency reviewer's lookup tools: the bundled language
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L70))
 
 ### agencyReviewAgent
 
@@ -115,7 +115,7 @@ Review Agency source code and return findings. Always includes parse and
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L93))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L128))
 
 ## Nodes
 
@@ -145,4 +145,4 @@ Eval entry point: `agency eval run stdlib/agents/agency/review.agency:evalMain
 
 **Throws:** `std::read`, `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L164))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L199))

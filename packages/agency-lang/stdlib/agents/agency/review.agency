@@ -84,7 +84,7 @@ Return a list of feedback items.
       model: model,
       provider: provider,
       tools: buildTools().concat(extraTools).concat([saveDraft]),
-      hostedTools: hostedSearchTools(model),
+      hostedTools: hostedSearchTools(model, provider),
     ),
   )
 }

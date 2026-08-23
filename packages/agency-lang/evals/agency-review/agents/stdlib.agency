@@ -17,22 +17,13 @@ type ReviewInput = {
   source: string
 }
 
-// The adapter, not the suite, says which model the implementation runs on:
-// "stdlib reviewer on openai-responses/gpt-4o-mini" is the thing under
-// test. Named explicitly here because with the repo's agency.json (base
-// "openai" provider) the reviewer asks for hosted web_search, the provider
-// refuses, and the judgment silently fails open to "no findings".
-static const MODEL = "gpt-4o-mini"
-static const PROVIDER = "openai-responses"
+// The adapter, not the suite, is where an implementation's model choice
+// would go (agencyReviewAgent takes model/provider). This one uses the
+// ambient default from agency.json, so "which model" is a run-time matter.
 
 node main(input: ReviewInput): Feedback[] {
   evalValue(input)
-  const reviewed = agencyReviewAgent(
-    source: input.source,
-    task: input.task,
-    model: MODEL,
-    provider: PROVIDER,
-  )
+  const reviewed = agencyReviewAgent(source: input.source, task: input.task)
   if (reviewed is failure(err)) {
     return [{ error: true, feedback: "review agent failed: ${err}" }]
   }

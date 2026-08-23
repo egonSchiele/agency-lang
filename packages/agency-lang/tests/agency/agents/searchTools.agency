@@ -14,15 +14,14 @@ node oneToolPerAvailableProvider(): boolean {
 }
 
 // Hosted search is requested from one place rather than hardcoded at each
-// agent. The gate errs open (see _hostedSearchTools in stdlib-lib/llm):
-// wrongly withholding search silently disables it, while wrongly requesting
-// it produces a visible provider error. So an unknown model still requests
-// search, and a known model matches hosted tools by provider FAMILY —
-// "gpt-4o-mini" is cataloged under "openai" while hosted search lives under
-// "openai-responses", and the family rule bridges that split.
-node hostedSearchIsRequestedFromOnePlace(): boolean {
-  const capable = hostedSearchTools("gpt-4o-mini")
+// agent, and the answer depends on the ROUTE (see _hostedSearchTools in
+// stdlib-lib/llm): gpt-4o-mini has hosted search through "openai-responses"
+// and none through the base "openai" client, so the same model answers
+// differently by provider. An unknown model still requests search, because
+// wrongly withholding it is the invisible failure.
+node hostedSearchFollowsTheRoute(): boolean {
+  const responses = hostedSearchTools("gpt-4o-mini", "openai-responses")
+  const base = hostedSearchTools("gpt-4o-mini", "openai")
   const unknown = hostedSearchTools("some-local-model-nobody-shipped")
-  const ambient = hostedSearchTools()
-  return capable.includes("web_search") && unknown.includes("web_search") && ambient.includes("web_search")
+  return responses.includes("web_search") && base.length == 0 && unknown.includes("web_search")
 }

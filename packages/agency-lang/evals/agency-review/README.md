@@ -44,25 +44,20 @@ shape (`std::agents/lib/feedback`):
 `error: true` means "this code does not accomplish the task". Anything
 else is advisory.
 
-Each test's `expected` says what a good reviewer concludes:
+## Grading
 
-```
-{ "verdict": "reject" | "accept", "about"?: string }
-```
+Each test directory carries its own `graders.ts`, picked up automatically
+beside `test.json`, so a test states what it expects in code next to the
+input it gives. The pattern so far:
 
-`about` describes the planted bug in one sentence, for the judge.
-
-## Grading (`graders.ts`, shared by every test)
-
-| grader | kind | what it checks |
-|---|---|---|
-| `verdict` | deterministic, **gate** | an `error: true` finding exists exactly when `expected.verdict` is `reject`. Misses and false positives both fail. |
-| `names-the-bug` | LLM judge, `bug` tests only | some error finding describes the problem in `expected.about`, not just *a* problem |
-| `concise` | deterministic | at most 5 findings |
-
-The gate needs no model, so re-grading is free and the headline number is
-stable. The judge is the one place a model is consulted, and only on tests
-that plant a bug.
+- a deterministic **gate** (`mustPass`) on the verdict: an `error: true`
+  finding exists for a planted bug, and none for clean code. No model is
+  consulted, so re-grading is free and the headline number is stable;
+- an LLM-judged **names-the-bug** on bug tests: some error finding
+  describes the planted problem, not just *a* problem;
+- where the first run showed invented complaints, an LLM-judged
+  **no-invented-errors**: every error finding is real;
+- **concise**: at most 5 findings.
 
 ## The tests
 
@@ -76,12 +71,6 @@ bugs a reviewer that only runs the typechecker cannot see.
 
 ## Adding a test
 
-Make a directory with a `test.json` that points at the shared grader
-(`"graders": "../graders.ts"`), carries `input` and `expected`, and tags
-itself `bug` or `clean` (today both `tags` and `metadata.tags`, see the
-note below). Typecheck the planted source first; a source that fails to
-typecheck tests the typechecker, not the reviewer.
-
-Note: `--tags` filtering reads the top-level `tags` field, while a
-grader's `inputScope: { tag }` reads `metadata.tags`. Until those agree,
-tests set both.
+Make a directory with a `test.json` (`description`, `tags`, `input`) and
+a `graders.ts` beside it. Typecheck the planted source first; a source
+that fails to typecheck tests the typechecker, not the reviewer.

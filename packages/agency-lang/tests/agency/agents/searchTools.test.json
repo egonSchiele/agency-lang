@@ -23,8 +23,8 @@
       ]
     },
     {
-      "nodeName": "hostedSearchIsRequestedFromOnePlace",
-      "description": "hosted search comes from one helper, gated by provider family and failing open",
+      "nodeName": "hostedSearchFollowsTheRoute",
+      "description": "hosted search comes from one helper, decided by model and provider together, failing open for unknown models",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [

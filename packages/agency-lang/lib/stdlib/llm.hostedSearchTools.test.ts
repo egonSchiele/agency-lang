@@ -11,8 +11,13 @@ describe("_hostedSearchTools", () => {
     expect(_hostedSearchTools("claude-sonnet-4-6")).toEqual(["web_search"]);
   });
 
-  test("family rule bridges the openai / openai-responses split", () => {
-    expect(_hostedSearchTools("gpt-4o-mini")).toEqual(["web_search"]);
+  test("the route decides: gpt-4o-mini via openai-responses has search, via base openai none", () => {
+    expect(_hostedSearchTools("gpt-4o-mini", "openai-responses")).toEqual(["web_search"]);
+    expect(_hostedSearchTools("gpt-4o-mini", "openai")).toEqual([]);
+  });
+
+  test("no provider anywhere means the catalog route, which for gpt-4o-mini is base openai", () => {
+    expect(_hostedSearchTools("gpt-4o-mini")).toEqual([]);
   });
 
   test("google models match even though the catalog names the tool google_search", () => {
@@ -23,11 +28,11 @@ describe("_hostedSearchTools", () => {
     expect(_hostedSearchTools("not-a-real-model")).toEqual(["web_search"]);
   });
 
-  test("empty model with no branch default keeps the historical request", () => {
+  test("empty model with no default anywhere keeps the historical request", () => {
     expect(_hostedSearchTools("")).toEqual(["web_search"]);
   });
 
-  test("known model whose provider family has no hosted search gets nothing", () => {
+  test("known model whose provider has no hosted search gets nothing", () => {
     registerModelData({
       models: [
         {

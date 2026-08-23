@@ -97,7 +97,7 @@ ${finalizeReminder}
     model: model,
     provider: provider,
     tools: [...buildTools(), ...extraTools, saveDraft],
-    hostedTools: hostedSearchTools(model),
+    hostedTools: hostedSearchTools(model, provider),
   ),
   )
 }

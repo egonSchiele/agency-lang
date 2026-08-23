@@ -1,22 +1,11 @@
 {
   "description": "Agency-specific: the task says deletion must wait for the user's approval, but the code approves its own destructive effect with `with approve`. Typechecks cleanly.",
-  "graders": "../graders.ts",
   "tags": [
     "bug",
     "handlers"
   ],
-  "metadata": {
-    "tags": [
-      "bug",
-      "handlers"
-    ]
-  },
   "input": {
     "task": "Write an Agency program with a node main that deletes every file in ./tmp whose name ends in .log. The deletion is destructive, so it must be left for the caller to approve or reject: do not approve it inside the program.",
     "source": "import { remove } from \"std::fs\"\nimport { glob } from \"std::shell\"\n\nnode main() {\n  const logs = glob(\"*.log\", \"./tmp\")\n  if (logs is success(files)) {\n    for (file in files) {\n      remove(file) with approve\n    }\n  }\n}\n"
-  },
-  "expected": {
-    "verdict": "reject",
-    "about": "remove is called with `with approve`, which approves the destructive deletion inside the program instead of leaving it to the caller's handler"
   }
 }

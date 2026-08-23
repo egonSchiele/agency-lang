@@ -33,19 +33,23 @@ Return the web-search tools whose API key is set, or an empty array when
 ### hostedSearchTools
 
 ```ts
-hostedSearchTools(model: string = ""): string[]
+hostedSearchTools(model: string = "", provider: string = ""): string[]
 ```
 
-Return the provider-hosted search capabilities available to the model, or
-  an empty array when its provider offers none (e.g. local models).
+Return the provider-hosted search capabilities available to a call on this
+  model through this provider, or an empty array when that route offers none
+  (the base "openai" client, local models). Pass the same model and provider
+  the call will use: the answer depends on the route, not the model alone.
 
-  @param model - The model that will run the call, or "" for the branch default
+  @param model - The model that will run the call, or "" for the ambient default
+  @param provider - The provider the call will route through, or "" for the ambient default
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | model | `string` | "" |
+| provider | `string` | "" |
 
 **Returns:** `string[]`
 
@@ -62,4 +66,4 @@ Return the names of the web-search providers whose API key is set, for
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L71))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L74))

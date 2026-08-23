@@ -1,0 +1,87 @@
+# agency-review: an eval suite for Agency code reviewers
+
+**PROTOTYPE.** This suite exists to see what evaluating a single stdlib
+agent looks like, as opposed to evaluating the whole agency agent.
+
+The suite describes the job. It does not name an agent. Any reviewer
+implementation can be scored on it by supplying a small adapter file; the
+adapters live in `agents/`, and the one there today wraps the stdlib's
+`agencyReviewAgent`.
+
+## Run it
+
+```bash
+pnpm run agency eval run \
+  evals/agency-review/agents/stdlib.agency \
+  --suite evals/agency-review \
+  --out runs/agency-review
+
+pnpm run agency eval grade runs/agency-review
+```
+
+Add `--trials 3` to get means with error bars. To compare a second
+implementation, write `agents/<name>.agency` with the same node shape and
+run the same two commands pointing at it.
+
+## The contract
+
+Every test gives the reviewer a task and the source written for it, and
+expects findings back.
+
+Input, the entry node's single parameter:
+
+```
+{ "task": string, "source": string }
+```
+
+Output, the entry node's return value. This is the stdlib's `Feedback`
+shape (`std::agents/lib/feedback`):
+
+```
+[{ "error": boolean, "feedback": string }, ...]
+```
+
+`error: true` means "this code does not accomplish the task". Anything
+else is advisory.
+
+Each test's `expected` says what a good reviewer concludes:
+
+```
+{ "verdict": "reject" | "accept", "about"?: string }
+```
+
+`about` describes the planted bug in one sentence, for the judge.
+
+## Grading (`graders.ts`, shared by every test)
+
+| grader | kind | what it checks |
+|---|---|---|
+| `verdict` | deterministic, **gate** | an `error: true` finding exists exactly when `expected.verdict` is `reject`. Misses and false positives both fail. |
+| `names-the-bug` | LLM judge, `bug` tests only | some error finding describes the problem in `expected.about`, not just *a* problem |
+| `concise` | deterministic | at most 5 findings |
+
+The gate needs no model, so re-grading is free and the headline number is
+stable. The judge is the one place a model is consulted, and only on tests
+that plant a bug.
+
+## The tests
+
+Every planted source typechecks clean. That is the point: these are the
+bugs a reviewer that only runs the typechecker cannot see.
+
+- `fib-off-by-one` (bug): `fib(0)` returns 1.
+- `fib-correct` (clean): a correct `fib`; measures false positives.
+- `ungated-delete` (bug, Agency-specific): the task says the deletion must
+  be left to the caller's handler; the code does `remove(file) with approve`.
+
+## Adding a test
+
+Make a directory with a `test.json` that points at the shared grader
+(`"graders": "../graders.ts"`), carries `input` and `expected`, and tags
+itself `bug` or `clean` (today both `tags` and `metadata.tags`, see the
+note below). Typecheck the planted source first; a source that fails to
+typecheck tests the typechecker, not the reviewer.
+
+Note: `--tags` filtering reads the top-level `tags` field, while a
+grader's `inputScope: { tag }` reads `metadata.tags`. Until those agree,
+tests set both.

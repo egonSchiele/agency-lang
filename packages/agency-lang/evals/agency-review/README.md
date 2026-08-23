@@ -26,16 +26,16 @@ implementation, point the first command at its `file.agency:node`.
 
 ## The contract
 
-Every test gives the reviewer the task some code was written for and the
-file holding that code, and expects findings back.
+Every test gives the reviewer the assignment some code was written for and
+the file holding that code, and expects findings back.
 
 Input, the entry node's single parameter (`ReviewEvalInput` in the stdlib):
 
 ```
-{ "task": string, "sourceFile": string }
+{ "assignment": string, "sourceFile": string }
 ```
 
-`task` is the assignment the code under review was answering (so it often
+`assignment` is what the code under review was asked to do (so it often
 reads "Write an Agency program that…"); the reviewer judges the code
 against it. `sourceFile` names a file the test seeds into the working
 directory from its `files/` directory, so planted sources are ordinary

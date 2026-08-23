@@ -6,7 +6,7 @@
   ],
   "files": "./files",
   "input": {
-    "task": "Write an Agency program with a node main that deletes every file in ./tmp whose name ends in .log. The deletion is destructive, so it must be left for the caller to approve or reject: do not approve it inside the program.",
+    "assignment": "Write an Agency program with a node main that deletes every file in ./tmp whose name ends in .log. The deletion is destructive, so it must be left for the caller to approve or reject: do not approve it inside the program.",
     "sourceFile": "solution.agency"
   }
 }

@@ -143,11 +143,12 @@ export def agencyReviewAgent(
   return mergeFeedback(feedback, failOpenFeedback(captured))
 }
 
-/** What an eval hands the reviewer: the task the source was written for, and
-  the source file to review, seeded into the working directory by the test's
-  `files/`. The shape the `evals/agency-review` suite uses as its input. */
+/** What an eval hands the reviewer: the assignment the source was written
+  for, and the source file to review, seeded into the working directory by
+  the test's `files/`. The shape the `evals/agency-review` suite uses as its
+  input. */
 export type ReviewEvalInput = {
-  task: string;
+  assignment: string;
   sourceFile: string
 }
 
@@ -166,7 +167,7 @@ node evalMain(input: ReviewEvalInput): Feedback[] {
   if (source is failure(readErr)) {
     return [{ error: true, feedback: "could not read ${input.sourceFile}: ${readErr}" }]
   }
-  const reviewed = agencyReviewAgent(source: source.value, task: input.task) with reject
+  const reviewed = agencyReviewAgent(source: source.value, task: input.assignment) with reject
   if (reviewed is failure(err)) {
     return [{ error: true, feedback: "review agent failed: ${err}" }]
   }

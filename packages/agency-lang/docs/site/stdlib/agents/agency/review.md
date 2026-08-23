@@ -15,21 +15,23 @@ an optional LLM judgment of whether the code accomplishes a task.
 
 ### ReviewEvalInput
 
-What an eval hands the reviewer: the task the source was written for, and
-  the source file to review, seeded into the working directory by the test's
-  `files/`. The shape the `evals/agency-review` suite uses as its input.
+What an eval hands the reviewer: the assignment the source was written
+  for, and the source file to review, seeded into the working directory by
+  the test's `files/`. The shape the `evals/agency-review` suite uses as its
+  input.
 
 ```ts
-/** What an eval hands the reviewer: the task the source was written for, and
-  the source file to review, seeded into the working directory by the test's
-  `files/`. The shape the `evals/agency-review` suite uses as its input. */
+/** What an eval hands the reviewer: the assignment the source was written
+  for, and the source file to review, seeded into the working directory by
+  the test's `files/`. The shape the `evals/agency-review` suite uses as its
+  input. */
 export type ReviewEvalInput = {
-  task: string;
+  assignment: string;
   sourceFile: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L149))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L150))
 
 ## Functions
 
@@ -143,4 +145,4 @@ Eval entry point: `agency eval run stdlib/agents/agency/review.agency:evalMain
 
 **Throws:** `std::read`, `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L163))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L164))

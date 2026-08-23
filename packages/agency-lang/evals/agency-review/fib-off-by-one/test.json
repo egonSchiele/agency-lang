@@ -6,7 +6,7 @@
   ],
   "files": "./files",
   "input": {
-    "task": "Write an Agency function fib(n) that returns the nth Fibonacci number, where fib(0) = 0 and fib(1) = 1.",
+    "assignment": "Write an Agency function fib(n) that returns the nth Fibonacci number, where fib(0) = 0 and fib(1) = 1.",
     "sourceFile": "solution.agency"
   }
 }

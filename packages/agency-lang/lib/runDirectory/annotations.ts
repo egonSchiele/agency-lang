@@ -95,6 +95,10 @@ export type RunPayload = {
   flags: Record<string, JsonValue>;
   /** The harness's error message when `ended` is not "ok". */
   error?: string;
+  /** One invocation of a suite; absent on pre-batch directories. */
+  batch?: string;
+  /** This test's 1-based repetition within the batch. */
+  trial?: number;
 };
 
 export type AnnotationPayload = ChecklistPayload | ScorePayload | RunPayload;
@@ -209,6 +213,8 @@ const RunAnnotationSchema = z
     ended: z.enum(["ok", "error", "timeout", "cost-cap", "killed"]),
     flags: z.record(z.string(), JsonValueSchema),
     error: z.string().optional(),
+    batch: z.string().min(1).optional(),
+    trial: z.number().int().positive().optional(),
   })
   .strict();
 

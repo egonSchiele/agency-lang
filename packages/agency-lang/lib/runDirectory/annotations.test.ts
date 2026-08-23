@@ -273,3 +273,29 @@ describe("readAnnotations", () => {
     );
   });
 });
+
+describe("run rows: batch and trial", () => {
+  const base: AnnotationDraft = {
+    traceId: "t1",
+    annotator: { kind: "harness", id: "agency-eval@1" },
+    kind: "run",
+    test: { id: "fib" },
+    suite: null,
+    ended: "ok",
+    flags: {},
+  };
+
+  it("a row from before batches parses without them, and a row with them keeps both", () => {
+    expect(row(base)).not.toHaveProperty("batch");
+    expect(row({ ...base, batch: "batch-1", trial: 2 })).toMatchObject({
+      batch: "batch-1",
+      trial: 2,
+    });
+  });
+
+  it("a trial index is a positive integer", () => {
+    for (const trial of [0, -1, 1.5]) {
+      expect(() => row({ ...base, batch: "batch-1", trial })).toThrow();
+    }
+  });
+});

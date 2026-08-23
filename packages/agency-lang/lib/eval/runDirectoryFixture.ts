@@ -27,6 +27,9 @@ export type FakeRun = {
   /** Harness pairs to store under graders/ and record on the run row, as
    *  `eval run` does for a test directory with files/ and holdout/. */
   harness?: HarnessSnapshot;
+  /** Recorded on the run row, as `eval run` does for a suite invocation. */
+  batch?: string;
+  trial?: number;
 };
 
 /**
@@ -83,6 +86,8 @@ export function writeRunDirectory(run: FakeRun, dir: string = tempDir("run-")): 
         suite: null,
         ended,
         flags: run.agentLabel === undefined ? {} : { agent: run.agentLabel },
+        batch: run.batch,
+        trial: run.trial,
         ...(run.harness === undefined ? {} : { harness: run.harness.records }),
         ...(ended === "ok" ? {} : { error: run.errorMessage ?? `ended with ${ended}` }),
       },

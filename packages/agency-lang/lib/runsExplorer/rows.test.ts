@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { readRunDirectory } from "@/runDirectory/runDir.js";
 
+import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
+
 import { buildRunRowFromDirectory } from "./rows.js";
 import { writeGradedRun, writeKilledRun } from "./testFixtures.js";
 
@@ -58,6 +60,25 @@ describe("buildRunRowFromDirectory", () => {
     expect(row.tests[0].status).toBe("failed");
     expect(row.status).toBe("killed");
     expect(row.costUsd).toBeCloseTo(3.0);
+  });
+
+  it("a run that never wrote a trace is one failed test row, not an empty run", () => {
+    const dir = writeRunDirectory(
+      {
+        traceId: "s1",
+        test: { id: "t1", input: "x" },
+        wroteStatelog: false,
+        ended: "error",
+        agentLabel: "claude -p {task}",
+      },
+      path.join(tmpDir, "silent-run"),
+    );
+    const row = rowFor(dir);
+    expect(row.tests.map((test) => [test.inputId, test.traceId, test.status])).toEqual([
+      ["t1", "s1", "failed"],
+    ]);
+    expect(row.status).toBe("failed");
+    expect(row.agent).toBe("claude -p {task}");
   });
 
   it("names the agent from the harness label when the trace never named itself", () => {

@@ -255,19 +255,20 @@ describe("runs list over groups", () => {
     );
     const listed: string[] = [];
     const summaries = runsList([group], { report: (m) => listed.push(m) });
-    expect(summaries).toHaveLength(2);
+    expect(summaries).toHaveLength(3);
     expect(lastLine(listed[0])).toBe("3 runs · mean 1.000 over 1 graded · 1 run wrote no trace");
   });
 
-  it("a group of only silent runs prints no table, just the footer", () => {
+  it("a group of only silent runs still lists each run as a row, with the footer", () => {
     const group = tempDir("group-");
     writeRunDirectory(
       { test: { id: "c", input: "t" }, wroteStatelog: false, ended: "error" },
       path.join(group, "c"),
     );
     const listed: string[] = [];
-    expect(runsList([group], { report: (m) => listed.push(m) })).toEqual([]);
-    expect(listed[0]).toBe("1 run · 1 run wrote no trace");
+    const summaries = runsList([group], { report: (m) => listed.push(m) });
+    expect(summaries.map((summary) => [summary.testId, summary.ended])).toEqual([["c", "error"]]);
+    expect(lastLine(listed[0])).toBe("1 run · 1 run wrote no trace");
   });
 
   it("the CLI passes every positional path through to the command", async () => {

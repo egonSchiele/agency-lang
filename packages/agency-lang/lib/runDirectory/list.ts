@@ -1,10 +1,38 @@
-import type { Annotation, EffectiveTraceAnnotations } from "./annotations.js";
-import { evalRecordFor, traceEnding } from "./evalRecord.js";
+import { extractEvalRecord } from "@/eval/extract.js";
+import type { EvalRecord } from "@/eval/types.js";
+import type { EventEnvelope } from "@/statelog/wireTypes.js";
+
+import { foldAnnotations, type Annotation, type EffectiveTraceAnnotations } from "./annotations.js";
+import { traceEnding } from "./evalRecord.js";
 import type { RunDirectorySnapshot } from "./runDir.js";
-import type { Trace } from "./traces.js";
 import { traceInputText } from "./traceText.js";
 
-/** One row per trace, for `agency runs list` and the viewer's overview. */
+/**
+ * The canonical rows one run is made of, wherever they are stored: the
+ * trace's events in order and every annotation row about it. Statelog hands
+ * its database rows to `summarizeEvalRun` in this shape; a run directory is
+ * adapted by `summarizeRunDirectory`. A run that died before its first event
+ * has no events and still summarizes: its harness `run` row is the evidence.
+ */
+export type EvalRunInput = {
+  traceId: string;
+  events: readonly EventEnvelope[];
+  annotations: readonly Annotation[];
+  /** Diagnostic identity only (a file path, a database id); never read. */
+  source: string;
+  notes?: string | null;
+};
+
+/** `ok`: the harness saw a clean finish. `killed`: the harness cut the run
+ *  short (timeout, cost cap, signal) after it had produced events. `failed`:
+ *  every other harness outcome, including a run with no events at all.
+ *  `trace`: no harness row, so only the trace's own ending is known.
+ *  `partial` is never produced for one run; aggregates over several runs
+ *  (the runs explorer) use it. */
+export type RunStatus = "ok" | "partial" | "failed" | "killed" | "trace";
+
+/** One row per run, for `agency runs list`, the viewer's overview, the runs
+ *  explorer, batch statistics, and statelog's per-trace summary table. */
 export type RunSummary = {
   traceId: string;
   /** The test id from the harness's `run` row; null for an ad-hoc trace. */
@@ -17,14 +45,24 @@ export type RunSummary = {
   agentLabel: string | null;
   startedAt: string | null;
   startedAtMs: number | null;
+  /** When the harness recorded the run (its `run` row's `createdAt`), else
+   *  the last event's timestamp; null for an empty ad-hoc trace. */
+  endedAt: string | null;
   durationMs: number;
   costUsd: number;
   llmCalls: number;
   toolCalls: number;
+  eventCount: number;
   models: string[];
   /** The harness's verdict when it recorded one, else read from the trace. */
   ended: string;
+  status: RunStatus;
+  /** The weighted mean of the effective scores on record; null with none. */
   latestScore: number | null;
+  /** What this run counts as in a mean, by grading's rule (`gradeRun.ts`):
+   *  `latestScore` when the run ended ok, 0 when it did not finish (a crash
+   *  earns no points, graded or not), null when it ended ok but has no score. */
+  score: number | null;
   /** Complete grading passes on this trace; `latestScore` is from the last. */
   gradingPasses: number;
   /** False when an effective must-pass score failed; null with no scores. */
@@ -33,48 +71,145 @@ export type RunSummary = {
   hasNotes: boolean;
   labeled: boolean;
   codeHash: string | null;
+  /** The suite invocation this run belongs to; null before batches existed. */
+  batch: string | null;
+  /** The test's 1-based repetition within the batch; null before trials existed. */
+  trial: number | null;
+  suiteSource: string | null;
+  suiteSha: string | null;
 };
 
-export function summarizeRuns(snapshot: RunDirectorySnapshot): RunSummary[] {
-  const hasNotes = snapshot.notes !== null && snapshot.notes.trim().length > 0;
-  return snapshot.traces.map((trace) =>
-    summarizeTrace(trace, snapshot.effectiveAnnotations[trace.traceId], snapshot.dir, hasNotes),
-  );
+/** Summarize one run from its canonical rows. Every event and annotation
+ *  must belong to `input.traceId`: a mismatch is a caller bug, not data. */
+export function summarizeEvalRun(input: EvalRunInput): RunSummary {
+  const strayEvent = input.events.find((event) => event.trace_id !== input.traceId);
+  if (strayEvent !== undefined) {
+    throw new Error(
+      `summarizeEvalRun: run ${input.traceId} was given an event of trace ${strayEvent.trace_id}`,
+    );
+  }
+  const strayRow = input.annotations.find((row) => row.traceId !== input.traceId);
+  if (strayRow !== undefined) {
+    throw new Error(
+      `summarizeEvalRun: run ${input.traceId} was given an annotation of trace ${strayRow.traceId}`,
+    );
+  }
+  return summarizeOne({
+    traceId: input.traceId,
+    events: input.events,
+    effective: foldAnnotations(input.annotations)[input.traceId],
+    source: input.source,
+    hasNotes: hasText(input.notes ?? null),
+  });
 }
 
-function summarizeTrace(
-  trace: Trace,
-  effective: EffectiveTraceAnnotations | undefined,
-  sourcePath: string,
-  hasNotes: boolean,
-): RunSummary {
-  const record = evalRecordFor(trace, sourcePath);
-  const start = trace.events.find((event) => event.data.type === "agentStart");
-  const run = effective?.run;
-  const runRow = run !== undefined && run !== null && run.kind === "run" ? run : null;
-  const startedAtMs = Number.isFinite(record.startedAtMs) ? record.startedAtMs : null;
+/** The run a directory holds: its trace, or, when the run never wrote one,
+ *  the run its harness row records. Null for a directory with neither. */
+export function summarizeRunDirectory(snapshot: RunDirectorySnapshot): RunSummary | null {
+  const hasNotes = hasText(snapshot.notes);
+  const [trace] = snapshot.traces;
+  if (trace !== undefined) {
+    return summarizeOne({
+      traceId: trace.traceId,
+      events: trace.events,
+      effective: snapshot.effectiveAnnotations[trace.traceId],
+      source: snapshot.dir,
+      hasNotes,
+    });
+  }
+  const silentIds = Object.keys(snapshot.effectiveAnnotations).filter(
+    (traceId) => runRowOf(snapshot.effectiveAnnotations[traceId]) !== null,
+  );
+  if (silentIds.length === 0) {
+    return null;
+  }
+  if (silentIds.length > 1) {
+    throw new Error(
+      `${snapshot.dir} records ${silentIds.length} runs (${silentIds.join(", ")}) and no trace; ` +
+        `a run directory holds one run.`,
+    );
+  }
+  return summarizeOne({
+    traceId: silentIds[0],
+    events: [],
+    effective: snapshot.effectiveAnnotations[silentIds[0]],
+    source: snapshot.dir,
+    hasNotes,
+  });
+}
+
+export function summarizeRuns(snapshot: RunDirectorySnapshot): RunSummary[] {
+  const summary = summarizeRunDirectory(snapshot);
+  return summary === null ? [] : [summary];
+}
+
+type RunParts = {
+  traceId: string;
+  events: readonly EventEnvelope[];
+  effective: EffectiveTraceAnnotations | undefined;
+  source: string;
+  hasNotes: boolean;
+};
+
+const CUT_SHORT_ENDINGS = ["timeout", "cost-cap", "killed"];
+
+function summarizeOne(parts: RunParts): RunSummary {
+  const runRow = runRowOf(parts.effective);
+  const record: EvalRecord | null =
+    parts.events.length === 0 ? null : extractEvalRecord([...parts.events], parts.source);
+  const start = parts.events.find((event) => event.data.type === "agentStart");
+  const startedAtMs =
+    record !== null && Number.isFinite(record.startedAtMs) ? record.startedAtMs : null;
+  const lastEvent = parts.events.at(-1);
+  const ended = runRow !== null ? runRow.ended : traceEnding({ events: parts.events });
+  const effectiveScore = latestScore(parts.effective);
   return {
-    traceId: trace.traceId,
+    traceId: parts.traceId,
     testId: testIdOf(runRow),
-    input: traceInputText(trace, record),
-    agentName: record.agentName ?? null,
+    input: record === null ? null : traceInputText({ events: parts.events }, record),
+    agentName: record?.agentName ?? null,
     agentLabel: agentLabelOf(runRow),
     startedAt: startedAtMs === null ? null : new Date(startedAtMs).toISOString(),
     startedAtMs,
-    durationMs: record.durationMs,
-    costUsd: record.metrics.costUsdTotal,
-    llmCalls: record.metrics.llmCalls,
-    toolCalls: record.metrics.toolEnds,
-    models: [...record.metrics.models],
-    ended: runRow !== null ? runRow.ended : traceEnding(trace),
-    latestScore: latestScore(effective),
-    gradingPasses: effective?.gradingPasses ?? 0,
-    gatesPassed: gatesPassed(effective),
-    hasNotes,
-    labeled: Object.keys(effective?.checklists ?? {}).length > 0,
+    endedAt: runRow?.createdAt ?? lastEvent?.data.timestamp ?? null,
+    durationMs: record?.durationMs ?? 0,
+    costUsd: record?.metrics.costUsdTotal ?? 0,
+    llmCalls: record?.metrics.llmCalls ?? 0,
+    toolCalls: record?.metrics.toolEnds ?? 0,
+    eventCount: parts.events.length,
+    models: record === null ? [] : [...record.metrics.models],
+    ended,
+    status: statusOf(runRow, parts.events.length),
+    latestScore: effectiveScore,
+    score: ended === "ok" ? effectiveScore : 0,
+    gradingPasses: parts.effective?.gradingPasses ?? 0,
+    gatesPassed: gatesPassed(parts.effective),
+    hasNotes: parts.hasNotes,
+    labeled: Object.keys(parts.effective?.checklists ?? {}).length > 0,
     codeHash:
       typeof start?.data.code?.closureHash === "string" ? start.data.code.closureHash : null,
+    batch: runRow?.batch ?? null,
+    trial: runRow?.trial ?? null,
+    suiteSource: runRow?.suite?.source ?? null,
+    suiteSha: runRow?.suite?.sha ?? null,
   };
+}
+
+function statusOf(runRow: RunRow | null, eventCount: number): RunStatus {
+  if (runRow === null) {
+    return "trace";
+  }
+  if (runRow.ended === "ok") {
+    return "ok";
+  }
+  if (eventCount > 0 && CUT_SHORT_ENDINGS.includes(runRow.ended)) {
+    return "killed";
+  }
+  return "failed";
+}
+
+function hasText(notes: string | null): boolean {
+  return notes !== null && notes.trim().length > 0;
 }
 
 /** One short line about a trace's annotations for a listing or the viewer's
@@ -101,7 +236,14 @@ export function annotationSummaries(snapshot: RunDirectorySnapshot): Record<stri
   return out;
 }
 
-function agentLabelOf(runRow: (Annotation & { kind: "run" }) | null): string | null {
+type RunRow = Annotation & { kind: "run" };
+
+function runRowOf(effective: EffectiveTraceAnnotations | undefined): RunRow | null {
+  const run = effective?.run;
+  return run !== undefined && run !== null && run.kind === "run" ? run : null;
+}
+
+function agentLabelOf(runRow: RunRow | null): string | null {
   const label = runRow?.flags.agent;
   if (typeof label !== "string" || label === "") {
     return null;
@@ -118,11 +260,11 @@ export function displayAgent(summary: RunSummary): string | null {
 
 /** What `runs list` renders for a set of run directories. */
 export type RunsListing = {
-  /** One row per trace found (a transitional multi-trace directory is several rows). */
+  /** One row per run found. */
   summaries: RunSummary[];
-  /** Directories whose statelog holds no trace: a run that died before its first event. */
+  /** Runs whose statelog holds no event: the harness recorded a run that died before its first event. */
   silentRunCount: number;
-  /** summaries.length + silentRunCount. */
+  /** summaries.length. */
   runCount: number;
   /** Rows with a persisted score, and their mean; null when none. */
   gradedCount: number;
@@ -131,21 +273,23 @@ export type RunsListing = {
 
 export function buildRunsListing(snapshots: RunDirectorySnapshot[]): RunsListing {
   const summaries = snapshots.flatMap(summarizeRuns);
-  const silentRunCount = snapshots.filter((snapshot) => snapshot.traces.length === 0).length;
+  const silentRunCount = summaries.filter(
+    (summary) => summary.eventCount === 0 && summary.status !== "trace",
+  ).length;
   const scores = summaries.flatMap((summary) =>
     summary.latestScore === null ? [] : [summary.latestScore],
   );
   return {
     summaries,
     silentRunCount,
-    runCount: summaries.length + silentRunCount,
+    runCount: summaries.length,
     gradedCount: scores.length,
     meanScore:
       scores.length === 0 ? null : scores.reduce((sum, score) => sum + score, 0) / scores.length,
   };
 }
 
-function testIdOf(runRow: (Annotation & { kind: "run" }) | null): string | null {
+function testIdOf(runRow: RunRow | null): string | null {
   const test = runRow?.test;
   if (typeof test !== "object" || test === null || Array.isArray(test)) return null;
   return typeof test.id === "string" ? test.id : null;

@@ -1,6 +1,8 @@
 import { extractEvalRecord } from "@/eval/extract.js";
 import type { EvalRecord } from "@/eval/types.js";
 
+import type { EventEnvelope } from "@/statelog/wireTypes.js";
+
 import type { Trace } from "./traces.js";
 
 /** The eval record for one trace, computed on demand — it is a view of the
@@ -16,7 +18,7 @@ export type TraceEnding = "ok" | "error" | "unknown";
  *  is a crash; no `agentEnd` at all is unknown (killed, still running, or
  *  captured mid-flight). The harness's `run` annotation, when present, knows
  *  more than this. */
-export function traceEnding(trace: Trace): TraceEnding {
+export function traceEnding(trace: { events: readonly EventEnvelope[] }): TraceEnding {
   const ends = trace.events.filter((event) => event.data.type === "agentEnd");
   const last = ends.at(-1);
   if (last === undefined) return "unknown";

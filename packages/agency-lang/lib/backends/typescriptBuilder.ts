@@ -49,7 +49,7 @@ import * as renderBuiltinToolRegistration from "../templates/backends/typescript
 import * as renderResultCheckpointSetup from "../templates/backends/typescriptGenerator/resultCheckpointSetup.js";
 import * as renderFunctionCatchFailure from "../templates/backends/typescriptGenerator/functionCatchFailure.js";
 
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig, DEFAULT_MODEL, DEFAULT_PROVIDER } from "@/config.js";
 import { parseDurationMs } from "@/duration.js";
 import { BinOpArgument, BinOpExpression, Operator, PRECEDENCE } from "@/types/binop.js";
 import { MessageThread } from "@/types/messageThread.js";
@@ -378,9 +378,11 @@ export class TypeScriptBuilder {
       log: {
         host: "https://statelog.adit.io",
       },
+      // No defaultModel here: the smoltalk-fields builder applies the
+      // built-in model and provider together only when neither is
+      // configured, which a merged default would hide.
       client: {
         logLevel: "warn",
-        defaultModel: "gpt-4o-mini",
         statelog: {
           host: "https://statelog.adit.io",
           projectId: "smoltalk",
@@ -4071,7 +4073,7 @@ export class TypeScriptBuilder {
           : ts.binOp(ts.env("OPENAI_COMPAT_API_KEY"), "||", ts.str("")),
       }),
       baseUrl: ts.obj(baseUrlFields),
-      model: ts.str(cfg.client?.defaultModel || "gpt-4o-mini"),
+      model: ts.str(cfg.client?.defaultModel || DEFAULT_MODEL),
       logLevel: ts.str(cfg.client?.logLevel || "warn"),
       statelog: ts.obj({
         host: ts.str(cfg.client?.statelog?.host || ""),
@@ -4080,10 +4082,13 @@ export class TypeScriptBuilder {
         traceId: $(ts.id("nanoid")).call().done(),
       }),
     };
-    // Emit a default provider only when configured — otherwise leave it unset
-    // so smoltalk's normal model→provider registry lookup still applies.
-    if (cfg.client?.defaultProvider) {
-      smoltalkFields.provider = ts.str(cfg.client.defaultProvider);
+    // The provider: the configured one; else, when the model is the built-in
+    // default too, its built-in provider; else unset, so smoltalk's normal
+    // model→provider registry lookup applies to the model the user named.
+    const provider =
+      cfg.client?.defaultProvider || (cfg.client?.defaultModel ? undefined : DEFAULT_PROVIDER);
+    if (provider) {
+      smoltalkFields.provider = ts.str(provider);
     }
     return ts.obj(smoltalkFields);
   }

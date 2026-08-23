@@ -332,7 +332,7 @@ Every field beyond `dir` is optional:
 | Field | Default | What it does |
 |---|---|---|
 | `dir` | *(required)* | Directory for per-scope JSON files. |
-| `model` | `agency.json` default, else `gpt-4o-mini` | Model for memory's own LLM work: extraction, recall re-ranking, forget, and compaction. |
+| `model` | `agency.json` default, else `gpt-5-mini` | Model for memory's own LLM work: extraction, recall re-ranking, forget, and compaction. |
 | `autoExtract.interval` | `5` | LLM turns between automatic extraction passes. |
 | `compaction.trigger` | `"messages"` | What the threshold counts — `"messages"` or `"token"`. |
 | `compaction.threshold` | — | Compact once the conversation grows past this. |

@@ -4,7 +4,7 @@ import * as path from "path";
 
 import { z } from "zod";
 
-import type { AgencyConfig } from "@/config.js";
+import { DEFAULT_MODEL, type AgencyConfig } from "@/config.js";
 import { executeNodeAsync } from "@/cli/util.js";
 import type { Test } from "@/eval/runTypes.js";
 import { getAgentsDir } from "@/importPaths.js";
@@ -116,7 +116,7 @@ export function buildMutatorSections(promptInputs: MutatorPromptInputs): Mutator
  * diagnostics come back in via `args.diagnostics` for a retry.
  */
 export async function proposeMutation(args: ProposeMutationArgs): Promise<MutationProposal> {
-  const model = args.model || args.config.client?.defaultModel || "gpt-4o-mini";
+  const model = args.model || args.config.client?.defaultModel || DEFAULT_MODEL;
   const sections = buildMutatorSections(args);
   const raw = await (args.callModel ?? defaultCallModel)({
     sections,

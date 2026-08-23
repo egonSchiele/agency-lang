@@ -76,7 +76,7 @@ export type MemoryConfig = {
   /** Model used for memory's internal LLM calls (extraction, recall,
    *  forget, compaction, summary merge). Resolution order:
    *  this field > the top-level `defaultModel` from `agency.json` >
-   *  the hardcoded fallback (`"gpt-4o-mini"`). Set this when you want
+   *  the built-in default (`DEFAULT_MODEL` in lib/config.ts). Set this when you want
    *  a specific cheap model for memory work that differs from the
    *  agent's primary model. */
   model?: string;

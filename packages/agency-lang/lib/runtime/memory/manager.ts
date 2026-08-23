@@ -1,6 +1,8 @@
 import { z } from "zod";
 import * as smoltalk from "smoltalk";
 import type { SmolConfig } from "smoltalk";
+
+import { DEFAULT_MODEL } from "@/config.js";
 import {
   EMBEDDING_FORMAT_VERSION,
   type MemoryConfig,
@@ -589,7 +591,7 @@ export class MemoryManager {
     if (this.config.model) return this.config.model;
     const smoltalkModel = (this.smoltalkDefaults as { model?: string }).model;
     if (smoltalkModel) return smoltalkModel;
-    return "gpt-4o-mini";
+    return DEFAULT_MODEL;
   }
 
   /**

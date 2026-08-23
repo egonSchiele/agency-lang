@@ -1,6 +1,8 @@
 import type { PromptResult, StreamChunk, TokenUsage, CostEstimate } from "smoltalk";
 import type { Result } from "smoltalk";
 import { DEFAULT_EMBEDDING_MODEL } from "../constants.js";
+import { DEFAULT_MODEL } from "@/config.js";
+
 import type { EmbedConfig, EmbedResult, LLMClient, PromptConfig, ToolCall } from "./llmClient.js";
 
 export class SimpleOpenAIClient implements LLMClient {
@@ -15,7 +17,7 @@ export class SimpleOpenAIClient implements LLMClient {
       );
     }
     this.apiKey = apiKey;
-    this.defaultModel = opts?.model ?? "gpt-4o-mini";
+    this.defaultModel = opts?.model ?? DEFAULT_MODEL;
   }
 
   async text(config: PromptConfig): Promise<Result<PromptResult>> {

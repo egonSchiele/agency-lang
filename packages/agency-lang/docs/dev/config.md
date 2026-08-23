@@ -34,12 +34,22 @@ mapped by `applyCliFlags`:
 
 | you write | `client.defaultModel` | `client.defaultProvider` |
 | --- | --- | --- |
-| `gpt-4o-mini` | `gpt-4o-mini` | **deleted** |
+| `gpt-5-mini` | `gpt-5-mini` | **deleted** |
 | `anthropic/claude-opus-4-8` | `claude-opus-4-8` | `anthropic` |
 | `openrouter/anthropic/claude-sonnet-4` | `anthropic/claude-sonnet-4` | `openrouter` |
 
 The split is on the **first** slash only, which is what lets an OpenRouter model
 identifier survive as the model name.
+
+With no model anywhere (no flag, no `client.defaultModel`), codegen bakes
+`DEFAULT_MODEL` and `DEFAULT_PROVIDER` from `lib/config.ts` together
+(`gpt-5-mini` through `openai-responses`; the provider is named because the
+inferred route for an OpenAI model is the base `openai` client, which has no
+hosted web search). A configured model without a provider is baked alone, so
+smoltalk infers the provider for the model the user named. The same constant
+is the fallback in the memory manager, the optimizer's mutator, and
+`SimpleOpenAIClient`. Note that the gpt-5 family rejects `temperature`; a
+program that sets it must also name a model that accepts it.
 
 Three things about this are easy to get wrong later.
 

@@ -8,7 +8,8 @@
   },
   "client": {
     "logLevel": "warn",
-    "defaultModel": "gpt-4o-mini"
+    "defaultModel": "gpt-5-mini",
+    "defaultProvider": "openai-responses"
   },
   "typechecker": {
     "enabled": true

@@ -1,12 +1,15 @@
 # The statelog CLI client family
 
-The CLI talks to statelog through six sealed clients in `lib/cli/statelog/`,
+The CLI talks to statelog through seven sealed clients in `lib/cli/statelog/`,
 one per route family: `uploadClient` (deploy), `projectClient` (project
 reads), `accountClient` (account management), `serveClient` (invoking hosted
-agents), `schedulesClient` (hosted schedules), and `secretsClient` (hosted
-environment secrets). Each client alone knows its routes, wire shapes, and
-failure **policy**; callers see typed values or the client's own error type
-(`ProjectRequestError`, `AccountScopeError`, `SecretRequestError`, …).
+agents), `schedulesClient` (hosted schedules), `secretsClient` (hosted
+environment secrets), and `evalUploadClient` (uploading eval run directories:
+a trace's upload state, bulk sequenced events, annotation upsert; see
+`docs/dev/eval-tracking.md`). Each client alone knows its routes, wire
+shapes, and failure **policy**; callers see typed values or the client's own
+error type (`ProjectRequestError`, `AccountScopeError`, `SecretRequestError`,
+`EvalUploadError`, …).
 
 The family seals policy. **Transport is sealed separately, once**, in
 `statelogRequest` — and a new client is exactly three things: route building,

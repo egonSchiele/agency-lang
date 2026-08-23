@@ -11,11 +11,15 @@ export type OptimizeTarget = { agent: string; inputs: Test[]; validationInputs?:
 /** Cross-cutting config every optimizer needs; each optimizer may extend it. */
 export type BaseOptimizerConfig = {
   /** The objective. "snapshot" (the CLI default with --suite): each input is
-   *  graded by its own graders, stored in its run directory the way eval run
-   *  stores them — the graders come from the suite when the run starts, so
-   *  the objective cannot drift mid-search. "override" (--graders): one set
-   *  for every input, the experiment knob. */
-  graders: GraderSource;
+   *  graded by its own graders — the test's graders.ts and harness pairs,
+   *  stored in its run directory the way eval run stores them, the goal
+   *  judge for tests with neither. Candidate runs read the suite's grader
+   *  files as they happen, so the same rule applies as to eval run: do not
+   *  edit the suite while a search is running. "override" (--graders): one
+   *  set for every input, the experiment knob. The grading layer's third
+   *  source ("suite", re-grading old runs against live graders) has no
+   *  meaning here, so the type excludes it. */
+  graders: Extract<GraderSource, { kind: "snapshot" } | { kind: "override" }>;
   iterations: number;
   seed?: number;
   config: AgencyConfig;

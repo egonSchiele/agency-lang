@@ -114,15 +114,19 @@ export abstract class BaseOptimizer {
    *  nothing but this preflight. */
   private async echoAndValidateGrading(inputs: Test[]): Promise<void> {
     const source = this.config.graders;
+    // Validation inputs are graded too (champion selection), so a broken
+    // grader there must also fail now, not after the search has run.
+    const everyInput = [...inputs, ...this.validationInputs];
     if (source.kind === "override") {
       this.reporter.gradingSetup({
         graders: source.graders.map((g) => ({ name: g.name(), describe: g.describe() })),
         firstInput: inputs[0] ? { id: inputs[0].id ?? "(no id)", goal: inputs[0].goal } : undefined,
       });
-      const first = inputs[0];
-      if (!first) return;
-      for (const grader of source.graders) {
-        grader.validateInput(first);
+      for (const input of [inputs[0], this.validationInputs[0]]) {
+        if (input === undefined) continue;
+        for (const grader of source.graders) {
+          grader.validateInput(input);
+        }
       }
       return;
     }
@@ -137,7 +141,7 @@ export abstract class BaseOptimizer {
       firstInput: inputs[0] ? { id: inputs[0].id ?? "(no id)", goal: inputs[0].goal } : undefined,
     });
     const cache = makeGraderModuleCache(this.config.config);
-    for (const input of inputs) {
+    for (const input of everyInput) {
       if (input.graders === undefined) continue;
       validateGraders(await cache(input.graders), input);
     }
@@ -302,9 +306,11 @@ export abstract class BaseOptimizer {
     inputs: Test[],
   ): Promise<Scorecard> {
     // The configured GraderSource IS the objective. In snapshot mode each
-    // input's run directory stores its test's graders at run time, so every
-    // candidate is judged by the same per-test criteria; an override set
-    // replaces them all.
+    // input's run directory stores its test's graders as the candidate runs,
+    // so every candidate is judged by the test's own criteria; an override
+    // set replaces them all. The grader files are read from the suite per
+    // candidate run — editing them mid-search changes the objective, the
+    // same way it would change what eval run records.
     const ctx: GradingContext = {
       graders: this.config.graders,
       runAgency: this.agencyRunner,

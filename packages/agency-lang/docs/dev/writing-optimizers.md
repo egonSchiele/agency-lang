@@ -75,7 +75,7 @@ These are the building blocks every optimizer composes (`this.` on `BaseOptimize
 | `buildPointwiseResult({ championIter, championFiles, attempts })` | Lower-level result assembly. `finishPointwise` calls it; you rarely need it directly. |
 | `eachIteration(step)` | `for iter in 1..config.iterations`, awaiting each `step(iter)`. |
 | `reporter` | A `PointwiseReporter` for progress (silent unless the CLI sets verbosity). |
-| `config.graders` | The objective, as a `GraderSource`. `snapshot` (the CLI default): each input is graded by the graders its run directory stored — the suite test's own `graders.ts` and harness pairs, the goal judge for tests with neither. The stored copy comes from the suite when the run starts, so the objective cannot drift mid-search. `override` (an explicit `--graders` module): one set for every input. |
+| `config.graders` | The objective, as a `GraderSource`. `snapshot` (the CLI default): each input is graded by the graders its run directory stored — the suite test's own `graders.ts` and harness pairs, the goal judge for tests with neither. The grader files are read from the suite as candidate runs happen, so the same rule applies as to `eval run`: do not edit the suite while a search is running. `override` (an explicit `--graders` module): one set for every input. |
 | `config` | `BaseOptimizerConfig`: `graders`, `iterations`, `seed`, `runId`, `runsDir`, `writeback`, `mutatorModel`, `verbosity`, `config` (the `AgencyConfig`). |
 | `validationInputs` | Held-out inputs (empty if none). See [Validation](#validation). |
 | `workspace.writeBack(source, files)` | Write a file set back to the real sources, sha-checked. `finishPointwise` already does this — only call it directly if you are not using `finishPointwise`. |

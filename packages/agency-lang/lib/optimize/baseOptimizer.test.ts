@@ -199,6 +199,52 @@ describe("BaseOptimizer.evaluate", () => {
     expect(runInput).not.toHaveBeenCalled();
   });
 
+  it("snapshot preflight validates a validation input's own graders before any agent run", async () => {
+    // The champion is selected on validation inputs, so a broken graders.ts
+    // there must fail now, not after the search has paid for every candidate.
+    const modDir = fs.mkdtempSync(path.join(process.cwd(), ".test-optimize-graders-"));
+    try {
+      const broken = path.join(modDir, "broken.ts");
+      fs.writeFileSync(broken, "export const notDefault = 1;");
+      const runInput = vi.fn(fixedRun);
+      const p = new Probe(
+        { graders: { kind: "snapshot" }, iterations: 1, config: {}, runsDir: root, runId: "r" },
+        {
+          runInput,
+          discover: () => ({
+            baseDir: src,
+            entryFile: "agent.agency",
+            typeAliases: {},
+            files: {},
+            targets: [
+              {
+                id: "t",
+                kind: "variable",
+                file: "agent.agency",
+                absoluteFile: path.join(src, "agent.agency"),
+                scope: "global",
+                name: "p",
+                valueKind: "string",
+                value: "x",
+                declaredType: null,
+              },
+            ],
+          }),
+        },
+      );
+      await expect(
+        p.optimize({
+          agent: path.join(src, "agent.agency"),
+          inputs: [{ id: "a", input: "t" }],
+          validationInputs: [{ id: "v", input: "t", graders: broken }],
+        }),
+      ).rejects.toThrow(/grader|default/i);
+      expect(runInput).not.toHaveBeenCalled();
+    } finally {
+      fs.rmSync(modDir, { recursive: true, force: true });
+    }
+  });
+
   it("short-circuits advisory graders when a gate fails for an input", async () => {
     const gate = new FixedGrader({ score: { kind: "binary", pass: false } }, { mustPass: true });
     const advisory = new FixedGrader({ score: { kind: "scalar", value: 1 } });
@@ -209,10 +255,12 @@ describe("BaseOptimizer.evaluate", () => {
     expect(advisorySpy).not.toHaveBeenCalled();
   });
 
-  it("snapshot mode grades each input by its own recorded graders module", async () => {
-    // Two inputs whose fake runs record different grading modules — the
-    // per-test graders an eval-run directory stores. The objective must be
-    // their per-test scores, not one shared set.
+  it("snapshot mode selects each input's own graders, not one shared set", async () => {
+    // Two inputs whose fake runs record different grading modules. This
+    // proves per-test SELECTION at the optimizer level; that grading then
+    // prefers a run directory's stored copy over the live file is the
+    // grading layer's contract, covered in runSuite.test.ts ("grading uses
+    // that copy even after the source changes").
     const modDir = fs.mkdtempSync(path.join(process.cwd(), ".test-optimize-graders-"));
     try {
       const one = path.join(modDir, "one.ts");

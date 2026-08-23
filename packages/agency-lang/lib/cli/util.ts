@@ -268,7 +268,7 @@ export async function runAgencyNode({
   rootCarriers,
   preferCompiled,
   allowTestImports,
-}: RunAgencyNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
+}: RunAgencyNodeArgs): Promise<{ data: any; stdout: string; stderr: string; costUsd?: number }> {
   let evaluateFile = "";
   let resultsFile = "";
   try {
@@ -329,8 +329,16 @@ export async function runAgencyNode({
       ...(wantsKill ? { killSignal: "SIGKILL" as const } : {}),
       env: withRootCarriers({ ...process.env, ...env }, rootCarriers ?? {}),
     });
-    const results = readFileSync(resultsFile, "utf-8");
-    return { data: JSON.parse(results).data, stdout, stderr };
+    const results = JSON.parse(readFileSync(resultsFile, "utf-8"));
+    // The subprocess reports its own LLM spend in the results file
+    // (`tokens.cost.totalCost`); surface it so callers can account for it.
+    const costUsd = results.tokens?.cost?.totalCost;
+    return {
+      data: results.data,
+      stdout,
+      stderr,
+      ...(typeof costUsd === "number" ? { costUsd } : {}),
+    };
   } finally {
     safeUnlink(evaluateFile);
     safeUnlink(resultsFile);

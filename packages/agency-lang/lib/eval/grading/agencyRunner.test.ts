@@ -6,6 +6,18 @@ import { AgencyRunner, type NodeRunner } from "./agencyRunner.js";
 const fakeRunner = (data: unknown): NodeRunner => vi.fn(async () => ({ data }));
 
 describe("AgencyRunner", () => {
+  it("sums the cost every node run reports; a costless result adds nothing", async () => {
+    let call = 0;
+    const runner = new AgencyRunner(
+      {},
+      vi.fn(async () => (++call === 1 ? { data: 1, costUsd: 0.02 } : { data: 2 })),
+    );
+    expect(runner.costUsd).toBe(0);
+    await runner.run("./judge.agency", "main", []);
+    await runner.run("./judge.agency", "main", []);
+    expect(runner.costUsd).toBeCloseTo(0.02);
+  });
+
   it("run() returns the node's raw value", async () => {
     const runner = new AgencyRunner({}, fakeRunner("New Delhi"));
     expect(await runner.run("./agent.agency", "main", ["India"])).toBe("New Delhi");

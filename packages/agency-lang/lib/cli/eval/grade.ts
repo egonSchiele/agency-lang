@@ -10,6 +10,9 @@ import { readRunDirectory } from "@/runDirectory/runDir.js";
 
 import type { GraderSource } from "@/eval/grading/gradeRun.js";
 
+import { mapInParallel } from "@/utils/parallelMap.js";
+
+import { formatGradeResult, formatUsd } from "./formatGrade.js";
 import { loadSuite } from "./run.js";
 
 export type EvalGradeOptions = {
@@ -23,6 +26,12 @@ export type EvalGradeOptions = {
   goal?: string;
   /** Also write the grading summary here, as JSON. */
   out?: string;
+  /** Grade up to this many run directories at once (default 1). Judge calls
+   *  are LLM calls, so a big group grades much faster in parallel. */
+  parallel?: number;
+  /** Called once per graded run directory, in completion order — the CLI's
+   *  progress line. Omitted (tests, programmatic use) = silent. */
+  progress?: (message: string) => void;
   config?: AgencyConfig;
 };
 
@@ -45,6 +54,8 @@ export type EvalGradeResult = {
   runs: { dir: string; grading: EvalRunGrading }[];
   /** Mean objective over the runs graded. */
   mean: number;
+  /** Total LLM spend of this pass's judge calls, in USD. */
+  judgeCostUsd: number;
   /** Every run passed its gates. */
   gatesPassed: boolean;
   /** Trial statistics for each selected batch that ran more than one trial,
@@ -95,14 +106,26 @@ export async function evalGrade(
   const runDirs = validateGradeTarget(targets, opts);
   const graders = graderSourceFor(opts, config);
 
-  const runs: EvalGradeResult["runs"] = [];
-  for (const dir of runDirs) {
-    const { grading } = await gradeSuite(dir, graders, config, { defaultGoal: opts.goal });
-    runs.push({ dir, grading });
-  }
+  // Each directory is one gradeSuite call (its own grading pass id and its
+  // own judge-cost meter); mapInParallel keeps the report in walk order.
+  let doneCount = 0;
+  const graded = await mapInParallel(runDirs, opts.parallel ?? 1, async (dir) => {
+    const startedAt = Date.now();
+    const { grading, judgeCostUsd } = await gradeSuite(dir, graders, config, {
+      defaultGoal: opts.goal,
+    });
+    doneCount += 1;
+    opts.progress?.(
+      `graded ${doneCount}/${runDirs.length} ${dir} — objective ${grading.objective.toFixed(3)}` +
+        ` (${formatUsd(judgeCostUsd)}, ${Math.round((Date.now() - startedAt) / 1000)}s)`,
+    );
+    return { dir, grading, judgeCostUsd };
+  });
+  const runs: EvalGradeResult["runs"] = graded.map(({ dir, grading }) => ({ dir, grading }));
   const result: EvalGradeResult = {
     runs,
     mean: runs.reduce((sum, run) => sum + run.grading.objective, 0) / runs.length,
+    judgeCostUsd: graded.reduce((sum, entry) => sum + entry.judgeCostUsd, 0),
     gatesPassed: runs.every((run) => run.grading.gatesPassed),
     batches: trialBatches(runDirs),
   };
@@ -111,4 +134,18 @@ export async function evalGrade(
     fs.writeFileSync(opts.out, JSON.stringify(result, null, 2));
   }
   return result;
+}
+
+/**
+ * The `agency eval grade` action: progress lines on stderr, the report on
+ * stdout. Returns whether every run passed its gates — the caller owns the
+ * exit code.
+ */
+export async function runGradeCommand(paths: string[], opts: EvalGradeOptions): Promise<boolean> {
+  const result = await evalGrade(paths, {
+    ...opts,
+    progress: (message) => process.stderr.write(`${message}\n`),
+  });
+  for (const line of formatGradeResult(result)) console.log(line);
+  return result.gatesPassed;
 }

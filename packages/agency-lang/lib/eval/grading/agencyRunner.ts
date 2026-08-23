@@ -19,7 +19,7 @@ export type NodeRunner = (args: {
   scratchDir: string;
   quietCompile: boolean;
   preferCompiled?: boolean;
-}) => Promise<{ data: unknown }>;
+}) => Promise<{ data: unknown; costUsd?: number }>;
 
 const defaultRunner: NodeRunner = (args) => runAgencyNode(args);
 
@@ -29,10 +29,19 @@ const defaultRunner: NodeRunner = (args) => runAgencyNode(args);
  * `runAgencyNode` core; the `runNode` seam keeps it unit-testable.
  */
 export class AgencyRunner {
+  private totalCostUsd = 0;
+
   constructor(
     private readonly config: AgencyConfig,
     private readonly runNode: NodeRunner = defaultRunner,
   ) {}
+
+  /** Total LLM spend of every node this runner has executed, in USD. Judge
+   *  calls are LLM calls; grading a suite is not free, and this is where
+   *  that bill is readable. */
+  get costUsd(): number {
+    return this.totalCostUsd;
+  }
 
   /** Run an agent node and return its raw value. `args` are positional, in node-parameter order. */
   async run(agencyFile: string, nodeName: string, args: JSON[]): Promise<JSON> {
@@ -61,7 +70,7 @@ export class AgencyRunner {
     agencyFile: string,
     nodeName: string,
     args: JSON[],
-  ): Promise<{ data: unknown }> {
+  ): Promise<{ data: unknown; costUsd?: number }> {
     const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-runner-"));
     try {
       const config = { ...this.config };
@@ -69,7 +78,7 @@ export class AgencyRunner {
       const argsString = args.map((v) => globalThis.JSON.stringify(v)).join(", ");
       // Judges/proposers are bundled agents with a precompiled .js in dist;
       // reuse it instead of recompiling on every grade/proposal call.
-      return await this.runNode({
+      const result = await this.runNode({
         config,
         agencyFile,
         nodeName,
@@ -79,6 +88,8 @@ export class AgencyRunner {
         quietCompile: true,
         preferCompiled: true,
       });
+      this.totalCostUsd += result.costUsd ?? 0;
+      return result;
     } finally {
       fs.rmSync(scratchDir, { recursive: true, force: true });
     }

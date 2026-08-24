@@ -10,6 +10,7 @@ import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
 import { reinstallRootBudget } from "./rootBudget.js";
 import { AgencyCancelledError, HandlerRecursionError, RestoreSignal } from "./errors.js";
 import { isAborted } from "./abortedResult.js";
+import { throwIfNodeResultAborted } from "./abortBoundary.js";
 import { mergeFor, mergeForIpc } from "./effectMerge.js";
 import { applyOverrides } from "./rewind.js";
 import { Checkpoint } from "./state/checkpointStore.js";
@@ -713,6 +714,7 @@ async function runResumeLoop(
         ),
       );
       await execCtx.pendingPromises.awaitAll();
+      await throwIfNodeResultAborted(result, execCtx, { endsRun: true });
       const returnObject = createReturnObject({ result, globals: execCtx.globals });
       if (hasInterrupts(returnObject.data)) {
         await execCtx.pauseTraceWriter();

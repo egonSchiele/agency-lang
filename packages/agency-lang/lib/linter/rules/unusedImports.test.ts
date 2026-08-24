@@ -3,7 +3,7 @@ import { parseAgency } from "../../parser.js";
 import type { LintContext } from "../types.js";
 import { unusedImportsRule } from "./unusedImports.js";
 
-// Parse WITHOUT the template so offsets index `source` (docs/dev/locations.md).
+// Parse WITHOUT the template so offsets index `source` (docs/dev/compiler/locations.md).
 function ctxFor(source: string): LintContext {
   const parsed = parseAgency(source, {}, false);
   if (!parsed.success) throw new Error("test source did not parse");

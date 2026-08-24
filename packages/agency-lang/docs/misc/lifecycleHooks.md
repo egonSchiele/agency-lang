@@ -40,7 +40,7 @@ parent re-fires its own callbacks. Notes:
   forwarding it is tracked in #418), `onOAuthRequired` (needs a live bidirectional
   channel), and `onTrace` (not currently dispatched). All other hooks forward.
 
-See `docs/dev/subprocess-ipc.md` (Callback forwarding) for the mechanism.
+See `docs/dev/runtime/subprocess-ipc.md` (Callback forwarding) for the mechanism.
 
 ## Usage
 
@@ -87,11 +87,11 @@ const result = await myAgent({ callbacks });
 
 All hooks are async-compatible — if your callback returns a promise, it will be awaited before execution continues. Any hook that is not provided is a no-op.
 
-Hooks also work with interrupt functions:
+Hooks also work when you respond to an interrupt. Build the responses with `approve()` and
+`reject()`, then hand them to `respondToInterrupts` along with the callbacks:
 
 ```ts
-await approveInterrupt(response, { callbacks });
-await rejectInterrupt(response, { callbacks });
+await respondToInterrupts({ interrupts, responses: [approve(), reject("no")], callbacks });
 ```
 
 ## Hook Data Reference

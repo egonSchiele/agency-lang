@@ -528,7 +528,7 @@ export function formatErrors(errors: TypeCheckError[]): string {
     .map((err) => {
       const colorFunc = err.severity === "warning" ? color.yellow : color.red;
       // Display line/col are 1-indexed; loc stores 0-indexed values
-      // (docs/dev/locations.md). loc null = file-level diagnostic.
+      // (docs/dev/compiler/locations.md). loc null = file-level diagnostic.
       let where = "";
       if (err.file && err.loc) {
         where = `${err.file}:${err.loc.line + 1}:${err.loc.col + 1} - `;

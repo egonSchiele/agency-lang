@@ -1,6 +1,6 @@
 // Hand-maintained pins for the actions used by `agency schedule add --backend github`.
 //
-// To bump a version, follow the procedure in `docs/dev/updating-pinned-actions.md`.
+// To bump a version, follow the procedure in `docs/dev/contributing/updating-pinned-actions.md`.
 // The short version: `make refresh-action-pins` to look up SHAs, paste them
 // here, also update the matching tags in the `refresh-action-pins` target in
 // the Makefile, regenerate the snapshot YAMLs, and commit.

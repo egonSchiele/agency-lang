@@ -1282,7 +1282,7 @@ function collectChecks(pattern: MatchPattern, source: Expression, checks: Expres
       // deliberate language-wide, not an oversight here: every equality
       // operator routes through `__eq` so null and undefined compare equal,
       // and `===` is documented as a stylistic alias that compiles
-      // identically (typescriptBuilder.ts:1379, docs/dev/null-and-undefined.md).
+      // identically (typescriptBuilder.ts:1379, docs/dev/language/null-and-undefined.md).
       // Emitting a native comparison would make this one generated check the
       // only equality in the language that skips the helper.
       const op: Operator = hasRest ? ">=" : "==";

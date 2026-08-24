@@ -43,7 +43,7 @@
  *    user reaches for them there, they get a loud error instead of a
  *    silent write into a discarded store.
  *
- * See docs/dev/async-context.md for the full picture.
+ * See docs/dev/runtime/async-context.md for the full picture.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import process from "node:process";

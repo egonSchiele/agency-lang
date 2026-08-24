@@ -13,8 +13,6 @@ their tools.
   search. Adding a provider means appending one entry to the catalog here,
   and every agent picks it up.
 
-## Types
-
 ## Functions
 
 ### searchTools
@@ -28,7 +26,9 @@ Return the web-search tools whose API key is set, or an empty array when
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L52))
+**Throws:** `std::env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L53))
 
 ### hostedSearchTools
 
@@ -53,7 +53,7 @@ Return the provider-hosted search capabilities available to a call on this
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L62))
 
 ### searchProviderNames
 
@@ -66,4 +66,6 @@ Return the names of the web-search providers whose API key is set, for
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L74))
+**Throws:** `std::env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L75))

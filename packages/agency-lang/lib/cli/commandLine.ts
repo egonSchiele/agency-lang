@@ -10,7 +10,7 @@
  *
  * The tokenizer that used to live here (splitCommandLine and friends) is
  * gone: the boundary is drawn by the parser itself. See
- * docs/dev/vendored-commander.md.
+ * docs/dev/cli/vendored-commander.md.
  */
 import type { Command } from "../vendor/commander/index.js";
 

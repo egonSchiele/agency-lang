@@ -43,7 +43,7 @@
  *   runs that read-modify-write the same `(absDir, memoryId)` race
  *   the same way any two processes touching the same file would.
  *   Memory is intentionally outside the deterministic-replay
- *   contract — see `docs/dev/checkpointing.md` for which state IS
+ *   contract — see `docs/dev/runtime/checkpointing.md` for which state IS
  *   in the contract.
  */
 import { FileMemoryStore } from "./store.js";

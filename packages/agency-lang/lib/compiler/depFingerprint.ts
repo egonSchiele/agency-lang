@@ -36,7 +36,7 @@ export type DependencyFingerprint = {
  *  including string-coded programming errors like ERR_INVALID_ARG_TYPE —
  *  must surface; a has-a-code check would silently pin modules stale on
  *  real bugs. (Resolver throws are a vacuous class here: pkg:: is
- *  filtered before resolution — see docs/dev/incremental-builds.md.) */
+ *  filtered before resolution — see docs/dev/compiler/incremental-builds.md.) */
 const DISCOVERY_FS_CODES = [
   "ENOENT",
   "EACCES",

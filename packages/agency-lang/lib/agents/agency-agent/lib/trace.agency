@@ -18,7 +18,8 @@ import {
 import { renderLLMCallResponse } from "./utils/renderLLMCallResponse.agency"
 
 
-let AGENT_DEBUG: boolean = env("AGENT_DEBUG") == "1"
+let AGENT_DEBUG_ENV = env("AGENT_DEBUG") with approve
+let AGENT_DEBUG: boolean = AGENT_DEBUG_ENV == "1"
 let VERBOSE: boolean = false
 
 // Whether the agent is running in interactive (TTY) mode.

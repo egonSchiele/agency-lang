@@ -1,6 +1,6 @@
 /** @module
   @summary The brain record: what the harness needs from the thing that
-  answers a turn. See docs/dev/agent-brains.md.
+  answers a turn. See docs/dev/agents/agent-brains.md.
 */
 import { Attachment } from "std::thread"
 

@@ -6,7 +6,7 @@ import { POLICY_DIR } from "../../lib/agents/agency-agent/lib/config.agency"
 // derive) must resolve to it — so tests can never touch the developer's
 // real ~/.agency-agent (issue #469).
 node main(): string {
-  const sandbox = env("AGENCY_AGENT_HOME")
+  const sandbox = env("AGENCY_AGENT_HOME") with approve
   if (sandbox == null) {
     return "AGENCY_AGENT_HOME not set"
   }

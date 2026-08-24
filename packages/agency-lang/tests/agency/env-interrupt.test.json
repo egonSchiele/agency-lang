@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Reading an environment variable raises std::env, and an approved read returns the real value",
+      "input": "",
+      "expectedOutput": "\"std::setEnv std::env readBack=hello\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "rejected",
+      "description": "A denied read returns null even though the variable is set, so ordinary unset-handling covers it",
+      "input": "",
+      "expectedOutput": "\"readBack=null\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

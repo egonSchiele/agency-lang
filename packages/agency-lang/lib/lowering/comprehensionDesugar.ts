@@ -216,7 +216,7 @@ function comprehensionSource(
 /** Copy the comprehension's source location onto a synthesized node and
  *  everything under it. Without this, a type error inside a comprehension
  *  body points at generated `map(...)` internals instead of the line the
- *  user wrote. See docs/dev/locations.md.
+ *  user wrote. See docs/dev/compiler/locations.md.
  *
  *  Only fills a MISSING loc, so nodes carried over from the user's source
  *  (the body expression, the iterable, the condition) keep their own real

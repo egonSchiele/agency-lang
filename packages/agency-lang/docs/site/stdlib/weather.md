@@ -20,8 +20,6 @@ Look up current weather for a city or zip code, and convert between
   Weather data comes from Open-Meteo (https://open-meteo.com), licensed under
   CC BY 4.0, for non-commercial use.
 
-## Types
-
 ## Effects
 
 ### std::weather

@@ -112,7 +112,7 @@ export def pickProvider(order: string[] = ["anthropic", "google", "openai"]): Re
       } else {
         checked = "${checked}, ${varName}"
       }
-      const value = env(varName)
+      const value = env(varName) with approve
       if (value != null && value != "") {
         return success(provider)
       }

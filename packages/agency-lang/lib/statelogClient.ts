@@ -1458,7 +1458,8 @@ export class StatelogClient {
   /** One event per hop where an abort's travel touches a saveDraft
    *  partial: a frame attached its draft (carried), a frame dropped a
    *  callee's partial by having none of its own (erased), a partial was
-   *  discarded at a boundary (clearedAtFork, droppedAtArgPosition), or a
+   *  discarded at a boundary (clearedAtFork, droppedAtArgPosition,
+   *  droppedAtNodeBoundary), or a
    *  guard salvaged one (delivered). An abort through undrafted code
    *  emits nothing. `partial` and `functionArgs` are pre-truncated string
    *  previews, nested under `data` so post()'s redaction replacer covers
@@ -1472,7 +1473,13 @@ export class StatelogClient {
     functionArgs,
     partial,
   }: {
-    action: "carried" | "erased" | "delivered" | "clearedAtFork" | "droppedAtArgPosition";
+    action:
+      | "carried"
+      | "erased"
+      | "delivered"
+      | "clearedAtFork"
+      | "droppedAtArgPosition"
+      | "droppedAtNodeBoundary";
     scopeName?: string;
     spanId?: string;
     functionArgs?: string;
@@ -1536,7 +1543,7 @@ export class StatelogClient {
     // stringify, byte-identical to before. Events posted outside an ALS frame
     // fall back to the execution's top-level store (fallbackGlobals) — the
     // result-bearing agentEnd event posts after the run's frame has ended and
-    // must still redact. See docs/dev/globalstore.md on per-branch isolation:
+    // must still redact. See docs/dev/runtime/globalstore.md on per-branch isolation:
     // __globals() returns the branch-local clone, so each branch redacts using
     // its own tags.
     const globals = __globals() ?? this.fallbackGlobals?.();

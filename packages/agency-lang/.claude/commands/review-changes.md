@@ -1,8 +1,8 @@
 Review the current changes in this branch for violations of the project's coding standards and anti-patterns.
 
 1. Run `git diff origin/main` to get the full diff of changes in this branch.
-2. Read `packages/agency-lang/docs/dev/anti-patterns.md` — the anti-pattern catalog.
-3. Read `packages/agency-lang/docs/dev/coding-standards.md` — the coding standards.
+2. Read `packages/agency-lang/docs/dev/contributing/anti-patterns.md` — the anti-pattern catalog.
+3. Read `packages/agency-lang/docs/dev/contributing/coding-standards.md` — the coding standards.
 4. Review the diff against both documents. For each violation found, report:
    - Which anti-pattern or coding standard was violated
    - The file and approximate line number

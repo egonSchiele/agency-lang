@@ -24,11 +24,10 @@ This is why we don't restore the `__stateStack` and `__global` variables right h
 Instead we run the correct node and pass the StateStack into that node,
 so that the *node* can restore the global state, thus ensuring it will restore those values
 to the `__stateStack` and `__global` variables local to its file.
-This means you can import and call the `approveInterrupt` and `rejectInterrupt`
-functions from ANY file, and as long as the nodes of that file are part of the same graph,
-the state will get restored correctly. You don't need to keep track of which node the interrupt
-is being returned from. You don't need to make sure you import the `rejectInterrupt`
-from that file. Any one will do.
+This means you can import and call `respondToInterrupts` from ANY file, and as long as the
+nodes of that file are part of the same graph, the state will get restored correctly. You
+don't need to keep track of which node the interrupt is being returned from, and you don't
+need to import it from that particular file. Any one will do.
 
 ## Serialization and deserialization
 ### Serialization

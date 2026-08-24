@@ -11,7 +11,7 @@ const plain = (formatted: string) => formatted.replace(/\x1b\[[0-9;]*m/g, "");
 
 describe("formatErrors", () => {
   it("prints file:line:col - severity CODE: message (1-indexed display)", () => {
-    // loc.line and loc.col are 0-indexed (docs/dev/locations.md); display
+    // loc.line and loc.col are 0-indexed (docs/dev/compiler/locations.md); display
     // adds 1 to both.
     const err = {
       ...diagnostic("reassignToConst", { name: "c" }, { line: 12, col: 8, start: 100, end: 110 }),

@@ -15,11 +15,13 @@ Run the OAuth 2.0 authorization flow and manage the resulting tokens, so your
 
   node main() {
     if (!isAuthorized("google-calendar")) {
+      const clientId = env("GOOGLE_CLIENT_ID") with approve
+      const clientSecret = env("GOOGLE_CLIENT_SECRET") with approve
       authorize("google-calendar",
         authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
         tokenUrl: "https://oauth2.googleapis.com/token",
-        clientId: env("GOOGLE_CLIENT_ID"),
-        clientSecret: env("GOOGLE_CLIENT_SECRET"),
+        clientId: clientId,
+        clientSecret: clientSecret,
         scopes: "https://www.googleapis.com/auth/calendar",
         extraAuthParams: "access_type=offline prompt=consent"
       )
@@ -49,7 +51,7 @@ effect std::authorize {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L41))
 
 ### std::getAccessToken
 
@@ -59,7 +61,7 @@ effect std::getAccessToken {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L42))
 
 ### std::revokeAuth
 
@@ -69,7 +71,7 @@ effect std::revokeAuth {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L43))
 
 ## Functions
 
@@ -116,7 +118,7 @@ Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, cap
 
 **Throws:** `std::authorize`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L45))
 
 ### getAccessToken
 
@@ -138,7 +140,7 @@ Get a valid OAuth access token for a previously authorized provider. Refreshes t
 
 **Throws:** `std::getAccessToken`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L75))
 
 ### isAuthorized
 
@@ -158,7 +160,7 @@ Check whether OAuth tokens are stored for a provider. Returns true if tokens exi
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L88))
 
 ### revokeAuth
 
@@ -180,4 +182,4 @@ Delete stored OAuth tokens for a provider. Re-authorization is required before t
 
 **Throws:** `std::revokeAuth`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L97))

@@ -8,7 +8,7 @@
  * leaves the indicator red.
  *
  * Two escape-sequence families do the work, and this file is the only place
- * that knows them. See docs/dev/terminal-status.md.
+ * that knows them. See docs/dev/cli/terminal-status.md.
  */
 import { AGENCY_NO_TERM_STATUS, AGENCY_TERM_STATUS_OWNED } from "@/constants.js";
 import type { Command } from "@/vendor/commander/index.js";

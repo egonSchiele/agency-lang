@@ -39,7 +39,8 @@ static const WDQS_BASE = "https://query.wikidata.org"
 static const WDQS_DOMAINS = ["query.wikidata.org"]
 
 // WDQS requires a descriptive User-Agent. Read once per run (env), like edgar's SEC_USER_AGENT.
-const wikidataUserAgent = env("WIKIDATA_USER_AGENT") ?? "agency-lang (https://agency-lang.com)"
+const wikidataUserAgentEnv = env("WIKIDATA_USER_AGENT") with approve
+const wikidataUserAgent = wikidataUserAgentEnv ?? "agency-lang (https://agency-lang.com)"
 const WD_HEADERS = { "User-Agent": wikidataUserAgent }
 
 /** A Wikidata entity from a name search. `id` is the QID (e.g. "Q42"). */

@@ -67,7 +67,7 @@ the Agency runtime, and the in-process serve dispatcher.
   parent-isolation tests.
 - `lib/serve/http/perInvocation.integration.test.ts` — serve injection,
   resume, telemetry credentials, and deterministic concurrency tests.
-- `docs/dev/per-invocation-config.md` — maintainer contract.
+- `docs/dev/hosting/per-invocation-config.md` — maintainer contract.
 
 **Modified files**
 
@@ -692,7 +692,7 @@ Commit message: `test(serve): prove per-invocation telemetry isolation`
 
 **Files:**
 
-- Create: `docs/dev/per-invocation-config.md`
+- Create: `docs/dev/hosting/per-invocation-config.md`
 - Modify: `CLAUDE.md`
 
 - [ ] **Step 1: Write the maintainer note**
@@ -748,8 +748,8 @@ pnpm run agency test js tests/agency-js/per-invocation-options 2>&1 | tee /tmp/p
 - [ ] Search the diff for `Map`, `Set`, `interface`, one-line `if` statements,
   dynamic imports, single-character local names, duplicated run-id selection,
   and config-field inspection outside `invocationOptions.ts`.
-- [ ] Read the complete diff against `docs/dev/anti-patterns.md` and
-  `docs/dev/coding-standards.md`.
+- [ ] Read the complete diff against `docs/dev/contributing/anti-patterns.md` and
+  `docs/dev/contributing/coding-standards.md`.
 - [ ] Confirm `InvocationOptions` is publicly importable from both
   `agency-lang/runtime` and `agency-lang/serve`, while resolved internal types are
   not exported from the serve package.

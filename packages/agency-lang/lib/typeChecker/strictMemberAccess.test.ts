@@ -140,7 +140,7 @@ def f(u: U): void {
 }`;
     const result = run(src, { typechecker: { strictMemberAccess: "error" } });
     const diag = result.errors.find((e) => e.message.includes(STRICT_UNION_PHRASE));
-    // loc.line is 0-indexed (docs/dev/locations.md); the `let x = u.v` access
+    // loc.line is 0-indexed (docs/dev/compiler/locations.md); the `let x = u.v` access
     // is the 4th physical line → line 3.
     expect(diag?.loc?.line).toBe(3);
   });

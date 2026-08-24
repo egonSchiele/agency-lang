@@ -4,7 +4,7 @@ import { env } from "std::system"
 node main() {
   // Skip the live API call if no key is configured. The unit tests in
   // lib/stdlib/search.test.ts cover the URL/header/parsing logic.
-  const key = env("BRAVE_API_KEY")
+  const key = env("BRAVE_API_KEY") with approve
   if (key == null || key == "") {
     return "search ok"
   }

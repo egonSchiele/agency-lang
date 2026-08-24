@@ -688,7 +688,7 @@ the resolved `dir` and `filename` consumed by `runWrite`.
 ### Task 10: docs and guards
 
 **Files:**
-- Modify: `docs/dev/approval-policies.md` (containment section + the
+- Modify: `docs/dev/agents/approval-policies.md` (containment section + the
   threat-model boundary: stable escapes are rejected before the interrupt;
   post-approval races are out of scope and why)
 

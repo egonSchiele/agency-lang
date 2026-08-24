@@ -14,7 +14,7 @@ import { TypeAlias, VariableType } from "@/types/typeHints.js";
 import { EffectDeclaration } from "@/types/effectDeclaration.js";
 import { FunctionDefinition, FunctionParameter } from "@/types/function.js";
 import { GraphNodeDefinition } from "@/types/graphNode.js";
-import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
+import { TypescriptPreprocessor, strandedTags } from "@/preprocessors/typescriptPreprocessor.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { typeCheck } from "@/typeChecker/index.js";
 import type { InterruptEffect } from "@/symbolTable.js";
@@ -467,11 +467,13 @@ function generateDocForFile(
 }
 
 /** Source lines of a `@hidden` that attached to no declaration — at the
- *  end of a file, say. Warning is the only way the author finds out. */
+ *  end of a file, or above a statement inside a body. Warning is the only
+ *  way the author finds out. */
 export function strayHiddenLines(program: AgencyProgram): number[] {
-  return program.nodes
-    .filter((node) => node.type === "tag" && node.name === HIDDEN_TAG)
-    .map((node) => (node.loc ? node.loc.line + 1 : 0));
+  return strandedTags(program.nodes)
+    .filter((tag) => tag.name === HIDDEN_TAG)
+    .map((tag) => (tag.loc ? tag.loc.line + 1 : 0))
+    .sort((a, b) => a - b);
 }
 
 function warnStrayHidden(lines: number[], sourceRel: string): void {

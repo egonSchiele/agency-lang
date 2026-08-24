@@ -21,9 +21,11 @@ import {
   _getNodesOfType,
   _filterImports,
   _exactVerdictFeedback,
+  reExportedHiddenNames,
 } from "./agency.js";
 import type { AgencyNode } from "../types.js";
 import type { ImportStatement } from "../types/importStatement.js";
+import type { NamedExportBody } from "../types/exportFromStatement.js";
 
 // Sentinel string baked into the inside-the-sandbox source. The compiled JS
 // has to contain it — that's what proves _compileFile actually read THIS
@@ -752,6 +754,22 @@ describe("_describe (reify): re-exports, consts, module summary", () => {
     // A real export from the same module still comes through, so this is
     // not just an empty result.
     expect(star.exports.map((e) => e.name)).toContain("agencyCodingAgent");
+  });
+
+  it("passes a hidden name on through a re-export, so a chain stays hidden", () => {
+    // The two-hop case: A hides X, B re-exports A, C re-exports X from B.
+    // If B does not report X as hidden, C sees "absent" — which means
+    // "not exported there" — and resurrects X as a thin entry.
+    // No stdlib module re-exports from one carrying a `@hidden`, so the
+    // chain is not reachable end to end; this covers the rule itself.
+    const body = { names: ["X", "keep"], aliases: {} } as NamedExportBody;
+    expect(reExportedHiddenNames(body, ["X"])).toEqual(["X"]);
+    expect(reExportedHiddenNames(body, [])).toEqual([]);
+
+    // Under an alias the outer module asks for the LOCAL name, so that is
+    // the one that has to be reported hidden.
+    const aliased = { names: ["X"], aliases: { X: "Y" } } as NamedExportBody;
+    expect(reExportedHiddenNames(aliased, ["X"])).toEqual(["Y"]);
   });
 
   it("star re-exports from std:: enumerate the source module, outermost path winning", () => {

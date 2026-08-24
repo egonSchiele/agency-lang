@@ -6,8 +6,9 @@ export default defineConfig({
   markdown: {
     config: (md) => {
       // `std::notes::create` contains `:notes:`, which the emoji plugin
-      // VitePress always enables rewrites to 🎶 (issue 843).
-      md.core.ruler.disable("emoji", true);
+      // VitePress always enables rewrites to 🎶 (issue 843). No second
+      // argument: if the rule is ever renamed, fail the build loudly.
+      md.core.ruler.disable("emoji");
     },
   },
   themeConfig: {

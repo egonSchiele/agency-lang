@@ -280,7 +280,12 @@ function describeSource(source: string, visited: string[]): DescribeResult {
   const hiddenNames: string[] = [];
   for (const node of program.nodes) {
     if (node.type === "exportFromStatement") {
-      exports.push(...reExportInfos(node, visited));
+      const reExported = reExportInfos(node, visited);
+      exports.push(...reExported.infos);
+      // Hiding travels with the name: a module that re-exports someone
+      // else's hidden name hides it in turn, or the next module out sees
+      // "absent" and resurrects it as a thin entry.
+      hiddenNames.push(...reExported.hiddenNames);
       continue;
     }
     if (isHidden((node as { tags?: Tag[] }).tags)) {
@@ -395,24 +400,51 @@ function localExportInfos(
   return [];
 }
 
-function reExportInfos(node: ExportFromStatement, visited: string[]): ExportInfo[] {
+/** What a re-export contributes: the entries it exposes, and the names it
+ *  passes on as hidden. */
+type ReExportResult = { infos: ExportInfo[]; hiddenNames: string[] };
+
+function reExportInfos(node: ExportFromStatement, visited: string[]): ReExportResult {
   const from = node.modulePath;
   if (isResolvableReExport(node)) {
     const abs = resolveAgencyImportPath(from, "");
     if (!visited.includes(abs) && existsSync(abs)) {
       const inner = describeSource(readFileSync(abs, "utf-8"), [...visited, abs]);
       if (node.body.kind === "starExport") {
-        return inner.info.exports.map((info) => ({ ...info, reexportedFrom: from }));
+        return {
+          infos: inner.info.exports.map((info) => ({ ...info, reexportedFrom: from })),
+          // A star re-exposes the whole surface, so it re-exposes the
+          // whole hidden set with it.
+          hiddenNames: inner.hiddenNames,
+        };
       }
       const byName: Record<string, ExportInfo> = Object.create(null);
       for (const info of inner.info.exports) byName[info.name] = info;
-      return resolveNamedReExports(node.body, from, byName, inner.hiddenNames);
+      return {
+        infos: resolveNamedReExports(node.body, from, byName, inner.hiddenNames),
+        hiddenNames: reExportedHiddenNames(node.body, inner.hiddenNames),
+      };
     }
   }
+  // Unresolvable: we cannot read the source module, so we cannot know
+  // what it hides. Reporting nothing hidden is the honest answer.
   if (node.body.kind === "starExport") {
-    return [thinReExport("*", "*", from)];
+    return { infos: [thinReExport("*", "*", from)], hiddenNames: [] };
   }
-  return resolveNamedReExports(node.body, from, Object.create(null), []);
+  return {
+    infos: resolveNamedReExports(node.body, from, Object.create(null), []),
+    hiddenNames: [],
+  };
+}
+
+/** The local names this module exposes for names the source module hides
+ *  — under the local alias, since that is what the next module out asks
+ *  for. Exported for tests: a re-export chain deep enough to exercise it
+ *  cannot be built from the stdlib as it stands. */
+export function reExportedHiddenNames(body: NamedExportBody, innerHidden: string[]): string[] {
+  return body.names
+    .filter((sourceName) => innerHidden.includes(sourceName))
+    .map((sourceName) => body.aliases[sourceName] ?? sourceName);
 }
 
 function resolveNamedReExports(

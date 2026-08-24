@@ -129,6 +129,14 @@ that attached to no declaration. It is optional on the entry, so an older
 ledger keeps its authority and simply warns nothing until the page next
 re-renders.
 
+Where those lines come from matters. Tag attachment recurses into
+function and node bodies and through control flow, so it can strand a tag
+anywhere, not just at the top level — a `@hidden` above a `return` is
+dropped as silently as one at the end of a file. `strandedTags` in the
+preprocessor therefore mirrors `collectTags`'s own walk, and lives beside
+it so the two are read together. A separate walker here would drift and
+the drift would show up as missing warnings, which nothing tests for.
+
 ## Deletion boundary
 
 Reconciliation deletes a prior-owned page only when: the prior ledger had

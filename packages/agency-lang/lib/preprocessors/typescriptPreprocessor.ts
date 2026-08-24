@@ -143,6 +143,29 @@ function attachTags(nodes: AgencyNode[]): AgencyNode[] {
   return result;
 }
 
+/**
+ * Every tag `collectTags` could not attach to anything, wherever it left
+ * it — top level and inside bodies alike. Deliberately mirrors that
+ * function's walk (explicit recursion into function/node bodies, then
+ * `walkBody` for control flow) so the two cannot disagree about where a
+ * tag can survive. Run it after attachment, or everything looks stranded.
+ */
+export function strandedTags(nodes: AgencyNode[]): Tag[] {
+  const out: Tag[] = [];
+  for (const node of nodes) {
+    if ((node.type === "graphNode" || node.type === "function") && node.body) {
+      out.push(...strandedTags(node.body));
+    }
+  }
+  walkBody(nodes, (body) => {
+    for (const node of body) {
+      if (node.type === "tag") out.push(node);
+    }
+    return body;
+  });
+  return out;
+}
+
 function collectTags(nodes: AgencyNode[]): AgencyNode[] {
   // walkBody handles control-flow bodies (ifElse, loops, etc.) but not
   // graphNode/function bodies, so recurse into those explicitly.

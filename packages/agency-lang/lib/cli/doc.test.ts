@@ -546,6 +546,30 @@ export def f(): number {
     expect(errors.some((e) => e.includes("@hidden") && e.includes("stray.agency:6"))).toBe(true);
   });
 
+  it("warns about a @hidden stranded inside a function body", () => {
+    const inputDir = path.join(tmpDir, "input-bodytag");
+    const outputDir = path.join(tmpDir, "output-bodytag");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    // Tag attachment recurses into bodies, so it can strand a tag there
+    // too — above a `return`, which is not an attach target.
+    fs.writeFileSync(
+      path.join(inputDir, "body.agency"),
+      `
+export def f(): number {
+  @hidden
+  return 1
+}
+`,
+    );
+
+    const errors = captureStderr(() =>
+      generateDoc({}, path.join(inputDir, "body.agency"), outputDir),
+    );
+
+    expect(errors.some((e) => e.includes("@hidden") && e.includes("body.agency:3"))).toBe(true);
+  });
+
   it("re-warns about a stray @hidden on a page served from cache", () => {
     const inputDir = path.join(tmpDir, "input-straycache");
     const outputDir = path.join(tmpDir, "output-straycache");

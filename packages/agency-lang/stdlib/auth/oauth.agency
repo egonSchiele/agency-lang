@@ -13,11 +13,14 @@ import { fetchJSON } from "std::http"
 
   node main() {
     if (!isAuthorized("google-calendar")) {
+      // `env` raises std::env, so each read is answered here.
+      const clientId = env("GOOGLE_CLIENT_ID") with approve
+      const clientSecret = env("GOOGLE_CLIENT_SECRET") with approve
       authorize("google-calendar",
         authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
         tokenUrl: "https://oauth2.googleapis.com/token",
-        clientId: env("GOOGLE_CLIENT_ID"),
-        clientSecret: env("GOOGLE_CLIENT_SECRET"),
+        clientId: clientId,
+        clientSecret: clientSecret,
         scopes: "https://www.googleapis.com/auth/calendar",
         extraAuthParams: "access_type=offline prompt=consent"
       )

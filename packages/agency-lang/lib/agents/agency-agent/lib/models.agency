@@ -76,12 +76,20 @@ static const BASE_URL_PROVIDERS: Record<string, string> = {
  *  embedding validation both consume it. */
 export def missingProviderEnvVar(provider: string): string {
   const varName = envVarFor(provider)
-  if (varName != "" && (env(varName) == null || env(varName) == "")) {
-    return varName
+  // `with approve` on both reads below: this asks whether a provider is
+  // configured, and neither value leaves the function.
+  if (varName != "") {
+    const keyValue = env(varName) with approve
+    if (keyValue == null || keyValue == "") {
+      return varName
+    }
   }
   const baseVar = BASE_URL_PROVIDERS[provider]
-  if (baseVar != undefined && (env(baseVar) == null || env(baseVar) == "")) {
-    return baseVar
+  if (baseVar != undefined) {
+    const baseValue = env(baseVar) with approve
+    if (baseValue == null || baseValue == "") {
+      return baseVar
+    }
   }
   return ""
 }

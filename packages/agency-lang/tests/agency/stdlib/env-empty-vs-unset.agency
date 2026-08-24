@@ -2,8 +2,8 @@ import { env, setEnv } from "std::system"
 
 node main() {
   setEnv("AGENCY_TEST_EMPTY_VAR", "") with approve
-  let emptySet = env("AGENCY_TEST_EMPTY_VAR")
-  let neverSet = env("AGENCY_TEST_NEVER_SET_AT_ALL_XYZ")
+  let emptySet = env("AGENCY_TEST_EMPTY_VAR") with approve
+  let neverSet = env("AGENCY_TEST_NEVER_SET_AT_ALL_XYZ") with approve
   return {
     emptyValue: emptySet,
     emptyIsString: emptySet == "",

@@ -112,7 +112,9 @@ export def pickProvider(order: string[] = ["anthropic", "google", "openai"]): Re
       } else {
         checked = "${checked}, ${varName}"
       }
-      const value = env(varName)
+      // `with approve`: this asks whether a key is present and returns
+      // only the provider name. The value is compared and discarded.
+      const value = env(varName) with approve
       if (value != null && value != "") {
         return success(provider)
       }

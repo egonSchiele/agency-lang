@@ -187,7 +187,10 @@ export def fredSeries(seriesId: string, observationStart: string = "", observati
   @param units - Optional units transform code, e.g. "pch" for percent change (null for "lin")
   @param limit - Optional max observations from the oldest, 0 means no limit
   """
-  const apiKey = env("FRED_API_KEY") ?? ""
+  // `with approve`: the key goes straight into the request, and the
+  // request is gated by std::fred.
+  const fredKey = env("FRED_API_KEY") with approve
+  const apiKey = fredKey ?? ""
   if (apiKey == "") {
     return failure("FRED_API_KEY is not set. Get a free key at https://fred.stlouisfed.org/docs/api/api_key.html")
   }
@@ -206,7 +209,10 @@ export def fredSeriesInfo(seriesId: string): Result<FredSeriesInfo> raises <std:
 
   @param seriesId - FRED series id, e.g. "UNRATE"
   """
-  const apiKey = env("FRED_API_KEY") ?? ""
+  // `with approve`: the key goes straight into the request, and the
+  // request is gated by std::fred.
+  const fredKey = env("FRED_API_KEY") with approve
+  const apiKey = fredKey ?? ""
   if (apiKey == "") {
     return failure("FRED_API_KEY is not set. Get a free key at https://fred.stlouisfed.org/docs/api/api_key.html")
   }

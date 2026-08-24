@@ -389,17 +389,30 @@ export def withWebSearch(opts: LlmOpts): LlmOpts {
 
 // --- Picker helper for the /search slash command -----------------------
 
+/** Which search backends have a key set. `with approve` on both reads:
+ *  this asks whether a backend is usable and neither key leaves the
+ *  function. Prompting here would fire every time the picker opens. */
+def searchKeyPresence(): { hasTavily: boolean, hasBrave: boolean } {
+  const tavilyKey = env("TAVILY_API_KEY") with approve
+  const braveKey = env("BRAVE_API_KEY") with approve
+  return {
+    hasTavily: tavilyKey != null && tavilyKey != "",
+    hasBrave: braveKey != null && braveKey != ""
+  }
+}
+
 /*
   Items shown in the /search picker and the startup `askWhich` prompt.
   Built from BACKENDS filtered by isBackendAvailable against the current
   session — no per-backend rules duplicated here.
 */
 export def availableBackendItems(): ChoiceItem[] {
+  const keys = searchKeyPresence()
   const ctx: SearchContext = {
     isLocal: session.isLocal,
     isTty: true,
-    hasTavily: env("TAVILY_API_KEY") != null && env("TAVILY_API_KEY") != "",
-    hasBrave: env("BRAVE_API_KEY") != null && env("BRAVE_API_KEY") != "",
+    hasTavily: keys.hasTavily,
+    hasBrave: keys.hasBrave,
     savedBackend: ""
   }
   const result: ChoiceItem[] = []
@@ -445,11 +458,12 @@ export def configureSearch(isLocal: boolean) {
     saved = settings.search.backend ?? ""
   }
 
+  const keys = searchKeyPresence()
   const ctx: SearchContext = {
     isLocal: isLocal,
     isTty: isTTY(),
-    hasTavily: env("TAVILY_API_KEY") != null && env("TAVILY_API_KEY") != "",
-    hasBrave: env("BRAVE_API_KEY") != null && env("BRAVE_API_KEY") != "",
+    hasTavily: keys.hasTavily,
+    hasBrave: keys.hasBrave,
     savedBackend: saved
   }
   const p = planSearchSetup(ctx)

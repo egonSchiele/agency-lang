@@ -40,4 +40,4 @@ does not see any of it.
 4. Put tests under your brain's own `tests/` directory. Call `init` before
    `runTurn`, the way the harness does.
 
-`docs/dev/agent-brains.md` has the full picture.
+`docs/dev/agents/agent-brains.md` has the full picture.

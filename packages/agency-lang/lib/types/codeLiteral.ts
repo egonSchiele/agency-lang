@@ -6,7 +6,7 @@ import type { AgencyNode } from "../types.js";
  *  as real nodes — that is what lets the formatter reformat bodies and
  *  makes a malformed template a compile error. The node is a host-side
  *  LEAF: quoted names belong to the generated program, not the host
- *  scope (see the leaf-ness levers in docs/dev/template-agency.md). */
+ *  scope (see the leaf-ness levers in docs/dev/language/template-agency.md). */
 export type CodeLiteral = BaseNode & {
   type: "codeLiteral";
   nodes: AgencyNode[];

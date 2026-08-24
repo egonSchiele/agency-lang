@@ -364,7 +364,7 @@ export class TypescriptPreprocessor {
     // Accepted behavior change: `for (x in async getItems())` was
     // rejected by validateNoAsyncInLoops (the async call sat under the
     // loop node); hoisting moves it above the loop, so it now compiles.
-    // A relaxation, recorded here and in docs/dev/hoist-calls.md.
+    // A relaxation, recorded here and in docs/dev/compiler/hoist-calls.md.
     this.program = hoistCallsInProgram(this.program);
     this.addAwaitPendingCalls();
     this.validateNoAsyncInLoops();

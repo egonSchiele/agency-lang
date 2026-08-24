@@ -34,7 +34,7 @@ const approve: PolicyRule[] = [{ action: "approve" }];
 // and bundled skills are plain reads of shipped files, the agency install
 // itself. Both are placeholders the matcher expands at match time (`.` to
 // the process cwd, `<agency>` to the package root; see
-// docs/dev/approval-policies.md), so a saved copy of this policy keeps
+// docs/dev/agents/approval-policies.md), so a saved copy of this policy keeps
 // meaning "wherever the agent runs, wherever agency is installed now".
 // Reads anywhere else fall through: a prompt in an interactive session, an
 // automatic rejection in a headless one.

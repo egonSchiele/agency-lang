@@ -72,7 +72,7 @@ export const SKIP_TYPES = ["comment", "newLine"];
 export function hoistCallsInProgram(program: AgencyProgram): AgencyProgram {
   // Only function and graphNode bodies. Module-level initializers are
   // excluded by construction: they run through the per-variable init
-  // dependency graph (docs/dev/init-topsort.md), cannot pause, and a
+  // dependency graph (docs/dev/compiler/init-topsort.md), cannot pause, and a
   // synthesized variable would be invisible to the topsort.
   return {
     ...program,

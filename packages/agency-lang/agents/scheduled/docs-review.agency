@@ -34,7 +34,7 @@ node main() {
     const devDir = "${pkg}/docs/dev"
 
     // List the docs with the typed `glob` tool (not a raw `ls`/`find`).
-    const listResult = glob("*.md", dir: devDir) with approve
+    const listResult = glob("**/*.md", dir: devDir) with approve
     let files: string[] = []
     if (listResult is success(names)) {
       files = names

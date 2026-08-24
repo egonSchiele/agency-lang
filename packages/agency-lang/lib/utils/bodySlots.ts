@@ -234,7 +234,7 @@ export function bodySlots(node: AgencyNode): BodySlot[] {
     // field looks like a statement body but is QUOTED code — registering
     // it would send walkNodes (and every consumer of the generic body
     // descent) into the generated program's names. See
-    // docs/dev/template-agency.md, "host-side leaf".
+    // docs/dev/language/template-agency.md, "host-side leaf".
     //
     // splice is also absent, for the opposite reason: it has no body at
     // all. Its one child is an expression, registered in expressionSlots.

@@ -8,7 +8,7 @@
  * other value (including `0`, `""`, `false`, `NaN`). The operand is evaluated
  * exactly once, so wrapping a side-effecting expression is safe.
  *
- * See docs/dev/null-and-undefined.md.
+ * See docs/dev/language/null-and-undefined.md.
  */
 export function __nn<T>(x: T): T | null {
   return x ?? null;

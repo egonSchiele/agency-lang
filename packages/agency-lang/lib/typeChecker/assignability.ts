@@ -329,7 +329,7 @@ function deepResolveNode(
   if (n.type === "keyofType" || n.type === "indexedAccessType" || n.type === "intersectionType") {
     // Same routing as genericType: these evaluate to concrete types and
     // must never reach the zod mapper unresolved — the mapper's fallback
-    // silently emits z.string(). See docs/dev/adding-features.md.
+    // silently emits z.string(). See docs/dev/contributing/adding-features.md.
     return resolveType(n, typeAliases);
   }
   if (n.type === "typeAliasVariable") {

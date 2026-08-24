@@ -80,7 +80,7 @@ real needs it cannot meet:
 
 The word "telemetry" above means the stream of events a run emits describing what
 it did (LLM calls, tool calls, interrupts, and so on). Agency's telemetry system
-is called **statelog**; see `docs/dev/statelog.md`. A run's telemetry is stamped
+is called **statelog**; see `docs/dev/hosting/statelog.md`. A run's telemetry is stamped
 with three things that matter here: a **host** (which server to send events to),
 an **apiKey** (the credential that server checks), and a **trace id** (the id that
 ties all events from one run together).

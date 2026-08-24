@@ -2,7 +2,7 @@
  * Fire-and-forget forwarding of lifecycle callbacks from a subprocess to its
  * parent, so a parent's registered AgencyCallbacks fire for events that happen
  * inside a std::agency run() child (see the "Callback forwarding" section of
- * docs/dev/subprocess-ipc.md).
+ * docs/dev/runtime/subprocess-ipc.md).
  *
  * Dependency-light leaf (mirrors costTelemetry.ts): the only runtime import is
  * subprocessRunInfo.ts (for isIpcMode + the shared ipcChildDebug). invokeCallbacks

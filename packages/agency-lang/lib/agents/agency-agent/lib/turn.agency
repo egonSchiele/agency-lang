@@ -2,7 +2,7 @@
   @summary The harness side of a turn: which brain is selected, the one
   session wrapper that installs the policy handler, and the per-turn work
   (budget guard, slash expansion, attachments) that happens before the brain
-  sees the message. See docs/dev/agent-brains.md.
+  sees the message. See docs/dev/agents/agent-brains.md.
 */
 import { map } from "std::array"
 import { cliPolicyHandler } from "std::policy"

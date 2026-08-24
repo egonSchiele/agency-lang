@@ -14,7 +14,7 @@ description: "Connector core — shared plumbing for `std::data` connectors"
   only contains what is specific to its source: types, reshapes, path
   builders, and verbs.
 
-  See `docs/dev/data-connectors.md` for the full guide to writing a connector.
+  See `docs/dev/stdlib/data-connectors.md` for the full guide to writing a connector.
 
 ## Functions
 

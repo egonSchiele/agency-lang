@@ -12,6 +12,7 @@
  */
 import { AGENCY_NO_TERM_STATUS, AGENCY_TERM_STATUS_OWNED } from "@/constants.js";
 import type { Command } from "@/vendor/commander/index.js";
+import * as fs from "fs";
 import * as path from "path";
 
 /** Push the current tab title onto the terminal's title stack (XTerm CSI 22 t). */
@@ -98,14 +99,35 @@ export function createTerminalStatus(deps: TerminalStatusDeps): TerminalStatus {
 }
 
 /**
- * The process-wide instance the CLI wires up. Writes are synchronous to a TTY,
- * which is what lets `end` run from an `exit` handler.
+ * The process-wide instance the CLI wires up.
+ *
+ * `fs.writeSync` rather than `process.stdout.write`, because `end` runs from an
+ * `exit` handler and so must land before the process is gone. Node's stdout is
+ * synchronous to a TTY on POSIX but asynchronous to one on Windows, where the
+ * write would be dropped and the tab left named and spinning.
  */
 export const terminalStatus: TerminalStatus = createTerminalStatus({
-  write: (text) => process.stdout.write(text),
+  write: (text) => {
+    fs.writeSync(1, text);
+  },
   env: process.env,
   isTty: () => process.stdout.isTTY === true,
 });
+
+/**
+ * A path, for the purpose of shortening it: it has a separator and no
+ * whitespace. Both halves matter. `agency agent` forwards free-form arguments,
+ * so its first operand is usually a prompt, and "fix lib/parsers/foo.ts" would
+ * otherwise be shortened to "foo.ts" — the prompt cut at its last slash. Real
+ * paths on the command line rarely contain spaces; prompts nearly always do.
+ *
+ * The character class covers both separators rather than `path.sep`, since a
+ * forward-slash path works on Windows too, where `path.sep` is a backslash.
+ * `path.basename` itself is already per-platform and needs no such help.
+ */
+function looksLikePath(operand: string): boolean {
+  return /[/\\]/.test(operand) && !/\s/.test(operand);
+}
 
 /**
  * What to call the tab: the command as typed, plus its first operand. So
@@ -120,9 +142,7 @@ export function commandTitle(command: Command): string {
   }
   const operand = command.args[0];
   if (operand !== undefined && operand !== "" && !operand.startsWith("-")) {
-    // Unconditional: basename("fib") is "fib", so a plain operand is unharmed,
-    // and this handles a forward-slash path on Windows, where path.sep is "\\".
-    names.push(path.basename(operand));
+    names.push(looksLikePath(operand) ? path.basename(operand) : operand);
   }
   return names.join(" ");
 }

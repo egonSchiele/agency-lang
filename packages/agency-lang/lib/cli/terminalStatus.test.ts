@@ -148,6 +148,7 @@ describe("commandTitle", () => {
     };
     program.command("eval").command("run").argument("[test]").action(remember);
     program.command("run").argument("<input>").action(remember);
+    program.command("agent").argument("[args...]").action(remember);
     program.parse(["node", "agency", ...argv]);
     if (seen === undefined) throw new Error("no command ran");
     return seen;
@@ -163,6 +164,22 @@ describe("commandTitle", () => {
 
   it("shortens a path operand to its filename", () => {
     expect(commandTitle(parse(["run", "tests/agency/foo.agency"]))).toBe("agency run foo.agency");
+  });
+
+  it("shortens a forward-slash path, which is what Windows users type too", () => {
+    // `path.basename` is already the per-platform one, so a backslash path is
+    // shortened on Windows and left alone on POSIX, where a backslash is an
+    // ordinary character in a filename. The forward-slash case is the one that
+    // has to work everywhere.
+    expect(commandTitle(parse(["run", "a/b/c/foo.agency"]))).toBe("agency run foo.agency");
+  });
+
+  it("leaves a prompt alone, even one naming a file", () => {
+    // `agency agent` forwards free-form arguments; shortening would cut the
+    // prompt at its last slash.
+    expect(commandTitle(parse(["agent", "fix lib/parsers/foo.ts"]))).toBe(
+      "agency agent fix lib/parsers/foo.ts",
+    );
   });
 });
 

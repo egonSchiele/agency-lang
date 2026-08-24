@@ -63,15 +63,38 @@ subcommand, including the shorthand that falls back to `run`.
 
 The title is `commandTitle(actionCommand)`: the command names from the root
 down, plus the command's first operand, so you get `agency eval run fib` and
-`agency run investment.agency`. A path operand is shortened to its basename,
-because a tab has room for a filename but not a directory tree. The result is
-sanitized — control characters stripped, length capped — since an operand is
-usually a filename and a filename can contain anything.
+`agency run investment.agency`. The result is sanitized — control characters
+stripped, length capped — since an operand is usually a filename and a filename
+can contain anything.
+
+An operand is shortened to its basename only when it *looks like* a path: it
+has a separator and no whitespace. Both halves earn their keep. `agency agent`
+forwards free-form arguments, so its first operand is normally a prompt, and
+`agency agent "fix lib/parsers/foo.ts"` would otherwise be shortened to
+`agency agent foo.ts` — the prompt cut at its last slash. Real paths on a
+command line rarely contain spaces; prompts nearly always do.
+
+The separator test is `/[/\\]/` rather than `path.sep`, because a
+forward-slash path works on Windows too, where `path.sep` is a backslash.
+`path.basename` itself is already the per-platform one, so it shortens a
+backslash path on Windows and leaves it alone on POSIX, where a backslash is an
+ordinary character in a filename.
+
+## Writes must be synchronous
+
+The status writes through `fs.writeSync(1, …)`, not `process.stdout.write`.
+`end` runs from an `exit` handler, so the bytes have to land before the process
+is gone, and Node's stdout is synchronous to a TTY only on POSIX — on Windows a
+TTY write is asynchronous and would simply be dropped, leaving the tab named and
+spinning after the command finished. `fs.writeSync` is synchronous on both, and
+this seam only writes twice per command, so there is nothing to interleave badly
+with the buffered stream.
 
 ## Signals, and why there are none
 
-Cleanup hangs off `process.on("exit")`, whose handlers must be synchronous;
-`process.stdout.write` to a TTY is, so that holds. What the exit code means is
+Cleanup hangs off `process.on("exit")`, whose handlers must be synchronous —
+see the section above on why the write goes through `fs.writeSync`. What the
+exit code means is
 one predicate, `commandFailed`: zero is success, and so are 130 and 143 — the
 shell's "ended by SIGINT/SIGTERM" codes — because Ctrl-C is the normal way out
 of `compile --watch` or the log viewer, not a failure. Everything else is red.
@@ -101,6 +124,18 @@ name. It clears itself the next time any Agency command runs in that tab, and
 the commands most likely to be interrupted — the eval runner, `compile --watch`,
 the log viewer — all handle their own signal and exit through `process.exit`,
 which does run the exit handler.
+
+## Interactive commands keep spinning
+
+`agency agent` and `agency logs` hold the terminal for a whole session, and
+neither gets a special case: an open viewer or a live agent session is a command
+in progress, and the spinner says so.
+
+For the agent this is a deliberate call rather than an oversight. A spinner is
+arguably right while the agent is thinking and wrong while it waits on you, but
+the work happens in a spawned child, so the parent cannot tell those apart
+without new plumbing between them. An indicator that is sometimes early is worth
+more than that machinery, and the session's end clears it either way.
 
 ## Known behavior: a failed command leaves the tab red
 

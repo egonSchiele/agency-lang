@@ -1,9 +1,12 @@
 {
-  "description": "Module coding: digit manipulation that needs a while loop (Agency has no C-style for). Graded only by the hidden harness in holdout/.",
-  "tags": ["coding", "module", "easy"],
+  "description": "Digit manipulation the JS reflexes do not cover: reversing an integer takes a while loop and hand-built integer division.",
+  "tags": [
+    "coding",
+    "module",
+    "easy"
+  ],
   "input": {
     "assignment": "Write an Agency module that exports def reverseDigits(n: number): number, returning the nonnegative integer n with its decimal digits reversed. Leading zeros of the reversed value disappear, since the result is a number: reverseDigits(1200) = 21. Examples: reverseDigits(1234) = 4321, reverseDigits(5) = 5, reverseDigits(0) = 0. Use only Agency standard library (std::) imports, or no imports at all.",
-    "outFile": "solution.agency",
-    "requireMain": false
+    "outFile": "solution.agency"
   }
 }

@@ -32,24 +32,25 @@ export type WriteFailure = {
 
 ### CodingEvalInput
 
-What an eval hands the writer: the assignment, the file to save the
-  returned program as, and whether a `node main` entry point is required
-  (false when the deliverable is a module whose exports a harness imports).
-  The shape the `evals/agency-coding` suite uses as its input.
+What an eval hands the writer: the assignment, and the file to save the
+  returned program as. The shape the `evals/agency-coding` suite uses as its
+  input. Deliberately agent-agnostic: everything about the deliverable's
+  shape (module vs runnable program, what to export) lives in the assignment
+  text, so any writer can be scored on the same suite.
 
 ```ts
-/** What an eval hands the writer: the assignment, the file to save the
-  returned program as, and whether a `node main` entry point is required
-  (false when the deliverable is a module whose exports a harness imports).
-  The shape the `evals/agency-coding` suite uses as its input. */
+/** What an eval hands the writer: the assignment, and the file to save the
+  returned program as. The shape the `evals/agency-coding` suite uses as its
+  input. Deliberately agent-agnostic: everything about the deliverable's
+  shape (module vs runnable program, what to export) lives in the assignment
+  text, so any writer can be scored on the same suite. */
 export type CodingEvalInput = {
   assignment: string;
-  outFile: string;
-  requireMain: boolean
+  outFile: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L339))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L340))
 
 ## Functions
 
@@ -140,7 +141,8 @@ Eval entry point: `agency eval run stdlib/agents/agency/coding.agency:evalMain
   saving into the workdir — where the suite's harness pairs grade it — is
   this node's own doing (`with approve`). A budget trip inside the writer is
   rejected (`with reject`) so the caps stay caps. A failed run still saves
-  its last draft: the harness scores whatever partial credit it earns.
+  its last draft: harness grading is all-or-nothing, but the grade's
+  per-case feedback then names exactly which cases the draft fails.
 
 **Parameters:**
 
@@ -152,4 +154,4 @@ Eval entry point: `agency eval run stdlib/agents/agency/coding.agency:evalMain
 
 **Throws:** `std::write`, `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L354))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L355))

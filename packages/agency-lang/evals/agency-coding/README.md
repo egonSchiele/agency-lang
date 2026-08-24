@@ -33,14 +33,15 @@ finished program saved under that name in the working directory.
 Input, the entry node's single parameter (`CodingEvalInput` in the stdlib):
 
 ```
-{ "assignment": string, "outFile": string, "requireMain": boolean }
+{ "assignment": string, "outFile": string }
 ```
 
-`assignment` is what the program should do. `outFile` is where the entry
-node must save the source it produces — grading happens against that file,
-not against the node's return value. `requireMain` says whether the
-deliverable is a runnable program with a `node main` entry point (true) or
-a module whose exports a harness imports (false).
+`assignment` is what the program should do, including the shape of the
+deliverable (a module exporting a named def, or a runnable program with a
+`node main`) — everything agent-specific stays out of the contract, so any
+writer can be scored on the same suite. `outFile` is where the entry node
+must save the source it produces — grading happens against that file, not
+against the node's return value.
 
 ## Grading
 
@@ -49,9 +50,12 @@ pair in its `holdout/` directory — a `<name>.agency` importing the saved
 `outFile`, and a `<name>.test.json` naming node-by-node expected outputs.
 The framework discovers the pair and grades the run's working directory
 with `agency test --agency-only --reject '*'` (an `AgencyTestGrader`, one
-per pair, must-pass): the score is the passing fraction, so a program that
-gets some cases right earns partial credit, and the stdlib's `evalMain`
-saves even a failed run's last draft for the same reason. `holdout/` is
+per pair). Grading is all-or-nothing: the grader is a must-pass gate, so a
+test's objective is 1 only when every case passes and 0 otherwise. The
+grader's own row in the report still shows the passing fraction and names
+each failing case, which is why the stdlib's `evalMain` saves even a
+failed run's last draft — the report then says exactly what the draft got
+wrong. `holdout/` is
 never seeded into the working directory, so the writer cannot code to the
 oracle. A pair placed in `files/` instead would be visible to the writer —
 useful later for tests about working against a given spec-by-example.

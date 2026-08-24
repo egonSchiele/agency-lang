@@ -94,6 +94,20 @@ export const AGENCY_RUN_POLICY_INTERACTIVE_ON = "1";
 export const AGENCY_MAX_COST = "AGENCY_MAX_COST";
 export const AGENCY_MAX_TIME = "AGENCY_MAX_TIME";
 
+/**
+ * Set (any value) to stop the CLI naming the terminal tab and driving its
+ * progress indicator. Honoured alongside `NO_COLOR`, for people whose terminal
+ * renders the escape sequences as visible garbage.
+ */
+export const AGENCY_NO_TERM_STATUS = "AGENCY_NO_TERM_STATUS";
+
+/**
+ * Set on itself by the outermost `agency` process once it has claimed the tab.
+ * Children inherit it through `process.env` and stay quiet, so nested runs
+ * (`eval run --agent-cmd`, spawned agents) cannot fight over one tab title.
+ */
+export const AGENCY_TERM_STATUS_OWNED = "AGENCY_TERM_STATUS_OWNED";
+
 /** Process exit code when a top-level cost/time budget is exceeded. Distinct
  *  from 1 (generic failure) and 2 (usage error). */
 export const EXIT_CODE_BUDGET_EXCEEDED = 3;

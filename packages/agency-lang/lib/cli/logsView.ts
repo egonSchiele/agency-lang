@@ -20,6 +20,7 @@ import { TerminalInput } from "@/tui/input/terminal.js";
 import { TerminalOutput } from "@/tui/output/terminal.js";
 import type { InputSource } from "@/tui/input/types.js";
 import type { OutputTarget } from "@/tui/output/types.js";
+import { terminalStatus } from "@/cli/terminalStatus.js";
 
 export type LogsViewOpts = {
   follow?: boolean;
@@ -180,6 +181,9 @@ export function createViewerHost(
     const sigterm = onSignal(143);
     process.on("SIGINT", sigint);
     process.on("SIGTERM", sigterm);
+    // The viewer owns the screen from here, and it is interactive rather than
+    // busy: keep the tab's name, drop the spinner.
+    terminalStatus.stopProgress();
 
     let operation: ViewerLifecycleResult = { ok: true };
     try {

@@ -70,6 +70,7 @@ import { evalLs } from "@/cli/eval/ls.js";
 import { evalRun, totalRunCostUsd } from "@/cli/eval/run.js";
 import { evalUpload, formatUploadResult } from "@/cli/eval/upload.js";
 import { ttyColor } from "@/utils/termcolors.js";
+import { installTerminalStatus, terminalStatus } from "@/cli/terminalStatus.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
 import { renderDiagnosticText, renderDiagnosticList } from "@/cli/explain.js";
 import { AgencyConfig, applyCliFlags, type CliFlags, redactConfigSecrets } from "@/config.js";
@@ -2331,6 +2332,10 @@ export async function runCli(
 ): Promise<void> {
   loadEnv();
   const program = createProgram(deps);
+  // Installed here rather than in createProgram: this is the one real entry
+  // point, and the process-level listeners must not accumulate across the many
+  // createProgram calls that tests make.
+  installTerminalStatus(program, terminalStatus);
   // No argv rewriting: the program boundary and flag ownership live inside
   // the vendored commander fork (passThroughOptions, fallbackCommand).
   await program.parseAsync(argv);

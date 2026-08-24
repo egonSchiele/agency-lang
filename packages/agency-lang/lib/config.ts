@@ -739,7 +739,13 @@ export type CliFlags = {
   logFile?: string;
   logStdout?: boolean;
   observability?: boolean;
+  /** `--strict` on `run`/`compile`: fail the run on any fatal type error. */
   strict?: boolean;
+  /** `--strict` on `typecheck`: untyped variables are errors, nothing else.
+   *  Same spelling as `strict`, deliberately narrower, because `typecheck`
+   *  runs the checker unconditionally and computes its own exit code — it
+   *  never reaches the compile-path gate that `strict` exists to open. */
+  strictTypes?: boolean;
   maxToolCallRounds?: number;
   maxToolResultChars?: number;
   model?: ResolvedModelFlag;
@@ -757,7 +763,13 @@ export type CliFlags = {
  *   --log stdout     → log.host="stdout" and observability=true (stream to stdout)
  *   --observability  → observability=true
  *   --strict         → typechecker.strict + strictTypes (the compile-path gate
- *                      never runs the checker on strictTypes alone)
+ *                      never runs the checker on strictTypes alone). This is
+ *                      the `run`/`compile` meaning.
+ *   --strict (tc)    → typechecker.strictTypes ONLY. `agency typecheck` calls
+ *                      the checker unconditionally and computes its own exit
+ *                      code, so it never reaches that gate and must not set
+ *                      `strict`. Same flag name, narrower meaning, which is
+ *                      why it is a separate field rather than a branch here.
  *   --model <m>      → client.defaultModel=<m> and client.defaultProvider
  *                      DELETED, so smoltalk infers the provider
  *   --model <p>/<m>  → client.defaultModel=<m> + client.defaultProvider=<p>
@@ -801,6 +813,9 @@ export function applyCliFlags(config: AgencyConfig, flags: CliFlags, input?: str
   }
   if (flags.strict) {
     next.typechecker = { ...next.typechecker, strict: true, strictTypes: true };
+  }
+  if (flags.strictTypes) {
+    next.typechecker = { ...next.typechecker, strictTypes: true };
   }
   if (flags.maxToolCallRounds !== undefined) {
     next.maxToolCallRounds = flags.maxToolCallRounds;

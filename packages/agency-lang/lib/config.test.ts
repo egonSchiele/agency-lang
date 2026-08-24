@@ -214,6 +214,26 @@ describe("applyCliFlags", () => {
     });
   });
 
+  // `agency typecheck --strict` is a NARROWER meaning of the same flag name.
+  // That command calls the checker unconditionally and computes its own exit
+  // code, so it never reaches the compile-path gate that `strict` opens.
+  // Setting `strict` here would make typecheck fail on errors it currently
+  // reports and walks past.
+  it("--strict on typecheck sets strictTypes ONLY, never strict", () => {
+    expect(applyCliFlags({}, { strictTypes: true }).typechecker).toEqual({
+      strictTypes: true,
+    });
+  });
+
+  it("an absent typecheck --strict changes nothing", () => {
+    expect(applyCliFlags({}, { strictTypes: undefined }).typechecker).toBeUndefined();
+  });
+
+  it("the narrow meaning preserves other typechecker settings", () => {
+    const out = applyCliFlags({ typechecker: { enabled: true } }, { strictTypes: true });
+    expect(out.typechecker).toEqual({ enabled: true, strictTypes: true });
+  });
+
   it("--max-tool-call-rounds sets the top-level maxToolCallRounds", () => {
     expect(applyCliFlags({}, { maxToolCallRounds: 20 }).maxToolCallRounds).toBe(20);
   });

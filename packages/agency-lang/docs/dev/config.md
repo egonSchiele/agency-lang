@@ -26,6 +26,50 @@ Where applied: sources 1⊕2 at the CLI (baked into the generated program);
 source 3 at runtime, in the `RuntimeContext` constructor. Inspect the resolved
 result with `agency config show` (secrets masked; `--show-secrets` to reveal).
 
+### Every command translates its flags in the same place
+
+`applyCliFlags` is the only definition of what a flag means, and every command
+that turns a flag into a setting calls it — `run`, `compile`, `typecheck`, and
+the bundled agents. Do not hand-write `config.x = y` in a command action. The
+one exception is the root `-v` / `-c`, handled inside `getConfig()` itself, so
+it is still applied in exactly one place for every command.
+
+`typecheck` was the last holdout and was migrated in the change that added this
+section; before that, its `--strict` was written by hand, and it had already
+drifted from the shared version.
+
+### The same flag name may mean different things on different commands
+
+`--strict` is the live example. On `run`/`compile` it sets both `strict` and
+`strictTypes`, because the compile path has a gate that only opens on `strict`.
+On `typecheck` it sets `strictTypes` alone: that command runs the checker
+unconditionally and computes its own exit code, so it never reaches the gate,
+and setting `strict` there would make it fail on errors it currently reports
+and walks past.
+
+The two meanings are two fields on `CliFlags` (`strict` and `strictTypes`), not
+a branch inside `applyCliFlags`. The command picks the meaning it wants by
+choosing a field; the helper never needs to know which command called it.
+
+## Flags that are NOT config
+
+Not every flag becomes a setting, and forcing one to be a setting is a mistake.
+There are two channels, and a new flag belongs to exactly one of them:
+
+- **Config** (this document) — a value the compiler reads, or one that gets
+  baked into the generated program. Goes through `applyCliFlags`.
+- **Resolved objects passed as arguments** — `--policy` / `--approve` /
+  `--reject` become an interrupt policy object via `resolveRunPolicy`,
+  `--max-cost` / `--max-time` become a budget via `resolveBudget`, the test
+  runner's output sink is a live object with methods, and `--agency-only`
+  selects a different compile path (through the closure validator) rather than
+  setting a value.
+
+The test for which channel a flag belongs in: *is it a plain value the compiled
+program needs baked in, or is it a live object, or a choice of code path?* The
+first is config; the other two are arguments. `agency run` and `agency test run`
+both use both channels, which is expected, not drift.
+
 ## What `--model` means
 
 `agency run --model` and the `agency <file>` shorthand set the run's default

@@ -56,6 +56,25 @@ export interface AgencyConfig {
    * know that the generator can then do anything that library can.
    */
   allowNonAgencyGenerators?: boolean;
+
+  /**
+   * Refuse to compile a file containing a compile-time splice, instead of
+   * running the generator.
+   *
+   * Compiling a `$( ... )` runs the generator during compilation, so
+   * compiling a file you have not read executes code you have not read.
+   * The bound on that is real but indirect: a generator may import only
+   * `std::` modules and other `.agency` files, and compilation installs no
+   * interrupt handlers, so anything dangerous cannot complete. This setting
+   * is for callers who would rather decline than rely on that argument —
+   * someone inspecting a freshly cloned repository, say.
+   *
+   * The refusal names the file and the generator, so you can decide whether
+   * to compile again without it. Off by default; sandboxed compilation
+   * (`compileSandboxed`) refuses splices unconditionally and does not need
+   * it.
+   */
+  refuseSplices?: boolean;
   logLevel?: LogLevel;
   outDir?: string;
 
@@ -449,6 +468,7 @@ export const AgencyConfigSchema = z
   .object({
     verbose: z.boolean(),
     allowNonAgencyGenerators: z.boolean(),
+    refuseSplices: z.boolean(),
     logLevel: z.enum(["debug", "info", "warn", "error"]),
     outDir: z.string(),
     // Positive integer: the generated code does `maxToolCallRounds || 10`, so a
@@ -749,6 +769,8 @@ export type CliFlags = {
    *  a trap: it would quietly start mattering the day this command grows a
    *  compile path. */
   strictTypes?: boolean;
+  /** `--refuse-splices`: decline compile-time generator execution. */
+  refuseSplices?: boolean;
   maxToolCallRounds?: number;
   maxToolResultChars?: number;
   model?: ResolvedModelFlag;
@@ -774,6 +796,8 @@ export type CliFlags = {
  *                      inert there, and an inert-but-meaningful-looking
  *                      setting is a trap. Same flag name, narrower meaning,
  *                      which is why it is a separate field, not a branch.
+ *   --refuse-splices → refuseSplices=true (refuse to compile a file with a
+ *                      splice rather than running its generator)
  *   --model <m>      → client.defaultModel=<m> and client.defaultProvider
  *                      DELETED, so smoltalk infers the provider
  *   --model <p>/<m>  → client.defaultModel=<m> + client.defaultProvider=<p>
@@ -820,6 +844,9 @@ export function applyCliFlags(config: AgencyConfig, flags: CliFlags, input?: str
   }
   if (flags.strictTypes) {
     next.typechecker = { ...next.typechecker, strictTypes: true };
+  }
+  if (flags.refuseSplices) {
+    next.refuseSplices = true;
   }
   if (flags.maxToolCallRounds !== undefined) {
     next.maxToolCallRounds = flags.maxToolCallRounds;

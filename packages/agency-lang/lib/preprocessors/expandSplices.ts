@@ -83,6 +83,28 @@ export function expandSplices(
       },
     };
   }
+  // Declining generator execution is answered here, before a generator is
+  // resolved or run — the whole point is that nothing in the closure
+  // executes. Deliberately NOT one of the CHECKS in `decide`: those run
+  // after resolution, which parses the generator's module and would report
+  // an unrelated import problem (AG8005) in preference to this refusal.
+  // `calleeName` reads the callee straight off the syntax, so the message
+  // still names the generator without opening its file.
+  if (config.refuseSplices === true) {
+    const splice = splices[0];
+    return {
+      ok: false,
+      diagnostic: {
+        diagnostic: "spliceRefused",
+        params: {
+          file: path.basename(key),
+          name: calleeName(splice) ?? generateExpression(splice.expression),
+        },
+        loc: splice.loc ?? ORIGIN_UNKNOWN,
+      },
+    };
+  }
+
   inProgress[key] = true;
   try {
     return expandAll(program, splices, hostPath, config, options);

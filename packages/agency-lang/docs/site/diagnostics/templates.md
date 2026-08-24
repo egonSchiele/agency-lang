@@ -194,3 +194,17 @@ A template is checked before anything fills it, so a hole is opaque: the checker
 This also covers names from the file the template is written in. A template becomes its own program — `toSource` prints it and `runCode` compiles the print — and the surrounding file is not there when that happens.
 
 **How to fix:** keep each fragment self-contained. Move the code that defines the name into the template, or move the code that uses it into the fragment that defines it. A template may always use the prelude, language builtins, and anything it declares or imports itself.
+
+<a id="ag8016"></a>
+
+## AG8016 — `&#123;file&#125;` contains a splice, and generator execution was declined for this check, so `&#123;name&#125;` was not run.
+
+*Default severity: error.*
+
+This file contains a splice, and generator execution was declined for this compile.
+
+Compiling a `$( ... )` runs its generator, so compiling a file you have not read runs code you have not read. Declining is for when you would rather not, such as inspecting a repository you just cloned.
+
+The generator was never compiled or run. Its file may still have been read, because building the symbol table crawls imports first.
+
+**How to fix:** compile again without `--refuse-splices`. Sandboxed compilation (`--agency-only`, `std::agency compile`) refuses splices with no flag to drop.

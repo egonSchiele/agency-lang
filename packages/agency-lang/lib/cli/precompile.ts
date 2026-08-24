@@ -17,7 +17,7 @@
  */
 import fs from "fs";
 import path from "path";
-import { AgencyConfig } from "../config.js";
+import { AgencyConfig, applyCliFlags } from "../config.js";
 import { loadConfig } from "./commands.js";
 import { createBuildSession, type CompileGroup } from "../compiler/buildSession.js";
 import { parseTestFileFull, resolveSourceFile, type FullTestFile } from "../testFormat/schema.js";
@@ -98,7 +98,16 @@ export function groupTestSources(
     let config = baseConfig;
     if (fs.existsSync(localConfigPath)) {
       label = dir;
-      config = { ...baseConfig, ...loadConfig(localConfigPath) };
+      // Re-apply the CLI intent AFTER the merge. A fixture-local agency.json
+      // is allowed to opt into features, but not to opt out of a refusal the
+      // user asked for on the command line: `--refuse-splices` beside a
+      // fixture carrying `"refuseSplices": false` must still refuse. Every
+      // other path gets this ordering for free because applyCliFlags runs
+      // last; this is the one place a local config merges over it.
+      config = applyCliFlags(
+        { ...baseConfig, ...loadConfig(localConfigPath) },
+        { refuseSplices: baseConfig.refuseSplices },
+      );
     }
 
     const group = (groups[label] ??= {

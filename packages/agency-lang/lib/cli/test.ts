@@ -24,7 +24,7 @@ import {
   type CompileAttempt,
 } from "./expectedCompileError.js";
 import { safeDeleteFile } from "@/utils.js";
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig, applyCliFlags } from "@/config.js";
 import path from "path";
 import { loadConfig } from "./commands.js";
 import { compile } from "@/compiler/defaultSession.js";
@@ -711,6 +711,7 @@ async function compileInSubprocess(
   sourcePath: string,
   timeoutMs: number,
   signal: AbortSignal,
+  refuseSplices: boolean = false,
 ): Promise<CompileAttempt> {
   // The CLI entry this runner is itself executing, so the child is
   // guaranteed to be the same build as the parent.
@@ -725,11 +726,13 @@ async function compileInSubprocess(
     env: { ...process.env, AGENCY_ALLOW_TEST_IMPORTS: "1" },
   };
   try {
-    const { stdout, stderr } = await execFileAsync(
-      process.execPath,
-      [cliEntry, "compile", sourcePath],
-      options,
-    );
+    // The child is a fresh process and re-derives its own config, so a
+    // refusal the user asked for has to be forwarded explicitly or the
+    // generator runs over there instead.
+    const compileArgs = refuseSplices
+      ? [cliEntry, "compile", "--refuse-splices", sourcePath]
+      : [cliEntry, "compile", sourcePath];
+    const { stdout, stderr } = await execFileAsync(process.execPath, compileArgs, options);
     return { exitCode: 0, output: `${stderr}${stdout}` };
   } catch (e) {
     // Abort before timeout, mirroring the per-case path (runSingleTest):
@@ -764,6 +767,7 @@ async function runExpectedCompileError(
   testFile: string,
   suite: SuiteContext,
   log: (msg: string) => void,
+  refuseSplices: boolean,
 ): Promise<TestFileReport> {
   const expected = tests.expectedCompileError;
   // Absolute, because the child runs with cwd set to the fixture's
@@ -824,6 +828,7 @@ async function runExpectedCompileError(
     sourcePath,
     resolveTimeoutMs(undefined, tests),
     suite.abortController.signal,
+    refuseSplices,
   );
   safeDeleteFile(siblingJs, false);
 
@@ -864,7 +869,11 @@ async function runTestFile(
     // config against another.
     const localConfigPath = path.join(path.dirname(testFile), "agency.json");
     if (fs.existsSync(localConfigPath)) {
-      config = { ...config, ...loadConfig(localConfigPath) };
+      // Same ordering rule as precompile's grouping: a fixture-local config
+      // may opt in to features, but must not cancel a refusal the user asked
+      // for on the command line.
+      const cliIntent = { refuseSplices: config.refuseSplices };
+      config = applyCliFlags({ ...config, ...loadConfig(localConfigPath) }, cliIntent);
     }
 
     const cases = Array.isArray(tests.tests) ? tests.tests : [];
@@ -891,7 +900,13 @@ async function runTestFile(
     // else it declares — and before any per-case machinery, because a
     // file in this mode has no cases: the compile is the test.
     if (tests.expectedCompileError !== undefined) {
-      return await runExpectedCompileError(tests, testFile, suite, log);
+      return await runExpectedCompileError(
+        tests,
+        testFile,
+        suite,
+        log,
+        config.refuseSplices === true,
+      );
     }
 
     // Neither cases nor a compile expectation: the file is malformed.

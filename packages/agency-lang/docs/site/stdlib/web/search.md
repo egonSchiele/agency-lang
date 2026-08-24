@@ -17,8 +17,6 @@ Search the web from Agency code, backed by the Brave Search API
   }
   ```
 
-## Types
-
 ## Effects
 
 ### std::search

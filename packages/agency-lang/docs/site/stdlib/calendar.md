@@ -35,8 +35,6 @@ Read and write Google Calendar events from Agency code. Authorizes once
   date only (e.g. "2026-05-10") for all-day events. Pair with `std::date`
   helpers like `tomorrow` and `atTime` for convenient date construction.
 
-## Types
-
 ## Effects
 
 ### std::authorizeCalendar

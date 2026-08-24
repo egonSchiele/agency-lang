@@ -7,6 +7,8 @@ import { AgencyGenerator, generateAgency } from "../backends/agencyGenerator.js"
 import { TypescriptPreprocessor } from "../preprocessors/typescriptPreprocessor.js";
 import { walkNodesArray } from "../utils/node.js";
 import { docCommentText, docStringText } from "../utils/docStringText.js";
+import { isHidden } from "../utils/hiddenTag.js";
+import type { Tag } from "../types/tag.js";
 import { moduleDescription } from "../utils/moduleDoc.js";
 import { patternBinders } from "../runtime/template/hygiene.js";
 import { resolveAgencyImportPath, isStdlibImport } from "../importPaths.js";
@@ -247,7 +249,12 @@ function describeSource(source: string, visited: string[]): ModuleInfo {
   // Doc comments live as loose comment nodes until attachment — the same
   // pass `agency doc` runs. It hoists the @module comment onto
   // program.docComment and pins each doc comment to its declaration.
-  new TypescriptPreprocessor(program, {}).attachDocComments();
+  const preprocessor = new TypescriptPreprocessor(program, {});
+  preprocessor.attachDocComments();
+  // `@hidden` is read off a declaration's attached tags, so run the same
+  // attachment pass `agency doc` runs. Without it the tag stays a loose
+  // node and the two tools disagree about what a module's surface is.
+  preprocessor.attachTags();
   // The effects pipeline REQUIRES every re-export to resolve, and
   // relative/pkg paths cannot resolve from a bare string — so effects
   // run on a copy with unresolvable re-exports stripped. They are
@@ -285,6 +292,10 @@ function localExportInfos(
   generator: AgencyGenerator,
   effects: Record<string, string[]>,
 ): ExportInfo[] {
+  // A deliberate omission, unlike the loud throw at the bottom of this
+  // function: that guard is about declaration KINDS this dispatch does not
+  // know, not about declarations the author asked to keep off the surface.
+  if (isHidden((node as { tags?: Tag[] }).tags)) return [];
   if (node.type === "function" && node.exported) {
     const name = declaredName(node.functionName);
     if (isInternalExport(name)) return [];

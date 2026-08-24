@@ -18,8 +18,6 @@ Send SMS text messages from Agency code via Twilio. Set `TWILIO_ACCOUNT_SID`,
   }
   ```
 
-## Types
-
 ## Effects
 
 ### std::sendSms

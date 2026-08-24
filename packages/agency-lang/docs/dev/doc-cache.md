@@ -92,6 +92,29 @@ does not enforce (`formatTypeLinked` is a bare name lookup) — with a
 mechanical check: a symbol moving files, appearing somewhere new, or
 changing a collision winner re-renders exactly the pages that linked it.
 
+## `@hidden` and the registry
+
+`@hidden` (see `docs/site/cli/doc.md` for the user-facing rule) keeps a
+declaration out of the rendered page. It has to keep it out of
+`registrySymbols` too, or the page stops matching the registry: a hidden
+type renders no `### Name` section, so any other page linking to it would
+point at an anchor that does not exist. `extractRegistrySymbols` therefore
+drops hidden declarations of every kind. Only the type-alias case can
+actually break a link today — `formatTypeLinked` returns early for
+anything that is not a `typeAliasVariable` — but the registry is defined
+as "the set link targets resolve against", so it stays honest about all
+four.
+
+This needs no render-key bump. Adding `@hidden` to a file changes that
+file's source hash, so its page re-renders and contributes a smaller
+symbol set; the `linkTargets` re-check then invalidates exactly the pages
+whose lookups changed. The cache corrects itself through machinery that
+already exists.
+
+Note that `extractRegistrySymbols` reads tags off the declarations, so its
+input must have been through `preprocessProgram` — `parseFor` does this,
+and a caller that skips it will silently see no tags at all.
+
 ## Deletion boundary
 
 Reconciliation deletes a prior-owned page only when: the prior ledger had

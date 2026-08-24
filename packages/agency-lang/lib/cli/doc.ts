@@ -20,6 +20,7 @@ import { typeCheck } from "@/typeChecker/index.js";
 import type { InterruptEffect } from "@/symbolTable.js";
 import { heading, codeFence, bold, markdownTable, section } from "@/utils/markdown.js";
 import { docStringText } from "@/utils/docStringText.js";
+import { HIDDEN_TAG, isHidden } from "@/utils/hiddenTag.js";
 import {
   OwnedPathError,
   acquireDocLock,
@@ -320,21 +321,25 @@ function sameStringList(a: string[], b: string[]): boolean {
  *  function definitions (non-exported and underscore-prefixed included),
  *  node names, global-scope type aliases, and exported constants — the
  *  set link targets resolve against. Cached per page as
- *  `registrySymbols`, so an unchanged file costs no parse. */
+ *  `registrySymbols`, so an unchanged file costs no parse.
+ *
+ *  `@hidden` declarations are left out. A hidden type alias is the case
+ *  that matters: it renders no section, so a link to it from another page
+ *  would point at an anchor that does not exist. */
 export function extractRegistrySymbols(program: AgencyProgram): string[] {
   const info = buildCompilationUnit(program);
   const out: string[] = [];
-  for (const name of Object.keys(info.functionDefinitions)) {
-    out.push(name);
+  for (const [name, fn] of Object.entries(info.functionDefinitions)) {
+    if (!isHidden(fn.tags)) out.push(name);
   }
   for (const node of info.graphNodes) {
-    out.push(declaredName(node.nodeName));
+    if (!isHidden(node.tags)) out.push(declaredName(node.nodeName));
   }
-  for (const name of Object.keys(info.typeAliases.get(GLOBAL_SCOPE_KEY) ?? {})) {
-    out.push(name);
+  for (const [name, alias] of Object.entries(info.typeAliases.get(GLOBAL_SCOPE_KEY) ?? {})) {
+    if (!isHidden(alias.tags)) out.push(name);
   }
   for (const c of collectExportedConstants(program)) {
-    out.push(c.variableName);
+    if (!isHidden(c.tags)) out.push(c.variableName);
   }
   return out;
 }
@@ -395,6 +400,8 @@ function generateDocForFile(
     // Fall back to no interrupt info if the type checker crashes.
   }
 
+  warnOnStrayHiddenTags(program, filePath);
+
   const typeAliases: TypeAlias[] = [];
   const effectDecls: EffectDeclaration[] = [];
   for (const node of program.nodes) {
@@ -444,6 +451,21 @@ function generateDocForFile(
   const generatedOutput = postprocessDoc(sections.join("\n\n") + "\n");
   fs.writeFileSync(outputPath, generatedOutput);
   return generatedOutput;
+}
+
+/** `attachTags` moves a tag onto the next declaration, but only for the
+ *  kinds it knows: functions, nodes, type aliases, constants, and calls.
+ *  A `@hidden` above anything else — an `effect` block, say — is left
+ *  behind as a loose tag node and would otherwise do nothing at all,
+ *  silently. Say so instead. */
+function warnOnStrayHiddenTags(program: AgencyProgram, filePath: string): void {
+  for (const node of program.nodes) {
+    if (node.type !== "tag" || node.name !== HIDDEN_TAG) continue;
+    const where = node.loc ? `:${node.loc.line + 1}` : "";
+    console.error(
+      `[doc] @${HIDDEN_TAG} at ${path.basename(filePath)}${where} is not attached to a declaration it can hide; ignoring.`,
+    );
+  }
 }
 
 function postprocessDoc(doc: string): string {
@@ -545,11 +567,9 @@ function formatTypeAlias(alias: TypeAlias, ctx: DocContext): string {
 }
 
 function generateTypeSection(aliases: TypeAlias[], ctx: DocContext): string | null {
-  if (aliases.length === 0) return null;
-  return section(
-    heading(2, "Types"),
-    ...aliases.filter((a) => a.exported).map((a) => formatTypeAlias(a, ctx)),
-  );
+  const visible = aliases.filter((a) => a.exported && !isHidden(a.tags));
+  if (visible.length === 0) return null;
+  return section(heading(2, "Types"), ...visible.map((a) => formatTypeAlias(a, ctx)));
 }
 
 function formatEffectDeclaration(decl: EffectDeclaration, ctx: DocContext): string {
@@ -637,8 +657,9 @@ function formatConstant(c: Assignment, ctx: DocContext): string {
 }
 
 function generateConstantSection(constants: Assignment[], ctx: DocContext): string | null {
-  if (constants.length === 0) return null;
-  return section(heading(2, "Constants"), ...constants.map((c) => formatConstant(c, ctx)));
+  const visible = constants.filter((c) => !isHidden(c.tags));
+  if (visible.length === 0) return null;
+  return section(heading(2, "Constants"), ...visible.map((c) => formatConstant(c, ctx)));
 }
 
 function formatThrows(kinds: InterruptEffect[] | undefined): string | null {
@@ -652,13 +673,16 @@ function generateFunctionSection(
   ctx: DocContext,
   interruptEffectsByFunction: Record<string, InterruptEffect[]>,
 ): string | null {
-  if (fns.length === 0) return null;
-  const _parts = fns.map((fn) => {
-    if (!fn.exported) return null; // skip non-exported functions
+  const visible = fns.filter((fn) => {
+    if (!fn.exported) return false;
     // Underscore-prefixed exports are internal plumbing (e.g. `_guard`,
     // the guard construct's lowering target) — exported for the
     // compiler's sake, not the user's. Their story belongs in docs/dev.
-    if (declaredName(fn.functionName).startsWith("_")) return null;
+    if (declaredName(fn.functionName).startsWith("_")) return false;
+    return !isHidden(fn.tags);
+  });
+  if (visible.length === 0) return null;
+  const parts = visible.map((fn) => {
     const sig = generator.signatureOf(fn);
     return section(
       heading(3, declaredName(fn.functionName)),
@@ -671,7 +695,6 @@ function generateFunctionSection(
       sourceLink(fn.loc, ctx),
     );
   });
-  const parts = _parts.filter((p): p is string => p !== null);
   return section(heading(2, "Functions"), ...parts);
 }
 
@@ -680,8 +703,12 @@ function generateNodeSection(
   ctx: DocContext,
   interruptEffectsByFunction: Record<string, InterruptEffect[]>,
 ): string | null {
-  if (nodes.length === 0) return null;
-  const parts = nodes.map((node) => {
+  // A node that is not exported cannot be reached by anyone importing the
+  // module, so it is not part of the module's surface — the same rule the
+  // function, type, and constant sections have always applied.
+  const visible = nodes.filter((node) => node.exported && !isHidden(node.tags));
+  if (visible.length === 0) return null;
+  const parts = visible.map((node) => {
     const sig = generator.signatureOf(node);
     return section(
       heading(3, declaredName(node.nodeName)),

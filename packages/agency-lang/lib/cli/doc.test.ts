@@ -240,7 +240,7 @@ export def add(a: number, b: number): number {
   return a + b
 }
 
-node main() {
+export node main() {
   uses greet
   const result = llm("Say hello")
   print(result)
@@ -298,7 +298,7 @@ export def helper(): string {
     fs.writeFileSync(
       path.join(subDir, "chat.agency"),
       `
-node main() {
+export node main() {
   print("hello")
 }
 `,
@@ -328,7 +328,7 @@ node main() {
     fs.writeFileSync(
       path.join(inputDir, "nodetonly.agency"),
       `
-node main() {
+export node main() {
   print("hello")
 }
 `,
@@ -340,6 +340,183 @@ node main() {
     expect(output).toContain("## Nodes");
     expect(output).not.toContain("## Types");
     expect(output).not.toContain("## Functions");
+  });
+
+  it("omits @hidden declarations but keeps their plain siblings", () => {
+    const inputDir = path.join(tmpDir, "input-hidden");
+    const outputDir = path.join(tmpDir, "output-hidden");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "mixed.agency"),
+      `
+@hidden
+export type EvalInput = {
+  goal: string
+}
+
+export type Report = {
+  text: string
+}
+
+@hidden
+export def evalHelper(): string {
+  return "scaffolding"
+}
+
+export def realWork(): string {
+  return "surface"
+}
+
+@hidden
+export const EVAL_SEED: number = 7
+
+export const VERSION: number = 1
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "mixed.agency"), outputDir);
+    const output = fs.readFileSync(path.join(outputDir, "mixed.md"), "utf-8");
+
+    // Asserting the SIBLINGS survive is what makes the negatives evidence:
+    // a filter that dropped everything would pass the "not.toContain" half.
+    expect(output).toContain("### Report");
+    expect(output).toContain("### realWork");
+    expect(output).toContain("### VERSION");
+    expect(output).not.toContain("### EvalInput");
+    expect(output).not.toContain("### evalHelper");
+    expect(output).not.toContain("### EVAL_SEED");
+  });
+
+  it("drops the whole section when every declaration in it is hidden", () => {
+    const inputDir = path.join(tmpDir, "input-allhidden");
+    const outputDir = path.join(tmpDir, "output-allhidden");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "allhidden.agency"),
+      `
+@hidden
+export type Only = {
+  a: number
+}
+
+@hidden
+export node evalMain(): number {
+  return 1
+}
+
+export def keepMe(): number {
+  return 2
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "allhidden.agency"), outputDir);
+    const output = fs.readFileSync(path.join(outputDir, "allhidden.md"), "utf-8");
+
+    expect(output).toContain("## Functions");
+    expect(output).not.toContain("## Types");
+    expect(output).not.toContain("## Nodes");
+  });
+
+  it("omits a node that is not exported", () => {
+    const inputDir = path.join(tmpDir, "input-privnode");
+    const outputDir = path.join(tmpDir, "output-privnode");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "nodes.agency"),
+      `
+export node published(): number {
+  return 1
+}
+
+node internal(): number {
+  return 2
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "nodes.agency"), outputDir);
+    const output = fs.readFileSync(path.join(outputDir, "nodes.md"), "utf-8");
+
+    expect(output).toContain("### published");
+    expect(output).not.toContain("### internal");
+  });
+
+  it("does not link to a @hidden type from another page", () => {
+    const inputDir = path.join(tmpDir, "input-hiddenlink");
+    const outputDir = path.join(tmpDir, "output-hiddenlink");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "types.agency"),
+      `
+@hidden
+export type Secret = {
+  a: number
+}
+
+export type Public = {
+  b: number
+}
+`,
+    );
+    fs.writeFileSync(
+      path.join(inputDir, "uses.agency"),
+      `
+export def takesSecret(s: Secret): Public {
+  return { b: 1 }
+}
+`,
+    );
+
+    generateDoc({}, inputDir, outputDir);
+    const uses = fs.readFileSync(path.join(outputDir, "uses.md"), "utf-8");
+
+    // `Public` still renders a section, so it stays a link target. `Secret`
+    // renders none, so a link to it would point at an anchor that does not
+    // exist — it must come out as plain code instead.
+    expect(uses).toContain("[Public](types.md#public)");
+    expect(uses).not.toContain("(types.md#secret)");
+    expect(uses).toContain("`Secret`");
+  });
+
+  it("warns about a @hidden that has no declaration to attach to", () => {
+    const inputDir = path.join(tmpDir, "input-straytag");
+    const outputDir = path.join(tmpDir, "output-straytag");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "stray.agency"),
+      `
+@hidden
+effect myapp::confirm { question: string }
+
+export def f(): number {
+  return 1
+}
+`,
+    );
+
+    const errors: string[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => {
+      errors.push(args.join(" "));
+    };
+    try {
+      generateDoc({}, path.join(inputDir, "stray.agency"), outputDir);
+    } finally {
+      console.error = original;
+    }
+
+    const output = fs.readFileSync(path.join(outputDir, "stray.md"), "utf-8");
+    // Tag attachment does not reach effect declarations, so the effect is
+    // still documented — and the warning is the only thing that tells the
+    // author their `@hidden` did nothing.
+    expect(output).toContain("### myapp::confirm");
+    expect(errors.some((e) => e.includes("@hidden") && e.includes("stray.agency:2"))).toBe(true);
   });
 
   it("handles functions with default values", () => {
@@ -373,7 +550,7 @@ export def greet(name: string = "world"): string {
 
 import { helper } from "./helper.ts"
 
-node main() {
+export node main() {
   print("hello")
 }
 `,
@@ -424,7 +601,7 @@ export def add(a: number, b: number): number {
     fs.writeFileSync(
       path.join(inputDir, "nodedoc.agency"),
       `/** Extra node context. */
-node main() {
+export node main() {
   """Main entry point."""
   print("hello")
 }
@@ -586,7 +763,7 @@ export def safe(): string {
   return "no interrupts here"
 }
 
-node main() {
+export node main() {
   interrupt myapp::confirm("confirm?")
   const r = helper()
   print(r)

@@ -20,8 +20,6 @@ Tools for editing files and managing directories: apply text edits and
   }
   ```
 
-## Types
-
 ## Effects
 
 ### std::edit

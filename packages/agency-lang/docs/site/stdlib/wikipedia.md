@@ -17,8 +17,6 @@ Search Wikipedia and read article summaries or full text from Agency code.
   }
   ```
 
-## Types
-
 ## Effects
 
 ### std::wikipedia::search

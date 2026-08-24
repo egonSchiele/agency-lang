@@ -12,8 +12,6 @@ can render, and
 - `todoWrite` / `todoList` give the LLM a small todo
 list to track multi-step work across turns.
 
-## Types
-
 ## Effects
 
 ### std::question

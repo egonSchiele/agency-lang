@@ -700,6 +700,27 @@ export node inspect(input: {
     expect(info.description).toContain("Tools for the news agent");
   });
 
+  it("omits @hidden exports, matching what agency doc renders", () => {
+    const info = _describe(
+      [
+        "@hidden",
+        "export type EvalInput = {",
+        "  goal: string",
+        "}",
+        "export type Report = {",
+        "  text: string",
+        "}",
+        "@hidden",
+        'export def evalHelper(): string { return "scaffolding" }',
+        'export def realWork(): string { return "surface" }',
+        "",
+      ].join("\n"),
+    );
+    // Both halves matter: the plain siblings prove the filter is not just
+    // dropping everything with a tag near it.
+    expect(info.exports.map((e) => e.name)).toEqual(["Report", "realWork"]);
+  });
+
   it("returns no description and no exports for a bare program", () => {
     const info = _describe("node main() {\n  return 1\n}\n");
     expect(info).toEqual({ description: null, exports: [] });

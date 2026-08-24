@@ -30,28 +30,6 @@ export type WriteFailure = {
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L27))
 
-### CodingEvalInput
-
-What an eval hands the writer: the assignment, and the file to save the
-  returned program as. The shape the `evals/agency-coding` suite uses as its
-  input. Deliberately agent-agnostic: everything about the deliverable's
-  shape (module vs runnable program, what to export) lives in the assignment
-  text, so any writer can be scored on the same suite.
-
-```ts
-/** What an eval hands the writer: the assignment, and the file to save the
-  returned program as. The shape the `evals/agency-coding` suite uses as its
-  input. Deliberately agent-agnostic: everything about the deliverable's
-  shape (module vs runnable program, what to export) lives in the assignment
-  text, so any writer can be scored on the same suite. */
-export type CodingEvalInput = {
-  assignment: string;
-  outFile: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L340))
-
 ## Functions
 
 ### buildTools
@@ -124,34 +102,3 @@ Write an Agency program for the task. Iterates until the source parses,
 **Throws:** `std::guard`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L260))
-
-## Nodes
-
-### evalMain
-
-```ts
-evalMain(input: CodingEvalInput): string
-```
-
-Eval entry point: `agency eval run stdlib/agents/agency/coding.agency:evalMain
-  --suite <dir>`. A node in a library module never runs when the module is
-  imported; it only exists so a suite can score this writer without a
-  wrapper file. Any other writer scored on the same suite supplies a node
-  with this signature. The writer returns source without saving it, so
-  saving into the workdir — where the suite's harness pairs grade it — is
-  this node's own doing (`with approve`). A budget trip inside the writer is
-  rejected (`with reject`) so the caps stay caps. A failed run still saves
-  its last draft: harness grading is all-or-nothing, but the grade's
-  per-case feedback then names exactly which cases the draft fails.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| input | [CodingEvalInput](#codingevalinput) |  |
-
-**Returns:** `string`
-
-**Throws:** `std::write`, `std::guard`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L355))

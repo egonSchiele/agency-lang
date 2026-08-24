@@ -10,8 +10,6 @@ plannerAgent: the plan-as-code meta-agent. Given a task, generate an Agency
   it, show the plan, source, and capability envelope for approval, run it in a
   handler-sandboxed subprocess, verify, and fall back to codingAgent on failure.
 
-## Types
-
 ## Effects
 
 ### std::agents::planApprove

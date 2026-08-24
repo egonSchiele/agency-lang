@@ -26,8 +26,13 @@ You can also set these options in the Agency config file:
 
 `baseUrl` is used to generate links to the source code in the documentation. It should point to the directory containing your library's source code.
 
+## What gets documented
+Agency documents the exported nodes, functions, types, and constants defined at the top level of each file. Anything you do not export is not part of what a caller can reach, so it is left out. Names starting with an underscore are left out too: they are compiler plumbing rather than something anyone calls.
+
+If you want to leave out something you *did* export, see [hiding a declaration](#hiding-a-declaration) below.
+
 ## Doc comments
-Agency will generate documentation for all nodes, functions, and types defined at the top level of each file. It will use the docstring as the description for nodes and functions. You can additionally give more documentation by providing a doc comment above types, functions, or nodes:
+Agency uses the docstring as the description for nodes and functions. You can additionally give more documentation by providing a doc comment above types, functions, or nodes:
 
 ```ts
 /** This is a doc comment for the Person type */
@@ -72,6 +77,38 @@ def now(timezone: string = ""): string {
 The `@module` doc comment must appear at the top of the file, or right after the imports. If it appears after any other code (type aliases, functions, nodes), the compiler will throw an error.
 
 In the generated documentation, the module doc comment appears at the top of the page, before the types and functions sections.
+
+## Hiding a declaration
+
+Write `@hidden` above a declaration to keep it out of the generated pages:
+
+```ts
+/** What an eval hands the reviewer. */
+@hidden
+export type ReviewEvalInput = {
+  assignment: string
+  sourceFile: string
+}
+```
+
+This is for something you have to export for a tool to reach, but that is not
+part of what you are asking people to use. The example above is real: the review
+agent in the standard library exports a type that only its eval suite passes in.
+Exporting it is necessary; putting it in the reference next to the agent itself
+would just be confusing.
+
+A few things worth knowing:
+
+- `@hidden` works on types, functions, nodes, and constants. It does nothing on
+  an `effect` declaration; `agency doc` prints a warning if you write one there,
+  so you are not left wondering why the effect still shows up.
+- Nothing links to a hidden declaration. If another page has a function that
+  takes a hidden type, that type name renders as plain text instead of a link,
+  because there is no longer a section to link to.
+- `std::agency`'s `describe()` hides it too, so a generator reading your module
+  sees the same surface a reader does.
+- Hiding is about documentation only. The declaration still compiles, still
+  exports, and anyone who knows its name can still import it.
 
 ## Interrupts
 

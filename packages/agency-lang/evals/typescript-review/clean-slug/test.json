@@ -1,0 +1,9 @@
+{
+  "description": "The planted test's clean sibling: the same helper written plainly. Measures false positives on the exact same assignment.",
+  "tags": ["clean"],
+  "files": "./files",
+  "input": {
+    "assignment": "Add a slugify helper that turns a page title into a URL slug: lowercase, non-alphanumerics collapsed to single hyphens, no leading or trailing hyphen.",
+    "sourceFile": "slug.ts"
+  }
+}

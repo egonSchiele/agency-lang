@@ -638,6 +638,18 @@ class PatternLowerer {
     matchId: number,
     arm: MatchBlockCase,
   ): AgencyNode[] {
+    if (body.length === 1 && body[0].type === "matchBlock") {
+      // A nested match as the arm's whole body: lower the inner match first and
+      // yield its `__matchval_` ref, exactly as `return match(...)` does in a
+      // block arm. Hoisting it as an opaque expression instead would leave the
+      // raw `matchBlock` as this yield's `typeSource`, which the synthesizer
+      // types as `any` — poisoning the outer match's whole value type.
+      const inner = this.lowerMatchExpressionCore(body[0] as MatchBlock, body[0].loc);
+      return [
+        ...inner.statements,
+        { type: "matchYield", matchId, value: inner.valueRef, loc: body[0].loc },
+      ];
+    }
     if (body.length === 1 && isExpressionNode(body[0])) {
       const expr = body[0] as Expression;
       // Always bind a single-expression arm's value to a temp at STATEMENT

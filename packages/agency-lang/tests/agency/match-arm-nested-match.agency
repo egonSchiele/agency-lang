@@ -1,0 +1,23 @@
+// #887: a match expression as the body of a match arm — the natural way to
+// chain two fallible steps.
+def chain(r: Result<string>, r2: Result<string>): string {
+  return match(r) {
+    success(s) => match(r2) {
+      success(t) => "${s}${t}"
+      failure(e) => "inner:${e}"
+    }
+    failure(err) => "outer:${err}"
+  }
+}
+
+node bothSucceed() {
+  return chain(success("a"), success("b"))
+}
+
+node innerFails() {
+  return chain(success("a"), failure("boom"))
+}
+
+node outerFails() {
+  return chain(failure("first"), success("b"))
+}

@@ -159,11 +159,6 @@ const INLINE_ARM_STATEMENT_TYPES: readonly string[] = [
   "assignment",
 ];
 
-/** Node types that never print inline even though they are expressions:
- *  a nested match keeps block form so it re-parses as a match, not an
- *  arm body. */
-const NEVER_INLINE_ARM_TYPES: readonly string[] = ["matchBlock"];
-
 export class AgencyGenerator {
   protected graphNodes: GraphNodeDefinition[] = [];
   protected generatedStatements: string[] = [];
@@ -1638,9 +1633,6 @@ export class AgencyGenerator {
       return false;
     }
     const stmt = caseNode.body[0];
-    if (NEVER_INLINE_ARM_TYPES.includes(stmt.type)) {
-      return false;
-    }
     // A raise-form interrupt is a statement, even though the interrupt
     // EXPRESSION shares its `interruptStatement` node type.
     if (stmt.type === "interruptStatement" && (stmt as InterruptStatement).viaRaise) {

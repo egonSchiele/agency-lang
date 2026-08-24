@@ -302,3 +302,61 @@ describe("memo invalidation across computeMatchExprTypes phases", () => {
     expect(messages).toContain("number");
   });
 });
+
+// #887: an inline nested match must be lowered to its `__matchval_` ref, not
+// hoisted as an opaque expression. The synthesizer has no `matchBlock` case,
+// so an opaque hoist types the yield as `any` — and one `any` yield makes the
+// WHOLE outer match `any`, silently disabling every check on it.
+describe("a nested match as an arm body", () => {
+  it("types the inner match's arms, so a bad arm is still an error", () => {
+    const errs = check(`${TRY}
+node main() {
+  let r = tryParse("ok")
+  let r2 = tryParse("no")
+  const val: string = match(r) {
+    success(v) => match(r2) {
+      success(w) => 1
+      failure(e) => "inner"
+    }
+    failure(e) => "outer"
+  }
+  return val
+}`);
+    expect(errs.join("\n")).toContain("is not assignable to type 'string'");
+  });
+
+  it("does not collapse the OUTER match's type to any", () => {
+    // Every arm here yields a number; assigning to `string` must still fail.
+    const errs = check(`${TRY}
+node main() {
+  let r = tryParse("ok")
+  let r2 = tryParse("no")
+  const val: string = match(r) {
+    success(v) => match(r2) {
+      success(w) => 1
+      failure(e) => 2
+    }
+    failure(e) => 3
+  }
+  return val
+}`);
+    expect(errs.join("\n")).toContain("Type 'number' is not assignable to type 'string'");
+  });
+
+  it("accepts a nested match whose arms all match the annotation", () => {
+    const errs = check(`${TRY}
+node main() {
+  let r = tryParse("ok")
+  let r2 = tryParse("no")
+  const val: string = match(r) {
+    success(v) => match(r2) {
+      success(w) => "a"
+      failure(e) => "b"
+    }
+    failure(e) => "c"
+  }
+  return val
+}`);
+    expect(errs).toEqual([]);
+  });
+});

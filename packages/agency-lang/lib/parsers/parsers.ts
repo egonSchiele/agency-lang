@@ -4757,6 +4757,7 @@ const matchBlockParserCaseInner: Parser<MatchBlockCase> = (
                 returnStatementParser,
                 gotoStatementParser,
                 lazy(() => assignmentParser),
+                lazy(() => matchBlockExprParser),
                 exprParser,
               ),
               "n",

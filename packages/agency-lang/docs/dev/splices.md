@@ -58,6 +58,10 @@ The map of paths is the same one `liftCallbackBlocks` marks. If a sixth appears,
 
 `TypeScriptBuilder.build` has a tripwire for this. A splice reaching code generation means expansion did not run. Without the tripwire the symptom is a raw `Unhandled Agency node type` stack trace that says nothing about the actual mistake.
 
+The tripwire runs before the builder generates anything, and it finds splices by walking the whole tree rather than scanning the top level — a splice in expression position sits several levels down inside a call. The message names the generator when it can read one, so it says *which* splice went unexpanded, and points here for the list of paths that must call expansion.
+
+Because no real compile path can reach the tripwire, its only coverage is `lib/backends/spliceRefusal.test.ts`, which builds a splice program with expansion deliberately skipped, once per splice position. That test is what notices if the tripwire is ever removed.
+
 ## The three phases
 
 `expandSplices` keeps decide, run, and graft separate, because they change for different reasons.

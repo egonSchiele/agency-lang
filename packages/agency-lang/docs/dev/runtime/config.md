@@ -60,7 +60,23 @@ choosing a field; the helper never needs to know which command called it.
 
 `refuseSplices` declines compile-time generator execution: a file containing a `$( ... )` fails with `AG8016` instead of the generator being run. Off by default, available on `compile`, `run`, `typecheck` and `test run`.
 
-It is a config field rather than an argument because the refusal is read deep inside `expandSplices`, which every compile and check path reaches. `--agency-only` refuses splices too, but by taking a different compile path entirely, so the two do not imply one another — see `docs/dev/splices.md`.
+It is a config field rather than an argument because the refusal is read deep
+inside `expandSplices`, which every compile and check path reaches.
+`--agency-only` refuses splices too, but by taking a different compile path
+entirely, so the two do not imply one another — see
+`docs/dev/language/splices.md`.
+
+One consequence of being a config field is worth knowing, because it bit this
+flag once. Anything that merges another config **over** the CLI-derived one can
+cancel it. `agency test run` does exactly that: both `groupTestSources`
+(`lib/cli/precompile.ts`) and `runTestFile` (`lib/cli/test.ts`) merge a
+fixture-local `agency.json` over the base, so a fixture carrying
+`"refuseSplices": false` beat the flag until both sites were changed to
+re-apply the CLI intent afterwards. Every other command is safe for free,
+because `applyCliFlags` runs last there. If you add a flag whose whole point is
+to refuse something, check that nothing merges over it, and note that a
+subprocess re-derives its own config — `expectedCompileError` shells out to a
+child `agency compile`, which has to be passed the flag explicitly.
 
 ## Flags that are NOT config
 

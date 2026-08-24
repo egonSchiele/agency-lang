@@ -17,6 +17,7 @@ import {
 } from "../compiler/splice/eligibility.js";
 import type { ImportSource } from "../compiler/splice/eligibility.js";
 import { runGenerator } from "../compiler/splice/runGenerator.js";
+import { calleeName } from "../compiler/splice/calleeName.js";
 import {
   cachedEligibility,
   cachedGeneratorRun,
@@ -261,14 +262,6 @@ function decide(
       ),
     },
   };
-}
-
-/** A splice calls its generator; anything else has no generator to name. */
-function calleeName(splice: Splice): string | null {
-  const expression = splice.expression as { type: string; functionName?: string };
-  return expression.type === "functionCall" && expression.functionName !== undefined
-    ? expression.functionName
-    : null;
 }
 
 /**

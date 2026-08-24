@@ -120,6 +120,8 @@ function coarseKindFor(typeHint: VariableType): CoarseKind | null {
 import { printTs } from "../ir/prettyPrint.js";
 import type { TsNode, TsObjectEntry, TsParam, TsTemplatePart } from "../ir/tsIR.js";
 import type { CompilationUnit } from "../compilationUnit.js";
+import type { Splice } from "../types/splice.js";
+import { calleeName } from "../compiler/splice/calleeName.js";
 import { SourceMapBuilder } from "./sourceMap.js";
 import { nodeWrapperParams } from "./typescriptBuilder/nodeWrapperParams.js";
 import { ScopeManager } from "./typescriptBuilder/scopeManager.js";
@@ -508,9 +510,16 @@ export class TypeScriptBuilder {
       (visit) => visit.node.type === "splice",
     );
     if (unexpanded.length > 0) {
+      const named = unexpanded
+        .map((visit) => calleeName(visit.node as Splice))
+        .filter((name): name is string => name !== null);
+      const which =
+        named.length > 0 ? ` (generator${named.length > 1 ? "s" : ""}: ${named.join(", ")})` : "";
       throw new Error(
-        "Internal error: a compile-time splice `$( ... )` reached code " +
-          "generation. Splice expansion did not run on this compile path.",
+        `Internal error: a compile-time splice \`$( ... )\`${which} reached code ` +
+          "generation. Splice expansion did not run on this compile path: " +
+          "expandSplices should have replaced it. See docs/dev/splices.md for " +
+          "the paths that must call it.",
       );
     }
 

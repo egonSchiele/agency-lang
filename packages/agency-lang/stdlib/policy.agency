@@ -36,7 +36,6 @@ import {
   import { cliPolicyHandler } from "std::policy"
 
   node main() {
-    // `with approve`: this read happens before the handler is installed.
     const home = env("HOME") with approve
     // Bind to a variable — the `with` clause only accepts an identifier.
     const handler = cliPolicyHandler(

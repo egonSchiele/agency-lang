@@ -172,6 +172,9 @@ def fredInfoFinalize(fetchResult: any): Result {
   }
 }
 
+// std::env is in the raises clauses below even though both reads are
+// approved at the site: `with approve` answers the interrupt at runtime,
+// it does not discharge the effect.
 export def fredSeries(seriesId: string, observationStart: string = "", observationEnd: string = "", frequency: FredFrequency | null = null, units: FredUnits | null = null, limit: number = 0): Result<FredSeries> raises <std::fred, std::env, std::http::fetchJSON> {
   """
   Fetch a U.S. macroeconomic time-series from FRED by its series id (e.g. "UNRATE" for the
@@ -187,8 +190,6 @@ export def fredSeries(seriesId: string, observationStart: string = "", observati
   @param units - Optional units transform code, e.g. "pch" for percent change (null for "lin")
   @param limit - Optional max observations from the oldest, 0 means no limit
   """
-  // `with approve`: the key goes straight into the request, and the
-  // request is gated by std::fred.
   const fredKey = env("FRED_API_KEY") with approve
   const apiKey = fredKey ?? ""
   if (apiKey == "") {
@@ -209,8 +210,6 @@ export def fredSeriesInfo(seriesId: string): Result<FredSeriesInfo> raises <std:
 
   @param seriesId - FRED series id, e.g. "UNRATE"
   """
-  // `with approve`: the key goes straight into the request, and the
-  // request is gated by std::fred.
   const fredKey = env("FRED_API_KEY") with approve
   const apiKey = fredKey ?? ""
   if (apiKey == "") {

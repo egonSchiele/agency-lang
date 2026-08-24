@@ -110,19 +110,17 @@ Six paths run generator code: the two compile paths, the two typecheck paths, th
 
 "Compiling runs your code" is therefore close to accurate, with typechecking as the honest addition. That was not true of an earlier draft, which expanded inside `SymbolTable.build`; see the section above for why that changed.
 
-## What is not checked
+## What is checked, and what is not
 
-Two things a reader might expect and should not.
+Effects are refused statically, as `AG8003`: a generator that may raise cannot run at compile time. The backstop still stands behind it — compilation installs no handlers, so an operation that raises could not complete anyway, and that failure arrives as `AG8008` naming the generator.
 
-**Effects are not checked before the generator runs.** An earlier draft refused an effectful generator statically, as `AG8003`. That is gone. The backstop does the work instead: compilation installs no handlers, so an operation that raises cannot complete, and the failure arrives as `AG8008` naming the generator.
+The import restriction, `AG8006`, is on by default, with `allowNonAgencyGenerators` in the config to opt out. "Does this generator reach a non-Agency import" has an exact answer, and it is the precondition that makes the backstop mean anything rather than a duplicate of it.
 
-The static version could not be made precise while #680 stands, because effects do not cross a module boundary. To fail closed it had to refuse a generator when *any* export anywhere in its closure raised, which rejects a generator that uses one harmless function from a file that happens to contain an effectful one. A coarse check is defensible when it is the only protection; it is hard to justify as an earlier version of an error the runtime already produces. Filed as **#691**, blocked on #680.
-
-The import restriction, `AG8006`, was removed at the same time and then restored. It does not share the imprecision: "does this generator reach a non-Agency import" has an exact answer, and it is the precondition that makes the backstop mean anything rather than a duplicate of it. It is on by default, with `allowNonAgencyGenerators` in the config to opt out.
+One thing a reader might expect and should not:
 
 **Determinism is not enforced.**
 
-An earlier draft refused a generator that could reach `llm()` or the clock, as `AG8004`. That check is gone and the code is unused.
+An earlier draft refused a generator that could reach `llm()` or the clock. That check is gone, and its diagnostic code has since been reused for `spliceGeneratorUnreadable`.
 
 It was a hardcoded name list, and a name list cannot be made complete. It missed anything one wrapper away through a `std::` module, and eleven stdlib files reach `llm` while declaring no interrupts. It missed everything nondeterministic that was not `llm` or `std::date`, and it would have missed every function added afterwards. A check that reads like a guarantee and is not one is worse than no check.
 

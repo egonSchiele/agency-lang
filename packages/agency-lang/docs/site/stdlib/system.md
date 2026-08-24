@@ -197,7 +197,8 @@ Return the absolute path of the current working directory of the Agency process.
 env(name: string): string | null
 ```
 
-Read an environment variable. Returns null if the variable is not set.
+Read an environment variable. Returns null if the variable is not set, or if
+  the read was denied.
 
   @param name - The environment variable name
 
@@ -211,7 +212,7 @@ Read an environment variable. Returns null if the variable is not set.
 
 **Throws:** `std::env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L102))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L109))
 
 ### setEnv
 
@@ -235,7 +236,7 @@ Set an environment variable in the current process. Fails if the name is empty o
 
 **Throws:** `std::setEnv`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L114))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L126))
 
 ### isTTY
 
@@ -247,7 +248,7 @@ Return true if standard input is connected to a terminal. Returns false when std
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L128))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L140))
 
 ### readStdin
 
@@ -259,7 +260,7 @@ Read all of standard input until EOF and return it as a string. Blocks until the
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L135))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L147))
 
 ### openUrl
 
@@ -284,7 +285,7 @@ macOS-only. Ctrl-C, a race loss, or a time-guard abort kills the in-flight
 
 **Throws:** `std::openUrl`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L144))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L156))
 
 ### setTitle
 
@@ -304,4 +305,4 @@ Set the process title (as shown in system monitors, `ps` output, and the termina
 
 **Returns:** `void`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L157))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L169))

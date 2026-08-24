@@ -60,9 +60,8 @@ export def computeAgentDir(): string {
   // One resolver for the agent home: settings, policy, history, and the
   // memory dir all go through resolveAgentHome, so the sandbox variable
   // and the home fallback cannot drift between them.
-  // `with approve`: AGENCY_AGENT_DIR is a static const, so this runs at
-  // module init where no handler can be installed. Same read, same
-  // resolver as config.agency's POLICY_DIR.
+  // AGENCY_AGENT_DIR is a static const, so this runs at module init,
+  // where no handler can be installed.
   const override = env("AGENCY_AGENT_HOME") with approve
   return resolveAgentHome(override)
 }

@@ -14,7 +14,6 @@ import { _authorizeCalendar, _listEvents, _createEvent, _updateEvent, _deleteEve
 
   node main() {
     if (!isCalendarAuthorized()) {
-      // `env` raises std::env, so each read is answered here.
       const clientId = env("GOOGLE_CLIENT_ID") with approve
       const clientSecret = env("GOOGLE_CLIENT_SECRET") with approve
       authorizeCalendar(clientId, clientSecret)

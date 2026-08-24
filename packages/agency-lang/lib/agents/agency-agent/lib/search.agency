@@ -389,9 +389,8 @@ export def withWebSearch(opts: LlmOpts): LlmOpts {
 
 // --- Picker helper for the /search slash command -----------------------
 
-/** Which search backends have a key set. `with approve` on both reads:
- *  this asks whether a backend is usable and neither key leaves the
- *  function. Prompting here would fire every time the picker opens. */
+/** Which search backends have a key set. Approved at the site because a
+ *  prompt here would fire every time the picker opens. */
 def searchKeyPresence(): { hasTavily: boolean, hasBrave: boolean } {
   const tavilyKey = env("TAVILY_API_KEY") with approve
   const braveKey = env("BRAVE_API_KEY") with approve

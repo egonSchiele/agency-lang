@@ -99,16 +99,28 @@ export def cwd(): string {
   return _cwd()
 }
 
-export idempotent def env(name: string): string | null {
-  """
-  Read an environment variable. Returns null if the variable is not set.
-
-  @param name - The environment variable name
-  """
+def requestEnvRead(name: string): string | null {
   return interrupt std::env("Are you sure you want to read this environment variable?", {
     name: name
   })
   return _env(name)
+}
+
+export idempotent def env(name: string): string | null {
+  """
+  Read an environment variable. Returns null if the variable is not set, or if
+  the read was denied.
+
+  @param name - The environment variable name
+  """
+  const value = requestEnvRead(name)
+  if (isFailure(value)) {
+    // A read the program is not allowed to make looks like a variable that
+    // is not set. Callers already handle the unset case, so a denial cannot
+    // be mistaken for a configured value.
+    return null
+  }
+  return value
 }
 
 export def setEnv(name: string, value: string): Result {

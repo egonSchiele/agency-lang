@@ -35,7 +35,6 @@ static const providers: SearchProvider[] = [
 ]
 
 def hasKey(provider: SearchProvider): boolean {
-  // `with approve`: a presence check that returns a boolean.
   const key = env(provider.envKey) with approve
   return key != null && key != ""
 }
@@ -47,10 +46,6 @@ def boundTool(provider: SearchProvider): any {
   // `"</antml_parameter>\n<parameter name=..."` as the key, which reached
   // the HTTP layer and failed the search outright. A bound argument is not
   // in the schema at all, so there is nothing to fill.
-  //
-  // `with approve` on the read: the key is bound into the tool, not shown
-  // to the model, and the search itself is gated by std::search or
-  // std::tavilySearch. The moment worth asking about is the search.
   const key = env(provider.envKey) with approve
   return provider.tool.partial(apiKey: key).rename(provider.toolName)
 }

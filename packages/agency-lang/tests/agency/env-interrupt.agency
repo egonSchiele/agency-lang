@@ -23,19 +23,17 @@ node main(): string {
   return "${effects}readBack=${readBack}"
 }
 
-// A rejected read blocks: the variable is set, and env() still comes back a
-// failure rather than the value.
+// A denied read looks like a variable that is not set. The variable IS set
+// here, so `null` can only come from the denial — which is what makes the
+// ordinary `?? "default"` and `== null` guards at every call site correct
+// without any of them checking for a failure.
 node rejected(): string {
   let readBack = "unset"
 
   handle {
     setEnv("AGENCY_ENV_TEST_2", "hello")
     const value = env("AGENCY_ENV_TEST_2")
-    if (isFailure(value)) {
-      readBack = "blocked"
-    } else {
-      readBack = value ?? "null"
-    }
+    readBack = value ?? "null"
   } with (e) {
     if (e.effect == "std::env") {
       return reject("no reading the environment")

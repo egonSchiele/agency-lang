@@ -9,9 +9,9 @@
     },
     {
       "nodeName": "rejected",
-      "description": "A rejected std::env blocks the read even though the variable is set",
+      "description": "A denied read returns null even though the variable is set, so ordinary unset-handling covers it",
       "input": "",
-      "expectedOutput": "\"readBack=blocked\"",
+      "expectedOutput": "\"readBack=null\"",
       "evaluationCriteria": [{ "type": "exact" }]
     }
   ]

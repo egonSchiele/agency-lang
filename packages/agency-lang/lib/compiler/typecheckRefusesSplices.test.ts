@@ -18,16 +18,20 @@ let dir: string;
 beforeEach(() => {
   dir = path.join(process.cwd(), ".agency-tmp", `tc-refuse-${nanoid()}`);
   fs.mkdirSync(dir, { recursive: true });
-  // The fragment declares `greet`, and host.agency calls it. `greet`
-  // resolving is the witness that the generator ran.
+  // The fragment declares a TYPE, and host.agency annotates with it. The type
+  // is the witness, deliberately: a call to a function that does not exist is
+  // reported silently here, so a generated *function* proves nothing — an
+  // unexpanded program with `print(greet())` still type-checks clean. An
+  // unknown type alias is a real error (AG1006), so this fixture fails if
+  // expansion ever stops happening.
   fs.writeFileSync(
     path.join(dir, "gen.agency"),
-    `import { Code } from "std::agency"\n\nexport def makeGreet(): Code {\n  return [|\n    def greet(): string {\n      return "hi"\n    }\n  |]\n}\n`,
+    `import { Code } from "std::agency"\n\nexport def makeGreet(): Code {\n  return [|\n    type Greeting = string\n\n    def greet(): Greeting {\n      return "hi"\n    }\n  |]\n}\n`,
     "utf-8",
   );
   fs.writeFileSync(
     path.join(dir, "host.agency"),
-    `import { makeGreet } from "./gen.agency"\n\n$( makeGreet() )\n\nnode main() {\n  print(greet())\n}\n`,
+    `import { makeGreet } from "./gen.agency"\n\n$( makeGreet() )\n\nnode main() {\n  const g: Greeting = greet()\n  print(g)\n}\n`,
     "utf-8",
   );
 });
@@ -56,9 +60,10 @@ describe("type checking with generator execution declined", () => {
   });
 
   it("still expands when the caller does not decline", () => {
-    // A CLEAN report, not merely the absence of AG8016: `greet` exists only
-    // if the generator ran, so an unexpanded program reports it undefined.
-    // This is what stops the flag from becoming a blanket ban.
+    // The control that stops the flag from becoming a blanket ban. A clean
+    // report only means something because of the generated type: without
+    // expansion this reports AG1006 for the unknown `Greeting`. Verified by
+    // disabling expansion in runCheckerPipeline, which fails this test.
     expect(check("host.agency").errors).toHaveLength(0);
   }, 60_000);
 

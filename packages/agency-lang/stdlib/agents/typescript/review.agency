@@ -202,7 +202,7 @@ export def typescriptReviewAgent(
   the file holding that code, seeded into the working directory by the
   test's `files/`. The shape the `evals/typescript-review` suite uses as
   its input. */
-export type ReviewEvalInput = {
+export type TsReviewEvalInput = {
   assignment: string;
   sourceFile: string
 }
@@ -216,7 +216,7 @@ export type ReviewEvalInput = {
   trip inside the reviewer is rejected (`with reject`) so the caps stay
   caps and the reviewer's fail-open result comes back instead of an
   interrupt escaping the entry point. */
-node evalMain(input: ReviewEvalInput): Feedback[] {
+node evalMain(input: TsReviewEvalInput): Feedback[] {
   evalValue(input)
   const source = read(input.sourceFile) with approve
   if (source is failure(readErr)) {

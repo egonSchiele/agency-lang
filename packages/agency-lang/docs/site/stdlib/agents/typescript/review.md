@@ -15,7 +15,7 @@ The judgment layer above what compilers and linters catch.
 
 ## Types
 
-### ReviewEvalInput
+### TsReviewEvalInput
 
 What an eval hands the reviewer: the task the code was written for, and
   the file holding that code, seeded into the working directory by the
@@ -27,7 +27,7 @@ What an eval hands the reviewer: the task the code was written for, and
   the file holding that code, seeded into the working directory by the
   test's `files/`. The shape the `evals/typescript-review` suite uses as
   its input. */
-export type ReviewEvalInput = {
+export type TsReviewEvalInput = {
   assignment: string;
   sourceFile: string
 }
@@ -112,7 +112,7 @@ Review TypeScript code for readability and architecture and return
 ### evalMain
 
 ```ts
-evalMain(input: ReviewEvalInput): Feedback[]
+evalMain(input: TsReviewEvalInput): Feedback[]
 ```
 
 Eval entry point: `agency eval run stdlib/agents/typescript/review.agency:evalMain
@@ -129,7 +129,7 @@ Eval entry point: `agency eval run stdlib/agents/typescript/review.agency:evalMa
 
 | Name | Type | Default |
 |---|---|---|
-| input | [ReviewEvalInput](#reviewevalinput) |  |
+| input | [TsReviewEvalInput](#tsreviewevalinput) |  |
 
 **Returns:** `Feedback[]`
 

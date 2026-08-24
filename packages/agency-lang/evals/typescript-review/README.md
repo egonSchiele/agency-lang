@@ -23,7 +23,7 @@ pnpm run agency eval grade runs/typescript-review
 
 ## The contract
 
-Input, the entry node's single parameter (`ReviewEvalInput` in the stdlib
+Input, the entry node's single parameter (`TsReviewEvalInput` in the stdlib
 module):
 
 ```

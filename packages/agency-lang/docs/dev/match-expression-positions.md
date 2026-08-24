@@ -40,14 +40,62 @@ So the failure is not "the nested match is untyped". It is "the whole outer
 match is untyped", and every assignability check on it silently stops running.
 Nothing errors; you just lose the checking.
 
-The fix is for `rewriteArmForYield` to lower a nested match through
-`lowerMatchExpressionCore` first and yield its `__matchval_<id>` ref — exactly
-what `rewriteReturnsToYields` already does for `return match(...)` in a block
-arm. `computeMatchExprTypes` processes match ids in DESCENDING order precisely
-so these resolve bottom-up.
+The fix is for `rewriteArmForYield` to lower the nested construct first and
+yield its `__matchval_<id>` ref — exactly what `rewriteReturnsToYields` already
+does for `return match(...)` in a block arm. `computeMatchExprTypes` processes
+match ids in DESCENDING order precisely so these resolve bottom-up.
+
+It routes through the shared `expressionRegion()` helper, which owns the
+question "is this an expression-position control-flow construct?" for
+`matchBlock` and `ifElse` alike. The arm lowerer adds the one question only it
+can answer: **is this arm an expression position?**
+
+That second question is load-bearing, not ceremony. `ifElse` is one node type
+for two surface forms (see the last section), and is an expression only in value
+position — for an arm, the inline form. A BLOCK arm whose body is a lone
+statement `if` must NOT take this path: `lowerIfExpressionCore` reads each
+branch as `thenBody[0] as Expression`, so a branch like
+`{ const x = 41  return x + 1 }` yields the value of the `const` binding and
+silently drops the `return`. Calling `expressionRegion()` ungated on every
+one-node arm body makes this arm return 41:
+
+```agency
+true => {
+  if (c) { const x = 41  return x + 1 } else { return 2 }
+}
+```
+
+and makes an arm whose branches yield nothing at all compile silently instead of
+raising "match arm must return a value on every path". `matchBlock` has no such
+ambiguity — it is an expression in both forms — so it takes the path either way.
 
 Anything else you make legal in a value position needs the same treatment: if
 the synthesizer cannot type the node, hoisting it poisons its consumer.
+
+## Known limitation: a nested arm loses literal types
+
+The yield this produces carries no `typeSource`, so `computeMatchExprTypes`
+types it by synthing the `__matchval_<inner>` ref, and that hook returns
+`ctx.matchExprTypes[inner]` — which has already been through `widenType`. A
+nested arm therefore loses literal types, and a literal-union annotation gets a
+false error:
+
+```agency
+const val: "a" | "b" = match(r) {
+  success(v) => match(r2) { success(w) => "a"  failure(e) => "b" }
+  failure(e) => "a"
+}
+// Type 'string' is not assignable to type '"a" | "b"'
+```
+
+Flattened to a single match this is accepted, because a plain arm keeps its
+`typeSource` and the per-arm check runs on the UNWIDENED type. This is not new —
+`=> { return match(...) }` has always behaved this way — but the inline syntax
+is what makes the shape easy to reach.
+
+If you want to close it: the unwidened per-arm types do exist, in
+`ctx.matchExprYieldTypes[inner]`. The nested yield would need to carry them
+through rather than collapsing to the widened union.
 
 ## The formatter has to agree
 
@@ -64,15 +112,42 @@ but only for shapes the corpus actually contains — add a targeted case too.
 
 ## Known gap: `if ... then ... else` as an arm body
 
-Still a parse error. The parser half is one line (add `ifExpressionParser` to
-the arm alternatives) and the lowering half is already written — the shared
-`expressionRegion()` helper handles `matchBlock` and `ifElse` both. The reason
-it is not done is the formatter.
+Still a parse error. The parser half is one line — add `ifExpressionParser` to
+the arm alternatives — and the lowering half really is done: because
+`rewriteArmForYield` routes through `expressionRegion()`, which already handles
+`ifElse`, adding that one parser line is enough to make
 
-`ifElse` is one node type for two surface forms: the statement `if (c) { ... }`
-and the expression `if c then a else b`. Nothing on the node records which was
-written. Existing code disambiguates **by position** — see the comment at the
-assignment-value branch in `agencyGenerator.ts`, "a statement `if` is never an
-assignment value". An inline arm body is a value position, so the same argument
-works there, but `armPrintsInline` and the arm-printing path both need to know
-it, or the arm prints in statement form and stops round-tripping.
+```agency
+match(x) {
+  1 => if (x > 0) then 10 else 20
+  _ => 0
+}
+```
+
+parse, lower, and run correctly. I verified this by temporarily adding the line.
+
+What is NOT done is the formatter, and it fails loudly rather than subtly. With
+the parser line in, `agency fmt` prints the arm above as:
+
+```
+1 => {
+  if (x > 0) {
+10
+  } else {
+20
+  }
+}
+```
+
+— structurally broken, and even repaired it would re-parse as a statement `if`
+whose branches contain no `return`, which dies with "match arm must return a
+value on every path".
+
+The cause is the two-surface-forms problem again: nothing on an `ifElse` node
+records which form was written, and `armPrintsInline` /
+`processMatchBlockCase` fall back to the statement printer. Existing code
+disambiguates **by position** — see the comment at the assignment-value branch
+in `agencyGenerator.ts`, "a statement `if` is never an assignment value". An
+inline arm body is a value position, so the same argument works; both the
+inline decision and the printing path need to route through
+`formatIfExpression`. That, plus a round-trip test, is the whole remaining job.

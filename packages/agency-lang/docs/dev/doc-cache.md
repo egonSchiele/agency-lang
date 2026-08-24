@@ -92,28 +92,42 @@ does not enforce (`formatTypeLinked` is a bare name lookup) — with a
 mechanical check: a symbol moving files, appearing somewhere new, or
 changing a collision winner re-renders exactly the pages that linked it.
 
-## `@hidden` and the registry
+## The registry is the set of rendered anchors
 
-`@hidden` (see `docs/site/cli/doc.md` for the user-facing rule) keeps a
-declaration out of the rendered page. It has to keep it out of
-`registrySymbols` too, or the page stops matching the registry: a hidden
-type renders no `### Name` section, so any other page linking to it would
-point at an anchor that does not exist. `extractRegistrySymbols` therefore
-drops hidden declarations of every kind. Only the type-alias case can
-actually break a link today — `formatTypeLinked` returns early for
-anything that is not a `typeAliasVariable` — but the registry is defined
-as "the set link targets resolve against", so it stays honest about all
-four.
+`extractRegistrySymbols` used to be deliberately wider than "what the page
+shows": it registered non-exported and underscore-prefixed functions too.
+That is unsafe, because `formatTypeLinked` turns a registry hit into
+`[Name](page.md#name)`. A registered name with no `###` section on that
+page is a link to an anchor that does not exist — and contributions are
+last-writer-wins in traversal order, so a non-exported declaration in one
+file can steal the name from a documented one in another.
 
-This needs no render-key bump. Adding `@hidden` to a file changes that
-file's source hash, so its page re-renders and contributes a smaller
-symbol set; the `linkTargets` re-check then invalidates exactly the pages
-whose lookups changed. The cache corrects itself through machinery that
-already exists.
+So the registry now applies exactly the render sections' rule, through the
+single `isDocumented(name, exported, tags)` predicate both sides call:
+exported, not underscore-prefixed, not `@hidden`. If you add a visibility
+rule to a section, put it in `isDocumented` or the two will drift and the
+drift shows up as a broken link, not as a test failure.
 
-Note that `extractRegistrySymbols` reads tags off the declarations, so its
-input must have been through `preprocessProgram` — `parseFor` does this,
-and a caller that skips it will silently see no tags at all.
+`extractRegistrySymbols` reads `exported` off AST nodes and tags off
+attached declarations, so its input must have been through
+`preprocessProgram`. `parseFor` does this; a caller that skips it sees no
+tags at all and silently over-registers.
+
+None of this needs a render-key bump. Adding `@hidden` changes the file's
+source hash, so its page re-renders with a smaller symbol set, and the
+`linkTargets` re-check invalidates exactly the pages whose lookups
+changed.
+
+## Warnings have to survive a cache hit
+
+`generateDocForFile` runs only for stale pages, so anything it prints
+vanishes on the next run — the author sees a warning once, reruns, and
+gets a clean build with the problem still there. Any per-page diagnostic
+therefore has to be recorded in the ledger and re-emitted for fresh pages.
+`strayHiddenLines` is the one instance: the source lines of a `@hidden`
+that attached to no declaration. It is optional on the entry, so an older
+ledger keeps its authority and simply warns nothing until the page next
+re-renders.
 
 ## Deletion boundary
 

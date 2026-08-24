@@ -737,6 +737,23 @@ describe("_describe (reify): re-exports, consts, module summary", () => {
     expect(info.exports[0].signature).toContain("map(");
   });
 
+  it("hides a @hidden name from BOTH re-export forms", () => {
+    // `CodingEvalInput` is `@hidden` in std::agents/agency/coding. A named
+    // re-export used to report it anyway: absent from the source module's
+    // surface looked like "not exported there", which falls through to a
+    // thin `kind: "reexport"` / `effects: ["unknown"]` entry. The star form
+    // took a different path and hid it, so the same tag gave opposite
+    // answers depending on how you re-exported it.
+    const named = _describe('export { CodingEvalInput } from "std::agents/agency/coding"\n');
+    expect(named.exports.map((e) => e.name)).toEqual([]);
+
+    const star = _describe('export * from "std::agents/agency/coding"\n');
+    expect(star.exports.map((e) => e.name)).not.toContain("CodingEvalInput");
+    // A real export from the same module still comes through, so this is
+    // not just an empty result.
+    expect(star.exports.map((e) => e.name)).toContain("agencyCodingAgent");
+  });
+
   it("star re-exports from std:: enumerate the source module, outermost path winning", () => {
     // std::array is nothing but a re-export block over std::index — the
     // module shape that motivated re-export support (it used to describe

@@ -105,9 +105,9 @@ Gate generated code behind user approval, then run it: shows the plan,
 | task | `string` |  |
 | plan | `string` |  |
 | src | `string` |  |
-| state | [PlanState](#planstate) |  |
+| state | `PlanState` |  |
 
-**Returns:** [PlanState](#planstate)
+**Returns:** `PlanState`
 
 **Throws:** `std::agents::planApprove`, `std::run`, `std::guard`
 

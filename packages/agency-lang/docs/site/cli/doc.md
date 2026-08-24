@@ -27,7 +27,7 @@ You can also set these options in the Agency config file:
 `baseUrl` is used to generate links to the source code in the documentation. It should point to the directory containing your library's source code.
 
 ## What gets documented
-Agency documents the exported nodes, functions, types, and constants defined at the top level of each file. Anything you do not export is not part of what a caller can reach, so it is left out. Names starting with an underscore are left out too: they are compiler plumbing rather than something anyone calls.
+Agency documents the exported nodes, functions, types, and constants defined at the top level of each file, plus every effect it declares. Anything you do not export is not part of what a caller can reach, so it is left out. Names starting with an underscore are left out too, whatever kind they are: they are compiler plumbing rather than something anyone calls.
 
 If you want to leave out something you *did* export, see [hiding a declaration](#hiding-a-declaration) below.
 
@@ -99,9 +99,9 @@ would just be confusing.
 
 A few things worth knowing:
 
-- `@hidden` works on types, functions, nodes, and constants. It does nothing on
-  an `effect` declaration; `agency doc` prints a warning if you write one there,
-  so you are not left wondering why the effect still shows up.
+- `@hidden` works on types, functions, nodes, constants, and effect
+  declarations. If you write it somewhere it cannot apply — at the end of a
+  file, say — `agency doc` warns rather than quietly ignoring it.
 - Nothing links to a hidden declaration. If another page has a function that
   takes a hidden type, that type name renders as plain text instead of a link,
   because there is no longer a section to link to.

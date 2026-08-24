@@ -234,7 +234,7 @@ function isInternalExport(name: string): boolean {
  *  come back as thin "reexport" entries whose effects carry the
  *  "unknown" sentinel — never a silent omission. */
 export function _describe(source: string): ModuleInfo {
-  return describeSource(source, []);
+  return describeSource(source, []).info;
 }
 
 /** True when the re-export's source module can be read from a bare
@@ -244,16 +244,19 @@ function isResolvableReExport(node: ExportFromStatement): boolean {
   return node.isAgencyImport && isStdlibImport(node.modulePath);
 }
 
-function describeSource(source: string, visited: string[]): ModuleInfo {
+/** A module's surface plus the names `@hidden` removed from it. A caller
+ *  re-exporting by name needs the second list to tell "hidden" from "not
+ *  exported at all", which take opposite paths. */
+type DescribeResult = { info: ModuleInfo; hiddenNames: string[] };
+
+function describeSource(source: string, visited: string[]): DescribeResult {
   const program = parseSource(source);
   // Doc comments live as loose comment nodes until attachment — the same
   // pass `agency doc` runs. It hoists the @module comment onto
   // program.docComment and pins each doc comment to its declaration.
   const preprocessor = new TypescriptPreprocessor(program, {});
   preprocessor.attachDocComments();
-  // `@hidden` is read off a declaration's attached tags, so run the same
-  // attachment pass `agency doc` runs. Without it the tag stays a loose
-  // node and the two tools disagree about what a module's surface is.
+  // `@hidden` is read off attached tags, so run the same pass doc runs.
   preprocessor.attachTags();
   // The effects pipeline REQUIRES every re-export to resolve, and
   // relative/pkg paths cannot resolve from a bare string — so effects
@@ -274,17 +277,33 @@ function describeSource(source: string, visited: string[]): ModuleInfo {
   const effects = getEffectsFromSource(effectsSource);
   const generator = new AgencyGenerator();
   const exports: ExportInfo[] = [];
+  const hiddenNames: string[] = [];
   for (const node of program.nodes) {
     if (node.type === "exportFromStatement") {
       exports.push(...reExportInfos(node, visited));
       continue;
     }
+    if (isHidden((node as { tags?: Tag[] }).tags)) {
+      hiddenNames.push(...exportedNamesOf(node));
+    }
     exports.push(...localExportInfos(node, generator, effects));
   }
   return {
-    description: moduleDescription(program.docComment),
-    exports,
+    info: { description: moduleDescription(program.docComment), exports },
+    hiddenNames,
   };
+}
+
+/** The names a declaration binds for importers, or none if it is not
+ *  exported. Only used to tell a re-export that a name was hidden. */
+function exportedNamesOf(node: AgencyNode): string[] {
+  if (node.type === "function" && node.exported) return [declaredName(node.functionName)];
+  if (node.type === "graphNode" && node.exported) return [declaredName(node.nodeName)];
+  if (node.type === "typeAlias" && node.exported) return [node.aliasName];
+  if (node.type === "assignment" && node.exported && node.declKind) {
+    return node.pattern ? patternBinders(node.pattern) : [node.variableName];
+  }
+  return [];
 }
 
 function localExportInfos(
@@ -292,9 +311,7 @@ function localExportInfos(
   generator: AgencyGenerator,
   effects: Record<string, string[]>,
 ): ExportInfo[] {
-  // A deliberate omission, unlike the loud throw at the bottom of this
-  // function: that guard is about declaration KINDS this dispatch does not
-  // know, not about declarations the author asked to keep off the surface.
+  // Deliberate, unlike the throw below: that guards unknown KINDS.
   if (isHidden((node as { tags?: Tag[] }).tags)) return [];
   if (node.type === "function" && node.exported) {
     const name = declaredName(node.functionName);
@@ -385,27 +402,31 @@ function reExportInfos(node: ExportFromStatement, visited: string[]): ExportInfo
     if (!visited.includes(abs) && existsSync(abs)) {
       const inner = describeSource(readFileSync(abs, "utf-8"), [...visited, abs]);
       if (node.body.kind === "starExport") {
-        return inner.exports.map((info) => ({ ...info, reexportedFrom: from }));
+        return inner.info.exports.map((info) => ({ ...info, reexportedFrom: from }));
       }
       const byName: Record<string, ExportInfo> = Object.create(null);
-      for (const info of inner.exports) byName[info.name] = info;
-      return resolveNamedReExports(node.body, from, byName);
+      for (const info of inner.info.exports) byName[info.name] = info;
+      return resolveNamedReExports(node.body, from, byName, inner.hiddenNames);
     }
   }
   if (node.body.kind === "starExport") {
     return [thinReExport("*", "*", from)];
   }
-  return resolveNamedReExports(node.body, from, Object.create(null));
+  return resolveNamedReExports(node.body, from, Object.create(null), []);
 }
 
 function resolveNamedReExports(
   body: NamedExportBody,
   from: string,
   byName: Record<string, ExportInfo>,
+  hiddenNames: string[],
 ): ExportInfo[] {
   return body.names.flatMap((sourceName) => {
     const localName = body.aliases[sourceName] ?? sourceName;
     if (isInternalExport(localName)) return [];
+    // Otherwise a hidden name looks merely absent and falls through to
+    // thinReExport, reappearing as a bogus "reexport" entry.
+    if (hiddenNames.includes(sourceName)) return [];
     const found = Object.hasOwn(byName, sourceName) ? byName[sourceName] : null;
     const base = found ?? thinReExport(sourceName, localName, from);
     return [

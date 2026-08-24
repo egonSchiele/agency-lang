@@ -38,7 +38,7 @@ Add a new todo to the list.
 
 | Name | Type | Default |
 |---|---|---|
-| todo | [Todo](#todo) |  |
+| todo | `Todo` |  |
 
 **Returns:** `Todo[]`
 

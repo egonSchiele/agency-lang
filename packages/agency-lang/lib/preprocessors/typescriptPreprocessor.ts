@@ -120,7 +120,8 @@ function attachTags(nodes: AgencyNode[]): AgencyNode[] {
         node.type === "function" ||
         node.type === "assignment" ||
         node.type === "functionCall" ||
-        node.type === "typeAlias"
+        node.type === "typeAlias" ||
+        node.type === "effectDeclaration"
       ) {
         node.tags = [...(node.tags || []), ...pendingTags];
         pendingTags = [];

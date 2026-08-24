@@ -131,6 +131,21 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
+/** Collect what a doc run writes to stderr. */
+function captureStderr(run: () => void): string[] {
+  const errors: string[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => {
+    errors.push(args.join(" "));
+  };
+  try {
+    run();
+  } finally {
+    console.error = original;
+  }
+  return errors;
+}
+
 describe("generateDoc", () => {
   it("keeps alias source trivia but omits function signature trivia", () => {
     const inputDir = path.join(tmpDir, "input-display-types");
@@ -483,40 +498,150 @@ export def takesSecret(s: Secret): Public {
     expect(uses).toContain("`Secret`");
   });
 
+  it("hides an effect declaration", () => {
+    const inputDir = path.join(tmpDir, "input-hiddeneffect");
+    const outputDir = path.join(tmpDir, "output-hiddeneffect");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "effects.agency"),
+      `
+@hidden
+effect myapp::internal { a: string }
+
+effect myapp::confirm { question: string }
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "effects.agency"), outputDir);
+    const output = fs.readFileSync(path.join(outputDir, "effects.md"), "utf-8");
+
+    expect(output).toContain("### myapp::confirm");
+    expect(output).not.toContain("### myapp::internal");
+  });
+
   it("warns about a @hidden that has no declaration to attach to", () => {
     const inputDir = path.join(tmpDir, "input-straytag");
     const outputDir = path.join(tmpDir, "output-straytag");
     fs.mkdirSync(inputDir, { recursive: true });
 
+    // Trailing tag: there is no following declaration for it to land on.
     fs.writeFileSync(
       path.join(inputDir, "stray.agency"),
       `
-@hidden
-effect myapp::confirm { question: string }
-
 export def f(): number {
+  return 1
+}
+
+@hidden
+`,
+    );
+
+    const errors = captureStderr(() =>
+      generateDoc({}, path.join(inputDir, "stray.agency"), outputDir),
+    );
+
+    const output = fs.readFileSync(path.join(outputDir, "stray.md"), "utf-8");
+    expect(output).toContain("### f");
+    expect(errors.some((e) => e.includes("@hidden") && e.includes("stray.agency:6"))).toBe(true);
+  });
+
+  it("re-warns about a stray @hidden on a page served from cache", () => {
+    const inputDir = path.join(tmpDir, "input-straycache");
+    const outputDir = path.join(tmpDir, "output-straycache");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "stray.agency"),
+      `
+export def f(): number {
+  return 1
+}
+
+@hidden
+`,
+    );
+
+    // Directory mode, twice, with nothing touched in between: the second
+    // run serves the page from the ledger and must still say so, or the
+    // author reruns once and the warning is gone for good.
+    const first = captureStderr(() => generateDoc({}, inputDir, outputDir));
+    const second = captureStderr(() => generateDoc({}, inputDir, outputDir));
+
+    expect(first.some((e) => e.includes("@hidden"))).toBe(true);
+    expect(second.some((e) => e.includes("@hidden"))).toBe(true);
+  });
+
+  it("keeps a non-exported node out of the link registry", () => {
+    const inputDir = path.join(tmpDir, "input-noderegistry");
+    const outputDir = path.join(tmpDir, "output-noderegistry");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    // `a.agency` exports a type named Foo, which renders a section;
+    // `z.agency` declares a non-exported node of the same name, which
+    // renders none. Registry contributions are last-writer-wins in
+    // traversal order, so `z` must sort AFTER `a` — otherwise `a` wins the
+    // name anyway and the test passes without the fix.
+    fs.writeFileSync(path.join(inputDir, "z.agency"), `\nnode Foo(): number {\n  return 1\n}\n`);
+    fs.writeFileSync(
+      path.join(inputDir, "a.agency"),
+      `
+export type Foo = {
+  a: number
+}
+
+export def takesFoo(f: Foo): number {
   return 1
 }
 `,
     );
 
-    const errors: string[] = [];
-    const original = console.error;
-    console.error = (...args: unknown[]) => {
-      errors.push(args.join(" "));
-    };
-    try {
-      generateDoc({}, path.join(inputDir, "stray.agency"), outputDir);
-    } finally {
-      console.error = original;
-    }
+    generateDoc({}, inputDir, outputDir);
+    const a = fs.readFileSync(path.join(outputDir, "a.md"), "utf-8");
 
-    const output = fs.readFileSync(path.join(outputDir, "stray.md"), "utf-8");
-    // Tag attachment does not reach effect declarations, so the effect is
-    // still documented — and the warning is the only thing that tells the
-    // author their `@hidden` did nothing.
-    expect(output).toContain("### myapp::confirm");
-    expect(errors.some((e) => e.includes("@hidden") && e.includes("stray.agency:2"))).toBe(true);
+    expect(a).toContain("[Foo](#foo)");
+    expect(a).not.toContain("z.md#foo");
+  });
+
+  it("omits underscore-prefixed exports of every kind, not just functions", () => {
+    const inputDir = path.join(tmpDir, "input-underscore");
+    const outputDir = path.join(tmpDir, "output-underscore");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "u.agency"),
+      `
+export type _Internal = {
+  a: number
+}
+
+export type Public = {
+  b: number
+}
+
+export const _SEED: number = 1
+
+export const LIMIT: number = 2
+
+export node _bootstrap(): number {
+  return 1
+}
+
+export node start(): number {
+  return 2
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "u.agency"), outputDir);
+    const output = fs.readFileSync(path.join(outputDir, "u.md"), "utf-8");
+
+    expect(output).toContain("### Public");
+    expect(output).toContain("### LIMIT");
+    expect(output).toContain("### start");
+    expect(output).not.toContain("### _Internal");
+    expect(output).not.toContain("### _SEED");
+    expect(output).not.toContain("### _bootstrap");
   });
 
   it("handles functions with default values", () => {
@@ -1010,16 +1135,22 @@ node main() { print("hi") }
 
 import { extractRegistrySymbols, formatTypeLinked } from "./doc.js";
 import { parseAgency } from "../parser.js";
+import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import type { AgencyProgram } from "@/types.js";
 import type { VariableType } from "@/types/typeHints.js";
 
-/** Parse Agency source for registry tests; throws on failure so a bad
- *  fixture fails loudly. Template ON, matching doc's pass-1 parse. */
+/** Parse AND preprocess Agency source for registry tests, matching what
+ *  doc's pass 1 feeds `extractRegistrySymbols`. Skipping the preprocess
+ *  would leave every tag unattached and silently pass. Throws on a bad
+ *  fixture so it fails loudly. */
 function parseFixture(src: string): AgencyProgram {
   const result = parseAgency(src, {}, true);
   if (!result.success) {
     throw new Error(`fixture parse failed: ${result.message}`);
   }
+  const preprocessor = new TypescriptPreprocessor(result.result, {});
+  preprocessor.attachDocComments();
+  preprocessor.attachTags();
   return result.result;
 }
 
@@ -1029,31 +1160,27 @@ function aliasType(name: string): VariableType {
 }
 
 describe("extractRegistrySymbols", () => {
-  it("registers all functions (non-exported and underscore included), nodes, global aliases, exported consts only", () => {
+  it("registers exactly the names that render a section", () => {
     const program = parseFixture(
       [
-        "def hidden(): number { return 1 }",
+        "def unexportedFn(): number { return 1 }",
         "export def _guardish(): number { return 2 }",
         "export def visible(): number { return 3 }",
-        "node main() { return 4 }",
+        "node unexportedNode() { return 4 }",
+        "export node shownNode() { return 5 }",
         "export type Foo = { a: number }",
         "type Unexported = { b: number }",
-        "export const BAR: number = 5",
-        "const PRIVATE: number = 6",
+        "@hidden",
+        "export type Secret = { c: number }",
+        "export const BAR: number = 6",
+        "const PRIVATE: number = 7",
       ].join("\n"),
     );
-    // Pins exactly today's pass-1 set (doc.ts registry loops): aliases are
-    // registered from the GLOBAL scope regardless of export; constants
-    // only when exported.
-    expect(extractRegistrySymbols(program).sort()).toEqual([
-      "BAR",
-      "Foo",
-      "Unexported",
-      "_guardish",
-      "hidden",
-      "main",
-      "visible",
-    ]);
+    // The registry IS the link-target set, so it must equal what the
+    // render sections emit a `###` heading for: exported, not
+    // underscore-prefixed, not `@hidden`. A name here with no section is
+    // a link to an anchor that does not exist.
+    expect(extractRegistrySymbols(program).sort()).toEqual(["BAR", "Foo", "shownNode", "visible"]);
   });
 });
 

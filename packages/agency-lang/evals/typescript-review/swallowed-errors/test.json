@@ -1,0 +1,9 @@
+{
+  "description": "Catch a swallowed error: a catch block that silently discards the failure and lets an empty result stand in for it.",
+  "tags": ["planted", "swallowed-errors"],
+  "files": "./files",
+  "input": {
+    "assignment": "Add a slugify helper that turns a page title into a URL slug: lowercase, non-alphanumerics collapsed to single hyphens, no leading or trailing hyphen.",
+    "sourceFile": "slug.ts"
+  }
+}

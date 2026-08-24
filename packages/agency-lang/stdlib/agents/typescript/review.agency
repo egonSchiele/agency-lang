@@ -20,6 +20,7 @@ import {
   SAVE_DRAFT_HINT,
 } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
+import { evalValue } from "std::statelog"
 import { systemMessage, threadIsNew } from "std::thread"
 
 static const systemPrompt = """You review TypeScript code for readability and architecture.
@@ -195,4 +196,35 @@ export def typescriptReviewAgent(
   }
 
   return failOpenFeedback(captured)
+}
+
+/** What an eval hands the reviewer: the task the code was written for, and
+  the file holding that code, seeded into the working directory by the
+  test's `files/`. The shape the `evals/typescript-review` suite uses as
+  its input. */
+export type TsReviewEvalInput = {
+  assignment: string;
+  sourceFile: string
+}
+
+/** Eval entry point: `agency eval run stdlib/agents/typescript/review.agency:evalMain
+  --suite <dir>`. A node in a library module never runs when the module is
+  imported; it only exists so a suite can score this reviewer without a
+  wrapper file. Any other reviewer scored on the same suite supplies a node
+  with this signature. Effects are decided at this boundary: reading the
+  seeded input file is this node's own doing (`with approve`), and a budget
+  trip inside the reviewer is rejected (`with reject`) so the caps stay
+  caps and the reviewer's fail-open result comes back instead of an
+  interrupt escaping the entry point. */
+node evalMain(input: TsReviewEvalInput): Feedback[] {
+  evalValue(input)
+  const source = read(input.sourceFile) with approve
+  if (source is failure(readErr)) {
+    return [{ error: true, feedback: "could not read ${input.sourceFile}: ${readErr}" }]
+  }
+  const reviewed = typescriptReviewAgent(work: source.value, task: input.assignment) with reject
+  if (reviewed is failure(err)) {
+    return [{ error: true, feedback: "review agent failed: ${err}" }]
+  }
+  return reviewed.value
 }

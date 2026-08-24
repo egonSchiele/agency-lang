@@ -1,4 +1,7 @@
-- There are a lot of cases to test with message threads, so this doc keeps a list of all the cases and where the tests for those cases are.
+# Message thread test cases
+
+There are a lot of cases to test with message threads, so this doc keeps a list of all the cases and where the tests for those cases are.
+
 - Create a message thread with two messages: tests/agency/threads/simple.agency
 - Assign a variable to a message thread: tests/agency/threads/messages.agency
 - Message thread with sub-threads: tests/agency/threads/subthreads.agency

@@ -100,68 +100,143 @@ packages/agency-lang/docs/dev/contributing/anti-patterns.md
 
 ## Deeper docs
 
-Read these before starting work:
-- `docs/dev/contributing/coding-standards.md` — Banned patterns and style rules. Enforced by the structural linter.
-- `docs/dev/contributing/formatting.md` — Prettier for hand-written TypeScript: `pnpm run fmt:ts`, what is ignored and why, the VS Code wiring, and the CI check
-- `docs/dev/contributing/anti-patterns.md` — Common mistakes with before/after examples.
-- `docs/dev/contributing/adding-features.md` — Step-by-step guides for adding AST nodes, CLI commands, etc.
+Every developer doc lives under `docs/dev/`, grouped by topic. Read these four before starting work:
 
-Pipeline and architecture:
-- `docs/dev/compiler/typescript-ir.md` — Structured TsNode tree representation of generated TypeScript
-- `docs/dev/compiler/typechecker/` — Bidirectional type checking (overview in `README.md`; flow-sensitive narrowing in `narrowing/`)
-- `docs/dev/runtime/interrupts.md` — How interrupts resume inside blocks using step counters (substeps)
-- `docs/dev/runtime/simplemachine.md` — Graph execution engine that runs compiled Agency programs
-- `docs/dev/runtime/async.md` — How async function calls work
-- `docs/dev/runtime/checkpointing.md` — Snapshotting execution state for retry loops and rollback
-- `docs/dev/runtime/threads.md` — ThreadStore and MessageThread system for LLM conversation history
-- `docs/dev/runtime/globalstore.md` — Global variable management with module isolation and serialization
-- `docs/dev/compiler/init-topsort.md` — Per-variable init dep graph, topological sort, per-module init plans, runtime init registry
-- `docs/dev/llm/smoltalk.md` — External LLM client library for structured output requests
-- `docs/dev/evals/run-directory.md` — The run directory (`lib/runDirectory/`): the statelog is the run; the coherent lock-free read snapshot (plus the best-effort `notes.md` read outside it), the three annotation kinds and their fold (deterministic ids, complete-pass scores, per-question checklist fold, revision-named annotators), the one-run invariant (reader guard + writer preflight), the four declarative writes and their preflight/torn-tail/lock rules, digest merge, code-by-closure-hash, dated workdir snapshots, and `safeDeleteDirectoryWithin`
-- `docs/dev/hosting/statelog.md` — Observability and tracing system for execution events; `agentStart` records code identity (`code`, cwd-independent closure hash) and the explicit `input`
-- `docs/dev/runtime/config.md` — AgencyConfig options for compiler and runtime configuration
-- `docs/dev/agents/approval-policies.md` — How policy rules match: absolutized dir values, the `.` = launch-directory resolution, picomatch's `**`-skips-dot-segments rule, and why eval `.staging` workdirs need a cwd-scoped policy
-- `docs/dev/cli/cli-arguments.md` — One command line, two programs: the position rule (agency's flags before the filename), the ownership rule (a flag is valid after its owning command, never before), the misplaced-flag warning and its `--` suppression, the shorthand being the real `run` command, the agent's full flag delegation with the minimal launcher pre-scan, and the `--` asymmetry across launchers
-- `docs/dev/cli/vendored-commander.md` — The vendored commander fork: what was copied, the six ledgered modifications (duplicate-name guard, boundaries, provenance, fallback, ownership-aware parsing), the fork-discipline rules, and how to diff against upstream
-- `docs/dev/contributing/supply-chain.md` — Dependency supply-chain hardening: the 7-day release-age cooldown and its first-party exclusions, exotic-subdep blocking, install-script denials, and why the pnpm version is pinned in the root package.json (older pnpm silently ignores all of it)
-- `docs/dev/cli/debugger.md` — Interactive debugger for stepping through and rewinding execution
-- `docs/dev/runtime/concurrent-interrupts.md` — Supporting multiple concurrent threads that interrupt simultaneously
-- `docs/dev/agents/tool-loop-guards.md` — The two refusals in the tool loop: a call repeated with the same arguments and the same result (`maxRepeatedToolCalls`, default 3, `0` disables) and a string argument that is really tool-call markup (`</antml…`); both before hooks, neither counts as a failure
-- `docs/dev/runtime/runBatch.md` — The `runBatch` primitive: signature, three modes, slice rule, invoke no-throw contract, defensive guards
-- `docs/dev/runtime/saveDraft.md` — saveDraft salvage-on-abort: aborted functions return their draft (`AbortedResult`), the salvage rules and why they are structural, trade-offs, and easy-to-miss nuances — including the four boundaries that turn an abort back into an exception (`throwIfNodeResultAborted` / `throwIfValueAborted`: why they must run before `createReturnObject`, why a tail-position `return foo()` needs them, why the partial goes through `atNodeBoundary()`, why only a TERMINAL drop ends the unwind span, and the `endsRun` trace-writer rule), and why a diagnostic must ride the `AbortCause` rather than the error object
-- `docs/dev/agents/reply-attachments.md` — How tools hand images back to the model: attachToReply, branch-local queues, harvest/inject in the tool loop, marker-string API
-- `docs/dev/evals/writing-optimizers.md` — How to write a new `optimize` strategy on `BaseOptimizer`: the contract, helpers, grading semantics, reflection feedback, registration, testing
-- `docs/dev/stdlib/std-agency-test.md` — std::agency test()/testFile(): the closure validator's pure-Agency invariant and mirror TOCTOU boundary, one-vote scripted answers (and the outer-valueless-approve merge wart), gate-before-read testFile, and convergence with the CLI runner
-- `docs/dev/cli/test-cli-sandbox.md` — `agency test run` / `agency run` under `--policy`/`--reject` and `--agency-only` (+ `--json`): why the two flags together make running untrusted Agency safe (reject beats `with approve`; static init cannot interrupt), the clear-then-set env rule, flags go after `test run`, a refusal is a file failure
-- `docs/dev/evals/eval-tracking.md` — Tracking agent evals on statelog, the agency-lang half: `eval run --trials k` (`<out>/<test>/<trial>/`, trial-major, `batch`/`trial` on every run row), batch statistics over a complete trial grid with SE paired by trial index, one summary derivation for traced AND silent runs (`status`, `endedAt`, `score` = grading's did-not-finish-is-zero rule), `summarizeEvalRun` as the canonical-rows boundary statelog must not go around, `eval upload`'s server-proven upload states and the events-before-annotations rule, URL-safe agent names, the narrow `agency-lang/eval` exports, and what the statelog PR must provide
-- `docs/dev/evals/eval-grading.md` — The run directory is the interface between running and grading: `eval run` never grades (staging → `recordCompletedRun`, harness-minted trace ids incl. `AGENCY_TRACE_ID` for command agents), `eval grade` reads the directory and records one complete grading pass of `score` annotations, errored-runs-score-zero via the harness's `run` row, per-test graders and the override/fallback precedence, revision-named graders
-- `docs/dev/cli/logs-viewer.md` — The interactive statelog viewer: the component View classes and view stack, the timeline kernel (self-time, busyness shading, thread-label grouping), and the rebuilt follow mode
-- `docs/dev/cli/runs-explorer.md` — The cross-run explorer behind `agency logs <paths…>`: the loader's two-read phase 1 + bounded backfill, cursor pinned to row identity, the shared column-width table component, the embedded-viewer hand-off rules, CSV semantics
-- `docs/dev/evals/eval-command-agents.md` — Running a CLI as the eval agent (`--agent-cmd`): the EvalTarget union, tokenize-then-substitute, the AGENCY_CONFIG_OVERRIDES/AGENCY_TRACE_ID statelog handoff, process-group kill lifecycle, and the two cost-cap feeds
-- `docs/dev/language/pkg-imports.md` — Importing Agency code from npm packages using `pkg::` prefix
-- `docs/dev/runtime/trace.md` — Execution traces capturing checkpoints at every step
-- `docs/dev/language/match-expression-positions.md` — Where a `match` expression is allowed: `match` is not in `exprParser` but hand-wired into three sites, why folding it in is ruled out, why a nested-match arm must be LOWERED rather than hoisted (one `any` yield makes the whole outer match `any`), the formatter's inline/block re-parse rule, and the open `if ... then ... else` arm gap
-- `docs/dev/compiler/binop-parser.md` — Binary expression parser using precedence climbing
-- `docs/dev/compiler/locations.md` — How `loc.line` / `loc.col` / parse-mode template offset interact
-- `docs/dev/language/validation-annotations.md` — `@validate(...)` and `@jsonSchema(...)` internals: tag merging, `__agency_descriptor` contract, descriptor tree, runtime walker
-- `docs/dev/runtime/async-context.md` — `agencyStore` AsyncLocalStorage frame and `getRuntimeContext()` pattern for stdlib TS helpers
-- `docs/dev/llm/local-models.md` — Local-model support: provider, name resolution, catalog refresh, and SHA-256 download verification
-- `docs/dev/compiler/incremental-builds.md` — The build manifest: schema, invalidation fields, the ManifestTracker policy object, --force
-- `docs/dev/cli/doc-cache.md` — The `agency doc` incremental cache: the output-directory ownership ledger, freshness vs ownership evidence, the linkTargets re-check, why the registry must equal the set of rendered anchors (the shared `isDocumented` predicate) and why that needs no render-key bump, why a per-page warning has to be recorded in the ledger to survive a cache hit, the deletion boundary, and the conservative no-ledger contract
-- `docs/dev/language/splices.md` — Compile-time splices `$( ... )`: where expansion sits in the pipeline, the compile paths that must run it, why the cache is mandatory, the import restriction that carries the safety argument, and the cycle guard
-- `docs/dev/compiler/effect-propagation.md` — How a function's interrupt effects are computed: the shared walk in lib/analysis/effects.ts, the fixpoint at the end of SymbolTable.build, following re-exports, the `.invoke()` shape, why `_guard` is seeded rather than walked, and the four things the walk cannot see
-- `docs/dev/compiler/trailing-comments.md` — How `agency fmt` keeps an end-of-line `//` comment where it was written: the two mechanisms (`BaseNode.trailingComment` vs `placement: "trailing"` list trivia) and which applies where, who owns the end of the line, why a reordering formatter path must call `remapListTrivia`, the `CommaListPolicy` table, and the three ways this silently regresses
-- `docs/dev/language/template-agency.md` — Template Agency internals: the Hole node and per-position parsing, `Code` fragment kinds, the never-parse lifting rule and its two escaping conventions, scope-keyed hygiene with `__hyg` seeding, AG8001/AG8002 refusals, and the walker-completeness tripwire
-- `docs/dev/hosting/hosted-agent-execution.md` — Hosting agents on statelog (`agency deploy` + the `./serve` API): the serve wire contract and moduleId gotcha, per-agent observability via `withRuntimeConfigOverrides`, `compileSource(sourcePath)` for multi-file, the deploy CLI's module layout, the statelog host pieces, and the known limitations
-- `docs/dev/hosting/statelog-clients.md` — The seven sealed statelog CLI clients over the one `statelogRequest` transport core: family-owned failure mappers vs core-owned fetch/envelope mechanics, the classification precedence, the two deviants (`requireOk:false` for upload, `contentType:"always"` for serve), `readJsonBody`'s redirect/http:// diagnosis, and the test rule that mocks stub `text()` not `json()`
-- `docs/dev/hosting/remote-secrets.md` — `agency remote secrets`: the write-only store, the two invariants (value never in argv, value never in output) and their three enforcement layers (`sanitizeDiagnostic`, per-verb client redaction, `presentSecretError`), the HTTP-200 failure taxonomy, `import`'s parseEnv/no-`loadEnv` rule and file-only confirmation, and Commander-owned exit codes
-- `docs/dev/hosting/schedule-remote-backend.md` — `agency schedule --backend remote`: the server-authoritative contract (no registry entry), binding-based target resolution via `resolveProjectTarget`, the failure-inside-HTTP-200 envelope, deploy-if-missing and the `runDeploy` outcome gate, the PATCH-only-cadence edit limitation, and why remote-only flags fail loudly on other backends
-- `docs/dev/evals/eval-labeling.md` — `agency label <path…>` over a group of run directories: `resolveLabelingGroup` (one common parent, aliases dropped, duplicate trace ids refused), session files in `<group>/checklists/`, the `labelStore.ts` facade, identities (trace id, checklist revision, question id, session id, deterministic annotation id), the checklist row shape, the per-question fold, the sign-off commit protocol and its recovery boundaries, the three narrow locks (per-session draft, per-publication, per-run append via `recordChecklistRow`) and why there is no group lock, and why validation is strict where grading is tolerant
-- `docs/dev/hosting/invocation-usage-accounting.md` — The serve cost seam's full cost/token breakdown: the authoritative-flat-total vs best-effort-attribution split, the valid-price and kind-specific-token rules, the one `recordUsageDelta` sink, untrusted IPC recovery that never drops money, the #809 rejected-promise boundary, and the `agency remote spend` schema/rendering
-- `docs/dev/hosting/per-invocation-config.md` — Per-invocation config overrides + injectable trace id: the `InvocationOptions` request, the single `resolveInvocation()` policy owner, the positive v1 config allow-list (and the inert filesystem/code-loading/model fields), run-id precedence and the resume rule, `RouteResult.traceId` presence, and the agency-is-a-mechanism / host-owns-clamping-and-trust boundary
-- `docs/dev/stdlib/aws.md` — AWS stdlib support (`std::aws/s3`): the SigV4 signer (node:crypto only, no SDK), the functional core (uri/base64/credentials/endpoints/sigv4/client), the atomic `AwsRequestTarget` and one-encoding canonical-URI contract, the single `runS3Operation` declarative executor, the bounded region/partition policy + `ValidatedBucket` + final-hostname defense, `std::aws/s3` vs the `std::aws::s3::*` effect labels, interrupt+destructive writes, strict-base64 binary with the 10 MiB two-way cap, the statelog redaction with a custom marker + narrowed v1 guarantee, and presigned URLs (query-string SigV4, the one-encoding contract on the query, the non-inherited final-hostname check, bearer-URL redaction)
-- `docs/dev/stdlib/data-connectors.md` — Writing a `std::data` connector: the shared core (`connectorFetch`'s internal approve as a vote not a bypass, `connectorError`, `clampLimit`, `dateStrToEpochMs`), the 8-part anatomy modeled on `stdlib/data/social/bluesky.agency`, the conventions (epoch-ms times, union-typed enums, clamped limits, `idempotent` reads, payload carries what handlers judge), wire types validated with bang syntax at the finalize boundary (`shapeError` embeds Zod's mismatched paths so drift fails loudly), the fetchMocks testing template incl. the shape-drift test, the agency-js style (import test, the propagate-surfaces-the-fetch pattern, -live tiers), ergonomics rules (adapt-don't-mirror, tagged unions over sentinels), the two runtime gotchas, and how to update a connector (absorbed the old adding-connectors.md)
-- `docs/dev/llm/speech-via-smoltalk.md` — Cloud speech (STT `transcribe` / TTS `speak`) routed through the LLM client like `std::image`: the local `say` vs cloud `speak` rename and DISTINCT effects (`std::say` vs `std::synthesizeSpeech`), the removal of the old `_speak` / `__internal_*` runtime exports with no back-compat shim, the conservative #809 failure-accounting rule, atomic no-clobber TTS publication (`publishSpeechOutput`), audio-token collapse into `totalTokens`, the `transcription`/`speechSynthesis` leaf events, the `Attachment` vs `MessageAttachment` split for `audio()`/`attachToReply`, and cancellation (branch signal → smoltalk `abortSignal`; `SmoltalkClient` adapts smoltalk's resolved `failure("Request was aborted")` into a reject with the branch reason via `rejectIfAborted`, since the `LLMClient` contract rejects on abort)
+- `docs/dev/contributing/coding-standards.md` — Rules for writing code here. Each rule says whether the structural linter enforces it or it is a convention.
+- `docs/dev/contributing/anti-patterns.md` — Common mistakes, each with a before/after example.
+- `docs/dev/contributing/adding-features.md` — Step-by-step guides for adding an AST node, a CLI command, a type, and similar.
+- `docs/dev/contributing/formatting.md` — Prettier for hand-written TypeScript, and the CI check that fails on unformatted files.
+
+### The language (`docs/dev/language/`)
+
+- `docs/dev/language/agency-function.md` — The wrapper codegen emits around every Agency `def`. Covers tool metadata, argument resolution, and block arguments.
+- `docs/dev/language/closures-and-lambdas.md` — Why Agency has blocks and first-class functions but no lambdas, and what makes adding them hard.
+- `docs/dev/language/lambda-sketch.md` — A design sketch for lambdas. Nothing here is implemented.
+- `docs/dev/language/match-expression-positions.md` — Where a `match` may appear as a value, and why each such position has to be wired up by hand.
+- `docs/dev/language/null-and-undefined.md` — Why Agency has exactly one nothing-value, `null`, and treats `undefined` as another spelling of it.
+- `docs/dev/language/parallel-blocks.md` — The shipped design for `parallel` and `seq` blocks: what they lower to and what they refuse.
+- `docs/dev/language/parallel-blocks-v2-dataflow.md` — A spec for grouping parallel statements automatically by dataflow. Not implemented.
+- `docs/dev/language/pkg-imports.md` — Importing Agency code from npm packages with the `pkg::` prefix.
+- `docs/dev/language/splices.md` — Compile-time splices `$( ... )`, which run a generator during compilation and paste the code it returns into the file.
+- `docs/dev/language/template-agency.md` — How templates work under the hood: holes, `fill`, and hygiene.
+- `docs/dev/language/validation-annotations.md` — How `@validate` and `@jsonSchema` are compiled, and how the runtime walks a validated value.
+- `docs/dev/language/with-approve.md` — The `with approve/reject/propagate` shorthand for wrapping a single statement in a handler.
+
+### Compiler and type checker (`docs/dev/compiler/`)
+
+- `docs/dev/compiler/typescript-ir.md` — The `TsNode` tree that generated TypeScript is built from, instead of concatenating strings.
+- `docs/dev/compiler/ts-ir-readability-backlog.md` — A backlog of pain points in the TypeScript builder. Nothing here is actioned yet.
+- `docs/dev/compiler/binop-parser.md` — How binary expressions parse, including the operator precedence and associativity table.
+- `docs/dev/compiler/locations.md` — How source positions flow through the parser, and what to check when a reported location is wrong.
+- `docs/dev/compiler/trailing-comments.md` — How `agency fmt` keeps an end-of-line `//` comment where the author wrote it.
+- `docs/dev/compiler/rewriting-imports.md` — How imports in generated output are rewritten, and why compile mode and run mode differ.
+- `docs/dev/compiler/codegen-als-accessors.md` — How generated code reads runtime values out of the active async-context frame.
+- `docs/dev/compiler/hoist-calls.md` — Why helper calls are hoisted into their own statements, so resuming never re-runs a call that already finished.
+- `docs/dev/compiler/init.md` — Design history for running a file's top-level code before any node executes.
+- `docs/dev/compiler/init-topsort.md` — The dependency graph and ordering that decide which module's top-level code runs first.
+- `docs/dev/compiler/incremental-builds.md` — The build manifest that lets the compiler skip files whose inputs have not changed.
+- `docs/dev/compiler/effect-propagation.md` — How the interrupt effects a function carries are computed and propagated through calls.
+- `docs/dev/compiler/interrupts-command.md` — `agency interrupts`, which statically prints which handlers could enclose each interrupt.
+- `docs/dev/compiler/undefined-function-diagnostic.md` — The diagnostic for calling a function that does not exist, and how real JS interop avoids false positives.
+- `docs/dev/compiler/typechecker/README.md` — How bidirectional type checking works: the phases, the scopes, and the diagnostic registry.
+- `docs/dev/compiler/typechecker/narrowing/README.md` — Flow-sensitive narrowing and exhaustiveness checking.
+- `docs/dev/compiler/typechecker/definite-returns-remaining-work.md` — What shipped for definite-return checking and which parts are still open.
+
+### Runtime (`docs/dev/runtime/`)
+
+- `docs/dev/runtime/simplemachine.md` — The graph execution engine that runs compiled Agency programs.
+- `docs/dev/runtime/interrupts.md` — How a program resumes in the middle of a block after an interrupt, using step counters.
+- `docs/dev/runtime/concurrent-interrupts.md` — What happens when several concurrent execution paths interrupt at the same time.
+- `docs/dev/runtime/runBatch.md` — The one primitive that owns concurrent-interrupt orchestration for forks, parallel blocks, tool calls, and subprocesses.
+- `docs/dev/runtime/checkpointing.md` — Snapshotting execution state so a program can restore back to it later.
+- `docs/dev/runtime/rewind.md` — Replaying execution from a checkpoint, optionally with different values for its local variables.
+- `docs/dev/runtime/trace.md` — Execution traces: a checkpoint per step, written to a file the debugger can replay.
+- `docs/dev/runtime/threads.md` — How LLM conversation history accumulates and flows through thread and subthread blocks.
+- `docs/dev/runtime/globalstore.md` — Module-namespaced storage for top-level variables at runtime.
+- `docs/dev/runtime/async.md` — How async function calls work, and the problems the design solves.
+- `docs/dev/runtime/async-behavior-checklist.md` — The case-by-case behavioral checklist the async implementation was built against.
+- `docs/dev/runtime/async-context.md` — The async-context frame that carries runtime state, and how stdlib TypeScript helpers read it.
+- `docs/dev/runtime/callback-hooks.md` — Registering callbacks for runtime events such as node, function, and tool lifecycle.
+- `docs/dev/runtime/saveDraft.md` — How a scope's best-so-far value survives a guard trip instead of being lost.
+- `docs/dev/runtime/lock.md` — A per-run mutex for serializing access to shared resources such as the terminal prompt.
+- `docs/dev/runtime/subprocess-ipc.md` — How an agent compiles and runs Agency code in a subprocess, and how the parent's handler chain extends across that boundary.
+- `docs/dev/runtime/config.md` — Every `AgencyConfig` option, with types and defaults, and how config is resolved.
+
+### The agent (`docs/dev/agents/`)
+
+- `docs/dev/agents/agent-brains.md` — How `agency agent` splits into a harness and pluggable brains, and what each half owns.
+- `docs/dev/agents/approval-policies.md` — How approval policy rules match, and the matching rules that have caused surprises.
+- `docs/dev/agents/tool-loop-guards.md` — The two refusals that stop a model wasting rounds: a repeated call, and an argument that is really tool-call markup.
+- `docs/dev/agents/reply-attachments.md` — How a tool hands images back to the model, given that most providers reject image parts in tool results.
+- `docs/dev/agents/promptRunner.md` — The small control-flow helper behind `runPrompt`.
+- `docs/dev/agents/why-agents-write-code.md` — The argument for letting an agent write and run programs instead of giving it more tools.
+- `docs/dev/agents/self-writing-agent.md` — Investigation notes from the experiment behind that argument.
+
+### LLM plumbing (`docs/dev/llm/`)
+
+- `docs/dev/llm/smoltalk.md` — The external library Agency routes every LLM call through.
+- `docs/dev/llm/llm-clients.md` — The `LLMClient` interface, for swapping smoltalk out for something else.
+- `docs/dev/llm/local-models.md` — How local-model support is wired, from the provider to model download and verification.
+- `docs/dev/llm/local-model-integration.md` — The integration suite that downloads and runs a real local model.
+- `docs/dev/llm/speech-via-smoltalk.md` — Speech-to-text and text-to-speech, routed through the LLM client so they inherit cost accounting and tracing.
+
+### Evals (`docs/dev/evals/`)
+
+- `docs/dev/evals/run-directory.md` — The on-disk shape that observing, noting, labeling, grading, and optimizing all read and write.
+- `docs/dev/evals/eval-grading.md` — Why running and grading are separate, joined only by the run directory.
+- `docs/dev/evals/eval-tracking.md` — Running a suite over several trials, then uploading the results to statelog for a trend.
+- `docs/dev/evals/eval-labeling.md` — Answering a checklist about a group of runs by hand, and how those answers are recorded.
+- `docs/dev/evals/eval-command-agents.md` — Running an arbitrary CLI as the eval agent instead of an `.agency` file.
+- `docs/dev/evals/writing-optimizers.md` — Adding a new `optimize` strategy alongside `greedy` and `gepa`.
+- `docs/dev/evals/terminal-bench.md` — Benchmarking the coding agent against Terminal-Bench, and the results so far.
+
+### CLI and terminal UI (`docs/dev/cli/`)
+
+- `docs/dev/cli/cli-arguments.md` — How one command line carries both agency's own flags and the program's.
+- `docs/dev/cli/vendored-commander.md` — The vendored commander fork, what was changed in it, and the rules for keeping it in sync.
+- `docs/dev/cli/doc-cache.md` — The incremental cache behind `agency doc`, and how it decides a page is stale.
+- `docs/dev/cli/test-cli-sandbox.md` — The flag combination that makes it safe to run Agency code you do not trust.
+- `docs/dev/cli/debugger.md` — The interactive debugger: stepping, inspecting variables, and rewinding.
+- `docs/dev/cli/debugger-tests.md` — Driving the debugger headlessly in tests.
+- `docs/dev/cli/debugger-future-work.md` — The few debugger and TUI items still open.
+- `docs/dev/cli/logs-viewer.md` — The interactive viewer for a single statelog trace, including the timeline.
+- `docs/dev/cli/runs-explorer.md` — The cross-run table `agency logs` opens when pointed at several paths.
+- `docs/dev/cli/tui.md` — The terminal UI toolkit the debugger, the viewer, and `std::ui` are built on.
+- `docs/dev/cli/tui/guide/getting-started.md` — Writing a first TUI screen, and the builders available.
+- `docs/dev/cli/tui/guide/terminal-usage.md` — Running a TUI against a real terminal: input, signals, and resizing.
+- `docs/dev/cli/tui/guide/testing.md` — Testing a TUI with scripted input and recorded frames, no terminal needed.
+- `docs/dev/cli/tui/dev/elements-and-builders.md` — The element tree and the builder functions that produce it.
+- `docs/dev/cli/tui/dev/layout.md` — The flexbox-lite layout engine that assigns every element a position and size.
+- `docs/dev/cli/tui/dev/rendering.md` — How a laid-out element tree becomes terminal output, HTML, or plain text.
+- `docs/dev/cli/tui/dev/input-output.md` — The injected input and output interfaces that make the TUI testable.
+- `docs/dev/cli/tui/dev/style-parser.md` — The inline `{bold}` style tag syntax, and the ANSI sequences the parser also understands.
+
+### Standard library (`docs/dev/stdlib/`)
+
+- `docs/dev/stdlib/adding-a-module-to-the-agency-stdlib.md` — The pattern for adding a stdlib module, including where files go and how docs are generated.
+- `docs/dev/stdlib/data-connectors.md` — Writing a `std::data` connector that reads a public data source, and the conventions they all follow.
+- `docs/dev/stdlib/aws.md` — S3 support with no AWS SDK, including the request signer and the safety contracts around it.
+- `docs/dev/stdlib/std-agency-test.md` — `test()` and `testFile()` from `std::agency`, and the sandbox rules that are easy to get wrong.
+
+### Hosting and statelog (`docs/dev/hosting/`)
+
+- `docs/dev/hosting/statelog.md` — The observability system: what events are captured and where they are sent.
+- `docs/dev/hosting/statelog-clients.md` — The sealed per-route clients the CLI uses to talk to statelog, over one shared transport.
+- `docs/dev/hosting/hosted-agent-execution.md` — Deploying an agent to a hosted statelog instance and running it over HTTP.
+- `docs/dev/hosting/per-invocation-config.md` — Letting one invocation carry its own config override and trace id.
+- `docs/dev/hosting/invocation-usage-accounting.md` — How a hosted invocation reports its full cost and token breakdown, including across a subprocess.
+- `docs/dev/hosting/remote-secrets.md` — Managing a hosted project's secrets against a write-only store, and the rules that keep values out of argv and output.
+- `docs/dev/hosting/schedule-remote-backend.md` — Managing schedules that live on a hosted statelog server rather than locally.
+
+### Process and conventions (`docs/dev/contributing/`)
+
+The four listed at the top of this section also live here. The rest:
+
+- `docs/dev/contributing/general-writing-tips.md` — How to write prose in this repo. Follow it for docs, comments, and messages to the user.
+- `docs/dev/contributing/supply-chain.md` — The dependency hardening that guards against a malicious npm release.
+- `docs/dev/contributing/updating-pinned-actions.md` — Refreshing the pinned GitHub Action SHAs that generated workflows use.
+- `docs/dev/contributing/untestable-builtins.md` — Stdlib functions CI cannot test, and the cases we want once they can be mocked.
+- `docs/dev/contributing/message-thread-tests.md` — An index of message-thread test cases and which file covers each one.
 
 Other references:
 - `docs/misc/TESTING.md` — Full testing guide (unit tests, fixtures, execution tests, agency-js tests)

@@ -62,6 +62,24 @@ The tripwire runs before the builder generates anything, and it finds splices by
 
 Because no real compile path can reach the tripwire, its only coverage is `lib/backends/spliceRefusal.test.ts`, which builds a splice program with expansion deliberately skipped, once per splice position. That test is what notices if the tripwire is ever removed.
 
+## Declining generator execution
+
+Compiling a `$( ... )` runs its generator. That is bounded — a generator may import only `std::` modules and other `.agency` files, and compilation installs no interrupt handlers, so anything dangerous cannot complete — but it is still execution, and a caller may prefer to decline it rather than rely on the argument. Inspecting a freshly cloned repository is the usual reason.
+
+`refuseSplices` in `AgencyConfig` (and `--refuse-splices` on `compile`, `run`, `typecheck` and `test run`) refuses `AG8016` instead of expanding. It is off by default.
+
+**The refusal happens before the generator is resolved**, at the top of `expandSplices`, not as one of the `CHECKS` in `decide`. This is a deliberate exception to the "add a rule, do not edit the pass" convention above, for two reasons. Resolution parses the generator's module, which is work the refusal exists to avoid; and resolution can fail on its own, so a file with both a broken import and the setting on would report `AG8005` in preference to the refusal. `calleeName` reads the callee straight off the syntax, so the message still names the generator without opening its file.
+
+The tests in `expandSplices.test.ts` deliberately do not write a generator file. If the refusal ever moves after resolution, they fail with `AG8005` instead of `AG8016`, which is the regression the placement guards against.
+
+### Where it is forced on
+
+Sandboxed compilation (`compileSandboxed`, used by `agency run --agency-only` and by `std::agency compile`) refuses splices unconditionally through the closure validator, and does not consult this setting.
+
+The agent-reachable inspection entry points in `lib/stdlib/agency.ts` — `typecheck`, `typecheckFile`, `getEffects` — set it on unconditionally, via the `INSPECT_UNTRUSTED` policy object there. They need it because **type checking runs generators**: `typecheckFile` hands the checker a real on-disk path so relative imports resolve, which is also what lets a splice resolve its generator against that directory and execute it. That path never passes through the closure validator, so before this it was the one agent-reachable way to run a generator. "Type checking is read-only" holds only for files without splices.
+
+On that pipeline a refusal **throws** rather than becoming a diagnostic. `runCheckerPipeline` otherwise tolerates a splice that will not expand, keeping the unexpanded program — but a refusal is the caller saying "do not run this", and answering as though the file had no splice would report every generated name as undefined. Throwing joins the pipeline's existing rule that a throw means "could not check this", which the `Result`-returning stdlib entry points surface as an ordinary failure. Every other splice failure keeps the tolerant behaviour.
+
 ## The three phases
 
 `expandSplices` keeps decide, run, and graft separate, because they change for different reasons.

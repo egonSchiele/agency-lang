@@ -194,3 +194,17 @@ A template is checked before anything fills it, so a hole is opaque: the checker
 This also covers names from the file the template is written in. A template becomes its own program — `toSource` prints it and `runCode` compiles the print — and the surrounding file is not there when that happens.
 
 **How to fix:** keep each fragment self-contained. Move the code that defines the name into the template, or move the code that uses it into the fragment that defines it. A template may always use the prelude, language builtins, and anything it declares or imports itself.
+
+<a id="ag8016"></a>
+
+## AG8016 — `&#123;file&#125;` contains a splice that would run the generator `&#123;name&#125;` at compile time, and generator execution was declined. Compile again without `--refuse-splices` (or with `refuseSplices` off) to allow it.
+
+*Default severity: error.*
+
+This file contains a splice, and generator execution was declined for this compile.
+
+Compiling a `$( ... )` runs its generator right then, during compilation. So compiling a file you have not read means running code you have not read. That is bounded — a generator may import only `std::` modules and other `.agency` files, and compilation installs no interrupt handlers, so anything dangerous cannot finish — but it is still execution, and you may prefer to decline it. Inspecting a repository you just cloned is the usual reason.
+
+Nothing ran: the refusal happens before the generator is resolved, so its file was never opened.
+
+**How to fix:** compile again without `--refuse-splices`, or with `refuseSplices` off in your config, once you are satisfied the generator is one you want to run. Note that sandboxed compilation refuses splices unconditionally and this setting has no bearing on it.

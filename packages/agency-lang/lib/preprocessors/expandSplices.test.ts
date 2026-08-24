@@ -42,6 +42,12 @@ function expand(source: string) {
   return expandSplices(parse(source), hostPath, {});
 }
 
+/** The same, with generator execution declined. */
+function expandRefusing(source: string) {
+  const hostPath = write("host.agency", source);
+  return expandSplices(parse(source), hostPath, { refuseSplices: true });
+}
+
 /** A generator module returning a program fragment declaring `greet`. */
 function writeDeclGenerator(): void {
   write(
@@ -66,6 +72,59 @@ describe("expandSplices", () => {
     if (!result.ok) return;
     // Identity, not equality: a file without splices must pay nothing.
     expect(result.value).toBe(program);
+  });
+
+  // `refuseSplices` — declining compile-time generator execution.
+  //
+  // These deliberately do NOT write a generator file. If the refusal ever
+  // moved after generator resolution, these would fail with AG8005
+  // (generator not imported) instead of AG8016, which is exactly the
+  // regression the placement is guarding against.
+  describe("with refuseSplices on", () => {
+    it("refuses a declaration splice and names the generator", () => {
+      const result = expandRefusing(
+        `import { makeGreet } from "./gen.agency"\n\n$( makeGreet() )\n`,
+      );
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.diagnostic.diagnostic).toBe("spliceRefused");
+      expect(result.diagnostic.params.name).toBe("makeGreet");
+      expect(result.diagnostic.params.file).toBe("host.agency");
+    });
+
+    it("refuses an expression splice too", () => {
+      const result = expandRefusing(
+        `import { two } from "./gen.agency"\n\ndef f(): number {\n  return $( two() )\n}\n`,
+      );
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.diagnostic.diagnostic).toBe("spliceRefused");
+      expect(result.diagnostic.params.name).toBe("two");
+    });
+
+    it("refuses without opening the generator's file", () => {
+      // No gen.agency on disk at all. Resolution would fail; refusal does not
+      // reach resolution, so the refusal is what comes back.
+      const result = expandRefusing(`import { nope } from "./missing.agency"\n\n$( nope() )\n`);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.diagnostic.diagnostic).toBe("spliceRefused");
+    });
+
+    it("leaves a file with no splices completely alone", () => {
+      const program = parse(`def f(): number {\n  return 1\n}\n`);
+      const result = expandSplices(program, write("host.agency", "x"), { refuseSplices: true });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // Still identity: the setting must not cost a file that has no splices.
+      expect(result.value).toBe(program);
+    });
+
+    it("off by default: the same program expands normally", () => {
+      writeDeclGenerator();
+      const result = expand(`import { makeGreet } from "./gen.agency"\n\n$( makeGreet() )\n`);
+      expect(result.ok).toBe(true);
+    }, 60_000);
   });
 
   it("replaces a declaration splice with the generator's declarations", () => {

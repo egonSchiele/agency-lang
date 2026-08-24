@@ -24,6 +24,7 @@ import type { ImportStatement } from "../types/importStatement.js";
 import { _write } from "./builtins.js";
 import { VALID_CALLBACK_NAMES, type CallbackName } from "../types/function.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
+import type { AgencyConfig } from "../config.js";
 import { AgencyFunction } from "../runtime/agencyFunction.js";
 
 const VALID_CALLBACK_NAME_SET: ReadonlySet<string> = new Set(VALID_CALLBACK_NAMES);
@@ -185,12 +186,23 @@ export function _subprocessDepth(): number {
   return getRuntimeContext().ctx.subprocessDepth ?? 0;
 }
 
+/**
+ * The trust boundary for agent-reachable inspection.
+ *
+ * These entry points read source the agent supplied or found, and type
+ * checking RUNS a splice's generator (`_typecheckFile` hands the checker a
+ * real path, so a splice resolves its generator against that directory).
+ * `compile` already refuses splices unconditionally through the closure
+ * validator; inspection is the same boundary and gets the same answer.
+ */
+const INSPECT_UNTRUSTED: AgencyConfig = { refuseSplices: true };
+
 export function _typecheck(source: string): TypeCheckReport {
-  return typeCheckSource(source);
+  return typeCheckSource(source, undefined, INSPECT_UNTRUSTED);
 }
 
 export function _getEffects(source: string): Record<string, string[]> {
-  return getEffectsFromSource(source);
+  return getEffectsFromSource(source, INSPECT_UNTRUSTED);
 }
 
 // ---------------------------------------------------------------------------
@@ -264,7 +276,7 @@ function describeSource(source: string, visited: string[]): ModuleInfo {
         ),
       })
     : source;
-  const effects = getEffectsFromSource(effectsSource);
+  const effects = getEffectsFromSource(effectsSource, INSPECT_UNTRUSTED);
   const generator = new AgencyGenerator();
   const exports: ExportInfo[] = [];
   for (const node of program.nodes) {
@@ -437,7 +449,7 @@ function thinReExport(sourceName: string, localName: string, from: string): Expo
 // `dir` — typechecking is read-only so this is intentional).
 export function _typecheckFile(dir: string, filename: string): TypeCheckReport {
   const target = resolveInSandbox(dir, filename);
-  return typeCheckSource(readFileSync(target, "utf-8"), target);
+  return typeCheckSource(readFileSync(target, "utf-8"), target, INSPECT_UNTRUSTED);
 }
 
 // ---------------------------------------------------------------------------

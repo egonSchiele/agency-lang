@@ -62,7 +62,7 @@ Adding two members to `ProviderUsageKind` is not the only structural change. The
 - kind validation and entry recovery across the subprocess IPC boundary;
 - `TokenBreakdown`, its normalizers, checked accumulation, snapshots, and IPC recovery;
 - the strict `usageKindSchema` and `tokenBreakdownSchema` in `lib/cli/statelog/spendTypes.ts`;
-- the companion statelog server/database schema described in `docs/dev/invocation-usage-accounting.md`;
+- the companion statelog server/database schema described in `docs/dev/hosting/invocation-usage-accounting.md`;
 - statelog's local `TokenUsage` shape and relevant renderers/tests.
 
 The plan's statement that new audio token fields are inherited automatically is false for these Agency-owned normalized and wire types. Decide whether `inputAudioTokens` and `outputAudioTokens` are preserved end to end or intentionally represented only in `totalTokens`. If they are preserved, update the client and server as a pinned pair. If they are collapsed, document the loss of attribution and test it.

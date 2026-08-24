@@ -14,7 +14,7 @@ const prop = (name: string): PathSegment => ({ kind: "prop", name });
 
 // Parse a snippet and return the first ifElse node in main. Uses the shared
 // walkNodes traversal (lib/utils/node.ts) rather than a hand-rolled walker —
-// see docs/dev/anti-patterns.md "Duplicating existing code".
+// see docs/dev/contributing/anti-patterns.md "Duplicating existing code".
 function firstIf(srcBody: string): IfElse {
   const parsed = parseAgency(`node main() {\n${srcBody}\n}`);
   if (!parsed.success) throw new Error(`parse failed: ${parsed.message}`);

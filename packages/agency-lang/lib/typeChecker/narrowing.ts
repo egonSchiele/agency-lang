@@ -134,7 +134,7 @@ function asPresenceTest(left: Expression, right: Expression): Reference | null {
 
 /** `===`/`!==` are documented stylistic aliases of `==`/`!=` — codegen compiles
  *  all four to the same `__eq` call (processBinOpExpression,
- *  lib/backends/typescriptBuilder.ts; docs/dev/null-and-undefined.md) — so they
+ *  lib/backends/typescriptBuilder.ts; docs/dev/language/null-and-undefined.md) — so they
  *  justify the exact same narrowing facts. */
 const STRICT_EQUALITY_ALIAS: Record<string, "==" | "!="> = { "===": "==", "!==": "!=" };
 

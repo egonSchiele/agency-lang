@@ -2,7 +2,7 @@
  * Grades a coding test by running one harness pair against the agent's
  * workdir with `agency test --json --agency-only --reject '*'`. The score is
  * the passing fraction; the gate needs all of them. Why that command line
- * is safe to run on agent-written code: docs/dev/test-cli-sandbox.md.
+ * is safe to run on agent-written code: docs/dev/cli/test-cli-sandbox.md.
  */
 import { execFileSync } from "child_process";
 import * as fs from "fs";

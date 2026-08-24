@@ -336,7 +336,7 @@ export default (config: BaseOptimizerConfig) => new MyOptimizer(config);
 agency optimize foo.agency --inputs inputs.json --optimizer ./myOptimizer.ts
 ```
 
-`--optimizer` takes either a **built-in name** (`greedy`, `gepa`, `example`) or a **path** (a value with a `/` or a `.ts`/`.js`/`.mjs` extension). The module is loaded the same way as a grading module (esbuild + import), and its result is used structurally as an `Optimizer` (`{ name, optimize }`). `example` (`lib/optimize/optimizers/example.ts`) is the minimal copy-paste template; the full authoring guide is in the repo at `docs/dev/writing-optimizers.md`.
+`--optimizer` takes either a **built-in name** (`greedy`, `gepa`, `example`) or a **path** (a value with a `/` or a `.ts`/`.js`/`.mjs` extension). The module is loaded the same way as a grading module (esbuild + import), and its result is used structurally as an `Optimizer` (`{ name, optimize }`). `example` (`lib/optimize/optimizers/example.ts`) is the minimal copy-paste template; the full authoring guide is in the repo at `docs/dev/evals/writing-optimizers.md`.
 
 ## Notes
 

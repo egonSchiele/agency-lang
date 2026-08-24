@@ -58,7 +58,7 @@ export type GradingContext = {
  * Score every trace in a run directory. The run directory is grading's ONLY
  * input: run data is never handed over in memory, so grading right after
  * `eval run` reads the same directory `eval grade` reads days later. (See
- * docs/dev/eval-grading.md.)
+ * docs/dev/evals/eval-grading.md.)
  */
 export async function gradeRun(runDir: string, ctx: GradingContext): Promise<Scorecard> {
   return gradeSnapshot(readRunDirectory(runDir, { reportWarning: warn }), ctx);

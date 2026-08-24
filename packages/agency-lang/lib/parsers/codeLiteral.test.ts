@@ -75,7 +75,7 @@ describe("code literals: single-line bodies", () => {
     // silent shift here would misplace every error inside generated code.
     //
     // Both point at the `d` of `def` in the enclosing file. Line and
-    // column are 0-indexed (docs/dev/locations.md).
+    // column are 0-indexed (docs/dev/compiler/locations.md).
     const multiLine = firstLiteral(
       `def f(): Code {\n  return [|\n    def greet(): string {\n      return "hi"\n    }\n  |]\n}\n`,
     );

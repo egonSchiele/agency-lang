@@ -55,7 +55,7 @@ describe("comprehensionDesugar source locations", () => {
 
     // The comprehension is the 7th source line. parseAgency normalizes
     // loc.line to be 0-INDEXED in the user's source (lib/parser.ts and
-    // docs/dev/locations.md), so the expected line is 6. The column is
+    // docs/dev/compiler/locations.md), so the expected line is 6. The column is
     // the call's own position - the carried node keeps its real loc
     // through the desugar rather than being restamped.
     const onComprehensionLine = errors.filter((d) => d.loc?.line === 6);

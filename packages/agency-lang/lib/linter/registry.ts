@@ -19,7 +19,7 @@ export function runLinter(ctx: LintContext): LintFinding[] {
 
 /**
  * Parse `source` and lint it. Parses with the template OFF so every finding's
- * offsets index into `source` (docs/dev/locations.md). A file that does not
+ * offsets index into `source` (docs/dev/compiler/locations.md). A file that does not
  * parse has no lint findings — the parser's own error is the user's problem
  * to fix first, and every caller of this function surfaces parse errors
  * through its own channel (CLI compile errors, LSP parse diagnostics).

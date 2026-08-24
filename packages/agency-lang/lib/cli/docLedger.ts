@@ -19,7 +19,7 @@
  * `resolveOwnedOutputPath`, which refuses symlinked ancestors — lexical
  * containment alone would follow `out/sub -> victim` outside the root.
  *
- * See docs/dev/doc-cache.md for the full design story.
+ * See docs/dev/cli/doc-cache.md for the full design story.
  */
 import * as fs from "fs";
 import * as path from "path";

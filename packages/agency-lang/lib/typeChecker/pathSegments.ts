@@ -37,7 +37,7 @@ export function referenceKey(ref: Reference): string {
 }
 
 function segEq(a: PathSegment, b: PathSegment): boolean {
-  // Discriminated compare — no nested ternary (docs/dev/anti-patterns.md).
+  // Discriminated compare — no nested ternary (docs/dev/contributing/anti-patterns.md).
   if (a.kind !== b.kind) return false;
   if (a.kind === "prop") return a.name === (b as { name: string }).name;
   return a.index === (b as { index: number }).index;

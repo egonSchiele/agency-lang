@@ -461,7 +461,7 @@ Implement this in one focused PR:
 3. Canonicalize `.` expansion for `dir` policy patterns.
 4. Add the targeted wrapper, policy, and end-to-end tests.
 5. Document the filename containment rule in the affected stdlib API docs and
-   `docs/dev/approval-policies.md`.
+   `docs/dev/agents/approval-policies.md`.
 
 Track any broader audit of path-bearing effects separately. This PR is complete
 when model-controlled filenames cannot escape their prepared directory through

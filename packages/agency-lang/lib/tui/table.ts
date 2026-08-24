@@ -4,7 +4,7 @@
 // sort chrome, and the cursor-row background. Width math is the same
 // algorithm std::ui/table uses (lib/utils/columnWidths.ts). Every emitted
 // segment carries an explicit width and height — the two lib/tui layout
-// rules that otherwise bite (see docs/dev/logs-viewer.md).
+// rules that otherwise bite (see docs/dev/cli/logs-viewer.md).
 import { column, line, row } from "./builders.js";
 import type { Element, Style } from "./elements.js";
 import { resolveColumnWidths, type ColumnPlan } from "../utils/columnWidths.js";

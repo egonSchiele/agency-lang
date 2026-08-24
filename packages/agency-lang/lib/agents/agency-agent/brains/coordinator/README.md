@@ -4,7 +4,7 @@ This directory is one *brain* of the Agency agent: the part that answers a
 turn. The harness around it (`agent.agency` and `lib/`) owns the command
 line, the REPL, the approval policy handler, the per-turn budget guard,
 slash-command expansion, and attachment detection. None of that lives here.
-`docs/dev/agent-brains.md` explains the split; this file explains how this
+`docs/dev/agents/agent-brains.md` explains the split; this file explains how this
 particular brain is put together.
 
 Run it with `agency agent` (it is the default) or `agency agent --brain coordinator`.
@@ -97,4 +97,4 @@ not compile correctly today.
 A new specialist is a function in `subagents/`, added to `mainAgentTools`
 and, if it should be a `--agent` target, to `startTargets` and the `match`
 in `coordinatorRunTurn`. A new brain is a different thing: see
-`docs/dev/agent-brains.md` and `brains/simple/README.md`.
+`docs/dev/agents/agent-brains.md` and `brains/simple/README.md`.

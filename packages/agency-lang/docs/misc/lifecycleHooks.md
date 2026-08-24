@@ -40,7 +40,7 @@ parent re-fires its own callbacks. Notes:
   forwarding it is tracked in #418), `onOAuthRequired` (needs a live bidirectional
   channel), and `onTrace` (not currently dispatched). All other hooks forward.
 
-See `docs/dev/subprocess-ipc.md` (Callback forwarding) for the mechanism.
+See `docs/dev/runtime/subprocess-ipc.md` (Callback forwarding) for the mechanism.
 
 ## Usage
 

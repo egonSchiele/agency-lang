@@ -20,7 +20,7 @@ import { functionContainsDestructiveBlock } from "@/backends/functionContainsDes
 /**
  * Statement allowlist enforcement and cross-arm reference checks for `parallel`
  * blocks, plus desugaring of `parallel`/`seq` blocks into the existing `fork`
- * primitive. See docs/dev/parallel-blocks.md for the v1 spec.
+ * primitive. See docs/dev/language/parallel-blocks.md for the v1 spec.
  *
  * Outline:
  *   parallel { stmt0; stmt1; seq { ... } }

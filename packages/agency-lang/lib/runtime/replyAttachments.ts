@@ -15,7 +15,7 @@ import { success, failure, isSuccess, type ResultValue } from "./result.js";
  * marker to that tool's result text; after the full tool round the loop
  * injects ONE labeled user message built here. See
  * docs/superpowers/specs/2026-07-02-tool-reply-attachments-design.md and
- * docs/dev/reply-attachments.md.
+ * docs/dev/agents/reply-attachments.md.
  *
  * The marker strings below are MODEL-FACING API — tests pin them; do not
  * reword casually. (They contain em-dashes, not hyphens.)

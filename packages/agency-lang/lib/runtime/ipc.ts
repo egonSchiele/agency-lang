@@ -681,8 +681,9 @@ export function buildForkOptions(args: { limits: RunLimits; cwd?: string }): For
   };
 }
 
-/** Write the compiled JS to a fresh .agency-tmp/<nanoid>/ dir (under cwd so
- * Node resolves agency-lang package imports via the project's node_modules)
+/** Write the compiled JS to a fresh .agency-tmp/<nanoid>/ dir (under the
+ * agency-lang package root so Node resolves agency-lang package imports via
+ * the project's node_modules)
  * and return the script path. Called at every fork — initial run and resume
  * alike — and paired with cleanupTempDir when the session settles. */
 export function materializeCompiledScript(compiled: {
@@ -736,7 +737,7 @@ export function materializeCompiledScript(compiled: {
  * Best-effort delete of the per-run compile output directory.
  *
  * SAFETY: we only delete `tempDir` if it resolves to a *strict descendant*
- * of `<cwd>/.agency-tmp/`. The `path.resolve` collapses any `..` segments,
+ * of `<agency-lang package root>/.agency-tmp/`. The `path.resolve` collapses any `..` segments,
  * so a malicious `compiledPath` like `/anything/../../../etc/passwd` ends
  * up outside the allowed prefix and the rmSync is skipped. The trailing
  * `+ path.sep` on the prefix prevents two attacks:
@@ -745,7 +746,7 @@ export function materializeCompiledScript(compiled: {
  *   - matching a sibling directory like `.agency-tmpevil/` that shares
  *     the prefix string but is a different path.
  * Even if a malicious caller bypassed everything else, the worst they can
- * do is recursively rm a subdirectory of `<cwd>/.agency-tmp/` — never
+ * do is recursively rm a subdirectory of `<agency-lang package root>/.agency-tmp/` — never
  * `~`, `/`, or anything outside the project's tmp area.
  */
 function cleanupTempDir(compiledPath: string): void {

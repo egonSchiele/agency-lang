@@ -6,11 +6,12 @@ How `agency`'s local-model support is wired, end to end.
 
 Local inference runs through `smoltalk`'s `llama-cpp` provider. Since
 smoltalk 0.11, smoltalk itself owns loading it: smoltalk-llama-cpp is
-smoltalk's *optional peer dependency*, and smoltalk's `loadLlamaCpp()`
-imports the package, validates its shape, and registers the provider —
-re-registering from its cached module whenever the name is absent, so a
+smoltalk's *optional peer dependency*. smoltalk's `loadLlamaCpp()`
+imports the package, validates its shape, and registers the provider. It
+re-registers from its cached module whenever the name is absent, so a
 later `unregisterProvider` is undone by the next load call. `text()` calls
-with `provider: "llama-cpp"` auto-load it.
+with `provider: "llama-cpp"` auto-load it. Agency pins `smoltalk` at
+`^0.12.0`.
 
 Agency's half is `lib/runtime/localProvider.ts`, which owns finding the
 package in layouts smoltalk cannot see:
@@ -27,22 +28,22 @@ package in layouts smoltalk cannot see:
   a compiled child process works even for global installs.
 
 `AGENCY_LLAMA_PROVIDER_MODULE` is the test/advanced escape hatch: an entry
-path to a *plugin-shaped* module — one exporting a `LlamaCPP` class and
+path to a *plugin-shaped* module. It must export a `LlamaCPP` class and
 `resolveModel(uriOrPath, cacheDir)`, the same shape smoltalk validates on
 the real package. (Before smoltalk 0.11 it pointed at a `register()`-shaped
 wrapper; the bundled `lib/stdlib/providers/llama-cpp.mjs` wrapper, the
 `AGENCY_SMOLTALK_LLAMA_CPP_PATH` relay, and the path-splitting
-`llamaModelConfig.ts` are all gone — `LlamaCPP` itself accepts a `.gguf`
+`llamaModelConfig.ts` are all gone. `LlamaCPP` itself accepts a `.gguf`
 path as the model now.)
 
 Registration is lazy either way; nothing loads `node-llama-cpp` until a
 local model is actually used.
 
 Observability: loading emits a `localModelLoaded` statelog event carrying
-the pinned model and the `chooseEntryPath` decision (override / local /
-global) — from the bootstrap hook on the run path, and from
-`_registerLocalProvider` via `__ctx()` on the agent path (the plain CLI has
-no runtime frame, so it emits nothing).
+the pinned model and the `chooseEntryPath` decision, which is one of
+override, local, or global. The event comes from the bootstrap hook on the
+run path, and from `_registerLocalProvider` via `__ctx()` on the agent
+path. The plain CLI has no runtime frame, so it emits nothing.
 
 ## `agency run --local`
 
@@ -55,8 +56,8 @@ behavior that split `--trace` in two.
 
 Flow: `runWithOptions` calls `resolveLocalRunFlag` (`lib/cli/localFlag.ts`)
 in the PARENT CLI, so download progress and SHA-256 verification happen in
-the terminal before the program starts. The result —
-`{ model: <absolute .gguf path>, explicitProvider: "llama-cpp" }` — is folded
+the terminal before the program starts. The result is
+`{ model: <absolute .gguf path>, explicitProvider: "llama-cpp" }`, folded
 into the ordinary `CliFlags.model` slot, so `applyCliFlags` stays the single
 owner of flag→config meaning. The path is absolutized because `LlamaCPP`
 rejects a bare separator-less filename (ambiguous with a model name), which
@@ -72,10 +73,11 @@ network).
 (`lib/stdlib/localModelManifest.ts`). `_downloadModel` records after
 verification succeeds (an invalid-hash file is never recorded); writes go
 through temp-file + rename so an interrupted write keeps the previous valid
-manifest. It is display metadata only: resolution, downloading, and
+manifest. It is display metadata only. Resolution, downloading, and
 verification never read it, so a corrupt or deleted manifest can mislabel
 the `agency local list` view and nothing else. Concurrent downloaders race
-whole-file (last writer wins) — accepted for display metadata.
+on the whole file, and the last writer wins, which is acceptable for
+display metadata.
 
 ## The `agency local` CLI surface
 
@@ -95,8 +97,8 @@ whole-file (last writer wins) — accepted for display metadata.
 `_resolveModelName(value)` maps a value to a model URI/path:
 
 1. A `.gguf` path or an `hf:`/`https:` URI passes through unchanged.
-2. An alias in `client.modelAliases` (nearest `agency.json`) wins next — a
-   value is either a bare URI string or an object
+2. An alias in `client.modelAliases`, read from the nearest `agency.json`,
+   wins next. Its value is either a bare URI string or an object
    `{ uri, …metadata, source?, sha256? }`.
 
    **Both forms must validate against `ModelAliasSchema` in `lib/config.ts`.**
@@ -104,7 +106,7 @@ whole-file (last writer wins) — accepted for display metadata.
    and the two have drifted before: the object form was added for
    `agency local refresh` while `config.ts` still required a plain string, so a
    refresh wrote a config that the next `agency run` refused to load. If you add
-   a field to `AliasObject`, add it there too —
+   a field to `AliasObject`, add it there too.
    `lib/config.modelAliases.test.ts` round-trips a fully-populated entry to
    catch exactly this.
 3. Otherwise a curated short name in `CURATED_LOCAL_MODELS`.
@@ -122,22 +124,22 @@ preserving the user's own aliases. The seed catalog lives at
 ## Download + verification
 
 `_downloadModel(value)` resolves the URI and calls the provider's
-`resolveModel`, which downloads via `node-llama-cpp` (single file, or sharded —
-see below). We then verify integrity:
+`resolveModel`, which downloads via `node-llama-cpp`. The download is a single
+file, or sharded, as described below. We then verify integrity:
 
 - A known-good SHA-256 is **pinned** per curated/catalog model (in
   `CURATED_LOCAL_MODELS` and `data/model-catalog.json`), minted by
-  `scripts/genModelHashes.ts` from Hugging Face's `X-Linked-ETag` header (which
-  equals the file's content sha256 — verified end-to-end against a real
-  download).
+  `scripts/genModelHashes.ts` from Hugging Face's `X-Linked-ETag` header, which
+  equals the file's content sha256. We verified that end to end against a real
+  download.
 - After a **fresh** download (detected via a cache-dir snapshot,
   `snapshotFreshness` — we never re-hash an already-present file), we
   stream-hash the file and compare it to the pin (`verifyModelFile`).
 - On a mismatch the file is renamed to `<file>.gguf.invalidSha` (kept for
   inspection, not loaded) and an error is thrown.
-- Verification is **opportunistic**: models with no pin (user aliases, raw
-  URIs) are simply not verified. A user alias may opt in by setting its own
-  `sha256` on the alias object; it never borrows a curated model's hash.
+- Verification is **opportunistic**. Models with no pin, meaning user aliases
+  and raw URIs, are simply not verified. A user alias may opt in by setting its
+  own `sha256` on the alias object. It never borrows a curated model's hash.
 
 Because we verify only freshly-downloaded files, a pin change (e.g. via
 `agency local refresh`) does **not** retroactively re-check a file you already
@@ -165,14 +167,15 @@ snapshot.
 
 `node-llama-cpp` handles two multi-part layouts: GGUF-split keeps the parts as
 separate files; binary-split splices them into one combined file. Our pin is a
-single content sha256, which only applies to **single-file** models — the entire
-curated Q4_K_M set is single-file. Sharded models therefore carry no pin and are
-**skipped** by verification. Extending coverage (per-part hashes for GGUF-split;
+single content sha256, which only applies to **single-file** models, and the
+entire curated Q4_K_M set is single-file. Sharded models therefore carry no pin
+and verification **skips** them. Extending coverage (per-part hashes for GGUF-split;
 compute-and-pin for binary-split) is tracked in
 [issue #348](https://github.com/egonSchiele/agency-lang/issues/348).
 
 ## Tests
 
-See `docs/dev/llm/local-model-integration.md` for the real-download integration
-suite; the deterministic unit tests live in `lib/stdlib/localModels.test.ts`,
-`lib/cli/local.test.ts`, and `tests/agency-js/local-model/`.
+See [`local-model-integration.md`](./local-model-integration.md) for the
+real-download integration suite. The deterministic unit tests live in
+`lib/stdlib/localModels.test.ts`, `lib/cli/local.test.ts`,
+`lib/cli/runLocal.spawn.test.ts`, and `tests/agency-js/local-model/`.

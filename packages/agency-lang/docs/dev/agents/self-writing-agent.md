@@ -4,7 +4,9 @@ Working notes from a session on 2026-07-28 that started as "why is the agency
 agent slow and expensive" and turned into an evaluation of a different
 architecture: **an agent that writes the agent that answers the request.**
 
-This is a findings document, not a spec. Every claim is tagged with where it
+This is a findings document, not a spec. Some of the work it lists as open has
+since landed. See "Status since these notes" at the end before acting on
+anything here. Every claim is tagged with where it
 came from, because they are not equally solid:
 
 - **[measured]** — run in this session against this repo. Reproducible.
@@ -36,7 +38,7 @@ interrupts cross the process boundary. The parent's handler chain extends into
 the child, a parent rejection beats a child approval, and an interrupt nobody
 resolves checkpoints the child and surfaces to the user. So generated code
 cannot do anything the user has not approved. **[repo:
-`docs/dev/runtime/subprocess-ipc.md`]**
+[`subprocess-ipc.md`](../runtime/subprocess-ipc.md)]**
 
 This is the part that is genuinely Agency's. The closest published system,
 CaMeL, had to build the equivalent from scratch. **[relayed: arXiv 2503.18813]**
@@ -142,8 +144,9 @@ That prior predicted the prototype would struggle. It did not — see below.
 
 ## 4. Tests run, in order
 
-All probes live in `investigate/`. They typecheck generated programs and never
-run them.
+The probes lived in an `investigate/` directory that is no longer in the repo.
+They typechecked generated programs and never ran them. The results below are
+kept as a record; the probes themselves cannot be re-run as written.
 
 ### Probe 1 — `writerprobe.agency`: does the prompt produce code that compiles?
 
@@ -251,11 +254,11 @@ prompt should be a file that CI typechecks.**
 
 ## 6. What does not work yet
 
-- **Generated programs have no resource ceiling.** `runCode`'s `maxCost`
-  defaults to `null` — no limit — and `foo.agency` passes only `wallClock`. The
-  hand-rolled six-call loop above would have run unbudgeted. The interrupt
-  system gates *capabilities*, not *spending*, and spending is what broke the
-  original run. **[measured/repo]**
+- **Generated programs have no resource ceiling (SINCE FIXED).** `runCode`'s
+  `maxCost` still defaults to `null`, meaning no limit, but `foo.agency` now
+  passes `maxCost: $5.00` alongside `wallClock: 5m`. The interrupt system gates
+  *capabilities*, not *spending*, and spending is what broke the original run.
+  **[measured/repo]**
 - **Coverage gaps degrade silently now instead of loudly.** `revise`, `race`,
   `consensus`, and `supervise` all exist in the stdlib and go unused.
 - **Upfront programs are structurally brittle.** A program written before any
@@ -297,11 +300,14 @@ expose the seam below themselves.
 one `llm` call with tools, no guard, no review loop, no thread. It appeared in
 6/6 generated programs and carries none of the old warnings.
 
-**One bug worth fixing regardless of direction:** `hostedSearchTools(model)`
-accepts a `model` parameter and **ignores it entirely**, always returning
-`["web_search"]`. Seven stdlib agents call it, so every agent — including the
-coding agent and the reviewer — unconditionally requests provider-hosted web
-search with no way to turn it off. **[measured]**
+**One bug worth fixing regardless of direction (SINCE FIXED):**
+`hostedSearchTools(model)` accepted a `model` parameter and ignored it
+entirely, always returning `["web_search"]`. Seven stdlib agents call it, so
+every agent unconditionally requested provider-hosted web search with no way to
+turn it off. **[measured]** The signature is now
+`hostedSearchTools(model: string = "", provider: string = "")` in
+`stdlib/agents/lib/search.agency`, and it delegates to `_hostedSearchTools`,
+which resolves the answer from the route rather than returning a constant.
 
 ---
 
@@ -317,8 +323,8 @@ Tm 58–72, pair ΔTm ≤ 5, minimal number of pairs, output `primers.fasta`, an
 **ground-truth Tm is `primer3`'s `oligotm` with exact flags**
 (`-tp 1 -sc 1 -mv 50 -dv 2 -n 0.8 -d 500`).
 
-Both plausible failure modes land in the two clusters `terminal-bench.md`
-already identifies as harness-addressable: computing Tm with a different
+Both plausible failure modes land in the two clusters
+[`terminal-bench.md`](../evals/terminal-bench.md) already identifies as harness-addressable: computing Tm with a different
 library than the one specified (spec-adherence), and not checking the output at
 all (verification).
 
@@ -334,21 +340,22 @@ the task names.** **[mine, grounded in the task text]**
 ### Four harness changes, prioritized
 
 1. **Stop telling the model to avoid the shell.** `stdlib/agents/coding.agency`
-   says *"Avoid using [bash and exec] if at all possible… every time you use
-   bash or exec, it will require human approval."* Under the benchmark adapter
-   that is false — it runs `--policy approve-all` — and DNA-insert cannot be
-   solved without repeatedly shelling out to `oligotm`. **[measured/repo]**
+   still says *"Avoid using them if at all possible"*, though the absolute
+   claim has since softened to *"they often need an approval that a human must
+   grant"*. Under the benchmark adapter no approval is needed at all, because
+   it runs `--policy approve-all`, and DNA-insert cannot be solved without
+   repeatedly shelling out to `oligotm`. **[measured/repo]**
    For context, Terminal-Bench's own reference harness Terminus has **one tool,
    a tmux session**, and mini-swe-agent is bash-only at >74% on SWE-bench
    Verified. **[relayed]**
-2. **Make verification a gate, not advice.** `oneShot.md` already says
+2. **Make verification a gate, not advice.** `lib/agents/agency-agent/brains/coordinator/prompts/oneShot.md` already says
    under-verifying is the number-one failure, and it is still the top failure
    cluster — prose has been tried. The measured version is structural:
    LangChain moved Terminal-Bench 2.0 from **52.8% → 66.5% with the same
    model**, centered on a middleware that blocks completion until a
-   verification pass has run. `verifierAgent` and `verify.agency` already
-   exist; the change is making the path through them mandatory and requiring
-   quoted tool output. **[relayed]**
+   verification pass has run. `verifierAgent` already exists in
+   `stdlib/agents/verifier.agency`; the change is making the path through it
+   mandatory and requiring quoted tool output. **[relayed]**
 3. **Cut the tool surface.** `codingAgent` exposes **48 tools**, 18 of them git,
    on tasks with no repository. **[measured]** Selecting a relevant subset
    rather than presenting the full catalog took tool-selection accuracy from
@@ -421,13 +428,15 @@ or a skill, not a new model. That step is the cheapest and splits the ~46
 
 ## 10. Where I would go next
 
-1. **Fix the guard example** so it captures the result (done) and **make the
-   prompt's examples CI-typechecked files.** Four for four example defects have
-   shipped into generated code.
-2. **Cap `runCode` with a `maxCost`.** The one gap where generated code can
-   still reproduce the original failure.
-3. **Add `revise` and `race` examples.** Currently the model hand-rolls the
-   first and silently drops the second.
+1. **Fix the guard example** so it captures the result (done, every `guard` in
+   `foo.agency` is now written as `const result = guard(...) { ... }`) and
+   **make the prompt's examples CI-typechecked files** (still open). Four for
+   four example defects have shipped into generated code.
+2. **Cap `runCode` with a `maxCost`.** DONE: `foo.agency` passes
+   `maxCost: $5.00`.
+3. **Add `revise` and `race` examples.** Still open. `foo.agency` demonstrates
+   `guard` and `fork` only, so the model still hand-rolls `revise` and silently
+   drops `race`.
 4. **Measure end to end.** "Today's top news, quickly" against the 5m36s /
    $3.3922 baseline. Nothing else settles whether this direction is right.
 5. Separately, on the benchmark track: items 1–4 of §8.
@@ -436,10 +445,11 @@ or a skill, not a new model. That step is the cheapest and splits the ~46
 
 ## Citations
 
-**Verified in this repo:** `docs/dev/runtime/subprocess-ipc.md` (interrupt propagation
-across the subprocess boundary), `docs/dev/evals/terminal-bench.md` (benchmark scores
-and the 46/24 failure split), `stdlib/agents/*` (agent structure and tool
-counts), `log.jsonl` (the failing run).
+**Verified in this repo:** [`subprocess-ipc.md`](../runtime/subprocess-ipc.md)
+for interrupt propagation across the subprocess boundary,
+[`terminal-bench.md`](../evals/terminal-bench.md) for benchmark scores and the
+46/24 failure split, `stdlib/agents/*` for agent structure and tool counts, and
+`log.jsonl` for the failing run.
 
 **Relayed, not verified.** These came from a research subagent. If one is going
 to drive a decision, check it first.
@@ -472,8 +482,29 @@ capability-versus-reliability (Chen et al., 2021, the Codex/HumanEval paper).
 ## Artifacts
 
 - `foo.agency` — the prototype
-- `stdlib/agents/composable/{researcher,utils}.agency` — the small primitives
-- `investigate/writerprobe.agency` — probe 1
-- `investigate/composeprobe.agency` — probes 2 and 3; reads the live prompt from
-  `investigate/prompt.txt`, regenerated with the `awk` command in its header
+- `stdlib/agents/composable/{researcher,utils}.agency` — the small primitives.
+  `ask` lives in `utils.agency`.
 - `lib/runtime/toolSchemaSize.ts` + tests — the oversized-schema warning
+- The `investigate/` probe files are gone from the repo.
+
+---
+
+## Status since these notes
+
+Verified against the current tree. Everything else in this document is
+unchanged and should still be read as of 2026-07-28.
+
+- **`runCode` cost cap: done.** `foo.agency:346` calls
+  `runCode(code, wallClock: 5m, maxCost: $5.00, cwd: getAgentCwd())`.
+- **Guard examples capture their result: done.** Every `guard` in the prompt is
+  written as `const result = guard(...) { ... }`.
+- **`hostedSearchTools`: fixed.** See §7 above.
+- **Hallucinated tool-call markup in a string argument: now refused.** Cause 1
+  in §2 is one of the two guards in the tool loop. See
+  [`tool-loop-guards.md`](./tool-loop-guards.md).
+- **Oversized tool schemas: shipped.** `client.maxToolSchemaChars` is a real
+  config field (`lib/config.ts`), and `lib/runtime/toolSchemaSize.ts` emits the
+  `warnType: "toolSchemaSize"` statelog warning.
+- **`revise` and `race` examples: still missing** from the prompt.
+- **CI-typechecked prompt examples: still not built.**
+- **The end-to-end measurement in §6 and §10.4 has still not been run.**

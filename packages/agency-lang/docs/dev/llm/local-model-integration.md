@@ -4,9 +4,11 @@ The fake-provider unit tests (in `lib/stdlib/localModels.test.ts`,
 `lib/cli/local.test.ts`, and `tests/agency-js/local-model/`) cover the
 wiring deterministically. The integration suite in
 `tests/integration/local-model/` additionally exercises a **real download +
-real CPU inference** path: it pulls the ~85 MB SmolLM2-135M GGUF from
-Hugging Face, registers `node-llama-cpp`, runs a one-shot completion, and
-verifies the agent's `--local-model` flag end-to-end.
+real CPU inference** path. It pulls the SmolLM2-135M GGUF from Hugging Face,
+registers the `smoltalk-llama-cpp` provider, and runs a one-shot completion
+(`smoltest.test.ts`). Two more files sit alongside it: `agent-flag.test.ts`
+runs `agency agent --local-model smollm2-135m --print` end to end, and
+`catalog-liveness.test.ts` checks that every curated model's Hugging Face URI still resolves, using manifest fetches only and no weight downloads.
 
 ## When it runs
 
@@ -21,8 +23,8 @@ The suite sandboxes `HOME` and `AGENCY_MODELS_DIR` to a temp dir, so it
 won't write to your real `~/.agency-agent/models` or `~/agency.json`.
 
 ```bash
-# In packages/agency-lang/. Install the optional provider (one-time; not in
-# package.json, so this doesn't affect normal `pnpm install`).
+# In packages/agency-lang/. Install the optional provider once. It is not in
+# package.json, so a normal `pnpm install` never pulls it.
 # Keep the version in step with SMOLTALK_LLAMA_CPP_VERSION in
 # .github/workflows/local-model.yml, which is the source of truth.
 pnpm add --save=false smoltalk-llama-cpp@0.4.0

@@ -15,15 +15,15 @@ const y = 6                             // explains x
 ```
 
 Being permissive here produced a *wrong result*, not merely an untidy one. The
-same loss happened inside object types, where a wrapped object type dropped its
+same loss happened inside object types. A wrapped object type dropped its
 comments entirely.
 
 ## Two mechanisms, and which one applies
 
 There are two, and picking the wrong one is the most common mistake.
 
-**A complete construct** — a top-level declaration, a statement in any body, or
-a match arm — carries its comment on the node itself:
+**A complete construct** carries its comment on the node itself. That means a
+top-level declaration, a statement in any body, or a match arm:
 
 ```ts
 // lib/types/base.ts
@@ -33,11 +33,11 @@ export type BaseNode = {
 };
 ```
 
-**An item in a multiline list** — an array element, an object property, a call
-argument, a parameter, an import name, a pattern element, a `thread` argument —
-does *not* use `trailingComment`. List items are not separate AST nodes with a
-common base, so their comments live in the list owner's `trivia` array, keyed by
-the index of the item they belong to:
+**An item in a multiline list** does *not* use `trailingComment`. That covers an
+array element, an object property, a call argument, a parameter, an import name,
+a pattern element, and a `thread` argument. List items are not separate AST nodes
+with a common base, so their comments live in the list owner's `trivia` array,
+keyed by the index of the item they belong to:
 
 ```ts
 // lib/types/dataStructures.ts
@@ -93,8 +93,8 @@ Two helpers decide "did we cross a line", and they are not interchangeable:
 
 Getting these backwards causes real bugs in both directions. A nested list
 parser consumes the layout after its own closing brace, so the *next* line's
-standalone comment ends up sitting exactly where a trailing comment would be
-and gets stolen — that needs the trailing-whitespace rule. Meanwhile
+standalone comment ends up sitting exactly where a trailing comment would be and
+gets stolen. That case needs the trailing-whitespace rule. Meanwhile
 `first\n, // c` must be refused, which needs the anywhere-in-the-span rule
 applied to the delimiter alone.
 
@@ -121,16 +121,16 @@ canonical position `c`. A before-comment stays with the item it preceded; a
 trailing comment stays with the item it followed.
 
 It throws if the index list is not a permutation of the source items. That guard
-catches a *malformed* remap — it cannot catch a **forgotten** one. If you add a
-formatter path that reorders a list, nothing will fail; the comments will just be
-wrong. Add a test that writes the items out of canonical order and asserts each
+catches a *malformed* remap, but it cannot catch a **forgotten** one. If you add
+a formatter path that reorders a list, nothing will fail. The comments will just
+be wrong. Add a test that writes the items out of canonical order and asserts each
 comment lands on its own item.
 
 ## Rule 3: state the list policy
 
 `commaDelimitedList` is the shared parser for a comma-separated list that may
 span lines. Every call site passes a policy rather than relying on a default,
-because these genuinely differ across the grammar and getting one wrong silently
+because these genuinely differ across the grammar. Getting one wrong silently
 widens what the language accepts:
 
 ```ts
@@ -159,7 +159,7 @@ accident; collapsing them would make a future divergence look like a bug.
 `sepBy1` means one-or-more, `sepBy` means zero-or-more, and a trailing
 `optional(comma)` means the trailing comma is allowed. Then pin your `reject`
 choice with a negative test asserting the trailing comma still fails. Those
-negative tests are not ceremony — when the reject policy was first written its
+negative tests are not ceremony. When the reject policy was first written, its
 closer-lookahead did not skip whitespace, so every reject site was still quietly
 permissive and only the negative tests caught it.
 
@@ -189,12 +189,13 @@ Trivia-free code keeps its existing inline or wrapping behavior exactly. A
 comment forces the multiline form, because a `//` cannot share a line with what
 follows it.
 
-Type printing works slightly differently. `variableTypeToString` remains the one
-recursive type printer and is shared with TypeScript codegen; the Agency
-formatter passes it an optional `TypePrintHooks.objectType` hook that takes over
-only for an object type carrying trivia. Every recursive edge forwards the hook.
-Display paths — `signatureOf`, `agency doc`, `std::agency`'s `describe` — pass no
-hook and stay compact and comment-free.
+Type printing works slightly differently. `variableTypeToString`
+(`lib/backends/typescriptGenerator/typeToString.ts`) remains the one recursive
+type printer, shared with TypeScript codegen. The Agency formatter passes it an
+optional `TypePrintHooks.objectType` hook, which takes over only for an object
+type carrying trivia. Every recursive edge forwards the hook. Display paths pass
+no hook and stay compact and comment-free: `signatureOf`, `agency doc`, and
+`std::agency`'s `describe`.
 
 ## The three ways this regresses
 
@@ -218,8 +219,8 @@ others do.
 
 ## Deliberate non-goals
 
-Block comments (`/* ... */`) never attach — "trailing" has no meaning when code
-can follow on the same line. Trivia nodes (comments, blank lines) never own a
+Block comments (`/* ... */`) never attach, because "trailing" has no meaning when
+code can follow on the same line. Trivia nodes (comments, blank lines) never own a
 trailing comment themselves. Inline-only grammars stay inline-only: tags,
 generics, value-parameterized types, effect and `raises` lists, block and lambda
 parameters, and `new` arguments.

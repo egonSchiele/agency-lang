@@ -3,27 +3,26 @@
 `lib/vendor/commander/` is a copy of [commander.js](https://github.com/tj/commander.js)
 v15.0.0 (MIT — the upstream LICENSE ships with it), modified so the CLI's core
 concept — one command line carrying agency's arguments *and* the program's —
-lives inside the parser instead of being bolted on ahead of it. The design is
-`docs/superpowers/specs/2026-08-06-cli-flag-ownership-design.md`; the
-user-facing rules are `docs/dev/cli/cli-arguments.md`.
+lives inside the parser instead of being bolted on ahead of it. The
+user-facing rules are in [cli-arguments.md](cli-arguments.md).
 
 ## Why a fork
 
 Upstream commander cannot express a program boundary. Its one gesture at it,
 `passThroughOptions()`, requires `enablePositionalOptions()` on the root,
-which changes parsing for the whole CLI (it broke `label ingest --store`). So
-for a while the boundary was drawn *outside* commander by rewriting argv
-(`splitCommandLine`), which meant maintaining a shadow tokenizer that had to
-mimic commander's real one bug-for-bug. The fork ends that: one parser, one
-tokenizer, and the boundary is a property of a command.
+which changes parsing for the whole CLI. That broke `label ingest --store`.
+So for a while the boundary lived *outside* commander, drawn by rewriting
+argv in a `splitCommandLine` tokenizer that had to mimic commander's real one
+bug-for-bug. The fork ends that. There is one parser and one tokenizer, and
+the boundary is a property of a command.
 
 ## What was copied
 
 Upstream `lib/*.js` (six files of plain JS with JSDoc), `index.js` (import
 paths flattened), and `typings/index.d.ts` as `index.d.ts`. The makefile
-ships the directory into `dist/`, and the repo's global `**/*.js` gitignore
-has an exception for it — these are hand-maintained sources, not compiled
-output.
+copies the directory into `dist/lib/vendor/commander/`, and the repo's global
+`**/*.js` gitignore has an exception for it. These are hand-maintained
+sources, not compiled output.
 
 ## The modifications
 

@@ -33,17 +33,21 @@ The synthesizer has no case for `matchBlock`, so synthesizing that node returns
 match's value type `any`:
 
 ```ts
-ctx.matchExprTypes[id] = types.some(isAnyType) ? ANY_T : ...
+ctx.matchExprTypes[id] = types.some(isAnyType)
+  ? ANY_T
+  : unionTypes(types.map((t) => widenType(t)));
 ```
+
+(`lib/typeChecker/matchExprTypes.ts`)
 
 So the failure is not "the nested match is untyped". It is "the whole outer
 match is untyped", and every assignability check on it silently stops running.
 Nothing errors; you just lose the checking.
 
-The fix is for `rewriteArmForYield` to lower the nested construct first and
-yield its `__matchval_<id>` ref — exactly what `rewriteReturnsToYields` already
-does for `return match(...)` in a block arm. `computeMatchExprTypes` processes
-match ids in DESCENDING order precisely so these resolve bottom-up.
+So `rewriteArmForYield` lowers the nested construct first and yields its
+`__matchval_<id>` ref, exactly what `rewriteReturnsToYields` does for
+`return match(...)` in a block arm. `computeMatchExprTypes` processes match ids
+in DESCENDING order precisely so these resolve bottom-up.
 
 It routes through the shared `expressionRegion()` helper, which owns the
 question "is this an expression-position control-flow construct?" for
@@ -100,11 +104,17 @@ through rather than collapsing to the widened union.
 ## The formatter has to agree
 
 `armPrintsInline` (`lib/backends/agencyGenerator.ts`) decides whether an arm
-prints as `=> expr` or `=> { ... }`. It must not print inline a shape the arm
-grammar cannot re-parse — that is the `#708` rule in its doc comment. A
-`NEVER_INLINE_ARM_TYPES` list used to exist for exactly one entry,
-`"matchBlock"`, because the grammar rejected inline nested matches. Once the
-parser accepted them the list was empty and was deleted.
+prints as `=> expr` or `=> { ... }`. The author's form wins: the parser sets
+`blockBody` on an arm written as a block, and that arm prints as a block. The
+shape tests only decide for ASTs built programmatically, where no form was
+recorded. Those tests must not print inline a shape the arm grammar cannot
+re-parse, which is the `#708` rule in the doc comment.
+
+The check is now an allow-list, `INLINE_ARM_STATEMENT_TYPES`, holding the three
+statement types the single-statement arm grammar accepts alongside expressions:
+`returnStatement`, `gotoStatement`, and `assignment`. It replaced a
+`NEVER_INLINE_ARM_TYPES` deny-list that existed for exactly one entry,
+`"matchBlock"`, because the grammar used to reject inline nested matches.
 
 The whole-corpus print→reparse identity test in
 `lib/backends/agencyGenerator.roundtrip.test.ts` is what catches a mistake here,

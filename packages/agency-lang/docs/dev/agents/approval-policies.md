@@ -9,8 +9,11 @@ surprised us more than once.
 - With no `--policy` flag, `agency agent` loads the user's static file at
   `~/.agency-agent/policy.json`
   (`lib/agents/agency-agent/lib/policy.agency`, `getPolicyForAgent`).
-- `--policy <name>` selects a built-in (`stdlib` `builtinPolicy`) and
-  **replaces** the static file for that run — there is no merging.
+- `--policy <name>` selects a built-in (`builtinPolicy` in
+  `stdlib/policy.agency`) and **replaces** the static file for that run.
+  There is no merging. If the name is not a built-in, `getPolicyForAgent`
+  falls back to reading it as a policy file path, and exits with an error
+  when that fails too.
 - Built-ins like `with-writes` are constructed at launch with the process
   cwd baked into their dir rules.
 
@@ -36,10 +39,10 @@ The read-only file effects (`std::read`, `std::readBinary`, `std::ls`,
 Both rules are placeholders, not paths. `.` expands to the process cwd and
 `<agency>` to the directory the agency package is installed in
 (`AGENCY_INSTALL_DIR_PLACEHOLDER`, `expandAgencyInstallDir`,
-`getPackageRoot`), each at match time, so the copy the agent saves to
-`~/.agency-agent/policy.json` pins neither the directory it was first run
-in nor the install path of one version; after an upgrade moves the package,
-the same rule still matches. A root that cannot be found (a bundled build
+`getPackageRoot`), each at match time. The copy the agent saves to
+`~/.agency-agent/policy.json` therefore pins neither the directory it was
+first run in nor the install path of one version. After an upgrade moves the
+package, the same rule still matches. A root that cannot be found (a bundled build
 with no `package.json` above it) leaves `<agency>` as written and the rule
 simply never matches.
 
@@ -47,8 +50,8 @@ A policy file saved before this change keeps its old catch-all read rules;
 there is no migration. Delete the file (the agent writes a fresh
 recommended policy on the next launch) or edit the five read effects.
 
-There is deliberately no trailing `reject`: a read elsewhere is undecided,
-which prompts in an interactive session and auto-rejects in a headless one.
+There is deliberately no trailing `reject`. A read elsewhere is undecided,
+so it prompts in an interactive session and auto-rejects in a headless one.
 The agent's own reads of its home directory (`~/.agency-agent`) do not go
 through the policy at all (`_internalIo` in `stdlib/policy.agency`).
 
@@ -102,8 +105,9 @@ filename is normalized, and any stable escape — an absolute path, `~`,
 upward traversal, or a symlink whose target leaves `dir` — is rejected
 BEFORE the interrupt exists. No policy or human can approve an escape,
 because no escape request is ever raised. `prepareContainedPath`
-(`lib/stdlib/prepareContainedPath.ts`) owns the rule; the spec is
-`2026-08-20-contained-filename-spec.md`.
+(`lib/stdlib/prepareContainedPath.ts`) owns the rule, re-exported to Agency
+as `_prepareContainedPath` from `lib/stdlib/fs.ts`. The spec is
+`2026-08-20-contained-filename-spec.md` at the package root.
 
 The migration rule doubles as the design principle: **the destination
 belongs in `dir`, because `dir` is the field a policy rule (or a human)

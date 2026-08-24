@@ -14,6 +14,7 @@ Agency uses a **ThreadStore** + **MessageThread** system to manage LLM conversat
 - Wraps a `smoltalk.Message[]` array (OpenAI-compatible message format)
 - Each instance has a unique `id` (nanoid)
 - Key methods: `addMessage()`, `push()`, `getMessages()`, `cloneMessages()` (deep clone via JSON round-trip), `labelAt()`
+- Also carries the metadata a thread accumulates: `parentId`, `label`, `hidden`, `summary`, `repairs`, and `queuedMessages`. All of them round-trip through `toJSON` / `fromJSON`.
 
 #### Per-message debug labels (`messageLabels`)
 
@@ -43,38 +44,52 @@ Serialization: `messageLabels` round-trips through `toJSON`/`fromJSON`; legacy J
 
 Anything that snapshots a thread for checkpoint/resume must persist the **full `MessageThreadJSON`**, not just `.messages` — a bare array revives through `fromJSON`'s legacy branch, which has no labels to read, so the labels would be gone after resume. `fromJSON` still accepts the bare array, so older checkpoints keep working.
 
-`runPrompt` has six bailout paths that each store a snapshot into `self.messagesJSON` (the PromptRunner callback, the tool loop, reply-attachment injection, the validation retries). They all go through one local `snapshotThread()` rather than each calling `toJSON()` themselves — the same reasoning as the writers above: the shape decision is made once, so a path that isn't covered by a test is still correct by construction.
+Every bailout path in `runPrompt` stores a snapshot into `self.messagesJSON`: the PromptRunner callback, the tool loop, reply-attachment injection, and the validation retries. They all go through one local `snapshotThread()` rather than each calling `toJSON()` themselves. Same reasoning as the writers above, the shape decision is made once, so a path that isn't covered by a test is still correct by construction.
 
 **`ThreadStore`** (`lib/runtime/state/threadStore.ts`):
 - Registry of `MessageThread` objects keyed by auto-incremented string IDs
 - Maintains an **active stack** (`activeStack: string[]`) for nested thread scoping
 - Key methods:
-  - `create()` — new empty thread, returns ID
-  - `createSubthread()` — new thread inheriting active thread's messages
+  - `create(meta?)` — new empty thread, returns ID
+  - `createSubthread(meta?)` — new thread inheriting active thread's messages
+  - `createAndReturnSubthread()` — the same fork, returning the `MessageThread` itself
   - `pushActive(id)` / `popActive()` — manage the active stack
   - `getOrCreateActive()` — lazy creation of the active thread
+  - `resumeExisting(id)` / `openSession(name, meta)` — reopen a thread for `thread(continue:)` and `thread(session:)`
   - `toJSON()` / `fromJSON()` — serialization for interrupt/resume
+
+The registry itself (`threads`, `counter`, `sessions`) is shared. `forkBranchView()` builds a store that aliases the parent's registry but gets its own `activeStack`, so a fork, parallel, or race branch writes to a branch-local active thread without hiding new threads from anyone else.
 
 ### AST representation
 
 **`MessageThread`** AST node (`lib/types/messageThread.ts`):
 ```typescript
-type ThreadType = "thread" | "subthread" | "parallel";
-type MessageThread = { type: "messageThread"; threadType: ThreadType; body: AgencyNode[] };
+type ThreadType = "thread" | "subthread";
+type MessageThread = BaseNode & {
+  type: "messageThread";
+  threadType: ThreadType;
+  body: AgencyNode[];
+  label?: Expression | null;
+  summarize?: Expression | null;
+  continueExpr?: Expression | null;  // thread(continue: id)
+  sessionExpr?: Expression | null;   // thread(session: "name")
+  hidden?: Expression | null;
+};
 ```
 
 ### Generated code for `thread { ... }`
 
-Template: `lib/templates/backends/typescriptGenerator/messageThread.mustache`
+`processMessageThread` in `lib/backends/typescriptBuilder.ts` emits a `runnerThread` IR node, which `lib/ir/prettyPrint.ts` prints as:
 
 ```typescript
-{
-  const __tid = __threads.create();       // new empty thread
-  __threads.pushActive(__tid);
+await runner.thread(<id>, "create", async () => ({ label: ... }), async (runner) => {
   // ... body code (prompts accumulate messages on this thread) ...
-  __threads.popActive();
-}
+});
 ```
+
+The options are a thunk, not a plain object. A `return` earlier in the function halts the runner and skips the steps that assign the locals those option expressions read, so evaluating them eagerly would dereference an unset local.
+
+`Runner.thread` in `lib/runtime/runner.ts` owns the whole lifecycle: it creates or reopens the thread, pushes it on the active stack, runs the callback, and pops in a `finally`. It also fires the `onThreadStart` and `onThreadEnd` callbacks. It remembers the thread id in a frame local (`__thread_<stepPath>`), because a debug pause inside the callback re-runs the whole method and the create must not happen twice.
 
 A `thread` block creates a **fresh, isolated** message history. LLM calls inside it start with no prior context.
 
@@ -82,18 +97,11 @@ A `thread` block creates a **fresh, isolated** message history. LLM calls inside
 
 ## How are sub-threads implemented?
 
-Generated code for `subthread { ... }`:
+`subthread { ... }` emits the same call with `"createSubthread"` as the method.
 
-```typescript
-{
-  const __tid = __threads.createSubthread();  // inherits parent messages
-  __threads.pushActive(__tid);
-  // ... body code ...
-  __threads.popActive();
-}
-```
+`createSubthread()` calls `newSubthreadChild()` on the active thread, which deep-clones its messages into a new `MessageThread` and records the parent's id in `parentId`. The subthread starts with the full conversation history of its parent, so LLM calls inside can reference prior context.
 
-`createSubthread()` calls `this.threads[parentId].newSubthreadChild()`, which deep-clones the parent's messages into a new `MessageThread`. The subthread starts with the full conversation history of its parent, so LLM calls inside can reference prior context.
+`subthread` rejects `continue` and `session` at codegen time. A subthread is bound to its parent's context at create time, so reopening it would either have to re-derive that parent or drop the linkage.
 
 Key distinction: **thread = blank slate; subthread = fork of parent's conversation**.
 
@@ -129,28 +137,18 @@ Design history: `docs/superpowers/specs/2026-07-22-orphaned-tool-use-on-guard-ab
 
 ## How are threads passed into prompts?
 
-In `typescriptGenerator.ts` lines 741-748, when generating a prompt function call, the generator determines the thread expression:
+`lib/backends/typescriptBuilder.ts` picks the thread expression when it builds the `runPrompt` config:
 
 ```typescript
-// typescriptGenerator.ts:741-748
-if (this.parallelThreadVars[variableName]) {
-  threadExpr = `__threads.get(${this.parallelThreadVars[variableName]})`;  // parallel: dedicated thread
-} else if (prompt.async) {
-  threadExpr = `new MessageThread()`;                                       // async: fresh isolated thread
-} else {
-  threadExpr = `__threads.getOrCreateActive()`;                             // normal: active thread
+let threadExpr: TsNode = ts.threads.getOrCreateActive();
+if (node.async) {
+  threadExpr = ts.threads.createAndReturnSubthread();
 }
 ```
 
-This thread expression is passed as `__metadata`:
-```typescript
-{ messages: ${threadExpr} }
-```
+An async prompt forks a subthread. It therefore sees the conversation so far, but its own messages never land on the shared active thread.
 
-Inside the generated prompt function (`promptFunction.mustache`), it reaches `runPrompt()`:
-```typescript
-messages: __metadata?.messages || new MessageThread()
-```
+The expression becomes the `messages` field of the `runPrompt` config. `ctx` and `stateStack` are not passed at the call site; `runPrompt` reads them from the active ALS frame through `getRuntimeContext()`.
 
 The runtime (`lib/runtime/prompt.ts`) uses `messages.getMessages()` to build the LLM API call, and appends assistant/tool responses back to the same `MessageThread`.
 
@@ -158,22 +156,9 @@ The runtime (`lib/runtime/prompt.ts`) uses `messages.getMessages()` to build the
 
 ## How are threads passed into functions?
 
-When a function is called internally, the template `internalFunctionCall.mustache` passes the entire ThreadStore:
+A call site no longer passes the ThreadStore. Since the AsyncLocalStorage migration, `setupFunction()` in `lib/runtime/node.ts` reads `threads` off the active `agencyStore` frame, which the caller seeded (a `runner.step` body, `runNode`'s top-level frame, or `runBatch.runInBranchAlsFrame`). See [async-context.md](./async-context.md).
 
-```typescript
-functionName(args, {
-  ctx: __ctx,
-  threads: __threads,          // <-- whole ThreadStore passed through
-  interruptData: __state?.interruptData
-})
-```
-
-In `setupFunction()` (`lib/runtime/node.ts:42-71`):
-- If `state.threads` exists (called from a node/function): uses the passed ThreadStore
-- If `state` is undefined (called as an LLM tool): creates a new empty ThreadStore
-- Fallback: `state.threads || new ThreadStore()`
-
-This means **functions share the same ThreadStore as their caller**, so they participate in the same thread scoping. The active stack is shared.
+This means **functions share the same ThreadStore as their caller**, so they participate in the same thread scoping. The active stack is shared. A direct JS caller of `__foo_impl` from outside an Agency frame has to wrap the call in `runInTestContext`.
 
 ---
 
@@ -185,16 +170,11 @@ The function receives `__threads` (the caller's ThreadStore) via the internal fu
 - The function can also create nested threads/subthreads (they push/pop on the same active stack)
 - When the function returns, the active stack is unchanged (the caller's thread is still active)
 
-**Exception — when called as a tool by the LLM** (`lib/runtime/prompt.ts:229-233`):
-```typescript
-params.push({
-  ctx,
-  threads: new ThreadStore(),   // <-- isolated ThreadStore
-  interruptData,
-  isToolCall: true,
-});
-```
-Tool calls get a **fresh, isolated** ThreadStore. Their messages don't bleed into the parent prompt's thread.
+**Exception — when called as a tool by the LLM** (`lib/runtime/prompt.ts`): the tool loop runs `handler.invoke` inside a copy of the parent ALS frame whose `threads` slot is a **fresh, isolated** `ThreadStore`. Everything else in the frame is inherited, because branch-aware cancellation and per-branch state depend on it.
+
+The isolation is not cosmetic. Without it, an `llm()` call inside a tool body would push messages onto the outer prompt's thread, whose last message is `assistant(tool_calls=[this tool])`. OpenAI rejects that shape with "An assistant message with 'tool_calls' must be followed by tool messages".
+
+The fresh store is lazy rather than `withDefaultActive`, so a leaf tool that never calls `llm()` does not emit a phantom `threadCreated` event.
 
 ---
 
@@ -202,10 +182,12 @@ Tool calls get a **fresh, isolated** ThreadStore. Their messages don't bleed int
 
 For `msgs = thread { ... }` or `msgs = subthread { ... }`:
 
-The template generates (after body, before popActive):
+Codegen appends the assignment to the END of the callback body:
 ```typescript
 msgs = __threads.active().cloneMessages();
 ```
+
+It has to be inside the callback, because `Runner.thread` pops the active stack in its `finally`.
 
 The variable receives a **deep clone** of the thread's accumulated messages (`smoltalk.Message[]` array). The thread itself is popped from the active stack and remains in the ThreadStore but is no longer active.
 
@@ -219,9 +201,9 @@ The variable receives a **deep clone** of the thread's accumulated messages (`sm
 - Messages accumulate sequentially on the active thread
 - After the call, checks for interrupts and returns early if needed
 
-### Async prompts (`prompt.async = true`)
-- Thread expression: `new MessageThread()` — **brand new isolated thread**, not connected to the ThreadStore
-- Generated as `_varName(...)` (no `await`) — returns a Promise immediately
+### Async prompts (`node.async === true`)
+- Thread expression: `__threads.createAndReturnSubthread()` — a fork of the active thread, so the call sees prior context but writes back to its own thread
+- Generated without an `await`, so it returns a Promise immediately
 - No interrupt check (can't interrupt mid-flight)
 - The promise is stored and must be awaited later
 
@@ -232,9 +214,11 @@ The variable receives a **deep clone** of the thread's accumulated messages (`sm
 | `lib/runtime/state/threadStore.ts` | ThreadStore class (thread registry + active stack) |
 | `lib/runtime/node.ts` | setupNode/setupFunction (ThreadStore initialization) |
 | `lib/runtime/prompt.ts` | runPrompt (uses thread for LLM calls), tool call isolation |
-| `lib/backends/typescriptBuilder.ts` | processMessageThread |
-| `lib/templates/backends/typescriptGenerator/blockSetup.mustache` | Block setup template (includes thread init) |
-| `lib/templates/backends/typescriptGenerator/imports.mustache` | Import template (includes thread setup) |
+| `lib/runtime/runner.ts` | `Runner.thread()` — create/reopen, active stack, thread hooks |
+| `lib/runtime/threadRepair.ts` | `repairReopenedThread` |
+| `lib/backends/typescriptBuilder.ts` | `processMessageThread`, prompt thread expression |
+| `lib/ir/prettyPrint.ts` | Prints the `runnerThread` IR node |
+| `lib/templates/backends/typescriptGenerator/imports.mustache` | Imports `MessageThread` / `ThreadStore` / `__threads` into generated modules |
 | `tests/typescriptGenerator/threadsAndSubthreads.agency` | Thread/subthread fixture |
 | `tests/agency/threads/` | End-to-end thread tests |
 

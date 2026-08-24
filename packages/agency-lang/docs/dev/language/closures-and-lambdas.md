@@ -2,9 +2,11 @@
 
 ## Background
 
-Agency supports first-class functions (`functionRef`) and blocks, but not lambdas (anonymous functions that capture variables from their enclosing scope). This document explains why adding lambda support is fundamentally difficult given Agency's execution model, even though blocks work fine.
+Agency supports first-class functions and blocks, but not lambdas. A lambda here means an anonymous function that captures variables from its enclosing scope and can be stored in a variable. This document explains why adding lambda support is fundamentally difficult given Agency's execution model, even though blocks work fine.
 
-The core problem is **deserialization**. Agency can serialize its entire execution state (via the StateStack) and resume later — this is how interrupts, checkpoints, and the debugger work. Lambdas with closures are very hard to restore correctly during deserialization.
+Agency does have an inline block syntax that looks like a lambda: `map(names, \name -> "Hi, ${name}!")`. That is still a block argument to the call, not a standalone value, so everything below about blocks applies to it. See `docs/site/guide/blocks.md`.
+
+The core problem is **deserialization**. Agency can serialize its entire execution state through the StateStack and resume later. That is how interrupts, checkpoints, and the debugger work. Lambdas with closures are very hard to restore correctly during deserialization.
 
 ## How Deserialization Works
 
@@ -19,11 +21,11 @@ For a call chain like `node main => foo => bar` where bar interrupts, the StateS
 5. Enter bar → `getNewState()` returns `bar_frame`, `deserializeStackLength` hits 0, mode switches to serialize
 6. bar's step counter skips to where we left off → new execution begins
 
-The key property: **each function call is re-entered, and its saved frame is consumed from the queue in order.** Steps that already completed are skipped via the step counter. Steps that didn't complete (because the interrupt was nested inside them) are re-executed.
+The key property: **each function call is re-entered, and its saved frame is consumed from the queue in order.** The step counter skips steps that already completed. Steps that didn't complete (because the interrupt was nested inside them) are re-executed.
 
 ## Why Blocks Work
 
-Blocks are compiled as inline arrow functions at the call site. The syntax `mapItems(items) as item { ... }` compiles to a single expression — the block is an argument to the function call. They are always in the same Runner step as the function call.
+Blocks are compiled as inline arrow functions at the call site. The syntax `map(items) as item { ... }` compiles to a single expression, where the block is an argument to the function call. A block is always in the same Runner step as the call it belongs to.
 
 When a block (or something inside it) throws an interrupt, the step containing the function call **didn't complete**. On resume, that step re-executes, which:
 
@@ -59,13 +61,13 @@ Step 0 completes (the counter advances to 1). Step 1 interrupts. On resume:
 2. **Step 0 is skipped** (counter 1 > 0) — the lambda is NOT re-created
 3. Step 1 re-executes, reads `__stack.locals.myLambda` — but this is the **deserialized** version
 
-The deserialized lambda is a FunctionRef looked up by name in `__toolRegistry`. It's the function definition, but it **doesn't have a JS closure over the enclosing `__stack`**. When called, it would try to access `__stack.locals.x`, but `__stack` isn't in its scope — the closure was lost during serialization.
+The deserialized lambda is a function reference looked up by name in `__toolRegistry`. It is the function definition, but it **has no JS closure over the enclosing `__stack`**. When called, it would try to read `__stack.locals.x`, but `__stack` is not in its scope. Serialization lost the closure.
 
 ## The Core Problem
 
-The StateStack stores all variable state on State objects (`args` and `locals`). Regular functions work because their entire state is on their own frame — they don't capture anything from an enclosing scope. The `FunctionRefReviver` serializes them as `{name, module}` and looks them up in `__toolRegistry` on deserialization. This works because top-level functions are stateless from a closure perspective.
+The StateStack stores all variable state on State objects, under `args` and `locals`. Regular functions work because their entire state is on their own frame. They capture nothing from an enclosing scope. `FunctionRefReviver` (`lib/runtime/revivers/functionRefReviver.ts`) serializes them as `{name, module}` and looks them up in `__toolRegistry` on deserialization. This works because top-level functions are stateless from a closure perspective.
 
-A closure's state is **split across frames**: its own execution state is on its own frame (fine), but its captured state is on the *creating function's* frame. The deserialization mechanism restores each frame independently. There's no mechanism to re-link a deserialized lambda back to the frame it captured from.
+A closure's state is **split across frames**. Its own execution state is on its own frame, which is fine. Its captured state lives on the *creating function's* frame. Deserialization restores each frame independently, and nothing re-links a deserialized lambda back to the frame it captured from.
 
 ## Comparison Table
 
@@ -86,7 +88,7 @@ foo creates lambda at step 0
 foo loops at step 1: iteration 0 → calls lambda, iteration 1 → calls lambda (interrupt)
 ```
 
-On resume: step 0 is skipped (lambda not re-created), loop replays from iteration 1, calls the deserialized lambda, lambda has no closure → broken.
+On resume, step 0 is skipped so the lambda is not re-created. The loop replays from iteration 1 and calls the deserialized lambda, which has no closure. Broken.
 
 ### Lambda passed to another function
 
@@ -96,7 +98,7 @@ foo calls bar(lambda) at step 1
 bar calls lambda at its step 0 (interrupt inside lambda)
 ```
 
-On resume: foo's step 0 is skipped (lambda not re-created), step 1 re-enters bar, bar calls the deserialized lambda from `__stack.args`, lambda has no closure → broken.
+On resume, foo's step 0 is skipped so the lambda is not re-created. Step 1 re-enters bar, which calls the deserialized lambda from `__stack.args`. It has no closure. Broken.
 
 ### Lambda called within the same step it's created
 
@@ -104,7 +106,7 @@ On resume: foo's step 0 is skipped (lambda not re-created), step 1 re-enters bar
 foo creates lambda AND calls bar(lambda) in step 0
 ```
 
-This would **work** — just like blocks. Step 0 didn't complete, so it re-executes, re-creating the lambda with fresh closures. But this constrains lambda usage to be essentially the same as blocks.
+This would **work**, just like blocks. Step 0 did not complete, so it re-executes and re-creates the lambda with fresh closures. But that constrains lambda usage to be essentially the same as blocks.
 
 ## Possible Approaches
 
@@ -127,7 +129,7 @@ Don't skip the step that creates a lambda during deserialization — always re-e
 
 ### Store captured frame reference
 
-Have the lambda look up its creator's frame from the StateStack at call time, rather than capturing via JS closure. But identifying the right frame is tricky — frame indices shift during deserialization, and the creator's frame might be at a different position.
+Have the lambda look up its creator's frame from the StateStack at call time, rather than capturing via JS closure. Identifying the right frame is the hard part. Frame indices shift during deserialization, so the creator's frame might be at a different position.
 
 ## Relationship to Blocks
 
@@ -143,7 +145,9 @@ def foo(block: () => any) {
 
 On resume, `__stack.args.block` gets the fresh block (from parameter overwrite), but `__stack.locals.saved` is the deserialized version from step 0 (which was skipped). This is the same class of problem — creation and use in different steps.
 
-In practice this doesn't come up because block parameters are always used directly. But it demonstrates that the problem isn't specific to lambdas — it's about any callable value that captures state and is used in a step after the one where it was created.
+This is documented as a user-facing limitation in `docs/site/guide/blocks.md`, alongside a second rule: do not return a block from a function. Both demonstrate that the problem is not specific to lambdas. It affects any callable value that captures state and is used in a step after the one where it was created.
+
+Note the limitation only bites when an interrupt actually fires inside the copied block. Without an interrupt there is no replay, and the copy works.
 
 ## Summary
 

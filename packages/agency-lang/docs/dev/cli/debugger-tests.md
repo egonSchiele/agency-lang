@@ -1,13 +1,13 @@
 # How to Write Debugger Tests
 
-Debugger tests use `DebuggerTestSession` (`lib/debugger/testSession.ts`) to drive the debugger headlessly. The session creates a real `DebuggerUI` wired to test infrastructure — the same rendering and key mapping code that runs in production, but with a `TestInput` (custom input with idle detection) + `FrameRecorder` (via `LabelingOutput` wrapper) instead of terminal I/O. `TestInput` is similar to `@agency-lang/tui`'s `ScriptedInput` but adds `waitForIdle()` so `press()` can synchronize with the driver's async processing.
+Debugger tests use `DebuggerTestSession` (`lib/debugger/testSession.ts`) to drive the debugger headlessly. The session creates a real `DebuggerUI` wired to test infrastructure, so it runs the same rendering and key mapping code as production. Only the terminal I/O is swapped out, for a `TestInput` and a `FrameRecorder` behind a `LabelingOutput` wrapper. `TestInput` resembles the TUI library's `ScriptedInput` (`lib/tui/input/scripted.ts`) but adds `waitForIdle()`, so `press()` can synchronize with the driver's async processing.
 
 ## Quick example
 
 ```typescript
 import { describe, it, expect, beforeAll } from "vitest";
 import * as path from "path";
-import { compile } from "../cli/commands.js";
+import { compile } from "@/compiler/defaultSession.js";
 import { freshImport, fixtureDir } from "./testHelpers.js";
 import { DebuggerTestSession } from "./testSession.js";
 
@@ -339,7 +339,7 @@ Run the test, then `open /tmp/debug-frames.html` in a browser. Use left/right ar
 |------|---------|
 | `lib/debugger/testSession.ts` | `DebuggerTestSession` class |
 | `lib/debugger/testHelpers.ts` | `freshImport`, `fixtureDir` |
-| `lib/debugger/driver.test.ts` | Main debugger test suite (30 tests) |
+| `lib/debugger/driver.test.ts` | Main debugger test suite |
 | `lib/debugger/testSession.test.ts` | Smoke tests for `DebuggerTestSession` itself |
 | `lib/debugger/exportFrames.test.ts` | Generates HTML frame exports for visual inspection |
 | `tests/debugger/*.agency` | Test fixture programs |

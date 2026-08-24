@@ -1,9 +1,9 @@
 # Eval grading: the run directory is the interface
 
 Running an agent and grading it are separate concepts, joined by exactly one
-thing: the run directory on disk (`docs/dev/evals/run-directory.md`). This page
-exists so the seam survives future readers; every rule here was decided
-deliberately (2026-07-30, re-based on the run directory 2026-08-18).
+thing: the run directory on disk (`docs/dev/evals/run-directory.md`). This
+page exists so the seam survives future readers. Every rule here was decided
+deliberately.
 
 ## The rules
 
@@ -44,15 +44,20 @@ an error naming the suite's ids and tags, never a silent empty run; filter
 flags with `--input` are an error too.
 `eval grade <path…>` takes run directories and groups, grades each run found
 with its own pass, and prints the mean over them (`findRunDirectories`,
-`docs/dev/evals/run-directory.md`); a run named twice, or through a symlink alias,
-is graded once (`fs.realpathSync.native` identity, first appearance wins). There is deliberately no `--goal` (grading's business), no
-stop-on-error (`--continue-on-error` is gone: an errored test is a `run` row
-that grades 0, and stopping the suite half-way only leaves holes), and no
+`docs/dev/evals/run-directory.md`). A run named twice, or through a symlink
+alias, is graded once: `uniqueRunDirectories` compares
+`fs.realpathSync.native` identity and the first appearance wins. `eval run`
+has deliberately no `--goal`, because the goal is grading's business. It has
+no stop-on-error either (`--continue-on-error` is gone: an errored test is a
+`run` row that grades 0, and stopping the suite half-way only leaves holes),
+and no
 agent-config flags (`--strict`, `--max-tool-call-rounds`,
 `--max-tool-result-chars` are gone: they belong in `agency.json` beside the
-agent, and never applied to command agents anyway). Grading is always
-concurrent across traces (`Promise.all` in `gradeSnapshot`), so `-n` is a
-run-only knob.
+agent, and never applied to command agents anyway). Within one run directory
+grading is always concurrent across traces (`Promise.all` in
+`gradeSnapshot`). `eval grade -n <count>` adds a second level, grading that
+many run directories at once (`mapInParallel` in `lib/cli/eval/grade.ts`),
+which matters for a group of many runs.
 
 **Input is optional, and the agent's shape must match.** A test may omit
 `input` (a suite test without the field, or `eval run <agent>` with neither
@@ -80,16 +85,16 @@ Because the goal no longer has to live in the run row, every judge score
 records the goal it scored against (`ScorePayload.goal`, set in
 `scoreDrafts` for annotators of kind `judge`): two passes over the same run
 with `--goal A` and `--goal B` are tellable apart in `annotations.jsonl`.
-The same preflight refuses a target with no `statelog.jsonl` — a
-statelog copied into a folder is not a run directory; the error names
-`agency runs add` and `agency run --capture-workdir` as the two ways to make
-one — instead of quietly grading zero traces to `objective 0.000`.
+The same preflight refuses a target with no `statelog.jsonl`, rather than
+quietly grading zero traces to `objective 0.000`. A statelog copied into a
+folder is not a run directory. The error names `agency runs add` and
+`agency run --capture-workdir` as the two ways to make one.
 
 **Each test runs in staging, then is folded in.** `runSuite` mints the trace
-id up front (`nanoid`) and hands it to the child — the fork runner via
-`identity.runId` on the run instruction, the spawn runner via
-`AGENCY_TRACE_ID`, which `resolveInvocation` honors for a fresh root run —
-runs the agent in `<runsDir>/.staging/<runId>/<testId>/`, and calls
+id up front (`nanoid`) and hands it to the child. The fork runner passes it
+as `identity.runId` on the run instruction, and the spawn runner passes it
+as `AGENCY_TRACE_ID`, which `resolveInvocation` honors for a fresh root run.
+`runSuite` then runs the agent in `<runsDir>/.staging/<runId>/<testId>/`, and calls
 `recordCompletedRun` once with the staged statelog, workdir, seeded agent
 entry and the `run` row. A test that never wrote a statelog still gets its
 `run` row (so the failure is recorded), but no workdir. Code is attached only
@@ -241,7 +246,7 @@ Three rules that are easy to get wrong:
 ## What is gone
 
 `config.json`, `summary.json`, per-input `input.json`, `eval-record.json` on
-disk, `verifier-N/grading.json`, `error.txt`, and `--no-grade`. Old run
-directories on disk are still readable by the runs explorer's legacy loader
-(`lib/runsExplorer/readRunSummary.ts`) and the label loader
-(`lib/eval/readRun.ts`) until those move to the run directory.
+disk, `verifier-N/grading.json`, and `--no-grade`. The legacy loaders that
+read those files are gone too: the runs explorer loads through
+`readRunDirectory` (`lib/runsExplorer/loader.ts`) and labeling works off the
+run directory (`lib/eval/label/`).

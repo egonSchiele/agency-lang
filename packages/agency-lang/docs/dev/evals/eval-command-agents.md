@@ -35,11 +35,11 @@ hostile task is inert bytes inside one argv entry. `{input}` is required
 exactly when the tests carry an input, and refused when they carry none —
 `assertTargetMatchesInputs` (`lib/agentTarget.ts`) checks that once, before
 any run, for command and file agents alike; an object task substitutes as
-JSON. Two hard-won notes in
-the file: tarsec's `between(char, char, manyWithJoin(noneOf))` takes ~14s
-to FAIL on an unclosed quote (pathological backtracking) — `quotedString`
-with a first-char guard is used instead; and the argv byte total is capped
-before spawn (the OS's own failure is an opaque E2BIG).
+JSON. Two hard-won notes. Tarsec's
+`between(char, char, manyWithJoin(noneOf))` takes ~14s to FAIL on an
+unclosed quote, so `commandLine.ts` uses `quotedString` behind a
+first-char guard instead. And `spawnRunner.ts` caps the argv byte total
+before spawning, because the OS's own failure is an opaque E2BIG.
 
 ## One pipeline, two runners
 
@@ -132,8 +132,9 @@ Enforcement lags by one LLM call; it is an accident stopper, not a budget.
 
 ## Provenance
 
-Command runs record the command string verbatim (keep credentials in the
-environment, never argv), the harness version, and — when the command
-invokes the agency CLI — that CLI's `--version`. This trades away file
-targets' sha-comparability (#733); the versions are what anchor
-comparisons over time.
+Every run row a suite writes carries the target's label as its `agent`
+flag. For a command target that label is the command string, verbatim.
+Keep credentials in the environment, never in argv. The row's annotator
+id is `agency-eval@<harness version>` (`harnessVersion()` in
+`runSuite.ts`). This trades away file targets' sha-comparability (#733);
+the harness version is what anchors comparisons over time.

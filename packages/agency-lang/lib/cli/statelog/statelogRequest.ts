@@ -26,8 +26,8 @@ export type StatelogRequestOptions = {
   apiKey: string;
   /** JSON.stringify'd (exactly once) when present. */
   body?: unknown;
-  /** Unwrap the { success, value | error } envelope. Default true; serve's
-   *  bare-JSON /list manifest passes false. */
+  /** Unwrap the { success, value | error } envelope. Default true. Both
+   *  serve's bare-JSON /list manifest and uploadClient pass false. */
   envelope?: boolean;
   /** Default true: a non-2xx response is an `http` failure, and that
    *  classification wins over non-json and envelope handling. uploadClient

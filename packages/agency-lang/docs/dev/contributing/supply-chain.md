@@ -13,6 +13,7 @@ vendoring anything; they live in the repo-root `pnpm-workspace.yaml` and
 minimumReleaseAge: 10080        # minutes: 7 days
 minimumReleaseAgeExclude:
   - smoltalk
+  - smoltalk-llama-cpp
   - tarsec
   - typestache
 ```
@@ -25,9 +26,11 @@ matches the lockfile. Verified behaviorally: with `openai@7.4.0` four days
 old and `7.3.0` at 6.99 days, a fresh `pnpm add openai` resolved `7.2.0`
 (8 days old).
 
-**First-party packages are excluded** because publish-then-immediately-use is
-the normal dev loop for smoltalk/tarsec/typestache. The exclusion is by
-package name and covers all versions. If you ever need one specific fresh
+**First-party packages are excluded** because publishing one and immediately
+using it is the normal dev loop. `smoltalk-llama-cpp` is on the list for a
+second reason: exact-version requests are gated too, and the local-model CI
+workflow installs it at a freshly bumped pin. The exclusion is by package
+name and covers all versions. If you ever need one specific fresh
 version of a third-party package right now, prefer the versioned exclusion
 form (`name@x.y.z`, pnpm ≥ 10.19) over lowering the global window.
 
@@ -46,19 +49,19 @@ form (`name@x.y.z`, pnpm ≥ 10.19) over lowering the global window.
 
 ## Why the pnpm version is pinned in package.json
 
-These settings need pnpm ≥ 10.16 and are **silently ignored** by older pnpm —
-which is the failure mode that would quietly turn all of this off. The
+These settings need pnpm >= 10.16, and older pnpm **silently ignores** them.
+That is the failure mode that would quietly turn all of this off. The
 repo-root `"packageManager": "pnpm@11.20.0"` field is the single source of
-truth, honored by three separate mechanisms: pnpm ≥ 10 itself switches to the
-pinned version natively (`managePackageManagerVersions`, on by default —
-verified here with a standalone pnpm 10.2.1 running 11.20.0 in this repo),
-Corepack shims do the same where Corepack is enabled, and CI's
-`pnpm/action-setup` reads the field when no `version` input is given (the
-per-workflow `version: 9` pins were removed for exactly this reason — never
-reintroduce one, or that workflow resolves dependencies with the cooldown
-off). The unprotected case is a global pnpm older than 10: it ignores both
-the field and the settings, so if `pnpm --version` inside the repo does not
-print 11.20.0, upgrade it.
+truth, and three separate mechanisms honor it. pnpm >= 10 switches to the
+pinned version natively via `managePackageManagerVersions`, which is on by
+default. Corepack shims do the same where Corepack is enabled. CI's
+`pnpm/action-setup` reads the field when no `version` input is given, which
+is why the per-workflow `version: 9` pins were removed. Never reintroduce
+one, or that workflow resolves dependencies with the cooldown off.
+
+The unprotected case is a global pnpm older than 10. It ignores both the
+field and the settings, so if `pnpm --version` inside the repo does not print
+11.20.0, upgrade it.
 
 pnpm 11 itself requires Node ≥ 22.13, which is why the engines floor (and the
 CI job pinned to the exact floor) sits at 22.13.0 rather than commander v15's

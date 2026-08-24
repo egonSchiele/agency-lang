@@ -1,7 +1,8 @@
 # Async Function Calls
-CLAUDE: also read async-info-for-claude.md which contains detailed info.
 
 This document explains how async function calls work in Agency, the problems we encountered, and how they are solved.
+
+For the case-by-case behavioral checklist that the implementation was built against, see [`async-behavior-checklist.md`](./async-behavior-checklist.md).
 
 ## Background
 
@@ -90,7 +91,7 @@ Both helper calls share the same `RuntimeContext` and thus the same promise stor
 
 ## Solution: Runtime promise tracking with unique keys
 
-Instead of the preprocessor generating inline `Promise.all` code, we centralize all promise tracking in a new `PendingPromiseStore` class on `RuntimeContext`. Promises are tracked with unique counter-based keys to avoid all collision issues.
+Instead of the preprocessor generating inline `Promise.all` code, all promise tracking lives in a `PendingPromiseStore` on `RuntimeContext` (`lib/runtime/state/pendingPromiseStore.ts`). Promises are tracked with unique counter-based keys, which avoids every collision above.
 
 ### How it works
 
@@ -98,34 +99,46 @@ Instead of the preprocessor generating inline `Promise.all` code, we centralize 
 
 ```js
 // For: x = async func(...)
-__self.x = func(..., { ctx: __ctx, ... });
-__self.__pendingKey_x = __ctx.pendingPromises.add(__self.x, (val) => { __self.x = val; });
+__self.x = __call(func, /* … */);
+__self.__pendingKey_x = getRuntimeContext().ctx.pendingPromises.add(
+  __self.x,
+  (val) => { __self.x = val; },
+);
 
 // For: async func(...) (unassigned)
-__ctx.pendingPromises.add(func(..., { ctx: __ctx, ... }));
+getRuntimeContext().ctx.pendingPromises.add(__call(func, /* … */));
 ```
+
+`getRuntimeContext()` is the strict ALS accessor. Codegen uses it everywhere
+post-ALS-migration, so a missing frame fails with an actionable error instead of
+a cryptic property read on `undefined`.
 
 The key is stored in `__self.__pendingKey_x`, which is per-stack-frame. Concurrent calls to the same function each have their own `__self`, so each gets a unique key. Loop iterations also get unique keys from the counter.
 
 **Await before usage:** The preprocessor still determines *when* to await (before first usage), but instead of generating `Promise.all` raw code, it generates:
 
 ```js
-await __ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendingKey_y]);
+await getRuntimeContext().ctx.pendingPromises.awaitPending([
+  __self.__pendingKey_x,
+  __self.__pendingKey_y,
+]);
 ```
 
 The `awaitPending` method resolves the promises and calls their setters to write the resolved values back to the variables.
 
-**Await at runtime entry points:** The `awaitAll` call does NOT live in generated node code. Instead, it lives in the three runtime functions that return control to TypeScript: `runNode`, `respondToInterrupt`, and `resumeFromState` (all in `lib/runtime/`). This is the right place because:
+**Await at runtime entry points:** The `awaitAll` call does NOT live in generated node code. It lives in the runtime functions that return control to TypeScript. Today those are `runNode` and `runExportedFunction` (`lib/runtime/node.ts`), `runResumeLoop` behind `respondToInterrupts` (`lib/runtime/interrupts.ts`), and `rewindFrom` (`lib/runtime/rewind.ts`). This is the right place because:
 
 - Pending promises live on `RuntimeContext`, which persists across node transitions within the same execution. There's no need to await them at every node boundary.
 - Node-to-node transitions (e.g., `return otherNode(...)`) should not wait for pending promises — that would add artificial slowness. The async work continues in the background and is only required to complete before we return to TypeScript or serialize state for an interrupt.
 - Centralizing `awaitAll` in the runtime (rather than in generated code) means fewer code paths to maintain and less generated code.
 
-**Await before interrupt:** Before any interrupt return, the builder inserts `await __ctx.pendingPromises.awaitAll()` in the generated code. This ensures all pending async work completes and all assigned variables hold resolved values before state is serialized. The serialized state is then complete and consistent. This is separate from the runtime `awaitAll` because interrupts return from inside generated node code, not from the runtime entry points.
+**Await before interrupt:** Before any interrupt return, the builder emits `await getRuntimeContext().ctx.pendingPromises.awaitAll()` right before `runner.halt(...)`. Every pending promise settles and every assigned variable holds a resolved value before state is serialized, so the serialized state is complete and consistent. This is separate from the runtime `awaitAll` because interrupts return from inside generated node code, not from a runtime entry point.
+
+**Await on handler exit:** A handler body can launch its own async calls. When the handler returns, `runHandlerChain` (`lib/runtime/interrupts.ts`) awaits exactly the promises registered since it started, using `keysSince(watermark)` rather than `awaitAll`. It cannot use `awaitAll`, because the full pending set can contain the very async call whose raise is being dispatched, and that call cannot settle until the chain returns. This await passes `rejectInterrupts: true`: a handler cannot pause, so an async call that returns an interrupt here throws `ConcurrentInterruptError` instead of being silently consumed.
 
 ### Why this solves each problem
 
-- **Unassigned async calls:** Registered with `add` (no key stored). Caught by `awaitAll` in `runNode`/`respondToInterrupt`/`resumeFromState` when execution returns to TypeScript.
+- **Unassigned async calls:** Registered with `add` and no key stored. Caught by `awaitAll` at whichever runtime entry point returns to TypeScript.
 - **Async vars + interrupts:** `awaitAll` resolves all pending promises (including assigned ones) before state serialization. The setter writes the resolved value back to the variable.
 - **Loop collisions:** Each iteration gets a unique key from the counter. All promises are tracked independently.
 - **Concurrent function collisions:** Each function call stores its key in its own `__self.__pendingKey_x`. The shared `PendingPromiseStore` holds all promises with distinct keys.
@@ -145,6 +158,15 @@ So, this LLM checkpoint feature not attempt to await any pending promises. That 
 ## Future work
 
 ### Interrupt queues (phase 2) — deferred
+
+**Scope note.** Concurrent interrupts DID land, but for `fork`/`parallel`
+branches, not for the pending-promise path described here. Multiple branches can
+interrupt at once, the runtime aggregates them into an `Interrupt[]`, and
+`respondToInterrupts(interrupts, responses)` matches responses by `interruptId`.
+See `docs/dev/runtime/concurrent-interrupts.md`. What remains unsupported is an
+`async` call tracked in `PendingPromiseStore` returning an interrupt: `awaitAll`
+throws `ConcurrentInterruptError` there. The rest of this section is the
+historical reasoning for that gap.
 
 The idea here was to allow multiple different threads to throw interrupts. So, again, remember that when an interrupt is thrown, we wait for all pending promises to finish before returning to TypeScript. Well, it's possible that one of those pending promises throws an interrupt.
 I wanted to add support for this and change from returning a single interrupt to returning an array of interrupts. Then TypeScript could handle each and respond to each interrupt.

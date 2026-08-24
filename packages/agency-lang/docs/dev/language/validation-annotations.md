@@ -5,8 +5,10 @@ features that landed together:
 
 - **`@validate(fn1, fn2, ...)`** — attach one or more runtime validators
   to a type. The validators run at every `!` site whose resolved type
-  reaches the annotation, including nested positions (object property,
-  array element, nullable branch, union member).
+  reaches the annotation, including nested positions: object property,
+  array element, record value, nullable branch, and union member. A
+  validator is a **predicate**. It accepts by returning its input, or
+  rejects by returning a failure. It may not transform the value.
 - **`@jsonSchema({ ... })`** — attach JSON Schema metadata to a type so
   that structured-output LLM calls and downstream Zod consumers see it.
   Internally this becomes a Zod `.meta(...)` call.
@@ -44,8 +46,8 @@ typescriptBuilder
    │     For each `!` site: decide whether to emit
    │         __validateType(value, zodSchema)               (zero-cost path)
    │     or
-   │         await __validateChainRecursive(value, descriptor, __ctx)
-   │     The gate is `hasAnyValidateTag(resolvedType)`.
+   │         await __validateChainRecursive(value, descriptor)
+   │     The gate is `hasAnyValidateTag(resolvedType, aliasesFull)`.
    │
    │     For each `type Foo = ...` declaration whose body reaches any
    │     `@validate(...)` tag, the builder also emits
@@ -79,11 +81,12 @@ whose entries may contain spreads, identifiers, and literals.
 
 [`lib/backends/typescriptGenerator/tagArgToTs.ts`](../../../lib/backends/typescriptGenerator/tagArgToTs.ts)
 prints a tag argument as a TS source string. Only the restricted subset
-the tag parser accepts is handled (literals, identifiers, calls, object
-literals, spreads). If you teach the parser to accept new expression
-shapes inside tag args, extend `tagArgToTs` to match — otherwise codegen
-will emit `/* unsupported tag arg: ... */ undefined`, which is loud but
-not helpful at runtime.
+the tag parser accepts is handled: literals, identifiers, calls, object
+literals, array literals, value-access chains, and spreads. If you teach
+the parser to accept new expression shapes inside tag args, extend
+`tagArgToTs` to match. It throws `tagArgToTs: unsupported tag argument
+expression type "..."` on anything else, so the failure lands at compile
+time rather than at runtime.
 
 ---
 
@@ -104,11 +107,12 @@ the same merge pass in `mergeJsonSchemaArgs`, which collects every
 entry / splat from every object-literal argument before running the
 description-concat and dedupe passes.
 
-A malformed `@jsonSchema(...)` (no arguments at all, or an argument
-that is not an object literal) throws from
+A malformed `@jsonSchema(...)` throws from
 [`mergeTags.ts`](../../../lib/typeChecker/mergeTags.ts) with a
-location-aware error. The parser doesn't reject this earlier because
-the tag-argument grammar is intentionally permissive — see
+location-aware error. That covers a tag with no arguments at all, and a
+tag whose argument is not an object literal. The parser does not reject
+either earlier, because the tag-argument grammar is intentionally
+permissive. See
 [`jsonSchemaArgValidator.ts`](../../../lib/typeChecker/jsonSchemaArgValidator.ts)
 for the dedicated check.
 
@@ -132,12 +136,13 @@ takes:
 - **At least one `@validate` somewhere** → emit
   `await __validateChainRecursive(value, descriptor, __ctx)`.
 
-`hasAnyValidateTag` walks the resolved type structurally and, crucially,
-follows non-generic `typeAliasVariable` references via the
-`aliasesFull` map. `resolveTypeDeep` leaves those references intact for
-"codegen-by-name" purposes, so without this manual lookup, an
-`@validate` reachable only through a named alias would be silently
-dropped from gating.
+`hasAnyValidateTag(t, aliasesFull?, seen?)` walks the resolved type
+structurally and, crucially, follows non-generic `typeAliasVariable` and
+`genericType` references via the `aliasesFull` map. `resolveTypeDeep`
+leaves those references intact for "codegen-by-name" purposes, so without
+this manual lookup an `@validate` reachable only through a named alias
+would be silently dropped from gating. The `seen` set guards against a
+recursive alias referring back to itself.
 
 ---
 
@@ -179,15 +184,20 @@ export type Email = z.infer<typeof Email>;
 `__agency_descriptor` is a non-enumerable side-channel between the
 Zod schema and the validation runtime. It's:
 
-- attached unconditionally to any alias whose body has any `@validate`
-  reachable (per `hasAliasValidate` in
-  [`validationDescriptor.ts`](../../../lib/backends/typescriptGenerator/validationDescriptor.ts));
-- read at the use-site via `(Email as any).__agency_descriptor`;
-- combined with use-site validators when the use-site adds its own
-  `@validate(...)` (see the `typeAliasVariable` branch in
-  `descriptor()`):
+- attached by `processTypeAlias` in `typescriptBuilder.ts` to any alias
+  whose body or tags reach a `@validate`, gated by `hasAnyValidateTag`;
+- read at the use-site via `(Email as any).__agency_descriptor`, gated on
+  the reference side by `hasAliasValidate(entry, aliasesFull)` in
+  [`validationDescriptor.ts`](../../../lib/backends/typescriptGenerator/validationDescriptor.ts);
+- never read eagerly. The use site emits a `{ kind: "ref", get: () => ... }`
+  node instead, and the walker resolves it at validation time. An eager
+  read is a TDZ crash for a forward reference, and silently `undefined`
+  for a self-reference whose assignment is still in progress.
+- combined with use-site validators inside `get()`, via
+  `withUseSiteValidators`, which binds the base through an IIFE so it is
+  evaluated exactly once:
   ```ts
-  { ...ref, validators: [...(ref?.validators ?? []), ...useSiteValidators] }
+  ((__d) => ({ ...__d, validators: [...(__d?.validators ?? []), ...useSite] }))(base)
   ```
 
 ### What you must never do
@@ -226,30 +236,47 @@ type TypeValidationDescriptor =
   | { kind: "leaf"; schema; validators }
   | { kind: "object"; schema; validators; properties: Record<string, _> }
   | { kind: "array"; schema; validators; element: _ }
+  | { kind: "record"; schema; validators; value: _ }
   | { kind: "union"; schema; validators; branches: Array<{ test; descriptor }> }
-  | { kind: "nullable"; schema; validators; inner: _ };
+  | { kind: "nullable"; schema; validators; inner: _ }
+  | { kind: "ref"; get: () => TypeValidationDescriptor };
 ```
 
 `walk()` recurses on `descriptor` and `value` in lockstep:
 
+- `ref` → dispatched **before** the own-validator step, because a ref
+  carries no schema and no validators of its own. It calls `get()` and
+  walks the result at the same depth.
 - `array` → run own validators on the array, then recurse into each
-  element with `element` descriptor;
+  element with the `element` descriptor;
 - `object` → run own validators, then recurse into each property with
   `properties[key]`;
+- `record` → run own validators, then walk every entry value against the
+  one `value` descriptor. Keys are schema-checked only. The walker writes
+  results with `Object.defineProperty`, so a key like `__proto__` stores
+  an entry instead of rewriting the prototype.
 - `union` → run own validators, then dispatch to the first branch whose
   `test(v)` passes (the test is a Zod `safeParse` predicate);
 - `nullable` → if value is null/undefined, success unchanged; else
   recurse into `inner`;
 - `leaf` → run own validators only.
 
-The walker is depth-capped (default 64, configurable via
-`opts.maxDepth`). On overflow we return a structured failure payload:
+Two caps keep the walk terminating. Depth is capped at 64 by default and
+configurable through `opts.maxDepth`. On overflow the walker returns:
 
 ```ts
 { reason: "validation recursion depth exceeded", limit, kind, valuePreview }
 ```
 
-`valuePreview` is a cycle-safe, length-bounded JSON snippet.
+Consecutive `ref` hops are capped separately at
+`MAX_CONSECUTIVE_REF_HOPS` (8), because a ref chain does not increment
+depth. Structural kinds reset the hop count, so the cap only bounds
+degenerate `ref → ref` chains. Codegen already rejects the alias shapes
+that would produce one, so this is belt and braces: runtime termination
+must not depend on a compile-time guard staying airtight.
+
+`previewValue` builds the cycle-safe, length-bounded JSON snippet. It is
+private to `validateChain.ts`.
 
 ---
 
@@ -264,13 +291,15 @@ type AgencyValidator =
   | AgencyFunction;
 ```
 
-`callValidator(v, ctx, value)` dispatches:
+`callValidator(v, value)` dispatches:
 
-- **`AgencyFunction`** → `.invoke({ type: "positional", args: [value] }, { ctx })`.
+- **`AgencyFunction`** → `.invoke({ type: "positional", args: [value] })`.
   This is the same machinery as a regular Agency call, so the validator
-  gets a real ctx and can interrupt / call other Agency functions.
-- **plain function** → called as `v(value)`. No ctx is threaded through.
-  Users wanting ctx should write the validator as an Agency `def`.
+  can call other Agency functions.
+- **plain function** → called as `v(value)`.
+
+`runValidator` wraps `callValidator` and then calls `assertNotModified`,
+which enforces the predicate contract described next.
 
 Plain JS validators are first-class: users can import `success` /
 `failure` from `agency-lang/runtime` and write any validator they want
@@ -278,29 +307,35 @@ in TS, then reference it from `@validate(...)`. See
 [`tests/agency/validation/validatePlainJsFunction.agency`](../../../tests/agency/validation/validatePlainJsFunction.agency)
 for the end-to-end test that proves this works.
 
-### Transforming validators
+### Validators are predicates, not transforms
 
-Each validator receives the value the previous validator returned with
-success. A validator can therefore transform the value:
+A validator may only accept or reject. To accept it returns
+`success(value)` carrying **the same value it was handed**, compared by
+`Object.is`. To reject it returns a failure. Returning a different value
+throws:
 
-```agency
-def trim(value: string): Result {
-  return success(value.trim())
-}
-
-@validate(trim)
-type Trimmed = string
+```
+validator 'toUpper' modified the value; validators may only accept
+(return the input) or reject (return a failure)
 ```
 
-The bound variable receives the transformed value. See
-[`tests/agency/validation/validateTransform.agency`](../../../tests/agency/validation/validateTransform.agency).
+`assertNotModified` in `validateChain.ts` enforces this. The comparison
+uses `Object.is` rather than `!==` so a `NaN` handed straight back is
+obeying the contract and is not punished for it. Identity matters, not
+equality: rebuilding an equal object counts as a modification, and the
+loud error is the feature.
+
+[`tests/agency/validation/validateTransform.agency`](../../../tests/agency/validation/validateTransform.agency)
+pins this. If that test ever passes with a transformed value instead of
+erroring, the check has degraded to silently ignoring returned values,
+which is exactly the failure mode the loud error prevents.
 
 ### Parameterized validators via PFA
 
-`std::validation` ships parameterized validators (`min`, `max`,
-`minLength`, `maxLength`, `matches`) as ordinary two-argument Agency
-`def` functions where the configuration parameter comes first and the
-value comes last. Users bind the configuration via Agency [partial
+`std::validation` (`stdlib/validation.agency`) ships parameterized
+validators (`min`, `max`, `minLength`, `maxLength`, `matches`) as
+ordinary two-argument Agency `def` functions where the configuration
+parameter comes first and the value comes last. Users bind the configuration via Agency [partial
 application](../../site/guide/partial-application.md) inside the tag:
 
 ```agency
@@ -337,10 +372,12 @@ parameter(s) first and the value last, and document the PFA call shape.
 
 Implemented in
 [`lib/backends/typescriptGenerator/typeToZodSchema.ts`](../../../lib/backends/typescriptGenerator/typeToZodSchema.ts)
-as `appendMeta(...)`. It looks up the `jsonSchema` tag on a type,
-renders the single object-literal argument via `tagArgToTs`, and tacks
-on a `.meta({...})` to the Zod schema. This must be the **last** call
-in the chain because Zod's API requires it.
+as `appendMeta(...)`. It looks up the `jsonSchema` tags on a type, merges
+their object-literal arguments through `mergeJsonSchemaArgs`, renders the
+result via `tagArgToTs`, and tacks a `.meta({...})` onto the Zod schema.
+This must be the **last** call in the chain because Zod's API requires
+it. Every call site that finishes a Zod expression for a type should
+route through `appendMeta`.
 
 The metadata becomes available at runtime via:
 
@@ -368,8 +405,8 @@ since `.meta()`'s semantics only matter at runtime.
 | `lib/backends/typescriptGenerator/typeToZodSchema.ts` — `appendMeta()`                 | attaches `.meta(...)` for `@jsonSchema`                               |
 | `lib/backends/typescriptGenerator/tagArgToTs.ts`                                      | prints a tag argument as a TS source string                            |
 | `lib/backends/typescriptBuilder.ts`                                                    | emits `(Alias as any).__agency_descriptor = ...` and `!`-site validation calls |
-| `lib/runtime/validateChain.ts`                                                        | `__validateChain` / `__validateChainRecursive` / `previewValue`        |
-| `stdlib/validators.agency` / `stdlib/schemas.agency` / `stdlib/types.agency`          | the pre-baked validators, schema fragments, and opaque-string aliases  |
+| `lib/runtime/validateChain.ts`                                                        | `__validateChain` / `__validateChainRecursive` / the predicate-contract check |
+| `stdlib/validation.agency`                                                            | the pre-baked validators and the annotated aliases (`Email`, `NumberInRange`, …) |
 
 ---
 
@@ -390,10 +427,14 @@ since `.meta()`'s semantics only matter at runtime.
    be combined across alias/use-site.
 6. **Malformed `@jsonSchema(...)` throws synchronously** from
    `mergeTagSets` — keep that loud, don't swallow it.
-7. **Validators may be async and may transform the value.** The walker
-   threads `success.value` into the next validator. Tests in
-   `tests/agency/validation/` cover the boundary cases (array element,
-   nested object, nullable, transform).
+7. **Validators may be async but may NOT transform the value.**
+   `assertNotModified` throws when a validator returns a value that is
+   not `Object.is`-identical to its input. Tests in
+   `tests/agency/validation/` cover the boundary cases: array element,
+   nested object, nullable, and the transform refusal.
+8. **`ref` and `record` are real descriptor kinds.** A new structural
+   kind needs a case in `walk()` AND a producer in
+   `validationDescriptor.ts`, or it will not validate.
 
 ---
 
@@ -464,17 +505,29 @@ Zod schemas:
   `typescriptBuilder.ts` skips the const for aliases with
   `valueParams`. There's no single schema for `NumberInRange` without
   arguments.
-- **No `(AliasName as any).__agency_descriptor` side-channel.** The
-  descriptor would have to encode the specific value args; instead,
-  the descriptor is constructed *inline at the use site* with the
-  substituted tags.
-- **Use-site inlining.** `typeToZodSchema.ts` and
-  `validationDescriptor.ts` both branch on
-  `isValueParamInstantiation(vt, entry)` (defined in
-  `valueParamSubstitution.ts`) — the single canonical predicate for
-  "this reference needs inline-at-use-site emission". When it matches,
-  they call `applyValueArgs` and recursively map the substituted entry.
-  The substituted tags drive `appendMeta` and `validatorNodes`.
+- **No `(AliasName as any).__agency_descriptor` side-channel.** A single
+  descriptor object would have to encode specific value args, and there
+  are none until a use site supplies them.
+- **A validated one emits a descriptor FACTORY instead.**
+  `processTypeAlias` emits `function NumberInRange(low, high) { return
+  <descriptor> }` in the alias's own module, with each value param's
+  declared default baked into the signature. Use sites reference it by
+  CALL, `NumberInRange(0, 150)`, so its validator identifiers stay in
+  that module's scope and a same-named local in the consumer cannot
+  shadow them. The factory body is built from the UNRESOLVED alias body:
+  deep-resolving it would inline an inner alias's validators back into
+  this factory, re-introducing the cross-module leak the factory exists
+  to remove.
+- **Use-site inlining for the schema, and for non-validated aliases.**
+  `typeToZodSchema.ts` and `validationDescriptor.ts` both branch on
+  `isValueParamInstantiation(vt, entry)`, defined in
+  `valueParamSubstitution.ts`. It is the single canonical predicate for
+  "this reference is a value-param instantiation". The Zod schema is
+  always inlined at the use site with substituted tags driving
+  `appendMeta`. On the descriptor side, only a NON-validated alias
+  inlines. A validated one takes the factory-call path above, and a
+  combined type-param plus value-param alias inlines too, because its
+  schema depends on a type argument that only exists at codegen.
 - **Object-property merge also substitutes.** The object-property branch
   of `mapTypeToSchemaInner` looks up alias-level tags to merge them onto
   the property. When the property is a value-parameterized
@@ -483,10 +536,10 @@ Zod schemas:
   outer `.meta(...)` chain on the property would emit out-of-scope
   value-param identifiers (e.g. `low`, `high`).
 
-The codegen divergence rule is expressed in exactly one predicate
-(`isValueParamInstantiation`), used at three sites. Adding a new
-emission site that handles `typeAliasVariable` should consult the same
-predicate to stay consistent.
+The codegen divergence rule is expressed in exactly one predicate,
+`isValueParamInstantiation`. Adding a new emission site that handles
+`typeAliasVariable` should consult the same predicate to stay
+consistent.
 
 ### Why inline-at-use-site instead of a schema factory function?
 
@@ -497,7 +550,12 @@ const NumberInRange = (low: number, high: number) =>
   z.number().meta({ minimum: low, maximum: high });
 ```
 
-We chose inline-at-use-site instead. Trade-off:
+We chose inline-at-use-site for the **Zod schema**. The trade-off below
+was the original reasoning. It still holds for schemas, and for the
+descriptors of non-validated aliases. The descriptors of *validated*
+value-param aliases have since moved to the factory shape described
+above, because keeping validator identifiers inside their defining
+module mattered more than the duplication argument.
 
 | Concern | Factory emission | Inline at use site (chosen) |
 |---|---|---|
@@ -542,6 +600,6 @@ identifier. There are two layers of defense:
 | `lib/typeChecker/valueParamSubstitution.test.ts` | Unit tests for every branch |
 | `lib/typeChecker/assignability.ts` | Calls `applyValueArgs` during `resolveType` |
 | `lib/backends/typescriptGenerator/typeToZodSchema.ts` | Inlines substituted schemas at use sites |
-| `lib/backends/typescriptGenerator/validationDescriptor.ts` | Inlines substituted descriptors at use sites |
-| `lib/backends/typescriptBuilder.ts` | Skips top-level emission for value-parameterized aliases |
-| `stdlib/types.agency` | Pre-baked `NumberInRange`, `StringWithLength`, `MatchesPattern`, `BoundedArray<T>` |
+| `lib/backends/typescriptGenerator/validationDescriptor.ts` | Emits a factory CALL for a validated instantiation, inlines a non-validated one |
+| `lib/backends/typescriptBuilder.ts` | Emits the descriptor factory, or nothing, instead of a top-level schema const |
+| `stdlib/validation.agency` | Pre-baked `NumberInRange`, `StringWithLength`, `MatchesPattern`, `BoundedArray<T>` |

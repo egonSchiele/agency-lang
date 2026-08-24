@@ -24,16 +24,15 @@ node main() {
 const client = SimpleOpenAIClient({ apiKey: "sk-...", model: "gpt-4o" })
 ```
 
-The simple client does not support real streaming — `textStream` falls back to making a non-streaming call and yielding the result as a single chunk. It also does not calculate cost estimates.
+The simple client does not support real streaming. Its `textStream` makes a non-streaming call and yields the result as a single `done` chunk. It also reports every cost as zero rather than estimating one.
 
 ## Building your own client
 
-A custom LLM client is a class that implements the `LLMClient` type:
+A custom LLM client is a class that implements the `LLMClient` type (`lib/runtime/llmClient.ts`). Three methods are required: `text`, `textStream`, and `embed`.
 
 ```typescript
-import type { LLMClient, PromptConfig } from "agency-lang/runtime";
-import type { PromptResult, StreamChunk } from "smoltalk";
-import type { Result } from "smoltalk";
+import type { LLMClient, PromptConfig, EmbedConfig, EmbedResult } from "agency-lang/runtime";
+import type { PromptResult, StreamChunk, Result } from "smoltalk";
 
 class MyClient implements LLMClient {
   async text(config: PromptConfig): Promise<Result<PromptResult>> {
@@ -50,6 +49,15 @@ class MyClient implements LLMClient {
     } else {
       yield { type: "error", error: result.error } as StreamChunk;
     }
+  }
+
+  async embed(
+    input: string | string[],
+    config?: Partial<EmbedConfig>,
+  ): Promise<Result<EmbedResult>> {
+    // Return a failure Result if you do not support embeddings; callers
+    // such as memory Tier 2 then skip rather than crash.
+    return { success: false, error: "embeddings not supported" };
   }
 }
 ```
@@ -76,8 +84,9 @@ Your `text` and `textStream` methods receive a `PromptConfig` with these fields:
 |-------|------|-------------|
 | `messages` | `Message[]` | Conversation history (smoltalk Message objects) |
 | `tools` | `ToolDefinition[]` | Available tools with name, description, and Zod schema |
+| `hostedTools` | `string[]` | Server-side tools to enable by capability name, e.g. `["web_search"]`. Ignore this field if your provider has no hosted tools. |
 | `model` | `string` | Model identifier |
-| `apiKey` | `string` | API key |
+| `apiKey` | `SmolConfig["apiKey"]` | Per-provider key map, e.g. `{ openAi: "sk-..." }`. There is no bare-string form, which would route every key to `openAi`. |
 | `maxTokens` | `number` | Max tokens to generate |
 | `temperature` | `number` | Sampling temperature (0-2) |
 | `responseFormat` | `ZodType` | Zod schema for structured output |
@@ -86,6 +95,7 @@ Your `text` and `textStream` methods receive a `PromptConfig` with these fields:
 | `provider` | `string` | Provider override |
 | `abortSignal` | `AbortSignal` | Cancellation signal |
 | `metadata` | `Record<string, any>` | Additional client-specific options |
+| `hooks` | `{ onStart?, onToolCall?, onEnd?, onError? }` | Optional callbacks the caller supplies |
 
 All fields except `messages` are optional. Your client can ignore fields it doesn't support.
 
@@ -109,23 +119,36 @@ const jsonSchema = config.responseFormat.toJSONSchema();
 { success: false, error: "API error message" }
 ```
 
-`PromptResult` fields:
-- `output` — the model's text response (string)
+`PromptResult` has two required fields and several optional ones:
+- `output` — the model's text response, or `null`
 - `toolCalls` — array of tool call objects with `id`, `name`, and `arguments`
-- `usage` — token counts: `{ inputTokens, outputTokens, cachedInputTokens, totalTokens }`
-- `cost` — cost estimate: `{ inputCost, outputCost, totalCost, currency }` (optional)
-- `model` — the model that was used (optional)
+- `usage` — token counts. `inputTokens` and `outputTokens` are required; `cachedInputTokens`, `cacheCreationInputTokens`, `inputAudioTokens`, `outputAudioTokens` and `totalTokens` are optional.
+- `cost` — cost estimate: `{ inputCost, outputCost, totalCost, currency }`
+- `model` — the model that was used
+- `thinkingBlocks`, `hostedToolResults`, `stopReason`, `rawStopReason` — populated only by clients that support those features
 
 ### Streaming
 
 `textStream()` must yield `StreamChunk` objects:
 
 - `{ type: "text", text: "partial response..." }` — streamed text
+- `{ type: "thinking", text, signature? }` — streamed extended-thinking text
 - `{ type: "tool_call", toolCall: { id, name, arguments } }` — tool invocation
+- `{ type: "web_search", query }` — a provider-run search completed
 - `{ type: "done", result: promptResult }` — final result
 - `{ type: "error", error: "message" }` — error
+- `{ type: "timeout", error: "message" }` — the request timed out
 
 Errors must be signaled as chunks, not thrown exceptions. Agency's streaming handler (`handleStreamingResponse`) relies on this convention.
+
+### Optional methods
+
+Four more methods are optional. Omit any your provider cannot serve.
+
+- `image(input, config?)` — image generation. `std::image` surfaces a failure Result when the method is missing.
+- `transcribe(source, config, signal)` — speech to text.
+- `speak(text, config, signal)` — text to speech. Both speech methods get a complete config (model, and for `speak` voice and format), so a client must never inject its own defaults. The `signal` argument is the only cancellation channel, and an abort must reject promptly with `signal.reason`.
+- `normalizeError(err)` — translate an error your client threw into the provider-neutral `NormalizedLLMError` shape (`status`, `retryAfterMs`, `kind`, `message`). Without it agency's retry layer only sees `{ message: String(err) }` and can classify by keyword alone. The retry policy itself lives in `lib/runtime/llmRetry.ts`.
 
 ## How it works
 
@@ -138,3 +161,4 @@ Errors must be signaled as chunks, not thrown exceptions. Agency's streaming han
 - `lib/runtime/llmClient.ts` — `LLMClient` type, `PromptConfig` type, `SmoltalkClient` default
 - `lib/runtime/simpleOpenAIClient.ts` — `SimpleOpenAIClient` reference implementation
 - `lib/runtime/prompt.ts` — where `ctx.llmClient` is called
+- `lib/runtime/llmRetry.ts` — retry classification over `NormalizedLLMError`

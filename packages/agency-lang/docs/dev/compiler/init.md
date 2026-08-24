@@ -25,16 +25,16 @@ The compiled output places that assignment inside `__initializeGlobals`, a funct
 
 ### 1. Minimal fix: make `__initializeGlobals` async + skip checkpoints
 
-Make `__initializeGlobals` async, add a dummy `const __state = {};` for the interruptData reference, and silently skip checkpoint creation when there's no node context (return -1 from `CheckpointStore.create`).
+Make `__initializeGlobals` async, add a dummy `const __state = {};` for the interruptData reference, and skip checkpoint creation when there is no node context. (Both of those details have since changed. See "Current State" below.)
 
 **Pros:**
-- Extremely simple — 4 small changes across 3 files
+- Extremely simple, 4 small changes across 3 files
 - No new concepts, no architectural changes
 - Cross-module init and tool calls work (functions still call `__initializeGlobals`)
 
 **Cons:**
 - No debugger stepping through top-level code
-- No rewind support for top-level code (checkpoints silently skipped)
+- No rewind support for top-level code
 - No interrupt or handler support at top level
 - `const __state = {};` is a hack
 
@@ -121,20 +121,41 @@ Force users to initialize globals inside nodes. Top-level code is limited to sim
 
 ## Current State
 
-We went with **Approach 1 (minimal fix)** as a pragmatic starting point. The changes are:
+We went with **Approach 1 (minimal fix)** as a pragmatic starting point, and the
+runtime has since grown around it. Today:
 
-1. `__initializeGlobals` is marked `{ async: true }` in the builder (`lib/backends/typescriptBuilder.ts`)
-2. `const __state = {};` is added inside `__initializeGlobals` so `__state?.interruptData` resolves to `undefined`
-3. `initializeGlobals` type in `runNode` accepts `void | Promise<void>` and the call is `await`ed (`lib/runtime/node.ts`)
-4. `CheckpointStore.create` returns -1 when `currentNodeId()` is undefined (`lib/runtime/state/checkpointStore.ts`)
+1. `__initializeGlobals` is emitted `{ async: true }` by `buildInitializeGlobalsFn`
+   in `lib/backends/typescriptBuilder/sectionAssembler.ts`. The body starts with an
+   `isInitialized` guard and a `markInitialized` call, so a global init expression
+   that calls a function from the same module cannot recurse forever.
+2. `runNode` accepts `initializeGlobals?: (ctx) => void | Promise<void>` and awaits
+   it inside `runInBootstrapFrame` (`lib/runtime/node.ts`). A bootstrap frame is an
+   `agencyStore` frame with no `Runner`, no callsite, and a `BootstrapThreadStore`
+   that throws on every thread builtin. See `docs/dev/runtime/async-context.md`.
+3. There is no `const __state = {}` hack any more. Call sites read their context
+   from the ALS frame through `getRuntimeContext()`, so nothing in generated code
+   needs a `__state` local.
+4. Creating a checkpoint with no current node id now throws instead of returning a
+   sentinel. `Checkpoint.fromStateStack` (`lib/runtime/state/checkpointStore.ts`)
+   raises a `CheckpointError` telling the user to write
+   `const foo = funcName() with approve` instead.
+
+Static and global initialization are two separate phases with their own dependency
+ordering. `docs/dev/compiler/init-topsort.md` owns that topic; read it for the
+per-variable init dep graph, the topological sort, and the runtime init registry.
 
 **Known limitations:**
 - No debugger stepping through top-level code
 - No rewind from top-level code
-- No interrupts or handlers at top level
-- Checkpoint data is lost for top-level function calls (checkpoint ID is -1)
-- Some debugger tests fail because they create checkpoints in a mock context without a node ID (the silent -1 return breaks their assertions)
+- A top-level call that tries to checkpoint fails loudly rather than silently
+- Interrupts at top level need the `with` modifier, which registers a handler
+  directly on the context instead of going through a runner. See
+  `docs/dev/language/with-approve.md`.
 
 ## Future Work
 
-The ideal solution is likely Approach 3 (implicit init node) with the cross-module challenges solved, or Approach 2 (explicit `initialize` block) if we're willing to add new syntax. The key unsolved problem is making init code run in a proper graph node context while also handling cross-module initialization for imported tools/functions.
+The ideal solution is likely Approach 3 (implicit init node) with the cross-module
+challenges solved, or Approach 2 (explicit `initialize` block) if we are willing to
+add new syntax. The key unsolved problem is making init code run in a proper graph
+node context while also handling cross-module initialization for imported tools and
+functions.

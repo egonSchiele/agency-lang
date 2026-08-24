@@ -14,25 +14,28 @@ each returning "no errors", over four minutes. Nothing changed between
 calls, and nothing was going to.
 
 `repeatKey` identifies a call by tool name plus a SHA-256 of the arguments
-as canonical JSON (keys sorted at every level, so argument order does not
-make a new key), and results are compared by digest too, so the streak
-record never holds a large argument or result: a tool can take a whole
-source file or return megabytes, and the record lives on the serialized
-frame. Hashing is linear in the size, which the loop already pays to
-stringify the result for the model. The loop keeps ONE streak record (`RepeatStreak`: key,
-result, count), because only calls in a row count: after every run,
-`noteRepeat` extends the streak when the key and the stringified result
-both match the previous call, and otherwise starts a new streak of one. So
+as canonical JSON. Canonical JSON sorts object keys at every level, so
+argument order does not make a new key. Results are compared by digest too,
+so the streak record never holds a large argument or result. That matters
+because a tool can take a whole source file or return megabytes, and the
+record lives on the serialized frame. Hashing is linear in the size, which
+the loop already pays to stringify the result for the model.
+
+The loop keeps ONE streak record (`RepeatStreak`: key, result, count),
+because only calls in a row count. After every run, `noteRepeat` extends
+the streak when the key and the stringified result both match the previous
+call, and otherwise starts a new streak of one. So
 `readStatus → advanceJob → readStatus` never accumulates, however many
-cycles. When the streak reaches `maxRepeatedToolCalls` (default 3), the
-next identical call is refused:
+cycles. When the streak reaches `maxRepeatedToolCalls` (default
+`DEFAULT_MAX_REPEATED_TOOL_CALLS`, 3), `repeatsBefore` sees the count and
+the loop refuses the next identical call:
 
 > Error: this is call 4 to typecheck with exactly these arguments, and
 > the previous 3 all returned the same result. It was not run. Say what
 > you expected to change, then either call it with different arguments
 > or continue without it.
 
-The refusal also resets the streak, so the call is interrupted every N
+The refusal calls `resetRepeat`, so the call is interrupted every N
 identical runs rather than banned: a poll that really is waiting on the
 world gets to run again once the model has said so, and a changed result
 then starts a fresh streak. The guard applies to every tool regardless of
@@ -41,8 +44,8 @@ output, asked again, with nothing in between", not the tool's nature.
 
 Setting: `llm(..., { maxRepeatedToolCalls: n })` per call,
 `setLlmOptions({ maxRepeatedToolCalls: n })` per branch; `0` disables.
-The records live on the runPrompt frame (`self.repeatedCalls`) and are
-written inside the idempotent `invoke` step, so an interrupt/resume does
+The streak lives on the runPrompt frame as `self.repeatStreak`. `noteRepeat`
+runs inside the idempotent `invoke` step, so an interrupt and resume does
 not count one run twice.
 
 ## Markup arguments
@@ -72,7 +75,7 @@ naming the argument and asking for the call again without it.
 
 ## Tests
 
-- Pure helpers: `lib/runtime/prompt.test.ts` (`markupArgument`,
+- Pure helpers: `lib/runtime/toolLoopGuards.test.ts` (`markupArgument`,
   `repeatKey`, `noteRepeat`).
 - Real wiring: `tests/agency-js/repeated-tool-calls` scripts five
   identical calls and one garbled one through a fake client and checks

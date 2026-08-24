@@ -1,10 +1,20 @@
 # Lambda Implementation Sketch
 
+This is a design sketch. Lambdas are NOT implemented: the parser has no lambda
+node, and nothing in `lib/` compiles one. Read
+[closures-and-lambdas.md](closures-and-lambdas.md) first. It owns the argument
+for why the hard part is deserialization, and this sketch does not repeat it.
+
 ## Overview
 
 Lambdas are anonymous functions that can be stored in variables, passed as arguments, and called later. They are closely related to blocks (which are already implemented) but differ in that they are standalone values rather than always being the last argument to a function call.
 
 ## Proposed Syntax
+
+A caution on the arrow. Agency already uses an arrow in block *types*
+(`(string) -> boolean`). There `->` is preferred and `=>` is legacy, and the
+formatter rewrites `=>` to `->` on the next save (`lib/parsers/parsers.ts`).
+So the spelling below needs revisiting before anyone builds this.
 
 ```
 // Expression body
@@ -26,7 +36,7 @@ const doubled = items |> map(?, (x) => x * 2)
 
 ## Compilation
 
-Very similar to the existing block wrapping with `TsAgencyFunctionWrap`. A lambda compiles to an arrow function wrapped in `AgencyFunction.create()`:
+Very similar to the existing block wrapping with `TsAgencyFunctionWrap` (`lib/ir/tsIR.ts`, built by `lib/ir/builders.ts`). A lambda compiles to an arrow function wrapped in `AgencyFunction.create()` (`lib/runtime/agencyFunction.ts`):
 
 ```typescript
 // Agency:
@@ -59,17 +69,17 @@ node main() {
 The lambda needs to close over `multiplier`, which lives in `__stack.locals.multiplier`. This is the core challenge because:
 
 - Blocks sidestep this: they execute immediately in the same scope, so they can reference `__stack` directly.
-- Lambdas are values that can be stored, passed around, and called later — potentially in a different scope context.
+- Lambdas are values that can be stored, passed around, and called later, potentially in a different scope context.
 
 **Proposed solution (first pass):** Compile lambda bodies so they directly reference the enclosing scope's `__stack`. The arrow function in JavaScript naturally closes over variables in its lexical scope, so `__stack.locals.multiplier` will resolve correctly as long as the lambda is called while the enclosing scope is still alive.
 
 This covers the common cases: lambdas passed to `map`, `filter`, `sort`, pipe stages, `fork` blocks, and any function that calls the lambda synchronously or within the same execution.
 
-**Limitation:** If a lambda is returned from a function and called after the function returns, the `__stack` reference is stale (the stack frame was popped). This is an uncommon pattern in Agency code and can be documented as unsupported initially.
+**Limitation:** If a lambda is returned from a function and called after the function returns, the `__stack` reference is stale, because the stack frame was popped. This is an uncommon pattern in Agency code and can be documented as unsupported initially.
 
 ### 2. Serialization Through Interrupts
 
-If a lambda is stored in a variable and an interrupt occurs, it needs to survive serialization. The `FunctionRefReviver` handles this for `AgencyFunction` instances — it serializes the `name` and `module`, then looks them up in `__toolRegistry` on deserialization.
+If a lambda is stored in a variable and an interrupt occurs, it needs to survive serialization. The `FunctionRefReviver` (`lib/runtime/revivers/functionRefReviver.ts`) handles this for `AgencyFunction` instances. It serializes the `name` and `module`, then looks them up in `__toolRegistry` on deserialization.
 
 For lambdas registered via `AgencyFunction.create()`, this works: the reviver finds `__lambda_0` in the registry and returns the AgencyFunction instance.
 
@@ -83,7 +93,7 @@ For lambdas registered via `AgencyFunction.create()`, this works: the reviver fi
 
 The preprocessor resolves variable scopes (local, global, shared, imported, functionRef). A lambda defined inside a node creates a nested scope.
 
-**Proposed solution:** Treat lambda scope like block scope in the preprocessor. The `lookupScope` function already walks up the scope chain for blocks. Lambdas would work the same way:
+**Proposed solution:** Treat lambda scope like block scope in the preprocessor. The `lookupScope` helper in `lib/preprocessors/typescriptPreprocessor.ts` already walks up the scope chain for blocks. Lambdas would work the same way:
 
 - Variables declared inside the lambda body → `local` scope (relative to the lambda's own `__stack`)
 - Variables referenced from the enclosing scope → resolved by `lookupScope` walking up to the enclosing function/node scope
@@ -96,13 +106,13 @@ When a lambda is called via `.invoke()`, state is passed as the second argument 
 
 **Proposed solution:** The lambda's compiled body should follow the same pattern as function bodies — it receives `__state` as the last parameter and passes it through when calling other Agency functions via `.invoke()`. Since `.invoke()` already handles state threading, this should work without special treatment.
 
-**Note:** Unlike full function definitions, lambdas probably should NOT have the full function setup machinery (setupFunction, state stack push/pop, hooks, runner). They should be lightweight. The state parameter should be passed through for forwarding but not used to set up a new execution frame.
+**Note:** Unlike full function definitions, lambdas probably should NOT get the full function setup machinery: setupFunction, state stack push and pop, hooks, and the runner. They should be lightweight. The state parameter should be passed through for forwarding but not used to set up a new execution frame.
 
 ### 5. Runner Step Tracking
 
 Blocks have runner step tracking (checkpoints, debugger hooks) because they execute as part of a function's step sequence. Should lambdas?
 
-**Proposed solution:** No step tracking for lambdas, at least initially. Lambdas are lightweight — they shouldn't participate in the checkpoint/debug machinery. If a lambda calls a full Agency function, that function has its own step tracking. This keeps lambdas fast and simple.
+**Proposed solution:** No step tracking for lambdas, at least initially. Lambdas are lightweight, so they shouldn't participate in the checkpoint and debug machinery. If a lambda calls a full Agency function, that function has its own step tracking. This keeps lambdas fast and simple.
 
 If multi-statement lambdas need step tracking in the future, it can be added as an opt-in feature.
 

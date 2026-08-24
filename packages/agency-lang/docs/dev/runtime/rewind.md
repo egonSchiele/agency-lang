@@ -1,113 +1,90 @@
-# Rewind (LLM Checkpoints)
+# Rewind
 
-Rewind lets you retrospectively override the result of an LLM call and replay execution from that point. Every sync LLM call in an Agency program automatically emits a checkpoint. You can collect these checkpoints, inspect them, and rewind to any of them with different values.
+Rewind replays an Agency execution from a saved checkpoint, optionally with
+different values for the local variables in the checkpoint's top stack frame.
+It is how the debugger's "rewind" command works, and it is available to any
+TypeScript caller of a compiled Agency module.
+
+Checkpoints themselves are the subject of
+[checkpointing.md](checkpointing.md). This note covers only the rewind path.
 
 ## Quick start
 
 ```ts
 import { main, rewindFrom } from "./agent.js";
 
-// 1. Run the agent, collecting checkpoints
-const checkpoints = [];
-const result = await main("I feel fine", {
-  callbacks: {
-    onCheckpoint(cp) {
-      checkpoints.push(cp);
-    },
-  },
-});
+// The agency program calls checkpoint() and returns getCheckpoint(cid),
+// so the run hands its checkpoint back to JS.
+const { data: checkpoint } = await main();
 
-// The LLM categorized mood as "sad" — wrong!
-console.log(result.data.mood); // "sad"
-
-// 2. Rewind from the mood checkpoint, overriding the value
-const fixed = await rewindFrom(checkpoints[0], { mood: "happy" });
-
-// Execution replayed from after the mood LLM call, using "happy" instead
-console.log(fixed.data.mood); // "happy"
-console.log(fixed.data.response); // a response appropriate for "happy"
+// Replay from that checkpoint, overriding a local.
+const fixed = await rewindFrom(checkpoint, { mood: "happy" });
 ```
 
-## How it works
+`tests/agency-js/imported-module-callback-rewind/` is a working end-to-end
+example of exactly this shape.
 
-The compiler inserts a **checkpoint sentinel** after every sync LLM call. This sentinel is a separate step in the generated code that:
+## Where checkpoints come from
 
-1. Creates a snapshot of the full execution state (call stack, locals, globals, thread history)
-2. Sends it to the `onCheckpoint` callback along with metadata about the LLM call
-3. Deletes the internal snapshot (the caller owns the data)
+There is no automatic checkpoint after every LLM call, and no `onCheckpoint`
+callback. A checkpoint reaches you one of three ways:
 
-Because the sentinel is its own step, the checkpoint captures the state *after* the LLM call's step has incremented. When `rewindFrom` restores this checkpoint, the LLM call's step is already past — it gets skipped naturally without any step counter manipulation.
+- Agency code calls the `checkpoint()` builtin, which returns a numeric id.
+  `getCheckpoint(id)` turns that id back into a `Checkpoint` value the program
+  can return. Both live in `lib/runtime/checkpoint.ts`.
+- The debugger takes rolling checkpoints. `debugStep`
+  (`lib/runtime/debugger.ts`) builds one with `Checkpoint.fromContext` on every
+  step, writes it to the trace writer, and hands it to
+  `DebuggerState.createRollingCheckpoint`. A compiled module exposes the whole
+  store as `__getCheckpoints()`.
+- An interrupt carries the checkpoint it was raised at.
 
-## API
+`debugStep` skips both the trace write and the debugger entirely when
+`ctx._skipNextCheckpoint` is set, which is what stops a rewind from
+immediately re-recording the checkpoint it just restored.
 
-### `onCheckpoint` callback
+## `rewindFrom(checkpoint, overrides, opts?)`
 
-Register via the `callbacks` option when calling an agent:
+Every compiled Agency module exports it. The generated wrapper lives in
+`lib/templates/backends/typescriptGenerator/imports.mustache` and binds the
+module's `__globalCtx`:
 
 ```ts
-const checkpoints = [];
-await main("hello", {
-  callbacks: {
-    onCheckpoint(cp) {
-      // cp is a RewindCheckpoint
-      checkpoints.push(cp);
-    },
-  },
-});
+export const rewindFrom = (
+  checkpoint: Checkpoint,
+  overrides: Record<string, unknown>,
+  opts?: { metadata?: Record<string, any> },
+) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
 ```
 
-### `RewindCheckpoint` type
+`opts.metadata.callbacks` is merged onto the rewound execution's callbacks, and
+`opts.metadata.debugger` becomes its `DebuggerState`. The debugger passes both
+(`lib/debugger/driver.ts`).
 
-```ts
-type RewindCheckpoint = {
-  checkpoint: Checkpoint;  // serialized execution state
-  llmCall: {
-    step: number;          // step counter at checkpoint time
-    targetVariable: string; // variable name (e.g. "mood")
-    prompt: string;         // the prompt sent to the LLM
-    response: unknown;      // the LLM's response
-    model: string;          // which model was used
-  };
-};
-```
+The implementation is `rewindFrom` in `lib/runtime/rewind.ts`. It:
 
-The `llmCall` field is informational — it tells you what happened at this checkpoint so you can display it in a UI, log it, or decide which value to override.
-
-### `rewindFrom(checkpoint, overrides, opts?)`
-
-Exported from every compiled Agency module.
-
-```ts
-const result = await rewindFrom(checkpoint, overrides, opts?);
-```
-
-**Parameters:**
-
-- `checkpoint: RewindCheckpoint` — the checkpoint to rewind to
-- `overrides: Record<string, unknown>` — values to inject into the execution state
-- `opts?.metadata.callbacks` — lifecycle callbacks for the rewound execution
-
-**Returns:** the same result shape as calling the agent directly (`{ data, globals }`).
+1. deep-clones the checkpoint, so the caller's copy is never mutated;
+2. applies the overrides;
+3. mints a fresh run id and a fresh execution context, so a replay shows up as
+   a distinct run in traces;
+4. registers top-level callbacks inside a bootstrap ALS frame, then calls
+   `restoreState(checkpoint)` and sets `_skipNextCheckpoint`;
+5. runs the checkpoint's node to completion, looping on `RestoreSignal` so a
+   `restore()` inside the replay is honored;
+6. returns `createReturnObject({ result, globals })`, the same
+   `{ messages, data, tokens }` shape a direct call returns.
 
 ## Overriding values
 
-The `overrides` parameter is a `Record<string, unknown>`. It sets values in the checkpoint's local variables before resuming. You can override:
+`applyOverrides(checkpoint, overrides)` writes each entry into
+`StateStack.lastFrameJSON(checkpoint.stack).locals`. So:
 
-### The LLM call result
-
-The most common use case — correct what the LLM got wrong:
-
-```ts
-// The LLM said mood was "sad", override it to "happy"
-const fixed = await rewindFrom(checkpoints[0], { mood: "happy" });
-```
-
-### Any local variable in scope
-
-Overrides aren't limited to the LLM call's target variable. You can override any local variable that exists at the checkpoint:
+- you can override any local variable in the checkpoint's top frame;
+- you cannot override arguments, which live in `frame.args`, not `frame.locals`;
+- you cannot override locals in outer frames;
+- you cannot override globals or shared variables this way.
 
 ```ts
-// Override multiple variables
 const fixed = await rewindFrom(checkpoint, {
   mood: "happy",
   confidence: "high",
@@ -115,62 +92,26 @@ const fixed = await rewindFrom(checkpoint, {
 });
 ```
 
-### What you can't override
-
-- **Arguments** — node/function parameters are stored separately from locals
-- **Global variables** — use the `globals` field on the result to inspect these
-- **Shared variables** — these are never serialized
-- **Thread message history** — the message thread is restored from the checkpoint as-is; overriding a variable doesn't retroactively change what the LLM "said" in the thread history
-
-## Chained rewinds
-
-You can collect new checkpoints during a rewind and rewind again from those:
-
-```ts
-// First run
-const checkpoints1 = [];
-await main("hello", {
-  callbacks: { onCheckpoint(cp) { checkpoints1.push(cp); } },
-});
-
-// First rewind — override mood, collect new checkpoints
-const checkpoints2 = [];
-await rewindFrom(checkpoints1[0], { mood: "happy" }, {
-  metadata: {
-    callbacks: { onCheckpoint(cp) { checkpoints2.push(cp); } },
-  },
-});
-
-// Second rewind — override confidence from the new execution
-const final = await rewindFrom(checkpoints2[0], { confidence: "high" });
-```
-
-## Threads
-
-Rewind works inside `thread { }` blocks. The checkpoint captures the thread's message history and substep position. When rewinding:
-
-- The LLM call that produced the checkpoint is skipped
-- The overridden value is used in subsequent LLM calls within the thread
-- The thread's message history from *before* the override point is preserved — subsequent LLM calls see the original conversation history but use the overridden variable value in their prompts
+Overriding a variable does not rewrite thread message history. The message
+thread is restored from the checkpoint as it was, so a later LLM call sees the
+original conversation but the new variable value in its prompt.
 
 ## Handlers
 
-Rewind works correctly with `handle` blocks, including nested handlers across function calls. When execution resumes from a checkpoint, the entire call chain replays through the state stack, re-registering all handlers along the way.
-
-## Limitations
-
-- **Async LLM calls** do not emit checkpoints. Async calls haven't resolved at the point where checkpoint code runs, so there's nothing meaningful to checkpoint. Rewind and async threads cannot be used together.
-- **Thread message history is not rewritten.** Overriding `mood = "happy"` changes the variable value used in subsequent prompts, but the assistant's original response (e.g. "sad") remains in the thread history.
+Rewind works with `handle` blocks, including nested handlers across function
+calls. Restoring the checkpoint replays the call chain through the state stack,
+which re-registers every handler along the way. Handlers are never serialized,
+so this replay is the only thing that puts them back.
 
 ## Key files
 
 | File | Role |
 |------|------|
-| `lib/runtime/rewind.ts` | `RewindCheckpoint` type, `applyOverrides`, `rewindFrom` |
-| `lib/runtime/hooks.ts` | `onCheckpoint` in `CallbackMap` |
+| `lib/runtime/rewind.ts` | `rewindFrom`, `applyOverrides` |
+| `lib/runtime/checkpoint.ts` | `checkpoint()`, `getCheckpoint()`, `restore()` |
+| `lib/runtime/state/checkpointStore.ts` | `Checkpoint`, `CheckpointStore` |
+| `lib/runtime/debugger.ts` | `debugStep` — trace write plus rolling checkpoints |
 | `lib/runtime/state/context.ts` | `_skipNextCheckpoint` flag |
-| `lib/preprocessors/typescriptPreprocessor.ts` | `insertCheckpointSentinels` — inserts sentinels after LLM calls |
-| `lib/types/sentinel.ts` | `Sentinel` AST node type |
-| `lib/backends/typescriptBuilder.ts` | `processSentinel` — renders checkpoint code |
-| `lib/templates/backends/typescriptGenerator/rewindCheckpoint.mustache` | Checkpoint emission template |
-| `tests/agency-js/rewind*/` | Integration tests |
+| `lib/templates/backends/typescriptGenerator/imports.mustache` | the exported `rewindFrom` / `__getCheckpoints` wrappers |
+| `lib/debugger/driver.ts` | the debugger's rewind command |
+| `tests/agency-js/imported-module-callback-rewind/` | end-to-end test |

@@ -3,7 +3,7 @@
 `agency schedule add --backend github` writes a workflow that pins every
 action to an exact SHA (with the tag in an inline comment) for security
 hardening. The SHAs live in [`lib/cli/schedule/backends/pinnedActions.ts`](../../../lib/cli/schedule/backends/pinnedActions.ts)
-and are hand-maintained — agency-lang deliberately ships no Octokit
+and are hand-maintained. Agency-lang deliberately ships no Octokit
 dependency to refresh them automatically.
 
 This doc is the procedure for bumping a pinned action.
@@ -15,7 +15,7 @@ This doc is the procedure for bumping a pinned action.
 - `actions/checkout` (or any other action we add later) ships a security
   release.
 
-Bumping is a release-engineering task — it ships in the next agency-lang
+Bumping is a release-engineering task, so it ships in the next agency-lang
 release.
 
 ## Procedure
@@ -41,11 +41,11 @@ Sample output:
 ```
 Look up these SHAs and update lib/cli/schedule/backends/pinnedActions.ts by hand:
   actions/checkout                         b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.7
-  egonSchiele/run-agency-action            2a3030d846ce45a7c9d5eafad345e86db4f83a38  # v1.0.2
+  egonSchiele/run-agency-action            4768784aa7611fafee0801e01cdaea9f06d08dfb  # v1.0.3
 ```
 
-If you want to pin a *different* tag (e.g. bumping `v1.0.2` →
-`v1.0.3`), edit the `for spec in ...` line in the [Makefile](../../../makefile)
+If you want to pin a *different* tag, for example bumping `v1.0.3` to
+`v1.0.4`, edit the `for spec in ...` line in the [Makefile](../../../makefile)
 to list the new tag, then run the target again.
 
 The target uses the `gh` CLI (already installed on every developer/CI
@@ -60,9 +60,12 @@ and paste the new SHA + tag into the corresponding entry:
 ```ts
 "egonSchiele/run-agency-action": {
   sha: "<paste from step 2>",
-  tag: "v1.0.3",
+  tag: "v1.0.4",
 },
 ```
+
+The entries live in the exported `PINNED_ACTIONS` record, typed as
+`Record<string, PinnedAction>`.
 
 ### 4. Update the Makefile target's tag list
 
@@ -98,8 +101,8 @@ after the merge.
 
 ### 5.5. Re-pin the live workflow files
 
-`pinnedActions.ts` controls workflows generated in *future*. The workflows that
-actually run on a schedule already exist and hold their own copy of the SHA:
+`pinnedActions.ts` controls workflows generated in *future*. Workflows that
+already exist hold their own copy of the SHA:
 
 ```bash
 grep -rln "run-agency-action@" ../../.github/workflows/
@@ -132,7 +135,7 @@ tests/integration/cli-main/fixtures/expected/*.yml
 Plus the live workflows from step 5.5 if any pin the action.
 
 Open a PR with a title like `chore(schedule): bump
-egonSchiele/run-agency-action to v1.0.3`.
+egonSchiele/run-agency-action to v1.0.4`.
 
 ## What about the all-zeros placeholder?
 

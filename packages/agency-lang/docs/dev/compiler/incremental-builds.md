@@ -33,9 +33,10 @@ deliberately never roots at a stdlib file), so their deps cannot come from
 the session closure. They come from `dependencyFingerprint`
 (`lib/compiler/depFingerprint.ts`): a breadth-first walk over
 `parseAgencyFileCached` + `agencyImportTargets(…, { resolveStdlib: true })`
-that returns `{ deps, hasPkgImports, cacheable }`. It is a shared contract
-(the planned doc cache consumes it too), and it makes no freshness
-decisions — the tracker interprets the data.
+that returns `{ deps, hasPkgImports, cacheable }`. It is a shared contract:
+the `agency doc` cache consumes it too (`lib/cli/docLedger.ts`, see
+[`docs/dev/cli/doc-cache.md`](../cli/doc-cache.md)). It makes no freshness
+decisions; the tracker interprets the data.
 
 Completeness is data, not an exception. A missing direct target stays in
 `deps` (a missing file hashes to null at check time, so the entry stays
@@ -79,12 +80,14 @@ tracker instead.
 
 - `incremental` (default for all disk compiles): consult and record.
 - `always` (internal only): the shared no-op tracker — no reads, no
-  writes, no manifest file. Forced for `allowTestImports` (the test
-  runner; `configKey` cannot see that flag), `--ts` mode (different
-  artifact), and any compile with a caller-supplied `importStrategy`
-  (RunStrategy — the run/coverage paths — rewrites emitted import
-  specifiers and transpiles sibling `.ts` deps, none of which the key can
-  see).
+  writes, no manifest file. `resolveFreshness` in `buildSession.ts` forces
+  it in four cases: `allowTestImports` (the test runner, and `configKey`
+  cannot see that flag), `--ts` mode (a different artifact), a
+  caller-supplied `importStrategy` (RunStrategy on the run and coverage
+  paths rewrites emitted import specifiers and transpiles sibling `.ts`
+  deps, none of which the key can see), and an explicit `outputFile` (a
+  fresh entry only knows the RECORDED output path, so a skip could return
+  the requested path without ever writing it).
 - `force` (`agency compile --force`): reads disabled, writes on —
   recompile everything and rewrite the manifest.
 

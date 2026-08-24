@@ -3,12 +3,12 @@
 ## Overview
 
 Statelog is Agency's observability and tracing system. The `StatelogClient`
-(`lib/statelogClient.ts`) captures structured execution events — graph
-topology, node/hook lifecycle, LLM and tool calls, embeddings, image
-generation, interrupts, checkpoints, forks/races, threads, subprocesses,
-memory operations, saveDraft salvage, structured errors/warnings, and eval
-markers — stamps each with a span context, and fans them out to one or more
-sinks.
+(`lib/statelogClient.ts`) captures structured execution events, stamps each
+with a span context, and fans them out to one or more sinks. The events cover
+graph topology, node and hook lifecycle, LLM and tool calls, embeddings, image
+generation, speech, interrupts, checkpoints, forks and races, threads,
+subprocesses, memory operations, saveDraft salvage, structured errors and
+warnings, and eval markers.
 
 The current wire format is **`STATELOG_FORMAT_VERSION = 1`**.
 
@@ -45,8 +45,8 @@ the top-level `observability` master switch:
   and tests). Compatible with `host`/`stdout` — all configured sinks receive
   every event.
 - **`debugMode`** — extra console diagnostics.
-- **`requestTimeoutMs`** — per-request timeout for the remote POST (default
-  1500ms) so a slow/unreachable host can't wedge end-of-run cleanup.
+- **`requestTimeoutMs`** — per-request timeout for the remote POST (`DEFAULT_REQUEST_TIMEOUT_MS`,
+  1500ms) so a slow or unreachable host can't wedge end-of-run cleanup.
 
 A `traceId` is auto-generated per execution via `nanoid()` so every event from
 one run shares it.
@@ -80,7 +80,7 @@ Every event is serialized by `post()` into this envelope:
   bounded by `AbortSignal.timeout(requestTimeoutMs)`. Requires an apiKey.
 
 Remote sends are **fire-and-forget**: the fetch is not awaited (telemetry never
-blocks execution) but is tracked in an `inFlight` set. Call `flush()` at
+blocks execution), but it is tracked in an `inFlight` set. Call `flush()` at
 end-of-run to drain in-flight POSTs before the process exits.
 
 ## Redaction
@@ -90,10 +90,10 @@ replacer (`makeRedactReplacer`, `lib/runtime/redactForStatelog.ts`) applied to
 the **`data` payload only**, so it can never blank out envelope infra fields
 (`format_version`, `trace_id`, span ids). The replacer matches whole tagged
 values and also scrubs redacted strings **contained inside** larger strings
-(`GlobalStore.redactContainedStrings`) — a tagged string interpolated into a
-new string would otherwise log verbatim. The pass is skipped entirely when the
-caller's `GlobalStore.hasAnyTags()` is false — the common case is byte-identical
-to no redaction. Events posted outside an AsyncLocalStorage frame (e.g.
+(`GlobalStore.redactContainedStrings`), because a tagged string interpolated
+into a new string would otherwise log verbatim. The pass is skipped entirely
+when the caller's `GlobalStore.hasAnyTags()` is false, so the common case is
+byte-identical to no redaction. Events posted outside an AsyncLocalStorage frame (e.g.
 `agentEnd`, resume-path finalization) fall back to the execution's top-level
 store via `setFallbackGlobals`. Prompt/embed/image previews are capped at
 `PROMPT_PREVIEW_MAX = 200` chars; embedding vectors and generated image bytes
@@ -126,14 +126,13 @@ parent/child tree.
 
 ## Event catalog
 
-Run lifecycle: `runMetadata`, `agentStart`, `agentEnd` (`agentEnd` posts its
-remote send with `noWait`).
+Run lifecycle: `runMetadata`, `agentStart`, `agentName`, `agentEnd`.
+`agentEnd` posts its remote send with `noWait`.
 
 ### Code identity and input on `agentStart`
 
 `agentStart` carries two fields that cannot be recovered after the fact and
-that let a trace stand on its own as "a run" (see
-`docs/superpowers/specs/2026-08-18-run-directory-and-annotations-design.md`):
+that let a trace stand on its own as "a run":
 
 - `code` — `{ entry, closureHash, closure: [{ file, sha256 }] }`, computed by
   `computeCodeIdentity(entryFile)` in `lib/runDirectory/codeIdentity.ts`.
@@ -148,9 +147,10 @@ that let a trace stand on its own as "a run" (see
 - `input` — what the entry node was given, when the caller named it. It is
   never derived from the node's parameters (a plain one-parameter call and an
   eval input look identical there). The generated node wrapper takes a hidden
-  `invocationInput` option (not `input`, which is a common parameter name); the subprocess bootstrap passes `RunInstruction.task` through
-  it, so eval runs record their input and ordinary `agency run` invocations
-  record none.
+  `invocationInput` option, named that way because `input` is a common
+  parameter name. The subprocess bootstrap passes `RunInstruction.input`
+  through it, so eval runs record their input and ordinary `agency run`
+  invocations record none.
 
 Graph & nodes: `graph`, `enterNode`, `exitNode`, `beforeHook`, `afterHook`,
 `followEdge`.
@@ -165,7 +165,10 @@ is a hung/killed-mid-call run.
 Tools: `toolCallStart` → `toolCall` (share the `toolExecution` span; OTEL
 start+end mergeable).
 
-Embeddings & images: `embedCompletion`, `imageGeneration`.
+Embeddings, images, and speech: `embedCompletion`, `imageGeneration`,
+`transcription` (speech-to-text), `speechSynthesis` (text-to-speech). Only a
+short text preview is logged for each. Audio bytes, embedding vectors, and
+generated image bytes never are.
 
 Local models: `localModelLoaded` — the pinned model plus where the llama-cpp
 provider package was resolved from (`entrySource`: override / local / global).
@@ -180,8 +183,10 @@ Checkpoints: `checkpointCreated`, `checkpointRestored`.
 
 Fork/race: `forkStart`, `forkBranchEnd`, `forkEnd`.
 
-Threads: `threadCreated`, `threadResumed`, `threadEndHooksStart`,
-`threadEndHooksEnd`, `threadEndHookError`.
+Threads: `threadCreated`, `threadResumed`, `threadRepaired`,
+`threadEndHooksStart`, `threadEndHooksEnd`, `threadEndHookError`.
+`threadRepaired` fires when a reopened thread was structurally invalid and
+`repairAbandonedTurn` synthesized the missing tool results.
 
 Subprocess: `subprocessStarted`, `subprocessEnd`.
 
@@ -192,9 +197,9 @@ span. The two terminal drops (`clearedAtFork`, `droppedAtNodeBoundary`) end
 that span; `droppedAtArgPosition` does not, because the abort travels on.
 
 Diagnostics: `error` (`errorType`: `toolError | llmError | runtimeError |
-validationError | limitExceeded | structuredOutput`), `warn` (`warnType:
-"failurePropagation"`; its variable payload lives under `data` so redaction
-scopes it), `debug`, `diff`.
+validationError | limitExceeded | structuredOutput | finalizeError`), `warn`
+(`warnType`: `failurePropagation | toolSchemaSize`; its variable payload lives
+under `data` so redaction scopes it), `debug`, `diff`.
 
 Eval: `evalValueRecorded`, `evalOutputRecorded` (emitted by the `std::statelog`
 stdlib wrappers — `stdlib/statelog.agency` + `lib/stdlib/statelog.ts`).
@@ -211,14 +216,15 @@ stdlib wrappers — `stdlib/statelog.agency` + `lib/stdlib/statelog.ts`).
 - **Log viewer** (`lib/logsViewer/`) — reconstructs the span tree from event
   lines (`tree.ts`, `render.ts`, `follow.ts`, `summary.ts`, `search.ts`).
 - **Eval** (`lib/eval/statelogParser.ts`) — parses eval markers out of a trace.
-- **CLI** — `lib/cli/upload.ts` (`upload()`), `lib/cli/remoteRun.ts`
-  (`remoteRun()`).
+- **CLI** — `lib/cli/eval/upload.ts` and the sealed upload client
+  `lib/cli/statelog/uploadClient.ts`.
 
 ## Factory
 
-`getStatelogClient(config)` builds a `StatelogClient`, defaulting `apiKey` from
-`STATELOG_API_KEY`. Used by CLI commands to construct clients from
-`AgencyConfig.log`.
+`getStatelogClient(config)` builds a `StatelogClient`, reading `apiKey` from
+`STATELOG_API_KEY`. It takes `{ host, traceId?, projectId, debugMode?,
+observability?, logFile? }` and mints a `traceId` with `nanoid()` when none is
+given.
 
 ## Key behaviors
 

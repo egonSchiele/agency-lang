@@ -19,7 +19,8 @@ The end-to-end flow:
 | Piece | Repo | Path |
 |---|---|---|
 | `./serve` API (the dispatcher a host embeds) | agency-lang | `lib/serve/` |
-| `agency deploy` CLI | agency-lang | `lib/cli/deploy/` |
+| The deploy engine | agency-lang | `lib/cli/deploy/` |
+| The statelog upload client | agency-lang | `lib/cli/statelog/uploadClient.ts` |
 | `compileSource` (with `sourcePath`) | agency-lang | `lib/compiler/compile.ts` |
 | Per-agent observability seam | agency-lang | `lib/runtime/configOverrides.ts` |
 | The serve host (runs agents per request) | statelog | `src/backend/lib/serveHost.ts` |
@@ -35,7 +36,7 @@ The end-to-end flow:
 A host embeds a small dispatcher that turns HTTP requests into agent runs. The public surface is `agency-lang/serve` (barrel: `lib/serve/public.ts`):
 
 - **`createServeHandler(compiledPath, options) => Promise<ServeHandler>`** — imports a compiled Agency module and returns a `ServeHandler`, which is a function `(method, path, body) => Promise<RouteResult>`. It handles four routes: `/list`, `/function/:name`, `/node/:name`, `/resume`.
-- **`collectServeMetadata({ filePath, config }) => { moduleId, exportedNodeNames, interruptEffectsByName, errors }`** — builds a symbol table and type-checks, producing the metadata `createServeHandler` needs.
+- **`collectServeMetadata({ filePath, config }) => ServeMetadata`** — builds a symbol table and type-checks, producing the metadata `createServeHandler` needs: `moduleId`, `exportedNodeNames`, `exportedFunctionNames`, `interruptEffectsByName`, and the type-check `errors`.
 - **`ServeHandler`, `CreateServeHandlerOptions`, `RouteResult`** — the types.
 
 Internally (`lib/serve/discovery.ts`), `discoverExports` walks the compiled module and builds one `ExportedFunction` or `ExportedNode` per exported item. `ExportedNode` carries a `parameters` array; **`ExportedFunction` also carries `parameters`** (added so `/list` describes function arguments — before, only nodes did; see "PR history"). Bound params (from partial application) are filtered out — only caller-facing params are listed.
@@ -78,7 +79,9 @@ The obvious approach — compile each agent with its statelog config (host, proj
 - `AGENCY_CONFIG_OVERRIDES` — an environment variable (read by `readConfigOverrides`).
 - `setRuntimeConfigOverrides(overrides)` — a process-global (used by subprocess IPC).
 
-**The crucial fact:** that `RuntimeContext` is built **once, at module-import time** — the moment `createServeHandler` calls `await import(...)`. The per-invocation path (`createExecutionContext`) just copies the frozen config. So observability is decided when the module loads, and both override transports are process-global.
+**The crucial fact:** that `RuntimeContext` is built **once, at module-import time**, the moment `createServeHandler` calls `await import(...)`. Both override transports above are process-global, so this is where an agent's default observability is decided.
+
+A caller can also override observability for a single call. `InvocationOptions` (`lib/runtime/invocationOptions.ts`) carries a narrow allow-list of config, `observability` and `log` among it, and `createExecutionContext` layers it on top of the frozen module config for that invocation only. See `docs/dev/hosting/per-invocation-config.md`.
 
 ### The seam: `withRuntimeConfigOverrides`
 
@@ -106,7 +109,7 @@ Two things make this correct:
 
 ### The invariant, and its guard
 
-This design rests on one invariant: **a `RuntimeContext` is only constructed at module import, never per-invocation.** If a future agency-lang change made that read lazy (deferred to first run), the override would already be cleared and observability would silently go dark. The statelog test `serveHost.test.ts > "per-agent observability routing"` is the guard — it builds two agents with different configs and asserts each traces only to its own project; it fails if the import-time capture stops happening.
+This design rests on one invariant: **the module-level `RuntimeContext` is only constructed at module import.** A per-invocation execution context is derived from it, and reads no process-global override of its own. If a future agency-lang change made the module's own read lazy (deferred to first run), the override would already be cleared and observability would silently go dark. The statelog test `serveHost.test.ts > "per-agent observability routing"` is the guard — it builds two agents with different configs and asserts each traces only to its own project; it fails if the import-time capture stops happening.
 
 There is a filed follow-up to replace this ambient-global coupling with a first-class `createServeHandler({ observability })` binding API (see "Follow-ups").
 
@@ -134,7 +137,7 @@ Statelog stores an agent's files **flat** (one directory, keyed by basename), an
 
 ## 4. `agency deploy` (agency-lang `lib/cli/deploy/`)
 
-`agency deploy agent.agency` uploads an agent to statelog. The command is currently **registered hidden** in `scripts/agency.ts` (works, but not shown in `--help`) while the hosted feature matures.
+`lib/cli/deploy/` is the engine that uploads an agent to statelog. There is no top-level `agency deploy` command any more; `agency remote deploy <file>` calls this engine (section 6). The whole `remote` command group is **registered hidden** in `scripts/agency.ts` (it works, but `--help` does not list it) while the hosted feature matures.
 
 ### Architecture — "what" split from "how"
 
@@ -145,10 +148,13 @@ deploy.ts        the "what": resolveDeployTarget → collectAgencyBundle
                  → validateBundleCompiles → uploadBundle
 target.ts        resolve { host, projectId, apiKey } + provenance
 bundle.ts        collect the .agency file set + local compile pre-flight
-uploadClient.ts  the ONLY file that knows statelog's upload API
 curlExamples.ts  pure: manifest → ready-to-run curl commands
 render.ts        terminal output (via a typestache template)
 ```
+
+`uploadBundle`, the only function that knows statelog's upload API, lives one
+directory over with the other sealed statelog clients
+(`lib/cli/statelog/uploadClient.ts`); see `docs/dev/hosting/statelog-clients.md`.
 
 `render.ts` builds coloured blocks (using `lib/utils/termcolors.ts`) and hands them to `lib/templates/cli/deployReport.mustache`, which owns the layout. (The template is deliberately compact — one line with placeholders and two sections — because typestache does not strip standalone section-tag lines and nested inline sections don't render; the block builders own all the spacing.)
 
@@ -172,7 +178,7 @@ Known gap: a re-exported *node* is counted by the metadata but not served — th
 
 ### The statelog coupling is sealed
 
-`uploadClient.ts` is the single file that knows statelog's HTTP contract: it POSTs to `/api/projects/:project/upload` with body `{ entrypoint, files }`, reads the `Result<{ endpointUrls }>` envelope, and best-effort fetches `/list` for the manifest (to print curl examples). Server responses are treated as untrusted — a bad shape reports an error or drops the extra rather than crashing a deploy that already landed. If statelog's API changes, only this file changes.
+`lib/cli/statelog/uploadClient.ts` is the single file that knows statelog's upload contract. It runs on the shared `statelogRequest` transport, with `envelope: false` and `requireOk: false`, because the envelope decides the outcome whatever the HTTP status. It POSTs to `/api/projects/:project/upload` with body `{ entrypoint, files }`, reads the `Result<{ endpointUrls }>` envelope, and best-effort fetches `/list` for the manifest (to print curl examples). Server responses are treated as untrusted, so a bad shape reports an error or drops the extra rather than crashing a deploy that already landed. If statelog's API changes, only this file changes.
 
 ---
 
@@ -245,6 +251,14 @@ Introspection commands (project-scoped **reads**; a **project key on its own pro
 - **`remote pull [--out <dir>] [--force]`** — download the deployed source to disk (`GET …/source`). Server filenames are untrusted, so a non-mutating planner refuses traversal/duplicate/non-regular names and collects **all** conflicts before any write, and the applicator publishes each file **atomically** (create via `fs.link`; `--force` replaces a still-regular file). Output-directory symlinks are refused, and a pull bundle is **not transactional** — a later failure reports the files already committed. It refuses to overwrite without `--force`.
 - **`remote logs [traceId] [--json] [--list]`** — open a trace's logs in the same viewer `agency logs` uses (`GET …/traces` + `…/traces/:id/logs`, mapped to the viewer's JSONL through one owner). Defaults to the most recent trace; `--list` shows recent traces; `--json` writes raw JSON to stdout instead. **Viewer mode requires an interactive stdin/stdout** (`--json` is the headless alternative).
 
+Two more command groups hang off `remote` and have their own notes:
+
+- **`remote secrets set|list|rm|import`** — the project's write-only environment
+  secrets (`docs/dev/hosting/remote-secrets.md`).
+- **`remote spend [project]`** — hosted spend for a project or the whole
+  account, with `--since`/`--from`/`--to`, `--by-model`, `--by-kind`, and
+  `--json` (`docs/dev/hosting/invocation-usage-accounting.md`).
+
 The project-read wire is sealed in `lib/cli/statelog/projectClient.ts` (slug-addressed), keeping the project-**404** / wrong-project-**403** / HTTP-success **`Trace not found`** failure layers distinct. Like the account and serve clients, its success values are validated with **Zod** schemas (the `lib/cli/statelog/` clients share this convention).
 
 **One interrupt mechanism, shared with `agency run`.** `remote call` reuses the runtime's `resolveInterrupts` + `buildDecider` (`lib/runtime/interruptResolution.ts`); it differs from a local run only in the resume transport (HTTP `/resume` vs in-process). It borrows run's flags — `--interactive`, `--policy`, `--approve`, `--reject` — through `resolveRunPolicy`. With no such flag a surfaced interrupt is reported unhandled and exits, exactly like `run`. **The remote policy acts on *surfaced* interrupts only** (the server's own handlers ran first), unlike run's in-chain policy.
@@ -282,7 +296,7 @@ These are accepted for the current trusted, single-tenant posture and tracked in
 - **Compile-time containment gap.** Compiling at a real path means a traversing import (`../../other/agent.agency`) reads the live filesystem at compile time. The upload filename is sanitized, but import specifiers inside a file's source are not. Compile-only and low-leak, but a new cross-project read surface.
 - **Sibling cache staleness.** `serveHost` cache-busts the entrypoint's module URL by content hash, but its relative `import "./sibling.js"` is not version-busted, so Node's ESM cache serves an old sibling even after a re-upload — a multi-file sibling edit needs a process restart. Same root cause as the general "ESM registry accretes modules" caveat; the planned child-process execution model fixes it.
 - **Upload atomicity.** Upload pre-writes all sources then compiles/upserts per file; a mid-batch failure can leave partial on-disk/DB state. Re-uploading recovers.
-- **Per-agent (not per-request) observability.** Trace routing is fixed per agent at import time; a single agent can't route different runs to different projects.
+- **Per-agent observability is the default.** Trace routing binds per agent at import time. A host that needs a different destination for one run must pass it per invocation through `InvocationOptions` (section 2).
 
 ---
 
@@ -304,114 +318,43 @@ The feature landed as a sequence of small PRs. In agency-lang: the `./serve` pub
 ## Serve cost seam — per-invocation usage
 
 A host that runs an agent (statelog, "platform pays") needs the **authoritative**
-cost of each hosted invocation, read from the run it executed — not from
+cost of each hosted invocation, read from the run it executed, not from
 client-supplied `/api/logs` telemetry, which the tracked party can forge. Every
-post-execution serve `RouteResult` therefore carries a `usage` figure.
+post-execution serve `RouteResult` therefore carries a `usage` figure and a
+sibling `usageComplete` flag.
 
-**The meter.** Each execution context owns a fresh `InvocationUsageMeter`
-(`lib/runtime/invocationUsage.ts`), set in `createExecutionContext` and **never
-serialized or restored** from a checkpoint. Because each `/node`, `/function`,
-and `/resume` invocation builds its own execCtx, per-leg and concurrent isolation
-are structural: a resume leg starts at zero (it does **not** inherit the
-checkpoint-carried `stateStack.localCost`), and two concurrent requests never
-share a meter.
-
-**One accounting boundary.** Every paid unit of work submits one
-`InvocationUsageDelta` to `recordPaidUsageAt({ ctx, stack }, delta)`
-(`lib/runtime/recordPaidUsage.ts`), which bills the branch's cost guards (reusing
-`StateStack.billCharge`), merges the invocation meter, and relays the full delta
-upward once when this process is a subprocess. The three paid sites route through
-it: the LLM completion (`prompt.ts` → `accountCompletionUsage`), `addCost`
-(memory / image generation), and the IPC telemetry handler. So `pricedCost` means
-*all* trusted billable spend and never depends on execution topology (an
-`addCost` charge counts identically in-process and in a child). `addCost` throws
-on invalid input rather than silently dropping a real charge.
-
-**Pricing vs delivery completeness — two axes, never conflated.**
-`pricingComplete` (on the usage) is derived: `unknownCostCallCount === 0`. A
-finite `0` price is a KNOWN free price; only an *absent* price is unknown.
-`usageComplete` (on the snapshot) starts true and becomes permanently false when
-an **abnormal subprocess termination** (a kill, error, or unexpected close) means
-unsent child telemetry cannot be ruled out — making `usage` a trusted **lower
-bound**, relayed upward once. Normal `result`/`interrupted` completions stay
-complete (IPC FIFO guarantees all telemetry preceded the terminal message).
-
-**Per-model breakdown.** Alongside the flat totals, `usage` carries a
-`models` map (`{ [model]: { pricedCost, inputTokens, outputTokens } }`) and an
-`unattributed` row of the same shape. The breakdown rides the *same* delta and
-IPC wire as the total, so it includes subprocess-relayed spend that the
-process-local `__tokenStats.models` (used by `/cost`) cannot cross. Each charge
-carries a discriminated `attribution` — `{ kind:"model", model }` (a completion)
-or `{ kind:"unattributed" }` (`addCost`: memory / image, which has no model). A
-scalar model field would not do: the immediately-preceding runtime (#801) relays
-usage deltas with *no* attribution, and "no model" from `addCost` must stay
-distinct from "model lost by an old child." Cost per model is a single number —
-input-vs-output dollars are **not** split (the provider gives one `totalCost`
-through this seam). Rows plus `unattributed` reconcile to the flat `pricedCost`
-within `usageReconcileTolerance(pricedCost)` = `max(1e-9, 1e-9·|pricedCost|)`
-(relative+absolute, because float ulp drift scales with magnitude); token counts
-reconcile **exactly within the safe-integer range** — the meter rejects any
-individual count at or above 2**53 and real totals are far below it, so only a
-subprocess relaying absurd counts whose accumulation crosses 2**53 makes token
-attribution best-effort (like cost). The flat total stays authoritative for
-both — a host bills `pricedCost`, not the row sum.
-
-**Model attribution — the third completeness axis.** `modelAttributionComplete`
-(on the usage) starts true and flips false the moment a *measurable* child
-delta arrives over IPC with **no** attribution: an older child (a #801 runtime,
-or the legacy `{ costUsd }` telemetry handler) whose real LLM spend books to
-`unattributed` with its model lost. This is distinct from both `pricingComplete`
-(price availability) and `usageComplete` (telemetry delivery): pricing and
-delivery can both be complete while the model labels are not. The flag is raised
-only at the IPC boundary (`accountChildUsageWithProvenance`) and relayed upward
-once, mirroring `usageComplete`; `addCost` and normal completions always carry
-an explicit attribution and never trip it. A host seeing it false should read
-`unattributed` as "includes spend of unknown model," not runtime overhead.
-
-**Model identity.** The per-model key is `resolveCompletionModel(completion.model,
-clientConfig.model)` (`lib/runtime/modelIdentity.ts`): the provider-reported model
-wins, else the requested/configured model, else the literal `"unknown model"`.
-The string is used verbatim (no provider-name normalization); a real model named
-`"unknown model"` is an ordinary row, never `unattributed`.
-
-**Rollout / absence.** `models`, `unattributed`, and `modelAttributionComplete`
-are optional on the public `InvocationUsage` type (a required field would break
-host code that constructs it); the current runtime always emits them. A host that
-sees them **absent** is reading an older runtime's snapshot — it must fall back
-to the flat totals and record "breakdown unavailable," never treat absence as
-zero spend.
+`docs/dev/hosting/invocation-usage-accounting.md` owns that seam: the meter, the
+authoritative flat total versus the best-effort per-`(kind, model)` attribution,
+the two completeness axes, and how a charge survives a subprocess boundary. What
+matters on the serve side is the wiring:
 
 **The invocation boundary.** `runNode` / `runExportedFunction` /
 `respondToInterrupts` each split into an internal core that returns a
 `ServedInvocationOutcome<T>` (`{ status:"returned", value } | { status:"threw",
-error }` plus the usage snapshot) and a public wrapper that unwraps-or-rethrows —
-so the CLI/debugger contract is unchanged. The `…ForServe` variants hand the
+error }` plus the usage snapshot) and a public wrapper that unwraps or rethrows,
+so the CLI and debugger contract is unchanged. The `…ForServe` variants hand the
 outcome to the serve adapters. The lifecycle boundary starts the moment the
 execution context exists, so an already-aborted signal or a setup failure still
-yields an outcome-with-usage and still runs cleanup; the meter snapshot is taken
-**after** cleanup so cleanup-incurred paid work counts. User values and thrown
-errors are never mutated or wrapped (identity, `readCause`, stack, cause
-preserved).
+yields an outcome with usage and still runs cleanup. The meter snapshot is taken
+**after** cleanup, so cleanup-incurred paid work counts. User values and thrown
+errors are never mutated or wrapped: identity, `readCause`, stack, and cause are
+all preserved.
 
 **The wire.** Generated modules export `__invokeNodeForServe` /
 `__invokeFunctionForServe` / `__respondToInterruptsForServe` (see
-`imports.mustache`). The **public** `ExportedFunction.invoke` /
-`ExportedNode.invoke` keep their original raw contract (value-or-throw; node
-positional args) for host apps that construct/consume these directly; the serve
-adapters use a separate internal `invokeServed` that `discoverExports` wires to
-the `…ForServe` invokers. `discoverExports` requires each serve invoker **only
-for the kind actually exported** (a node-only bundle needs just the node one) and
-fails fast with a recompile-required error otherwise — **served bundles must be
-recompiled** to report usage. The HTTP adapter's one `routeResultFor` mapper
-attaches `usage` (and the sibling `usageComplete`) to every post-execution
-`RouteResult` — success, interrupt, 402 `budgetExceeded`, generic failure,
-cancellation — and omits both on `/list`, 404, and validation 400. The host
-reads them in-process; they are not part of the standalone HTTP body. MCP unwraps
-the outcome to the raw value (or rethrows) and does not expose usage in v1.
+`lib/templates/backends/typescriptGenerator/imports.mustache`). The **public**
+`ExportedFunction.invoke` / `ExportedNode.invoke` keep their original raw
+contract (value-or-throw; node positional args) for host apps that construct or
+consume these directly. The serve adapters use a separate internal `invokeServed`
+that `discoverExports` wires to the `…ForServe` invokers. `discoverExports`
+requires each serve invoker **only for the kind actually exported**, so a
+node-only bundle needs just the node one, and it fails fast with a
+recompile-required error otherwise. **Served bundles must be recompiled** to
+report usage.
 
-**In-process dispatch failures count too.** Beyond a returned-but-unpriced
-completion, a provider request that is *dispatched and then times out / is
-cancelled / errors after dispatch* may have incurred untracked spend with no
-price metadata, so each such attempt (each retry is a fresh attempt, via
-`meteredDispatch`) adds one to `unknownCostCallCount` and flips `pricingComplete`
-false. A failure proven *before* dispatch counts nothing.
+**The adapter.** The HTTP adapter's one `routeResultFor` mapper attaches `usage`
+and `usageComplete` to every post-execution `RouteResult`: success, interrupt,
+402 `budgetExceeded`, generic failure, and cancellation. It omits both on
+`/list`, on 404, and on a validation 400. The host reads them in-process; they
+are not part of the standalone HTTP body. MCP unwraps the outcome to the raw
+value (or rethrows) and does not expose usage in v1.

@@ -32,15 +32,15 @@ When the compiler encounters a `pkg::` import:
 
 1. **Parse the specifier.** `pkg::toolbox/strings` is split into package name (`toolbox`) and subpath (`strings`). Scoped packages like `pkg::@org/name` are handled correctly.
 
-2. **Find the package.** Uses Node's `createRequire` rooted at the importing file's directory. This delegates all the hard work — finding `node_modules`, handling scoped packages, workspaces, symlinks — to Node itself.
+2. **Find the package.** `resolvePkgAgencyPath()` uses Node's `createRequire`, rooted at the importing file's directory. Node then does the hard work of finding `node_modules` and handling scoped packages and workspaces. If the package's `exports` map hides `./package.json`, resolution falls back to resolving the package entry and walking up to the package root.
 
 3. **Locate the `.agency` file.**
    - **With a subpath** (`pkg::toolbox/strings`): resolves to `<package-dir>/strings.agency`.
-   - **Without a subpath** (`pkg::toolbox`): reads the package's `package.json` and looks for the `"agency"` field, which should point to the main `.agency` entry file.
+   - **Without a subpath** (`pkg::toolbox`): reads the package's `package.json` and looks for the `"agency"` field, which should point to the main `.agency` entry file. The field must end in `.agency` and must resolve inside the package directory.
 
 4. **Build the symbol table.** The compiler parses the resolved `.agency` file to classify its exports (functions, nodes, types). This is what allows `import { foo } from "pkg::toolbox"` to automatically become an `import tool` if `foo` is a function, or an `import node` if `foo` is a graph node.
 
-5. **Recursively compile.** The `.agency` file is compiled to `.js` like any other Agency file.
+5. **Emit a bare specifier.** The compiler does not compile the package's `.agency` files. A package ships its own compiled `.js`, and the generated import points at that. `pkg::` edges are invisible to the compile closure and to the dependency fingerprint, so a module whose subtree touches `pkg::` is never skipped by an incremental build. See `lib/compiler/buildManifest.ts` and `docs/dev/compiler/incremental-builds.md`.
 
 ### At runtime
 
@@ -112,8 +112,9 @@ The implementation touches these files:
 - **`lib/importPaths.ts`** — Core resolution logic. `isPkgImport()`, `parsePkgImport()`, `resolvePkgAgencyPath()`. Also `isAgencyImport()` which is a unified check for all Agency import types (`.agency`, `std::`, `pkg::`).
 - **`lib/symbolTable.ts`** — Follows `pkg::` imports when building the symbol table.
 - **`lib/preprocessors/importResolver.ts`** — Resolves `pkg::` imports into specialized AST nodes (import tool, import node, etc.) based on symbol kind.
-- **`lib/cli/util.ts`** — `getImports()` includes `pkg::` imports in the dependency list.
-- **`lib/cli/commands.ts`** — `compile()` handles `pkg::` imports for recursive compilation and skips `restrictImports` checks for them.
+- **`lib/analysis/imports.ts`** — `getImports()` includes `pkg::` imports in the dependency list. `lib/cli/util.ts` builds on it with `getImportsRecursively()`.
+- **`lib/compiler/compileClosure.ts`** — `agencyImportTargets()` skips `pkg::` edges, and `programHasPkgImport()` reports whether a program has one.
+- **`lib/compiler/buildSession.ts`** — `subtreeHasPkgImport()` keeps any module whose subtree touches `pkg::` out of the incremental-build skip.
 
 ### Validation
 
@@ -126,10 +127,16 @@ The implementation touches these files:
 
 `resolvePkgAgencyPath()` additionally verifies the resolved path stays within the package directory.
 
+### Where `pkg::` is not allowed
+
+- `import test { ... } from "pkg::..."` is rejected. The `import test` keyword is only for first-party `std::` and local modules. See `assertTestOnlyImportable()` in `lib/preprocessors/importResolver.ts`.
+- Sandboxed code rejects `pkg::` imports. See `lib/compiler/closureValidator.ts`.
+- A compile-time splice generator cannot import `pkg::`, because that leaves Agency. See `docs/dev/language/splices.md`.
+
 ## Tests
 
 Unit and integration tests are in `lib/importPaths.test.ts`. The integration tests use fixture packages at `tests/pkg-imports/`:
 
 - `tests/pkg-imports/node_modules/test-agency-pkg/` — package with an `"agency"` field
-- `tests/pkg-imports/node_modules/test-agency-pkg2/` — package without an `"agency"` field (uses subpath imports)
+- `tests/pkg-imports/node_modules/test-agency-pkg2/` — package without an `"agency"` field, imported by subpath
 - `tests/pkg-imports/main.agency` — test file that imports from both packages

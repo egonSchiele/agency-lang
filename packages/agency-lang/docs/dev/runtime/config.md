@@ -4,7 +4,7 @@
 
 `AgencyConfig` (`lib/config.ts`) defines all compiler and runtime configuration options for Agency. It is typically loaded from an `agency.json` file in the project root, but can also be passed programmatically. The CLI accepts a `-c` / `--config` flag to specify a custom config file path.
 
-For basic usage examples, see `docs/config.md`.
+For basic usage examples, see [`docs/misc/config.md`](../../misc/config.md).
 
 ## Config resolution (single source of truth)
 
@@ -138,31 +138,53 @@ cannot affect a later process's validation.
 
 ## All options
 
+Every field is optional, and the schema is `.loose()`, so an unknown key in
+`agency.json` loads rather than erroring. The list below follows the
+`AgencyConfig` interface and `AgencyConfigSchema` in `lib/config.ts`; read
+those for the full per-field commentary.
+
 ### Basic
 
 | Option | Type | Description |
 |--------|------|-------------|
 | `verbose` | `boolean` | Enable verbose compilation logging |
-| `outDir` | `string` | Output directory for compiled TypeScript files |
+| `logLevel` | `"debug" \| "info" \| "warn" \| "error"` | Compiler log level |
+| `outDir` | `string` | Output directory for compiled files |
+| `distDir` | `string` | Directory of pre-compiled JS. The debugger imports from here instead of compiling on the fly. |
+| `allowNonAgencyGenerators` | `boolean` | Let a compile-time splice generator import JavaScript. Off by default, because a generator that reaches an npm package is unchecked. See [`docs/dev/language/splices.md`](../language/splices.md). |
+| `instrument` | `boolean` | Emit `debugStep()` instrumentation in compiled output (default: true) |
+| `debugger` | `boolean` | Debugger mode: insert a pause point before every step |
 
 ### Type checking
 
+Type-checker settings live under `typechecker`, not at the top level.
+
 | Option | Type | Description |
 |--------|------|-------------|
-| `strictTypes` | `boolean` | If true, untyped variables are errors instead of implicit `any` |
-| `typeCheck` | `boolean` | Run the type checker during compilation (reports warnings) |
-| `typeCheckStrict` | `boolean` | Make type errors fatal (implies `typeCheck: true`) |
+| `typechecker.enabled` | `boolean` | Run the type checker during compilation and print warnings (default: false) |
+| `typechecker.strict` | `boolean` | Type errors are fatal, which implies `enabled` (default: false) |
+| `typechecker.strictTypes` | `boolean` | Untyped variables are errors instead of implicit `any` (default: false) |
+| `typechecker.undefinedFunctions` | `"silent" \| "warn" \| "error"` | An unresolvable function call (default: `warn`) |
+| `typechecker.undefinedVariables` | `"silent" \| "warn" \| "error"` | An unresolvable variable reference (default: `silent`) |
+| `typechecker.strictMemberAccess` | `"silent" \| "warn" \| "error"` | A property that exists on only some members of an un-narrowed union (default: `error`) |
+| `typechecker.matchExhaustiveness` | `"silent" \| "warn" \| "error"` | A `match` over a closed type that misses a case and has no `_` arm (default: `silent`) |
+| `typechecker.definiteReturns` | `"silent" \| "warn" \| "error"` | A function with a non-void return type can reach the end of its body without returning (default: `warn`) |
 
 ### LLM and runtime
 
 | Option | Type | Description |
 |--------|------|-------------|
 | `maxToolCallRounds` | `number` (positive int) | Max LLM-to-tool iterations before halting a tool loop (default: 10). Also `agency run/compile --max-tool-call-rounds <n>`, and at runtime via `setLlmOptions({ maxToolCallRounds })` / the agent's `--max-tool-call-rounds` flag. |
-| (runtime only) `maxRepeatedToolCalls` | `number` | Refuse a tool call once the same call has returned the same result this many times in a row (default: 3; `0` disables). `llm(..., { maxRepeatedToolCalls })` and `setLlmOptions({ maxRepeatedToolCalls })`; not an `agency.json` key. See `docs/dev/agents/tool-loop-guards.md`. |
+| (runtime only) `maxRepeatedToolCalls` | `number` | Refuse a tool call once the same call has returned the same result this many times in a row (default: 3; `0` disables). `llm(..., { maxRepeatedToolCalls })` and `setLlmOptions({ maxRepeatedToolCalls })`; not an `agency.json` key. See [`docs/dev/agents/tool-loop-guards.md`](../agents/tool-loop-guards.md). |
 | `client.maxToolResultChars` | `number` | Max chars of a single tool result fed back to the model (default: 100000; `0` disables). Also `--max-tool-result-chars <n>`, `llm(..., { maxToolResultChars })`, and `setLlmOptions({ maxToolResultChars })`. |
 | `client.maxToolSchemaChars` | `number` | Warn (statelog `warn` event, `warnType: "toolSchemaSize"`) when one tool's serialized JSON schema exceeds this many characters (default: 2000; `0` disables). Warned once per tool name per run. Schemas ride on every request, so an oversized tool is a standing cost rather than a one-off. |
-| `maxCallDepth` | `number` (positive int) | Max logical function-call nesting depth before the runaway-recursion guard throws `CallDepthExceededError` (default: 2048). Catches unbounded recursion — especially the async kind, which grows the promise chain until the process OOMs with no diagnostic — before it exhausts memory. Raise it for programs that legitimately recurse very deeply. Note: recursing through the stdlib higher-order functions (`map`/`filter`/`reduce`/`flatMap`) consumes ~2 depth levels per user level (the HOF call plus its callback dispatch), so the effective budget for HOF-style recursion is roughly half of what a `for`-loop equivalent gets. |
-| `client` | `Partial<SmolConfig>` | Smoltalk client defaults — `logLevel`, `defaultModel`, `defaultProvider`, nested `apiKey`/`baseUrl` maps, and nested `statelog` config |
+| `maxCallDepth` | `number` (positive int) | Max logical function-call nesting depth before the runaway-recursion guard throws `CallDepthExceededError` (default: 2048). Catches unbounded recursion, especially the async kind, which grows the promise chain until the process OOMs with no diagnostic. Raise it for programs that legitimately recurse very deeply. Note: recursing through the stdlib higher-order functions (`map`/`filter`/`reduce`/`flatMap`) consumes ~2 depth levels per user level, one for the call and one for the callback dispatch, so HOF-style recursion gets roughly half the budget a `for`-loop equivalent gets. |
+| `failurePropagation` | `"off" \| "warn" \| "on"` | How a failure value passed where a Result is not accepted behaves (default: `on`) |
+| `checkpoints.maxRestores` | `number` | Max restores of a single checkpoint before `CheckpointError` (default: 100) |
+| `budget.maxCost` | `number` | Dollars of LLM spend for the run. `< 0` disables, `0` is a real limit. Must be finite. A `--max-cost` flag wins over it. |
+| `budget.maxTime` | `string` | Duration string such as `30s`, `5m`, `1h`. `<= 0` disables. |
+| `memory` | object | Enables the memory layer: `dir`, `model`, `autoExtract.interval`, `compaction.trigger`/`threshold`, `embeddings.model` |
+| `client` | `Partial<SmolConfig>` | Smoltalk client defaults: `logLevel`, `defaultModel`, `defaultProvider`, the `apiKey` and `baseUrl` per-provider maps, `providerModules`, `modelAliases`, `modelsDir`, and a nested `statelog` block |
 
 > **Breaking change (smoltalk 0.6.0):** the flat `client.openAiApiKey` /
 > `googleApiKey` / `anthropicApiKey` fields are removed. Nest keys under
@@ -175,14 +197,23 @@ cannot affect a later process's validation.
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `log` | `Partial<StatelogConfig>` | Statelog configuration — `host`, `projectId`, `apiKey`, `debugMode`. See `docs/dev/hosting/statelog.md` |
+| `observability` | `boolean` | Activate statelog. When false (the default) the StatelogClient is a complete no-op: no events, no network calls. |
+| `log` | object | Statelog configuration: `host`, `projectId`, `apiKey`, `debugMode`, `logFile`, `requestTimeoutMs` (default 1500), `metadata`, and `code`. See [`docs/dev/hosting/statelog.md`](../hosting/statelog.md) |
+| `trace` | `boolean` | Write an execution trace |
+| `traceFile` | `string` | Trace file path (default: `<program>.trace`) |
+| `traceDir` | `string` | Directory for auto-generated `<timestamp>_<id>.agencytrace` files |
+| `viewer` | object | Thresholds for `agency logs view`: `slowMs` (5000), `fastMs` (100), `expensiveUsd` (0.01) |
 
-### Security
+### Commands
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `restrictImports` | `boolean` | Validate that import paths resolve within the project directory, preventing path traversal attacks |
-
+| `test.parallel` | `number` | Test files to run in parallel (default: 1) |
+| `doc.outDir` / `doc.baseUrl` | `string` | Output directory and source-link base URL for `agency doc` |
+| `coverage` | object | `outDir`, `threshold`, `perFileThreshold`, `exclude` |
+| `pack` | object | `format` (`esm`/`cjs`), `target`, `external` |
+| `eval` | object | `runsDir`, `optimizeRunsDir`, `sourceCacheRoot`, `limits.wallClockSec`, `limits.maxCostUsd`, and the `optimize` block. See [`docs/dev/evals/eval-tracking.md`](../evals/eval-tracking.md) |
+| `remote.serveUrl` | `string` | The hosted agent this directory is linked to |
 
 ## Example
 
@@ -191,14 +222,16 @@ cannot affect a later process's validation.
   "verbose": false,
   "outDir": "dist",
   "maxToolCallRounds": 15,
-  "strictTypes": true,
-  "typeCheck": true,
-  "restrictImports": true,
+  "typechecker": {
+    "enabled": true,
+    "strictTypes": true
+  },
   "client": {
     "defaultModel": "gpt-4o",
     "logLevel": "error",
     "apiKey": { "openAi": "sk-...", "anthropic": "sk-ant-..." }
   },
+  "observability": true,
   "log": {
     "host": "https://agency-lang.com",
     "projectId": "my-project"

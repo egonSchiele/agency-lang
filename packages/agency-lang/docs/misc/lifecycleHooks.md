@@ -87,11 +87,11 @@ const result = await myAgent({ callbacks });
 
 All hooks are async-compatible — if your callback returns a promise, it will be awaited before execution continues. Any hook that is not provided is a no-op.
 
-Hooks also work with interrupt functions:
+Hooks also work when you respond to an interrupt. Build the responses with `approve()` and
+`reject()`, then hand them to `respondToInterrupts` along with the callbacks:
 
 ```ts
-await approveInterrupt(response, { callbacks });
-await rejectInterrupt(response, { callbacks });
+await respondToInterrupts({ interrupts, responses: [approve(), reject("no")], callbacks });
 ```
 
 ## Hook Data Reference

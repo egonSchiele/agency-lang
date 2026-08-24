@@ -6,7 +6,9 @@ Agency packages are npm packages that include `.agency` source files alongside c
 
 ## Reference Implementation
 
-Use `packages/web-fetch/` as the canonical reference. It's a minimal, well-structured example.
+Use `packages/web-fetch/` as the canonical reference. It is minimal and well structured.
+
+The other published packages are `email`, `github`, `mcp`, and `whisper-local`. Read one of those when you need a richer example.
 
 ## Directory Structure
 
@@ -54,14 +56,16 @@ packages/<package-name>/
   "homepage": "https://github.com/egonSchiele/agency-lang",
   "scripts": {
     "build": "tsc",
+    "agency": "agency",
     "test": "vitest",
     "test:run": "vitest run",
     "test:agency": "agency tests/agency"
   },
   "peerDependencies": {
-    "agency-lang": "workspace:*"
+    "agency-lang": ">=0.9.0"
   },
   "devDependencies": {
+    "agency-lang": "workspace:*",
     "@types/node": "^25.0.0",
     "typescript": "^5.0.0",
     "vitest": "^3.0.0"
@@ -69,7 +73,12 @@ packages/<package-name>/
 }
 ```
 
-Add any runtime dependencies (e.g., the third-party SDK) to `dependencies`.
+Note the two different entries for `agency-lang`. The peer dependency is a
+published version range, because that is what users install. The dev dependency
+is `workspace:*`, so local builds resolve against this repo. Publishing a
+package whose peer dependency says `workspace:*` would break installs.
+
+Add any runtime dependencies, such as a third-party SDK, to `dependencies`.
 
 ## tsconfig.json
 
@@ -99,14 +108,14 @@ all:
 	pnpm run build
 
 publish:
-	npm publish --access public --no-git-checks
+	pnpm publish --access public --no-git-checks
 ```
 
 ## index.agency Pattern
 
 The `.agency` file is a thin wrapper that:
 1. Imports the TypeScript implementation from `./dist/src/<impl>.js`
-2. Exports Agency functions with doc comments (used as tool descriptions)
+2. Exports Agency functions with doc comments, which become tool descriptions
 3. Uses default parameters so Agency users get a simple API
 4. Passes options through to the TS implementation
 
@@ -147,9 +156,9 @@ export def myFunction(input: string, optionalParam: string = "", apiKey: string 
 
 Key conventions:
 - The top-level doc comment (`/** */`) provides package-level documentation
-- Use `///` (triple-slash) for function-level doc comments - these become tool descriptions
+- Use `///` (triple-slash) for function-level doc comments. These become tool descriptions
 - Use `export def` to make functions importable by users
-- Use empty string defaults for optional string params (Agency doesn't have `undefined`)
+- Use empty string defaults for optional string params. Agency has one nothing-value, `null`, so there is no `undefined` to mean "not provided". See [`null` and `undefined` in Agency](../../packages/agency-lang/docs/dev/language/null-and-undefined.md).
 - The TS implementation should use `||` (not `??`) to fall through empty strings to env vars
 
 ## TypeScript Implementation Pattern
@@ -206,7 +215,7 @@ export async function myFunction(
 
 ### Agency integration tests (tests/agency/<test>.agency)
 - Import from the package's index.agency: `import { fn } from "../../index.agency"`
-- These make real API calls - keep them minimal
+- These make real API calls, so keep them minimal
 - Run with `pnpm run test:agency`
 
 ## Compiling index.agency to index.js
@@ -218,7 +227,7 @@ cd packages/agency-lang
 pnpm run compile ../web-fetch/index.agency
 ```
 
-This outputs the compiled JS. Redirect to `index.js` in the package directory. The compiled file is large and full of runtime boilerplate - don't edit it by hand.
+This outputs the compiled JS. Redirect to `index.js` in the package directory. The compiled file is large and full of runtime boilerplate, so never edit it by hand.
 
 ## How Users Import the Package
 
@@ -235,14 +244,14 @@ import { myFunction } from "@agency-lang/<package-name>"
 ## Checklist for Creating a New Package
 
 1. Create `packages/<name>/` directory
-2. Create `package.json` (use template above, add SDK dependency)
-3. Create `tsconfig.json` (copy from web-fetch)
-4. Create `makefile` (copy from web-fetch)
-5. Write `src/<impl>.ts` - the core TypeScript implementation
-6. Write `src/<impl>.test.ts` - unit tests with mocked fetch
-7. Write `index.agency` - thin Agency wrapper with doc comments
+2. Create `package.json` from the template above, adding any SDK dependency
+3. Create `tsconfig.json`, copied from web-fetch
+4. Create `makefile`, copied from web-fetch
+5. Write `src/<impl>.ts`, the core TypeScript implementation
+6. Write `src/<impl>.test.ts`, unit tests with mocked fetch
+7. Write `index.agency`, a thin Agency wrapper with doc comments
 8. Run `pnpm install` from repo root to link workspace deps
 9. Run `pnpm run build` in the package to compile TS
 10. Compile `index.agency` to `index.js` (see command above)
-11. Write `tests/agency/<test>.agency` - integration test
-12. Add the package to the root `pnpm-workspace.yaml` if needed
+11. Write `tests/agency/<test>.agency`, an integration test
+12. Nothing to add to `pnpm-workspace.yaml`. It globs `packages/*`, so a new directory there is picked up automatically.

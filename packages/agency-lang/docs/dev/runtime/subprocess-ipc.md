@@ -2,11 +2,13 @@
 
 ## Overview
 
-Agency agents can compile and execute Agency code at runtime in a subprocess. The parent process's handler chain extends across the process boundary — a parent handler that rejects file deletions will reject them in the subprocess too, even if the subprocess has its own handler that approves. When NO handler resolves an interrupt, the subprocess **pauses itself**: it checkpoints its state, exits, and its interrupts surface to the user exactly like in-process interrupts; `respondToInterrupts` resumes it in a fresh process from exactly where it left off.
+Agency agents can compile and execute Agency code at runtime in a subprocess. The parent process's handler chain extends across the process boundary, so a parent handler that rejects file deletions rejects them in the subprocess too, even if the subprocess has its own handler that approves. When NO handler resolves an interrupt, the subprocess **pauses itself**. It checkpoints its state and exits, and its interrupts surface to the user exactly like in-process interrupts. `respondToInterrupts` then resumes it in a fresh process from exactly where it left off.
 
 The user-facing API is two functions in `std::agency`:
-- `compile(source)` — compile Agency source code, returns a `Result<CompiledProgram>`
-- `run(compiled, { node, args })` — execute a compiled program in a subprocess, returns a `Result`
+- `compile(source, dir)` — compile Agency source code, returns a `Result` carrying a `CompiledProgram`
+- `run(compiled, node, args, ...)` — execute a compiled program in a subprocess, returns a `Result`. The remaining parameters are the per-run limits: `wallClock`, `memory`, `ipcPayload`, `stdout`, `logFile`, `cwd`, `maxDepth`, `maxCost`.
+
+`runFile`, `runCode`, `test`, and `testFile` in the same module are wrappers over the same machinery.
 
 ## Architecture
 
@@ -45,7 +47,7 @@ Communication uses Node's built-in IPC channel (`child_process.fork()`). Stdout/
 | `lib/runtime/subprocess-bootstrap.ts` | Entry point forked by `_run()`. Handles `run` and `resume` instructions, sends `result`/`interrupted`/`error` back. |
 | `lib/runtime/interrupts.ts` | `interruptWithHandlers()` (child-side merge + verdict), `gatherChainOutcome()` (parent-side reporting; recurses when nested), `mergeChainOutcomes()` |
 | `lib/runtime/subprocessRunInfo.ts` | Per-process identity seeded by the bootstrap: inherited runId, session id, parent span id |
-| `lib/stdlib/agency.ts` | `_compile()` — runs the compilation pipeline, returns `{ moduleId, code }` |
+| `lib/stdlib/agency.ts` | `_compile()` — runs the sandboxed compilation pipeline, returns `{ moduleId, code, modules?, entryPath? }` |
 | `stdlib/agency.agency` | User-facing `compile()` and `run()` functions |
 | `lib/templates/backends/typescriptGenerator/imports.mustache` | `_run` AgencyFunction wrapping |
 
@@ -83,7 +85,7 @@ On the parent side, `_run` — a `runBatch` adopter with a single child (`subpro
 
 **Resume:** `respondToInterrupts` replays the parent; `_run` re-runs, finds the payload plus a response for every pending interrupt id (`collectSubprocessResponses` — order-preserving, ids are the routing keys), and forks a fresh child with a `resume` instruction. The bootstrap re-attaches the shared checkpoint to each interrupt and calls the compiled module's own `respondToInterrupts` export — the exact machinery in-process resumes use. Replay re-registers handlers on BOTH sides before any interrupt site resolves (handlers are safety infrastructure; covered by `pause-then-child-handler` and `pause-then-parent-handler` tests). A resumed child that pauses again re-enters the same cycle (multi-cycle). A rejection response is not an abort: the interrupt site returns the failure into the child's code, which continues.
 
-**Durability:** the parent checkpoint is fully self-contained. `CompiledProgram` is `{ moduleId, code }` — `compile()` does not touch disk; `_run` materializes the script into `.agency-tmp/<nanoid>/` at every fork and deletes it at every settle. The surfaced `Interrupt[]` survives a JSON round-trip and resumes in a fresh process after wiping `.agency-tmp` (see `tests/agency-js/subprocess-durable-resume`).
+**Durability:** the parent checkpoint is fully self-contained. The compiled value carries its own code: `{ moduleId, code, modules?, entryPath? }`, where `modules` and `entryPath` carry the rest of a multi-file closure. The Agency-level `CompiledProgram` type declares only `moduleId`, so a hand-built value typechecks and `materializeCompiledScript` fails it with a pointed message. `compile()` does not touch disk. `_run` materializes the script into `.agency-tmp/<nanoid>/` at every fork and deletes it at every settle. The surfaced `Interrupt[]` survives a JSON round-trip and resumes in a fresh process after wiping `.agency-tmp` (see `tests/agency-js/subprocess-durable-resume`).
 
 ## Message protocol
 
@@ -94,17 +96,24 @@ On the parent side, `_run` — a `runBatch` adopter with a single child (`subpro
 { type: "interrupted", interrupts: SerializedInterrupt[], checkpoint, subprocessSessionId }
 { type: "error", error: string }
 { type: "lockAcquire" | "lockRelease", ... }
-{ type: "telemetry", costUsd }   // fire-and-forget, one per paid call
+{ type: "invocationUsage", cost?, tokens?, entry?, unknownCostCallCount?, attributionLost? }
+                                 // fire-and-forget, one per paid call
+{ type: "invocationUsageIncomplete" } // usage from here down is a lower bound
 { type: "callback", name, data } // fire-and-forget, one per lifecycle event (see Callback forwarding)
 ```
 
 **Parent → Subprocess:**
 ```typescript
-{ type: "run", scriptPath, node, args, ipcPayload, configOverrides?, runId, subprocessSessionId, spanContext? }
-{ type: "resume", scriptPath, node, checkpoint, interrupts, responses, ipcPayload, configOverrides?, runId, subprocessSessionId, spanContext? }
+{ type: "run", scriptPath, node, args, input?, ipcPayload?, configOverrides?, runId?, subprocessSessionId?, spanContext?, depth?, maxDepth? }
+{ type: "resume", scriptPath, node, checkpoint, interrupts, responses, ipcPayload?, configOverrides?, runId?, subprocessSessionId?, spanContext?, depth?, maxDepth? }
 { type: "decision", interruptId, outcome: HandlerChainOutcome }
 { type: "lockGranted", ... }
 ```
+
+`input` rides only on eval runs. It is delivered as the node's single
+positional argument, because the sender does not know the agent's
+parameter names (`resolveNodeCallArgs`). `depth` and `maxDepth` carry
+the nesting cap down the tree.
 
 `interruptId` on the wire IS the child's interrupt-level id, end-to-end: it keys the decision reply, both processes' statelog events, and the user's resume response.
 
@@ -118,39 +127,46 @@ On the parent side, `_run` — a `runBatch` adopter with a single child (`subpro
 ## How compiled code gets executed in the subprocess
 
 1. `_compile()` runs the Agency compilation pipeline and returns `{ moduleId, code }` — no disk writes.
-2. `_run()` writes the code to `.agency-tmp/<nanoid>/<moduleId>.js` under `cwd` (so Node resolves `agency-lang/runtime` against the project's `node_modules`), forks `subprocess-bootstrap.js` with `AGENCY_IPC=1`, and sends the `run` (or `resume`) instruction.
+2. `_run()` writes the code to `.agency-tmp/<nanoid>/<moduleId>.js` under the agency-lang package root, so Node resolves `agency-lang/runtime` against the installed `node_modules`. It then forks `subprocess-bootstrap.js` with `AGENCY_IPC=1` and sends the `run` (or `resume`) instruction. `materializeCompiledScript` re-checks containment for every path it writes, and `cleanupTempDir` deletes only a strict descendant of `.agency-tmp/`.
 3. The bootstrap imports the compiled script, runs the node (or resumes via the module's `respondToInterrupts`), and reports the terminal outcome.
 4. `_run()` deletes the temp dir when the session settles — including the interrupted settle; resume re-materializes from `CompiledProgram.code`.
 
 ### Import restrictions
 
-`compile()` sets a stdlib-only import policy: relative imports and Node builtins are rejected. This is both a security constraint and a practical one (generated code has no meaningful filesystem location).
+`compile()` compiles through the closure validator (`lib/compiler/closureValidator.ts`), which enforces a pure-Agency closure. Imports may name `std::` modules and `.agency` files inside `dir`, the confinement boundary the caller passes. An empty `dir`, the default, means no local import can resolve. TypeScript and JavaScript files, Node builtins, `pkg::` packages, symlinks, and compile-time splices are all refused anywhere in the import closure. Splices are refused before anything could expand them, because a splice generator executes in the compiling process.
 
 ## Limits
 
-Wall-clock, memory, ipcPayload, and stdout limits clamp each subprocess (ceilings in `LIMIT_CEILINGS`). All budgets are **per execution segment**: each fork gets a fresh timer/counters, and paused time never counts (the process doesn't exist while paused). This property is pinned by fake-timer unit tests in `ipc.test.ts` (an end-to-end assertion would require segment-time-vs-cap arithmetic, which is unreliable on loaded CI runners). Accepted quirk: a child that pauses N times gets N stdout budgets.
+Wall-clock, memory, ipcPayload, and stdout limits clamp each subprocess, with ceilings in `LIMIT_CEILINGS` (`lib/runtime/ipc.ts`). All budgets are **per execution segment**. Each fork gets a fresh timer and fresh counters, and paused time never counts, because the process does not exist while paused. This property is pinned by fake-timer unit tests in `ipc.test.ts` (an end-to-end assertion would require segment-time-vs-cap arithmetic, which is unreliable on loaded CI runners). Accepted quirk: a child that pauses N times gets N stdout budgets.
 
 The `ipcPayload` limit applies to the `interrupted` message, whose dominant term is the child checkpoint — an oversized pause **fails loudly** with the structured `limit_exceeded` failure rather than pausing un-resumably (`limit-ipc-payload-interrupted` test).
 
-Token stats live in the child's per-execution `GlobalStore` (`__tokenStats`), which serializes inside the checkpoint's `globals` — so they accumulate across pause/resume segments and the final `result.tokens` is cumulative.
+Token stats live in the child's per-execution `GlobalStore` (`__tokenStats`), which serializes inside the checkpoint's `globals`, so they accumulate across pause/resume segments and the final `result.tokens` is cumulative.
 
 Locks brokered through the parent are released at segment settle, and lock-acquisition steps are completed steps that replay skips — **locks do not survive a pause**, which is already the in-process checkpoint semantic (releasers are not serialized there either).
 
-**Cost guards** meter subprocess spend live: every paid call in a child
-fire-and-forgets `{ type: "telemetry", costUsd }` upward (emitted from
-`StateStack.billCharge`, the choke point every paid site funnels
-through). The parent bills the charge via `billCharge` on the run()
-call-site stack — so parent `getCost()` includes child spend — and a trip
-kills the child and surfaces the standard cost-limit Failure at the
-owning `guard(cost:)` boundary. Relay to the root is automatic in nested
-trees (the mid-tier handler's own `chargeGuards` re-emits upward).
-Detection latency is at most one paid call, matching in-process CostGuard
-semantics. Telemetry is cost-only; tokens arrive terminally via
-`result.tokens`. One `getCost()` edge: telemetry arriving after a kill
-(abort, wall-clock, stdout, memory — FIFO rules this out on normal
-completion) still charges budgets via the shared guard references, but
-can be invisible to `getCost()` if the owning fork branch already joined.
-Budgets never undercount; `getCost()` may, on abnormal termination only.
+**Cost guards** meter subprocess spend live. Every paid call in a child
+fire-and-forgets an `invocationUsage` message upward, carrying the full
+normalized usage delta: cost, tokens, the attribution entry, and the
+incompleteness flags. The one emission point is `recordUsageDelta` in
+`lib/runtime/recordPaidUsage.ts`, the sink every paid site funnels
+through. The parent recovers the delta field by field with
+`normalizeIpcUsageDelta`, because the wire payload is untrusted, then
+puts it through the same sink an in-process charge uses. So parent
+`getCost()` includes child spend, and a trip kills the child and
+surfaces the standard cost-limit Failure at the owning `guard(cost:)`
+boundary. Relay to the root is automatic in nested trees, since the
+mid-tier's own sink re-emits upward. Detection latency is at most one
+paid call, matching in-process CostGuard semantics. A child that can no
+longer guarantee delivery sends `invocationUsageIncomplete`, which marks
+the owning invocation's usage a lower bound. The parent marks the same
+on every abnormal termination, so a killed child's unsent telemetry is
+never presented as an authoritative total. `result.tokens` is still the
+cumulative terminal report. One `getCost()` edge: telemetry arriving
+after a kill still charges budgets through the shared guard references,
+but can be invisible to `getCost()` if the owning fork branch already
+joined. Budgets never undercount. `getCost()` may, and only on abnormal
+termination.
 
 ## Callback forwarding
 
@@ -165,7 +181,8 @@ child-side sender live in the dependency-light leaf `callbackForwarding.ts`
   fields (e.g. `onAgentStart.cancel`) are stripped, and an unserializable
   (circular / BigInt) payload degrades to a dropped event rather than a throw.
 - **Parent side.** `handleCallbackMessage` (synchronous, like
-  `handleTelemetryMessage`) validates the name against `VALID_CALLBACK_NAMES`
+  `handleInvocationUsageMessage`) validates the name with
+  `isForwardableCallbackName` against `VALID_CALLBACK_NAMES`
   (the child is the less-trusted party), drops post-settle events, then
   `void invokeCallbacks(...)` fire-and-forget so a slow/throwing parent callback
   cannot wedge the message pump. It fires inside the parent's captured ALS store

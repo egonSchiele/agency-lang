@@ -2,7 +2,7 @@ import { fetchMarkdown } from "std::http"
 import { env } from "std::system"
 
 node main() {
-  const port = env("TEST_HTTP_PORT")
+  const port = env("TEST_HTTP_PORT") with approve
   if (port == null) {
     return "TEST_HTTP_PORT not set"
   }

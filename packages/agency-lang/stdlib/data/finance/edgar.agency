@@ -47,7 +47,8 @@ const CIK_WIDTH = 10
 
 // SEC requires a descriptive User-Agent with contact info. We read it once at
 // module init, so setting SEC_USER_AGENT after the process starts has no effect.
-const secUserAgent = env("SEC_USER_AGENT") ?? "agency-lang admin@agency-lang.com"
+const secUserAgentEnv = env("SEC_USER_AGENT") with approve
+const secUserAgent = secUserAgentEnv ?? "agency-lang admin@agency-lang.com"
 
 // Per-host fetch config. The std::edgar interrupt gates the call; each fetch is approved
 // at its call site (an outer handler can still reject the std::http::fetchJSON

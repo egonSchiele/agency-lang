@@ -157,6 +157,8 @@ Return the first provider in `order` whose API-key environment variable
 
 **Returns:** `Result<string>`
 
+**Throws:** `std::env`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L97))
 
 ### registerProviderModule

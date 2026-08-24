@@ -18,7 +18,9 @@ Read and write Google Calendar events from Agency code. Authorizes once
 
   node main() {
     if (!isCalendarAuthorized()) {
-      authorizeCalendar(env("GOOGLE_CLIENT_ID"), env("GOOGLE_CLIENT_SECRET"))
+      const clientId = env("GOOGLE_CLIENT_ID") with approve
+      const clientSecret = env("GOOGLE_CLIENT_SECRET") with approve
+      authorizeCalendar(clientId, clientSecret)
     }
 
     print(listEvents())
@@ -45,7 +47,7 @@ effect std::authorizeCalendar {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L54))
 
 ### std::listEvents
 
@@ -57,7 +59,7 @@ effect std::listEvents {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L55))
 
 ### std::createEvent
 
@@ -71,7 +73,7 @@ effect std::createEvent {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L56))
 
 ### std::updateEvent
 
@@ -84,7 +86,7 @@ effect std::updateEvent {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L57))
 
 ### std::deleteEvent
 
@@ -95,7 +97,7 @@ effect std::deleteEvent {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L58))
 
 ## Functions
 
@@ -121,7 +123,7 @@ Authorize access to Google Calendar. Opens a browser for the user to sign in and
 
 **Throws:** `std::authorizeCalendar`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L60))
 
 ### isCalendarAuthorized
 
@@ -133,7 +135,7 @@ Check if Google Calendar has been authorized. Returns true if OAuth tokens exist
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L72))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L74))
 
 ### listEvents
 
@@ -169,7 +171,7 @@ List upcoming events from Google Calendar. Returns an array of events, each with
 
 **Throws:** `std::listEvents`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L79))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L81))
 
 ### createEvent
 
@@ -208,7 +210,7 @@ Create a new event on Google Calendar. Returns the created event.
 
 **Throws:** `std::createEvent`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L104))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L106))
 
 ### updateEvent
 
@@ -250,7 +252,7 @@ Update an existing event on Google Calendar. Pass the eventId and any fields to 
 
 **Throws:** `std::updateEvent`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L135))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L137))
 
 ### deleteEvent
 
@@ -274,4 +276,4 @@ Delete an event from Google Calendar by its event ID. Returns { deleted: true } 
 
 **Throws:** `std::deleteEvent`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L167))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L169))

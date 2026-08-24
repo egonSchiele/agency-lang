@@ -186,7 +186,10 @@ export def pushBranch(
   // `git push` has no std::git equivalent, so it stays on exec.
   run("git", ["-C", root, "push", "--force", "origin", branch], "")
 
-  const repo = env("GITHUB_REPOSITORY")
+  // handleScheduledInterrupt passes on std::env, so an unapproved read
+  // would surface unhandled on the weekly cron. A denied read is null,
+  // which the guard below already handles.
+  const repo = env("GITHUB_REPOSITORY") with approve
   if (repo == null) {
     return ""
   }

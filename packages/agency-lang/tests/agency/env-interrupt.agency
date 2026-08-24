@@ -1,0 +1,45 @@
+import { env, setEnv } from "std::system"
+
+// Reading an environment variable asks permission, the same as setting one
+// does. A secret read without asking can be written into a log, a prompt,
+// or generated code, and none of that is visible to the person whose
+// secret it is.
+//
+// The round trip is the point: writing a known value and reading it back
+// pins that an approved read resumes into `_env(name)` and returns the
+// real string, rather than returning whatever the interrupt resolved to.
+node main(): string {
+  let effects = ""
+  let readBack = "unset"
+
+  handle {
+    setEnv("AGENCY_ENV_TEST", "hello")
+    readBack = env("AGENCY_ENV_TEST") ?? "null"
+  } with (e) {
+    effects = "${effects}${e.effect} "
+    return approve()
+  }
+
+  return "${effects}readBack=${readBack}"
+}
+
+// A denied read looks like a variable that is not set. The variable IS set
+// here, so `null` can only come from the denial — which is what makes the
+// ordinary `?? "default"` and `== null` guards at every call site correct
+// without any of them checking for a failure.
+node rejected(): string {
+  let readBack = "unset"
+
+  handle {
+    setEnv("AGENCY_ENV_TEST_2", "hello")
+    const value = env("AGENCY_ENV_TEST_2")
+    readBack = value ?? "null"
+  } with (e) {
+    if (e.effect == "std::env") {
+      return reject("no reading the environment")
+    }
+    return approve()
+  }
+
+  return "readBack=${readBack}"
+}

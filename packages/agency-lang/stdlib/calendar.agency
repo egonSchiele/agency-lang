@@ -14,7 +14,9 @@ import { _authorizeCalendar, _listEvents, _createEvent, _updateEvent, _deleteEve
 
   node main() {
     if (!isCalendarAuthorized()) {
-      authorizeCalendar(env("GOOGLE_CLIENT_ID"), env("GOOGLE_CLIENT_SECRET"))
+      const clientId = env("GOOGLE_CLIENT_ID") with approve
+      const clientSecret = env("GOOGLE_CLIENT_SECRET") with approve
+      authorizeCalendar(clientId, clientSecret)
     }
 
     print(listEvents())

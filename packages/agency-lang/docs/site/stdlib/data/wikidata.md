@@ -48,7 +48,7 @@ export type Entity = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L47))
 
 ### EntityDetail
 
@@ -69,7 +69,7 @@ export type EntityDetail = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L57))
 
 ## Effects
 
@@ -113,7 +113,7 @@ Search Wikidata for entities by name. Returns matches with QID, label, descripti
 
 **Throws:** `std::wikidata`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L217))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L218))
 
 ### wikidataEntity
 
@@ -139,7 +139,7 @@ Fetch one Wikidata entity by its QID. Returns the English label, description, al
 
 **Throws:** `std::wikidata`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L231))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L232))
 
 ### wikidataQuery
 
@@ -165,4 +165,4 @@ Run a SPARQL query against the Wikidata Query Service and return rows (each a ma
 
 **Throws:** `std::wikidata`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L244))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L245))

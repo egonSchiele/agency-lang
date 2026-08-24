@@ -17,8 +17,6 @@ Send an iMessage from Agency code via the macOS Messages app. Works on
   }
   ```
 
-## Types
-
 ## Effects
 
 ### std::sendIMessage

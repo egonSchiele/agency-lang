@@ -337,6 +337,7 @@ export def agencyCodingAgent(
   input. Deliberately agent-agnostic: everything about the deliverable's
   shape (module vs runnable program, what to export) lives in the assignment
   text, so any writer can be scored on the same suite. */
+@hidden
 export type CodingEvalInput = {
   assignment: string;
   outFile: string

@@ -883,7 +883,11 @@ export class AgencyGenerator {
       node.payloadType.properties.length === 0
         ? "{}"
         : this.aliasedTypeToString(node.payloadType, "source");
-    return this.formatDocComment(node) + this.indentStr(`effect ${node.effect} ${body}`);
+    return (
+      this.formatDocComment(node) +
+      this.formatAttachedTags(node) +
+      this.indentStr(`effect ${node.effect} ${body}`)
+    );
   }
 
   protected processTypeAlias(node: TypeAlias): string {

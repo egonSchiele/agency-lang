@@ -62,6 +62,10 @@ export type DocLedgerEntry = {
    *  path, or null for "rendered unlinked". Re-checked against the
    *  rebuilt registry every run. */
   linkTargets: Record<string, string | null>;
+  /** Lines with a `@hidden` that attached to nothing, so a page served
+   *  from cache still warns. Optional: an older ledger keeps authority
+   *  and warns nothing until the page next re-renders. */
+  strayHiddenLines?: number[];
 };
 
 export type DocLedger = {
@@ -201,7 +205,10 @@ export function ledgerEntryHasValidShape(entry: unknown): entry is DocLedgerEntr
     Array.isArray(entry.registrySymbols) &&
     entry.registrySymbols.every((s) => typeof s === "string") &&
     isPlainObject(entry.linkTargets) &&
-    Object.values(entry.linkTargets).every((v) => v === null || typeof v === "string")
+    Object.values(entry.linkTargets).every((v) => v === null || typeof v === "string") &&
+    (entry.strayHiddenLines === undefined ||
+      (Array.isArray(entry.strayHiddenLines) &&
+        entry.strayHiddenLines.every((n) => typeof n === "number")))
   );
 }
 
@@ -437,6 +444,7 @@ export function buildDocLedgerEntry(args: {
   config: AgencyConfig;
   registrySymbols: string[];
   linkTargets: Record<string, string | null>;
+  strayHiddenLines: number[];
   writtenBytes: string;
   /** Source hash captured when the page's program was PARSED. Rendering
    *  happens between that parse and this builder; if an editor saved the
@@ -497,5 +505,6 @@ export function buildDocLedgerEntry(args: {
     outputHash: hashBytes(writtenBytes),
     registrySymbols,
     linkTargets,
+    strayHiddenLines: args.strayHiddenLines,
   };
 }

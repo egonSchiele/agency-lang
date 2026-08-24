@@ -17,8 +17,6 @@ Search Wikipedia and read article summaries or full text from Agency code.
   }
   ```
 
-## Types
-
 ## Effects
 
 ### std::wikipedia::search
@@ -94,7 +92,7 @@ Get a summary of a Wikipedia article. Returns the title, description, intro extr
 |---|---|---|
 | title | `string` |  |
 
-**Returns:** [WikiSummary](#wikisummary)
+**Returns:** `WikiSummary`
 
 **Throws:** `std::wikipedia::summary`
 
@@ -116,7 +114,7 @@ Get the full text of a Wikipedia article. Returns the title, plain-text content,
 |---|---|---|
 | title | `string` |  |
 
-**Returns:** [WikiArticle](#wikiarticle)
+**Returns:** `WikiArticle`
 
 **Throws:** `std::wikipedia::article`
 

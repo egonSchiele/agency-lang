@@ -20,8 +20,6 @@ Run browser automation tasks described in plain language via the Browser Use
   Set `BROWSER_USE_API_KEY` to your Browser Use API key. Get one at
   https://cloud.browser-use.com/settings.
 
-## Types
-
 ## Effects
 
 ### std::browserUse

@@ -21,8 +21,6 @@ Give an LLM access to a directory of skills, and support Claude-Code-style
   }
   ```
 
-## Types
-
 ## Effects
 
 ### std::skills::skillsDir

@@ -33,8 +33,6 @@ Send email from Agency code through Resend, SendGrid, or Mailgun. Each
   )
   ```
 
-## Types
-
 ## Effects
 
 ### std::sendEmail

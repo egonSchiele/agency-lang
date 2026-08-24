@@ -13,8 +13,6 @@ their tools.
   search. Adding a provider means appending one entry to the catalog here,
   and every agent picks it up.
 
-## Types
-
 ## Functions
 
 ### searchTools

@@ -256,6 +256,7 @@ describe("entry builder + freshness predicate (writer/checker pair)", () => {
       config: {},
       registrySymbols: ["a"],
       linkTargets: { Foo: null },
+      strayHiddenLines: [],
       writtenBytes: md,
     });
     return { inputDir, outDir, ctx, entry, md };
@@ -329,6 +330,7 @@ describe("entry builder + freshness predicate (writer/checker pair)", () => {
       config: {},
       registrySymbols: ["a"],
       linkTargets: {},
+      strayHiddenLines: [],
       writtenBytes: "x",
       // Simulates an editor save mid-render: the hash captured at parse
       // time no longer matches the bytes on disk now.
@@ -356,6 +358,7 @@ describe("entry builder + freshness predicate (writer/checker pair)", () => {
       config: {},
       registrySymbols: ["a"],
       linkTargets: {},
+      strayHiddenLines: [],
       writtenBytes: "x",
       preRender,
     });
@@ -376,6 +379,7 @@ describe("entry builder + freshness predicate (writer/checker pair)", () => {
       config: {},
       registrySymbols: [],
       linkTargets: {},
+      strayHiddenLines: [],
       writtenBytes: "x",
     });
     expect(entry.cacheable).toBe(false);

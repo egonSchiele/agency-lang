@@ -1494,8 +1494,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--strict", "Enable strict types (untyped variables are errors)")
     .action(async (inputs: string[], opts: { strict?: boolean }) => {
       // `strictTypes`, not `strict`: this command computes its own exit code
-      // and never reaches the compile-path gate. Applied before runTypeCheck
-      // closes over `config`, since applyCliFlags returns a copy.
+      // and never reaches the compile-path gate, so `strict` would be inert
+      // here — and an inert setting that looks meaningful is a trap. Applied
+      // before runTypeCheck closes over `config`, since applyCliFlags copies.
       const config = applyCliFlags(getConfig(), { strictTypes: opts.strict });
       let hasErrors = false;
       const runTypeCheck = (contents: string, filePath?: string, symbolTable?: SymbolTable) => {

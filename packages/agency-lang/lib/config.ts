@@ -742,9 +742,12 @@ export type CliFlags = {
   /** `--strict` on `run`/`compile`: fail the run on any fatal type error. */
   strict?: boolean;
   /** `--strict` on `typecheck`: untyped variables are errors, nothing else.
-   *  Same spelling as `strict`, deliberately narrower, because `typecheck`
-   *  runs the checker unconditionally and computes its own exit code — it
-   *  never reaches the compile-path gate that `strict` exists to open. */
+   *  Same spelling as `strict`, deliberately narrower. `typechecker.strict`
+   *  has one reader — the compile-path gate at compiler/compile.ts — and
+   *  `typecheck` never reaches it, so setting `strict` here would be inert
+   *  rather than harmful. An inert setting that reads as meaningful is still
+   *  a trap: it would quietly start mattering the day this command grows a
+   *  compile path. */
   strictTypes?: boolean;
   maxToolCallRounds?: number;
   maxToolResultChars?: number;
@@ -767,9 +770,10 @@ export type CliFlags = {
  *                      the `run`/`compile` meaning.
  *   --strict (tc)    → typechecker.strictTypes ONLY. `agency typecheck` calls
  *                      the checker unconditionally and computes its own exit
- *                      code, so it never reaches that gate and must not set
- *                      `strict`. Same flag name, narrower meaning, which is
- *                      why it is a separate field rather than a branch here.
+ *                      code, so it never reaches that gate; `strict` would be
+ *                      inert there, and an inert-but-meaningful-looking
+ *                      setting is a trap. Same flag name, narrower meaning,
+ *                      which is why it is a separate field, not a branch.
  *   --model <m>      → client.defaultModel=<m> and client.defaultProvider
  *                      DELETED, so smoltalk infers the provider
  *   --model <p>/<m>  → client.defaultModel=<m> + client.defaultProvider=<p>

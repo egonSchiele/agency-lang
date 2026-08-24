@@ -35,17 +35,22 @@ one exception is the root `-v` / `-c`, handled inside `getConfig()` itself, so
 it is still applied in exactly one place for every command.
 
 `typecheck` was the last holdout and was migrated in the change that added this
-section; before that, its `--strict` was written by hand, and it had already
-drifted from the shared version.
+section. Its `--strict` was hand-written rather than shared — but its narrower
+meaning was correct, and is preserved. See the next section.
 
 ### The same flag name may mean different things on different commands
 
 `--strict` is the live example. On `run`/`compile` it sets both `strict` and
 `strictTypes`, because the compile path has a gate that only opens on `strict`.
 On `typecheck` it sets `strictTypes` alone: that command runs the checker
-unconditionally and computes its own exit code, so it never reaches the gate,
-and setting `strict` there would make it fail on errors it currently reports
-and walks past.
+unconditionally and computes its own exit code, so it never reaches the gate.
+
+Setting `strict` on `typecheck` would therefore be **inert**, not harmful —
+`typechecker.strict` has exactly one reader in the repo, the gate itself
+(`lib/compiler/compile.ts`). The narrow field is still the right call for a
+different reason: a setting that reads as meaningful and does nothing is a
+trap, and it would quietly begin to matter the day `typecheck` grows a compile
+path.
 
 The two meanings are two fields on `CliFlags` (`strict` and `strictTypes`), not
 a branch inside `applyCliFlags`. The command picks the meaning it wants by
@@ -54,7 +59,7 @@ choosing a field; the helper never needs to know which command called it.
 ## Flags that are NOT config
 
 Not every flag becomes a setting, and forcing one to be a setting is a mistake.
-There are two channels, and a new flag belongs to exactly one of them:
+There are three channels, and most new flags belong to one of the first two:
 
 - **Config** (this document) — a value the compiler reads, or one that gets
   baked into the generated program. Goes through `applyCliFlags`.
@@ -64,11 +69,18 @@ There are two channels, and a new flag belongs to exactly one of them:
   runner's output sink is a live object with methods, and `--agency-only`
   selects a different compile path (through the closure validator) rather than
   setting a value.
+- **Forwarded verbatim to a child command line** — `agency doctor` accepts
+  `--trace [file]` and `--log-file <path>` and translates neither. It pushes
+  them back onto an argv for a child `agency` invocation (`lib/cli/doctor.ts`),
+  where `applyCliFlags` runs in that process instead. A wrapper command that
+  shells out belongs here, and the flag's meaning is still defined in exactly
+  one place — just not in this one.
 
 The test for which channel a flag belongs in: *is it a plain value the compiled
-program needs baked in, or is it a live object, or a choice of code path?* The
-first is config; the other two are arguments. `agency run` and `agency test run`
-both use both channels, which is expected, not drift.
+program needs baked in, or is it a live object, or a choice of code path, or is
+this command a wrapper that re-invokes `agency`?* The first is config; the next
+two are arguments; the last is forwarding. `agency run` and `agency test run`
+both use the first two channels, which is expected, not drift.
 
 ## What `--model` means
 

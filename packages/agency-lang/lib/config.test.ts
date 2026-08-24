@@ -215,10 +215,18 @@ describe("applyCliFlags", () => {
   });
 
   // `agency typecheck --strict` is a NARROWER meaning of the same flag name.
-  // That command calls the checker unconditionally and computes its own exit
-  // code, so it never reaches the compile-path gate that `strict` opens.
-  // Setting `strict` here would make typecheck fail on errors it currently
-  // reports and walks past.
+  // `typechecker.strict` has one reader — the compile-path gate in
+  // compiler/compile.ts — and typecheck never reaches it, so setting `strict`
+  // there would be inert, not harmful. The narrow field exists so an inert
+  // setting never looks meaningful, and so it cannot start mattering silently
+  // if this command ever grows a compile path.
+  //
+  // These pin applyCliFlags, not the wiring in scripts/agency.ts: tidying that
+  // call site to `{ strict: opts.strict }` leaves them green. Nothing observes
+  // the difference today (that is what inert means), so the only test that
+  // could bite would assert resolved config through an injectable seam that
+  // does not exist yet — production surface added for one test, which is not
+  // worth it while the failure mode is invisible.
   it("--strict on typecheck sets strictTypes ONLY, never strict", () => {
     expect(applyCliFlags({}, { strictTypes: true }).typechecker).toEqual({
       strictTypes: true,

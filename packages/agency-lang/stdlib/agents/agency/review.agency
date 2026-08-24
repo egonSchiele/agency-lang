@@ -182,6 +182,7 @@ export def agencyReviewAgent(
   for, and the source file to review, seeded into the working directory by
   the test's `files/`. The shape the `evals/agency-review` suite uses as its
   input. */
+@hidden
 export type ReviewEvalInput = {
   assignment: string;
   sourceFile: string

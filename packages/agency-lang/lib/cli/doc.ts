@@ -14,12 +14,13 @@ import { TypeAlias, VariableType } from "@/types/typeHints.js";
 import { EffectDeclaration } from "@/types/effectDeclaration.js";
 import { FunctionDefinition, FunctionParameter } from "@/types/function.js";
 import { GraphNodeDefinition } from "@/types/graphNode.js";
-import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
-import { buildCompilationUnit, GLOBAL_SCOPE_KEY } from "@/compilationUnit.js";
+import { TypescriptPreprocessor, strandedTags } from "@/preprocessors/typescriptPreprocessor.js";
+import { buildCompilationUnit } from "@/compilationUnit.js";
 import { typeCheck } from "@/typeChecker/index.js";
 import type { InterruptEffect } from "@/symbolTable.js";
 import { heading, codeFence, bold, markdownTable, section } from "@/utils/markdown.js";
 import { docStringText } from "@/utils/docStringText.js";
+import { HIDDEN_TAG, isHidden } from "@/utils/hiddenTag.js";
 import {
   OwnedPathError,
   acquireDocLock,
@@ -102,6 +103,7 @@ export function generateDoc(
         throw new OwnedPathError(`refusing to write documentation through a symlink: ${baseName}`);
       }
       const program = preprocessProgram(parseDocSource(readFile(inputPath), config), config);
+      warnStrayHidden(strayHiddenLines(program), path.basename(inputPath));
       generateDocForFile(
         inputPath,
         resolved.abs,
@@ -227,7 +229,9 @@ function generateDocDirectory(
   const newEntries: Record<string, DocLedgerEntry> = {};
   for (const info of infos) {
     if (info.fresh) {
-      newEntries[info.rel] = prior!.entries[info.rel];
+      const entry = prior!.entries[info.rel];
+      newEntries[info.rel] = entry;
+      warnStrayHidden(entry.strayHiddenLines ?? [], info.rel);
       continue;
     }
     const resolved = resolveOwnedOutputPath(outDirReal, info.mdRelPath, {
@@ -244,6 +248,8 @@ function generateDocDirectory(
     const preRender = captureDepSnapshot(info.filePath, config, ctx.stdlibDir);
     const linkRecorder: Record<string, string | null> = {};
     const program = parsedPrograms.get(info.filePath)!;
+    const strayLines = strayHiddenLines(program);
+    warnStrayHidden(strayLines, info.rel);
     const written = generateDocForFile(
       info.filePath,
       resolved.abs,
@@ -264,6 +270,7 @@ function generateDocDirectory(
         config,
         registrySymbols: extractRegistrySymbols(program),
         linkTargets: linkRecorder,
+        strayHiddenLines: strayLines,
         writtenBytes: written,
         sourceHashAtParse: sourceHashAtParse.get(info.filePath),
         preRender,
@@ -316,25 +323,38 @@ function sameStringList(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i]);
 }
 
-/** A file's pass-1 registry contributions. NOT "exported symbols": all
- *  function definitions (non-exported and underscore-prefixed included),
- *  node names, global-scope type aliases, and exported constants — the
- *  set link targets resolve against. Cached per page as
- *  `registrySymbols`, so an unchanged file costs no parse. */
+/** Does this declaration get a section? Shared by the render sections and
+ *  the link registry so the two cannot drift. Underscore names are
+ *  compiler plumbing (`_guard`), not caller surface. */
+function isDocumented(
+  name: string,
+  exported: boolean | undefined,
+  tags: Tag[] | undefined,
+): boolean {
+  return exported === true && !name.startsWith("_") && !isHidden(tags);
+}
+
+/** The names this file renders a `###` section for — exactly the set a
+ *  link may resolve to; a name here with no section is a broken anchor.
+ *  Cached per page, so an unchanged file costs no parse. */
 export function extractRegistrySymbols(program: AgencyProgram): string[] {
   const info = buildCompilationUnit(program);
   const out: string[] = [];
-  for (const name of Object.keys(info.functionDefinitions)) {
-    out.push(name);
+  for (const [name, fn] of Object.entries(info.functionDefinitions)) {
+    if (isDocumented(name, fn.exported, fn.tags)) out.push(name);
   }
   for (const node of info.graphNodes) {
-    out.push(declaredName(node.nodeName));
+    const name = declaredName(node.nodeName);
+    if (isDocumented(name, node.exported, node.tags)) out.push(name);
   }
-  for (const name of Object.keys(info.typeAliases.get(GLOBAL_SCOPE_KEY) ?? {})) {
-    out.push(name);
+  // program.nodes, not the compilation unit: only the AST node knows
+  // `exported`, and the Types section renders top-level aliases.
+  for (const node of program.nodes) {
+    if (node.type !== "typeAlias") continue;
+    if (isDocumented(node.aliasName, node.exported, node.tags)) out.push(node.aliasName);
   }
   for (const c of collectExportedConstants(program)) {
-    out.push(c.variableName);
+    if (isDocumented(c.variableName, true, c.tags)) out.push(c.variableName);
   }
   return out;
 }
@@ -446,6 +466,23 @@ function generateDocForFile(
   return generatedOutput;
 }
 
+/** Source lines of a `@hidden` that attached to no declaration — at the
+ *  end of a file, or above a statement inside a body. Warning is the only
+ *  way the author finds out. */
+export function strayHiddenLines(program: AgencyProgram): number[] {
+  return strandedTags(program.nodes)
+    .filter((tag) => tag.name === HIDDEN_TAG)
+    .map((tag) => (tag.loc ? tag.loc.line + 1 : 0))
+    .sort((a, b) => a - b);
+}
+
+function warnStrayHidden(lines: number[], sourceRel: string): void {
+  for (const line of lines) {
+    const where = line > 0 ? `:${line}` : "";
+    console.error(`[doc] @${HIDDEN_TAG} at ${sourceRel}${where} hides nothing; ignoring.`);
+  }
+}
+
 function postprocessDoc(doc: string): string {
   return doc;
   // escape < and > for all xml
@@ -545,11 +582,9 @@ function formatTypeAlias(alias: TypeAlias, ctx: DocContext): string {
 }
 
 function generateTypeSection(aliases: TypeAlias[], ctx: DocContext): string | null {
-  if (aliases.length === 0) return null;
-  return section(
-    heading(2, "Types"),
-    ...aliases.filter((a) => a.exported).map((a) => formatTypeAlias(a, ctx)),
-  );
+  const visible = aliases.filter((a) => isDocumented(a.aliasName, a.exported, a.tags));
+  if (visible.length === 0) return null;
+  return section(heading(2, "Types"), ...visible.map((a) => formatTypeAlias(a, ctx)));
 }
 
 function formatEffectDeclaration(decl: EffectDeclaration, ctx: DocContext): string {
@@ -569,8 +604,9 @@ function formatEffectDeclaration(decl: EffectDeclaration, ctx: DocContext): stri
 }
 
 function generateEffectSection(decls: EffectDeclaration[], ctx: DocContext): string | null {
-  if (decls.length === 0) return null;
-  return section(heading(2, "Effects"), ...decls.map((d) => formatEffectDeclaration(d, ctx)));
+  const visible = decls.filter((d) => !isHidden(d.tags));
+  if (visible.length === 0) return null;
+  return section(heading(2, "Effects"), ...visible.map((d) => formatEffectDeclaration(d, ctx)));
 }
 
 /**
@@ -637,8 +673,9 @@ function formatConstant(c: Assignment, ctx: DocContext): string {
 }
 
 function generateConstantSection(constants: Assignment[], ctx: DocContext): string | null {
-  if (constants.length === 0) return null;
-  return section(heading(2, "Constants"), ...constants.map((c) => formatConstant(c, ctx)));
+  const visible = constants.filter((c) => isDocumented(c.variableName, true, c.tags));
+  if (visible.length === 0) return null;
+  return section(heading(2, "Constants"), ...visible.map((c) => formatConstant(c, ctx)));
 }
 
 function formatThrows(kinds: InterruptEffect[] | undefined): string | null {
@@ -652,13 +689,11 @@ function generateFunctionSection(
   ctx: DocContext,
   interruptEffectsByFunction: Record<string, InterruptEffect[]>,
 ): string | null {
-  if (fns.length === 0) return null;
-  const _parts = fns.map((fn) => {
-    if (!fn.exported) return null; // skip non-exported functions
-    // Underscore-prefixed exports are internal plumbing (e.g. `_guard`,
-    // the guard construct's lowering target) — exported for the
-    // compiler's sake, not the user's. Their story belongs in docs/dev.
-    if (declaredName(fn.functionName).startsWith("_")) return null;
+  const visible = fns.filter((fn) =>
+    isDocumented(declaredName(fn.functionName), fn.exported, fn.tags),
+  );
+  if (visible.length === 0) return null;
+  const parts = visible.map((fn) => {
     const sig = generator.signatureOf(fn);
     return section(
       heading(3, declaredName(fn.functionName)),
@@ -671,7 +706,6 @@ function generateFunctionSection(
       sourceLink(fn.loc, ctx),
     );
   });
-  const parts = _parts.filter((p): p is string => p !== null);
   return section(heading(2, "Functions"), ...parts);
 }
 
@@ -680,8 +714,11 @@ function generateNodeSection(
   ctx: DocContext,
   interruptEffectsByFunction: Record<string, InterruptEffect[]>,
 ): string | null {
-  if (nodes.length === 0) return null;
-  const parts = nodes.map((node) => {
+  const visible = nodes.filter((node) =>
+    isDocumented(declaredName(node.nodeName), node.exported, node.tags),
+  );
+  if (visible.length === 0) return null;
+  const parts = visible.map((node) => {
     const sig = generator.signatureOf(node);
     return section(
       heading(3, declaredName(node.nodeName)),

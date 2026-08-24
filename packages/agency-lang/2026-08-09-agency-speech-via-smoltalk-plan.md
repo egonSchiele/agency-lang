@@ -355,7 +355,7 @@ following are closed contracts that a new usage kind and/or new token fields tou
 - The strict `usageKindSchema` and `tokenBreakdownSchema` in `lib/cli/statelog/spendTypes.ts`.
 - The companion statelog API type, `USAGE_KINDS` allow-list, Kysely table type, and a **new
   forward migration** replacing the PostgreSQL `usage_events.kind` check constraint
-  (`docs/dev/invocation-usage-accounting.md`). These kind changes are unconditional.
+  (`docs/dev/hosting/invocation-usage-accounting.md`). These kind changes are unconditional.
 - statelog's separate closed `TokenUsage` shape remains unchanged in v1; project raw smoltalk
   usage into it rather than leaking extra fields. Update only affected renderers/tests.
 

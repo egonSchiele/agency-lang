@@ -10,8 +10,6 @@ plannerAgent: the plan-as-code meta-agent. Given a task, generate an Agency
   it, show the plan, source, and capability envelope for approval, run it in a
   handler-sandboxed subprocess, verify, and fall back to codingAgent on failure.
 
-## Types
-
 ## Effects
 
 ### std::agents::planApprove
@@ -107,9 +105,9 @@ Gate generated code behind user approval, then run it: shows the plan,
 | task | `string` |  |
 | plan | `string` |  |
 | src | `string` |  |
-| state | [PlanState](#planstate) |  |
+| state | `PlanState` |  |
 
-**Returns:** [PlanState](#planstate)
+**Returns:** `PlanState`
 
 **Throws:** `std::agents::planApprove`, `std::run`, `std::guard`
 

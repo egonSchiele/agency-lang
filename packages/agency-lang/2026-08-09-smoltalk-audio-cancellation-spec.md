@@ -140,7 +140,7 @@ the smoltalk change:
    failure `Result` to a rejection with `signal.reason` (plan §5 already
    specifies this adapter step); if (A), the rejection already carries it.
 3. Remove the "cancellation is inert" caveats from
-   `docs/dev/speech-via-smoltalk.md`, the `withSignal` comment, and the CLAUDE.md
+   `docs/dev/llm/speech-via-smoltalk.md`, the `withSignal` comment, and the CLAUDE.md
    pointer.
 4. Add the two deferred tests: (a) `SmoltalkClient.transcribe`/`speak` forward the
    exact signal object to smoltalk, and (b) a real mid-flight abort rejects

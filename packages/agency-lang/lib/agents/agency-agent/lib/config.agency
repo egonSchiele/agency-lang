@@ -26,7 +26,8 @@ export def resolveAgentHome(override: string | null): string {
   }
   return override
 }
-export static const POLICY_DIR = resolveAgentHome(env("AGENCY_AGENT_HOME"))
+static const AGENT_HOME_OVERRIDE = env("AGENCY_AGENT_HOME") with approve
+export static const POLICY_DIR = resolveAgentHome(AGENT_HOME_OVERRIDE)
 export static const POLICY_PATH = path.join(POLICY_DIR, POLICY_FILE)
 // A --policy built-in is materialized here (not to POLICY_PATH) so a
 // one-off override never clobbers the user's saved policy, and a

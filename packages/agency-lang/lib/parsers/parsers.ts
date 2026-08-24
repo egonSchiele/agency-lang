@@ -1295,7 +1295,7 @@ export const booleanParser: Parser<BooleanLiteral> = label(
 );
 
 // `undefined` is a second spelling of `null`, not a second value. Agency has
-// exactly one nothing-value (docs/dev/null-and-undefined.md); the *type*
+// exactly one nothing-value (docs/dev/language/null-and-undefined.md); the *type*
 // `undefined` has always normalized to `null`, and accepting the literal makes
 // the value side agree. `agency fmt` prints `null`.
 //
@@ -1384,7 +1384,7 @@ export const primitiveTypeParser: Parser<PrimitiveType> = memo(
     // never contains an `undefined` primitive. The *value* `undefined` is
     // likewise a spelling of `null` — see `nullParser`. The capitalized
     // TypeScript spellings normalize the same way.
-    // See docs/dev/null-and-undefined.md.
+    // See docs/dev/language/null-and-undefined.md.
     (r: PrimitiveType) => {
       const normalized: Record<string, string> = {
         undefined: "null",
@@ -5702,7 +5702,7 @@ const _bodyNodeParser: Parser<AgencyNode> = memo(
     // hole occupying the whole statement gets sort "statements" here; a hole
     // inside a larger expression fails statementHoleParser's boundary check
     // and reaches binOpParser, whose operand path assigns sort "expr". (The
-    // parser-ordering exemption in docs/dev/anti-patterns.md covers this.)
+    // parser-ordering exemption in docs/dev/contributing/anti-patterns.md covers this.)
     lazy(() => statementHoleParser),
     // A bare `$( gen() )` occupying a whole statement needs its own entry:
     // binOpParser below rejects anything that is not a binOpExpression, and

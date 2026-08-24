@@ -120,7 +120,8 @@ function attachTags(nodes: AgencyNode[]): AgencyNode[] {
         node.type === "function" ||
         node.type === "assignment" ||
         node.type === "functionCall" ||
-        node.type === "typeAlias"
+        node.type === "typeAlias" ||
+        node.type === "effectDeclaration"
       ) {
         node.tags = [...(node.tags || []), ...pendingTags];
         pendingTags = [];
@@ -140,6 +141,29 @@ function attachTags(nodes: AgencyNode[]): AgencyNode[] {
   }
 
   return result;
+}
+
+/**
+ * Every tag `collectTags` could not attach to anything, wherever it left
+ * it — top level and inside bodies alike. Deliberately mirrors that
+ * function's walk (explicit recursion into function/node bodies, then
+ * `walkBody` for control flow) so the two cannot disagree about where a
+ * tag can survive. Run it after attachment, or everything looks stranded.
+ */
+export function strandedTags(nodes: AgencyNode[]): Tag[] {
+  const out: Tag[] = [];
+  for (const node of nodes) {
+    if ((node.type === "graphNode" || node.type === "function") && node.body) {
+      out.push(...strandedTags(node.body));
+    }
+  }
+  walkBody(nodes, (body) => {
+    for (const node of body) {
+      if (node.type === "tag") out.push(node);
+    }
+    return body;
+  });
+  return out;
 }
 
 function collectTags(nodes: AgencyNode[]): AgencyNode[] {
@@ -340,7 +364,7 @@ export class TypescriptPreprocessor {
     // Accepted behavior change: `for (x in async getItems())` was
     // rejected by validateNoAsyncInLoops (the async call sat under the
     // loop node); hoisting moves it above the loop, so it now compiles.
-    // A relaxation, recorded here and in docs/dev/hoist-calls.md.
+    // A relaxation, recorded here and in docs/dev/compiler/hoist-calls.md.
     this.program = hoistCallsInProgram(this.program);
     this.addAwaitPendingCalls();
     this.validateNoAsyncInLoops();

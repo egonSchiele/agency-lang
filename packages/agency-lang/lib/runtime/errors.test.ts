@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   CheckpointError,
+  describeAbortCause,
   RestoreSignal,
   AgencyAbort,
   AgencyCancelledError,
@@ -235,5 +236,21 @@ describe("LLM resilience causes", () => {
     expect(readCause(t)?.kind).toBe("callTimeout");
     expect((readCause(t) as { limitMs: number }).limitMs).toBe(600000);
     expect(isAbortError(t)).toBe(true);
+  });
+});
+
+describe("describeAbortCause", () => {
+  it("keeps the reason a cancel was given", () => {
+    // This text is what a user sees when a cancelled run's abort reaches the
+    // node boundary, so dropping the reason loses the only useful part.
+    expect(
+      describeAbortCause(makeAbortCause({ kind: "userKill", reason: "spend limit reached" })),
+    ).toBe("Execution aborted: spend limit reached");
+  });
+
+  it("falls back to the kind when a cancel carries no reason", () => {
+    expect(describeAbortCause(makeAbortCause({ kind: "userKill" }))).toBe(
+      "Execution aborted (userKill)",
+    );
   });
 });

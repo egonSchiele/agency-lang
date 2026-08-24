@@ -24,7 +24,7 @@
  * 1. Positions come from `loc.line` / `loc.col`, which are 0-indexed in
  *    the USER'S file whichever parse mode ran. `loc.start` / `loc.end`
  *    are offsets into whatever the parser actually saw, which differs
- *    between the two modes. See `docs/dev/locations.md` — and note it
+ *    between the two modes. See `docs/dev/compiler/locations.md` — and note it
  *    says the LSP's choice of mode is historical and could change, which
  *    is exactly why nothing here may depend on it. `scopeOffset` is safe
  *    because it is only ever compared with offsets from the same parse.
@@ -51,7 +51,7 @@ export type IdentifierSlot = {
   /** 0-based column of the identifier's first character. */
   col: number;
   /** Offset for `findContainingScope`. Only comparable against other
-   *  offsets from the SAME parse — see `docs/dev/locations.md`. */
+   *  offsets from the SAME parse — see `docs/dev/compiler/locations.md`. */
   scopeOffset: number;
   /** True when the source wrote this as a call, `name(...)`. Lets a
    *  consumer distinguish a call site from a bare reference without

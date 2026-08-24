@@ -21,7 +21,7 @@ import { projectProviderTokenUsage } from "./invocationUsage.js";
 import { resolveCompletionModel } from "./modelIdentity.js";
 import { decideValidationRetry, resolveRetryPolicy } from "./llmRetry.js";
 import type { RetryPolicy, RetryConfig } from "./llmRetry.js";
-// See docs/dev/promptRunner.md — the dispatch + retry driver lives next door.
+// See docs/dev/agents/promptRunner.md — the dispatch + retry driver lives next door.
 import { armCallTimeout, dispatchWithRetry, runWithRetry } from "./llmDispatch.js";
 import { markThreadCancelled, needsThreadRepair, restoreThreadForResume } from "./threadRepair.js";
 import { isGuardExceededError } from "./guard.js";
@@ -29,7 +29,7 @@ import { callHook, invokeCallbacks } from "./hooks.js";
 import { hasInterrupts, isRejected } from "./interrupts.js";
 import type { PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
-// See docs/dev/promptRunner.md for the control-flow abstraction used here.
+// See docs/dev/agents/promptRunner.md for the control-flow abstraction used here.
 import { PromptBailout, PromptRunner } from "./promptRunner.js";
 import { findIntrinsic, partitionIntrinsicCalls, runIntrinsicCall } from "./intrinsicTools.js";
 import type { RunBatchResult } from "./runBatch.js";

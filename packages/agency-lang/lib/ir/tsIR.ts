@@ -277,7 +277,7 @@ export interface TsNewExpr {
   arguments: TsNode[];
 }
 
-/** Scoped variable reference — lowered to TsPropertyAccess by lowerScopes */
+/** Scoped variable reference — resolved to its access expression by printTs */
 export interface TsScopedVar {
   kind: "scopedVar";
   name: string;

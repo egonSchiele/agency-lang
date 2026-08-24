@@ -1,8 +1,8 @@
 import { env } from "std::system"
 
 node main() {
-  let pathVar = env("PATH")
-  let bogus = env("AGENCY_TEST_NEVER_SET_VAR_XYZ")
+  let pathVar = env("PATH") with approve
+  let bogus = env("AGENCY_TEST_NEVER_SET_VAR_XYZ") with approve
   return {
     pathSet: pathVar != null,
     pathNonEmpty: pathVar != null && pathVar != "",

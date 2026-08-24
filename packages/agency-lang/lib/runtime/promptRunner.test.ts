@@ -78,7 +78,7 @@ describe("PromptRunner.step", () => {
     // Round 1: body returns interrupts and bails. Round 2 (resume): the
     // user has responded to the interrupt, the body now returns void, and
     // the key gets marked completed. This is the core idempotent-resume
-    // contract documented in docs/dev/promptRunner.md.
+    // contract documented in docs/dev/agents/promptRunner.md.
     const { runner, self } = makeRunner();
     let firstPass = true;
     const tryStep = () =>

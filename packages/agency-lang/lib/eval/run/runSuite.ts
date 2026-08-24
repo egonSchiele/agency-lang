@@ -77,7 +77,7 @@ export type RunSuiteDeps = { runner?: EvalInputRunner };
  * under `workdir/`, the agent's code under `code/`, and one `run` annotation
  * saying which test it was and how it ended. A test whose directory already
  * exists is an error result; the others still run. Executes only — grading is
- * a separate pass over the finished directories (docs/dev/eval-grading.md).
+ * a separate pass over the finished directories (docs/dev/evals/eval-grading.md).
  */
 export async function runSuite(
   opts: RunSuiteOptions,

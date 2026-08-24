@@ -119,7 +119,7 @@ function computeFileCoverage(file: string, sourceMap: SourceMap, hits: CoverageD
   for (const [scope, steps] of Object.entries(sourceMap)) {
     for (const [stepPath, loc] of Object.entries(steps)) {
       totalSteps++;
-      // loc.line is 0-indexed (see docs/dev/locations.md). Convert to
+      // loc.line is 0-indexed (see docs/dev/compiler/locations.md). Convert to
       // 1-indexed for display.
       const displayLine = loc.line + 1;
       const isHit = hits[scope]?.[stepPath] === true;

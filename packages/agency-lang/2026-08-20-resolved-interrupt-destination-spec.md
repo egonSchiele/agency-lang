@@ -171,7 +171,7 @@ that swaps a directory for a symlink between approval and execution.
 Closing that race requires an operating-system feature Node does not
 expose on any platform we support. A local program with that access
 already owns the account and gains nothing by going through our agent.
-This boundary goes in `docs/dev/approval-policies.md` so the next reviewer
+This boundary goes in `docs/dev/agents/approval-policies.md` so the next reviewer
 finds a stated decision instead of an oversight.
 
 ## Interactions

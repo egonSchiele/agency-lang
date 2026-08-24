@@ -349,7 +349,7 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 | useAgentCwd | `boolean` | false |
 | followSymlinks | `boolean` | false |
 
-**Returns:** [StatInfo](#statinfo)
+**Returns:** `StatInfo`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L290))
 

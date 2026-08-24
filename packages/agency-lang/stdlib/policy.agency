@@ -36,9 +36,10 @@ import {
   import { cliPolicyHandler } from "std::policy"
 
   node main() {
+    const home = env("HOME") with approve
     // Bind to a variable — the `with` clause only accepts an identifier.
     const handler = cliPolicyHandler(
-      file: "${env("HOME")}/.myapp/policy.json",
+      file: "${home}/.myapp/policy.json",
       fields: { "std::read": [{ field: "dir", matchSubpaths: true }] },
     )
     handle {
@@ -464,7 +465,7 @@ export def setPolicy(path: string, policy: Policy) {
  * `allowedPaths` is a defense-in-depth allow-list passed straight
  * through to the underlying `write`. Pass `[]` (the default) only
  * when the path is trusted. Otherwise restrict it to a known
- * directory like `["${env("HOME")}/.myapp"]`.
+ * directory like `["/home/you/.myapp"]`.
  */
 export def writePolicyFile(
   path: string,
@@ -858,8 +859,9 @@ def _handler(intr: any): any {
  * block:
  *
  * ```ts
+ * const home = env("HOME") with approve
  * const handler = cliPolicyHandler(
- *   file: "${env("HOME")}/.myapp/policy.json",
+ *   file: "${home}/.myapp/policy.json",
  *   fields: { "std::read": [{ field: "dir", matchSubpaths: true }] },
  * )
  * handle {

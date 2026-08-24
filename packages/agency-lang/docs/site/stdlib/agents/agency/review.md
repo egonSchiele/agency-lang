@@ -11,28 +11,6 @@ an optional LLM judgment of whether the code accomplishes a task.
   measures it. This agent never executes the code it reviews, but it can
   consult the bundled Agency documentation and the web to check a claim.
 
-## Types
-
-### ReviewEvalInput
-
-What an eval hands the reviewer: the assignment the source was written
-  for, and the source file to review, seeded into the working directory by
-  the test's `files/`. The shape the `evals/agency-review` suite uses as its
-  input.
-
-```ts
-/** What an eval hands the reviewer: the assignment the source was written
-  for, and the source file to review, seeded into the working directory by
-  the test's `files/`. The shape the `evals/agency-review` suite uses as its
-  input. */
-export type ReviewEvalInput = {
-  assignment: string;
-  sourceFile: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L185))
-
 ## Functions
 
 ### reportFeedback
@@ -116,33 +94,3 @@ Review Agency source code and return findings. Always includes parse and
 **Throws:** `std::guard`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L128))
-
-## Nodes
-
-### evalMain
-
-```ts
-evalMain(input: ReviewEvalInput): Feedback[]
-```
-
-Eval entry point: `agency eval run stdlib/agents/agency/review.agency:evalMain
-  --suite <dir>`. A node in a library module never runs when the module is
-  imported; it only exists so a suite can score this reviewer without a
-  wrapper file. Any other reviewer scored on the same suite supplies a node
-  with this signature. Effects are decided at this boundary: reading the
-  seeded input file is this node's own doing (`with approve`), and a budget
-  trip inside the reviewer is rejected (`with reject`) so the caps stay caps
-  and the reviewer's fail-open result comes back instead of an interrupt
-  escaping the entry point.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| input | [ReviewEvalInput](#reviewevalinput) |  |
-
-**Returns:** `Feedback[]`
-
-**Throws:** `std::read`, `std::guard`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L199))

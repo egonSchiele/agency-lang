@@ -503,9 +503,9 @@ export class TypeScriptBuilder {
     }
 
     // A tripwire. Expansion removes every splice before codegen, so one
-    // reaching here means a compile path skipped expandSplices, and seven
-    // must run it. Without this the symptom is a raw "Unhandled Agency
-    // node type" stack trace that says nothing about the real mistake.
+    // reaching here means a compile path skipped expandSplices, and every
+    // compile path must run it. Without this the symptom is a raw "Unhandled
+    // Agency node type" stack trace that says nothing about the real mistake.
     const unexpanded = [...walkNodesArray(program.nodes)].filter(
       (visit) => visit.node.type === "splice",
     );
@@ -518,7 +518,7 @@ export class TypeScriptBuilder {
       throw new Error(
         `Internal error: a compile-time splice \`$( ... )\`${which} reached code ` +
           "generation. Splice expansion did not run on this compile path: " +
-          "expandSplices should have replaced it. See docs/dev/splices.md for " +
+          "expandSplices should have replaced it. See docs/dev/language/splices.md for " +
           "the paths that must call it.",
       );
     }
@@ -976,7 +976,7 @@ export class TypeScriptBuilder {
    * Build the validation expression for a `!` site. If the resolved type
    * carries no `@validate(...)` tag anywhere, return the existing
    * `__validateType(value, schema)` call (zero behavior change). Otherwise
-   * return `await __validateChainRecursive(value, <descriptor>, __ctx)`,
+   * return `await __validateChainRecursive(value, <descriptor>)`,
    * which runs Zod parse + the validator chain at each level.
    */
   private validateExpr(t: VariableType, value: TsNode): TsNode {
@@ -1229,11 +1229,11 @@ export class TypeScriptBuilder {
     // is not a valid assignment target. Those targets stay raw lvalues.
     //
     // An *optional* terminal index (`arr?.[i]`) is left raw: optional chaining
-    // is deliberately deferred (see docs/dev/null-and-undefined.md), so `?.[]`
+    // is deliberately deferred (see docs/dev/language/null-and-undefined.md), so `?.[]`
     // stays consistent with `?.` property access — both yield `undefined` on a
     // null base rather than `null`. Only a plain `[i]` — issue #409's actual
     // target — is normalized.
-    // See docs/dev/null-and-undefined.md and issue #409.
+    // See docs/dev/language/null-and-undefined.md and issue #409.
     const lastElement = node.chain[node.chain.length - 1];
     if (!asLValue && lastElement?.kind === "index" && !lastElement.optional) {
       return ts.call(ts.id("__nn"), [result]);
@@ -1310,7 +1310,7 @@ export class TypeScriptBuilder {
     // All equality operators use unified nullish equality via the `__eq`
     // runtime helper (null and undefined compare equal). There is no strict
     // escape hatch: `===`/`!==` are stylistic aliases that compile identically
-    // to `==`/`!=`. See docs/dev/null-and-undefined.md.
+    // to `==`/`!=`. See docs/dev/language/null-and-undefined.md.
     if (
       node.operator === "==" ||
       node.operator === "===" ||

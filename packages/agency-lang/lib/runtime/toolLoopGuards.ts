@@ -2,7 +2,7 @@
  * Two refusals in runPrompt's tool loop, both decided before a tool runs:
  * a call the model keeps repeating with nothing changing, and a string
  * argument that is really the model's own tool-call markup. See
- * docs/dev/tool-loop-guards.md.
+ * docs/dev/agents/tool-loop-guards.md.
  */
 import { createHash } from "crypto";
 import type { FuncParam } from "./agencyFunction.js";

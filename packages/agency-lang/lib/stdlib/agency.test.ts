@@ -21,9 +21,11 @@ import {
   _getNodesOfType,
   _filterImports,
   _exactVerdictFeedback,
+  reExportedHiddenNames,
 } from "./agency.js";
 import type { AgencyNode } from "../types.js";
 import type { ImportStatement } from "../types/importStatement.js";
+import type { NamedExportBody } from "../types/exportFromStatement.js";
 
 // Sentinel string baked into the inside-the-sandbox source. The compiled JS
 // has to contain it — that's what proves _compileFile actually read THIS
@@ -700,6 +702,27 @@ export node inspect(input: {
     expect(info.description).toContain("Tools for the news agent");
   });
 
+  it("omits @hidden exports, matching what agency doc renders", () => {
+    const info = _describe(
+      [
+        "@hidden",
+        "export type EvalInput = {",
+        "  goal: string",
+        "}",
+        "export type Report = {",
+        "  text: string",
+        "}",
+        "@hidden",
+        'export def evalHelper(): string { return "scaffolding" }',
+        'export def realWork(): string { return "surface" }',
+        "",
+      ].join("\n"),
+    );
+    // Both halves matter: the plain siblings prove the filter is not just
+    // dropping everything with a tag near it.
+    expect(info.exports.map((e) => e.name)).toEqual(["Report", "realWork"]);
+  });
+
   it("returns no description and no exports for a bare program", () => {
     const info = _describe("node main() {\n  return 1\n}\n");
     expect(info).toEqual({ description: null, exports: [] });
@@ -714,6 +737,39 @@ describe("_describe (reify): re-exports, consts, module summary", () => {
       ["keep", "def", "std::index"],
     ]);
     expect(info.exports[0].signature).toContain("map(");
+  });
+
+  it("hides a @hidden name from BOTH re-export forms", () => {
+    // `CodingEvalInput` is `@hidden` in std::agents/agency/coding. A named
+    // re-export used to report it anyway: absent from the source module's
+    // surface looked like "not exported there", which falls through to a
+    // thin `kind: "reexport"` / `effects: ["unknown"]` entry. The star form
+    // took a different path and hid it, so the same tag gave opposite
+    // answers depending on how you re-exported it.
+    const named = _describe('export { CodingEvalInput } from "std::agents/agency/coding"\n');
+    expect(named.exports.map((e) => e.name)).toEqual([]);
+
+    const star = _describe('export * from "std::agents/agency/coding"\n');
+    expect(star.exports.map((e) => e.name)).not.toContain("CodingEvalInput");
+    // A real export from the same module still comes through, so this is
+    // not just an empty result.
+    expect(star.exports.map((e) => e.name)).toContain("agencyCodingAgent");
+  });
+
+  it("passes a hidden name on through a re-export, so a chain stays hidden", () => {
+    // The two-hop case: A hides X, B re-exports A, C re-exports X from B.
+    // If B does not report X as hidden, C sees "absent" — which means
+    // "not exported there" — and resurrects X as a thin entry.
+    // No stdlib module re-exports from one carrying a `@hidden`, so the
+    // chain is not reachable end to end; this covers the rule itself.
+    const body = { names: ["X", "keep"], aliases: {} } as NamedExportBody;
+    expect(reExportedHiddenNames(body, ["X"])).toEqual(["X"]);
+    expect(reExportedHiddenNames(body, [])).toEqual([]);
+
+    // Under an alias the outer module asks for the LOCAL name, so that is
+    // the one that has to be reported hidden.
+    const aliased = { names: ["X"], aliases: { X: "Y" } } as NamedExportBody;
+    expect(reExportedHiddenNames(aliased, ["X"])).toEqual(["Y"]);
   });
 
   it("star re-exports from std:: enumerate the source module, outermost path winning", () => {

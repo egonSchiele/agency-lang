@@ -27,7 +27,7 @@ import type { Expression } from "../types.js";
  *
  * Codegen sites (`mapTypeToSchema`, `descriptor`, `hasAnyValidateTag`)
  * also branch on `VariableType.type`; review them when adding a
- * variant. Full walkthrough: docs/dev/adding-features.md.
+ * variant. Full walkthrough: docs/dev/contributing/adding-features.md.
  */
 export type VariableType =
   | PrimitiveType

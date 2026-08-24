@@ -7,7 +7,7 @@
  * `a == null` (loose) is true for exactly `null` and `undefined` (never `0`,
  * `""`, `false`, `NaN`), so `(a == null && b == null)` means "both nullish."
  *
- * See docs/dev/null-and-undefined.md.
+ * See docs/dev/language/null-and-undefined.md.
  */
 export function __eq(a: unknown, b: unknown): boolean {
   return a === b || (a == null && b == null);

@@ -111,10 +111,10 @@ Sources wired in:
 - `prompt.ts` and `llmDispatch.ts` — completion.
 - `memory/manager.ts` — completion and embedding. It no-ops without an ALS
   frame, and it re-raises guard errors.
-- `stdlib/image.ts` — records cost and tokens for BOTH a returned image and an
+- `lib/stdlib/image.ts` — records cost and tokens for BOTH a returned image and an
   empty result, because the provider charged either way. It emits the
   `imageGeneration` event only when there is an image.
-- `stdlib/speech.ts` — the `transcription` and `speech` kinds. See
+- `lib/stdlib/speech.ts` — the `transcription` and `speech` kinds. See
   [`speech-via-smoltalk.md`](../llm/speech-via-smoltalk.md).
 
 ## Across the subprocess boundary — `costTelemetry.ts` / `ipc.ts`

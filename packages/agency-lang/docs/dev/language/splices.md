@@ -2,7 +2,7 @@
 
 `$( gen(args) )` runs `gen` during compilation and pastes the `Code` value it returns into the file being compiled. This is the half of Template Haskell that code literals did not ship: literals make code, splices install it. See `docs/dev/language/template-agency.md`.
 
-User-facing documentation is in `docs/site/guide/templates.md`. This file covers the parts you only need if you are changing how splices work.
+User-facing documentation is in `docs/site/guide/splices.md`. This file covers the parts you only need if you are changing how splices work.
 
 ## The pipeline, and where expansion sits
 

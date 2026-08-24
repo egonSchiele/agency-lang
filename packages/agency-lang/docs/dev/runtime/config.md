@@ -153,7 +153,7 @@ those for the full per-field commentary.
 | `distDir` | `string` | Directory of pre-compiled JS. The debugger imports from here instead of compiling on the fly. |
 | `allowNonAgencyGenerators` | `boolean` | Let a compile-time splice generator import JavaScript. Off by default, because a generator that reaches an npm package is unchecked. See [`docs/dev/language/splices.md`](../language/splices.md). |
 | `instrument` | `boolean` | Emit `debugStep()` instrumentation in compiled output (default: true) |
-| `debugger` | `boolean` | Debugger mode: insert a pause point before every step |
+| `debugger` | `boolean` | Inert. `agency debug` sets it, but nothing reads it. `instrument` is the flag that controls `debugStep()` emission. |
 
 ### Type checking
 
@@ -167,7 +167,7 @@ Type-checker settings live under `typechecker`, not at the top level.
 | `typechecker.undefinedFunctions` | `"silent" \| "warn" \| "error"` | An unresolvable function call (default: `warn`) |
 | `typechecker.undefinedVariables` | `"silent" \| "warn" \| "error"` | An unresolvable variable reference (default: `silent`) |
 | `typechecker.strictMemberAccess` | `"silent" \| "warn" \| "error"` | A property that exists on only some members of an un-narrowed union (default: `error`) |
-| `typechecker.matchExhaustiveness` | `"silent" \| "warn" \| "error"` | A `match` over a closed type that misses a case and has no `_` arm (default: `silent`) |
+| `typechecker.matchExhaustiveness` | `"silent" \| "warn" \| "error"` | A `match` over a closed type that misses a case and has no `_` arm (default: `"error"`). Only statement match sites honor this value. An expression match is hard-checked per site regardless of the setting. |
 | `typechecker.definiteReturns` | `"silent" \| "warn" \| "error"` | A function with a non-void return type can reach the end of its body without returning (default: `warn`) |
 
 ### LLM and runtime

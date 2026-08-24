@@ -132,7 +132,7 @@ Something has to survive the rollback for a retry loop to terminate. That is why
 
 A checkpoint whose thread has since been repaired is stale. See "Reopen repair"
 in [`threads.md`](./threads.md). `restoreThreadForResume` (in
-`lib/runtime/state/threadRepair.ts`) throws rather than letting the old snapshot
+`lib/runtime/threadRepair.ts`) throws rather than letting the old snapshot
 overwrite the repaired thread. `MessageThread.repairs` is the generation number
 both sides compare, and `markRepaired()` is its only writer.
 

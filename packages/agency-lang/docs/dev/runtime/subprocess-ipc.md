@@ -126,7 +126,7 @@ the nesting cap down the tree.
 
 ## How compiled code gets executed in the subprocess
 
-1. `_compile()` runs the Agency compilation pipeline and returns `{ moduleId, code }` — no disk writes.
+1. `_compile()` runs the Agency compilation pipeline and returns `{ moduleId, code, modules?, entryPath? }`, with no disk writes. The `modules` and `entryPath` fields carry the rest of a multi-file closure, so resume can re-materialize a multi-file program.
 2. `_run()` writes the code to `.agency-tmp/<nanoid>/<moduleId>.js` under the agency-lang package root, so Node resolves `agency-lang/runtime` against the installed `node_modules`. It then forks `subprocess-bootstrap.js` with `AGENCY_IPC=1` and sends the `run` (or `resume`) instruction. `materializeCompiledScript` re-checks containment for every path it writes, and `cleanupTempDir` deletes only a strict descendant of `.agency-tmp/`.
 3. The bootstrap imports the compiled script, runs the node (or resumes via the module's `respondToInterrupts`), and reports the terminal outcome.
 4. `_run()` deletes the temp dir when the session settles — including the interrupted settle; resume re-materializes from `CompiledProgram.code`.

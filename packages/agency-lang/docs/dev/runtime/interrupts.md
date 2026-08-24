@@ -52,13 +52,13 @@ Every statement inside a branch keeps its counter, so an interrupt deep inside a
 
 ## Match blocks
 
-Match blocks reuse `TsIfSteps`, exactly like if/else: `processMatchBlockWithSteps` (`lib/backends/typescriptBuilder.ts`) turns each match case into a branch with an `===` equality condition against the scrutinee, and the `_` case (if present) becomes the else branch. Arm bodies are processed through `processBodyAsParts`, the same helper if/else uses, so each statement in an arm gets its own `__substep_<key>` counter — a multi-statement block arm resumes mid-arm exactly like a multi-statement if/else branch resumes mid-branch. The `__condbranch_<key>` cache means the winning arm is decided once and re-dispatched to (not re-matched) on resume, even if the scrutinee or a guard has side effects.
+Match blocks reuse `runnerIfElse`, exactly like if/else: `processMatchBlockWithSteps` (`lib/backends/typescriptBuilder.ts`) turns each match case into a branch with an `===` equality condition against the scrutinee, and the `_` case (if present) becomes the else branch. Arm bodies are processed through `processBodyAsParts`, the same helper if/else uses, so each statement in an arm gets its own `__substep_<key>` counter — a multi-statement block arm resumes mid-arm exactly like a multi-statement if/else branch resumes mid-branch. The `__condbranch_<key>` cache means the winning arm is decided once and re-dispatched to (not re-matched) on resume, even if the scrutinee or a guard has side effects.
 
 Code generation goes through the same `runnerIfElse.mustache` template used for if/else. There is no separate match-specific template.
 
 ### Match *expressions*
 
-When a match is used as an expression (`const x = match(...) { ... }` or `return match(...) { ... }`), the lowered `TsIfSteps`/`runner.ifElse(...)` call additionally carries a `matchId`, and each arm's yielding `return expr` lowers to a `matchYield` node that compiles to:
+When a match is used as an expression (`const x = match(...) { ... }` or `return match(...) { ... }`), the lowered `runnerIfElse` / `runner.ifElse(...)` call additionally carries a `matchId`, and each arm's yielding `return expr` lowers to a `matchYield` node that compiles to:
 
 ```typescript
 runner.exitMatch(<matchId>, <value>);

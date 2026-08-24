@@ -53,6 +53,8 @@ subagents) and `simple` (one tool-less LLM call per turn). Each has a
 
 ## What the harness owns
 
+Paths in this section are relative to `lib/agents/agency-agent/`.
+
 - `agent.agency`: parses flags, picks the brain, validates `--agent`
   against `brain.startTargets` (`main` means `""`), sets up models, memory,
   and MCP, and then runs either one turn or the REPL, both through

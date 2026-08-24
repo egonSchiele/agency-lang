@@ -26,7 +26,7 @@ Everything below is machinery in service of that rule plus one workflow: **filli
 | `lib/parsers/parsers.ts` (literal block) | End-scan grammar, `parseCodeLiteralBody`, `codeLiteralParser`, the program-parser injection slot |
 | `lib/runtime/template/codeLiteral.ts` | `__codeLiteral` — runtime reconstruction, per-`(kind, source)` cache, the load-bearing `parser.js` side-effect import |
 
-`Code` sits under `lib/runtime/`, not `lib/stdlib/`, to break an import cycle: `stdlib/template.ts` imports the fill machinery, which needs the type. Hole queries sit under `lib/utils/` because three layers need them, and none of those layers may import across the others. The three are the builder (AG8001), the type checker (AG8002 and definite returns), and the template runtime.
+`Code` sits under `lib/runtime/`, not `lib/stdlib/`, to break an import cycle: `lib/stdlib/template.ts` imports the fill machinery, which needs the type. Hole queries sit under `lib/utils/` because three layers need them, and none of those layers may import across the others. The three are the builder (AG8001), the type checker (AG8002 and definite returns), and the template runtime.
 
 ## The Hole node and its sorts
 

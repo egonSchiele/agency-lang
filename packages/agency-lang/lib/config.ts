@@ -739,7 +739,16 @@ export type CliFlags = {
   logFile?: string;
   logStdout?: boolean;
   observability?: boolean;
+  /** `--strict` on `run`/`compile`: fail the run on any fatal type error. */
   strict?: boolean;
+  /** `--strict` on `typecheck`: untyped variables are errors, nothing else.
+   *  Same spelling as `strict`, deliberately narrower. `typechecker.strict`
+   *  has one reader — the compile-path gate at compiler/compile.ts — and
+   *  `typecheck` never reaches it, so setting `strict` here would be inert
+   *  rather than harmful. An inert setting that reads as meaningful is still
+   *  a trap: it would quietly start mattering the day this command grows a
+   *  compile path. */
+  strictTypes?: boolean;
   maxToolCallRounds?: number;
   maxToolResultChars?: number;
   model?: ResolvedModelFlag;
@@ -757,7 +766,14 @@ export type CliFlags = {
  *   --log stdout     → log.host="stdout" and observability=true (stream to stdout)
  *   --observability  → observability=true
  *   --strict         → typechecker.strict + strictTypes (the compile-path gate
- *                      never runs the checker on strictTypes alone)
+ *                      never runs the checker on strictTypes alone). This is
+ *                      the `run`/`compile` meaning.
+ *   --strict (tc)    → typechecker.strictTypes ONLY. `agency typecheck` calls
+ *                      the checker unconditionally and computes its own exit
+ *                      code, so it never reaches that gate; `strict` would be
+ *                      inert there, and an inert-but-meaningful-looking
+ *                      setting is a trap. Same flag name, narrower meaning,
+ *                      which is why it is a separate field, not a branch.
  *   --model <m>      → client.defaultModel=<m> and client.defaultProvider
  *                      DELETED, so smoltalk infers the provider
  *   --model <p>/<m>  → client.defaultModel=<m> + client.defaultProvider=<p>
@@ -801,6 +817,9 @@ export function applyCliFlags(config: AgencyConfig, flags: CliFlags, input?: str
   }
   if (flags.strict) {
     next.typechecker = { ...next.typechecker, strict: true, strictTypes: true };
+  }
+  if (flags.strictTypes) {
+    next.typechecker = { ...next.typechecker, strictTypes: true };
   }
   if (flags.maxToolCallRounds !== undefined) {
     next.maxToolCallRounds = flags.maxToolCallRounds;

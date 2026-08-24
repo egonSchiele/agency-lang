@@ -214,6 +214,34 @@ describe("applyCliFlags", () => {
     });
   });
 
+  // `agency typecheck --strict` is a NARROWER meaning of the same flag name.
+  // `typechecker.strict` has one reader — the compile-path gate in
+  // compiler/compile.ts — and typecheck never reaches it, so setting `strict`
+  // there would be inert, not harmful. The narrow field exists so an inert
+  // setting never looks meaningful, and so it cannot start mattering silently
+  // if this command ever grows a compile path.
+  //
+  // These pin applyCliFlags, not the wiring in scripts/agency.ts: tidying that
+  // call site to `{ strict: opts.strict }` leaves them green. Nothing observes
+  // the difference today (that is what inert means), so the only test that
+  // could bite would assert resolved config through an injectable seam that
+  // does not exist yet — production surface added for one test, which is not
+  // worth it while the failure mode is invisible.
+  it("--strict on typecheck sets strictTypes ONLY, never strict", () => {
+    expect(applyCliFlags({}, { strictTypes: true }).typechecker).toEqual({
+      strictTypes: true,
+    });
+  });
+
+  it("an absent typecheck --strict changes nothing", () => {
+    expect(applyCliFlags({}, { strictTypes: undefined }).typechecker).toBeUndefined();
+  });
+
+  it("the narrow meaning preserves other typechecker settings", () => {
+    const out = applyCliFlags({ typechecker: { enabled: true } }, { strictTypes: true });
+    expect(out.typechecker).toEqual({ enabled: true, strictTypes: true });
+  });
+
   it("--max-tool-call-rounds sets the top-level maxToolCallRounds", () => {
     expect(applyCliFlags({}, { maxToolCallRounds: 20 }).maxToolCallRounds).toBe(20);
   });

@@ -15,27 +15,34 @@ portable form: it runs the same `.test.json` file `agency test` runs,
 restricted to the sandbox subset.
 
 The public API is `test`, `testFile`, and the types they use
-(`AgencyTestCase`, `InterruptAnswer`, `CaseReport`, `TestReport`) in
-`stdlib/agency.agency`. `testFile`'s `maxCost`
-is the whole-call cost cap the eval grader wrapper uses. Everything under
-`lib/compiler/closureValidator.ts` and `compileValidatedClosure.ts` is
-compiler-private. `snapshotValidatedClosureForTest` is a test seam.
+(`AgencyTestCase`, `TestArguments`, `InterruptAnswer`, `CaseReport`,
+`TestReport`) in `stdlib/agency.agency`. `testFile`'s `maxCost` is the
+whole-call cost cap the eval grader wrapper uses. Everything under
+`lib/compiler/closureValidator.ts` and `lib/compiler/compileValidatedClosure.ts`
+is compiler-private. `snapshotValidatedClosureForTest`
+(`lib/compiler/closureValidator.ts`) is a test seam.
+
+For running untrusted Agency from the CLI instead, see
+`docs/dev/cli/test-cli-sandbox.md`.
 
 ## The sandboxed compile (closure validator + mirror)
 
 The safety invariant: the compile closure contains only Agency source and
 `std::` imports. `validateClosure` (`lib/compiler/closureValidator.ts`) walks
-the raw import graph and refuses, listing every violation:
+the raw import graph and refuses, listing every violation. `compileSandboxed.ts`
+is the entry point that calls it.
 
-- TypeScript/JavaScript files and node builtins (`fs`, `child_process`) —
-  the one thing that would break the interrupt-gating guarantee;
-- `pkg::` packages (not supported in the sandbox yet; a future change can
-  add them with their own validation);
-- local imports that are absolute, escape the sandbox `dir` (realpath
-  containment via `isStrictDescendant`), or go through a symlink anywhere
-  in their path. Symlinks are refused rather than followed: supporting them
-  would need the mirror to rewrite import paths (see CLAUDE.md);
-- compile-time splices, anywhere — BEFORE anything could expand them.
+- TypeScript/JavaScript files and node builtins such as `fs` and
+  `child_process`. These are the one thing that would break the
+  interrupt-gating guarantee.
+- `pkg::` packages. They are not supported in the sandbox yet, and a future
+  change can add them with their own validation.
+- local imports that are absolute, escape the sandbox `dir`, or go through a
+  symlink anywhere in their path. Containment is a realpath check via
+  `isStrictDescendant` (`lib/utils.ts`). Symlinks are refused rather than
+  followed, because supporting them would need the mirror to rewrite import
+  paths (see CLAUDE.md).
+- compile-time splices, anywhere, and BEFORE anything could expand them.
   Splice generators execute in the compiling process, outside the sandbox,
   so untrusted code gets no compile-time execution hook. The tests observe
   this through a call-through mock of `runGenerator` (generators are
@@ -74,8 +81,8 @@ verdict seam (failure propagation forbids handing tagged failures to TS).
 
 Known semantics wart, surfaced during this work: within one process's
 handler chain, a valueless outer `approve()` OVERWRITES an inner approval's
-value (`DEFAULT_MERGE` in `lib/runtime/effectMerge.ts`; only the IPC merge
-defers). A scripted `approve(value)` therefore only delivers its value when
+value. That is `DEFAULT_MERGE` in `lib/runtime/effectMerge.ts`, and only the
+IPC merge defers. A scripted `approve(value)` therefore only delivers its value when
 no outer handler also blanket-approves. The fixtures in
 `tests/agency/agency-test-fn.agency` use a silent-except-`std::run` parent
 for exactly this reason.
@@ -83,10 +90,11 @@ for exactly this reason.
 ## testFile() and the shared format
 
 `lib/testFormat/schema.ts` owns the `.test.json` format in two profiles:
-FULL (everything the CLI runner supports, now validated) and SANDBOX (the
-subset that makes sense inside the sandbox; out-of-subset fields are
-refused BY NAME, `evaluationCriteria` must be exactly one `exact`, and
-`expectedOutput` parses to a value at parse time). Cases in the sandbox
+FULL is everything the CLI runner supports, now validated. SANDBOX is the
+subset that makes sense inside the sandbox: out-of-subset fields are refused
+BY NAME, `evaluationCriteria` must be exactly one `exact`, and
+`expectedOutput` parses to a value at parse time. The two entry points are
+`parseTestFileFull` and `parseTestFileSandbox`. Cases in the sandbox
 profile give their arguments as a named object (`"args": { "n": 10 }`), the
 shape `run()` takes; the CLI's `input` string (a JavaScript argument list
 pasted into generated code, see #881) is refused with a hint.

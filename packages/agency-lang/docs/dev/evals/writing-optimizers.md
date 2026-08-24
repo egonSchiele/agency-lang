@@ -1,8 +1,8 @@
 # Writing an optimizer
 
-An optimizer searches for better values of the `optimize`-marked declarations in an agent. `greedy` (the default), `gepa`, and `example` all extend one base class — `BaseOptimizer` (`lib/optimize/baseOptimizer.ts`) — and are selected by the `--optimizer` flag via a registry. This guide shows how to write your own.
+An optimizer searches for better values of the `optimize`-marked declarations in an agent. `greedy` (the default), `gepa`, and `example` all extend one base class, `BaseOptimizer` (`lib/optimize/baseOptimizer.ts`), and the `--optimizer` flag selects among them through a registry. This guide shows how to write your own.
 
-For the user-facing command, see `docs/site/cli/optimize.md`. The smallest working optimizer is `lib/optimize/optimizers/example.ts` — copy it.
+For the user-facing command (`agency optimize`), see `docs/site/cli/optimize.md`. The smallest working optimizer is `lib/optimize/optimizers/example.ts` — copy it.
 
 ## How optimizing works, end to end
 
@@ -26,19 +26,19 @@ An optimizer is a class that:
 
 ```ts
 import { BaseOptimizer } from "../baseOptimizer.js";
-import type { Input } from "../grading/types.js";
+import type { Test } from "@/eval/grading/types.js";
 import type { OptimizeTargetSet } from "../targets.js";
 import type { OptimizeResult } from "../types.js";
 
 export class MyOptimizer extends BaseOptimizer {
   readonly name = "mine";
-  protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult> {
+  protected async optimizeTargets(source: OptimizeTargetSet, inputs: Test[]): Promise<OptimizeResult> {
     // ... search, return the best candidate as an OptimizeResult
   }
 }
 ```
 
-(In an **out-of-repo** module, import these from the package, not relative paths: `import { BaseOptimizer, type Input, type OptimizeTargetSet, type OptimizeResult } from "agency-lang/optimize"`.)
+(In an **out-of-repo** module, import these from the package, not relative paths: `import { BaseOptimizer, type Test, type OptimizeTargetSet, type OptimizeResult } from "agency-lang/optimize"`.)
 
 ## What the base class does before you run
 
@@ -46,7 +46,7 @@ export class MyOptimizer extends BaseOptimizer {
 
 1. resolves the agent file and **discovers the `optimize` targets** (parsing the entry file and its local `.agency` imports) into an `OptimizeTargetSet`; throws if none are marked.
 2. stores any held-out validation set on `this.validationInputs` (empty array if none).
-3. **echoes the resolved grading setup** and **fail-fast validates** each grader against the first input (`grader.validateInput`), so a misconfigured grader aborts before any agent runs.
+3. **echoes the resolved grading setup** and **fail-fast validates** the graders with `grader.validateInput`, so a misconfigured grader aborts before any agent runs. An override set is checked against the first input. In snapshot mode each input's own grading module is loaded once and checked against its own test. Validation inputs are checked too, because champion selection grades them.
 
 So inside `optimizeTargets` you already have a discovered `source` and the run `inputs`; your job is the search.
 
@@ -54,9 +54,9 @@ So inside `optimizeTargets` you already have a discovered `source` and the run `
 
 - **`OptimizeTargetSet`** (`targets.ts`): `{ baseDir, entryFile, files, targets, typeAliases }`. `files` maps each relative path to its source and discovery-time sha256; `targets` is the list of discovered `optimize` declarations (`{ id, kind, name, value, valueKind, declaredType, … }`); `typeAliases` is the closure's type registry, used to typecheck proposed values. `fileMap(source)` returns just the `{ relpath: source }` map.
 - **A candidate is a file map.** Everywhere below, `files: Record<string, string>` means a complete relpath→source map for the whole discovered closure, not a diff. `defaultPreview` produces one; you pass it to `evaluate`/`scoreFiles` and it becomes the overlay applied on top of a fresh project copy before compiling.
-- **`Input`** (`@/eval/runTypes.ts`): one agent invocation — `{ id?, task, goal?, expected?, files?, timeoutSec?, metadata? }`. `task` (a string or JSON object) is delivered as the entry node's single parameter.
-- **`Scorecard`** (`grading/scorecard.ts`): the result of grading a candidate. See [Grading semantics](#grading-semantics-you-should-know).
-- **`OptimizeResult`** (`types.ts`): what you return — champion iteration + files, decision counts, per-iteration records, objectives, and the champion breakdown. `finishPointwise` builds it for you.
+- **`Test`** (`@/eval/runTypes.ts`): one agent invocation. Its fields are `{ id?, description?, tags?, input?, goal?, expected?, files?, … }`. `input` is a string or a JSON object, delivered as the entry node's single positional parameter. The optimizer code calls these values `inputs`, but the type is `Test`, re-exported from `@/eval/grading/types.js`.
+- **`Scorecard`** (`@/eval/grading/scorecard.ts`): the result of grading a candidate. See [Grading semantics](#grading-semantics-you-should-know).
+- **`OptimizeResult`** (`lib/optimize/types.ts`): what you return — champion iteration + files, decision counts, per-iteration records, objectives, and the champion breakdown. `finishPointwise` builds it for you.
 
 ## Protected helpers
 
@@ -80,14 +80,14 @@ These are the building blocks every optimizer composes (`this.` on `BaseOptimize
 | `validationInputs` | Held-out inputs (empty if none). See [Validation](#validation). |
 | `workspace.writeBack(source, files)` | Write a file set back to the real sources, sha-checked. `finishPointwise` already does this — only call it directly if you are not using `finishPointwise`. |
 
-`CachePartition` (formerly `Workspace`) is **not** a directory: just `{ key: string }`, a cache-partition token. The real isolation happens per input: `evaluate` hands your `files` map to `runSuite`, which seeds the agent's import closure into `runs/<runId>/…/workdir/`, overlays those files, compiles, and runs there. You never write to disk yourself.
+`CachePartition` (`lib/optimize/workspace.ts`) is **not** a directory. It is just `{ key: string }`, a cache-partition token. The real isolation happens per input: `evaluate` hands your `files` map to `runSuite`, which seeds the agent's import closure into `runs/<runId>/…/workdir/`, overlays those files, compiles, and runs there. You never write to disk yourself.
 
 ## The shape: score → propose → score → compare → finish
 
 Here is the whole `example` optimizer — a single round. Real optimizers loop and search more cleverly, but they all follow this shape.
 
 ```ts
-protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult> {
+protected async optimizeTargets(source: OptimizeTargetSet, inputs: Test[]): Promise<OptimizeResult> {
   const startedAt = Date.now();
   this.reporter.runStarted({
     optimizer: this.name, runId: this.config.runId,
@@ -132,7 +132,7 @@ protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Pro
 /** Grade one candidate file set. */
 private async makeCandidate(
   iter: number | "baseline", files: Record<string, string>,
-  targetSet: OptimizeTargetSet, inputs: Input[],
+  targetSet: OptimizeTargetSet, inputs: Test[],
 ): Promise<Candidate> {
   const scorecard = await this.scoreFiles(targetSet, files, inputs);
   return { iter, files, scorecard, targetSet };
@@ -145,8 +145,8 @@ Note the `targetSet` carried on each candidate. It reflects *that candidate's* t
 
 A mutation is proposed by a model and applied to the source. There are two proposer front-ends, both returning a `MutationProposal` (`{ operations, rationale }`):
 
-- **`proposeMutation`** (`mutator.ts`) — the greedy/example proposer. Renders TARGETS, GOALS, per-input FEEDBACK, and HISTORY into `mutatePrompt.agency`.
-- **`proposeReflective`** (`gepaReflect.ts`) — GEPA's reflective proposer (`gepaReflect.agency`).
+- **`proposeMutation`** (`lib/optimize/mutator.ts`) is the greedy and example proposer. It renders TARGETS, GOALS, per-input FEEDBACK, and HISTORY into `lib/agents/optimize/mutatePrompt.agency`.
+- **`proposeReflective`** (`lib/optimize/gepaReflect.ts`) is GEPA's reflective proposer, backed by `lib/agents/optimize/gepaReflect.agency`.
 
 You hand `proposeValidMutation` two callbacks:
 
@@ -213,11 +213,11 @@ Two ways to make `--optimizer` resolve to your class:
 
 ```ts
 // myOptimizer.ts
-import { BaseOptimizer, type BaseOptimizerConfig, type Input, type OptimizeResult, type OptimizeTargetSet } from "agency-lang/optimize";
+import { BaseOptimizer, type BaseOptimizerConfig, type Test, type OptimizeResult, type OptimizeTargetSet } from "agency-lang/optimize";
 
 class MyOptimizer extends BaseOptimizer {
   readonly name = "mine";
-  protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult> { /* … */ }
+  protected async optimizeTargets(source: OptimizeTargetSet, inputs: Test[]): Promise<OptimizeResult> { /* … */ }
 }
 
 export default (config: BaseOptimizerConfig) => new MyOptimizer(config);
@@ -226,7 +226,7 @@ export default (config: BaseOptimizerConfig) => new MyOptimizer(config);
 agency optimize foo.agency --suite inputs.json --optimizer ./myOptimizer.ts
 ```
 
-`--optimizer` treats a value with a `/` or a `.ts`/`.js`/`.mjs` extension as a path: it's loaded with esbuild + `import()` (same as a grading module), the default-exported factory is called with the run config, and the result is used **structurally** as an `Optimizer` (`{ name, optimize }`) — no `instanceof`, so it works even across realms. This is the path for users who don't fork the repo. Can also be set as `eval.optimize.optimizer` in `agency.json`.
+`--optimizer` treats a value with a `/` or a `.ts`/`.js`/`.mjs` extension as a path: it's loaded with esbuild + `import()` (same as a grading module), the default-exported factory is called with the run config, and the result is used **structurally** as an `Optimizer` (`{ name, optimize }`) — no `instanceof`, so it works even across realms. This is the path for users who don't fork the repo. You can also set it as `eval.optimize.optimizer` in `agency.json` (`lib/config.ts`).
 
 **B. A built-in name (in-repo).** Register it so a bare `--optimizer <name>` resolves it:
 
@@ -244,7 +244,7 @@ Config that only your optimizer needs rides on `BaseOptimizerConfig` and gets ca
 | Seam | Replaces |
 | --- | --- |
 | `discover` | Target discovery — return a fixed `OptimizeTargetSet` instead of parsing a file. |
-| `runInput` | Running the agent — return the run DIRECTORY it wrote (one trace). Grading reads that directory like any other run directory (`docs/dev/evals/run-directory.md`), so it must carry a real statelog and a `run` row; `fakeRun` in `lib/optimize/testUtils.ts` builds one. |
+| `runInput` | Running the agent — return the run DIRECTORY it wrote (one trace). Grading reads that directory like any other run directory ([run-directory.md](run-directory.md)), so it must carry a real statelog and a `run` row; `fakeRun` in `lib/optimize/testUtils.ts` builds one. |
 | `reporter` | Progress output — capture emitted events. |
 | `agencyRunner` | Running judge/proposer `.agency` files. |
 | `cache` | The per-`(workspace, input)` run cache. |

@@ -2,8 +2,8 @@
 
 This document explains a deliberate language-design decision: **Agency has one
 nothing-value, `null`, and treats `undefined` as identical to it.** It records
-what we decided, the alternatives we weighed, and *why* we chose unification —
-because this question resurfaces often and the reasoning is subtle.
+what we decided, the alternatives we weighed, and *why* we chose unification.
+This question resurfaces often and the reasoning is subtle.
 
 The concrete implementation is specified in
 [`docs/superpowers/specs/2026-06-28-nullish-unification-design.md`](../../superpowers/specs/2026-06-28-nullish-unification-design.md).
@@ -12,9 +12,9 @@ This doc is the "why"; that spec is the "what."
 ## The decision in one paragraph
 
 There is exactly one nothing-value in Agency: `null`. `undefined` is accepted as
-a second *spelling* of it — in a type it always was, and as of the keyword-alias
-work the value side agrees: `undefined` parses to the same node as `null`, and
-`agency fmt` prints `null`. There is still no second nothing-*value*; this is a
+a second *spelling* of it. In a type it always was, and as of the keyword-alias
+work the value side agrees. `undefined` parses to the same node as `null`, and
+`agency fmt` prints `null`. There is still no second nothing-*value*. This is a
 spelling, not a concept. Optionality is `T | null`. At runtime, `null` and `undefined`
 compare equal (via the `__eq` helper), and `undefined` arriving from the JS
 runtime or TypeScript interop is absorbed into `null`. `undefined` is never a
@@ -120,14 +120,15 @@ it, you would get values flowing through the program that the types say can't
 exist — an unsoundness hole, and the *worst* outcome (the confusion isn't
 removed, just hidden).
 
-The design therefore does not *ignore* `undefined` — it **absorbs** it. `null`
+The design therefore does not *ignore* `undefined`. It **absorbs** it. `null`
 and `undefined` are made to behave identically everywhere a user can observe
 them, and `undefined` is normalized to `null` where it enters typed data.
 
 As of the index/match normalization work (issue #409), the two most common of
-these value leaks — a missing object key / out-of-bounds index (`obj[key]`,
-`arr[i]`) and an unmatched `match` expression — are normalized to `null` at the
-value level via the `__nn` runtime helper (`x ?? null`). A *terminal* index read
+these value leaks are normalized to `null` at the value level by the `__nn`
+runtime helper in `lib/runtime/nn.ts`, which is `x ?? null`. Those two leaks are
+a missing object key or out-of-bounds index (`obj[key]`, `arr[i]`), and an
+unmatched `match` expression. A *terminal* index read
 of an access chain and the `__matchval_<id>` read that consumes a match result
 are wrapped in `__nn`, so they yield `null` rather than `undefined` as an
 observable value. This complements `__eq` (which unifies the two only at
@@ -307,18 +308,24 @@ compile identically.
 
 ## Relationship to null safety
 
-Unifying the nothing-values is **Project 1**. It deliberately does *not* make
-Agency null-*safe*: today the type checker lets you access a member on a
-possibly-null value with no error (like TypeScript with `strictNullChecks`
-off).
+Unifying the nothing-values was **Project 1**. On its own it did not make
+Agency null-*safe*.
 
-Strict null checking — forcing you to narrow a `T | null` before using it — is
-**Project 2**, and it is where the real safety payoff lives. It rides on the
-existing narrowing engine and roadmap: retarget `null-truthiness-narrowing-spec`
-from `undefined` to `null`, and make `strictMemberAccess` treat a possibly-null
-access as an error until narrowed. That combination gives Rust/`Option`-grade
-safety on top of the clean one-value runtime model, without a nominal `Option`
-type.
+Strict null checking, which forces you to narrow a `T | null` before using it,
+was **Project 2**, and it is where the real safety payoff lives. Both halves of
+it have since landed on the existing narrowing engine:
+
+- Null and truthiness narrowing. `if (x != null)`, `if (x == null)` and
+  `if (x)` strip the `null` member of a `T | null`. See the narrowing table in
+  [`docs/dev/compiler/typechecker/narrowing/README.md`](../compiler/typechecker/narrowing/README.md).
+- Strict member access. `accessUnionField` in `lib/typeChecker/synthesizer.ts`
+  treats any union member that lacks the field as missing, and `null` is such a
+  member, so an un-narrowed `x.foo` on a `T | null` raises the
+  `unionFieldNotOnEveryMember` diagnostic. The severity comes from
+  `typechecker.strictMemberAccess`, which defaults to `"error"`.
+
+Together those give `Option`-grade safety on top of the one-value runtime model,
+without a nominal `Option` type.
 
 ## Summary
 

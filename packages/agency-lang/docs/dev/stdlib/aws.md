@@ -22,7 +22,8 @@ declarative call over a sealed imperative body.
 - `lib/stdlib/aws/uri.ts` — `awsUriEncode(value, encodeSlash)`, the one place AWS
   path/query encoding lives.
 - `lib/stdlib/base64.ts` + `lib/stdlib/objectBytes.ts` — the shared strict base64
-  decoder and the single `AWS_OBJECT_BYTE_LIMIT` (10 MiB) with `objectSizeFailure`.
+  decoder and `objectSizeFailure`, which enforces the single
+  `AWS_OBJECT_BYTE_LIMIT` (10 MiB, defined in `lib/constants.ts`).
   `_writeBinary` reuses the same decoder.
 - `lib/stdlib/aws/credentials.ts` — env-only credentials + region precedence
   (argument → `AWS_REGION` → `us-east-1`).
@@ -50,9 +51,9 @@ The slash names a file; the colons name an effect. Both are intentional.
 ## The declarative executor
 
 `runS3Operation(region, operation)` owns the entire imperative pipeline for all
-operations in one `switch`: credential/partition/bucket resolution, key
+operations in one `switch`: credential, partition and bucket resolution, key
 checks, target construction, text/base64 codecs, the upload cap, transport, non-2xx
-mapping, binary redaction, and result shaping. The extern helpers
+mapping, binary redaction, and result shaping. The six extern helpers
 (`_s3Get`, `_s3GetBinary`, `_s3Put`, `_s3PutBinary`, `_createBucket`,
 `_s3PresignGet`) are one-call adapters. Adding an operation is a new variant plus
 a new `case` — no plumbing is copied.
@@ -105,11 +106,11 @@ create-bucket returns the `Location` header.
 
 ## Presigned URLs (`s3PresignGet`)
 
-`s3PresignGet(bucket, key, expiresIn, region)` mints a time-limited
-download URL for a private object: the query-string variant of SigV4
+`s3PresignGet(bucket, key, expiresIn = 1h, region = "")` mints a time-limited
+download URL for a private object. It uses the query-string variant of SigV4
 (`presignRequest` in `sigv4.ts`), where the signature rides in the query, only
 `host` is signed, and the payload hash is the literal `UNSIGNED-PAYLOAD`. No
-request is sent — the URL is pure local crypto.
+request is sent, the URL is pure local crypto.
 
 The parts that are easy to get wrong:
 

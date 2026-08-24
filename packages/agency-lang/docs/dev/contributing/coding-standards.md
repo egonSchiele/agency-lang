@@ -1,6 +1,6 @@
 # Coding Standards
 
-Rules for writing code in the Agency codebase. Most are enforced by the structural linter (`pnpm run lint:structure`). The last two are conventions that are not mechanically enforced.
+Rules for writing code in the Agency codebase. Some are enforced by the structural linter (`pnpm run lint:structure`, which runs ESLint over `lib/` using `eslint.config.js`). The rest are conventions we follow by hand. Each rule below says which it is.
 
 ---
 
@@ -14,7 +14,9 @@ interface Foo { name: string }
 type Foo = { name: string }
 ```
 
-**Rationale:** Consistency. The codebase uses `type` everywhere; `interface` introduces a second way to do the same thing.
+**Rationale:** Consistency. The codebase uses `type` everywhere, and `interface` introduces a second way to do the same thing.
+
+**Enforcement:** convention only. The `consistent-type-definitions` rule sits commented out in `eslint.config.js`, waiting on a cleanup pass over the existing `interface` declarations.
 
 ---
 
@@ -28,7 +30,9 @@ const lookup = new Map<string, number>();
 const lookup: Record<string, number> = {};
 ```
 
-**Rationale:** Plain objects are serializable (important for checkpointing/interrupts) and simpler to work with.
+**Rationale:** Plain objects serialize cleanly, which matters for checkpointing and interrupts, and they are simpler to work with.
+
+**Enforcement:** convention only. The linter has no rule for `Map`.
 
 ---
 
@@ -44,6 +48,8 @@ import { foo } from "./foo.js";
 
 **Rationale:** Dynamic imports break static analysis and make the dependency graph harder to reason about.
 
+**Enforcement:** linted. `no-restricted-syntax` bans `ImportExpression`.
+
 ---
 
 ### Prefer `const` over `let`
@@ -57,29 +63,35 @@ let name = "Alice";
 const name = "Alice";
 ```
 
-**Rationale:** `const` signals that a value won't change, reducing cognitive load when reading code.
+**Rationale:** `const` signals that a value will not change, so there is less to track while reading.
+
+**Enforcement:** linted, via `prefer-const`.
 
 ---
 
-### Keep functions under 100 lines
+### Keep functions short
 
-If a function exceeds 100 lines, break it into smaller, focused functions. Blank lines and comments don't count toward the limit.
+The linter caps a function at 150 lines, but aim well below that. If a function is getting long, break it into smaller, focused functions. Blank lines and comments don't count toward the limit.
 
 **Rationale:** Long functions are hard to understand, test, and modify. Smaller functions with clear names serve as documentation.
 
+**Enforcement:** linted, via `max-lines-per-function`. Test files are exempt.
+
 ---
 
-### Keep files under 1000 lines
+### Keep files short
 
-If a file exceeds 1000 lines, consider splitting it into smaller modules. Blank lines and comments don't count toward the limit.
+The linter caps a file at 1250 lines. If a file is approaching that, split it into smaller modules. Blank lines and comments don't count toward the limit.
 
-Some files are exempt from this rule (e.g., `typescriptBuilder.ts`, `parser.ts`) because they are inherently large due to the nature of their work. These are configured as exceptions in the ESLint config.
+`lib/backends/agencyGenerator.ts` is exempt, and so are test files. Both exemptions live in `eslint.config.js`.
 
 **Rationale:** Large files are hard to navigate and often indicate that a module has too many responsibilities.
 
+**Enforcement:** linted, via `max-lines`.
+
 ---
 
-### Keep nesting depth under 4 levels
+### Keep nesting shallow
 
 ```ts
 // Bad
@@ -87,11 +99,12 @@ if (a) {
   for (x in items) {
     if (b) {
       for (y in things) {
-        if (c) { // 5 levels deep
+        if (c) {
+          while (d) { // 6 levels deep, over the limit
 ```
 
 ```ts
-// Good — use early returns and extracted functions
+// Good: use early returns and extracted functions
 if (!a) return;
 for (x in items) {
   if (!b) continue;
@@ -101,13 +114,17 @@ for (x in items) {
 
 **Rationale:** Deeply nested code is hard to follow. Extract inner logic into functions or use early returns to flatten the structure.
 
+**Enforcement:** linted. `max-depth` allows 5 levels. Test files are exempt.
+
 ---
 
 ### Push functionality into runtime libs, not the builder
 
-When adding new features, put as much logic as possible in `lib/runtime/` (where it's testable and type-safe). The builder should generate calls to runtime functions, not inline complex logic as code strings.
+When adding new features, put as much logic as possible in `lib/runtime/`, where it is testable and type-safe. The builder should generate calls to runtime functions rather than inline complex logic as code strings.
 
-**Rationale:** Runtime code is easier to read, test, refactor, and debug than generated code. See anti-pattern #4 (logic in the wrong layer) in `docs/dev/contributing/anti-patterns.md`.
+**Rationale:** Runtime code is easier to read, test, refactor, and debug than generated code. See [anti-patterns.md](anti-patterns.md).
+
+**Enforcement:** convention only.
 
 ---
 
@@ -117,12 +134,16 @@ Always create new commits. Never use `git push --force` or `git commit --amend`.
 
 **Rationale:** Force-pushing and amending can destroy work and make history hard to follow.
 
+**Enforcement:** convention only.
+
 ---
 
 ### Route path arguments through `resolveDir` / `resolvePath`
 
-Any new stdlib function in `lib/stdlib/` that takes a `dir`, `cwd`, `src`, `dest`, or `path` argument MUST resolve it via [`resolveDir`](../../../lib/stdlib/resolveDir.ts) (for directories) or [`resolvePath`](../../../lib/stdlib/resolvePath.ts) (for the dir-plus-filename case). Do NOT call `path.resolve(process.cwd(), …)` directly on user-supplied paths; sync-only code uses `resolveCwdPath` from the same module so the expand-then-resolve policy stays single-homed.
+Any new stdlib function in `lib/stdlib/` that takes a `dir`, `cwd`, `src`, `dest`, or `path` argument MUST resolve it via [`resolveDir`](../../../lib/stdlib/resolveDir.ts) for directories, or [`resolvePath`](../../../lib/stdlib/resolvePath.ts) for the dir-plus-filename case. Do NOT call `path.resolve(process.cwd(), …)` directly on user-supplied paths. Sync-only code uses `resolveCwdPath` from `resolveDir.ts`, so the expand-then-resolve policy stays in one place.
 
-`resolveDir`/`resolvePath` delegate to [`expandPath`](../../../lib/stdlib/expandPath.ts), which is the single owner of path-shorthand policy (today: leading `~`; later: env vars, normalization, etc.). Inlining `path.resolve` at a new call site encodes the policy locally, so any future expansion rule has to be added at every site — exactly the "inconsistent patterns" anti-pattern this module exists to prevent.
+`resolveDir` and `resolvePath` delegate to [`expandPath`](../../../lib/stdlib/expandPath.ts), the single owner of path-shorthand policy. Today it expands a leading `~`, and later it may handle env vars and normalization. Inlining `path.resolve` at a new call site encodes the policy locally, so any future expansion rule has to be added at every site. That is exactly the "inconsistent patterns" anti-pattern this module exists to prevent.
 
-For options-only `allowedPaths` shapes, `assertContained` already runs each entry through `expandPath`, so a policy that says `allowedPaths: ["~/.agency"]` works for free.
+For options-only `allowedPaths` shapes, `assertContained` in `lib/stdlib/assertContained.ts` already runs each entry through `expandPath`, so a policy that says `allowedPaths: ["~/.agency"]` works for free.
+
+**Enforcement:** convention only.

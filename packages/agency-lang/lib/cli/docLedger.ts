@@ -55,8 +55,8 @@ export type DocLedgerEntry = {
   /** Hash of the Markdown bytes as written; a hand-edited or truncated
    *  page hashes differently and gets repaired. */
   outputHash: string;
-  /** The file's pass-1 registry contributions (NOT "exports": includes
-   *  non-exported and underscore-prefixed functions). */
+  /** The file's pass-1 registry contributions: the names that pass
+   *  `isDocumented`, which is the same predicate the renderer anchors on. */
   registrySymbols: string[];
   /** Every registry lookup this page's rendering made: name → target md
    *  path, or null for "rendered unlinked". Re-checked against the

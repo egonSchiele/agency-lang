@@ -21,8 +21,8 @@ is applied during scope building in `lib/typeChecker/scopes.ts`.
 > (`narrowByRefine`), so a new narrowing form lands in both automatically.
 > Fusing the walks and deleting the scope-chain path was assessed and
 > deliberately deferred (issue #471): the duplication is inert and the
-> precision delta was not worth the rebuild. Original design spec:
-> [`docs/superpowers/specs/2026-06-29-flow-typed-checker-design.md`](../../../../superpowers/specs/2026-06-29-flow-typed-checker-design.md).
+> precision delta was not worth the rebuild. The original design spec is no
+> longer in the repo; this page is the reference.
 
 ## Capabilities & limitations (current)
 
@@ -100,45 +100,81 @@ so the binding `v` picks up the narrowed type with no pattern-specific code.
 ### Fact production: `analyzeCondition`
 
 `analyzeCondition(condition)` reports the narrowing candidates a guard implies for
-its then- and else-branches. It recognizes a single `isSuccess(x)` / `isFailure(x)`
-over a bare variable (both are `RESERVED_FUNCTION_NAMES`, so the match is
-unambiguous), and composes over boolean combinators: `!c` swaps then/else, `a && b`
-unions then-facts, `a || b` unions else-facts.
+its then- and else-branches. It recognizes, all in `lib/typeChecker/narrowing.ts`:
 
-Each candidate carries a tagged `Refine` (`{ variableName, refine }`) and is applied
-through a declarative `narrowers` table keyed by `refine.kind` — so a new narrowing
-form is one table entry, not a change to the apply loop. The two forms today are
-`resultBranch` and `discriminant`.
+- `isSuccess(x)` / `isFailure(x)`. Both are `RESERVED_FUNCTION_NAMES`, so matching
+  on the function name is unambiguous and needs no `resolveCall` lookup.
+- `V.prop == literal` and `!= literal`, either operand order. `===`/`!==` map onto
+  `==`/`!=` through `STRICT_EQUALITY_ALIAS`.
+- `x == null` / `x != null` presence tests, either operand order.
+- Member-access truthiness `if (r.success)`, which becomes `r.success == true`.
+- Bare-variable truthiness `if (x)`, then-branch only.
+- A type pattern's lowered test `x is T`, then-branch only.
 
-### Result branch narrowing (`resultBranch`)
+It composes over boolean combinators: `!c` swaps then/else, `a && b` unions
+then-facts, `a || b` unions else-facts.
 
-Refines a `Result`-typed variable inside a guard so its branch-specific fields type
-correctly: inside `if (isSuccess(r))`, `r.value` synthesizes to the success type
-instead of `any`; inside `if (isFailure(r))` (or the `else` of an `isSuccess`
-guard), `r.error` synthesizes to the failure type.
+Each candidate is a `{ ref, refine }` pair, where `ref` is a `Reference` path and
+`refine` is a tagged `Refine`. `narrowByRefine` is the single dispatcher, and its
+switch is exhaustive, so a new `Refine` variant is a compile error there rather
+than a silent no-op. The three variants today are `discriminant`, `presence`, and
+`typeTest`.
+
+There is no separate Result variant. A `Result` is consumed as a discriminated
+union on its `success` field (`resultToObjectUnion`, `lib/typeChecker/resultUnion.ts`),
+so `isSuccess(r)` produces `discriminant { prop: "success", literal: true, keep: true }`
+and `isFailure(r)` produces the same refine with `keep: false`. Inside
+`if (isSuccess(r))`, `r.value` therefore synthesizes to the success type; inside the
+failure branch, `r.error` synthesizes to the failure type.
+
+### Presence narrowing (`presence`)
+
+Filters the `null` member of a `T | null` optional. `x != null` narrows both
+branches exactly. Bare `if (x)` narrows only the then-branch, because the runtime
+uses JS truthiness and a falsy `x` may be `""`, `0`, or `false` rather than `null`.
+
+### Type-test narrowing (`typeTest`)
+
+`x is T` narrows the subject to the tested type in the then-branch only. If what is
+already known is at least as precise as the tested type, `narrowByRefine` returns
+"no narrowing" so that `is string` on `"a" | "b"` does not widen the literal union.
+`any` is excluded from that check, since escaping `any` is the whole point of the
+test.
 
 ### Discriminated-union narrowing (`discriminant`)
 
-`analyzeCondition` also recognizes `v.prop == literal` / `v.prop != literal` over a
-bare variable (either operand order; string/number/boolean literals via the shared
-`literalToType`). `narrowUnionByDiscriminant` then filters the union's members by
-that literal discriminant property — `if (r.kind == "answer")` narrows `r` to the
-matching member(s) in the then-branch and the complement in the else-branch.
+`narrowUnionByDiscriminant` filters the union's members by a literal discriminant
+property. `if (r.kind == "answer")` narrows `r` to the matching member(s) in the
+then-branch and to the complement in the else-branch. String, number, and boolean
+literals are recognized through the shared `literalToType`.
 
-Like Result narrowing it is sound/conservative: a member whose discriminant
-property isn't a *matching-kind literal type* (a plain `string`, a wider union, a
-different literal kind) can't be proven disjoint, so it is kept — and narrowing to
-`never` (or to the full set) is suppressed entirely (returns "no narrowing").
+`asDiscriminantAccess` decides which reference gets narrowed: the discriminant is
+the FINAL property hop, and the narrowed reference is the receiver prefix. So
+`obj.payload.kind == "x"` narrows `obj.payload`, and `arr[0].kind == "x"` narrows
+`arr[0]`. An unstable hop before the discriminant, such as `arr[i()].kind`, narrows
+nothing.
+
+The filter is sound and conservative. A member whose discriminant property is not
+a matching-kind literal type cannot be proven disjoint, so it is kept. A plain
+`string`, a wider union, and a different literal kind all fall in that bucket. A
+result that would be empty, or that keeps every member, returns "no narrowing"
+instead, so this path never narrows to `never`.
 
 Match arms come for free: `match (r) { { kind: "answer", data } => … }` lowers to
 `const __s = r; if (__s.kind == "answer") { const data = __s.data; … }`, so the
 bound field `data` reads the narrowed temp with no match-specific code.
 
-Two limitations: (1) only *bound fields* of the scrutinee narrow — the scrutinee
-variable in the source isn't re-typed, only the lowered temp; (2) a mixed union with
-a non-literal discriminant member (`{ kind: "a" } | { kind: string }`) doesn't
-narrow, by design (the `string` member can't be excluded). The `is`-form match
-(`match (x is …)`) is guard-based and intentionally untagged.
+One limitation remains: a mixed union with a non-literal discriminant member
+(`{ kind: "a" } | { kind: string }`) does not narrow, by design, because the
+`string` member cannot be excluded. The `is`-form match (`match (x is …)`) is
+guard-based and intentionally untagged.
+
+For a stable scrutinee in a match with no guarded arms, the lowered conditions
+target the original expression rather than the `__scrutinee` temp
+(`narrowableScrutineeRef`, `lib/lowering/patternLowering.ts`), so the scrutinee
+itself narrows too. A guard in any arm forces the evaluate-once temp back, because
+a guard is user code between the conditions and dispatch must stay a single
+evaluation.
 
 ### Application: `walkWithNarrowing`
 
@@ -160,10 +196,11 @@ conservative: it counts only `return` (a `raise`/interrupt may resume, and
 ### Soundness
 
 Every narrowing is a false-negative-only approximation. A whole-body reassignment
-scan skips narrowing any variable the branch (or the post-guard tail) reassigns,
-since its type could change. The `narrowedBranch` marker on `ResultType` is set only
-by this layer and is stripped by `widenType`, so it never leaks through `declare()`
-into a function's inferred return type.
+scan skips narrowing any variable the branch, or the post-guard tail, reassigns,
+since its type could change. Narrowing never leaks into a function's inferred
+return type: the scope-chain path writes refinements with `declareLocal` into a
+throwaway child scope, and the flow path keeps them on flow nodes rather than on
+the type itself.
 
 **Member-path prefix invalidation.** A narrowing of `box.r` (or `arr[0]`) is keyed
 on the whole path — `Reference.chain` is a `PathSegment[]` of `prop`/`index` hops,
@@ -201,29 +238,29 @@ later reassignment is the classic closure-staleness limitation (mainstream
 checkers narrow `const` but not reassigned `let` across closures) and is not
 specially handled.
 
-Un-narrowed `Result` field access still synthesizes to `any` (the legacy escape
-hatch in `synthValueAccess`); tightening that into a hard error is a later increment
-(the enforced-Result-safety flip, which the flow-typed model unblocks).
+Un-narrowed `Result` field access is a hard error by default. That is the
+strict-member-access check described above, and `strictMemberAccess: "silent"`
+restores the old lenient `any`.
 
-## Planned: the flow-typed checker
+## The flow-typed model
 
-The scope-chain model above has a structural weakness: narrowing lives in transient
+The scope-chain model above has a structural weakness. Narrowing lives in transient
 child scopes inside one walk, but other passes re-synthesize against the flat,
-un-narrowed function scope — so they can disagree (this is what blocks enforced
-Result safety). The fix is a **flow-typed environment**: narrowing lives on a graph
-of program points attached to AST nodes, and every type query routes through
-`typeAt(reference, flowNode)` — one oracle, consulted by every pass, with no
-scope-chain disagreement possible.
+un-narrowed function scope, so they can disagree. That is what blocked enforced
+Result safety. The fix, now shipped, is a **flow-typed environment**: narrowing
+lives on a graph of program points attached to AST nodes, and every type query
+routes through `typeAt(reference, flowNode)`. One oracle, consulted by every pass,
+with no scope-chain disagreement possible.
 
-Highlights of the planned model (see the spec for detail):
+The model, in `lib/typeChecker/flow.ts` and `lib/typeChecker/flowBuilder.ts`:
 
-- **Flow graph** — `start` / `assign` / `narrow` / `join` / `loop` / `exit` nodes;
+- **Flow graph** — `start` / `assign` / `narrow` / `join` / `loop` / `exit` nodes.
   `typeAt` resolves a reference's type by walking the graph, memoized per node.
-- **Reference-keyed** narrowing (a `{ variable, chain }` path, not a bare name) so
-  property-path guards (`if (user.profile != null)`) can narrow.
-- **Loop widening** at the back-edge (sound, sometimes over-widens; no fixpoint).
-- **`never`** as the bottom type (landed) — empty joins and fully-excluded
-  discriminant narrowings become `never`, unlocking dead-branch and exhaustiveness
+- **Reference-keyed** narrowing. The key is a `{ variable, chain }` path, not a
+  bare name, so property-path guards such as `if (user.profile != null)` narrow.
+- **Loop widening** at the back-edge. Sound, sometimes over-widens, no fixpoint.
+- **`never`** as the bottom type. Empty joins and fully-excluded discriminant
+  narrowings become `never`, which unlocks dead-branch and exhaustiveness
   diagnostics.
 
 > **Exhaustiveness is not a flow byproduct.** `match (r) { … }` coverage checking is
@@ -232,8 +269,8 @@ Highlights of the planned model (see the spec for detail):
 
 ## Pages in this directory
 
-Today this README is the whole reference. As the flow-typed increments land, the
-content splits into focused pages (each owned by the PR that builds it):
+Today this README is the whole reference. If the content ever splits, these are the
+intended pages:
 
 - `flow-graph.md` — `FlowNode` kinds, `typeAt`, `Reference` keys, memoization, loop widening.
 - `result-unions.md` — Result-as-union + discriminant narrowing.

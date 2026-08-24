@@ -173,15 +173,12 @@ that broke nested-fork composition):
 - The `__race_winner_<id>` key shape — preserved deliberately for
   in-flight checkpoint compatibility.
 
-## Subprocess-shape (future)
+## The subprocess adapter
 
-`runBatch`'s shape — per-child branch, idempotent re-entry,
-shared-checkpoint batching — is the same shape that a subprocess /
-multi-process executor would need. A future "spawn agent in
-subprocess" adapter would build its `BatchChild.invoke` around an
-IPC round-trip rather than a synchronous function call, surface the
-subprocess's interrupts as the return value, and otherwise reuse the
-existing branch lifecycle / checkpoint stamping unchanged. Designing
-that adapter is out of scope here; see
-`docs/superpowers/specs/2026-05-09-subprocess-propagation-and-resume-design.md`
-for the broader subprocess plan.
+`runBatch`'s shape, one branch per child with idempotent re-entry and
+shared-checkpoint batching, is also what a subprocess executor needs. That
+adapter now exists: `_run` in `lib/runtime/ipc.ts` builds its
+`BatchChild.invoke` around an IPC round-trip instead of a synchronous call,
+surfaces the subprocess's interrupts as the return value, and reuses the
+branch lifecycle and checkpoint stamping unchanged. See
+[`docs/dev/runtime/subprocess-ipc.md`](./subprocess-ipc.md).

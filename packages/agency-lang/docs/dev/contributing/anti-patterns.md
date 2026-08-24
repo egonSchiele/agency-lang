@@ -38,7 +38,7 @@ const functions = walkNodesArray(nodes)
 
 ### Imperative code everywhere
 
-**What it looks like:** Writing imperative code everywhere, instead of encapsulating it in a few places and exposing a nice abstraction that the user can use to write their code in a declarative manner. The logic for the "what" and the logic for the "how" should be split apart, so in the future, it's easier to make changes... you simply need to change the code for the "what" and not touch the code for the "how."
+**What it looks like:** Imperative code spread everywhere, instead of a few places that encapsulate it behind a declarative interface. Split the logic for the "what" apart from the logic for the "how". Then a future change usually only touches the "what".
 
 **Bad:**
 ```ts
@@ -145,7 +145,8 @@ return arr.map(x => x * 2);
 **What it looks like:** Similar operations are implemented in different ways across the codebase, making it harder to read and maintain.
 
 **Bad:**
-```ts// In one file
+```ts
+// In one file
 function getUser(id: string): User {
   // implementation A
 }
@@ -189,7 +190,7 @@ if (isLoading) {
 
 ### Using a try-catch block without logging anything in the catch block
 
-**Why:** This is bad because it can make errors really difficult to trace since you're not logging anything when the exception is caught. Those errors will be swallowed.
+**Why:** A silent catch swallows the error. Nothing is logged, so the failure is very hard to trace.
 
 **Bad:**
 
@@ -215,7 +216,7 @@ try {
 
 ### One-line if statements
 
-**Why:** One-line if statements can be hard to read and maintain, especially when they contain complex logic. It's better to use block statements for clarity.
+**Why:** One-line if statements are hard to read and maintain, especially when the branch holds complex logic. Use a block statement instead.
 
 **Bad:**
 ```ts
@@ -231,7 +232,7 @@ if (condition) {
 
 ### Putting too much stuff onto a single line
 
-**Why:** Putting too much logic on a single line can make the code hard to read and understand. It's better to break it down into multiple lines for clarity.
+**Why:** Too much logic on one line is hard to read. Break it across several lines.
 
 **Bad:**
 ```ts
@@ -246,7 +247,7 @@ const result = activeValues.reduce((acc, val) => acc + val, 0);
 
 ### Nested objects in type definitions
 
-**Why:** Deeply nested objects in type definitions can make the code harder to read and maintain. It's better to break them down into separate types for clarity.
+**Why:** Deeply nested objects in type definitions make the code harder to read and maintain. Break them into separate named types.
 
 **Bad:**
 ```ts
@@ -274,7 +275,7 @@ type Foo = {
 
 ### Dynamic requires
 
-**Why:** Dynamic requires can lead to code that is difficult to analyze and optimize. It's better to use static imports whenever possible.
+**Why:** Dynamic requires make code difficult to analyze and optimize. Always use static imports. The structural linter also bans dynamic `import()` expressions, see `eslint.config.js`.
 
 **Bad:**
 ```ts
@@ -289,7 +290,7 @@ const dispatch = async () => { throw new SmolError(); };
 
 ### Magic numbers
 
-**Why:** Magic numbers are hard to understand and maintain. It's better to use named constants to give context to the values.
+**Why:** Magic numbers are hard to understand and maintain. Use named constants to give the values some context.
 
 **Bad:**
 ```ts
@@ -309,7 +310,7 @@ for (let i = 0; i < MAX_ITERATIONS; i++) {
 
 ### Single character variable names
 
-**Why:** Single character variable names can be unclear and make the code harder to read. Use descriptive names that convey the purpose of the variable.
+**Why:** Single character variable names are unclear and make the code harder to read. Use descriptive names that convey the purpose of the variable.
 
 **Bad:**
 ```ts
@@ -341,7 +342,7 @@ Please never use this pattern.
 
 ### Not using safeDelete when deleting files
 
-**Why:** Using `safeDelete` ensures that you don't accidentally delete important files or directories. It adds a layer of safety to file deletion operations.
+**Why:** The `safeDelete*` helpers in `lib/utils.ts` refuse to delete important files or directories. They add a layer of safety to file deletion operations.
 
 **Bad:**
 ```ts
@@ -351,8 +352,10 @@ unlinkSync(filePath);
 
 **Good:**
 ```ts
-import { safeDelete } from "@/utils.js";
-safeDelete(filePath);
+import { safeDeleteFile, safeDeleteDirectoryWithin } from "@/utils.js";
+safeDeleteFile(filePath, false);
+// When you already know the root the target must live under:
+safeDeleteDirectoryWithin(root, dirPath);
 ```
 
 ### Writing tests where failures are catastrophic

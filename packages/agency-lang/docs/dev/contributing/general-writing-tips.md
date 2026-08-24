@@ -14,7 +14,7 @@ When you read the sentence, what do you think it means? I think it means that a 
 The name lists partition the catalog's managed (`source:"remote"`) entries by what changed.
 ```
 
-It turns out that there is something called a "name list", which partitions something in the catalog. Avoid sentences like this, because they make the reader realize halfway through reading the sentence that it doesn't that the words don't mean what the reader thought they meant, and they have to re-read the sentence to take into account the information they gained in the second half of the sentence. A classic garden path sentence begins with the words "the old man". What do you think it's going to tell us about the old man? Actually, the full sentence is "the old man the boat". Notice how the first half of the sentence makes you think it's talking about an old man, and it's not until you read the second half that you realize that it's talking about elderly people as a group.
+It turns out that there is something called a "name list", which partitions something in the catalog. Avoid sentences like this, because they make the reader realize halfway through reading the sentence that the words don't mean what the reader thought they meant, and they have to re-read the sentence to take into account the information they gained in the second half of the sentence. A classic garden path sentence begins with the words "the old man". What do you think it's going to tell us about the old man? Actually, the full sentence is "the old man the boat". Notice how the first half of the sentence makes you think it's talking about an old man, and it's not until you read the second half that you realize that it's talking about elderly people as a group.
 
 Good: 
 
@@ -32,7 +32,7 @@ Passive voice makes you focus on the person or object receiving the action, rath
 Other examples:
 
 Bad: "Enclosing guard(cost:) budgets meter the subprocess in real time"
-Good "The subprocess is metered in real time by enclosing guard(cost:) budgets."
+Good: "The subprocess is metered in real time by enclosing guard(cost:) budgets."
 
 3. Avoid introducing too many concepts in a single sentence.
 

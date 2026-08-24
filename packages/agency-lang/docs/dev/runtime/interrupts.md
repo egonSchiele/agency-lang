@@ -2,90 +2,63 @@
 
 ## Background
 
-Agency uses a step-counter system to resume execution after an interrupt. Every statement in a node or function body gets wrapped in a step guard:
+Agency uses a step-counter system to resume execution after an interrupt. The compiler gives every statement in a node or function body an integer step id, and wraps it in a `runner.step` call:
 
 ```typescript
-if (__step <= 0) {
+await runner.step(0, async (runner) => {
   // statement 0
-  __stack.step++;
-}
-if (__step <= 1) {
+});
+await runner.step(1, async (runner) => {
   // statement 1
-  __stack.step++;
-}
+});
 ```
 
-When an interrupt fires, `__stack.step` is serialized. On resume, statements with lower indices are skipped, and execution picks up at the right statement.
+`Runner` (`lib/runtime/runner.ts`) owns the counter. `step()` returns immediately when the counter has already passed the id, and advances the counter once the body finishes. When an interrupt fires, the counter is serialized on the frame. On resume the completed statements are skipped and execution picks up at the right statement.
 
-This works well for top-level statements, but blocks (if/else, loops, threads, etc.) were originally treated as a single step. The entire block body was one step, so interrupts inside a block couldn't resume at the correct statement within that block.
+That works for top-level statements. Blocks (if/else, loops, threads) were originally one step each, so an interrupt inside a block could not resume at the right statement within it.
 
-**Substeps** solve this by adding nested step guards inside block bodies.
+**Substeps** solve this. Each block construct gets its own runner method, and the body statements inside it get their own nested counter.
 
-## The subStepPath
+## The step path
 
-All substep tracking is built on `_subStepPath`, an array that tracks the current position in the step hierarchy. It works like a scope stack:
+All substep tracking is built on a path of integers that tracks the current position in the step hierarchy. It works like a scope stack. The compiler side is `StepPathTracker` (`lib/backends/typescriptBuilder/stepPathTracker.ts`), and the runtime side is `Runner.path`.
 
 - `processBodyAsParts` pushes the step index before processing each statement and pops after
-- `processIfElseWithSteps` pushes the statement index before processing each branch body statement and pops after
-- Loop and thread processors do the same for their body statements
+- The block processors do the same for their body statements
+- At runtime, `Runner` pushes the id before running a nested body and pops in a `finally`
 
-The path is used to generate unique variable names. For example, `_subStepPath = [3, 1]` produces variables like `__substep_3_1`, `__condbranch_3_1`, etc. This ensures nested blocks at different positions never collide.
+The path names the frame locals that hold the tracking state. A path of `[3, 1]` gives a key of `"3.1"`, which produces locals like `__substep_3.1` and `__condbranch_3.1`. Nested blocks at different positions can therefore never collide. `Runner.getCounter()` reads `__substep_<key>` when the path is non-empty, and `frame.step` at the top level.
 
-The path is also used as the branch key for async function calls. When `forkBranchSetup` is called, it uses `_subStepPath.join("_")` as the key to store/retrieve branch state in `__stack.branches`.
+The joined path is also the branch key for async function calls. `forkBranchSetup` uses `this.steps.joined()` to store and retrieve branch state in `__stack.branches`.
 
 ## If/else blocks
 
-If/else blocks use two tracking variables:
-
-- `__condbranch_K` — which branch was taken (integer: 0 for if, 1 for first else-if, etc., -1 if no branch matched)
-- `__substep_K` — which statement within the taken branch we're on
-
-The generated code:
-
-1. **Evaluates the condition once** and stores the result in `__condbranch_K`. On resume, the stored value is used instead of re-evaluating the condition.
-2. **Dispatches to the correct branch** using the stored condbranch value.
-3. **Wraps each statement** in the branch body with a substep guard (`if (__sub_K <= N)`).
+Codegen lowers an if/else chain to a single `runner.ifElse` call. `processIfElseWithSteps` (`lib/backends/typescriptBuilder.ts`) builds the `runnerIfElse` IR node, and `lib/ir/prettyPrint.ts` prints it through `runnerIfElse.mustache`:
 
 ```typescript
-if (__stack.locals.__condbranch_3 === undefined) {
-  if (condition1) {
-    __stack.locals.__condbranch_3 = 0;
-  } else if (condition2) {
-    __stack.locals.__condbranch_3 = 1;
-  } else {
-    __stack.locals.__condbranch_3 = -1;
-  }
-}
-const __condbranch_3 = __stack.locals.__condbranch_3;
-const __sub_3 = __stack.locals.__substep_3 ?? 0;
-
-if (__condbranch_3 === 0) {
-  if (__sub_3 <= 0) {
-    // first statement in the if body
-    __stack.locals.__substep_3 = 1;
-  }
-  if (__sub_3 <= 1) {
-    // second statement
-    __stack.locals.__substep_3 = 2;
-  }
-} else if (__condbranch_3 === 1) {
-  // else-if body statements with their own substep guards
-}
+await runner.ifElse(3, [
+  { condition: async () => cond1, body: async (runner) => { /* then body */ } },
+  { condition: async () => cond2, body: async (runner) => { /* else-if body */ } },
+], async (runner) => { /* else body */ });
 ```
 
-The condbranch value is immutable once set — `modifyInterrupt` does not cause branch conditions to be re-evaluated.
+`Runner.ifElse` uses one tracking local:
 
-The IR node for this is `TsIfSteps` (defined in `lib/ir/tsIR.ts`), with code generation handled by Mustache templates (`ifStepsCondbranch.mustache` and `ifStepsBranchDispatch.mustache`).
+- `__condbranch_<key>` — which branch was taken. It holds the branch index, or `-1` when no branch matched and there is no else.
+
+It evaluates the conditions ONCE, in order, and caches the winning index. On resume the cached value re-dispatches to the same branch without re-evaluating anything. Statements inside the chosen branch are ordinary `runner.step` calls, so they get their own `__substep_<key>` counter under the pushed path.
+
+Every statement inside a branch keeps its counter, so an interrupt deep inside an else-if resumes at exactly the statement it paused on.
 
 ## Match blocks
 
-Match blocks reuse `TsIfSteps`, exactly like if/else: `processMatchBlockWithSteps` (`lib/backends/typescriptBuilder.ts`) turns each match case into a branch with an `===` equality condition against the scrutinee, and the `_` case (if present) becomes the else branch. Arm bodies are processed through `processBodyAsParts`, the same helper if/else uses, so each statement in an arm gets its own `__substep_K` guard — a multi-statement block arm resumes mid-arm exactly like a multi-statement if/else branch resumes mid-branch. The `__condbranch_K` cache means the winning arm is decided once and re-dispatched to (not re-matched) on resume, even if the scrutinee or a guard has side effects.
+Match blocks reuse `runnerIfElse`, exactly like if/else: `processMatchBlockWithSteps` (`lib/backends/typescriptBuilder.ts`) turns each match case into a branch with an `===` equality condition against the scrutinee, and the `_` case (if present) becomes the else branch. Arm bodies are processed through `processBodyAsParts`, the same helper if/else uses, so each statement in an arm gets its own `__substep_<key>` counter — a multi-statement block arm resumes mid-arm exactly like a multi-statement if/else branch resumes mid-branch. The `__condbranch_<key>` cache means the winning arm is decided once and re-dispatched to (not re-matched) on resume, even if the scrutinee or a guard has side effects.
 
-Code generation goes through the same `runnerIfElse.mustache` template used for if/else (there is no separate match-specific template).
+Code generation goes through the same `runnerIfElse.mustache` template used for if/else. There is no separate match-specific template.
 
 ### Match *expressions*
 
-When a match is used as an expression (`const x = match(...) { ... }` or `return match(...) { ... }`), the lowered `TsIfSteps`/`runner.ifElse(...)` call additionally carries a `matchId`, and each arm's yielding `return expr` lowers to a `matchYield` node that compiles to:
+When a match is used as an expression (`const x = match(...) { ... }` or `return match(...) { ... }`), the lowered `runnerIfElse` / `runner.ifElse(...)` call additionally carries a `matchId`, and each arm's yielding `return expr` lowers to a `matchYield` node that compiles to:
 
 ```typescript
 runner.exitMatch(<matchId>, <value>);
@@ -96,7 +69,7 @@ return;
 
 `_matchExit`, like `_break`/`_continue`, is transient in-process unwind state and is **never serialized** — an interrupt cannot fire while a match-exit unwind is in flight, only in between statements.
 
-The consuming statement (the `const x = ...` or `return ...` around the match) reads `__matchval_<matchId>` back out of `__stack.locals`. **No end-of-iteration reset is needed for `__matchval_<matchId>`**, unlike `__condbranch_`/`__substep_`/`__iteration_`: the all-paths-yield check (enforced at lowering time — every code path through an expression-position arm must `return` a value) guarantees the local is freshly written before it's ever read in the same pass through the match, so a stale value from a previous loop iteration can never leak through unread. (Loop-iteration resets for `__condbranch_`/`__substep_`/`__iteration_` themselves are implemented directly in `lib/runtime/runner.ts` — in `loop()` and `whileLoop()`, via `this.frame.clearLocalsWithPrefix(...)` calls after each iteration — not in a Mustache template; `runnerIfElse.mustache` is the only template involved in match/if-else codegen.)
+The consuming statement (the `const x = ...` or `return ...` around the match) reads `__matchval_<matchId>` back out of `__stack.locals`. **No end-of-iteration reset is needed for `__matchval_<matchId>`**, unlike `__condbranch_`, `__substep_`, and `__iteration_`: the all-paths-yield check (enforced at lowering time — every code path through an expression-position arm must `return` a value) guarantees the local is freshly written before it's ever read in the same pass through the match, so a stale value from a previous loop iteration can never leak through unread. Loop-iteration resets for the other prefixes live in `loop()` and `whileLoop()` in `lib/runtime/runner.ts`, as `this.frame.clearLocalsWithPrefix(...)` calls after each iteration. No template is involved; `runnerIfElse.mustache` is the only template in match and if/else codegen.
 
 Interrupt walkthrough for an expression-position match:
 
@@ -111,125 +84,76 @@ const val = match(r) {
 }
 ```
 
-Pausing at the `interrupt` serializes `__stack.step`, `__condbranch_K = 0` (the `success` arm), `__substep_K = 1`, and locals. On resume: outer guards skip completed statements; the cached condbranch re-enters the `success` arm without re-matching `r`; the substep guard skips `print`; the interrupt statement completes with the response; the `return` statement calls `runner.exitMatch(matchId, ...)`, writing `__matchval_<matchId>` and setting `_matchExit`; the owning `ifElse` call's `finally` clears the flag; the outer `const val = __matchval_<matchId>` statement reads the value. Checkpoint/`restore()` behave identically to if/else since all of this tracking lives on `__stack`.
+Pausing at the `interrupt` serializes `__stack.step`, `__condbranch_<key> = 0` (the `success` arm), `__substep_<key> = 1`, and locals. On resume: outer guards skip completed statements; the cached condbranch re-enters the `success` arm without re-matching `r`; the substep guard skips `print`; the interrupt statement completes with the response; the `return` statement calls `runner.exitMatch(matchId, ...)`, writing `__matchval_<matchId>` and setting `_matchExit`; the owning `ifElse` call's `finally` clears the flag; the outer `const val = __matchval_<matchId>` statement reads the value. Checkpoint/`restore()` behave identically to if/else since all of this tracking lives on `__stack`.
 
 ## Thread blocks
 
-Thread blocks use `TsThreadSteps` with three phases:
+A `thread { }` or `subthread { }` block compiles to `runner.thread(id, method, optsThunk, callback)`. `Runner.thread` creates or reopens the thread, pushes it on the active stack, runs the callback, and pops in a `finally`. The body statements inside the callback are ordinary `runner.step` calls with their own substep counter, so an interrupt inside a thread body resumes at the right statement.
 
-- **Setup (substep 0):** `__threads.create()` + `__threads.pushActive(__tid)` — creates the thread and pushes it onto the active stack
-- **Body (substeps 1..N):** Each statement in the thread body gets its own substep guard
-- **Cleanup:** `__threads.active().cloneMessages()` (if assigned) + `__threads.popActive()` — runs after all substeps complete
+`Runner.thread` remembers the thread id in the frame local `__thread_<stepPath>`. That is what makes the create idempotent: a resume re-runs the whole method, and without the local it would create a second thread.
 
-```typescript
-const __sub_K = __stack.locals.__substep_K ?? 0;
-if (__sub_K <= 0) {
-  const __tid = __threads.create();
-  __threads.pushActive(__tid);
-  __stack.locals.__substep_K = 1;
-}
-if (__sub_K <= 1) {
-  // first body statement
-  __stack.locals.__substep_K = 2;
-}
-// ... more body substeps ...
-msgs = __threads.active().cloneMessages();
-__threads.popActive();
-```
-
-On resume, the ThreadStore is deserialized with the thread already on the `activeStack`, so setup (substep 0) is skipped and the thread is already active. The cleanup only runs after all substeps complete.
-
-The IR node is `TsThreadSteps`, with code generation handled by `threadSteps.mustache`.
+See [threads.md](./threads.md) for what the thread machinery itself does.
 
 ## While loops
 
-While loops are the most complex because the body executes multiple times. They use two tracking variables:
-
-- `__iteration_K` — which iteration we're on (persisted in locals, survives serialization)
-- `__substep_K` — which statement within the current iteration
-
-The generated code:
+While loops are the most complex, because the body executes many times. `processWhileLoopWithSteps` emits a `runnerWhileLoop` node, which prints as:
 
 ```typescript
-__stack.locals.__iteration_K = __stack.locals.__iteration_K ?? 0;
-let __currentIter_K = 0;
-while (condition) {
-  // Skip completed iterations
-  if (__currentIter_K < __stack.locals.__iteration_K) {
-    __currentIter_K++;
-    continue;
-  }
-  // Substep guards for body statements
-  __stack.locals.__substep_K = __stack.locals.__substep_K ?? 0;
-  if (__stack.locals.__substep_K <= 0) {
-    // first body statement
-    __stack.locals.__substep_K = 1;
-  }
-  if (__stack.locals.__substep_K <= 1) {
-    // second body statement
-    __stack.locals.__substep_K = 2;
-  }
-  // End-of-iteration reset
-  __stack.locals.__substep_K = 0;
-  __stack.clearLocalsWithPrefix("__condbranch_K_");
-  __stack.clearLocalsWithPrefix("__substep_K_");
-  __stack.clearLocalsWithPrefix("__iteration_K_");
-  __stack.locals.__iteration_K++;
-  __currentIter_K++;
-}
+await runner.whileLoop(7, async () => condition, async (runner) => {
+  // body statements, each its own runner.step
+});
 ```
+
+`Runner.whileLoop` uses two tracking locals:
+
+- `__iteration_<key>` — which iteration we are on. It lives in `frame.locals` and survives serialization.
+- `__substep_<key>` — which statement within the current iteration, maintained by the body's `runner.step` calls.
 
 ### How iteration skipping works
 
-`__iteration_K` is stored in `__stack.locals` and survives serialization. `__currentIter_K` is a local `let` variable that starts at 0 each time the loop runs (including on resume). On each iteration, if `__currentIter_K < __iteration_K`, the iteration was already completed — we increment the counter and `continue` to skip it.
-
-When we reach the iteration where the interrupt happened, `__currentIter_K === __iteration_K`, so we fall through to the substep guards. The substep counter guides execution to the exact statement where the interrupt occurred.
+`currentIter` is a plain local that starts at 0 every time the loop runs, including on resume. On each turn of the loop, if `currentIter < __iteration_<key>`, that iteration already completed. The runner increments `currentIter` and `continue`s past it. When the two are equal we are at the iteration where the interrupt happened, and the substep counter guides execution to the exact statement.
 
 ### Why we re-evaluate the loop condition on skipped iterations
 
-During skipped iterations, the while loop condition is still evaluated. This is necessary because the loop variable (e.g., `x`) is restored from serialized locals and must satisfy the condition to enter the loop at all. The condition evaluation is cheap (it's just a comparison) and ensures correctness.
+The condition still runs during skipped iterations. It has to: the loop variable is restored from serialized locals, and it must satisfy the condition for the loop to be entered at all. The condition is cheap, and evaluating it keeps the resume correct.
 
 ### How end-of-iteration reset works
 
-At the end of each iteration, three things happen:
+At the end of each iteration the runner does three things:
 
-1. `__substep_K` is reset to 0 for the next iteration
-2. `__stack.clearLocalsWithPrefix(...)` deletes all nested tracking variables
-3. `__iteration_K` is incremented
+1. Deletes every nested tracking local under this loop's path prefix
+2. Sets `__iteration_<key>` to the next iteration number
+3. Advances `currentIter`
 
-**The reset is critical for correctness.** Without it, tracking variables from a previous iteration would persist and cause incorrect behavior on the next iteration. For example, a `__condbranch_K_0` value cached from iteration 0 (where `x == 0`) would prevent the condition from being re-evaluated on iteration 3 (where `x == 3`).
+**The reset is critical for correctness.** Without it, tracking locals from a previous iteration would persist into the next one. A `__condbranch_` value cached in iteration 0, where `x == 0`, would stop the condition being re-evaluated in iteration 3, where `x == 3`.
 
-`clearLocalsWithPrefix` (defined as a method on the `State` class in `lib/runtime/state/stateStack.ts`) iterates over all keys in `__stack.locals` and deletes any that start with the given prefix. Three prefixes are cleared:
+`clearLocalsWithPrefix` is a method on the `State` class in `lib/runtime/state/stateStack.ts`. It walks every key in `frame.locals` and deletes those starting with the given prefix. `loop()` and `whileLoop()` clear five prefixes:
 
-- `__condbranch_K_` — cached branch decisions from if/else and match blocks
-- `__substep_K_` — substep counters from nested blocks
-- `__iteration_K_` — iteration counters from nested loops
+- `__substep_<path>` — substep counters from nested blocks
+- `__condbranch_<path>` — cached branch decisions from if/else and match blocks
+- `__iteration_<path>` — iteration counters from nested loops
+- `__interruptId_<path>` — persisted interrupt ids from nested interrupt sites
+- `__pipe_result_` — pipe-chain intermediates
 
-This prefix-based approach is deliberately broad. Rather than enumerating specific keys to reset (which is fragile and breaks when new tracking variable types are added), it clears everything that belongs to the loop's scope.
+The prefix approach is deliberately broad. Enumerating specific keys would be fragile and would break whenever a new kind of tracking local appears.
 
-**If you add a new type of tracking variable in the future** (e.g., `__newthing_K_0`), you must either:
-- Use one of the existing prefixes (`__condbranch_`, `__substep_`, `__iteration_`), in which case it will be automatically cleared
-- Add a new `clearLocalsWithPrefix` call to the loop templates (`whileSteps.mustache` and `forSteps.mustache`) with the new prefix
-
-Failing to do so will cause the variable to persist across loop iterations, leading to incorrect resume behavior after interrupts.
-
-The IR node is `TsWhileSteps`, with code generation handled by `whileSteps.mustache`.
+**If you add a new kind of tracking local**, you must either name it with one of the existing prefixes, so the sweep already covers it, or add a `clearLocalsWithPrefix` call for the new prefix to both `loop()` and `whileLoop()` in `lib/runtime/runner.ts`. Skip that and the local persists across iterations, and resume after an interrupt goes wrong.
 
 ## For loops
 
-For loops use `TsForSteps`, which is structurally identical to `TsWhileSteps` but with explicit init/condition/update expressions in a `for` header instead of a `while` condition.
+For loops go through `Runner.loop(id, items, callback)`. The runtime, not codegen, owns the iteration: `loop()` classifies the value with `classifyIterable` (`lib/utils/iteration.ts`), which is shared with `_pairsOf`, so comprehensions and `for` loops can never disagree about what is iterable. Arrays iterate by element, records by key, and anything else iterates zero times.
 
-All three for-loop forms (range, indexed, basic for-each) are converted to C-style indexed loops for substep support:
+`processForLoopWithSteps` handles the surface forms:
 
-- **Range:** `for (i in range(5))` → `for (let i = 0; i < 5; i++)`
-- **Indexed:** `for (item, idx in items)` → `for (let idx = 0; idx < items.length; idx++)` with `const item = items[idx]` at the start of each iteration
-- **Basic for-each:** `for (item in items)` → `for (let __i_K = 0; __i_K < items.length; __i_K++)` with `const item = items[__i_K]` at the start of each iteration
+- **Range:** `for (i in range(5))` becomes an `Array.from({length: ...}, ...)` expression passed as `items`
+- **Indexed:** `for (item, idx in items)` passes `indexVar`, and the callback's second argument is the array index or, for a record, the value at the current key
+- **Basic for-each:** `for (item in items)` passes the iterable straight through
 
-The basic for-each form is converted to an indexed loop because iteration tracking requires a numeric counter. The internal index variable `__i_K` is generated by the builder and not visible to user code.
+The iterable is emitted as a thunk (`async () => <expr>`). A `return` earlier in the function halts the runner and skips the steps that assign the locals the expression reads, so evaluating it eagerly would dereference an unset local.
 
-The iteration skipping, substep guards, and end-of-iteration reset all work identically to while loops.
+For arrays the runner re-reads `.length` each turn rather than snapshotting, so a body that appends to the array it is iterating keeps going. `tests/agency/for-loop-live-iteration.agency` pins that.
 
-The IR node is `TsForSteps`, with code generation handled by `forSteps.mustache`.
+Iteration skipping, substep counters, and the end-of-iteration reset all work exactly as in while loops.
 
 ## Callback hook firing
 
@@ -249,39 +173,33 @@ control flow continues to the next registered callback.
 
 ## Overriding local variables when resuming from an interrupt
 
-All interrupt response functions (`approveInterrupt`, `rejectInterrupt`, `modifyInterrupt`, `resolveInterrupt`) accept an optional `overrides` parameter that lets you modify local variables in the execution state before resuming.
+`respondToInterrupts` takes an optional `overrides` option that lets you change local variables in the execution state before resuming.
 
-This is useful when you want to both respond to the interrupt *and* correct a value that was computed earlier in the execution.
+That is useful when you want to both answer the interrupt and correct a value computed earlier in the run.
 
 ### API
 
-Each function takes an options object as its last parameter:
+A compiled module exports `respondToInterrupts` along with the two response constructors, `approve(value?)` and `reject(value?)`:
 
 ```ts
-approveInterrupt(interrupt, { overrides: { mood: "happy" } });
-rejectInterrupt(interrupt, { overrides: { retryCount: 0 } });
-resolveInterrupt(interrupt, resolvedValue, { overrides: { mood: "happy" } });
-modifyInterrupt(interrupt, newArgs, { overrides: { mood: "happy" } });
+respondToInterrupts(interrupts, [approve()], { overrides: { mood: "happy" } });
+respondToInterrupts(interrupts, [reject()], { overrides: { retryCount: 0 } });
+respondToInterrupts(interrupts, [approve(resolvedValue)], { overrides: { mood: "happy" } });
 ```
+
+The responses array is positional: one response per interrupt in the array you were handed.
 
 ### What you can override
 
-The `overrides` parameter is `Record<string, unknown>`. It sets values in the local variables of the stack frame where the interrupt occurred. You can override any local variable that exists at that point:
-
-```ts
-// Override the result of a previous LLM call
-approveInterrupt(interrupt, {
-  overrides: { mood: "happy", confidence: "high" },
-});
-```
+`overrides` is a `Record<string, unknown>`. It sets values in the locals of the stack frame where the interrupt occurred, so you can override any local that exists at that point.
 
 ### Example
 
 ```agency
 node main(message: string) {
-  mood: "happy" | "sad" = llm("Categorize: ${message}")
-  result = interrupt("Confirm mood: ${mood}")
-  response: string = llm("Respond to ${mood} user")
+  const mood: "happy" | "sad" = llm("Categorize: ${message}")
+  const result = interrupt("Confirm mood: ${mood}")
+  const response: string = llm("Respond to ${mood} user")
   return { mood, response }
 }
 ```
@@ -289,36 +207,37 @@ node main(message: string) {
 From TypeScript:
 
 ```ts
-import { main, approveInterrupt, isInterrupt } from "./agent.js";
+import { main, respondToInterrupts, approve, isInterrupt } from "./agent.js";
 
 const result = await main("I feel fine");
 
 if (isInterrupt(result.data)) {
-  // The LLM said "sad" but we want to correct it to "happy"
-  // AND approve the interrupt
-  const fixed = await approveInterrupt(result.data, {
+  // The LLM said "sad" but we want to correct it to "happy" AND approve
+  const fixed = await respondToInterrupts(result.data, [approve()], {
     overrides: { mood: "happy" },
   });
   console.log(fixed.data.mood); // "happy"
 }
 ```
 
-The override is applied to the checkpoint state before execution resumes, so the subsequent LLM call sees `mood = "happy"`.
+The override is applied to the checkpoint state before execution resumes, so the later LLM call sees `mood = "happy"`.
 
 ### Implementation
 
-Overrides are applied via the shared `applyOverrides` helper in `lib/runtime/rewind.ts`. The interrupt response functions in `lib/runtime/interrupts.ts` call `applyOverrides` after getting the checkpoint but before calling `restoreState`.
+`applyOverrides` lives in `lib/runtime/rewind.ts`. `respondToInterruptsCore` in `lib/runtime/interrupts.ts` calls it after fetching the checkpoint and before creating the resumed execution context.
 
 ## Key files
 
 | File | Role |
 |------|------|
-| `lib/ir/tsIR.ts` | IR node definitions (e.g. `TsIf`, `TsFor`, `TsWhile`) |
+| `lib/ir/tsIR.ts` | IR node definitions (`TsRunnerStep`, `TsRunnerIfElse`, `TsRunnerLoop`, `TsRunnerWhileLoop`, `TsRunnerThread`) |
 | `lib/ir/builders.ts` | Factory functions for IR nodes |
 | `lib/ir/prettyPrint.ts` | Code generation for each IR node kind |
+| `lib/runtime/runner.ts` | `Runner` — step counters, `ifElse`, `loop`, `whileLoop`, `thread`, `hook`, `handle` |
 | `lib/backends/typescriptBuilder.ts` | `processIfElseWithSteps`, `processMessageThread`, `processWhileLoopWithSteps`, `processForLoopWithSteps`, `processMatchBlockWithSteps` |
+| `lib/backends/typescriptBuilder/stepPathTracker.ts` | `StepPathTracker` — the compile-time step path |
 | `lib/runtime/state/stateStack.ts` | `State.clearLocalsWithPrefix()` for loop reset |
-| `lib/templates/backends/typescriptGenerator/` | Mustache templates: `blockSetup`, `runnerIfElse`, `imports`, etc. |
+| `lib/templates/backends/typescriptGenerator/runnerIfElse.mustache` | The one template in if/else and match codegen |
 | `tests/agency/substeps/` | Integration tests for all block types |
 
 ## Handler verdicts, merge, and registration-site scoping
@@ -349,7 +268,7 @@ from an explicit undefined).
 carries `liveGuardIds` — the guard ids live on the registering branch's
 stack at registration time (`HandlerEntry`, `lib/runtime/types.ts`).
 While a handler runs, the raising branch suspends every installed guard
-NOT in that set (`StateStack.beginHandlerSuspension`): the handler's own
+NOT in that set (`StateStack.beginSuspension`), so the handler's own
 work is metered by its registration site's guards only. Key mechanics,
 each load-bearing:
 
@@ -380,8 +299,9 @@ instead of throwing. The pieces, and where they live:
 
 - **Detection and raising:** `runPrompt` runs an idempotent guard-gate
   step (`pr.step("guardGate.*")`) before every request step and once
-  before returning. The gate loops on `stack.detectTrippedGuard()` and
-  calls `raiseGuardTrip` per trip (`lib/runtime/guardTripInterrupt.ts`).
+  before returning. The gate runs `raiseGuardTripsUntilClear`
+  (`lib/runtime/guardTripInterrupt.ts`), which loops on
+  `stack.detectTrippedGuard()` and raises one interrupt per trip.
   It loops because one answered question does not clear the gate:
   approving an inner guard can leave an outer one over its own limit,
   and each budget is owed its own question. The gate lives at the
@@ -448,7 +368,9 @@ them. PR 3 adds two raise surfaces and the join rule:
 - **Step-boundary raise:** `Runner.step` AND `Runner.hook` (loop bodies
   compile to hook) probe `stack.firstRaisableTrip()` before
   `shouldSkip`'s consuming walk, and call `raiseGuardTripsAtStep`
-  (`lib/runtime/guardTripInterrupt.ts`) when it fires: approve applies
+  (`lib/runtime/guardTripInterrupt.ts`) when it fires. That helper loops
+  on `stack.detectStepRaisableTrip()`, the non-consuming sibling of the
+  gate's detector. Then: approve applies
   and the step body runs; reject throws exactly what shouldSkip would
   have thrown; unanswered checkpoints AT THIS STEP and halts —
   replay-safe because the resumed boundary re-detects and applies the

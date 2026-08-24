@@ -16,17 +16,34 @@ A `step()` body returns either `void` (happy path) or `Interrupt[]`. The body re
 3. Attaches the checkpoint to every interrupt in the batch and emits a `checkpointCreated` statelog event.
 4. Throws `PromptBailout`, which is caught at the top of `runPrompt` and converted to a return value (the interrupts).
 
-The completed-keys map is **not** updated on bailout. On resume, the step body re-runs. If the user has responded to the interrupt, the tool's saved `__interruptId_N` matches the response and proceeds normally; the step then runs to completion and gets marked done.
+The completed-keys list (`self.runnerState.completedSteps`) is **not** updated on bailout. On resume, the step body re-runs. If the user has responded to the interrupt, the tool's saved `__interruptId_N` matches the response and proceeds normally; the step then runs to completion and gets marked done.
 
 ## `parallel` and merged interrupts
 
-`PromptRunner.parallel(keyPrefix, items, branchFn)` runs `branchFn` for every item concurrently via `Promise.all`. Each branch receives a `BranchRunner` whose `step()` **collects** interrupts on `b.interrupts` rather than throwing. After all branches settle, `parallel` merges their interrupts (if any) into one `PromptBailout` and stamps a single checkpoint at `${checkpointInfo.stepPath}/${keyPrefix}`. The semantic mirrors `runForkAll` in `docs/dev/runtime/concurrent-interrupts.md`: siblings always run to completion so interrupts surface in one batch.
+```ts
+parallel<T>(
+  keyPrefix: string,
+  items: T[],
+  keyFor: (item: T, index: number) => string,
+  branchFn: (item: T, b: BranchRunner, index: number) => Promise<void>,
+): Promise<RunBatchResult<void>>
+```
 
-Inside a `branchFn`, use `b.step(...)` (collects) — not `pr.step(...)` (throws). A throw inside `Promise.all` propagates out of `parallel` uncaught.
+`parallel` is a thin adapter over `runBatch` ([lib/runtime/runBatch.ts](../../../lib/runtime/runBatch.ts), documented in [`docs/dev/runtime/runBatch.md`](../runtime/runBatch.md)) with `mode: "all"` and `recordBranchOutcomes: false`. `runBatch` owns the concurrency, the per-branch abort composition, and the shared checkpoint stamped at `${checkpointInfo.stepPath}/${keyPrefix}`. `PromptRunner` supplies the branch bodies and two hooks: `beforeCheckpoint` refreshes `self.messagesJSON` before the checkpoint deep-clones the frame, and `onCheckpoint` emits the `checkpointCreated` statelog event.
+
+Each branch receives a `BranchRunner` whose `step()` **collects** interrupts on `b.interrupts` rather than throwing. Every branch runs to completion, so interrupts surface in one batch. This mirrors `runForkAll`, described in [`docs/dev/runtime/concurrent-interrupts.md`](../runtime/concurrent-interrupts.md).
+
+`parallel` does not throw `PromptBailout`. It returns a `RunBatchResult<void>` tagged union. `runPrompt` checks `parallelResult.kind === "interrupts"` and returns the merged batch directly, which keeps `runBatch`'s no-throw-on-interrupt contract intact.
+
+`keyFor(item, i)` must produce the same branch key the `branchFn` body passes to `stack.getOrCreateBranch(...)`. If the two disagree, `runBatch` allocates a branch separate from the one the body manages, and the leaf checkpoint never reaches `State.toJSON`'s branches walk.
+
+Tool dispatches are not a user-facing concurrency primitive, so `parallel` passes `shareGlobals: true` and `shareThreads: true`. A tool that mutates a global behaves like a normal sequential call.
+
+Inside a `branchFn`, use `b.step(...)`, which collects. Do not use `pr.step(...)`, which throws: a throw from `branchFn` propagates out of `runBatch` and aborts the whole batch.
 
 ## `removedTools` / `toolErrorCounts` semantics
 
-`runPrompt`'s tool loop mutates two shared structures from inside concurrent branches: `removedTools` and `toolErrorCounts`. The plan accepts **eventual consistency**: removals always take effect from the next LLM round (the `.filter()` after the `pr.parallel` call), never within the round they happened. Within the round, a "gated start" check in each branch's first step still skips a tool already in `removedTools` — best-effort, ordering between sibling pushes is undefined.
+`runPrompt`'s tool loop mutates two shared structures from inside concurrent branches: `removedTools` and `toolErrorCounts`. Both live on the frame (`self.removedTools`, `self.toolErrorCounts`) so they survive checkpoint and restore. The design accepts **eventual consistency**. A removal takes effect from the next LLM round, when the `.filter()` after the `pr.parallel` call drops the tool, never within the round where it happened. Within the round, a "gated start" check in each branch's first step still skips a tool already in `removedTools`. That check is best-effort, because the ordering between sibling pushes is undefined.
 
 ## What `PromptRunner` deliberately is not
 

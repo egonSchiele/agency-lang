@@ -5,6 +5,9 @@
 - message thread with nested threads: tests/agency/threads/nested-threads.agency
 - message thread with mixed nested threads and subthreads: tests/agency/threads/nested-threads-and-subthreads.agency
 - Message threads nested more than two levels deep: tests/agency/threads/thread-three-levels-deep.agency
+- Pass a thread's messages into a later LLM call and check recall: tests/agency/threads/pass-messages.agency
+- Two LLM calls in one node share history with no explicit thread: tests/agency/threads/default-shared-thread.agency
+- The same, across two nodes: tests/agency/threads/default-shared-cross-node.agency
 
 - message thread with nested function calls: tests/agency/threads/nested-function-calls/nested-three-levels-deep.agency
 - the same function being called inside and outside a message thread: tests/agency/threads/nested-function-calls/inside-and-outside.agency

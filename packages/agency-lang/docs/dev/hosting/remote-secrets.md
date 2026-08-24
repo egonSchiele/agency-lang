@@ -20,8 +20,8 @@ an unknown option). A value reaches `set` only through
 `--from-env VAR` (copies a local environment variable), piped stdin (exactly
 one trailing `\n` or `\r\n` stripped — a value meant to keep a final newline
 supplies two, `printf 'value\n\n'`), or a hidden TTY prompt
-(`promptSecretValue` in `confirmation.ts`, `prompts` type `"invisible"`,
-`undefined` = canceled). All of it is injected: recipes never read process
+(`promptSecretValue` in `confirmation.ts`, `prompts` type `"invisible"`, which
+returns `undefined` when the user cancels). All of it is injected: recipes never read process
 globals, and the Commander actions wire the production adapters.
 
 ## Invariant 2: no code path prints a value
@@ -63,14 +63,16 @@ why 401/403 gets the full-access-key guidance.
 
 ## `import` mechanics
 
-- Parsing is a pure wrapper over `node:util`'s `parseEnv`
-  (`parseEnvSource`). The repo's `loadEnv` must NEVER be used here: it takes
-  no path or source text, mutates `process.env`, and splits on `=` in a way
-  that truncates exactly the values secrets are made of. Entries are
-  `Object.entries(parseEnv(text))` — first-insertion order, last assignment
-  wins on duplicates; there is deliberately no duplicate *reporting* (correct
-  detection would need a second, quote-aware dotenv parser — a `B=` line
-  inside a multiline quoted value is not an assignment).
+- Parsing goes through `parseEnvSource` (`secretsInput.ts`), a small dotenv
+  parser this repo owns. It is deliberately not `node:util`'s `parseEnv`, whose
+  quoted-value handling differs across Node releases inside the supported engine
+  range, and secret values must parse identically on every version. The repo's
+  `loadEnv` must NEVER be used here either: it takes no path or source text,
+  mutates `process.env`, and splits on `=` in a way that truncates exactly the
+  values secrets are made of. Entries come back in first-insertion order, and
+  the last assignment wins on a duplicate name. There is deliberately no
+  duplicate *reporting*, because a `B=` line inside a multiline quoted value is
+  not an assignment.
 - **Confirmation is for file sources on a TTY only.** `import -` never
   prompts: `readStdin` resolves at EOF and the confirm helper reads the same
   now-exhausted stream, and choosing `-` is itself the authorization.
@@ -81,8 +83,9 @@ why 401/403 gets the full-access-key guidance.
 ## Exit-status ownership
 
 Recipes render and return semantic outcomes (`SecretsSetResult`,
-`ImportResult`); the **Commander actions** are the only place that sets
-`process.exitCode` (canceled set, declined or failed import → 1). Preflight
+`ImportResult`); the **Commander actions** in `scripts/agency.ts` are the only
+place that sets `process.exitCode` (canceled set, declined or failed import
+→ 1). Preflight
 failures (unreadable file, empty parse, target resolution) use `fail()`,
 which exits immediately — the POST loop must never call it.
 

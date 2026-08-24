@@ -13,11 +13,11 @@ This doc covers the salvage mechanism and the `finalize` keyword.
 
 When an abort stops a function, the function does not throw past its own
 frame. The frame catches the abort and returns an `AbortedResult`
-instead: a marker that says "my run was aborted", the cause, and the
-frame's saved draft as its partial. Callers receive it like any other
-return value. The generated check that runs after every call — the same
-place interrupts are checked — spots the marker, and the caller stops
-too, returning its OWN `AbortedResult`. So an abort travels up the stack
+instead. That is a marker saying "my run was aborted", plus the cause,
+plus the frame's saved draft as its partial. Callers receive it like any
+other return value. The generated check that runs after every call, the
+same place interrupts are checked, spots the marker, so the caller stops
+too and returns its OWN `AbortedResult`. So an abort travels up the stack
 as a plain value, the same way interrupts do.
 
 Exceptions still exist, but only in two places:
@@ -39,10 +39,10 @@ compiler, and that is deliberate (see the trade-offs section).
 
 1. **The frame where the abort strikes** returns its saved draft, or
    nothing (`AbortedResult.fromError`, called in the generated catch).
-2. **A caller receiving an aborted result at a statement** — an
-   assignment or a bare call — stops and returns its own saved draft
-   (`carryThrough`). The callee's partial is dropped: salvage is opt-in
-   per level.
+2. **A caller receiving an aborted result at a statement**, meaning an
+   assignment or a bare call, stops and returns its own saved draft
+   (`carryThrough`). The callee's partial is dropped, because salvage is
+   opt-in per level.
 3. **Return position passes a partial through** because returning a
    value is what return statements do. `return verify()` returns
    verify's result, aborted or not. No code runs, so there is nothing
@@ -57,9 +57,9 @@ compiler, and that is deliberate (see the trade-offs section).
 
 Type safety holds by induction: a partial is always the saved draft of
 the frame that returned it, which the checker verified against that
-frame's return type; return position only forwards a value whose type
-the checker already matched to the scope; argument position — the one
-place a wrongly-typed value could sneak through — is dropped at the
+frame's return type. Return position only forwards a value whose type
+the checker already matched to the scope. Argument position is the one
+place a wrongly-typed value could sneak through, and it is dropped at the
 boundary. So a guard only ever sees a value typed for its own block.
 
 ## finalize: translating a partial instead of replacing it
@@ -83,16 +83,17 @@ Mechanically, finalize plugs into the three stop sites:
   This lowering is exhaustive because AG6036 rejects any other
   call-bearing return shape in a finalize scope.
 
-`withFinalize` owns the failure rule: a finalize that throws — or
-resolves to interrupts or to an aborted result of its own — never masks
-the trip; the abort continues with the saved draft, or nothing, and the
-failure is logged as a `finalizeError`.
+`withFinalize` owns the failure rule. A finalize never masks the trip,
+whether it throws, resolves to interrupts, or resolves to an aborted
+result of its own. The abort continues with the saved draft, or with
+nothing, and the failure is logged as a `finalizeError`.
 
 The `__finalize` closure runs a fresh Runner on the SAME frame as its
 container, so locals resolve without any passing. Two non-obvious
 consequences:
 
-- **Step ids live in a disjoint range** (`FINALIZE_STEP_BASE`). Runner
+- **Step ids live in a disjoint range** (`FinalizeCodegen.STEP_BASE` in
+  `lib/backends/typescriptBuilder/finalizeCodegen.ts`). Runner
   step counters are frame-keyed (`frame.step` at the top level, path-only
   keys nested), so small ids would collide with the main body's counters
   and silently skip finalize steps.
@@ -124,6 +125,9 @@ run — and the side branch never touches the main flow, so a finalize
 | `lib/stdlib/thread.ts` | `_saveDraft`, a one-liner delegating to the stack |
 | `lib/runtime/state/stateStack.ts` | `State.savedDraft` (serialized in `toJSON`/`fromJSON`) and `StateStack.setSavedDraft` (caller-frame targeting, deep clone, global-scope rejection) |
 | `lib/runtime/abortedResult.ts` | `AbortedResult` — the whole value-transport vocabulary, plus its statelog trail |
+| `lib/runtime/abortBoundary.ts` | `throwIfNodeResultAborted` / `throwIfValueAborted`: the four boundaries that turn an abort back into an exception |
+| `lib/runtime/errors.ts` | `describeAbortCause`: the single owner of an abort's user-facing message |
+| `lib/backends/typescriptBuilder/finalizeCodegen.ts` | The `finalize` lowering, including `STEP_BASE` and the `withFinalize` wiring |
 | `lib/templates/backends/typescriptGenerator/functionCatchFailure.mustache` | Def catch: abort exception → `AbortedResult.fromError` |
 | `lib/templates/backends/typescriptGenerator/blockSetup.mustache` | Block catch: same conversion for `as { }` blocks (this is how a draft saved directly in a guard block reaches the guard) |
 | `lib/backends/typescriptBuilder.ts` | `assignmentInterruptGuard` / `assignmentAbortedGuard`: the post-call checks; handler bodies and node scope emit the throw form |
@@ -194,18 +198,21 @@ Same program, same answer, regardless of whether an interrupt happened.
 ## Nuances people miss
 
 - **The node boundary is where an abort becomes an exception again, and
-  there are three of them.** Inside compiled code an abort travels as a
-  value; everything above compiled code expects an exception.
-  lib/runtime/abortBoundary.ts does the conversion, and there are four
-  boundaries, not one. Three hand back a node result and call
-  `throwIfNodeResultAborted`: `runNode`, `runResumeLoop`
-  (lib/runtime/interrupts.ts) and the rewind loop
-  (lib/runtime/rewind.ts). The fourth, `runExportedFunctionCore`, hands
+  there are four of them.** Inside compiled code an abort travels as a
+  value. Everything above compiled code expects an exception.
+  `lib/runtime/abortBoundary.ts` does the conversion, at four boundaries,
+  not one. Three hand back a node result and call
+  `throwIfNodeResultAborted`: `runNodeCore` and `runResumeLoop`
+  (`lib/runtime/interrupts.ts`) and `rewindFrom`
+  (`lib/runtime/rewind.ts`). The fourth, `runExportedFunctionCore` in
+  `lib/runtime/node.ts`, hands
   back a bare value from `invoke()` and calls `throwIfValueAborted`;
   without it an exported function that aborts returns a
   `{ __type: "abortedResult" }` object to its caller — an HTTP 200 with a
   nonsense body over `./serve`. Fixing only one of the four leaves the
-  same bug one interrupt, or one export, later. Three things are easy to get wrong. First, codegen's
+  same bug one interrupt, or one export, later.
+
+  Three things are easy to get wrong. First, codegen's
   per-call guards only cover calls whose result is bound to a local — a
   bare `return foo()` in tail position binds nothing, gets no guard, and
   reaches the boundary intact, which is why the check exists at all
@@ -295,13 +302,13 @@ Same program, same answer, regardless of whether an interrupt happened.
 
 ## Design history
 
-- `docs/superpowers/specs/2026-07-15-save-draft-carry-on-abort-redesign.md`
-  — the full design (revision 3 = the value transport), with walked
-  examples the fixtures pin value-for-value.
-- Fixtures: `tests/agency/guards/save-draft-*.agency` — each one pins a
-  rule above; `save-draft-arg-position` pins the argument-position drop
-  both ways, and `save-draft-return-chain` vs `save-draft-deep-only`
-  pin pass-through vs per-level opt-in.
-- The follow-up `finalize` design (translating a callee's partial in
-  the caller) and the resumable-guards design build on this; both are
-  in `docs/superpowers/specs/`.
+The original design docs are no longer in the repo. The behavior they
+described is pinned by fixtures instead.
+
+- Fixtures: `tests/agency/guards/save-draft-*.agency`. Each one pins a
+  rule above. `save-draft-arg-position` pins the argument-position drop
+  both ways, and `save-draft-return-chain` versus `save-draft-deep-only`
+  pin pass-through versus per-level opt-in.
+- The value transport is revision 3 of the design. Earlier revisions,
+  the side-map storage and the draft-on-the-exception, are described in
+  the trade-offs section above.

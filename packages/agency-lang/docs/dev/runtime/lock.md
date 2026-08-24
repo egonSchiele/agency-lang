@@ -22,9 +22,9 @@ These fields are runtime-only. They are not serialized in checkpoints. If execut
 3. It awaits the previous tail before entering the body.
 4. The returned release function clears ownership metadata and resolves the tail.
 
-The implementation is non-reentrant for a single `ownerId`: attempting to acquire a lock already held by the same owner throws immediately. `timeoutMs` rejects while waiting without force-releasing a live holder; the timed-out queue slot is released after the previous holder exits so later waiters are not blocked. `warnAfterMs` prints a diagnostic if waiting takes too long (default: 30s).
+The implementation is non-reentrant for a single `ownerId`: acquiring a lock the same owner already holds throws immediately. `timeoutMs` rejects while waiting, and never force-releases a live holder. The timed-out queue slot is released after the previous holder exits, so later waiters are not blocked. `warnAfterMs` prints a diagnostic if waiting takes too long, and defaults to 30 seconds.
 
-This is not a full deadlock detector. It catches immediate same-owner reentrancy only; multi-lock cycles such as owner A holding `x` while waiting for `y` and owner B holding `y` while waiting for `x` are not detected automatically. Use `timeoutMs` for bounded waits when that risk exists.
+This is not a full deadlock detector. It catches immediate same-owner reentrancy only. It does not detect a multi-lock cycle, such as owner A holding `x` while waiting for `y` while owner B holds `y` and waits for `x`. Use `timeoutMs` for bounded waits when that risk exists.
 
 Fork branches can run inside a lock if they do not reacquire the same lock. Reacquiring the same lock inside a fork spawned by the lock holder can deadlock: the outer scope waits for the fork to finish while the branch waits for the outer lock to release.
 

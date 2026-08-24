@@ -5,10 +5,12 @@ The interactive debugger lets users step through `.agency` source code line by l
 ## Usage
 
 ```bash
-agency debug <file.agency> [--node <name>] [--rewind-size 30]
+agency debug <file> [--node <name>] [--rewind-size 30] [--trace <file>] [--checkpoint <file>] [--dist-dir <dir>]
 ```
 
-If the file has multiple nodes, the user picks one interactively. If the node has parameters, the debugger prompts for their values.
+The command is hidden from `agency --help`, but it works. If the file has multiple nodes, the user picks one interactively. If the node has parameters, the debugger prompts for their values.
+
+`--trace` and `--checkpoint` load a recorded run instead of executing one. If the file is a bundle, `agency debug` extracts its sources to a temp directory and debugs those. `--dist-dir` imports pre-compiled JS from a directory rather than compiling on the fly.
 
 ## Architecture
 
@@ -16,7 +18,7 @@ Three layers:
 
 ```
 +-----------------------------------------+
-|  UI (@agency-lang/tui) lib/debugger/ui.ts |
+|  UI                   lib/debugger/ui.ts     |
 +-----------------------------------------+
 |  Driver               lib/debugger/driver.ts |
 +-----------------------------------------+
@@ -24,64 +26,50 @@ Three layers:
 +-----------------------------------------+
 ```
 
-**Runtime**: The builder inserts `debugStep()` calls at every step boundary in the generated code. `debugStep()` takes rolling checkpoints and conditionally fires interrupts to pause execution.
+**Runtime**: Every `Runner` step method calls `maybeDebugHook()`, which calls `debugStep()`. `debugStep()` takes rolling checkpoints and conditionally returns a debug interrupt to pause execution.
 
-**Driver**: A loop that catches debug interrupts, feeds state to the UI, waits for user commands, and resumes execution via `approveInterrupt()`.
+**Driver**: A loop that catches debug interrupts, feeds state to the UI, waits for user commands, and resumes execution via `respondToInterrupts()`.
 
-**UI**: A terminal application (using `@agency-lang/tui`) with panes for source code, locals/globals, call stack, activity log, and stdout.
+**UI**: A terminal application built on `lib/tui/` with panes for source code, threads, locals/globals, call stack, activity log, and stdout.
 
 ## How it works
 
 ### Compilation
 
-When `agency debug` runs, it compiles the `.agency` file with `{ debugger: true }` in the config. This triggers two things in the builder:
+The debugger does not need special compilation. Generated code already routes every step through a `Runner` method, and every one of those methods calls `maybeDebugHook()` first. The hook is a no-op unless the run has a debugger or a trace writer attached.
 
-1. `processDebuggerStatement()` emits a `debugStep()` call (via the `debugger.mustache` template) instead of a no-op.
-2. `insertDebugSteps()` inserts synthetic `debuggerStatement` AST nodes before every step-triggering statement in all body processors: `processBodyAsParts`, `processIfElseWithSteps`, `processForLoopWithSteps`, `processWhileLoopWithSteps`, `processMessageThread`, and `processHandleBlockWithSteps`.
-
-The synthetic nodes borrow the `loc` of the statement they precede so the source map points to the line about to execute. This is intentional and non-standard — normally a node's `loc` reflects its own position. This should be documented in code comments wherever `insertDebugSteps` is called.
-
-The generated code looks like:
+Instrumentation is controlled by one compiler flag, `instrument`. When `agencyConfig.instrument === false`, `processDebuggerStatement()` emits nothing and no step records a source-map entry. Otherwise the `debugger` keyword compiles to:
 
 ```typescript
-if (__step <= 1) {
-  const __dbg = await debugStep(__ctx, __state, {
-    moduleId: "foo.agency",
-    scopeName: "main",
-    stepPath: "1",
-    label: null,
-    nodeContext: true,
-  });
-  if (__dbg) {
-    return { messages: __threads, data: __dbg };
-  }
-  __stack.step++;
-}
+await runner.debugger(0, "some-label");
 ```
+
+`agency debug` also sets `{ debugger: true }` on the config it compiles with. Nothing in the builder or runtime reads that field today; instrumentation is on by default, so the flag is currently inert.
+
+### The `maybeDebugHook()` hook (`lib/runtime/runner.ts`)
+
+`maybeDebugHook(id, label, isUserAdded)` runs before each step body. It returns early when the context has neither a debugger nor a trace writer, and when the runner is inside a tool call.
+
+To avoid re-triggering on resume, it stores a flag in `frame.locals` under a per-step key. First entry sets the flag and fires the hook. On resume the flag is present, so the hook is skipped and the step body runs. `step()` deletes the flag only after the callback completes without halting, so a step that halts on a nested interrupt keeps its flag for the next resume.
+
+When `debugStep()` returns an interrupt, the hook halts the runner. In node context it halts with `{ messages, data }`; in function context it halts with the raw interrupt.
 
 ### The `debugStep()` function (`lib/runtime/debugger.ts`)
 
-This is the core runtime function. On every call it:
+Signature: `debugStep(ctx, info)`, where `info` carries `moduleId`, `scopeName`, `stepPath`, `label`, `nodeContext`, and `isUserAdded`. On every call it:
 
-1. Clears any `interruptData.interruptResponse` left from a previous resume (prevents downstream code like `runPrompt` from mistaking it for a tool call response).
-2. Returns `undefined` if `ctx.debugger` is null (not in debug mode).
-3. Takes a rolling checkpoint via `DebuggerState.createRollingCheckpoint()` for rewind history.
-4. Decides whether to pause based on mode (stepping vs running), labels (user breakpoints), and step targets (for next/stepOut).
-5. If pausing: advances the step counter via `StateStack.advanceDebugStep()`, creates a checkpoint on the regular `CheckpointStore` for interrupt resumption, and returns a debug interrupt.
+1. Returns `undefined` when the stack has no current node id. Global initialization runs outside any graph node, so there is nothing to checkpoint against.
+2. Writes a trace checkpoint, independent of whether a debugger is attached. This is how `agency debug --trace` gets its recording.
+3. Returns `undefined` if `ctx.debuggerState` is null (not in debug mode).
+4. Takes a rolling checkpoint via `DebuggerState.createRollingCheckpoint()` for rewind history.
+5. Decides whether to pause. When stepping, it pauses if the runner is at or below the target call depth. When running, it pauses only on a user-added `debugger()` breakpoint.
+6. If pausing: creates a checkpoint on the regular `CheckpointStore` for interrupt resumption and returns a debug interrupt.
 
-### Step/substep advancing (`StateStack.advanceDebugStep`)
-
-When `debugStep()` pauses, it needs to advance the step counter so that on resume the generated code's step guard (`if (__step <= N)`) skips past the debug step block. The counter to increment depends on the nesting level:
-
-- `stepPath "3"` → top-level step → increments `frame.step`
-- `stepPath "4.0"` → substep inside step 4 → sets `frame.locals.__substep_4 = 1`
-- `stepPath "4.0.2"` → nested substep → sets `frame.locals.__substep_4_0 = 3`
-
-The naming convention matches the builder's generated code: all path segments except the last form the variable name (`__substep_` + segments joined by `_`), and the value is set to `lastSegment + 1`.
+`debugStep()` does not advance the step counter. An earlier design called `StateStack.advanceDebugStep()` here so the resumed step guard would skip past the debug block. The `frame.locals` flag in `maybeDebugHook()` replaced it. `advanceDebugStep()` still exists on `StateStack` but the debugger no longer calls it.
 
 ### DebuggerState (`lib/debugger/debuggerState.ts`)
 
-A class that encapsulates all debugger state. Owned by the driver, passed to the runtime via `metadata.debugger` on each interrupt resume. Stored on `RuntimeContext.debugger`.
+A class that encapsulates all debugger state. Owned by the driver, passed to the runtime via `metadata.debugger` on each interrupt resume. Stored on `RuntimeContext.debuggerState`.
 
 Key state:
 - `mode`: "stepping" or "running"
@@ -104,7 +92,7 @@ run program → hits debugStep() → interrupt returned
   → loop
 ```
 
-The driver uses the compiled module's exported wrapper functions (`approveInterrupt`, `respondToInterrupt`, `rewindFrom`, `__setDebugger`, `__getCheckpoints`) rather than accessing `__globalCtx` directly.
+The driver uses four wrapper functions the compiled module exports (`respondToInterrupts`, `rewindFrom`, `__setDebugger`, `__getCheckpoints`) rather than accessing `__globalCtx` directly.
 
 ### Stepping commands
 
@@ -125,22 +113,20 @@ The builder records source locations in a `SourceMap` exported as `__sourceMap` 
 
 ### Metadata plumbing
 
-`DebuggerState` is passed via `metadata.debugger` on `approveInterrupt`, `respondToInterrupt`, and `rewindFrom` calls. The following functions copy it onto the new `RuntimeContext`:
+`DebuggerState` is passed via `metadata.debugger` on `respondToInterrupts` and `rewindFrom` calls. Two functions copy it onto the new `RuntimeContext`:
 
-- `respondToInterrupt()` in `lib/runtime/interrupts.ts`
-- `resumeFromState()` in `lib/runtime/interrupts.ts`
+- `respondToInterruptsCore()` in `lib/runtime/interrupts.ts`
 - `rewindFrom()` in `lib/runtime/rewind.ts`
 
-`RuntimeContext.createExecutionContext()` also copies `this.debugger` to the new context, so `runNode()` execution contexts inherit the debugger state.
+`RuntimeContext.createExecutionContext()` also copies `this.debuggerState` to the new context, so `runNode()` execution contexts inherit the debugger state.
 
 ### Module wrapper functions
 
 The generated code exports wrapper functions bound to `__globalCtx` (see `imports.mustache`):
 
-- `__setDebugger(dbg)` — sets `__globalCtx.debugger`
+- `__setDebugger(dbg)` — sets `__globalCtx.debuggerState`
 - `__getCheckpoints()` — returns `__globalCtx.checkpoints`
-- `approveInterrupt(interrupt, opts)` — bound to `__globalCtx`
-- `respondToInterrupt(interrupt, response, opts)` — bound to `__globalCtx`
+- `respondToInterrupts(interrupts, responses, opts)` — bound to `__globalCtx`
 - `rewindFrom(checkpoint, overrides, opts)` — bound to `__globalCtx`
 
 This avoids exporting `__globalCtx` directly.
@@ -151,27 +137,38 @@ This avoids exporting `__globalCtx` directly.
 |------|---------|
 | `lib/cli/debug.ts` | CLI command: compile, load module, pick node, launch driver |
 | `lib/debugger/driver.ts` | Driver loop, command handling, hook subscriptions |
-| `lib/debugger/ui.ts` | Terminal UI (@agency-lang/tui), keyboard input, rendering |
+| `lib/debugger/ui.ts` | Terminal UI (`lib/tui/`), keyboard input, rendering |
 | `lib/debugger/uiState.ts` | UI state management (locals, globals, call stack, activity log) |
+| `lib/debugger/overlays.ts` | Full-screen overlays (rewind selector, checkpoint panel) |
+| `lib/debugger/util.ts` | `parseCommandInput()`, `formatValue()`, `coerceArg()` |
 | `lib/debugger/types.ts` | `DebuggerCommand`, `DebuggerIO` types |
 | `lib/debugger/debuggerState.ts` | `DebuggerState` class |
+| `lib/debugger/testSession.ts` | Headless test harness — see [debugger-tests.md](./debugger-tests.md) |
 | `lib/runtime/debugger.ts` | `debugStep()` function |
+| `lib/runtime/runner.ts` | `maybeDebugHook()`, `Runner.debugger()` |
 
 ## Keyboard commands
 
 | Key | Command |
 |-----|---------|
-| `s` | step |
+| `s` or `→` | step |
 | `n` | next (step over) |
 | `i` | step in |
 | `o` | step out |
-| `c` | continue |
+| `c` or `Space` | continue |
 | `r` | rewind (checkpoint selector) |
-| `k` | pin checkpoint |
+| `d` | checkpoint panel |
+| `k` | pin the current checkpoint, with an optional label |
 | `p` | print variable |
-| `Tab` | cycle pane focus |
-| `q` | quit |
-| `:` | command mode (`set x = 42`, `checkpoint "label"`, `reject`, `resolve <val>`, `modify k=v`) |
+| `z` | zoom the focused pane |
+| `[` / `]` | cycle which message thread the threads pane shows |
+| `↑` / `↓` | scroll the focused pane; in the source pane, step back and step |
+| `Tab` | cycle pane focus (`Shift+Tab` goes backwards) |
+| `1`–`9` | focus a pane by position |
+| `q` or `Esc` | quit |
+| `:` | command mode |
+
+Command mode accepts `set x = 42`, `checkpoint "label"`, `print x`, `reject [value]`, `resolve <val>`, `modify k=v`, `save <path>`, and `load <path>`. `parseCommandInput()` in `lib/debugger/util.ts` is the grammar.
 
 ## Known limitations
 
@@ -179,4 +176,4 @@ This avoids exporting `__globalCtx` directly.
 - **TypeScript functions**: cannot step into them. The driver detects them (not in source map) and shows "Executing TypeScript: functionName()" in the activity log.
 - **Conditional breakpoints**: not supported. Use `debugger("label")` statements in code for manual breakpoints.
 - **Checkpoint rewind vs resume**: rolling checkpoints capture state before the step advances, while the interrupt checkpoint captures state after. This means rewinding to a checkpoint re-enters at that step, while resuming from an interrupt advances past it.
-- **interruptResponse clearing**: when resuming from a debug interrupt, `debugStep()` clears `state.interruptData.interruptResponse` to prevent downstream code (like `runPrompt`) from interpreting it as a tool call response.
+- **Tool calls**: `maybeDebugHook()` returns early while the runner is inside a tool call, so the debugger does not step into tool dispatch.

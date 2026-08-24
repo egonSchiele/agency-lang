@@ -1,6 +1,12 @@
+# Async: edge cases and design notes
+
+Companion to [async.md](./async.md), which explains the mechanism. This page is the behavioral checklist the async implementation was built against, plus the design reasoning for how async and interrupts interact.
+
 ## Edge cases and test cases
 
-Each of these should have a corresponding Agency test (`.agency` + `.mjs` fixture pair in `tests/`) to verify the implementation handles it correctly.
+Most of these are covered by the agency-js tests under `tests/agency-js/async/`: `async-assigned`, `async-unassigned`, `async-mixed`, `async-loop`, `async-concurrent-functions`, `async-nested-function`, and `per-thread-statestack`. A few substep cases live in `tests/agency/substeps/` (`async-in-if.agency`, `interrupt-in-async-branches.agency`). The rest are unchecked; treat them as a wish list, not a claim of coverage.
+
+The Agency snippets below are illustrative sketches from the original design notes, not runnable programs. They predate the current syntax rules, so they omit `let`/`const` on declarations and the parentheses on `for` headers.
 
 ### Basic async behavior
 
@@ -274,29 +280,33 @@ Each of these should have a corresponding Agency test (`.agency` + `.mjs` fixtur
 
 ### Code generation
 
-24. **Verify generated TypeScript for assigned async call.** The builder should emit `__self.__pendingKey_x = __ctx.pendingPromises.add(...)` after the assignment. The `isInterrupt` check should be skipped for async calls.
+24. **Verify generated TypeScript for assigned async call.** The builder emits `__self.__pendingKey_x = getRuntimeContext().ctx.pendingPromises.add(...)` after the assignment. The `isInterrupt` check is skipped for async calls.
 
-25. **Verify generated TypeScript for unassigned async call.** The builder should emit `__ctx.pendingPromises.add(func(...))` without storing the key. No `isInterrupt` check.
+25. **Verify generated TypeScript for unassigned async call.** The builder emits `getRuntimeContext().ctx.pendingPromises.add(func(...))` without storing the key. No `isInterrupt` check.
 
-26. **Verify `awaitAll` is called in runtime entry points.** `runNode`, `respondToInterrupt`, and `resumeFromState` should all call `await execCtx.pendingPromises.awaitAll()` before returning to TypeScript.
+26. **Verify `awaitAll` is called in runtime entry points.** `runNode` (`lib/runtime/node.ts`), `respondToInterruptsCore` (`lib/runtime/interrupts.ts`), and `rewindFrom` (`lib/runtime/rewind.ts`) all call `await execCtx.pendingPromises.awaitAll()` before returning to TypeScript. `Runner` also drains before halting on an interrupt, and `checkpoint()` drains before snapshotting.
 
-27. **Verify `awaitAll` is inserted before interrupt returns.** Each `isInterrupt` check in the generated code should call `awaitAll` before returning the interrupt.
+27. **Verify `awaitAll` is inserted before interrupt returns.** Each `isInterrupt` check in the generated code calls `awaitAll` before returning the interrupt.
 
-28. **Verify preprocessor generates `awaitPending` calls.** The preprocessor should emit `await __ctx.pendingPromises.awaitPending([__self.__pendingKey_x])` instead of `[__self.x] = await Promise.all([__self.x])`.
+28. **Verify preprocessor generates `awaitPending` calls.** The preprocessor emits `await getRuntimeContext().ctx.pendingPromises.awaitPending([__self.__pendingKey_x])` instead of `[__self.x] = await Promise.all([__self.x])`. See `lib/preprocessors/typescriptPreprocessor.ts`.
 
 ### Pre-existing bug fix
 
-29. **`respondToInterrupt` cleanup.** Verify that `respondToInterrupt` now has a `finally { execCtx.cleanup() }` block, matching `runNode`'s pattern. This ensures `PendingPromiseStore.clear()` runs on error paths during interrupt resumption.
+29. **Resume cleanup.** The resume path calls `execCtx.cleanup()` on the way out, matching `runNode`'s pattern, so `PendingPromiseStore.clear()` runs on error paths during interrupt resumption.
 
-## Async + interrupts: phase 1 limitations
+## Async + interrupts: what the `async` keyword still cannot do
 
-Interrupts allow Agency programs to pause execution, serialize state, and resume later. This creates a fundamental tension with async: you can't serialize something you've deliberately set loose.
+Interrupts let Agency programs pause execution, serialize state, and resume later. That creates a tension with async: you can't serialize something you've deliberately set loose.
+
+This section is about the `async` keyword only. `fork`, `race`, and parallel tool calls DO batch concurrent interrupts and resume from them; see [concurrent-interrupts.md](./concurrent-interrupts.md) and [runBatch.md](./runBatch.md).
 
 ### What happens when an async call triggers an interrupt
 
-If an unassigned `async func()` is running in the background and it triggers an interrupt, the `awaitAll` call (at node exit or before another interrupt return) will discover the interrupt object among the resolved results.
+If an `async func()` is running in the background and it triggers an interrupt, the `awaitAll` call at node exit, or before another interrupt return, discovers the interrupt among the resolved results.
 
-In phase 1, this throws a `ConcurrentInterruptError` with a message telling the user to assign the call to a variable if it may interrupt. This is a deliberate limitation — the alternative (silently losing the interrupt or corrupting state) is worse.
+`PendingPromiseStore.awaitAll` (`lib/runtime/state/pendingPromiseStore.ts`) then throws a `ConcurrentInterruptError` telling the user to assign the call to a variable if it may interrupt. It catches both shapes, a single `Interrupt` and an `Interrupt[]`. This is a deliberate limitation; the alternative, silently losing the interrupt or corrupting state, is worse.
+
+`awaitPending` has a narrower version of the same guard, opted into with `{ rejectInterrupts: true }`. The handler-exit drain passes it, so an async call launched inside a handler cannot have its interrupt silently consumed. Handlers cannot pause, so that interrupt has nowhere to go.
 
 ### Why not just let both async calls keep running?
 
@@ -313,4 +323,4 @@ We chose: when any interrupt is triggered, first await ALL pending promises befo
 3. The serialized state is complete — you can resume on a different machine
 4. No orphaned promises
 
-The tradeoff is that the user waits for all async work to finish before seeing the interrupt. If this is unacceptable, users can run parallel agents by calling multiple node functions in parallel from TypeScript — each gets its own isolated execution context, so interrupts in one don't block the other.
+The tradeoff is that the user waits for all async work to finish before seeing the interrupt. If that is unacceptable, use `fork` or `race`, which do support concurrent interrupts. Users can also run parallel agents by calling multiple node functions in parallel from TypeScript. Each gets its own isolated execution context, so interrupts in one don't block the other.

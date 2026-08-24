@@ -77,10 +77,12 @@ private derivation in `lib/runDirectory/list.ts`. The rules:
 - A run with no events still summarizes: zero cost, calls, duration, and
   models; its identity, outcome, batch, trial, and suite come from the
   `run` row. A directory with neither a trace nor a run row is not a run.
-- `status`: `ok` when the harness saw a clean finish; `killed` when it cut
-  the run short (timeout, cost cap, signal) after events existed; `failed`
-  for every other harness outcome, including a silent run; `trace` when
-  there is no harness row at all (an ad-hoc directory).
+- `status`: `ok` when the harness saw a clean finish. `killed` when it cut
+  the run short after events existed, meaning a timeout, cost cap, or
+  signal. `failed` for every other harness outcome, including a silent run.
+  `trace` when there is no harness row at all, which means an ad-hoc
+  directory. The `RunStatus` type also declares `partial`, but `statusOf`
+  never returns it.
 - `endedAt`: the `run` row's `createdAt`, else the last event's timestamp.
 - `latestScore` is the weighted mean of the scores on record; `score` is
   what the run counts as in a mean, by grading's own rule (`gradeRun.ts`:
@@ -156,8 +158,9 @@ So the rule in `lib/statelog/agentName.ts` is: letters, digits, `.`, `_`,
 `-`, and `/` between segments; at most 200 characters; no empty, `.`, or
 `..` segment (a URL parser folds those away even when percent-encoded). An
 invalid name throws at the call site, inside or outside an Agency frame.
-The agency agent names itself `agency-agent/<brain>` (`lib/agentName.agency`)
-right after it picks its brain, so runs group per brain.
+The agency agent names itself `agency-agent/<brain>`
+(`lib/agents/agency-agent/lib/agentName.agency`) right after it picks its
+brain, so runs group per brain.
 
 ## What `agency-lang/eval` exports for statelog
 
@@ -165,7 +168,8 @@ right after it picks its brain, so runs group per brain.
 `batchStatistics`, `batchStatisticsByBatch` and their types;
 `AnnotationSchema`, `annotationId` and the annotation types;
 `EventEnvelope`; `agentNameProblem`, `AGENT_NAME_PATTERN`,
-`AGENT_NAME_MAX_LENGTH`. The grader-authoring exports are unchanged.
+`AGENT_NAME_MAX_LENGTH`. They all live in `lib/eval/public.ts`, alongside
+the unchanged grader-authoring exports.
 `lib/eval/public.test.ts` also checks that the run directory reader, the
 trace parser, and the annotation fold are not exported.
 

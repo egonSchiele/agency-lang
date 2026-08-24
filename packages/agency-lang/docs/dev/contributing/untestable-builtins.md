@@ -1,6 +1,6 @@
 # Untestable Builtins
 
-These stdlib functions produce side effects on the user's system and cannot be tested in CI. This document tracks the desired test cases for future implementation when a mocking/sandboxing strategy is established.
+These stdlib functions produce side effects on the user's system, so CI cannot test them. This document tracks the test cases we want once someone establishes a mocking or sandboxing strategy.
 
 ## Clipboard (`std::clipboard`)
 
@@ -14,17 +14,35 @@ These stdlib functions produce side effects on the user's system and cannot be t
 - Region capture with valid coordinates produces a cropped image
 - Invalid filepath (e.g. non-existent directory) throws an error
 
-## Text-to-Speech (`std::speech`)
+## Local Text-to-Speech (`std::speech`, `say`)
 
-- `speak` with default voice and rate
-- `speak` with custom voice name
-- `speak` with custom rate
-- `speak` with empty string should return immediately without calling `say`
+`say` speaks text through the operating system's own voice on macOS.
 
-## Speech-to-Text (`std::speech`)
+- `say` with default voice and rate
+- `say` with a custom voice name
+- `say` with a custom rate
+- `say` with an empty string should return immediately without shelling out to `say`
+- `say` with `outputFile` writes the audio instead of playing it
+
+## Cloud Text-to-Speech (`std::speech`, `speak`)
+
+`speak` sends text to a cloud provider and writes the audio to a file.
+
+- `speak` writes an audio file and returns its path
+- `speak` never overwrites an existing output file
+- `speak` with an unsupported format or an out-of-range speed throws
+- `speak` with a missing API key throws an error
+
+## Microphone Recording (`std::speech`, `record`)
+
+- `record` stops when the user presses Enter
+- `record` stops after the silence timeout elapses
+- `record` with `silenceTimeout: 0` stops only on Enter
+
+## Speech-to-Text (`std::speech`, `transcribe`)
 
 - `transcribe` with a valid WAV file returns text
-- `transcribe` with language hint
-- `transcribe` with missing API key throws an error
-- `transcribe` with invalid/corrupt audio file throws an error
-- `transcribe` with file exceeding 25 MB limit
+- `transcribe` with a language hint
+- `transcribe` with a missing API key throws an error
+- `transcribe` with an invalid or corrupt audio file throws an error
+- `transcribe` with a file that exceeds the provider's size limit

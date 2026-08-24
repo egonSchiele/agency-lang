@@ -1,7 +1,7 @@
 # Why agents that write code beat agents that call tools
 
 Written 2026-07-28, during the self-writing-agent experiment (see
-`self-writing-agent.md` for the experiment itself). This document answers a
+`docs/dev/agents/self-writing-agent.md` for the experiment itself). This document answers a
 question we will keep asking ourselves: **is letting an agent write and run
 Agency programs actually different from giving it a big enough tool set, or
 are we building an elaborate equivalent?** Read this when you are wondering
@@ -19,9 +19,9 @@ reasoning **[mine]** or measured in this repo **[measured]**.
 
 ## The formal core: interpreter vs compiler
 
-In tool calling, **the model is the interpreter**. Every composition step —
-every loop iteration, every branch, every value handed from one tool to the
-next — is executed by an LLM inference. In code writing, **the model is the
+In tool calling, **the model is the interpreter**. An LLM inference executes
+every composition step: every loop iteration, every branch, every value
+handed from one tool to the next. In code writing, **the model is the
 compiler**: it emits the composition once, and a deterministic machine
 executes it.
 
@@ -49,9 +49,9 @@ through the context window on every call. **[measured]**
 ### 2. Deterministic control flow
 
 A `while` loop in code runs exactly as written. A "loop" in tool calling is
-a suggestion the model re-decides on every iteration — which is how our
-news run produced 53 near-duplicate web searches **[measured]**, and how
-agents in general drift, stop early, or repeat failed actions. You cannot
+a suggestion the model re-decides on every iteration. That is how our news
+run produced 53 near-duplicate web searches **[measured]**, and how agents
+in general drift, stop early, or repeat failed actions. You cannot
 make the model-as-interpreter reliable per step; code removes the
 stochastic interpreter from every step that does not need judgment.
 
@@ -119,8 +119,8 @@ its body — `researcherAgent` in `stdlib/agents/researcher.agency` does
 exactly that, parameterized by `maxCost`/`maxTime`. That works for
 **first-order, pre-decided composition**: the library author bet, at
 authoring time, on which layers the task would need. Section 7 of
-`self-writing-agent.md` documents how that bet went: the researcher froze
-five layers into itself and became uncomposable — the code-writing agent
+`docs/dev/agents/self-writing-agent.md` documents how that bet went: the researcher froze
+five layers into itself and became uncomposable, so the code-writing agent
 could not reach the seam below it. **[measured]**
 
 What cannot be pre-baked are the **higher-order** compositions: "a guard
@@ -134,7 +134,7 @@ needed; code writing is the refusal to bet.
 
 Honesty requires the other column. When the right next step genuinely
 depends on judgment applied to what just came back, you want the model in
-the loop — that is why ReAct-style agents survive, and why upfront programs
+the loop. That is why ReAct-style agents survive, and why upfront programs
 are structurally brittle (ReWOO names this as its own tradeoff; our
 findings doc lists it as an open weakness). **[relayed/mine]**
 
@@ -152,14 +152,14 @@ The published systems above cover *offline* meta-design: search loops that
 evolve better agent architectures against benchmarks. None of them do
 per-request program synthesis on a governed substrate. Every one of them
 runs generated Python in a **sandbox**, where safety means *isolation*: the
-code cannot hurt you because it cannot touch anything real — which also
-means it cannot do much that is real.
+code cannot hurt you because it cannot touch anything real, which also means
+it cannot do much that is real.
 
 Agency's generated code is **governed rather than isolated**: **[repo]**
 
 - Interrupts cross the subprocess boundary, so the parent's approval chain
   rules the child; a parent rejection beats a child approval
-  (`subprocess-ipc.md`).
+  (`docs/dev/runtime/subprocess-ipc.md`).
 - Effects are typed and inspectable *before* running — `getEffects` is a
   capability manifest for a program that does not exist yet.
 - Budgets (`guard`), checkpoints, salvage (`finalize`), and

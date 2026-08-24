@@ -10,7 +10,7 @@ There are three user-facing constructs that produce concurrent execution:
 
 The user responds to a batch via `respondToInterrupts(interrupts, responses)`. Resume reconstructs the full execution state, replays only the work that hadn't completed, and continues.
 
-**As of the runBatch refactor (PR #186):** three call sites delegate to a single runtime primitive (a fourth adopter, `_run` for subprocess execution, was added with subprocess pause/resume — see [`runBatch.md`](./runBatch.md)), [`runBatch`](../../../lib/runtime/runBatch.ts), that owns the concurrent-interrupt orchestration: `Runner.runForkAll`, `Runner.runRace`, and `PromptRunner.parallel`. Previously every site hand-rolled the same `Promise.allSettled` / `Promise.race` boilerplate, made the same subtle mistakes, and was hard to keep in lock-step. After the refactor there is **one** place where branch lifecycle, abort composition, checkpoint stamping, and `intr.checkpoint` overwrite live, and thin adapter functions that wire it up.
+**As of the runBatch refactor (PR #186):** three call sites delegate to a single runtime primitive, [`runBatch`](../../../lib/runtime/runBatch.ts), that owns the concurrent-interrupt orchestration: `Runner.runForkAll`, `Runner.runRace`, and `PromptRunner.parallel`. A fourth adopter arrived with subprocess pause/resume: `_run` in [`lib/runtime/ipc.ts`](../../../lib/runtime/ipc.ts), a single-child batch that relays a subprocess's interrupts (see [`runBatch.md`](./runBatch.md)). Previously every site hand-rolled the same `Promise.allSettled` / `Promise.race` boilerplate, made the same subtle mistakes, and was hard to keep in lock-step. After the refactor there is **one** place where branch lifecycle, abort composition, checkpoint stamping, and `intr.checkpoint` overwrite live, and thin adapter functions that wire it up.
 
 For the primitive's API, contracts, and the slice-rule discipline in isolation, see [`docs/dev/runtime/runBatch.md`](./runBatch.md). This document focuses on the bigger picture: data model, resume mechanics, and per-call-site usage.
 
@@ -43,7 +43,7 @@ Think of each parallel branch as having its own miniature state stack. The paren
                             ╰───────────────────────────────────╯
 ```
 
-Same shape applies to tool-call branches inside `runPrompt`, just keyed differently (`tool_<toolCallId>`).
+Same shape applies to tool-call branches inside `runPrompt`, just keyed differently (`tool_<index>_<toolCallId>`). The index leads because some providers (Gemini) return tool calls with no id, and two id-less calls in one round would otherwise collide on the same branch key.
 
 ## Core data types
 
@@ -104,6 +104,7 @@ The two callers-must-observe rules are:
   - returned value → (if `recordBranchOutcomes`) call `setResultOnBranch(key, value)`.
 - **Shared checkpoint stamp + overwrite.** If any child interrupted, stamp ONE shared checkpoint at `checkpointLocation` and overwrite `intr.checkpoint` + `intr.checkpointId` on every interrupt in the batch. This overwrite is intentional (per commit c72b9c1574): every interrupt in a batch deliberately resumes from the same point.
 - **Cost-propagation hooks.** `seedBranchCost` / `propagateBranchCost` for mode `"all"` / `"sequential"`. For mode `"race"`, the asymmetric pair `propagateLoserCost` / `propagateWinnerCost` (losers eagerly at race time, winner deferred until winner-branch finally completes).
+- **Guard and memory inheritance.** The parent's time guards pause for the duration of the batch (`pauseParentTimeGuards`), each branch gets a clone (`mode: "sum"` for `"sequential"`, `"max"` for the concurrent modes), and `rehydrateInheritedGuards` / `inheritBranchMemory` carry the parent's executing handlers, inherited guards, and memory into the branch stack.
 - **Cleanup on success.** No-interrupt success path: propagate cost, then `parentFrame.popBranches()`.
 - **Defensive guards.** Duplicate-child-key check; mode-flip mismatch assert (if `raceWinnerLocalKey` holds a number but `mode !== "race"`, throw a clear error).
 
@@ -119,7 +120,7 @@ Per commit c72b9c1574 (which removed the buggy `isForked` approach that broke ne
 
 By default `runBatch` records branch outcomes itself via `setResultOnBranch` / `setInterruptOnBranch`. That's what fork and race need.
 
-`runPrompt`'s tool loop sets `recordBranchOutcomes: false` because the per-tool body (`runInvokeStep` in `prompt.ts`) already records branch state — `setResultOnBranch(branchKey, toolResult)` happens inside the body before it returns. If `runBatch` then also called `setResultOnBranch(key, undefined)` (the body returns `void`), it would destroy the meaningful tool result that `runPrompt` reads on resume (around `prompt.ts` line 723).
+`runPrompt`'s tool loop sets `recordBranchOutcomes: false` because the per-tool body (`runInvokeStep` in `prompt.ts`) already records branch state — `setResultOnBranch(branchKey, toolResult)` happens inside the body before it returns. If `runBatch` then also called `setResultOnBranch(key, undefined)` (the body returns `void`), it would destroy the meaningful tool result that `runPrompt` reads on resume.
 
 When this flag is false, `runBatch` also **disables the cached-branch short-circuit**. The reason: `branch.result` being set no longer means "the body is fully done" — for the tool loop it may only mean "the tool's `invoke` step succeeded; the `.end` and `.log` steps still need to fire on resume." Idempotency in that mode is the caller's responsibility (`BranchRunner.step`'s `completedSteps` for the tool loop).
 
@@ -149,7 +150,7 @@ The adapter:
 
 ### `Runner.runRace` (`lib/runtime/runner.ts`)
 
-Mode: `"race"`. `recordBranchOutcomes` defaults to true. `raceWinnerLocalKey: this.raceWinnerKey(id)` (which evaluates to the existing `__race_winner_<id>` shape — unchanged for in-flight checkpoint compatibility).
+Mode: `"race"`. `recordBranchOutcomes` defaults to true. `raceWinnerLocalKey: this.raceWinnerKey(id)`, which evaluates to the existing `__race_winner_<id>` shape at the top level, and `__race_winner_<runnerKey>_<id>` inside a nested runner. Both shapes are unchanged for in-flight checkpoint compatibility.
 
 The adapter:
 
@@ -170,13 +171,13 @@ parallel<T>(
   keyPrefix: string,
   items: T[],
   keyFor: (item: T, index: number) => string,
-  branchFn: (item: T, b: BranchRunner) => Promise<void>,
+  branchFn: (item: T, b: BranchRunner, index: number) => Promise<void>,
 ): Promise<RunBatchResult<void>>
 ```
 
-`keyFor` MUST produce the same branch key that the `branchFn` body uses inside `stack.getOrCreateBranch(...)`. Otherwise `runBatch` allocates a separate branch from the one the body manages, and the leaf-checkpoint vehicle into `State.toJSON`'s branches walk is lost. The real call site in `prompt.ts` passes `(toolCall) => \`tool_${toolCall.id}\``.
+`keyFor` MUST produce the same branch key that the `branchFn` body uses inside `stack.getOrCreateBranch(...)`. Otherwise `runBatch` allocates a separate branch from the one the body manages, and the leaf-checkpoint vehicle into `State.toJSON`'s branches walk is lost. The real call site in `prompt.ts` passes `(toolCall, i) => \`tool_${i}_${toolCall.id}\``, and the body builds the same key from the same `callSlug`. It also skips the call entirely when the round has nothing to dispatch, rather than running `runBatch` over zero children.
 
-The body still uses `BranchRunner.step` for substep idempotency (`.start`, `.invoke`, `.end`, `.log` keyed by `round.X.tool.Y.<phase>` so resume skips already-completed phases). `BranchRunner.step` collects interrupts on `b.interrupts` rather than throwing.
+The body still uses `BranchRunner.step` for substep idempotency. Every phase is keyed by `round.<round>.tool.<callSlug>.<phase>`, so resume skips already-completed phases. `BranchRunner.step` collects interrupts on `b.interrupts` rather than throwing.
 
 Each child's `invoke` in the adapter is:
 
@@ -227,7 +228,7 @@ If you do need it, follow this checklist.
 | Run N children strictly in order; batch any interrupts at the end. | `"sequential"` |
 | Run N children; first to settle wins; abort losers; recordable resume. | `"race"` |
 
-Examples: fork is `"all"`. Race is `"race"`. Hook-callback batching (Task 6 of the runBatch plan, not yet landed at the time of this doc) is `"sequential"` so the existing `callHook` strict-ordering semantics are preserved — using `"all"` there would silently turn an ordered side-effect chain into a concurrent race.
+Examples: fork is `"all"`, race is `"race"`, and the subprocess adopter `_run` is `"all"` with one child. `"sequential"` has no in-tree adopter yet. It exists for hook-callback batching, where the existing `callHook` strict-ordering semantics must be preserved. Using `"all"` there would silently turn an ordered side-effect chain into a concurrent race.
 
 ### 2. Get the parentStack right (this is the only discipline you owe `runBatch`)
 
@@ -382,15 +383,16 @@ Each subsequent resume keeps re-entering the same winner until it either produce
 
 When `llm(prompt, { tools })` is called, the LLM may emit multiple `toolCalls` in a single round. `runPrompt` calls `PromptRunner.parallel` (the thin `runBatch` adapter) with `mode: "all"`, `recordBranchOutcomes: false`, and one child per `toolCall`.
 
-The per-tool branchFn body (in `prompt.ts`):
+The per-tool branchFn body (in `prompt.ts`) derives a `callSlug` of `<index>_<toolCall.id>` and then:
 
-1. Checks if the handler exists; if not, marks completion and skips.
-2. Checks `removedTools`; if blacklisted, marks completion and skips.
-3. Allocates the same branch (`stack.getOrCreateBranch("tool_<id>")`) that `runBatch` already created — idempotent.
-4. Runs `b.step("…start")` to fire `onToolCallStart`.
-5. Runs `b.step("…invoke")` which calls `runInvokeStep` — that's where the handler runs and where `stack.setResultOnBranch` / `setInterruptOnBranch` / `deleteBranch` get called depending on outcome.
-6. Runs `b.step("…end")` to fire `onToolCallEnd`.
-7. Runs `b.step("…log")` to emit the `toolCall` statelog event.
+1. Refuses the call through a guard step when there is no handler (`.unhandled`), when the round budget is spent (`.tooManyRounds`), when the tool was removed (`.removed`), when a string argument is really tool-call markup (`.markup`), or when the same call repeated with the same result (`.repeated`). Each pushes an error tool message and returns.
+2. Allocates the same branch (`stack.getOrCreateBranch("tool_<callSlug>")`) that `runBatch` already created — idempotent.
+3. Runs `b.step("…start")` to fire `onToolCallStart`, then `b.step("…logStart")`.
+4. Runs `b.step("…invoke")` which calls `runInvokeStep` — that's where the handler runs and where `stack.setResultOnBranch` / `setInterruptOnBranch` / `deleteBranch` get called depending on outcome.
+5. Runs `b.step("…end")` to fire `onToolCallEnd`.
+6. Runs `b.step("…log")` to emit the `toolCall` statelog event.
+
+The two refusal guards are documented in [`docs/dev/agents/tool-loop-guards.md`](../agents/tool-loop-guards.md).
 
 If any of these `b.step` bodies returns interrupts, `BranchRunner.step` collects them on `b.interrupts`, the rest of the body short-circuits via `if (b.interrupts) return`, and the runBatch child's invoke returns the collected array.
 
@@ -484,6 +486,7 @@ If the re-run produces another batch of interrupts, the cycle repeats.
 - [`lib/runtime/runBatch.ts`](../../../lib/runtime/runBatch.ts) — the single concurrent-interrupt primitive. Lives next to the adopters; comment at top documents the no-throw audit findings.
 - [`lib/runtime/runner.ts`](../../../lib/runtime/runner.ts) — `Runner.fork`, `runForkAll` (now adapter), `runRace` (now adapter). The remaining branch-orchestration glue.
 - [`lib/runtime/prompt.ts`](../../../lib/runtime/prompt.ts) — `runPrompt` and `_runPrompt`. Tool-call branch path.
+- [`lib/runtime/ipc.ts`](../../../lib/runtime/ipc.ts) — `_run`, the single-child subprocess adopter.
 - [`lib/runtime/promptRunner.ts`](../../../lib/runtime/promptRunner.ts) — `PromptRunner.parallel` (now adapter) + `BranchRunner` (per-branch substep idempotency, unchanged).
 - [`lib/runtime/state/stateStack.ts`](../../../lib/runtime/state/stateStack.ts) — `BranchState`, `BranchStateJSON`, `State.branches`, `setInterruptOnBranch`, `setResultOnBranch`, `deleteBranch`, `popBranches`. Also `StateStack.deserializeMode` and `StateStack.abortSignal`.
 - [`lib/runtime/state/context.ts`](../../../lib/runtime/state/context.ts) — `RuntimeContext.isCancelled`, `getAbortSignal`, `restoreState`.
@@ -516,11 +519,11 @@ If you change anything in this area, make sure these still hold:
 - Fork basics, multi-interrupt, multi-cycle: `tests/agency/fork/` (top-level files like `fork-multi-interrupt`, `fork-multi-cycle-interrupt`).
 - Fork organised by category: `tests/agency/fork/{nested,multi-cycle,control-flow,handlers,llm-tools,race}/`.
 - The deepest fork+tool composition: `tests/agency/fork/fork-llm-tool-nested.test.json` (the regression test for the slice-only capture fix).
-- Multi-tool batching: `tests/agency/fork/llm-tools/multi-tool-{all-interrupt,mixed,multi-cycle}.test.json`.
+- Multi-tool batching: `tests/agency/fork/llm-tools/multi-tool-{all-interrupt,mixed}.test.json` and `tool-multi-cycle.test.json` in the same directory.
 - Race + interrupt: `tests/agency/fork/race-interrupt.test.json`, `tests/agency/fork/race/race-{multi-cycle,reject-winner,with-fork-inside,mixed-completion}.test.json`.
 - TypeScript-side API: `tests/agency-js/interrupts/{interrupt-approve,interrupt-reject,interrupt-overrides,interrupt-batched-overrides,interrupt-respond-mismatch,interrupt-respond-by-data}/`.
 - Fork batching: `tests/agency-js/fork/{fork-parallel-interrupts,fork-nested-interrupts,fork-mixed-responses}/`.
-- **`runBatch` unit tests**: `lib/runtime/runBatch.test.ts` — 19 tests covering all three modes, cached short-circuit, abort propagation, race resume dispatch (pending + cached winner), cost-hook asymmetry, empty/duplicate/rejection edge cases, mode-flip defensive assert.
+- **`runBatch` unit tests**: `lib/runtime/runBatch.test.ts` covers all three modes, cached short-circuit, abort propagation, race resume dispatch (pending + cached winner), cost-hook asymmetry, empty/duplicate/rejection edge cases, and the mode-flip defensive assert.
 - **`PromptRunner.parallel` unit tests**: `lib/runtime/promptRunner.test.ts` (the `parallel` block) — uses real `State`/`StateStack` to exercise the runBatch path.
 
 ---
@@ -528,6 +531,6 @@ If you change anything in this area, make sure these still hold:
 ## Known limitations
 
 - **Race loser cancellation is cooperative.** Synchronous JS code in a loser cannot be interrupted — it runs to completion, but its result is discarded. Cancellation only takes effect at await points and at runner step boundaries.
-- **Handler that calls `interrupt()` recursively invokes itself.** See the skipped `tests/agency/fork/handlers/handler-throws-interrupt.test.json`. Whether handler-issued interrupts should bypass the active handler is an open design question.
+- **A handler that raises never hears its own raise.** `runHandlerChain` in `lib/runtime/interrupts.ts` skips any handler entry currently executing in this lineage, so the rest of the chain decides. Exclusion is per lineage, tracked in `executingHandlers.ts`, not per branch: concurrent sibling dispatches on one branch still reach a handler that another dispatch is running. An excluded entry contributes nothing, so a raise from inside a handler body executes only if an outer handler or an explicit `with approve` approves it.
 - **Race + reject of winner**: rejection becomes the race result (a failure `Result`). There's no automatic re-race against the surviving losers — the user must run `race` again at a higher level if they want that semantics.
 - **The runPrompt tool loop's `recordBranchOutcomes: false` arrangement is the only current site that opts out of `runBatch`'s branch-state recording.** If a future adopter needs the same arrangement, follow the same pattern (and re-read the comment in `runBatch.ts` explaining why the cached-branch short-circuit is also disabled in that mode).

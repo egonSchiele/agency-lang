@@ -32,7 +32,7 @@ Each compiled Agency file gets a unique module ID (typically the filename, like 
 
 ### The `__internal` module
 
-The `GlobalStore` reserves a special module ID, `GlobalStore.INTERNAL_MODULE` (`"__internal"`), for runtime bookkeeping. Currently this stores token usage statistics (`__tokenStats`), which track input/output token counts and costs across all LLM calls in a single execution. The static factory `GlobalStore.withTokenStats()` creates a new store pre-populated with zeroed-out token stats.
+The `GlobalStore` reserves a special module ID, `GlobalStore.INTERNAL_MODULE` (`"__internal"`), for runtime bookkeeping. It stores token usage statistics under `__tokenStats`, which track token counts and costs across all LLM calls in a single execution, broken down per model. The static factory `GlobalStore.withTokenStats()` creates a new store pre-populated with zeroed-out token stats. `__internal` also holds the value-tag map (`__valueTags`) and the durable-object-tag flag that back the tagging and redaction API below.
 
 ## Generated code patterns
 
@@ -131,6 +131,17 @@ class GlobalStore {
 }
 ```
 
+### Value tags and redaction
+
+The store also tags individual values, which is how `redact` keeps a secret out of the statelog. `setTag` / `getTagsFor` / `removeTag` / `removeAllTags` attach a record of keys to a value, and `markRedacted` / `isRedacted` / `redactionReplacement` / `redactContainedStrings` sit on top of that for redaction.
+
+Where the record lives depends on the value:
+
+- A plain extensible object or array carries the record on the object itself (`lib/runtime/state/tagSymbol.ts`). The reviver preserves it through every state round-trip, so these tags are durable.
+- A frozen, sealed, or native-typed object, and any function, falls back to a `WeakMap` keyed by reference. Object identity does not survive `toJSON`/`fromJSON`, so these tags are branch-local.
+- A string, number, or boolean is keyed by value in a `Map` stored under `__internal`, so it rides the normal serialization.
+- A `bigint` or `symbol` cannot be tagged. Tagging one is a silent no-op.
+
 ## Where GlobalStore lives at runtime
 
 The canonical `GlobalStore` instance is held on the `RuntimeContext` as `ctx.globals`. The `RuntimeContext` is created once per execution and threaded through all nodes and functions.
@@ -151,7 +162,7 @@ Each branch of a user-facing concurrency primitive (`fork`, `parallel`, `race`) 
 
 ### Interrupt resume
 
-When an interrupt fires inside a branch body, `runInBranchAlsFrame`'s capture-on-return wrapper snapshots the branch's GlobalStore onto `BranchState.globalsJSON` before the interrupt propagates up. The snapshot rides along through the normal `BranchStateJSON` serialization path. On resume, `runInBranchAlsFrame` checks for an existing `globalsJSON` on the branch and uses `GlobalStore.fromJSON()` to restore it instead of cloning fresh from the parent. This ensures any global writes a branch made before the interrupt are still visible after resume.
+When an interrupt fires inside a branch body, `runInBranchAlsFrame` snapshots the branch's GlobalStore onto `BranchState.globalsJSON` before the interrupt propagates up. The snapshot happens only when the body settles as an `Interrupt[]`. A successful return is discarded at the join, so capturing then would be a wasted JSON round-trip. The snapshot rides along through the normal `BranchStateJSON` serialization path. On resume, `runInBranchAlsFrame` checks for an existing `globalsJSON` on the branch and uses `GlobalStore.fromJSON()` to restore it instead of cloning fresh from the parent. This ensures any global writes a branch made before the interrupt are still visible after resume.
 
 ### `shared: true` opt-out
 

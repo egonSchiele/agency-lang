@@ -1,13 +1,14 @@
 # The runs explorer
 
-`agency logs` pointed at several paths (run directories, a directory of
-run directories, statelog files) opens the cross-run explorer: one
-sortable, groupable table with one row per run directory or statelog
-trace, drill-down into a run's tests, and from a test into the existing
-log viewer focused on that test's trace. A **sole** run directory does
-not open the explorer: it opens the viewer on the directory's statelog,
-with each trace's annotations summarised on its row ("notes · score
-0.70 · labeled", from `annotationSummaries` in `lib/runDirectory/list.ts`).
+`agency logs` pointed at several paths opens the cross-run explorer.
+Those paths may be run directories, a directory of run directories, or
+statelog files. The explorer is one sortable, groupable table with a row
+per run directory or statelog trace. From a row you drill into a run's
+tests, and from a test into the existing log viewer focused on that
+test's trace. A **sole** run directory does not open the explorer. It
+opens the viewer on the directory's statelog, with each trace's
+annotations summarised on its row ("notes · score 0.70 · labeled", from
+`annotationSummaries` in `lib/runDirectory/list.ts`).
 This page explains how the explorer is built and why the boundaries sit
 where they do. The single-run viewer has its own page
 (`docs/dev/cli/logs-viewer.md`); the explorer is a **separate app** that
@@ -66,9 +67,11 @@ into records and summary metrics) > the eval `agentLabel`, shortened
 (basename for `.agency` entries, `agency-agent(x)` for agent commands)
 > the launch command > the file/trace name. Identity colors are
 frequency-ranked over one palette so "bright-cyan is the most-seen
-agent" holds on every screen. The suite column comes from
-`config.json`'s `provenance.inputsSource.source` (`suite.ts` knows the
-real formats: local path, git URL with `?ref=`, `inline:`, `optimize`).
+agent" holds on every screen. The suite column comes from the harness
+`run` annotation row's `suite.source`, surfaced as `suiteSource` by
+`lib/runDirectory/list.ts`. `suite.ts` knows the real formats: a local
+path, a git URL with `?ref=`, `inline:`, `optimize`, and
+`unspecified`.
 
 ## The cursor pins to identity, never an index
 

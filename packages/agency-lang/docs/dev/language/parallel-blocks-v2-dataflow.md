@@ -2,11 +2,13 @@
 
 Status: concrete spec, not yet implemented. v2 follows the v1 release of `parallel`/`seq`.
 
-v1 reference: `parallel-blocks.md`.
+Nothing here has shipped. The codebase still runs v1: `lib/preprocessors/parallelDesugar.ts` gives every statement its own arm and rejects cross-arm references, there is no `parallelDataflow.ts`, and `scripts/agency.ts` has no `plan` command. Read this as a design to implement, not as a description of the compiler.
+
+v1 reference: [parallel-blocks.md](parallel-blocks.md).
 
 ## Summary
 
-In v1, the user must wrap any data-dependent chain in `seq { }` because cross-arm references are a compile error. v2 lifts that restriction by adding a compile-time **dataflow analyzer** that infers arm grouping from variable references. Statements with no inter-dependencies run in their own arms; chains collapse into a single sequential arm. Cross-arm references no longer error — they merge statements into the same arm.
+In v1, the user must wrap any data-dependent chain in `seq { }`, because cross-arm references are a compile error. v2 lifts that restriction by adding a compile-time **dataflow analyzer** that infers arm grouping from variable references. Statements with no inter-dependencies run in their own arms, and chains collapse into a single sequential arm. A cross-arm reference no longer errors, it merges the two statements into the same arm.
 
 ```agency
 // v1 — must wrap dependent chain in seq

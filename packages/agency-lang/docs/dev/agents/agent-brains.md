@@ -53,6 +53,8 @@ subagents) and `simple` (one tool-less LLM call per turn). Each has a
 
 ## What the harness owns
 
+Paths in this section are relative to `lib/agents/agency-agent/`.
+
 - `agent.agency`: parses flags, picks the brain, validates `--agent`
   against `brain.startTargets` (`main` means `""`), sets up models, memory,
   and MCP, and then runs either one turn or the REPL, both through
@@ -65,13 +67,15 @@ subagents) and `simple` (one tool-less LLM call per turn). Each has a
   `brain.runTurn`.
 - `lib/repl.agency`: the interactive terminal. It calls the harness
   `runTurn` and never a brain directly.
-- `lib/grounding.agency`: builds the grounding text (`groundingText`, which
-  includes `loadAgentsMd`).
+- `lib/grounding.agency`: builds the grounding text with `groundingText`,
+  which calls `loadAgentsMd`.
+- `lib/agentName.agency`: `agentNameFor(brain)` returns
+  `"agency-agent/<brain name>"`. `main()` passes it to `setAgentName`, so
+  every trace is grouped by the brain that produced it.
 
-Selection is a runtime value, not a separate entry file per brain, because
-the launcher (`lib/cli/runBundledAgent.ts`) hard-codes one entry point and
-because a flag lets the same session code, header, and settings serve every
-brain. `resolveBrainName` picks `--brain`, else the `brain` key in
+Selection is a runtime value rather than a separate entry file per brain.
+The launcher in `lib/cli/runBundledAgent.ts` hard-codes one entry point, and
+a flag lets the same session code, header, and settings serve every brain. `resolveBrainName` picks `--brain`, else the `brain` key in
 `settings.json`, else `coordinator`. It checks the runtime shape of the
 setting, since the file is hand-editable.
 
@@ -98,17 +102,17 @@ export def runSession(interactive: boolean, body: () -> void raises <*>) {
 The `interactive` flag is also threaded into the policy handler
 (`cliPolicyHandler(interactive: ...)`). In a one-shot run there is no user
 at a terminal, so an interrupt the policy does not decide is rejected with
-a reason string instead of prompted — the reason becomes the failing
-call's error, which the tool loop feeds back to the model so it can take
-another approach. Before this, an undecided effect in `-p` mode raised a
+a reason string instead of prompted. The reason becomes the failing call's
+error, and the tool loop feeds it back to the model so it can take another
+approach. Before this, an undecided effect in `-p` mode raised a
 prompt nobody could answer: the pending prompt starved the event loop and
 the process died with exit 13 ("unsettled top-level await").
 
 Why this is enough: handlers in Agency are not try/catch. When a function
 raises an interrupt, *every* handler up the chain is consulted, and if any
 one of them rejects, the interrupt is rejected. So a brain that wraps its
-own work in `with approve` still cannot get past the harness policy, because
-the policy handler is outside it and gets its vote. `tests/turn.agency`
+own work in `with approve` still cannot get past the harness policy. The
+policy handler sits outside the brain and gets its vote. `tests/turn.agency`
 proves this with a stub brain that approves its own interrupt during `init`
 and during two turns and is rejected each time. Note that a function type's
 `raises <*>` is a type-checker annotation only; the safety comes from where
@@ -146,12 +150,11 @@ expected count.
 
 ## Known limits
 
-- No `/brain` slash command to switch mid-session; a brain owns thread
-  state that would not survive the switch. Pick a brain per run.
-- Attachments are detected only for the main target; named targets get bare
+- There is no `/brain` slash command to switch mid-session. A brain owns
+  thread state that would not survive the switch, so pick a brain per run.
+- Attachments are detected only for the main target. Named targets get bare
   text.
-- No per-brain slash commands, and the statelog is not yet stamped with the
-  brain name.
+- There are no per-brain slash commands.
 
 ## Two compiler bugs met while building this
 

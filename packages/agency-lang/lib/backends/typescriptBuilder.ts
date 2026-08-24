@@ -503,9 +503,9 @@ export class TypeScriptBuilder {
     }
 
     // A tripwire. Expansion removes every splice before codegen, so one
-    // reaching here means a compile path skipped expandSplices, and seven
-    // must run it. Without this the symptom is a raw "Unhandled Agency
-    // node type" stack trace that says nothing about the real mistake.
+    // reaching here means a compile path skipped expandSplices, and every
+    // compile path must run it. Without this the symptom is a raw "Unhandled
+    // Agency node type" stack trace that says nothing about the real mistake.
     const unexpanded = [...walkNodesArray(program.nodes)].filter(
       (visit) => visit.node.type === "splice",
     );
@@ -976,7 +976,7 @@ export class TypeScriptBuilder {
    * Build the validation expression for a `!` site. If the resolved type
    * carries no `@validate(...)` tag anywhere, return the existing
    * `__validateType(value, schema)` call (zero behavior change). Otherwise
-   * return `await __validateChainRecursive(value, <descriptor>, __ctx)`,
+   * return `await __validateChainRecursive(value, <descriptor>)`,
    * which runs Zod parse + the validator chain at each level.
    */
   private validateExpr(t: VariableType, value: TsNode): TsNode {

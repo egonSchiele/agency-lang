@@ -1,8 +1,8 @@
 # Definite-return checking — remaining work
 
-Status of the feature shipped in **PR #386** (safe subset) and extended by the
-match-aware follow-up branch (`match-aware-definite-returns`). Read alongside
-the type-checker dev docs:
+Status of the feature shipped in **PR #386** as a safe subset, then extended by
+the match-aware follow-up. Both parts are on `main`. Sections 3, 4, and 5 below
+are still open. Read alongside the type-checker dev docs:
 
 - [`docs/dev/compiler/typechecker/README.md`](./README.md) — bidirectional checking, the pass pipeline, `synthType`.
 - [`docs/dev/compiler/typechecker/narrowing/README.md`](./narrowing/README.md) — flow-sensitive narrowing, the flow graph, `exit` nodes, `match` exhaustiveness.
@@ -21,10 +21,10 @@ the type-checker dev docs:
 - `lib/typeChecker/flowBuilder.ts` — `returnStatement` rule returns `{ kind: "exit" }`; `ifElse` merges then/else via `mergeFlows`; `buildFlowGraphs` records each scope's terminal into `FlowEnvironment.scopeTerminals` (null-prototype dict).
 - `lib/typeChecker/definiteReturns.ts` — `checkDefiniteReturns(scopes, ctx)`: `requiresReturn(rt)` exempts absent/`null`, `void`, `never` return types; the loop skips `top-level` and nodes (`ctx.nodeDefs[info.name]`, bare-keyed); flags when `scopeTerminals[scopeKey].kind !== "exit"`.
 - `lib/config.ts` — `typechecker.definiteReturns: "silent" | "warn" | "error"`. **Ships at `"warn"`** (default read-site is `?? "warn"` in `definiteReturns.ts`).
-- Registered in the pipeline immediately after `checkMatchExhaustiveness` (`index.ts`).
+- Registered in the pipeline immediately after `checkMatchExhaustiveness` and before `checkConflictingMarkers` (`lib/typeChecker/index.ts`).
 - Tests: `lib/typeChecker/definiteReturns.test.ts`.
 
-**Match-aware (this branch):** match-containing functions are fully checked — the #386 `containsMatch` safe-subset skip is gone (§2 below). **`while (true)` divergence (was §5b):** the flow builder's `whileLoop` rule yields `{ kind: "exit" }` for a literal-`true` loop with no reachable `break` (`hasReachableBreak` — break binds to the nearest loop; nested loops/definitions are excluded, everything else conservatively counts). Post-infinite-loop statements are dead code to all flow consumers.
+**Match-aware:** match-containing functions are fully checked. The #386 `containsMatch` safe-subset skip is gone from the code (§2 below). **`while (true)` divergence (was §5b):** the flow builder's `whileLoop` rule yields `{ kind: "exit" }` for a literal-`true` loop with no reachable `break`. `hasReachableBreak` decides that: a `break` binds to the nearest loop, so nested loops and nested definitions are excluded, and everything else conservatively counts. Post-infinite-loop statements are dead code to all flow consumers.
 
 **Measured clean:** #386 scanned 841 execution-test `.agency` programs at `error` level — 0 hits. The match-aware branch re-scanned **855** programs (the base plus the match-expression suite added by `7eefd7c1`) at `error` — **0 hits, 0 crashes**, and the full unit suite is at parity with base `main`.
 
@@ -47,9 +47,9 @@ So the flow terminal is exact for every match shape, and the entire follow-up co
 
 ---
 
-## 3. Flip the default `warn` → `error`
+## 3. Flip the default `warn` → `error` (STILL OPEN)
 
-Same trajectory as `matchExhaustiveness` (flipped in PR #383) and now the main remaining item. The match-aware branch's sweep is the fresh measurement: **855 execution-test programs at `error` = 0 hits**, so the blast radius is currently zero.
+`definiteReturns.ts` still reads `?? "warn"`. Same trajectory as `matchExhaustiveness` (flipped in PR #383) and now the main remaining item. The match-aware branch's sweep is the fresh measurement: **855 execution-test programs at `error` = 0 hits**, so the blast radius is currently zero.
 
 - Change the default read-site in `definiteReturns.ts` from `?? "warn"` to `?? "error"`, and update the docstring + `docs/misc/config.md`.
 - Re-measure first anyway (the discipline used for #383/#366): full typeChecker suite, fixture integration test, and the `discoverAgencyFiles` sweep over `tests/agency`, `tests/agency-js`, `tests/integration` at `error`.
@@ -58,23 +58,23 @@ Same trajectory as `matchExhaustiveness` (flipped in PR #383) and now the main r
 
 ---
 
-## 4. Edge-case refinement: trailing `raise` (documented limitation)
+## 4. Edge-case refinement: trailing `raise` (STILL OPEN, documented limitation)
 
-`def f(): number { raise e::x("m", {}) }` is flagged, because `raise`/`interrupt` are `passThrough` (non-diverging) in the flow builder, matching the `alwaysExits` convention ("a raise may resume"). Sound but noisy. To refine: treat a `raise` as diverging when it can be *proven* not to resume (no handler up the static chain resumes it). The interrupt-effects analysis already computes per-function effect sets and the handler call-graph — see `lib/typeChecker/interruptAnalysis.ts` (`analyzeInterruptsFromScopes`, `buildInterruptCallGraph`) and `docs/dev/runtime/interrupts.md`. This is a bigger analysis; only worth it if the trailing-raise false positive proves common. It matters more once the default flips to `error` (§3).
+`def f(): number { raise e::x("m", {}) }` is flagged, because `raise`/`interrupt` are `passThrough` (non-diverging) in the flow builder, matching the `alwaysExits` convention ("a raise may resume"). Sound but noisy. The same convention covers `return interrupt effect(...)`: the `returnStatement` and `matchYield` rules both treat a returned interrupt as passThrough, because an approved interrupt resumes and execution falls past the `return`. To refine the trailing `raise`: treat a `raise` as diverging when it can be *proven* not to resume (no handler up the static chain resumes it). The interrupt-effects analysis already computes per-function effect sets and the handler call-graph — see `lib/typeChecker/interruptAnalysis.ts` (`analyzeInterruptsFromScopes`, `buildInterruptCallGraph`) and `docs/dev/runtime/interrupts.md`. This is a bigger analysis; only worth it if the trailing-raise false positive proves common. It matters more once the default flips to `error` (§3).
 
-(The other refinement listed here previously — infinite loops — shipped with the match-aware branch; see §1.)
+(The other refinement listed here previously, infinite loops, shipped with the match-aware work. See §1.)
 
 ---
 
-## 5. Adjacent: dead-code / unreachable-statement detection
+## 5. Adjacent: dead-code / unreachable-statement detection (STILL OPEN)
 
-The flow builder already knows a statement is unreachable — `buildFlowGraph` short-circuits when the running flow is `exit`, which now also covers code after a provably-infinite loop. Surfacing that as a warning (`code after return/infinite-loop is unreachable`) is a cheap, high-signal addition reusing the exact `exit`-node reasoning. It is a *separate* diagnostic, not part of definite-return, but it lives in the same conceptual space.
+The flow builder already knows a statement is unreachable — `buildFlowGraph` short-circuits when the running flow is `exit`, which now also covers code after a provably-infinite loop. Nothing surfaces it yet. Turning it into a warning such as `code after return/infinite-loop is unreachable` is a cheap, high-signal addition that reuses the exact `exit`-node reasoning. It is a separate diagnostic rather than part of definite-return, but it lives in the same conceptual space.
 
 ---
 
 ## 6. Test + gotcha reference
 
-- Tests: `lib/typeChecker/definiteReturns.test.ts`. Harness note: `typecheckSource` (in `testUtils.ts`) hardcodes empty config, so the config-knob tests use a local `check(src, config)` helper that forwards `config` to `typeCheck`. Anchor assertions to the exact message with `^Not all code paths return a value in '`.
+- Tests: `lib/typeChecker/definiteReturns.test.ts`. Harness note: the file uses its own `check(src, config)` helper, which forwards `config` straight to `typeCheck`. (`typecheckSource` in `testUtils.ts` now takes a config too, so the helper is no longer strictly required.) Anchor assertions to the exact message with `^Not all code paths return a value in '`.
 - **Gotchas:**
   - `return` in a statement-position match arm is a compile error; expression matches are legal only as an assignment RHS or a return operand (v1 grammar restriction).
   - Type-mismatch and many diagnostics carry **no explicit `severity`** (they render as errors). Assert with `(e.severity ?? "error") === "error"`, never `=== "error"`.

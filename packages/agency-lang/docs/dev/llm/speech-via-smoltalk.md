@@ -20,9 +20,9 @@ package). Read it for the full rationale; this note is the code map.
 
 Breaking rename (Agency has no users): the old local-playback `speak` is now
 `say`, and `speak` is the new CLOUD TTS. Because there are no users, there is no
-back-compat shim — the old `_speak` / `__internal_*` runtime exports were
-removed, not kept as aliases. This is a deliberate, approval-safety-relevant
-change — see the effect note below.
+back-compat shim. The old `_speak` and `__internal_*` runtime exports were
+removed, not kept as aliases. This rename matters for approval safety, so read
+the effect note below.
 
 ## Effects are capability boundaries, not just prompts
 
@@ -49,9 +49,9 @@ Argument validation (format, speed, timestamp granularity) lives in
 BEFORE the approval interrupt (an invalid call never prompts), and the runtime
 helpers validate again at their boundary (a direct/deterministic caller that
 bypassed the `.agency` still can't publish a mislabeled artifact). `format` is
-normalized (case + a leading dot) against the shared `SPEAK_FORMATS` /
-`SPEECH_FORMAT_TO_MIME` in `lib/runtime/audioFormats.ts` — the single source both
-this helper and the `DeterministicClient` use.
+normalized for case and a leading dot against the shared `SPEAK_FORMATS` and
+`SPEECH_FORMAT_TO_MIME` in `lib/runtime/audioFormats.ts`. That file is the single
+source both this helper and the `DeterministicClient` use.
 
 ## Failure accounting: honest #809 provenance (`lib/stdlib/speech.ts`)
 
@@ -59,9 +59,9 @@ smoltalk's `transcribe`/`speak` never reject — they resolve a failure `Result`
 `meteredDispatch` only records an unresolved attempt on a REJECTED promise, so a
 resolved failure would leave `pricingComplete` true. The wrapper therefore
 records exactly one unresolved attempt on a resolved failure Result itself
-(`recordUnresolvedAttempt`). Success path mirrors `_generateImage`: `recordUsage`
-→ `addTokens` (STT only; TTS has no tokens) → statelog leaf event →
-`enforceGuards()` LAST. Cost is recorded only on success; a guard trip still
+(`recordUnresolvedAttempt`). The success path mirrors `_generateImage`: `recordUsage`,
+then `addTokens` (STT only, since TTS has no tokens), then the statelog leaf
+event, then `enforceGuards()` LAST. Cost is recorded only on success; a guard trip still
 leaves the spend accounted and traced.
 
 ## TTS output is published atomically (`publishSpeechOutput`)
@@ -93,8 +93,8 @@ failure is logged and the published file is kept.
   `recordCompletionUsage`; `addTokens` in `_transcribe`), the global token stats
   (`updateTokenStats`), and every statelog payload all use the identical projected
   total and never serialize an audio-token field. Before this, the completion path
-  fed the meter one number (44) and the branch/global/statelog the raw one (0) for
-  the same call — that skew is what the single projection closes.
+  fed the meter one number and the branch, global, and statelog consumers the raw
+  one for the same call. The single projection closes that skew.
 - Leaf events `transcription` + `speechSynthesis` (`lib/statelogClient.ts`) mirror
   `imageGeneration`. Previews are `PROMPT_PREVIEW_MAX`-capped; audio bytes / `raw`
   / `pcm` are never logged. The wrapper hands the projected usage + a total-only
@@ -113,15 +113,15 @@ Type split (`stdlib/thread.agency`):
   `lib/runtime/replyAttachments.ts` only handles image/file).
 - `MessageAttachment = image | file | audio` — used by `userMessage`.
 - `llm()`'s first-arg type (`lib/typeChecker/builtins.ts`) is a UNION of the two
-  alias NAMES `Attachment | MessageAttachment`. This is because at an `llm()`
+  alias NAMES `Attachment | MessageAttachment`. At an `llm()`
   call site the user file usually has not imported these aliases, so the checker
-  compares them as unresolved aliases by name (assignability.ts) — a single alias
+  compares them as unresolved aliases by name (`assignability.ts`). A single alias
   would reject whichever builder returns the other name.
 
 ## Cancellation
 
-Agency pins `smoltalk ^0.10.1`, which added `abortSignal` to the audio
-operations. The branch abort signal (`ctx.getAbortSignal(stack)`) is the SOLE
+Agency pins `smoltalk ^0.12.0`. `abortSignal` on the audio operations arrived in
+0.10.1. The branch abort signal (`ctx.getAbortSignal(stack)`) is the SOLE
 cancellation channel: it is a method argument on `LLMClient.transcribe`/`speak`,
 deliberately NOT a config field (the derived `TranscribeConfig`/`SpeakConfig`
 `Omit` `abortSignal`), so there is exactly one place a signal can enter.
@@ -134,16 +134,20 @@ in-flight request, not just Agency's wait.
 resolves a distinguishable `failure("Request was aborted")`. The `LLMClient`
 contract (plan §5) is the opposite — cancellation must REJECT with the branch
 reason; a resolved failure means a non-cancellation failure. So the
-`SmoltalkClient` adapters call `rejectIfAborted(signal)` after the smoltalk call:
-if our OWN branch signal aborted, throw `signal.reason` (the runtime's
-`AgencyCancelledError`). Detection is by our signal, not by string-matching
+`SmoltalkClient` adapters call `rejectIfAborted(signal)` after the smoltalk call.
+If our OWN branch signal aborted, it throws `signal.reason`, the runtime's
+`AgencyCancelledError`. Detection is by our signal, not by string-matching
 smoltalk's message, so it holds even if that string changes. `meteredDispatch`
 then records exactly one unresolved attempt for the rejection.
 
-Layers, all covered by tests: the wrapper's already-aborted preflight (throws
-before any dispatch), the `SmoltalkClient` mid-flight abort→reject adaptation,
-and — for TTS — the pre-publication abort check (a cancelled synthesis never
-writes its file). The `DeterministicClient` also honors the signal (rejects with
+The adapters do this only on a FAILURE result (`if (!result.success)`). A request
+that raced to a real success before a late abort keeps its success and its real
+cost, rather than being discarded as a cancellation.
+
+Three layers, all covered by tests. The wrapper's already-aborted preflight
+throws before any dispatch. The `SmoltalkClient` adapts a mid-flight abort into a
+rejection. For TTS, the pre-publication abort check means a cancelled synthesis
+never writes its file. The `DeterministicClient` also honors the signal (rejects with
 its reason) so wrapper tests can exercise mid-request cancellation offline.
 
 Note: for a non-OpenAI provider (Gemini), smoltalk documents its cancellation as

@@ -112,7 +112,10 @@ on success or failure.
   must match at least one trace and attaches to the ones that recorded it;
   annotation rows go to the child their `traceId` names and must name one of
   the traces. Used by `runs add` and `run --capture-workdir`.
-- `recordCompletedRun({ dir, stagedStatelogFile, codeEntry?, workdir?, run })` — the eval harness's one call per finished test, on a fresh directory
+- `recordCompletedRun({ dir, stagedStatelogFile?, codeEntry?, workdir?, gradersFiles?, run })`
+  — the eval harness's one call per finished test, on a fresh directory. A run
+  that never wrote a statelog omits `stagedStatelogFile`; the `run` row is still
+  recorded so the failure is not lost.
 - `recordGradingPass({ dir, scores })` — mints one `passId`, stamps `passSize`; an empty `scores` is refused
 - `recordChecklistRow({ dir, groupDir, row })` — one labeling sign-off, the completed row as the session built it (its id is content-derived, so a replay lands on the same id): grounded immediately before the append against the run (holds the trace) and the group's lineage (revision exists with that hash; every answer names one of its questions); returns `appended` or `replayed` plus the post-write snapshot
 
@@ -150,8 +153,8 @@ The planners (`mergeStatelog.ts`, `attachCode.ts`, `attachWorkdir.ts`):
   was removed). Same name = same content, so nothing is ever rewritten. See docs/dev/evals/eval-grading.md for why grading prefers this copy.
 - **Workdir** copies to `workdir/` and writes the dated `workdir.json`
   sidecar. A workdir attached later may postdate the run; the sidecar says so.
-  The run directory itself, and the optional `excludeDir` (the group a capture
-  is written into), are left out of the copy.
+  The run directory itself, and any directory named in `excludeDirs` (the group
+  a capture is written into), are left out of the copy.
   Replacement goes through `safeDeleteDirectoryWithin(root, target)`
   (`lib/utils.ts`), which deletes only a strict descendant of the run
   directory after resolving symlinks.
@@ -166,12 +169,11 @@ Node has no built-in file lock (`fs` exposes no `flock`), so this is the
 standard idiom: create the lock file with the `wx` flag, which fails if the
 file exists, and record who holds it. Packages such as `proper-lockfile` do
 the same thing with more machinery (mtime-based staleness and takeover); we
-deliberately do not want takeover, so the ~100 lines here are the whole
-feature.
+deliberately do not want takeover, so this one small file is the whole feature.
 
 ## Derived views
 
-`evalRecordFor(trace)` (`evalRecord.ts`) computes the `EvalRecord` graders and
+`evalRecordFor(trace, sourcePath)` (`evalRecord.ts`) computes the `EvalRecord` graders and
 judges consume — a view, never a file. `traceEnding(trace)` reads how a trace
 ended from its own events (`ok` / `error` / `unknown`); the harness's `run` row,
 when present, knows more. `summarizeRuns(snapshot)` (`list.ts`) is one
@@ -219,11 +221,12 @@ One file per command; none imports the lock or the append helpers.
 - `agency runs list <path…>` — one line per run across every run directory
   the paths name (`findRunDirectories`, then `readRunDirectory` each, then
   `buildRunsListing` → `formatRunsList`). Columns `TRACE TEST AGENT STARTED
-  ENDED TIME COST LLM TOOLS SCORE NOTES LABELED INPUT`: `NOTES` is `yes`
+  ENDED TIME COST LLM TOOLS SCORE PASSES NOTES LABELED INPUT`: `NOTES` is `yes`
   when `notes.md` has text, else blank; `TEST` is the harness
   `run` row's test id; `AGENT` is `displayAgent`: the trace's own `agentName`
-  event, else the harness label `flags.agent` unchanged (a command line is
-  not shortened; its basename could be any argument). `SCORE` and the footer
+  event, else the harness label `flags.agent`. A command line is not shortened,
+  because its basename could be any argument, though an agent file path under
+  the cwd is shown relative to it. `SCORE` and the footer
   mean are the persisted effective score rows (weighted mean per run); a run
   `eval grade` scored zero without running graders (errored, timed out,
   traceless) has no score row and is left out of `G graded`, so the two means

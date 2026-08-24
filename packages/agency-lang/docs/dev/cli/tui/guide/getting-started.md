@@ -1,10 +1,11 @@
 # Getting Started
 
-## Installation
+## Where it lives
 
-```bash
-pnpm add @agency-lang/tui
-```
+The TUI library lives in this repo under `lib/tui/`. There is no
+published `@agency-lang/tui` package, so nothing to install: code in
+`lib/` imports it from `@/tui/index.js`, and the library's own tests
+import the source files directly.
 
 ## Quick Example
 
@@ -12,7 +13,7 @@ pnpm add @agency-lang/tui
 import {
   Screen, ScriptedInput, FrameRecorder,
   box, row, column, text, list,
-} from "@agency-lang/tui";
+} from "@/tui/index.js";
 
 // Create a screen with test I/O
 const recorder = new FrameRecorder();
@@ -58,8 +59,12 @@ Elements are plain data objects describing the UI. Builder functions provide a c
 - `row(style?, ...children)` — horizontal layout
 - `column(style?, ...children)` — vertical layout (default)
 - `text(content)` — styled text
+- `line(content, style?)` / `lines(strings, style?)` — fixed-height single-line rows
 - `list(style, items, selectedIndex?)` — selectable list
 - `textInput(style, value?)` — text input
+
+`text()` defaults to `flex: 1`, so use `line()` when you want one row of
+a fixed height. See `docs/dev/cli/tui.md` for when each one fits.
 
 ### Flexbox-Lite Layout
 

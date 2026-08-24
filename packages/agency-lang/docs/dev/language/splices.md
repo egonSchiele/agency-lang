@@ -2,7 +2,7 @@
 
 `$( gen(args) )` runs `gen` during compilation and pastes the `Code` value it returns into the file being compiled. This is the half of Template Haskell that code literals did not ship: literals make code, splices install it. See `docs/dev/language/template-agency.md`.
 
-User-facing documentation is in `docs/site/guide/templates.md`. This file covers the parts you only need if you are changing how splices work.
+User-facing documentation is in `docs/site/guide/splices.md`. This file covers the parts you only need if you are changing how splices work.
 
 ## The pipeline, and where expansion sits
 
@@ -12,7 +12,7 @@ parse → expandSplices → SymbolTable.build / buildCompilationUnit → typeche
 
 Expansion happens immediately after parsing and before anything reads what the file declares, so a generated name resolves like any other.
 
-**`SymbolTable.build` deliberately does not expand.** That crawl records what each file exports so other files can resolve against it, and expanding there is what would make a generated declaration importable. It would also put generator execution behind all twelve of its callers, including `agency doc`, `pack`, `bundle`, `serve`, the MCP tools, and the editor's symbol table.
+**`SymbolTable.build` deliberately does not expand.** That crawl records what each file exports so other files can resolve against it, and expanding there is what would make a generated declaration importable. It would also put generator execution behind every one of its callers, including `agency doc`, `pack`, `bundle`, `serve`, the MCP tools, and the editor's symbol table. There are around eighteen of them.
 
 Generated declarations are therefore **file-local**: usable in the file that spliced them, invisible to importers. A generated declaration marked `export` is refused outright (`AG8013`) rather than left to fail as a confusing "not defined" in the importing file. Lifting this is issue #687, and the shape of the fix is an interface artifact like the one GHC writes, so a module's exports can be read without re-deriving them from source.
 
@@ -33,7 +33,7 @@ Measured on this machine, one splice whose generator returns a small fragment:
 
 So a splice costs about **two seconds per `tc` invocation**, every time, because each invocation is a fresh process and the cache does not survive it. Inside the language server the cache does survive, so the cost lands once per generator edit rather than once per keystroke.
 
-Two consequences worth keeping in mind when changing this code. The cache is what makes the editor usable, so anything that weakens its key makes the editor forkstorm. And `execFileSync` blocks a single-threaded server, which is why the editor path passes a 3-second wall clock instead of the build's 30.
+Two consequences worth keeping in mind when changing this code. The cache is what makes the editor usable, so anything that weakens its key makes the editor forkstorm. And `execFileSync` blocks a single-threaded server, which is why the editor path passes `EDITOR_WALL_CLOCK_MS` (3 seconds) instead of the build's `WALL_CLOCK_MS` (30 seconds). Both live in `runGenerator.ts`.
 
 ## Every path that must expand
 
@@ -41,7 +41,7 @@ Six, and missing one is the failure mode to worry about. It produces a file that
 
 The list below was originally found by searching for another preprocessing step, `liftCallbackBlocks`, on the assumption that anything running one should run the other. `agency tc` runs neither, so it was missed, and `agency tc` on a file with a splice reported the generated function as undefined.
 
-Search instead for callers of `buildCompilationUnit`. That is the step which inventories what a file declares, so it is the one that needs the splice already expanded. It returns seventeen call sites; most only want metadata and are listed under "Blast radius" as deliberately not expanding.
+Search instead for callers of `buildCompilationUnit`. That is the step which inventories what a file declares, so it is the one that needs the splice already expanded. Most of the call sites it returns only want metadata, and "Blast radius" below lists them as deliberately not expanding.
 
 That six copies of this sequence exist at all is the real problem, and it is filed as #692.
 
@@ -54,9 +54,9 @@ That six copies of this sequence exist at all is the real problem, and it is fil
 | `lib/lsp/diagnostics.ts` (`computeDiagnostics`) | Report it as an editor diagnostic. This is the only path where the user is looking at the file while the generator is broken. |
 | `scripts/agency.ts` (the `typecheck`/`tc` command) | Print and mark the run failed. Has its own pipeline and reaches none of the shared ones. Skipped for stdin, which has no path to resolve a generator against. |
 
-The map of paths is the same one `liftCallbackBlocks` marks. If a sixth appears, it will need both.
+Four of these six also run `liftCallbackBlocks`: `buildSession.ts`, `compile.ts`, `typecheck.ts`, and `interrupts.ts`. The editor and the `typecheck` command run expansion only. If a seventh path appears, check whether it needs both.
 
-`TypeScriptBuilder.build` has a tripwire for this. A splice reaching code generation means expansion did not run. Without the tripwire the symptom is a raw `Unhandled Agency node type` stack trace that says nothing about the actual mistake.
+`TypeScriptBuilder.build` has a tripwire for this. A splice reaching code generation means expansion did not run. Without the tripwire the symptom is a raw `Unhandled Agency node type` stack trace that says nothing about the actual mistake. It lives in `TypeScriptBuilder.build` in `lib/backends/typescriptBuilder.ts`, and its comment still says seven paths must expand rather than six.
 
 The tripwire runs before the builder generates anything, and it finds splices by walking the whole tree rather than scanning the top level — a splice in expression position sits several levels down inside a call. The message names the generator when it can read one, so it says *which* splice went unexpanded, and points here for the list of paths that must call expansion.
 
@@ -66,7 +66,7 @@ Because no real compile path can reach the tripwire, its only coverage is `lib/b
 
 `expandSplices` keeps decide, run, and graft separate, because they change for different reasons.
 
-1. **Decide.** An ordered list of checks, each `(context) => SpliceDiagnostic | null`, applied by a short-circuiting reduce. Adding a rule means adding an entry to `CHECKS`, never editing the pass. Short-circuiting matters, because each eligibility check parses the generator's whole import closure.
+1. **Decide.** `checkGeneratorEligible` in `lib/compiler/splice/eligibility.ts` holds an ordered list of checks, each `() => SpliceDiagnostic | null`, applied by a short-circuiting reduce. Adding a rule means adding an entry to that list, never editing the pass. Short-circuiting matters, because each eligibility check parses the generator's whole import closure. The three checks today are `checkNoNestedSplice`, `checkImportGraph`, and `checkGeneratorEffects`.
 2. **Run.** `runGenerator`. Not a check. It produces a value, so it returns `SpliceResult<Code>` and does not belong in the array.
 3. **Graft.** The capture rule, the position/kind rule, then paste. These need the *result*, which is why phase 1 cannot simply be "all the checks".
 
@@ -74,7 +74,7 @@ Grafting matches splices by object identity rather than by index. A declaration 
 
 ## Why the cache is mandatory
 
-Not an optimization. `SymbolTable.build` has twelve non-test callers, and `lib/lsp/server.ts` calls it from `onDidChangeContent`, once per keystroke. Without a memo, every splice in an open file forks a child process every time the user types a character.
+Not an optimization. `SymbolTable.build` has many non-test callers, and `lib/lsp/server.ts` calls it from `onDidChangeContent`, once per keystroke. Without a memo, every splice in an open file forks a child process every time the user types a character.
 
 The key has two parts. The **slot** identifies the call: the generator's path and the printed expression. The **fingerprint** says whether a remembered answer is still good: a hash over every file that can change what the generator returns. One entry per slot, so an editing session replaces rather than accumulates.
 
@@ -93,13 +93,13 @@ The key is a fingerprint over inputs, not a claim about the generator. Generator
 
 Failures are cached too. A currently-broken generator is the case an editor hits hardest, since the user is staring at the error while typing. The caller re-anchors the diagnostic to the splice at hand, because a cached failure carries the position of whichever splice ran first.
 
-`clearSpliceCache()` exists for tests. The cache deliberately outlives a single compile.
+`clearSpliceCache()` in `lib/compiler/splice/cache.ts` exists for tests, alongside `spliceCacheSize()`. The cache deliberately outlives a single compile.
 
 ## Running a generator synchronously
 
 `_run` is async because it forks, but the whole compile pipeline including `SymbolTable.build` is synchronous, and expansion has to happen inside it. `runGenerator` therefore uses `execFileSync`: the parent blocks while the child does async work internally.
 
-It synthesizes a runner with exactly one import and one node, writes it under `.agency-tmp/`, and compiles it **from a real path**. `compileSource` cannot do this. It writes to its own temp directory, so a program importing the generator by relative path cannot resolve it. The same root cause bit the effect check: anything needing relative imports to resolve must take a path, never a source string.
+It synthesizes a runner with exactly one import and one node, writes it into a fresh `.agency-tmp/splice-<id>/` directory, and compiles it **from a real path**. The directory is deleted in a `finally`. `compileSource` cannot do this. It writes to its own temp directory, so a program importing the generator by relative path cannot resolve it. The same root cause bit the effect check: anything needing relative imports to resolve must take a path, never a source string.
 
 Things that are easy to get wrong here:
 
@@ -107,6 +107,7 @@ Things that are easy to get wrong here:
 - **A node returns an envelope**, `{ messages, data, tokens }`. The generator's value is under `data`.
 - **Detect a timeout kill with `err.signal === "SIGTERM"`**, not `err.killed`, which comes back `undefined`. The memory limit surfaces as `SIGABRT`.
 - **The runner compiles with the typechecker off.** `compileEntry` reports a type error with `process.exit(1)`, which would take the user's whole build down instead of reporting AG8008.
+- **The child writes its result to a file, not stdout.** A generator may `print`, and that output would corrupt the payload.
 
 ## Blast radius
 
@@ -187,7 +188,7 @@ Two things stop that. `checkNoNestedSplice` refuses a generator whose own file c
 
 ## Shared with template fills
 
-`lib/runtime/template/graft.ts` holds what filling a hole and expanding a splice must agree about: origin stamping and the position/kind table. Origin stamping is the detail that goes stale first once there are two copies of it, and it is what makes an error inside generated code attributable at all.
+Filling a hole and expanding a splice must agree on two things. `stampOrigin` in `lib/runtime/template/origin.ts` is shared, and it is what makes an error inside generated code attributable at all. The position/kind table is not shared: `expandSplices.ts` owns `KINDS_FOR_POSITION` and `fill.ts` keeps the stricter hole rule. Origin stamping is the detail that goes stale first once there are two copies of it.
 
 `formatErrors` reads that stamp and appends ``(in code generated by `name`)``. This is best-effort. A diagnostic anchored at a node carrying no position of its own has no stamp to read. Attribution for those needs the fragment-checker entry point that `fill.ts` records as a follow-up.
 

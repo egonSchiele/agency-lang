@@ -12,14 +12,15 @@ The motivating debugging story: you wrap a call in `with approve` expecting auto
 agency interrupts <file>
 ```
 
-- One positional arg, no flags in v1.
+- One positional arg, no flags in v1. The command is registered `hidden`
+  in `scripts/agency.ts`, so it does not appear in `agency --help`.
 - Plain text output to stdout. Errors (file not found, parse errors) go to stderr with exit code 1.
 - No color, no JSON, no policy filtering. See "Out of scope" below.
 
 Example output:
 
 ```
-src/agent.agency:42  interrupt of kind std::read
+src/agent.agency:42  interrupt of effect std::read
   Possible enclosing handlers:
     handle block at src/main.agency:10
     handle via fn approveReads at src/main.agency:18
@@ -29,7 +30,7 @@ src/agent.agency:67  interrupt
     (none)
 ```
 
-- The `of kind <Kind>` clause is omitted when `kind === "unknown"` (the bare `interrupt(...)` form).
+- The `of effect <Effect>` clause is omitted when the site's `effect` is `"unknown"`, which is the bare `interrupt(...)` form.
 - Inline handlers render as `handle block at <file>:<line>`.
 - `functionRef` handlers render as `handle via fn <name> at <file>:<line>`.
 - `(none)` appears under any site with an empty handler set.
@@ -62,7 +63,7 @@ Three layers, three files:
 
 | Layer | Module | Responsibility |
 |-------|--------|----------------|
-| Typechecker call graph | [lib/typeChecker/interruptAnalysis.ts](../../../lib/typeChecker/interruptAnalysis.ts) | `buildInterruptCallGraph(scopes, ctx)` records, per function, every call edge and every `interruptStatement` along with its lexically enclosing `handle` blocks. Purely structural — no propagation. |
+| Typechecker call graph | [lib/typeChecker/interruptAnalysis.ts](../../../lib/typeChecker/interruptAnalysis.ts) | `buildInterruptCallGraph(scopes, ctx)` records, per function, every call edge and every `interruptStatement` along with its lexically enclosing `handle` blocks. Purely structural, with no propagation. |
 | Handler-set analyzer | [lib/analysis/interrupts.ts](../../../lib/analysis/interrupts.ts) | `analyzeInterrupts(rootFile, config)` runs the typechecker on every reachable `.agency` file, merges the call graphs, and runs a worklist fixed-point to compute per-site handler sets. |
 | CLI shim | [lib/cli/interrupts.ts](../../../lib/cli/interrupts.ts) | `renderInterrupts(result)` plus the Commander `action` that reads the file and writes stdout. |
 
@@ -71,26 +72,35 @@ Three layers, three files:
 `buildInterruptCallGraph` walks `scopes` (the same `ScopeInfo[]` the rest of the typechecker uses). For each non-top-level scope it visits every node and records:
 
 - **Interrupt sites.** For every `interruptStatement` node, store the AST node plus the list of `handle` blocks in `ancestors` that lexically enclose it.
-- **Call edges.** For every `functionCall`, store the callee name plus the same enclosing-handlers list. Function references appearing as arguments (e.g. `llm(..., { tools: [deploy] })`) are added as synthetic call edges via `functionRefsInArgs` — same code path the existing transitive-kinds analyzer uses. `gotoStatement` targets are also recorded as call edges.
+- **Call edges.** For every `functionCall`, store the callee name plus the same enclosing-handlers list. Function references appearing as arguments of any call, such as `llm(..., { tools: [deploy] })`, are added as synthetic call edges via `functionRefsInArgs`. That is the same code path the transitive-effects analyzer uses. `gotoStatement` targets are also recorded as call edges.
+
+Every edge also carries a `calleeKey`, the callee's `${file}:${name}` `QualifiedKey`. `makeCalleeResolver` produces it: a locally defined name resolves against the current file, an imported name resolves to its origin file and original name, and anything else falls back to the current file so the edge is at least keyed consistently.
 
 Each handler is a `TaggedHandler = { block: HandleBlock; file: string }`. The file tag is the file the *enclosing function* lives in, looked up via `SymbolTable.findFileForName(name)`. This is essential because `SourceLocation` carries only `{line, col, start, end}` — there is no `loc.file`, so the file has to be threaded explicitly through every level of the analysis.
 
 The output:
 
 ```ts
+type QualifiedKey = string; // `${file}:${name}`
+type CallEdge = {
+  calleeName: string;
+  calleeKey: QualifiedKey;
+  enclosingHandlers: TaggedHandler[];
+};
 type CallGraphFunction = {
+  name: string;
   file: string;
-  callEdges: { calleeName: string; enclosingHandlers: TaggedHandler[] }[];
+  callEdges: CallEdge[];
   interruptSites: {
     site: InterruptStatement;
     file: string;
     enclosingHandlers: TaggedHandler[];
   }[];
 };
-type InterruptCallGraph = Record<string, CallGraphFunction>;
+type InterruptCallGraph = Record<QualifiedKey, CallGraphFunction>;
 ```
 
-This lives on `TypeCheckResult.interruptCallGraph` alongside the existing `interruptKindsByFunction`. The two analyses are intentionally independent: this one records exact handler identities, the other propagates kind sets.
+This lives on `TypeCheckResult.interruptCallGraph` alongside the existing `interruptEffectsByFunction`. The two analyses are intentionally independent. This one records exact handler identities, the other propagates effect sets.
 
 ## Layer 2: the handler-set analyzer
 
@@ -108,7 +118,9 @@ return buildResult(sites, perSite);
 
 The typechecker only knows about one file's local definitions at a time — `scopes` is built from the entry file's `CompilationUnit.functionDefinitions` and `graphNodes`. Imported functions appear as signatures in `importedFunctions` but their **bodies** are not in `scopes`, so they contribute zero interrupt sites and zero call edges when only the entry file is typechecked.
 
-To analyze the whole import closure, `loadCallGraph` builds the symbol table once and then runs the typechecker on **every** `.agency` file in `symbolTable.filePaths()`, calling `Object.assign(merged, cg)` to merge the per-file call graphs into one. Function names are unique across the symbol table (the symbol table itself enforces that), so the merge is safe.
+To analyze the whole import closure, `loadCallGraph` builds the symbol table once and then runs the typechecker on **every** `.agency` file in `symbolTable.filePaths()`, calling `Object.assign(merged, cg)` to merge the per-file call graphs into one. The merge is collision-free because every key is a `QualifiedKey` of the form `${file}:${name}`. Two files declaring the same top-level name produce distinct entries.
+
+`analyzeOneFile` parses the file, expands splices, and lifts callback blocks before building the compilation unit. Splice expansion is best-effort here: if a splice fails to expand, the analysis runs over the unexpanded program rather than refusing to report anything.
 
 ### Phase 2: collect sites
 
@@ -141,25 +153,27 @@ This runs in `O(iterations × edges × sites)` with the fixed point bounded by t
 
 ### Phase 4: entry detection + union
 
-An **entry** is a function with no incoming call edges. The final per-site handler set is the union of `state[entry][s]` across every entry that reaches `s`.
+An **entry** is every non-stdlib function or node in the merged call graph. The final per-site handler set is the union of `state[entry][s]` across every entry that reaches `s`.
 
-**Stdlib filter.** Stdlib functions are excluded from entry candidates via [`isInStdlib(filePath, getStdlibDir())`](../../../lib/analysis/interrupts.ts). Without this filter, every orphan stdlib function (anything not called by the user's code) would count as an entry and contribute its own interrupt sites — which is noise. Stdlib functions remain valid *callees* — when reached from a user entry, their sites propagate normally and their handlers are included.
+`collectEntries` deliberately does *not* narrow entries to functions with no incoming call edges. That narrower definition drops mutually recursive groups, because every member has an incoming edge from inside the cycle. It also drops disconnected components whose external caller is not in the graph yet, and their interrupt sites would vanish from the report.
+
+**Stdlib filter.** `isInStdlib(filePath, getStdlibDir())` in `lib/analysis/interrupts.ts` excludes stdlib functions from the entry set. Without it, every orphan stdlib function would count as an entry and contribute its own interrupt sites, which is noise. Stdlib functions remain valid *callees*. When reached from a user entry, their sites propagate normally and their handlers are included.
 
 ### Phase 5: build result
 
 For each site (with a non-empty per-site map entry), produce a `SiteResult` and sort by `(file, line)`. Each handler is rendered into a `HandlerRef` with the right `shape`.
 
-**Line numbers.** The parser stores `loc.line` as 0-indexed in the user's source (see [lib/parsers/parsers.ts](../../../lib/parsers/parsers.ts) `AGENCY_TEMPLATE_OFFSET`). The analyzer adds 1 when producing the public `InterruptSite.line` / `HandlerRef.line` so the rendered output uses the human convention (line 1 = first line of the file). The template prelude added by `parseAgency` is already compensated for by the parser — see the docstring at `parsers.ts:179`.
+**Line numbers.** The parser stores `loc.line` as 0-indexed in the user's source. `toDisplayLine` adds 1 when producing the public `InterruptSite.line` and `HandlerRef.line`, so the rendered output uses the human convention where line 1 is the first line of the file. `parseAgency` already compensates for the template prelude it adds, via the per-parse `AGENCY_TEMPLATE_OFFSET`. See the `withLoc` comment above `AGENCY_TEMPLATE_OFFSET` in [lib/parsers/parsers.ts](../../../lib/parsers/parsers.ts).
 
 ## Layer 3: CLI
 
 `renderInterrupts(result)` is a pure function: `AnalysisResult → string`. No I/O, easy to test. The CLI shim (`interruptsCmd`) calls `existsSync(file)`, runs the analyzer, writes `renderInterrupts(...)` to stdout, and handles errors by printing to stderr + `process.exit(1)`.
 
-Registered in [scripts/agency.ts](../../../scripts/agency.ts) via Commander. Help text in [lib/cli/help.ts](../../../lib/cli/help.ts) (mostly inert — Commander auto-generates the visible help from each subcommand's `.description()`).
+Registered in [scripts/agency.ts](../../../scripts/agency.ts) via Commander, with `{ hidden: true }`. There is a line for it in [lib/cli/help.ts](../../../lib/cli/help.ts), which is mostly inert because Commander auto-generates the visible help from each subcommand's `.description()`.
 
 ## File-path tracking
 
-`SourceLocation` carries only `{line, col, start, end}` — never the file. Every layer that touches a site or handler has to carry the file explicitly:
+`SourceLocation` carries only `{line, col, start, end}`, never the file. Every layer that touches a site or handler has to carry the file explicitly:
 
 - `SymbolTable.findFileForName(name)` resolves a top-level function/node name to its defining file.
 - `ScopeInfo.file` is populated in `buildScopes` from the symbol-table lookup, threaded through `TypeCheckerContext.symbolTable` which itself comes from `CompilationUnit.symbolTable`.
@@ -170,7 +184,7 @@ The top-level scope (`name === "top-level"`) gets `file: ""` because it spans th
 
 ## Known limitations
 
-These are all **call-graph fidelity** issues. The handler-set analysis itself is complete; what it can't see is the call graph's missing edges.
+These are all **call-graph fidelity** issues. The handler-set analysis itself is complete. What it cannot see is the call graph's missing edges.
 
 ### Function references through object properties
 
@@ -201,7 +215,7 @@ const handler = cliPolicyHandler(file: "policy.json", fields: ...)
 handle { ... } with handler
 ```
 
-`cliPolicyHandler` returns `_handler` (a function value). The analyzer sees `with handler` as a `functionRef` with `functionName === "handler"` — but `"handler"` is a local variable, not a defined function, so there's no `CallGraphFunction["handler"]` entry. The handler-body interrupts (`maybeLoad` → `parsePolicyFile` → `interrupt std::read`) are invisible.
+`cliPolicyHandler` returns `_handler`, a function value. The analyzer sees `with handler` as a `functionRef` whose `functionName` is `"handler"`. But `"handler"` is a local variable, not a defined function, so the call graph has no entry keyed for it. The handler-body interrupts (`maybeLoad` → `parsePolicyFile` → `interrupt std::read`) are invisible.
 
 This requires return-value-of-function-call escape analysis: tracking that `cliPolicyHandler(...)` returns the function value `_handler`. Agency's type system doesn't track this today.
 
@@ -213,16 +227,16 @@ Almost all stdlib interrupts are written as `interrupt std::foo(...)` in `stdlib
 
 ### Other indirect calls
 
-Only `llm(...)` tool arguments and `gotoStatement` targets are resolved as call edges. Higher-order calls like `someArray.forEach(fn)` or stored-callback dispatch are ignored.
+The only indirect edges the analyzer resolves are function-typed arguments to a call and `gotoStatement` targets. Higher-order calls like `someArray.forEach(fn)` and stored-callback dispatch are ignored.
 
 ## Things explicitly out of scope (v1)
 
 These are documented decisions, not bugs:
 
-- **Handler-safety warnings.** Already a type error in `checkHandlerBodyInterrupts`; resurfacing them would be duplication.
+- **Handler-safety warnings.** The old `handlerBodyRaises` diagnostic (AG3010) is retired. Handler self-exclusion means the dispatcher skips the executing handler entry for its own raises, so raising inside a handler body is legal now.
 - **Uncaught-interrupt warnings.** Already a typechecker diagnostic.
 - **`--json` output, `--entry` flag, color/`NO_COLOR`, LSP integration.**
-- **Special rendering for `llm()`-reachable sites.** The call graph routes through `llm()` tools correctly; no special header needed.
+- **Special rendering for `llm()`-reachable sites.** The call graph routes through `llm()` tools correctly, so no special header is needed.
 - **Stack-order of handlers.** A set is enough for the debugging story.
 - **Policy analysis / interrupt-kind filtering.**
 
@@ -231,10 +245,10 @@ These are documented decisions, not bugs:
 Three test files, all in normal `vitest` style:
 
 - [lib/typeChecker/interruptCallGraph.test.ts](../../../lib/typeChecker/interruptCallGraph.test.ts) — 8 unit tests for `buildInterruptCallGraph` (call edges with/without handlers, llm tool synthetic edges, goto, file identity, top-level skip, multiple sites).
-- [lib/analysis/interrupts.test.ts](../../../lib/analysis/interrupts.test.ts) — 14 unit tests for `analyzeInterrupts` (direct sites, bare interrupts, diamond dedup, recursion, both handler shapes, nested handlers across function boundaries, multi-entry union, orphan functions, cross-file imports).
+- [lib/analysis/interrupts.test.ts](../../../lib/analysis/interrupts.test.ts) — unit tests for `analyzeInterrupts` (direct sites, bare interrupts, diamond dedup, recursion, both handler shapes, nested handlers across function boundaries, multi-entry union, orphan functions, cross-file imports).
 - [lib/cli/interrupts.test.ts](../../../lib/cli/interrupts.test.ts) — 6 unit tests for `renderInterrupts` (header format, unknown-kind clause, both shapes, block separation, trailing newline, empty input).
 
-Five integration fixtures under [tests/integration/cli-main/fixtures/interrupts/](../../../tests/integration/cli-main/fixtures/interrupts/) plus expected snapshots under `expected/interrupts-*.txt`. `make fixtures` regenerates the snapshots via the block at the end of [scripts/regenerate-fixtures.ts](../../../scripts/regenerate-fixtures.ts). The cli-main smoke test ([tests/integration/cli-main/test.mjs](../../../tests/integration/cli-main/test.mjs)) runs `agency interrupts` against each fixture and diffs the output.
+Five integration fixtures under [tests/integration/cli-main/fixtures/interrupts/](../../../tests/integration/cli-main/fixtures/interrupts/) plus expected snapshots under `tests/integration/cli-main/fixtures/expected/interrupts-*.txt`. `make fixtures` regenerates the snapshots via the interrupts block in [scripts/regenerate-fixtures.ts](../../../scripts/regenerate-fixtures.ts). The cli-main smoke test ([tests/integration/cli-main/test.mjs](../../../tests/integration/cli-main/test.mjs)) runs `agency interrupts` against each fixture and diffs the output.
 
 **Path normalization.** Both the regenerate script and the test harness normalize absolute fixture paths to a `<fixtures>/interrupts` token so snapshots are reproducible across machines, and both convert Windows backslashes to forward slashes. They also handle the macOS `/private/var/folders/...` realpath form. The two normalization blocks must stay in sync — comments in both files cross-reference each other.
 
@@ -242,4 +256,4 @@ Five integration fixtures under [tests/integration/cli-main/fixtures/interrupts/
 
 - [interrupts.md](../runtime/interrupts.md) — how interrupts resume inside blocks at runtime (substeps).
 - [typechecker](./typechecker/README.md) — bidirectional type checking pipeline.
-- [Spec](../../superpowers/specs/2026-06-06-agency-interrupts-command-design.md) and [implementation plan](../../superpowers/plans/2026-06-06-agency-interrupts-command.md).
+- [effect-propagation.md](./effect-propagation.md) — the separate analysis that propagates interrupt effect sets.

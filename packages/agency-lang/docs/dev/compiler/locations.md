@@ -7,13 +7,17 @@ How Agency tracks positions through the parser, why the template wrapper exists,
 Every AST node carries an optional `loc: SourceLocation`:
 
 ```ts
+// lib/types/base.ts
 type SourceLocation = {
   line: number;    // 0-indexed in the user's source file
   col: number;     // 0-indexed column
   start: number;   // byte offset into the parser input
   end: number;     // byte offset into the parser input
+  origin?: { kind: "template" | "filler" | "splice"; name: string };
 };
 ```
+
+`origin` is set only when a node was grafted in rather than written by hand, so an error in generated code can name who is responsible.
 
 **Invariant:** `loc.line` is always 0-indexed in the user's source, regardless of which parse mode was used. `start` and `end` are byte offsets into whatever the parser actually saw — see "About `start` / `end`" below.
 
@@ -24,10 +28,12 @@ type SourceLocation = {
 Every Agency program is conceptually wrapped in a 2-line prelude that auto-imports stdlib symbols (`print`, `read`, `range`, …). The prelude lives at `lib/templates/backends/agency/template.mustache`:
 
 ```
-import { print, ... } from "std::index";
+{{{preludeImport:string}}}
 
 {{{body:string}}}
 ```
+
+`parseAgency` fills `preludeImport` with `preludeImportLine()`, the `import { ... } from "std::index"` line.
 
 `AGENCY_TEMPLATE_OFFSET = 2` in `lib/parsers/parsers.ts` is the count of prelude lines.
 
@@ -35,19 +41,17 @@ The prelude is what makes `print(x)` work in a user file with no explicit import
 
 ## The two parse modes
 
-`parseAgency(source, config, applyTemplate=true)` is the entrypoint. The third argument gates whether the prelude wrapper is prepended.
+`parseAgency(source, config, applyTemplate = true, lower = true)` is the entrypoint. The third argument gates whether the prelude wrapper is prepended. The fourth gates pattern lowering and comprehension desugaring, which the formatter turns off so it can print patterns back as patterns.
 
 **`applyTemplate=true` (default, used by the CLI compile path):** the parser sees `prelude + source`. Spans returned by tarsec are based on this combined input — line numbers shifted by `+AGENCY_TEMPLATE_OFFSET` relative to the user's source.
 
 **`applyTemplate=false`:** the parser sees just the user's source.
 
-Three callers genuinely need `applyTemplate=false`:
+Callers pass `applyTemplate=false` for three kinds of reason:
 
-1. **Stdlib index** (`stdlib/index.agency`) — declares the very symbols the prelude imports. Wrapping it would be circular.
-2. **Formatter** (`lib/formatter.ts`) — round-trips source through `generateAgency`. The wrapper would inject phantom imports into output.
-3. **Fixture regeneration** (`scripts/regenerate-fixtures.ts`) — same as formatter.
-
-LSP also uses `applyTemplate=false`, but that's historical, not load-bearing. It could switch.
+1. **Circularity.** `stdlib/index.agency` and `stdlib/array.agency` declare the very symbols the prelude imports. `isNonTemplatedStdlib` in `lib/importPaths.ts` names them, and `lib/cli/util.ts` reads that predicate to pick the mode.
+2. **Printing source back out.** The formatter (`lib/formatter.ts`), the optimizer's source mutator, and fixture regeneration (`scripts/regenerate-fixtures.ts`) all round-trip source. The wrapper would inject phantom imports into the output.
+3. **Parsing a fragment for analysis, not for codegen.** The linter, the closure validator and analyzer, the optimizer's type probe, and the LSP paths all parse source they never compile.
 
 ## How `loc.line` is computed
 
@@ -79,13 +83,14 @@ export function withLoc<T>(parser: Parser<T>) {
 const offset = applyTemplate ? AGENCY_TEMPLATE_OFFSET : 0;
 setTemplateOffset(offset);
 try {
-  return _parseAgency(input, config);
-} catch (error) {
-  // ... errorData.line: error.data.line - offset
+  const result = _parseAgency(input, config);
+  // ... on failure: buildErrorData(..., offset, ...) subtracts it from the line
 } finally {
   setTemplateOffset(0);
 }
 ```
+
+`buildErrorData` owns the subtraction on the failure path. It turns tarsec's rightmost-failure offset into a line and column, then subtracts `offset` from the line.
 
 Net result:
 
@@ -100,7 +105,12 @@ Both modes produce the same `loc.line`. Same for `errorData.line`. There is **on
 
 `loc.start` and `loc.end` are byte offsets into the input the parser saw. In `applyTemplate=true` mode, they're offsets into the templated string (which includes the prelude bytes); in `applyTemplate=false` mode, they're offsets into the user source directly.
 
-This is **intentionally** not normalized. Consumers that work in offset space (e.g. LSP `doc.positionAt(start)` for end-line lookups) need to know which offset space they're in. In practice, the only consumers using `start`/`end` are LSP path functions where `applyTemplate=false`, so byte offsets *do* match the user's text buffer there. If you ever introduce a CLI-side consumer of `start`/`end`, be aware those offsets include the 2 prelude lines worth of bytes.
+This is **intentionally** not normalized. A consumer that works in offset space has to know which offset space it is in. Two shapes of consumer are safe:
+
+- **Same-parse comparisons.** `lib/utils/identifierSlots.ts`, `lib/lsp/scopeResolution.ts`, and `pendingAliasesFor` in `lib/backends/typescriptBuilder.ts` only compare offsets that came out of one parse, so the mode does not matter.
+- **Mapping back into the user's buffer.** `lib/lsp/diagnostics.ts` calls `doc.positionAt(loc.start)`, and `lib/linter/rules/importFixes.ts` slices the source. Both run on an un-templated parse, so the offsets match the user's text.
+
+Nothing may depend on which mode the LSP happens to use, because that choice could change. If you add a consumer on the templated CLI path that maps an offset back to user text, remember those offsets include the prelude bytes.
 
 ## Module-level state
 
@@ -110,6 +120,7 @@ This is **intentionally** not normalized. Consumers that work in offset space (e
 
 - Not thread-safe. Node single-threaded execution makes this fine in practice.
 - Tests that bypass `parseAgency` and call `agencyParser` directly will see whatever `currentTemplateOffset` was last set. The `finally` block in `parseAgency` resets to `0`, which matches the initial value, so direct-parser tests get the "no offset" semantics expected when the source isn't templated. If you add a test that calls `agencyParser` directly with a templated source, you must `setTemplateOffset(AGENCY_TEMPLATE_OFFSET)` first or your `loc.line` values will be off by `+2`.
+- A nested parse has to save and restore the offset. `parseCodeLiteralBody` in `lib/parsers/parsers.ts` parses a code literal's body, which is never templated, so it sets the offset to `0` and puts the outer value back in a `finally`.
 
 ## Consumers of `loc.line`
 
@@ -117,7 +128,7 @@ All of these now read `loc.line` directly with no compensation:
 
 - `lib/backends/sourceMap.ts` — embeds line numbers into the generated TS source map.
 - `lib/cli/definition.ts`, `lib/cli/doc.ts`.
-- `lib/lsp/diagnostics.ts`, `definition.ts`, `documentSymbol.ts`, `foldingRange.ts`, `inlayHint.ts`, `semantics.ts`, `typeDefinition.ts`, `workspaceSymbol.ts`.
+- `lib/lsp/diagnostics.ts`, `definition.ts`, `documentSymbol.ts`, `foldingRange.ts`, `inlayHint.ts`, `typeDefinition.ts`, `workspaceSymbol.ts`.
 - `lib/typeChecker/suppression.ts` — compares against `parseSuppressions`'s output, which is also 0-indexed user-source.
 - `lib/typeChecker/index.ts` — error reporting.
 
@@ -167,7 +178,7 @@ When something looks "off by 2" or "off by N":
 
 - **`loc.col`** — always raw column from tarsec; no offset adjustment is needed because the prelude only adds whole lines, not a column shift on existing user lines.
 - **`loc.start` / `loc.end`** — byte offsets into the parser input, including any prelude bytes. Documented above.
-- **`applyTemplate=false` callers** — the three legitimate ones stay.
+- **`applyTemplate=false` callers** — the legitimate ones stay.
 
 ## Pinned by tests
 

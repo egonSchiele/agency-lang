@@ -16,8 +16,9 @@ updating.
 `stdlib/data/connector.agency` holds the plumbing every connector needs.
 Import it; never call `fetchJSON` directly from a connector.
 
-- `connectorFetch(base, domains, path)` fetches a path and returns the
-  parsed-JSON `Result`. It pre-approves nothing: calling it directly raises
+- `connectorFetch(base, domains, path, headers = {}, method = "GET", body = null)`
+  fetches a path and returns the parsed-JSON `Result`. Most read verbs pass
+  the first three arguments only. It pre-approves nothing: calling it directly raises
   the same `std::http::fetchJSON` interrupt as `fetchJSON`, so the helper is
   safe to have exported. Connector verbs approve it at the call site —
   `connectorFetch(...) with approve` — after raising their own connector
@@ -182,8 +183,8 @@ them.
 1. **Bind the interrupt-raising call to its own statement.** An
    interrupt-raising call nested in an argument or `match` scrutinee does
    not resume/gate at statement level. Write
-   `const r = connectorFetch(...) with approve` then `return finalize(r)`
-   — never `return finalize(connectorFetch(...) with approve)`.
+   `const r = connectorFetch(...) with approve` then `return finalize(r)`,
+   never `return finalize(connectorFetch(...) with approve)`.
 2. **Do `Result`-consuming work before `return interrupt`.** A `match` or
    `.value` over a typed `Result` placed after a `return interrupt`
    statement fails to narrow. Validate and unwrap before the interrupt
@@ -227,11 +228,11 @@ all using nodes that call the verbs:
    reject wins.
 
 **Agency-js tests** (`tests/agency-js/data-*/`): the older connectors'
-style — an `agent.agency` of node wrappers, a `test.js` of assertions, a
-`fixture.json`, and captured `sample-*.json` API responses (prefer a real
-captured body over a hand-authored one; a wrong field path otherwise ships
-green). `import test { ... }` imports private defs for direct testing.
-Two patterns to know:
+style. Each directory holds an `agent.agency` of node wrappers, a `test.js`
+of assertions, a `fixture.json`, and captured `sample-*.json` API responses.
+Prefer a real captured body over a hand-authored one, because a wrong field
+path otherwise ships green. `import test { ... }` imports private defs for
+direct testing. Two patterns to know:
 
 - **Surfacing the fetch offline.** To prove the fetch effect escapes with
   the right URL without any network, a wrapper node `propagate()`s

@@ -11,10 +11,10 @@ shapes, and failure **policy**; callers see typed values or the client's own
 error type (`ProjectRequestError`, `AccountScopeError`, `SecretRequestError`,
 `EvalUploadError`, …).
 
-The family seals policy. **Transport is sealed separately, once**, in
-`statelogRequest` — and a new client is exactly three things: route building,
-zod wire schemas, and a failure mapper. It must not hand-roll fetch, body
-reading, or envelope handling.
+The family seals policy. `statelogRequest` seals transport separately, once.
+A new client is exactly three things: route building, zod wire schemas, and a
+failure mapper. It must not hand-roll fetch, body reading, or envelope
+handling.
 
 ## The transport core: `statelogRequest`
 
@@ -35,16 +35,20 @@ failure is `non-json`; then (unless `envelope: false`) a missing
 `envelope-error`. Two option flags carry the two deliberate deviants:
 
 - **`requireOk: false`** — `uploadClient` only. Upload has never inspected
-  `response.ok`: the envelope decides the outcome at any HTTP status (a
-  non-2xx success envelope succeeds). Settled route semantics, pinned by
-  characterization tests.
+  `response.ok`, so a non-2xx response with a success envelope still succeeds.
+  Upload also passes `envelope: false` and unwraps the `{ success, value }`
+  envelope itself in `readEndpointUrls`, so it can report a rejection with the
+  server's own wording. Settled route semantics, pinned by characterization
+  tests.
 - **`contentType: "always"`** — `serveClient` only. Serve has always sent
   `Content-Type: application/json` on every call, bodyless `GET /list`
-  included, and serializes `{}` for an undefined POST body. Also wire
-  behavior, also pinned.
+  included, and serializes `{}` for an undefined POST body. Serve also passes
+  `envelope: false` for `/list`, which answers with bare JSON rather than the
+  envelope. This is wire behavior too, and it is pinned too.
 
-Programmer errors — an unserializable body, a throwing sanitizer — propagate
-as exceptions; the failure union deliberately has no kind for them.
+Programmer errors propagate as exceptions. An unserializable body and a
+throwing sanitizer both land here. The failure union deliberately has no kind
+for them.
 
 ## Failure mappers
 
@@ -59,11 +63,12 @@ status handling, and 403/404 taxonomy per family (e.g. three different
 meanings of 404: project-not-found, host-predates-this-route, and a plain
 server error).
 
-`secretsClient`'s mapper additionally owns redaction: it passes its per-verb
-redactor to the core as `sanitizeDiagnostic` AND redacts every string a
-failure can carry — the unreachable message as a **whole** (a sensitive value
-in the origin redacts too, not only one in the cause), server errors, and
-diagnostics — before a `SecretRequestError` exists.
+`secretsClient`'s mapper additionally owns redaction. It passes its per-verb
+redactor to the core as `sanitizeDiagnostic`, and it also redacts every string
+a failure can carry before a `SecretRequestError` exists: server errors,
+diagnostics, and the unreachable message as a **whole**. Redacting that
+message whole matters because a sensitive value can sit in the origin, not
+only in the cause.
 
 ## Reading a response body: `readJsonBody`
 

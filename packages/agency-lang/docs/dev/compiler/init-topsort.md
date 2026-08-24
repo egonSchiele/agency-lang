@@ -5,10 +5,9 @@
 Agency files have top-level `static const`, `const`/`let`, and bare
 statements that need to run before any node executes. When a module
 imports values from other modules, those upstream modules' inits must
-complete first. Get the order wrong and a static initializer reads a
-sentinel and trips the runtime read-before-init trap (PR 1); or a
-bare statement runs against a global the importer hasn't yet
-populated.
+complete first. Get the order wrong and a static initializer reads a sentinel and trips
+the runtime read-before-init trap. Or a bare statement runs against a
+global the importer has not yet populated.
 
 This document describes the system that gets the order right. It
 combines:
@@ -72,12 +71,14 @@ it.
 Two graphs, one per phase:
 
   - **staticGraph** — one node per top-level `static const` in any
-    module in the closure. Drives `__initializeStatic`, which runs
-    once per process per module.
+    module in the closure, plus one per bare `static <statement>`.
+    This graph drives `__initializeStatic`, which runs once per process
+    per module.
   - **globalGraph** — one node per non-static `const` / `let` and
-    one synthetic node per bare top-level statement (`functionCall`,
-    `interruptStatement`). Drives `__initializeGlobals`, which runs
-    once per agent execution per module.
+    one synthetic node per bare top-level statement. A bare statement
+    is a `functionCall`, an `interruptStatement`, or a `valueAccess`.
+    This graph drives `__initializeGlobals`, which runs once per agent
+    execution per module.
 
 A node looks like:
 
@@ -85,7 +86,7 @@ A node looks like:
 type InitVarNode = {
   moduleId: string;                  // absolute source path
   varName: string;                   // user-visible name, or
-                                     // `__bareStmt_${moduleId}_${line}`
+                                     // `__bareStmt_${line}_${col}`
   kind: "static" | "global";
   initExpr: Expression | AgencyNode; // the RHS or the bare stmt itself
   loc?: SourceLocation;
@@ -121,14 +122,15 @@ The boundary is exactly one function-body hop:
   - Function values stored in variables aren't traced. `const f =
     getBar; const foo = f()` produces no expansion, because the call
     site doesn't directly name `getBar`.
-  - Method calls on user objects (`obj.method()`) and stdlib/built-in
-    functions are silently skipped — we have no Agency AST to walk.
+  - Method calls on user objects (`obj.method()`) and stdlib or
+    built-in functions are silently skipped, because there is no Agency
+    AST to walk.
 
 `collectFreeIdentifiers` already skips identifiers inside nested
 `function` / `graphNode` bodies via the ancestor stack, so when we
 walk a function body for depth-1 expansion the walker naturally stops
-at any further nested closures. That gives us the depth-1 boundary
-for free — no additional bookkeeping required.
+at any further nested closures. That gives us the depth-1 boundary for free, with no extra
+bookkeeping.
 
 The new piece in the source is the `FunctionDefLookup`
 (`lib/compiler/initDepGraph.ts`), which resolves bare or
@@ -147,8 +149,8 @@ The depth-1 expansion runs in three places, all in lockstep:
     function call still emits the right `await __awaitStaticInit`.
 
 Conditional reads inside the called function are treated as
-always-reads — a safe over-approximation that may add a small number
-of extra `await`s but cannot change correctness.
+always-reads. That over-approximation may add a few extra `await`s, but it
+cannot change correctness.
 
 ### Cross-phase rules
 
@@ -160,9 +162,9 @@ own. The cross-phase rules are enforced separately:
     Phase A time (globals don't exist yet). Surfaced as
     `StaticReferencesGlobalError` in `rejectStaticReferencesGlobal`.
   - **global → static is allowed.** All statics finish initializing
-    before any global init runs (`buildInitializeGlobalsFn` emits
-    `await __initializeStatic(__ctx)` at the top of the global init
-    body). The dep graph drops the cross-phase ref as an edge but
+    before any global init runs. `buildInitializeGlobalsFn` emits
+    `await __initializeStatic(__ctx)` near the top of the global init
+    body. The dep graph drops the cross-phase ref as an edge but
     `globalPhasePlanFor` scans for cross-module static refs and adds
     them to `awaitModules` so the importing module awaits the
     source's static init.
@@ -234,7 +236,7 @@ source order."
 If `kahn`'s output is shorter than the node count, the graph has a
 cycle. `traceCycleFrom` walks the remaining `inDegree > 0` nodes,
 following deps that still have nonzero in-degree, until it revisits
-a node — that closes the loop. The result is rendered by
+a node. That revisit closes the loop. The result is rendered by
 `formatCycleError` in `compileClosure.ts` as:
 
 ```
@@ -266,10 +268,10 @@ type ModuleInitPlan = {
 `localOrder` includes only **named** local decls. Synthetic
 `__bareStmt_` nodes are intentionally omitted: the section assembler
 emits bare statements inline at their source position. But bare
-nodes **do** contribute their out-edges to `awaitModules` — a bare
-`show(helper.helperGlobal)` needs `helper.agency`'s globals init
-awaited before it runs, same as any named decl that references an
-imported global.
+nodes **do** contribute their out-edges to `awaitModules`. A bare
+`show(helper.helperGlobal)` needs `helper.agency`'s globals init awaited
+before it runs, same as any named decl that references an imported
+global.
 
 `globalPhasePlanFor` additionally scans all this module's global
 nodes for cross-module **static** refs (the cross-phase case) and
@@ -287,8 +289,9 @@ node into one of:
     bare top-level expressions/calls
   - `topLevelStatements` — top-level declarations (functions,
     graphNodes, classes, type aliases)
-  - `topLevelCallbackStatements` — `callback(name, fn)` calls,
-    re-registered on every fresh run AND every resume
+  - `topLevelCallbackStatements` — `callback(name, fn)` calls. They
+    go into `__registerTopLevelCallbacks`, which the runtime re-runs on
+    every fresh run, every resume, and every rewind.
 
 Each init statement is tagged with its `varName` (`null` for bare
 statements). After partitioning, `reorderTagged` applies the
@@ -296,7 +299,7 @@ plan's `localOrder`:
 
   - **Bare slots stay anchored to their source position.** This is
     critical for side-effecting patterns like `foo(); const x =
-    fromFoo; bar();` — `x` must snapshot AFTER `foo()` has run, not
+    fromFoo; bar();`, where `x` must snapshot AFTER `foo()` has run, not
     before.
   - **Named slots are filled in plan order.** The k-th name in
     `localOrder` fills the k-th named slot encountered in source
@@ -326,17 +329,26 @@ The banner comment is generated by `buildInitBanner` and surfaces
 the plan in two human-readable lines. Skipped when both lists are
 empty so trivial modules stay quiet.
 
-`__initializeGlobals` has the same shape, with an additional
-`await __initializeStatic(__ctx)` at the top so all statics finish
-before any global init runs.
+`__initializeGlobals` has a similar shape. Its body starts with a
+per-execCtx idempotence guard (`if (__ctx.globals.isInitialized(moduleId))
+return`) and then `__ctx.globals.markInitialized(moduleId)`. Marking first
+prevents infinite recursion when a global initializer calls a function in
+the same module. Next comes `await __initializeStatic(__ctx)`, emitted only
+when the module has static vars or bare `static` statements, so all of this
+module's statics finish before any of its global init runs. Then come the
+`await __awaitGlobalsInit(...)` calls from the plan, and finally the global
+init statements.
+
+`__registerTopLevelCallbacks` is emitted alongside them, always, even when
+empty, so every module has a registry entry.
 
 ### Promise-based guard
 
 `__staticInitPromise` is the once-per-process latch. The first
 caller into `__initializeStatic` populates the promise; concurrent
 callers `await` the same promise. This protects against the case
-where two import chains both fan in to the same upstream module —
-its init runs at most once.
+where two import chains both fan in to the same upstream module. Its init
+runs at most once.
 
 ### cwd-relative paths in the registry strings
 
@@ -350,19 +362,38 @@ the value of `process.cwd()` at runtime is irrelevant.
 
 ## Runtime registry (`lib/runtime/crossModuleInitRegistry.ts`)
 
-The runtime side is small. Two registries (`staticInits`,
-`globalsInits`) keyed by moduleId, plus four functions:
+The runtime side is small. Three registries keyed by moduleId
+(`staticInits`, `globalsInits`, `callbackInits`), plus these functions:
 
-  - `__registerStaticInit(moduleId, fn)` — called at JS-load time
+  - `__registerStaticInit(moduleId, fn)`, called at JS-load time
     by every compiled module immediately after declaring
     `__initializeStatic`.
-  - `__registerGlobalsInit(moduleId, fn)` — same, for
+  - `__registerGlobalsInit(moduleId, fn)`, the same for
     `__initializeGlobals`.
-  - `__awaitStaticInit(moduleId, ctx)` — called from inside other
-    modules' `__initializeStatic` bodies (via the plan's
-    `awaitModules`). Returns immediately if the module isn't
+  - `__registerCallbacksInit(moduleId, fn)`, the same for
+    `__registerTopLevelCallbacks`.
+  - `__awaitStaticInit(moduleId, ctx)`, called from inside other
+    modules' `__initializeStatic` bodies through the plan's
+    `awaitModules`. It returns immediately if the module isn't
     registered.
-  - `__awaitGlobalsInit(moduleId, ctx)` — same, for globals.
+  - `__awaitGlobalsInit(moduleId, ctx)`, the same for globals.
+  - `__initAllRegistered(ctx)`, the closure-wide bootstrap. `runNode`
+    calls it on every fresh run, before the entry module's own globals
+    init. It walks the `globalsInits` registry and runs each module's
+    `__initializeGlobals`, skipping modules already initialized on this
+    execCtx. It exists because the dep graph only sees references in
+    initializer expressions. A static read from inside a function body
+    produces no edge, so a dependency the entry never names in an
+    initializer would otherwise never be initialized.
+    Phase A is driven through `__initializeGlobals` rather than
+    `__initializeStatic` on purpose: `markInitialized` has to run before
+    the static-init IIFE starts, or the per-function lazy prelude
+    re-enters `__initializeGlobals` and awaits a still-pending promise.
+  - `__initAllRegisteredCallbacks(ctx)`, which clears
+    `ctx.topLevelCallbacks` once and then runs every registered module's
+    `__registerTopLevelCallbacks`. The fresh-run, resume, and rewind
+    paths all call it. The reset lives here, not in the per-module
+    function, so one module's registration never clobbers another's.
 
 Cycle safety at runtime: ES module load order matches the
 file-import DAG (JS-level imports are added by codegen), so by the
@@ -374,10 +405,12 @@ always terminates.
 
 ## Bare top-level statements
 
-Bare `functionCall` / `interruptStatement` nodes at module top
-level get synthetic `__bareStmt_${moduleId}_${line}` nodes in the
-**global** graph (statics are decl-only today). They participate
-in the dep graph like any other global node:
+A bare statement at module top level gets a synthetic
+`__bareStmt_${line}_${col}` node. The name uses both line and column
+because `foo(); bar()` on one source line would otherwise collide. The
+node lands in the **global** graph, unless the source wrote
+`static <statement>`, which puts it in the **static** graph instead. It
+participates in the dep graph like any other node of its phase:
 
   - Their initializer expression is the statement itself; the
     free-identifier walk treats them like any other initializer.
@@ -412,16 +445,15 @@ strips those nodes). The unit-test helper `writeFixture` in
 `initDepGraph.test.ts` mirrors the same two-step pattern so tests
 match production behavior.
 
-## Read-before-init trap (PR 1) — the safety net
+## Read-before-init trap: the safety net
 
-The dep graph orders **values**, not **callable code**. With
-depth-1 function-body expansion (PR 2.5), one-hop function calls
-do contribute edges, but anything beyond that boundary — depth-2+
-call chains, function values stored in variables, methods on user
-objects, stdlib functions — produces no edge in the graph.
+The dep graph orders **values**, not **callable code**. Depth-1
+function-body expansion means one-hop function calls do contribute edges.
+Anything beyond that boundary produces no edge: depth-2 and deeper call
+chains, function values stored in variables, methods on user objects, and
+stdlib functions.
 
-The runtime read-before-init trap (`__readStatic`, PR 1) catches
-this case. Every static read in generated code is wrapped in
+The runtime read-before-init trap, `__readStatic`, catches this case. Every static read in generated code is wrapped in
 `__readStatic(value, name, sourceModuleId)`. If the value is still
 the `__UNINIT_STATIC` sentinel, the trap throws with a helpful
 message pointing at the source module of the unset static. The
@@ -432,12 +464,14 @@ analysis can't see it).
 
 ## Multi-entry compile cache
 
-`lib/cli/commands.ts:compile()` caches the `CompiledClosure` across
-entry files in one CLI invocation. When the first entry pulls in a
-file the second entry also imports, the cache reuses the parse +
-topsort work. The cache key is the entry path; when a later entry
-isn't in the cache, the cache rebuilds for that entry's closure (a
-known place for past bugs — see PR 2 review commit b9fb4695).
+`BuildSession` in `lib/compiler/buildSession.ts` caches one
+`CompiledClosure` per session and reuses it across entry files in a single
+CLI invocation. `ensureCompiledClosure` keeps the cached closure when it
+already covers the new entry, so a file two entries share is parsed and
+topsorted once. It rebuilds when the entry is not in the closure's
+`programs`, and it skips closure building entirely for stdlib entries,
+whose imports are structured differently. This is a known place for past
+bugs.
 
 ## Testing
 
@@ -454,9 +488,9 @@ known place for past bugs — see PR 2 review commit b9fb4695).
     `tests/agency/topsort/cycles/` and are driven by the vitest
     runner in
     [`lib/runtime/topsortCycleErrors.test.ts`](../../../lib/runtime/topsortCycleErrors.test.ts) —
-    the agency test framework has no "expected compile error"
-    assertion, so they go through vitest's
-    `process.exit`/`console.error` interception.
+    The agency test framework has no "expected compile error"
+    assertion, so these go through vitest's interception of
+    `process.exit` and `console.error`.
   - **Plan-driven assertions** live in
     [`lib/compiler/compileClosure.test.ts`](../../../lib/compiler/compileClosure.test.ts).
     Add a test here whenever you change `phasePlanFor` /
@@ -466,9 +500,9 @@ known place for past bugs — see PR 2 review commit b9fb4695).
 When debugging init order issues, the banner comment at the top of
 the generated `__initializeStatic` / `__initializeGlobals` is the
 fastest way to see what the planner decided without re-deriving
-from the body. Use `pnpm run compile --ts file.agency` to inspect
-the generated `.ts` (the `.js` output runs through esbuild which
-strips comments).
+from the body. Use `pnpm run compile --ts file.agency` to inspect the
+generated `.ts`. The `.js` output runs through esbuild, which strips the
+comments.
 
 ## File map
 

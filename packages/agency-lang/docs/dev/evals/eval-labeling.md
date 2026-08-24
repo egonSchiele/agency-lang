@@ -34,9 +34,9 @@ validation here is stricter than in grading.
     .lock                           the run's writer lock, held around each append
 ```
 
-A run copied out of its group (`cp -r`) keeps its checklist rows; without the
-group's lineage the question texts are unknown, which readers
-(`humanFeedbackFor`) treat as "no texts", not as an error.
+A run copied out of its group with `cp -r` keeps its checklist rows. Without
+the group's lineage the question texts are unknown, and readers
+(`humanFeedbackFor`) treat that as "no texts" rather than an error.
 
 ## Layering
 
@@ -84,8 +84,8 @@ store (labelStore.ts)        -> recordChecklistRow, checklist.ts, draft.ts, lock
 - **Session id** is the hash of `(traceIds in order, checklistId, annotator)`.
   Order is part of it: the cursor is an index, so resuming against the same
   runs listed in another order would put the person in front of a different
-  trace than their position implies. A draft may only be resumed against exactly its session
-  (`assertDraftMatches` in `draft.ts` is defence in depth for that).
+  trace than their position implies. A draft may only be resumed against exactly its session.
+  `assertDraftMatches` in `draft.ts` is defence in depth for that.
 - **Annotation id** is the run directory's deterministic id: the hash of the
   row's content, which for a checklist row is
   `{traceId, annotator, sessionId, checklist, version, hash, answers, note, activeMs}`.
@@ -112,7 +112,7 @@ missing key means "not judged", never "no".
 The fold is the run directory's `foldAnnotations`: per checklist row, keyed by
 `checklist:annotator.kind:annotator.id`, answers merged **per question in
 append order**, note = the latest row's note. Taking the whole newest row would
-break soft delete: judge a question, delete it, sign off again covering only
+break soft delete. Judge a question, delete it, sign off again covering only
 the live questions, then restore it, and the earlier answer would vanish.
 Folding per question keeps it, because the row that covered it is still in the
 append-only log.
@@ -183,7 +183,7 @@ The same grounding is repeated at the moment of writing: `recordChecklistRow`
 (`mutations.ts`) checks, under the run's lock and immediately before the
 append, that the run holds the row's trace, that the group has the revision
 the row names with the hash it records, and that every answer names a question
-that revision defines. Open-time validation is diagnostics; the mutation is
+that revision defines. Open-time validation is diagnostics. The mutation is
 the guarantee, so no caller can skip publish-before-append.
 
 ## The locks
@@ -199,8 +199,8 @@ token inside is still ours):
   same draft; another annotator, or another checklist, opens beside it.
 - **One per lineage publication**, `.publish.lock`, held only while a revision
   is written. Two sessions that both prepared "the next version" cannot both
-  win: the loser's `assertParentStillMatches` fails inside the lock and the
-  lineage is untouched; it reconciles against the published lineage on its
+  win. The loser's `assertParentStillMatches` fails inside the lock, so the
+  lineage is untouched. It reconciles against the published lineage on its
   next prepare.
 - **The run's writer lock**, taken by `recordChecklistRow` around each append
   and released after it, so `eval grade` or `runs add` on that run between
@@ -224,8 +224,8 @@ The run's `notes.md` is under none of these: a person edits it with any
 editor at any time, and readers sample it best-effort (see
 `docs/dev/evals/run-directory.md`).
 
-A stale lock is never taken over automatically; it is reported with the
-holder's pid, and removing it is a person's decision. Every lock is released
+A stale lock is never taken over automatically. The command reports it with
+the holder's pid, and removing it is a person's decision. Every lock is released
 when opening fails, when a dispatch fails, and on close; the store is the only
 owner, and the controller only calls `store.close()`, which is idempotent.
 

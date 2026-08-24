@@ -174,9 +174,12 @@ code generation it is a hazard, which is what the next section is for.
 
 ## Checking a generator before it runs
 
-`lib/compiler/splice/eligibility.ts` refuses a generator whose effects are not
-empty (AG8003), and refuses one whose effects could not be read at all (AG8004),
-naming which of the four blind spots it hit.
+`checkGeneratorEffects` in `lib/compiler/splice/generatorEffects.ts` refuses a
+generator whose effects are not empty (AG8003), and refuses one whose effects
+could not be read at all (AG8004), naming which of the four blind spots it hit.
+It reports every effect it found, sorted, so fixing one does not get you refused
+for the next. `lib/compiler/splice/eligibility.ts` owns the other two generator
+rules: no splice of its own, and imports that stay inside Agency (AG8006).
 
 The second half is the load-bearing one: an empty list from a reading that could
 not see everything is not evidence of safety.

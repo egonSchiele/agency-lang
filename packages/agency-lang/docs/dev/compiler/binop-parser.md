@@ -1,8 +1,17 @@
 # Binary Expression Parser
 
-The binary expression parser (`lib/parsers/binop.test.ts` for tests, `lib/types/binop.ts` for the precedence table) uses a technique called **precedence climbing** to parse expressions that can contain nested operators, chained operations, parentheses, and operators at different precedence levels — all in a single pass.
+Agency parses binary expressions with **precedence climbing**: one pass that handles nested operators, chained operations, parentheses, and operators at different precedence levels.
 
-This document walks through the algorithm in detail.
+The algorithm itself lives in tarsec's `buildExpressionParser` combinator, not in this repo. Agency supplies the pieces:
+
+| Piece | Where |
+|-------|-------|
+| The operator table (precedence levels and associativity) | `_exprParserBase` in `lib/parsers/parsers.ts` |
+| `binOpParser`, the filter that other parsers call | `lib/parsers/parsers.ts` |
+| `Operator` and the `PRECEDENCE` map used by code generation | `lib/types/binop.ts` |
+| Tests | `lib/parsers/binop.test.ts` |
+
+This document walks through what the table says and why the algorithm behaves the way it does.
 
 ## The problem
 
@@ -15,186 +24,111 @@ A flat parser like `seqC(left, op, right)` can parse `1 + 2`, but it can't handl
 
 The precedence-climbing algorithm handles all of these cases.
 
-## Precedence table
+## The operator table
 
-Every operator has a numeric precedence level. Higher numbers mean tighter binding:
+`buildExpressionParser(atom, table, parenParser)` takes an array of precedence levels, highest binding first. Each level lists its operators with an `assoc` of `"left"` or `"right"`. Agency's table:
 
-| Level | Operators        | Meaning                  |
-|-------|------------------|--------------------------|
-| -1    | `\|>`            | Pipe                     |
-| 0     | `+=` `-=` `*=` `/=` `??=` `\|\|=` `catch` | Compound assignment / catch |
-| 1     | `\|\|` `??`      | Logical OR / nullish coalescing |
-| 2     | `&&`             | Logical AND              |
-| 3     | `==` `===` `!=` `!==` `=~` `!~` | Equality / pattern match |
-| 4     | `<` `>` `<=` `>=` `instanceof` `in` | Comparison         |
-| 5     | `+` `-`          | Addition, subtraction    |
-| 6     | `*` `/` `%`      | Multiplication, division, modulo |
-| 7     | `**`             | Exponentiation           |
+| Level | Operators | Associativity |
+|-------|-----------|---------------|
+| 7 | `**` | right |
+| 6 | `*=` `/=` | right |
+| 6 | `*` `/` `%` | left |
+| 5 | `+=` `-=` | right |
+| 5 | `+` `-` | left |
+| 4 | `instanceof` `in` `<=` `>=` `<` `>` | left |
+| 3 | `===` `!==` `=~` `==` `!~` `!=` | left |
+| 2 | `&&=` | right |
+| 2 | `&&` | left |
+| 1 | `??=` `\|\|=` | right |
+| 1 | `??` `\|\|` | left |
+| 0 | `catch` | left |
+| -1 | `\|>` | left |
 
-All operators are left-associative.
+Within a level, multi-character operators come first so that `*=` is not mis-read as `*` followed by `=`, and `<=` is not mis-read as `<`.
 
-## The two functions
+The atom is `atomWithIs` (a value, optionally followed by `is <pattern>`), and the paren parser is a custom `parenParser` rather than tarsec's default.
 
-The parser is built from two mutually recursive functions:
+## How `buildExpressionParser` works
 
-### `parseAtom(input)`
+The combinator builds one parser per precedence level, wrapping the previous level. The innermost parser is the base: a parenthesized sub-expression, or failing that, an atom. Each wrapper parses `nextLevel (op nextLevel)*` for its own operators.
 
-Parses the smallest unit of an expression — a simple value (boolean, variable, number, string).
+Because a level can only ever see operators from its own row, an operator with a higher precedence has already been consumed by an inner level by the time an outer level looks. That is what makes `*` bind tighter than `+`.
 
-```
-parseAtom(input):
-  return parse a boolean, variable access, or literal
-```
+### Precedence, worked through
 
-### `parseExprPrec(input, minPrec)`
-
-This is the core of the algorithm. It parses an expression, but only consumes operators whose precedence is `>= minPrec`. This single parameter is what makes precedence and associativity work.
-
-```
-parseExprPrec(input, minPrec):
-  left = parseAtom(input)
-
-  while there is an operator next and its precedence >= minPrec:
-    op = consume the operator
-    right = parseExprPrec(remaining, prec(op) + 1)
-    left = BinOp(left, op, right)
-
-  return left
-```
-
-Two things to notice:
-
-1. The `while` loop is what enables **chaining** — it keeps consuming operators as long as they meet the minimum precedence threshold.
-2. The recursive call uses `prec(op) + 1` as the new minimum — this is what creates **left-associativity** and **precedence**.
-
-## How precedence works
-
-Consider parsing `1 + 2 * 3` where `+` has precedence 5 and `*` has precedence 6.
+Consider `1 + 2 * 3`. The additive level runs first and delegates its left operand to the multiplicative level.
 
 ```
-parseExprPrec("1 + 2 * 3", minPrec=0)
-│
-├─ parseAtom("1 + 2 * 3") → 1, rest = " + 2 * 3"
-│
-├─ Loop iteration 1:
-│  ├─ See operator '+' (prec 5). Is 5 >= 0? Yes. Consume it.
-│  │
-│  ├─ parseExprPrec("2 * 3", minPrec=6)     // prec(+) + 1 = 6
-│  │  │
-│  │  ├─ parseAtom("2 * 3") → 2, rest = " * 3"
-│  │  │
-│  │  ├─ Loop iteration 1:
-│  │  │  ├─ See operator '*' (prec 6). Is 6 >= 6? Yes. Consume it.
-│  │  │  │
-│  │  │  ├─ parseExprPrec("3", minPrec=7)   // prec(*) + 1 = 7
-│  │  │  │  ├─ parseAtom("3") → 3
-│  │  │  │  ├─ No more operators (or none with prec >= 7)
-│  │  │  │  └─ return 3
-│  │  │  │
-│  │  │  └─ left = BinOp(2, *, 3)
-│  │  │
-│  │  ├─ No more operators
-│  │  └─ return BinOp(2, *, 3)
-│  │
-│  └─ left = BinOp(1, +, BinOp(2, *, 3))
-│
-├─ No more operators
-└─ return BinOp(1, +, BinOp(2, *, 3))
+additive("1 + 2 * 3")
+├─ multiplicative("1 + 2 * 3") → 1, rest = " + 2 * 3"
+│  (sees '+', which is not one of its operators, so it stops)
+├─ sees '+', consumes it
+├─ multiplicative("2 * 3")
+│  ├─ 2, rest = " * 3"
+│  ├─ sees '*', consumes it
+│  └─ 3  →  BinOp(2, *, 3)
+└─ BinOp(1, +, BinOp(2, *, 3))
 ```
 
-The critical moment is when `parseExprPrec` is called with `minPrec=6` after seeing `+`. This means: "only consume operators with precedence >= 6." The `*` operator has precedence 6, so it gets consumed by the inner call, not the outer loop. This is what makes `*` bind tighter than `+`.
-
-If the expression were `1 * 2 + 3` instead, here's what happens:
+Now `1 * 2 + 3`. The multiplicative level parses `1 * 2` and stops at `+`, because `+` is not one of its operators. Control returns to the additive level, which consumes the `+`.
 
 ```
-parseExprPrec("1 * 2 + 3", minPrec=0)
-│
-├─ parseAtom → 1
-│
-├─ See '*' (prec 6). Is 6 >= 0? Yes. Consume it.
-│  ├─ parseExprPrec("2 + 3", minPrec=7)   // prec(*) + 1 = 7
-│  │  ├─ parseAtom → 2
-│  │  ├─ See '+' (prec 5). Is 5 >= 7? NO. Stop.
-│  │  └─ return 2
-│  └─ left = BinOp(1, *, 2)
-│
-├─ See '+' (prec 5). Is 5 >= 0? Yes. Consume it.
-│  ├─ parseExprPrec("3", minPrec=6)
-│  │  └─ return 3
-│  └─ left = BinOp(BinOp(1, *, 2), +, 3)
-│
-└─ return BinOp(BinOp(1, *, 2), +, 3)
+additive("1 * 2 + 3")
+├─ multiplicative("1 * 2 + 3") → BinOp(1, *, 2), rest = " + 3"
+├─ sees '+', consumes it
+├─ multiplicative("3") → 3
+└─ BinOp(BinOp(1, *, 2), +, 3)
 ```
 
-The `+` has precedence 5, which is less than the `minPrec=7` required inside the `*`'s right-hand side, so it doesn't get consumed there. Instead, control returns to the outer loop, which sees `+` and handles it at the top level.
+### Associativity
 
-## How chaining works (left-associativity)
+A left-associative level folds its operands leftward as it loops, so `1 + 2 + 3` becomes `BinOp(BinOp(1, +, 2), +, 3)`. A right-associative level recurses into itself for the right operand instead, so `2 ** 3 ** 4` becomes `BinOp(2, **, BinOp(3, **, 4))`.
 
-Consider `1 + 2 + 3` where `+` has precedence 5.
-
-```
-parseExprPrec("1 + 2 + 3", minPrec=0)
-│
-├─ parseAtom → 1
-│
-├─ Loop iteration 1:
-│  ├─ See '+' (prec 5). Is 5 >= 0? Yes.
-│  ├─ parseExprPrec("2 + 3", minPrec=6)   // prec(+) + 1 = 6
-│  │  ├─ parseAtom → 2
-│  │  ├─ See '+' (prec 5). Is 5 >= 6? NO. Stop.
-│  │  └─ return 2
-│  └─ left = BinOp(1, +, 2)
-│
-├─ Loop iteration 2:
-│  ├─ See '+' (prec 5). Is 5 >= 0? Yes.
-│  ├─ parseExprPrec("3", minPrec=6)
-│  │  └─ return 3
-│  └─ left = BinOp(BinOp(1, +, 2), +, 3)
-│
-└─ return BinOp(BinOp(1, +, 2), +, 3)
-```
-
-The `+ 1` in `prec(op) + 1` is what makes this left-associative. When parsing the right side of the first `+`, the recursive call uses `minPrec=6`. The second `+` also has precedence 5, and since `5 < 6`, it does **not** get consumed by the inner call. Instead, it falls through to the outer `while` loop, which builds the tree leftward: `(1 + 2) + 3`.
-
-If we used `prec(op)` instead of `prec(op) + 1`, the second `+` would be consumed by the inner call (since `5 >= 5`), producing right-associative grouping: `1 + (2 + 3)`. That `+ 1` is the entire difference between left- and right-associativity.
+Exponentiation and the compound assignments are the right-associative operators. Everything else is left-associative.
 
 ## The `binOpParser` wrapper
 
-The exported `binOpParser` function wraps `parseExprPrec` with one additional check: it only succeeds if the result is actually a `BinOpExpression` (i.e., at least one operator was consumed). If the input is just a bare value like `x`, the parser returns failure. This is necessary because `binOpParser` sits in an `or(...)` chain alongside other parsers (like the variable parser), and we don't want it to "steal" inputs that should be handled by those other parsers.
+`binOpParser` delegates to `exprParser` and adds one check: it only succeeds if the result is actually a `BinOpExpression`, meaning at least one operator was consumed. A bare value like `x` is a failure. This matters because `binOpParser` sits in an `or(...)` chain alongside other parsers such as the variable parser, and it must not steal inputs those parsers should handle.
 
 ```typescript
-export const binOpParser: Parser<BinOpExpression> = (input) => {
-  const result = parseExprPrec(input, 0);
+export const binOpParser: Parser<BinOpExpression> = (input: string) => {
+  const result = exprParser(input);
   if (!result.success) return result;
 
-  // Only succeed if we actually parsed a binary expression (not just an atom)
-  if (result.result.type === "binOpExpression") {
-    // Consume optional trailing semicolon
-    ...
-    return success(result.result, finalRest);
+  if (result.result.type !== "binOpExpression") {
+    return failure("expected binary expression", input);
   }
 
-  return failure("expected binary expression", input);
+  // Consume optional trailing semicolon
+  const semiResult = optionalSemicolon(result.rest);
+  const finalRest = semiResult.success ? semiResult.rest : result.rest;
+  return success(result.result as BinOpExpression, finalRest);
 };
 ```
+
+`exprParser` itself wraps `_exprParserBase` with one refusal: a JavaScript ternary. A `?` that is not `?.` or `??`, followed by an expression and a `:`, produces a committed failure with the ternary diagnostic.
 
 ## Code generation
 
 When the code generators (`TypeScriptGenerator`, `AgencyGenerator`) emit code for a `BinOpExpression`, they use precedence-aware logic to decide whether parentheses are needed around child `BinOpExpression` nodes. This avoids unnecessary parentheses in common cases like chained same-operator expressions.
 
-The rules are implemented as two helper methods in `BaseGenerator`:
+Code generation reads a separate precedence source: the `PRECEDENCE` map in `lib/types/binop.ts`. It is keyed by operator rather than ordered by level, and it also carries the unary operators (`!`, `typeof`, `void` at 8; `++`, `--` at 9) that the parser table has no rows for. It disagrees with the parser table in one place: the compound assignments sit at level 0 here, but the parser groups each one with the arithmetic operator it is built from.
 
-**Left child**: parens only if `childPrec < parentPrec`. Same or higher precedence is safe because left-associativity naturally groups the left child first.
+The rules are two helper methods, duplicated in `TypeScriptBuilder` and `AgencyGenerator`:
+
+**Left child**: parens only if `childPrec < parentPrec`. Same or higher precedence is safe because left-associativity naturally groups the left child first. Right-associative `**` is the exception, so `(2 ** 3) ** 4` keeps its parens.
 
 **Right child**: parens if `childPrec <= parentPrec`. Equal precedence needs parens because re-parsing without them would left-associate differently.
 
 ```typescript
-protected needsParensLeft(child: BinOpArgument, parentOp: Operator): boolean {
+private needsParensLeft(child: BinOpArgument, parentOp: Operator): boolean {
   if (child.type !== "binOpExpression") return false;
+  // For right-associative ops like **, (2 ** 3) ** 4 needs parens on the left
+  if (parentOp === "**") return PRECEDENCE[child.operator] <= PRECEDENCE[parentOp];
   return PRECEDENCE[child.operator] < PRECEDENCE[parentOp];
 }
 
-protected needsParensRight(child: BinOpArgument, parentOp: Operator): boolean {
+private needsParensRight(child: BinOpArgument, parentOp: Operator): boolean {
   if (child.type !== "binOpExpression") return false;
   return PRECEDENCE[child.operator] <= PRECEDENCE[parentOp];
 }

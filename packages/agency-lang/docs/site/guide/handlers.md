@@ -179,7 +179,22 @@ Now, all of their interrupts get rejected. As long as all destructive actions ar
 
 ## Propagate
 
-Besides `approve` and `reject,` the other keyword is `propagate.` `propagate` means "I don't want to reject the interrupt, but I don't want anyone to be able to programmatically approve it either. I want to make sure it always goes to a user for approval or rejection."
+`propagate` means "I don't want to reject the interrupt, but I don't want anyone to be able to programmatically approve it either. I want to make sure it always goes to a user for approval or rejection."
+
+## Pass
+
+The final keyword is `pass`. `pass` just says, "I don't have an opinion about this interrupt." If you don't return anything, `pass` is the default. It's useful in match blocks, when you need some sort of value to return:
+
+```ts
+handle {
+  doSomeWork()
+} with (intr) {
+  return match (intr.effect) {
+    "std::guard" -> reject()    
+    _ -> pass()
+  }
+}
+```
 
 ## The rules of handlers
 
@@ -187,8 +202,9 @@ The rules of handlers are thus:
 1. If any handler rejects, the interrupt is rejected.
 2. Otherwise, if any handler propagates, the interrupt propagates to the user for a decision.
 3. Otherwise, if a handler approves, the interrupt is approved.
+4. A handler that passes does none of these. It steps aside and lets the rest of the chain decide.
 
-Of course, a handler doesn't need to approve, reject, or propagate. It can simply choose to log the interrupt data, print out the lyrics to "A Day in the Life," or whatever. If no handler approves, rejects, or propagates, by default, the interrupt propagates up to the user for a decision.
+Of course, a handler doesn't need to approve, reject, or propagate. It can simply choose to log the interrupt data, print out the lyrics to "A Day in the Life," or whatever. A handler that never returns a verdict has passed, whether or not it said `pass()` out loud. And if *every* handler passes, nobody in the chain made a decision, so the interrupt propagates up to the user — the same safe default you get when there is no handler at all.
 
 ## Raising interrupts inside a handler function
 

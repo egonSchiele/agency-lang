@@ -105,6 +105,14 @@ export class AbortedResult {
     return this.dropped("clearedAtFork");
   }
 
+  /** The run is ending at the node boundary, where the abort turns back
+   *  into an exception. Nothing above compiled code can consume a partial,
+   *  so it is dropped here with a record of where it went, exactly as the
+   *  fork boundary does. */
+  atNodeBoundary(): AbortedResult {
+    return this.dropped("droppedAtNodeBoundary");
+  }
+
   /** The partial's value, or null when there is no partial. The ONLY way
    *  generated code reads a partial: the `{ value }` wrapper (which keeps
    *  a saved null distinct from no-partial) is internal to this class. */
@@ -186,15 +194,20 @@ export class AbortedResult {
 
   /** Drop the partial, emit the reason, close the span (the partial's
    *  story ends where it is dropped). */
-  private dropped(action: "droppedAtArgPosition" | "clearedAtFork"): AbortedResult {
-    if (this.partial === undefined) {
+  private dropped(
+    action: "droppedAtArgPosition" | "clearedAtFork" | "droppedAtNodeBoundary",
+  ): AbortedResult {
+    // An "erased" hop opens the span while carrying no partial forward, so a
+    // span can outlive the partial that started it. Bail only when there is
+    // neither — otherwise that span would never be ended.
+    if (this.partial === undefined && this.unwindSpanId === undefined) {
       return this;
     }
     const client = statelogClient();
     client?.abortSalvage({
       action,
       spanId: this.unwindSpanId,
-      partial: previewForLog(this.partial.value),
+      partial: this.partial !== undefined ? previewForLog(this.partial.value) : undefined,
     });
     client?.endSpan(this.unwindSpanId);
     return new AbortedResult(this.cause, undefined, undefined);

@@ -1472,7 +1472,13 @@ export class StatelogClient {
     functionArgs,
     partial,
   }: {
-    action: "carried" | "erased" | "delivered" | "clearedAtFork" | "droppedAtArgPosition";
+    action:
+      | "carried"
+      | "erased"
+      | "delivered"
+      | "clearedAtFork"
+      | "droppedAtArgPosition"
+      | "droppedAtNodeBoundary";
     scopeName?: string;
     spanId?: string;
     functionArgs?: string;

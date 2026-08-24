@@ -194,18 +194,39 @@ Same program, same answer, regardless of whether an interrupt happened.
 ## Nuances people miss
 
 - **The node boundary is where an abort becomes an exception again, and
-  it has to run before `createReturnObject`.** Inside compiled code an
-  abort travels as a value. Everything above compiled code expects an
-  exception, so `runNode` converts: if the graph's result data is an
-  `AbortedResult`, it throws `toError()`. Two things are easy to get
-  wrong here. First, codegen's per-call guards only cover calls whose
-  result is bound to a local — a bare `return foo()` in tail position
-  binds nothing, gets no guard, and reaches the boundary intact, which
-  is why the boundary check exists at all rather than being redundant
-  (issue #243: the CLI reported runaway recursion as a successful run
-  with no output). Second, `createReturnObject` JSON round-trips the
-  value, and `isAborted` is an `instanceof` test, so a check placed
-  after it silently never fires. Order matters more than it looks.
+  there are three of them.** Inside compiled code an abort travels as a
+  value; everything above compiled code expects an exception.
+  `throwIfNodeResultAborted` (lib/runtime/abortBoundary.ts) does the
+  conversion, and every `graph.run(...)` → `createReturnObject(...)`
+  boundary must call it first: `runNode`, `runResumeLoop`
+  (lib/runtime/interrupts.ts) and the rewind loop
+  (lib/runtime/rewind.ts). Fixing only the first leaves the same bug one
+  interrupt later. Three things are easy to get wrong. First, codegen's
+  per-call guards only cover calls whose result is bound to a local — a
+  bare `return foo()` in tail position binds nothing, gets no guard, and
+  reaches the boundary intact, which is why the check exists at all
+  rather than being redundant (issue #243: the CLI reported runaway
+  recursion as a successful run with no output). Second,
+  `createReturnObject` JSON round-trips the value, and `isAborted` is an
+  `instanceof` test, so a check placed after it silently never fires —
+  this is also why the conversion cannot live inside
+  `createReturnObject`. Third, the partial has to be dropped through
+  `atNodeBoundary()` rather than by calling `toError()` raw, exactly as
+  the fork boundary uses `atForkBoundary()`: that is what emits the
+  closing `abortSalvage` event and ends the `abortUnwind` span. A raw
+  throw leaves that span open forever and the draft vanishes with no
+  record of where it went.
+- **Throwing at the boundary skips the caller's end-of-run tail.** The
+  run lands in the outer `catch` instead of the branch that emits
+  `agentEnd` with a result, fires `onAgentEnd`, and calls
+  `closeTraceWriter()`. `finalizeExecCtx` does not touch the trace
+  writer, so without help an aborted `agency run --trace` writes a trace
+  that stops mid-stream with no `footer` record. The `endsRun` flag on
+  `throwIfNodeResultAborted` closes it for the two call sites that own
+  the end of a run; the rewind loop has no such tail and passes false.
+  The `onAgentEnd` hook still does not fire for an aborted run — that
+  matches every other crash path, including the aborts codegen already
+  threw before this.
 - **An abort's message has to survive on the cause, not the error.**
   `AbortedResult.toError()` rebuilds the exception from the `AbortCause`
   alone — the original error object is long gone. Anything a user needs

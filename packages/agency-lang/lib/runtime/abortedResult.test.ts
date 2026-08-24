@@ -39,15 +39,19 @@ function withStubStatelog<T>(fn: () => T): {
   result: T;
   events: RecordedEvent[];
   spans: string[];
+  endedSpans: string[];
 } {
   const events: RecordedEvent[] = [];
   const spans: string[] = [];
+  const endedSpans: string[] = [];
   const client = {
     startSpan(type: string): string {
       spans.push(type);
       return `span-${spans.length}`;
     },
-    endSpan(): void {},
+    endSpan(id?: string): void {
+      if (id !== undefined) endedSpans.push(id);
+    },
     abortSalvage(e: RecordedEvent): Promise<void> {
       events.push(e);
       return Promise.resolve();
@@ -59,7 +63,7 @@ function withStubStatelog<T>(fn: () => T): {
   };
   const ctx = { statelogClient: client } as any;
   const result = runInTestContext(ctx, new StateStack(), new ThreadStore(), fn);
-  return { result, events, spans };
+  return { result, events, spans, endedSpans };
 }
 
 describe("AbortedResult.fromError (the frame-boundary conversion)", () => {
@@ -184,6 +188,21 @@ describe("AbortedResult boundary drops", () => {
     });
     expect(result.partial).toBeUndefined();
     expect(events.map((e) => e.action)).toEqual(["carried", "clearedAtFork"]);
+  });
+
+  it("atNodeBoundary drops the partial and ends the unwind span", () => {
+    // The run is over, so nothing above can consume the draft. Dropping it
+    // through the same hop as the fork boundary is what leaves a record of
+    // where it went and closes the abortUnwind span; throwing toError()
+    // straight from the boundary would leave that span open forever.
+    const { result, events, spans, endedSpans } = withStubStatelog(() => {
+      const aborted = AbortedResult.fromError(abortError(), frameWithDraft("draft"), "scope");
+      return aborted.atNodeBoundary();
+    });
+    expect(result.partial).toBeUndefined();
+    expect(events.map((e) => e.action)).toEqual(["carried", "droppedAtNodeBoundary"]);
+    expect(spans).toEqual(["abortUnwind"]);
+    expect(endedSpans).toEqual(["span-1"]);
   });
 
   it("both are no-ops (same instance, no events) without a partial", () => {

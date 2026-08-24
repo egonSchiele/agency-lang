@@ -23,7 +23,7 @@ import { createReturnObject } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
 import { nanoid } from "nanoid";
 import { hasInterrupts } from "./interrupts.js";
-import { isAborted } from "./abortedResult.js";
+import { throwIfNodeResultAborted } from "./abortBoundary.js";
 import { unwrapServedInvocationOutcome, type ServedInvocationOutcome } from "./invocationUsage.js";
 import { finishServedInvocation, type RawOutcome } from "./servedInvocationLifecycle.js";
 
@@ -475,15 +475,7 @@ async function runNodeCore({
         );
         await execCtx.pendingPromises.awaitAll();
 
-        // Node level is where an abort stops being a value and becomes an
-        // exception again. Codegen's per-call guards miss a tail-position
-        // `return foo()`, which binds no local (#243). Must run before
-        // createReturnObject: that JSON round-trip strips the prototype
-        // `isAborted` tests for. See docs/dev/saveDraft.md.
-        const abortedData = (result as { data?: unknown }).data;
-        if (isAborted(abortedData)) {
-          throw abortedData.toError();
-        }
+        await throwIfNodeResultAborted(result, execCtx, { endsRun: true });
 
         const returnObject = createReturnObject({
           result,

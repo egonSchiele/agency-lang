@@ -52,3 +52,45 @@ describe("an abort in tail position becomes an exception at the node boundary", 
     await expect(mod.main()).rejects.toThrow(/maxCallDepth/);
   });
 });
+
+/**
+ * The same escape, one interrupt later. `runResumeLoop` ends a run the same
+ * way `runNode` does — graph.run, then createReturnObject — so before it got
+ * the same boundary check, resuming past an interrupt into a tail-position
+ * abort recorded the AbortedResult as a successful result and exited 0.
+ */
+describe("the resume path converts a tail-position abort too", () => {
+  const fixturesRoot = path.resolve(__dirname, "../../.agency-tmp/resume-abort-boundary");
+  const mainAgency = path.join(fixturesRoot, "main.agency");
+  const mainJs = mainAgency.replace(/\.agency$/, ".js");
+
+  beforeAll(() => {
+    fs.mkdirSync(fixturesRoot, { recursive: true });
+    fs.writeFileSync(
+      mainAgency,
+      "def foo() { return bar() }\n" +
+        "def bar() { return foo() }\n" +
+        "\n" +
+        "node main() {\n" +
+        '  raise interrupt("ok?")\n' +
+        "  return foo()\n" +
+        "}\n",
+    );
+    resetCompilationCache();
+    compile({ maxCallDepth: 16 }, mainAgency);
+  });
+
+  afterAll(() => {
+    safeDeleteDirectoryWithin(path.resolve(__dirname, "../.."), fixturesRoot);
+  });
+
+  it("rejects on resume instead of recording the aborted value as the result", async () => {
+    const mod = await import(pathToFileURL(mainJs).href);
+    const first = await mod.main();
+    // The first pass stops at the interrupt; the recursion has not run yet.
+    expect(mod.hasInterrupts(first.data)).toBe(true);
+    await expect(mod.respondToInterrupts(first.data, [mod.approve()])).rejects.toThrow(
+      /Maximum call depth exceeded/,
+    );
+  });
+});

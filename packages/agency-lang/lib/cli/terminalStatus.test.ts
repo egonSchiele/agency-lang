@@ -1,5 +1,6 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
+  commandFailed,
   commandTitle,
   createTerminalStatus,
   installTerminalStatus,
@@ -60,6 +61,17 @@ describe("createTerminalStatus", () => {
     expect(env[AGENCY_TERM_STATUS_OWNED]).toBe("1");
   });
 
+  it("releases the claim on end, so a second run in one process is not mute", () => {
+    const { status, written, env } = harness();
+    status.begin("agency run x");
+    status.end(true);
+    expect(env[AGENCY_TERM_STATUS_OWNED]).toBeUndefined();
+
+    const afterFirst = written();
+    status.begin("agency run y");
+    expect(written()).toBe(`${afterFirst}${PUSH}\x1b]1;agency run y\x07${WORKING}`);
+  });
+
   it("writes nothing when an outer process already claimed the tab", () => {
     const { status, written } = harness({ env: { [AGENCY_TERM_STATUS_OWNED]: "1" } });
     status.begin("agency run x");
@@ -92,7 +104,6 @@ describe("createTerminalStatus", () => {
     const { status, written } = harness({ isTty: false });
     status.begin("agency run x");
     status.end(false);
-    status.stopProgress();
     expect(written()).toBe("");
   });
 
@@ -103,14 +114,6 @@ describe("createTerminalStatus", () => {
     const afterFirstEnd = written();
     status.end(true);
     expect(written()).toBe(afterFirstEnd);
-  });
-
-  it("stops the spinner but keeps the name for a full-screen view", () => {
-    const { status, written } = harness();
-    status.begin("agency logs view");
-    const afterBegin = written();
-    status.stopProgress();
-    expect(written()).toBe(`${afterBegin}${CLEAR}`);
   });
 
   it("skips a title that sanitizes away to nothing", () => {
@@ -164,31 +167,8 @@ describe("commandTitle", () => {
 });
 
 describe("installTerminalStatus", () => {
-  type ProcessSignal = "exit" | "SIGINT" | "SIGTERM";
-  const signals: ProcessSignal[] = ["exit", "SIGINT", "SIGTERM"];
-  const before: Record<ProcessSignal, unknown[]> = {
-    exit: process.listeners("exit"),
-    SIGINT: process.listeners("SIGINT"),
-    SIGTERM: process.listeners("SIGTERM"),
-  };
-
-  // The wiring installs process-level listeners. Take back out whatever this
-  // test added, so it does not leak into the rest of the run.
-  afterEach(() => {
-    for (const signal of signals) {
-      for (const listener of process.listeners(signal)) {
-        if (!before[signal].includes(listener)) process.removeListener(signal, listener);
-      }
-    }
-  });
-
-  it("names the tab from the command that is about to run", async () => {
-    const begun: string[] = [];
-    const status: TerminalStatus = {
-      begin: (title) => begun.push(title),
-      end: () => {},
-      stopProgress: () => {},
-    };
+  /** A program shaped like the CLI's `eval run`, with a status we can watch. */
+  function wire(status: TerminalStatus): Command {
     const program = new Command();
     program.name("agency").exitOverride();
     program
@@ -197,9 +177,62 @@ describe("installTerminalStatus", () => {
       .argument("[test]")
       .action(() => {});
     installTerminalStatus(program, status);
+    return program;
+  }
 
-    await program.parseAsync(["node", "agency", "eval", "run", "fib"]);
+  function recorder(): { status: TerminalStatus; begun: string[]; ended: boolean[] } {
+    const begun: string[] = [];
+    const ended: boolean[] = [];
+    return {
+      begun,
+      ended,
+      status: { begin: (title) => begun.push(title), end: (ok) => ended.push(ok) },
+    };
+  }
 
+  it("names the tab from the command that is about to run", async () => {
+    const { status, begun } = recorder();
+    await wire(status).parseAsync(["node", "agency", "eval", "run", "fib"]);
     expect(begun).toEqual(["agency eval run fib"]);
+  });
+
+  it("registers no signal listeners, so Ctrl-C keeps its default disposition", () => {
+    const before = {
+      SIGINT: process.listenerCount("SIGINT"),
+      SIGTERM: process.listenerCount("SIGTERM"),
+    };
+    wire(recorder().status);
+    expect(process.listenerCount("SIGINT")).toBe(before.SIGINT);
+    expect(process.listenerCount("SIGTERM")).toBe(before.SIGTERM);
+  });
+
+  it("adds at most one exit listener however many times it is installed", () => {
+    const before = process.listenerCount("exit");
+    wire(recorder().status);
+    wire(recorder().status);
+    wire(recorder().status);
+    expect(process.listenerCount("exit")).toBeLessThanOrEqual(before + 1);
+  });
+
+  it("hooks every program it is given, not just the first", async () => {
+    const first = recorder();
+    const second = recorder();
+    await wire(first.status).parseAsync(["node", "agency", "eval", "run", "one"]);
+    await wire(second.status).parseAsync(["node", "agency", "eval", "run", "two"]);
+    expect(first.begun).toEqual(["agency eval run one"]);
+    expect(second.begun).toEqual(["agency eval run two"]);
+  });
+});
+
+describe("commandFailed", () => {
+  it.each([
+    ["success", 0, false],
+    ["Ctrl-C, the normal way out of a watcher or the viewer", 130, false],
+    ["SIGTERM", 143, false],
+    ["a generic failure", 1, true],
+    ["a usage error", 2, true],
+    ["the budget-exceeded code", 3, true],
+  ])("%s (exit %i) turns the tab red: %s", (_name, code, failed) => {
+    expect(commandFailed(code)).toBe(failed);
   });
 });

@@ -37,8 +37,6 @@ export type TerminalStatus = {
   begin: (title: string) => void;
   /** Stop the spinner — red when `ok` is false — and restore the tab's old name. */
   end: (ok: boolean) => void;
-  /** Stop the spinner but keep the name, for full-screen views that take over the terminal. */
-  stopProgress: () => void;
 };
 
 export type TerminalStatusDeps = {
@@ -93,11 +91,8 @@ export function createTerminalStatus(deps: TerminalStatusDeps): TerminalStatus {
     end(ok: boolean): void {
       if (!claimed) return;
       claimed = false;
+      delete deps.env[AGENCY_TERM_STATUS_OWNED];
       deps.write(progressSequence(ok ? 0 : 2) + POP_TITLE);
-    },
-    stopProgress(): void {
-      if (!claimed) return;
-      deps.write(progressSequence(0));
     },
   };
 }
@@ -125,34 +120,51 @@ export function commandTitle(command: Command): string {
   }
   const operand = command.args[0];
   if (operand !== undefined && operand !== "" && !operand.startsWith("-")) {
-    names.push(operand.includes(path.sep) ? path.basename(operand) : operand);
+    // Unconditional: basename("fib") is "fib", so a plain operand is unharmed,
+    // and this handles a forward-slash path on Windows, where path.sep is "\\".
+    names.push(path.basename(operand));
   }
   return names.join(" ");
 }
 
 /**
+ * Exit codes of the form 128 + signal number, the shell's convention for "ended
+ * by a signal". Ctrl-C out of the log viewer or a `compile --watch` is a normal
+ * way to stop, so it clears the indicator rather than turning it red.
+ */
+const INTERRUPTED_EXIT_CODES = [130, 143];
+
+export function commandFailed(exitCode: number): boolean {
+  return exitCode !== 0 && !INTERRUPTED_EXIT_CODES.includes(exitCode);
+}
+
+// Latched so repeated installs in one process do not stack up `exit` listeners:
+// `runCli` is called several times over in scripts/agency.test.ts.
+let processListenerInstalled = false;
+
+/**
  * Wire the tab status to a CLI program: every command names the tab while it
  * runs, and gives the name back on the way out.
  *
- * The signal handlers deliberately do not exit. Other parts of the CLI (the
- * eval runner, the logs viewer) install their own SIGINT handling for graceful
- * shutdown, and exiting here would preempt them. Instead we clean up, step out
- * of the way, and re-raise only when nobody else was listening — which is what
- * keeps Ctrl-C working when we are the only handler.
+ * Cleanup hangs off `exit` alone, with no `SIGINT` handler of its own. That is
+ * deliberate. Registering any JS signal listener takes SIGINT off its default
+ * disposition, where the kernel ends the process at once, and defers it to the
+ * event loop — so `agency compile` on a big file, which is synchronous and is
+ * the case where Ctrl-C responsiveness matters most, would stop dying on the
+ * first Ctrl-C. A stranded spinner is a far smaller price, and it clears itself
+ * the next time any Agency command runs in that tab.
+ *
+ * Leaving signals alone also keeps us from mistaking one for a verdict. The
+ * eval runner treats the first Ctrl-C as non-fatal and keeps working for
+ * minutes afterwards; a signal handler here would have reported that run failed
+ * while it was still going.
  */
 export function installTerminalStatus(program: Command, status: TerminalStatus): void {
   program.hook("preAction", (_program, actionCommand) => {
     status.begin(commandTitle(actionCommand));
   });
 
-  process.on("exit", (code) => status.end(code === 0));
-
-  for (const signal of ["SIGINT", "SIGTERM"] as const) {
-    const handler = (): void => {
-      status.end(false);
-      process.removeListener(signal, handler);
-      if (process.listenerCount(signal) === 0) process.kill(process.pid, signal);
-    };
-    process.on(signal, handler);
-  }
+  if (processListenerInstalled) return;
+  processListenerInstalled = true;
+  process.on("exit", (code) => status.end(!commandFailed(code)));
 }

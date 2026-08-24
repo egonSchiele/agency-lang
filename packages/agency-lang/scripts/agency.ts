@@ -2332,9 +2332,6 @@ export async function runCli(
 ): Promise<void> {
   loadEnv();
   const program = createProgram(deps);
-  // Installed here rather than in createProgram: this is the one real entry
-  // point, and the process-level listeners must not accumulate across the many
-  // createProgram calls that tests make.
   installTerminalStatus(program, terminalStatus);
   // No argv rewriting: the program boundary and flag ownership live inside
   // the vendored commander fork (passThroughOptions, fallbackCommand).

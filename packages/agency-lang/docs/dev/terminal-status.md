@@ -41,7 +41,8 @@ That last one is how nesting is handled. The first `agency` process to name the
 tab sets `AGENCY_TERM_STATUS_OWNED=1` on its own `process.env`, which every
 child inherits. So when `eval run --agent-cmd` spawns Agency processes, or an
 agent spawns a subprocess, only the outermost one writes — one tab, one owner,
-no fighting over the name.
+no fighting over the name. `end` deletes the variable again, so a process that
+runs the CLI twice over is not silently mute the second time.
 
 There is also an internal guard: `end` and `stopProgress` do nothing unless a
 `begin` actually wrote something. Otherwise a skipped `begin` would still pop a
@@ -50,8 +51,10 @@ title nobody pushed, clobbering the shell's own title.
 ## The wiring
 
 `installTerminalStatus(program, status)` is called from `runCli` in
-`scripts/agency.ts` — not from `createProgram`, because tests construct
-programs many times over and the process-level listeners must not pile up.
+`scripts/agency.ts`. It hooks every program it is handed, but registers its one
+process-level `exit` listener only once per process — `runCli` itself is called
+repeatedly inside `scripts/agency.test.ts`, and without the latch those
+listeners would pile up.
 
 It registers a commander `preAction` hook on the root program. Commander walks
 the ancestor chain when it fires hooks (`_chainOrCallHooks` in
@@ -65,25 +68,39 @@ because a tab has room for a filename but not a directory tree. The result is
 sanitized — control characters stripped, length capped — since an operand is
 usually a filename and a filename can contain anything.
 
-## Signals, and why we do not exit
+## Signals, and why there are none
 
-Cleanup runs from `process.on("exit")`, whose handlers must be synchronous;
-`process.stdout.write` to a TTY is, so that holds.
+Cleanup hangs off `process.on("exit")`, whose handlers must be synchronous;
+`process.stdout.write` to a TTY is, so that holds. What the exit code means is
+one predicate, `commandFailed`: zero is success, and so are 130 and 143 — the
+shell's "ended by SIGINT/SIGTERM" codes — because Ctrl-C is the normal way out
+of `compile --watch` or the log viewer, not a failure. Everything else is red.
 
-The `SIGINT` and `SIGTERM` handlers deliberately do **not** call
-`process.exit`. Other parts of the CLI install their own signal handling for
-graceful shutdown — the eval runner (`lib/eval/run/runSuite.ts`), the logs
-viewer (`lib/cli/logsView.ts`) — and since our listener is registered first, it
-would preempt them. Instead each handler cleans up, removes itself, and
-re-raises the signal only when no other listener remains. If someone else is
-handling the signal, we have stepped out of their way; if nobody is, removing
-ourselves restores Node's default termination, so Ctrl-C still works.
+There is deliberately **no `SIGINT` handler here**, and adding one later would
+be a mistake for two separate reasons.
 
-## The logs viewer
+The first is about Ctrl-C itself. With no JS listener, Node leaves SIGINT at its
+default disposition and the kernel ends the process at once. The moment any
+listener exists, libuv defers the signal to the event loop, so the handler
+cannot run until the current synchronous block finishes. `agency compile` on a
+big file is largely synchronous, and parsing is the known front-end bottleneck —
+a listener would turn its instant Ctrl-C into one that waits for the parse to
+finish. The same goes for `ast`, `typecheck` and `fmt`. That is a real
+regression in a core behavior, traded for a cosmetic one.
 
-`agency logs` takes over the whole screen and then sits waiting for keys, which
-is not "busy". It calls `terminalStatus.stopProgress()` before starting, which
-drops the spinner but keeps the tab's name.
+The second is about what a signal means. A signal is not a verdict. The eval
+runner (`lib/eval/run/runSuite.ts`) treats the first Ctrl-C as non-fatal: it
+folds the in-flight test into the run directory and keeps going, possibly for
+minutes. A handler here would fire first and report that run as failed while it
+was still working, then leave `claimed` false so nothing could put the spinner
+back. Only `exit` knows how the command actually ended.
+
+The cost is that a hard Ctrl-C on a command that installs no signal handler of
+its own kills the process before any cleanup, stranding the spinner and the tab
+name. It clears itself the next time any Agency command runs in that tab, and
+the commands most likely to be interrupted — the eval runner, `compile --watch`,
+the log viewer — all handle their own signal and exit through `process.exit`,
+which does run the exit handler.
 
 ## Known behavior: a failed command leaves the tab red
 

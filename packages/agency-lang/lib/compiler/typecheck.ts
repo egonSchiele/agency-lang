@@ -7,6 +7,8 @@ import { resolveImports } from "@/preprocessors/importResolver.js";
 import { resolveReExports } from "@/preprocessors/resolveReExports.js";
 import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
 import { expandSplices } from "@/preprocessors/expandSplices.js";
+import type { AgencyConfig } from "@/config.js";
+import { toTypeCheckError } from "./splice/report.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { typeCheck } from "@/typeChecker/index.js";
@@ -98,6 +100,7 @@ function toDiagnostic(err: TypeCheckErrorShape): TypeCheckDiagnostic {
 function runCheckerPipeline<T>(
   source: string,
   sourcePath: string | undefined,
+  config: AgencyConfig,
   fn: (result: {
     checkResult: ReturnType<typeof typeCheck>;
     symbolTable: SymbolTable;
@@ -117,7 +120,23 @@ function runCheckerPipeline<T>(
     // report splice failures with a position.
     // Hand over the table we just built: the generator effect check would
     // otherwise crawl and parse every reachable file again, once per splice.
-    const spliced = expandSplices(program, syntheticPath, {}, { symbolTable });
+    // Config reaches here so a caller can decline generator execution. This
+    // pipeline RUNS generators: `sourcePath` is a real path for
+    // std::agency typecheckFile, so a splice resolves its generator against
+    // that directory and executes it. "Type checking is read-only" holds
+    // only for files without splices.
+    const spliced = expandSplices(program, syntheticPath, config, { symbolTable });
+    // A REFUSAL is not a splice that failed to expand — it is the caller
+    // saying "do not run this." Continuing with the unexpanded program would
+    // answer as though the file had no splice, reporting every generated name
+    // as undefined. So it throws, joining parse and import failures under
+    // this pipeline's existing rule: a throw means "could not check this",
+    // which the Result-returning stdlib entry points surface as a failure.
+    // Every OTHER splice failure keeps the tolerant behavior above.
+    if (!spliced.ok && spliced.diagnostic.diagnostic === "spliceRefused") {
+      const error = toTypeCheckError(spliced.diagnostic, sourcePath);
+      throw new Error(`${error.code}: ${error.message}`);
+    }
     const expanded = spliced.ok ? spliced.value : program;
     const reExported = resolveReExports(expanded, symbolTable, syntheticPath);
     // This pipeline is agent-reachable (std::agency typecheck/getEffects),
@@ -135,8 +154,12 @@ function runCheckerPipeline<T>(
   });
 }
 
-export function typeCheckSource(source: string, sourcePath?: string): TypeCheckReport {
-  return runCheckerPipeline(source, sourcePath, ({ checkResult }) => {
+export function typeCheckSource(
+  source: string,
+  sourcePath?: string,
+  config: AgencyConfig = {},
+): TypeCheckReport {
+  return runCheckerPipeline(source, sourcePath, config, ({ checkResult }) => {
     // Partition into errors and warnings in a single pass. The only severity
     // values the type-checker emits are "error" and "warning" (see
     // lib/typeChecker/types.ts), so anything not "warning" is treated as
@@ -160,8 +183,8 @@ export type EffectsByExport = Record<string, string[]>;
  * "unknown" sentinel — the envelope is fail-closed by design. Type
  * errors in `source` do not prevent extraction; parse failures throw.
  */
-export function getEffectsFromSource(source: string): EffectsByExport {
-  return effectsVia(source, undefined);
+export function getEffectsFromSource(source: string, config: AgencyConfig = {}): EffectsByExport {
+  return effectsVia(source, undefined, config);
 }
 
 /**
@@ -173,22 +196,42 @@ export function getEffectsFromSource(source: string): EffectsByExport {
  * behavior for `getEffects`, but wrong for splice eligibility, where an
  * empty list reads as "safe to run at compile time".
  */
-export function getEffectsFromFile(filePath: string): EffectsByExport {
+/**
+ * Effects for a file on disk. Takes `config` for the same reason its
+ * siblings do: this reads a REAL path, so a splice here resolves its
+ * generator and runs it, and a caller must be able to decline.
+ *
+ * Test-only today — `lib/analysis/effects.test.ts`, `effectsOracle.test.ts`
+ * and `typecheckEffects.test.ts` are the only callers, and it is not part of
+ * the package's public API. The parameter is defaulted so those keep
+ * working, and so the next production caller does not inherit the hole
+ * silently.
+ */
+export function getEffectsFromFile(filePath: string, config: AgencyConfig = {}): EffectsByExport {
   const absolute = path.resolve(filePath);
-  return effectsVia(fs.readFileSync(absolute, "utf-8"), absolute);
+  return effectsVia(fs.readFileSync(absolute, "utf-8"), absolute, config);
 }
 
-function effectsVia(source: string, sourcePath: string | undefined): EffectsByExport {
-  return runCheckerPipeline(source, sourcePath, ({ checkResult, symbolTable, syntheticPath }) => {
-    const { interruptEffectsByFunction } = checkResult;
-    const out: EffectsByExport = {};
-    const fileSymbols = symbolTable.getFile(syntheticPath) ?? {};
-    for (const [name, sym] of Object.entries(fileSymbols)) {
-      const isCallable = sym.kind === "function" || sym.kind === "node";
-      if (!isCallable || !sym.exported) continue;
-      const names = (interruptEffectsByFunction[name] ?? []).map((e) => e.effect);
-      out[name] = names.filter((n, i) => names.indexOf(n) === i).sort();
-    }
-    return out;
-  });
+function effectsVia(
+  source: string,
+  sourcePath: string | undefined,
+  config: AgencyConfig,
+): EffectsByExport {
+  return runCheckerPipeline(
+    source,
+    sourcePath,
+    config,
+    ({ checkResult, symbolTable, syntheticPath }) => {
+      const { interruptEffectsByFunction } = checkResult;
+      const out: EffectsByExport = {};
+      const fileSymbols = symbolTable.getFile(syntheticPath) ?? {};
+      for (const [name, sym] of Object.entries(fileSymbols)) {
+        const isCallable = sym.kind === "function" || sym.kind === "node";
+        if (!isCallable || !sym.exported) continue;
+        const names = (interruptEffectsByFunction[name] ?? []).map((e) => e.effect);
+        out[name] = names.filter((n, i) => names.indexOf(n) === i).sort();
+      }
+      return out;
+    },
+  );
 }

@@ -242,6 +242,14 @@ describe("applyCliFlags", () => {
     expect(out.typechecker).toEqual({ enabled: true, strictTypes: true });
   });
 
+  it("--refuse-splices sets refuseSplices", () => {
+    expect(applyCliFlags({}, { refuseSplices: true }).refuseSplices).toBe(true);
+  });
+
+  it("absent --refuse-splices leaves it unset, so splices still expand", () => {
+    expect(applyCliFlags({}, {}).refuseSplices).toBeUndefined();
+  });
+
   it("--max-tool-call-rounds sets the top-level maxToolCallRounds", () => {
     expect(applyCliFlags({}, { maxToolCallRounds: 20 }).maxToolCallRounds).toBe(20);
   });

@@ -49,7 +49,7 @@ That six copies of this sequence exist at all is the real problem, and it is fil
 | --- | --- |
 | `lib/compiler/buildSession.ts` (`compileEntry`) | Print and `process.exit(1)`, matching how this path already reports parse and typecheck failures. |
 | `lib/compiler/compile.ts` (`compileSource`) | Return a `CompileFailure`. This module returns errors as data and never exits. |
-| `lib/compiler/typecheck.ts` (`runCheckerPipeline`) | Keep the unexpanded program. This pipeline answers "what does this check as"; reporting belongs to the compile paths. |
+| `lib/compiler/typecheck.ts` (`runCheckerPipeline`) | Keep the unexpanded program. This pipeline answers "what does this check as"; reporting belongs to the compile paths. The one exception is a refusal (`AG8016`), which throws — see "Declining generator execution". |
 | `lib/analysis/interrupts.ts` (`analyzeOneFile`) | Keep the unexpanded program. Refusing to analyze interrupts because a splice failed would be worse than analyzing what is there. |
 | `lib/lsp/diagnostics.ts` (`computeDiagnostics`) | Report it as an editor diagnostic. This is the only path where the user is looking at the file while the generator is broken. |
 | `scripts/agency.ts` (the `typecheck`/`tc` command) | Print and mark the run failed. Has its own pipeline and reaches none of the shared ones. Skipped for stdin, which has no path to resolve a generator against. |
@@ -61,6 +61,24 @@ Four of these six also run `liftCallbackBlocks`: `buildSession.ts`, `compile.ts`
 The tripwire runs before the builder generates anything, and it finds splices by walking the whole tree rather than scanning the top level — a splice in expression position sits several levels down inside a call. The message names the generator when it can read one, so it says *which* splice went unexpanded, and points here for the list of paths that must call expansion.
 
 Because no real compile path can reach the tripwire, its only coverage is `lib/backends/spliceRefusal.test.ts`, which builds a splice program with expansion deliberately skipped, once per splice position. That test is what notices if the tripwire is ever removed.
+
+## Declining generator execution
+
+Compiling a `$( ... )` runs its generator. That is bounded — a generator may import only `std::` modules and other `.agency` files, and compilation installs no interrupt handlers, so anything dangerous cannot complete — but it is still execution, and a caller may prefer to decline it rather than rely on the argument. Inspecting a freshly cloned repository is the usual reason.
+
+`refuseSplices` in `AgencyConfig` (and `--refuse-splices` on `compile`, `run`, `typecheck` and `test run`) refuses `AG8016` instead of expanding. It is off by default.
+
+**The refusal happens before the generator is resolved**, at the top of `expandSplices`, not as one of the `CHECKS` in `decide` ("The three phases" below). That is a deliberate exception to the rule that a new refusal is an entry in `CHECKS`, for two reasons. Resolution parses the generator's module, which is work the refusal exists to avoid; and resolution can fail on its own, so a file with both a broken import and the setting on would report `AG8005` in preference to the refusal. `calleeName` reads the callee straight off the syntax, so the message still names the generator without opening its file.
+
+That is as far as the guarantee goes: the generator is never compiled or executed, but its file may already have been read, because building the symbol table and the compiled closure crawls imports before expansion.
+
+The tests in `expandSplices.test.ts` deliberately do not write a generator file. If the refusal ever moves after resolution, they fail with `AG8005` instead of `AG8016`, which is the regression the placement guards against.
+
+### What it does not change
+
+Sandboxed compilation (`compileSandboxed`, behind `agency run --agency-only` and `std::agency compile`) refuses splices unconditionally through the closure validator and never consults this setting. That refusal is structural — the mirror-and-compile machinery assumes a validated closure — and is not a general judgement that splices are unsafe. "The safety argument, and what carries it" below is that judgement, and this flag does not change it.
+
+On the type-checking pipeline a refusal **throws** rather than becoming a diagnostic. `runCheckerPipeline` otherwise tolerates a splice that will not expand, keeping the unexpanded program — but a refusal is the caller saying "do not run this", and answering as though the file had no splice would report every generated name as undefined. Throwing joins that pipeline's existing rule that a throw means "could not check this". Every other splice failure keeps the tolerant behaviour.
 
 ## The three phases
 

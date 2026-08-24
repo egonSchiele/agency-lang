@@ -162,6 +162,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG8013](templates.md#ag8013) | The generator `&#123;name&#125;` produced an exported declaration (`&#123;declared&#125;`). Generated declarations cannot be exported yet, because other files resolve imports without running generators. Remove the `export`. |
 | [AG8014](templates.md#ag8014) | The generator `&#123;name&#125;` returned &#123;kind&#125;, which cannot sit at the top level of a file. Top-level code runs at initialization, which cannot branch, loop, or wait. |
 | [AG8015](templates.md#ag8015) | `&#123;name&#125;` is not defined in this template. A template can only use names it declares or imports itself, because a hole hides whatever fills it. Move the code that defines `&#123;name&#125;` into this template, or move the code that uses it into the fragment that defines it. |
+| [AG8016](templates.md#ag8016) | `&#123;file&#125;` contains a splice, and generator execution was declined for this check, so `&#123;name&#125;` was not run. |
 
 ## Lint
 

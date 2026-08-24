@@ -531,6 +531,14 @@ The rule covers everything a generator can reach, not just what it imports direc
 
 **How to fix:** move the work into Agency, or set \`allowNonAgencyGenerators: true\` in your config if the generator genuinely needs a JavaScript library. Turning it off means the generator can do whatever that library can.`,
 
+  spliceRefused: `This file contains a splice, and generator execution was declined for this compile.
+
+Compiling a \`$( ... )\` runs its generator, so compiling a file you have not read runs code you have not read. Declining is for when you would rather not, such as inspecting a repository you just cloned.
+
+The generator was never compiled or run. Its file may still have been read, because building the symbol table crawls imports first.
+
+**How to fix:** compile again without \`--refuse-splices\`. Sandboxed compilation (\`--agency-only\`, \`std::agency compile\`) refuses splices with no flag to drop.`,
+
   spliceFragmentKindMismatch: `A generator returned a piece of code that does not fit where the splice sits.
 
 A splice at the top level of a file needs whole declarations — functions, nodes, types. A splice in expression position needs a single expression. Returning a whole program where a value belongs, or the reverse, cannot be pasted in.

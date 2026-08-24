@@ -667,6 +667,12 @@ export const DIAGNOSTICS = {
     message:
       "The splice argument `{name}` is declared in this file, so it does not exist yet when the generator runs. Splice arguments may be literals, code literals, or imported names.",
   },
+  spliceRefused: {
+    code: "AG8016",
+    severity: "error",
+    message:
+      "`{file}` contains a splice, and generator execution was declined for this check, so `{name}` was not run.",
+  },
 } as const;
 
 export type DiagnosticName = keyof typeof DIAGNOSTICS;

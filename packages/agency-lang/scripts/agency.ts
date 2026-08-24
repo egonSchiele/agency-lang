@@ -189,6 +189,10 @@ type CliDependencies = {
   launchAgent?: typeof agent;
 };
 
+/** One spelling of `--refuse-splices` for every command that offers it. */
+const DESC_REFUSE_SPLICES =
+  "Refuse to compile a file containing a compile-time splice `$( ... )`, instead of running its generator";
+
 function defaultResolveMcpCommand(): string[] {
   return ["agency", "mcp"];
 }
@@ -318,6 +322,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--force", "Recompile everything, ignoring the incremental-build manifest")
     .option("-w, --watch", "Watch for changes and recompile")
     .option("--strict", "Fail on any fatal type error (typechecker.strict)")
+    .option("--refuse-splices", DESC_REFUSE_SPLICES)
     .option(
       "--max-tool-call-rounds <n>",
       "Max LLM tool-call rounds before halting a tool loop (default 10; overrides agency.json)",
@@ -336,12 +341,14 @@ export function createProgram(deps: CliDependencies = {}): Command {
           force?: boolean;
           watch?: boolean;
           strict?: boolean;
+          refuseSplices?: boolean;
           maxToolCallRounds?: number;
           maxToolResultChars?: number;
         },
       ) => {
         const config = applyCliFlags(getConfig(), {
           strict: opts.strict,
+          refuseSplices: opts.refuseSplices,
           maxToolCallRounds: opts.maxToolCallRounds,
           maxToolResultChars: opts.maxToolResultChars,
         });
@@ -405,6 +412,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
           "Enable statelog observability for this run (use with a configured host, or --log-file)",
         )
         .option("--strict", "Fail the run on any fatal type error (typechecker.strict)")
+        .option("--refuse-splices", DESC_REFUSE_SPLICES)
         .option(
           "--max-tool-call-rounds <n>",
           "Max LLM tool-call rounds before halting a tool loop (default 10; overrides agency.json)",
@@ -1228,6 +1236,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "--agency-only",
       "Compile each tested file through the closure validator: anything in its imports that is not Agency source is refused and the file fails",
     )
+    .option("--refuse-splices", DESC_REFUSE_SPLICES)
     .option(
       "--json",
       "Print one JSON document of every file and case to stdout; all human-readable output goes to stderr",
@@ -1257,10 +1266,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
           maxCost?: string;
           maxTime?: string;
           agencyOnly?: boolean;
+          refuseSplices?: boolean;
           json?: boolean;
         },
       ) => {
-        const config = getConfig();
+        const config = applyCliFlags(getConfig(), { refuseSplices: opts.refuseSplices });
         const output = opts.json ? jsonOutput() : humanOutput();
         if (opts.json && opts.coverage && !opts.collectOnly) {
           // The coverage report prints to stdout, which --json reserves
@@ -1492,12 +1502,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Type check .agency file(s) (reads from stdin if no input)")
     .argument("[inputs...]", "Paths to .agency input files")
     .option("--strict", "Enable strict types (untyped variables are errors)")
-    .action(async (inputs: string[], opts: { strict?: boolean }) => {
+    .option("--refuse-splices", DESC_REFUSE_SPLICES)
+    .action(async (inputs: string[], opts: { strict?: boolean; refuseSplices?: boolean }) => {
       // `strictTypes`, not `strict`: this command computes its own exit code
       // and never reaches the compile-path gate, so `strict` would be inert
       // here — and an inert setting that looks meaningful is a trap. Applied
       // before runTypeCheck closes over `config`, since applyCliFlags copies.
-      const config = applyCliFlags(getConfig(), { strictTypes: opts.strict });
+      const config = applyCliFlags(getConfig(), {
+        strictTypes: opts.strict,
+        refuseSplices: opts.refuseSplices,
+      });
       let hasErrors = false;
       const runTypeCheck = (contents: string, filePath?: string, symbolTable?: SymbolTable) => {
         const parsed = parse(contents, config);

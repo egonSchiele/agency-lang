@@ -56,6 +56,18 @@ The two meanings are two fields on `CliFlags` (`strict` and `strictTypes`), not
 a branch inside `applyCliFlags`. The command picks the meaning it wants by
 choosing a field; the helper never needs to know which command called it.
 
+### `--refuse-splices`
+
+`refuseSplices` declines compile-time generator execution: a file containing a
+`$( ... )` fails with `AG8016` instead of the generator being run. Off by
+default; see `docs/dev/language/splices.md`.
+
+Worth knowing when adding any refusing flag: because it is config, anything
+that merges another config **over** the CLI-derived one cancels it. That is how
+`agency test run` beat this flag until both of its merge sites re-applied the
+CLI intent, and a subprocess re-derives its own config, so a flag has to be
+forwarded to it explicitly.
+
 ## Flags that are NOT config
 
 Not every flag becomes a setting, and forcing one to be a setting is a mistake.

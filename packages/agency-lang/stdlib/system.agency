@@ -28,6 +28,7 @@ open URLs, and read from stdin.
 
 effect std::screenshot { filepath: string }
 effect std::exit { code: number }
+effect std::env { name: string }
 effect std::setEnv { name: string, value: string }
 effect std::openUrl { url: string }
 effect std::notify { title: string, body: string }
@@ -98,10 +99,15 @@ export def cwd(): string {
   return _cwd()
 }
 
-export def env(name: string): string | null {
+export idempotent def env(name: string): string | null {
   """
   Read an environment variable. Returns null if the variable is not set.
+
+  @param name - The environment variable name
   """
+  return interrupt std::env("Are you sure you want to read this environment variable?", {
+    name: name
+  })
   return _env(name)
 }
 

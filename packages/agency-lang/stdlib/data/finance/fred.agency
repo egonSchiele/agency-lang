@@ -172,7 +172,7 @@ def fredInfoFinalize(fetchResult: any): Result {
   }
 }
 
-export def fredSeries(seriesId: string, observationStart: string = "", observationEnd: string = "", frequency: FredFrequency | null = null, units: FredUnits | null = null, limit: number = 0): Result<FredSeries> raises <std::fred, std::http::fetchJSON> {
+export def fredSeries(seriesId: string, observationStart: string = "", observationEnd: string = "", frequency: FredFrequency | null = null, units: FredUnits | null = null, limit: number = 0): Result<FredSeries> raises <std::fred, std::env, std::http::fetchJSON> {
   """
   Fetch a U.S. macroeconomic time-series from FRED by its series id (e.g. "UNRATE" for the
   unemployment rate, "CPIAUCSL" for CPI, "FEDFUNDS" for the fed funds rate). Returns the
@@ -199,7 +199,7 @@ export def fredSeries(seriesId: string, observationStart: string = "", observati
   return fredObservationsFinalize(seriesId, result)
 }
 
-export def fredSeriesInfo(seriesId: string): Result<FredSeriesInfo> raises <std::fred, std::http::fetchJSON> {
+export def fredSeriesInfo(seriesId: string): Result<FredSeriesInfo> raises <std::fred, std::env, std::http::fetchJSON> {
   """
   Fetch metadata about a FRED series by its id: its human title, display units, frequency, and
   the date range it covers. Requires the FRED_API_KEY environment variable.

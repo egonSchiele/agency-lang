@@ -1,10 +1,19 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// fd 1 is the one thing this module touches that a test cannot own, so it is
+// the one thing mocked here.
+const stdout = vi.hoisted(() => ({ writeSync: vi.fn() }));
+vi.mock("fs", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("fs")>()),
+  writeSync: stdout.writeSync,
+}));
 import {
   commandFailed,
   commandTitle,
   createTerminalStatus,
   installTerminalStatus,
   sanitizeTitle,
+  writeToTerminal,
   type TerminalStatus,
 } from "@/cli/terminalStatus.js";
 import { AGENCY_NO_TERM_STATUS, AGENCY_TERM_STATUS_OWNED } from "@/constants.js";
@@ -251,5 +260,35 @@ describe("commandFailed", () => {
     ["the budget-exceeded code", 3, true],
   ])("%s (exit %i) turns the tab red: %s", (_name, code, failed) => {
     expect(commandFailed(code)).toBe(failed);
+  });
+});
+
+describe("writeToTerminal", () => {
+  beforeEach(() => {
+    stdout.writeSync.mockReset();
+  });
+
+  it("writes to stdout by descriptor, so the bytes land before the process exits", () => {
+    writeToTerminal("\x1b]1;title\x07");
+    expect(stdout.writeSync).toHaveBeenCalledWith(1, "\x1b]1;title\x07");
+  });
+
+  it.each(["EIO", "EPIPE", "EAGAIN"])(
+    "swallows %s: a terminal that went away must not fail the run",
+    (code) => {
+      stdout.writeSync.mockImplementation(() => {
+        throw Object.assign(new Error(`write failed: ${code}`), { code });
+      });
+      expect(() => writeToTerminal("anything")).not.toThrow();
+    },
+  );
+
+  it("does not take the process down at the end of a command", () => {
+    stdout.writeSync.mockImplementation(() => {
+      throw Object.assign(new Error("write EIO"), { code: "EIO" });
+    });
+    const status = createTerminalStatus({ write: writeToTerminal, env: {}, isTty: () => true });
+    status.begin("agency eval run fib");
+    expect(() => status.end(true)).not.toThrow();
   });
 });

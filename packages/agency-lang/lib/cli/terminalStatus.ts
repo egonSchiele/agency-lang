@@ -99,17 +99,30 @@ export function createTerminalStatus(deps: TerminalStatusDeps): TerminalStatus {
 }
 
 /**
- * The process-wide instance the CLI wires up.
+ * Write to stdout by descriptor, and never let that failure matter.
  *
- * `fs.writeSync` rather than `process.stdout.write`, because `end` runs from an
- * `exit` handler and so must land before the process is gone. Node's stdout is
- * synchronous to a TTY on POSIX but asynchronous to one on Windows, where the
- * write would be dropped and the tab left named and spinning.
+ * `fs.writeSync` rather than `process.stdout.write` because `end` runs from an
+ * `exit` handler and the bytes must land before the process is gone: Node's
+ * stdout is synchronous to a TTY on POSIX but asynchronous to one on Windows,
+ * where the write would simply be dropped.
  */
-export const terminalStatus: TerminalStatus = createTerminalStatus({
-  write: (text) => {
+export function writeToTerminal(text: string): void {
+  try {
     fs.writeSync(1, text);
-  },
+  } catch {
+    // Deliberately silent, and the one place here where an empty catch is the
+    // point: the failure IS that the terminal is unreachable, so there is
+    // nowhere to log it. A closed window or a dropped SSH session leaves fd 1
+    // throwing EIO/EPIPE, and fs.writeSync throws where process.stdout.write
+    // would have swallowed it. Unguarded, that throw escapes the `exit`
+    // handler and ends a clean run with a stack trace and
+    // a changed exit code, over a cosmetic tab title.
+  }
+}
+
+/** The process-wide instance the CLI wires up. */
+export const terminalStatus: TerminalStatus = createTerminalStatus({
+  write: writeToTerminal,
   env: process.env,
   isTty: () => process.stdout.isTTY === true,
 });
@@ -171,8 +184,17 @@ let processListenerInstalled = false;
  * disposition, where the kernel ends the process at once, and defers it to the
  * event loop — so `agency compile` on a big file, which is synchronous and is
  * the case where Ctrl-C responsiveness matters most, would stop dying on the
- * first Ctrl-C. A stranded spinner is a far smaller price, and it clears itself
- * the next time any Agency command runs in that tab.
+ * first Ctrl-C.
+ *
+ * What that costs: a hard Ctrl-C on a command with no signal handler of its own
+ * kills the process before any cleanup runs. The spinner clears itself the next
+ * time an Agency command runs in that tab. The title does not — `begin` pushed
+ * onto the terminal's title stack and only `end` pops — so the tab keeps the
+ * dead command's name at the shell prompt, and each interrupted command leaves
+ * one more unbalanced entry on that stack (terminals cap its depth, so this
+ * accumulates to a limit rather than without bound). The pair stays anyway:
+ * dropping it would make every command leave its name behind, trading a rare
+ * stranded title for a permanent one.
  *
  * Leaving signals alone also keeps us from mistaking one for a verdict. The
  * eval runner treats the first Ctrl-C as non-fatal and keeps working for

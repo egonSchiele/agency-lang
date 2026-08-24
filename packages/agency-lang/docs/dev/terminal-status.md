@@ -90,6 +90,20 @@ spinning after the command finished. `fs.writeSync` is synchronous on both, and
 this seam only writes twice per command, so there is nothing to interleave badly
 with the buffered stream.
 
+That swap changes the failure mode, which is why `writeToTerminal` wraps it in a
+bare `try`/`catch`. `process.stdout.write` never throws — the stream emits
+`error`, and Node's stdout swallows `EPIPE` for you — while `fs.writeSync`
+throws synchronously. Picture an `agency eval run` over SSH, or in a window the
+user closes while it works: stdout was a TTY at `begin`, so the status is
+claimed, but by exit time the pty is gone and fd 1 fails with `EIO` or `EPIPE`
+(or `EAGAIN` on a busy non-blocking shared tty). Unguarded, that throw escapes
+the `exit` handler and ends a clean run with a stack trace and a changed exit
+code, over a tab title.
+
+The empty catch is deliberate, and it is the one place in this file where the
+repo's usual "log it" rule does not apply: the failure *is* that the terminal is
+unreachable, so there is nowhere to log.
+
 ## Signals, and why there are none
 
 Cleanup hangs off `process.on("exit")`, whose handlers must be synchronous —
@@ -119,11 +133,26 @@ was still working, then leave `claimed` false so nothing could put the spinner
 back. Only `exit` knows how the command actually ended.
 
 The cost is that a hard Ctrl-C on a command that installs no signal handler of
-its own kills the process before any cleanup, stranding the spinner and the tab
-name. It clears itself the next time any Agency command runs in that tab, and
-the commands most likely to be interrupted — the eval runner, `compile --watch`,
-the log viewer — all handle their own signal and exit through `process.exit`,
-which does run the exit handler.
+its own kills the process before any cleanup runs, and the two halves are not
+stranded equally.
+
+The **spinner** clears itself the next time any Agency command runs in that tab.
+The **title** does not. `begin` pushes onto the terminal's title stack and only
+`end` pops, so the tab keeps the dead command's name once you are back at the
+shell prompt, and each interrupted command leaves one more unbalanced entry on
+that stack. Terminals cap the stack's depth, so this accumulates to a limit
+rather than without bound, but it accumulates. Ctrl-C on a slow `compile` is
+both the case the no-signal-handler decision protects and the case that strands
+a title.
+
+The push/pop pair stays anyway. Dropping it, and simply setting the title at
+`begin` without restoring anything, would trade a rare stranded title for a
+permanent one on every command — restoring the previous title is the entire
+reason the stack exists.
+
+The commands most likely to be interrupted — the eval runner, `compile --watch`,
+the log viewer — all handle their own signal and leave through `process.exit`,
+which does run the exit handler, so none of them strand anything.
 
 ## Interactive commands keep spinning
 

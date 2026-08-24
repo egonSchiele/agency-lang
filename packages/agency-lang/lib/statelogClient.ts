@@ -1458,7 +1458,8 @@ export class StatelogClient {
   /** One event per hop where an abort's travel touches a saveDraft
    *  partial: a frame attached its draft (carried), a frame dropped a
    *  callee's partial by having none of its own (erased), a partial was
-   *  discarded at a boundary (clearedAtFork, droppedAtArgPosition), or a
+   *  discarded at a boundary (clearedAtFork, droppedAtArgPosition,
+   *  droppedAtNodeBoundary), or a
    *  guard salvaged one (delivered). An abort through undrafted code
    *  emits nothing. `partial` and `functionArgs` are pre-truncated string
    *  previews, nested under `data` so post()'s redaction replacer covers
@@ -1472,7 +1473,13 @@ export class StatelogClient {
     functionArgs,
     partial,
   }: {
-    action: "carried" | "erased" | "delivered" | "clearedAtFork" | "droppedAtArgPosition";
+    action:
+      | "carried"
+      | "erased"
+      | "delivered"
+      | "clearedAtFork"
+      | "droppedAtArgPosition"
+      | "droppedAtNodeBoundary";
     scopeName?: string;
     spanId?: string;
     functionArgs?: string;

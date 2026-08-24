@@ -193,6 +193,60 @@ Same program, same answer, regardless of whether an interrupt happened.
 
 ## Nuances people miss
 
+- **The node boundary is where an abort becomes an exception again, and
+  there are three of them.** Inside compiled code an abort travels as a
+  value; everything above compiled code expects an exception.
+  lib/runtime/abortBoundary.ts does the conversion, and there are four
+  boundaries, not one. Three hand back a node result and call
+  `throwIfNodeResultAborted`: `runNode`, `runResumeLoop`
+  (lib/runtime/interrupts.ts) and the rewind loop
+  (lib/runtime/rewind.ts). The fourth, `runExportedFunctionCore`, hands
+  back a bare value from `invoke()` and calls `throwIfValueAborted`;
+  without it an exported function that aborts returns a
+  `{ __type: "abortedResult" }` object to its caller — an HTTP 200 with a
+  nonsense body over `./serve`. Fixing only one of the four leaves the
+  same bug one interrupt, or one export, later. Three things are easy to get wrong. First, codegen's
+  per-call guards only cover calls whose result is bound to a local — a
+  bare `return foo()` in tail position binds nothing, gets no guard, and
+  reaches the boundary intact, which is why the check exists at all
+  rather than being redundant (issue #243: the CLI reported runaway
+  recursion as a successful run with no output). Second,
+  `createReturnObject` JSON round-trips the value, and `isAborted` is an
+  `instanceof` test, so a check placed after it silently never fires —
+  this is also why the conversion cannot live inside
+  `createReturnObject`. Third, the partial has to be dropped through
+  `atNodeBoundary()` rather than by calling `toError()` raw, exactly as
+  the fork boundary uses `atForkBoundary()`: that is what emits the
+  closing `abortSalvage` event and ends the `abortUnwind` span. A raw
+  throw leaves that span open forever and the draft vanishes with no
+  record of where it went.
+- **Only a TERMINAL drop may end the unwind span.** An "erased" hop opens
+  the span while carrying no partial forward, so a span can outlive the
+  partial that started it. The two terminal drops (`atForkBoundary`,
+  `atNodeBoundary`) must still close it — nothing above them will.
+  `droppedAtArgPosition` must not: the abort travels on as that call's
+  result, and a later frame with a draft of its own would find no span id
+  and open a second one, splitting a single abort's salvage trail across
+  two spans. That is what the `terminal` flag on `dropped()` selects.
+- **Throwing at the boundary skips the caller's end-of-run tail.** The
+  run lands in the outer `catch` instead of the branch that emits
+  `agentEnd` with a result, fires `onAgentEnd`, and calls
+  `closeTraceWriter()`. `finalizeExecCtx` does not touch the trace
+  writer, so without help an aborted `agency run --trace` writes a trace
+  that stops mid-stream with no `footer` record. The `endsRun` flag on
+  `throwIfNodeResultAborted` closes it for the two call sites that own
+  the end of a run; the rewind loop has no such tail and passes false.
+  The `onAgentEnd` hook still does not fire for an aborted run — that
+  matches every other crash path, including the aborts codegen already
+  threw before this.
+- **An abort's message has to survive on the cause, not the error.**
+  `AbortedResult.toError()` rebuilds the exception from the `AbortCause`
+  alone — the original error object is long gone. Anything a user needs
+  to read (which guard tripped, what recursed) must therefore ride the
+  cause and be rendered by `describeAbortCause`, which is the single
+  owner of that text. `CallDepthExceededError` calls
+  `describeAbortCause` for its own message too, so the thrown form and
+  the rebuilt form cannot drift apart.
 - **`saveDraft` writes the CALLER's frame.** saveDraft is itself an
   Agency def, so when `_saveDraft` runs, the top frame is saveDraft's
   own. `StateStack.setSavedDraft` targets `callerFrame()`. If you inline

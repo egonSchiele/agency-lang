@@ -187,7 +187,9 @@ Subprocess: `subprocessStarted`, `subprocessEnd`.
 
 Salvage: `abortSalvage` — records how a `saveDraft` partial is handled as an
 abort unwinds (`action`: `carried | erased | delivered | clearedAtFork |
-droppedAtArgPosition`), nested inside an `abortUnwind` span.
+droppedAtArgPosition | droppedAtNodeBoundary`), nested inside an `abortUnwind`
+span. The two terminal drops (`clearedAtFork`, `droppedAtNodeBoundary`) end
+that span; `droppedAtArgPosition` does not, because the abort travels on.
 
 Diagnostics: `error` (`errorType`: `toolError | llmError | runtimeError |
 validationError | limitExceeded | structuredOutput`), `warn` (`warnType:

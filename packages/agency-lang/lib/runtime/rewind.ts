@@ -1,4 +1,5 @@
 import type { Checkpoint } from "./state/checkpointStore.js";
+import { throwIfNodeResultAborted } from "./abortBoundary.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
 import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
 import { RestoreSignal } from "./errors.js";
@@ -81,6 +82,7 @@ export async function rewindFrom(args: {
           ),
         );
         await execCtx.pendingPromises.awaitAll();
+        await throwIfNodeResultAborted(result, execCtx, { endsRun: false });
         return createReturnObject({ result, globals: execCtx.globals });
       } catch (e) {
         if (e instanceof RestoreSignal) {

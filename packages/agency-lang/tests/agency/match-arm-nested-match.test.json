@@ -1,0 +1,48 @@
+{
+  "tests": [
+    {
+      "nodeName": "bothSucceed",
+      "description": "a nested match arm yields the inner match's value",
+      "input": "",
+      "expectedOutput": "\"ab\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "innerFails",
+      "description": "the inner match still dispatches to its own failure arm",
+      "input": "",
+      "expectedOutput": "\"inner:boom\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "outerFails",
+      "description": "the outer failure arm skips the nested match entirely",
+      "input": "",
+      "expectedOutput": "\"outer:first\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "blockArmStatementIf",
+      "description": "a block arm holding a statement if keeps its returns (not read as a single expression)",
+      "input": "",
+      "expectedOutput": "42",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

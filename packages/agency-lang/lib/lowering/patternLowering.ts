@@ -638,6 +638,29 @@ class PatternLowerer {
     matchId: number,
     arm: MatchBlockCase,
   ): AgencyNode[] {
+    if (body.length === 1) {
+      // A nested expression-position construct as the arm's whole body: lower it
+      // first and yield its `__matchval_` ref, exactly as `return match(...)` does
+      // in a block arm. Hoisting it as an opaque expression instead would leave the
+      // raw node as this yield's `typeSource`, which the synthesizer types as `any`
+      // — poisoning the outer match's whole value type.
+      //
+      // `expressionRegion` answers "is this an expression-position construct?";
+      // only the arm can answer "is this arm an expression position?". `ifElse` is
+      // ONE node type for two surface forms, and is an expression only in value
+      // position — for an arm, the inline form. A BLOCK arm holding a lone
+      // statement `if` must fall through to the return-rewrite below, or its
+      // branches are read as single expressions and every statement after the
+      // first is silently dropped. `matchBlock` is an expression in both forms.
+      const valuePosition = arm.blockBody !== true || body[0].type === "matchBlock";
+      const inner = valuePosition ? this.expressionRegion(body[0], body[0].loc) : null;
+      if (inner) {
+        return [
+          ...inner.statements,
+          { type: "matchYield", matchId, value: inner.valueRef, loc: body[0].loc },
+        ];
+      }
+    }
     if (body.length === 1 && isExpressionNode(body[0])) {
       const expr = body[0] as Expression;
       // Always bind a single-expression arm's value to a temp at STATEMENT

@@ -1045,3 +1045,36 @@ describe("arm arrow", () => {
     );
   });
 });
+
+// #887: `match` is not part of `exprParser` — it is wired into each
+// expression site by hand, and the arm body was missing it.
+describe("a nested match as an arm body", () => {
+  const nested = `node main() {
+  const x = match (a) {
+    success(s) => match (b) {
+      success(t) => t
+      failure(e) => e
+    }
+    failure(err) => err
+  }
+}`;
+
+  it("parses a match expression as the body of a match arm", () => {
+    expect(() => program(nested)).not.toThrow();
+  });
+
+  it("is the same program written as a block arm", () => {
+    expect(program(nested)).toEqualWithoutLoc(
+      program(`node main() {
+  const x = match (a) {
+    success(s) => { return match (b) { success(t) => t failure(e) => e } }
+    failure(err) => err
+  }
+}`),
+    );
+  });
+
+  it("keeps the inline form when formatted", () => {
+    expect(formatSource(nested)).toContain("success(s) => match(b) {");
+  });
+});

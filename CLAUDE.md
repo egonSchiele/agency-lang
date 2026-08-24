@@ -140,6 +140,7 @@ Pipeline and architecture:
 - `docs/dev/eval-command-agents.md` — Running a CLI as the eval agent (`--agent-cmd`): the EvalTarget union, tokenize-then-substitute, the AGENCY_CONFIG_OVERRIDES/AGENCY_TRACE_ID statelog handoff, process-group kill lifecycle, and the two cost-cap feeds
 - `docs/dev/pkg-imports.md` — Importing Agency code from npm packages using `pkg::` prefix
 - `docs/dev/trace.md` — Execution traces capturing checkpoints at every step
+- `docs/dev/match-expression-positions.md` — Where a `match` expression is allowed: `match` is not in `exprParser` but hand-wired into three sites, why folding it in is ruled out, why a nested-match arm must be LOWERED rather than hoisted (one `any` yield makes the whole outer match `any`), the formatter's inline/block re-parse rule, and the open `if ... then ... else` arm gap
 - `docs/dev/binop-parser.md` — Binary expression parser using precedence climbing
 - `docs/dev/locations.md` — How `loc.line` / `loc.col` / parse-mode template offset interact
 - `docs/dev/validation-annotations.md` — `@validate(...)` and `@jsonSchema(...)` internals: tag merging, `__agency_descriptor` contract, descriptor tree, runtime walker

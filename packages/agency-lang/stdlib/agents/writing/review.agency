@@ -1,0 +1,204 @@
+/** @module
+  @summary Reviews prose for readability: the judgment layer above spelling
+  and grammar.
+
+  Review reads the work and looks things up; this agent changes nothing and
+  needs no tools beyond the text itself. It judges whether a reader can
+  follow the writing, using a small catalog of readability principles, and
+  a caller can supply its own writing guidelines to extend or override them.
+*/
+import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
+import { llmOptions, withContext } from "std::agents/lib/shared"
+import { communicationTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
+import { agentSkill } from "std::skills"
+import { evalValue } from "std::statelog"
+import { systemMessage, threadIsNew } from "std::thread"
+
+static const systemPrompt = """You review prose for readability. Spelling and grammar checkers run
+separately; your job is the judgment layer — writing that is technically
+correct but hard to follow.
+
+The principles. Every finding names the principle it violates:
+
+- Garden-path sentences: an opening that makes the reader parse the
+  sentence one way, then forces a re-read when the real structure lands
+  ("The name lists partition the catalog…" — "name lists" is a noun).
+  Quote the misleading opening and give a rewrite that cannot be misread.
+- Passive voice: the actor hidden behind "is/was …-ed by" (or dropped
+  entirely) when naming who does what would read faster. Flag it where it
+  costs the reader; technical prose sometimes has no actor worth naming.
+- Too many concepts in one sentence: several commas, semicolons,
+  conjunctions, or a parenthetical stacked into one sentence, so the end
+  arrives after the reader has dropped the beginning. Propose the split.
+- Needless detail: parentheticals and qualifier lists that make the
+  reader stack a new mental frame for information the sentence does not
+  need. Ask whether the speed bump is worth what it carries.
+- Emdash overuse: one emdash can add life; emdashes in every sentence are
+  jarring. Suggest a comma or a conjunction for the excess.
+- Unexplained jargon and shorthand: terms, codenames, or bare issue
+  numbers the intended reader has not been given. Judge against the
+  audience the task names.
+- Buried lead: the sentence the reader came for sitting under background
+  they did not need first.
+
+How to review:
+1. Work out who the text is for and what it must get across; judge
+   against that, not against taste.
+2. error=true means the text fails its job on that point: a reader will
+   misread it, lose the thread, or miss the point. Quote the exact
+   passage and give a concrete rewrite.
+3. error=false is advisory: real polish (a tightening, an active-voice
+   rewrite, a split) that would help but does not block understanding.
+   Calibrate hard: a passage that merely could be smoother, or extra
+   information a curious reader might also want, is advisory, not an
+   error. Reserve error=true for a demonstrable misreading — one you can
+   act out: "the reader parses it as X, but it means Y". When unsure,
+   advisory.
+4. When the caller supplies writing guidelines, they outrank this
+   catalog: apply both, and where they conflict, the guidelines win.
+5. A clean verdict is a fine outcome. Never pad with generic advice, and
+   report a repeated habit once, saying that it repeats.
+
+Keep each finding brief, quote the passage it is about, and always offer
+the fixed version.${SAVE_DRAFT_HINT}"""
+
+static const skills = agentSkill("writing/review")
+
+export def buildTools(): any[] {
+  """
+  Return the writing reviewer's tools. Prose review needs nothing beyond
+  the text, so this is only the shipped skills and progress reporting.
+  """
+  return [skills, ...communicationTools()]
+}
+
+def judgeText(
+  work: string,
+  task: string,
+  guidelines: string,
+  context: string,
+  model: string,
+  provider: string,
+  extraTools: any[],
+): Feedback[] {
+  if (threadIsNew()) {
+    systemMessage(systemPrompt)
+  }
+  let guidelinesSection = ""
+  if (guidelines != "") {
+    guidelinesSection = """The caller's own writing guidelines. They outrank the built-in catalog:
+<guidelines>
+${guidelines}
+</guidelines>
+
+"""
+  }
+  const prompt = """
+${guidelinesSection}The text was written for this task:
+<task>
+${withContext(task: task, context: context)}
+</task>
+
+<text>
+${work}
+</text>
+
+Return a list of feedback items.
+"""
+  // Return position so a model saveDraft propagates as partial findings.
+  return llm(
+    prompt,
+    llmOptions(
+      model: model,
+      provider: provider,
+      tools: buildTools().concat(extraTools).concat([saveDraft]),
+    ),
+  )
+}
+
+export def writingReviewAgent(
+  work: string,
+  task: string = "",
+  guidelines: string = "",
+  context: string = "",
+  maxCost: number = $5.00,
+  maxTime: number = 10m,
+  model: string = "",
+  provider: string = "",
+  session: string = "",
+  extraTools: any[] = [],
+): Result<Feedback[]> {
+  """
+  Review prose for readability and return findings. error=true marks a
+  passage a reader will misread or lose; error=false is advisory polish.
+  Spelling and grammar are assumed checked separately: this agent reports
+  only what needs judgment.
+
+  @param work - The text under review
+  @param task - Who the text is for and what it must get across, or ""
+  @param guidelines - The caller's own writing guidelines, as text (for
+    example the contents of a project's writing-tips document). Outranks
+    the built-in catalog where they conflict; "" for the built-in catalog alone
+  @param context - Extra material for the judgment, or ""
+  @param maxCost - Hard spend cap
+  @param maxTime - Hard wall-clock cap
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  """
+  const captured = guard(cost: maxCost, time: maxTime, label: "writingReviewAgent") {
+    let items: Feedback[] = []
+    thread(label: "writingReviewAgent", session: session) {
+      items = judgeText(
+        work: work,
+        task: task,
+        guidelines: guidelines,
+        context: context,
+        model: model,
+        provider: provider,
+        extraTools: extraTools,
+      )
+    }
+    return items
+
+    // Salvage the model's partial findings if an outer budget guard trips
+    // mid-review; the assignment above would otherwise drop them.
+    finalize {
+      return items
+    }
+  }
+
+  return failOpenFeedback(captured)
+}
+
+/** What an eval hands the reviewer: the task the text was written for, and
+  the file holding that text, seeded into the working directory by the
+  test's `files/`. The shape the `evals/writing-review` suite uses as its
+  input. */
+export type WritingReviewEvalInput = {
+  assignment: string;
+  sourceFile: string
+}
+
+/** Eval entry point: `agency eval run stdlib/agents/writing/review.agency:evalMain
+  --suite <dir>`. A node in a library module never runs when the module is
+  imported; it only exists so a suite can score this reviewer without a
+  wrapper file. Any other reviewer scored on the same suite supplies a node
+  with this signature. Effects are decided at this boundary: reading the
+  seeded input file is this node's own doing (`with approve`), and a budget
+  trip inside the reviewer is rejected (`with reject`) so the caps stay
+  caps and the reviewer's fail-open result comes back instead of an
+  interrupt escaping the entry point. */
+node evalMain(input: WritingReviewEvalInput): Feedback[] {
+  evalValue(input)
+  const source = read(input.sourceFile) with approve
+  if (source is failure(readErr)) {
+    return [{ error: true, feedback: "could not read ${input.sourceFile}: ${readErr}" }]
+  }
+  const reviewed = writingReviewAgent(work: source.value, task: input.assignment) with reject
+  if (reviewed is failure(err)) {
+    return [{ error: true, feedback: "review agent failed: ${err}" }]
+  }
+  return reviewed.value
+}

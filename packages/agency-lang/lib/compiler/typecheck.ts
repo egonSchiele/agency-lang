@@ -196,12 +196,20 @@ export function getEffectsFromSource(source: string, config: AgencyConfig = {}):
  * behavior for `getEffects`, but wrong for splice eligibility, where an
  * empty list reads as "safe to run at compile time".
  */
-export function getEffectsFromFile(filePath: string): EffectsByExport {
+/**
+ * Effects for a file on disk. Takes `config` for the same reason its
+ * siblings do: this reads a REAL path, so a splice here resolves its
+ * generator and runs it, and a caller must be able to decline.
+ *
+ * Test-only today — `lib/analysis/effects.test.ts`, `effectsOracle.test.ts`
+ * and `typecheckEffects.test.ts` are the only callers, and it is not part of
+ * the package's public API. The parameter is defaulted so those keep
+ * working, and so the next production caller does not inherit the hole
+ * silently.
+ */
+export function getEffectsFromFile(filePath: string, config: AgencyConfig = {}): EffectsByExport {
   const absolute = path.resolve(filePath);
-  // No refusal here on purpose: splice eligibility calls this to read a
-  // GENERATOR's effects, and a generator that itself splices is already
-  // refused as AG8009 (spliceNested).
-  return effectsVia(fs.readFileSync(absolute, "utf-8"), absolute, {});
+  return effectsVia(fs.readFileSync(absolute, "utf-8"), absolute, config);
 }
 
 function effectsVia(

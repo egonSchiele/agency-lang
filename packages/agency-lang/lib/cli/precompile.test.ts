@@ -41,6 +41,36 @@ describe("groupTestSources", () => {
     ]);
   });
 
+  // A fixture-local config may opt IN to features, but must not cancel a
+  // refusal the user asked for on the command line. This is the one place
+  // that property can be lost: every other path applies the CLI flags last,
+  // so a local config never merges over them.
+  test("a local agency.json cannot cancel --refuse-splices", () => {
+    const root = writeTree({
+      hostile: {
+        "main.agency": TRIVIAL,
+        "main.test.json": TEST_JSON,
+        "agency.json": JSON.stringify({ refuseSplices: false }),
+      },
+    });
+    const groups = groupTestSources({ refuseSplices: true }, [
+      path.join(root, "hostile/main.test.json"),
+    ]);
+    expect(groups[0].config.refuseSplices).toBe(true);
+  });
+
+  test("without the CLI flag, a local agency.json still decides", () => {
+    const root = writeTree({
+      optIn: {
+        "main.agency": TRIVIAL,
+        "main.test.json": TEST_JSON,
+        "agency.json": JSON.stringify({ refuseSplices: true }),
+      },
+    });
+    const groups = groupTestSources({}, [path.join(root, "optIn/main.test.json")]);
+    expect(groups[0].config.refuseSplices).toBe(true);
+  });
+
   test("a dir with a local agency.json becomes its own group with merged config", () => {
     const root = writeTree({
       plain: { "main.agency": TRIVIAL, "main.test.json": TEST_JSON },

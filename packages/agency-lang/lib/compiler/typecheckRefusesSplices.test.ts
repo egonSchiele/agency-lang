@@ -56,16 +56,18 @@ describe("agent-reachable type checking declines generator execution", () => {
 
   it("a file with no splice still checks normally", () => {
     fs.writeFileSync(path.join(dir, "plain.agency"), `node main() {\n  print("hi")\n}\n`, "utf-8");
-    const report = _typecheckFile(dir, "plain.agency");
-    expect(report.errors.map((e) => e.code)).not.toContain("AG8016");
+    // A clean report, not merely the absence of one code: the setting must
+    // cost a splice-free file nothing at all.
+    expect(_typecheckFile(dir, "plain.agency").errors).toHaveLength(0);
   });
 
   it("the pipeline itself still expands when the caller does not decline", () => {
-    // The refusal is a caller's choice, not a property of the checker: the
-    // same file, checked without the setting, expands and reports no AG8016.
-    // This is what stops the fix from becoming a blanket ban.
+    // The refusal is a caller's choice, not a property of the checker. This
+    // is what stops the fix from becoming a blanket ban, so it asserts a
+    // CLEAN report: `host.agency` calls `greet()`, which exists only if the
+    // generator ran, so an unexpanded program reports it as undefined.
     const hostPath = path.join(dir, "host.agency");
     const report = typeCheckSource(fs.readFileSync(hostPath, "utf-8"), hostPath);
-    expect(report.errors.map((e) => e.code)).not.toContain("AG8016");
+    expect(report.errors).toHaveLength(0);
   }, 60_000);
 });

@@ -535,9 +535,11 @@ The rule covers everything a generator can reach, not just what it imports direc
 
 Compiling a \`$( ... )\` runs its generator right then, during compilation. So compiling a file you have not read means running code you have not read. That is bounded — a generator may import only \`std::\` modules and other \`.agency\` files, and compilation installs no interrupt handlers, so anything dangerous cannot finish — but it is still execution, and you may prefer to decline it. Inspecting a repository you just cloned is the usual reason.
 
-Nothing ran: the refusal happens before the generator is resolved, so its file was never opened.
+The generator did not run. The refusal happens before it is resolved, so it was never compiled or executed — though the file itself may already have been read, since building the symbol table and the compiled closure crawls imports before expansion.
 
-**How to fix:** compile again without \`--refuse-splices\`, or with \`refuseSplices\` off in your config, once you are satisfied the generator is one you want to run. Note that sandboxed compilation refuses splices unconditionally and this setting has no bearing on it.`,
+**How to fix:** if you passed \`--refuse-splices\`, compile again without it (or turn \`refuseSplices\` off in your config) once you are satisfied the generator is one you want to run.
+
+Two paths refuse regardless of the setting, and there is no flag to drop on either. Sandboxed compilation — \`agency run --agency-only\` and \`std::agency compile\` — refuses splices unconditionally through the closure validator. So do the \`std::agency\` inspection entry points \`typecheck\`, \`typecheckFile\`, \`getEffects\` and \`describe\`, because type checking runs generators and that path has no sandbox. To inspect a file with a splice, remove the splice or compile it yourself outside those APIs.`,
 
   spliceFragmentKindMismatch: `A generator returned a piece of code that does not fit where the splice sits.
 

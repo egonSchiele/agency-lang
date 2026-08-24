@@ -671,7 +671,7 @@ export const DIAGNOSTICS = {
     code: "AG8016",
     severity: "error",
     message:
-      "`{file}` contains a splice that would run the generator `{name}` at compile time, and generator execution was declined. Compile again without `--refuse-splices` (or with `refuseSplices` off) to allow it.",
+      "`{file}` contains a splice, and generator execution was declined for this check, so `{name}` was not run.",
   },
 } as const;
 

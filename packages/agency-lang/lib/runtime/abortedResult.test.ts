@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { AbortedResult, isAborted, previewForLog } from "./abortedResult.js";
-import { AgencyCancelledError, makeAbortCause, readCause, type AbortCause } from "./errors.js";
+import {
+  AgencyCancelledError,
+  CallDepthExceededError,
+  makeAbortCause,
+  readCause,
+  type AbortCause,
+} from "./errors.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { runInTestContext } from "./asyncContext.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -73,6 +79,20 @@ describe("AbortedResult.fromError (the frame-boundary conversion)", () => {
     expect(aborted.cause).toBe(cause);
     const rebuilt = aborted.toError();
     expect(readCause(rebuilt)).toBe(cause);
+  });
+
+  it("rebuilds the call-depth diagnostic after travelling up as a value", () => {
+    // An abort loses its original Error object on the way up — only the cause
+    // survives. The frames therefore ride the cause, so the message a user
+    // finally sees names what recursed and how to raise the limit, instead of
+    // the bare "Execution aborted (callDepthExceeded)" the kind alone gives.
+    const original = new CallDepthExceededError(2048, 2049, ["main", "foo", "bar"]);
+    const aborted = AbortedResult.fromError(original, new State(), "code");
+    const rebuilt = aborted.toError();
+    expect(rebuilt.message).toBe(original.message);
+    expect(rebuilt.message).toContain("foo \u2192 bar");
+    expect(rebuilt.message).toContain("2049 > 2048");
+    expect(rebuilt.message).toContain("maxCallDepth");
   });
 
   it("emits a 'carried' event with previews and opens the unwind span", () => {

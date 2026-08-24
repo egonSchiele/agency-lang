@@ -193,6 +193,27 @@ Same program, same answer, regardless of whether an interrupt happened.
 
 ## Nuances people miss
 
+- **The node boundary is where an abort becomes an exception again, and
+  it has to run before `createReturnObject`.** Inside compiled code an
+  abort travels as a value. Everything above compiled code expects an
+  exception, so `runNode` converts: if the graph's result data is an
+  `AbortedResult`, it throws `toError()`. Two things are easy to get
+  wrong here. First, codegen's per-call guards only cover calls whose
+  result is bound to a local — a bare `return foo()` in tail position
+  binds nothing, gets no guard, and reaches the boundary intact, which
+  is why the boundary check exists at all rather than being redundant
+  (issue #243: the CLI reported runaway recursion as a successful run
+  with no output). Second, `createReturnObject` JSON round-trips the
+  value, and `isAborted` is an `instanceof` test, so a check placed
+  after it silently never fires. Order matters more than it looks.
+- **An abort's message has to survive on the cause, not the error.**
+  `AbortedResult.toError()` rebuilds the exception from the `AbortCause`
+  alone — the original error object is long gone. Anything a user needs
+  to read (which guard tripped, what recursed) must therefore ride the
+  cause and be rendered by `describeAbortCause`, which is the single
+  owner of that text. `CallDepthExceededError` calls
+  `describeAbortCause` for its own message too, so the thrown form and
+  the rebuilt form cannot drift apart.
 - **`saveDraft` writes the CALLER's frame.** saveDraft is itself an
   Agency def, so when `_saveDraft` runs, the top frame is saveDraft's
   own. `StateStack.setSavedDraft` targets `callerFrame()`. If you inline

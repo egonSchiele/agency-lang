@@ -80,7 +80,16 @@ export type AbortCause =
   // `maxCallDepth`. Modeled as an abort (like `guardTrip`) so it propagates
   // untouched through every generated catch and halts the run instead of being
   // converted to a Failure that could silently re-descend into the recursion.
-  | { kind: "callDepthExceeded"; limit: number; observed: number }
+  | {
+      kind: "callDepthExceeded";
+      limit: number;
+      observed: number;
+      /** The tail of the call chain that overflowed, oldest first. Rides the
+       *  cause because an abort travels up the stack as a VALUE: the original
+       *  error object is gone by the time `AbortedResult.toError()` rebuilds
+       *  the exception, and it can only rebuild what the cause carries. */
+      frames?: string[];
+    }
   // An abort WE initiate when a single llm() call exceeds its per-call deadline.
   // (This is the cause on the call's AbortController while retrying. A transient
   // LLM failure that EXHAUSTS retries is NOT an abort — it surfaces as a plain
@@ -162,6 +171,15 @@ export function describeAbortCause(cause: AbortCause): string {
     const name = cause.label !== undefined ? `Guard "${cause.label}"` : "Guard";
     return `${name} exceeded its ${cause.dimension} budget: spent ${cause.spent} of limit ${cause.limit}`;
   }
+  if (cause.kind === "callDepthExceeded") {
+    const chain =
+      cause.frames !== undefined ? ` Recent calls: ${cause.frames.join(" \u2192 ")}.` : "";
+    return (
+      `Maximum call depth exceeded (${cause.observed} > ${cause.limit}). This ` +
+      `usually means unbounded recursion.${chain} If your program legitimately ` +
+      `recurses this deeply, raise the limit via the \`maxCallDepth\` config option.`
+    );
+  }
   return `Execution aborted (${cause.kind})`;
 }
 
@@ -191,14 +209,16 @@ export class CallDepthExceededError extends AgencyAbort {
   readonly limit: number;
   readonly observed: number;
   constructor(limit: number, observed: number, recentFrames: string[]) {
-    const chain = recentFrames.join(" → ");
-    super(
-      `Maximum call depth exceeded (${observed} > ${limit}). This usually ` +
-        `means unbounded recursion. Recent calls: ${chain}. If your program ` +
-        `legitimately recurses this deeply, raise the limit via the ` +
-        `\`maxCallDepth\` config option.`,
-      makeAbortCause({ kind: "callDepthExceeded", limit, observed }),
-    );
+    // Build the cause first and let `describeAbortCause` render the message,
+    // so the text a user sees is identical whether it comes from this throw
+    // or from an `AbortedResult` rebuilt after travelling up as a value.
+    const cause = makeAbortCause({
+      kind: "callDepthExceeded",
+      limit,
+      observed,
+      frames: recentFrames,
+    });
+    super(describeAbortCause(cause), cause);
     this.name = "CallDepthExceededError";
     this.limit = limit;
     this.observed = observed;

@@ -181,14 +181,47 @@ Now, all of their interrupts get rejected. As long as all destructive actions ar
 
 Besides `approve` and `reject,` the other keyword is `propagate.` `propagate` means "I don't want to reject the interrupt, but I don't want anyone to be able to programmatically approve it either. I want to make sure it always goes to a user for approval or rejection."
 
+## Pass
+
+Sometimes a handler looks at an interrupt and decides it has no opinion about it. Maybe it only cares about budget guards, and this interrupt was a file write. `pass()` is how you say that: "not my question, ask the next handler."
+
+```ts
+handle {
+  doSomeWork()
+} with (intr) {
+  if (intr.effect == "std::guard") {
+    return reject()
+  }
+  return pass()
+}
+```
+
+A handler that just falls off the end without returning anything means the same thing. So why have a keyword for it at all?
+
+Because sometimes you are in a spot where you have to produce a value. A `match` has to have a value in every arm, so there is nowhere to "return nothing":
+
+```ts
+handle {
+  doSomeWork()
+} with (intr) {
+  return match (intr.effect) {
+    "std::guard" -> reject()
+    _ -> pass()
+  }
+}
+```
+
+That last arm is the whole reason `pass()` exists.
+
 ## The rules of handlers
 
 The rules of handlers are thus:
 1. If any handler rejects, the interrupt is rejected.
 2. Otherwise, if any handler propagates, the interrupt propagates to the user for a decision.
 3. Otherwise, if a handler approves, the interrupt is approved.
+4. A handler that passes does none of these. It steps aside and lets the rest of the chain decide.
 
-Of course, a handler doesn't need to approve, reject, or propagate. It can simply choose to log the interrupt data, print out the lyrics to "A Day in the Life," or whatever. If no handler approves, rejects, or propagates, by default, the interrupt propagates up to the user for a decision.
+Of course, a handler doesn't need to approve, reject, or propagate. It can simply choose to log the interrupt data, print out the lyrics to "A Day in the Life," or whatever. A handler that never returns a verdict has passed, whether or not it said `pass()` out loud. And if *every* handler passes, nobody in the chain made a decision, so the interrupt propagates up to the user — the same safe default you get when there is no handler at all.
 
 ## Raising interrupts inside a handler function
 

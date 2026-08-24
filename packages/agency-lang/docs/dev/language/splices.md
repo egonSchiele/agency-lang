@@ -74,17 +74,11 @@ That is as far as the guarantee goes: the generator is never compiled or execute
 
 The tests in `expandSplices.test.ts` deliberately do not write a generator file. If the refusal ever moves after resolution, they fail with `AG8005` instead of `AG8016`, which is the regression the placement guards against.
 
-### Where it is forced on
+### What it does not change
 
-Sandboxed compilation (`compileSandboxed`, used by `agency run --agency-only` and by `std::agency compile`) refuses splices unconditionally through the closure validator, and does not consult this setting.
+Sandboxed compilation (`compileSandboxed`, behind `agency run --agency-only` and `std::agency compile`) refuses splices unconditionally through the closure validator and never consults this setting. That refusal is structural — the mirror-and-compile machinery assumes a validated closure — and is not a general judgement that splices are unsafe. "The safety argument, and what carries it" below is that judgement, and this flag does not change it.
 
-The agent-reachable inspection entry points in `lib/stdlib/agency.ts` — `typecheck`, `typecheckFile`, `getEffects`, `describe` — set it on unconditionally, via the `INSPECT_UNTRUSTED` policy object there.
-
-"Typechecking runs your generator" above is the reason, and it applies with more force here than on the `tc` command: `typecheckFile` hands the checker a real on-disk path so relative imports resolve, which is also what lets a splice resolve its generator against that directory and run it. That path never goes through the closure validator, so before this it was the one agent-reachable way to execute a generator — and the comment in `lib/stdlib/agency.ts` justifying imports walking outside `dir`, that "typechecking is read-only", holds only for files without splices.
-
-Because these callers cannot turn the setting off, they get a failure rather than advice: `typecheck`, `typecheckFile`, `getEffects` and `describe` return a `Result` failure for splice-bearing source, which their docstrings now say.
-
-On that pipeline a refusal **throws** rather than becoming a diagnostic. `runCheckerPipeline` otherwise tolerates a splice that will not expand, keeping the unexpanded program — but a refusal is the caller saying "do not run this", and answering as though the file had no splice would report every generated name as undefined. Throwing joins the pipeline's existing rule that a throw means "could not check this", which the `Result`-returning stdlib entry points surface as an ordinary failure. Every other splice failure keeps the tolerant behaviour.
+On the type-checking pipeline a refusal **throws** rather than becoming a diagnostic. `runCheckerPipeline` otherwise tolerates a splice that will not expand, keeping the unexpanded program — but a refusal is the caller saying "do not run this", and answering as though the file had no splice would report every generated name as undefined. Throwing joins that pipeline's existing rule that a throw means "could not check this". Every other splice failure keeps the tolerant behaviour.
 
 ## The three phases
 

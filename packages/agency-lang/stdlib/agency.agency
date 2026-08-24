@@ -630,10 +630,6 @@ export idempotent def typecheck(
   """
   Type-check Agency source code.
 
-  Source containing a compile-time splice `$( ... )` fails rather than
-  being checked: checking it would mean running the generator, and this
-  API declines to run code it was asked to inspect.
-
   @param source - Agency source code as a string
   @param ignoreCodes - Diagnostic codes (e.g. ["AG3009"]) to drop from the report's errors and warnings
   """
@@ -678,10 +674,6 @@ export idempotent def getEffects(source: string): Result<EffectsByExport> {
   reference stored in a variable before being passed on. An empty list
   means nothing risky was found, not that nothing risky exists.
 
-  Source containing a splice `$( ... )` fails rather than being
-  inspected. Reading effects would mean running the generator, and this
-  API declines to run code it was asked to inspect.
-
   @param source - Agency source code as a string
   """
   return try _getEffects(source)
@@ -721,8 +713,6 @@ export idempotent def describe(source: string): Result<ModuleInfo> {
   """
   Describe what an Agency module exports: each exported function, node, type, const, and re-export, in source order, with its signature, docstring, transitive effect list, and destructive/idempotent markers. Anything marked @hidden is left out, as is anything whose name starts with an underscore - both are the same visibility rule `agency doc` applies, so this is the module surface a reader sees. Re-exports from std:: modules resolve to full entries; re-exports from relative paths cannot be read from a source string and come back with effects ["unknown"]. Use this instead of reading source when generating code shaped by a module - for example, one handler per effect its tools can raise.
 
-  Source containing a compile-time splice `$( ... )` fails rather than being described, because reading its effects would mean running the generator.
-
   @param source - Agency source code as a string
   """
   return try _describe(source)
@@ -737,11 +727,6 @@ export idempotent def typecheckFile(dir: string, filename: string): Result {
   """
   Type-check an Agency file on disk. The file is read from dir/filename,
   with relative imports inside it resolved against the file's directory.
-
-  A file containing a compile-time splice `$( ... )` fails rather than
-  being checked: because relative imports resolve here, checking it would
-  resolve the generator against that directory and run it. This API
-  declines to run code it was asked to inspect.
 
   @param dir - The directory containing the file
   @param filename - The agency file to type-check. Must stay inside dir; to

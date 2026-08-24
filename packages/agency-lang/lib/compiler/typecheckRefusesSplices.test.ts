@@ -4,27 +4,22 @@ import path from "node:path";
 import { nanoid } from "nanoid";
 import { safeDeleteDirectory } from "../utils.js";
 import { typeCheckSource } from "./typecheck.js";
-import { _typecheckFile } from "../stdlib/agency.js";
 
 /**
- * Type checking RUNS splice generators.
+ * `--refuse-splices` on the type-checking path.
  *
- * `_typecheckFile` hands the checker a real on-disk path so relative imports
- * resolve, which means a splice resolves its generator against that directory
- * and executes it. The comment justifying that path ("typechecking is
- * read-only") does not hold for a file containing a splice, and unlike
- * `compile` this path never passes through the closure validator.
- *
- * These tests pin the boundary: the agent-reachable entry points decline
- * generator execution, and the underlying pipeline still allows it when a
- * caller explicitly asks.
+ * This pipeline RUNS generators, which is easy to miss: it hands the checker
+ * a real on-disk path so relative imports resolve, and that is also what lets
+ * a splice resolve its generator against that directory and execute it. It
+ * took a config parameter of `{}` before this, so no caller could decline.
  */
 let dir: string;
 
 beforeEach(() => {
   dir = path.join(process.cwd(), ".agency-tmp", `tc-refuse-${nanoid()}`);
   fs.mkdirSync(dir, { recursive: true });
-  // A generator that writes a file when it runs. Nothing should create it.
+  // The fragment declares `greet`, and host.agency calls it. `greet`
+  // resolving is the witness that the generator ran.
   fs.writeFileSync(
     path.join(dir, "gen.agency"),
     `import { Code } from "std::agency"\n\nexport def makeGreet(): Code {\n  return [|\n    def greet(): string {\n      return "hi"\n    }\n  |]\n}\n`,
@@ -41,33 +36,34 @@ afterEach(() => {
   safeDeleteDirectory(dir, false);
 });
 
-describe("agent-reachable type checking declines generator execution", () => {
+function check(file: string, refuseSplices?: boolean) {
+  const target = path.join(dir, file);
+  const source = fs.readFileSync(target, "utf-8");
+  return typeCheckSource(source, target, refuseSplices ? { refuseSplices: true } : {});
+}
+
+describe("type checking with generator execution declined", () => {
   // A refusal is not a diagnostic in the report: continuing would answer as
   // though the file had no splice, reporting every generated name as
-  // undefined. It throws, which the Result-returning stdlib entry points
-  // surface to the agent as a failure.
-  it("typecheckFile refuses instead of running the generator", () => {
-    expect(() => _typecheckFile(dir, "host.agency")).toThrow(/AG8016/);
+  // undefined. It throws, joining this pipeline's rule that a throw means
+  // "could not check this".
+  it("refuses instead of running the generator", () => {
+    expect(() => check("host.agency", true)).toThrow(/AG8016/);
   });
 
-  it("the refusal names the generator, so the caller knows what was declined", () => {
-    expect(() => _typecheckFile(dir, "host.agency")).toThrow(/makeGreet/);
+  it("names the generator that was declined", () => {
+    expect(() => check("host.agency", true)).toThrow(/makeGreet/);
   });
 
-  it("a file with no splice still checks normally", () => {
-    fs.writeFileSync(path.join(dir, "plain.agency"), `node main() {\n  print("hi")\n}\n`, "utf-8");
-    // A clean report, not merely the absence of one code: the setting must
-    // cost a splice-free file nothing at all.
-    expect(_typecheckFile(dir, "plain.agency").errors).toHaveLength(0);
-  });
-
-  it("the pipeline itself still expands when the caller does not decline", () => {
-    // The refusal is a caller's choice, not a property of the checker. This
-    // is what stops the fix from becoming a blanket ban, so it asserts a
-    // CLEAN report: `host.agency` calls `greet()`, which exists only if the
-    // generator ran, so an unexpanded program reports it as undefined.
-    const hostPath = path.join(dir, "host.agency");
-    const report = typeCheckSource(fs.readFileSync(hostPath, "utf-8"), hostPath);
-    expect(report.errors).toHaveLength(0);
+  it("still expands when the caller does not decline", () => {
+    // A CLEAN report, not merely the absence of AG8016: `greet` exists only
+    // if the generator ran, so an unexpanded program reports it undefined.
+    // This is what stops the flag from becoming a blanket ban.
+    expect(check("host.agency").errors).toHaveLength(0);
   }, 60_000);
+
+  it("costs a splice-free file nothing", () => {
+    fs.writeFileSync(path.join(dir, "plain.agency"), `node main() {\n  print("hi")\n}\n`, "utf-8");
+    expect(check("plain.agency", true).errors).toHaveLength(0);
+  });
 });

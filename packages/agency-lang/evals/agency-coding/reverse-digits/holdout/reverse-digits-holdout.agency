@@ -1,0 +1,22 @@
+// Held-out oracle the writer never sees. Imports the file evalMain saved.
+import { reverseDigits } from "./solution.agency"
+
+export node fourDigits(): number {
+  return reverseDigits(1234)
+}
+
+export node trailingZeros(): number {
+  return reverseDigits(1200)
+}
+
+export node oneDigit(): number {
+  return reverseDigits(5)
+}
+
+export node zero(): number {
+  return reverseDigits(0)
+}
+
+export node palindrome(): number {
+  return reverseDigits(7337)
+}

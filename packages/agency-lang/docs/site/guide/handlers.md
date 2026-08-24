@@ -179,39 +179,22 @@ Now, all of their interrupts get rejected. As long as all destructive actions ar
 
 ## Propagate
 
-Besides `approve` and `reject,` the other keyword is `propagate.` `propagate` means "I don't want to reject the interrupt, but I don't want anyone to be able to programmatically approve it either. I want to make sure it always goes to a user for approval or rejection."
+`propagate` means "I don't want to reject the interrupt, but I don't want anyone to be able to programmatically approve it either. I want to make sure it always goes to a user for approval or rejection."
 
 ## Pass
 
-Sometimes a handler looks at an interrupt and decides it has no opinion about it. Maybe it only cares about budget guards, and this interrupt was a file write. `pass()` is how you say that: "not my question, ask the next handler."
-
-```ts
-handle {
-  doSomeWork()
-} with (intr) {
-  if (intr.effect == "std::guard") {
-    return reject()
-  }
-  return pass()
-}
-```
-
-A handler that just falls off the end without returning anything means the same thing. So why have a keyword for it at all?
-
-Because sometimes you are in a spot where you have to produce a value. A `match` has to have a value in every arm, so there is nowhere to "return nothing":
+The final keyword is `pass`. `pass` just says, "I don't have an opinion about this interrupt." If you don't return anything, `pass` is the default. It's useful in match blocks, when you need some sort of value to return:
 
 ```ts
 handle {
   doSomeWork()
 } with (intr) {
   return match (intr.effect) {
-    "std::guard" -> reject()
+    "std::guard" -> reject()    
     _ -> pass()
   }
 }
 ```
-
-That last arm is the whole reason `pass()` exists.
 
 ## The rules of handlers
 

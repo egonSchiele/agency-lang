@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { throwIfNodeResultAborted } from "./abortBoundary.js";
+import { throwIfNodeResultAborted, throwIfValueAborted } from "./abortBoundary.js";
 import { AbortedResult } from "./abortedResult.js";
 import { AgencyCancelledError, makeAbortCause, type AbortCause } from "./errors.js";
 import { State } from "./state/stateStack.js";
@@ -61,6 +61,21 @@ describe("throwIfNodeResultAborted", () => {
       throwIfNodeResultAborted(abortedNodeResult(), s.ctx, { endsRun: true }),
     ).rejects.toThrow();
     expect(s.closes).toBe(1);
+  });
+
+  it("converts a bare value too, for the exported-function boundary", async () => {
+    // runExportedFunction hands back whatever invoke() produced, with no
+    // { data } wrapper. An aborted frame produces an AbortedResult, which
+    // would otherwise reach the caller as a JSON-ish object.
+    const { ctx } = stubCtx();
+    const value = AbortedResult.fromError(
+      new AgencyCancelledError("trip", tripCause()),
+      new State(),
+      "fn",
+    );
+    await expect(throwIfValueAborted(value, ctx, { endsRun: false })).rejects.toThrow(
+      /Guard exceeded its cost budget/,
+    );
   });
 
   it("leaves the trace writer alone for the rewind loop, which has no end-of-run tail", async () => {

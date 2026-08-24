@@ -196,12 +196,16 @@ Same program, same answer, regardless of whether an interrupt happened.
 - **The node boundary is where an abort becomes an exception again, and
   there are three of them.** Inside compiled code an abort travels as a
   value; everything above compiled code expects an exception.
-  `throwIfNodeResultAborted` (lib/runtime/abortBoundary.ts) does the
-  conversion, and every `graph.run(...)` → `createReturnObject(...)`
-  boundary must call it first: `runNode`, `runResumeLoop`
+  lib/runtime/abortBoundary.ts does the conversion, and there are four
+  boundaries, not one. Three hand back a node result and call
+  `throwIfNodeResultAborted`: `runNode`, `runResumeLoop`
   (lib/runtime/interrupts.ts) and the rewind loop
-  (lib/runtime/rewind.ts). Fixing only the first leaves the same bug one
-  interrupt later. Three things are easy to get wrong. First, codegen's
+  (lib/runtime/rewind.ts). The fourth, `runExportedFunctionCore`, hands
+  back a bare value from `invoke()` and calls `throwIfValueAborted`;
+  without it an exported function that aborts returns a
+  `{ __type: "abortedResult" }` object to its caller — an HTTP 200 with a
+  nonsense body over `./serve`. Fixing only one of the four leaves the
+  same bug one interrupt, or one export, later. Three things are easy to get wrong. First, codegen's
   per-call guards only cover calls whose result is bound to a local — a
   bare `return foo()` in tail position binds nothing, gets no guard, and
   reaches the boundary intact, which is why the check exists at all
@@ -216,6 +220,14 @@ Same program, same answer, regardless of whether an interrupt happened.
   closing `abortSalvage` event and ends the `abortUnwind` span. A raw
   throw leaves that span open forever and the draft vanishes with no
   record of where it went.
+- **Only a TERMINAL drop may end the unwind span.** An "erased" hop opens
+  the span while carrying no partial forward, so a span can outlive the
+  partial that started it. The two terminal drops (`atForkBoundary`,
+  `atNodeBoundary`) must still close it — nothing above them will.
+  `droppedAtArgPosition` must not: the abort travels on as that call's
+  result, and a later frame with a draft of its own would find no span id
+  and open a second one, splitting a single abort's salvage trail across
+  two spans. That is what the `terminal` flag on `dropped()` selects.
 - **Throwing at the boundary skips the caller's end-of-run tail.** The
   run lands in the outer `catch` instead of the branch that emits
   `agentEnd` with a result, fires `onAgentEnd`, and calls

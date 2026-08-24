@@ -23,7 +23,7 @@ import { createReturnObject } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
 import { nanoid } from "nanoid";
 import { hasInterrupts } from "./interrupts.js";
-import { throwIfNodeResultAborted } from "./abortBoundary.js";
+import { throwIfNodeResultAborted, throwIfValueAborted } from "./abortBoundary.js";
 import { unwrapServedInvocationOutcome, type ServedInvocationOutcome } from "./invocationUsage.js";
 import { finishServedInvocation, type RawOutcome } from "./servedInvocationLifecycle.js";
 
@@ -312,6 +312,11 @@ async function runExportedFunctionCore({
         return result;
       },
     );
+    // The exported-function boundary, same rule as the node boundary above:
+    // an aborted frame returns a value, and nothing above compiled code knows
+    // what to do with one. No trace-writer close — this path has no
+    // end-of-run tail on its success side either.
+    await throwIfValueAborted(value, execCtx, { endsRun: false });
     outcome = { status: "returned", value };
   } catch (error) {
     outcome = { status: "threw", error };

@@ -95,14 +95,15 @@ export class AbortedResult {
    *  the partial, because an argument-position partial has no type-sound
    *  place to land — g's partial is g-typed, not f-return-typed. */
   droppedAtArgPosition(): AbortedResult {
-    return this.dropped("droppedAtArgPosition");
+    // Not terminal: the abort keeps travelling as this call's result.
+    return this.dropped("droppedAtArgPosition", { terminal: false });
   }
 
   /** A branch's abort is crossing the fork boundary. The partial stays
    *  in the branch: which branch fails first is a race, and one branch's
    *  value has the wrong shape for the fork. */
   atForkBoundary(): AbortedResult {
-    return this.dropped("clearedAtFork");
+    return this.dropped("clearedAtFork", { terminal: true });
   }
 
   /** The run is ending at the node boundary, where the abort turns back
@@ -110,7 +111,7 @@ export class AbortedResult {
    *  so it is dropped here with a record of where it went, exactly as the
    *  fork boundary does. */
   atNodeBoundary(): AbortedResult {
-    return this.dropped("droppedAtNodeBoundary");
+    return this.dropped("droppedAtNodeBoundary", { terminal: true });
   }
 
   /** The partial's value, or null when there is no partial. The ONLY way
@@ -196,11 +197,14 @@ export class AbortedResult {
    *  story ends where it is dropped). */
   private dropped(
     action: "droppedAtArgPosition" | "clearedAtFork" | "droppedAtNodeBoundary",
+    { terminal }: { terminal: boolean },
   ): AbortedResult {
     // An "erased" hop opens the span while carrying no partial forward, so a
-    // span can outlive the partial that started it. Bail only when there is
-    // neither — otherwise that span would never be ended.
-    if (this.partial === undefined && this.unwindSpanId === undefined) {
+    // span can outlive the partial that started it. A TERMINAL drop must still
+    // close that span — nothing above will. A non-terminal drop must not: the
+    // abort travels on, and a later frame with a draft of its own would find
+    // no span id and open a second one, splitting the trail.
+    if (this.partial === undefined && !(terminal && this.unwindSpanId !== undefined)) {
       return this;
     }
     const client = statelogClient();

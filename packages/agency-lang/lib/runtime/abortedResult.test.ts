@@ -205,6 +205,31 @@ describe("AbortedResult boundary drops", () => {
     expect(endedSpans).toEqual(["span-1"]);
   });
 
+  it("keeps an erased hop's span open at argument position, where the abort travels on", () => {
+    // "erased" opens the span while carrying no partial forward, so a span can
+    // outlive the partial that started it. Argument position is not the end of
+    // the abort's journey: closing the span here would make a later frame with
+    // a draft of its own open a SECOND one, splitting the salvage trail.
+    const { result, events, endedSpans } = withStubStatelog(() => {
+      const inner = AbortedResult.fromError(abortError(), frameWithDraft("inner"), "g");
+      const erased = inner.carryThrough(new State(), "middle");
+      return erased.droppedAtArgPosition();
+    });
+    expect(events.map((e) => e.action)).toEqual(["carried", "erased"]);
+    expect(endedSpans).toEqual([]);
+    expect(result.unwindSpanId).toBe("span-1");
+  });
+
+  it("closes that same span at the node boundary, where the abort stops", () => {
+    const { events, endedSpans } = withStubStatelog(() => {
+      const inner = AbortedResult.fromError(abortError(), frameWithDraft("inner"), "g");
+      const erased = inner.carryThrough(new State(), "middle");
+      return erased.atNodeBoundary();
+    });
+    expect(events.map((e) => e.action)).toEqual(["carried", "erased", "droppedAtNodeBoundary"]);
+    expect(endedSpans).toEqual(["span-1"]);
+  });
+
   it("both are no-ops (same instance, no events) without a partial", () => {
     const { result, events } = withStubStatelog(() => {
       const aborted = AbortedResult.fromError(abortError(), new State(), "g");

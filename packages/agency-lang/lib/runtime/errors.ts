@@ -180,6 +180,9 @@ export function describeAbortCause(cause: AbortCause): string {
       `recurses this deeply, raise the limit via the \`maxCallDepth\` config option.`
     );
   }
+  if (cause.kind === "userKill" && cause.reason !== undefined) {
+    return `Execution aborted: ${cause.reason}`;
+  }
   return `Execution aborted (${cause.kind})`;
 }
 

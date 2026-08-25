@@ -184,7 +184,7 @@ node evalMain(input: WritingReviewEvalInput): Feedback[] {
       {
         error: true,
         feedback: "could not read ${input.sourceFile}: ${readErr}"
-      },
+      }
     ]
   }
   const reviewed = writingReviewAgent(work: source.value, task: input.assignment) with reject

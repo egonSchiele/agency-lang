@@ -60,8 +60,8 @@ function runOnce({ name, flags }) {
     throw new Error(`no improvement: champion ${trainObjective} <= baseline ${baselineObjective}`);
   }
   const outputs = (championBreakdown ?? []).map((b) => String(b.output));
-  if (!outputs.some((o) => /delhi/i.test(o))) {
-    throw new Error(`champion output never mentions Delhi: ${JSON.stringify(outputs)}`);
+  if (!outputs.some((o) => /paris/i.test(o))) {
+    throw new Error(`champion output never mentions Paris: ${JSON.stringify(outputs)}`);
   }
   console.log(`[${name}] PASS (baseline ${baselineObjective} -> champion ${trainObjective})`);
 }

@@ -172,17 +172,17 @@ describe("runCommandInSpawn", () => {
     }
   }, 15_000);
 
-  it("signal listener count stays constant however many commands run — one shared supervisor, not per-run listeners", async () => {
+  it("one shared signal listener however many commands run, and none once they settle", async () => {
     // Per-run listeners under -n 10 tripped MaxListenersExceededWarning,
     // which printed into the status board's in-place repaint and smeared it.
     await runCommandInSpawn(base({ argv: ["node", "-e", "1"] }));
-    const after = process.listenerCount("SIGINT");
+    const idle = process.listenerCount("SIGINT");
     const runs = Array.from({ length: 12 }, () =>
       runCommandInSpawn(base({ argv: ["node", "-e", "setTimeout(() => {}, 100)"] })),
     );
-    expect(process.listenerCount("SIGINT")).toBe(after);
+    expect(process.listenerCount("SIGINT")).toBe(idle + 1);
     expect(process.listenerCount("exit")).toBeLessThanOrEqual(process.getMaxListeners());
     await Promise.all(runs);
-    expect(process.listenerCount("SIGINT")).toBe(after);
+    expect(process.listenerCount("SIGINT")).toBe(idle);
   });
 });

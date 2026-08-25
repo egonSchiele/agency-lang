@@ -171,15 +171,30 @@ function harvest(graderFiles: string): { notes: string; cleaned: string | null }
   return { notes, cleaned };
 }
 
-/** The editor's points, one per top-level bullet in notes.md. Notes written
- *  as prose are one point. The judge is asked about each point on its own,
- *  so it cannot pad the list with the reviewer's findings. */
-function editorPoints(notes: string): string[] {
-  const bullets = notes
-    .split("\n")
-    .filter((line) => /^[-*] /.test(line))
-    .map((line) => line.slice(2).trim());
-  return bullets.length > 0 ? bullets : [notes.trim()];
+/** The editor's points from notes.md. A top-level bullet is a point, with
+ *  its indented continuation lines. A prose paragraph is a point too; when
+ *  it ends with a colon, the bullets under it belong to it. The judge is
+ *  asked about each point on its own, so it cannot pad the list with the
+ *  reviewer's findings. */
+export function editorPoints(notes: string): string[] {
+  const points: string[] = [];
+  let absorbing = false;
+  for (const paragraph of notes.split(/\n\s*\n/)) {
+    for (const line of paragraph.split("\n")) {
+      if (line.trim() === "") continue;
+      const isBullet = /^[-*] /.test(line);
+      const text = isBullet ? line.slice(2).trim() : line.trim();
+      const continues = (isBullet && absorbing) || (!isBullet && /^\s/.test(line));
+      if (continues && points.length > 0) {
+        points[points.length - 1] += `\n${text}`;
+      } else {
+        points.push(text);
+        absorbing = !isBullet && text.endsWith(":");
+      }
+    }
+    absorbing = false;
+  }
+  return points.length > 0 ? points : [notes.trim()];
 }
 
 function scoreValue(score: Grade["score"]): number {

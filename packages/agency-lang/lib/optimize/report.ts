@@ -4,7 +4,7 @@ import * as path from "path";
 import renderTemplate from "@/templates/cli/optimizeReport.js";
 import { asJudgeText } from "@/eval/grading/goalJudgeFile.js";
 import type { GradeRow, InputBreakdown } from "@/eval/grading/gradeBreakdown.js";
-import type { OptimizeResult } from "./types.js";
+import type { OptimizeCost, OptimizeResult } from "./types.js";
 
 export type ReportMeta = {
   optimizer: string;
@@ -15,6 +15,11 @@ export type ReportMeta = {
 };
 
 /** Escape a Markdown table cell: no pipes (column breaks) or newlines (row breaks). */
+export function formatCost(cost: OptimizeCost): string {
+  const usd = (value: number) => `$${value.toFixed(2)}`;
+  return `${usd(cost.totalUsd)} (agent ${usd(cost.agentUsd)}, grading ${usd(cost.gradingUsd)}, mutator ${usd(cost.mutatorUsd)})`;
+}
+
 function score(value: number | undefined): string {
   return value === undefined ? "" : value.toFixed(3);
 }
@@ -57,6 +62,7 @@ function metaLines(result: OptimizeResult, meta: ReportMeta): string[] {
   lines.push(
     `- Decisions — accepted: ${result.acceptedCount}, rejected: ${result.rejectedCount}, invalid: ${result.validationFailedCount}`,
   );
+  if (result.cost) lines.push(`- Cost: ${formatCost(result.cost)}`);
   return lines;
 }
 

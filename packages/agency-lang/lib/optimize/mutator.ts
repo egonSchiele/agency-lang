@@ -59,7 +59,7 @@ export type MutatorModelCaller = (args: {
   sections: MutatorMessageSections;
   config: AgencyConfig;
   model: string;
-}) => Promise<unknown>;
+}) => Promise<{ raw: unknown; costUsd?: number }>;
 
 export type ProposeMutationArgs = MutatorPromptInputs & {
   config: AgencyConfig;
@@ -118,7 +118,7 @@ export function buildMutatorSections(promptInputs: MutatorPromptInputs): Mutator
 export async function proposeMutation(args: ProposeMutationArgs): Promise<MutationProposal> {
   const model = args.model || args.config.client?.defaultModel || DEFAULT_MODEL;
   const sections = buildMutatorSections(args);
-  const raw = await (args.callModel ?? defaultCallModel)({
+  const { raw, costUsd } = await (args.callModel ?? defaultCallModel)({
     sections,
     config: args.config,
     model,
@@ -128,7 +128,7 @@ export async function proposeMutation(args: ProposeMutationArgs): Promise<Mutati
   if (!parsed.success) {
     throw new Error(`Malformed mutator response: ${parsed.error.message}`);
   }
-  return parsed.data;
+  return costUsd === undefined ? parsed.data : { ...parsed.data, costUsd };
 }
 
 function parseModelOutput(raw: unknown): unknown {
@@ -167,7 +167,7 @@ const defaultCallModel: MutatorModelCaller = async (args) => {
       // mutatePrompt is a bundled agent with a precompiled .js in dist; reuse it.
       preferCompiled: true,
     });
-    return result.data;
+    return { raw: result.data, costUsd: result.costUsd };
   } finally {
     fs.rmSync(scratchDir, { recursive: true, force: true });
   }

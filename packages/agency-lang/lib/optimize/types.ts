@@ -6,6 +6,8 @@ export type OptimizeDecision = "baseline" | "accepted" | "rejected" | "validatio
 export type MutationProposal = {
   operations: OptimizeMutationOperation[];
   rationale: string;
+  /** What the proposing model call cost, when the proposer can tell. */
+  costUsd?: number;
 };
 
 export type ValidationResult = { ok: true } | { ok: false; reason: string };
@@ -51,4 +53,16 @@ export type OptimizeResult = {
   validationObjective?: number;
   /** Per-input grade breakdown for the champion — the reward-hacking lens. */
   championBreakdown?: InputBreakdown[];
+  /** What the run spent, in USD, split by who spent it. */
+  cost?: OptimizeCost;
+};
+
+export type OptimizeCost = {
+  /** The agent under test, across every candidate and input. */
+  agentUsd: number;
+  /** The judges, across every grading pass (including validation scoring). */
+  gradingUsd: number;
+  /** The model that proposed mutations. */
+  mutatorUsd: number;
+  totalUsd: number;
 };

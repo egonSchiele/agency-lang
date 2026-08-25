@@ -12,6 +12,8 @@ import {
 import { EvalCache } from "./evalCache.js";
 import { breakdown } from "@/eval/grading/gradeBreakdown.js";
 import { AgencyRunner } from "@/eval/grading/agencyRunner.js";
+import { makeStatelogCostTailer } from "@/eval/run/costTail.js";
+import { runDirPaths } from "@/runDirectory/runDir.js";
 import type { BaseGrader } from "@/eval/grading/baseGrader.js";
 import { Scorecard } from "@/eval/grading/scorecard.js";
 import type { Test } from "@/eval/grading/types.js";
@@ -26,6 +28,7 @@ import { discoverOptimizeTargets, type OptimizeTargetSet } from "./targets.js";
 import type {
   IterationResult,
   MutationProposal,
+  OptimizeCost,
   OptimizeDecision,
   OptimizeResult,
 } from "./types.js";
@@ -65,6 +68,11 @@ export type BaseOptimizerDeps = {
 export abstract class BaseOptimizer {
   protected readonly workspace: WorkspaceManager;
   protected readonly agencyRunner: AgencyRunner;
+  /** Spend so far: the agent under test, and proposals. Judge spend is what
+   *  the runner has accumulated beyond the proposals that went through it. */
+  private agentCostUsd = 0;
+  private mutatorCostUsd = 0;
+  private mutatorViaRunnerUsd = 0;
   protected readonly cache: EvalCache;
   protected readonly reporter: PointwiseReporter;
   private readonly runInput: RunInput;
@@ -181,13 +189,16 @@ export abstract class BaseOptimizer {
     let rationale = "";
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       let proposal: MutationProposal;
+      const runnerBefore = this.agencyRunner.costUsd;
       try {
         proposal = await propose(diagnostics);
       } catch (error) {
+        this.countProposalCost(runnerBefore, 0);
         rationale = `proposer returned a malformed response: ${error instanceof Error ? error.message : String(error)}`;
         diagnostics = [];
         continue;
       }
+      this.countProposalCost(runnerBefore, proposal.costUsd ?? 0);
       rationale = proposal.rationale;
       const result = preview(proposal.operations);
       if (result.diagnostics.length === 0) return { ok: true, preview: result, rationale };
@@ -239,6 +250,24 @@ export abstract class BaseOptimizer {
     // pool always has the train champion, so reduce has at least one element.
     const winner = scored.reduce((best, s) => (s.objective > best.objective ? s : best));
     return { champion: winner.candidate, validationObjective: winner.objective, scored };
+  }
+
+  /** A proposal's spend: what it reported itself (greedy's mutator runs its
+   *  own node) plus what it ran through the shared runner (gepa's proposer). */
+  private countProposalCost(runnerBefore: number, reported: number): void {
+    const viaRunner = this.agencyRunner.costUsd - runnerBefore;
+    this.mutatorViaRunnerUsd += viaRunner;
+    this.mutatorCostUsd += viaRunner + reported;
+  }
+
+  protected costSoFar(): OptimizeCost {
+    const gradingUsd = this.agencyRunner.costUsd - this.mutatorViaRunnerUsd;
+    return {
+      agentUsd: this.agentCostUsd,
+      gradingUsd,
+      mutatorUsd: this.mutatorCostUsd,
+      totalUsd: this.agentCostUsd + gradingUsd + this.mutatorCostUsd,
+    };
   }
 
   /** The shared tail every pointwise optimizer runs: pick the writeback champion
@@ -298,6 +327,7 @@ export abstract class BaseOptimizer {
     }
 
     result.championBreakdown = breakdown(champion.scorecard);
+    result.cost = this.costSoFar();
 
     this.reporter.runFinished({
       result,
@@ -394,6 +424,7 @@ export abstract class BaseOptimizer {
         `agent run failed for input ${input.id ?? "(no id)"}: ${testResult?.errorMessage ?? "unknown error"}`,
       );
     }
+    this.agentCostUsd += makeStatelogCostTailer(runDirPaths(testResult.runDir).statelog).poll();
     // The one test's run directory, `<out>/<id>/`; `gradeRun` sees exactly one input.
     return testResult.runDir;
   }

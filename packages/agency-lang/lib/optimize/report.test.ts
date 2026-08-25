@@ -42,6 +42,11 @@ describe("renderReport", () => {
     expect(md).toContain("accepted: 1");
     expect(md).toMatch(/\| 1 \| rejected \| 0.400 \|  \| no improvement \|/);
     expect(md).toMatch(/\| 2 \| accepted \| 0.750 \| 0.700 \|  \|/);
+    const costed = renderReport(
+      { ...result, cost: { agentUsd: 0.24, gradingUsd: 0.6, mutatorUsd: 0.15, totalUsd: 0.99 } },
+      { optimizer: "greedy", graders: ["goal"] },
+    );
+    expect(costed).toContain("- Cost: $0.99 (agent $0.24, grading $0.60, mutator $0.15)");
   });
 
   it("renders the champion grade breakdown so reward-hacking is visible", () => {

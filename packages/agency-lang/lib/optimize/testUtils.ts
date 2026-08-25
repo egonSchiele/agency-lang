@@ -23,9 +23,9 @@ export function cleanupFakeRuns(): void {
  * `run` row naming the test. Optimizer tests inject `runInput` seams that
  * return this directory. Registered for cleanupFakeRuns.
  */
-export function fakeRun(inputId: string, output: unknown, spec?: Test): string {
+export function fakeRun(inputId: string, output: unknown, spec?: Test, costUsd?: number): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "optimize-run-"));
   fakeRunDirs.push(root);
   const test: Test = { input: "", ...spec, id: inputId };
-  return writeRunDirectory({ test, output, traceId: `trace-${inputId}` }, root);
+  return writeRunDirectory({ test, output, traceId: `trace-${inputId}`, costUsd }, root);
 }

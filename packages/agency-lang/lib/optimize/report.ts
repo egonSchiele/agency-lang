@@ -15,6 +15,10 @@ export type ReportMeta = {
 };
 
 /** Escape a Markdown table cell: no pipes (column breaks) or newlines (row breaks). */
+function score(value: number | undefined): string {
+  return value === undefined ? "" : value.toFixed(3);
+}
+
 function cell(value: unknown): string {
   return String(value).replace(/\|/g, "\\|").replace(/\n/g, " ");
 }
@@ -27,7 +31,10 @@ export function renderReport(result: OptimizeResult, meta: ReportMeta): string {
     runId: result.runId,
     metaLines: metaLines(result, meta).join("\n"),
     iterationRows: result.iterations
-      .map((it) => `| ${it.iter} | ${it.decision} | ${cell(it.detail ?? "")} |`)
+      .map(
+        (it) =>
+          `| ${it.iter} | ${it.decision} | ${score(it.objective)} | ${score(it.validationObjective)} | ${cell(it.detail ?? "")} |`,
+      )
       .join("\n"),
     championSection: championSection(result.championBreakdown),
   });

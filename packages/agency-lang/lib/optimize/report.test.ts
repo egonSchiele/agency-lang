@@ -12,8 +12,8 @@ const result: OptimizeResult = {
   validationFailedCount: 0,
   iterations: [
     { iter: 0, decision: "baseline" },
-    { iter: 1, decision: "rejected", detail: "no improvement" },
-    { iter: 2, decision: "accepted" },
+    { iter: 1, decision: "rejected", detail: "no improvement", objective: 0.4 },
+    { iter: 2, decision: "accepted", objective: 0.75, validationObjective: 0.7 },
   ],
   championBreakdown: [
     {
@@ -40,7 +40,8 @@ describe("renderReport", () => {
     expect(md).toContain("greedy");
     expect(md).toContain("Champion: iteration 2");
     expect(md).toContain("accepted: 1");
-    expect(md).toMatch(/\| 1 \| rejected \| no improvement \|/);
+    expect(md).toMatch(/\| 1 \| rejected \| 0.400 \|  \| no improvement \|/);
+    expect(md).toMatch(/\| 2 \| accepted \| 0.750 \| 0.700 \|  \|/);
   });
 
   it("renders the champion grade breakdown so reward-hacking is visible", () => {

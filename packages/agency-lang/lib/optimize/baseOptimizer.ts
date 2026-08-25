@@ -222,8 +222,12 @@ export abstract class BaseOptimizer {
     source: OptimizeTargetSet,
     candidates: C[],
     trainChampion: C,
-  ): Promise<{ champion: C; validationObjective?: number }> {
-    if (this.validationInputs.length === 0) return { champion: trainChampion };
+  ): Promise<{
+    champion: C;
+    validationObjective?: number;
+    scored: { candidate: C; objective: number }[];
+  }> {
+    if (this.validationInputs.length === 0) return { champion: trainChampion, scored: [] };
     // Always consider the train champion, even if a caller forgot to include it.
     const pool = candidates.includes(trainChampion) ? candidates : [trainChampion, ...candidates];
     const scored = await Promise.all(
@@ -234,7 +238,7 @@ export abstract class BaseOptimizer {
     );
     // pool always has the train champion, so reduce has at least one element.
     const winner = scored.reduce((best, s) => (s.objective > best.objective ? s : best));
-    return { champion: winner.candidate, validationObjective: winner.objective };
+    return { champion: winner.candidate, validationObjective: winner.objective, scored };
   }
 
   /** The shared tail every pointwise optimizer runs: pick the writeback champion
@@ -253,14 +257,18 @@ export abstract class BaseOptimizer {
     source: OptimizeTargetSet,
     candidates: C[],
     trainChampion: C,
-    attempts: { iter: number; decision: OptimizeDecision; detail?: string }[],
+    attempts: { iter: number; decision: OptimizeDecision; detail?: string; objective?: number }[],
     startedAt: number,
   ): Promise<OptimizeResult> {
-    const { champion, validationObjective } = await this.pickValidationChampion(
+    const { champion, validationObjective, scored } = await this.pickValidationChampion(
       source,
       candidates,
       trainChampion,
     );
+    const validationByIter = Object.fromEntries(
+      scored.map((s) => [String(s.candidate.iter), s.objective]),
+    );
+    const baseline = candidates.find((c) => c.iter === "baseline");
     if (this.config.writeback && champion.iter !== "baseline") {
       this.workspace.writeBack(source, champion.files);
     }
@@ -268,7 +276,12 @@ export abstract class BaseOptimizer {
     const result = this.buildPointwiseResult({
       championIter: champion.iter,
       championFiles: champion.files,
-      attempts,
+      attempts: attempts.map((a) => ({
+        ...a,
+        validationObjective: validationByIter[String(a.iter)],
+      })),
+      baselineObjective: baseline?.scorecard.gatedObjective(),
+      baselineValidationObjective: validationByIter.baseline,
     });
 
     // Gate-aware: match the score optimizers actually use to compare
@@ -276,7 +289,6 @@ export abstract class BaseOptimizer {
     // baseline (raw 0.5) appear "better" than a gate-passing champion
     // (raw 0.3) and break consumer comparisons.
     result.trainObjective = champion.scorecard.gatedObjective();
-    const baseline = candidates.find((c) => c.iter === "baseline");
     if (baseline) {
       result.baselineObjective = baseline.scorecard.gatedObjective();
     }
@@ -403,11 +415,17 @@ export abstract class BaseOptimizer {
   protected buildPointwiseResult(args: {
     championIter: number | "baseline";
     championFiles: Record<string, string>;
-    attempts: { iter: number; decision: OptimizeDecision; detail?: string }[];
+    attempts: IterationResult[];
+    baselineObjective?: number;
+    baselineValidationObjective?: number;
   }): OptimizeResult {
     const count = (decision: OptimizeDecision): number =>
       args.attempts.filter((a) => a.decision === decision).length;
     const baselineIteration: IterationResult = { iter: 0, decision: "baseline" };
+    if (args.baselineObjective !== undefined) baselineIteration.objective = args.baselineObjective;
+    if (args.baselineValidationObjective !== undefined) {
+      baselineIteration.validationObjective = args.baselineValidationObjective;
+    }
     return {
       runId: this.config.runId,
       runDir: path.join(this.config.runsDir, this.config.runId),

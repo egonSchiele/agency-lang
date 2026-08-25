@@ -128,7 +128,12 @@ export class Gepa extends BaseOptimizer {
       source,
       [baseline, ...accepted],
       pool.best().value,
-      attempts.map((a) => ({ iter: a.iter, decision: a.decision, detail: attemptDetail(a) })),
+      attempts.map((a) => ({
+        iter: a.iter,
+        decision: a.decision,
+        detail: attemptDetail(a),
+        objective: a.objective,
+      })),
       startedAt,
     );
   }

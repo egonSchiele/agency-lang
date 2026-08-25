@@ -20,6 +20,12 @@ export type IterationResult = {
   /** Human-readable reason for the decision: validation diagnostics for
    *  "validation-failed", otherwise the proposal rationale. */
   detail?: string;
+  /** The training objective the decision rested on: the full training set
+   *  for the baseline and accepted candidates, the minibatch for a rejection. */
+  objective?: number;
+  /** The held-out objective, scored for the baseline and every accepted
+   *  candidate when a validation set is configured. */
+  validationObjective?: number;
 };
 
 export type OptimizeResult = {

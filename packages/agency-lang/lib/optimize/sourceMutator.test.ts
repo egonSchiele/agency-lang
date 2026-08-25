@@ -422,6 +422,26 @@ describe("OptimizeSourceMutator.preview", () => {
     ]);
   });
 
+  it("recovers a multi-line prompt the model sent in plain quotes", () => {
+    const dir = makeTempDir();
+    const entry = writeAgency(
+      dir,
+      "multi.agency",
+      'optimize const big = """\nline one\nline two\n"""\n\nnode main() {\n  return big\n}\n',
+    );
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+    const preview = new OptimizeSourceMutator({ targetSet }).preview([
+      {
+        target: "multi.agency:global:big",
+        kind: "variable",
+        op: "replaceInitializer",
+        value: '"first line\nsecond line"',
+      },
+    ]);
+    expect(preview.diagnostics).toEqual([]);
+    expect(preview.changes[0].newValue).toBe("first line\nsecond line");
+  });
+
   it("replaces a multiline string target with a single-line string", () => {
     const dir = makeTempDir();
     const entry = writeAgency(

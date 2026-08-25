@@ -418,6 +418,13 @@ export class OptimizeSourceMutator {
       const quote = target.valueKind === "multilineString" ? `"""` : `"`;
       const wrapped = exprParser(`${quote}${operation.value}${quote}`);
       if (wrapped.success && wrapped.rest.trim() === "") parsed = wrapped;
+      // A multi-line prompt sent in plain quotes cannot parse (newlines), and
+      // wrapping it whole gives four quotes. Strip the pair and wrap the inside.
+      const plainQuoted = /^"(?!"")([\s\S]*)"$/.exec(operation.value);
+      if (!parsed.success && target.valueKind === "multilineString" && plainQuoted) {
+        const inner = exprParser(`"""${plainQuoted[1]}"""`);
+        if (inner.success && inner.rest.trim() === "") parsed = inner;
+      }
     }
     if (!parsed.success || parsed.rest.trim() !== "") {
       // Keep the text-target message prescriptive — it is retry feedback the

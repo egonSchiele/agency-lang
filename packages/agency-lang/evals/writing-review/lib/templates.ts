@@ -61,8 +61,8 @@ export const recommendsCuts = (p: { sourceFileText: string; cleaned: string }): 
   context: `${reviewed(p.sourceFileText)}\n\nThe editor's version:\n\n${p.cleaned}`,
 });
 
-export const rewritesFaithful = (p: { sourceFileText: string }): Rubric => ({
+export const rewritesFaithful = (p: { sourceFileText: string; assignment: string }): Rubric => ({
   standard:
-    "These are the findings of a readability review, each quoting a passage and suggesting a rewrite. Do the suggested rewrites keep the facts the same as the original, or do they invent facts? A rewrite may cut or simplify freely, but it should never add a claim or detail that the original didn't. For example, if the original text is about art, a rewrite shouldn't mention that Wayne Thiebaud is the best artist, if the original didn't claim that. Also, every identifier, (like a code name, a path, a symbol like `std::notes::create`) must be the same in the rewrite as it was in the original. Lower the score in proportion to the number of rewrites that invent something or alter an identifier.",
-  context: reviewed(p.sourceFileText),
+    "These are the findings of a readability review, each quoting a passage and suggesting a rewrite. Do the suggested rewrites keep the facts the same as the original, or do they invent facts? A rewrite may cut or simplify freely, and it may use facts from the assignment the text was written for (the reviewer saw the assignment), but it should never add a claim or detail that neither the original nor the assignment contains. For example, if the original text is about art, a rewrite shouldn't mention that Wayne Thiebaud is the best artist, if the original didn't claim that. Also, every identifier, (like a code name, a path, a symbol like `std::notes::create`) must be the same in the rewrite as it was in the original. Lower the score in proportion to the number of rewrites that invent something or alter an identifier.",
+  context: `${reviewed(p.sourceFileText)}\n\nThe assignment the text was written for:\n\n${p.assignment}`,
 });

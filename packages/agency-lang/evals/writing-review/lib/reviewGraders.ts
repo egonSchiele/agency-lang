@@ -83,7 +83,10 @@ function rewritesFaithful(): WritingReviewGrader {
         return binary(true, "no findings");
       }
       return judges.rubric({
-        ...prompts.rewritesFaithful({ sourceFileText: getSourceFileText(workdir, test) }),
+        ...prompts.rewritesFaithful({
+          sourceFileText: getSourceFileText(workdir, test),
+          assignment: getAssignment(test),
+        }),
         output: text(all),
       });
     },

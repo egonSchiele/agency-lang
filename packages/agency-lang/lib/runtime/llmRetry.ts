@@ -295,6 +295,24 @@ export function buildValidationRetryMessage(error: string): string {
   );
 }
 
+/** Extra sentence for a validation failure that the token limit caused, not
+ *  the model. smoltalk maps every provider's "ran out of room" reason to the
+ *  single stop reason "length" (OpenAI `length`, Anthropic `max_tokens`,
+ *  Google `MAX_TOKENS`, Responses `max_output_tokens`). Without this the
+ *  message blames the schema for an empty string, which sends people looking
+ *  at their types. A reasoning model makes it easy to hit: the thinking tokens
+ *  come out of the same budget, so a small `maxTokens` can leave no room for
+ *  any visible answer at all. */
+function truncatedByTokenLimitHint(stopReason?: string): string {
+  if (stopReason !== "length") return "";
+  return (
+    ` The model stopped because it hit the token limit, so this output is cut ` +
+    `short rather than malformed. Raise maxTokens for this call. Note that a ` +
+    `reasoning model spends the same budget on thinking before it writes ` +
+    `anything you can see.`
+  );
+}
+
 /**
  * Pure decision for one drained response under a structured-output schema:
  * accept it, retry with feedback, or surface a failure. The validation
@@ -312,6 +330,7 @@ export function decideValidationRetry(
   rawContent: unknown,
   attempt: number,
   policy: RetryPolicy,
+  stopReason?: string,
 ): ValidationDecision {
   if (isSuccess(extracted)) {
     return { kind: "accept", value: extracted.value };
@@ -320,7 +339,8 @@ export function decideValidationRetry(
   if (attempt >= policy.validationRetries) {
     const message =
       `LLM structured output failed validation: ${error}. ` +
-      `Raw output (first 200 chars): ${JSON.stringify(truncate(rawContent))}`;
+      `Raw output (first 200 chars): ${JSON.stringify(truncate(rawContent))}` +
+      truncatedByTokenLimitHint(stopReason);
     return { kind: "surfaceFailure", message };
   }
   return {

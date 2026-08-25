@@ -281,6 +281,37 @@ Keys are matched against the module making the `llm()` call: the exact module id
 
 The post-merge workflow ([`.github/workflows/test-with-llm.yml`](../../.github/workflows/test-with-llm.yml)) re-runs the same suites against the real OpenAI provider after a PR lands on `main`.
 
+#### When a mocked test also has to survive a real model
+
+The post-merge run bypasses `llmMocks` entirely, so a test whose
+`expectedOutput` was copied from its mocks is really asking a live model to
+reproduce those exact values. That works only while the default model and
+route keep answering the way they did on the day the values were recorded.
+
+When the default model moved to `gpt-5-mini` through `openai-responses`, seven
+such tests went red at once, and not always for the reason you would guess.
+Some answers simply differed. Others changed shape: `openai-responses`
+enforces the declared return type strictly, so a prompt asking for two numbers
+whose result is typed `number` comes back as one number there, where the older
+route returned a list.
+
+If a test compares against the model's own words, pin the model **and the
+route** in the agency source and say why:
+
+```ts
+import { setLlmOptions } from "std::llm"
+
+node main() {
+  // Recorded on this model and route; the assertions are its exact answers.
+  setLlmOptions({ model: "gpt-4o-mini", provider: "openai" })
+  ...
+}
+```
+
+Pinning the model alone is not enough — the route decides how strictly the
+declared type is enforced. Prefer not needing the pin at all: a test that
+checks structure rather than the model's answer keeps working on any model.
+
 ### Deterministic fetch mode
 
 Independently of the LLM deterministic mode, you can mock HTTP responses. A `fetchMocks` array in a `.test.json` (file-level and/or per test case), or a `fetchMocks.json` file in an agency-js test directory, replaces **every** `fetch` in the agent subprocess — agency `fetch()`/`fetchJSON()`/`fetchMarkdown()`, internal stdlib TS, and interop TS — with canned responses. Any fetch that matches no entry throws and fails the test, so tests never hit the real network.

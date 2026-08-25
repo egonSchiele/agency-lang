@@ -471,6 +471,10 @@ export abstract class BaseOptimizer {
           iter: a.iter,
           decision: a.decision,
           ...(a.detail ? { detail: a.detail } : {}),
+          ...(a.objective !== undefined ? { objective: a.objective } : {}),
+          ...(a.validationObjective !== undefined
+            ? { validationObjective: a.validationObjective }
+            : {}),
         })),
       ],
     };

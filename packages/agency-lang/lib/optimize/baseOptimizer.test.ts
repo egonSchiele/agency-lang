@@ -374,7 +374,7 @@ describe("BaseOptimizer.evaluate", () => {
       championFiles: { "agent.agency": "node main() {}\n" },
       attempts: [
         { iter: 1, decision: "rejected" },
-        { iter: 2, decision: "accepted" },
+        { iter: 2, decision: "accepted", objective: 0.8, validationObjective: 0.7 },
         {
           iter: 3,
           decision: "validation-failed",
@@ -391,5 +391,8 @@ describe("BaseOptimizer.evaluate", () => {
     // detail (validation reason / rationale) is persisted into the iteration record.
     expect(result.iterations[3].detail).toBe("[interpolation-mismatch] you removed ${x}");
     expect(result.iterations[1].detail).toBeUndefined();
+    // Scores attached to an attempt survive into the iteration record.
+    expect(result.iterations[2].objective).toBe(0.8);
+    expect(result.iterations[2].validationObjective).toBe(0.7);
   });
 });

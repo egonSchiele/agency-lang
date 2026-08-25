@@ -111,7 +111,15 @@ describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
       closureFiles: [],
     });
     expect(call.perRun.overlayFiles).toEqual(files);
-    expect(call.agent).toBe(path.join(src, "agent.agency"));
+    expect(call.agent).toBe(`${path.join(src, "agent.agency")}:main`);
+  });
+
+  it("runs the node named in the target, not always main", async () => {
+    const p = probe();
+    await p.evaluateAt(p.forkAt(), { ...source(), entryNode: "evalMain" }, {}, [
+      { id: "a", input: "t" },
+    ]);
+    expect(mockEval.mock.calls[0][0].agent).toBe(`${path.join(src, "agent.agency")}:evalMain`);
   });
 
   it("partitions agent-runs by ws.key so caching is per-candidate", async () => {

@@ -95,8 +95,8 @@ export abstract class BaseOptimizer {
    * here — subclasses implement {@link optimizeTargets} and never touch discovery.
    */
   async optimize(target: OptimizeTarget): Promise<OptimizeResult> {
-    const agentFile = resolveEvalRunTarget(target.agent).agentFile;
-    const source = this.discover(agentFile);
+    const { agentFile, node } = resolveEvalRunTarget(target.agent);
+    const source = { ...this.discover(agentFile), entryNode: node };
     if (source.targets.length === 0) {
       throw new Error(
         `No optimize targets found in ${agentFile}. Mark a declaration with the optimize modifier.`,
@@ -351,7 +351,8 @@ export abstract class BaseOptimizer {
   ): Promise<string> {
     this.runCounter += 1;
     const result = await runSuite({
-      agent: path.join(source.baseDir, source.entryFile), // used for label/node parsing only
+      // Used for the label and the node name only; the files come from the overlay.
+      agent: `${path.join(source.baseDir, source.entryFile)}:${source.entryNode ?? "main"}`,
       inputs: [{ ...input, id }],
       suite: { source: "optimize" },
       out: path.join(

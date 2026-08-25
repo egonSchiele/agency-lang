@@ -104,33 +104,3 @@ Review prose for readability and return findings. error=true marks a
 **Throws:** `std::guard`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/review.agency#L119))
-
-## Nodes
-
-### evalMain
-
-```ts
-evalMain(input: WritingReviewEvalInput): Feedback[]
-```
-
-Eval entry point: `agency eval run stdlib/agents/writing/review.agency:evalMain
-  --suite <dir>`. A node in a library module never runs when the module is
-  imported; it only exists so a suite can score this reviewer without a
-  wrapper file. Any other reviewer scored on the same suite supplies a node
-  with this signature. Effects are decided at this boundary: reading the
-  seeded input file is this node's own doing (`with approve`), and a budget
-  trip inside the reviewer is rejected (`with reject`) so the caps stay
-  caps and the reviewer's fail-open result comes back instead of an
-  interrupt escaping the entry point.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| input | [WritingReviewEvalInput](#writingreviewevalinput) |  |
-
-**Returns:** `Feedback[]`
-
-**Throws:** `std::read`, `std::guard`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/review.agency#L193))

@@ -5,6 +5,7 @@
 import * as path from "path";
 
 import type { RunRow } from "./rows.js";
+import { fmtTests } from "./views/rowFormat.js";
 import type { TableProjection } from "./views/tableState.js";
 
 export type CsvRow = Record<string, string | number | null>;
@@ -54,6 +55,7 @@ export function csvRowsFromProjection(projection: TableProjection, allRows: RunR
         date: null,
         agent: display.aggregates.agent,
         suite: display.aggregates.suite,
+        test: null,
         score: display.aggregates.score,
         pass: null,
         status: null,
@@ -84,6 +86,7 @@ function runCsvRow(row: RunRow): CsvRow {
     date: row.startedAtMs === null ? null : new Date(row.startedAtMs).toISOString(),
     agent: row.agent,
     suite: row.suite,
+    test: fmtTests(row),
     score: row.score,
     pass: row.gatesPassed === null ? null : String(row.gatesPassed),
     status: row.status,

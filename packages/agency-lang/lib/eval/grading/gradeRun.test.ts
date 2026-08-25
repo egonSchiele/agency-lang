@@ -11,6 +11,7 @@ import { AgencyRunner } from "./agencyRunner.js";
 import { grader } from "./functionGrader.js";
 import { gradeRun, type GradingContext } from "./gradeRun.js";
 import { snapshotHarness } from "./harnessSnapshot.js";
+import { snapshotGraderFiles } from "./graderFilesSnapshot.js";
 
 const capital: Test = { id: "a", goal: "name the capital", input: "t", expected: "New Delhi" };
 
@@ -196,6 +197,73 @@ describe("gradeRun", () => {
     const card = await gradeRun(runDir, ctx([spy]));
     expect(seenId).toBe("adhoc");
     expect(card.objective()).toBe(1);
+  });
+});
+
+describe("grader files from the run row", () => {
+  function graderFilesFixture() {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "grader-files-fixture-"));
+    fs.writeFileSync(path.join(dir, "notes.md"), "lead with the why");
+    return { dir, snapshot: snapshotGraderFiles(dir) };
+  }
+
+  it("hands graders the stored copy under an override, and the suite's own directory under --suite", async () => {
+    const { dir, snapshot } = graderFilesFixture();
+    const runDir = makeRun({ output: "x", graderFiles: snapshot });
+    const seen: string[] = [];
+    const spy = grader(
+      ({ graderFiles }) => {
+        seen.push(graderFiles);
+        return 1;
+      },
+      { name: "spy" },
+    );
+
+    await gradeRun(runDir, ctx([spy]));
+    expect(seen[0]).toBe(path.join(runDirPaths(runDir).gradersDir, snapshot.dirName));
+    expect(fs.readFileSync(path.join(seen[0], "notes.md"), "utf8")).toBe("lead with the why");
+
+    // Under --suite the suite test's own directory is handed over, not the
+    // stored copy. A spy in memory cannot be a suite module, so this half
+    // goes through a module file.
+    const live = path.join(dir, "live");
+    fs.mkdirSync(live);
+    const modulePath = path.join(dir, "graders.ts");
+    fs.writeFileSync(
+      modulePath,
+      'import { grader } from "agency-lang/eval";\n' +
+        "export default [grader(({ graderFiles }) => graderFiles.endsWith('/live') ? 1 : 0, { name: 'live' })];",
+    );
+    const card = await gradeRun(runDir, {
+      ...ctx([]),
+      graders: { kind: "suite", tests: [{ ...capital, graders: modulePath, graderFiles: live }] },
+    });
+    expect(card.perInput[0].grades.map((g) => [g.grader.name(), g.grade.score])).toEqual([
+      ["live", { kind: "scalar", value: 1 }],
+    ]);
+  });
+
+  it("a test with no grader files gives the grader an empty path", async () => {
+    const runDir = makeRun({ output: "x" });
+    let seen: string | undefined;
+    const spy = grader(
+      ({ graderFiles }) => {
+        seen = graderFiles;
+        return 1;
+      },
+      { name: "spy" },
+    );
+    await gradeRun(runDir, ctx([spy]));
+    expect(seen).toBe("");
+  });
+
+  it("a recorded copy that is missing from the run directory fails grading by test", async () => {
+    const { snapshot } = graderFilesFixture();
+    const runDir = makeRun({ output: "x", graderFiles: snapshot });
+    fs.rmSync(path.join(runDirPaths(runDir).gradersDir, snapshot.dirName), { recursive: true });
+    await expect(gradeRun(runDir, ctx([]))).rejects.toThrow(
+      /Grader files snapshot not found.*recorded for test a/,
+    );
   });
 });
 

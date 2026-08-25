@@ -243,6 +243,50 @@ Three rules that are easy to get wrong:
 - **The scratch dir goes under `.agency-tmp/`, not `os.tmpdir()`**: compiled
   Agency resolves `agency-lang` from the directory it runs in.
 
+## Two bundled judges: goal and rubric
+
+A function grader has two LLM judges on its context, `ctx.judges`, and
+they ask different questions. `judges.goal({ goal, output, expected })` runs
+`lib/agents/eval/goalJudge.agency`, a correctness judge: was the output
+the right, direct answer to the goal? Its rules treat any expected text
+as authoritative and penalize extra content, which is right for "name
+the capital" and wrong for grading review findings against a standard.
+`judges.rubric({ standard, output, context })` runs
+`lib/agents/eval/rubricJudge.agency`: how well does the output meet the
+standard, with `context` (the source text, an editor's notes, a
+reference version) read as background and never as an answer to match.
+The writing-review suite learned this the expensive way: phrased for the
+goal judge, its graders scored findings for "matching the expected
+answer" that did not exist. Each judge file is versioned by a pinned
+hash (`goalJudgeFile.ts`, `rubricJudgeFile.ts`); bump the version when
+you edit a prompt. A new judge (pairwise, say) is a new key on `judges`,
+not a new field on the context.
+
+## Grader-only files: `graderFiles/`
+
+A test directory may hold a `graderFiles/` directory beside `test.json`:
+reference answers, an editor's notes, a cleaned version of the text, or
+anything else the graders read and the agent must never see. `files/` is
+the opposite: it is seeded into the agent's workdir. The loader records
+the directory on the test as `graderFiles` (absolute; a `test.json` may
+also name one explicitly, a local directory only).
+
+`eval run` stores the whole tree in the run directory
+(`snapshotGraderFiles`, `lib/eval/grading/graderFilesSnapshot.ts`): under
+`graders/<sha256>/` with its relative names kept, where the hash covers
+every path and content, and the run row records that name as
+`graderFiles`. Symlinks in the tree are refused. At grading time a
+function grader reads the directory as `ctx.graderFiles` (`""` when the
+test has none): the stored copy under `snapshot` and `override`, the
+suite's live directory under `--suite`. A recorded copy missing from the
+run directory is an error naming the test, never a silent `""`.
+`evals/writing-review/` is the reference user: its `harvestedGraders()`
+reads `notes.md` and `cleaned.md` from there.
+
+Grading modules load through the built package (`agency-lang/eval`
+resolves to `dist/`), so a change to what `ctx` carries needs a build
+before a suite sees it.
+
 ## What is gone
 
 `config.json`, `summary.json`, per-input `input.json`, `eval-record.json` on

@@ -8,6 +8,7 @@ import { finishedTraceLines, tempDir } from "@/runDirectory/testFixtures.js";
 
 import type { Test } from "./runTypes.js";
 import type { HarnessSnapshot } from "./grading/harnessSnapshot.js";
+import type { GraderFilesSnapshot } from "./grading/graderFilesSnapshot.js";
 
 /** One fake test run to write into a run directory. */
 export type FakeRun = {
@@ -27,6 +28,9 @@ export type FakeRun = {
   /** Harness pairs to store under graders/ and record on the run row, as
    *  `eval run` does for a test directory with files/ and holdout/. */
   harness?: HarnessSnapshot;
+  /** The test's grader-only files to store under graders/, as `eval run`
+   *  does for a test directory with graderFiles/. */
+  graderFiles?: GraderFilesSnapshot;
   /** Recorded on the run row, as `eval run` does for a suite invocation. */
   batch?: string;
   trial?: number;
@@ -76,7 +80,7 @@ export function writeRunDirectory(run: FakeRun, dir: string = tempDir("run-")): 
     dir,
     stagedStatelogFile: statelogFile,
     workdir,
-    gradersFiles: run.harness?.files,
+    gradersFiles: [...(run.harness?.files ?? []), ...(run.graderFiles?.files ?? [])],
     run: {
       traceId,
       annotator: { kind: "harness", id: "agency-eval@test" },
@@ -89,6 +93,7 @@ export function writeRunDirectory(run: FakeRun, dir: string = tempDir("run-")): 
         batch: run.batch,
         trial: run.trial,
         ...(run.harness === undefined ? {} : { harness: run.harness.records }),
+        ...(run.graderFiles === undefined ? {} : { graderFiles: run.graderFiles.dirName }),
         ...(ended === "ok" ? {} : { error: run.errorMessage ?? `ended with ${ended}` }),
       },
     },

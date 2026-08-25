@@ -46,6 +46,14 @@ export function fmtTime(ms: number | null, pending: boolean): string {
   return fmtDuration(ms, { minutes: true });
 }
 
+/** Which test a run row ran: its id for a one-test run, a count for a
+ *  suite run, blank for a raw statelog trace (which has no test). */
+export function fmtTests(row: RunRow): string {
+  if (row.tests.length === 1) return row.tests[0].inputId;
+  if (row.tests.length > 1) return `${row.tests.length} tests`;
+  return "";
+}
+
 export function fmtModels(models: string[]): string {
   return models.join(",");
 }

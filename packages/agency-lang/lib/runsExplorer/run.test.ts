@@ -126,7 +126,7 @@ describe("runExplorer", () => {
     ]);
   });
 
-  it("Enter on a run opens its trace directly (one run, one trace); back returns to runs, Esc at runs is inert", async () => {
+  it("Enter on a run drills to its graders, then to one verdict; o opens the trace; back returns to runs, Esc at runs is inert", async () => {
     const runDir = writeGradedRun(tmpDir);
     const viewerCalls: string[] = [];
     const { options, input, recorder } = makeOptions({
@@ -139,11 +139,19 @@ describe("runExplorer", () => {
 
     await drive(options, input, recorder, [
       { when: (frame) => frame.includes("[runs]") && frame.includes("regex-log"), key: "enter" },
-      { when: (frame) => viewerCalls.length === 1 && frame.includes("[runs]"), key: "escape" },
+      { when: (frame) => frame.includes("[graders]") && frame.includes("fixture"), key: "j" },
+      { when: (frame) => frame.includes("[graders]"), key: "enter" },
+      { when: (frame) => frame.includes("[verdict]") && frame.includes("gate"), key: "escape" },
+      { when: (frame) => frame.includes("[graders]"), key: "o" },
+      { when: (frame) => viewerCalls.length === 1 && frame.includes("[graders]"), key: "escape" },
+      { when: (frame) => frame.includes("[runs]"), key: "escape" },
       { when: (frame) => frame.includes("[runs]"), key: "q" },
     ]);
 
     expect(viewerCalls).toEqual(["t1"]);
+    expect(recorder.frames.some((_, i) => recorder.textAt(i).includes("VERDICT  gate on t1"))).toBe(
+      true,
+    );
     expect(lastFrame(recorder)).toContain("[runs]");
   });
 
@@ -163,12 +171,12 @@ describe("runExplorer", () => {
     });
 
     await drive(options, input, recorder, [
-      { when: (frame) => frame.includes("[runs]") && frame.includes("regex-log"), key: "enter" },
+      { when: (frame) => frame.includes("[runs]") && frame.includes("regex-log"), key: "o" },
       { when: () => viewerCalls.length === 1 && viewerKeys.length === 0, key: "x" },
       {
         when: (frame) =>
           viewerCalls.length === 1 && viewerKeys.length === 1 && frame.includes("[runs]"),
-        key: "enter",
+        key: "o",
       },
       { when: () => viewerCalls.length === 2 && viewerKeys.length === 1, key: "y" },
     ]);

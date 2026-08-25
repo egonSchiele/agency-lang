@@ -21,7 +21,7 @@ import { LlmJudge } from "./graders/llmJudge.js";
 import { AgencyTestGrader } from "./agencyTestGrader.js";
 import { loadGradingModule, loadGradingSnapshot } from "./gradingModule.js";
 import { Scorecard, type GraderGrade, type InputGrades } from "./scorecard.js";
-import type { LoadedRun, JSON as Json } from "./types.js";
+import type { GraderInput, LoadedRun, JSON as Json } from "./types.js";
 
 /** Where each test's graders come from. Graders are test-side, like goal and
  *  expected: a test's own `graders.ts` and its harness pairs. The question
@@ -73,8 +73,13 @@ export async function gradeSnapshot(
   const perInput = await Promise.all(
     gradableEntries(snapshot).map(async (bare) => {
       const entry = withDefaultGoal(bare, ctx.defaultGoal);
-      const graders = await effectiveGraders(entry, ctx, moduleCache, snapshot.dir);
-      return gradeEntry(entry, ctx, graders);
+      const { graders, graderFiles } = await effectiveGraders(
+        entry,
+        ctx,
+        moduleCache,
+        snapshot.dir,
+      );
+      return gradeEntry(entry, ctx, graders, graderFiles);
     }),
   );
   return new Scorecard(perInput);
@@ -135,29 +140,48 @@ export function validateGraders(graders: BaseGrader[], test: Test | undefined): 
   }
 }
 
-/** Which graders score this test: its module graders and its harness
- *  graders, each from the source `ctx.graders` names. */
+/** Which graders score this test, and which copy of its grader-only files
+ *  they read: both from the source `ctx.graders` names. */
 async function effectiveGraders(
   entry: Entry,
   ctx: GradingContext,
   cache: (modulePath: string) => Promise<BaseGrader[]>,
   runDir: string,
-): Promise<BaseGrader[]> {
+): Promise<{ graders: BaseGrader[]; graderFiles?: string }> {
   const source = ctx.graders;
   if (source.kind === "suite") {
     const test = suiteTestFor(entry, source.tests);
     const harness = liveHarnessGraders(test);
-    return [...(await suiteModuleGraders(test, cache, harness.length > 0)), ...harness];
+    return {
+      graders: [...(await suiteModuleGraders(test, cache, harness.length > 0)), ...harness],
+      graderFiles: test.graderFiles,
+    };
   }
-  // Harness graders are the test's own: an override leaves them.
+  // Harness graders and grader files are the test's own: an override leaves them.
   const harness = snapshotHarnessGraders(entry, runDir);
+  const graderFiles = snapshotGraderFilesDir(entry, runDir);
   if (source.kind === "override") {
-    return [...source.graders, ...harness];
+    return { graders: [...source.graders, ...harness], graderFiles };
   }
-  return [
-    ...(await snapshotModuleGraders(entry, ctx, cache, runDir, harness.length > 0)),
-    ...harness,
-  ];
+  return {
+    graders: [
+      ...(await snapshotModuleGraders(entry, ctx, cache, runDir, harness.length > 0)),
+      ...harness,
+    ],
+    graderFiles,
+  };
+}
+
+/** The run directory's stored copy of the test's `graderFiles/`. */
+function snapshotGraderFilesDir(entry: Entry, runDir: string): string | undefined {
+  if (entry.graderFiles === undefined) return undefined;
+  const dir = path.join(runDirPaths(runDir).gradersDir, entry.graderFiles);
+  if (!fs.existsSync(dir)) {
+    throw new Error(
+      `Grader files snapshot not found: ${dir} (recorded for test ${entry.test.id ?? "(no id)"}).`,
+    );
+  }
+  return dir;
 }
 
 /** The bundled goal judge: what scores a test that carries no graders. */
@@ -275,6 +299,8 @@ type Entry = {
   humanFeedback: HumanFeedback;
   graders?: GradersIdentity;
   harness?: HarnessRecord[];
+  /** The stored `graderFiles/` copy's name under `graders/`, from the run row. */
+  graderFiles?: string;
 } & (
   | { run: LoadedRun }
   /** The trace cannot be graded at all: skip straight to a scored zero. */
@@ -311,9 +337,10 @@ function entryFor(snapshot: RunDirectorySnapshot, trace: Trace): Entry {
   const humanFeedback = humanFeedbackFor(snapshot, trace.traceId);
   const graders = runRow !== null && runRow.kind === "run" ? runRow.graders : undefined;
   const harness = runRow !== null && runRow.kind === "run" ? runRow.harness : undefined;
+  const graderFiles = runRow !== null && runRow.kind === "run" ? runRow.graderFiles : undefined;
   const ended = runRow !== null && runRow.kind === "run" ? runRow.ended : traceEnding(trace);
   if (ended === "ok") {
-    return { test, run, humanFeedback, graders, harness };
+    return { test, run, humanFeedback, graders, harness, graderFiles };
   }
   const detail =
     runRow !== null && runRow.kind === "run" && runRow.error !== undefined
@@ -324,6 +351,7 @@ function entryFor(snapshot: RunDirectorySnapshot, trace: Trace): Entry {
     humanFeedback,
     graders,
     harness,
+    graderFiles,
     ungradedReason: `the run ended with ${ended}${detail}`,
   };
 }
@@ -346,6 +374,7 @@ async function gradeEntry(
   entry: Entry,
   ctx: GradingContext,
   graders: BaseGrader[],
+  graderFiles: string | undefined,
 ): Promise<InputGrades> {
   if ("ungradedReason" in entry) {
     return {
@@ -357,7 +386,7 @@ async function gradeEntry(
       humanFeedback: entry.humanFeedback,
     };
   }
-  const graded = await gradeInput(entry.test, entry.run, ctx, graders);
+  const graded = await gradeInput(entry.test, entry.run, ctx, graders, graderFiles);
   return { ...graded, humanFeedback: entry.humanFeedback };
 }
 
@@ -370,13 +399,15 @@ async function gradeInput(
   run: LoadedRun,
   ctx: GradingContext,
   graders: BaseGrader[],
+  graderFiles: string | undefined,
 ): Promise<InputGrades> {
   const gates = graders.filter((grader) => grader.mustPass());
   const advisory = graders.filter((grader) => !grader.mustPass());
+  const input: GraderInput = { test, run, runAgency: ctx.runAgency, graderFiles };
 
   const gateGrades: GraderGrade[] = [];
   for (const grader of gates) {
-    const grade = await grader.run({ test, run, runAgency: ctx.runAgency });
+    const grade = await grader.run(input);
     gateGrades.push({ grader, grade });
     if (!grader.passes(grade)) {
       return { test, run, grades: gateGrades, gatesPassed: false };
@@ -386,7 +417,7 @@ async function gradeInput(
   const advisoryGrades = await Promise.all(
     advisory.map(async (grader) => ({
       grader,
-      grade: await grader.run({ test, run, runAgency: ctx.runAgency }),
+      grade: await grader.run(input),
     })),
   );
 

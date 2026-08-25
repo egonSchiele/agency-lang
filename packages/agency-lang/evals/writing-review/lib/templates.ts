@@ -1,0 +1,62 @@
+// Every judge prompt the writing-review graders use, as plain typed
+// functions: read them as prose, and a missing field is a type error.
+//
+// Each is a { standard, context } pair for the bundled rubric judge
+// (ctx.judgeRubric): the standard is what the findings must meet, the
+// context is what the judge needs to check them. Nothing here is an
+// answer key; the judge is told so.
+
+type Rubric = { standard: string; context: string };
+
+const reviewed = (sourceFileText: string) => `The text that was reviewed:\n\n${sourceFileText}`;
+
+export const advisoryUseful = (p: { sourceFileText: string; assignment: string }): Rubric => ({
+  standard:
+    "These are the ADVISORY findings (not errors) of a readability review. Findings that are specific to this text and genuinely increase its readability raise the score. Generic writing advice that fits any text, and suggestions that are not true of this text, lower the score in proportion to how many findings are affected.",
+  context: `${reviewed(p.sourceFileText)}\n\nThe task the text was written for:\n\n${p.assignment}`,
+});
+
+export const namesPlantedFlaw = (p: { reason: string }): Rubric => ({
+  standard:
+    "These are the findings of a readability review. Do the findings identify the problems described in the context? Do they point at the planted passages, and at what makes them hard to follow? It's okay if the wording differs, as long as the meaning is the same. Return a score in proportion to how many of the planted problems were found.",
+  context: `The problems we planted: ${p.reason}`,
+});
+
+export const noInventedErrorsPlanted = (p: { sourceFileText: string; reason: string }): Rubric => ({
+  standard:
+    "These are the ERROR findings of a readability review. Every finding is a real obstacle for the text's reader: one of the planted problems, or something genuinely hard to follow. A finding that objects to clear prose, or to a matter of taste, is invented and lowers the score in proportion.",
+  context: `The planted problems: ${p.reason}\n\n${reviewed(p.sourceFileText)}`,
+});
+
+export const namesHarvestedFlaws = (p: { notes: string }): Rubric => ({
+  standard:
+    "These are the findings of a readability review. The findings identify the problems the editor's notes name, pointing at the same passages for the same reasons. Wording may differ, and whether a finding is marked error or advisory does not matter. Score in proportion to how many of the editor's points the findings cover.",
+  context: `The editor's notes:\n\n${p.notes}`,
+});
+
+export const noInventedErrorsHarvested = (p: {
+  sourceFileText: string;
+  notes: string;
+}): Rubric => ({
+  standard:
+    "These are the ERROR findings of a readability review. Is every finding a real obstacle for the text's reader? Does it identify something that's genuinely hard to follow? Findings like that raise the score. Findings that incorrectly flag something that is actually clear or trivial lower the score. We're also adding the editor's notes as context. Score in proportion to how many of the findings are real obstacles.",
+  context: `The editor's notes on what is actually wrong:\n\n${p.notes}\n\n${reviewed(p.sourceFileText)}`,
+});
+
+export const fixLandsOnDelete = (): Rubric => ({
+  standard:
+    "These are the findings of a readability review. The editor's verdict on this text was to delete it entirely: it tells its readers nothing they need. The findings meet the standard when they say the text should be removed rather than reworded. Findings that only suggest rewordings score near 0.",
+  context: "",
+});
+
+export const fixLands = (p: { sourceFileText: string; cleaned: string }): Rubric => ({
+  standard:
+    "These are the findings of a readability review, each with a suggested rewrite. We're also giving you an editor's rewrite. If a writer applied these findings, would they end up with text about as readable as the editor's own rewrite? The word choice itself can be different, you need to judge on the content. What information did the editor choose to cut? What sentences did the editor choose to simplify? Would a rewrite based on these findings make similar cuts and simplifications? Judge the findings together, as one edit, not one at a time: score high if applying all of them would make the same cuts and simplifications the editor made, and low if it would leave the main problems in place.",
+  context: `${reviewed(p.sourceFileText)}\n\nThe editor's rewrite:\n\n${p.cleaned}`,
+});
+
+export const rewritesFaithful = (p: { sourceFileText: string }): Rubric => ({
+  standard:
+    "These are the findings of a readability review, each quoting a passage and suggesting a rewrite. Do the suggested rewrites keep the facts the same as the original, or do they invent facts? A rewrite may cut or simplify freely, but it should never add a claim or detail that the original didn't. For example, if the original text is about art, a rewrite shouldn't mention that Wayne Thiebaud is the best artist, if the original didn't claim that. Also, every identifier, (like a code name, a path, a symbol like `std::notes::create`) must be the same in the rewrite as it was in the original. Lower the score in proportion to the number of rewrites that invent something or alter an identifier.",
+  context: reviewed(p.sourceFileText),
+});

@@ -5,14 +5,38 @@
 // recomputed from the per-test rows so no two paths can disagree.
 import * as path from "path";
 
+import type { Annotation, Score } from "@/runDirectory/annotations.js";
+import { evalRecordFor } from "@/runDirectory/evalRecord.js";
 import { summarizeRuns } from "@/runDirectory/list.js";
 import type { RunDirectorySnapshot } from "@/runDirectory/runDir.js";
 import { runDirPaths } from "@/runDirectory/runDir.js";
+import { traceInputText, traceOutputText, type TraceOutputText } from "@/runDirectory/traceText.js";
 
 import { resolveAgentName } from "./identity.js";
 import { suiteFromSource, UNKNOWN_SUITE } from "./suite.js";
 import type { Source } from "./sources.js";
 import type { ScanResult, TraceTotals } from "./mine.js";
+
+/** One grader's effective verdict on a test: the latest complete pass's
+ *  score row, as the graders table and the verdict screen show it. */
+export type GraderVerdict = {
+  name: string;
+  score: Score;
+  weight: number;
+  mustPass: boolean;
+  feedback: string | null;
+  /** The annotator id: `<module>@<revision>` for a grader, the judge's id for a judge. */
+  annotator: string;
+};
+
+/** What a person sees when drilling into a test: the input it was given,
+ *  the output the graders saw, and every grader's verdict. Only a run
+ *  directory has it; a raw statelog trace was never graded. */
+export type TestDetail = {
+  input: string | null;
+  output: TraceOutputText;
+  graders: GraderVerdict[];
+};
 
 export type TestRow = {
   inputId: string;
@@ -28,6 +52,7 @@ export type TestRow = {
   models: string[];
   /** The trace's `agentName` event; feeds run identity. */
   agentName?: string;
+  detail?: TestDetail;
   /** The trace produced events but the run was cut short (timeout, cost
    *  cap, kill) — the signature of a killed run. */
   statelogHadEvents?: boolean;
@@ -89,6 +114,10 @@ export function buildRunRowFromDirectory(snapshot: RunDirectorySnapshot, source:
     if (summary.agentName !== null) {
       test.agentName = summary.agentName;
     }
+    const detail = testDetail(snapshot, summary.traceId);
+    if (detail !== undefined) {
+      test.detail = detail;
+    }
     return test;
   });
 
@@ -114,6 +143,35 @@ export function buildRunRowFromDirectory(snapshot: RunDirectorySnapshot, source:
   }
   recomputeRunAggregates(row);
   return row;
+}
+
+/** The drill-in view of one trace: its texts and the effective score rows
+ *  (one per grader lineage, latest complete pass), in name order. A run
+ *  that wrote no trace has nothing to show. */
+function testDetail(snapshot: RunDirectorySnapshot, traceId: string): TestDetail | undefined {
+  const trace = snapshot.traces.find((candidate) => candidate.traceId === traceId);
+  if (trace === undefined) return undefined;
+  const record = evalRecordFor(trace, snapshot.dir);
+  const scores = Object.values(snapshot.effectiveAnnotations[traceId]?.scores ?? {});
+  return {
+    input: traceInputText(trace, record),
+    output: traceOutputText(trace, record),
+    graders: scores.flatMap(graderVerdict).sort((a, b) => a.name.localeCompare(b.name)),
+  };
+}
+
+function graderVerdict(row: Annotation): GraderVerdict[] {
+  if (row.kind !== "score") return [];
+  return [
+    {
+      name: row.name,
+      score: row.score,
+      weight: row.weight,
+      mustPass: row.mustPass,
+      feedback: row.feedback ?? null,
+      annotator: row.annotator.id,
+    },
+  ];
 }
 
 /** False if any test failed a gate, true if any passed and none failed,

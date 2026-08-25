@@ -2,8 +2,8 @@ import { grader } from "agency-lang/eval";
 
 export default [
   grader(
-    ({ judge }) =>
-      judge({
+    ({ judges }) =>
+      judges.goal({
         goal:
           "accurately summarizes the article's stated facts: the fishing derby has moved off " +
           "Hollow Creek for the third year due to low catch numbers, the Braxton Polymer plant " +
@@ -15,8 +15,8 @@ export default [
   ),
 
   grader(
-    ({ judge }) =>
-      judge({
+    ({ judges }) =>
+      judges.goal({
         goal:
           "reads between the lines: identifies that the article implies, without stating it, " +
           "that the Braxton Polymer plant is likely polluting Hollow Creek and killed its " +

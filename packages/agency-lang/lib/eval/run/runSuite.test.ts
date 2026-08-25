@@ -517,6 +517,34 @@ describe("runSuite", () => {
     expect((run as unknown as { graders?: unknown }).graders).toBeUndefined();
   });
 
+  it("stores a test's graderFiles/ tree in its run directory and names it on the run row", async () => {
+    const testDir = path.join(proj, "suite", "essay");
+    fs.mkdirSync(path.join(testDir, "graderFiles", "sub"), { recursive: true });
+    fs.writeFileSync(path.join(testDir, "test.json"), JSON.stringify({ input: "t", goal: "g" }));
+    fs.writeFileSync(path.join(testDir, "graderFiles", "notes.md"), "lead with the why");
+    fs.writeFileSync(path.join(testDir, "graderFiles", "sub", "cleaned.md"), "short");
+    const [test] = loadInputs(testDir);
+    const result = await runSuite(
+      {
+        agent: path.join(proj, "agent.agency"),
+        inputs: [test],
+        out: path.join(proj, "runs", "r-grader-files"),
+        config: {},
+        perRun: { pipeOutput: false },
+      },
+      { runner: traceWritingRunner("done") },
+    );
+    const { runDir, traceId } = result.tests[0];
+    const run = readRunDirectory(runDir, quiet).effectiveAnnotations[traceId].run;
+    const stored = (run as unknown as { graderFiles: string }).graderFiles;
+    expect(stored).toMatch(/^[0-9a-f]{64}$/);
+    const storedDir = path.join(runDirPaths(runDir).gradersDir, stored);
+    expect(fs.readFileSync(path.join(storedDir, "notes.md"), "utf8")).toBe("lead with the why");
+    expect(fs.readFileSync(path.join(storedDir, "sub", "cleaned.md"), "utf8")).toBe("short");
+    // The agent never saw them.
+    expect(fs.existsSync(path.join(runDirPaths(runDir).workdirDir, "notes.md"))).toBe(false);
+  });
+
   it("stores each test's grading module in its run directory, and grading uses that copy even after the source changes", async () => {
     const modulePath = path.join(proj, "graders.ts");
     const moduleReturning = (value: number) => `export default [() => ${value}];`;

@@ -35,6 +35,7 @@ describe("RunsTableView rendering", () => {
       "date▼",
       "agent",
       "suite",
+      "test",
       "score",
       "pass",
       "status",
@@ -55,14 +56,15 @@ describe("RunsTableView rendering", () => {
   it("narrow viewports drop models, then time, then pass", () => {
     const view = makeView();
     const at = (cols: number) => screenText(view.render({ rows: 24, cols }));
+    // Fixed columns sum to 112; the flex models column needs 8 more.
     expect(at(120)).toContain("models");
-    const noModels = at(95);
+    const noModels = at(115);
     expect(noModels).not.toContain("models");
     expect(noModels).toContain("time");
-    const noTime = at(85);
+    const noTime = at(105);
     expect(noTime).not.toContain("time");
     expect(noTime).toContain("pass");
-    const noPass = at(75);
+    const noPass = at(98);
     expect(noPass).not.toContain("pass");
     expect(noPass).toContain("status");
   });
@@ -111,10 +113,14 @@ describe("RunsTableView keys", () => {
     expect(onTrace).toMatchObject({ kind: "openLog", statelogPath: "/logs/log.jsonl" });
   });
 
-  it("a single-test run opens its log directly", () => {
+  it("a single-test run opens its graders on Enter and its log on o", () => {
     const view = makeView([runRow("solo", { tests: [testRow("only")] })]);
-    const action = view.handleKey({ key: "enter" }, viewport);
-    expect(action).toMatchObject({
+    expect(view.handleKey({ key: "enter" }, viewport)).toEqual({
+      kind: "openTest",
+      runKey: "solo",
+      inputId: "only",
+    });
+    expect(view.handleKey({ key: "o" }, viewport)).toMatchObject({
       kind: "openLog",
       statelogPath: "/runs/x/inputs/only/agent/statelog.jsonl",
     });

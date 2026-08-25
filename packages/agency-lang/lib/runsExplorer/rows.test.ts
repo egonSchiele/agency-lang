@@ -47,6 +47,17 @@ describe("buildRunRowFromDirectory", () => {
     expect(row.gatesPassed).toBe(false);
   });
 
+  it("carries the drill-in detail: input, output, and one verdict per grader in name order", () => {
+    const row = rowFor(writeGradedRun(tmpDir));
+    const detail = row.tests[0].detail;
+    expect(detail?.input).toBe("first");
+    expect(detail?.output).toEqual({ kind: "output", text: "a" });
+    expect(detail?.graders.map((g) => [g.name, g.score, g.mustPass, g.annotator])).toEqual([
+      ["fixture", { kind: "scalar", value: 1 }, false, "fixture@1"],
+      ["gate", { kind: "binary", pass: false }, true, "fixture@1"],
+    ]);
+  });
+
   it("the test opens the run's statelog, so the viewer can focus its trace", () => {
     const dir = writeGradedRun(tmpDir);
     const row = rowFor(dir);

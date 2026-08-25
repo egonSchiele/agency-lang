@@ -10,7 +10,7 @@
 //
 // View arrangement: three cycling variants (runs → compare → trend) at
 // the bottom, a loading splash before the first rows, and an overlay
-// stack (tests, info) above. Esc pops the overlay, then falls back to
+// stack (tests, graders, verdict, info) above. Esc pops the overlay, then falls back to
 // the runs variant, then goes inert; q quits from anywhere.
 import * as fs from "fs";
 
@@ -24,6 +24,8 @@ import type { Source } from "./sources.js";
 import { exportCsv, csvRowsFromProjection } from "./csv.js";
 import type { ExplorerAction, ExplorerView, Viewport } from "./views/explorerView.js";
 import { CompareView } from "./views/compareView.js";
+import { GradersTableView } from "./views/gradersTableView.js";
+import { VerdictScreen } from "./views/verdictScreen.js";
 import { InfoScreen } from "./views/infoScreen.js";
 import { LoadingScreen } from "./views/loadingScreen.js";
 import { RunsTableView } from "./views/runsTableView.js";
@@ -198,6 +200,18 @@ class ExplorerShell {
       const tests = new TestsTableView(action.parentRunKey);
       tests.setData(this.rows);
       this.overlay.push(tests);
+      return false;
+    }
+    if (action.kind === "openTest") {
+      const graders = new GradersTableView(action.runKey, action.inputId);
+      graders.setData(this.rows);
+      this.overlay.push(graders);
+      return false;
+    }
+    if (action.kind === "openVerdict") {
+      const verdict = new VerdictScreen(action.runKey, action.inputId, action.graderName);
+      verdict.setData(this.rows);
+      this.overlay.push(verdict);
       return false;
     }
     if (action.kind === "openInfo") {

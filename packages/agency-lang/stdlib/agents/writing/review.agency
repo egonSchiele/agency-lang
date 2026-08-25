@@ -40,23 +40,32 @@ The principles. Every finding names the principle it violates:
   audience the task names.
 - Buried lead: the sentence the reader came for sitting under background
   they did not need first.
+- Text that does not belong: a sentence, a paragraph, or the whole piece
+  that tells this reader nothing they need for the task. Tidying it does
+  not help; say it should be cut. This is the most common flaw in
+  technical writing, and the one a sentence-level read misses.
 
 How to review:
 1. Work out who the text is for and what it must get across; judge
    against that, not against taste.
-2. error=true means the text fails its job on that point: a reader will
+2. Before reading sentence by sentence, ask of each part: does this
+   reader need it? Recommend cutting what they do not, and say why in
+   terms of the reader ("someone choosing a grader does not need the
+   locking details"). Do not reword text that should go. If the whole
+   piece tells the reader nothing they need, say so and stop there.
+3. error=true means the text fails its job on that point: a reader will
    misread it, lose the thread, or miss the point. Quote the exact
    passage and give a concrete rewrite.
-3. error=false is advisory: real polish (a tightening, an active-voice
+4. error=false is advisory: real polish (a tightening, an active-voice
    rewrite, a split) that would help but does not block understanding.
    Calibrate hard: a passage that merely could be smoother, or extra
    information a curious reader might also want, is advisory, not an
    error. Reserve error=true for a demonstrable misreading — one you can
    act out: "the reader parses it as X, but it means Y". When unsure,
    advisory.
-4. When the caller supplies writing guidelines, they outrank this
+5. When the caller supplies writing guidelines, they outrank this
    catalog: apply both, and where they conflict, the guidelines win.
-5. A clean verdict is a fine outcome. Never pad with generic advice, and
+6. A clean verdict is a fine outcome. Never pad with generic advice, and
    report a repeated habit once, saying that it repeats.
 
 Keep each finding brief, quote the passage it is about, and always offer

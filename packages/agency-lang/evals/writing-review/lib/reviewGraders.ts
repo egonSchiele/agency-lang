@@ -91,6 +91,25 @@ function rewritesFaithful(): WritingReviewGrader {
   );
 }
 
+/** The editor removed material the reader did not need; the findings must
+ *  say to cut it, not reword it. Needs `graderFiles/cleaned.md`. */
+export function recommendsCuts(): WritingReviewGrader {
+  return grader<WritingReviewInput>(
+    ({ output, workdir, test, graderFiles, judges }) => {
+      const cleanedFile = path.join(graderFiles, "cleaned.md");
+      if (graderFiles === "" || !fs.existsSync(cleanedFile)) {
+        throw new Error("recommendsCuts needs graderFiles/cleaned.md");
+      }
+      const cleaned = fs.readFileSync(cleanedFile, "utf8");
+      return judges.rubric({
+        ...prompts.recommendsCuts({ sourceFileText: getSourceFileText(workdir, test), cleaned }),
+        output: text(findings(output)),
+      });
+    },
+    { name: "recommends-cuts" },
+  );
+}
+
 /** Graders for a planted-flaw test: the author's `reason` is the ground
  *  truth for what makes the text hard to follow. */
 export function plantedFlawGraders(args: { reason: string }): WritingReviewGrader[] {
@@ -152,7 +171,7 @@ function harvest(graderFiles: string): { notes: string; cleaned: string | null }
 /** Graders for a harvested test: a real piece of text, the editor's notes on
  *  it, and the text after editing. The notes are the ground truth for what
  *  the findings must name; the cleaned text is the ground truth for whether
- *  the findings would get a writer there. */
+ *  the findings would get a writer there, and for what it cut. */
 export function harvestedGraders(): WritingReviewGrader[] {
   return [
     rejects(),
@@ -202,6 +221,7 @@ export function harvestedGraders(): WritingReviewGrader[] {
       },
       { name: "fix-lands" },
     ),
+    recommendsCuts(),
     advisoryUseful(),
     rewritesFaithful(),
   ];

@@ -55,6 +55,12 @@ export const fixLands = (p: { sourceFileText: string; cleaned: string }): Rubric
   context: `${reviewed(p.sourceFileText)}\n\nThe editor's rewrite:\n\n${p.cleaned}`,
 });
 
+export const recommendsCuts = (p: { sourceFileText: string; cleaned: string }): Rubric => ({
+  standard:
+    "These are the findings of a readability review. Compare the original text with the editor's version and list what the editor removed: sentences, details, or whole sections that the reader did not need. (If the editor's version is empty, the editor removed everything.) Then check the findings: do they say that material should be cut, or that it does not belong? A finding that only rewords something the editor removed does not count. Score in proportion to how much of what the editor removed the findings call to cut. If the editor removed nothing, score 1 when the findings recommend no cuts.",
+  context: `${reviewed(p.sourceFileText)}\n\nThe editor's version:\n\n${p.cleaned}`,
+});
+
 export const rewritesFaithful = (p: { sourceFileText: string }): Rubric => ({
   standard:
     "These are the findings of a readability review, each quoting a passage and suggesting a rewrite. Do the suggested rewrites keep the facts the same as the original, or do they invent facts? A rewrite may cut or simplify freely, but it should never add a claim or detail that the original didn't. For example, if the original text is about art, a rewrite shouldn't mention that Wayne Thiebaud is the best artist, if the original didn't claim that. Also, every identifier, (like a code name, a path, a symbol like `std::notes::create`) must be the same in the rewrite as it was in the original. Lower the score in proportion to the number of rewrites that invent something or alter an identifier.",

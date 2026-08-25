@@ -1,0 +1,8 @@
+{
+  "description": "Beemo #623 (Generation, Llama-2-7b-chat-hf): an LLM answer and an expert's edit of it. Source: toloka/beemo.",
+  "files": "./files",
+  "input": {
+    "assignment": "Write a solemn, appreciative missive from a therapist to the LGBTQ+ community for a regular weekly blog post centered around compassion.",
+    "sourceFile": "text.md"
+  }
+}

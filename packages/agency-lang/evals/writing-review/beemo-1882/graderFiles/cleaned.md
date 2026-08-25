@@ -1,0 +1,1 @@
+The author believes quick weight loss is unhealthy and suggests that "yo-yo dieting" or "weight cycling" that includes an extreme caloric deficit or excessive exercising is not recommended by nutrition and fitness experts for health reasons. It can be associated with an increased risk of death. Instead, they advise losing weight by improving your overall diet and lifestyle.

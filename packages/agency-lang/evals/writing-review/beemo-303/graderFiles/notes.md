@@ -1,0 +1,2 @@
+- The first line (", or be humorous. Just be creative!") is a fragment of the instructions that leaked into the poem. Remove it.
+- The poem had to fit in a tweet. Two stanzas do; four do not. The third and fourth stanzas add nothing the first two have not said (the phone connects you to other languages and cultures), so cut them.

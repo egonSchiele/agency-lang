@@ -1,0 +1,2 @@
+- Far too long for a weekly blog post: five paragraphs say one thing (I admire your resilience and I am committed to supporting you), and each paragraph restates it. The same phrases recur: "resilience", "testament to the power of community and compassion" (twice), "honored to be a part of your journey" (twice), "courage". Say it once.
+- The paragraph about challenging "systems of oppression" is a political pledge the assignment (a solemn, appreciative note) did not ask for; cut it.

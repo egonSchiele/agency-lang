@@ -1,0 +1,2 @@
+- Too long for the ask. The email makes one argument (I have new responsibilities and still deliver at work); it does not need four paragraphs of restatement, a list of puppy chores, or a paragraph conceding that this is not a traditional reason.
+- "I hope this email finds you well", "I look forward to discussing this matter further" are filler openers and closers; cut them.

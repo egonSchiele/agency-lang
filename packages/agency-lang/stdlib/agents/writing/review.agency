@@ -14,7 +14,7 @@ import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
 import { systemMessage, threadIsNew } from "std::thread"
 
-static const systemPrompt = """You review prose for readability. Spelling and grammar checkers run
+optimize static const systemPrompt = """You review prose for readability. Spelling and grammar checkers run
 separately; your job is the judgment layer — writing that is technically
 correct but hard to follow.
 
@@ -212,11 +212,19 @@ node evalMain(input: WritingReviewEvalInput): Feedback[] {
   evalValue(input)
   const source = read(input.sourceFile) with approve
   if (source is failure(readErr)) {
-    return [{ error: true, feedback: "could not read ${input.sourceFile}: ${readErr}" }]
+    return [
+      {
+        error: true,
+        feedback: "could not read ${input.sourceFile}: ${readErr}"
+      },
+    ]
   }
   const reviewed = writingReviewAgent(work: source.value, task: input.assignment) with reject
   if (reviewed is failure(err)) {
-    return [{ error: true, feedback: "review agent failed: ${err}" }]
+    return [{
+      error: true,
+      feedback: "review agent failed: ${err}"
+    }]
   }
   return reviewed.value
 }

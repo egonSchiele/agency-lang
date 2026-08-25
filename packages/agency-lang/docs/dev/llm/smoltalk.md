@@ -75,8 +75,9 @@ status. Smoltalk maps them all to one `StopReason` of `"length"` on
 
 The field is spelled **`stopReason`**. `PromptResult` has no `finishReason`
 and no `finish_reason`, so reading either of those silently gives you
-`undefined` — which is what the statelog's `finishReason` field did until
-this was fixed.
+`undefined` rather than an error. The statelog event calls its field
+`finishReason`, which is why `prompt.ts` assigns `completion.stopReason` to
+a key of a different name.
 
 `runPrompt` carries the last round's stop reason to
 `decideValidationRetry`, which uses it to tell two different failures

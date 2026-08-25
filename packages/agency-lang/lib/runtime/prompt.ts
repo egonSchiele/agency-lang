@@ -64,14 +64,12 @@ type Tool = {
 };
 
 /** Result of `_runPrompt`. Callback bodies cannot raise interrupts
- *  (typechecker-enforced), so the result is always a plain `{messages,
- *  toolCalls}` shape — the LLM hooks (onLLMCallStart, onLLMCallEnd)
- *  fire as side effects only. */
+ *  (typechecker-enforced), so the result is always plain data — the LLM
+ *  hooks (onLLMCallStart, onLLMCallEnd) fire as side effects only. */
 export type RunPromptResult = {
   messages: MessageThread;
   toolCalls: smoltalk.ToolCallJSON[];
-  /** Why this round ended, normalized by smoltalk across providers. Read
-   *  only to explain a validation failure the token limit caused. */
+  /** Why this round ended, normalized by smoltalk across providers. */
   stopReason?: smoltalk.StopReason;
 };
 
@@ -531,8 +529,7 @@ async function _runPrompt({
     responseFormat,
     usage: projectedUsage,
     cost: completion.cost,
-    // smoltalk's normalized name is `stopReason` (PromptResult has no
-    // `finishReason`), so the two older spellings always read undefined.
+    // Statelog's field name; smoltalk's is `stopReason`.
     finishReason: completion.stopReason ?? completion.rawStopReason,
     stream,
     threadId: __threads()?.activeId() ?? null,
@@ -865,10 +862,8 @@ export async function runPrompt(args: {
   // let the initialLlmCall step populate it.
   let toolCalls: smoltalk.ToolCallJSON[] = self.pendingToolCalls ?? [];
 
-  // Why the last round ended, used to explain a validation failure caused by
-  // the token limit rather than by the model. Deliberately NOT on `self`: it
-  // only decorates an error message, and a resume re-runs the round that
-  // would set it.
+  // Not on `self`: it only decorates an error message, and a resume re-runs
+  // the round that would set it.
   let lastStopReason: smoltalk.StopReason | undefined;
 
   let shouldPop = true;

@@ -295,14 +295,12 @@ export function buildValidationRetryMessage(error: string): string {
   );
 }
 
-/** Extra sentence for a validation failure that the token limit caused, not
- *  the model. smoltalk maps every provider's "ran out of room" reason to the
- *  single stop reason "length" (OpenAI `length`, Anthropic `max_tokens`,
- *  Google `MAX_TOKENS`, Responses `max_output_tokens`). Without this the
- *  message blames the schema for an empty string, which sends people looking
- *  at their types. A reasoning model makes it easy to hit: the thinking tokens
- *  come out of the same budget, so a small `maxTokens` can leave no room for
- *  any visible answer at all. */
+/** Extra sentence for a validation failure the token limit caused, not the
+ *  model. smoltalk maps every provider's out-of-room reason (OpenAI `length`,
+ *  Anthropic `max_tokens`, Google `MAX_TOKENS`, Responses
+ *  `max_output_tokens`) to the single stop reason "length". A reasoning model
+ *  makes this easy to hit: thinking comes out of the same budget, so a small
+ *  `maxTokens` can leave no room for a visible answer at all. */
 function truncatedByTokenLimitHint(stopReason?: string): string {
   if (stopReason !== "length") return "";
   return (

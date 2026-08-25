@@ -1,14 +1,10 @@
 // task is unused: eval entry nodes take exactly one parameter (the input's
 // task); this fixture's behavior is driven by its optimizable variable.
 //
-// What is optimizable is the STYLE line, not the question. The question stays
-// fixed and the baseline style makes the agent bury the answer in chatter, so
-// the way to score is to write a general instruction about how to answer. That
-// is exactly what the mutator is told to produce: mutatePrompt.agency forbids
-// hard-coding an expected answer into a value, because such a value would not
-// survive held-out inputs. An earlier version of this fixture made the whole
-// prompt optimizable and could only be solved by hard-coding the answer, so it
-// asked the mutator for the one thing its prompt rules out.
+// The style line is optimizable, the question is not. The baseline style
+// buries the answer in chatter, so the way to score is a general instruction
+// about how to answer -- which is what mutatePrompt.agency asks the mutator
+// for, and all it will produce: it forbids hard-coding an expected answer.
 node main(task: string): string {
   optimize const style = "Be warm and chatty, and set the scene before answering."
   const response = llm("${style} What is the capital of France?")

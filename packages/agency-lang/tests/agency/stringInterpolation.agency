@@ -2,9 +2,7 @@ import { setLlmOptions } from "std::llm"
 
 const adjective = "hot"
 node main(name: string, item: string) {
-  // What is under test is the interpolation, but the check is an exact match
-  // on what the model echoes back, so the model and route are pinned to the
-  // ones it was recorded on. Other models wrap the echoed text in quotes.
+  // Pinned: the exact-match expectation is this model's exact echo.
   setLlmOptions({ model: "gpt-4o-mini", provider: "openai" })
   const adjective2 = "spicy"
   const result: string = llm("Respond with ONLY this exact text: '${name} wants ${adjective} ${adjective2} ${item}'")

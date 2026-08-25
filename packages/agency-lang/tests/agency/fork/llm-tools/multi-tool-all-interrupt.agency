@@ -20,11 +20,8 @@ type Response = {
 }
 
 node main() {
-  // The test supplies exactly three interrupt handlers, one per tool, so it
-  // only holds for a model that calls all three tools in a single round.
-  // Pinned to the model and route it was written against: through
-  // openai-responses the model spreads the calls over extra rounds, which
-  // raises a fourth interrupt that no handler answers.
+  // Pinned: only this model reliably calls all three tools in one round,
+  // which is what the three interrupt handlers assume.
   setLlmOptions({ model: "gpt-4o-mini", provider: "openai" })
   const result: Response = llm("You must call all three tools (confirmA, confirmB, confirmC) in a SINGLE response in parallel. Then return a 'results' field that is an array containing the three return values.", {
     tools: [confirmA, confirmB, confirmC]

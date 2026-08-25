@@ -1,8 +1,0 @@
-{
-  "description": "Beemo #1880 (Summarize, Llama-2-70b-chat-hf): an LLM answer and an expert's edit of it. Source: toloka/beemo.",
-  "files": "./files",
-  "input": {
-    "assignment": "Give me the main idea of this post about coral reefs by writing a summary sentence for me.\n\nPollution and a warming planet are destroying coral reefs. Here is what you can do to help.\n\nReduce, reuse, recycle.\n(Above) Plastic and other trash are harming the ocean. Use less plastic. Recycle what you can.\n\nHands off!\n\nCoral reefs are delicate. Look, but do not touch. Stepping on or touching coral can hurt it.\n\nUse a safe sunscreen.\n\nSunscreen can contain chemicals that harm coral. Look for bottles marked \u201creef-safe.\u201d\n\nFight climate change.\n\nWalk. Bike. Reduce the greenhouse gas you produce. The planet will thank you.",
-    "sourceFile": "text.md"
-  }
-}

@@ -1,8 +1,0 @@
-{
-  "description": "Beemo #303 (Generation, zephyr-7b-beta): an LLM answer and an expert's edit of it. Source: toloka/beemo.",
-  "files": "./files",
-  "input": {
-    "assignment": "Create a short poem about a telephone that translates your voice into any language magically. It doesn't have to rhyme. fit into a tweet",
-    "sourceFile": "text.md"
-  }
-}

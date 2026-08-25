@@ -1,8 +1,0 @@
-{
-  "description": "Beemo #1268 (Open QA, Llama-2-70b-chat-hf): an LLM answer and an expert's edit of it. Source: toloka/beemo.",
-  "files": "./files",
-  "input": {
-    "assignment": "What is the Dream Team in basketball?",
-    "sourceFile": "text.md"
-  }
-}

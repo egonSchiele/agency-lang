@@ -1,3 +1,0 @@
-- The acrostic spells CAMPING, so the poem ends at the seventh line. Lines eight to fourteen spell nothing; cut them.
-- The two prose paragraphs after the poem (a pitch for camping, and an explanation of what an acrostic is) were not asked for. Cut them.
-- The stray period at the top is an artifact; remove it.

@@ -1,1 +1,0 @@
-- "Sure! Here's a TL:DR of the document you provided:" is a preamble that repeats the instruction. Cut it and start with the summary.

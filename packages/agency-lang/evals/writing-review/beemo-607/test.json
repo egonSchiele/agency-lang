@@ -1,8 +1,0 @@
-{
-  "description": "Beemo #607 (Generation, Llama-2-13b-chat-hf): an LLM answer and an expert's edit of it. Source: toloka/beemo.",
-  "files": "./files",
-  "input": {
-    "assignment": "Write an email to my boss telling her that I deserve a raise because I took on the responsibility of a new puppy.",
-    "sourceFile": "text.md"
-  }
-}

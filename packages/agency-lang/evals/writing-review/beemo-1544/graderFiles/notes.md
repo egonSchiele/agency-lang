@@ -1,2 +1,0 @@
-- Written down to a child rather than as one: "Can you believe it?", "It's like, whoa", "super smart doctors", "superheroes" pile up in every sentence and become tiresome. A kid states things plainly; keep one or two touches of voice, not one per clause.
-- The paragraph praising Dr. Lippner and Dr. Lang and the closing paragraph of wishes (peanut butter sandwiches, "the best thing ever") are padding that do not carry any of the source's content. Cut them.

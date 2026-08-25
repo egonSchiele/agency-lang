@@ -1,1 +1,0 @@
-- "Sure! Here is a summary sentence for the post about coral reefs:" is a preamble that repeats the instruction. The reader asked for one sentence; give the sentence and nothing else.

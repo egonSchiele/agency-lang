@@ -1,2 +1,0 @@
-- The summary repeats itself: the reasons (extreme restriction, weight regained, weight cycling, weight is not everything) are stated twice in different words, and the closing sentence restates the whole summary again. One pass through the author's reasons is enough.
-- "Overall, the author suggests ..." adds nothing after the reasons have been given; cut it.

@@ -1,8 +1,0 @@
-{
-  "description": "Beemo #1882 (Summarize, Llama-2-70b-chat-hf): an LLM answer and an expert's edit of it. Source: toloka/beemo.",
-  "files": "./files",
-  "input": {
-    "assignment": "Summarize why this author believes quick weight loss is unhealthy. \n\n\nQuick weight loss can sound pretty enticing. That's especially true when fad diets and social media make it seem more realistic than it really is to drop 10 pounds in 10 days. In fact, \"yo-yo dieting\" or \"weight cycling\" is associated with an increased risk of death. The truth is, for many people, it's not easy to lose weight for a myriad of reasons, including life-stage, body composition, physical activity, genetics and hormones, among other factors. Plus, weight is not the end all be all and is only one of several factors that impact our overall health.\n\nExtreme calorie restriction and excessive exercising is something our nutrition and fitness experts would never recommend for health reasons, but they also note that you'll likely gain all of your weight back faster than you lost it if you try those approaches. Losing weight by improving your overall diet and lifestyle is without a doubt the healthiest way to go.",
-    "sourceFile": "text.md"
-  }
-}

@@ -1,8 +1,0 @@
-{
-  "description": "Beemo #1544 (Rewrite, Llama-2-7b-chat-hf): an LLM answer and an expert's edit of it. Source: toloka/beemo.",
-  "files": "./files",
-  "input": {
-    "assignment": "Rewrite this as if it was from the perspective of a young kid.\n\nPeanut allergy affects approximately 2 percent of children in the United States, Canada and other westernized countries, and it commonly persists into adulthood. Life-threatening allergic reactions can be triggered by unintentional exposure to minute quantities, including through products manufactured on shared equipment as peanuts. Currently, there are no approved treatments for peanut-allergic children younger than 4 years of age.\n\nSince 2012, the clinical trials program for food allergies at Lurie Children's has enrolled patients on numerous studies of novel treatments, including the oral immunotherapy for peanuts that has been approved by the Food and Drug Administration (FDA). Ongoing trials are available for all age groups, from infancy to young adulthood. The program is led by Principal Investigators Elizabeth Lippner, MD, and Abigail Lang, MD, MSCI.",
-    "sourceFile": "text.md"
-  }
-}

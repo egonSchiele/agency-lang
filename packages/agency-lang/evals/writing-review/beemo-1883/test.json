@@ -1,8 +1,0 @@
-{
-  "description": "Beemo #1883 (Summarize, Llama-2-70b-chat-hf): an LLM answer and an expert's edit of it. Source: toloka/beemo.",
-  "files": "./files",
-  "input": {
-    "assignment": "I need a TL:DR on the following document:\n\nNearly 10 months after the long-awaited dredging of the Weeki Wachee River stopped because of water quality issues, work is scheduled to begin again on the $2.1 million project with a new contractor and a different technique.\n\nTo provide space for workers to stage equipment and begin the job, Hernando County will close Rogers Park on Shoal Line Boulevard on Monday, May 8, through Friday, May 12.\n\n\u201cThis week was chosen so the temporary closure would not conflict with spring break, and would allow the park to reopen before schools let out for the summer. The weather will determine any potential delays and the community will be notified,\u201d according to a news release from Hernando County.",
-    "sourceFile": "text.md"
-  }
-}

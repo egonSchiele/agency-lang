@@ -1,2 +1,0 @@
-- The final "In summary" paragraph repeats every point the article already made (balances, transfers, bills, alerts, 24/7 access, fees). Cut it; a 250-word article has no room to say things twice.
-- "and even deposit checks" appears twice; say it once.

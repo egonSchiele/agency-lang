@@ -1,8 +1,0 @@
-{
-  "description": "Beemo #367 (Generation, Mixtral-8x7B-Instruct-v0.1): an LLM answer and an expert's edit of it. Source: toloka/beemo.",
-  "files": "./files",
-  "input": {
-    "assignment": "Create an acrostic poem for camping",
-    "sourceFile": "text.md"
-  }
-}

@@ -1,1 +1,0 @@
-- The question asks what the Dream Team is. The first sentence answers it. The other three paragraphs (history of the pro-player rule, the 1992 results, the legacy) are background the reader did not ask for, and repeat the same claim about popularizing basketball three times. Cut everything after the first sentence.

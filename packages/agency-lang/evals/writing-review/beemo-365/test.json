@@ -1,8 +1,0 @@
-{
-  "description": "Beemo #365 (Generation, Mixtral-8x7B-Instruct-v0.1): an LLM answer and an expert's edit of it. Source: toloka/beemo.",
-  "files": "./files",
-  "input": {
-    "assignment": "Write an article about online banking. Give some tidbits of information that readers might not know. Talk about all the benefits of online banking. Keep the word count under 250 words.",
-    "sourceFile": "text.md"
-  }
-}

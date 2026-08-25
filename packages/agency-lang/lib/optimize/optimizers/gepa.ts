@@ -32,7 +32,11 @@ export type GepaConfig = BaseOptimizerConfig & {
 };
 
 export type GepaDeps = BaseOptimizerDeps & {
-  propose?: (runAgency: AgencyRunner, sections: ReflectionSections) => Promise<MutationProposal>;
+  propose?: (
+    runAgency: AgencyRunner,
+    sections: ReflectionSections,
+    model?: string,
+  ) => Promise<MutationProposal>;
   preview?: (
     targetSet: OptimizeTargetSet,
     operations: OptimizeMutationOperation[],
@@ -178,15 +182,19 @@ export class Gepa extends BaseOptimizer {
     const feedback = renderReflectionFeedback(this.focus(parent, minibatch));
     const outcome = await this.proposeValidMutation(
       (diagnostics) =>
-        (this.gepaDeps.propose ?? proposeReflective)(this.agencyRunner, {
-          targets: renderTargetsSection(selected),
-          feedback,
-          // Feed validation errors from the previous attempt back so the model corrects itself.
-          history:
-            diagnostics.length === 0
-              ? ""
-              : `Your previous proposal was rejected:\n${formatDiagnostics(diagnostics)}\nFix these and keep every interpolation placeholder.`,
-        }),
+        (this.gepaDeps.propose ?? proposeReflective)(
+          this.agencyRunner,
+          {
+            targets: renderTargetsSection(selected),
+            feedback,
+            // Feed validation errors from the previous attempt back so the model corrects itself.
+            history:
+              diagnostics.length === 0
+                ? ""
+                : `Your previous proposal was rejected:\n${formatDiagnostics(diagnostics)}\nFix these and keep every interpolation placeholder.`,
+          },
+          this.config.mutatorModel,
+        ),
       (operations) => (this.gepaDeps.preview ?? defaultPreview)(parent.targetSet, operations),
     );
     if (!outcome.ok)

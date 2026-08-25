@@ -49,14 +49,17 @@ export class AgencyRunner {
     return data as JSON;
   }
 
-  /** Run a judge/proposer node and validate its structured return against a schema. */
+  /** Run a judge/proposer node and validate its structured return against a
+   *  schema. `model` overrides the configured default model for this call:
+   *  a proposer may run on a stronger model than the agent under test. */
   async runStructured<T>(
     agencyFile: string,
     nodeName: string,
     args: JSON[],
     schema: ZodSchema<T>,
+    model?: string,
   ): Promise<T> {
-    const { data } = await this.exec(agencyFile, nodeName, args);
+    const { data } = await this.exec(agencyFile, nodeName, args, model);
     const parsed = schema.safeParse(data);
     if (!parsed.success) {
       throw new Error(
@@ -70,11 +73,15 @@ export class AgencyRunner {
     agencyFile: string,
     nodeName: string,
     args: JSON[],
+    model?: string,
   ): Promise<{ data: unknown; costUsd?: number }> {
     const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-runner-"));
     try {
       const config = { ...this.config };
       delete config.distDir;
+      if (model !== undefined) {
+        config.client = { ...config.client, defaultModel: model };
+      }
       const argsString = args.map((v) => globalThis.JSON.stringify(v)).join(", ");
       // Judges/proposers are bundled agents with a precompiled .js in dist;
       // reuse it instead of recompiling on every grade/proposal call.

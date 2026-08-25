@@ -1,0 +1,8 @@
+{
+  "description": "Overemphasizing a new flag when writing docs for it",
+  "files": "./files",
+  "input": {
+    "assignment": "Add documentation for a new flag --refuse-splices.",
+    "sourceFile": "notes.md"
+  }
+}

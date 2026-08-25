@@ -45,6 +45,15 @@ The principles. Every finding names the principle it violates:
   not help; say it should be cut. This is the most common flaw in
   technical writing, and the one a sentence-level read misses.
 
+Habits to flag on sight. These constructions are worn out from overuse
+by the writers this reviewer serves; report each once, saying it repeats:
+- "X is the case that matters", "the one that matters"
+- "both matter", "both halves matter"
+- "this proves the X", "proves that"
+- "I said it before checking"
+- "also answers to" for a command alias (say "is an alias for")
+- a verb used as a noun to save words ("costs no parse")
+
 How to review:
 1. Work out who the text is for and what it must get across; judge
    against that, not against taste.

@@ -7,7 +7,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { binary, grader, scalar, type Grader, type Test } from "agency-lang/eval";
+import { binary, grader, scalar, type Grade, type Grader, type Test } from "agency-lang/eval";
 
 import * as prompts from "./templates.js";
 
@@ -168,6 +168,21 @@ function harvest(graderFiles: string): { notes: string; cleaned: string | null }
   return { notes, cleaned };
 }
 
+/** The editor's points, one per top-level bullet in notes.md. Notes written
+ *  as prose are one point. The judge is asked about each point on its own,
+ *  so it cannot pad the list with the reviewer's findings. */
+function editorPoints(notes: string): string[] {
+  const bullets = notes
+    .split("\n")
+    .filter((line) => /^[-*] /.test(line))
+    .map((line) => line.slice(2).trim());
+  return bullets.length > 0 ? bullets : [notes.trim()];
+}
+
+function scoreValue(score: Grade["score"]): number {
+  return score.kind === "binary" ? (score.pass ? 1 : 0) : score.value;
+}
+
 /** Graders for a harvested test: a real piece of text, the editor's notes on
  *  it, and the text after editing. The notes are the ground truth for what
  *  the findings must name; the cleaned text is the ground truth for whether
@@ -176,14 +191,29 @@ export function harvestedGraders(): WritingReviewGrader[] {
   return [
     rejects(),
     grader<WritingReviewInput>(
-      ({ output, graderFiles, judges }) => {
+      async ({ output, graderFiles, judges }) => {
         if (findings(output).length === 0) {
           return scalar(0, "no findings to match");
         }
-        return judges.rubric({
-          ...prompts.namesHarvestedFlaws({ notes: harvest(graderFiles).notes }),
-          output: text(findings(output)),
-        });
+        const { notes } = harvest(graderFiles);
+        const points = editorPoints(notes);
+        const verdicts = await Promise.all(
+          points.map((point) =>
+            judges.rubric({
+              ...prompts.coversEditorPoint({ point, notes }),
+              output: text(findings(output)),
+            }),
+          ),
+        );
+        const covered = verdicts.filter((verdict) => scoreValue(verdict.score) >= 0.5).length;
+        const report = points.map(
+          (point, i) =>
+            `[${scoreValue(verdicts[i].score) >= 0.5 ? "covered" : "missed"}] ${point}\n    ${verdicts[i].feedback ?? ""}`,
+        );
+        return scalar(
+          covered / points.length,
+          `${covered} of ${points.length} editor's points covered\n${report.join("\n")}`,
+        );
       },
       { name: "names-the-flaws" },
     ),

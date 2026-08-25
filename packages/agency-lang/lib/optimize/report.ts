@@ -14,7 +14,7 @@ export type ReportMeta = {
   validationConfiguredButUnused?: boolean; // Phase 3, gepa/example honesty note
 };
 
-/** Escape a Markdown table cell: no pipes (column breaks) or newlines (row breaks). */
+/** The cost line: total first, then the agent, grading, and mutator shares. */
 export function formatCost(cost: OptimizeCost): string {
   const usd = (value: number) => `$${value.toFixed(2)}`;
   return `${usd(cost.totalUsd)} (agent ${usd(cost.agentUsd)}, grading ${usd(cost.gradingUsd)}, mutator ${usd(cost.mutatorUsd)})`;
@@ -24,6 +24,7 @@ function score(value: number | undefined): string {
   return value === undefined ? "" : value.toFixed(3);
 }
 
+/** Escape a Markdown table cell: no pipes (column breaks) or newlines (row breaks). */
 function cell(value: unknown): string {
   return String(value).replace(/\|/g, "\\|").replace(/\n/g, " ");
 }

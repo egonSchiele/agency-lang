@@ -32,6 +32,7 @@ import type {
   OptimizeDecision,
   OptimizeResult,
 } from "./types.js";
+import { MalformedProposalError } from "./mutator.js";
 import { WorkspaceManager, type CachePartition } from "./workspace.js";
 
 /** Result of proposing a mutation: a clean preview, or the reason it couldn't be produced. */
@@ -193,7 +194,8 @@ export abstract class BaseOptimizer {
       try {
         proposal = await propose(diagnostics);
       } catch (error) {
-        this.countProposalCost(runnerBefore, 0);
+        const paid = error instanceof MalformedProposalError ? (error.costUsd ?? 0) : 0;
+        this.countProposalCost(runnerBefore, paid);
         rationale = `proposer returned a malformed response: ${error instanceof Error ? error.message : String(error)}`;
         diagnostics = [];
         continue;

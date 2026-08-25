@@ -115,6 +115,17 @@ export function buildMutatorSections(promptInputs: MutatorPromptInputs): Mutator
  * validation belongs to `OptimizeSourceMutator.preview()`, whose rejected
  * diagnostics come back in via `args.diagnostics` for a retry.
  */
+/** The model answered, so its call was paid for, but the answer was not a
+ *  proposal. Carries the spend so the optimizer can still count it. */
+export class MalformedProposalError extends Error {
+  constructor(
+    detail: string,
+    public readonly costUsd?: number,
+  ) {
+    super(`Malformed mutator response: ${detail}`);
+  }
+}
+
 export async function proposeMutation(args: ProposeMutationArgs): Promise<MutationProposal> {
   const model = args.model || args.config.client?.defaultModel || DEFAULT_MODEL;
   const sections = buildMutatorSections(args);
@@ -126,7 +137,7 @@ export async function proposeMutation(args: ProposeMutationArgs): Promise<Mutati
   const normalized = parseModelOutput(raw);
   const parsed = MutationProposalSchema.safeParse(normalized);
   if (!parsed.success) {
-    throw new Error(`Malformed mutator response: ${parsed.error.message}`);
+    throw new MalformedProposalError(parsed.error.message, costUsd);
   }
   return costUsd === undefined ? parsed.data : { ...parsed.data, costUsd };
 }

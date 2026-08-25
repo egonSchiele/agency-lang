@@ -418,12 +418,15 @@ export class OptimizeSourceMutator {
       const quote = target.valueKind === "multilineString" ? `"""` : `"`;
       const wrapped = exprParser(`${quote}${operation.value}${quote}`);
       if (wrapped.success && wrapped.rest.trim() === "") parsed = wrapped;
-      // A multi-line prompt sent in plain quotes cannot parse (newlines), and
-      // wrapping it whole gives four quotes. Strip the pair and wrap the inside.
-      const plainQuoted = /^"(?!"")([\s\S]*)"$/.exec(operation.value);
-      if (!parsed.success && target.valueKind === "multilineString" && plainQuoted) {
-        const inner = exprParser(`"""${plainQuoted[1]}"""`);
-        if (inner.success && inner.rest.trim() === "") parsed = inner;
+      // Text that ends in a quote cannot sit inside """...""" (the closing
+      // quotes run together), so fall back to "..." with escapes.
+      if (!parsed.success || parsed.rest.trim() !== "") {
+        const escaped = operation.value
+          .replace(/\\/g, "\\\\")
+          .replace(/"/g, '\\"')
+          .replace(/\n/g, "\\n");
+        const plain = exprParser(`"${escaped}"`);
+        if (plain.success && plain.rest.trim() === "") parsed = plain;
       }
     }
     if (!parsed.success || parsed.rest.trim() !== "") {
@@ -456,13 +459,23 @@ export class OptimizeSourceMutator {
         });
       }
       // A multi-line prompt sent as "..." with \n escapes would be written
-      // back as one long line. Keep the source readable: emit it as """...""".
+      // back as one long line. Keep the source readable: emit it as """..."""
+      // when that renders back to the same text (""" cannot escape quotes).
       if (
         target.valueKind === "multilineString" &&
         replacement.type === "string" &&
         newValue.includes("\n")
       ) {
-        replacement = { type: "multiLineString", segments: replacement.segments };
+        const block: Expression = { type: "multiLineString", segments: replacement.segments };
+        const roundTrip = exprParser(generateExpression(block));
+        if (
+          roundTrip.success &&
+          roundTrip.rest.trim() === "" &&
+          roundTrip.result.type === "multiLineString" &&
+          promptSegmentsToString(roundTrip.result.segments) === newValue
+        ) {
+          replacement = block;
+        }
       }
       return { resolved: { operation, target, replacement, newValue } };
     }

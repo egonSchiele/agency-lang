@@ -236,11 +236,12 @@ describe("OptimizeSourceMutator replacement value validation", () => {
     ]);
   });
 
-  it("rejects replacement values that are not valid Agency expressions", () => {
-    const diagnostics = previewDiagnostics([{ ...validOperation, value: '"unterminated' }]);
-    expect(diagnostics).toMatchObject([
-      { code: "invalid-replacement-syntax", target: "foo.agency:bar:prompt" },
+  it("keeps a stray leading quote as part of the prompt text", () => {
+    const preview = new OptimizeSourceMutator({ targetSet: makeTargetSet() }).preview([
+      { ...validOperation, value: '"unterminated' },
     ]);
+    expect(preview.diagnostics).toEqual([]);
+    expect(preview.changes[0].newValue).toBe('"unterminated');
   });
 
   it("wraps unquoted prose into a string literal (recovers a model that omits quotes)", () => {
@@ -259,18 +260,21 @@ describe("OptimizeSourceMutator replacement value validation", () => {
     expect(preview.changes[0].newValue).toBe("x => x + 1");
   });
 
-  it("still rejects unquoted text with embedded quotes that cannot be wrapped cleanly", () => {
-    const diagnostics = previewDiagnostics([{ ...validOperation, value: 'Say "hi" to them' }]);
-    expect(diagnostics).toMatchObject([
-      { code: "invalid-replacement-syntax", target: "foo.agency:bar:prompt" },
+  it("escapes embedded quotes in plain text", () => {
+    const preview = new OptimizeSourceMutator({ targetSet: makeTargetSet() }).preview([
+      { ...validOperation, value: 'Say "hi" to them' },
     ]);
+    expect(preview.diagnostics).toEqual([]);
+    expect(preview.changes[0].newValue).toBe('Say "hi" to them');
+    expect(preview.files["foo.agency"]).toContain('"Say \\"hi\\" to them"');
   });
 
-  it("rejects replacement values with trailing content after the expression", () => {
-    const diagnostics = previewDiagnostics([{ ...validOperation, value: '"ok" trailing' }]);
-    expect(diagnostics).toMatchObject([
-      { code: "invalid-replacement-syntax", target: "foo.agency:bar:prompt" },
+  it("keeps text after a quoted phrase instead of treating it as trailing garbage", () => {
+    const preview = new OptimizeSourceMutator({ targetSet: makeTargetSet() }).preview([
+      { ...validOperation, value: '"ok" trailing' },
     ]);
+    expect(preview.diagnostics).toEqual([]);
+    expect(preview.changes[0].newValue).toBe('"ok" trailing');
   });
 
   it("rejects non-string expressions in v1", () => {
@@ -422,7 +426,7 @@ describe("OptimizeSourceMutator.preview", () => {
     ]);
   });
 
-  it("recovers a multi-line prompt the model sent in plain quotes", () => {
+  it("keeps a multi-line prompt that starts and ends with a quote character verbatim", () => {
     const dir = makeTempDir();
     const entry = writeAgency(
       dir,
@@ -435,11 +439,37 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "multi.agency:global:big",
         kind: "variable",
         op: "replaceInitializer",
-        value: '"first line\nsecond line"',
+        value: '"quoted start"\nmiddle\n"quoted end"',
       },
     ]);
     expect(preview.diagnostics).toEqual([]);
-    expect(preview.changes[0].newValue).toBe("first line\nsecond line");
+    expect(preview.changes[0].newValue).toBe('"quoted start"\nmiddle\n"quoted end"');
+    expect(preview.files["multi.agency"]).toContain(
+      'optimize const big = "\\"quoted start\\"\\nmiddle\\n\\"quoted end\\""',
+    );
+  });
+
+  it("keeps plain quotes when the text cannot round-trip through a triple-quoted block", () => {
+    const dir = makeTempDir();
+    const entry = writeAgency(
+      dir,
+      "multi.agency",
+      'optimize const big = """\nline one\nline two\n"""\n\nnode main() {\n  return big\n}\n',
+    );
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+    const preview = new OptimizeSourceMutator({ targetSet }).preview([
+      {
+        target: "multi.agency:global:big",
+        kind: "variable",
+        op: "replaceInitializer",
+        value: '"first line\\nsay \\"hi\\""',
+      },
+    ]);
+    expect(preview.diagnostics).toEqual([]);
+    expect(preview.changes[0].newValue).toBe('first line\nsay "hi"');
+    expect(preview.files["multi.agency"]).toContain(
+      'optimize const big = "first line\\nsay \\"hi\\""',
+    );
   });
 
   it("writes a multi-line replacement back as a triple-quoted block", () => {

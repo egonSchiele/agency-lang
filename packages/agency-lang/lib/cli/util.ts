@@ -361,7 +361,7 @@ export async function executeNodeAsync({
   fakeClock,
   env: callerEnv,
   ...rest
-}: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
+}: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string; costUsd?: number }> {
   const useDeterministic = !!process.env.AGENCY_USE_TEST_LLM_PROVIDER || !!useTestLLMProvider;
   // The caller's entries (policy, budget) come first; the mock entries this
   // wrapper owns are added on top.

@@ -9,8 +9,8 @@ export const template = `# Optimize run {{{runId}}}
 
 ## Iterations
 
-| iter | decision | detail |
-| --- | --- | --- |
+| iter | decision | objective | validation | detail |
+| --- | --- | --- | --- | --- |
 {{{iterationRows}}}{{{championSection}}}
 `;
 

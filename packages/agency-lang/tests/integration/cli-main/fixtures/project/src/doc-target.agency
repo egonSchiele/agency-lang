@@ -13,7 +13,7 @@ export def greet(person: Person): string {
 }
 
 /** Return a greeting for Ada. */
-node main(): string {
+export node main(): string {
   const person: Person = { name: "Ada" }
   return greet(person)
 }

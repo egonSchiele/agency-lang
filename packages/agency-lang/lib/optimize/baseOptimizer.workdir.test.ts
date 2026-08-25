@@ -46,6 +46,9 @@ class Probe extends BaseOptimizer {
   ): Promise<Scorecard> {
     return this.evaluate(ws, source, files, inputs);
   }
+  costAt() {
+    return this.costSoFar();
+  }
   forkAt() {
     return this.fork();
   }
@@ -66,7 +69,7 @@ describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
     mockEval.mockImplementation(async (args: { out: string; inputs: Test[] }) => {
       const input = args.inputs[0];
       // A real one-input run directory: the optimizer grades it via gradeRun.
-      const runDir = fakeRun(input.id ?? "a", "out", input);
+      const runDir = fakeRun(input.id ?? "a", "out", input, 0.25);
       return {
         runDir: path.dirname(runDir),
         tests: [{ testId: input.id ?? "a", traceId: "t", runDir, status: "success" }],
@@ -111,7 +114,24 @@ describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
       closureFiles: [],
     });
     expect(call.perRun.overlayFiles).toEqual(files);
-    expect(call.agent).toBe(path.join(src, "agent.agency"));
+    expect(call.agent).toBe(`${path.join(src, "agent.agency")}:main`);
+  });
+
+  it("adds each run's statelog spend to the agent cost", async () => {
+    const p = probe();
+    await p.evaluateAt(p.forkAt(), source(), {}, [
+      { id: "a", input: "t" },
+      { id: "b", input: "u" },
+    ]);
+    expect(p.costAt()).toEqual({ agentUsd: 0.5, gradingUsd: 0, mutatorUsd: 0, totalUsd: 0.5 });
+  });
+
+  it("runs the node named in the target, not always main", async () => {
+    const p = probe();
+    await p.evaluateAt(p.forkAt(), { ...source(), entryNode: "evalMain" }, {}, [
+      { id: "a", input: "t" },
+    ]);
+    expect(mockEval.mock.calls[0][0].agent).toBe(`${path.join(src, "agent.agency")}:evalMain`);
   });
 
   it("partitions agent-runs by ws.key so caching is per-candidate", async () => {

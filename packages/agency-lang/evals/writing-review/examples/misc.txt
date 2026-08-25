@@ -28,3 +28,43 @@ Lots of little speech patterns that irk me:
 ```
 
 more sentence constructions that you use all the time. You often tell me that "both matter", and that something "proves the X".
+
+---
+
+`agency label` also answers to `agency eval label`, if you prefer to keep the
+whole family under one name.
+
+"also answers to" is really weird phrasing. Better:
+
+`agency eval label` is an alias for `agency label`.
+
+---
+
+Bad:
+
+```
+It guesses which kind you meant. Pass `--format run`, `--format files` or
+`--format json` when you want to say so yourself.
+```
+
+Better:
+
+```
+It tries to guess the format. You can pass the format yourself explicitly with the `--format` flag.
+```
+
+---
+
+Bad:
+
+```
+  First, a correction to what I told you last turn. I said nothing used this feature. That was wrong, and I said it before checking.
+```
+
+"I said it before checking" is overused and grating.
+
+Better:
+
+```
+First, a correction to what I told you last turn. I said nothing used this feature, but that was wrong.
+```

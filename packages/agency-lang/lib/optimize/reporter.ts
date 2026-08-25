@@ -2,6 +2,7 @@ import { formatDiff } from "@/utils/diff.js";
 import { color } from "@/utils/termcolors.js";
 import type { OptimizeAppliedChange, OptimizeMutationDiagnostic } from "./sourceMutator.js";
 import type { OptimizeTarget } from "./targets.js";
+import { formatCost } from "./report.js";
 import type { OptimizeDecision, OptimizeResult } from "./types.js";
 
 export type OptimizeVerbosity = "silent" | "default";
@@ -124,6 +125,7 @@ export function createPointwiseReporter(
           `Complete: champion iteration ${result.championIter}, accepted ${result.acceptedCount}, rejected ${result.rejectedCount}, invalid ${result.validationFailedCount} (${formatMs(durationMs)})`,
         ),
       );
+      if (result.cost) log(color.yellow(`Cost: ${formatCost(result.cost)}`));
     },
   };
 }

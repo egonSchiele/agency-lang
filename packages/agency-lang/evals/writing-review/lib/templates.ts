@@ -28,10 +28,10 @@ export const noInventedErrorsPlanted = (p: { sourceFileText: string; reason: str
   context: `The planted problems: ${p.reason}\n\n${reviewed(p.sourceFileText)}`,
 });
 
-export const namesHarvestedFlaws = (p: { notes: string }): Rubric => ({
+export const coversEditorPoint = (p: { point: string; notes: string }): Rubric => ({
   standard:
-    "These are the findings of a readability review. The findings identify the problems the editor's notes name, pointing at the same passages for the same reasons. Wording may differ, and whether a finding is marked error or advisory does not matter. Score in proportion to how many of the editor's points the findings cover.",
-  context: `The editor's notes:\n\n${p.notes}`,
+    "These are the findings of a readability review. Does one of them make this point from the editor's notes, about the same passage and calling for the same kind of fix? Wording may differ, and whether the finding is marked error or advisory does not matter. A finding that quotes the right passage but prescribes the opposite fix does not count: if the editor says something should go and the finding says to expand or clarify it, the point is not made. Score 1 if a finding makes the point, 0 if none does.",
+  context: `The editor's point:\n\n${p.point}\n\nThe editor's full notes, for context:\n\n${p.notes}`,
 });
 
 export const noInventedErrorsHarvested = (p: {
@@ -61,8 +61,8 @@ export const recommendsCuts = (p: { sourceFileText: string; cleaned: string }): 
   context: `${reviewed(p.sourceFileText)}\n\nThe editor's version:\n\n${p.cleaned}`,
 });
 
-export const rewritesFaithful = (p: { sourceFileText: string }): Rubric => ({
+export const rewritesFaithful = (p: { sourceFileText: string; assignment: string }): Rubric => ({
   standard:
-    "These are the findings of a readability review, each quoting a passage and suggesting a rewrite. Do the suggested rewrites keep the facts the same as the original, or do they invent facts? A rewrite may cut or simplify freely, but it should never add a claim or detail that the original didn't. For example, if the original text is about art, a rewrite shouldn't mention that Wayne Thiebaud is the best artist, if the original didn't claim that. Also, every identifier, (like a code name, a path, a symbol like `std::notes::create`) must be the same in the rewrite as it was in the original. Lower the score in proportion to the number of rewrites that invent something or alter an identifier.",
-  context: reviewed(p.sourceFileText),
+    "These are the findings of a readability review, each quoting a passage and suggesting a rewrite. Do the suggested rewrites keep the facts the same as the original, or do they invent facts? A rewrite may cut or simplify freely, and it may use facts from the assignment the text was written for (the reviewer saw the assignment), but it should never add a claim or detail that neither the original nor the assignment contains. For example, if the original text is about art, a rewrite shouldn't mention that Wayne Thiebaud is the best artist, if the original didn't claim that. Also, every identifier, (like a code name, a path, a symbol like `std::notes::create`) must be the same in the rewrite as it was in the original. Lower the score in proportion to the number of rewrites that invent something or alter an identifier.",
+  context: `${reviewed(p.sourceFileText)}\n\nThe assignment the text was written for:\n\n${p.assignment}`,
 });

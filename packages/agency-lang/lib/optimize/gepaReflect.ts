@@ -13,6 +13,7 @@ export type ReflectionSections = { targets: string; feedback: string; history: s
 export async function proposeReflective(
   runAgency: AgencyRunner,
   sections: ReflectionSections,
+  model?: string,
 ): Promise<MutationProposal> {
   const agentFile = path.join(getAgentsDir(), "optimize", "gepaReflect.agency");
   const args: JSON[] = [sections.targets, sections.feedback, sections.history];
@@ -21,5 +22,6 @@ export async function proposeReflective(
     "gepaReflect",
     args,
     MutationProposalSchema,
+    model,
   ) as Promise<MutationProposal>;
 }

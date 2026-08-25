@@ -1,0 +1,2 @@
+- "guesses which kind you meant" and "when you want to say so yourself" are roundabout. Say it guesses the format, and that you can pass the format explicitly with --format.
+- Listing every --format value is not needed here.

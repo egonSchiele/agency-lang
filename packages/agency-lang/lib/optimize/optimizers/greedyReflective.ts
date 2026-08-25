@@ -101,7 +101,12 @@ export class GreedyReflective extends BaseOptimizer {
       source,
       [baseline, ...accepted],
       trainChampion,
-      attempts.map((a) => ({ iter: a.iter, decision: a.decision, detail: attemptDetail(a) })),
+      attempts.map((a) => ({
+        iter: a.iter,
+        decision: a.decision,
+        detail: attemptDetail(a),
+        objective: a.objective,
+      })),
       startedAt,
     );
   }

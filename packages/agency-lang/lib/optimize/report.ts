@@ -4,7 +4,7 @@ import * as path from "path";
 import renderTemplate from "@/templates/cli/optimizeReport.js";
 import { asJudgeText } from "@/eval/grading/goalJudgeFile.js";
 import type { GradeRow, InputBreakdown } from "@/eval/grading/gradeBreakdown.js";
-import type { OptimizeResult } from "./types.js";
+import type { OptimizeCost, OptimizeResult } from "./types.js";
 
 export type ReportMeta = {
   optimizer: string;
@@ -13,6 +13,16 @@ export type ReportMeta = {
   validationObjective?: number; // populated in Phase 3
   validationConfiguredButUnused?: boolean; // Phase 3, gepa/example honesty note
 };
+
+/** The cost line: total first, then the agent, grading, and mutator shares. */
+export function formatCost(cost: OptimizeCost): string {
+  const usd = (value: number) => `$${value.toFixed(2)}`;
+  return `${usd(cost.totalUsd)} (agent ${usd(cost.agentUsd)}, grading ${usd(cost.gradingUsd)}, mutator ${usd(cost.mutatorUsd)})`;
+}
+
+function score(value: number | undefined): string {
+  return value === undefined ? "" : value.toFixed(3);
+}
 
 /** Escape a Markdown table cell: no pipes (column breaks) or newlines (row breaks). */
 function cell(value: unknown): string {
@@ -27,7 +37,10 @@ export function renderReport(result: OptimizeResult, meta: ReportMeta): string {
     runId: result.runId,
     metaLines: metaLines(result, meta).join("\n"),
     iterationRows: result.iterations
-      .map((it) => `| ${it.iter} | ${it.decision} | ${cell(it.detail ?? "")} |`)
+      .map(
+        (it) =>
+          `| ${it.iter} | ${it.decision} | ${score(it.objective)} | ${score(it.validationObjective)} | ${cell(it.detail ?? "")} |`,
+      )
       .join("\n"),
     championSection: championSection(result.championBreakdown),
   });
@@ -50,6 +63,7 @@ function metaLines(result: OptimizeResult, meta: ReportMeta): string[] {
   lines.push(
     `- Decisions — accepted: ${result.acceptedCount}, rejected: ${result.rejectedCount}, invalid: ${result.validationFailedCount}`,
   );
+  if (result.cost) lines.push(`- Cost: ${formatCost(result.cost)}`);
   return lines;
 }
 

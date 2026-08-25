@@ -10,7 +10,7 @@ import {
   subprocessBootstrapPath,
   type RunLimits,
 } from "@/runtime/ipc.js";
-import { forwardSigintTo } from "./sigintForwarder.js";
+import { supervise } from "./childSupervisor.js";
 
 /** One run's execution job, mirroring the EvalTarget kinds: a compiled file
  *  entry to fork and invoke over IPC, or a substituted command argv to
@@ -173,13 +173,13 @@ async function runCompiledAgentInSubprocess(args: {
 
   return new Promise((resolve) => {
     let settled = false;
-    // A forwarded SIGINT kills the child, which settles this promise through
+    // A forwarded signal kills the child, which settles this promise through
     // the normal "close" path, as an error result.
-    const stopForwarding = forwardSigintTo(child);
+    const unsupervise = supervise((signal) => child.kill(signal));
     const settle = (value: { ok: true } | { ok: false; errorMessage: string }) => {
       if (settled) return;
       settled = true;
-      stopForwarding();
+      unsupervise();
       resolve(value);
     };
 

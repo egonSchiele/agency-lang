@@ -6,6 +6,7 @@ import type { RunLimits } from "@/runtime/ipc.js";
 
 import { makeCostCapTracker } from "./subprocess.js";
 import { makeStatelogCostTailer } from "./costTail.js";
+import { supervise } from "./childSupervisor.js";
 
 /** Substituted argv must fit the OS argument-size limit; the raw failure is
  *  an opaque E2BIG from spawn. Conservative cap, checked before spawning. */
@@ -16,40 +17,6 @@ const KILL_GRACE_MS = 5_000;
 
 /** Keep this much of the drained stderr for error messages. */
 const STDERR_TAIL_CHARS = 2_000;
-
-/**
- * One process-wide supervisor for every in-flight command tree, instead of
- * four `process` listeners per run: under `-n 10` the per-run listeners added
- * up to 40+ and Node's MaxListenersExceededWarning printed straight into the
- * status board's in-place repaint. The four handlers are registered once,
- * forever; each run adds its killTree while alive and removes it on settle.
- * The detached trees must never outlive this process: the terminating
- * signals are forwarded as group kills, and ANY exit (normal, crash,
- * uncaught throw) reaps with SIGKILL. The one hole no supervisor can close
- * is SIGKILL of this process — nothing runs then; a tree's remaining
- * protection is EPIPE on its next write to our closed pipes.
- */
-const liveTrees: Array<(signal: NodeJS.Signals) => void> = [];
-let supervisorInstalled = false;
-
-function superviseTree(killTree: (signal: NodeJS.Signals) => void): () => void {
-  if (!supervisorInstalled) {
-    supervisorInstalled = true;
-    for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
-      process.on(signal, () => {
-        for (const kill of liveTrees) kill(signal);
-      });
-    }
-    process.on("exit", () => {
-      for (const kill of liveTrees) kill("SIGKILL");
-    });
-  }
-  liveTrees.push(killTree);
-  return () => {
-    const at = liveTrees.indexOf(killTree);
-    if (at !== -1) liveTrees.splice(at, 1);
-  };
-}
 
 /**
  * Run a command target: spawn (not fork — no IPC channel) in the workdir,
@@ -134,7 +101,7 @@ export function runCommandInSpawn(args: {
     let stderrTail = "";
     const timers: NodeJS.Timeout[] = [];
     const intervals: NodeJS.Timeout[] = [];
-    const unsupervise = superviseTree(killTree);
+    const unsupervise = supervise(killTree);
 
     const settle = (value: { ok: true } | { ok: false; errorMessage: string }) => {
       if (settled) return;

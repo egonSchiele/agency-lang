@@ -104,7 +104,10 @@ more minutes, holding the harness's pipes open so `close` never fired.
 Detaching removes the tree from the terminal's foreground group, so the
 harness's forwarding IS the delivery mechanism: SIGINT, SIGTERM, and
 SIGHUP are forwarded as group kills, and a `process.on("exit")` hook reaps
-the group with SIGKILL on any harness death. The one hole no supervisor
+the group with SIGKILL on any harness death. That forwarding lives in
+`lib/eval/run/childSupervisor.ts`, shared with the forked file-target
+children, and installs its listeners only while a child is live. A second
+terminating signal is a force quit: SIGKILL to every live child, then exit. The one hole no supervisor
 can close is SIGKILL of the harness itself — the orphaned tree's remaining
 protection is EPIPE on its next write to the dead pipes. (File targets are
 safer here: IPC children carry a disconnect watchdog and die with their

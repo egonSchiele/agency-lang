@@ -47,14 +47,37 @@ describe("FunctionGrader", () => {
     expect(seen).toEqual(["Paris"]);
   });
 
-  it("provides ctx.judge that runs the bundled goal judge and returns a Grade with its reasoning", async () => {
+  it("provides ctx.judges.rubric that runs the bundled rubric judge with the standard, output, and context", async () => {
+    const runStructured = vi.fn(async () => ({ score: 0.4, reasoning: "two of five" }));
+    const ctxInput: GraderInput = {
+      ...runInput(["finding a", "finding b"]),
+      runAgency: { runStructured } as unknown as AgencyRunner,
+    };
+    const g = new FunctionGrader(({ judges }) =>
+      judges.rubric({ standard: "every finding is true", context: "the source" }),
+    );
+    expect(await g.run(ctxInput)).toEqual({
+      score: { kind: "scalar", value: 0.4 },
+      feedback: "two of five",
+    });
+    const [file, node, args] = runStructured.mock.calls[0] as unknown as [
+      string,
+      string,
+      unknown[],
+    ];
+    expect(file.endsWith("eval/rubricJudge.agency")).toBe(true);
+    expect(node).toBe("main");
+    expect(args).toEqual(["every finding is true", '["finding a","finding b"]', "the source"]);
+  });
+
+  it("provides ctx.judges.goal that runs the bundled goal judge and returns a Grade with its reasoning", async () => {
     const runStructured = vi.fn(async () => ({ score: 0.9, reasoning: "good" }));
     const ctxInput: GraderInput = {
       ...runInput("Paris"),
       runAgency: { runStructured } as unknown as AgencyRunner,
     };
     // The Grade is returnable as-is, so the reasoning lands in the annotation.
-    const g = new FunctionGrader(({ judge, output }) => judge({ goal: "capital", output }));
+    const g = new FunctionGrader(({ judges, output }) => judges.goal({ goal: "capital", output }));
     expect(await g.run(ctxInput)).toEqual({
       score: { kind: "scalar", value: 0.9 },
       feedback: "good",
@@ -62,14 +85,14 @@ describe("FunctionGrader", () => {
     expect(runStructured).toHaveBeenCalledTimes(1);
   });
 
-  it("ctx.judge forwards test.expected as the third judge arg by default", async () => {
+  it("ctx.judges.goal forwards test.expected as the third judge arg by default", async () => {
     const runStructured = vi.fn(async () => ({ score: 1, reasoning: "" }));
     const input: GraderInput = {
       test: { id: "a", input: "t", expected: "New Delhi" },
       run: loadedRun("New Delhi"),
       runAgency: { runStructured } as unknown as AgencyRunner,
     };
-    const g = new FunctionGrader(({ judge }) => judge({ goal: "capital" }));
+    const g = new FunctionGrader(({ judges }) => judges.goal({ goal: "capital" }));
     await g.run(input);
     expect((runStructured.mock.calls[0] as unknown[])[2]).toEqual([
       "capital",
@@ -78,14 +101,16 @@ describe("FunctionGrader", () => {
     ]);
   });
 
-  it("ctx.judge lets the caller override expected explicitly", async () => {
+  it("ctx.judges.goal lets the caller override expected explicitly", async () => {
     const runStructured = vi.fn(async () => ({ score: 1, reasoning: "" }));
     const input: GraderInput = {
       test: { id: "a", input: "t", expected: "New Delhi" },
       run: loadedRun("Mumbai"),
       runAgency: { runStructured } as unknown as AgencyRunner,
     };
-    const g = new FunctionGrader(({ judge }) => judge({ goal: "capital", expected: "Delhi" }));
+    const g = new FunctionGrader(({ judges }) =>
+      judges.goal({ goal: "capital", expected: "Delhi" }),
+    );
     await g.run(input);
     expect((runStructured.mock.calls[0] as unknown[])[2]).toEqual(["capital", "Mumbai", "Delhi"]);
   });

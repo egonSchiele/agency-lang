@@ -17,12 +17,17 @@ describe("TestsTableView", () => {
     expect(text).toContain("[pick test]");
   });
 
-  it("Enter opens the cursor test's statelog; Esc backs out; q quits", () => {
+  it("Enter opens the cursor test's graders, o its statelog; Esc backs out; q quits", () => {
     const view = new TestsTableView("r-1");
     view.setData([runRow("r-1", { agent: "gcode", tests: [testRow("t-a"), testRow("t-b")] })]);
 
     view.handleKey({ key: "j" }, viewport);
-    const action = view.handleKey({ key: "enter" }, viewport);
+    expect(view.handleKey({ key: "enter" }, viewport)).toEqual({
+      kind: "openTest",
+      runKey: "r-1",
+      inputId: "t-b",
+    });
+    const action = view.handleKey({ key: "o" }, viewport);
     expect(action).toEqual({
       kind: "openLog",
       statelogPath: "/runs/x/inputs/t-b/agent/statelog.jsonl",
@@ -50,6 +55,6 @@ describe("TestsTableView", () => {
     const text = screenText(view.render(viewport));
     expect(text).toContain("$3.00");
     const action = view.handleKey({ key: "enter" }, viewport);
-    expect(action).toMatchObject({ kind: "openLog", title: "agent-a / t-b" });
+    expect(action).toEqual({ kind: "openTest", runKey: "r-1", inputId: "t-b" });
   });
 });

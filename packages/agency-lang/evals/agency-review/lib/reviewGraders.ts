@@ -5,24 +5,26 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { grader, type Grader } from "agency-lang/eval";
+import { binary, grader, type Grader, type Test } from "agency-lang/eval";
 
 import { AGENCY_FACTS } from "./agencyFacts.js";
+
+/** Mirrors `ReviewEvalInput` in stdlib/agents/agency/review.agency. */
+type ReviewInput = { assignment: string; sourceFile: string };
+type ReviewGrader = Grader<ReviewInput>;
 
 type Feedback = { error: boolean; feedback: string };
 const findings = (output: unknown): Feedback[] => (Array.isArray(output) ? output : []);
 const errors = (output: unknown) => findings(output).filter((item) => item?.error === true);
 const advisories = (output: unknown) => findings(output).filter((item) => item?.error !== true);
-
-type TestShape = { input?: unknown };
+const text = (items: Feedback[]) => items.map((item) => item.feedback);
 
 /** The reviewed source, read from the test's seeded workdir. Fixture paths
  *  are authored, but a path that escapes the workdir reads as missing. */
-function sourceOf(workdir: string, test: TestShape): string {
-  const input = test.input as { sourceFile?: string } | undefined;
-  if (!input?.sourceFile) return "";
+function sourceOf(workdir: string, test: Test<ReviewInput>): string {
+  if (!test.input?.sourceFile) return "";
   const root = path.resolve(workdir);
-  const resolved = path.resolve(root, input.sourceFile);
+  const resolved = path.resolve(root, test.input.sourceFile);
   if (!resolved.startsWith(root + path.sep)) return "";
   try {
     return fs.readFileSync(resolved, "utf8");
@@ -31,33 +33,24 @@ function sourceOf(workdir: string, test: TestShape): string {
   }
 }
 
-function assignmentOf(test: TestShape): string {
-  const input = test.input as { assignment?: string } | undefined;
-  return input?.assignment ?? "";
-}
+const reviewed = (source: string) => `The Agency source that was reviewed:\n\n${source}`;
 
 /** Every claim the findings make about Agency must be true of Agency. Runs on
  *  ALL findings, error and advisory alike: a JS-flavored "error" and a
  *  JS-flavored suggestion are the same failure. Judged against the facts
  *  card, so what counts as true is written down and versioned. */
-function agencyTrue(): Grader {
-  return grader(
-    ({ output, judge }) => {
+function agencyTrue(): ReviewGrader {
+  return grader<ReviewInput>(
+    ({ output, judges }) => {
       const all = findings(output);
       if (all.length === 0) {
-        return { score: { kind: "binary", pass: true }, feedback: "no findings to check" };
+        return binary(true, "no findings to check");
       }
-      return judge({
-        goal:
-          "These are review findings about a piece of Agency-language code. Facts about " +
-          "Agency:\n\n" +
-          AGENCY_FACTS +
-          "\n\nIs every claim these findings make about Agency syntax, semantics, or idiom " +
-          "true of Agency? A finding that treats correct Agency as a mistake, or gives " +
-          "JavaScript advice (like preferring === or for...of), is false and should lower " +
-          "the score in proportion to how many findings are affected.",
+      return judges.rubric({
+        standard:
+          "The work is the findings of a review of Agency-language code, each marked [error] or [advisory]. Every claim a finding makes about Agency syntax, semantics, or idiom is true of Agency, as the facts in the context state it. A finding that treats correct Agency as a mistake, or gives JavaScript advice (like preferring === or for...of), is false and lowers the score in proportion to how many findings are affected.",
+        context: `Facts about Agency:\n\n${AGENCY_FACTS}`,
         output: all.map((item) => (item.error ? "[error] " : "[advisory] ") + item.feedback),
-        expected: "",
       });
     },
     { name: "agency-true" },
@@ -66,139 +59,97 @@ function agencyTrue(): Grader {
 
 /** Advisory findings should be worth reading: true of this code and genuinely
  *  useful (performance, idiom, robustness) for this assignment. A review with
- *  no advisory findings passes vacuously — advice is welcome, not demanded. */
-function advisoryUseful(): Grader {
-  return grader(
-    ({ output, workdir, test, judge }) => {
+ *  no advisory findings passes vacuously; advice is welcome, not demanded. */
+function advisoryUseful(): ReviewGrader {
+  return grader<ReviewInput>(
+    ({ output, workdir, test, judges }) => {
       const advice = advisories(output);
       if (advice.length === 0) {
-        return { score: { kind: "binary", pass: true }, feedback: "no advisory findings" };
+        return binary(true, "no advisory findings");
       }
-      return judge({
-        goal:
-          "This Agency source was reviewed:\n\n" +
-          sourceOf(workdir, test) +
-          "\n\nIt was written for this assignment:\n\n" +
-          assignmentOf(test) +
-          "\n\nThese are the review's ADVISORY findings (not errors). Is each one a useful, " +
-          "accurate pointer for this code — a real performance, idiom, or robustness " +
-          "improvement? Padding (generic advice that fits any code), advice the assignment " +
-          "already settles, and suggestions that are not true of this code should lower the " +
-          "score in proportion.",
-        output: advice.map((item) => item.feedback),
-        expected: "",
+      return judges.rubric({
+        standard:
+          "The work is the ADVISORY findings (not errors) of a review of Agency code. Each finding is a useful, accurate pointer for this code: a real performance, idiom, or robustness improvement for the assignment it was written for. Padding (generic advice that fits any code), advice the assignment already settles, and suggestions that are not true of this code lower the score in proportion.",
+        context: `${reviewed(sourceOf(workdir, test))}\n\nThe assignment the code was written for:\n\n${test.input?.assignment ?? ""}`,
+        output: text(advice),
       });
     },
     { name: "advisory-useful" },
   );
 }
 
-function rejects(): Grader {
+function rejects(): ReviewGrader {
   return grader(
-    ({ output }) => ({
-      score: { kind: "binary", pass: errors(output).length > 0 },
-      feedback: `${errors(output).length} error finding(s), ${findings(output).length} total`,
-    }),
+    ({ output }) =>
+      binary(
+        errors(output).length > 0,
+        `${errors(output).length} error finding(s), ${findings(output).length} total`,
+      ),
     { name: "rejects" },
   );
 }
 
-/** Graders for a mutation-derived bug test. `diff` is the mutation applied
- *  to a correct program — verified at authoring time to typecheck and fail
- *  the test's harness. `reason` is the mutation author's one sentence on
- *  what the change breaks; the judges get both, the reason for semantic
- *  framing and the diff for precision and location. */
-export function mutantGraders(args: { diff: string; reason: string }): Grader[] {
+/** Ground truth for a planted bug: the author's one-sentence `reason` for
+ *  what the change breaks, plus, for a mutation-derived test, the diff
+ *  (minus lines are the correct code, plus lines are what the reviewed
+ *  code says) for precision and location. */
+function plantedProblem(args: { diff?: string; reason: string }): string {
+  const reason = `The code under review is a correct program with exactly one planted problem: ${args.reason}`;
+  if (args.diff === undefined) return reason;
+  return `${reason}\n\nThe change, as a diff (minus lines are the correct code, plus lines are what the reviewed code actually says):\n\n${args.diff}`;
+}
+
+function bugGraders(args: { diff?: string; reason: string }): ReviewGrader[] {
   return [
     rejects(),
-    grader(
-      ({ output, judge }) =>
-        judge({
-          goal:
-            "The code under review is a correct program with exactly one planted change: " +
-            args.reason +
-            "\nThe change, as a diff (minus lines are the correct code, plus lines are what " +
-            "the reviewed code actually says):\n\n" +
-            args.diff +
-            "\n\nDo these review findings identify that problem? Wording may differ; what " +
-            "matters is that some error finding points at the planted change or its behavior.",
-          output: errors(output).map((item) => item.feedback),
-          expected: "",
+    grader<ReviewInput>(
+      ({ output, judges }) =>
+        judges.rubric({
+          standard:
+            "The work is the ERROR findings of a code review. Some finding identifies the planted problem described in the context. Wording may differ; what matters is that a finding points at the planted change or its behavior.",
+          context: plantedProblem(args),
+          output: text(errors(output)),
         }),
       { name: "names-the-bug" },
     ),
-    grader(
-      ({ output, workdir, test, judge }) =>
-        judge({
-          goal:
-            "This Agency source was reviewed:\n\n" +
-            sourceOf(workdir, test) +
-            "\n\nIts only planted problem: " +
-            args.reason +
-            "\nThe change from the correct version:\n\n" +
-            args.diff +
-            "\n\nIs every one of these error findings a real problem with the source — the " +
-            "planted change, or something genuinely wrong? A finding that objects to correct " +
-            "code is invented.",
-          output: errors(output).map((item) => item.feedback),
-          expected: "",
+    grader<ReviewInput>(
+      ({ output, workdir, test, judges }) =>
+        judges.rubric({
+          standard:
+            "The work is the ERROR findings of a code review. Every finding is a real problem with the source: the planted problem, or something genuinely wrong. A finding that objects to correct code is invented and lowers the score in proportion.",
+          context: `${plantedProblem(args)}\n\n${reviewed(sourceOf(workdir, test))}`,
+          output: text(errors(output)),
         }),
       { name: "no-invented-errors" },
     ),
     agencyTrue(),
     advisoryUseful(),
   ];
+}
+
+/** Graders for a mutation-derived bug test. `diff` is the mutation applied
+ *  to a correct program, verified at authoring time to typecheck and fail
+ *  the test's harness; `reason` is the mutation author's one sentence on
+ *  what the change breaks. */
+export function mutantGraders(args: { diff: string; reason: string }): ReviewGrader[] {
+  return bugGraders(args);
 }
 
 /** Graders for a hand-planted bug test (no mutation diff): the author's
  *  `reason` alone is the ground truth for what is wrong. */
-export function plantedBugGraders(args: { reason: string }): Grader[] {
-  return [
-    rejects(),
-    grader(
-      ({ output, judge }) =>
-        judge({
-          goal:
-            "The code under review has exactly one planted problem: " +
-            args.reason +
-            "\n\nDo these review findings identify that problem? Wording may differ; what " +
-            "matters is that some error finding points at it.",
-          output: errors(output).map((item) => item.feedback),
-          expected: "",
-        }),
-      { name: "names-the-bug" },
-    ),
-    grader(
-      ({ output, workdir, test, judge }) =>
-        judge({
-          goal:
-            "This Agency source was reviewed:\n\n" +
-            sourceOf(workdir, test) +
-            "\n\nIts only planted problem: " +
-            args.reason +
-            "\n\nIs every one of these error findings a real problem with the source — the " +
-            "planted problem, or something genuinely wrong? A finding that objects to " +
-            "correct code is invented.",
-          output: errors(output).map((item) => item.feedback),
-          expected: "",
-        }),
-      { name: "no-invented-errors" },
-    ),
-    agencyTrue(),
-    advisoryUseful(),
-  ];
+export function plantedBugGraders(args: { reason: string }): ReviewGrader[] {
+  return bugGraders(args);
 }
 
 /** Graders for a clean test: correct code the reviewer must not reject. */
-export function cleanGraders(): Grader[] {
+export function cleanGraders(): ReviewGrader[] {
   return [
     grader(
-      ({ output }) => ({
-        score: { kind: "binary", pass: errors(output).length === 0 },
-        feedback: `${errors(output).length} error finding(s) on correct code: ${errors(output)
-          .map((item) => item.feedback)
-          .join(" | ")}`,
-      }),
+      ({ output }) =>
+        binary(
+          errors(output).length === 0,
+          `${errors(output).length} error finding(s) on correct code: ${text(errors(output)).join(" | ")}`,
+        ),
       { name: "no-false-positive" },
     ),
     agencyTrue(),

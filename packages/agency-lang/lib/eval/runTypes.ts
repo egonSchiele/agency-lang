@@ -14,7 +14,9 @@ export type AgencyTestDefinition = {
   visibility: AgencyTestVisibility;
 };
 
-export type Test = {
+export type TestInput = string | Record<string, any>;
+
+export type Test<T = TestInput> = {
   /** Stable identifier. Auto-derived when omitted: the loader generates one
    *  via nanoid, the optimizer derives it positionally (`input-<index>`). */
   id?: string;
@@ -32,7 +34,7 @@ export type Test = {
    *  an agent that takes no input runs a test with none, and then the entry
    *  node takes no parameter. Within one suite, either every test has an
    *  input or none does. */
-  input?: string | Record<string, any>;
+  input?: T;
   /** The success criterion — read by the goal judge and the pairwise judge
    *  suite, never shown to the agent. Optional; required only when the
    *  default LLM judge will run. */
@@ -53,6 +55,13 @@ export type Test = {
    *  Trust note: graders are code the harness executes — pulling a remote
    *  suite means trusting it. */
   graders?: string;
+  /** A directory of files for the graders alone, never seeded into the
+   *  agent's workdir: reference answers, editing notes, expected output.
+   *  Auto-discovered in the test-directory form as `graderFiles/` beside
+   *  test.json. Relative in a raw spec, absolute after loading. Graders
+   *  read it as `ctx.graderFiles`; `eval run` stores a copy in the run
+   *  directory so a run grades the same later, anywhere. */
+  graderFiles?: string;
   /** Discovered harness pairs (`files/*.test.json` visible, `holdout/*.test.json`
    *  hidden). Set by directory-convention discovery, never by suite JSON. */
   agencyTests?: AgencyTestDefinition[];

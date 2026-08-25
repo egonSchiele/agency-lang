@@ -17,6 +17,7 @@ import {
   fmtModels,
   fmtPass,
   fmtScore,
+  fmtTests,
   fmtTime,
   passColor,
   scoreColor,
@@ -32,10 +33,11 @@ import {
 } from "./tableState.js";
 
 /** Columns dropped right-to-left when the terminal is too narrow. */
-const DROP_ORDER = ["models", "time", "pass"];
+const DROP_ORDER = ["models", "time", "pass", "test"];
 const CHROME_ROWS = 4;
 
-const HINTS = "t/T views  s sort  S asc/desc  b group  Enter open/expand  i info  e export  q quit";
+const HINTS =
+  "t/T views  s sort  S asc/desc  b group  Enter open/expand  o log  i info  e export  q quit";
 
 export class RunsTableView implements ExplorerView {
   readonly viewName = "runs" as const;
@@ -64,7 +66,7 @@ export class RunsTableView implements ExplorerView {
     return [
       "j/k or arrows  move    g/G first/last    Ctrl+F/B/D/U page",
       "s cycle sort   S flip direction   b group by agent/suite",
-      "Enter  expand a group, open a run, or open its log",
+      "Enter  expand a group, or open a run's graders    o  open a run's log",
       "i run info    e export CSV    t/T switch view    q quit",
     ];
   }
@@ -122,6 +124,9 @@ export class RunsTableView implements ExplorerView {
     }
     if (key === "e") {
       return { kind: "exportCsv", projection: projectTable(this.rows, this.state) };
+    }
+    if (key === "o") {
+      return this.openCursorLog();
     }
     if (key === "Enter" || key === "Right" || key === "l") {
       return this.openCursorRow();
@@ -197,6 +202,26 @@ export class RunsTableView implements ExplorerView {
     if (row.source.kind === "statelog") {
       return { kind: "openLog", statelogPath: row.source.file, title: row.agent };
     }
+    if (row.tests.length === 1) {
+      return { kind: "openTest", runKey: row.key, inputId: row.tests[0].inputId };
+    }
+    if (row.tests.length > 1) {
+      return { kind: "openRun", parentRunKey: row.key };
+    }
+    return { kind: "openInfo", rowKey: row.key };
+  }
+
+  /** The log viewer on the cursor row's one trace; a run with several
+   *  tests picks one through its tests table instead. */
+  private openCursorLog(): ExplorerAction {
+    const cursorRow = this.cursorRow();
+    if (cursorRow === undefined || cursorRow.kind === "groupHeader") {
+      return { kind: "none" };
+    }
+    const row = cursorRow.row;
+    if (row.source.kind === "statelog") {
+      return { kind: "openLog", statelogPath: row.source.file, title: row.agent };
+    }
     if (row.tests.length === 1 && row.tests[0].statelogPath !== undefined) {
       return {
         kind: "openLog",
@@ -205,10 +230,7 @@ export class RunsTableView implements ExplorerView {
         traceId: row.tests[0].traceId,
       };
     }
-    if (row.tests.length > 1) {
-      return { kind: "openRun", parentRunKey: row.key };
-    }
-    return { kind: "openInfo", rowKey: row.key };
+    return { kind: "none" };
   }
 
   // ── columns ──────────────────────────────────────────────────────
@@ -259,6 +281,12 @@ export class RunsTableView implements ExplorerView {
           row.kind === "groupHeader"
             ? { fg: "bright-cyan", bold: true }
             : { fg: row.row.status === "trace" ? "gray" : undefined },
+      },
+      {
+        key: "test",
+        header: "test",
+        width: 20,
+        cell: (row) => (row.kind === "groupHeader" ? "" : fmtTests(row.row)),
       },
       {
         key: "score",
@@ -326,7 +354,7 @@ export class RunsTableView implements ExplorerView {
   }
 }
 
-/** Drop whole columns (models, then time, then pass) until the columns
+/** Drop whole columns (models, time, pass, then test) until the columns
  *  fit the viewport; a flex column claims a little minimum room. */
 export function dropToFit<Row>(all: TableColumn<Row>[], cols: number): TableColumn<Row>[] {
   let columns = all;

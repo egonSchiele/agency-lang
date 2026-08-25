@@ -91,6 +91,9 @@ export type RunPayload = {
   graders?: GradersIdentity;
   /** The harness pairs this run is graded by. */
   harness?: HarnessRecord[];
+  /** The stored copy of the test's `graderFiles/` directory: its name under
+   *  `graders/`, a hash over every path and content. */
+  graderFiles?: string;
   ended: RunOutcome;
   flags: Record<string, JsonValue>;
   /** The harness's error message when `ended` is not "ok". */
@@ -209,6 +212,10 @@ const RunAnnotationSchema = z
           })
           .strict(),
       )
+      .optional(),
+    graderFiles: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
       .optional(),
     ended: z.enum(["ok", "error", "timeout", "cost-cap", "killed"]),
     flags: z.record(z.string(), JsonValueSchema),

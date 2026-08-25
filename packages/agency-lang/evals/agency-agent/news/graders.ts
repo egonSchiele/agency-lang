@@ -8,14 +8,14 @@ export default [
   grader(({ record }) => record.durationMs < 1000 * 60 * 5, { name: "under-5min", mustPass: true }),
 
   grader(
-    ({ judge, record }) =>
-      judge({
+    ({ judges, record }) =>
+      judges.goal({
         goal: `lists news headlines from ${runDate(record)}, not from an earlier or later date`,
       }),
     { name: "is-today" },
   ),
 
-  grader(({ judge }) => judge({ goal: "returns a list of top news headlines" }), {
+  grader(({ judges }) => judges.goal({ goal: "returns a list of top news headlines" }), {
     name: "headlines",
   }),
 ];

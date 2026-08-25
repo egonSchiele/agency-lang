@@ -4,8 +4,12 @@
 Those paths may be run directories, a directory of run directories, or
 statelog files. The explorer is one sortable, groupable table with a row
 per run directory or statelog trace. From a row you drill into a run's
-tests, and from a test into the existing log viewer focused on that
-test's trace. A **sole** run directory does not open the explorer. It
+tests, from a test into its graders (one row per effective score, with
+the feedback's first line), and from a grader into the verdict screen:
+that grader's score and feedback beside the input and output it judged.
+`o` opens the existing log viewer on the test's trace from any of those
+screens; Enter never does, since a graded run's first question is "what
+did the graders say", not "what did the agent do". A **sole** run directory does not open the explorer. It
 opens the viewer on the directory's statelog, with each trace's
 annotations summarised on its row ("notes · score 0.70 · labeled", from
 `annotationSummaries` in `lib/runDirectory/list.ts`).
@@ -117,8 +121,12 @@ letting cells collide.
   the key waiter against an always-ready microtask.
 
 Views: a loading splash until the first rows, then three cycling
-variants (runs → compare → trend on `t`/`Shift+T`), with tests/info as
-an overlay stack above. Esc pops the overlay, then falls back to the
+variants (runs → compare → trend on `t`/`Shift+T`), with
+tests/graders/verdict/info as an overlay stack above. The graders table
+and the verdict screen read `TestRow.detail` (`rows.ts`): the trace's
+input and output through `traceText.ts`, and one `GraderVerdict` per
+effective score row, so they show exactly what `eval grade` scored and
+`runs list` sums. Esc pops the overlay, then falls back to the
 runs variant, then goes inert.
 
 ## CSV

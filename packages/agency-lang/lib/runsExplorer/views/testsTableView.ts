@@ -27,7 +27,7 @@ import { dropToFit } from "./runsTableView.js";
 import type { ExplorerAction, ExplorerView, Viewport } from "./explorerView.js";
 
 const CHROME_ROWS = 4;
-const HINTS = "Enter open log  Esc back  q quit";
+const HINTS = "Enter graders  o log  Esc back  q quit";
 
 export class TestsTableView implements ExplorerView {
   readonly viewName = "tests" as const;
@@ -53,7 +53,7 @@ export class TestsTableView implements ExplorerView {
 
   helpLines(): string[] {
     return [
-      "j/k move    Enter open this test's log in the viewer",
+      "j/k move    Enter this test's graders    o this test's log in the viewer",
       "Esc back to the runs table    q quit",
     ];
   }
@@ -96,6 +96,12 @@ export class TestsTableView implements ExplorerView {
       return this.moveTo(tests, cursor - page);
     }
     if (key === "Enter" || key === "Right" || key === "l") {
+      const test = tests[cursor];
+      if (test !== undefined && this.parent !== null) {
+        return { kind: "openTest", runKey: this.parent.key, inputId: test.inputId };
+      }
+    }
+    if (key === "o") {
       const test = tests[cursor];
       if (test !== undefined && test.statelogPath !== undefined && this.parent !== null) {
         return {

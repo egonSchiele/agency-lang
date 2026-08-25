@@ -12,6 +12,7 @@ export {
 export { LlmJudge } from "./grading/graders/llmJudge.js";
 export { AgencyTestGrader } from "./grading/agencyTestGrader.js";
 export { goalJudgeFile } from "./grading/goalJudgeFile.js"; // for users who want a custom judge but the bundled prompt
+export { rubricJudgeFile } from "./grading/rubricJudgeFile.js";
 export type {
   LoadedRun,
   GraderInput,
@@ -22,6 +23,7 @@ export type {
   JSONPath,
   Score,
 } from "./grading/types.js";
+export type { TestInput } from "./runTypes.js";
 export { Scorecard, inputObjective } from "./grading/scorecard.js";
 export type { GraderGrade, InputGrades } from "./grading/scorecard.js";
 export { breakdown } from "./grading/gradeBreakdown.js";

@@ -18,6 +18,10 @@ import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";
 import { recordCompletedRun } from "@/runDirectory/mutations.js";
 import { snapshotGradingModule, type GradersSnapshot } from "@/eval/grading/gradingModule.js";
 import { snapshotHarness, type HarnessSnapshot } from "@/eval/grading/harnessSnapshot.js";
+import {
+  snapshotGraderFiles,
+  type GraderFilesSnapshot,
+} from "@/eval/grading/graderFilesSnapshot.js";
 import { readTraces } from "@/runDirectory/traces.js";
 import { safeDeleteDirectoryWithin } from "@/utils.js";
 
@@ -296,9 +300,13 @@ function runDirFor(testDir: string, trial: number, trials: number): string {
  *  a test's own. */
 type TestGraders = GradersSnapshot & { origin: "test" | "config" };
 
-/** What a run directory keeps for grading later: the grading module and/or
- *  the harness pairs. */
-type TestSnapshots = { module?: TestGraders; harness?: HarnessSnapshot };
+/** What a run directory keeps for grading later: the grading module, the
+ *  harness pairs, and the grader-only files. */
+type TestSnapshots = {
+  module?: TestGraders;
+  harness?: HarnessSnapshot;
+  graderFiles?: GraderFilesSnapshot;
+};
 
 /** Each test's own grading module, bundled once per distinct module, plus
  *  its discovered harness pairs, preflighted and read now. Tests with
@@ -317,6 +325,9 @@ async function snapshotGraders(tests: Test[]): Promise<Record<string, TestSnapsh
     }
     if (test.agencyTests !== undefined && test.agencyTests.length > 0) {
       snapshots.harness = snapshotHarness(test.agencyTests, test.harnessMaxCost);
+    }
+    if (test.graderFiles !== undefined) {
+      snapshots.graderFiles = snapshotGraderFiles(test.graderFiles);
     }
     byTest[test.id] = snapshots;
   }
@@ -344,6 +355,7 @@ function foldIntoRunDirectory(args: {
   const { run } = args;
   const graders = args.snapshots.module;
   const harness = args.snapshots.harness;
+  const graderFiles = args.snapshots.graderFiles;
   fs.mkdirSync(args.runDir, { recursive: true });
   const staged = run.statelogPath === null ? [] : readTraces(run.statelogPath).traces;
   if (staged.length === 0) fs.writeFileSync(path.join(args.runDir, "statelog.jsonl"), "");
@@ -363,7 +375,11 @@ function foldIntoRunDirectory(args: {
     stagedStatelogFile: run.statelogPath === null ? undefined : run.statelogPath,
     codeEntry,
     workdir: traceRecorded && fs.existsSync(run.workdir) ? { sourceDir: run.workdir } : undefined,
-    gradersFiles: [...(graders?.files ?? []), ...(harness?.files ?? [])],
+    gradersFiles: [
+      ...(graders?.files ?? []),
+      ...(harness?.files ?? []),
+      ...(graderFiles?.files ?? []),
+    ],
     run: {
       traceId: args.traceId,
       annotator: args.harness,
@@ -384,6 +400,7 @@ function foldIntoRunDirectory(args: {
               },
             }),
         ...(harness === undefined ? {} : { harness: harness.records }),
+        ...(graderFiles === undefined ? {} : { graderFiles: graderFiles.dirName }),
         ended: endedFrom(run),
         flags: args.flags,
         batch: args.batch,

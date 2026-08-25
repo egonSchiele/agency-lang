@@ -1,6 +1,5 @@
 {
-  "description": "Catch prose that loses the reader: a garden-path opening, concept-stacked sentences with nested parentheticals, and passive voice hiding the actors.",
-  "tags": ["planted", "overloaded"],
+  "description": "Poorly written paragraph: a garden-path opening, lots of concepts in one sentence, passive voice.",
   "files": "./files",
   "input": {
     "assignment": "Explain to a developer new to the codebase, in one short section, how the run directory decides which scores its listings show.",

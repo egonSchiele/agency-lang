@@ -150,6 +150,9 @@ function loadTestDir(testDir: string, makeId: MakeId, options: LoadOptions): Tes
   if (spec.graders === undefined && fs.existsSync(path.join(testDir, "graders.ts"))) {
     spec.graders = "./graders.ts";
   }
+  if (spec.graderFiles === undefined && fs.existsSync(path.join(testDir, "graderFiles"))) {
+    spec.graderFiles = "./graderFiles";
+  }
   const agencyTests = discoverAgencyTests(testDir);
   // A test graded by discovered harness pairs needs no goal of its own.
   const testOptions = agencyTests.length > 0 ? { ...options, requireGoal: false } : options;
@@ -248,6 +251,9 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   if (spec.graders !== undefined && typeof spec.graders !== "string") {
     throw new Error("Eval input graders must be a path string when provided");
   }
+  if (spec.graderFiles !== undefined && typeof spec.graderFiles !== "string") {
+    throw new Error("Eval input graderFiles must be a path string when provided");
+  }
   if (
     spec.timeoutSec !== undefined &&
     (typeof spec.timeoutSec !== "number" ||
@@ -298,6 +304,8 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
     out.files = resolveFilesDir(spec.files, baseDir, options, out.id ?? "");
   if (typeof spec.graders === "string")
     out.graders = resolveGradersFile(spec.graders, baseDir, out.id ?? "");
+  if (typeof spec.graderFiles === "string")
+    out.graderFiles = resolveGraderFilesDir(spec.graderFiles, baseDir, out.id ?? "");
   if (typeof spec.timeoutSec === "number") out.timeoutSec = spec.timeoutSec;
   if (typeof spec.harnessMaxCost === "number") out.harnessMaxCost = spec.harnessMaxCost;
   if (isPlainObject(spec.metadata)) out.metadata = spec.metadata as Record<string, any>;
@@ -345,6 +353,18 @@ function resolveGradersFile(raw: string, baseDir: string, inputId: string): stri
   if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
     throw new Error(
       `Test ${inputId}: graders must name a TypeScript file (got ${raw}, resolved to ${abs})`,
+    );
+  }
+  return abs;
+}
+
+/** Resolve a test's grader-only directory to an absolute path. A local
+ *  directory only: it holds answers, and answers live beside the test. */
+function resolveGraderFilesDir(raw: string, baseDir: string, inputId: string): string {
+  const abs = path.resolve(baseDir, raw);
+  if (!fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) {
+    throw new Error(
+      `Test ${inputId}: graderFiles must name a directory (got ${raw}, resolved to ${abs})`,
     );
   }
   return abs;

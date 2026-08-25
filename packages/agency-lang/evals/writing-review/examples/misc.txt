@@ -1,0 +1,30 @@
+Lots of little speech patterns that irk me:
+
+> so an unchanged file costs no parse.
+"costs no parse" is not grammatical. A better version would be "so we don't need to parse an unchanged file".
+
+---
+
+```
+ *
+ *  `@hidden` declarations are left out. A hidden type alias is the case
+ *  that matters: it renders no section, so a link to it from another page
+ *  would point at an anchor that does not exist. */
+ ```
+
+ "A hidden type alias is the case that matters" - you overuse this sentence construction ("X is the case that matters").
+
+ "it renders no section" – The `@hidden` tag doesn't do any rendering. The whole text, rewritten:
+
+ ```
+ `@hidden` declarations are left out. We don't render a hidden type alias, so a link to it from another page would be broken.
+ ```
+
+---
+
+```
+  // Both halves matter: the plain siblings prove the filter is not just
+    // dropping everything with a tag near it.
+```
+
+more sentence constructions that you use all the time. You often tell me that "both matter", and that something "proves the X".

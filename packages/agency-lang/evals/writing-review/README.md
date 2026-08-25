@@ -1,14 +1,6 @@
 # writing-review: an eval suite for prose reviewers
 
-The prose sibling of `evals/typescript-review`: a reviewer of writing
-readability, judged on whether it catches text that loses its reader
-without inventing findings on clear prose.
-
-The suite describes the job. It does not name an agent. A reviewer is
-scored on it through an eval entry node with the contract below; the
-stdlib's `writingReviewAgent` carries one (`evalMain` in
-`stdlib/agents/writing/review.agency`), and any other implementation
-supplies its own.
+Evals for a prose reviewer. We want clear and readable prose!
 
 ## Run it
 
@@ -21,36 +13,18 @@ pnpm run agency eval run \
 pnpm run agency eval grade runs/writing-review
 ```
 
-## The contract
+## How it's set up
 
-Input, the entry node's single parameter (`WritingReviewEvalInput` in the stdlib
-module):
+Each input has an assignment and a source file:
 
 ```
 { "assignment": string, "sourceFile": string }
 ```
 
-`assignment` says who the text is for and what it must get across.
-`sourceFile` names a file the test seeds into the working directory from
-its `files/` directory. Output is the stdlib `Feedback` shape:
-`error: true` marks a passage the reader will misread or lose, anything
-else is advisory polish.
+The story we are giving is that the assignment was given to an agent, and the source file contains the text that the agent wrote. The review agent now needs to review the text in the source file.
 
 ## Grading
 
-Each test carries a one-liner `graders.ts` over the shared library in
-`lib/reviewGraders.ts`. A planted test's ground truth is the author's
-written `reason` for what makes the text hard to follow; its graders check
-that an error finding exists (`rejects`), that the findings point at the
-planted passages (`names-the-flaw`), and that no error finding objects to
-clear prose or a matter of taste (`no-invented-errors`). A clean test
-checks the reviewer rejects nothing (`rejects-nothing`). Both kinds judge
-advisory findings for usefulness (`advisory-useful`), passing vacuously
-when there are none.
+Each test carries a one-liner `graders.ts` that uses the helpers in the shared library in `lib/reviewGraders.ts`.
 
-## Growing the suite
-
-Harvested tests: a before/after pair from a real editing round, where
-"before" is the text as first written, "after" is the text after feedback,
-and the editing note is the `reason`. A harvested test is just a planted
-test whose reason and text came from history instead of being authored.
+The grader that matters most is `recommends-cuts`. Most bad technical prose is not badly phrased; it says things the reader did not need. A reviewer that only fixes sentences leaves that problem in place, so this grader compares the original with the editor's version in `graderFiles/cleaned.md` and checks whether the findings call for the same cuts. A test with a `cleaned.md` gets it automatically through `harvestedGraders()`; a planted test can add it by hand, as `overloaded-paragraph` does.

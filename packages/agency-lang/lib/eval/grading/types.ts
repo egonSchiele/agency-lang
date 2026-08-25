@@ -1,4 +1,4 @@
-import type { Test } from "@/eval/runTypes.js";
+import type { Test, TestInput } from "@/eval/runTypes.js";
 import type { EvalRecord } from "@/eval/types.js";
 
 import type { AgencyRunner } from "./agencyRunner.js";
@@ -39,8 +39,10 @@ export type GraderOptions = {
 };
 
 /** What a grader's `_run` receives. */
-export type GraderInput = {
-  test: Test;
+export type GraderInput<T = TestInput> = {
+  test: Test<T>;
   run: LoadedRun;
   runAgency: AgencyRunner; // capability to invoke a judge .agency file
+  /** The test's grader-only files, as a directory; absent when it has none. */
+  graderFiles?: string;
 };

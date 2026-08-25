@@ -145,6 +145,20 @@ describe("eval run input loading", () => {
     expect(fromTestDir[0].graders).toBe(path.join(testDir, "graders.ts"));
   });
 
+  it("test-directory form auto-discovers graderFiles/, and an explicit path must be a directory", () => {
+    const testDir = path.join(tmpDir, "suite-gf", "essay");
+    fs.mkdirSync(path.join(testDir, "graderFiles"), { recursive: true });
+    fs.writeFileSync(path.join(testDir, "test.json"), JSON.stringify({ input: "t", goal: "g" }));
+    fs.writeFileSync(path.join(testDir, "graderFiles", "notes.md"), "n");
+    expect(loadInputs(testDir)[0].graderFiles).toBe(path.join(testDir, "graderFiles"));
+
+    fs.writeFileSync(
+      path.join(testDir, "test.json"),
+      JSON.stringify({ input: "t", goal: "g", graderFiles: "./missing" }),
+    );
+    expect(() => loadInputs(testDir)).toThrow(/graderFiles must name a directory/);
+  });
+
   it("test-directory form discovers files/ and holdout/ harness pairs and needs no goal", () => {
     const testDir = path.join(tmpDir, "suite-h", "fib");
     fs.mkdirSync(path.join(testDir, "files"), { recursive: true });

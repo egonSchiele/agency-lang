@@ -373,7 +373,8 @@ export function recordCompletedRun(
 }
 
 /** Content-hash names never collide on different contents; the same name
- *  already present is the same file, so nothing is rewritten. */
+ *  already present is the same file, so nothing is rewritten. A name may
+ *  hold a path (`<hash>/notes.md`: a stored `graderFiles/` tree). */
 function writeGradersFiles(
   paths: RunDirectoryPaths,
   files: readonly { name: string; content: string }[],
@@ -381,7 +382,9 @@ function writeGradersFiles(
   fs.mkdirSync(paths.gradersDir, { recursive: true });
   for (const file of files) {
     const target = path.join(paths.gradersDir, file.name);
-    if (!fs.existsSync(target)) fs.writeFileSync(target, file.content);
+    if (fs.existsSync(target)) continue;
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, file.content);
   }
 }
 

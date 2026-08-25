@@ -59,7 +59,7 @@ export type MutatorModelCaller = (args: {
   sections: MutatorMessageSections;
   config: AgencyConfig;
   model: string;
-}) => Promise<unknown>;
+}) => Promise<{ raw: unknown; costUsd?: number }>;
 
 export type ProposeMutationArgs = MutatorPromptInputs & {
   config: AgencyConfig;
@@ -115,10 +115,21 @@ export function buildMutatorSections(promptInputs: MutatorPromptInputs): Mutator
  * validation belongs to `OptimizeSourceMutator.preview()`, whose rejected
  * diagnostics come back in via `args.diagnostics` for a retry.
  */
+/** The model answered, so its call was paid for, but the answer was not a
+ *  proposal. Carries the spend so the optimizer can still count it. */
+export class MalformedProposalError extends Error {
+  constructor(
+    detail: string,
+    public readonly costUsd?: number,
+  ) {
+    super(`Malformed mutator response: ${detail}`);
+  }
+}
+
 export async function proposeMutation(args: ProposeMutationArgs): Promise<MutationProposal> {
   const model = args.model || args.config.client?.defaultModel || DEFAULT_MODEL;
   const sections = buildMutatorSections(args);
-  const raw = await (args.callModel ?? defaultCallModel)({
+  const { raw, costUsd } = await (args.callModel ?? defaultCallModel)({
     sections,
     config: args.config,
     model,
@@ -126,9 +137,9 @@ export async function proposeMutation(args: ProposeMutationArgs): Promise<Mutati
   const normalized = parseModelOutput(raw);
   const parsed = MutationProposalSchema.safeParse(normalized);
   if (!parsed.success) {
-    throw new Error(`Malformed mutator response: ${parsed.error.message}`);
+    throw new MalformedProposalError(parsed.error.message, costUsd);
   }
-  return parsed.data;
+  return costUsd === undefined ? parsed.data : { ...parsed.data, costUsd };
 }
 
 function parseModelOutput(raw: unknown): unknown {
@@ -167,7 +178,7 @@ const defaultCallModel: MutatorModelCaller = async (args) => {
       // mutatePrompt is a bundled agent with a precompiled .js in dist; reuse it.
       preferCompiled: true,
     });
-    return result.data;
+    return { raw: result.data, costUsd: result.costUsd };
   } finally {
     fs.rmSync(scratchDir, { recursive: true, force: true });
   }

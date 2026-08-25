@@ -1,8 +1,8 @@
 // Optimizer efficacy integration test (REAL LLM, main-only).
 //
 // Proves both built-in optimizers (greedy, gepa) plus the custom-grader and
-// custom-optimizer loaders can optimize a trivial agent: rewrite
-// "What is the capital of France?" so the agent returns the capital of India.
+// custom-optimizer loaders can optimize a trivial agent: replace a chatty
+// style line so the agent answers with the bare city name.
 //
 // Runs IN-TREE (not via a temp tarball project): the optimizer forks a workspace
 // and runs the agent in a subprocess that resolves `agency-lang` by walking up to
@@ -22,9 +22,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // of how the harness was launched.
 const PACKAGE_DIR = dirname(dirname(dirname(HERE)));
 const AGENT = join(HERE, "fixtures", "agent.agency");
-const GRADER = join(HERE, "fixtures", "containsDelhi.ts");
+const GRADER = join(HERE, "fixtures", "onlyCityName.ts");
 const OPTIMIZER = join(HERE, "fixtures", "customOptimizer.ts");
-const GOAL = "Return the capital of India";
+const GOAL = "Reply with only the capital city name and nothing else";
 
 const ITERATIONS = Number(process.env.OPTIMIZE_EFFICACY_ITERATIONS ?? "3");
 const RETRIES = Number(process.env.OPTIMIZE_EFFICACY_RETRIES ?? "2");
@@ -36,15 +36,7 @@ const runsDir = mkdtempSync(join(PACKAGE_DIR, "optimize-efficacy-runs-"));
 
 const RUNS = [
   { name: "greedy-judge", flags: `--goal ${q(GOAL)}` },
-  // TODO(gepa-efficacy): re-enable once gepa's reflective mutator can solve this fixture.
-  // Empirically gepa's mutator rewrites the prompt as a generic *instruction*
-  // ("Provide the capital city of the specified country…") rather than as the literal
-  // question "What is the capital of India?", so when the agent calls `llm(prompt)` the
-  // model returns an acknowledgement instead of "Delhi" and the judge scores 0. Even at
-  // 5 iterations the rewrites stay instructional — the failure is systematic, not flaky.
-  // Likely fixes: restructure the fixture so the optimize target is the country name
-  // rather than the whole prompt, or teach proposeReflective to preserve question shape.
-  { name: "gepa-judge", flags: `--optimizer gepa --goal ${q(GOAL)} --minibatch 1`, skip: "gepa mutator emits instructions, not questions; see TODO(gepa-efficacy)" },
+  { name: "gepa-judge", flags: `--optimizer gepa --goal ${q(GOAL)} --minibatch 1` },
   { name: "greedy-grader", flags: `--goal ${q(GOAL)} --graders ${q(GRADER)}` },
   { name: "custom-optimizer", flags: `--optimizer ${q(OPTIMIZER)} --goal ${q(GOAL)}` },
 ];
@@ -68,8 +60,8 @@ function runOnce({ name, flags }) {
     throw new Error(`no improvement: champion ${trainObjective} <= baseline ${baselineObjective}`);
   }
   const outputs = (championBreakdown ?? []).map((b) => String(b.output));
-  if (!outputs.some((o) => /delhi/i.test(o))) {
-    throw new Error(`champion output never mentions Delhi: ${JSON.stringify(outputs)}`);
+  if (!outputs.some((o) => /paris/i.test(o))) {
+    throw new Error(`champion output never mentions Paris: ${JSON.stringify(outputs)}`);
   }
   console.log(`[${name}] PASS (baseline ${baselineObjective} -> champion ${trainObjective})`);
 }

@@ -28,6 +28,31 @@ describe("proposeReflective", () => {
     expect(proposal.operations).toHaveLength(1);
   });
 
+  it("runs the reflective agent on the mutator model when one is given", async () => {
+    let seen: string | undefined;
+    const runner = new AgencyRunner({ client: { defaultModel: "gpt-5-mini" } }, async (args) => {
+      seen = args.config.client?.defaultModel;
+      return {
+        data: {
+          rationale: "r",
+          operations: [
+            {
+              target: "agent.agency:global:prompt",
+              kind: "variable",
+              op: "replaceInitializer",
+              value: '"x"',
+              rationale: "r",
+            },
+          ],
+        },
+      };
+    });
+    await proposeReflective(runner, { targets: "", feedback: "", history: "" }, "gpt-5");
+    expect(seen).toBe("gpt-5");
+    await proposeReflective(runner, { targets: "", feedback: "", history: "" });
+    expect(seen).toBe("gpt-5-mini");
+  });
+
   it("throws on a malformed reflective response", async () => {
     const runner = new AgencyRunner({}, async () => ({ data: { rationale: "" } }));
     await expect(

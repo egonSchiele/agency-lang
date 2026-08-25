@@ -125,10 +125,21 @@ describe("proposeMutation", () => {
       targets,
       inputs,
       history: "",
-      callModel: async () => proposalJson,
+      callModel: async () => ({ raw: proposalJson }),
     });
 
     expect(proposal).toEqual(proposalJson);
+  });
+
+  it("carries the model call's cost on the proposal", async () => {
+    const proposal = await proposeMutation({
+      config: {},
+      targets,
+      inputs,
+      history: "",
+      callModel: async () => ({ raw: proposalJson, costUsd: 0.03 }),
+    });
+    expect(proposal.costUsd).toBe(0.03);
   });
 
   it("parses JSON string structured output from the model", async () => {
@@ -137,7 +148,7 @@ describe("proposeMutation", () => {
       targets,
       inputs,
       history: "",
-      callModel: async () => JSON.stringify(proposalJson),
+      callModel: async () => ({ raw: JSON.stringify(proposalJson) }),
     });
 
     expect(proposal).toEqual(proposalJson);
@@ -150,7 +161,7 @@ describe("proposeMutation", () => {
         targets,
         inputs,
         history: "",
-        callModel: async () => ({ prompt: "legacy shape", rationale: "nope" }),
+        callModel: async () => ({ raw: { prompt: "legacy shape", rationale: "nope" } }),
       }),
     ).rejects.toThrow(/malformed/i);
   });
@@ -166,7 +177,7 @@ describe("proposeMutation", () => {
         history: "",
       });
 
-      expect(proposal).toEqual(proposalJson);
+      expect(proposal).toMatchObject(proposalJson);
     } finally {
       if (previousMocks === undefined) {
         delete process.env.AGENCY_LLM_MOCKS;

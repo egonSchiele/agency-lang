@@ -48,6 +48,8 @@ export type OptimizeSourceFile = {
 export type OptimizeTargetSet = {
   baseDir: string;
   entryFile: string;
+  /** The node each candidate runs, from the `file.agency:node` target; `main` when unset. */
+  entryNode?: string;
   files: Record<string, OptimizeSourceFile>;
   targets: OptimizeTarget[];
   /** Global type aliases visible across the import closure, in the exact

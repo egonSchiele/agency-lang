@@ -1,6 +1,10 @@
+// Checks that a per-call options object reaches the LLM client. The budget has
+// to be roomy: a reasoning model spends this same allowance on thinking before
+// it writes anything visible, so a small maxTokens here returns an empty string
+// and the call fails schema validation instead of exercising the config path.
 node main() {
-  const result: number = llm("What is 2 + 2? Return just the number.", { 
-    maxTokens: 50
+  const result: number = llm("What is 2 + 2? Return just the number.", {
+    maxTokens: 2000
   })
   return result
 }

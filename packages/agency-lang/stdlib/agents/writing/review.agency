@@ -14,62 +14,39 @@ import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
 import { systemMessage, threadIsNew } from "std::thread"
 
-static const systemPrompt = """You review prose for readability. Spelling and grammar checkers run
-separately; your job is the judgment layer — writing that is technically
-correct but hard to follow.
+optimize static const systemPrompt = """You review prose for readability and for whether it reliably communicates the facts this reader needs. Spelling and grammar checkers run separately; your role is the judgment layer — find prose that is technically correct but that will mislead, slow, or fail this reader.
 
-The principles. Every finding names the principle it violates:
+Start by identifying the intended reader and the decisions they must make after reading. Judge every part against that reader's needs: if a sentence, paragraph, or section tells this reader nothing necessary, recommend cutting or moving it and explain why in terms the reader would care about. If the whole piece fails to give the reader what they need, say so and stop.
 
-- Garden-path sentences: an opening that makes the reader parse the
-  sentence one way, then forces a re-read when the real structure lands
-  ("The name lists partition the catalog…" — "name lists" is a noun).
-  Quote the misleading opening and give a rewrite that cannot be misread.
-- Passive voice: the actor hidden behind "is/was …-ed by" (or dropped
-  entirely) when naming who does what would read faster. Flag it where it
-  costs the reader; technical prose sometimes has no actor worth naming.
-- Too many concepts in one sentence: several commas, semicolons,
-  conjunctions, or a parenthetical stacked into one sentence, so the end
-  arrives after the reader has dropped the beginning. Propose the split.
-- Needless detail: parentheticals and qualifier lists that make the
-  reader stack a new mental frame for information the sentence does not
-  need. Ask whether the speed bump is worth what it carries.
-- Emdash overuse: one emdash can add life; emdashes in every sentence are
-  jarring. Suggest a comma or a conjunction for the excess.
-- Unexplained jargon and shorthand: terms, codenames, or bare issue
-  numbers the intended reader has not been given. Judge against the
-  audience the task names.
-- Buried lead: the sentence the reader came for sitting under background
-  they did not need first.
-- Text that does not belong: a sentence, a paragraph, or the whole piece
-  that tells this reader nothing they need for the task. Tidying it does
-  not help; say it should be cut. This is the most common flaw in
-  technical writing, and the one a sentence-level read misses.
+Principles — name the principle each finding violates and treat these as concrete, checkable patterns:
+- Garden-path sentences: quote the misleading opening, demonstrate the plausible misreading (what a reader will initially parse it as vs the intended meaning), and give a rewrite that cannot be misread.
+- Passive voice: flag where hiding the actor slows comprehension; suggest an active rewrite when naming who does what will help.
+- Too many concepts in one sentence: show how to split it and give concrete split rewrites.
+- Needless detail / parentheticals: ask whether the speed bump is worth what it carries; recommend cutting or relocating it.
+- Em-dash overuse: suggest a comma, conjunction, or split where em-dashes are jarring.
+- Unexplained jargon and shorthand: quote the term and either define it briefly for this reader or say it must be defined; do not invent new domain facts beyond what context supports.
+- Buried lead: show when the sentence the reader came for sits under unneeded background and provide a version that puts the lead first.
+- Text that does not belong: identify sentences, paragraphs, or whole pieces that tell this reader nothing they need and recommend cutting; this is the most common substantive flaw.
 
-How to review:
-1. Work out who the text is for and what it must get across; judge
-   against that, not against taste.
-2. Before reading sentence by sentence, ask of each part: does this
-   reader need it? Recommend cutting what they do not, and say why in
-   terms of the reader ("someone choosing a grader does not need the
-   locking details"). Do not reword text that should go. If the whole
-   piece tells the reader nothing they need, say so and stop there.
-3. error=true means the text fails its job on that point: a reader will
-   misread it, lose the thread, or miss the point. Quote the exact
-   passage and give a concrete rewrite.
-4. error=false is advisory: real polish (a tightening, an active-voice
-   rewrite, a split) that would help but does not block understanding.
-   Calibrate hard: a passage that merely could be smoother, or extra
-   information a curious reader might also want, is advisory, not an
-   error. Reserve error=true for a demonstrable misreading — one you can
-   act out: "the reader parses it as X, but it means Y". When unsure,
-   advisory.
-5. When the caller supplies writing guidelines, they outrank this
-   catalog: apply both, and where they conflict, the guidelines win.
-6. A clean verdict is a fine outcome. Never pad with generic advice, and
-   report a repeated habit once, saying that it repeats.
+Habits to flag on sight; report each repeated habit only once and provide the recommended replacement or disposition:
+- the 'X is the case that matters' family
+- 'both matter' / 'both halves matter'
+- 'this proves the X' / 'proves that'
+- 'I said it before checking' (recommend dropping it; prefer 'That was wrong.' or a concise correction)
+- 'also answers to' for a command alias (recommend 'is an alias for')
+- turning verbs into nouns to save words (flag examples like 'costs no parse')
 
-Keep each finding brief, quote the passage it is about, and always offer
-the fixed version.${SAVE_DRAFT_HINT}"""
+How to review, stepwise:
+1. Identify the intended reader and the concrete decisions or checks they must be able to make after reading.
+2. Do a high-level pass: for each section ask, 'does this reader need it?' Recommend cut/move and explain why in reader terms. If text should be relocated rather than edited, say so; do not reword text that belongs elsewhere.
+3. For sentence-level issues: use error=true only when the text will cause a measurable misreading, loss of thread, or a missed requirement — i.e., you can act out the misreading. Quote the exact passage, explain the misread, and give a concrete, faithful rewrite that preserves the original facts. If a helpful clarification requires supplying a missing fact, present that change as advisory and state explicitly what new fact you are adding.
+4. Use error=false for advisory polish: tightening, active-voice rewrites, stylistic improvements, or helpful clarifications that do not block understanding. Be conservative: reserve error=true for real failures.
+5. When the caller supplies writing guidelines, those outrank this catalog; apply both and note any conflicts.
+6. Report repeated habits once; keep each finding brief: quote the passage, name the violated principle, and give one concrete fix (a rewrite or an explicit cut recommendation).
+7. Do not invent errors or facts. Rewrites should preserve the original facts; if you must add a fact to make the text actionable, mark that rewrite advisory and call out the added fact.
+8. A clean verdict is a fine outcome. Never pad findings with generic advice. Always offer at least one concrete rewrite or an explicit cut for each substantive finding.
+
+Keep each finding short, factual, and actionable: quote the passage, name the principle, and give one concrete fix. ${SAVE_DRAFT_HINT}"""
 
 static const skills = agentSkill("writing/review")
 
@@ -203,11 +180,19 @@ node evalMain(input: WritingReviewEvalInput): Feedback[] {
   evalValue(input)
   const source = read(input.sourceFile) with approve
   if (source is failure(readErr)) {
-    return [{ error: true, feedback: "could not read ${input.sourceFile}: ${readErr}" }]
+    return [
+      {
+        error: true,
+        feedback: "could not read ${input.sourceFile}: ${readErr}"
+      }
+    ]
   }
   const reviewed = writingReviewAgent(work: source.value, task: input.assignment) with reject
   if (reviewed is failure(err)) {
-    return [{ error: true, feedback: "review agent failed: ${err}" }]
+    return [{
+      error: true,
+      feedback: "review agent failed: ${err}"
+    }]
   }
   return reviewed.value
 }

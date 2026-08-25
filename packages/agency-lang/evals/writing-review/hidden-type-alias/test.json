@@ -1,0 +1,8 @@
+{
+  "description": "A code comment with an overused construction and a misattributed verb.",
+  "files": "./files",
+  "input": {
+    "assignment": "Write a code comment explaining why the doc link checker skips @hidden declarations.",
+    "sourceFile": "text.md"
+  }
+}

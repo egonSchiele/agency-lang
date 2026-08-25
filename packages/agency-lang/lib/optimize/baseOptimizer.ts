@@ -12,6 +12,8 @@ import {
 import { EvalCache } from "./evalCache.js";
 import { breakdown } from "@/eval/grading/gradeBreakdown.js";
 import { AgencyRunner } from "@/eval/grading/agencyRunner.js";
+import { makeStatelogCostTailer } from "@/eval/run/costTail.js";
+import { runDirPaths } from "@/runDirectory/runDir.js";
 import type { BaseGrader } from "@/eval/grading/baseGrader.js";
 import { Scorecard } from "@/eval/grading/scorecard.js";
 import type { Test } from "@/eval/grading/types.js";
@@ -26,9 +28,11 @@ import { discoverOptimizeTargets, type OptimizeTargetSet } from "./targets.js";
 import type {
   IterationResult,
   MutationProposal,
+  OptimizeCost,
   OptimizeDecision,
   OptimizeResult,
 } from "./types.js";
+import { MalformedProposalError } from "./mutator.js";
 import { WorkspaceManager, type CachePartition } from "./workspace.js";
 
 /** Result of proposing a mutation: a clean preview, or the reason it couldn't be produced. */
@@ -65,6 +69,11 @@ export type BaseOptimizerDeps = {
 export abstract class BaseOptimizer {
   protected readonly workspace: WorkspaceManager;
   protected readonly agencyRunner: AgencyRunner;
+  /** Spend so far: the agent under test, and proposals. Judge spend is what
+   *  the runner has accumulated beyond the proposals that went through it. */
+  private agentCostUsd = 0;
+  private mutatorCostUsd = 0;
+  private mutatorViaRunnerUsd = 0;
   protected readonly cache: EvalCache;
   protected readonly reporter: PointwiseReporter;
   private readonly runInput: RunInput;
@@ -95,8 +104,8 @@ export abstract class BaseOptimizer {
    * here — subclasses implement {@link optimizeTargets} and never touch discovery.
    */
   async optimize(target: OptimizeTarget): Promise<OptimizeResult> {
-    const agentFile = resolveEvalRunTarget(target.agent).agentFile;
-    const source = this.discover(agentFile);
+    const { agentFile, node } = resolveEvalRunTarget(target.agent);
+    const source = { ...this.discover(agentFile), entryNode: node };
     if (source.targets.length === 0) {
       throw new Error(
         `No optimize targets found in ${agentFile}. Mark a declaration with the optimize modifier.`,
@@ -181,13 +190,17 @@ export abstract class BaseOptimizer {
     let rationale = "";
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       let proposal: MutationProposal;
+      const runnerBefore = this.agencyRunner.costUsd;
       try {
         proposal = await propose(diagnostics);
       } catch (error) {
+        const paid = error instanceof MalformedProposalError ? (error.costUsd ?? 0) : 0;
+        this.countProposalCost(runnerBefore, paid);
         rationale = `proposer returned a malformed response: ${error instanceof Error ? error.message : String(error)}`;
         diagnostics = [];
         continue;
       }
+      this.countProposalCost(runnerBefore, proposal.costUsd ?? 0);
       rationale = proposal.rationale;
       const result = preview(proposal.operations);
       if (result.diagnostics.length === 0) return { ok: true, preview: result, rationale };
@@ -222,8 +235,12 @@ export abstract class BaseOptimizer {
     source: OptimizeTargetSet,
     candidates: C[],
     trainChampion: C,
-  ): Promise<{ champion: C; validationObjective?: number }> {
-    if (this.validationInputs.length === 0) return { champion: trainChampion };
+  ): Promise<{
+    champion: C;
+    validationObjective?: number;
+    scored: { candidate: C; objective: number }[];
+  }> {
+    if (this.validationInputs.length === 0) return { champion: trainChampion, scored: [] };
     // Always consider the train champion, even if a caller forgot to include it.
     const pool = candidates.includes(trainChampion) ? candidates : [trainChampion, ...candidates];
     const scored = await Promise.all(
@@ -234,7 +251,25 @@ export abstract class BaseOptimizer {
     );
     // pool always has the train champion, so reduce has at least one element.
     const winner = scored.reduce((best, s) => (s.objective > best.objective ? s : best));
-    return { champion: winner.candidate, validationObjective: winner.objective };
+    return { champion: winner.candidate, validationObjective: winner.objective, scored };
+  }
+
+  /** A proposal's spend: what it reported itself (greedy's mutator runs its
+   *  own node) plus what it ran through the shared runner (gepa's proposer). */
+  private countProposalCost(runnerBefore: number, reported: number): void {
+    const viaRunner = this.agencyRunner.costUsd - runnerBefore;
+    this.mutatorViaRunnerUsd += viaRunner;
+    this.mutatorCostUsd += viaRunner + reported;
+  }
+
+  protected costSoFar(): OptimizeCost {
+    const gradingUsd = this.agencyRunner.costUsd - this.mutatorViaRunnerUsd;
+    return {
+      agentUsd: this.agentCostUsd,
+      gradingUsd,
+      mutatorUsd: this.mutatorCostUsd,
+      totalUsd: this.agentCostUsd + gradingUsd + this.mutatorCostUsd,
+    };
   }
 
   /** The shared tail every pointwise optimizer runs: pick the writeback champion
@@ -253,14 +288,18 @@ export abstract class BaseOptimizer {
     source: OptimizeTargetSet,
     candidates: C[],
     trainChampion: C,
-    attempts: { iter: number; decision: OptimizeDecision; detail?: string }[],
+    attempts: { iter: number; decision: OptimizeDecision; detail?: string; objective?: number }[],
     startedAt: number,
   ): Promise<OptimizeResult> {
-    const { champion, validationObjective } = await this.pickValidationChampion(
+    const { champion, validationObjective, scored } = await this.pickValidationChampion(
       source,
       candidates,
       trainChampion,
     );
+    const validationByIter = Object.fromEntries(
+      scored.map((s) => [String(s.candidate.iter), s.objective]),
+    );
+    const baseline = candidates.find((c) => c.iter === "baseline");
     if (this.config.writeback && champion.iter !== "baseline") {
       this.workspace.writeBack(source, champion.files);
     }
@@ -268,7 +307,12 @@ export abstract class BaseOptimizer {
     const result = this.buildPointwiseResult({
       championIter: champion.iter,
       championFiles: champion.files,
-      attempts,
+      attempts: attempts.map((a) => ({
+        ...a,
+        validationObjective: validationByIter[String(a.iter)],
+      })),
+      baselineObjective: baseline?.scorecard.gatedObjective(),
+      baselineValidationObjective: validationByIter.baseline,
     });
 
     // Gate-aware: match the score optimizers actually use to compare
@@ -276,7 +320,6 @@ export abstract class BaseOptimizer {
     // baseline (raw 0.5) appear "better" than a gate-passing champion
     // (raw 0.3) and break consumer comparisons.
     result.trainObjective = champion.scorecard.gatedObjective();
-    const baseline = candidates.find((c) => c.iter === "baseline");
     if (baseline) {
       result.baselineObjective = baseline.scorecard.gatedObjective();
     }
@@ -286,6 +329,7 @@ export abstract class BaseOptimizer {
     }
 
     result.championBreakdown = breakdown(champion.scorecard);
+    result.cost = this.costSoFar();
 
     this.reporter.runFinished({
       result,
@@ -351,7 +395,8 @@ export abstract class BaseOptimizer {
   ): Promise<string> {
     this.runCounter += 1;
     const result = await runSuite({
-      agent: path.join(source.baseDir, source.entryFile), // used for label/node parsing only
+      // Used for the label and the node name only; the files come from the overlay.
+      agent: `${path.join(source.baseDir, source.entryFile)}:${source.entryNode ?? "main"}`,
       inputs: [{ ...input, id }],
       suite: { source: "optimize" },
       out: path.join(
@@ -381,6 +426,7 @@ export abstract class BaseOptimizer {
         `agent run failed for input ${input.id ?? "(no id)"}: ${testResult?.errorMessage ?? "unknown error"}`,
       );
     }
+    this.agentCostUsd += makeStatelogCostTailer(runDirPaths(testResult.runDir).statelog).poll();
     // The one test's run directory, `<out>/<id>/`; `gradeRun` sees exactly one input.
     return testResult.runDir;
   }
@@ -402,11 +448,17 @@ export abstract class BaseOptimizer {
   protected buildPointwiseResult(args: {
     championIter: number | "baseline";
     championFiles: Record<string, string>;
-    attempts: { iter: number; decision: OptimizeDecision; detail?: string }[];
+    attempts: IterationResult[];
+    baselineObjective?: number;
+    baselineValidationObjective?: number;
   }): OptimizeResult {
     const count = (decision: OptimizeDecision): number =>
       args.attempts.filter((a) => a.decision === decision).length;
     const baselineIteration: IterationResult = { iter: 0, decision: "baseline" };
+    if (args.baselineObjective !== undefined) baselineIteration.objective = args.baselineObjective;
+    if (args.baselineValidationObjective !== undefined) {
+      baselineIteration.validationObjective = args.baselineValidationObjective;
+    }
     return {
       runId: this.config.runId,
       runDir: path.join(this.config.runsDir, this.config.runId),
@@ -421,6 +473,10 @@ export abstract class BaseOptimizer {
           iter: a.iter,
           decision: a.decision,
           ...(a.detail ? { detail: a.detail } : {}),
+          ...(a.objective !== undefined ? { objective: a.objective } : {}),
+          ...(a.validationObjective !== undefined
+            ? { validationObjective: a.validationObjective }
+            : {}),
         })),
       ],
     };

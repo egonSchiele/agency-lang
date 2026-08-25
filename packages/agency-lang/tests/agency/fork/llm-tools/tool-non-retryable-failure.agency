@@ -1,10 +1,14 @@
-// Tool returns failure(..., { retryable: false }). runPrompt's isFailure
-// path should push "Error: ${msg}. This operation failed and cannot be
-// retried." and remove the tool. The LLM's next round runs without the
-// tool available and produces structured output directly.
+// A tool whose failure reports that destructive work already ran. That is the
+// most serious tier in runPrompt's isFailure path (lib/runtime/prompt.ts): it
+// tells the model the tool can no longer be called and drops the tool from the
+// list, so the next round runs without it and answers directly.
+//
+// This used to pass `{ retryable: false }`, which no option has ever read --
+// failure()'s options are untyped, so the key was silently ignored and the
+// model was told the opposite, "You may call this tool again."
 
 def alwaysFail(): string {
-  return failure("permanent failure", { retryable: false })
+  return failure("permanent failure", { destructiveRan: true })
 }
 
 type Resp = {
@@ -12,7 +16,7 @@ type Resp = {
 }
 
 node main() {
-  const result: Resp = llm("Try calling alwaysFail. If it returns an error that says it cannot be retried, output exactly the string 'tool-removed' in the msg field. Do not retry.", {
+  const result: Resp = llm("Call alwaysFail. If its error says the tool can no longer be called, put exactly the string 'tool-removed' in the msg field. Do not try the tool again.", {
     tools: [alwaysFail]
   })
   return result.msg

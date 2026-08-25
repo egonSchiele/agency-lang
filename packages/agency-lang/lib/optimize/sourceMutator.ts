@@ -455,6 +455,15 @@ export class OptimizeSourceMutator {
           message: `Replacement value for ${operation.target} is invalid: ${validation.reason}`,
         });
       }
+      // A multi-line prompt sent as "..." with \n escapes would be written
+      // back as one long line. Keep the source readable: emit it as """...""".
+      if (
+        target.valueKind === "multilineString" &&
+        replacement.type === "string" &&
+        newValue.includes("\n")
+      ) {
+        replacement = { type: "multiLineString", segments: replacement.segments };
+      }
       return { resolved: { operation, target, replacement, newValue } };
     }
 

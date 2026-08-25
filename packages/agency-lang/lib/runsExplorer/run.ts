@@ -209,7 +209,7 @@ class ExplorerShell {
       return false;
     }
     if (action.kind === "openVerdict") {
-      const verdict = new VerdictScreen(action.runKey, action.inputId, action.graderName);
+      const verdict = new VerdictScreen(action.runKey, action.inputId, action.graderKey);
       verdict.setData(this.rows);
       this.overlay.push(verdict);
       return false;

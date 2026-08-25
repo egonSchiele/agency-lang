@@ -33,7 +33,7 @@ import {
 } from "./tableState.js";
 
 /** Columns dropped right-to-left when the terminal is too narrow. */
-const DROP_ORDER = ["models", "time", "pass"];
+const DROP_ORDER = ["models", "time", "pass", "test"];
 const CHROME_ROWS = 4;
 
 const HINTS =
@@ -354,7 +354,7 @@ export class RunsTableView implements ExplorerView {
   }
 }
 
-/** Drop whole columns (models, then time, then pass) until the columns
+/** Drop whole columns (models, time, pass, then test) until the columns
  *  fit the viewport; a flex column claims a little minimum room. */
 export function dropToFit<Row>(all: TableColumn<Row>[], cols: number): TableColumn<Row>[] {
   let columns = all;

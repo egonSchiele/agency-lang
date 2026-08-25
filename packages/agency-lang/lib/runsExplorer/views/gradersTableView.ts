@@ -102,7 +102,7 @@ export class GradersTableView implements ExplorerView {
           kind: "openVerdict",
           runKey: this.runKey,
           inputId: this.inputId,
-          graderName: verdict.name,
+          graderKey: verdict.key,
         };
       }
     }

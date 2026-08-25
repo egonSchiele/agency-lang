@@ -20,6 +20,9 @@ import type { ScanResult, TraceTotals } from "./mine.js";
 /** One grader's effective verdict on a test: the latest complete pass's
  *  score row, as the graders table and the verdict screen show it. */
 export type GraderVerdict = {
+  /** The effective-score key: annotator kind, lineage, and name. Two
+   *  verdicts can share a name (a regrade from a different module), never a key. */
+  key: string;
   name: string;
   score: Score;
   weight: number;
@@ -152,18 +155,21 @@ function testDetail(snapshot: RunDirectorySnapshot, traceId: string): TestDetail
   const trace = snapshot.traces.find((candidate) => candidate.traceId === traceId);
   if (trace === undefined) return undefined;
   const record = evalRecordFor(trace, snapshot.dir);
-  const scores = Object.values(snapshot.effectiveAnnotations[traceId]?.scores ?? {});
+  const scores = Object.entries(snapshot.effectiveAnnotations[traceId]?.scores ?? {});
   return {
     input: traceInputText(trace, record),
     output: traceOutputText(trace, record),
-    graders: scores.flatMap(graderVerdict).sort((a, b) => a.name.localeCompare(b.name)),
+    graders: scores
+      .flatMap(([key, row]) => graderVerdict(key, row))
+      .sort((a, b) => a.name.localeCompare(b.name)),
   };
 }
 
-function graderVerdict(row: Annotation): GraderVerdict[] {
+function graderVerdict(key: string, row: Annotation): GraderVerdict[] {
   if (row.kind !== "score") return [];
   return [
     {
+      key,
       name: row.name,
       score: row.score,
       weight: row.weight,

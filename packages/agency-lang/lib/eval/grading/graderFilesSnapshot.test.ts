@@ -15,6 +15,17 @@ function tree(files: Record<string, string>): string {
 }
 
 describe("snapshotGraderFiles", () => {
+  test("refuses an empty directory, which would record a hash with nothing stored under it", () => {
+    expect(() => snapshotGraderFiles(tree({}))).toThrow("graderFiles is empty");
+  });
+
+  test("refuses a directory that is itself a symlink", () => {
+    const target = tree({ "notes.md": "a" });
+    const link = path.join(tree({}), "graderFiles");
+    fs.symlinkSync(target, link);
+    expect(() => snapshotGraderFiles(link)).toThrow("must not be a symlink");
+  });
+
   test("stores the whole tree under one hash-named directory, keeping relative names", () => {
     const dir = tree({ "notes.md": "lead with the why", "sub/cleaned.md": "short" });
     const snap = snapshotGraderFiles(dir);

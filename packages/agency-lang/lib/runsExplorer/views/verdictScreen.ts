@@ -8,7 +8,7 @@ import { formatKey } from "../../tui/input/format.js";
 import type { KeyEvent } from "../../tui/input/types.js";
 import { bottomHints } from "../../logsViewer/views/shared.js";
 import { wrapLine } from "../../logsViewer/treeRows.js";
-import type { GraderVerdict, RunRow, TestDetail } from "../rows.js";
+import type { GraderVerdict, RunRow, TestDetail, TestRow } from "../rows.js";
 import { verdictValue } from "./gradersTableView.js";
 import { fmtScore, scoreColor } from "./rowFormat.js";
 import type { ExplorerAction, ExplorerView, Viewport } from "./explorerView.js";
@@ -20,6 +20,8 @@ type Styled = { text: string; fg?: string };
 
 export class VerdictScreen implements ExplorerView {
   readonly viewName = "verdict" as const;
+  private parent: RunRow | null = null;
+  private test: TestRow | null = null;
   private detail: TestDetail | null = null;
   private verdict: GraderVerdict | null = null;
   private scroll = 0;
@@ -28,16 +30,15 @@ export class VerdictScreen implements ExplorerView {
   constructor(
     private readonly runKey: string,
     private readonly inputId: string,
-    private readonly graderName: string,
+    private readonly graderKey: string,
   ) {}
 
   setData(rows: RunRow[]): void {
-    const test = rows
-      .find((row) => row.key === this.runKey)
-      ?.tests.find((candidate) => candidate.inputId === this.inputId);
-    this.detail = test?.detail ?? null;
+    this.parent = rows.find((row) => row.key === this.runKey) ?? null;
+    this.test = this.parent?.tests.find((candidate) => candidate.inputId === this.inputId) ?? null;
+    this.detail = this.test?.detail ?? null;
     this.verdict =
-      this.detail?.graders.find((candidate) => candidate.name === this.graderName) ?? null;
+      this.detail?.graders.find((candidate) => candidate.key === this.graderKey) ?? null;
   }
 
   setProgress(): void {
@@ -49,7 +50,9 @@ export class VerdictScreen implements ExplorerView {
   }
 
   helpLines(): string[] {
-    return ["↑↓ / j k scroll    g / G top / bottom    Ctrl+F/B/D/U page    Esc back    q quit"];
+    return [
+      "↑↓ / j k scroll    g / G top / bottom    Ctrl+F/B/D/U page    o log    Esc back    q quit",
+    ];
   }
 
   handleKey(event: KeyEvent, viewport: Viewport): ExplorerAction {
@@ -57,6 +60,18 @@ export class VerdictScreen implements ExplorerView {
     const key = formatKey(event);
     if (key === "q" || key === "Ctrl+C") return { kind: "quit" };
     if (key === "Escape" || key === "Left" || key === "h") return { kind: "back" };
+    if (key === "o") {
+      const test = this.test;
+      if (test !== null && test.statelogPath !== undefined && this.parent !== null) {
+        return {
+          kind: "openLog",
+          statelogPath: test.statelogPath,
+          title: `${this.parent.agent} / ${test.inputId}`,
+          traceId: test.traceId,
+        };
+      }
+      return { kind: "none" };
+    }
     const total = this.pageLines(viewport.cols).length;
     const page = Math.max(1, viewport.rows - CHROME_ROWS);
     const clamp = (value: number) => Math.max(0, Math.min(value, Math.max(0, total - page)));
@@ -95,7 +110,7 @@ export class VerdictScreen implements ExplorerView {
 
   private title(): string {
     const verdict = this.verdict;
-    if (verdict === null) return `VERDICT  ${this.graderName} on ${this.inputId}`;
+    if (verdict === null) return `VERDICT  ${this.graderKey} on ${this.inputId}`;
     return `VERDICT  ${verdict.name} on ${this.inputId} — ${scoreText(verdict)}`;
   }
 
@@ -111,7 +126,7 @@ export class VerdictScreen implements ExplorerView {
     const detail = this.detail;
     const verdict = this.verdict;
     if (detail === null || verdict === null) {
-      return [{ text: `no verdict named ${this.graderName} for ${this.inputId}`, fg: "gray" }];
+      return [{ text: `no verdict ${this.graderKey} for ${this.inputId}`, fg: "gray" }];
     }
     const role = verdict.mustPass ? "must-pass gate" : `weight ${verdict.weight}`;
     return [

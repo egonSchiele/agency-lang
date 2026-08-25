@@ -275,7 +275,7 @@ also name one explicitly, a local directory only).
 (`snapshotGraderFiles`, `lib/eval/grading/graderFilesSnapshot.ts`): under
 `graders/<sha256>/` with its relative names kept, where the hash covers
 every path and content, and the run row records that name as
-`graderFiles`. Symlinks in the tree are refused. At grading time a
+`graderFiles`. Symlinks in the tree are refused, as is an empty directory. At grading time a
 function grader reads the directory as `ctx.graderFiles` (`""` when the
 test has none): the stored copy under `snapshot` and `override`, the
 suite's live directory under `--suite`. A recorded copy missing from the

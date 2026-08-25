@@ -8,6 +8,7 @@ const viewport = { rows: 24, cols: 120 };
 
 function verdict(name: string, over: Partial<GraderVerdict> = {}): GraderVerdict {
   return {
+    key: `grader:graders.ts:${name}`,
     name,
     score: { kind: "scalar", value: 0.7 },
     weight: 1,
@@ -54,7 +55,7 @@ describe("GradersTableView", () => {
       kind: "openVerdict",
       runKey: "r-1",
       inputId: "t1",
-      graderName: "gate",
+      graderKey: "grader:graders.ts:gate",
     });
     expect(built.handleKey({ key: "o" }, viewport)).toEqual({
       kind: "openLog",

@@ -11,6 +11,7 @@ const detail: TestDetail = {
   output: { kind: "output", text: '[{"error":true,"feedback":"too long"}]' },
   graders: [
     {
+      key: "grader:graders.ts:names-the-flaws",
       name: "names-the-flaws",
       score: { kind: "scalar", value: 0.25 },
       weight: 1,
@@ -21,9 +22,14 @@ const detail: TestDetail = {
   ],
 };
 
-function screen(graderName = "names-the-flaws"): VerdictScreen {
-  const built = new VerdictScreen("r-1", "t1", graderName);
-  built.setData([runRow("r-1", { tests: [testRow("t1", { detail })] })]);
+function screen(graderKey = "grader:graders.ts:names-the-flaws"): VerdictScreen {
+  const built = new VerdictScreen("r-1", "t1", graderKey);
+  built.setData([
+    runRow("r-1", {
+      agent: "gcode",
+      tests: [testRow("t1", { detail, statelogPath: "/logs/t1.jsonl", traceId: "tr-1" })],
+    }),
+  ]);
   return built;
 }
 
@@ -53,7 +59,16 @@ describe("VerdictScreen", () => {
     expect(built.handleKey({ key: "escape" }, viewport)).toEqual({ kind: "back" });
   });
 
+  it("o opens the test's log without leaving the verdict", () => {
+    expect(screen().handleKey({ key: "o" }, viewport)).toEqual({
+      kind: "openLog",
+      statelogPath: "/logs/t1.jsonl",
+      title: "gcode / t1",
+      traceId: "tr-1",
+    });
+  });
+
   it("names a verdict it cannot find rather than rendering blank", () => {
-    expect(screenText(screen("missing").render(viewport))).toContain("no verdict named missing");
+    expect(screenText(screen("missing").render(viewport))).toContain("no verdict missing");
   });
 });

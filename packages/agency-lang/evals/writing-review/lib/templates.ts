@@ -2,7 +2,7 @@
 // functions: read them as prose, and a missing field is a type error.
 //
 // Each is a { standard, context } pair for the bundled rubric judge
-// (ctx.judgeRubric): the standard is what the findings must meet, the
+// (ctx.judges.rubric): the standard is what the findings must meet, the
 // context is what the judge needs to check them. Nothing here is an
 // answer key; the judge is told so.
 

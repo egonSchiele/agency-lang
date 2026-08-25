@@ -13,7 +13,7 @@ pnpm run agency eval run \
 pnpm run agency eval grade runs/writing-review
 ```
 
-## How its set up
+## How it's set up
 
 Each input has an assignment and a source file:
 

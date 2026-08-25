@@ -66,7 +66,10 @@ describe("RunsTableView rendering", () => {
     expect(noTime).toContain("pass");
     const noPass = at(98);
     expect(noPass).not.toContain("pass");
-    expect(noPass).toContain("status");
+    expect(noPass).toContain("test");
+    const noTest = at(80);
+    expect(noTest).not.toContain("test");
+    expect(noTest).toContain("status");
   });
 
   it("loading progress shows in the status line and clears when done", () => {

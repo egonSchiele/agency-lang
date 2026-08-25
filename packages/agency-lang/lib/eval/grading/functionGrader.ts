@@ -63,7 +63,7 @@ export class FunctionGrader<T = TestInput> extends BaseGrader {
 
   protected async _run({ test, run, runAgency, graderFiles }: GraderInput): Promise<Grade> {
     // The bundled judge takes (goal, output, expected); default expected to the
-    // test's gold answer so a metric that calls ctx.judge({ goal }) grades the
+    // test's gold answer so a metric that calls ctx.judges.goal({ goal }) grades the
     // same way LlmJudge does when test.expected is present.
     const inputExpected = (test as { expected?: JSON }).expected;
     const goalJudge = async ({

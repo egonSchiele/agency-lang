@@ -15,7 +15,13 @@ export type GraderFilesSnapshot = {
 };
 
 export function snapshotGraderFiles(dir: string): GraderFilesSnapshot {
+  if (fs.lstatSync(dir).isSymbolicLink()) {
+    throw new Error(`graderFiles must not be a symlink: ${dir}`);
+  }
   const entries = readTree(dir, "");
+  if (entries.length === 0) {
+    throw new Error(`graderFiles is empty: ${dir}`);
+  }
   const manifest = entries.map((entry) => `${entry.rel}\0${sha256Text(entry.content)}`).join("\n");
   const dirName = sha256Text(manifest);
   return {

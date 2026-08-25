@@ -15,7 +15,7 @@ export type ExplorerAction =
   /** The graders table for one test of one run. */
   | { kind: "openTest"; runKey: string; inputId: string }
   /** One grader's verdict on one test, with the input and output it judged. */
-  | { kind: "openVerdict"; runKey: string; inputId: string; graderName: string }
+  | { kind: "openVerdict"; runKey: string; inputId: string; graderKey: string }
   | { kind: "openLog"; statelogPath: string; title: string; traceId?: string }
   | { kind: "openInfo"; rowKey: string }
   | { kind: "back" }

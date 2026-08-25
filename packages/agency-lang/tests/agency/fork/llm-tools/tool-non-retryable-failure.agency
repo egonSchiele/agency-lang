@@ -1,11 +1,6 @@
-// A tool whose failure reports that destructive work already ran. That is the
-// most serious tier in runPrompt's isFailure path (lib/runtime/prompt.ts): it
-// tells the model the tool can no longer be called and drops the tool from the
-// list, so the next round runs without it and answers directly.
-//
-// This used to pass `{ retryable: false }`, which no option has ever read --
-// failure()'s options are untyped, so the key was silently ignored and the
-// model was told the opposite, "You may call this tool again."
+// A failure that reports destructive work already ran. runPrompt tells the
+// model this tool can no longer be called and drops it, so the next round
+// answers without it.
 
 def alwaysFail(): string {
   return failure("permanent failure", { destructiveRan: true })

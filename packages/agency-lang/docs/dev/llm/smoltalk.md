@@ -62,6 +62,32 @@ Smoltalk provides `TokenUsage` and `CostEstimate` types for tracking LLM costs. 
 | `TokenUsage` | Input/output/cached token counts |
 | `CostEstimate` | Dollar cost estimates |
 | `EmbedResult` / `ImageGenResult` | Embedding and image-generation responses |
+| `StopReason` | Why a turn ended, normalized across providers |
+
+### Why a turn ended
+
+Every provider has its own word for running out of room: OpenAI says
+`length`, Anthropic says `max_tokens`, Google says `MAX_TOKENS`, and the
+OpenAI Responses API reports `max_output_tokens` inside an `incomplete`
+status. Smoltalk maps them all to one `StopReason` of `"length"` on
+`PromptResult.stopReason`, and keeps the provider's own word in
+`rawStopReason`.
+
+The field is spelled **`stopReason`**. `PromptResult` has no `finishReason`
+and no `finish_reason`, so reading either of those silently gives you
+`undefined` rather than an error. The statelog event calls its field
+`finishReason`, which is why `prompt.ts` assigns `completion.stopReason` to
+a key of a different name.
+
+`runPrompt` carries the last round's stop reason to
+`decideValidationRetry`, which uses it to tell two different failures
+apart. A response that fails its schema because the model wrote the wrong
+shape is the model's fault. A response that fails because it was cut off
+mid-sentence is a budget problem, and the error says so and points at
+`maxTokens`. That distinction matters most with a reasoning model, which
+spends the same token budget thinking before it writes anything visible:
+set `maxTokens` too low and the visible output is the empty string, which
+otherwise surfaces as a baffling "expected object, received string".
 
 ## Where smoltalk is used
 

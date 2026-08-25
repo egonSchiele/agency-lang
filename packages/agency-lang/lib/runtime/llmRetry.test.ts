@@ -235,6 +235,23 @@ describe("decideValidationRetry", () => {
     }
   });
 
+  it("blames the token limit when the model stopped on length", () => {
+    const d = decideValidationRetry(failure("expected object"), "", 2, POLICY_2, "length");
+    expect(d.kind).toBe("surfaceFailure");
+    if (d.kind === "surfaceFailure") {
+      expect(d.message).toContain("hit the token limit");
+      expect(d.message).toContain("Raise maxTokens");
+    }
+  });
+
+  it("does not blame the token limit when the model stopped normally", () => {
+    const d = decideValidationRetry(failure("expected object"), "prose", 2, POLICY_2, "stop");
+    expect(d.kind).toBe("surfaceFailure");
+    if (d.kind === "surfaceFailure") {
+      expect(d.message).not.toContain("token limit");
+    }
+  });
+
   it("validationRetries 0 surfaces immediately", () => {
     const p = { ...DEFAULT_RETRY_POLICY, validationRetries: 0 };
     const d = decideValidationRetry(failure("bad"), "raw", 0, p);

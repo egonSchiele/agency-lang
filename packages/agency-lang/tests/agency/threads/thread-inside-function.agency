@@ -12,12 +12,7 @@ def nextTwo() {
 }
 
 node main() {
-  // This test checks the thread plumbing by comparing the model's own
-  // answers, so under a real LLM it needs the model and route those
-  // expectations were captured on. The route matters as much as the model:
-  // openai-responses enforces the declared return type strictly, so a
-  // prompt asking for two numbers typed as a single `number` comes back as
-  // one number there but as a list here.
+  // Pinned: the expectations below are this model's exact answers.
   setLlmOptions({ model: "gpt-4o-mini", provider: "openai" })
   const msgs = thread {
     const res1: number[] = llm("What are the first 5 prime numbers?")

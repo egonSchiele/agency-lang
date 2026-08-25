@@ -64,12 +64,13 @@ type Tool = {
 };
 
 /** Result of `_runPrompt`. Callback bodies cannot raise interrupts
- *  (typechecker-enforced), so the result is always a plain `{messages,
- *  toolCalls}` shape — the LLM hooks (onLLMCallStart, onLLMCallEnd)
- *  fire as side effects only. */
+ *  (typechecker-enforced), so the result is always plain data — the LLM
+ *  hooks (onLLMCallStart, onLLMCallEnd) fire as side effects only. */
 export type RunPromptResult = {
   messages: MessageThread;
   toolCalls: smoltalk.ToolCallJSON[];
+  /** Why this round ended, normalized by smoltalk across providers. */
+  stopReason?: smoltalk.StopReason;
 };
 
 /** Flatten a prompt (a string, or an array of text/attachment parts) to plain
@@ -528,7 +529,8 @@ async function _runPrompt({
     responseFormat,
     usage: projectedUsage,
     cost: completion.cost,
-    finishReason: (completion as any).finishReason ?? (completion as any).finish_reason,
+    // Statelog's field name; smoltalk's is `stopReason`.
+    finishReason: completion.stopReason ?? completion.rawStopReason,
     stream,
     threadId: __threads()?.activeId() ?? null,
   });
@@ -567,7 +569,7 @@ async function _runPrompt({
     },
   });
 
-  return { messages, toolCalls };
+  return { messages, toolCalls, stopReason: completion.stopReason };
 }
 
 // eslint-disable-next-line max-lines-per-function -- core prompt execution loop; refactor tracked separately
@@ -860,6 +862,10 @@ export async function runPrompt(args: {
   // let the initialLlmCall step populate it.
   let toolCalls: smoltalk.ToolCallJSON[] = self.pendingToolCalls ?? [];
 
+  // Not on `self`: it only decorates an error message, and a resume re-runs
+  // the round that would set it.
+  let lastStopReason: smoltalk.StopReason | undefined;
+
   let shouldPop = true;
   // Open the single llmCall span before the round-trip loop. Done here
   // (not inside the idempotent `initialLlmCall` step) so a resumed run —
@@ -986,6 +992,7 @@ export async function runPrompt(args: {
         });
         messages = result.messages;
         toolCalls = result.toolCalls;
+        lastStopReason = result.stopReason;
       } finally {
         if (injectedFactsContent !== null) {
           const injectedIndex = messages
@@ -1571,6 +1578,7 @@ export async function runPrompt(args: {
           });
           messages = nextResult.messages;
           toolCalls = nextResult.toolCalls;
+          lastStopReason = nextResult.stopReason;
           // Increment the round counter only after a successful LLM round,
           // so resume after a tool-batch interrupt re-enters the SAME round.
           self.toolCallRound = round + 1;
@@ -1602,6 +1610,7 @@ export async function runPrompt(args: {
         lastAssistant?.content,
         validationAttempt,
         retryPolicy,
+        lastStopReason,
       );
 
       if (decision.kind === "accept") {
@@ -1669,6 +1678,7 @@ export async function runPrompt(args: {
         });
         messages = nextResult.messages;
         toolCalls = nextResult.toolCalls;
+        lastStopReason = nextResult.stopReason;
         // Advance ONLY here, like nextLlmCall advances toolCallRound: a
         // bailout before this step completes leaves the counter unchanged,
         // so resume re-enters the SAME attempt with the same step keys.

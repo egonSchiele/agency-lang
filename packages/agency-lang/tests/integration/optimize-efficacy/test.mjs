@@ -59,9 +59,14 @@ function runOnce({ name, flags }) {
   if (!(trainObjective > baselineObjective)) {
     throw new Error(`no improvement: champion ${trainObjective} <= baseline ${baselineObjective}`);
   }
+  // The objective alone could rise for the wrong reason, so check the champion
+  // answers the way the goal asks: the bare city, no chatter. Every input must
+  // pass, and there has to be at least one -- an empty breakdown would
+  // otherwise sail through.
   const outputs = (championBreakdown ?? []).map((b) => String(b.output));
-  if (!outputs.some((o) => /paris/i.test(o))) {
-    throw new Error(`champion output never mentions Paris: ${JSON.stringify(outputs)}`);
+  const isBareCity = (o) => /^paris[.!]?$/i.test(o.trim());
+  if (outputs.length === 0 || !outputs.every(isBareCity)) {
+    throw new Error(`champion outputs are not all the bare city name: ${JSON.stringify(outputs)}`);
   }
   console.log(`[${name}] PASS (baseline ${baselineObjective} -> champion ${trainObjective})`);
 }

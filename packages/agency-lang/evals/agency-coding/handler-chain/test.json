@@ -1,0 +1,8 @@
+{
+  "description": "Raise a named interrupt, wrap the call in two nested handlers that disagree, and say what happens. Tests the raise/raises/handle syntax and the rule that every handler in the chain runs and any reject wins.",
+  "tags": ["coding", "module", "handlers", "interrupts", "medium"],
+  "input": {
+    "assignment": "Write a module that exports two functions. First, `archiveNotes(count: number): Result<string>`: before doing anything it raises an interrupt with the effect name `notes::archive`, carrying `count` in the interrupt's data; if the interrupt is approved it returns success(\"archived ${count}\"). Second, `runArchive(count: number): string`: it calls archiveNotes inside an inner handler that approves `notes::archive`, and that inner handler sits inside an outer handler that rejects `notes::archive` when the count is greater than 10 and otherwise expresses no opinion. runArchive returns \"archived\" when archiveNotes succeeded and \"rejected\" when it was rejected. Above runArchive, write a doc comment that says, for a count of 11, which of the two handlers run and what runArchive returns, and why. Use only Agency standard library (std::) imports, or no imports at all.",
+    "outFile": "solution.agency"
+  }
+}

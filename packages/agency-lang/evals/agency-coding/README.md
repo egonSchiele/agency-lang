@@ -84,3 +84,9 @@ directory.
   and a `match` to unwrap the Result. On its first run the stdlib coding
   agent invented an `on std::read(data) { ... }` handler syntax that does
   not exist.
+- `handler-chain` — raise a named interrupt (`raise notes::archive(...)`,
+  `raises <notes::archive>`), call it under an inner handler that approves
+  inside an outer handler that rejects for large counts, and say in a doc
+  comment what happens when they disagree. Judged on the raise and handle
+  syntax and on knowing the rule: every handler in the chain runs, and any
+  reject wins.

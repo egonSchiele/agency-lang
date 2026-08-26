@@ -81,9 +81,7 @@ directory.
   `std::write`, or `std::email`) in a handler that decides each effect
   differently. Judged: one `match` on `data.effect` with a guard arm for
   the conditional write, no if-chain on the effect name, bare `reject()`,
-  and a `match` to unwrap the Result. On its first run the stdlib coding
-  agent invented an `on std::read(data) { ... }` handler syntax that does
-  not exist.
+  and a `match` to unwrap the Result.
 - `handler-chain` — raise a named interrupt (`raise notes::archive(...)`,
   `raises <notes::archive>`), call it under an inner handler that approves
   inside an outer handler that rejects for large counts, and say in a doc

@@ -2,10 +2,7 @@
 // a one-liner over these; the judge prompts live here so they improve for
 // every test at once. Ground truth is data the test carries (a mutation diff
 // and/or the author's reason), plus the shared Agency facts card.
-import * as fs from "fs";
-import * as path from "path";
-
-import { binary, grader, type Grader, type Test } from "agency-lang/eval";
+import { binary, grader, type Grader } from "agency-lang/eval";
 
 import { AGENCY_FACTS } from "./agencyFacts.js";
 
@@ -18,20 +15,6 @@ const findings = (output: unknown): Feedback[] => (Array.isArray(output) ? outpu
 const errors = (output: unknown) => findings(output).filter((item) => item?.error === true);
 const advisories = (output: unknown) => findings(output).filter((item) => item?.error !== true);
 const text = (items: Feedback[]) => items.map((item) => item.feedback);
-
-/** The reviewed source, read from the test's seeded workdir. Fixture paths
- *  are authored, but a path that escapes the workdir reads as missing. */
-function sourceOf(workdir: string, test: Test<ReviewInput>): string {
-  if (!test.input?.sourceFile) return "";
-  const root = path.resolve(workdir);
-  const resolved = path.resolve(root, test.input.sourceFile);
-  if (!resolved.startsWith(root + path.sep)) return "";
-  try {
-    return fs.readFileSync(resolved, "utf8");
-  } catch {
-    return "";
-  }
-}
 
 const reviewed = (source: string) => `The Agency source that was reviewed:\n\n${source}`;
 
@@ -62,7 +45,7 @@ function agencyTrue(): ReviewGrader {
  *  no advisory findings passes vacuously; advice is welcome, not demanded. */
 function advisoryUseful(): ReviewGrader {
   return grader<ReviewInput>(
-    ({ output, workdir, test, judges }) => {
+    ({ output, workdirFile, test, judges }) => {
       const advice = advisories(output);
       if (advice.length === 0) {
         return binary(true, "no advisory findings");
@@ -70,7 +53,7 @@ function advisoryUseful(): ReviewGrader {
       return judges.rubric({
         standard:
           "The work is the ADVISORY findings (not errors) of a review of Agency code. Each finding is a useful, accurate pointer for this code: a real performance, idiom, or robustness improvement for the assignment it was written for. Padding (generic advice that fits any code), advice the assignment already settles, and suggestions that are not true of this code lower the score in proportion.",
-        context: `${reviewed(sourceOf(workdir, test))}\n\nThe assignment the code was written for:\n\n${test.input?.assignment ?? ""}`,
+        context: `${reviewed(workdirFile(test.input?.sourceFile ?? ""))}\n\nThe assignment the code was written for:\n\n${test.input?.assignment ?? ""}`,
         output: text(advice),
       });
     },
@@ -113,11 +96,11 @@ function bugGraders(args: { diff?: string; reason: string }): ReviewGrader[] {
       { name: "names-the-bug" },
     ),
     grader<ReviewInput>(
-      ({ output, workdir, test, judges }) =>
+      ({ output, workdirFile, test, judges }) =>
         judges.rubric({
           standard:
             "The work is the ERROR findings of a code review. Every finding is a real problem with the source: the planted problem, or something genuinely wrong. A finding that objects to correct code is invented and lowers the score in proportion.",
-          context: `${plantedProblem(args)}\n\n${reviewed(sourceOf(workdir, test))}`,
+          context: `${plantedProblem(args)}\n\n${reviewed(workdirFile(test.input?.sourceFile ?? ""))}`,
           output: text(errors(output)),
         }),
       { name: "no-invented-errors" },

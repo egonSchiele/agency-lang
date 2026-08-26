@@ -1,0 +1,26 @@
+// Held-out oracle the writer never sees. Imports the file evalMain saved.
+//
+// The harness runs under `--reject '*'`, and every handler in the chain
+// runs, so an inner approve() is always vetoed by that outer reject and
+// surfaces as the generic "interrupt rejected". The two approve cases
+// therefore check for that generic text, which proves the solution's
+// handler did not reject with its own message; the two reject cases check
+// the exact messages the assignment asked for. Whether the approve arms
+// really call approve() is the idiom graders' job.
+import { callFoo } from "./solution.agency"
+
+export node readApproved(): string {
+  return callFoo("std::read")
+}
+
+export node writeHereApproved(): string {
+  return callFoo("std::write", ".")
+}
+
+export node writeElsewhereRejected(): string {
+  return callFoo("std::write", "/tmp")
+}
+
+export node emailRejected(): string {
+  return callFoo("std::email")
+}

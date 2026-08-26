@@ -1,0 +1,12 @@
+export def foo(effect: string, dir: string = "."): Result<string> raises <std::read, std::write, std::email> {
+  if (effect == "std::read") {
+    raise std::read("read a file?", { dir: dir, filename: "input.txt" })
+  }
+  if (effect == "std::write") {
+    raise std::write("write a file?", { dir: dir, filename: "output.txt" })
+  }
+  if (effect == "std::email") {
+    raise std::email("send an email?")
+  }
+  return success("did ${effect}")
+}

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { BaseGrader } from "./baseGrader.js";
 import { asJudgeText, goalJudgeFile, scalarGrade, ScalarVerdict } from "./goalJudgeFile.js";
 import { rubricJudgeFile } from "./rubricJudgeFile.js";
+import { readWorkdirFile } from "./workdirFile.js";
 import type { EvalRecord } from "@/eval/types.js";
 
 import type { Grade, GraderInput, GraderOptions, Test, JSON } from "./types.js";
@@ -16,6 +17,8 @@ export type GraderContext<T = TestInput> = {
   test: Test<T>;
   /** The isolated directory the agent ran in. Read files the agent wrote. */
   workdir: string;
+  /** One file from that directory, by relative path; "" when it is missing. */
+  workdirFile: (relativePath: string) => string;
   /** The test's `graderFiles/` directory: answers and notes the agent never
    *  saw. "" when the test has none. */
   graderFiles: string;
@@ -109,6 +112,7 @@ export class FunctionGrader<T = TestInput> extends BaseGrader {
       test: test as Test<T>,
       judges: { goal: goalJudge, rubric: rubricJudge },
       workdir: run.workdir,
+      workdirFile: (relativePath) => readWorkdirFile(run.workdir, relativePath),
       graderFiles: graderFiles ?? "",
       record: run.record,
     });

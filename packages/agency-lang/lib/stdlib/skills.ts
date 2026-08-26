@@ -24,7 +24,12 @@ export function _readSkill(filepath: string): string {
  * getStdlibDir, so one copy serves compiled and source runs.
  */
 export function _docsDir(section: "guide" | "cli" | "diagnostics" | "stdlib"): string {
-  return path.join(getStdlibDir(), "docs", section);
+  return path.join(_bundledDocsDir(), section);
+}
+
+/** The parent of every packaged docs section. */
+export function _bundledDocsDir(): string {
+  return path.join(getStdlibDir(), "docs");
 }
 
 /**

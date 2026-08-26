@@ -1,7 +1,19 @@
 /** @module
-  @summary Helpers every std::agents worker uses: context folding and model
-  overrides.
+  @summary Helpers every std::agents worker uses: context folding, model
+  overrides, and the handler an eval entry node runs its worker under.
 */
+import { bundledDocsDir } from "std::skills"
+
+/** Approves reads of the docs that ship in this package and rejects every
+  other interrupt. Run a worker under it when it may look up syntax but
+  must not write, run commands, or escape a budget trip. The stdlib eval
+  entry nodes use it. */
+export def docsOnlyHandler(intr) {
+  return match(intr.effect) {
+    "std::read" if (intr.data.dir.startsWith(bundledDocsDir())) => approve()
+    _ => reject()
+  }
+}
 
 export def withContext(task: string, context: string): string {
   """

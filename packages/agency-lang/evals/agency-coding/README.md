@@ -45,7 +45,7 @@ against the node's return value.
 
 ## Grading
 
-There are no `graders.ts` modules here. Each test carries a hidden harness
+A test about what the code does carries a hidden harness
 pair in its `holdout/` directory — a `<name>.agency` importing the saved
 `outFile`, and a `<name>.test.json` naming node-by-node expected outputs.
 The framework discovers the pair and grades the run's working directory
@@ -63,6 +63,13 @@ useful later for tests about working against a given spec-by-example.
 Every harness is verified at authoring time: the reference solution passes
 all its cases, and a representative wrong solution fails.
 
+A test about *how* the code is written (idiomatic Agency rather than a
+JavaScript habit) uses a rubric judge instead: its `graders.ts` calls
+`idiomJudge` from `lib/idiomJudge.ts` with a standard naming the idioms
+and a reference solution the judge can compare against. Such a test may
+have no harness at all. Only `files/` is seeded into the writer's working
+directory.
+
 ## The tests
 
 - `sum-multiples` — a pure arithmetic loop (sum multiples of 3 or 5 below
@@ -70,3 +77,14 @@ all its cases, and a representative wrong solution fails.
 - `reverse-digits` — digit manipulation that needs a while loop and
   integer division built by hand (Agency has no C-style `for`, and the
   stdlib has no `floor`), so JS reflexes do not transfer directly.
+- `uses-match` — wrap a call to a seeded `foo` (which raises `std::read`,
+  `std::write`, or `std::email`) in a handler that decides each effect
+  differently. Judged: one `match` on `data.effect` with a guard arm for
+  the conditional write, no if-chain on the effect name, bare `reject()`,
+  and a `match` to unwrap the Result.
+- `handler-chain` — raise a named interrupt (`raise notes::archive(...)`,
+  `raises <notes::archive>`), call it under an inner handler that approves
+  inside an outer handler that rejects for large counts, and say in a doc
+  comment what happens when they disagree. Judged on the raise and handle
+  syntax and on knowing the rule: every handler in the chain runs, and any
+  reject wins.

@@ -1,11 +1,11 @@
 ---
 name: "shared"
-description: "Helpers every std::agents worker uses: context folding and model"
+description: "Helpers every std::agents worker uses: context folding, model"
 ---
 
 # shared
 
-overrides.
+overrides, and the handler an eval entry node runs its worker under.
 
 ## Types
 
@@ -15,9 +15,28 @@ overrides.
 export type ReasoningEffort = "low" | "medium" | "high"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L17))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L29))
 
 ## Functions
+
+### docsOnlyHandler
+
+```ts
+docsOnlyHandler(intr)
+```
+
+Approves reads of the docs that ship in this package and rejects every
+  other interrupt. Run a worker under it when it may look up syntax but
+  must not write, run commands, or escape a budget trip. The stdlib eval
+  entry nodes use it.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| intr |  |  |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L11))
 
 ### withContext
 
@@ -40,7 +59,7 @@ Fold optional context material into a task prompt. Returns the task
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L6))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L18))
 
 ### llmOptions
 
@@ -80,4 +99,4 @@ Build an llm options object with an optional model override. Returns a
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L19))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L31))

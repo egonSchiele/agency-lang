@@ -72,9 +72,9 @@ directions ("pass --input" or "make the node take no parameter"). A test
 with no input reaches the child as a run instruction without `input`,
 which `resolveNodeCallArgs` already treats as a bare call.
 
-**The stdlib entry nodes run their worker under `evalHandler`.** Each
+**The stdlib entry nodes run their worker under `docsOnlyHandler`.** Each
 `evalMain` in `stdlib/agents/` wraps its worker in `handle { ... } with
-evalHandler` (`std::agents/lib/shared`), which approves `std::read` of
+docsOnlyHandler` (`std::agents/lib/shared`), which approves `std::read` of
 the docs that ship in the package (`bundledDocsDir()` in `std::skills`)
 and rejects every other interrupt.
 

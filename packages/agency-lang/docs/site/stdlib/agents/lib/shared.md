@@ -19,16 +19,16 @@ export type ReasoningEffort = "low" | "medium" | "high"
 
 ## Functions
 
-### evalHandler
+### docsOnlyHandler
 
 ```ts
-evalHandler(intr)
+docsOnlyHandler(intr)
 ```
 
-The handler for an eval entry node. A worker under evaluation may read
-  the docs that ship in this package (that is how it looks up syntax), and
-  nothing else: every other interrupt, including a budget trip, is
-  rejected so the caps stay caps and no write or command escapes.
+Approves reads of the docs that ship in this package and rejects every
+  other interrupt. Run a worker under it when it may look up syntax but
+  must not write, run commands, or escape a budget trip. The stdlib eval
+  entry nodes use it.
 
 **Parameters:**
 

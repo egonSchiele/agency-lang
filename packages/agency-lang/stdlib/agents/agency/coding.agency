@@ -10,7 +10,7 @@
 import { compile, typecheck, parseAST } from "std::agency"
 import { agencyReviewAgent } from "std::agents/agency/review"
 import { renderFeedback, feedbackHasErrors } from "std::agents/lib/feedback"
-import { llmOptions, withContext, evalHandler } from "std::agents/lib/shared"
+import { llmOptions, withContext, docsOnlyHandler } from "std::agents/lib/shared"
 import {
   agencyDocTools,
   readOnlyFileTools,
@@ -350,7 +350,7 @@ export type CodingEvalInput = {
   with this signature. The writer returns source without saving it, so
   saving into the workdir — where the suite's harness pairs grade it — is
   this node's own doing (`with approve`). The writer runs under
-  `evalHandler`, which lets it read the packaged docs and rejects every
+  `docsOnlyHandler`, which lets it read the packaged docs and rejects every
   other interrupt, so a budget trip stays a failure. A failed run still saves
   its last draft: harness grading is all-or-nothing, but the grade's
   per-case feedback then names exactly which cases the draft fails. */
@@ -362,7 +362,7 @@ node evalMain(input: CodingEvalInput): string {
   let written: Result<string, WriteFailure> = failure({ source: "", problems: ["the writer never ran"] })
   handle {
     written = agencyCodingAgent(task: input.assignment, requireMain: false)
-  } with evalHandler
+  } with docsOnlyHandler
   let source = ""
   if (written is success(code)) {
     source = code

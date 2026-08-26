@@ -11,7 +11,7 @@
 */
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
-import { llmOptions, withContext } from "std::agents/lib/shared"
+import { llmOptions, withContext, evalHandler } from "std::agents/lib/shared"
 import {
   communicationTools,
   readOnlyFileTools,
@@ -213,16 +213,20 @@ export type TsReviewEvalInput = {
   wrapper file. Any other reviewer scored on the same suite supplies a node
   with this signature. Effects are decided at this boundary: reading the
   seeded input file is this node's own doing (`with approve`), and a budget
-  trip inside the reviewer is rejected (`with reject`) so the caps stay
-  caps and the reviewer's fail-open result comes back instead of an
-  interrupt escaping the entry point. */
+  reviewer runs under `evalHandler`, which lets it read the packaged docs
+  and rejects every other interrupt, so a budget trip stays a failure and
+  the reviewer's fail-open result comes back instead of an interrupt
+  escaping the entry point. */
 node evalMain(input: TsReviewEvalInput): Feedback[] {
   evalValue(input)
   const source = read(input.sourceFile) with approve
   if (source is failure(readErr)) {
     return [{ error: true, feedback: "could not read ${input.sourceFile}: ${readErr}" }]
   }
-  const reviewed = typescriptReviewAgent(work: source.value, task: input.assignment) with reject
+  let reviewed: Result<Feedback[]> = failure("the reviewer never ran")
+  handle {
+    reviewed = typescriptReviewAgent(work: source.value, task: input.assignment)
+  } with evalHandler
   if (reviewed is failure(err)) {
     return [{ error: true, feedback: "review agent failed: ${err}" }]
   }

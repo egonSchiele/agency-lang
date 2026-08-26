@@ -10,7 +10,7 @@
   the request asks for that; by default it reports and changes nothing.
 */
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
-import { llmOptions, withContext } from "std::agents/lib/shared"
+import { llmOptions, withContext, evalHandler } from "std::agents/lib/shared"
 import { communicationTools, writableFileTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
@@ -181,9 +181,10 @@ export type WritingReviewEvalInput = {
   wrapper file. Any other reviewer scored on the same suite supplies a node
   with this signature. Effects are decided at this boundary: reading the
   seeded input file is this node's own doing (`with approve`), and a budget
-  trip inside the reviewer is rejected (`with reject`) so the caps stay
-  caps and the reviewer's fail-open result comes back instead of an
-  interrupt escaping the entry point. */
+  reviewer runs under `evalHandler`, which lets it read the packaged docs
+  and rejects every other interrupt, so a budget trip stays a failure and
+  the reviewer's fail-open result comes back instead of an interrupt
+  escaping the entry point. */
 node evalMain(input: WritingReviewEvalInput): Feedback[] {
   evalValue(input)
   const source = read(input.sourceFile) with approve
@@ -195,7 +196,10 @@ node evalMain(input: WritingReviewEvalInput): Feedback[] {
       }
     ]
   }
-  const reviewed = writingReviewAgent(work: source.value, task: input.assignment) with reject
+  let reviewed: Result<Feedback[]> = failure("the reviewer never ran")
+  handle {
+    reviewed = writingReviewAgent(work: source.value, task: input.assignment)
+  } with evalHandler
   if (reviewed is failure(err)) {
     return [{
       error: true,

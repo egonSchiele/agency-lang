@@ -72,6 +72,17 @@ directions ("pass --input" or "make the node take no parameter"). A test
 with no input reaches the child as a run instruction without `input`,
 which `resolveNodeCallArgs` already treats as a bare call.
 
+**The stdlib entry nodes run their worker under `evalHandler`.** Each
+`evalMain` in `stdlib/agents/` (coding, agency review, TypeScript review,
+writing review) wraps its worker in `handle { ... } with evalHandler`
+(`std::agents/lib/shared`). That handler approves `std::read` of files
+under `bundledDocsDir()` (`std::skills`), the docs that ship in the
+package, and rejects every other interrupt. Before it, the nodes used
+`with reject`, which also rejected the docs-tool reads: the coding agent
+asked for `handlers.md`, got "interrupt rejected", and invented a handler
+syntax from memory. Reads and greps of the working directory are still
+rejected.
+
 **The goal is a grading-time input.** `eval grade --goal <text>` is the goal
 for the built-in judge, applied to every trace whose test recorded no goal
 of its own (`withDefaultGoal` in `gradeRun.ts`, threaded as

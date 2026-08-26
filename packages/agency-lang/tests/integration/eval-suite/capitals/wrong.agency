@@ -1,0 +1,5 @@
+// Always wrong on purpose: grading it must FAIL, which proves the graders
+// can fail at all.
+node main(task: string): string {
+  return "The capital is a lovely city."
+}

@@ -1,0 +1,5 @@
+{
+  "goal": "Reply with only the capital city name and nothing else.",
+  "input": "What is the capital of France?",
+  "timeoutSec": 120
+}

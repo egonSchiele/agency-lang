@@ -13,6 +13,7 @@ type OptimizeMutationProposal = {
 
 node gepaReflect(
   targets: string,
+  goals: string,
   feedback: string,
   history: string,
 ): OptimizeMutationProposal {
@@ -22,6 +23,10 @@ node gepaReflect(
 
   OPTIMIZE TARGETS:
   ${targets}
+
+  GOALS (what the assistant's output must achieve; these outrank the current
+  instructions, so replace whatever in them works against a goal):
+  ${goals}
 
   The following are examples of task inputs given to the assistant, the assistant's
   response for each, its execution trace (errors and tool calls), and feedback on how

@@ -191,6 +191,31 @@ describe("Gepa (reflective Pareto optimizer)", () => {
     expect(targetSections[2]).toContain("t-alpha");
   });
 
+  it("tells the proposer the goal of every minibatch input", async () => {
+    // Without the goals the mutator reads the grader feedback as a one-off
+    // user request and keeps the old instruction, adding an exception to it.
+    const runInput = vi.fn(scoredRunner([0.1, 0.2, 0.3, 0.4]));
+    const proposeSpy = vi.fn<NonNullable<GepaDeps["propose"]>>(async () => ({
+      rationale: "r",
+      operations: [],
+    }));
+    const opt = new Gepa(config({ runId: "goals", minibatch: 2 }), deps(runInput, proposeSpy));
+    await opt.optimize({
+      agent: path.join(src, "agent.agency"),
+      inputs: [
+        { id: "a", input: "t", goal: "goal-a" },
+        { id: "b", input: "t", goal: "goal-b" },
+        { id: "c", input: "t", goal: "goal-c" },
+      ],
+    });
+    expect(proposeSpy).toHaveBeenCalled();
+    for (const call of proposeSpy.mock.calls) {
+      const lines = call[1].goals.split("\n");
+      expect(lines).toHaveLength(2);
+      for (const line of lines) expect(line).toMatch(/^- \[[abc]\] goal-[abc]$/);
+    }
+  });
+
   it("reports run start, baseline, and a decision per iteration through the injected reporter", async () => {
     const runInput = vi.fn(scoredRunner([0.1, 0.2, 0.3, 0.4]));
     const events: string[] = [];

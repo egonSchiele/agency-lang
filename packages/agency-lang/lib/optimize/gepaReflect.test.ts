@@ -21,6 +21,7 @@ describe("proposeReflective", () => {
     }));
     const proposal = await proposeReflective(runner, {
       targets: "id: prompt",
+      goals: "- [q1] be brief",
       feedback: "[q1] too verbose",
       history: "",
     });
@@ -47,16 +48,16 @@ describe("proposeReflective", () => {
         },
       };
     });
-    await proposeReflective(runner, { targets: "", feedback: "", history: "" }, "gpt-5");
+    await proposeReflective(runner, { targets: "", goals: "", feedback: "", history: "" }, "gpt-5");
     expect(seen).toBe("gpt-5");
-    await proposeReflective(runner, { targets: "", feedback: "", history: "" });
+    await proposeReflective(runner, { targets: "", goals: "", feedback: "", history: "" });
     expect(seen).toBe("gpt-5-mini");
   });
 
   it("throws on a malformed reflective response", async () => {
     const runner = new AgencyRunner({}, async () => ({ data: { rationale: "" } }));
     await expect(
-      proposeReflective(runner, { targets: "", feedback: "", history: "" }),
+      proposeReflective(runner, { targets: "", goals: "", feedback: "", history: "" }),
     ).rejects.toThrow();
   });
 });

@@ -82,12 +82,17 @@ export function renderTargetsSection(targets: OptimizeTarget[]): string {
     .join("\n");
 }
 
-export function buildMutatorSections(promptInputs: MutatorPromptInputs): MutatorMessageSections {
-  const targets = renderTargetsSection(promptInputs.targets);
-  const goals = [...promptInputs.inputs]
+/** Render the inputs' goals as the prompt's GOALS section. Shared by greedy and GEPA. */
+export function renderGoalsSection(inputs: Test[]): string {
+  return [...inputs]
     .sort((a, b) => (a.id ?? "").localeCompare(b.id ?? ""))
     .map((input) => `- [${input.id ?? ""}] ${input.goal ?? ""}`)
     .join("\n");
+}
+
+export function buildMutatorSections(promptInputs: MutatorPromptInputs): MutatorMessageSections {
+  const targets = renderTargetsSection(promptInputs.targets);
+  const goals = renderGoalsSection(promptInputs.inputs);
   const diagnostics =
     (promptInputs.diagnostics ?? []).length === 0
       ? ""

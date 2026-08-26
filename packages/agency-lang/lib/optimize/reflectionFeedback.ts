@@ -7,9 +7,11 @@ export type ReflectionRenderOptions = { maxChars?: number };
 
 // Sized so a long structured output (a reviewer's findings run to a few
 // thousand characters) and every grader's reasoning reach the proposer
-// whole. At 2,000 the mutator saw a preview of the output and the first
-// sentence of each grader's feedback, and its rewrites showed it.
-const DEFAULT_MAX_CHARS = 12_000;
+// whole: the 6,000-character output preview plus seven graders at 1,500
+// each fits with room for the headers. At 2,000 the mutator saw a preview
+// of the output and the first sentence of each grader's feedback, and its
+// rewrites showed it.
+const DEFAULT_MAX_CHARS = 20_000;
 
 /** One graded input rendered as a GEPA feedback block: input, output, errors, a compact
  *  tool-call trace, and graders' natural-language feedback. Bounded. */

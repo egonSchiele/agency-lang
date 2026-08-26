@@ -1,97 +1,24 @@
 import { writingReviewAgent } from "std::agents/writing/review"
-import { Feedback, renderFeedback } from "std::agents/lib/feedback"
+import { renderFeedback } from "std::agents/lib/feedback"
 import { setMemoryId } from "std::memory"
 
-// The review itself lives in std::agents/writing/review, so users get the
-// same reviewer. What is left here is the agent-shaped part: working out
-// from a chat message which text to review, who it is for, and whether the
-// user wants the findings applied or only reported.
-
-type WritingRequest = {
-  // A file to review, relative to the agent working directory, or "" when
-  // the text is in the message itself.
-  path: string;
-  // The text to review when it was pasted into the message, else "".
-  text: string;
-  // Who the text is for and what it must get across, in the user's words,
-  // or "" when the message does not say.
-  task: string;
-  // True only when the user asked for the text to be rewritten or fixed,
-  // not just reviewed.
-  apply: boolean
-}
+// The review itself lives in std::agents/writing/review. That reviewer
+// reads the files a message names and applies fixes only when asked, so
+// all that is left here is the thread and memory an agent turn needs.
 
 export def writingAgent(userMsg: string): string {
   """
   Review prose for readability: passages a reader will misread, lose the
-  thread in, or did not need. Reports findings by default; rewrites the
-  text only when asked to.
+  thread in, or did not need. Reports findings by default; changes the
+  files only when the message asks for the fixes to be applied.
 
-  @param userMsg - the text to review or the path of a file holding it, who
-    the text is for if known, and whether to apply the fixes.
+  @param userMsg - the text to review or the files holding it, who the
+    text is for if known, and whether to apply the fixes.
   """
   let reply = ""
   thread(label: "writing", summarize: true, session: "writing") {
     setMemoryId("writing")
-    const request: WritingRequest = llm(
-      "Work out what this message asks for: ${userMsg}",
-    )
-    reply = reviewRequest(request)
+    reply = renderFeedback(writingReviewAgent(work: userMsg))
   }
   return reply
-}
-
-def reviewRequest(request: WritingRequest): string {
-  let work = request.text
-  if (request.path != "") {
-    const source = read(filename: request.path, useAgentCwd: true)
-    if (isFailure(source)) {
-      return "could not read ${request.path}: ${source.error}"
-    }
-    work = source.value
-  }
-  if (work.trim() == "") {
-    return "There is no text to review. Paste the text or name the file that holds it."
-  }
-  const findings = writingReviewAgent(work: work, task: request.task)
-  if (!request.apply) {
-    return renderFeedback(findings)
-  }
-  if (isFailure(findings)) {
-    return findings.error
-  }
-  const rewritten = applyFindings(work: work, findings: findings.value)
-  if (request.path == "") {
-    return rewritten
-  }
-  const saved = write(request.path, rewritten, useAgentCwd: true)
-  if (isFailure(saved)) {
-    return "Rewrote the text but could not save it to ${request.path}: ${saved.error}"
-  }
-  return "Rewrote ${request.path}. The findings applied:\n\n${renderFeedback(findings)}"
-}
-
-def applyFindings(work: string, findings: Feedback[]): string {
-  """
-  The text with the findings applied and nothing else changed.
-  """
-  if (findings.length == 0) {
-    return work
-  }
-  const rewritten: string = llm(
-    """
-Apply these review findings to the text. Change only what a finding calls
-for: rewrite what it says to rewrite, cut what it says to cut, and leave
-every other sentence as it is. Keep every fact and identifier. Return the
-whole text and nothing else.
-
-<findings>
-${renderFeedback(success(findings))}
-</findings>
-<text>
-${work}
-</text>
-""",
-  )
-  return rewritten
 }

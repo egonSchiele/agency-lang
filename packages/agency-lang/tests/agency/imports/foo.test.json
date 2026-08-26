@@ -7,7 +7,7 @@
       "evaluationCriteria": [
         {
           "type": "llmJudge",
-          "judgePrompt": "Does the response make it clear that the best song by the Beatles is \"Hey Jude\"?",
+          "judgePrompt": "This checks that a function imported from a .js file can be called by the model as a tool. The tool maps 'The Beatles' to 'Hey Jude', so the answer naming Hey Jude is what proves the tool ran and its return value came back.\n\nScore full marks if the answer names Hey Jude, in any form. A bare \"Hey Jude\" is a complete pass -- do not require a sentence, the words \"best song\", or any mention of The Beatles. Fail only if Hey Jude is absent or a different song is named.",
           "desiredAccuracy": 80
         }
       ]
@@ -22,7 +22,15 @@
         }
       ],
       "llmMocks": [
-        { "return": [104, 101, 108, 108, 111] }
+        {
+          "return": [
+            104,
+            101,
+            108,
+            108,
+            111
+          ]
+        }
       ]
     },
     {

@@ -1,0 +1,8 @@
+// Reference solution: answers without an LLM. Running the suite against it
+// must score 1.0, so a failure points at the harness, not at a model.
+node main(task: string): string {
+  if (task.includes("France")) {
+    return "Paris"
+  }
+  return "Tokyo"
+}

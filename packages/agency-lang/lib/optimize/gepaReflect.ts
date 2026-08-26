@@ -7,7 +7,12 @@ import type { JSON } from "@/eval/grading/types.js";
 import { MutationProposalSchema } from "./mutator.js";
 import type { MutationProposal } from "./types.js";
 
-export type ReflectionSections = { targets: string; feedback: string; history: string };
+export type ReflectionSections = {
+  targets: string;
+  goals: string;
+  feedback: string;
+  history: string;
+};
 
 /** Run the GEPA reflective proposer and validate its structured proposal. */
 export async function proposeReflective(
@@ -16,7 +21,7 @@ export async function proposeReflective(
   model?: string,
 ): Promise<MutationProposal> {
   const agentFile = path.join(getAgentsDir(), "optimize", "gepaReflect.agency");
-  const args: JSON[] = [sections.targets, sections.feedback, sections.history];
+  const args: JSON[] = [sections.targets, sections.goals, sections.feedback, sections.history];
   return runAgency.runStructured(
     agentFile,
     "gepaReflect",

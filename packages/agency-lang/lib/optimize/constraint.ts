@@ -87,5 +87,5 @@ export function describeConstraint(target: {
 }): string {
   if (target.declaredType !== null) return target.declaredType;
   if (target.valueKind === "literal") return "any literal value";
-  return "free text (any string; keep every ${...} placeholder)";
+  return "free text (any string; keep every interpolation placeholder the current value uses)";
 }

@@ -146,7 +146,7 @@ Note the `targetSet` carried on each candidate. It reflects *that candidate's* t
 A mutation is proposed by a model and applied to the source. There are two proposer front-ends, both returning a `MutationProposal` (`{ operations, rationale }`):
 
 - **`proposeMutation`** (`lib/optimize/mutator.ts`) is the greedy and example proposer. It renders TARGETS, GOALS, per-input FEEDBACK, and HISTORY into `lib/agents/optimize/mutatePrompt.agency`.
-- **`proposeReflective`** (`lib/optimize/gepaReflect.ts`) is GEPA's reflective proposer, backed by `lib/agents/optimize/gepaReflect.agency`.
+- **`proposeReflective`** (`lib/optimize/gepaReflect.ts`) is GEPA's reflective proposer, backed by `lib/agents/optimize/gepaReflect.agency`. It renders TARGETS, GOALS, the minibatch's FEEDBACK, and HISTORY (validation errors from a rejected attempt).
 
 You hand `proposeValidMutation` two callbacks:
 

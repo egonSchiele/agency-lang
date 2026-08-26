@@ -46,7 +46,9 @@ try {
   const agentDir = join(TMP_ROOT, "agent");
   mkdirSync(agentDir, { recursive: true });
 
-  writeFileSync(join(agentDir, "agent.agency"), `def check() {
+  writeFileSync(
+    join(agentDir, "agent.agency"),
+    `def check() {
   return interrupt("confirm the thing")
 }
 
@@ -56,19 +58,23 @@ node main(task: string) {
   check()
   return "made it past the interrupt"
 }
-`);
-  writeFileSync(join(TMP_ROOT, "inputs.json"), JSON.stringify({
-    inputs: [{ id: "interrupting", goal: "finish despite the interrupt", input: "run" }],
-  }));
+`,
+  );
+  writeFileSync(
+    join(TMP_ROOT, "inputs.json"),
+    JSON.stringify({
+      inputs: [{ id: "interrupting", goal: "finish despite the interrupt", input: "run" }],
+    }),
+  );
 
   const runsDir = join(TMP_ROOT, "runs");
   let output;
   try {
     output = execSync(
       `node ${JSON.stringify(AGENCY_CLI)} eval run` +
-      ` ${JSON.stringify(join(agentDir, "agent.agency"))}` +
-      ` --suite ${JSON.stringify(join(TMP_ROOT, "inputs.json"))}` +
-      ` --out ${JSON.stringify(join(runsDir, "interrupt-e2e"))}`,
+        ` ${JSON.stringify(join(agentDir, "agent.agency"))}` +
+        ` --suite ${JSON.stringify(join(TMP_ROOT, "inputs.json"))}` +
+        ` --out ${JSON.stringify(join(runsDir, "interrupt-e2e"))}`,
       { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
     );
   } catch (err) {
@@ -85,7 +91,10 @@ node main(task: string) {
   // The run directory: one statelog holding the test's trace, plus the
   // harness's `run` row saying which test it was and how it ended.
   const runDir = join(runsDir, "interrupt-e2e", "interrupting");
-  const rows = readFileSync(join(runDir, "annotations.jsonl"), "utf-8").trim().split("\n").map((line) => JSON.parse(line));
+  const rows = readFileSync(join(runDir, "annotations.jsonl"), "utf-8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
   const runRow = rows.find((row) => row.kind === "run");
   assert(runRow, "no run annotation in annotations.jsonl");
   assert(runRow.ended === "ok", `run row ended: ${runRow.ended}`);
@@ -96,8 +105,14 @@ node main(task: string) {
 
   // The auto-approval must be auditable from the run's own statelog.
   const statelogPath = join(runDir, "statelog.jsonl");
-  const events = readFileSync(statelogPath, "utf-8").trim().split("\n").map((line) => JSON.parse(line));
-  assert(events.every((e) => e.trace_id === runRow.traceId), "statelog trace id does not match the run row");
+  const events = readFileSync(statelogPath, "utf-8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  assert(
+    events.every((e) => e.trace_id === runRow.traceId),
+    "statelog trace id does not match the run row",
+  );
   const resolved = events.find((e) => e.data?.type === "interruptResolved");
   assert(resolved, "no interruptResolved event in the statelog");
   assert(resolved.data.outcome === "approved", `outcome: ${resolved.data.outcome}`);
@@ -108,15 +123,23 @@ node main(task: string) {
   const started = events.find((e) => e.data?.type === "agentStart");
   assert(started, "no agentStart event in the statelog");
   assert(started.data.input === "run", `agentStart.input: ${JSON.stringify(started.data.input)}`);
-  assert(started.data.code?.entry === "agent.agency", `agentStart.code.entry: ${JSON.stringify(started.data.code)}`);
-  assert(/^[0-9a-f]{64}$/.test(started.data.code?.closureHash ?? ""), "agentStart.code.closureHash missing");
+  assert(
+    started.data.code?.entry === "agent.agency",
+    `agentStart.code.entry: ${JSON.stringify(started.data.code)}`,
+  );
+  assert(
+    /^[0-9a-f]{64}$/.test(started.data.code?.closureHash ?? ""),
+    "agentStart.code.closureHash missing",
+  );
 
   // The workdir snapshot and the agent's code are attached, flat.
   assert(existsSync(join(runDir, "workdir")), "no workdir snapshot for the run");
   assert(existsSync(join(runDir, "workdir.json")), "no workdir sidecar");
   assert(existsSync(join(runDir, "code", "agent.agency")), "agent code not stored under code/");
 
-  console.log("[eval-run-integration] PASS: interrupting agent auto-approved over IPC, verdict recorded");
+  console.log(
+    "[eval-run-integration] PASS: interrupting agent auto-approved over IPC, verdict recorded",
+  );
 
   // ── Scenario B: a COMMAND target, end to end ──
   // The load-bearing check for --agent-cmd: the spawned CLI (a real `agency
@@ -131,7 +154,9 @@ node main(task: string) {
   // the program's argv rather than in a node parameter. `args()` reads it raw:
   // an eval task is arbitrary text and may begin with a dash, which `parseArgs`
   // would try to read as a flag.
-  writeFileSync(join(cmdFixtures, "writer.agency"), `import { args } from "std::system"
+  writeFileSync(
+    join(cmdFixtures, "writer.agency"),
+    `import { args } from "std::system"
 
 node main(): string {
   const task = args()[0]
@@ -145,18 +170,29 @@ node main(): string {
   }
   return "wrote out.txt"
 }
-`);
-  writeFileSync(join(TMP_ROOT, "cmd-inputs.json"), JSON.stringify({
-    inputs: [{ id: "cmd-e2e", goal: "writes the input to out.txt", input: "hello from a command target", files: cmdFixtures }],
-  }));
+`,
+  );
+  writeFileSync(
+    join(TMP_ROOT, "cmd-inputs.json"),
+    JSON.stringify({
+      inputs: [
+        {
+          id: "cmd-e2e",
+          goal: "writes the input to out.txt",
+          input: "hello from a command target",
+          files: cmdFixtures,
+        },
+      ],
+    }),
+  );
   const agentCmd = `node ${AGENCY_CLI} run --policy approve-all writer.agency -- {input}`;
   let cmdOutput;
   try {
     cmdOutput = execSync(
       `node ${JSON.stringify(AGENCY_CLI)} eval run` +
-      ` --agent-cmd ${JSON.stringify(agentCmd)}` +
-      ` --suite ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
-      ` --out ${JSON.stringify(join(runsDir, "cmd-e2e"))}`,
+        ` --agent-cmd ${JSON.stringify(agentCmd)}` +
+        ` --suite ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
+        ` --out ${JSON.stringify(join(runsDir, "cmd-e2e"))}`,
       { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
     );
   } catch (err) {
@@ -169,7 +205,10 @@ node main(): string {
   assert(cmdOutput.includes("1/1 tests ok"), `expected a fully-ok command run, got:\n${cmdOutput}`);
 
   const cmdRunDir = join(runsDir, "cmd-e2e", "cmd-e2e");
-  const cmdRows = readFileSync(join(cmdRunDir, "annotations.jsonl"), "utf-8").trim().split("\n").map((line) => JSON.parse(line));
+  const cmdRows = readFileSync(join(cmdRunDir, "annotations.jsonl"), "utf-8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
   const cmdRunRow = cmdRows.find((row) => row.kind === "run");
   assert(cmdRunRow && cmdRunRow.ended === "ok", `command run row: ${JSON.stringify(cmdRunRow)}`);
   // argv delivery through a real CLI: the agent wrote the task text
@@ -177,18 +216,37 @@ node main(): string {
   assert(outTxt === "hello from a command target", `out.txt: ${JSON.stringify(outTxt)}`);
   // the spawned agent's own events landed at the harness statelog path...
   const cmdEvents = readFileSync(join(cmdRunDir, "statelog.jsonl"), "utf-8")
-    .trim().split("\n").map((line) => JSON.parse(line));
-  assert(cmdEvents.some((e) => e.data?.type === "agentStart"), "no agentStart from the spawned CLI in the harness statelog");
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  assert(
+    cmdEvents.some((e) => e.data?.type === "agentStart"),
+    "no agentStart from the spawned CLI in the harness statelog",
+  );
   // `agency run` fills the code identity itself, and a named-args run
   // (no eval task delivery) records no `input` — the runtime never guesses one.
   const cmdStarted = cmdEvents.find((e) => e.data?.type === "agentStart");
-  assert(cmdStarted.data.code?.entry === "writer.agency", `command agentStart.code: ${JSON.stringify(cmdStarted.data.code)}`);
-  assert(!("input" in cmdStarted.data), `command agentStart should not record input, got ${JSON.stringify(cmdStarted.data.input)}`);
+  assert(
+    cmdStarted.data.code?.entry === "writer.agency",
+    `command agentStart.code: ${JSON.stringify(cmdStarted.data.code)}`,
+  );
+  assert(
+    !("input" in cmdStarted.data),
+    `command agentStart should not record input, got ${JSON.stringify(cmdStarted.data.input)}`,
+  );
   // ...with exactly one trace id across the whole tree
   const traceIds = [...new Set(cmdEvents.map((e) => e.trace_id))];
-  assert(traceIds.length === 1, `expected one trace id, got ${traceIds.length}: ${traceIds.join(", ")}`);
-  assert(traceIds[0] === cmdRunRow.traceId, "the command run's trace id is the one the harness minted");
-  console.log("[eval-run-integration] PASS: command target — argv delivery, statelog handoff, single trace id");
+  assert(
+    traceIds.length === 1,
+    `expected one trace id, got ${traceIds.length}: ${traceIds.join(", ")}`,
+  );
+  assert(
+    traceIds[0] === cmdRunRow.traceId,
+    "the command run's trace id is the one the harness minted",
+  );
+  console.log(
+    "[eval-run-integration] PASS: command target — argv delivery, statelog handoff, single trace id",
+  );
 
   // ── Scenario C: a command that writes no statelog fails with the hint ──
   // (The --log clobber itself lives in `agency agent`, which is LLM-bound;
@@ -197,19 +255,30 @@ node main(): string {
   try {
     execSync(
       `node ${JSON.stringify(AGENCY_CLI)} eval run` +
-      ` --agent-cmd ${JSON.stringify(`node -e 1+1 {input}`)}` +
-      ` --suite ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
-      ` --out ${JSON.stringify(join(runsDir, "cmd-clobber"))}`,
+        ` --agent-cmd ${JSON.stringify(`node -e 1+1 {input}`)}` +
+        ` --suite ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
+        ` --out ${JSON.stringify(join(runsDir, "cmd-clobber"))}`,
       { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
     );
   } catch {
     // exit code is not the assertion; error.txt is
   }
-  const clobberRows = readFileSync(join(runsDir, "cmd-clobber", "cmd-e2e", "annotations.jsonl"), "utf-8").trim().split("\n").map((line) => JSON.parse(line));
+  const clobberRows = readFileSync(
+    join(runsDir, "cmd-clobber", "cmd-e2e", "annotations.jsonl"),
+    "utf-8",
+  )
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
   const clobberRun = clobberRows.find((row) => row.kind === "run");
-  assert(clobberRun && clobberRun.ended === "error", `clobber run row: ${JSON.stringify(clobberRun)}`);
-  assert(clobberRun.error.includes("If your command passes --log, remove it"),
-    `the run row's error should name the --log clobber cause, got:\n${clobberRun.error}`);
+  assert(
+    clobberRun && clobberRun.ended === "error",
+    `clobber run row: ${JSON.stringify(clobberRun)}`,
+  );
+  assert(
+    clobberRun.error.includes("If your command passes --log, remove it"),
+    `the run row's error should name the --log clobber cause, got:\n${clobberRun.error}`,
+  );
   console.log("[eval-run-integration] PASS: missing statelog names the --log/non-Agency causes");
 
   // ── Scenario D: a command without {input} fails at resolution, before any run dir exists ──
@@ -217,8 +286,8 @@ node main(): string {
   try {
     execSync(
       `node ${JSON.stringify(AGENCY_CLI)} eval run --agent-cmd "echo hello"` +
-      ` --suite ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
-      ` --out ${JSON.stringify(join(runsDir, "cmd-noplaceholder"))}`,
+        ` --suite ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
+        ` --out ${JSON.stringify(join(runsDir, "cmd-noplaceholder"))}`,
       { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
     );
   } catch (err) {
@@ -227,7 +296,10 @@ node main(): string {
     assert(text.includes("{input}"), `error should name the {input} requirement, got:\n${text}`);
   }
   assert(noPlaceholderFailed, "a command without {input} must be rejected");
-  assert(!existsSync(join(runsDir, "cmd-noplaceholder")), "no run directory should exist for a resolution-time failure");
+  assert(
+    !existsSync(join(runsDir, "cmd-noplaceholder")),
+    "no run directory should exist for a resolution-time failure",
+  );
   console.log("[eval-run-integration] PASS: missing {input} rejected before any run");
 
   // ── Scenario E: `agency run --capture-workdir <dir>` writes a run directory ──
@@ -238,15 +310,18 @@ node main(): string {
   const captureCwd = join(TMP_ROOT, "capture-cwd");
   mkdirSync(captureCwd, { recursive: true });
   writeFileSync(join(captureCwd, "note.txt"), "in the working directory");
-  writeFileSync(join(cmdFixtures, "trivial.agency"), `node main(): string {
+  writeFileSync(
+    join(cmdFixtures, "trivial.agency"),
+    `node main(): string {
   return "captured"
 }
-`);
+`,
+  );
   let captureOutput;
   try {
     captureOutput = execSync(
       `node ${JSON.stringify(AGENCY_CLI)} run --capture-workdir ${JSON.stringify(captureDir)}` +
-      ` ${JSON.stringify(join(cmdFixtures, "trivial.agency"))}`,
+        ` ${JSON.stringify(join(cmdFixtures, "trivial.agency"))}`,
       { cwd: captureCwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
     );
   } catch (err) {
@@ -261,14 +336,24 @@ node main(): string {
   const capturedTraceId = capturedMatch[1];
   const capturedRunDir = join(captureDir, capturedTraceId);
   const capturedEvents = readFileSync(join(capturedRunDir, "statelog.jsonl"), "utf-8")
-    .trim().split("\n").map((line) => JSON.parse(line));
-  assert(capturedEvents.length > 0 && capturedEvents.every((e) => e.trace_id === capturedTraceId),
-    "captured statelog does not hold exactly the run's trace");
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  assert(
+    capturedEvents.length > 0 && capturedEvents.every((e) => e.trace_id === capturedTraceId),
+    "captured statelog does not hold exactly the run's trace",
+  );
   const capturedStart = capturedEvents.find((e) => e.data?.type === "agentStart");
-  assert(capturedStart?.data.code?.entry === "trivial.agency", `captured code identity: ${JSON.stringify(capturedStart?.data.code)}`);
+  assert(
+    capturedStart?.data.code?.entry === "trivial.agency",
+    `captured code identity: ${JSON.stringify(capturedStart?.data.code)}`,
+  );
   assert(existsSync(join(capturedRunDir, "code", "trivial.agency")), "captured code not stored");
-  assert(readFileSync(join(capturedRunDir, "workdir", "note.txt"), "utf-8") === "in the working directory",
-    "working directory not captured");
+  assert(
+    readFileSync(join(capturedRunDir, "workdir", "note.txt"), "utf-8") ===
+      "in the working directory",
+    "working directory not captured",
+  );
   console.log("[eval-run-integration] PASS: run --capture-workdir writes a run directory");
 
   // ── Scenario F: the capture destination sits INSIDE the working directory ──
@@ -277,19 +362,70 @@ node main(): string {
   // workdir snapshot instead of being copied into itself.
   const inTreeOutput = execSync(
     `node ${JSON.stringify(AGENCY_CLI)} run --capture-workdir ./runs/example` +
-    ` ${JSON.stringify(join(cmdFixtures, "trivial.agency"))}`,
+      ` ${JSON.stringify(join(cmdFixtures, "trivial.agency"))}`,
     { cwd: captureCwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
   );
   const inTreeMatch = inTreeOutput.match(/Captured trace (\S+) into/);
   assert(inTreeMatch, `no capture line in output:\n${inTreeOutput}`);
   const inTreeDir = join(captureCwd, "runs", "example", inTreeMatch[1]);
   const inTreeWorkdir = join(inTreeDir, "workdir");
-  assert(readFileSync(join(inTreeWorkdir, "note.txt"), "utf-8") === "in the working directory",
-    "in-tree capture did not snapshot the working directory");
-  assert(!existsSync(join(inTreeWorkdir, "runs", "example")),
-    "in-tree capture copied the group directory into itself");
+  assert(
+    readFileSync(join(inTreeWorkdir, "note.txt"), "utf-8") === "in the working directory",
+    "in-tree capture did not snapshot the working directory",
+  );
+  assert(
+    !existsSync(join(inTreeWorkdir, "runs", "example")),
+    "in-tree capture copied the group directory into itself",
+  );
   assert(existsSync(join(inTreeDir, "statelog.jsonl")), "in-tree capture wrote no statelog");
   console.log("[eval-run-integration] PASS: run --capture-workdir with a destination inside cwd");
+
+  // ── Scenario G: a suite written as test directories, run and then graded ──
+  // The shape evals are written in now: a directory per test with test.json
+  // and graders.ts beside it. `eval run` must find the graders, `eval grade`
+  // must apply them, and the graders must be able to FAIL: the same suite is
+  // graded against a reference solution (mean 1) and an always-wrong agent
+  // (mean 0).
+  const suite = resolve(REPO_ROOT, "tests", "integration", "eval-suite", "capitals");
+  const gradeSuite = (agent, outName) => {
+    const out = join(runsDir, outName);
+    const runOutput = execSync(
+      `node ${JSON.stringify(AGENCY_CLI)} eval run ${JSON.stringify(join(suite, agent))}` +
+        ` --suite ${JSON.stringify(suite)} --out ${JSON.stringify(out)}`,
+      { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+    );
+    assert(
+      runOutput.includes("2/2 tests ok"),
+      `expected both suite tests to run, got:\n${runOutput}`,
+    );
+    const summaryPath = join(out, "grade.json");
+    let exitCode = 0;
+    try {
+      execSync(
+        `node ${JSON.stringify(AGENCY_CLI)} eval grade ${JSON.stringify(out)} --out ${JSON.stringify(summaryPath)}`,
+        { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+      );
+    } catch (err) {
+      exitCode = err.status;
+    }
+    return { exitCode, summary: JSON.parse(readFileSync(summaryPath, "utf-8")) };
+  };
+  const good = gradeSuite("solution.agency", "suite-solution");
+  assert(good.exitCode === 0, `grading the reference solution exited ${good.exitCode}`);
+  const goodGraders = good.summary.runs.flatMap((run) => run.grading.graders);
+  for (const name of ["bare-paris", "bare-tokyo"]) {
+    assert(
+      goodGraders.includes(name),
+      `graders.ts beside test.json was not used (no ${name}): ${goodGraders}`,
+    );
+  }
+  assert(good.summary.mean === 1, `the reference solution scored ${good.summary.mean}, expected 1`);
+  const bad = gradeSuite("wrong.agency", "suite-wrong");
+  assert(bad.exitCode === 0, `grading the always-wrong agent exited ${bad.exitCode}`);
+  assert(bad.summary.mean === 0, `the always-wrong agent scored ${bad.summary.mean}, expected 0`);
+  console.log(
+    "[eval-run-integration] PASS: test-directory suite runs, and eval grade passes and fails it correctly",
+  );
 
   passed = true;
 } finally {

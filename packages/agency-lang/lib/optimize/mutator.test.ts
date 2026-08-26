@@ -60,6 +60,16 @@ describe("buildMutatorSections", () => {
     expect(sections.targets).toContain("be brief");
   });
 
+  it("says so when no input has a goal", () => {
+    const sections = buildMutatorSections({
+      targets,
+      inputs: [{ id: "task-1", input: "t" }],
+      history: "",
+    });
+
+    expect(sections.goals).toBe("(no goals given: the graders' feedback below is the standard)");
+  });
+
   it("lists suite goals in task id order", () => {
     const sections = buildMutatorSections({ targets, inputs, history: "" });
 

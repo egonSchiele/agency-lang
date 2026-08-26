@@ -6,7 +6,7 @@ import { proposeReflective, type ReflectionSections } from "../gepaReflect.js";
 import type { AgencyRunner } from "@/eval/grading/agencyRunner.js";
 import { inputObjective, type InputGrades, type Scorecard } from "@/eval/grading/scorecard.js";
 import type { Test } from "@/eval/grading/types.js";
-import { renderTargetsSection } from "../mutator.js";
+import { renderGoalsSection, renderTargetsSection } from "../mutator.js";
 import type { BaseOptimizerConfig } from "../optimizer.js";
 import { formatDiagnostics } from "../reporter.js";
 import { makeRng, sampleWithoutReplacement, type Rng } from "../rng.js";
@@ -191,6 +191,7 @@ export class Gepa extends BaseOptimizer {
           this.agencyRunner,
           {
             targets: renderTargetsSection(selected),
+            goals: renderGoalsSection(minibatch),
             feedback,
             // Feed validation errors from the previous attempt back so the model corrects itself.
             history:

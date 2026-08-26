@@ -468,6 +468,11 @@ AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run test:agency-js
 - **Vite test** (`tests/integration/bundlers/test-vite.mjs`) — builds a compiled Agency project with Vite (SSR mode).
 - **CLI tests** (`tests/integration/cli/test.mjs`) — tests `agency run`, stdlib imports, interrupts/handlers, and the `agency test` runner.
 
+**Eval tests** — run in-tree against the built `dist/` (no tarball), because the eval harness resolves `agency-lang` from this package's `node_modules`.
+
+- **Eval-run test** (`tests/integration/eval-run/test.mjs`, every PR, no LLM) — `eval run` over an interrupting agent, a command target, `run --capture-workdir`, and a suite written as test directories (`tests/integration/eval-suite/capitals`: `test.json` + `graders.ts` per test). The suite is run and then graded with `eval grade` against a reference solution (mean 1) and an always-wrong agent (mean 0), so a grader that cannot fail is caught.
+- **Optimizer efficacy test** (`tests/integration/optimize-efficacy/test.mjs`, post-merge only, real LLM) — one `agency optimize` run per way the optimizer takes inputs and grades: `--goal` alone, a suite directory with per-test graders, `--graders` overriding them, `--validation-split`, GEPA, a custom optimizer module, and a single test directory with the grader coming from `agency.json`. Each run must beat its baseline and answer with the bare city name. `OPTIMIZE_EFFICACY_ONLY=suite-gepa` runs one row; `OPTIMIZE_EFFICACY_KEEP_RUNS=1` keeps the run directories.
+
 **Stdlib sandbox tests** (`tests/integration/stdlib-sandbox/run.mjs`) — exercise real side effects (filesystem, shell, network) in controlled environments. Guarded by `CI=true` so they don't run locally. Node 22 only. Includes:
 
 - `fs.agency` — mkdir, edit, copy, move, remove in a `/tmp` sandbox

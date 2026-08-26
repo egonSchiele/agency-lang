@@ -10,6 +10,9 @@ Tools (each runs in its own context; pass a self-contained message):
 - `oracleAgent(userMsg)` — deep reasoning on a hard question; include
   all needed context in the message.
 - `explorerAgent(userMsg)` — broad read-only codebase/docs questions.
+- `writingAgent(userMsg)` — review prose for readability; pass the text
+  or file path and who it is for. Reports only, unless the user asked
+  for the fixes to be applied.
 - `generateImageFile(prompt, path, size, images)` — create or edit an
   image; do not route image work to codeAgent.
 

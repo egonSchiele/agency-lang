@@ -1,6 +1,6 @@
 /** @module
   @summary The coordinator brain: one main LLM that routes to the code,
-  research, oracle, explorer, and review subagents. The harness (agent.agency
+  research, oracle, explorer, review, and writing subagents. The harness (agent.agency
   and lib/) owns the CLI, the REPL, the policy handler, and the per-turn
   guard; this module only answers turns.
 */
@@ -18,6 +18,7 @@ import { explorerAgent } from "./subagents/explorer.agency"
 import { oracleAgent } from "./subagents/oracle.agency"
 import { researchAgent } from "./subagents/research.agency"
 import { reviewAgent } from "./subagents/review.agency"
+import { writingAgent } from "./subagents/writing.agency"
 
 // Per-run grounding, from BrainContext. Spliced into the system prompt.
 let _context: string = ""
@@ -35,6 +36,7 @@ static const mainAgentTools = [
   reviewAgent,
   oracleAgent,
   explorerAgent,
+  writingAgent,
   generateImageFile,
 ]
 
@@ -109,6 +111,7 @@ def coordinatorRunTurn(
     "oracle" => oracleAgent(promptText(prompt))
     "explorer" => explorerAgent(promptText(prompt))
     "review" => reviewAgent(promptText(prompt))
+    "writing" => writingAgent(promptText(prompt))
     _ => mainAgent(prompt)
   }
 }
@@ -116,8 +119,8 @@ def coordinatorRunTurn(
 export def coordinatorBrain(): AgentBrain {
   return {
     name: "coordinator",
-    description: "One coordinator LLM that routes to code, research, oracle, explorer, and review subagents",
-    startTargets: ["code", "research", "oracle", "explorer", "review"],
+    description: "One coordinator LLM that routes to code, research, oracle, explorer, review, and writing subagents",
+    startTargets: ["code", "research", "oracle", "explorer", "review", "writing"],
     init: coordinatorInit,
     runTurn: coordinatorRunTurn
   }

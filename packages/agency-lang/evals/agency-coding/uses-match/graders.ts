@@ -16,12 +16,7 @@ Code that is not valid Agency scores 0 whatever else it does. Not valid means
 the parser would refuse it: a handler is written \`with (data) { ... }\` and match
 arms use \`=>\`, exactly as in the reference; forms like \`on std::read(data) { ... }\`
 do not exist. An if where a match belongs is an idiom miss that loses its
-quarter, not invalid syntax.`, not with \`is success\`
-checks. Full marks need all four; an if-chain on the effect name scores 0.
-Code that is not valid Agency scores 0 whatever else it does. Not valid means
-the parser would refuse it: a handler is
-written \`with (data) { ... }\` and match arms use \`=>\`, exactly as in the
-reference; forms like \`on std::read(data) { ... }\` do not exist.`,
+quarter, not invalid syntax.`,
     reference: `import { foo } from "./foo.agency"
 
 export def callFoo(effect: string, dir: string = "."): string {

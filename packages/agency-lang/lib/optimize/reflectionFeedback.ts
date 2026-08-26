@@ -5,7 +5,13 @@ import type { Score } from "@/eval/grading/types.js";
 
 export type ReflectionRenderOptions = { maxChars?: number };
 
-const DEFAULT_MAX_CHARS = 2000;
+// Sized so a long structured output (a reviewer's findings run to a few
+// thousand characters) and every grader's reasoning reach the proposer
+// whole: the 6,000-character output preview plus seven graders at 1,500
+// each fits with room for the headers. At 2,000 the mutator saw a preview
+// of the output and the first sentence of each grader's feedback, and its
+// rewrites showed it.
+const DEFAULT_MAX_CHARS = 20_000;
 
 /** One graded input rendered as a GEPA feedback block: input, output, errors, a compact
  *  tool-call trace, and graders' natural-language feedback. Bounded. */
@@ -25,7 +31,7 @@ export function renderInputFeedback(
   if (entry.test.input !== undefined) {
     lines.push(`Input: ${preview(stringifyOutput(entry.test.input), 400)}`);
   }
-  lines.push(`Output: ${preview(stringifyOutput(entry.run?.output ?? null), 600)}`);
+  lines.push(`Output: ${preview(stringifyOutput(entry.run?.output ?? null), 6000)}`);
   if (entry.test.expected !== undefined) {
     lines.push(`Expected: ${preview(stringifyOutput(entry.test.expected), 400)}`);
   }
@@ -43,7 +49,7 @@ export function renderInputFeedback(
   lines.push("Feedback:");
   for (const g of entry.grades) {
     lines.push(
-      `  - ${g.grader.name()} = ${formatScore(g.grade.score)}${g.grade.feedback ? `: ${preview(g.grade.feedback, 400)}` : ""}`,
+      `  - ${g.grader.name()} = ${formatScore(g.grade.score)}${g.grade.feedback ? `: ${preview(g.grade.feedback, 1500)}` : ""}`,
     );
   }
   const human = entry.humanFeedback;

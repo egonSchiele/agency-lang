@@ -32,7 +32,7 @@ tests/                  Agency execution tests for this brain
 `coordinatorBrain()` returns the record the registry hands to the harness:
 
 - `name: "coordinator"`, the `--brain` value.
-- `startTargets`: `code`, `research`, `oracle`, `explorer`, `review`. These
+- `startTargets`: `code`, `research`, `oracle`, `explorer`, `review`, `writing`. These
   are the names `--agent <name>` may route the starting prompt to directly.
   `--agent main` (or no flag) goes through the coordinator.
 - `init(context)`: runs once per session, inside the harness policy handler.
@@ -68,6 +68,7 @@ and an inner `with approve` cannot get past an outer policy.
 | `oracleAgent` | Deep-reasoning consult on the slow model slot; repeated consults share a session. | `std::agents/oracle` |
 | `explorerAgent` | Surveys a codebase or topic on the slow model slot; shared session. | `std::agents/explorer` |
 | `reviewAgent` | Reviews Agency code: snippets from a message, or the files the code agent just wrote. | `std::agents/agency/review` |
+| `writingAgent` | Reviews prose for readability; reports findings, or applies them when asked. | `std::agents/writing/review` |
 
 Most specialists are thin wrappers that add what is the agent's business
 (the user's chosen model slots, a shared session) to an agent that ships in

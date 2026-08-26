@@ -47,7 +47,7 @@ Each brain lives in its own directory under `brains/` and exports one
 function, `def <name>Brain(): AgentBrain`. `brains/registry.agency` lists
 them all in `allBrains()`; `brainByName` and `brainFlagHelp` are derived
 from that list. Two brains ship today: `coordinator` (the default; one
-main LLM that routes to code, research, oracle, explorer, and review
+main LLM that routes to code, research, oracle, explorer, review, and writing
 subagents) and `simple` (one tool-less LLM call per turn). Each has a
 `README.md` describing itself.
 

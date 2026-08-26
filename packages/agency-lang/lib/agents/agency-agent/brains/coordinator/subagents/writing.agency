@@ -1,0 +1,24 @@
+import { writingReviewAgent } from "std::agents/writing/review"
+import { renderFeedback } from "std::agents/lib/feedback"
+import { setMemoryId } from "std::memory"
+
+// The review itself lives in std::agents/writing/review. That reviewer
+// reads the files a message names and applies fixes only when asked, so
+// all that is left here is the thread and memory an agent turn needs.
+
+export def writingAgent(userMsg: string): string {
+  """
+  Review prose for readability: passages a reader will misread, lose the
+  thread in, or did not need. Reports findings by default; changes the
+  files only when the message asks for the fixes to be applied.
+
+  @param userMsg - the text to review or the files holding it, who the
+    text is for if known, and whether to apply the fixes.
+  """
+  let reply = ""
+  thread(label: "writing", summarize: true, session: "writing") {
+    setMemoryId("writing")
+    reply = renderFeedback(writingReviewAgent(work: userMsg))
+  }
+  return reply
+}

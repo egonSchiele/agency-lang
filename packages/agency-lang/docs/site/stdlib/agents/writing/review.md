@@ -7,10 +7,12 @@ description: "Reviews prose for readability: the judgment layer above spelling"
 
 and grammar.
 
-  Review reads the work and looks things up; this agent changes nothing and
-  needs no tools beyond the text itself. It judges whether a reader can
-  follow the writing, using a small catalog of readability principles, and
-  a caller can supply its own writing guidelines to extend or override them.
+  The reviewer takes the text itself or a request naming the files that hold
+  it, and reads those files itself. It judges whether a reader can follow
+  the writing, using a small catalog of readability principles, and a
+  caller can supply its own writing guidelines to extend or override them.
+  It carries write and edit tools so it can apply its fixes, but only when
+  the request asks for that; by default it reports and changes nothing.
 
 ## Types
 
@@ -32,7 +34,7 @@ export type WritingReviewEvalInput = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/review.agency#L197))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/review.agency#L173))
 
 ## Functions
 
@@ -42,12 +44,13 @@ export type WritingReviewEvalInput = {
 buildTools(): any[]
 ```
 
-Return the writing reviewer's tools. Prose review needs nothing beyond
-  the text, so this is only the shipped skills and progress reporting.
+Return the writing reviewer's tools: the file tools (to read the text
+  under review, and to apply fixes when asked), the shipped skills, and
+  progress reporting.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/review.agency#L85))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/review.agency#L55))
 
 ### writingReviewAgent
 
@@ -71,7 +74,8 @@ Review prose for readability and return findings. error=true marks a
   Spelling and grammar are assumed checked separately: this agent reports
   only what needs judgment.
 
-  @param work - The text under review
+  @param work - The text under review, or a request naming the files that
+    hold it (and, if the caller wants the fixes applied, saying so)
   @param task - Who the text is for and what it must get across, or ""
   @param guidelines - The caller's own writing guidelines, as text (for
     example the contents of a project's writing-tips document). Outranks
@@ -103,4 +107,4 @@ Review prose for readability and return findings. error=true marks a
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/review.agency#L137))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/review.agency#L112))

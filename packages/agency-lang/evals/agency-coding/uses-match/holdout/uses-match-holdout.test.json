@@ -1,9 +1,0 @@
-{
-  "sourceFile": "uses-match-holdout.agency",
-  "tests": [
-    { "nodeName": "readApproved", "expectedOutput": "\"rejected: interrupt rejected\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "writeHereApproved", "expectedOutput": "\"rejected: interrupt rejected\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "writeElsewhereRejected", "expectedOutput": "\"rejected: only writes to the current directory are allowed\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "emailRejected", "expectedOutput": "\"rejected: email is never allowed\"", "evaluationCriteria": [{ "type": "exact" }] }
-  ]
-}

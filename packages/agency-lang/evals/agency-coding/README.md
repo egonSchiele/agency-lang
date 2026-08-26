@@ -45,7 +45,7 @@ against the node's return value.
 
 ## Grading
 
-Each test carries a hidden harness
+A test about what the code does carries a hidden harness
 pair in its `holdout/` directory — a `<name>.agency` importing the saved
 `outFile`, and a `<name>.test.json` naming node-by-node expected outputs.
 The framework discovers the pair and grades the run's working directory
@@ -63,22 +63,12 @@ useful later for tests about working against a given spec-by-example.
 Every harness is verified at authoring time: the reference solution passes
 all its cases, and a representative wrong solution fails.
 
-A test about *how* the code is written adds a `graders.ts` on top of the
-harness. Those graders live in `lib/idiomGraders.ts`: each one parses the
-saved `outFile` with the real Agency parser and inspects the AST, so a
-score is a fact about the source rather than a judge's opinion. They are
-advisory, and the harness is a gate, so they only run once the solution
-behaves correctly; a solution that fails the harness scores 0 with no
-idiom rows. Notes the author left while building a test go in
-`graderFiles/`, which graders can read and the writer never sees. Only
-`files/` is seeded into the working directory.
-
-One rule of the harness worth knowing when writing a test about handlers:
-it runs under `--reject '*'`, and every handler in the chain runs, so a
-solution's `approve()` is always vetoed by that outer reject. A holdout
-cannot observe an approval; it can only tell rejections apart by their
-message. `uses-match` works around this by asking for specific rejection
-messages and leaving the approve arms to the AST graders.
+A test about *how* the code is written (idiomatic Agency rather than a
+JavaScript habit) uses a rubric judge instead: its `graders.ts` calls
+`idiomJudge` from `lib/idiomJudge.ts` with a standard naming the idioms
+and a reference solution the judge can compare against. Such a test may
+have no harness at all. Only `files/` is seeded into the writer's working
+directory.
 
 ## The tests
 
@@ -89,9 +79,8 @@ messages and leaving the approve arms to the AST graders.
   stdlib has no `floor`), so JS reflexes do not transfer directly.
 - `uses-match` — wrap a call to a seeded `foo` (which raises `std::read`,
   `std::write`, or `std::email`) in a handler that decides each effect
-  differently. The holdout checks the decisions; the idiom graders check
-  for one `match` on `data.effect` with a guard arm for the conditional
-  write, no if-chain on the effect name, and a `match` to unwrap the
-  Result. On its first run the stdlib coding agent invented an
-  `on std::read(data) { ... }` handler syntax that does not exist, so the
-  test already catches something real.
+  differently. Judged: one `match` on `data.effect` with a guard arm for
+  the conditional write, no if-chain on the effect name, bare `reject()`,
+  and a `match` to unwrap the Result. On its first run the stdlib coding
+  agent invented an `on std::read(data) { ... }` handler syntax that does
+  not exist.

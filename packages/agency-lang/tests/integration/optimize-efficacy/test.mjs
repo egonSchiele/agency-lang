@@ -56,7 +56,10 @@ const RUNS = [
   {
     name: "suite-graders-override",
     flags: `--suite ${q(SUITE)} --graders ${q(GRADER)}`,
-    check: ({ runDir }) => expectNoGraderNames(runDir, ["bare-paris", "bare-tokyo"]),
+    check: ({ runDir }) => {
+      expectNoGraderNames(runDir, ["bare-paris", "bare-tokyo"]);
+      expectGraderNames(runDir, ["only-city-name"]);
+    },
   },
   // A held-out validation input picks the champion.
   {
@@ -65,6 +68,9 @@ const RUNS = [
     check: ({ summary }) => {
       if (summary.validationObjective !== 1) {
         throw new Error(`validation objective ${summary.validationObjective}, expected 1`);
+      }
+      if (!summary.iterations.some((i) => i.validationObjective !== undefined)) {
+        throw new Error("no iteration recorded a validation objective");
       }
     },
   },
@@ -79,7 +85,10 @@ const RUNS = [
     name: "one-test-config-graders",
     flags: `--suite ${q(ONE_TEST)}`,
     cwd: projectWithConfig({ eval: { optimize: { graders: GRADER } } }),
-    check: ({ runDir }) => expectNoGraderNames(runDir, ["bare-tokyo"]),
+    check: ({ runDir }) => {
+      expectNoGraderNames(runDir, ["bare-tokyo"]);
+      expectGraderNames(runDir, ["only-city-name"]);
+    },
   },
 ];
 
@@ -89,7 +98,8 @@ function projectWithConfig(extra) {
   const dir = join(runsDir, "project");
   mkdirSync(dir, { recursive: true });
   const base = JSON.parse(readFileSync(join(PACKAGE_DIR, "agency.json"), "utf-8"));
-  writeFileSync(join(dir, "agency.json"), JSON.stringify({ ...base, ...extra }, null, 2));
+  const merged = { ...base, ...extra, eval: { ...base.eval, ...extra.eval } };
+  writeFileSync(join(dir, "agency.json"), JSON.stringify(merged, null, 2));
   return dir;
 }
 

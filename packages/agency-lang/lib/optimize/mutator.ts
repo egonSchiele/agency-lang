@@ -82,8 +82,13 @@ export function renderTargetsSection(targets: OptimizeTarget[]): string {
     .join("\n");
 }
 
-/** Render the inputs' goals as the prompt's GOALS section. Shared by greedy and GEPA. */
+/** Render the inputs' goals as the prompt's GOALS section. Shared by greedy and GEPA.
+ *  A suite whose tests grade only through graders.ts has no goals at all; say
+ *  so rather than listing empty bullets under a heading that says they rule. */
 export function renderGoalsSection(inputs: Test[]): string {
+  if (inputs.every((input) => !input.goal)) {
+    return "(no goals given: the graders' feedback below is the standard)";
+  }
   return [...inputs]
     .sort((a, b) => (a.id ?? "").localeCompare(b.id ?? ""))
     .map((input) => `- [${input.id ?? ""}] ${input.goal ?? ""}`)

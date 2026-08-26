@@ -5,7 +5,7 @@
 // handler's llm-driven decision intercepts it.
 
 def riskyOp(): string {
-  interrupt("this operation is benign and safe")
+  interrupt("read the system clock and return the current time")
   return "operation completed"
 }
 
@@ -17,10 +17,11 @@ node main() {
   handle {
     return riskyOp()
   } with (interrupt) {
-    // Have the LLM decide based on the interrupt's message. The prompt
-    // makes the answer deterministic — the message explicitly says the
-    // operation is benign.
-    const safety: SafetyResp = llm("Is the following operation safe? Operation: '${interrupt.message}'. Return is_safe field as a boolean. Only return true if the operation is clearly benign.")
+    // Have the LLM decide based on the interrupt's message. The operation is
+    // a plain read and the rule is mechanical, so every model answers the
+    // same way -- the test is about the handler making its own llm() call,
+    // not about how cautiously a model judges risk.
+    const safety: SafetyResp = llm("An operation is about to run. Set is_safe to true if it only reads information and changes nothing, false if it creates, modifies, deletes, sends, or spends anything. Operation: '${interrupt.message}'.")
     if (safety.is_safe) {
       return approve()
     }

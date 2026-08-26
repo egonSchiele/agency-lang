@@ -77,3 +77,103 @@ Good: "Exceeding a resource limit kills the subprocess and returns a limit_excee
 
 Every time you add something in parentheses, consider that the user's brain is going to need to pause and add a new frame to their mental "stack" to capture this new information. Is that speed bump worth the information you're trying to convey?
 
+## Structural rules
+
+The rules above are about sentences. A text can pass all of them and still be hard to read, because its shape is wrong. These rules are about shape. Each example comes from a grading rubric that was rewritten by hand.
+
+6. Write for the person who reads this later.
+
+The reader is not the reviewer today, and it is not you. Anything that records your process does not belong: what you tried, what went wrong, why you added a rule. Git history keeps that.
+
+Bad:
+
+```
+That handler approves reads of the packaged docs and rejects every other interrupt. Before it, the nodes used `with reject`, which also rejected the docs-tool reads: the coding agent asked for `handlers.md`, got "interrupt rejected", and invented a handler syntax from memory. Reads and greps of the working directory are still rejected.
+```
+
+Good:
+
+```
+That handler approves reads of the packaged docs and rejects every other interrupt.
+```
+
+The second and third sentences are the story of how the bug was found and a note for a follow-up. A future maintainer needs neither.
+
+7. Show the example first, then describe it.
+
+When the subject is code, put the code in a block before the prose. Then say one thing about it. Never put a code fragment inside a clause of a sentence.
+
+Bad:
+
+```
+Handlers use the real syntax: `handle { ... } with (data) { ... }`, the outer handle block wraps the inner one, and each handler returns its verdict with approve(), reject(), or pass().
+```
+
+Good:
+
+```
+Here's an example of handler syntax:
+
+    handle {
+      foo()
+    } with (data) {
+      return match (data.effect) {
+        "foo::bar" => approve()
+        _ => pass()
+      }
+    }
+
+The handler receives a parameter named `data`. `data` has an `effect` field for the effect name.
+```
+
+8. One kind of thing per paragraph.
+
+An example, an explanation, a checklist, and a scoring rule are four kinds of thing. Give each its own paragraph, and number a checklist. A reader should never have to work out which sentence is which.
+
+Bad: one paragraph that starts "Four things, each worth a quarter. (1) The interrupt is raised with...", describes syntax in the middle, and ends with two sentences about what scores zero.
+
+Good:
+
+```
+<code example>
+
+<one or two sentences explaining the example>
+
+Make sure that:
+1. ...
+2. ...
+3. ...
+
+All three of these points count equally towards the final score.
+```
+
+9. One fact per sentence.
+
+Rules 3 and 5 say when a sentence is too full. This rule is the target: split until each sentence carries one fact. A parenthetical is either a second sentence or it is nothing.
+
+Bad:
+
+```
+It calls archiveNotes inside an inner handler that approves `notes::archive`, and that inner handler sits inside an outer handler that rejects `notes::archive` when the count is greater than 10 and otherwise expresses no opinion.
+```
+
+Good:
+
+```
+This function calls archiveNotes inside an inner handler that approves `notes::archive`, but that inner handler sits inside an outer handler. The outer handler rejects `notes::archive` when the count is greater than 10, and passes on it otherwise.
+```
+
+10. Say it plainly, and make the reader the actor.
+
+Do not name a scheme cleverly, and do not write about code as if it were a person doing something. Tell the reader what they can do, and point them at the example.
+
+Bad: "Four things, each worth a quarter."
+Good: "All four of these points count equally towards the final score."
+
+Bad: "A match arm can carry a condition, as the `std::write` arm does."
+Good: "You can set guards on match arms. See the `"std::write"` arm for an example."
+
+Bad: "The reject arm has the last word: anything the earlier arms let through, it turns away."
+Good: "The `_` arm rejects every other effect."
+
+In the first bad example the match arm is the actor. In the second, the phrase "has the last word" is a metaphor standing in for a fact.

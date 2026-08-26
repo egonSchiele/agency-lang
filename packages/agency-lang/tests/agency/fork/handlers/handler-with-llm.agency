@@ -5,7 +5,7 @@
 // handler's llm-driven decision intercepts it.
 
 def riskyOp(): string {
-  interrupt("read the system clock and report the current time")
+  interrupt("read the system clock and return the current time")
   return "operation completed"
 }
 

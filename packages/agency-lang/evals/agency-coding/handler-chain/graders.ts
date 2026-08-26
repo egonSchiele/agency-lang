@@ -11,7 +11,7 @@ inner one, and each handler returns its verdict with approve(), reject(), or pas
 (pass for "no opinion"); \`return reject()\` counts, and reject() takes no
 message. (3) Both handlers decide with a match on data.effect,
 and the outer one reads the count from the interrupt's data field (for a
-handler parameter named intr, that is intr.data.count).
+handler parameter named data, that is data.data.count).
 (4) The doc comment above runArchive states that for a count of 11 BOTH handlers
 run (an interrupt is not caught by the nearest handler only), that the inner one
 approves and the outer one rejects, and that a reject from any handler wins, so

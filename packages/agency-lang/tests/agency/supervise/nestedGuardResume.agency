@@ -1,12 +1,9 @@
 // Characterizes what survives a guard pause/resume, which is the mechanism
 // supervise is built on.
 //
-// FINDING (2026-07-18): a `match` expression INSIDE a block that gets paused
-// and resumed evaluates to null (matchInsideResumedBlock). Reading the same
-// Result with isFailure/.value works, and a match on the guard's own Result
-// outside the block works. Agents that may run inside a supervised block
-// therefore read guard Results with isFailure, never match. Recorded in
-// TODO.md.
+// A `match` expression inside a block that gets paused and resumed used to
+// evaluate to null (#590, fixed with #928): the block read the match value
+// from the parent frame instead of its own.
 const log = []
 
 def spin(rounds: number): string {
@@ -17,8 +14,7 @@ def spin(rounds: number): string {
   return "spun"
 }
 
-// KNOWN BUG, pinned so a fix flips this test: match inside the resumed
-// block returns null instead of the matched arm.
+// match inside the resumed block returns the matched arm.
 node matchInsideResumedBlock(): string {
   handle {
     const outer = guard(time: 5ms, label: "a") {

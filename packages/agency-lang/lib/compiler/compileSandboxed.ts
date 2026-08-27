@@ -6,26 +6,11 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import { CompileResult, TypeCheckReport } from "./compile.js";
+import { CompileResult } from "./compile.js";
 import { ClosureEntry, ClosureValidationError, validateClosure } from "./closureValidator.js";
-import { compileValidatedClosure, typeCheckValidatedClosure } from "./compileValidatedClosure.js";
+import { compileValidatedClosure } from "./compileValidatedClosure.js";
 
 export { compileValidatedClosure } from "./compileValidatedClosure.js";
-
-/** Type-check an untrusted closure the way `compileSandboxed` compiles one:
- *  validate it, then check the entry from the mirror so its local imports
- *  resolve. A validation refusal throws an Error listing the violations;
- *  the stdlib's `try` turns it into a failure. */
-export function typecheckSandboxed(args: CompileSandboxedArgs): TypeCheckReport {
-  try {
-    return typeCheckValidatedClosure(validateClosure({ entry: args.entry, dir: args.dir }));
-  } catch (e) {
-    if (e instanceof ClosureValidationError) {
-      throw new Error(e.violations.join("\n"));
-    }
-    throw e;
-  }
-}
 
 export type CompileSandboxedArgs = {
   entry: ClosureEntry;

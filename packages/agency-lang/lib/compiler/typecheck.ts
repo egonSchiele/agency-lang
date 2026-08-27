@@ -106,6 +106,7 @@ function runCheckerPipeline<T>(
     symbolTable: SymbolTable;
     syntheticPath: string;
   }) => T,
+  overrides: Record<string, string> = {},
 ): T {
   const parseResult = parseAgency(source, {}, true);
   if (!parseResult.success) {
@@ -114,7 +115,7 @@ function runCheckerPipeline<T>(
   const program: AgencyProgram = parseResult.result;
 
   return withSourcePath(source, sourcePath, (syntheticPath) => {
-    const symbolTable = SymbolTable.build(syntheticPath, {});
+    const symbolTable = SymbolTable.build(syntheticPath, {}, overrides);
     // A splice that cannot expand is left in place rather than reported.
     // This pipeline answers what the code checks as; the compile paths
     // report splice failures with a position.
@@ -154,23 +155,33 @@ function runCheckerPipeline<T>(
   });
 }
 
+/** `overrides` maps an absolute path to in-memory source, so `sourcePath`
+ *  may name a file that does not exist: its relative imports then resolve
+ *  against that directory without anything being written there. */
 export function typeCheckSource(
   source: string,
   sourcePath?: string,
   config: AgencyConfig = {},
+  overrides: Record<string, string> = {},
 ): TypeCheckReport {
-  return runCheckerPipeline(source, sourcePath, config, ({ checkResult }) => {
-    // Partition into errors and warnings in a single pass. The only severity
-    // values the type-checker emits are "error" and "warning" (see
-    // lib/typeChecker/types.ts), so anything not "warning" is treated as
-    // "error" by toDiagnostic's default.
-    const out: TypeCheckReport = { errors: [], warnings: [] };
-    for (const err of checkResult.errors) {
-      const d = toDiagnostic(err);
-      (d.severity === "warning" ? out.warnings : out.errors).push(d);
-    }
-    return out;
-  });
+  return runCheckerPipeline(
+    source,
+    sourcePath,
+    config,
+    ({ checkResult }) => {
+      // Partition into errors and warnings in a single pass. The only severity
+      // values the type-checker emits are "error" and "warning" (see
+      // lib/typeChecker/types.ts), so anything not "warning" is treated as
+      // "error" by toDiagnostic's default.
+      const out: TypeCheckReport = { errors: [], warnings: [] };
+      for (const err of checkResult.errors) {
+        const d = toDiagnostic(err);
+        (d.severity === "warning" ? out.warnings : out.errors).push(d);
+      }
+      return out;
+    },
+    overrides,
+  );
 }
 
 export type EffectsByExport = Record<string, string[]>;

@@ -16,7 +16,8 @@ import type { ExportFromStatement, NamedExportBody } from "../types.js";
 import { variableTypeToString } from "../backends/typescriptGenerator/typeToString.js";
 import { declaredName } from "../types/hole.js";
 import { deepCopy, isStrictDescendant } from "../utils.js";
-import { compileSandboxed, typecheckSandboxed } from "../compiler/compileSandboxed.js";
+import { compileSandboxed } from "../compiler/compileSandboxed.js";
+import { nanoid } from "nanoid";
 import { exactVerdictValue } from "../testFormat/verdict.js";
 import { parseTestFileSandbox, type ParsedInterrupt } from "../testFormat/schema.js";
 import type { ClosureEntry } from "../compiler/closureValidator.js";
@@ -191,7 +192,11 @@ export function _typecheck(source: string, dir: string = ""): TypeCheckReport {
   if (dir === "") {
     return typeCheckSource(source);
   }
-  return typecheckSandboxed({ entry: { source }, dir });
+  // The draft is given a path inside dir, so its relative imports resolve
+  // against dir's files (as typecheckFile's do), and its own text comes from
+  // the override: nothing is written to dir.
+  const draftPath = join(realpathSync(resolve(dir)), `agency_draft_${nanoid()}.agency`);
+  return typeCheckSource(source, draftPath, {}, { [draftPath]: source });
 }
 
 export function _getEffects(source: string): Record<string, string[]> {

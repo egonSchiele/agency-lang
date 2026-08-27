@@ -620,9 +620,9 @@ export def runCode(
 }
 
 /** Without `dir`, relative imports (./foo.agency) cannot be resolved from a
-source string. With `dir`, the source is checked the way `compile` compiles
-it: the closure is validated and confined to `dir`, and imports resolve
-against a private mirror of it.
+source string. With `dir`, the source is checked as if it were a file in
+`dir`, so its relative imports resolve against the files there, the way
+`typecheckFile` resolves them. Nothing is written to `dir`.
 */
 export idempotent def typecheck(
   source: string,
@@ -634,7 +634,7 @@ export idempotent def typecheck(
 
   @param source - Agency source code as a string
   @param ignoreCodes - Diagnostic codes (e.g. ["AG3009"]) to drop from the report's errors and warnings
-  @param dir - Directory relative imports resolve against, and the boundary they are confined to, as for `compile`. Empty (the default) means local imports cannot resolve.
+  @param dir - Directory the source's relative imports resolve against. Empty (the default) means local imports cannot resolve.
   """
   const report = try _typecheck(source, dir)
   if (report is failure) {

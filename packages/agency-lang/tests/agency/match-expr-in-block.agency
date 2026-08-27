@@ -32,3 +32,29 @@ node matchInNestedBlock() {
   }
   return xs.join(",")
 }
+
+// A handler body compiles in plain mode, and a block inside it inherits that.
+// The plain-mode write and the read must pick the same frame.
+def guarded(): number {
+  const check = interrupt("confirm?")
+  return 42
+}
+
+node matchInBlockInHandler() {
+  handle {
+    const r = guarded()
+    if (isFailure(r)) {
+      return r.error
+    }
+    return "approved"
+  } with (data) {
+    const labels = map([1, 2]) as p {
+      const m = match (p) {
+        1 => "one"
+        _ => "other"
+      }
+      return m
+    }
+    return reject(labels.join(","))
+  }
+}

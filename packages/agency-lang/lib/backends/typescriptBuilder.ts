@@ -267,13 +267,11 @@ export class TypeScriptBuilder {
   // expression-match regions, every one of which routes through
   // `processMatchExpressionPlain` in a handler, and (b) the builder never
   // switches OUT of plain mode within the IIFE — it does not reset
-  // `insideHandlerBody` at block-argument / nested-frame boundaries, so nothing
-  // stepped compiles inside a handler. At every yield site this flag therefore
-  // currently equals `insideHandlerBody`. If a future change starts compiling
-  // stepped constructs inside a handler (e.g. resetting `insideHandlerBody` per
-  // frame), reset THIS flag at those same boundaries too — otherwise a stepped
-  // match nested in a plain arm would emit a bare `return` inside a step
-  // callback (value discarded, `_matchExit` never set: a silent wrong answer).
+  // `insideHandlerBody` anywhere except at block boundaries, where `stepped()`
+  // resets THIS flag too. Both flags must always be reset together — otherwise
+  // a stepped match inside a block in a plain arm would emit a bare `return`
+  // inside a step callback (value discarded, `_matchExit` never set: a silent
+  // wrong answer).
   private insidePlainMatchExpr: boolean = false;
 
   /*
@@ -1094,11 +1092,9 @@ export class TypeScriptBuilder {
             // to Agency's single nothing-value, `null`. This one read site is
             // the chokepoint for every match-result path (stepped no-arm and
             // the plain-mode IIFE that returns `undefined`). See #409.
-            // `exitMatch` writes to the frame of the runner that ran the
-            // match: `__stack` in a node or function, `__bstack` inside a
-            // block. Read from the same one (#928).
-            const frameScope = this.scopes.current().type === "block" ? "block" : "local";
-            return ts.call(ts.id("__nn"), [ts.scopedVar(literal.value, frameScope, this.moduleId)]);
+            return ts.call(ts.id("__nn"), [
+              ts.scopedVar(literal.value, this.matchValFrameScope(), this.moduleId),
+            ]);
           }
           return ts.id(literal.value);
         }
@@ -1668,9 +1664,19 @@ export class TypeScriptBuilder {
       this.insidePlainMatchExpr = prev;
     }
     return ts.assign(
-      ts.scopedVar(matchValName(matchId), "local", this.moduleId),
+      ts.scopedVar(matchValName(matchId), this.matchValFrameScope(), this.moduleId),
       ts.await(ts.iife({ async: true, body: [ifChain] })),
     );
+  }
+
+  /**
+   * The frame a `__matchval_<id>` temp lives in: `__bstack` inside a block,
+   * `__stack` in a node or function. The stepped writer (`runner.exitMatch`)
+   * uses the running runner's frame, which is the same choice. Every read
+   * and the plain-mode write go through here so they cannot drift (#928).
+   */
+  private matchValFrameScope(): "block" | "local" {
+    return this.scopes.current().type === "block" ? "block" : "local";
   }
 
   private processImportStatement(node: ImportStatement): TsNode {
@@ -1768,6 +1774,26 @@ export class TypeScriptBuilder {
    * Process a block argument into a wrapped AgencyFunction TsNode.
    * Shared by generateFunctionCallExpression and buildCallDescriptor.
    */
+  /**
+   * Compile a block body in stepped mode even when the block appears inside
+   * a handler body. A block gets its own frame and Runner, so its `return`
+   * must be `runner.halt(...)`, not the handler's plain `return` (which would
+   * exit a step callback and drop the value). Resets both plain-mode flags
+   * for the duration of `compile` and restores them after.
+   */
+  private stepped<T>(compile: () => T): T {
+    const prevHandler = this.insideHandlerBody;
+    const prevMatch = this.insidePlainMatchExpr;
+    this.insideHandlerBody = false;
+    this.insidePlainMatchExpr = false;
+    try {
+      return compile();
+    } finally {
+      this.insideHandlerBody = prevHandler;
+      this.insidePlainMatchExpr = prevMatch;
+    }
+  }
+
   private processBlockArgument(
     node: Pick<FunctionCall, "block"> & { functionName?: string },
   ): TsNode {
@@ -1801,12 +1827,14 @@ export class TypeScriptBuilder {
       declaredYieldType: block.declaredYieldType,
     });
     this._sourceMapBuilder.enterScope(this.moduleId, blockName);
-    const compiledFinalize = this.finalize.compileScope({
-      body: block.body,
-      scopeName: blockName,
-      errorVar: "__blockError",
-      compileBodyRest: (rest) => this.processBodyAsParts(rest),
-    });
+    const compiledFinalize = this.stepped(() =>
+      this.finalize.compileScope({
+        body: block.body,
+        scopeName: blockName,
+        errorVar: "__blockError",
+        compileBodyRest: (rest) => this.processBodyAsParts(rest),
+      }),
+    );
     this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
     this.scopes.pop();
 
@@ -1851,12 +1879,14 @@ export class TypeScriptBuilder {
     const parentScopeName = this.scopes.currentName();
     this.scopes.push({ type: "block", blockName });
     this._sourceMapBuilder.enterScope(this.moduleId, blockName);
-    const compiledFinalize = this.finalize.compileScope({
-      body: block.body,
-      scopeName: blockName,
-      errorVar: "__blockError",
-      compileBodyRest: (rest) => this.processBodyAsParts(rest),
-    });
+    const compiledFinalize = this.stepped(() =>
+      this.finalize.compileScope({
+        body: block.body,
+        scopeName: blockName,
+        errorVar: "__blockError",
+        compileBodyRest: (rest) => this.processBodyAsParts(rest),
+      }),
+    );
     this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
     this.scopes.pop();
 
@@ -2794,7 +2824,7 @@ export class TypeScriptBuilder {
     this.steps.enterForkBlock();
     this.scopes.push({ type: "block", blockName });
     this._sourceMapBuilder.enterScope(this.moduleId, blockName);
-    const bodyParts = this.processBodyAsParts(block.body);
+    const bodyParts = this.stepped(() => this.processBodyAsParts(block.body));
     this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
     this.scopes.pop();
     this.steps.exitForkBlock();

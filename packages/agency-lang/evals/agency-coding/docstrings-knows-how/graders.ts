@@ -1,6 +1,8 @@
+import { formatted } from "../lib/formatted.js";
 import { idiomJudge } from "../lib/idiomJudge.js";
 
 export default [
+  formatted(),
   idiomJudge({
     name: "docstrings-knows-how",
     weight: 0.8,

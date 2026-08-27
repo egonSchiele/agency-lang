@@ -1,8 +1,10 @@
+import { formatted } from "../lib/formatted.js";
 // The holdout checks both branches and that the message survives. This
 // judge checks how the Result was read.
 import { idiomJudge } from "../lib/idiomJudge.js";
 
 export default [
+  formatted(),
   idiomJudge({
     name: "narrows-results",
     standard: `

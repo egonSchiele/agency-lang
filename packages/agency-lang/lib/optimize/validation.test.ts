@@ -3,6 +3,13 @@ import { describe, expect, it } from "vitest";
 import { validateMutationPrompt, validateOptimizedStringValue } from "./validation.js";
 
 describe("validateOptimizedStringValue", () => {
+  it("treats an escaped \\${ in the text as text, not as a placeholder", () => {
+    const current = "Rules:\n- `\\${...}` interpolation, braces.";
+    expect(validateOptimizedStringValue(current, current)).toEqual({ ok: true });
+    expect(validateOptimizedStringValue(current, "Rules:\n- braces.")).toEqual({ ok: true });
+    expect(validateOptimizedStringValue(current, "Rules: ${x}").ok).toBe(false);
+  });
+
   it("accepts an unchanged interpolation placeholder", () => {
     expect(validateOptimizedStringValue("hello ${name}", "hi ${name}")).toEqual({ ok: true });
   });

@@ -4,9 +4,29 @@ import { expressionToString } from "@/utils/node.js";
 
 import type { ValidationResult } from "./types.js";
 
+/**
+ * Wraps decoded prompt text (the `OptimizeTarget.value` representation, see
+ * `promptSegmentsToString`) in a `"..."` Agency string literal. The text
+ * already carries `\${` and `\"""` as escapes: `\${` stays an escape,
+ * `\"""` becomes three escaped quotes, and every other backslash, quote,
+ * and newline is escaped so the literal parses back to the same text.
+ * JSON escaping is not the same thing: it doubles the backslash in `\${`,
+ * which the Agency parser then reads as a backslash followed by a live
+ * interpolation.
+ */
+export function decodedValueToStringLiteral(value: string): string {
+  const escaped = value
+    .split('\\"""')
+    .join('"""')
+    .replace(/\\(?!\$\{)/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n");
+  return `"${escaped}"`;
+}
+
 /** Parses decoded prompt text (no surrounding quotes) into prompt segments. */
 export function parsePromptToSegments(prompt: string): PromptSegment[] {
-  const parsed = stringParser(JSON.stringify(prompt));
+  const parsed = stringParser(decodedValueToStringLiteral(prompt));
   if (!parsed.success || parsed.rest.length > 0) {
     throw new Error("Failed to parse prompt as an Agency string literal");
   }

@@ -18,7 +18,7 @@ import {
   type OptimizeTarget,
   type OptimizeTargetSet,
 } from "./targets.js";
-import { validateOptimizedStringValue } from "./validation.js";
+import { decodedValueToStringLiteral, validateOptimizedStringValue } from "./validation.js";
 
 /**
  * Replaces an optimized variable's initializer expression. `value` is
@@ -425,17 +425,7 @@ export class OptimizeSourceMutator {
       // Text that ends in a quote cannot sit inside """...""" (the closing
       // quotes run together), so fall back to "..." with escapes.
       if (!parsed.success || parsed.rest.trim() !== "") {
-        // `\${` and `\"""` are the escapes a decoded value already carries
-        // (see promptSegmentsToString). A "..." string needs neither: `\"""`
-        // becomes three escaped quotes, and the backslash before `${` must
-        // not be doubled or it would sit in front of a live interpolation.
-        const escaped = operation.value
-          .split('\\"""')
-          .join('"""')
-          .replace(/\\(?!\$\{)/g, "\\\\")
-          .replace(/"/g, '\\"')
-          .replace(/\n/g, "\\n");
-        const plain = exprParser(`"${escaped}"`);
+        const plain = exprParser(decodedValueToStringLiteral(operation.value));
         if (plain.success && plain.rest.trim() === "") parsed = plain;
       }
     }

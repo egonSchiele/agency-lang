@@ -3,7 +3,12 @@ import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { discoverOptimizeTargets, type OptimizeTarget, type OptimizeTargetSet } from "./targets.js";
+import {
+  discoverOptimizeTargets,
+  literalInterpolationWarnings,
+  type OptimizeTarget,
+  type OptimizeTargetSet,
+} from "./targets.js";
 import { OptimizeSourceMutator, type OptimizeMutationOperation } from "./sourceMutator.js";
 
 const tempDirs: string[] = [];
@@ -80,6 +85,7 @@ function makeTargetSet(extraTargets: OptimizeTarget[] = []): OptimizeTargetSet {
         scope: "bar",
         name: "prompt",
         valueKind: "string",
+        interpolations: [],
         declaredType: null,
         value: "xyz",
       },
@@ -91,6 +97,7 @@ function makeTargetSet(extraTargets: OptimizeTarget[] = []): OptimizeTargetSet {
         scope: "global",
         name: "greeting",
         valueKind: "string",
+        interpolations: ["name"],
         declaredType: null,
         value: "hello ${name}",
       },
@@ -110,7 +117,7 @@ const validOperation: OptimizeMutationOperation = {
   target: "foo.agency:bar:prompt",
   kind: "variable",
   op: "replaceInitializer",
-  value: '"new prompt"',
+  value: "new prompt",
 };
 
 describe("OptimizeSourceMutator operation validation", () => {
@@ -142,6 +149,7 @@ describe("OptimizeSourceMutator operation validation", () => {
       scope: "global",
       name: "ResultType",
       valueKind: "string",
+      interpolations: [],
       declaredType: null,
       value: "string",
     } as unknown as OptimizeTarget;
@@ -157,7 +165,7 @@ describe("OptimizeSourceMutator operation validation", () => {
       target: "foo.agency:bar:prompt",
       kind: "variable",
       op: "replaceTypeDefinition",
-      value: '"new prompt"',
+      value: "new prompt",
     } as unknown as OptimizeMutationOperation;
     expect(previewDiagnostics([operation])).toMatchObject([
       { code: "unsupported-operation", target: "foo.agency:bar:prompt" },
@@ -216,7 +224,7 @@ describe("OptimizeSourceMutator replacement value validation", () => {
         target: "foo.agency:global:greeting",
         kind: "variable",
         op: "replaceInitializer",
-        value: '"welcome, ${name}!"',
+        value: "welcome, ${name}!",
       },
     ]);
     expect(diagnostics).toEqual([]);
@@ -228,7 +236,7 @@ describe("OptimizeSourceMutator replacement value validation", () => {
         target: "foo.agency:global:greeting",
         kind: "variable",
         op: "replaceInitializer",
-        value: '"welcome!"',
+        value: "welcome!",
       },
     ]);
     expect(diagnostics).toMatchObject([
@@ -236,57 +244,25 @@ describe("OptimizeSourceMutator replacement value validation", () => {
     ]);
   });
 
-  it("keeps a stray leading quote as part of the prompt text", () => {
-    const preview = new OptimizeSourceMutator({ targetSet: makeTargetSet() }).preview([
-      { ...validOperation, value: '"unterminated' },
-    ]);
-    expect(preview.diagnostics).toEqual([]);
-    expect(preview.changes[0].newValue).toBe('"unterminated');
-  });
-
-  it("wraps unquoted prose into a string literal (recovers a model that omits quotes)", () => {
-    const preview = new OptimizeSourceMutator({ targetSet: makeTargetSet() }).preview([
-      { ...validOperation, value: "What is the capital of India?" },
-    ]);
-    expect(preview.diagnostics).toEqual([]);
-    expect(preview.changes[0].newValue).toBe("What is the capital of India?");
-  });
-
-  it("wraps unquoted text even when it looks like code", () => {
-    const preview = new OptimizeSourceMutator({ targetSet: makeTargetSet() }).preview([
-      { ...validOperation, value: "x => x + 1" },
-    ]);
-    expect(preview.diagnostics).toEqual([]);
-    expect(preview.changes[0].newValue).toBe("x => x + 1");
-  });
-
-  it("escapes embedded quotes in plain text", () => {
-    const preview = new OptimizeSourceMutator({ targetSet: makeTargetSet() }).preview([
-      { ...validOperation, value: 'Say "hi" to them' },
-    ]);
-    expect(preview.diagnostics).toEqual([]);
-    expect(preview.changes[0].newValue).toBe('Say "hi" to them');
-    expect(preview.files["foo.agency"]).toContain('"Say \\"hi\\" to them"');
-  });
-
-  it("keeps text after a quoted phrase instead of treating it as trailing garbage", () => {
+  it("reads the value as text: quotes are text, not delimiters", () => {
     const preview = new OptimizeSourceMutator({ targetSet: makeTargetSet() }).preview([
       { ...validOperation, value: '"ok" trailing' },
     ]);
     expect(preview.diagnostics).toEqual([]);
     expect(preview.changes[0].newValue).toBe('"ok" trailing');
+    expect(preview.files["foo.agency"]).toContain('"\\"ok\\" trailing"');
   });
 
-  it("rejects non-string expressions in v1", () => {
-    const diagnostics = previewDiagnostics([{ ...validOperation, value: "42" }]);
+  it("rejects a ${...} that is not an expression", () => {
+    const diagnostics = previewDiagnostics([{ ...validOperation, value: "use ${...} here" }]);
     expect(diagnostics).toMatchObject([
-      { code: "unsupported-value-domain", target: "foo.agency:bar:prompt" },
+      { code: "invalid-replacement-syntax", target: "foo.agency:bar:prompt" },
     ]);
   });
 
-  it("accepts multiline string replacements", () => {
+  it("accepts text that contains triple quotes", () => {
     const diagnostics = previewDiagnostics([
-      { ...validOperation, value: '"""\n  a longer prompt\n  """' },
+      { ...validOperation, value: 'Start with """ then the body.' },
     ]);
     expect(diagnostics).toEqual([]);
   });
@@ -302,7 +278,7 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "foo.agency:bar:prompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: '"new prompt"',
+        value: "new prompt",
         rationale: "clearer instruction",
       },
     ]);
@@ -333,7 +309,7 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "foo.agency:global:systemPrompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: '"brand new"',
+        value: "brand new",
       },
     ]);
 
@@ -353,7 +329,7 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "foo.agency:bar:prompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: '"new prompt"',
+        value: "new prompt",
       },
     ]);
 
@@ -373,7 +349,7 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "foo.agency:bar:prompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: '"new prompt"',
+        value: "new prompt",
       },
     ]);
 
@@ -403,13 +379,13 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "foo.agency:bar:prompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: '"new prompt"',
+        value: "new prompt",
       },
       {
         target: "foo.agency:global:systemPrompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: '"new system"',
+        value: "new system",
       },
     ]);
 
@@ -462,7 +438,7 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "multi.agency:global:big",
         kind: "variable",
         op: "replaceInitializer",
-        value: '"first line\\nsay \\"hi\\""',
+        value: 'first line\nsay "hi"',
       },
     ]);
     expect(preview.diagnostics).toEqual([]);
@@ -485,7 +461,7 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "multi.agency:global:big",
         kind: "variable",
         op: "replaceInitializer",
-        value: '"first line\\nsecond line"',
+        value: "first line\nsecond line",
       },
     ]);
     expect(preview.diagnostics).toEqual([]);
@@ -495,7 +471,7 @@ describe("OptimizeSourceMutator.preview", () => {
     expect(preview.changes[0].newValue).toBe("first line\nsecond line");
   });
 
-  it("keeps an escaped ${ escaped through decode and writeback", () => {
+  it("warns about a target whose text contains a literal ${ and rejects proposals that keep it", () => {
     const dir = makeTempDir();
     const entry = writeAgency(
       dir,
@@ -503,32 +479,65 @@ describe("OptimizeSourceMutator.preview", () => {
       'optimize const p = """\nSay hello: "Hello, \\${name}"\n"""\n\nnode main() {\n  return p\n}\n',
     );
     const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
-    expect(targetSet.targets[0].value).toBe('\nSay hello: "Hello, \\${name}"\n');
+    expect(targetSet.targets[0].value).toBe('\nSay hello: "Hello, ${name}"\n');
+    expect(targetSet.targets[0].interpolations).toEqual([]);
+    expect(literalInterpolationWarnings(targetSet.targets)).toHaveLength(1);
+    expect(literalInterpolationWarnings(targetSet.targets)[0]).toContain("esc.agency:global:p");
     const preview = new OptimizeSourceMutator({ targetSet }).preview([
       {
         target: "esc.agency:global:p",
         kind: "variable",
         op: "replaceInitializer",
-        value: 'Always say hello: "Hello, \\${name}"',
+        value: 'Always say hello: "Hello, ${name}"',
       },
     ]);
-    // Ends in a quote, so it is written as a "..." string with escapes.
-    expect(preview.diagnostics).toEqual([]);
-    expect(preview.files["esc.agency"]).toContain('\\"Hello, \\${name}\\"');
-    expect(preview.files["esc.agency"]).not.toContain("\\\\${name}");
-    // Multi-line and not ending in a quote, so it stays a triple-quoted block.
-    const block = new OptimizeSourceMutator({ targetSet }).preview([
-      {
-        target: "esc.agency:global:p",
-        kind: "variable",
-        op: "replaceInitializer",
-        value: 'Always say hello: "Hello, \\${name}"\nThen stop.',
-      },
-    ]);
-    expect(block.diagnostics).toEqual([]);
-    expect(block.files["esc.agency"]).toContain(
-      '"""Always say hello: "Hello, \\${name}"\nThen stop."""',
+    expect(preview.diagnostics).toMatchObject([{ code: "interpolation-mismatch" }]);
+  });
+
+  it("warns when a target has both a real interpolation and a literal copy of it", () => {
+    const dir = makeTempDir();
+    const entry = writeAgency(
+      dir,
+      "both.agency",
+      'optimize const p = """\nHi ${name}. Use \\${name} for the name.\n"""\n\nnode main() {\n  const name = "x"\n  return p\n}\n',
     );
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+    expect(targetSet.targets[0].interpolations).toEqual(["name"]);
+    expect(literalInterpolationWarnings(targetSet.targets)).toHaveLength(1);
+  });
+
+  it("keeps plain quotes when a text segment ends in a backslash", () => {
+    const dir = makeTempDir();
+    const entry = writeAgency(
+      dir,
+      "slash.agency",
+      'optimize const p = """\nHi ${name}\n"""\n\nnode main() {\n  const name = "x"\n  return p\n}\n',
+    );
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+    for (const value of ["Hi \\${name}\nbye", "Hi ${name}\nbye\\"]) {
+      const preview = new OptimizeSourceMutator({ targetSet }).preview([
+        { target: "slash.agency:global:p", kind: "variable", op: "replaceInitializer", value },
+      ]);
+      expect(preview.diagnostics).toEqual([]);
+      expect(preview.changes[0].newValue).toBe(value);
+      expect(preview.files["slash.agency"]).not.toContain('"""');
+      writeAgency(dir, "slash.agency", preview.files["slash.agency"]);
+      const reread = discoverOptimizeTargets(entry, { baseDir: dir });
+      expect(reread.targets[0].value).toBe(value);
+      expect(reread.targets[0].interpolations).toEqual(["name"]);
+    }
+  });
+
+  it("does not warn about a target whose ${...} are all interpolations", () => {
+    const dir = makeTempDir();
+    const entry = writeAgency(
+      dir,
+      "ok.agency",
+      'optimize const p = "Hello, ${name}"\n\nnode main() {\n  const name = "x"\n  return p\n}\n',
+    );
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+    expect(targetSet.targets[0].interpolations).toEqual(["name"]);
+    expect(literalInterpolationWarnings(targetSet.targets)).toEqual([]);
   });
 
   it("writes a value that mentions triple quotes back as a block with the escape", () => {
@@ -539,7 +548,7 @@ describe("OptimizeSourceMutator.preview", () => {
       'optimize const p = """\nPut a \\""" docstring first.\n"""\n\nnode main() {\n  return p\n}\n',
     );
     const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
-    expect(targetSet.targets[0].value).toBe('\nPut a \\""" docstring first.\n');
+    expect(targetSet.targets[0].value).toBe('\nPut a """ docstring first.\n');
     // The model sends the triple quotes bare; the block form still wins.
     const preview = new OptimizeSourceMutator({ targetSet }).preview([
       {
@@ -571,7 +580,7 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "multi.agency:global:big",
         kind: "variable",
         op: "replaceInitializer",
-        value: '"now short"',
+        value: "now short",
       },
     ]);
 
@@ -593,13 +602,13 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "foo.agency:bar:prompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: '"new prompt"',
+        value: "new prompt",
       },
       {
         target: "helpers/prompts.agency:global:importedPrompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: '"refreshed"',
+        value: "refreshed",
       },
     ]);
 
@@ -620,13 +629,13 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "foo.agency:bar:prompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: '"new prompt"',
+        value: "new prompt",
       },
       {
         target: "foo.agency:bar:missing",
         kind: "variable",
         op: "replaceInitializer",
-        value: '"whatever"',
+        value: "whatever",
       },
     ]);
 
@@ -656,7 +665,7 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "foo.agency:bar:prompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: '"new prompt"',
+        value: "new prompt",
       },
     ]);
 
@@ -673,7 +682,7 @@ describe("OptimizeSourceMutator.preview", () => {
         target: "foo.agency:global:systemPrompt",
         kind: "variable",
         op: "replaceInitializer",
-        value: '"""\nfirst line\nsecond line\n"""',
+        value: "first line\nsecond line",
       },
     ]);
 
@@ -691,7 +700,7 @@ describe("OptimizeSourceMutator.mutate", () => {
   it("infers replaceInitializer for variable targets", () => {
     const mutator = new OptimizeSourceMutator({ targetSet: discoverFixture() });
 
-    const preview = mutator.mutate("foo.agency:bar:prompt", '"new"');
+    const preview = mutator.mutate("foo.agency:bar:prompt", "new");
 
     expect(preview.diagnostics).toEqual([]);
     expect(preview.changes).toMatchObject([
@@ -720,6 +729,7 @@ describe("OptimizeSourceMutator.mutate", () => {
       scope: "global",
       name: "ResultType",
       valueKind: "string",
+      interpolations: [],
       declaredType: null,
       value: "string",
     } as unknown as OptimizeTarget;
@@ -942,7 +952,7 @@ node main() {}
 });
 
 describe("literal ${ text in a free-text target", () => {
-  it("accepts a candidate that sends the escaped text back bare and writes it escaped", () => {
+  it("rejects a proposal that copies the text, with the placeholder rule in the message", () => {
     const dir = fs.realpathSync(makeTempDir());
     const entry = writeAgency(
       dir,
@@ -953,7 +963,7 @@ describe("literal ${ text in a free-text target", () => {
     const mutator = new OptimizeSourceMutator({ targetSet: set });
 
     const preview = mutator.mutate("a.agency:global:p", "Rules:\n- `${...}` interpolation.\nDone");
-    expect(preview.diagnostics).toEqual([]);
-    expect(preview.files["a.agency"]).toContain("`\\${...}` interpolation.\nDone");
+    expect(preview.diagnostics).toMatchObject([{ code: "invalid-replacement-syntax" }]);
+    expect(preview.diagnostics[0].message).toContain("placeholder");
   });
 });

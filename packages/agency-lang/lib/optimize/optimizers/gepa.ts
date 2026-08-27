@@ -197,7 +197,7 @@ export class Gepa extends BaseOptimizer {
             history:
               diagnostics.length === 0
                 ? ""
-                : `Your previous proposal was rejected:\n${formatDiagnostics(diagnostics)}\nFix these and keep every interpolation placeholder.`,
+                : `Your previous proposal was rejected:\n${formatDiagnostics(diagnostics)}\nFix these. Keep the placeholders the current value has, copied exactly, and add none.`,
           },
           this.config.mutatorModel,
         ),

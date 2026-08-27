@@ -67,6 +67,7 @@ describe("GreedyReflective (pointwise)", () => {
         name: "prompt",
         valueKind: "string",
         value: "hi",
+        interpolations: [],
         declaredType: null,
       },
     ],

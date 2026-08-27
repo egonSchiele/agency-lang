@@ -1,94 +1,64 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  escapeForeignInterpolations,
-  validateMutationPrompt,
-  validateOptimizedStringValue,
-} from "./validation.js";
+import { compareInterpolations, interpolationsOf, parseReplacementText } from "./validation.js";
 
-describe("validateOptimizedStringValue", () => {
-  it("treats an escaped \\${ in the text as text, not as a placeholder", () => {
-    const current = "Rules:\n- `\\${...}` interpolation, braces.";
-    expect(validateOptimizedStringValue(current, current)).toEqual({ ok: true });
-    expect(validateOptimizedStringValue(current, "Rules:\n- braces.")).toEqual({ ok: true });
-    expect(validateOptimizedStringValue(current, "Rules: ${x}").ok).toBe(false);
+function interpolations(text: string): string[] {
+  const parsed = parseReplacementText(text);
+  if (!parsed.ok) throw new Error(parsed.reason);
+  return interpolationsOf(parsed.segments);
+}
+
+describe("parseReplacementText", () => {
+  it("reads plain text with quotes, backslashes, and newlines as text", () => {
+    const parsed = parseReplacementText('Say "hi"\\nthen stop.\nDone');
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.segments).toEqual([{ type: "text", value: 'Say "hi"\\nthen stop.\nDone' }]);
   });
 
-  it("accepts an unchanged interpolation placeholder", () => {
-    expect(validateOptimizedStringValue("hello ${name}", "hi ${name}")).toEqual({ ok: true });
+  it("reads every ${...} as an interpolation", () => {
+    expect(interpolations("Hello ${name}, you are ${user.age}")).toEqual(["name", "user.age"]);
   });
 
-  it("accepts reordered placeholders when the multiset is equal", () => {
-    expect(validateOptimizedStringValue("${a} then ${b}", "${b} after ${a}")).toEqual({ ok: true });
+  it("keeps string quotes inside an interpolation, so a literal argument stays distinct from a variable", () => {
+    expect(interpolations('${format("x")} ${format(x)}')).toEqual(['format("x")', "format(x)"]);
   });
 
-  it("requires duplicate placeholders to preserve multiplicity", () => {
-    expect(validateOptimizedStringValue("${x} ${x}", "${x} and ${x}")).toEqual({ ok: true });
-    expect(validateOptimizedStringValue("${x} ${x}", "${x}")).toMatchObject({ ok: false });
+  it("rejects a ${...} that does not hold an expression", () => {
+    const parsed = parseReplacementText("use `${...}` to interpolate");
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.reason).toContain("placeholder");
   });
 
-  it("rejects a missing placeholder", () => {
-    expect(validateOptimizedStringValue("hello ${name}", "hi there")).toMatchObject({ ok: false });
-  });
-
-  it("rejects an added placeholder", () => {
-    expect(validateOptimizedStringValue("hello ${name}", "hi ${name} ${extra}")).toMatchObject({
-      ok: false,
-    });
-  });
-
-  it("compares placeholders by canonical rendered expression", () => {
-    expect(validateOptimizedStringValue("call ${foo(1,2)}", "ring ${foo(1, 2)}")).toEqual({
-      ok: true,
-    });
-  });
-
-  it("rejects an empty replacement value", () => {
-    expect(validateOptimizedStringValue("hello", "")).toMatchObject({ ok: false });
+  it("rejects an empty replacement", () => {
+    expect(parseReplacementText("")).toMatchObject({ ok: false });
   });
 });
 
-describe("validateMutationPrompt", () => {
-  it("accepts a prompt that preserves the current interpolation multiset", () => {
-    expect(validateMutationPrompt("hello ${name}", "hi ${name}")).toEqual({ ok: true });
-  });
-
-  it("rejects a prompt that drops an interpolation", () => {
-    expect(validateMutationPrompt("hello ${name}", "hi there")).toMatchObject({ ok: false });
-  });
-
-  it("rejects a prompt that adds an interpolation", () => {
-    expect(validateMutationPrompt("hello ${name}", "hi ${name} ${extra}")).toMatchObject({
-      ok: false,
-    });
-  });
-
-  it("compares duplicate interpolations as a multiset", () => {
-    expect(validateMutationPrompt("${x} ${x}", "${x}")).toMatchObject({ ok: false });
-  });
-
-  it("rejects malformed interpolation syntax", () => {
-    expect(validateMutationPrompt("${x}", "${}")).toMatchObject({ ok: false });
-  });
-});
-
-describe("escapeForeignInterpolations", () => {
-  it("escapes a ${...} the current value only has as literal text", () => {
-    const current = "Rules: `\\${...}` interpolation.";
-    expect(escapeForeignInterpolations("Rules: `${...}` interpolation.", current)).toBe(current);
-  });
-
-  it("leaves a real placeholder alone and escapes an unknown one", () => {
-    expect(escapeForeignInterpolations("Hi ${name}, see ${x.y}", "Hi ${name}")).toBe(
-      "Hi ${name}, see \\${x.y}",
+describe("compareInterpolations", () => {
+  it("accepts the same placeholders in any order", () => {
+    expect(compareInterpolations(interpolations("${a} ${b}"), interpolations("${b} ${a}"))).toEqual(
+      { ok: true },
     );
   });
 
-  it("leaves an already escaped one alone", () => {
-    expect(escapeForeignInterpolations("a \\${b}", "")).toBe("a \\${b}");
+  it("requires duplicates to keep their multiplicity", () => {
+    expect(
+      compareInterpolations(interpolations("${x} ${x}"), interpolations("${x}")),
+    ).toMatchObject({ ok: false, reason: "you removed ${x} from the prompt" });
   });
 
-  it("matches a placeholder by its parsed expression, not its spacing", () => {
-    expect(escapeForeignInterpolations("${ name }", "${name}")).toBe("${ name }");
+  it("rejects a missing placeholder and names it", () => {
+    expect(compareInterpolations(interpolations("hello ${name}"), interpolations("hi"))).toEqual({
+      ok: false,
+      reason: "you removed ${name} from the prompt",
+    });
+  });
+
+  it("rejects an added placeholder", () => {
+    expect(
+      compareInterpolations(interpolations("hello ${name}"), interpolations("hi ${name} ${extra}")),
+    ).toEqual({ ok: false, reason: "you added an interpolation to the prompt" });
   });
 });

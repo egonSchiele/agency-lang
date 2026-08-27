@@ -53,6 +53,7 @@ describe("Gepa (reflective Pareto optimizer)", () => {
     name: id,
     valueKind: "string",
     value: `"${id}"`,
+    interpolations: [],
     declaredType: null,
   });
 

@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { generateAgency } from "@/backends/agencyGenerator.js";
+import { escapeStringText, generateAgency } from "@/backends/agencyGenerator.js";
 import { parseAgency, replaceBlankLines } from "@/parser.js";
 import { exprParser } from "@/parsers/parsers.js";
 import type { AgencyProgram, Expression, PromptSegment } from "@/types.js";
@@ -18,11 +18,7 @@ import {
   type OptimizeTarget,
   type OptimizeTargetSet,
 } from "./targets.js";
-import {
-  decodedValueToStringLiteral,
-  escapeForeignInterpolations,
-  validateOptimizedStringValue,
-} from "./validation.js";
+import { compareInterpolations, interpolationsOf, parseReplacementText } from "./validation.js";
 
 /**
  * Replaces an optimized variable's initializer expression. `value` is
@@ -411,80 +407,24 @@ export class OptimizeSourceMutator {
     operation: ReplaceVariableInitializerOperation,
     target: OptimizeTarget,
   ): ValidationOutcome {
-    const isFreeformText = target.valueKind !== "literal" && target.declaredType === null;
-    const value = isFreeformText
-      ? escapeForeignInterpolations(operation.value, target.value)
-      : operation.value;
-    let parsed = exprParser(value);
+    if (target.valueKind !== "literal" && target.declaredType === null) {
+      return this.resolveFreeformText(operation, target);
+    }
+    let parsed = exprParser(operation.value);
     if ((!parsed.success || parsed.rest.trim() !== "") && target.valueKind !== "literal") {
-      // The model frequently returns the raw prompt text without the surrounding
-      // quotes. Recover by wrapping it in the target's quote style and re-parsing.
-      // This is self-validating — values that don't wrap into a clean single
-      // expression (e.g. embedded quotes, or newlines under single-quote style)
-      // fall through to the diagnostic, so we never emit broken source.
-      const quote = target.valueKind === "multilineString" ? `"""` : `"`;
-      // A bare `"""` in the text would close the block; the model may send
-      // one unescaped when the prompt talks about triple-quoted strings.
-      const body = quote === `"""` ? value.replace(/(?<!\\)"""/g, '\\"""') : value;
-      const wrapped = exprParser(`${quote}${body}${quote}`);
-      if (wrapped.success && wrapped.rest.trim() === "") parsed = wrapped;
-      // Text that ends in a quote cannot sit inside """...""" (the closing
-      // quotes run together), so fall back to "..." with escapes.
-      if (!parsed.success || parsed.rest.trim() !== "") {
-        const plain = exprParser(decodedValueToStringLiteral(value));
-        if (plain.success && plain.rest.trim() === "") parsed = plain;
-      }
+      // A typed text target (a union of strings, say) often comes back as
+      // bare prose. Read it as a string and let the type check judge it.
+      const quoted = exprParser(`"${escapeStringText(operation.value, '"')}"`);
+      if (quoted.success && quoted.rest.trim() === "") parsed = quoted;
     }
     if (!parsed.success || parsed.rest.trim() !== "") {
-      // Keep the text-target message prescriptive — it is retry feedback the
-      // mutator LLM acts on, and "send a quoted string" is the actual fix.
-      const message =
-        target.valueKind === "literal"
-          ? `Replacement value for ${operation.target} did not parse as an Agency expression. Received: ${JSON.stringify(operation.value)}`
-          : `Replacement value for ${operation.target} must be a quoted Agency string literal (e.g. "new prompt"), but it did not parse as one even after wrapping it in quotes. Received: ${JSON.stringify(operation.value)}`;
-      return diagnostic({ operation, code: "invalid-replacement-syntax", message });
+      return diagnostic({
+        operation,
+        code: "invalid-replacement-syntax",
+        message: `Replacement value for ${operation.target} did not parse as an Agency expression. Received: ${JSON.stringify(operation.value)}`,
+      });
     }
     let replacement = parsed.result;
-
-    if (isFreeformText) {
-      // Today's freeform path, byte-identical behavior.
-      if (replacement.type !== "string" && replacement.type !== "multiLineString") {
-        return diagnostic({
-          operation,
-          code: "unsupported-value-domain",
-          message: `Replacement value for ${operation.target} must be a string or multiline string expression; got ${replacement.type}.`,
-        });
-      }
-      const newValue = promptSegmentsToString(replacement.segments);
-      const validation = validateOptimizedStringValue(target.value, newValue);
-      if (!validation.ok) {
-        return diagnostic({
-          operation,
-          code: "interpolation-mismatch",
-          message: `Replacement value for ${operation.target} is invalid: ${validation.reason}`,
-        });
-      }
-      // A multi-line prompt sent as "..." with \n escapes would be written
-      // back as one long line. Keep the source readable: emit it as """..."""
-      // when that renders back to the same text (""" cannot escape quotes).
-      if (
-        target.valueKind === "multilineString" &&
-        replacement.type === "string" &&
-        newValue.includes("\n")
-      ) {
-        const block: Expression = { type: "multiLineString", segments: replacement.segments };
-        const roundTrip = exprParser(generateExpression(block));
-        if (
-          roundTrip.success &&
-          roundTrip.rest.trim() === "" &&
-          roundTrip.result.type === "multiLineString" &&
-          promptSegmentsToString(roundTrip.result.segments) === newValue
-        ) {
-          replacement = block;
-        }
-      }
-      return { resolved: { operation, target, replacement, newValue } };
-    }
 
     // Typed values must be self-contained: the mutator cannot know what
     // identifiers exist at the declaration site, and the probe's
@@ -543,6 +483,47 @@ export class OptimizeSourceMutator {
       replacement.type === "string" || replacement.type === "multiLineString"
         ? promptSegmentsToString(replacement.segments)
         : proposalText;
+    return { resolved: { operation, target, replacement, newValue } };
+  }
+
+  /**
+   * A free-text target's replacement is plain text. Every `${...}` in it
+   * is an interpolation, and the set must match the target's. The
+   * generator escapes whatever the text needs when it is written back.
+   */
+  private resolveFreeformText(
+    operation: ReplaceVariableInitializerOperation,
+    target: OptimizeTarget,
+  ): ValidationOutcome {
+    const parsed = parseReplacementText(operation.value);
+    if (!parsed.ok) {
+      return diagnostic({
+        operation,
+        code: "invalid-replacement-syntax",
+        message: `Replacement value for ${operation.target} could not be read: ${parsed.reason} Received: ${JSON.stringify(operation.value)}`,
+      });
+    }
+    const check = compareInterpolations(target.interpolations, interpolationsOf(parsed.segments));
+    if (!check.ok) {
+      return diagnostic({
+        operation,
+        code: "interpolation-mismatch",
+        message: `Replacement value for ${operation.target} is invalid: ${check.reason}`,
+      });
+    }
+    const newValue = promptSegmentsToString(parsed.segments);
+    // A multi-line value is written as a """ block so the source stays
+    // readable, unless the block form cannot hold it: a closing quote would
+    // run into the delimiter, and a backslash before `${` or before the
+    // delimiter would escape it.
+    const textEndsWithBackslash = parsed.segments.some(
+      (segment) => segment.type === "text" && segment.value.endsWith("\\"),
+    );
+    const asBlock = newValue.includes("\n") && !newValue.endsWith('"') && !textEndsWithBackslash;
+    const replacement: Expression = {
+      type: asBlock ? "multiLineString" : "string",
+      segments: parsed.segments,
+    };
     return { resolved: { operation, target, replacement, newValue } };
   }
 }

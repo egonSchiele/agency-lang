@@ -16,8 +16,9 @@ import type {
   VariableType,
 } from "@/types.js";
 import { generateExpression } from "@/backends/agencyGenerator.js";
-import { expressionToString, isLiteralExpression, walkNodes } from "@/utils/node.js";
+import { isLiteralExpression, walkNodes } from "@/utils/node.js";
 import { checkProposal, renderDeclaredType } from "./constraint.js";
+import { interpolationsOf } from "./validation.js";
 
 export type OptimizeTarget = {
   id: string;
@@ -27,10 +28,14 @@ export type OptimizeTarget = {
   scope: string;
   name: string;
   valueKind: "string" | "multilineString" | "literal";
-  /** Decoded text for text targets (interpolations rendered as `${...}` —
-   *  the `expected`-guard contract); the EXACT source slice, quotes intact,
-   *  for literal targets. */
+  /** The plain text for text targets, with interpolations rendered as
+   *  `${expr}` (the `expected`-guard contract); the EXACT source slice,
+   *  quotes intact, for literal targets. */
   value: string;
+  /** The interpolations a text target carries, as canonical expression
+   *  text, sorted. A replacement must keep exactly these. Empty for
+   *  literal targets. */
+  interpolations: string[];
   /** Parseable type text proposals are probed against (constraint.ts).
    *  `null` means FREEFORM for text targets (today's string-only semantics,
    *  interpolation rule and all) and UNCONSTRAINED for literal targets (any
@@ -250,10 +255,9 @@ function buildTarget(
   // contract). Literal targets carry formatter-exact source text, quotes
   // intact — parsed initializer nodes have no loc offsets to slice by.
   const valueSource = generateExpression(value);
-  const valueText =
-    isText && (value.type === "string" || value.type === "multiLineString")
-      ? promptSegmentsToString(value.segments)
-      : valueSource;
+  const segments =
+    isText && (value.type === "string" || value.type === "multiLineString") ? value.segments : null;
+  const valueText = segments ? promptSegmentsToString(segments) : valueSource;
 
   if (!prior && !isText && !assignment.typeHint) {
     throw new Error(
@@ -270,6 +274,7 @@ function buildTarget(
     name: assignment.variableName,
     valueKind,
     value: valueText,
+    interpolations: segments ? interpolationsOf(segments) : [],
     declaredType: prior
       ? prior.declaredType
       : resolveDeclaredType(assignment.typeHint, valueSource, typeAliases),
@@ -331,26 +336,45 @@ function legacyOptimizeError(file: string): Error {
 }
 
 /**
- * Renders prompt segments back to the decoded target value representation:
- * literal text with interpolations re-rendered as `${expr}`. This is the
- * representation stored in `OptimizeTarget.value` and the one `expected`
- * guards compare against.
- *
- * A literal `${` or `"""` in the text (written `\${` and `\"""` in the
- * source) stays escaped here. Rendered bare, `${` would read as an
- * interpolation when the mutator's proposal is parsed back, and the written
- * candidate would then interpolate a name that does not exist at run time;
- * a bare `"""` would close the block early.
+ * Renders a string literal's segments as the plain text a mutator model
+ * sees: text verbatim, interpolations as `${expr}`. This is
+ * `OptimizeTarget.value` for text targets and what `expected` guards
+ * compare against. The model returns text in the same form, and every
+ * `${...}` in what it returns is read as an interpolation, so a literal
+ * `${` in a target's text cannot survive a mutation; see
+ * `literalInterpolationWarnings`.
  */
 export function promptSegmentsToString(segments: PromptSegment[]): string {
   return segments
-    .map((segment) => {
-      if (segment.type === "text") {
-        return segment.value.split("${").join("\\${").split('"""').join('\\"""');
-      }
-      return `\${${expressionToString(segment.expression)}}`;
-    })
+    .map((segment) =>
+      segment.type === "text" ? segment.value : `\${${generateExpression(segment.expression)}}`,
+    )
     .join("");
+}
+
+/**
+ * One warning per text target whose text contains a literal `${`. The
+ * mutator reads every `${...}` it writes as an interpolation, so such a
+ * target cannot be reproduced faithfully; say `${` another way.
+ */
+export function literalInterpolationWarnings(targets: OptimizeTarget[]): string[] {
+  return targets
+    .filter((target) => target.valueKind !== "literal")
+    .filter((target) => textWithoutInterpolations(target).includes("${"))
+    .map(
+      (target) =>
+        `Optimize target ${target.id} contains the literal text "\${". The optimizer reads every \${...} a proposal contains as an interpolation, so proposals that keep this text will be rejected. Write it another way, such as "dollar-brace".`,
+    );
+}
+
+/** The target's text with one occurrence of each interpolation removed;
+ *  a second copy of the same spelling is literal text. */
+function textWithoutInterpolations(target: OptimizeTarget): string {
+  let text = target.value;
+  for (const expression of target.interpolations) {
+    text = text.replace(`\${${expression}}`, "");
+  }
+  return text;
 }
 
 function relativeFile(baseDir: string, absoluteFile: string): string {

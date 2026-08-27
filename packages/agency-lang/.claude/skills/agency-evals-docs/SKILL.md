@@ -13,4 +13,5 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/evals/eval-labeling.md` — Answering a checklist about a group of runs by hand, and how those answers are recorded.
 - `docs/dev/evals/eval-command-agents.md` — Running an arbitrary CLI as the eval agent instead of an `.agency` file.
 - `docs/dev/evals/writing-optimizers.md` — Adding a new `optimize` strategy alongside `greedy` and `gepa`.
+- `docs/dev/evals/optimize-text-targets.md` — How a prompt travels between the source file and the mutator model, and why every `${...}` in a reply is an interpolation.
 - `docs/dev/evals/terminal-bench.md` — Benchmarking the coding agent against Terminal-Bench, and the results so far.

@@ -53,10 +53,10 @@ node gepaReflect(
   Return JSON with:
   - "operations": one record per target you change. Each record needs "target" and "kind"
     copied exactly from the list above, "op" set to "replaceInitializer", "value" with the
-    rewritten instruction as plain text: no surrounding quotes, no escaping, real line
-    breaks, and
-    "rationale" with one sentence on what you changed. The replacement MUST preserve every
-    interpolation placeholder the current value uses (no drops, no additions).
+    rewritten instruction as plain text: no surrounding quotes, real line breaks, and
+    "rationale" with one sentence on what you changed. Every \${...} in the value is an
+    interpolation placeholder. Keep the placeholders the current value has, copied
+    exactly, and add none.
   - "rationale": 2-4 sentences explaining the overall change.
   """
   const proposal: OptimizeMutationProposal = llm(prompt)

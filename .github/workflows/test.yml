@@ -470,8 +470,11 @@ jobs:
     # browser) moved to the weekly live-api-tests.yml cron so merges stop
     # burning external API quota; this job keeps only the statelog remote
     # test, which exercises our own infrastructure.
-    if: >
-      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    # Disabled while the statelog side is fixed; re-enable per
+    # https://github.com/egonSchiele/agency-lang/issues/935 by restoring:
+    #   if: >
+    #     (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: ci-credentials

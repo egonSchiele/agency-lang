@@ -1,0 +1,14 @@
+const RATES: Record<string, number> = { USD: 1, EUR: 0.9, GBP: 0.8 }
+let history: string[] = []
+
+export def convert(amount: number, from: string, to: string): number {
+  let usd = amount / RATES[from]
+  let result = usd * RATES[to]
+  let line = "" + amount + " " + from + " -> " + result + " " + to
+  history.push(line)
+  return result
+}
+
+export def conversions(): string[] {
+  return history
+}

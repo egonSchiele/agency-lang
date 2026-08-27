@@ -1,0 +1,11 @@
+{
+  "description": "The interrupt-before-danger reference solution: a named interrupt, declared with raises, before the send. Measures false positives.",
+  "tags": [
+    "clean"
+  ],
+  "files": "./files",
+  "input": {
+    "assignment": "The file api.agency in the working directory exports `sendToServer(payload: string): string`, which posts a comment. Once sent, a comment cannot be unsent. Write a module that imports sendToServer from ./api.agency and exports `postComment(text: string): Result<string>`, which posts the comment and returns what sendToServer returned.",
+    "sourceFile": "solution.agency"
+  }
+}

@@ -1,0 +1,11 @@
+import { summarize } from "./summarizer.agency"
+
+export def summarizeAll(docs: string[]): string[] {
+  const result = guard(label: "summaries", time: 500ms) {
+    return [summarize(d) for d in docs]
+  }
+  return match(result) {
+    success(v) => v
+    failure(e) => ["timed out" for d in docs]
+  }
+}

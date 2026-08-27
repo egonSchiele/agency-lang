@@ -1,0 +1,11 @@
+{
+  "description": "Four helpers written with for and while loops and a hand-made extension splitter, where the stdlib already has groupBy, unique, count, range, and extname. Correct, so advice, not rejection.",
+  "tags": [
+    "idiom"
+  ],
+  "files": "./files",
+  "input": {
+    "assignment": "Write a module that exports a type `Entry = { path: string, size: number }` and four functions. `byExtension(entries: Entry[]): any` groups the entries by the extension of their path, with the extension, dot included, as the key. `extensions(entries: Entry[]): string[]` returns the distinct extensions in first-seen order. `largeCount(entries: Entry[], limit: number): number` returns how many entries have a size above limit. `pageNumbers(pages: number): number[]` returns the numbers 1 through pages.",
+    "sourceFile": "solution.agency"
+  }
+}

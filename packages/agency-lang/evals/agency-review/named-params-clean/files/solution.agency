@@ -1,0 +1,17 @@
+import { allRecords } from "./records.agency"
+
+export def search(query: string, limit: number = 10, offset: number = 0, order: string = "none", includeArchived: boolean = false): string[] {
+  """
+  Search the catalog by title.
+  @param query - text the title must contain, case-insensitive
+  @param limit - at most this many titles
+  @param offset - skip this many matches first
+  @param order - "none", "title", or "year"
+  @param includeArchived - also return archived records
+  """
+  const q = query.toLowerCase()
+  let matches = [r for r in allRecords() if r.title.toLowerCase().includes(q) && (includeArchived || !r.archived)]
+  if (order == "title") { matches = sortBy(matches) as r { return r.title } }
+  if (order == "year") { matches = sortBy(matches) as r { return r.year } }
+  return [r.title for r in matches].slice(offset, offset + limit)
+}

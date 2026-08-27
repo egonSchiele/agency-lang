@@ -1,0 +1,18 @@
+import { keys } from "std::object"
+
+static const rates: any = { USD: 1, EUR: 0.9, GBP: 0.8 }
+static const history: string[] = []
+
+export def convert(amount: number, from: string, to: string): number {
+  const result = amount / rates[from] * rates[to]
+  history.push("${amount} ${from} -> ${result} ${to}")
+  return result
+}
+
+export def conversions(): string[] {
+  return history
+}
+
+export def currencies(): string[] {
+  return keys(rates)
+}

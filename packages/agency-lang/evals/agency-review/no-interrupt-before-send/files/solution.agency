@@ -1,0 +1,6 @@
+import { sendToServer } from "./api.agency"
+
+export def postComment(text: string): Result<string> {
+  const resp: string = sendToServer(text)
+  return success(resp)
+}

@@ -1,0 +1,11 @@
+{
+  "description": "Two wrapper functions fix the directory by hand where .partial(dir: ...) with .rename() and .describe() is the Agency way to derive tools. Correct, so advice, not rejection.",
+  "tags": [
+    "idiom"
+  ],
+  "files": "./files",
+  "input": {
+    "assignment": "Write a module that exports `listDir(dir: string, pattern: string = \"*\"): string[]`, which returns a one-element list containing \"<dir>/<pattern>\", standing in for a real directory listing. It also exports `tools(): any[]`, which returns two versions of listDir for an LLM to use as tools: one fixed to the directory ./inbox and one fixed to ./archive. The LLM must be able to tell the two tools apart.",
+    "sourceFile": "solution.agency"
+  }
+}

@@ -1,0 +1,28 @@
+export def listDir(dir: string, pattern: string = "*"): string[] {
+  """
+  Return a mock listing for the given directory and pattern.
+  The result is a one-element list containing "<dir>/<pattern>".
+  """
+  return ["${dir}/${pattern}"]
+}
+
+export def listInbox(pattern: string = "*"): string[] {
+  """
+  List files in the inbox directory. This tool is fixed to ./inbox.
+  """
+  return listDir("./inbox", pattern)
+}
+
+export def listArchive(pattern: string = "*"): string[] {
+  """
+  List files in the archive directory. This tool is fixed to ./archive.
+  """
+  return listDir("./archive", pattern)
+}
+
+export def tools(): any[] {
+  """
+  Return two tools for LLM use: listInbox and listArchive.
+  """
+  return [listInbox, listArchive]
+}

@@ -1,0 +1,6 @@
+import { sendToServer } from "./api.agency"
+
+export def postComment(text: string): Result<string> raises <comments::post> {
+  raise comments::post("Post this comment? It cannot be unsent.", { text: text })
+  return success(sendToServer(text))
+}

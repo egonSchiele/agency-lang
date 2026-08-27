@@ -1,0 +1,15 @@
+// Seeded into the writer's working directory: slow stand-ins for network calls.
+export def fetchSource(name: string): string {
+  sleep(name.length * 20s)
+  return "data from ${name}"
+}
+
+export def refreshIndex(): string {
+  sleep(30s)
+  return "index ok"
+}
+
+export def refreshCache(): string {
+  sleep(30s)
+  return "cache ok"
+}

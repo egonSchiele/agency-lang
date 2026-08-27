@@ -1,0 +1,11 @@
+{
+  "description": "The concurrency-forms reference solution: fork, race, and parallel each where it belongs. Measures false positives.",
+  "tags": [
+    "clean"
+  ],
+  "files": "./files",
+  "input": {
+    "assignment": "The file sources.agency in the working directory exports `fetchSource(name: string): string`, `refreshIndex(): string`, and `refreshCache(): string`. Each one is slow. Write a module that imports them and exports three functions. `fetchAll(names: string[]): string[]` returns the result of fetchSource for every name, in the same order. `fetchFastest(names: string[]): string | null` returns the result of whichever fetchSource finishes first. `refreshBoth(): string` runs refreshIndex and refreshCache, which do not depend on each other, and returns \"refreshed\". Please try to make the three functions as fast as possible.",
+    "sourceFile": "solution.agency"
+  }
+}

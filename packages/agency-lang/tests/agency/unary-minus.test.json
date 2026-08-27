@@ -1,0 +1,64 @@
+{
+  "tests": [
+    {
+      "nodeName": "absOfNegative",
+      "input": "",
+      "expectedOutput": "7",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "negateCall",
+      "input": "",
+      "expectedOutput": "3",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "negateGroup",
+      "input": "",
+      "expectedOutput": "-5",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unaryBindsTighterThanPower",
+      "input": "",
+      "expectedOutput": "9",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "binaryMinusStillWorks",
+      "input": "",
+      "expectedOutput": "10",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "notOnGroup",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

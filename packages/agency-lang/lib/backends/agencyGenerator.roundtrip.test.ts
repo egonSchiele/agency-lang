@@ -168,6 +168,18 @@ describe("formatter gate: pinned repros", () => {
     );
   });
 
+  it("a prefix operator keeps the parens around a compound operand (#933)", () => {
+    // Dropping them changes the program: -(a + b) vs -a + b.
+    const src = `def f(a: number, b: number, c: boolean, d: boolean): number {\n  const n = -(a + b)\n  const m = -x ** 2\n  const k = !(c && d)\n  return n\n}\n`;
+    const printed = generateAgency(parseTemplateMode(src));
+    expect(printed).toContain("-(a + b)");
+    expect(printed).toContain("-x ** 2");
+    expect(printed).toContain("!(c && d)");
+    expect(normalized(parseTemplateMode(printed).nodes)).toEqual(
+      normalized(parseTemplateMode(src).nodes),
+    );
+  });
+
   it("a zero-parameter signature never wraps to (\\n\\n) (apple corruption)", () => {
     const src = `export idempotent def listAllOfTheThingsInTheApp(): Result<SomeVeryLongTypeName[]> raises <std::notes::list> {\n  return 1\n}\n`;
     const printed = generateAgency(parseTemplateMode(src));

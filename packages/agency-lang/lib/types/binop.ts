@@ -28,6 +28,9 @@ export type Operator =
   | "&&"
   | "||"
   | "!"
+  // Unary minus (`-x`). Distinct from binary `-` so consumers can tell
+  // `{ op: "unary-", left: true, right: x }` from `a - b`.
+  | "unary-"
   | "typeof"
   | "void"
   | "++"
@@ -74,9 +77,13 @@ export const PRECEDENCE: Record<string, number> = {
   "++": 9,
   "--": 9,
   "!": 8,
+  "unary-": 8,
   typeof: 8,
   void: 8,
 };
+
+/** The prefix operators the parser desugars to `{ op, left: true, right }`. */
+export const PREFIX_OPS: Operator[] = ["!", "unary-", "typeof", "void"];
 
 export type BinOpExpression = BaseNode & {
   type: "binOpExpression";

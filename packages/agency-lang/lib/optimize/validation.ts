@@ -1,4 +1,4 @@
-import { stringParser } from "@/parsers/parsers.js";
+import { exprParser, stringParser } from "@/parsers/parsers.js";
 import type { PromptSegment } from "@/types.js";
 import { expressionToString } from "@/utils/node.js";
 
@@ -95,4 +95,57 @@ function removedExpression(current: string[], proposed: string[]): string {
     remaining.splice(index, 1);
   }
   return "an interpolation";
+}
+
+/**
+ * Escapes every `${...}` in a free-text candidate that is not one of the
+ * current value's placeholders. The mutator model is told to send plain
+ * text with no escaping, so when the current value contains the literal
+ * text `\${...}` (a prompt that describes Agency syntax, say) the model
+ * sends it back as a bare `${...}`. A candidate may not add placeholders,
+ * so a `${...}` that is not already a placeholder can only be literal text.
+ */
+export function escapeForeignInterpolations(candidate: string, currentValue: string): string {
+  const known = interpolationMultiset(currentValue);
+  let out = "";
+  let index = 0;
+  while (index < candidate.length) {
+    const start = candidate.indexOf("${", index);
+    if (start === -1) break;
+    const end = closingBrace(candidate, start + 2);
+    const escaped = start > 0 && candidate[start - 1] === "\\";
+    if (end === -1 || escaped) {
+      out += candidate.slice(index, start + 2);
+      index = start + 2;
+      continue;
+    }
+    const inner = candidate.slice(start + 2, end);
+    out +=
+      candidate.slice(index, start) +
+      (isKnown(inner, known) ? "" : "\\") +
+      candidate.slice(start, end + 1);
+    index = end + 1;
+  }
+  return out + candidate.slice(index);
+}
+
+/** Index of the `}` that closes an interpolation opened just before `from`, or -1. */
+function closingBrace(text: string, from: number): number {
+  let depth = 1;
+  for (let index = from; index < text.length; index += 1) {
+    if (text[index] === "{") depth += 1;
+    if (text[index] === "}") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return -1;
+}
+
+function isKnown(inner: string, known: string[]): boolean {
+  if (known.includes(inner.trim())) return true;
+  const parsed = exprParser(inner.trim());
+  return (
+    parsed.success && parsed.rest.trim() === "" && known.includes(expressionToString(parsed.result))
+  );
 }

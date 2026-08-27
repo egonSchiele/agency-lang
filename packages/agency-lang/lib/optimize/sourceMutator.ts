@@ -18,7 +18,11 @@ import {
   type OptimizeTarget,
   type OptimizeTargetSet,
 } from "./targets.js";
-import { decodedValueToStringLiteral, validateOptimizedStringValue } from "./validation.js";
+import {
+  decodedValueToStringLiteral,
+  escapeForeignInterpolations,
+  validateOptimizedStringValue,
+} from "./validation.js";
 
 /**
  * Replaces an optimized variable's initializer expression. `value` is
@@ -408,7 +412,10 @@ export class OptimizeSourceMutator {
     target: OptimizeTarget,
   ): ValidationOutcome {
     const isFreeformText = target.valueKind !== "literal" && target.declaredType === null;
-    let parsed = exprParser(operation.value);
+    const value = isFreeformText
+      ? escapeForeignInterpolations(operation.value, target.value)
+      : operation.value;
+    let parsed = exprParser(value);
     if ((!parsed.success || parsed.rest.trim() !== "") && target.valueKind !== "literal") {
       // The model frequently returns the raw prompt text without the surrounding
       // quotes. Recover by wrapping it in the target's quote style and re-parsing.
@@ -418,14 +425,13 @@ export class OptimizeSourceMutator {
       const quote = target.valueKind === "multilineString" ? `"""` : `"`;
       // A bare `"""` in the text would close the block; the model may send
       // one unescaped when the prompt talks about triple-quoted strings.
-      const body =
-        quote === `"""` ? operation.value.replace(/(?<!\\)"""/g, '\\"""') : operation.value;
+      const body = quote === `"""` ? value.replace(/(?<!\\)"""/g, '\\"""') : value;
       const wrapped = exprParser(`${quote}${body}${quote}`);
       if (wrapped.success && wrapped.rest.trim() === "") parsed = wrapped;
       // Text that ends in a quote cannot sit inside """...""" (the closing
       // quotes run together), so fall back to "..." with escapes.
       if (!parsed.success || parsed.rest.trim() !== "") {
-        const plain = exprParser(decodedValueToStringLiteral(operation.value));
+        const plain = exprParser(decodedValueToStringLiteral(value));
         if (plain.success && plain.rest.trim() === "") parsed = plain;
       }
     }

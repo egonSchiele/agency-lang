@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { validateMutationPrompt, validateOptimizedStringValue } from "./validation.js";
+import {
+  escapeForeignInterpolations,
+  validateMutationPrompt,
+  validateOptimizedStringValue,
+} from "./validation.js";
 
 describe("validateOptimizedStringValue", () => {
   it("treats an escaped \\${ in the text as text, not as a placeholder", () => {
@@ -65,5 +69,26 @@ describe("validateMutationPrompt", () => {
 
   it("rejects malformed interpolation syntax", () => {
     expect(validateMutationPrompt("${x}", "${}")).toMatchObject({ ok: false });
+  });
+});
+
+describe("escapeForeignInterpolations", () => {
+  it("escapes a ${...} the current value only has as literal text", () => {
+    const current = "Rules: `\\${...}` interpolation.";
+    expect(escapeForeignInterpolations("Rules: `${...}` interpolation.", current)).toBe(current);
+  });
+
+  it("leaves a real placeholder alone and escapes an unknown one", () => {
+    expect(escapeForeignInterpolations("Hi ${name}, see ${x.y}", "Hi ${name}")).toBe(
+      "Hi ${name}, see \\${x.y}",
+    );
+  });
+
+  it("leaves an already escaped one alone", () => {
+    expect(escapeForeignInterpolations("a \\${b}", "")).toBe("a \\${b}");
+  });
+
+  it("matches a placeholder by its parsed expression, not its spacing", () => {
+    expect(escapeForeignInterpolations("${ name }", "${name}")).toBe("${ name }");
   });
 });

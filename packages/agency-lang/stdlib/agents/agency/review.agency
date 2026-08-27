@@ -7,7 +7,11 @@
   consult the bundled Agency documentation and the web to check a claim.
 */
 import { TypeCheckReport, typecheck, parseAST } from "std::agency"
-import { Feedback, mergeFeedback, failOpenFeedback } from "std::agents/lib/feedback"
+import {
+  Feedback,
+  mergeFeedback,
+  failOpenFeedback,
+ } from "std::agents/lib/feedback"
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { llmOptions, docsOnlyHandler } from "std::agents/lib/shared"
 import { agencyDocTools, webTools } from "std::agents/lib/toolkits"
@@ -17,57 +21,116 @@ import { systemMessage, threadIsNew } from "std::thread"
 
 static const systemPrompt = """You review code written in the Agency language. Agency compiles to
 TypeScript and looks like JS/TS, but it is its own language with its own
-idioms — judge the code as Agency, never as JavaScript.
+idioms. Judge the code as Agency, never as JavaScript.
 
-Ground rules about Agency (get these wrong and the review is wrong):
-- == and === are the same operator: ===/!== are accepted aliases that
-  compile identically to ==/!=, so ==-vs-=== advice is meaningless here.
+Facts about Agency. Get these wrong and the review is wrong.
+- == and === are the same operator. ===/!== are accepted aliases that
+  compile identically to ==/!=, so advice to switch between them is
+  meaningless.
 - `for (item in items)` iterates an array's ELEMENTS. It is the standard
   loop, not a JS for-in mistake.
-- Fallible functions return Result. `if (r is success(v)) { ... }` /
-  `is failure(e)` is correct narrowing syntax that binds v/e; `try` and
-  `catch <default>` are its expression forms.
-- Functions raise effects (file writes, deletes, LLM calls) that callers
-  decide with `handle ... with <handler>` or postfix `with approve` /
-  `with reject`. `with approve` self-approves: check what the TASK says
-  about who approves before judging it.
-- Agency has no lambdas, so JavaScript array methods that take a callback
-  (`.map`, `.filter`, `.reduce`, `.sort`, `.find`, `.forEach`, ...) must
-  never be called: an interrupt cannot be raised inside a callback, so
-  they typecheck and then crash at run time. The Agency
-  forms are list comprehensions (`[x for x in xs if ...]`) and the stdlib
-  functions `map`, `filter`, `sortBy`, `reduce` with a block (`as x { }`).
-  Calling one of those methods is an error finding.
-- `let`/`const` declarations, postfix types, `\${...}` interpolation,
-  `node main()` entry points, braces and parenthesized conditions.
+- Fallible functions return Result. `if (r is success(v)) { ... }` and
+  `is failure(e)` are correct narrowing syntax that binds v/e; `try` and
+  `catch <default>` are the expression forms. A function that receives a
+  failure and cannot handle it returns that failure as it is; rebuilding
+  it with `failure(e)` loses nothing but is not an error.
+- Blocks are how a function receives code to run per item. The inline
+  form is a backslash, parameters, and an arrow: `map(xs, \x -> x * 2)`,
+  `reduce(xs, 0, \(acc, n) -> acc + n)`. The full form follows the call:
+  `map(xs) as x { ... }`, `fork(xs) as x { ... }`. A `return` inside a
+  block returns the block's value for that item, not from the enclosing
+  function. Both forms are valid Agency; neither is a JavaScript lambda.
+- JavaScript array methods that take a callback (.map, .filter, .reduce,
+  .sort, .find, .forEach) are an error: an interrupt cannot be raised
+  inside a callback, so they typecheck and then crash at run time. The
+  Agency forms are list comprehensions (`[x for x in xs if ...]`) and the
+  stdlib functions map, filter, sortBy, reduce called with a block.
+  Methods with no callback (push, includes, join, slice) are fine.
+- Functions raise effects (interrupts) for file writes, deletes, network
+  calls, LLM calls. Callers decide them with `handle { ... } with
+  <handler>` or the postfix forms `with approve` / `with reject`.
+- `static const` initializes a value once and shares it across every run
+  of the program. It is for fixed tables and configuration, not for
+  state the program changes.
+- `let`/`const` declarations, postfix types, `node main()` entry points,
+  braces on every block, parentheses around every condition.
 
 How to review:
-1. Work out what the task requires, then trace what the code actually
-   does against each requirement. Correctness is behavioral: compute the
-   result for the boundary cases the task defines.
-2. Set error=true ONLY on a finding that means the code does not
-   accomplish the task (wrong result, missing requirement, effect
-   discipline the task forbids). Everything else is advisory.
-3. Advisory feedback is welcome when it is true and specific to THIS
-   code: a real performance improvement (e.g. iteration over deep
-   recursion), a more idiomatic Agency construction, a robustness gap
-   the task leaves open. Do not pad with generic advice.
+1. Work out what the task requires: the exported names and signatures,
+   the behavior including the boundary cases the task defines, and any
+   effect the task says must or must not happen. Keep this to yourself;
+   do not report it as a finding.
+2. Trace what the code actually does against each requirement. Compute
+   the result for the boundary cases in your head: empty input, one
+   element, duplicates, zero.
+3. Set error=true ONLY on a finding that means the code does not
+   accomplish the task: a wrong result, a missing requirement, a missing
+   export the task needs, or one of the rules below. Everything else is
+   advisory.
 4. Before flagging anything as a syntax or API mistake, verify the claim
    with the Agency documentation tools you have. If you cannot ground a
-   finding in the code or the docs, do not report it.
+   finding in the code or the docs, do not report it as an error.
 
-Keep each finding brief, concrete, and pointed at the construct it is
-about."""
+Rules whose violation is an error, whatever the task says:
+- An action that changes the outside world and cannot be undone (sending
+  a message, posting, deleting, paying) must raise an interrupt before it
+  happens, so the caller can approve or reject it. Code that calls such
+  an action directly, with no `raise` before it and no `raises` on the
+  function, takes that decision away from the caller.
+- `idempotent` marks a function whose repeat calls change nothing. A
+  function that appends, sends, or counts on every call must not carry
+  it: a retry would then repeat the change.
+- State the program changes (a list it pushes to, a counter) must not be
+  `static`. Shared across runs, it grows forever and leaks between
+  users.
+- A module-level function another module must call needs `export`.
+- A guard belongs around each independent unit of work, not around the
+  loop over all of them, when the task says one slow or failing item
+  must not sink the rest.
+
+Idioms to point out as advice, without rejecting. The code works; say
+what the Agency way is and why:
+- A hand-rolled loop where the prelude already has the helper: groupBy,
+  unique, count, range, sum, sortBy, and the std::path helpers such as
+  extname. Name the helper.
+- A function an LLM will be given as a tool that is described in a `//`
+  comment. The LLM never sees comments; the description belongs in a
+  triple-quoted docstring inside the body, with @param lines.
+- A wrapper function that fixes an argument by hand where
+  `.partial(name: value)` with `.rename()` and `.describe()` derives the
+  tool.
+- A fixed table declared with a plain `const` at module level, rebuilt
+  on every run, where `static const` initializes it once.
+- Configuration passed as one options object where named parameters with
+  defaults would do.
+- A plain for loop with push where a comprehension or a stdlib call with
+  a block says the same thing in one line.
+
+Findings: each one brief, concrete, and pointed at the construct it is
+about, with the fix in a sentence or a short snippet. Report only
+findings. No checklist, no summary line, no praise for what is correct.
+Advisory findings are welcome when they are true of this code and
+specific to it; do not pad with generic advice."""
 
 export def reportFeedback(report: TypeCheckReport): Feedback[] {
-  """Convert a typecheck report into findings: one error item per error,
-  one advisory item per warning."""
+  """
+  Convert a typecheck report into findings: one error item per error,
+    one advisory item per warning.
+  """
   const feedback: Feedback[] = []
   for (error in report.errors) {
-    feedback.push({ error: true, feedback: "Error: ${error.message}" })
+    feedback.push({
+      error: true,
+      feedback: "Error: ${error.message}"
+    })
   }
   for (warning in report.warnings) {
-    feedback.push({ error: false, feedback: "Warning: ${warning.message}" })
+    feedback.push(
+      {
+        error: false,
+        feedback: "Warning: ${warning.message}"
+      },
+    )
   }
   return feedback
 }
@@ -85,7 +148,10 @@ export def buildTools(): any[] {
 def parseFeedback(source: string): Result<Feedback[]> {
   const result = parseAST(source)
   if (result is failure(err)) {
-    return success([{ error: true, feedback: "Parse error: ${err}" }])
+    return success([{
+      error: true,
+      feedback: "Parse error: ${err}"
+    }])
   }
   return success([])
 }
@@ -93,7 +159,14 @@ def parseFeedback(source: string): Result<Feedback[]> {
 def typecheckFeedback(source: string, dir: string): Result<Feedback[]> {
   const result = typecheck(source, dir: dir)
   if (result is failure(err)) {
-    return success([{ error: true, feedback: "Typecheck failed: ${err}" }])
+    return success(
+      [
+        {
+          error: true,
+          feedback: "Typecheck failed: ${err}"
+        },
+      ],
+    )
   }
   return success(reportFeedback(result.value))
 }
@@ -128,6 +201,7 @@ Return a list of feedback items.
       provider: provider,
       tools: buildTools().concat(extraTools).concat([saveDraft]),
       hostedTools: hostedSearchTools(model, provider),
+      validationRetries: 2,
     ),
   )
 }
@@ -211,14 +285,22 @@ node evalMain(input: ReviewEvalInput): Feedback[] {
   evalValue(input)
   const source = read(input.sourceFile) with approve
   if (source is failure(readErr)) {
-    return [{ error: true, feedback: "could not read ${input.sourceFile}: ${readErr}" }]
+    return [
+      {
+        error: true,
+        feedback: "could not read ${input.sourceFile}: ${readErr}"
+      },
+    ]
   }
   let reviewed: Result<Feedback[]> = failure("the reviewer never ran")
   handle {
     reviewed = agencyReviewAgent(source: source.value, task: input.assignment, dir: ".")
   } with docsOnlyHandler
   if (reviewed is failure(err)) {
-    return [{ error: true, feedback: "review agent failed: ${err}" }]
+    return [{
+      error: true,
+      feedback: "review agent failed: ${err}"
+    }]
   }
   return reviewed.value
 }

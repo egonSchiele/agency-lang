@@ -494,6 +494,40 @@ describe("OptimizeSourceMutator.preview", () => {
     expect(preview.diagnostics).toMatchObject([{ code: "interpolation-mismatch" }]);
   });
 
+  it("warns when a target has both a real interpolation and a literal copy of it", () => {
+    const dir = makeTempDir();
+    const entry = writeAgency(
+      dir,
+      "both.agency",
+      'optimize const p = """\nHi ${name}. Use \\${name} for the name.\n"""\n\nnode main() {\n  const name = "x"\n  return p\n}\n',
+    );
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+    expect(targetSet.targets[0].interpolations).toEqual(["name"]);
+    expect(literalInterpolationWarnings(targetSet.targets)).toHaveLength(1);
+  });
+
+  it("keeps plain quotes when a text segment ends in a backslash", () => {
+    const dir = makeTempDir();
+    const entry = writeAgency(
+      dir,
+      "slash.agency",
+      'optimize const p = """\nHi ${name}\n"""\n\nnode main() {\n  const name = "x"\n  return p\n}\n',
+    );
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+    for (const value of ["Hi \\${name}\nbye", "Hi ${name}\nbye\\"]) {
+      const preview = new OptimizeSourceMutator({ targetSet }).preview([
+        { target: "slash.agency:global:p", kind: "variable", op: "replaceInitializer", value },
+      ]);
+      expect(preview.diagnostics).toEqual([]);
+      expect(preview.changes[0].newValue).toBe(value);
+      expect(preview.files["slash.agency"]).not.toContain('"""');
+      writeAgency(dir, "slash.agency", preview.files["slash.agency"]);
+      const reread = discoverOptimizeTargets(entry, { baseDir: dir });
+      expect(reread.targets[0].value).toBe(value);
+      expect(reread.targets[0].interpolations).toEqual(["name"]);
+    }
+  });
+
   it("does not warn about a target whose ${...} are all interpolations", () => {
     const dir = makeTempDir();
     const entry = writeAgency(

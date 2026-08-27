@@ -20,6 +20,10 @@ describe("parseReplacementText", () => {
     expect(interpolations("Hello ${name}, you are ${user.age}")).toEqual(["name", "user.age"]);
   });
 
+  it("keeps string quotes inside an interpolation, so a literal argument stays distinct from a variable", () => {
+    expect(interpolations('${format("x")} ${format(x)}')).toEqual(['format("x")', "format(x)"]);
+  });
+
   it("rejects a ${...} that does not hold an expression", () => {
     const parsed = parseReplacementText("use `${...}` to interpolate");
     expect(parsed.ok).toBe(false);

@@ -1,17 +1,18 @@
-import { stringParser } from "@/parsers/parsers.js";
+import { generateExpression } from "@/backends/agencyGenerator.js";
+import { interpolationSegmentParser } from "@/parsers/parsers.js";
 import type { PromptSegment } from "@/types.js";
-import { expressionToString } from "@/utils/node.js";
 
 import type { ValidationResult } from "./types.js";
 
 /**
- * The interpolations in a string literal's segments, as canonical
- * expression text, sorted so two lists compare as multisets.
+ * The interpolations in a string literal's segments, as source text
+ * (`generateExpression` keeps string quotes, so `format("x")` and
+ * `format(x)` stay distinct), sorted so two lists compare as multisets.
  */
 export function interpolationsOf(segments: PromptSegment[]): string[] {
   return segments
     .filter((segment) => segment.type === "interpolation")
-    .map((segment) => expressionToString(segment.expression))
+    .map((segment) => generateExpression(segment.expression))
     .sort();
 }
 
@@ -19,7 +20,8 @@ export function interpolationsOf(segments: PromptSegment[]): string[] {
  * Reads the plain text a mutator model returns for a free-text target.
  * Every `${...}` in the text is an interpolation; there is no way to write
  * a literal `${` in a replacement, and discovery warns when a target's
- * text contains one. Quotes, backslashes, and newlines are text.
+ * text contains one. Everything else, including quotes, backslashes, and
+ * newlines, is text.
  */
 export function parseReplacementText(
   text: string,
@@ -27,15 +29,29 @@ export function parseReplacementText(
   if (text.length === 0) {
     return { ok: false, reason: "the replacement is empty" };
   }
-  const parsed = stringParser(`"${escapeText(text)}"`);
-  if (!parsed.success || parsed.rest.length > 0) {
-    return {
-      ok: false,
-      reason:
-        "a ${...} in the text does not hold an Agency expression. Every ${...} is an interpolation placeholder; if you meant the placeholder, copy it exactly as the current value has it.",
-    };
+  const segments: PromptSegment[] = [];
+  let rest = text;
+  while (rest.length > 0) {
+    const start = rest.indexOf("${");
+    if (start === -1) {
+      segments.push({ type: "text", value: rest });
+      break;
+    }
+    if (start > 0) {
+      segments.push({ type: "text", value: rest.slice(0, start) });
+    }
+    const parsed = interpolationSegmentParser(rest.slice(start));
+    if (!parsed.success) {
+      return {
+        ok: false,
+        reason:
+          "a ${...} in the text does not hold an Agency expression. Every ${...} is an interpolation placeholder; if you meant the placeholder, copy it exactly as the current value has it.",
+      };
+    }
+    segments.push(parsed.result);
+    rest = parsed.rest;
   }
-  return { ok: true, segments: parsed.result.segments };
+  return { ok: true, segments };
 }
 
 /**
@@ -61,17 +77,6 @@ export function compareInterpolations(current: string[], proposed: string[]): Va
     }
   }
   return { ok: true };
-}
-
-/** Escapes text for a `"..."` literal, leaving `${` alone so it reads as
- *  an interpolation. */
-function escapeText(text: string): string {
-  return text
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, "\\n")
-    .replace(/\t/g, "\\t")
-    .replace(/\r/g, "\\r");
 }
 
 function removedExpression(current: string[], proposed: string[]): string {

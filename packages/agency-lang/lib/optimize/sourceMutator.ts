@@ -513,9 +513,13 @@ export class OptimizeSourceMutator {
     }
     const newValue = promptSegmentsToString(parsed.segments);
     // A multi-line value is written as a """ block so the source stays
-    // readable. A value that ends in a quote cannot: the closing quotes
-    // would run together.
-    const asBlock = newValue.includes("\n") && !newValue.endsWith('"');
+    // readable, unless the block form cannot hold it: a closing quote would
+    // run into the delimiter, and a backslash before `${` or before the
+    // delimiter would escape it.
+    const textEndsWithBackslash = parsed.segments.some(
+      (segment) => segment.type === "text" && segment.value.endsWith("\\"),
+    );
+    const asBlock = newValue.includes("\n") && !newValue.endsWith('"') && !textEndsWithBackslash;
     const replacement: Expression = {
       type: asBlock ? "multiLineString" : "string",
       segments: parsed.segments,

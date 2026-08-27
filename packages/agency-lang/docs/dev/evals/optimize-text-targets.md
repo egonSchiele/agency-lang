@@ -28,15 +28,16 @@ no quotes, real line breaks. There is no escaping in either direction.
 Discovery (`lib/optimize/targets.ts`) parses the source file once. For a
 text target it stores two things on the `OptimizeTarget`: `value`, the
 plain text above, and `interpolations`, the list of interpolation
-expressions as canonical text. The list comes from the real parse of the
-real literal, so it is never re-derived from text.
+expressions as source text, printed by the Agency generator so that
+`format("x")` and `format(x)` stay distinct. The list comes from the real
+parse of the real literal, so it is never re-derived from text.
 
 A reply goes through `lib/optimize/validation.ts`:
 
-1. `parseReplacementText` escapes quotes, backslashes, and newlines,
-   wraps the text in `"..."`, and parses it with the Agency string
-   parser. `${` is left alone, so each one becomes an interpolation
-   segment. A `${...}` that does not hold an expression fails here.
+1. `parseReplacementText` walks the text. Everything up to the next
+   `${` is a text segment, taken as is; each `${` is handed to the
+   interpolation parser. A `${...}` that does not hold an expression
+   fails here.
 2. `compareInterpolations` checks the reply's list against the target's:
    same placeholders, same count, none added.
 
@@ -44,7 +45,10 @@ Either failure goes back to the model as retry feedback. A reply that
 passes becomes a `string` or `multiLineString` node, and the Agency
 generator writes it into the source with whatever escapes the text needs
 (`\"""` for a triple quote inside a block, `\"` inside a plain string).
-The optimizer never escapes anything itself.
+The optimizer never escapes anything itself. A multi-line reply is
+written as a `"""` block unless the block form cannot hold it: text that
+ends in `"` would run into the closing delimiter, and text that ends in
+`\` would escape whatever follows it. Those replies use a plain string.
 
 ## What the rule gives up
 

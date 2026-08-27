@@ -16,7 +16,7 @@ import type {
   VariableType,
 } from "@/types.js";
 import { generateExpression } from "@/backends/agencyGenerator.js";
-import { expressionToString, isLiteralExpression, walkNodes } from "@/utils/node.js";
+import { isLiteralExpression, walkNodes } from "@/utils/node.js";
 import { checkProposal, renderDeclaredType } from "./constraint.js";
 import { interpolationsOf } from "./validation.js";
 
@@ -347,7 +347,7 @@ function legacyOptimizeError(file: string): Error {
 export function promptSegmentsToString(segments: PromptSegment[]): string {
   return segments
     .map((segment) =>
-      segment.type === "text" ? segment.value : `\${${expressionToString(segment.expression)}}`,
+      segment.type === "text" ? segment.value : `\${${generateExpression(segment.expression)}}`,
     )
     .join("");
 }
@@ -367,10 +367,12 @@ export function literalInterpolationWarnings(targets: OptimizeTarget[]): string[
     );
 }
 
+/** The target's text with one occurrence of each interpolation removed;
+ *  a second copy of the same spelling is literal text. */
 function textWithoutInterpolations(target: OptimizeTarget): string {
   let text = target.value;
   for (const expression of target.interpolations) {
-    text = text.split(`\${${expression}}`).join("");
+    text = text.replace(`\${${expression}}`, "");
   }
   return text;
 }

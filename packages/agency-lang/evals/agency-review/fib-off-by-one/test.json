@@ -1,8 +1,7 @@
 {
   "description": "Typechecks, but fib(0) returns 1: the base case is wrong. A reviewer that only runs the typechecker passes this.",
   "tags": [
-    "bug",
-    "logic"
+    "easy"
   ],
   "files": "./files",
   "input": {

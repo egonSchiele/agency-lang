@@ -1,7 +1,7 @@
 {
   "description": "fetchAll uses race, which returns the first result and cancels the rest, when every result is required.",
   "tags": [
-    "bug"
+    "easy"
   ],
   "files": "./files",
   "input": {

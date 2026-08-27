@@ -1,7 +1,7 @@
 {
   "description": "The interrupt-before-danger reference solution: a named interrupt, declared with raises, before the send. Measures false positives.",
   "tags": [
-    "clean"
+    "easy"
   ],
   "files": "./files",
   "input": {

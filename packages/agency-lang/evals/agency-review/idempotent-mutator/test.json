@@ -1,7 +1,7 @@
 {
   "description": "A function that changes state is marked idempotent, so an automated retry would add the task twice.",
   "tags": [
-    "bug"
+    "easy"
   ],
   "files": "./files",
   "input": {

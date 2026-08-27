@@ -1,7 +1,7 @@
 {
   "description": "One guard wraps the whole loop, so a single slow document times out every document, when the task says each must fail alone.",
   "tags": [
-    "bug"
+    "easy"
   ],
   "files": "./files",
   "input": {

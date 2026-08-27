@@ -1,7 +1,7 @@
 {
-  "description": "A rate table that never changes is a plain const global, reinitialized on every run, where static const initializes once and is shared. Correct, so advice, not rejection.",
+  "description": "A rate table that never changes is a plain const global, reinitialized on every run, where static const initializes once and is shared.",
   "tags": [
-    "idiom"
+    "easy"
   ],
   "files": "./files",
   "input": {

@@ -1,7 +1,7 @@
 {
   "description": "The concurrency-forms reference solution: fork, race, and parallel each where it belongs. Measures false positives.",
   "tags": [
-    "clean"
+    "easy"
   ],
   "files": "./files",
   "input": {

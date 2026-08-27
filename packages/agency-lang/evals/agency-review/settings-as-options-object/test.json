@@ -1,7 +1,7 @@
 {
   "description": "The search settings are an options object, so callers cannot pass one by name or lock one with .partial(), which the task requires.",
   "tags": [
-    "bug"
+    "easy"
   ],
   "files": "./files",
   "input": {

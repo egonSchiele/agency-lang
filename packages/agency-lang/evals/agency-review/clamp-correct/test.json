@@ -1,8 +1,7 @@
 {
   "description": "The mutant's clean sibling: the unmutated program, verified to pass the expected/ harness. Measures false positives on the exact same assignment.",
   "tags": [
-    "clean",
-    "mutant-sibling"
+    "easy"
   ],
   "files": "./files",
   "input": {

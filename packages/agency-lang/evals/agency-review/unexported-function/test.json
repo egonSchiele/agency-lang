@@ -1,7 +1,7 @@
 {
   "description": "The function other files call is not exported. Typechecks on its own; every importer fails.",
   "tags": [
-    "bug"
+    "easy"
   ],
   "files": "./files",
   "input": {

@@ -1,7 +1,7 @@
 {
   "description": "A correct fib. Measures false positives: the reviewer must not flag an error.",
   "tags": [
-    "clean"
+    "easy"
   ],
   "files": "./files",
   "input": {

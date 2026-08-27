@@ -1,7 +1,7 @@
 {
   "description": "A bad line is turned into 0 with `catch 0` instead of being returned as the failure the task requires.",
   "tags": [
-    "bug"
+    "easy"
   ],
   "files": "./files",
   "input": {

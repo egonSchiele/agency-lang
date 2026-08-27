@@ -1,7 +1,7 @@
 {
   "description": "Posts a comment that cannot be unsent without raising an interrupt first. The caller never gets to decide.",
   "tags": [
-    "bug"
+    "easy"
   ],
   "files": "./files",
   "input": {

@@ -2,5 +2,5 @@ import { plantedBugGraders } from "../lib/reviewGraders.js";
 
 export default plantedBugGraders({
   reason:
-    "postComment calls sendToServer, which cannot be undone, without raising a named interrupt first (raise comments::post(...) with raises <comments::post>), so nothing can approve or reject the send.",
+    "Agency code must raise an interrupt before any action that changes the outside world and cannot be undone, so the caller can approve or reject it. postComment sends a comment, which the assignment says cannot be unsent, and never raises an interrupt: it calls sendToServer directly, with no `raise comments::post(...)` before the call and no `raises <comments::post>` on the function. The caller gets no chance to stop the send.",
 });

@@ -138,6 +138,6 @@ not reject: `named-params-clean`, `interrupt-before-send-clean`,
 ## Adding a test
 
 Make a directory with a `test.json` (`description`, `tags`, `files`,
-`input`; the only tags are `bug`, `idiom`, or `clean`), the planted source under `files/`, and a `graders.ts` beside it.
+`input`; the only tags are `easy`, `medium`, or `hard`), the planted source under `files/`, and a `graders.ts` beside it.
 Typecheck the planted source first (`agency typecheck <file>`); a source
 that fails to typecheck tests the typechecker, not the reviewer.

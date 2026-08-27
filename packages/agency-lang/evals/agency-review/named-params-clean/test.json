@@ -1,7 +1,7 @@
 {
   "description": "The named-config-params reference solution: settings as named parameters with defaults. Measures false positives.",
   "tags": [
-    "clean"
+    "easy"
   ],
   "files": "./files",
   "input": {

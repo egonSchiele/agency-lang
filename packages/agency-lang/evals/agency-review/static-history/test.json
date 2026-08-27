@@ -1,7 +1,7 @@
 {
   "description": "The per-run history is declared static, but static values are deeply immutable and shared across runs, so the push fails at run time.",
   "tags": [
-    "bug"
+    "easy"
   ],
   "files": "./files",
   "input": {

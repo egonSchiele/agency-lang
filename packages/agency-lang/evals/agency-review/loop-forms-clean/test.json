@@ -1,7 +1,7 @@
 {
   "description": "The loop-forms reference solution: a comprehension, a full block, and an early-exit loop. Measures false positives.",
   "tags": [
-    "clean"
+    "easy"
   ],
   "files": "./files",
   "input": {

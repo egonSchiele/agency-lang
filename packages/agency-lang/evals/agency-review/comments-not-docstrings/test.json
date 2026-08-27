@@ -1,7 +1,7 @@
 {
-  "description": "Three tool functions described in // comments above the def, which the LLM never sees, instead of docstrings inside the body. Correct, so advice, not rejection.",
+  "description": "Three tool functions described in // comments above the def, which the LLM never sees, instead of docstrings inside the body.",
   "tags": [
-    "idiom"
+    "easy"
   ],
   "files": "./files",
   "input": {

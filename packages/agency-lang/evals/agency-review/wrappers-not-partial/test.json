@@ -1,7 +1,7 @@
 {
-  "description": "Two wrapper functions fix the directory by hand where .partial(dir: ...) with .rename() and .describe() is the Agency way to derive tools. Correct, so advice, not rejection.",
+  "description": "Two wrapper functions fix the directory by hand where .partial(dir: ...) with .rename() and .describe() is the Agency way to derive tools.",
   "tags": [
-    "idiom"
+    "easy"
   ],
   "files": "./files",
   "input": {

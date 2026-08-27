@@ -1,7 +1,7 @@
 {
-  "description": "Four helpers written with for and while loops and a hand-made extension splitter, where the stdlib already has groupBy, unique, count, range, and extname. Correct, so advice, not rejection.",
+  "description": "Four helpers written with for and while loops and a hand-made extension splitter, where the stdlib already has groupBy, unique, count, range, and extname.",
   "tags": [
-    "idiom"
+    "easy"
   ],
   "files": "./files",
   "input": {

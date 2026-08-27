@@ -71,6 +71,12 @@ and a reference solution the judge can compare against. Such a test may
 have no harness at all. Only `files/` is seeded into the writer's working
 directory.
 
+Every test also carries `formatted` from `lib/formatted.ts`, at weight
+0.2: the saved file must match what the Agency formatter would produce
+from it. The writer has the stdlib `format` tool for this. A test that
+has only a harness gets a `graders.ts` holding just this grader; the
+harness graders are added alongside it.
+
 ## The tests
 
 Each `test.json` carries one tag, `easy`, `medium`, or `hard`, and nothing

@@ -1,9 +1,11 @@
+import { formatted } from "../lib/formatted.js";
 // The holdout proves .partial() can bind both parameters and that a dry
 // run leaves the files alone. This judge checks what the holdout cannot:
 // the default, and who approves the delete.
 import { idiomJudge } from "../lib/idiomJudge.js";
 
 export default [
+  formatted(),
   idiomJudge({
     name: "restrictable-by-partial",
     standard: `

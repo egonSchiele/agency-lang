@@ -1,8 +1,10 @@
+import { formatted } from "../lib/formatted.js";
 // The holdout shows a rejected post sends nothing. This judge names the
 // idiom: a named interrupt, declared, decided by the caller.
 import { idiomJudge } from "../lib/idiomJudge.js";
 
 export default [
+  formatted(),
   idiomJudge({
     name: "named-interrupt-before-send",
     standard: `

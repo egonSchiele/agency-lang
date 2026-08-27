@@ -1,8 +1,10 @@
+import { formatted } from "../lib/formatted.js";
 // The holdout scores behaviour. This judge says in words what the holdout
 // only shows as "Unknown named argument", so the optimizer learns why.
 import { idiomJudge } from "../lib/idiomJudge.js";
 
 export default [
+  formatted(),
   idiomJudge({
     name: "settings-are-named-parameters",
     standard: `

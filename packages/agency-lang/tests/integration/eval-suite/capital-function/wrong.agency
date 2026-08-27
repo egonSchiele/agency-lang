@@ -1,0 +1,5 @@
+// Writes nothing on purpose: the holdout harness cannot even import the
+// module, so the gate fails.
+node main(task: string): string {
+  return "I would rather not."
+}

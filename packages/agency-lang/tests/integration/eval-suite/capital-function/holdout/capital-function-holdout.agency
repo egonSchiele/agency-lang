@@ -1,0 +1,10 @@
+// Held-out harness the agent never sees. Imports the file the agent wrote.
+import { capitalOf } from "./solution.agency"
+
+export node france(): string {
+  return capitalOf("France")
+}
+
+export node japan(): string {
+  return capitalOf("Japan")
+}

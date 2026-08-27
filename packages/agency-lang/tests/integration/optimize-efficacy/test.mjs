@@ -90,7 +90,36 @@ const RUNS = [
       expectGraderNames(runDir, ["only-city-name"]);
     },
   },
+  // Writeback, the one path that edits user source. Runs on a copy of the
+  // fixture; the copy must change, still parse, and hold the champion value.
+  {
+    name: "writeback",
+    agent: copyOfFixture(),
+    flags: `--suite ${q(SUITE)}`,
+    writeback: true,
+    check: ({ summary, agent }) => {
+      const before = readFileSync(AGENT, "utf-8");
+      const after = readFileSync(agent, "utf-8");
+      if (after === before) throw new Error("writeback left the agent file unchanged");
+      execSync(`node ${q(join(PACKAGE_DIR, "dist", "scripts", "agency.js"))} ast ${q(agent)}`, {
+        cwd: PACKAGE_DIR,
+        stdio: "pipe",
+      });
+      const championSource = summary.championFiles[Object.keys(summary.championFiles)[0]];
+      if (after !== championSource) {
+        throw new Error("the written file is not the champion source summary.json records");
+      }
+    },
+  },
 ];
+
+function copyOfFixture() {
+  const dir = join(runsDir, "writeback-agent");
+  mkdirSync(dir, { recursive: true });
+  const copy = join(dir, "agent.agency");
+  writeFileSync(copy, readFileSync(AGENT));
+  return copy;
+}
 
 // A directory under this package (so `agency-lang` still resolves) whose
 // agency.json is this package's plus `extra`.
@@ -123,12 +152,12 @@ function expectNoGraderNames(runDir, names) {
   }
 }
 
-function runOnce({ name, flags, cwd, check }) {
+function runOnce({ name, flags, cwd, agent, writeback, check }) {
   const runId = `${name}-${Date.now()}`;
   const cmd =
-    `node ${q(join(PACKAGE_DIR, "dist", "scripts", "agency.js"))} optimize ${q(AGENT)} ${flags} ` +
+    `node ${q(join(PACKAGE_DIR, "dist", "scripts", "agency.js"))} optimize ${q(agent ?? AGENT)} ${flags} ` +
     `--iterations ${ITERATIONS} --runs-dir ${q(runsDir)} --run-id ${q(runId)} ` +
-    `--no-writeback --silent`;
+    `${writeback ? "" : "--no-writeback "}--silent`;
   console.log(`[${name}] ${cmd}`);
   execSync(cmd, {
     cwd: cwd ?? PACKAGE_DIR,
@@ -155,7 +184,7 @@ function runOnce({ name, flags, cwd, check }) {
   if (outputs.length === 0 || !outputs.every(isBareCity)) {
     throw new Error(`champion outputs are not all the bare city name: ${JSON.stringify(outputs)}`);
   }
-  if (check) check({ summary, runDir });
+  if (check) check({ summary, runDir, agent: agent ?? AGENT });
   console.log(`[${name}] PASS (baseline ${baselineObjective} -> champion ${trainObjective})`);
 }
 

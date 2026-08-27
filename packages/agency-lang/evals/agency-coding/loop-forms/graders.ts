@@ -44,9 +44,9 @@ export def orderTotals(orders: Order[]): number[] {
 export def receipts(orders: Order[]): string[] {
   return map(orders) as o {
     const subtotal = reduce(o.items, 0, \\(acc, n) -> acc + n)
-    const status = match (o.paid) {
-      true => "paid"
-      _ => "due"
+    let status = "due"
+    if (o.paid) {
+      status = "paid"
     }
     return "\${o.customer}: \${subtotal * 1.1} (\${status})"
   }

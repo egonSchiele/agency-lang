@@ -10,6 +10,6 @@ export def refreshIndex(): string {
 }
 
 export def refreshCache(): string {
-  sleep(30)
+  sleep(30s)
   return "cache ok"
 }

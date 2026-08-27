@@ -311,7 +311,9 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
     out.graderFiles = resolveGraderFilesDir(spec.graderFiles, baseDir, out.id ?? "");
   if (typeof spec.timeoutSec === "number") out.timeoutSec = spec.timeoutSec;
   if (typeof spec.harnessMaxCost === "number") out.harnessMaxCost = spec.harnessMaxCost;
-  if (typeof spec.harnessMustPass === "boolean") out.harnessMustPass = spec.harnessMustPass;
+  if (typeof spec.harnessMustPass === "boolean") {
+    out.harnessMustPass = spec.harnessMustPass;
+  }
   if (isPlainObject(spec.metadata)) out.metadata = spec.metadata as Record<string, any>;
   return out;
 }

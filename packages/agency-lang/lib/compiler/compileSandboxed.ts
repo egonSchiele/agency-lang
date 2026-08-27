@@ -20,7 +20,9 @@ export function typecheckSandboxed(args: CompileSandboxedArgs): TypeCheckReport 
   try {
     return typeCheckValidatedClosure(validateClosure({ entry: args.entry, dir: args.dir }));
   } catch (e) {
-    if (e instanceof ClosureValidationError) throw new Error(e.violations.join("\n"));
+    if (e instanceof ClosureValidationError) {
+      throw new Error(e.violations.join("\n"));
+    }
     throw e;
   }
 }

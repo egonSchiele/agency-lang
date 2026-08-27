@@ -188,7 +188,9 @@ export function _subprocessDepth(): number {
 }
 
 export function _typecheck(source: string, dir: string = ""): TypeCheckReport {
-  if (dir === "") return typeCheckSource(source);
+  if (dir === "") {
+    return typeCheckSource(source);
+  }
   return typecheckSandboxed({ entry: { source }, dir });
 }
 

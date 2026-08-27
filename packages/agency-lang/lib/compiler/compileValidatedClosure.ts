@@ -54,7 +54,9 @@ function withMirror<T>(closure: ValidatedClosure, fn: (mirror: Mirror | null) =>
  *  entry; the stdlib caller turns that into a failure. */
 export function typeCheckValidatedClosure(closure: ValidatedClosure): TypeCheckReport {
   return withMirror(closure, (mirror) => {
-    if (mirror === null) throw new Error("internal: validated closure has no entry module");
+    if (mirror === null) {
+      throw new Error("internal: validated closure has no entry module");
+    }
     return typeCheckSource(mirror.entry.source, mirror.entry.mirrorPath);
   });
 }

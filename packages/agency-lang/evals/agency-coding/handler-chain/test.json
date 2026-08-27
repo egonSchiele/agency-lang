@@ -1,5 +1,5 @@
 {
-  "description": "Raise a named interrupt,and wrap the call in two nested handlers that disagree. Tests the raise/raises/handle syntax and the rule that every handler in the chain runs, and any rejection wins.",
+  "description": "Raise a named interrupt, and wrap the call in two nested handlers that disagree. Tests the raise/raises/handle syntax and the rule that every handler in the chain runs, and any rejection wins.",
   "tags": [
     "easy"
   ],

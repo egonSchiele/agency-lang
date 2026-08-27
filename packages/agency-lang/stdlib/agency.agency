@@ -619,9 +619,10 @@ export def runCode(
   return result
 }
 
-/** Unlike some of the other functions in this module,
-`typecheck` does not restrict imports to the standard library only.
-Relative imports (./foo.agency) cannot be resolved from a source string.
+/** Without `dir`, relative imports (./foo.agency) cannot be resolved from a
+source string. With `dir`, the source is checked the way `compile` compiles
+it: the closure is validated and confined to `dir`, and imports resolve
+against a private mirror of it.
 */
 export idempotent def typecheck(
   source: string,

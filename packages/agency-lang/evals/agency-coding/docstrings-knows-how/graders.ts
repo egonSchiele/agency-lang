@@ -39,7 +39,8 @@ export def addTask(title: string, due: string = ""): string {
 
 export def completeTask(title: string): string {
   """
-  Mark a task done. Use the exact title from listOpenTasks.
+  Mark a task done.
+  @param title - the exact title from listOpenTasks
   """
   const found = [t for t in tasks if t.title == title]
   if (found.length == 0) { return "no task named \${title}" }

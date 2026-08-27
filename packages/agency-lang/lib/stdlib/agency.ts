@@ -16,7 +16,7 @@ import type { ExportFromStatement, NamedExportBody } from "../types.js";
 import { variableTypeToString } from "../backends/typescriptGenerator/typeToString.js";
 import { declaredName } from "../types/hole.js";
 import { deepCopy, isStrictDescendant } from "../utils.js";
-import { compileSandboxed } from "../compiler/compileSandboxed.js";
+import { compileSandboxed, typecheckSandboxed } from "../compiler/compileSandboxed.js";
 import { exactVerdictValue } from "../testFormat/verdict.js";
 import { parseTestFileSandbox, type ParsedInterrupt } from "../testFormat/schema.js";
 import type { ClosureEntry } from "../compiler/closureValidator.js";
@@ -187,8 +187,9 @@ export function _subprocessDepth(): number {
   return getRuntimeContext().ctx.subprocessDepth ?? 0;
 }
 
-export function _typecheck(source: string): TypeCheckReport {
-  return typeCheckSource(source);
+export function _typecheck(source: string, dir: string = ""): TypeCheckReport {
+  if (dir === "") return typeCheckSource(source);
+  return typecheckSandboxed({ entry: { source }, dir });
 }
 
 export function _getEffects(source: string): Record<string, string[]> {

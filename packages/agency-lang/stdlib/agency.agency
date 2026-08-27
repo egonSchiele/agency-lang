@@ -626,14 +626,16 @@ Relative imports (./foo.agency) cannot be resolved from a source string.
 export idempotent def typecheck(
   source: string,
   ignoreCodes: string[] = [],
+  dir: string = "",
 ): Result<TypeCheckReport> {
   """
   Type-check Agency source code.
 
   @param source - Agency source code as a string
   @param ignoreCodes - Diagnostic codes (e.g. ["AG3009"]) to drop from the report's errors and warnings
+  @param dir - Directory relative imports resolve against, and the boundary they are confined to, as for `compile`. Empty (the default) means local imports cannot resolve.
   """
-  const report = try _typecheck(source)
+  const report = try _typecheck(source, dir)
   if (report is failure) {
     return report
   }

@@ -1,0 +1,10 @@
+export type Order = { customer: string, total: number, shipped: boolean }
+
+export def unshippedTotals(orders: Order[]): string[] {
+  const pending = orders.filter(\o -> !o.shipped).sort(\(a, b) -> a.total - b.total)
+  return pending.map(\o -> "${o.customer}: ${o.total}")
+}
+
+export def grandTotal(orders: Order[]): number {
+  return orders.reduce(\(sum, o) -> sum + o.total, 0)
+}

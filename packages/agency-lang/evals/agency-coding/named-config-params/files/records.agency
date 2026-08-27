@@ -1,0 +1,12 @@
+// Seeded into the writer's working directory. The catalog search reads this.
+export type Record = { title: string, year: number, archived: boolean }
+
+export def allRecords(): Record[] {
+  return [
+    { title: "Blue Sky Report", year: 2021, archived: false },
+    { title: "Deep Blue", year: 2019, archived: true },
+    { title: "Red Notes", year: 2023, archived: false },
+    { title: "Blue Notes", year: 2020, archived: false },
+    { title: "Old Blue Ledger", year: 2015, archived: true },
+  ]
+}

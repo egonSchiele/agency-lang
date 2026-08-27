@@ -93,10 +93,15 @@ bugs a reviewer that only runs the typechecker cannot see.
 - `fib-correct` (clean): a correct `fib`; measures false positives.
 - `ungated-delete` (bug, Agency-specific): the task says the deletion must
   be left to the caller's handler; the code does `remove(file) with approve`.
+- `js-array-methods` (bug, Agency-specific): the code calls `.filter`,
+  `.sort`, `.map`, and `.reduce` with arrow callbacks. It typechecks and
+  crashes at run time, because Agency has no lambdas; the fix is list
+  comprehensions or the stdlib `filter`/`map`/`sortBy`/`reduce` with a
+  block.
 
 ## Adding a test
 
 Make a directory with a `test.json` (`description`, `tags`, `files`,
-`input`), the planted source under `files/`, and a `graders.ts` beside it.
+`input`; the only tags are `bug` or `clean`), the planted source under `files/`, and a `graders.ts` beside it.
 Typecheck the planted source first (`agency typecheck <file>`); a source
 that fails to typecheck tests the typechecker, not the reviewer.

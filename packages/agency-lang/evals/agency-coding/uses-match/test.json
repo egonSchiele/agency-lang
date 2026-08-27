@@ -1,14 +1,10 @@
 {
   "description": "Wrap a call to a function that raises interrupts in a handler that approves some and rejects others. Tests that the handler uses a match with a guarded arm rather than an if chain.",
   "tags": [
-    "coding",
-    "module",
-    "handlers",
-    "match",
-    "medium"
+    "easy"
   ],
   "input": {
-    "assignment": "The file foo.agency in the working directory exports `foo(effect: string, dir: string = \".\"): Result<string>`. Depending on `effect`, foo raises one of the interrupts std::read, std::write, or std::email before returning; for std::read and std::write, the interrupt's data carries `dir`. Write a module that imports foo from ./foo.agency and exports `callFoo(effect: string, dir: string = \".\"): string`. callFoo must call foo inside a handler that approves std::read, approves std::write when the interrupt's dir is \".\", and rejects everything else. callFoo returns \"approved\" when foo succeeded and \"rejected\" when it was rejected. Apart from foo, use only Agency standard library (std::) imports, or no imports at all.",
+    "assignment": "The file foo.agency in the working directory exports `foo(effect: string, dir: string = \".\"): Result<string>`. Depending on `effect`, foo raises one of the interrupts std::read, std::write, or std::email before returning; for std::read and std::write, the interrupt's data carries `dir`. Write a module that imports foo from ./foo.agency and exports `callFoo(effect: string, dir: string = \".\"): string`. callFoo must call foo inside a handler that approves std::read, approves std::write when the interrupt's dir is \".\", and rejects everything else. callFoo returns \"approved\" when foo succeeded and \"rejected\" when it was rejected.",
     "outFile": "solution.agency"
   }
 }

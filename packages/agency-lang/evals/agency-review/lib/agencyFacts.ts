@@ -22,6 +22,13 @@ like JS/TS, but its idioms differ, and reviews must judge it as Agency:
   approve" self-approves the call's effects: whether that is appropriate
   depends on what the task says about who approves — it is not inherently
   wrong or right.
+- Agency has no lambdas. JavaScript array methods that take a callback
+  (.map, .filter, .reduce, .sort, .find, .forEach) cannot raise an
+  interrupt, so they typecheck and then crash at run time; calling one is
+  an error. The Agency forms are list
+  comprehensions ("[x for x in xs if ...]") and the stdlib functions map,
+  filter, sortBy, reduce called with a block ("sortBy(xs) as x { ... }").
+  Methods with no callback (push, includes, join, slice) are fine.
 - Declarations use let/const (bare assignment without a declaration is an
   error); types are postfix ("x: number"); string interpolation is
   "\${...}"; entry points are "node main() { ... }"; blocks always use

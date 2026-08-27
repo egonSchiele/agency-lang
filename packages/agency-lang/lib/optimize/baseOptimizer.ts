@@ -421,10 +421,17 @@ export abstract class BaseOptimizer {
       },
     });
     const testResult = result.tests[0];
-    if (!testResult || testResult.status !== "success") {
-      throw new Error(
-        `agent run failed for input ${input.id ?? "(no id)"}: ${testResult?.errorMessage ?? "unknown error"}`,
+    if (!testResult) {
+      throw new Error(`agent run for input ${input.id ?? "(no id)"} produced no result`);
+    }
+    if (testResult.status !== "success") {
+      // A candidate that crashes the agent is a bad candidate, not a broken
+      // search: the run directory records the error, gradeRun scores it 0,
+      // and the optimizer moves on.
+      this.reporter.note(
+        `agent run failed for input ${input.id ?? "(no id)"} (scored 0): ${testResult.errorMessage ?? "unknown error"}`,
       );
+      return testResult.runDir;
     }
     this.agentCostUsd += makeStatelogCostTailer(runDirPaths(testResult.runDir).statelog).poll();
     // The one test's run directory, `<out>/<id>/`; `gradeRun` sees exactly one input.

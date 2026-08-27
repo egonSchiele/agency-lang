@@ -1,0 +1,9 @@
+{
+  "sourceFile": "result-handling-holdout.agency",
+  "tests": [
+    { "nodeName": "allGood", "expectedOutput": "6.5", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "badLineFails", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "failureKeepsTheMessage", "expectedOutput": "\"not an amount: x\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "empty", "expectedOutput": "0", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

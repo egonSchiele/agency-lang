@@ -324,7 +324,11 @@ async function snapshotGraders(tests: Test[]): Promise<Record<string, TestSnapsh
       snapshots.module = { ...(await byModule[modulePath]), origin: "test" };
     }
     if (test.agencyTests !== undefined && test.agencyTests.length > 0) {
-      snapshots.harness = snapshotHarness(test.agencyTests, test.harnessMaxCost);
+      snapshots.harness = snapshotHarness(
+        test.agencyTests,
+        test.harnessMaxCost,
+        test.harnessMustPass,
+      );
     }
     if (test.graderFiles !== undefined) {
       snapshots.graderFiles = snapshotGraderFiles(test.graderFiles);

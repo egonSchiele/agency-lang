@@ -1,0 +1,32 @@
+{
+  "sourceFile": "restrict-with-partial-holdout.agency",
+  "tests": [
+    {
+      "nodeName": "dryRunListsFiles",
+      "expectedOutput": "\"./logs/a.log|./logs/b.log\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "dryRunDeletesNothing",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "pathsCanBeLocked",
+      "expectedOutput": "\"./logs/a.log|./logs/b.log\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

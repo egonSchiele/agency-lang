@@ -1466,7 +1466,19 @@ describe("literals parsers", () => {
           },
         },
       },
-      // Only \${ is special: a literal \n (backslash-n) stays raw alongside it.
+      // Escaped delimiter: \""" -> literal """, so a triple-quoted string can
+      // quote one (a prompt that explains docstrings, for instance).
+      {
+        input: '"""use \\""" for docstrings"""',
+        expected: {
+          success: true,
+          result: {
+            type: "multiLineString",
+            segments: [{ type: "text", value: 'use """ for docstrings' }],
+          },
+        },
+      },
+      // Only \${ and \""" are special: a literal \n (backslash-n) stays raw.
       {
         input: '"""raw \\n and escaped \\${x}"""',
         expected: {

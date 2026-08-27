@@ -1,0 +1,10 @@
+{
+  "description": "Three small functions that will be handed to an LLM as tools. The assignment never mentions docstrings. Tests whether the writer adds a short, tool-description-style docstring to each of the three functions without being asked.",
+  "tags": [
+    "easy"
+  ],
+  "input": {
+    "assignment": "Write a module for a to-do list kept in memory. It exports three functions that an llm call will be given as tools. `addTask(title: string, due: string = \"\"): string` adds a task and returns a short confirmation. `completeTask(title: string): string` marks the task with that exact title done and returns a short confirmation, or a message saying no such task exists. `listOpenTasks(): string[]` returns the titles of the tasks not yet done, in the order they were added.",
+    "outFile": "solution.agency"
+  }
+}

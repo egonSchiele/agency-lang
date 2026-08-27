@@ -1,0 +1,10 @@
+{
+  "sourceFile": "named-config-params-holdout.agency",
+  "tests": [
+    { "nodeName": "defaults", "expectedOutput": "\"Blue Sky Report|Blue Notes\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "namedLimitAndSort", "expectedOutput": "\"Blue Notes|Blue Sky Report\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "namedOffset", "expectedOutput": "\"Blue Notes\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "partialArchived", "expectedOutput": "\"Blue Notes|Blue Sky Report|Deep Blue|Old Blue Ledger\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "partialLimitOne", "expectedOutput": "\"Red Notes\"", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "description": "Tests whether the coding agent uses list comprehensions and the stdlib block-taking functions instead of JavaScript array methods like .filter and .map.",
+  "tags": [
+    "easy"
+  ],
+  "input": {
+    "assignment": "Write a module that exports a type `Order = { customer: string, total: number, shipped: boolean }` and two functions. `unshippedTotals(orders: Order[]): string[]` returns one string per unshipped order, formatted \"customer: total\", ordered from the smallest total to the largest. `grandTotal(orders: Order[]): number` returns the sum of every order's total, shipped or not.",
+    "outFile": "solution.agency"
+  }
+}

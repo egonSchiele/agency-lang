@@ -1,0 +1,7 @@
+{
+  "sourceFile": "module-basics-holdout.agency",
+  "tests": [
+    { "nodeName": "twoNames", "expectedOutput": "\"Hello, Ann!|Hello, Bo!\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "noNames", "expectedOutput": "0", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

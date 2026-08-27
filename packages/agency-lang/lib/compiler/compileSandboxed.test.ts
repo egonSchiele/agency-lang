@@ -6,6 +6,7 @@ import {
   compileAgencyOnly,
   compileSandboxed,
   compileValidatedClosure,
+  typecheckSandboxed,
 } from "./compileSandboxed.js";
 import { validateClosure } from "./closureValidator.js";
 import { compileSource } from "./compile.js";
@@ -79,6 +80,20 @@ describe("compileSandboxed", () => {
       fs.writeFileSync(path.join(dir, "main.agency"), MAIN);
       const result = compileSandboxed({ entry: { file: "main.agency" }, dir });
       expect(result.success).toBe(true);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("typecheckSandboxed resolves a relative import against dir; without dir it cannot", () => {
+    const dir = makeDir(".cs-tc-");
+    try {
+      fs.writeFileSync(path.join(dir, "helper.agency"), HELPER);
+      const withDir = typecheckSandboxed({ entry: { source: MAIN }, dir });
+      expect(withDir.errors).toEqual([]);
+      expect(() => typecheckSandboxed({ entry: { source: MAIN }, dir: "" })).toThrow(
+        /helper\.agency/,
+      );
     } finally {
       cleanup(dir);
     }

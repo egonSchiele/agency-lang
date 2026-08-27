@@ -1,8 +1,6 @@
-import { setLlmOptions } from "std::llm"
-
 node main() {
-  // Pinned: the expectations below are this model's exact answers.
-  setLlmOptions({ model: "gpt-4o-mini", provider: "openai" })
+  // Always mocked (useTestLLMProvider in the test json): this checks that a
+  // thread records every exchange, not what a model thinks 2+3+5+7+11+13+17 is.
   const msgs = thread {
     const res1: number[] = llm("What are the first 5 prime numbers?")
     const res2: number[] = llm("What are the next 2 prime numbers after those?")

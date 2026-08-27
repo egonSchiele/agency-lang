@@ -1,0 +1,141 @@
+/** @module
+  @summary A second pass over prose that finds verbal tics: phrases a
+  language model reaches for that a careful editor cuts. The list is the
+  prompt; edit it here. `docs/dev/contributing/verbal-tics.md` points at
+  this file.
+*/
+import { Feedback } from "std::agents/lib/feedback"
+import { llmOptions } from "std::agents/lib/shared"
+import { readOnlyFileTools } from "std::agents/lib/toolkits"
+import { systemMessage, threadIsNew } from "std::thread"
+
+static const ticsPrompt = """You read prose and report verbal tics: phrases a language model reaches for that a careful editor cuts. Report nothing else. Readability, structure, and facts are reviewed by a separate pass.
+
+The rule behind every entry: state the fact. Do not decorate it, rank it, or warn the reader about it.
+
+Sentence shapes:
+
+1. Contrastive binary: "not X, but Y", "neither X nor Y", "X, never Y".
+   Bad: "Judge the code as Agency, never as JavaScript."
+   Good: "Judge the code as Agency. Do not judge it as JavaScript."
+
+2. Stakes-raising: a sentence that tells the reader how much the last sentence matters.
+   Bad: "Facts about Agency. Get these wrong and the review is wrong."
+   Good: "Facts about Agency:"
+
+3. Aphoristic ender: a short punchy clause that closes a paragraph with a flourish. "And no more." "Full stop." "The rest is noise." "That is the whole point."
+
+4. Colon reveal: a setup, a colon, then the point delivered as a twist.
+   Bad: "The song and dance is all in one step you skipped: the parser parses literals, but the model returns text."
+   Good: "The parser parses string literals. The model returns text. Converting between them is where the extra code comes from."
+
+5. Mirrored clauses: two halves built on the same frame for effect.
+   Bad: "Keep this to yourself; do not report it as a finding."
+   Good: "Do not report this analysis as a finding."
+
+6. Semicolon joins and "but" joins that leave the reader unsure which half is the instruction.
+   Bad: "Rebuilding it with `failure(e)` loses nothing but is not an error."
+   Good: "Return the original failure unchanged. Rebuilding it with `failure(e)` changes the source of the error message."
+
+7. Meta-signposting: announcing the structure instead of using it. "Three things." "Here's the thing." "A quick word on how this is organized." Use a heading or a numbered list and start.
+
+8. The reframe: "Better posed:", "Put differently:", "In other words". Say it once.
+
+9. Negative-list prohibitions as rhythm: "No checklist, no summary line, no praise."
+   Good: "Omit checklists, summary lines, and praise for correct code."
+
+10. Shouting with capitals for emphasis: "ONLY", "NEVER", "ALL". Emphasis is a plain word in a short sentence.
+
+11. Naming a scheme cleverly, or writing about code as if it were a person: "the reject arm has the last word", "the command also answers to", "one document, one fence". Say what the code does, and let the checks state the rule.
+
+12. Turning a verb into a noun to save words: "costs no parse". Say "does not parse the file again".
+
+13. Narrating a correction: "I said it before checking." Give the corrected fact, or "That was wrong."
+
+Words and phrases:
+
+14. "load-bearing", "seam", "surface" (as a verb), "footgun", "trap", "the flagship X". Say what the thing does.
+
+15. "the key insight", "the real fix", "the actual problem", "the root cause". Describe the problem. The reader decides what is key.
+
+16. "genuinely", "honestly", "the honest answer", "to be fair", "frankly". Delete the word.
+
+17. "worth noting", "it is worth stating plainly", "note that". Delete the phrase and keep the fact.
+
+18. "You're absolutely right", "Great question", "Fair question". Answer the question.
+
+19. "essentially", "basically", "simply", "just", "fundamentally", "structurally". Delete.
+
+How to report:
+- One finding per passage. Quote the passage, name the entry by number and name, and give the plain replacement or say to delete it.
+- Report a repeated word once, listing each occurrence in the quote.
+- A colon that introduces a list, a code block, or an example is not a colon reveal. A lowercase "only", a short sentence, and a plain "note" as a noun are not tics. Report only the patterns above.
+- When a sentence carries no fact of its own (a signpost, a flourish, a list of prohibitions the checks already state), say to delete it. Rewrite only a sentence that carries a fact.
+- Clean text gets an empty list.
+- Every finding is advisory: set error to false.
+
+If the text names files instead of holding the prose, read each file and review its contents."""
+
+def askForTics(work: string, task: string, model: string, provider: string): Feedback[] {
+  if (threadIsNew()) {
+    systemMessage(ticsPrompt)
+  }
+  return llm(
+    """
+The text was written for this task:
+<task>
+${task}
+</task>
+
+<text>
+${work}
+</text>
+
+Return a list of feedback items.
+""",
+    llmOptions(model: model, provider: provider, tools: readOnlyFileTools(), validationRetries: 1),
+  )
+}
+
+export def findVerbalTics(
+  work: string,
+  task: string,
+  model: string,
+  provider: string,
+): Feedback[] {
+  """
+  Find verbal tics in the text and return them as advisory findings.
+
+  @param work - The text under review, or a request naming the files that hold it
+  @param task - Who the text is for and what it must get across, or ""
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  """
+  let found: Feedback[] = []
+  thread(label: "verbalTics") {
+    found = askForTics(work: work, task: task, model: model, provider: provider)
+  }
+  return [{ error: false, feedback: item.feedback } for item in found]
+}
+
+export def verbalTicsOrNothing(
+  work: string,
+  task: string,
+  model: string,
+  provider: string,
+): Feedback[] {
+  """
+  findVerbalTics, with a failed call reported as no findings. The main
+  review must not be lost because this advisory pass could not run.
+
+  @param work - The text under review, or a request naming the files that hold it
+  @param task - Who the text is for and what it must get across, or ""
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  """
+  const found = try findVerbalTics(work: work, task: task, model: model, provider: provider)
+  return match(found) {
+    success(items) => items
+    failure(_) => []
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "description": "A reply to a code reviewer padded with flattery, intensifiers, and jargon: opens with agreement instead of the fact, frames the point with 'the key insight', and calls the bug a 'load-bearing seam' and a 'footgun' instead of saying what happens.",
+  "files": "./files",
+  "input": {
+    "assignment": "Reply on a pull request thread to a reviewer who found that two different interpolation expressions compared as equal. Say whether the finding holds and what was changed.",
+    "sourceFile": "reply.md"
+  }
+}

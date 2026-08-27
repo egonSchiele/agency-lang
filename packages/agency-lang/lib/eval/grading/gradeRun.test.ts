@@ -47,6 +47,25 @@ describe("grading one trace (through gradeRun on a directory of one)", () => {
     expect(card.perInput[0].gatesPassed).toBe(true);
   });
 
+  it("a grader that throws scores 0 with the error as feedback, and the rest still run", async () => {
+    const runDir = makeRun({ output: "x" });
+    const broken = grader(
+      () => {
+        throw new Error("structured return failed schema validation");
+      },
+      { name: "broken" },
+    );
+    const fine = grader(() => 1, { name: "fine" });
+
+    const card = await gradeRun(runDir, ctx([broken, fine]));
+
+    const grades = card.perInput[0].grades;
+    expect(grades.map((g) => g.grader.name())).toEqual(["broken", "fine"]);
+    expect(grades[0].grade.score).toEqual({ kind: "scalar", value: 0 });
+    expect(grades[0].grade.feedback).toContain("structured return failed schema validation");
+    expect(grades[1].grade.score).toEqual({ kind: "scalar", value: 1 });
+  });
+
   it("runs mustPass gates before advisory graders and short-circuits on failure", async () => {
     const runDir = makeRun({ output: "x" });
     const order: string[] = [];

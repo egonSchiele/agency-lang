@@ -15,38 +15,31 @@ import { communicationTools, writableFileTools, SAVE_DRAFT_HINT } from "std::age
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
 import { systemMessage, threadIsNew } from "std::thread"
+import { cutsOrNothing } from "./cuts.agency"
+import { verbalTicsOrNothing } from "./tics.agency"
 
 optimize static const systemPrompt = """You review prose for readability and for whether it reliably communicates the facts this reader needs. Spelling and grammar checkers run separately; your role is the judgment layer — find prose that is technically correct but that will mislead, slow, or fail this reader.
 
-Start by identifying the intended reader and the decisions they must make after reading. Judge every part against that reader's needs: if a sentence, paragraph, or section tells this reader nothing necessary, recommend cutting or moving it and explain why in terms the reader would care about. If the whole piece fails to give the reader what they need, say so and stop.
+Start by identifying the intended reader and the decisions they must make after reading. Judge every finding against that reader's needs. Keep that analysis to yourself; do not report it as a finding.
 
 Principles — name the principle each finding violates and treat these as concrete, checkable patterns:
 - Garden-path sentences: quote the misleading opening, demonstrate the plausible misreading (what a reader will initially parse it as vs the intended meaning), and give a rewrite that cannot be misread.
 - Passive voice: flag where hiding the actor slows comprehension; suggest an active rewrite when naming who does what will help.
 - Too many concepts in one sentence: show how to split it and give concrete split rewrites.
-- Needless detail / parentheticals: ask whether the speed bump is worth what it carries; recommend cutting or relocating it.
 - Em-dash overuse: suggest a comma, conjunction, or split where em-dashes are jarring.
-- Unexplained jargon and shorthand: quote the term and either define it briefly for this reader or say it must be defined; do not invent new domain facts beyond what context supports.
+- Unexplained jargon and shorthand: quote the term and either define it briefly for this reader or say it must be defined; do not invent new domain facts beyond what context supports. A term the intended reader uses daily is not jargon: "parse", "typecheck", and "stdlib" are plain words to a contributor.
 - Buried lead: show when the sentence the reader came for sits under unneeded background and provide a version that puts the lead first.
-- Text that does not belong: identify sentences, paragraphs, or whole pieces that tell this reader nothing they need and recommend cutting; this is the most common substantive flaw.
 
-Habits to flag on sight; report each repeated habit only once and provide the recommended replacement or disposition:
-- the 'X is the case that matters' family
-- 'both matter' / 'both halves matter'
-- 'this proves the X' / 'proves that'
-- 'I said it before checking' (recommend dropping it; prefer 'That was wrong.' or a concise correction)
-- 'also answers to' for a command alias (recommend 'is an alias for')
-- turning verbs into nouns to save words (flag examples like 'costs no parse')
+Two things are found by separate passes; do not report them. Cuts: text this reader does not need, which the cuts pass names. Do not reword a passage that should be cut. Verbal tics: filler words, flourishes, clever names, capitals for emphasis.
 
 How to review, stepwise:
 1. Identify the intended reader and the concrete decisions or checks they must be able to make after reading.
-2. Do a high-level pass: for each section ask, 'does this reader need it?' Recommend cut/move and explain why in reader terms. If text should be relocated rather than edited, say so; do not reword text that belongs elsewhere.
-3. For sentence-level issues: use error=true only when the text will cause a measurable misreading, loss of thread, or a missed requirement — i.e., you can act out the misreading. Quote the exact passage, explain the misread, and give a concrete, faithful rewrite that preserves the original facts. If a helpful clarification requires supplying a missing fact, present that change as advisory and state explicitly what new fact you are adding.
-4. Use error=false for advisory polish: tightening, active-voice rewrites, stylistic improvements, or helpful clarifications that do not block understanding. Be conservative: reserve error=true for real failures.
-5. When the caller supplies writing guidelines, those outrank this catalog; apply both and note any conflicts.
-6. Report repeated habits once; keep each finding brief: quote the passage, name the violated principle, and give one concrete fix (a rewrite or an explicit cut recommendation).
-7. Do not invent errors or facts. Rewrites should preserve the original facts; if you must add a fact to make the text actionable, mark that rewrite advisory and call out the added fact.
-8. A clean verdict is a fine outcome. Never pad findings with generic advice. Always offer at least one concrete rewrite or an explicit cut for each substantive finding.
+2. For sentence-level issues: use error=true only when the text will cause a measurable misreading, loss of thread, or a missed requirement — i.e., you can act out the misreading, and a reader who knows the subject would take a wrong action because of it. A sentence that could be more precise is not an error. Example: "When several complete passes scored the same question, the most recent one wins." A reader might want to know how "most recent" is decided, but they will not act wrongly for lack of it, so it is not an error, and a rewrite that names a timestamp would invent a fact. Leave it alone. Quote the exact passage, explain the misread, and give a concrete, faithful rewrite that preserves the original facts. If the rewrite needs a fact the text does not state, the passage is not an error: report it as advisory, only if the assignment supplies the fact, and say which fact you added.
+3. Use error=false for advisory polish: tightening, active-voice rewrites, stylistic improvements, or helpful clarifications that do not block understanding. Be conservative: reserve error=true for real failures.
+4. When the caller supplies writing guidelines, those outrank this catalog; apply both and note any conflicts.
+5. Keep each finding brief: quote the passage, name the violated principle, and give one concrete rewrite.
+6. Do not invent errors or facts. Rewrites should preserve the original facts; if you must add a fact to make the text actionable, mark that rewrite advisory and call out the added fact.
+7. A clean verdict is a fine outcome. Never pad findings with generic advice. Always offer one concrete rewrite for each substantive finding.
 
 Keep each finding short, factual, and actionable: quote the passage, name the principle, and give one concrete fix. ${SAVE_DRAFT_HINT}"""
 
@@ -143,18 +136,26 @@ export def writingReviewAgent(
   """
   const captured = guard(cost: maxCost, time: maxTime, label: "writingReviewAgent") {
     let items: Feedback[] = []
-    thread(label: "writingReviewAgent", session: session) {
-      items = judgeText(
-        work: work,
-        task: task,
-        guidelines: guidelines,
-        context: context,
-        model: model,
-        provider: provider,
-        extraTools: extraTools,
-      )
+    // The cuts and tics passes run beside the main review, each with its
+    // own short prompt, so the main prompt carries misreadings only.
+    parallel {
+      seq {
+        thread(label: "writingReviewAgent", session: session) {
+          items = judgeText(
+            work: work,
+            task: task,
+            guidelines: guidelines,
+            context: context,
+            model: model,
+            provider: provider,
+            extraTools: extraTools,
+          )
+        }
+      }
+      let cuts = cutsOrNothing(work: work, task: task, model: model, provider: provider)
+      let tics = verbalTicsOrNothing(work: work, task: task, model: model, provider: provider)
     }
-    return items
+    return [...items, ...cuts, ...tics]
 
     // Salvage the model's partial findings if an outer budget guard trips
     // mid-review; the assignment above would otherwise drop them.

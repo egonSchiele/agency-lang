@@ -173,6 +173,10 @@ export async function runSuite(
     // Staged under the job's label, so a test's trials never share a path.
     const stagingDir = path.join(stagingRoot, jobLabel(job, trials));
     onStarted?.(agentRunPaths(stagingDir).statelogPath);
+    // A fold that refuses the agent's output (say, a statelog holding two
+    // traces) keeps the staging directory, so what the agent wrote can be
+    // examined; deleting it would destroy the only evidence.
+    let keepStaging = false;
     try {
       const run = await runAgent(
         target,
@@ -191,18 +195,25 @@ export async function runSuite(
       );
       const assembled = `${stagingDir}.rundir`;
       fs.rmSync(assembled, { recursive: true, force: true });
-      foldIntoRunDirectory({
-        runDir: assembled,
-        test,
-        traceId,
-        run,
-        harness,
-        suite: opts.suite,
-        snapshots: snapshotsByTest[testId] ?? {},
-        flags,
-        batch,
-        trial,
-      });
+      try {
+        foldIntoRunDirectory({
+          runDir: assembled,
+          test,
+          traceId,
+          run,
+          harness,
+          suite: opts.suite,
+          snapshots: snapshotsByTest[testId] ?? {},
+          flags,
+          batch,
+          trial,
+        });
+      } catch (err) {
+        keepStaging = true;
+        throw new Error(
+          `${err instanceof Error ? err.message : String(err)} The agent's files are kept at ${stagingDir} for diagnosis.`,
+        );
+      }
       // With trials, the test's directory is the parent of its runs.
       fs.mkdirSync(path.dirname(runDir), { recursive: true });
       fs.renameSync(assembled, runDir);
@@ -215,11 +226,13 @@ export async function runSuite(
         errorMessage: run.status === "error" ? run.errorMessage : undefined,
       };
     } finally {
-      const deleted = safeDeleteDirectoryWithin(stagingRoot, stagingDir);
-      if (!deleted.success && fs.existsSync(stagingDir)) {
-        console.warn(`[runSuite] could not remove staging ${stagingDir}: ${deleted.message}`);
+      if (!keepStaging) {
+        const deleted = safeDeleteDirectoryWithin(stagingRoot, stagingDir);
+        if (!deleted.success && fs.existsSync(stagingDir)) {
+          console.warn(`[runSuite] could not remove staging ${stagingDir}: ${deleted.message}`);
+        }
+        if (trials > 1) removeIfEmpty(path.dirname(stagingDir));
       }
-      if (trials > 1) removeIfEmpty(path.dirname(stagingDir));
     }
   };
 

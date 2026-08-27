@@ -207,7 +207,8 @@ function scoreValue(score: Grade["score"]): number {
  *  the findings would get a writer there, and for what it cut. */
 export function harvestedGraders(): WritingReviewGrader[] {
   return [
-    rejects(),
+    // No `rejects` here: cuts and tics come back advisory, and the editor's
+    // points below already measure whether the review found the flaws.
     grader<WritingReviewInput>(
       async ({ output, graderFiles, judges }) => {
         if (findings(output).length === 0) {

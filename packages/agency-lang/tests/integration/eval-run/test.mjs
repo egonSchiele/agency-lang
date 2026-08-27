@@ -465,8 +465,8 @@ export default [grader(() => 0.5, { name: "regraded" })];
   // ── Scenario I: a holdout harness pair as the gate ──
   // A test directory with holdout/<name>.agency + <name>.test.json grades by
   // running that harness against the agent's workdir through `agency test`.
-  // The harness is a must-pass gate, so when it fails the advisory grader
-  // beside it is never run.
+  // The suite sets harnessMustPass, so the harness is a gate: when it fails,
+  // the advisory grader beside it is never run.
   const functionSuite = resolve(
     REPO_ROOT,
     "tests",

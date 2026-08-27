@@ -1,5 +1,6 @@
 {
   "goal": "solution.agency exports def capitalOf(country: string): string and returns the right capital.",
   "input": "Write an Agency module named solution.agency in your current working directory that exports def capitalOf(country: string): string, returning \"Paris\" for \"France\" and \"Tokyo\" for \"Japan\". No imports. Once the file is written you are done.",
+  "harnessMustPass": true,
   "timeoutSec": 120
 }

@@ -90,11 +90,12 @@ const RUNS = [
       expectGraderNames(runDir, ["only-city-name"]);
     },
   },
-  // Writeback, the one path that edits user source. Runs on a copy of the
-  // fixture; the copy must change, still parse, and hold the champion value.
+  // Writeback, the one path that edits user source. Runs on a fresh copy of
+  // the fixture each attempt (a retry must not start from optimized source);
+  // the copy must change, still parse, and hold the champion value.
   {
     name: "writeback",
-    agent: copyOfFixture(),
+    agent: copyOfFixture,
     flags: `--suite ${q(SUITE)}`,
     writeback: true,
     check: ({ summary, agent }) => {
@@ -152,10 +153,11 @@ function expectNoGraderNames(runDir, names) {
   }
 }
 
-function runOnce({ name, flags, cwd, agent, writeback, check }) {
+function runOnce({ name, flags, cwd, agent: makeAgent, writeback, check }) {
   const runId = `${name}-${Date.now()}`;
+  const agent = makeAgent ? makeAgent() : AGENT;
   const cmd =
-    `node ${q(join(PACKAGE_DIR, "dist", "scripts", "agency.js"))} optimize ${q(agent ?? AGENT)} ${flags} ` +
+    `node ${q(join(PACKAGE_DIR, "dist", "scripts", "agency.js"))} optimize ${q(agent)} ${flags} ` +
     `--iterations ${ITERATIONS} --runs-dir ${q(runsDir)} --run-id ${q(runId)} ` +
     `${writeback ? "" : "--no-writeback "}--silent`;
   console.log(`[${name}] ${cmd}`);
@@ -184,7 +186,7 @@ function runOnce({ name, flags, cwd, agent, writeback, check }) {
   if (outputs.length === 0 || !outputs.every(isBareCity)) {
     throw new Error(`champion outputs are not all the bare city name: ${JSON.stringify(outputs)}`);
   }
-  if (check) check({ summary, runDir, agent: agent ?? AGENT });
+  if (check) check({ summary, runDir, agent });
   console.log(`[${name}] PASS (baseline ${baselineObjective} -> champion ${trainObjective})`);
 }
 

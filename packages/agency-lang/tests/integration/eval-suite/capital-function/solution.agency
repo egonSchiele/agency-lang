@@ -1,0 +1,7 @@
+// Reference solution: writes the module without an LLM. Grading it must
+// score 1, so a failure points at the harness, not at a model.
+node main(task: string): string {
+  const source = "export def capitalOf(country: string): string {\n  if (country == \"France\") {\n    return \"Paris\"\n  }\n  return \"Tokyo\"\n}\n"
+  write("solution.agency", source) with approve
+  return "wrote solution.agency"
+}

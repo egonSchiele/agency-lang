@@ -14,7 +14,7 @@
 //   node tests/integration/eval-run/test.mjs
 
 import { execSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -425,6 +425,107 @@ node main(): string {
   assert(bad.summary.mean === 0, `the always-wrong agent scored ${bad.summary.mean}, expected 0`);
   console.log(
     "[eval-run-integration] PASS: test-directory suite runs, and eval grade passes and fails it correctly",
+  );
+
+  // ── Scenario H: `eval grade --suite` re-grades an existing run with edited graders ──
+  // Tuning a grader means editing graders.ts and re-scoring old runs without
+  // re-running the agent. A copy of the suite whose graders give half credit
+  // must change the reference solution's score from 1 to 0.5.
+  const editedSuite = join(TMP_ROOT, "edited-suite");
+  cpSync(suite, editedSuite, { recursive: true });
+  for (const test of ["capital-of-france", "capital-of-japan"]) {
+    writeFileSync(
+      join(editedSuite, test, "graders.ts"),
+      `import { grader } from "agency-lang/eval";
+
+export default [grader(() => 0.5, { name: "regraded" })];
+`,
+    );
+  }
+  const regradePath = join(runsDir, "suite-solution", "regrade.json");
+  execSync(
+    `node ${JSON.stringify(AGENCY_CLI)} eval grade ${JSON.stringify(join(runsDir, "suite-solution"))}` +
+      ` --suite ${JSON.stringify(editedSuite)} --out ${JSON.stringify(regradePath)}`,
+    { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+  );
+  const regrade = JSON.parse(readFileSync(regradePath, "utf-8"));
+  const regradeGraders = regrade.runs.flatMap((run) => run.grading.graders);
+  assert(
+    regradeGraders.every((name) => name === "regraded"),
+    `--suite should grade with the edited graders only, got: ${regradeGraders}`,
+  );
+  assert(
+    regrade.mean === 0.5,
+    `re-grade with half-credit graders scored ${regrade.mean}, expected 0.5`,
+  );
+  console.log(
+    "[eval-run-integration] PASS: eval grade --suite re-scores a run with edited graders",
+  );
+
+  // ── Scenario I: a holdout harness pair as the gate ──
+  // A test directory with holdout/<name>.agency + <name>.test.json grades by
+  // running that harness against the agent's workdir through `agency test`.
+  // The suite sets harnessMustPass, so the harness is a gate: when it fails,
+  // the advisory grader beside it is never run.
+  const functionSuite = resolve(
+    REPO_ROOT,
+    "tests",
+    "integration",
+    "eval-suite",
+    "capital-function",
+  );
+  const gradeFunction = (agent, outName) => {
+    const out = join(runsDir, outName);
+    const runOutput = execSync(
+      `node ${JSON.stringify(AGENCY_CLI)} eval run ${JSON.stringify(join(functionSuite, agent))}` +
+        ` --suite ${JSON.stringify(functionSuite)} --out ${JSON.stringify(out)}`,
+      { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+    );
+    assert(runOutput.includes("1/1 tests ok"), `expected the test to run, got:\n${runOutput}`);
+    const summaryPath = join(out, "grade.json");
+    let exitCode = 0;
+    try {
+      execSync(
+        `node ${JSON.stringify(AGENCY_CLI)} eval grade ${JSON.stringify(out)} --out ${JSON.stringify(summaryPath)}`,
+        { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+      );
+    } catch (err) {
+      exitCode = err.status;
+    }
+    const summary = JSON.parse(readFileSync(summaryPath, "utf-8"));
+    return { exitCode, grading: summary.runs[0].grading };
+  };
+  const solved = gradeFunction("solution.agency", "function-solution");
+  assert(solved.exitCode === 0, `grading the reference solution exited ${solved.exitCode}`);
+  assert(
+    solved.grading.gatesPassed === true,
+    "the holdout harness should pass on the reference solution",
+  );
+  assert(
+    solved.grading.graders.includes("capital-function-holdout") &&
+      solved.grading.graders.includes("wrote-solution"),
+    `expected the holdout harness and the advisory grader, got: ${solved.grading.graders}`,
+  );
+  assert(
+    solved.grading.objective === 1,
+    `the reference solution scored ${solved.grading.objective}, expected 1`,
+  );
+  const unsolved = gradeFunction("wrong.agency", "function-wrong");
+  assert(
+    unsolved.exitCode === 2,
+    `grading the agent that wrote nothing exited ${unsolved.exitCode}, expected 2`,
+  );
+  assert(
+    unsolved.grading.gatesPassed === false,
+    "the holdout harness should fail when solution.agency is missing",
+  );
+  const unsolvedGrades = unsolved.grading.perInput[0].grades.map((g) => g.grader);
+  assert(
+    unsolvedGrades.length === 1 && unsolvedGrades[0] === "capital-function-holdout",
+    `a failed gate should skip the advisory grader, got grades from: ${unsolvedGrades}`,
+  );
+  console.log(
+    "[eval-run-integration] PASS: holdout harness gates the run, and a failed gate skips advisory graders",
   );
 
   passed = true;

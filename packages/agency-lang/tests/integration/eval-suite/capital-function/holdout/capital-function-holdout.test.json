@@ -1,0 +1,7 @@
+{
+  "sourceFile": "capital-function-holdout.agency",
+  "tests": [
+    { "nodeName": "france", "expectedOutput": "\"Paris\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "japan", "expectedOutput": "\"Tokyo\"", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

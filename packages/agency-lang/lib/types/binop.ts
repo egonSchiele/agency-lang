@@ -29,7 +29,7 @@ export type Operator =
   | "||"
   | "!"
   // Unary minus (`-x`). Distinct from binary `-` so consumers can tell
-  // `{ op: "unary-", left: true, right: x }` from `a - b`.
+  // `{ operator: "unary-", left: { type: "boolean", value: true }, right: x }` from `a - b`.
   | "unary-"
   | "typeof"
   | "void"

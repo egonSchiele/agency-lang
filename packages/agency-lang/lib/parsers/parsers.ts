@@ -653,18 +653,26 @@ const multiLineRawCharFor = (delim: string): Parser<string> =>
 
 const multiLineRawChar: Parser<string> = multiLineRawCharFor('"""');
 
+// `\"""` -> `"""` (and `\'''` -> `'''` under that spelling): the closing
+// delimiter written as text, so a triple-quoted string can quote one.
+const delimiterEscapeFor = (delim: string): Parser<string> => map(str(`\\${delim}`), () => delim);
+
 // Text segment inside a triple-quoted string. Raw by design — backslash escapes
-// like `\n` are NOT interpreted (a literal backslash then `n`) — with ONE
-// exception: `\${` decodes to a literal `${` (via `dollarBraceEscape`) so a raw
+// like `\n` are NOT interpreted (a literal backslash then `n`) — with TWO
+// exceptions: `\${` decodes to a literal `${` (via `dollarBraceEscape`) so a raw
 // string can contain literal interpolation syntax (e.g. embedded Agency/shell/JS
-// source) without opening an interpolation. `\${` is tried first so its `${` is
-// consumed as an escape rather than starting one; a lone backslash and every
-// other `\x` stays verbatim. Ends at the closing `"""` or an unescaped `${`.
+// source) without opening an interpolation, and `\"""` decodes to a literal
+// `"""`. Both are tried first so their text is consumed as an escape rather
+// than starting an interpolation or closing the string; a lone backslash and
+// every other `\x` stays verbatim. Ends at the closing `"""` or an unescaped `${`.
 export const multiLineStringTextSegmentParserFor = (delim: string): Parser<TextSegment> =>
-  map(many1WithJoin(or(dollarBraceEscape, multiLineRawCharFor(delim))), (value: string) => ({
-    type: "text" as const,
-    value,
-  }));
+  map(
+    many1WithJoin(or(delimiterEscapeFor(delim), dollarBraceEscape, multiLineRawCharFor(delim))),
+    (value: string) => ({
+      type: "text" as const,
+      value,
+    }),
+  );
 
 export const multiLineStringTextSegmentParser: Parser<TextSegment> =
   multiLineStringTextSegmentParserFor('"""');

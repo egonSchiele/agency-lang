@@ -1,0 +1,10 @@
+{
+  "description": "Three functions over slow stand-in calls: all results, the first result, and two independent refreshes. The assignment says nothing about concurrency. Tests that the writer picks fork, race, and parallel for those three jobs.",
+  "tags": [
+    "easy"
+  ],
+  "input": {
+    "assignment": "The file sources.agency in the working directory exports `fetchSource(name: string): string`, `refreshIndex(): string`, and `refreshCache(): string`. Each one is slow. Write a module that imports them and exports three functions. `fetchAll(names: string[]): string[]` returns the result of fetchSource for every name, in the same order. `fetchFastest(names: string[]): string | null` returns the result of whichever fetchSource finishes first. `refreshBoth(): string` runs refreshIndex and refreshCache, which do not depend on each other, and returns \"refreshed\". Please try to make the three functions as fast as possible.",
+    "outFile": "solution.agency"
+  }
+}

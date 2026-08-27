@@ -1,0 +1,10 @@
+{
+  "description": "Four small helpers over file entries, each of which the standard library already does. Tests whether the writer knows groupBy, unique, count, range, and std::path, instead of writing them by hand.",
+  "tags": [
+    "easy"
+  ],
+  "input": {
+    "assignment": "Write a module that exports a type `Entry = { path: string, size: number }` and four functions. `byExtension(entries: Entry[]): any` groups the entries by the extension of their path, with the extension, dot included, as the key. `extensions(entries: Entry[]): string[]` returns the distinct extensions in first-seen order. `largeCount(entries: Entry[], limit: number): number` returns how many entries have a size above limit. `pageNumbers(pages: number): number[]` returns the numbers 1 through pages.",
+    "outFile": "solution.agency"
+  }
+}

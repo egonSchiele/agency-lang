@@ -253,6 +253,7 @@ function liveHarnessGraders(test: Test): BaseGrader[] {
         agencyFile: def.agencyFile,
         testJsonFile: def.testJsonFile,
         ...(test.harnessMaxCost === undefined ? {} : { maxCost: test.harnessMaxCost }),
+        ...(test.harnessMustPass === undefined ? {} : { mustPass: test.harnessMustPass }),
       }),
   );
 }
@@ -273,6 +274,7 @@ function snapshotHarnessGraders(entry: Entry, runDir: string): BaseGrader[] {
       agencyFile: path.join(gradersDir, record.agency),
       testJsonFile: path.join(gradersDir, record.json),
       ...(record.maxCost === undefined ? {} : { maxCost: record.maxCost }),
+      ...(record.mustPass === undefined ? {} : { mustPass: record.mustPass }),
     });
   });
 }

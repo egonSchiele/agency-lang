@@ -28,7 +28,7 @@ export type WriteFailure = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L31))
 
 ## Functions
 
@@ -46,7 +46,7 @@ Return the Agency writer's tools: the bundled documentation, the source
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L109))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L204))
 
 ### agencyCodingAgent
 
@@ -62,6 +62,7 @@ agencyCodingAgent(
   session: string = "",
   extraTools: any[] = [],
   requireMain: boolean = true,
+  dir: string = "",
 ): Result<string, WriteFailure>
 ```
 
@@ -81,6 +82,8 @@ Write an Agency program for the task. Iterates until the source parses,
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   @param requireMain - Demand a `node main` entry point (default). Pass false
     when the deliverable is a library module whose exports the caller places.
+  @param dir - Directory the draft's relative imports resolve against, so a
+    draft that imports a sibling file typechecks. "" when it imports none.
 
 **Parameters:**
 
@@ -96,9 +99,10 @@ Write an Agency program for the task. Iterates until the source parses,
 | session | `string` | "" |
 | extraTools | `any[]` | [] |
 | requireMain | `boolean` | true |
+| dir | `string` | "" |
 
 **Returns:** `Result<string, WriteFailure>`
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L260))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L356))

@@ -1,0 +1,10 @@
+// Held-out oracle the writer never sees. Imports the file evalMain saved.
+import { summarizeAll } from "./solution.agency"
+
+export node fastDocsFinish(): string {
+  return summarizeAll(["a", "b"]).join("|")
+}
+
+export node slowDocTimesOutAlone(): string {
+  return summarizeAll(["a very long document indeed", "x"]).join("|")
+}

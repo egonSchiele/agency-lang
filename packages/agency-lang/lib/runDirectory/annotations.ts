@@ -76,6 +76,7 @@ export type HarnessRecord = {
   json: string;
   sha256: string;
   maxCost?: number;
+  mustPass?: boolean;
 };
 
 export type RunOutcome = "ok" | "error" | "timeout" | "cost-cap" | "killed";
@@ -209,6 +210,7 @@ const RunAnnotationSchema = z
             json: z.string().regex(/^[0-9a-f]{64}\.test\.json$/),
             sha256: z.string().regex(/^[0-9a-f]{64}$/),
             maxCost: z.number().optional(),
+            mustPass: z.boolean().optional(),
           })
           .strict(),
       )

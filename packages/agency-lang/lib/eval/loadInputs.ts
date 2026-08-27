@@ -275,6 +275,9 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
       "Eval input harnessMaxCost must be a non-negative number of dollars when provided",
     );
   }
+  if (spec.harnessMustPass !== undefined && typeof spec.harnessMustPass !== "boolean") {
+    throw new Error("Eval input harnessMustPass must be a boolean when provided");
+  }
   if (
     spec.description !== undefined &&
     (typeof spec.description !== "string" || spec.description.length === 0)
@@ -308,6 +311,9 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
     out.graderFiles = resolveGraderFilesDir(spec.graderFiles, baseDir, out.id ?? "");
   if (typeof spec.timeoutSec === "number") out.timeoutSec = spec.timeoutSec;
   if (typeof spec.harnessMaxCost === "number") out.harnessMaxCost = spec.harnessMaxCost;
+  if (typeof spec.harnessMustPass === "boolean") {
+    out.harnessMustPass = spec.harnessMustPass;
+  }
   if (isPlainObject(spec.metadata)) out.metadata = spec.metadata as Record<string, any>;
   return out;
 }

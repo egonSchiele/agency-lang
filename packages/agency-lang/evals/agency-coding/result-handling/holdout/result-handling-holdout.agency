@@ -1,0 +1,22 @@
+// Held-out oracle the writer never sees. Imports the file evalMain saved.
+import { total } from "./solution.agency"
+
+export node allGood(): number {
+  return total(["1", "2.5", "3"]) catch -1
+}
+
+export node badLineFails(): boolean {
+  return isFailure(total(["1", "x", "3"]))
+}
+
+export node failureKeepsTheMessage(): string {
+  const r = total(["1", "x", "3"])
+  return match(r) {
+    success(v) => "succeeded"
+    failure(e) => e
+  }
+}
+
+export node empty(): number {
+  return total([]) catch -1
+}

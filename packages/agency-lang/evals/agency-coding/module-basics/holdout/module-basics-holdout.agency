@@ -1,0 +1,10 @@
+// Held-out oracle the writer never sees. Imports the file evalMain saved.
+import { greetAll } from "./solution.agency"
+
+export node twoNames(): string {
+  return greetAll(["Ann", "Bo"]).join("|")
+}
+
+export node noNames(): number {
+  return greetAll([]).length
+}

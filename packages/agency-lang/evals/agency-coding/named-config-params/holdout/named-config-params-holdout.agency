@@ -1,0 +1,24 @@
+// Held-out oracle the writer never sees. Imports the file evalMain saved.
+import { search } from "./solution.agency"
+
+export node defaults(): string {
+  return search("blue").join("|")
+}
+
+export node namedLimitAndSort(): string {
+  return search("blue", order: "year", limit: 2).join("|")
+}
+
+export node namedOffset(): string {
+  return search("blue", offset: 1).join("|")
+}
+
+export node partialArchived(): string {
+  const searchAll = search.partial(includeArchived: true, order: "title")
+  return searchAll("blue").join("|")
+}
+
+export node partialLimitOne(): string {
+  const firstOnly = search.partial(limit: 1)
+  return firstOnly("notes").join("|")
+}

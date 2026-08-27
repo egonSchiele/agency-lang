@@ -1,0 +1,10 @@
+{
+  "description": "Sum amounts parsed by a seeded function that returns a Result, stopping at the first bad line. Tests that the writer narrows the Result with `is success`/`is failure` or `match` and returns the failure unchanged, instead of reading `.value` or swallowing the error.",
+  "tags": [
+    "easy"
+  ],
+  "input": {
+    "assignment": "The file amounts.agency in the working directory exports `parseAmount(text: string): Result<number>`, which fails when the text is not a number. Write a module that imports it and exports `total(lines: string[]): Result<number>`. It parses every line and returns the sum. If any line fails to parse, total returns that failure, with its message intact, and does not parse the lines after it. An empty list totals 0.",
+    "outFile": "solution.agency"
+  }
+}

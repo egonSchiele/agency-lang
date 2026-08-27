@@ -68,6 +68,9 @@ export type Test<T = TestInput> = {
   /** Dollars each harness case may spend on LLM calls while being graded;
    *  the grader's default applies when absent. */
   harnessMaxCost?: number;
+  /** Make the test's harness pairs gates: the test scores 0 unless every
+   *  case passes. Off by default, so partial progress still scores. */
+  harnessMustPass?: boolean;
   /** Per-test wall-clock override in seconds, test-side like terminal-bench's
    *  task.toml timeout_sec — a hard task may deserve more time than the
    *  suite default (eval.limits.wallClockSec). */

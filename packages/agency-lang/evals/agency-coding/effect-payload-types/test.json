@@ -1,0 +1,10 @@
+{
+  "description": "Raise a named interrupt and handle it with a guard on its data. Tests that the writer declares the interrupt's payload with an `effect` block so the handler's data is typed.",
+  "tags": [
+    "easy"
+  ],
+  "input": {
+    "assignment": "Write a module that exports two functions. `archiveNotes(count: number): Result<string>` raises an interrupt named `notes::archive` carrying count, and on approval returns success(\"archived <count>\"). `archiveSmall(count: number): string` calls archiveNotes inside a handler that approves `notes::archive` when the count is 10 or less and rejects it otherwise, returning archiveNotes's value when it succeeded and \"rejected\" when it did not.",
+    "outFile": "solution.agency"
+  }
+}

@@ -60,7 +60,24 @@ describe("AgencyTestGrader (stubbed CLI)", () => {
     const grade = await grader.run(input(workdirWith({ "fib.agency": "x" })));
     expect(grade.score).toEqual({ kind: "scalar", value: 0.5 });
     expect(grade.feedback).toBe("b: - 1\n+ 2");
+    expect(grader.mustPass()).toBe(false);
     expect(grader.passes(grade)).toBe(false);
+  });
+
+  test("mustPass makes the harness a gate; a partly passing run then fails it", async () => {
+    const pair = harnessPair();
+    const stub: RunHarness = () => ({
+      stdout: ran([
+        { node: "a", status: "passed", durationMs: 1 },
+        { node: "b", status: "failed", feedback: "- 1\n+ 2", durationMs: 1 },
+      ]),
+    });
+    const gate = new AgencyTestGrader(
+      { name: "suite", agencyFile: pair.agency, testJsonFile: pair.json, mustPass: true },
+      stub,
+    );
+    expect(gate.mustPass()).toBe(true);
+    expect(gate.passes(await gate.run(input(workdirWith({ "fib.agency": "x" }))))).toBe(false);
   });
 
   test("the stub sees the framework's harness bytes, not the agent's edited copy", async () => {

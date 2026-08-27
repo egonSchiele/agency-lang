@@ -1,0 +1,7 @@
+{
+  "sourceFile": "guards-holdout.agency",
+  "tests": [
+    { "nodeName": "fastDocsFinish", "expectedOutput": "\"summary of a|summary of b\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "slowDocTimesOutAlone", "expectedOutput": "\"timed out|summary of x\"", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "sourceFile": "interrupt-before-danger-holdout.agency",
+  "tests": [
+    {
+      "nodeName": "rejectedPostSendsNothing",
+      "expectedOutput": "0",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedPostIsAFailure",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

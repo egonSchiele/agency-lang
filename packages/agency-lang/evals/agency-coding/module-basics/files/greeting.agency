@@ -1,0 +1,4 @@
+// Seeded into the writer's working directory.
+export def greet(name: string): string {
+  return "Hello, ${name}!"
+}

@@ -31,6 +31,13 @@ Ground rules about Agency (get these wrong and the review is wrong):
   decide with `handle ... with <handler>` or postfix `with approve` /
   `with reject`. `with approve` self-approves: check what the TASK says
   about who approves before judging it.
+- Agency has no lambdas, so JavaScript array methods that take a callback
+  (`.map`, `.filter`, `.reduce`, `.sort`, `.find`, `.forEach`, ...) must
+  never be called: an interrupt cannot be raised inside a callback, so
+  they typecheck and then crash at run time. The Agency
+  forms are list comprehensions (`[x for x in xs if ...]`) and the stdlib
+  functions `map`, `filter`, `sortBy`, `reduce` with a block (`as x { }`).
+  Calling one of those methods is an error finding.
 - `let`/`const` declarations, postfix types, `\${...}` interpolation,
   `node main()` entry points, braces and parenthesized conditions.
 
@@ -83,8 +90,8 @@ def parseFeedback(source: string): Result<Feedback[]> {
   return success([])
 }
 
-def typecheckFeedback(source: string): Result<Feedback[]> {
-  const result = typecheck(source)
+def typecheckFeedback(source: string, dir: string): Result<Feedback[]> {
+  const result = typecheck(source, dir: dir)
   if (result is failure(err)) {
     return success([{ error: true, feedback: "Typecheck failed: ${err}" }])
   }
@@ -135,6 +142,7 @@ export def agencyReviewAgent(
   provider: string = "",
   session: string = "",
   extraTools: any[] = [],
+  dir: string = "",
 ): Result<Feedback[]> {
   """
   Review Agency source code and return findings. Always includes parse and
@@ -150,10 +158,11 @@ export def agencyReviewAgent(
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  @param dir - Directory the source's relative imports resolve against, or "" when it imports no local files
   """
   let feedback: Result<Feedback[]> = success([])
   feedback = mergeFeedback(feedback, parseFeedback(source))
-  feedback = mergeFeedback(feedback, typecheckFeedback(source))
+  feedback = mergeFeedback(feedback, typecheckFeedback(source, dir))
   if (task == "") {
     return feedback
   }
@@ -206,7 +215,7 @@ node evalMain(input: ReviewEvalInput): Feedback[] {
   }
   let reviewed: Result<Feedback[]> = failure("the reviewer never ran")
   handle {
-    reviewed = agencyReviewAgent(source: source.value, task: input.assignment)
+    reviewed = agencyReviewAgent(source: source.value, task: input.assignment, dir: ".")
   } with docsOnlyHandler
   if (reviewed is failure(err)) {
     return [{ error: true, feedback: "review agent failed: ${err}" }]

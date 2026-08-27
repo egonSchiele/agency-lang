@@ -1,0 +1,10 @@
+{
+  "description": "A price lookup and a card charge over a seeded payment stub. The assignment says nothing about markers. Tests that the writer marks the safe-to-repeat function `idempotent` and wraps only the charge in a `destructive` region, after the interrupt.",
+  "tags": [
+    "easy"
+  ],
+  "input": {
+    "assignment": "The file payments.agency in the working directory exports `priceOf(sku: string): number` and `charge(amount: number): string`. Write a module that imports both and exports two functions that will be given to an LLM as tools. `lookupPrice(sku: string): number` returns the price. `chargeCard(amount: number): Result<string>` asks for approval, then charges the card and returns what charge returned. A charge cannot be reversed.",
+    "outFile": "solution.agency"
+  }
+}

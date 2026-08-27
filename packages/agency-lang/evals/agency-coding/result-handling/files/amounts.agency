@@ -1,0 +1,8 @@
+// Seeded into the writer's working directory.
+export def parseAmount(text: string): Result<number> {
+  const n = Number(text)
+  if (text == "" || isNaN(n)) {
+    return failure("not an amount: ${text}")
+  }
+  return success(n)
+}

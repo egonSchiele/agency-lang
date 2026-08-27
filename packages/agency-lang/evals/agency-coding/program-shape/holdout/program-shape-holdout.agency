@@ -1,0 +1,10 @@
+// Held-out oracle the writer never sees. Imports the file evalMain saved.
+import { main } from "./solution.agency"
+
+export node threeNumbers(): string {
+  return main("1, 2, 3.5")
+}
+
+export node noNumbers(): string {
+  return main("")
+}

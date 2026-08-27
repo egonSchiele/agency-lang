@@ -141,14 +141,15 @@ export function escapeStringText(s: string, delim: '"' | "'" | "`"): string {
   return out;
 }
 
-/** Re-escape `${` -> `\${` when printing a triple-quoted (raw) string's text.
- * The parser decodes `\${` -> a literal `${` text segment; without re-escaping
- * here, the formatter would emit a bare `${` and silently turn a literal back
- * into a live interpolation on the next parse. Everything else stays raw —
- * triple-quoted strings do not escape backslashes, newlines, or quotes. Uses
+/** Re-escape `${` -> `\${` and `"""` -> `\"""` when printing a triple-quoted
+ * (raw) string's text. The parser decodes both escapes to literal text;
+ * without re-escaping here, the formatter would emit a bare `${` and silently
+ * turn a literal back into a live interpolation on the next parse, or a bare
+ * `"""` and close the string early. Everything else stays raw — triple-quoted
+ * strings do not escape backslashes, newlines, or single quotes. Uses
  * split/join so `$` in the replacement is not treated as a special pattern. */
 function escapeMultiLineText(s: string): string {
-  return s.split("${").join("\\${");
+  return s.split("${").join("\\${").split('"""').join('\\"""');
 }
 
 /** Statement types the single-statement arm grammar accepts in addition

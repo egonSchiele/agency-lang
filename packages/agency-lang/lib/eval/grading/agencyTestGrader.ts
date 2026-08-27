@@ -1,7 +1,8 @@
 /**
  * Grades a coding test by running one harness pair against the agent's
  * workdir with `agency test --json --agency-only --reject '*'`. The score is
- * the passing fraction; the gate needs all of them. Why that command line
+ * the passing fraction. It is an ordinary scored grader unless the test sets
+ * `harnessMustPass`, so a partly passing solution still moves the objective. Why that command line
  * is safe to run on agent-written code: docs/dev/cli/test-cli-sandbox.md.
  */
 import { execFileSync } from "child_process";
@@ -27,6 +28,8 @@ export type AgencyTestGraderOptions = {
   testJsonFile: string;
   name: string;
   maxCost?: number;
+  /** Make the harness a gate: the test scores 0 unless every case passes. */
+  mustPass?: boolean;
 };
 
 /** The CLI spawn, replaceable in unit tests. */
@@ -77,7 +80,7 @@ export class AgencyTestGrader extends BaseGrader {
   private readonly runHarness: RunHarness;
 
   constructor(opts: AgencyTestGraderOptions, runHarness: RunHarness = spawnHarness) {
-    super({ name: opts.name, mustPass: true, threshold: 1 });
+    super({ name: opts.name, mustPass: opts.mustPass ?? false, threshold: 1 });
     this.defaultName = opts.name;
     this.opts = opts;
     this.runHarness = runHarness;

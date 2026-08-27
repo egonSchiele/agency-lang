@@ -495,6 +495,66 @@ describe("OptimizeSourceMutator.preview", () => {
     expect(preview.changes[0].newValue).toBe("first line\nsecond line");
   });
 
+  it("keeps an escaped ${ escaped through decode and writeback", () => {
+    const dir = makeTempDir();
+    const entry = writeAgency(
+      dir,
+      "esc.agency",
+      'optimize const p = """\nSay hello: "Hello, \\${name}"\n"""\n\nnode main() {\n  return p\n}\n',
+    );
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+    expect(targetSet.targets[0].value).toBe('\nSay hello: "Hello, \\${name}"\n');
+    const preview = new OptimizeSourceMutator({ targetSet }).preview([
+      {
+        target: "esc.agency:global:p",
+        kind: "variable",
+        op: "replaceInitializer",
+        value: 'Always say hello: "Hello, \\${name}"',
+      },
+    ]);
+    // Ends in a quote, so it is written as a "..." string with escapes.
+    expect(preview.diagnostics).toEqual([]);
+    expect(preview.files["esc.agency"]).toContain('\\"Hello, \\${name}\\"');
+    expect(preview.files["esc.agency"]).not.toContain("\\\\${name}");
+    // Multi-line and not ending in a quote, so it stays a triple-quoted block.
+    const block = new OptimizeSourceMutator({ targetSet }).preview([
+      {
+        target: "esc.agency:global:p",
+        kind: "variable",
+        op: "replaceInitializer",
+        value: 'Always say hello: "Hello, \\${name}"\nThen stop.',
+      },
+    ]);
+    expect(block.diagnostics).toEqual([]);
+    expect(block.files["esc.agency"]).toContain(
+      '"""Always say hello: "Hello, \\${name}"\nThen stop."""',
+    );
+  });
+
+  it("writes a value that mentions triple quotes back as a block with the escape", () => {
+    const dir = makeTempDir();
+    const entry = writeAgency(
+      dir,
+      "docs.agency",
+      'optimize const p = """\nPut a \\""" docstring first.\n"""\n\nnode main() {\n  return p\n}\n',
+    );
+    const targetSet = discoverOptimizeTargets(entry, { baseDir: dir });
+    expect(targetSet.targets[0].value).toBe('\nPut a \\""" docstring first.\n');
+    // The model sends the triple quotes bare; the block form still wins.
+    const preview = new OptimizeSourceMutator({ targetSet }).preview([
+      {
+        target: "docs.agency:global:p",
+        kind: "variable",
+        op: "replaceInitializer",
+        value: 'Always put a """ docstring first.\nThen the body.',
+      },
+    ]);
+    expect(preview.diagnostics).toEqual([]);
+    expect(preview.files["docs.agency"]).toContain(
+      '"""Always put a \\""" docstring first.\nThen the body."""',
+    );
+  });
+
   it("replaces a multiline string target with a single-line string", () => {
     const dir = makeTempDir();
     const entry = writeAgency(

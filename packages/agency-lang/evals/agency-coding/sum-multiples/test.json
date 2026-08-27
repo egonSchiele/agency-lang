@@ -1,12 +1,10 @@
 {
   "description": "Write and export one small pure function: sum the multiples of 3 or 5 below n.",
   "tags": [
-    "coding",
-    "module",
     "easy"
   ],
   "input": {
-    "assignment": "Write an Agency module that exports def sumMultiples(n: number): number, returning the sum of all positive multiples of 3 or 5 that are strictly below n. A number that is a multiple of both counts once. For n <= 3 there are no such multiples, so the result is 0. Examples: sumMultiples(10) = 23 (3 + 5 + 6 + 9), sumMultiples(20) = 78. Use only Agency standard library (std::) imports, or no imports at all.",
+    "assignment": "Write an Agency module that exports def sumMultiples(n: number): number, returning the sum of all positive multiples of 3 or 5 that are strictly below n. A number that is a multiple of both counts once. For n <= 3 there are no such multiples, so the result is 0. Examples: sumMultiples(10) = 23 (3 + 5 + 6 + 9), sumMultiples(20) = 78.",
     "outFile": "solution.agency"
   }
 }

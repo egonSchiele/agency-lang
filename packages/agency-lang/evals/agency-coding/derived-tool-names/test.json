@@ -1,0 +1,10 @@
+{
+  "description": "Two partial applications of one function, handed to an LLM as separate tools. Tests that the writer renames and describes each copy, since `.partial()` keeps the original name and both would otherwise be the same tool.",
+  "tags": [
+    "easy"
+  ],
+  "input": {
+    "assignment": "Write a module that exports `listDir(dir: string, pattern: string = \"*\"): string[]`, which returns a one-element list containing \"<dir>/<pattern>\", standing in for a real directory listing. It also exports `tools(): any[]`, which returns two versions of listDir for an LLM to use as tools: one fixed to the directory ./inbox and one fixed to ./archive. The LLM must be able to tell the two tools apart.",
+    "outFile": "solution.agency"
+  }
+}

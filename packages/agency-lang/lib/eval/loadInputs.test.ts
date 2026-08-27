@@ -165,7 +165,7 @@ describe("eval run input loading", () => {
     fs.mkdirSync(path.join(testDir, "holdout"));
     fs.writeFileSync(
       path.join(testDir, "test.json"),
-      JSON.stringify({ input: "t", harnessMaxCost: 2 }),
+      JSON.stringify({ input: "t", harnessMaxCost: 2, harnessMustPass: true }),
     );
     for (const [dir, name] of [
       ["files", "fib-tests"],
@@ -177,6 +177,7 @@ describe("eval run input loading", () => {
     const [test] = loadInputs(testDir);
     expect(test.goal).toBeUndefined();
     expect(test.harnessMaxCost).toBe(2);
+    expect(test.harnessMustPass).toBe(true);
     expect(test.agencyTests?.map((t) => [t.name, t.visibility])).toEqual([
       ["fib-tests", "visible"],
       ["fib-holdout", "holdout"],

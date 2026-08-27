@@ -50,12 +50,13 @@ pair in its `holdout/` directory — a `<name>.agency` importing the saved
 `outFile`, and a `<name>.test.json` naming node-by-node expected outputs.
 The framework discovers the pair and grades the run's working directory
 with `agency test --agency-only --reject '*'` (an `AgencyTestGrader`, one
-per pair). Grading is all-or-nothing: the grader is a must-pass gate, so a
-test's objective is 1 only when every case passes and 0 otherwise. The
-grader's own row in the report still shows the passing fraction and names
-each failing case, which is why the stdlib's `evalMain` saves even a
-failed run's last draft — the report then says exactly what the draft got
-wrong. `holdout/` is
+per pair). The score is the passing fraction, so partial progress counts;
+a test can set `"harnessMustPass": true` to make the harness a gate
+instead. The grader's row names each failing case, which is why the
+stdlib's `evalMain` saves even a failed run's last draft — the report then
+says exactly what the draft got wrong. A judge can sit beside a holdout
+(`named-config-params` does this) to say in words what the failing cases
+only show as an error. `holdout/` is
 never seeded into the working directory, so the writer cannot code to the
 oracle. A pair placed in `files/` instead would be visible to the writer —
 useful later for tests about working against a given spec-by-example.
@@ -71,6 +72,9 @@ have no harness at all. Only `files/` is seeded into the writer's working
 directory.
 
 ## The tests
+
+Each `test.json` carries one tag, `easy`, `medium`, or `hard`, and nothing
+else; tags are for choosing a subset to run.
 
 - `sum-multiples` — a pure arithmetic loop (sum multiples of 3 or 5 below
   n). The easiest kind of deliverable: one exported def, no state.
@@ -88,3 +92,61 @@ directory.
   comment what happens when they disagree. Judged on the raise and handle
   syntax and on knowing the rule: every handler in the chain runs, and any
   reject wins.
+- `docstrings-unasked` — a to-do list module whose three exported defs
+  will be given to an `llm` call as tools. The assignment never mentions
+  docstrings. Judged: every exported def has one, it reads as a tool
+  description (when to call it, what to pass), and it is short.
+- `named-config-params` — a catalog search over a seeded `records.agency`
+  with four settings (limit, offset, order, includeArchived). The holdout
+  passes settings by name and binds them with `search.partial(...)`, so an
+  options-object solution fails four of five cases with "Unknown named
+  argument".
+- `no-js-array-methods` — filter, sort, map, and fold over a list of orders.
+  The assignment says nothing about how. Judged: list comprehensions and
+  stdlib block-taking functions, never a JavaScript array method with a
+  callback (`.filter(\o -> ...)` typechecks and crashes at run time).
+- `restrict-with-partial` — `deleteFiles(paths, dryRun = true)` over a
+  seeded `logs/` directory. The holdout locks each parameter with
+  `.partial()` and checks a dry run leaves the files alone; the judge checks
+  the default is the safe value and the delete is left for the caller to
+  approve.
+- `loop-forms` — a one-expression map, a multi-statement map, and an
+  early-exit search over orders. The assignment says nothing about loops.
+  Judged: comprehension, then inline block, then full block, and a plain
+  loop only for the early exit.
+- `static-globals` — a rate table two functions share, and a per-run
+  history, nothing said about static. Judged: the table is `static const`, the history is a plain
+  global, neither is exported.
+- `interrupt-before-danger` — post a comment through a seeded stub that
+  cannot unsend. The holdout rejects everything and checks nothing was
+  sent; the judge checks a named interrupt is raised first, declared with
+  `raises`, and left to the caller.
+- `destructive-markers` — a price lookup and a card charge over a seeded
+  stub. Judged: `idempotent` on the lookup, a `destructive { }` region
+  around the charge, the interrupt outside the region.
+- `concurrency-forms` — all results, the first result, and two independent
+  refreshes over slow stubs. Judged: `fork`, `race`, `parallel`.
+- `stdlib-knowledge` — group, distinct, count, and a number range over file
+  entries. Judged: `groupBy`, `unique`, `count`, `range`, and `extname`
+  from std::path instead of hand-written versions.
+- `guards` — summarize documents with a slow stub, one of which must time
+  out alone. The holdout checks the slow one yields "timed out" and the
+  rest finish; the judge checks a per-call `guard(time: 500ms)` read with
+  `match`.
+- `module-basics` — use a seeded `greet` and write `greetAll` for other
+  files to call, with neither `import` nor `export` named. The holdout catches the two module mistakes seen most: no `export`, and
+  `./greeting` without `.agency`.
+- `result-handling` — sum amounts from a seeded `parseAmount` that returns
+  a Result, stopping at the first failure. The holdout checks both branches
+  and that the message survives; the judge checks the Result was narrowed,
+  not unwrapped.
+- `program-shape` — a `node main(numbers: string)` program that sums a
+  comma-separated list, prints, and returns. The holdout imports the node
+  and calls it with and without numbers.
+- `effect-payload-types` (weight 0.6) — the `handler-chain` raise again,
+  judged on declaring the payload with an `effect` block.
+- `derived-tool-names` (weight 0.6) — two `.partial()` copies of one
+  function as separate tools. Judged: `.rename()` and `.describe()` on each.
+- `docstrings-knows-how` (weight 0.8) — the to-do module with descriptions
+  asked for. Judged: docstring inside the body, an `@param` line per
+  parameter, short.

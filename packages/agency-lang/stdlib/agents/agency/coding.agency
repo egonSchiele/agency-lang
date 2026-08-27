@@ -10,15 +10,19 @@
 import { compile, typecheck, parseAST } from "std::agency"
 import { agencyReviewAgent } from "std::agents/agency/review"
 import { renderFeedback, feedbackHasErrors } from "std::agents/lib/feedback"
-import { llmOptions, withContext, docsOnlyHandler } from "std::agents/lib/shared"
+import {
+  llmOptions,
+  withContext,
+  docsOnlyHandler,
+ } from "std::agents/lib/shared"
 import {
   agencyDocTools,
   readOnlyFileTools,
   readOnlyGitTools,
  } from "std::agents/lib/toolkits"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
-import { evalValue } from "std::statelog"
 import { agentSkill } from "std::skills"
+import { evalValue } from "std::statelog"
 import { Critique, revise } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 
@@ -53,6 +57,97 @@ Agency syntax rules you MUST follow:
 - Declare variables with let or const before use.
 - No Python-style colon blocks. Always { ... }.
 
+Modules:
+- Any function another file will call must be exported: export def name(...).
+- A local import names the .agency file: import { greet } from "./greeting.agency".
+  We always reject a bare path without the extension.
+
+Going over a list, in order of preference:
+1. A list comprehension when each item becomes one expression:
+     const names = [o.customer for o in orders if !o.shipped]
+2. A stdlib function with an inline block for a one-line body:
+     const doubled = map(xs, \\x -> x * 2)
+3. A stdlib function with a full block when the body needs several statements:
+     const lines = map(orders) as o {
+       const subtotal = reduce(o.items, 0, \\(acc, n) -> acc + n)
+       return "\${o.customer}: \${subtotal}"
+     }
+4. A plain for or while loop only when the loop must stop early.
+map, filter, reduce, sortBy, unique, groupBy, count, and range are always
+in scope; do not import them and do not prefix them with a module name.
+Never call a JavaScript array method that takes a callback (.map, .filter,
+.reduce, .sort, .find, .forEach): a callback cannot raise an interrupt, so
+the call typechecks and then crashes. Methods with no callback, such as
+push, includes, join, and slice, are fine.
+
+Globals:
+- A value fixed for the life of the program (a table, a prompt, a setting)
+  is a static const at module level. A value that changes as the program
+  runs is a plain let. Do not export globals; export functions that use them.
+
+Functions given to an LLM as tools:
+- The docstring is the triple-quoted string that opens the function body.
+  Agency sends it to the LLM as the tool description, so write it for the
+  LLM: one or two short sentences saying when to call the tool and what to
+  pass, then an @param line per parameter. A comment above the def is not
+  a docstring.
+- Settings are named parameters with defaults, not an options object, so a
+  caller can pass one by name and can lock it with partial application:
+    const preview = deleteFiles.partial(dryRun: true)
+  .partial() takes named arguments only. When two partial applications of
+  one function are handed to the same LLM, give each its own name and
+  description: listDir.partial(dir: "./inbox").rename("listInbox").describe("List the inbox.")
+- Mark a function idempotent when re-running it is always safe (a lookup, a
+  pure calculation): export idempotent def lookupPrice(sku: string): number { ... }
+
+Irreversible actions (sending, charging, deleting):
+- Raise a named interrupt first, declare it with raises, and leave the
+  decision to the caller: do not approve it yourself with "with approve"
+  or a handler of your own.
+- Put the irreversible call inside a destructive { } region, with the raise
+  outside it, so a rejected approval leaves the tool callable:
+    export def chargeCard(amount: number): Result<string> raises <payments::charge> {
+      \"""
+      Charge the customer's card. Asks before charging.
+      @param amount - dollars to charge
+      \"""
+      raise payments::charge("Charge \${amount}?", { amount: amount })
+      destructive {
+        return success(charge(amount))
+      }
+    }
+- Declare the interrupt's payload once so handlers get typed data:
+    effect payments::charge {
+      amount: number
+    }
+
+Handlers decide with one match on the effect name, using a guard on the
+arm when the decision depends on the data, and return the verdict:
+    handle {
+      foo()
+    } with (data) {
+      return match (data.effect) {
+        "std::read" => approve()
+        "std::write" if (data.data.dir == ".") => approve()
+        _ => reject()
+      }
+    }
+Every handler in a chain runs, and any reject wins. reject() takes no message.
+
+Results:
+- Read a Result with is success(v) / is failure(e), or with
+  match(r) { success(v) => ... failure(e) => ... }. Never reach into .value.
+- When a callee fails and you cannot recover, return its failure unchanged
+  so the message and the producing function survive.
+
+Concurrency:
+- fork(items) as x { ... } runs the block for every item at once and returns
+  every result in order.
+- race(items) as x { ... } returns the first result and cancels the rest.
+- parallel { a()  b() } runs a fixed set of independent calls at once.
+- guard(time: 500ms) { ... } or guard(cost: $1.00) { ... } caps one piece of
+  work and returns a Result; a per-call guard lets one slow item fail alone.
+
 Here are complete, correct Agency programs. Copy their structure: the imports, the `node main`, and the explicit `return` at the end.
 
 EXAMPLE 1, compute and return a value:
@@ -84,7 +179,7 @@ node main(): Summary {
 Commonly useful standard library modules:
 - std::shell: bash, exec, ls, grep, glob (run commands, inspect files)
 - std::http: fetch, fetchJSON (call web APIs)
-- std::array: map, filter (transform lists)
+- std::fs: read, write, remove (files)
 - std::agency: runCode (run Agency code)
 
 If you are unsure about syntax or a standard-library function, read the
@@ -157,8 +252,8 @@ def outcomeToResult(outcome: WriteOutcome): Result<string, WriteFailure> {
 // Judge one generated program. The critique it returns becomes the repair
 // instruction the next attempt receives, so what the checker found and what
 // the writer is told to fix can never drift apart.
-def checkSource(source: string, requireMain: boolean): Critique {
-  const reviewed = agencyReviewAgent(source: source)
+def checkSource(source: string, requireMain: boolean, dir: string): Critique {
+  const reviewed = agencyReviewAgent(source: source, dir: dir)
   if (feedbackHasErrors(reviewed)) {
     const findings = renderFeedback(reviewed)
     return {
@@ -166,7 +261,7 @@ def checkSource(source: string, requireMain: boolean): Critique {
       feedback: "That code has problems:\n${findings}\nReturn a corrected complete program."
     }
   }
-  const compiled = compile(source)
+  const compiled = compile(source, dir)
   if (compiled is failure(compileErr)) {
     return {
       accepted: false,
@@ -188,8 +283,8 @@ def checkSource(source: string, requireMain: boolean): Critique {
 // The critique doubles as the record of what was wrong with the attempt, so
 // an exhausted run reports it alongside the source it belongs to. Each
 // attempt is checked once here, and `revise` reads the verdict back out.
-def outcomeFor(source: string, requireMain: boolean): WriteOutcome {
-  const critique = checkSource(source, requireMain: requireMain)
+def outcomeFor(source: string, requireMain: boolean, dir: string): WriteOutcome {
+  const critique = checkSource(source, requireMain: requireMain, dir: dir)
   if (critique.accepted) {
     return {
       valid: true,
@@ -225,6 +320,7 @@ def generateLoop(
   provider: string,
   extraTools: any[],
   requireMain: boolean,
+  dir: string,
 ): WriteOutcome {
   if (threadIsNew()) {
     systemMessage(systemPrompt)
@@ -251,7 +347,7 @@ def generateLoop(
         tools: buildTools().concat(extraTools),
       ),
     )
-    const outcome = outcomeFor(source: generated.code, requireMain: requireMain)
+    const outcome = outcomeFor(source: generated.code, requireMain: requireMain, dir: dir)
     saveDraft(outcome)
     return outcome
   }
@@ -268,6 +364,7 @@ export def agencyCodingAgent(
   session: string = "",
   extraTools: any[] = [],
   requireMain: boolean = true,
+  dir: string = "",
 ): Result<string, WriteFailure> {
   """
   Write an Agency program for the task. Iterates until the source parses,
@@ -286,6 +383,8 @@ export def agencyCodingAgent(
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   @param requireMain - Demand a `node main` entry point (default). Pass false
     when the deliverable is a library module whose exports the caller places.
+  @param dir - Directory the draft's relative imports resolve against, so a
+    draft that imports a sibling file typechecks. "" when it imports none.
   """
   const captured = guard(cost: maxCost, time: maxTime, label: "agencyCodingAgent") {
     let outcome: WriteOutcome = {
@@ -302,6 +401,7 @@ export def agencyCodingAgent(
         provider: provider,
         extraTools: extraTools,
         requireMain: requireMain,
+        dir: dir,
       )
     }
     return outcome
@@ -359,9 +459,12 @@ node evalMain(input: CodingEvalInput): string {
   // requireMain is this agent's own knob, not part of the suite contract:
   // the assignment text says what shape the deliverable takes, and the
   // harness judges the outcome. So no mechanical main-node check here.
-  let written: Result<string, WriteFailure> = failure({ source: "", problems: ["the writer never ran"] })
+  let written: Result<string, WriteFailure> = failure({
+    source: "",
+    problems: ["the writer never ran"]
+  })
   handle {
-    written = agencyCodingAgent(task: input.assignment, requireMain: false)
+    written = agencyCodingAgent(task: input.assignment, requireMain: false, dir: ".")
   } with docsOnlyHandler
   let source = ""
   if (written is success(code)) {

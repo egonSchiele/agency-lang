@@ -15,6 +15,7 @@ function makeTarget(
     absoluteFile: "/abs/foo.agency",
     scope: "bar",
     valueKind: "string",
+    interpolations: [],
     declaredType: null,
     value: "xyz",
     ...overrides,

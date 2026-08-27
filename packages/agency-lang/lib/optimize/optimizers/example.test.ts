@@ -65,6 +65,7 @@ describe("ExampleOptimizer", () => {
         name: "prompt",
         valueKind: "string",
         value: "hi",
+        interpolations: [],
         declaredType: null,
       },
     ],

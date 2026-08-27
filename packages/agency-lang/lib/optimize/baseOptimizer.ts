@@ -24,7 +24,11 @@ import type {
   OptimizeMutationOperation,
   OptimizeMutationPreview,
 } from "./sourceMutator.js";
-import { discoverOptimizeTargets, type OptimizeTargetSet } from "./targets.js";
+import {
+  discoverOptimizeTargets,
+  literalInterpolationWarnings,
+  type OptimizeTargetSet,
+} from "./targets.js";
 import type {
   IterationResult,
   MutationProposal,
@@ -110,6 +114,9 @@ export abstract class BaseOptimizer {
       throw new Error(
         `No optimize targets found in ${agentFile}. Mark a declaration with the optimize modifier.`,
       );
+    }
+    for (const warning of literalInterpolationWarnings(source.targets)) {
+      this.reporter.note(warning);
     }
     this.validationInputs = target.validationInputs ?? [];
     await this.echoAndValidateGrading(target.inputs);

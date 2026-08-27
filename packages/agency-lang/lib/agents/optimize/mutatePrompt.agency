@@ -32,7 +32,7 @@ node mutatePrompt(
 
   YOUR TASK:
   Propose replacement values for one or more of the optimize targets listed above so the agent better achieves the goals and the per-input feedback. Return JSON with:
-  - "operations": one record per target you change. Each record needs "target" and "kind" copied exactly from the list above, "op" set to "replaceInitializer", "value" with the replacement (for a free text target, the plain text itself: no surrounding quotes, no escaping, real line breaks; for a typed target, Agency source text), and "rationale" with one sentence on what you changed. The replacement must preserve every interpolation placeholder the current value uses (no drops, no additions).
+  - "operations": one record per target you change. Each record needs "target" and "kind" copied exactly from the list above, "op" set to "replaceInitializer", "value" with the replacement (for a free text target, the plain text itself: no surrounding quotes, real line breaks; for a typed target, Agency source text), and "rationale" with one sentence on what you changed. Every \${...} in a free text value is an interpolation placeholder. Keep the placeholders the current value has, copied exactly, and add none.
   - "rationale": 2-4 sentences explaining the overall change.
 
   Each target lists a "type:" describing its allowed values. Your replacement must fit that type exactly - for a list of choices pick one of them, for a boolean use true or false, for a record keep the same fields and field types. Typed values must be self-contained: no interpolation placeholders at all. Only "free text" targets accept arbitrary prose (and those keep their existing placeholders, per the rule above).

@@ -14,6 +14,7 @@ const targets: OptimizeTarget[] = [
     scope: "global",
     name: "systemPrompt",
     valueKind: "string",
+    interpolations: [],
     declaredType: null,
     value: "be brief",
   },
@@ -25,6 +26,7 @@ const targets: OptimizeTarget[] = [
     scope: "bar",
     name: "prompt",
     valueKind: "string",
+    interpolations: [],
     declaredType: null,
     value: "Classify ${text}",
   },
@@ -210,6 +212,7 @@ describe("renderTargetsSection type descriptions", () => {
         name: "status",
         valueKind: "string",
         value: "pass",
+        interpolations: [],
         declaredType: `"pass" | "fail"`,
       },
       {
@@ -221,6 +224,7 @@ describe("renderTargetsSection type descriptions", () => {
         name: "enabled",
         valueKind: "literal",
         value: "false",
+        interpolations: [],
         declaredType: "boolean",
       },
     ];

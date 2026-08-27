@@ -1,0 +1,10 @@
+{
+  "description": "A runnable program rather than a module: an exported `node main` that takes its input as a parameter, prints, and returns. Tests the program shape.",
+  "tags": [
+    "easy"
+  ],
+  "input": {
+    "assignment": "Write an Agency program whose entry point is `node main(numbers: string): string`. The input is a comma-separated list of numbers, such as \"1, 2, 3.5\", and may be empty. main adds them, prints \"sum: <total>\", and returns that same string. With no numbers the sum is 0. The node must be importable by name from another file.",
+    "outFile": "solution.agency"
+  }
+}

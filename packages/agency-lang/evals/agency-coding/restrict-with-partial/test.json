@@ -1,0 +1,10 @@
+{
+  "description": "A delete function whose caller must be able to hand out a version that cannot delete. Tests that the safety switch and the target are parameters, so .partial() can lock them, and that the switch defaults to safe.",
+  "tags": [
+    "easy"
+  ],
+  "input": {
+    "assignment": "Write a module that exports `deleteFiles(paths: string[], dryRun: boolean = true): string[]`. It deletes each file in paths with `remove` from std::fs and returns the paths. When dryRun is true it deletes nothing and returns the paths it would have deleted. The function will be given to an LLM as a tool. A caller must be able to make a version that can never delete, and a version that can only touch a fixed list of files, by locking parameters with `.partial()`. The directory ./logs in the working directory holds a.log, b.log, and notes.txt for trying it out. Leave the decision to approve or reject the deletion to the caller.",
+    "outFile": "solution.agency"
+  }
+}

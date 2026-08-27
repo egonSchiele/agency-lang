@@ -1,0 +1,10 @@
+{
+  "description": "Use a seeded helper from another file, and write a function other files will call. The assignment names neither `import` nor `export`. Tests the two module mistakes the writer makes most: leaving off `export`, and importing `./greeting` without the `.agency` extension.",
+  "tags": [
+    "easy"
+  ],
+  "input": {
+    "assignment": "The file greeting.agency in the working directory has a function `greet(name: string): string`. Write `greetAll(names: string[]): string[]`, which returns greet's result for each name, in order. Other files in the project will call greetAll.",
+    "outFile": "solution.agency"
+  }
+}

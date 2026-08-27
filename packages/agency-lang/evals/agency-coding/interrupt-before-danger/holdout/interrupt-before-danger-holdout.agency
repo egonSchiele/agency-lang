@@ -1,0 +1,14 @@
+// Held-out oracle the writer never sees. Imports the file evalMain saved.
+// The harness rejects every interrupt, so a correct postComment sends nothing.
+import { postComment } from "./solution.agency"
+import { sentPayloads } from "./api.agency"
+
+export node rejectedPostSendsNothing(): number {
+  postComment("hello")
+  return sentPayloads().length
+}
+
+export node rejectedPostIsAFailure(): boolean {
+  const r = postComment("hello")
+  return isFailure(r)
+}

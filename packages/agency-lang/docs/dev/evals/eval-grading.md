@@ -35,8 +35,12 @@ has the statistics and the upload to statelog.
 **Selecting a subset of a suite.** `--test <glob>` (repeatable, any match
 selects, picomatch on the test id) and `--tags <a,b>` (repeatable; a test
 must carry EVERY listed tag, so `--tags coding,hard` means hard coding
-tests) narrow which tests run; tags live on the test (`tags: ["easy",
-"coding"]`, multiple allowed). Both flags go through one function,
+tests) narrow which tests run; tags live on the test (`tags: ["easy"]`).
+A tag exists so someone can run a subset, so a test carries only tags a
+person would filter on. The coding suite uses exactly one of `easy`,
+`medium`, `hard`; the review suite uses `bug` or `clean`. Do not add tags
+that describe the test (`module`, `handlers`): nobody runs the `module`
+subset. Both flags go through one function,
 `selectTests` (`lib/eval/selectTests.ts`), and `agency eval ls --suite …`
 applies the same flags through the same function — so the listing is
 exactly what a run would run, by construction. A filter matching nothing is
@@ -234,8 +238,13 @@ agency test run --json --agency-only --reject '*' --max-cost <n> <name>.test.jso
 ```
 
 in the scratch dir. Score = passing fraction of the file's cases (0 when the
-file did not run, 1 when it ran with nothing to fail), `mustPass` with
-`threshold: 1`. `eval grade` rebuilds one grader per `harness` record from
+file did not run, 1 when it ran with nothing to fail). It is an ordinary
+scored grader, so a solution passing three of five cases scores 0.6 and an
+optimizer sees the progress. A test that wants all-or-nothing sets
+`"harnessMustPass": true` in its `test.json`; the harness then becomes a
+gate with `threshold: 1`, and the choice is stored on the run's harness
+record so a re-grade keeps it. A judge beside a holdout runs on every
+solution, and can say in words why the holdout failed. `eval grade` rebuilds one grader per `harness` record from
 the stored files; they are the test's own, so an override and `--goal` leave
 them in place, and `--suite` rebuilds them from the suite's current pairs. The grader's revision is `agency-tests/<name>@<sha256>`.
 

@@ -17,6 +17,7 @@ import { variableTypeToString } from "../backends/typescriptGenerator/typeToStri
 import { declaredName } from "../types/hole.js";
 import { deepCopy, isStrictDescendant } from "../utils.js";
 import { compileSandboxed } from "../compiler/compileSandboxed.js";
+import { nanoid } from "nanoid";
 import { exactVerdictValue } from "../testFormat/verdict.js";
 import { parseTestFileSandbox, type ParsedInterrupt } from "../testFormat/schema.js";
 import type { ClosureEntry } from "../compiler/closureValidator.js";
@@ -187,8 +188,15 @@ export function _subprocessDepth(): number {
   return getRuntimeContext().ctx.subprocessDepth ?? 0;
 }
 
-export function _typecheck(source: string): TypeCheckReport {
-  return typeCheckSource(source);
+export function _typecheck(source: string, dir: string = ""): TypeCheckReport {
+  if (dir === "") {
+    return typeCheckSource(source);
+  }
+  // The draft is given a path inside dir, so its relative imports resolve
+  // against dir's files (as typecheckFile's do), and its own text comes from
+  // the override: nothing is written to dir.
+  const draftPath = join(realpathSync(resolve(dir)), `agency_draft_${nanoid()}.agency`);
+  return typeCheckSource(source, draftPath, {}, { [draftPath]: source });
 }
 
 export function _getEffects(source: string): Record<string, string[]> {

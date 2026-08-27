@@ -416,13 +416,23 @@ export class OptimizeSourceMutator {
       // expression (e.g. embedded quotes, or newlines under single-quote style)
       // fall through to the diagnostic, so we never emit broken source.
       const quote = target.valueKind === "multilineString" ? `"""` : `"`;
-      const wrapped = exprParser(`${quote}${operation.value}${quote}`);
+      // A bare `"""` in the text would close the block; the model may send
+      // one unescaped when the prompt talks about triple-quoted strings.
+      const body =
+        quote === `"""` ? operation.value.replace(/(?<!\\)"""/g, '\\"""') : operation.value;
+      const wrapped = exprParser(`${quote}${body}${quote}`);
       if (wrapped.success && wrapped.rest.trim() === "") parsed = wrapped;
       // Text that ends in a quote cannot sit inside """...""" (the closing
       // quotes run together), so fall back to "..." with escapes.
       if (!parsed.success || parsed.rest.trim() !== "") {
+        // `\${` and `\"""` are the escapes a decoded value already carries
+        // (see promptSegmentsToString). A "..." string needs neither: `\"""`
+        // becomes three escaped quotes, and the backslash before `${` must
+        // not be doubled or it would sit in front of a live interpolation.
         const escaped = operation.value
-          .replace(/\\/g, "\\\\")
+          .split('\\"""')
+          .join('"""')
+          .replace(/\\(?!\$\{)/g, "\\\\")
           .replace(/"/g, '\\"')
           .replace(/\n/g, "\\n");
         const plain = exprParser(`"${escaped}"`);

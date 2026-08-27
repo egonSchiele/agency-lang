@@ -1,0 +1,5 @@
+// Seeded into the writer's working directory: a stand-in for a slow model call.
+export def summarize(doc: string): string {
+  sleep(doc.length * 100)
+  return "summary of ${doc}"
+}

@@ -1,0 +1,11 @@
+{
+  "description": "Agency-specific: the code calls JavaScript array methods with callbacks (.filter, .sort, .map, .reduce) instead of list comprehensions and the stdlib block-taking functions. Typechecks cleanly, then crashes at run time with \"Cannot pass a trailing block to non-Agency function 'filter'\".",
+  "tags": [
+    "bug"
+  ],
+  "files": "./files",
+  "input": {
+    "assignment": "Write a module that exports a type Order = { customer: string, total: number, shipped: boolean } and two functions. unshippedTotals(orders: Order[]): string[] returns one string per unshipped order, formatted \"customer: total\", ordered from the smallest total to the largest. grandTotal(orders: Order[]): number returns the sum of every order's total, shipped or not.",
+    "sourceFile": "solution.agency"
+  }
+}

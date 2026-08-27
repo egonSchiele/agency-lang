@@ -1,0 +1,8 @@
+// Seeded into the writer's working directory: a stand-in payment provider.
+export def charge(amount: number): string {
+  return "charged ${amount}"
+}
+
+export def priceOf(sku: string): number {
+  return sku.length * 10
+}

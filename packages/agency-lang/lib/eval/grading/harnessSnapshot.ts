@@ -21,6 +21,7 @@ export function harnessSha256(agencySource: string, jsonText: string): string {
 export function snapshotHarness(
   defs: AgencyTestDefinition[],
   maxCost: number | undefined,
+  mustPass: boolean | undefined = undefined,
 ): HarnessSnapshot {
   const files: HarnessSnapshot["files"] = [];
   const records: HarnessRecord[] = [];
@@ -40,6 +41,7 @@ export function snapshotHarness(
       json: store(jsonText, ".test.json"),
       sha256: harnessSha256(agencySource, jsonText),
       ...(maxCost === undefined ? {} : { maxCost }),
+      ...(mustPass === undefined ? {} : { mustPass }),
     });
   }
   return { files, records };

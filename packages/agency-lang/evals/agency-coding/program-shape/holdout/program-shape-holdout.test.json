@@ -1,0 +1,23 @@
+{
+  "sourceFile": "program-shape-holdout.agency",
+  "tests": [
+    {
+      "nodeName": "threeNumbers",
+      "expectedOutput": "\"sum: 6.5\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noNumbers",
+      "expectedOutput": "\"sum: 0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

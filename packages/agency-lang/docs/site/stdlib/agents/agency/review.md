@@ -30,7 +30,7 @@ Convert a typecheck report into findings: one error item per error,
 
 **Returns:** `Feedback[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L62))
 
 ### buildTools
 
@@ -43,7 +43,7 @@ Return the Agency reviewer's lookup tools: the bundled language
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L77))
 
 ### agencyReviewAgent
 
@@ -58,6 +58,7 @@ agencyReviewAgent(
   provider: string = "",
   session: string = "",
   extraTools: any[] = [],
+  dir: string = "",
 ): Result<Feedback[]>
 ```
 
@@ -74,6 +75,7 @@ Review Agency source code and return findings. Always includes parse and
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  @param dir - Directory the source's relative imports resolve against, or "" when it imports no local files
 
 **Parameters:**
 
@@ -88,9 +90,10 @@ Review Agency source code and return findings. Always includes parse and
 | provider | `string` | "" |
 | session | `string` | "" |
 | extraTools | `any[]` | [] |
+| dir | `string` | "" |
 
 **Returns:** `Result<Feedback[]>`
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L128))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L135))

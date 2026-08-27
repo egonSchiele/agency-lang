@@ -335,11 +335,19 @@ function legacyOptimizeError(file: string): Error {
  * literal text with interpolations re-rendered as `${expr}`. This is the
  * representation stored in `OptimizeTarget.value` and the one `expected`
  * guards compare against.
+ *
+ * A literal `${` or `"""` in the text (written `\${` and `\"""` in the
+ * source) stays escaped here. Rendered bare, `${` would read as an
+ * interpolation when the mutator's proposal is parsed back, and the written
+ * candidate would then interpolate a name that does not exist at run time;
+ * a bare `"""` would close the block early.
  */
 export function promptSegmentsToString(segments: PromptSegment[]): string {
   return segments
     .map((segment) => {
-      if (segment.type === "text") return segment.value;
+      if (segment.type === "text") {
+        return segment.value.split("${").join("\\${").split('"""').join('\\"""');
+      }
       return `\${${expressionToString(segment.expression)}}`;
     })
     .join("");

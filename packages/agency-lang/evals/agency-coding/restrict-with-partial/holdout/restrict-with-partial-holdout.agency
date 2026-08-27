@@ -1,0 +1,24 @@
+// Held-out oracle the writer never sees. Imports the file evalMain saved.
+// The harness rejects every interrupt, so a real delete never happens here;
+// dryRunDeletesNothing catches a writer that approves the delete itself.
+import { deleteFiles } from "./solution.agency"
+import { exists } from "std::shell"
+
+const logs = ["./logs/a.log", "./logs/b.log"]
+
+export node dryRunListsFiles(): string {
+  const preview = deleteFiles.partial(dryRun: true)
+  return preview(logs).join("|")
+}
+
+export node dryRunDeletesNothing(): boolean {
+  const preview = deleteFiles.partial(dryRun: true)
+  preview(logs)
+  return exists("a.log", "./logs") && exists("b.log", "./logs")
+}
+
+export node pathsCanBeLocked(): string {
+  const cleanLogs = deleteFiles.partial(paths: logs)
+  return cleanLogs().join("|")
+}
+

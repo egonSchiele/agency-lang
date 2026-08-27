@@ -29,16 +29,18 @@ describe("snapshotHarness", () => {
         pair(dir, "a"),
         pair(dir, "b", JSON_OK, "export node t(): number {\n  return 2\n}\n"),
       ];
-      const snap = snapshotHarness(defs, 2);
+      const snap = snapshotHarness(defs, 2, true);
       expect(snap.records.map((r) => r.name)).toEqual(["a", "b"]);
       expect(snap.records[0].maxCost).toBe(2);
+      expect(snap.records[0].mustPass).toBe(true);
+      expect(snapshotHarness(defs, 2).records[0].mustPass).toBeUndefined();
       expect(snap.records[0].agency).toMatch(/^[0-9a-f]{64}\.agency$/);
       expect(snap.records[0].json).toMatch(/^[0-9a-f]{64}\.test\.json$/);
       // The two pairs share the json content: stored once.
       expect(snap.files.map((f) => f.name).sort()).toEqual(
         [snap.records[0].agency, snap.records[1].agency, snap.records[0].json].sort(),
       );
-      expect(snapshotHarness(defs, 2).records[0].sha256).toBe(snap.records[0].sha256);
+      expect(snapshotHarness(defs, 2, true).records[0].sha256).toBe(snap.records[0].sha256);
       expect(snap.records[0].sha256).toBe(harnessSha256(AGENCY, JSON_OK));
       expect(snap.records[0].sha256).not.toBe(snap.records[1].sha256);
     } finally {

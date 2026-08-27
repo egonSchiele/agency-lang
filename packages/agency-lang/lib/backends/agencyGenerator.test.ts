@@ -823,6 +823,7 @@ describe("AgencyGenerator - multi-line string escape round-tripping", () => {
     { name: "escaped interpolation only", source: '"""a \\${x} b"""' },
     { name: "raw backslash-n stays raw", source: '"""raw \\n text"""' },
     { name: "real interp next to escaped", source: '"""hi ${name} lit \\${skip}"""' },
+    { name: "escaped triple quote", source: '"""a \\""" docstring"""' },
   ];
 
   const segsOf = (program: { nodes: unknown[] }) => {

@@ -51,7 +51,7 @@ import * as renderFunctionCatchFailure from "../templates/backends/typescriptGen
 
 import { AgencyConfig, DEFAULT_MODEL, DEFAULT_PROVIDER } from "@/config.js";
 import { parseDurationMs } from "@/duration.js";
-import { BinOpArgument, BinOpExpression, Operator, PRECEDENCE } from "@/types/binop.js";
+import { BinOpArgument, BinOpExpression, Operator, PRECEDENCE, PREFIX_OPS } from "@/types/binop.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { walkNodes } from "@/utils/node.js";
 import { AccessChainElement, ValueAccess } from "../types/access.js";
@@ -463,8 +463,14 @@ export class TypeScriptBuilder {
 
   private needsParensLeft(child: BinOpArgument, parentOp: Operator): boolean {
     if (child.type !== "binOpExpression") return false;
-    // For right-associative ops like **, (2 ** 3) ** 4 needs parens on the left
-    if (parentOp === "**") return PRECEDENCE[child.operator] <= PRECEDENCE[parentOp];
+    // For right-associative ops like **, (2 ** 3) ** 4 needs parens on the left.
+    // JS also refuses a bare prefix operator there: `-x ** 2` is a syntax
+    // error, so it must print as `(-x) ** 2`.
+    if (parentOp === "**") {
+      return (
+        PREFIX_OPS.includes(child.operator) || PRECEDENCE[child.operator] <= PRECEDENCE[parentOp]
+      );
+    }
     return PRECEDENCE[child.operator] < PRECEDENCE[parentOp];
   }
 
@@ -1269,6 +1275,11 @@ export class TypeScriptBuilder {
     }
     if (node.operator === "typeof" || node.operator === "void") {
       return ts.unaryOp(node.operator, this.processNode(node.right));
+    }
+    if (node.operator === "unary-") {
+      return ts.unaryOp("-", this.processNode(node.right), {
+        paren: this.needsParensRight(node.right, node.operator),
+      });
     }
     // Compound assignment to a global variable: globals are accessed via
     // `__ctx.globals.get(...)`, which is not a valid assignment target,

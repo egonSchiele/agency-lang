@@ -72,7 +72,7 @@ import { AgencyConfig, BUILTIN_VARIABLES } from "@/config.js";
 import { mergeDeep } from "@/utils.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
-import { BinOpArgument, BinOpExpression, Operator, PRECEDENCE } from "@/types/binop.js";
+import { BinOpArgument, BinOpExpression, Operator, PRECEDENCE, PREFIX_OPS } from "@/types/binop.js";
 import { expressionToString } from "@/utils/node.js";
 import { Keyword } from "@/types/keyword.js";
 import { HandleBlock } from "@/types/handleBlock.js";
@@ -2111,11 +2111,13 @@ export class AgencyGenerator {
   protected processBinOpExpression(node: BinOpExpression, assigned: boolean = false): string {
     const op = node.operator;
 
-    // Unary prefix operators: !x, typeof x, void x
-    if (op === "!" || op === "typeof" || op === "void") {
-      const operand = this.processNode(node.right).trim();
-      const sep = op === "!" ? "" : " ";
-      const result = `${op}${sep}${operand}`;
+    // Unary prefix operators: !x, -x, typeof x, void x
+    if (PREFIX_OPS.includes(op)) {
+      const inner = this.processNode(node.right).trim();
+      const operand = this.needsParensRight(node.right, op) ? `(${inner})` : inner;
+      const symbol = op === "unary-" ? "-" : op;
+      const sep = symbol.length === 1 ? "" : " ";
+      const result = `${symbol}${sep}${operand}`;
       return assigned ? result : this.indentStr(result);
     }
 

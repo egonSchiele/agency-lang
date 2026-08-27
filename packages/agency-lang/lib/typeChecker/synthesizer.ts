@@ -556,6 +556,7 @@ function synthBinOp(
   }
 
   if (BOOLEAN_OPS.has(op)) return BOOLEAN_T;
+  if (op === "unary-") return NUMBER_T;
   if (op === "+") {
     const leftType = synthType(expr.left, scope, ctx);
     const rightType = synthType(expr.right, scope, ctx);

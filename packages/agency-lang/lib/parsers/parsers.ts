@@ -3502,19 +3502,46 @@ export function valueAccessParser(
 // Desugared to BinOpExpression: !x → { op: "!", left: true, right: x }
 // The builder must generate `!x`, not `true ! x`.
 //
-// Note: unary `-` is NOT included. Negative number literals like `-42` are
-// already handled by numberParser in literals.ts. Adding unary `-` would
-// create ambiguity where `-42` parses as `0 - 42`.
+// What a prefix operator applies to: a parenthesized expression or an atom.
+// Not exprParser, so the operator binds tightly: `!x && y` is `(!x) && y`.
+// parenParser is declared later in this file; calling it inside a function
+// body is fine because parsing only starts after the module has loaded.
+const unaryOperand: Parser<Expression> = (input: string) => {
+  const parenResult = parenParser(input);
+  if (parenResult.success) return parenResult;
+  return atom(input);
+};
+
 const unaryNotParser: Parser<Expression> = (input: string) => {
   const bangResult = char("!")(input);
   if (!bangResult.success) return bangResult;
-  // Recurse to atom (not exprParser) so `!` binds tightly: `!x && y` = `(!x) && y`
-  const atomResult = atom(bangResult.rest);
+  const atomResult = unaryOperand(bangResult.rest);
   if (!atomResult.success) return failure("expected expression after !", input);
   return success(
     {
       type: "binOpExpression" as const,
       operator: "!" as Operator,
+      left: { type: "boolean" as const, value: true },
+      right: atomResult.result,
+    } as BinOpExpression,
+    atomResult.rest,
+  );
+};
+
+// --- Unary - operator ---
+// Desugared like `!`: -x → { op: "unary-", left: true, right: x }.
+// Runs after literalParser in baseAtom, so `-42` stays a number literal and
+// only `-<non-literal>` (a variable, a call, a parenthesized expression)
+// reaches here. `-x ** 2` is `(-x) ** 2`.
+const unaryMinusParser: Parser<Expression> = (input: string) => {
+  const minusResult = char("-")(input);
+  if (!minusResult.success) return minusResult;
+  const atomResult = unaryOperand(minusResult.rest);
+  if (!atomResult.success) return failure("expected expression after -", input);
+  return success(
+    {
+      type: "binOpExpression" as const,
+      operator: "unary-" as Operator,
       left: { type: "boolean" as const, value: true },
       right: atomResult.result,
     } as BinOpExpression,
@@ -3534,7 +3561,7 @@ function unaryKeywordParser(keyword: string): Parser<Expression> {
     }
     const wsResult = spaces(kwResult.rest);
     if (!wsResult.success) return failure(`expected expression after ${keyword}`, input);
-    const atomResult = atom(wsResult.rest);
+    const atomResult = unaryOperand(wsResult.rest);
     if (!atomResult.success) return failure(`expected expression after ${keyword}`, input);
     return success(
       {
@@ -3967,6 +3994,8 @@ const baseAtom: Parser<Expression> = or(
   lazy(() => undefinedAliasParser),
   lazy(() => valueAccessParser),
   lazy(() => literalParser),
+  // After literalParser so `-42` is a literal, not `-(42)`.
+  unaryMinusParser,
 );
 
 // Wrap atom to handle postfix ++ and -- operators.

@@ -204,6 +204,51 @@ describe("exprParser", () => {
   });
 
   describe("unary operators", () => {
+    it("parses unary minus on a variable (#933)", () => {
+      const result = exprParser("-x");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({
+          type: "binOpExpression",
+          operator: "unary-",
+          left: { type: "boolean", value: true },
+          right: { type: "variableName", value: "x" },
+        });
+      }
+    });
+
+    it("keeps -42 a number literal", () => {
+      const result = exprParser("-42");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result).toEqualWithoutLoc({ type: "number", value: "-42" });
+      }
+    });
+
+    it("parses -x ** 2 as (-x) ** 2", () => {
+      const result = exprParser("-x ** 2");
+      expect(result.success).toBe(true);
+      if (result.success && result.result.type === "binOpExpression") {
+        expect(result.result.operator).toBe("**");
+        expect(result.result.left.type).toBe("binOpExpression");
+      }
+    });
+
+    it("a prefix operator takes a parenthesized operand", () => {
+      const minus = exprParser("-(a + b)");
+      expect(minus.success).toBe(true);
+      if (minus.success && minus.result.type === "binOpExpression") {
+        expect(minus.result.operator).toBe("unary-");
+        expect(minus.result.right.type).toBe("binOpExpression");
+      }
+      const not = exprParser("!(a && b)");
+      expect(not.success).toBe(true);
+      if (not.success && not.result.type === "binOpExpression") {
+        expect(not.result.operator).toBe("!");
+        expect(not.result.right.type).toBe("binOpExpression");
+      }
+    });
+
     it("should parse logical not", () => {
       const result = exprParser("!x");
       expect(result.success).toBe(true);

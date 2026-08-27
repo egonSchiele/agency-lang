@@ -1,0 +1,45 @@
+// Unary minus on a non-literal (#933). `-42` was always a literal; `-x`,
+// `-f()`, and `-(a + b)` now parse too.
+def abs(n: number): number {
+  let x = n
+  if (x < 0) {
+    x = -x
+  }
+  return x
+}
+
+def negate(n: number): number {
+  return -n
+}
+
+node absOfNegative() {
+  return abs(-7)
+}
+
+node negateCall() {
+  const y = -negate(3)
+  return y
+}
+
+node negateGroup() {
+  const a = 2
+  const b = 3
+  return -(a + b)
+}
+
+node unaryBindsTighterThanPower() {
+  const x = 3
+  return -x ** 2
+}
+
+node binaryMinusStillWorks() {
+  const a = 10
+  const b = 4
+  return a - b - -b
+}
+
+node notOnGroup() {
+  const a = true
+  const b = false
+  return !(a && b)
+}

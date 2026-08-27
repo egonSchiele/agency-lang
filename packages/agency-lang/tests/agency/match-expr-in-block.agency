@@ -1,0 +1,34 @@
+// A value-producing match or if-then-else inside a trailing block must read
+// its result from the block's own frame (#928).
+node matchInBlock() {
+  const xs = map([1, 2]) as p {
+    const m = match (p) {
+      1 => "one"
+      _ => "other"
+    }
+    return m
+  }
+  return xs.join(",")
+}
+
+node ifElseInBlock() {
+  const xs = map([1, 2]) as p {
+    const e = if p == 1 then "one" else "other"
+    return e
+  }
+  return xs.join(",")
+}
+
+node matchInNestedBlock() {
+  const xs = map([1, 2]) as p {
+    const ys = map([10, 20]) as q {
+      const m = match (q) {
+        10 => "ten"
+        _ => "more"
+      }
+      return "${p}${m}"
+    }
+    return ys.join("+")
+  }
+  return xs.join(",")
+}

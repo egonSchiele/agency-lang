@@ -1077,7 +1077,7 @@ export class TypeScriptBuilder {
           }
           // Synthetic match-expression result temps (`__matchval_<id>`) are
           // written by `runner.exitMatch(id, value)` into
-          // `runner.frame.locals.__matchval_<id>` (i.e. `__stack.locals`), but
+          // `runner.frame.locals.__matchval_<id>`, but
           // pattern lowering emits the *read* as a plain `variableName` with
           // no declaration, so scope resolution leaves it unresolved and it
           // would otherwise compile to a bare, undeclared JS identifier.
@@ -1094,7 +1094,11 @@ export class TypeScriptBuilder {
             // to Agency's single nothing-value, `null`. This one read site is
             // the chokepoint for every match-result path (stepped no-arm and
             // the plain-mode IIFE that returns `undefined`). See #409.
-            return ts.call(ts.id("__nn"), [ts.scopedVar(literal.value, "local", this.moduleId)]);
+            // `exitMatch` writes to the frame of the runner that ran the
+            // match: `__stack` in a node or function, `__bstack` inside a
+            // block. Read from the same one (#928).
+            const frameScope = this.scopes.current().type === "block" ? "block" : "local";
+            return ts.call(ts.id("__nn"), [ts.scopedVar(literal.value, frameScope, this.moduleId)]);
           }
           return ts.id(literal.value);
         }

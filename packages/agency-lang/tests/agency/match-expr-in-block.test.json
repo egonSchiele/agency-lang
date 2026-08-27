@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "nodeName": "matchInBlock",
+      "input": "",
+      "expectedOutput": "\"one,other\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "ifElseInBlock",
+      "input": "",
+      "expectedOutput": "\"one,other\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "matchInNestedBlock",
+      "input": "",
+      "expectedOutput": "\"1ten+1more,2ten+2more\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

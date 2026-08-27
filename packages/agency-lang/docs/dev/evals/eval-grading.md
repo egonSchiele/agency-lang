@@ -37,8 +37,8 @@ selects, picomatch on the test id) and `--tags <a,b>` (repeatable; a test
 must carry EVERY listed tag, so `--tags coding,hard` means hard coding
 tests) narrow which tests run; tags live on the test (`tags: ["easy"]`).
 A tag exists so someone can run a subset, so a test carries only tags a
-person would filter on. The coding suite uses exactly one of `easy`,
-`medium`, `hard`; the review suite uses `bug` or `clean`. Do not add tags
+person would filter on. Every suite uses exactly one of `easy`,
+`medium`, `hard`. Do not add tags
 that describe the test (`module`, `handlers`): nobody runs the `module`
 subset. Both flags go through one function,
 `selectTests` (`lib/eval/selectTests.ts`), and `agency eval ls --suite …`

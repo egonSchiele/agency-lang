@@ -1,0 +1,58 @@
+export type Entry = { path: string; size: number }
+
+def extOf(p: string): string {
+  let idx = p.lastIndexOf(".")
+  if (idx == -1) {
+    return ""
+  }
+  return p.slice(idx)
+}
+
+export def byExtension(entries: Entry[]): any {
+  let res: any = {}
+  for (e in entries) {
+    let ext = extOf(e.path)
+    if (res[ext] == null) {
+      res[ext] = [e]
+    } else {
+      res[ext] = res[ext].concat([e])
+    }
+  }
+  return res
+}
+
+export def extensions(entries: Entry[]): string[] {
+  let seen: any = {}
+  let out: string[] = []
+  for (e in entries) {
+    let ext = extOf(e.path)
+    if (seen[ext] != true) {
+      seen[ext] = true
+      out = out.concat([ext])
+    }
+  }
+  return out
+}
+
+export def largeCount(entries: Entry[], limit: number): number {
+  let cnt = 0
+  for (e in entries) {
+    if (e.size > limit) {
+      cnt = cnt + 1
+    }
+  }
+  return cnt
+}
+
+export def pageNumbers(pages: number): number[] {
+  let out: number[] = []
+  if (pages <= 0) {
+    return out
+  }
+  let i = 1
+  while (i <= pages) {
+    out = out.concat([i])
+    i = i + 1
+  }
+  return out
+}

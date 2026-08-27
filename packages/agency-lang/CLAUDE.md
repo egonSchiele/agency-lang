@@ -96,6 +96,7 @@ The rest are indexed by nine skills, one per area. Invoke the one matching your 
 Remaining process docs, which no skill covers:
 
 - `docs/dev/contributing/general-writing-tips.md` — How to write prose in this repo. Follow it for docs, comments, and messages to the user.
+- `docs/dev/contributing/verbal-tics.md` — Phrases to cut from every piece of prose before showing it to anyone. Read it after drafting, before sending.
 - `docs/dev/contributing/supply-chain.md` — The dependency hardening that guards against a malicious npm release.
 - `docs/dev/contributing/updating-pinned-actions.md` — Refreshing the pinned GitHub Action SHAs that generated workflows use.
 - `docs/dev/contributing/untestable-builtins.md` — Stdlib functions CI cannot test, and the cases we want once they can be mocked.

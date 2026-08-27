@@ -1,0 +1,11 @@
+{
+  "description": "The function other files call is not exported. Typechecks on its own; every importer fails.",
+  "tags": [
+    "easy"
+  ],
+  "files": "./files",
+  "input": {
+    "assignment": "The file greeting.agency in the working directory has a function `greet(name: string): string`. Write `greetAll(names: string[]): string[]`, which returns greet's result for each name, in order. Other files in the project will call greetAll.",
+    "sourceFile": "solution.agency"
+  }
+}

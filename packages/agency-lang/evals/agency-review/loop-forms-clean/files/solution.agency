@@ -1,0 +1,25 @@
+export type Order = { customer: string, items: number[], paid: boolean }
+
+export def orderTotals(orders: Order[]): number[] {
+  return [reduce(o.items, 0, \(acc, n) -> acc + n) for o in orders]
+}
+
+export def receipts(orders: Order[]): string[] {
+  return map(orders) as o {
+    const subtotal = reduce(o.items, 0, \(acc, n) -> acc + n)
+    let status = "due"
+    if (o.paid) {
+      status = "paid"
+    }
+    return "${o.customer}: ${subtotal * 1.1} (${status})"
+  }
+}
+
+export def firstUnpaid(orders: Order[]): string {
+  for (o in orders) {
+    if (!o.paid) {
+      return o.customer
+    }
+  }
+  return ""
+}

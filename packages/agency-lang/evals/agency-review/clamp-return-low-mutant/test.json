@@ -1,9 +1,7 @@
 {
   "description": "Mutation-derived: the high branch returns low (copy-paste bug). Verified at authoring: typechecks, fails the expected/ harness on above(). The diff in expected/diff.patch is the graders' ground truth.",
   "tags": [
-    "bug",
-    "logic",
-    "mutant"
+    "easy"
   ],
   "files": "./files",
   "input": {

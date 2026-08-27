@@ -99,9 +99,45 @@ bugs a reviewer that only runs the typechecker cannot see.
   comprehensions or the stdlib `filter`/`map`/`sortBy`/`reduce` with a
   block.
 
+Tests harvested from the coding suite (`evals/agency-coding`): each reuses
+a coding assignment, and the reviewed source is either a wrong solution the
+writer produced or the reference solution.
+
+Bug tests, where the reviewer must reject:
+
+- `unexported-function`: the function other files call has no `export`.
+- `no-interrupt-before-send`: an irreversible send with no interrupt first.
+- `settings-as-options-object`: settings the task says must be named
+  parameters, so `.partial()` works, are an options object.
+- `swallowed-failure`: `catch 0` turns a failed parse into 0 when the task
+  says the failure must be returned.
+- `static-history`: a per-run list declared `static const`, which is deeply
+  immutable, so the push fails.
+- `idempotent-mutator`: `idempotent` on a function that appends state.
+- `guard-around-loop`: one guard around the whole loop when each call must
+  fail alone.
+- `race-for-all`: `race` where every result is required.
+
+Idiom tests, where the code does what the task asks in a JavaScript way and
+the reviewer must say so as advice without rejecting (`idiomGraders`, which
+adds `names-the-idiom` to the clean graders):
+
+- `hand-rolled-loops`: loops where `groupBy`, `unique`, `count`, `range`,
+  and `extname` exist.
+- `comments-not-docstrings`: tool descriptions in `//` comments above the
+  def, which the LLM never sees.
+- `wrappers-not-partial`: wrapper functions where `.partial().rename()`
+  is the form.
+- `plain-const-table`: a never-changing table as a plain `const` instead
+  of `static const`.
+
+Clean tests, the coding suite's reference solutions, which the reviewer must
+not reject: `named-params-clean`, `interrupt-before-send-clean`,
+`loop-forms-clean`, `concurrency-clean`.
+
 ## Adding a test
 
 Make a directory with a `test.json` (`description`, `tags`, `files`,
-`input`; the only tags are `bug` or `clean`), the planted source under `files/`, and a `graders.ts` beside it.
+`input`; the only tags are `easy`, `medium`, or `hard`), the planted source under `files/`, and a `graders.ts` beside it.
 Typecheck the planted source first (`agency typecheck <file>`); a source
 that fails to typecheck tests the typechecker, not the reviewer.

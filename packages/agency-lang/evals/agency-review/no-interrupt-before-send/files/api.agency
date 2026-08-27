@@ -1,0 +1,11 @@
+// Seeded into the writer's working directory: a stand-in for a real server.
+let sent: string[] = []
+
+export def sendToServer(payload: string): string {
+  sent.push(payload)
+  return "sent"
+}
+
+export def sentPayloads(): string[] {
+  return sent
+}

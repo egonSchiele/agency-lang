@@ -1,7 +1,7 @@
 {
   "description": "Agency-specific: the code calls JavaScript array methods with callbacks (.filter, .sort, .map, .reduce) instead of list comprehensions and the stdlib block-taking functions. Typechecks cleanly, then crashes at run time with \"Cannot pass a trailing block to non-Agency function 'filter'\".",
   "tags": [
-    "bug"
+    "easy"
   ],
   "files": "./files",
   "input": {

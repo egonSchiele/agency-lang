@@ -1,0 +1,29 @@
+let tasks: { title: string, due: string, done: boolean }[] = []
+
+export idempotent def addTask(title: string, due: string = ""): string {
+  """
+  Add a task to the to-do list.
+  @param title - short name of the task
+  @param due - due date as YYYY-MM-DD, or leave empty
+  """
+  tasks.push({ title: title, due: due, done: false })
+  return "added ${title}"
+}
+
+export def completeTask(title: string): string {
+  """
+  Mark a task done.
+  @param title - the exact title from listOpenTasks
+  """
+  const found = [t for t in tasks if t.title == title]
+  if (found.length == 0) { return "no task named ${title}" }
+  found[0].done = true
+  return "completed ${title}"
+}
+
+export idempotent def listOpenTasks(): string[] {
+  """
+  Titles of tasks not yet done. Call this before completing a task.
+  """
+  return [t.title for t in tasks if !t.done]
+}

@@ -124,16 +124,38 @@ export function plantedBugGraders(args: { reason: string }): ReviewGrader[] {
   return bugGraders(args);
 }
 
+function noFalsePositive(): ReviewGrader {
+  return grader(
+    ({ output }) =>
+      binary(
+        errors(output).length === 0,
+        `${errors(output).length} error finding(s) on correct code: ${text(errors(output)).join(" | ")}`,
+      ),
+    { name: "no-false-positive" },
+  );
+}
+
 /** Graders for a clean test: correct code the reviewer must not reject. */
 export function cleanGraders(): ReviewGrader[] {
+  return [noFalsePositive(), agencyTrue(), advisoryUseful()];
+}
+
+/** Graders for an idiom test: code that does what the task asks, written the
+ *  way a JavaScript programmer would rather than the Agency way. The reviewer
+ *  must not reject it, and must point out the idiom in an advisory finding.
+ *  `reason` is the author's one sentence on what the idiomatic form is. */
+export function idiomGraders(args: { reason: string }): ReviewGrader[] {
   return [
-    grader(
-      ({ output }) =>
-        binary(
-          errors(output).length === 0,
-          `${errors(output).length} error finding(s) on correct code: ${text(errors(output)).join(" | ")}`,
-        ),
-      { name: "no-false-positive" },
+    noFalsePositive(),
+    grader<ReviewInput>(
+      ({ output, judges }) =>
+        judges.rubric({
+          standard:
+            "The work is the ADVISORY findings of a code review. Some finding points out the idiom described in the context and names the Agency form to use instead. Wording may differ; what matters is that a reader would know what to change.",
+          context: `The code under review does what its task asks, but misses one Agency idiom: ${args.reason}`,
+          output: text(advisories(output)),
+        }),
+      { name: "names-the-idiom" },
     ),
     agencyTrue(),
     advisoryUseful(),

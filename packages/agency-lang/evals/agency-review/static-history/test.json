@@ -1,0 +1,11 @@
+{
+  "description": "The per-run history is declared static, but static values are deeply immutable and shared across runs, so the push fails at run time.",
+  "tags": [
+    "easy"
+  ],
+  "files": "./files",
+  "input": {
+    "assignment": "Write a module for converting currency. It has a rate table with USD at 1, EUR at 0.9, and GBP at 0.8, meaning one USD buys 0.9 EUR. It exports `convert(amount: number, from: string, to: string): number`, which converts and records a line \"<amount> <from> -> <result> <to>\" in a history kept in memory, `conversions(): string[]`, which returns the history so far, and `currencies(): string[]`, which returns the codes in the rate table.",
+    "sourceFile": "solution.agency"
+  }
+}

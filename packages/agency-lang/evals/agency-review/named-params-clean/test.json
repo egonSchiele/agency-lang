@@ -1,0 +1,11 @@
+{
+  "description": "The named-config-params reference solution: settings as named parameters with defaults. Measures false positives.",
+  "tags": [
+    "easy"
+  ],
+  "files": "./files",
+  "input": {
+    "assignment": "The file records.agency in the working directory exports `allRecords(): Record[]`, where a Record is `{ title: string, year: number, archived: boolean }`. Write a module that imports allRecords from ./records.agency and exports `search`, which returns the titles of the records matching a query, as a `string[]`. A record matches when its title contains the query, ignoring case. search takes the query and four settings: limit, the most titles to return, default 10; offset, how many matches to skip first, default 0; order, one of \"none\", \"title\", or \"year\", default \"none\", where \"none\" keeps the records in their original order; and includeArchived, whether archived records count as matches, default false. Apply the order before the offset and the limit. Callers must be able to pass any setting by name, leaving the others at their defaults, and to fix settings with `.partial()`, for example `search.partial(includeArchived: true)`.",
+    "sourceFile": "solution.agency"
+  }
+}

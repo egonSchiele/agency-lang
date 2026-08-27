@@ -1,0 +1,11 @@
+{
+  "description": "One guard wraps the whole loop, so a single slow document times out every document, when the task says each must fail alone.",
+  "tags": [
+    "easy"
+  ],
+  "files": "./files",
+  "input": {
+    "assignment": "The file summarizer.agency in the working directory exports `summarize(doc: string): string`, which is slow, and slower for long documents. Write a module that imports it and exports `summarizeAll(docs: string[]): string[]`. It returns one summary per document, in order. No single summarize call may run for more than 500 milliseconds; a document that takes longer gets the string \"timed out\" in its place, and the other documents are still summarized.",
+    "sourceFile": "solution.agency"
+  }
+}

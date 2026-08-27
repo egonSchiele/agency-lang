@@ -1,0 +1,11 @@
+{
+  "description": "The loop-forms reference solution: a comprehension, a full block, and an early-exit loop. Measures false positives.",
+  "tags": [
+    "easy"
+  ],
+  "files": "./files",
+  "input": {
+    "assignment": "Write a module that exports a type `Order = { customer: string, items: number[], paid: boolean }` and three functions. `orderTotals(orders: Order[]): number[]` returns the sum of each order's items, in order. `receipts(orders: Order[]): string[]` returns one line per order in the form \"customer: total (status)\", where total is the sum of the items plus 10 percent tax and status is \"paid\" or \"due\". `firstUnpaid(orders: Order[]): string` returns the customer of the first unpaid order, or \"\" when every order is paid.",
+    "sourceFile": "solution.agency"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "description": "A rate table that never changes is a plain const global, reinitialized on every run, where static const initializes once and is shared.",
+  "tags": [
+    "easy"
+  ],
+  "files": "./files",
+  "input": {
+    "assignment": "Write a module for converting currency. It has a rate table with USD at 1, EUR at 0.9, and GBP at 0.8, meaning one USD buys 0.9 EUR. It exports `convert(amount: number, from: string, to: string): number`, which converts and records a line \"<amount> <from> -> <result> <to>\" in a history kept in memory, and `conversions(): string[]`, which returns the history so far.",
+    "sourceFile": "solution.agency"
+  }
+}

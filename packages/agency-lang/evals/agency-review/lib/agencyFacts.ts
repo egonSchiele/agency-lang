@@ -29,6 +29,12 @@ like JS/TS, but its idioms differ, and reviews must judge it as Agency:
   comprehensions ("[x for x in xs if ...]") and the stdlib functions map,
   filter, sortBy, reduce called with a block ("sortBy(xs) as x { ... }").
   Methods with no callback (push, includes, join, slice) are fine.
+- A block is how a function receives code to run per item. The inline form
+  is a backslash, parameters, and an arrow: "map(xs, \\x -> x * 2)" and
+  "reduce(xs, 0, \\(acc, n) -> acc + n)" are valid Agency, not lambdas.
+  The full form follows the call: "map(xs) as x { ... }", "fork(xs) as x
+  { ... }". A "return" inside a block returns the block's value for that
+  item; it does not return from the enclosing function.
 - Declarations use let/const (bare assignment without a declaration is an
   error); types are postfix ("x: number"); string interpolation is
   "\${...}"; entry points are "node main() { ... }"; blocks always use

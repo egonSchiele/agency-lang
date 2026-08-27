@@ -1,8 +1,7 @@
 {
   "description": "Agency-specific: the task says deletion must wait for the user's approval, but the code approves its own destructive effect with `with approve`. Typechecks cleanly.",
   "tags": [
-    "bug",
-    "handlers"
+    "easy"
   ],
   "files": "./files",
   "input": {

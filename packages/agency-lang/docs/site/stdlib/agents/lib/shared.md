@@ -71,6 +71,7 @@ llmOptions(
   hostedTools: string[] = [],
   reasoningEffort: ReasoningEffort | null = null,
   thinking: boolean = false,
+  validationRetries: number = 0,
 ): any
 ```
 
@@ -85,6 +86,7 @@ Build an llm options object with an optional model override. Returns a
   @param hostedTools - Provider-hosted tools to enable
   @param reasoningEffort - Reasoning effort to request from the model, or null for none
   @param thinking - Whether to enable thinking mode, which allows the model to use more time and tokens to reason about its answer
+  @param validationRetries - How many times to resend a structured-output call whose answer failed schema validation, or 0 for none
 
 **Parameters:**
 
@@ -96,6 +98,7 @@ Build an llm options object with an optional model override. Returns a
 | hostedTools | `string[]` | [] |
 | reasoningEffort | `ReasoningEffort \| null` | null |
 | thinking | `boolean` | false |
+| validationRetries | `number` | 0 |
 
 **Returns:** `any`
 

@@ -1,0 +1,22 @@
+import { fetchSource, refreshIndex, refreshCache } from "./sources.agency"
+
+export def fetchAll(names: string[]): string[] {
+  const first = race(names) as name {
+    return fetchSource(name)
+  }
+  return [first ?? ""]
+}
+
+export def fetchFastest(names: string[]): string | null {
+  return race(names) as name {
+    return fetchSource(name)
+  }
+}
+
+export def refreshBoth(): string {
+  parallel {
+    refreshIndex()
+    refreshCache()
+  }
+  return "refreshed"
+}

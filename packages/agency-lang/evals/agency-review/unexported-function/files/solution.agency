@@ -1,0 +1,5 @@
+import { greet } from "./greeting.agency"
+
+def greetAll(names: string[]): string[] {
+  return [greet(n) for n in names]
+}

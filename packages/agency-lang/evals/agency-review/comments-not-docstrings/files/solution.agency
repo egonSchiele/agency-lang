@@ -1,0 +1,41 @@
+type Task = { title: string; due: string; done: boolean }
+
+let tasks: Task[] = []
+
+// Add a task and return a short confirmation.
+export def addTask(title: string, due: string = ""): string {
+  const t: Task = { title: title, due: due, done: false }
+  tasks = tasks.concat([t])
+  return "Added task: ${title}"
+}
+
+// Mark the task with the exact title done and return a confirmation or not-found.
+export def completeTask(title: string): string {
+  let found: boolean = false
+  let newTasks: Task[] = []
+  for (task in tasks) {
+    if (task.title == title) {
+      const updated: Task = { title: task.title, due: task.due, done: true }
+      newTasks = newTasks.concat([updated])
+      found = true
+    } else {
+      newTasks = newTasks.concat([task])
+    }
+  }
+  tasks = newTasks
+  if (found) {
+    return "Completed task: ${title}"
+  }
+  return "No task with title: ${title}"
+}
+
+// Return titles of tasks not yet done, in order added.
+export def listOpenTasks(): string[] {
+  let open: string[] = []
+  for (task in tasks) {
+    if (!task.done) {
+      open = open.concat([task.title])
+    }
+  }
+  return open
+}

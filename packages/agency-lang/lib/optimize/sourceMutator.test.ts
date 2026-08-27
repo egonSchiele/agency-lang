@@ -940,3 +940,20 @@ node main() {}
     expect(second.diagnostics).toEqual([]);
   });
 });
+
+describe("literal ${ text in a free-text target", () => {
+  it("accepts a candidate that sends the escaped text back bare and writes it escaped", () => {
+    const dir = fs.realpathSync(makeTempDir());
+    const entry = writeAgency(
+      dir,
+      "a.agency",
+      'optimize static const p = """Rules:\n- `\\${...}` interpolation.\nEnd"""\nnode main() {}\n',
+    );
+    const set = discoverOptimizeTargets(entry, { baseDir: dir });
+    const mutator = new OptimizeSourceMutator({ targetSet: set });
+
+    const preview = mutator.mutate("a.agency:global:p", "Rules:\n- `${...}` interpolation.\nDone");
+    expect(preview.diagnostics).toEqual([]);
+    expect(preview.files["a.agency"]).toContain("`\\${...}` interpolation.\nDone");
+  });
+});

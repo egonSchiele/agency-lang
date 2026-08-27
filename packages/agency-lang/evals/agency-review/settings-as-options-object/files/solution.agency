@@ -1,0 +1,15 @@
+import { allRecords } from "./records.agency"
+
+export type SearchOptions = { limit?: number, offset?: number, order?: string, includeArchived?: boolean }
+
+export def search(query: string, options: SearchOptions = {}): string[] {
+  const q = query.toLowerCase()
+  const includeArchived = options.includeArchived ?? false
+  let matches = [r for r in allRecords() if r.title.toLowerCase().includes(q) && (includeArchived || !r.archived)]
+  const order = options.order ?? "none"
+  if (order == "title") { matches = sortBy(matches, \r -> r.title) }
+  if (order == "year") { matches = sortBy(matches, \r -> r.year) }
+  const offset = options.offset ?? 0
+  const limit = options.limit ?? 10
+  return [r.title for r in matches].slice(offset, offset + limit)
+}

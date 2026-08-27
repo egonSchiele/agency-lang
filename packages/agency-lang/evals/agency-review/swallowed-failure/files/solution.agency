@@ -1,0 +1,9 @@
+import { parseAmount } from "./amounts.agency"
+
+export def total(lines: string[]): Result<number> {
+  let sum = 0
+  for (line in lines) {
+    sum = sum + (parseAmount(line) catch 0)
+  }
+  return success(sum)
+}

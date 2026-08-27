@@ -1,0 +1,11 @@
+{
+  "description": "A bad line is turned into 0 with `catch 0` instead of being returned as the failure the task requires.",
+  "tags": [
+    "easy"
+  ],
+  "files": "./files",
+  "input": {
+    "assignment": "The file amounts.agency in the working directory exports `parseAmount(text: string): Result<number>`, which fails when the text is not a number. Write a module that imports it and exports `total(lines: string[]): Result<number>`. It parses every line and returns the sum. If any line fails to parse, total returns that failure, with its message intact, and does not parse the lines after it. An empty list totals 0.",
+    "sourceFile": "solution.agency"
+  }
+}

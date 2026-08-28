@@ -1,0 +1,8 @@
+{
+  "description": "Cleanly written text, the review agent shouldn't flag anything",
+  "files": "../../writing-review/clean-paragraph/files",
+  "input": {
+    "assignment": "Explain to a developer new to the codebase, in one short section, how the run directory decides which scores its listings show.",
+    "sourceFile": "notes.md"
+  }
+}

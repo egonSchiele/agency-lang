@@ -1,0 +1,9 @@
+{
+  "description": "A two-sentence doc comment on a grader. The first sentence stops short ('must resolve' to what?), the second lands its verb abruptly ('fails') and then gives the reason after a colon, backwards, as a metaphor ('the researcher's contract').",
+  "files": "../../writing-review/comment-abrupt-verb/files",
+  "input": {
+    "assignment": "Write the doc comment for an eval grader that checks the citations in a research agent's answer. A contributor reads it to learn what the grader fails.",
+    "sourceFile": "comment.md"
+  },
+  "graderFiles": "../../writing-review/comment-abrupt-verb/graderFiles"
+}

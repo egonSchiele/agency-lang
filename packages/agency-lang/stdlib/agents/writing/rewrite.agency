@@ -1,0 +1,167 @@
+/** @module
+  @summary Rewrite prose from the writing reviewer's findings and return the
+  new text.
+
+  The writing reviewer (`std::agents/writing/review`) returns a list of
+  findings. That suits a caller that wants to apply them itself. A caller
+  that wants the finished text instead calls this agent: it runs the
+  reviewer, hands the findings and the text to one rewriting call, and
+  returns the rewritten text. With `passes` above 1 the rewritten text is
+  reviewed and rewritten again, up to that many times; a review with no
+  findings ends the loop early.
+*/
+import { Feedback } from "std::agents/lib/feedback"
+import { llmOptions, withContext, docsOnlyHandler } from "std::agents/lib/shared"
+import { writingReviewAgent, WritingReviewEvalInput } from "std::agents/writing/review"
+import { evalValue } from "std::statelog"
+
+static const rewritePrompt = """You rewrite prose to apply a reviewer's findings. You get the text, the task it was written for, and the findings. Return the rewritten text and nothing else: no preamble, no notes, no list of what you changed.
+
+Apply every finding. When a finding says a passage should be cut, cut it. When a finding gives a rewrite, use that rewrite unless it conflicts with another finding. When a finding names a problem without a rewrite, fix the problem in the plainest way.
+
+Keep every fact, number, and identifier (names of files, functions, flags, and symbols) exactly as the text has them. Add nothing the text and the task do not say. Keep the text's format: a Markdown document stays Markdown, a code comment stays a comment, a reply stays a reply.
+"""
+
+def applyFindings(
+  text: string,
+  task: string,
+  guidelines: string,
+  context: string,
+  findings: Feedback[],
+  model: string,
+  provider: string,
+): string {
+  const findingLines = map(findings, \item -> "- ${item.feedback}").join("\n")
+  let guidelinesSection = ""
+  if (guidelines != "") {
+    guidelinesSection = """The writing guidelines the text must follow:
+<guidelines>
+${guidelines}
+</guidelines>
+
+"""
+  }
+  const prompt = """
+${rewritePrompt}
+
+${guidelinesSection}The text was written for this task:
+<task>
+${withContext(task: task, context: context)}
+</task>
+
+The reviewer's findings:
+<findings>
+${findingLines}
+</findings>
+
+<text>
+${text}
+</text>
+"""
+  return llm(prompt, llmOptions(model: model, provider: provider))
+}
+
+export def writingRewriteAgent(
+  text: string,
+  task: string = "",
+  guidelines: string = "",
+  context: string = "",
+  passes: number = 1,
+  maxCost: number = $5.00,
+  maxTime: number = 10m,
+  model: string = "",
+  provider: string = "",
+): Result<string> {
+  """
+  Review prose and return it rewritten with the findings applied. Text that
+  the reviewer finds nothing wrong with comes back unchanged.
+
+  @param text - The text to rewrite
+  @param task - Who the text is for and what it must get across, or ""
+  @param guidelines - The caller's own writing guidelines, as text, or ""
+    for the reviewer's built-in catalog alone
+  @param context - Extra material for the judgment, or ""
+  @param passes - How many review-and-rewrite rounds to run at most. Each
+    round reviews the current text and rewrites it; a round whose review
+    finds nothing ends the loop.
+  @param maxCost - Hard spend cap for all rounds together
+  @param maxTime - Hard wall-clock cap for all rounds together
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  """
+  let reviewFailure = ""
+  const captured = guard(cost: maxCost, time: maxTime, label: "writingRewriteAgent") {
+    let current = text
+    let remaining = passes
+    while (remaining > 0 && reviewFailure == "") {
+      remaining = remaining - 1
+      const reviewed = writingReviewAgent(
+        text: current,
+        task: task,
+        guidelines: guidelines,
+        context: context,
+        maxCost: maxCost,
+        maxTime: maxTime,
+        model: model,
+        provider: provider,
+      )
+      if (reviewed is failure(err)) {
+        reviewFailure = "${err}"
+      }
+      if (reviewed is success(findings)) {
+        if (findings.length == 0) {
+          remaining = 0
+        } else {
+          current = applyFindings(
+            text: current,
+            task: task,
+            guidelines: guidelines,
+            context: context,
+            findings: findings,
+            model: model,
+            provider: provider,
+          )
+        }
+      }
+    }
+    return current
+  }
+  if (reviewFailure != "") {
+    return failure("the writing reviewer failed: ${reviewFailure}")
+  }
+  return captured
+}
+
+/** Eval entry point: `agency eval run stdlib/agents/writing/rewrite.agency:evalMain
+  --suite <dir>`. Takes the same input as the reviewer's `evalMain`, so the
+  `evals/writing-rewrite` suite reuses the reviewer suite's test files, and
+  returns the rewritten text. Effects are decided here as in the reviewer:
+  the seeded input file is read `with approve`, and the agent runs under
+  `docsOnlyHandler`, so a budget trip comes back as text rather than an
+  interrupt escaping the entry point. */
+node evalMain(input: WritingReviewEvalInput): string {
+  return rewriteForEval(input, 1)
+}
+
+/** The same eval with two review-and-rewrite rounds, for measuring whether
+  the second round earns its cost:
+  `agency eval run stdlib/agents/writing/rewrite.agency:evalMainTwoPasses --suite <dir>`. */
+node evalMainTwoPasses(input: WritingReviewEvalInput): string {
+  return rewriteForEval(input, 2)
+}
+
+def rewriteForEval(input: WritingReviewEvalInput, passes: number): string {
+  evalValue(input)
+  const source = read(input.sourceFile) with approve
+  if (source is failure(readErr)) {
+    return "could not read ${input.sourceFile}: ${readErr}"
+  }
+  let rewritten: Result<string> = failure("the rewriter never ran")
+  handle {
+    rewritten = writingRewriteAgent(text: source.value, task: input.assignment, passes: passes)
+  } with docsOnlyHandler
+  if (rewritten is failure(err)) {
+    return "rewrite agent failed: ${err}"
+  }
+  return rewritten.value
+}

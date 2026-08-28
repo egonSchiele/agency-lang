@@ -1,0 +1,9 @@
+{
+  "description": "A developer-doc paragraph that records the author's debugging story instead of what a future maintainer needs.",
+  "files": "../../writing-review/own-debugging-notes/files",
+  "input": {
+    "assignment": "Add a paragraph to docs/dev/evals/eval-grading.md, the developer notes for eval grading, recording that the stdlib eval entry nodes now run their worker under a shared handler.",
+    "sourceFile": "paragraph.md"
+  },
+  "graderFiles": "../../writing-review/own-debugging-notes/graderFiles"
+}

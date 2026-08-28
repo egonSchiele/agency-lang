@@ -1,0 +1,9 @@
+{
+  "description": "Writing an eval description with some useless info.",
+  "files": "../../writing-review/eval-description/files",
+  "input": {
+    "assignment": "Write a short description for an eval that tests a coding agent's ability to write a program where, given a number, it reverses the order of digits (123 to 321, for example). This tests the agent's ability to use while loops. Like all other evals, it is graded by the hidden harness in holdout/.",
+    "sourceFile": "notes.md"
+  },
+  "graderFiles": "../../writing-review/eval-description/graderFiles"
+}

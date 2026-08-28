@@ -1,0 +1,9 @@
+{
+  "description": "Records something in the implementation notes even though it has no lasting consequences.",
+  "files": "../../writing-review/render-key-note/files",
+  "input": {
+    "assignment": "Write a paragraph in the developer notes for the @hidden doc tag. This document will guide people if they want to change this code later.",
+    "sourceFile": "note.md"
+  },
+  "graderFiles": "../../writing-review/render-key-note/graderFiles"
+}

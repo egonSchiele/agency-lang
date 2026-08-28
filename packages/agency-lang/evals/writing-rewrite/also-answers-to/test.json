@@ -1,0 +1,9 @@
+{
+  "description": "Odd phrasing for a command alias, plus an unneeded aside.",
+  "files": "../../writing-review/also-answers-to/files",
+  "input": {
+    "assignment": "Write one sentence for the CLI docs saying that agency eval label is an alias for agency label.",
+    "sourceFile": "text.md"
+  },
+  "graderFiles": "../../writing-review/also-answers-to/graderFiles"
+}

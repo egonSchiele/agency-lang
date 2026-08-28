@@ -1,0 +1,9 @@
+{
+  "description": "Roundabout phrasing in CLI docs.",
+  "files": "../../writing-review/format-guess/files",
+  "input": {
+    "assignment": "Write two sentences for the CLI docs saying the command guesses the input format and that the --format flag overrides the guess.",
+    "sourceFile": "text.md"
+  },
+  "graderFiles": "../../writing-review/format-guess/graderFiles"
+}

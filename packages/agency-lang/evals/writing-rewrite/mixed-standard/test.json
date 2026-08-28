@@ -1,0 +1,9 @@
+{
+  "description": "One paragraph that mixes an example, an explanation, a checklist, and a scoring rule. Each sentence is fine; the paragraph is not.",
+  "files": "../../writing-review/mixed-standard/files",
+  "input": {
+    "assignment": "Write the standard for an LLM judge that scores an Agency solution. The judge reads the standard and the solution and returns a score from 0 to 1. The standard must be easy to apply.",
+    "sourceFile": "standard.md"
+  },
+  "graderFiles": "../../writing-review/mixed-standard/graderFiles"
+}

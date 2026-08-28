@@ -1,0 +1,9 @@
+{
+  "description": "A code comment with an overused construction and a misattributed verb.",
+  "files": "../../writing-review/hidden-type-alias/files",
+  "input": {
+    "assignment": "Write a code comment explaining why the doc link checker skips @hidden declarations.",
+    "sourceFile": "text.md"
+  },
+  "graderFiles": "../../writing-review/hidden-type-alias/graderFiles"
+}

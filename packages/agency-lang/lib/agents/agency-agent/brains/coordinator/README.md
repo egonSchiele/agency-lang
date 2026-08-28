@@ -69,6 +69,7 @@ and an inner `with approve` cannot get past an outer policy.
 | `explorerAgent` | Surveys a codebase or topic on the slow model slot; shared session. | `std::agents/explorer` |
 | `reviewAgent` | Reviews Agency code: snippets from a message, or the files the code agent just wrote. | `std::agents/agency/review` |
 | `writingAgent` | Reviews prose for readability; reports findings, or applies them when asked. | `std::agents/writing/review` |
+| `rewriteAgent` | Rewrites prose from the reviewer's findings and returns the new text. | `std::agents/writing/rewrite` |
 
 Most specialists are thin wrappers that add what is the agent's business
 (the user's chosen model slots, a shared session) to an agent that ships in

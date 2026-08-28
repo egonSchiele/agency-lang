@@ -1,0 +1,9 @@
+{
+  "description": "Sentences that carry four or five facts each, with parentheticals. A reader has to parse each one twice.",
+  "files": "../../writing-review/one-fact-per-sentence/files",
+  "input": {
+    "assignment": "Write the assignment for an LLM coding agent. It reads this text and writes the Agency program it describes, so every requirement must be easy to pick out.",
+    "sourceFile": "assignment.md"
+  },
+  "graderFiles": "../../writing-review/one-fact-per-sentence/graderFiles"
+}

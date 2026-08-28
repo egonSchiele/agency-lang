@@ -33,4 +33,6 @@ The reviewer is three LLM passes run in parallel: the main pass (misreadings and
 
 The `tics-*` tests, and the older tic tests `also-answers-to`, `costs-no-parse`, and `correction-before-checking`, plant verbal tics from the reviewer's tics pass. Tics are always advisory, and a cut is advisory unless a whole piece or section should go, so `harvestedGraders()` has no `rejects` grader; the editor's points are the ground truth. `rejects` stays on the planted-flaw tests. `tics-control` is plain prose on the same kind of subject; a reviewer that flags every colon or "only" fails its `rejects-nothing` grader.
 
+The `comment-*` tests are doc comments harvested from a real pull request, with the owner's rewrite and notes: a sentence that stops short or lands its verb abruptly, and a sentence that holds its only signpost until the last word.
+
 `names-the-flaws` reads `graderFiles/notes.md` one point at a time: each top-level bullet (`- ...`) is one editor's point, and notes with no bullets count as a single point. Write one point per bullet, and say why a passage should go, not just that it should. The judge is asked about each point separately, so it cannot pad the list with the reviewer's own findings, which it did when asked to enumerate the points itself.

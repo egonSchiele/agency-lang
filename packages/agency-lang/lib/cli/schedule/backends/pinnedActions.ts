@@ -13,7 +13,7 @@ export const PINNED_ACTIONS: Record<string, PinnedAction> = {
     tag: "v4.1.7",
   },
   "egonSchiele/run-agency-action": {
-    sha: "4768784aa7611fafee0801e01cdaea9f06d08dfb",
-    tag: "v1.0.3",
+    sha: "bdae9e6bd4ac9cddbbebcef877c7d35ffe3cfa8c",
+    tag: "v1.1.0",
   },
 };

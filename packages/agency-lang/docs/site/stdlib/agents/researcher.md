@@ -11,6 +11,23 @@ a cited answer, retrying until every claim is grounded.
   is what it produces. Checking that answer against a wider task is the
   caller's job, via reviewAgent.
 
+## Types
+
+### ResearchEvalInput
+
+What an eval hands the researcher: the question. The shape the
+  `evals/researcher` suite uses as its input.
+
+```ts
+/** What an eval hands the researcher: the question. The shape the
+  `evals/researcher` suite uses as its input. */
+export type ResearchEvalInput = {
+  task: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L198))
+
 ## Functions
 
 ### buildTools
@@ -25,7 +42,7 @@ Return the researcher's tools: the encyclopedia and fetch tools that need
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L37))
 
 ### researcherAgent
 
@@ -74,4 +91,4 @@ Answer a research question from web and Wikipedia sources and return a
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L122))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L129))

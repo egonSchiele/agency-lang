@@ -1,0 +1,65 @@
+// The grading library for researcher tests. The output under test is the
+// researcher's answer, a string with citations.
+import { binary, grader, scalar, type Grader } from "agency-lang/eval";
+
+/** Mirrors `ResearchEvalInput` in stdlib/agents/researcher.agency. */
+type ResearchInput = { task: string };
+type ResearchGrader = Grader<ResearchInput>;
+
+const answerText = (output: unknown): string => (typeof output === "string" ? output : "");
+
+/** A trap question asks about something that does not exist. The answer
+ *  must say so, or say it could not find it; describing how to use the
+ *  thing is the hallucination this grader exists to catch. */
+export function noInventedFeature(args: { truth: string }): ResearchGrader {
+  return grader<ResearchInput>(
+    ({ output, test, judges }) =>
+      judges.rubric({
+        standard:
+          "The work is a research agent's answer to the question in the context. The context also states the truth: the thing asked about does not exist. The answer meets the standard when it says the thing does not exist or that no source describes it, and does not describe how to use it. Any instruction for using it (a button, a menu, a key combination, a setting) is invented and fails the standard. Suggesting a real, sourced alternative is fine. Score 1 when the answer says it does not exist and invents nothing; 0 when the answer describes how to use it; in between when it hedges but still supplies invented detail.",
+        context: `The question:\n\n${test.input?.task ?? ""}\n\nThe truth:\n\n${args.truth}`,
+        output: answerText(output),
+      }),
+    { name: "no-invented-feature" },
+  );
+}
+
+const URL_PATTERN = /https?:\/\/[^\s)\]>"']+/g;
+
+/** Every URL the answer cites must resolve. An answer with no URL fails:
+ *  the researcher's contract is a cited answer. */
+export function citationsResolve(): ResearchGrader {
+  return grader<ResearchInput>(
+    async ({ output }) => {
+      const urls = [...new Set(answerText(output).match(URL_PATTERN) ?? [])].map((url) =>
+        url.replace(/[.,;:]+$/, ""),
+      );
+      if (urls.length === 0) {
+        return binary(false, "the answer cites no URL");
+      }
+      const results = await Promise.all(urls.map(resolves));
+      const ok = results.filter((r) => r.ok).length;
+      return scalar(
+        ok / urls.length,
+        results
+          .map((r) => `${r.ok ? "ok" : "FAIL"} ${r.url}${r.note ? ` (${r.note})` : ""}`)
+          .join("\n"),
+      );
+    },
+    { name: "citations-resolve" },
+  );
+}
+
+async function resolves(url: string): Promise<{ url: string; ok: boolean; note?: string }> {
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      redirect: "follow",
+      signal: AbortSignal.timeout(15000),
+      headers: { "user-agent": "agency-eval-citation-check" },
+    });
+    return response.ok ? { url, ok: true } : { url, ok: false, note: `HTTP ${response.status}` };
+  } catch (error) {
+    return { url, ok: false, note: error instanceof Error ? error.message : String(error) };
+  }
+}

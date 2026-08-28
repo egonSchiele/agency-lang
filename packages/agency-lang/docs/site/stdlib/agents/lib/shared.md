@@ -72,6 +72,7 @@ llmOptions(
   reasoningEffort: ReasoningEffort | null = null,
   thinking: boolean = false,
   validationRetries: number = 0,
+  maxToolCallRounds: number = 0,
 ): any
 ```
 
@@ -87,6 +88,7 @@ Build an llm options object with an optional model override. Returns a
   @param reasoningEffort - Reasoning effort to request from the model, or null for none
   @param thinking - Whether to enable thinking mode, which allows the model to use more time and tokens to reason about its answer
   @param validationRetries - How many times to resend a structured-output call whose answer failed schema validation, or 0 for none
+  @param maxToolCallRounds - Tool-call rounds the call may use, or 0 for the configured default
 
 **Parameters:**
 
@@ -99,6 +101,7 @@ Build an llm options object with an optional model override. Returns a
 | reasoningEffort | `ReasoningEffort \| null` | null |
 | thinking | `boolean` | false |
 | validationRetries | `number` | 0 |
+| maxToolCallRounds | `number` | 0 |
 
 **Returns:** `any`
 

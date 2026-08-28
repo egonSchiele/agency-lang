@@ -8,6 +8,7 @@
 */
 import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
+import { evalValue } from "std::statelog"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { webTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
 import { reviewAgent } from "std::agents/review"
@@ -21,11 +22,14 @@ import { communicationTools } from "./lib/toolkits.agency"
 
 static const systemPrompt = """You are a research analyst. Answer the task using your source tools.
 
-- Ground every factual claim in a source and cite it.
+- Ground every factual claim in a source and cite it. A citation is the full URL of the page, written out (https://...), so the reader can open it. Do not cite a tool call or a search result number.
 - If your tools cannot retrieve the needed information, say so plainly. NEVER fabricate sources or facts.
+- If no source describes the thing the task asks about (a feature, a product, an event), say that no source describes it. Do not describe it from memory.
+- The task is your whole brief: you cannot ask the user anything. Answer with what you found, and say what you could not find.
+- If a page will not load, try another source; do not stop on one failure.
 
 ## Communicating with the user
-- Make sure the user is following what you're doing. Use the `whatIAmDoing` tool frequently to tell the user what you're doing.${SAVE_DRAFT_HINT}
+- Tell the user what you are doing with the `whatIAmDoing` tool when you start and when you change approach. Each call costs a tool round; spend the rounds on sources.${SAVE_DRAFT_HINT}
 """
 
 static const skills = agentSkill("researcher")
@@ -112,6 +116,9 @@ def researchLoop(
       provider: provider,
       tools: [...researchTools, ...extraTools, saveDraft],
       hostedTools: hostedSearchTools(model, provider),
+      // A research run is many searches and fetches; the default ten
+      // rounds end it before the sources are in.
+      maxToolCallRounds: 30,
     ),
     )
     saveDraft(answer)
@@ -166,4 +173,44 @@ export def researcherAgent(
       return answer
     }
   }
+}
+
+/** Approves the effects a research run needs, web fetches, searches,
+  Wikipedia, and the env reads that bind search keys, and rejects every
+  other interrupt, so a budget trip stays a failure. */
+def researchOnlyHandler(intr) {
+  return match(intr.effect) {
+    "std::http::fetch" => approve()
+    "std::http::fetchJSON" => approve()
+    "std::http::fetchMarkdown" => approve()
+    "std::search" => approve()
+    "std::tavilySearch" => approve()
+    "std::wikipedia::search" => approve()
+    "std::wikipedia::summary" => approve()
+    "std::wikipedia::article" => approve()
+    "std::env" => approve()
+    _ => reject()
+  }
+}
+
+/** What an eval hands the researcher: the question. The shape the
+  `evals/researcher` suite uses as its input. */
+export type ResearchEvalInput = {
+  task: string
+}
+
+/** Eval entry point: `agency eval run stdlib/agents/researcher.agency:evalMain
+  --suite <dir>`. Runs the researcher with a small budget under
+  researchOnlyHandler and returns the answer text, or a line saying why
+  there is none, so graders always get a string. */
+node evalMain(input: ResearchEvalInput): string {
+  evalValue(input)
+  let answer: Result<string> = failure("the researcher never ran")
+  handle {
+    answer = researcherAgent(task: input.task, maxCost: $3.00, maxTime: 6m)
+  } with researchOnlyHandler
+  if (answer is failure(err)) {
+    return "research agent failed: ${err}"
+  }
+  return answer.value
 }

@@ -34,7 +34,7 @@ export type WritingReviewEvalInput = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/review.agency#L442))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/review.agency#L510))
 
 ## Functions
 
@@ -50,13 +50,13 @@ Return the writing reviewer's tools: the file tools (to read the text
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/review.agency#L316))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/review.agency#L370))
 
 ### writingReviewAgent
 
 ```ts
 writingReviewAgent(
-  work: string,
+  text: string,
   task: string = "",
   guidelines: string = "",
   context: string = "",
@@ -74,7 +74,7 @@ Review prose for readability and return findings. error=true marks a
   Spelling and grammar are assumed checked separately: this agent reports
   only what needs judgment.
 
-  @param work - The text under review, or a request naming the files that
+  @param text - The text under review, or a request naming the files that
     hold it (and, if the caller wants the fixes applied, saying so)
   @param task - Who the text is for and what it must get across, or ""
   @param guidelines - The caller's own writing guidelines, as text (for
@@ -92,7 +92,7 @@ Review prose for readability and return findings. error=true marks a
 
 | Name | Type | Default |
 |---|---|---|
-| work | `string` |  |
+| text | `string` |  |
 | task | `string` | "" |
 | guidelines | `string` | "" |
 | context | `string` | "" |
@@ -107,4 +107,4 @@ Review prose for readability and return findings. error=true marks a
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/review.agency#L373))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/review.agency#L427))

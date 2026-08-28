@@ -18,7 +18,7 @@ export def writingAgent(userMsg: string): string {
   let reply = ""
   thread(label: "writing", summarize: true, session: "writing") {
     setMemoryId("writing")
-    reply = renderFeedback(writingReviewAgent(work: userMsg))
+    reply = renderFeedback(writingReviewAgent(text: userMsg))
   }
   return reply
 }

@@ -152,8 +152,8 @@ export def writingReviewAgent(
           )
         }
       }
-      let cuts = cutsOrNothing(work: work, task: task, model: model, provider: provider)
-      let tics = verbalTicsOrNothing(work: work, task: task, model: model, provider: provider)
+      let cuts = cutsOrNothing(work: work, task: task, guidelines: guidelines, context: context, model: model, provider: provider)
+      let tics = verbalTicsOrNothing(work: work, task: task, guidelines: guidelines, context: context, model: model, provider: provider)
     }
     return [...items, ...cuts, ...tics]
 

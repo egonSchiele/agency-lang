@@ -61,9 +61,25 @@ describe("grading one trace (through gradeRun on a directory of one)", () => {
 
     const grades = card.perInput[0].grades;
     expect(grades.map((g) => g.grader.name())).toEqual(["broken", "fine"]);
-    expect(grades[0].grade.score).toEqual({ kind: "scalar", value: 0 });
+    expect(grades[0].grade.score).toEqual({ kind: "binary", pass: false });
     expect(grades[0].grade.feedback).toContain("structured return failed schema validation");
     expect(grades[1].grade.score).toEqual({ kind: "scalar", value: 1 });
+  });
+
+  it("a must-pass grader that throws fails its gate", async () => {
+    const runDir = makeRun({ output: "x" });
+    const brokenGate = grader(
+      () => {
+        throw new Error("judge unavailable");
+      },
+      { name: "broken-gate", mustPass: true },
+    );
+    const advisory = grader(() => 1, { name: "advisory" });
+
+    const card = await gradeRun(runDir, ctx([brokenGate, advisory]));
+
+    expect(card.perInput[0].gatesPassed).toBe(false);
+    expect(card.perInput[0].grades.map((g) => g.grader.name())).toEqual(["broken-gate"]);
   });
 
   it("runs mustPass gates before advisory graders and short-circuits on failure", async () => {

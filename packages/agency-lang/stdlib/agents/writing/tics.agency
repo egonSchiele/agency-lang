@@ -5,7 +5,7 @@
   this file.
 */
 import { Feedback } from "std::agents/lib/feedback"
-import { llmOptions } from "std::agents/lib/shared"
+import { llmOptions, withContext } from "std::agents/lib/shared"
 import { readOnlyFileTools } from "std::agents/lib/toolkits"
 import { systemMessage, threadIsNew } from "std::thread"
 
@@ -76,15 +76,31 @@ How to report:
 
 If the text names files instead of holding the prose, read each file and review its contents."""
 
-def askForTics(work: string, task: string, model: string, provider: string): Feedback[] {
+def askForTics(
+  work: string,
+  task: string,
+  guidelines: string,
+  context: string,
+  model: string,
+  provider: string,
+): Feedback[] {
+  let guidelinesSection = ""
+  if (guidelines != "") {
+    guidelinesSection = """The caller's own writing guidelines. They outrank the rules above:
+<guidelines>
+${guidelines}
+</guidelines>
+
+"""
+  }
   if (threadIsNew()) {
     systemMessage(ticsPrompt)
   }
   return llm(
     """
-The text was written for this task:
+${guidelinesSection}The text was written for this task:
 <task>
-${task}
+${withContext(task: task, context: context)}
 </task>
 
 <text>
@@ -100,6 +116,8 @@ Return a list of feedback items.
 export def findVerbalTics(
   work: string,
   task: string,
+  guidelines: string,
+  context: string,
   model: string,
   provider: string,
 ): Feedback[] {
@@ -108,12 +126,14 @@ export def findVerbalTics(
 
   @param work - The text under review, or a request naming the files that hold it
   @param task - Who the text is for and what it must get across, or ""
+  @param guidelines - The caller's own writing guidelines, or ""
+  @param context - Extra material for the judgment, or ""
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   """
   let found: Feedback[] = []
   thread(label: "verbalTics") {
-    found = askForTics(work: work, task: task, model: model, provider: provider)
+    found = askForTics(work: work, task: task, guidelines: guidelines, context: context, model: model, provider: provider)
   }
   return [{ error: false, feedback: item.feedback } for item in found]
 }
@@ -121,6 +141,8 @@ export def findVerbalTics(
 export def verbalTicsOrNothing(
   work: string,
   task: string,
+  guidelines: string,
+  context: string,
   model: string,
   provider: string,
 ): Feedback[] {
@@ -130,10 +152,12 @@ export def verbalTicsOrNothing(
 
   @param work - The text under review, or a request naming the files that hold it
   @param task - Who the text is for and what it must get across, or ""
+  @param guidelines - The caller's own writing guidelines, or ""
+  @param context - Extra material for the judgment, or ""
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   """
-  const found = try findVerbalTics(work: work, task: task, model: model, provider: provider)
+  const found = try findVerbalTics(work: work, task: task, guidelines: guidelines, context: context, model: model, provider: provider)
   return match(found) {
     success(items) => items
     failure(_) => []

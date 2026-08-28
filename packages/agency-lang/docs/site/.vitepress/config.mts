@@ -341,6 +341,18 @@ export default defineConfig({
                   text: "agents/lib/toolkits",
                   link: "/stdlib/agents/lib/toolkits",
                 },
+                {
+                  text: "agents/writing/cuts",
+                  link: "/stdlib/agents/writing/cuts",
+                },
+                {
+                  text: "agents/writing/review",
+                  link: "/stdlib/agents/writing/review",
+                },
+                {
+                  text: "agents/writing/tics",
+                  link: "/stdlib/agents/writing/tics",
+                },
               ],
             },
             { text: "args", link: "/stdlib/args" },

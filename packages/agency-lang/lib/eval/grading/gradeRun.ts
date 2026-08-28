@@ -21,7 +21,7 @@ import { LlmJudge } from "./graders/llmJudge.js";
 import { AgencyTestGrader } from "./agencyTestGrader.js";
 import { loadGradingModule, loadGradingSnapshot } from "./gradingModule.js";
 import { Scorecard, type GraderGrade, type InputGrades } from "./scorecard.js";
-import { scalar } from "./grade.js";
+import { binary } from "./grade.js";
 import type { Grade, GraderInput, LoadedRun, JSON as Json } from "./types.js";
 
 /** Where each test's graders come from. Graders are test-side, like goal and
@@ -428,15 +428,16 @@ async function gradeInput(
 }
 
 /** A grader that throws (a judge whose structured reply failed validation,
- *  a missing file) scores 0 with the error as feedback, so one bad grade
- *  does not end the whole grading pass. */
+ *  a missing file) fails with the error as feedback, so one bad grade does
+ *  not end the whole grading pass. A binary fail, not scalar 0: a gate with
+ *  no threshold passes a scalar 0, and a crashed gate must short-circuit. */
 async function runGrader(grader: BaseGrader, input: GraderInput, test: Test): Promise<Grade> {
   try {
     return await grader.run(input);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     warn(`${test.id}: grader ${grader.name()} failed: ${message}`);
-    return scalar(0, `grader failed: ${message}`);
+    return binary(false, `grader failed: ${message}`);
   }
 }
 

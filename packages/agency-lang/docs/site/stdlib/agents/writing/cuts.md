@@ -16,6 +16,8 @@ this reader need it? It returns cuts only, never rewrites. Runs beside
 findCuts(
   work: string,
   task: string,
+  guidelines: string,
+  context: string,
   model: string,
   provider: string,
 ): Feedback[]
@@ -26,6 +28,8 @@ Find the parts of the text this reader does not need and return them as
 
   @param work - The text under review, or a request naming the files that hold it
   @param task - Who the text is for and what it must get across, or ""
+  @param guidelines - The caller's own writing guidelines, or ""
+  @param context - Extra material for the judgment, or ""
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
 
@@ -35,12 +39,14 @@ Find the parts of the text this reader does not need and return them as
 |---|---|---|
 | work | `string` |  |
 | task | `string` |  |
+| guidelines | `string` |  |
+| context | `string` |  |
 | model | `string` |  |
 | provider | `string` |  |
 
 **Returns:** `Feedback[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/cuts.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/cuts.agency#L71))
 
 ### cutsOrNothing
 
@@ -48,6 +54,8 @@ Find the parts of the text this reader does not need and return them as
 cutsOrNothing(
   work: string,
   task: string,
+  guidelines: string,
+  context: string,
   model: string,
   provider: string,
 ): Feedback[]
@@ -58,6 +66,8 @@ findCuts, with a failed call reported as no findings, so the main review
 
   @param work - The text under review, or a request naming the files that hold it
   @param task - Who the text is for and what it must get across, or ""
+  @param guidelines - The caller's own writing guidelines, or ""
+  @param context - Extra material for the judgment, or ""
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
 
@@ -67,9 +77,11 @@ findCuts, with a failed call reported as no findings, so the main review
 |---|---|---|
 | work | `string` |  |
 | task | `string` |  |
+| guidelines | `string` |  |
+| context | `string` |  |
 | model | `string` |  |
 | provider | `string` |  |
 
 **Returns:** `Feedback[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/cuts.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/cuts.agency#L97))

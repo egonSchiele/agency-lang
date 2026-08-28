@@ -17,6 +17,8 @@ language model reaches for that a careful editor cuts. The list is the
 findVerbalTics(
   work: string,
   task: string,
+  guidelines: string,
+  context: string,
   model: string,
   provider: string,
 ): Feedback[]
@@ -26,6 +28,8 @@ Find verbal tics in the text and return them as advisory findings.
 
   @param work - The text under review, or a request naming the files that hold it
   @param task - Who the text is for and what it must get across, or ""
+  @param guidelines - The caller's own writing guidelines, or ""
+  @param context - Extra material for the judgment, or ""
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
 
@@ -35,12 +39,14 @@ Find verbal tics in the text and return them as advisory findings.
 |---|---|---|
 | work | `string` |  |
 | task | `string` |  |
+| guidelines | `string` |  |
+| context | `string` |  |
 | model | `string` |  |
 | provider | `string` |  |
 
 **Returns:** `Feedback[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/tics.agency#L100))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/tics.agency#L116))
 
 ### verbalTicsOrNothing
 
@@ -48,6 +54,8 @@ Find verbal tics in the text and return them as advisory findings.
 verbalTicsOrNothing(
   work: string,
   task: string,
+  guidelines: string,
+  context: string,
   model: string,
   provider: string,
 ): Feedback[]
@@ -58,6 +66,8 @@ findVerbalTics, with a failed call reported as no findings. The main
 
   @param work - The text under review, or a request naming the files that hold it
   @param task - Who the text is for and what it must get across, or ""
+  @param guidelines - The caller's own writing guidelines, or ""
+  @param context - Extra material for the judgment, or ""
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
 
@@ -67,9 +77,11 @@ findVerbalTics, with a failed call reported as no findings. The main
 |---|---|---|
 | work | `string` |  |
 | task | `string` |  |
+| guidelines | `string` |  |
+| context | `string` |  |
 | model | `string` |  |
 | provider | `string` |  |
 
 **Returns:** `Feedback[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/tics.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/tics.agency#L141))

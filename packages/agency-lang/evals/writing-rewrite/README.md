@@ -18,12 +18,11 @@ pnpm run agency eval grade runs/writing-rewrite
 
 ## How it relates to writing-review
 
-The inputs are the reviewer suite's. Each test here is a `test.json` whose
-`files` and `graderFiles` point into `../../writing-review/<test>/`, so the
-text, the assignment, the editor's notes, and the editor's cleaned version
-are written once. Only the tests with a `cleaned.md` are included, plus the
-two clean-text controls, because the rewrite graders need a ground-truth
-text to compare against.
+Each test here is a copy of a `writing-review` test: the same text,
+assignment, editor's notes, and cleaned version. The copies are kept in
+step by hand; when a reviewer test changes, change the copy too. Only
+tests with a `cleaned.md` are included, plus the two clean-text controls,
+because the rewrite graders need a ground-truth text to compare against.
 
 The two suites answer different questions. A rewrite can come out well when
 the reviewer missed a point, because the rewriting model fixes it anyway,

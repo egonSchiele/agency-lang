@@ -1,19 +1,56 @@
 // The grading library for writing-rewrite tests. The output under test is
-// the rewritten text. Each test points at a writing-review test's files and
-// graderFiles, so the ground truth (the editor's notes and cleaned version)
-// is shared with the reviewer suite; only what is graded differs.
-import { binary, grader, scalar, type Grade, type Grader } from "agency-lang/eval";
+// the rewritten text. Ground truth is the editor's notes and cleaned version
+// in the test's graderFiles/. The tests are copies of writing-review tests
+// and are kept in step with that suite by hand.
+import * as fs from "fs";
+import * as path from "path";
 
-import {
-  type WritingReviewInput,
-  editorPoints,
-  getAssignment,
-  getSourceFileText,
-  harvest,
-} from "../../writing-review/lib/testFiles.js";
+import { binary, grader, scalar, type Grade, type Grader, type Test } from "agency-lang/eval";
+
 import * as prompts from "./templates.js";
 
+/** Mirrors `WritingReviewEvalInput` in stdlib/agents/writing/review.agency. */
+type WritingReviewInput = { assignment: string; sourceFile: string };
 type RewriteGrader = Grader<WritingReviewInput>;
+
+const getAssignment = (test: Test<WritingReviewInput>): string => test.input?.assignment ?? "";
+const getSourceFile = (test: Test<WritingReviewInput>): string => test.input?.sourceFile ?? "";
+
+/** The editor's files for a harvested test: `notes.md` says what was wrong
+ *  and `cleaned.md` is the text after editing. */
+function harvest(graderFiles: string): { notes: string; cleaned: string } {
+  if (graderFiles === "") {
+    throw new Error("harvestedRewriteGraders needs a graderFiles/ directory");
+  }
+  return {
+    notes: fs.readFileSync(path.join(graderFiles, "notes.md"), "utf8"),
+    cleaned: fs.readFileSync(path.join(graderFiles, "cleaned.md"), "utf8"),
+  };
+}
+
+/** The editor's points from notes.md, one per top-level bullet or paragraph.
+ *  Indented lines continue the point above; a paragraph ending in a colon
+ *  owns the bullets under it. */
+function editorPoints(notes: string): string[] {
+  const points: string[] = [];
+  let absorbing = false;
+  for (const paragraph of notes.split(/\n\s*\n/)) {
+    for (const line of paragraph.split("\n")) {
+      if (line.trim() === "") continue;
+      const isBullet = /^[-*] /.test(line);
+      const text = isBullet ? line.slice(2).trim() : line.trim();
+      const continues = (isBullet && absorbing) || (!isBullet && /^\s/.test(line));
+      if (continues && points.length > 0) {
+        points[points.length - 1] += `\n${text}`;
+      } else {
+        points.push(text);
+        absorbing = !isBullet && text.endsWith(":");
+      }
+    }
+    absorbing = false;
+  }
+  return points.length > 0 ? points : [notes.trim()];
+}
 
 const rewrittenText = (output: unknown): string => (typeof output === "string" ? output : "");
 
@@ -47,13 +84,10 @@ function flawsFixed(): RewriteGrader {
 /** What the editor removed must be absent from the rewrite. */
 function matchesCuts(): RewriteGrader {
   return grader<WritingReviewInput>(
-    ({ output, workdir, test, graderFiles, judges }) => {
+    ({ output, workdirFile, test, graderFiles, judges }) => {
       const { cleaned } = harvest(graderFiles);
-      if (cleaned === null) {
-        throw new Error("matchesCuts needs graderFiles/cleaned.md");
-      }
       return judges.rubric({
-        ...prompts.matchesCuts({ sourceFileText: getSourceFileText(workdir, test), cleaned }),
+        ...prompts.matchesCuts({ sourceFileText: workdirFile(getSourceFile(test)), cleaned }),
         output: rewrittenText(output),
       });
     },
@@ -64,10 +98,10 @@ function matchesCuts(): RewriteGrader {
 /** No invented fact, and every identifier kept. */
 function faithful(): RewriteGrader {
   return grader<WritingReviewInput>(
-    ({ output, workdir, test, judges }) =>
+    ({ output, workdirFile, test, judges }) =>
       judges.rubric({
         ...prompts.faithful({
-          sourceFileText: getSourceFileText(workdir, test),
+          sourceFileText: workdirFile(getSourceFile(test)),
           assignment: getAssignment(test),
         }),
         output: rewrittenText(output),
@@ -99,9 +133,9 @@ export function cleanRewriteGraders(): RewriteGrader[] {
   return [
     producesText(),
     grader<WritingReviewInput>(
-      ({ output, workdir, test, judges }) =>
+      ({ output, workdirFile, test, judges }) =>
         judges.rubric({
-          ...prompts.leavesCleanAlone({ sourceFileText: getSourceFileText(workdir, test) }),
+          ...prompts.leavesCleanAlone({ sourceFileText: workdirFile(getSourceFile(test)) }),
           output: rewrittenText(output),
         }),
       { name: "leaves-clean-alone" },

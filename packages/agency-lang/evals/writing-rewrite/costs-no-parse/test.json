@@ -1,9 +1,9 @@
 {
   "description": "Ungrammatical shorthand: a verb used as a noun.",
-  "files": "../../writing-review/costs-no-parse/files",
+  "files": "./files",
   "input": {
     "assignment": "Write one sentence for the developer notes explaining why the compile cache skips unchanged files.",
     "sourceFile": "text.md"
   },
-  "graderFiles": "../../writing-review/costs-no-parse/graderFiles"
+  "graderFiles": "./graderFiles"
 }

@@ -1,9 +1,9 @@
 {
   "description": "Overemphasizing a new flag when writing docs for it",
-  "files": "../../writing-review/config-doc/files",
+  "files": "./files",
   "input": {
     "assignment": "Add documentation for a new flag --refuse-splices.",
     "sourceFile": "notes.md"
   },
-  "graderFiles": "../../writing-review/config-doc/graderFiles"
+  "graderFiles": "./graderFiles"
 }

@@ -1,0 +1,1 @@
+A question whose meaning changes when it is read by itself versus in the context of the full conversation. The LLM's response should show that it considered the question while keeping in mind the context provided in the rest of the conversation.

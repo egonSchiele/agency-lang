@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { editorPoints } from "./testFiles.js";
+import { editorPoints } from "./reviewGraders.js";
 
 describe("editorPoints", () => {
   it("takes each top-level bullet as a point", () => {

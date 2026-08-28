@@ -1,9 +1,9 @@
 {
   "description": "Writing an excessively long diagnostic message.",
-  "files": "../../writing-review/diagnostic/files",
+  "files": "./files",
   "input": {
     "assignment": "Write a new diagnostic message for when we decline to compile code because it contains splices.",
     "sourceFile": "notes.md"
   },
-  "graderFiles": "../../writing-review/diagnostic/graderFiles"
+  "graderFiles": "./graderFiles"
 }

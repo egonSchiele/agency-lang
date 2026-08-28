@@ -1,6 +1,5 @@
 /** @module
-  @summary Rewrite prose from the writing reviewer's findings and return the
-  new text.
+  @summary Rewrite prose from the writing reviewer's findings and return the new text.
 
   The writing reviewer (`std::agents/writing/review`) returns a list of
   findings. That suits a caller that wants to apply them itself. A caller
@@ -72,7 +71,7 @@ ${text}
  * Rewrites a piece of text according to the findings of a writing review.
  *
  * Quick note on the `passes` parameter: a single pass is usually enough.
- * Running the eval suite comparing one passes to two passes,
+ * Running the eval suite comparing one pass to two passes,
  * the accuracy went from 0.769 -> 0.795.
  *
  * Usage example:
@@ -126,6 +125,7 @@ export def writingRewriteAgent(
         maxTime: maxTime,
         model: model,
         provider: provider,
+        failOpen: false,
       )
       if (reviewed is failure(err)) {
         reviewFailure = "${err}"
@@ -155,8 +155,7 @@ export def writingRewriteAgent(
 }
 
 /** Eval entry point: `agency eval run stdlib/agents/writing/rewrite.agency:evalMain
-  --suite <dir>`. Takes the same input as the reviewer's `evalMain`, so the
-  `evals/writing-rewrite` suite reuses the reviewer suite's test files, and
+  --suite <dir>`. Takes the same input as the reviewer's `evalMain` and
   returns the rewritten text. Effects are decided here as in the reviewer:
   the seeded input file is read `with approve`, and the agent runs under
   `docsOnlyHandler`, so a budget trip comes back as text rather than an

@@ -1,9 +1,9 @@
 {
   "description": "Describes a syntax in words when a code example would say it at once.",
-  "files": "../../writing-review/describe-not-show/files",
+  "files": "./files",
   "input": {
     "assignment": "Write the standard for an LLM judge that scores an Agency solution for idiomatic use of handlers and match. The judge reads the standard and the solution and returns a score from 0 to 1.",
     "sourceFile": "standard.md"
   },
-  "graderFiles": "../../writing-review/describe-not-show/graderFiles"
+  "graderFiles": "./graderFiles"
 }

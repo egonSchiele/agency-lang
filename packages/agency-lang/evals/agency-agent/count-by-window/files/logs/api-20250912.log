@@ -1,0 +1,28 @@
+2025-09-12T10:07:41 INFO api: user login
+2025-09-12T08:00:29 INFO api: slow query
+2025-09-12T10:46:09 CRITICAL api: disk usage above threshold
+2025-09-12T15:44:05 WARNING api: slow query
+2025-09-12T01:34:51 INFO api: request completed
+2025-09-12T14:31:49 INFO api: retrying job
+2025-09-12T18:50:46 INFO api: connection reset by peer
+2025-09-12T03:12:41 INFO api: retrying job
+2025-09-12T07:43:23 INFO api: token expired
+2025-09-12T04:03:53 INFO api: disk usage above threshold
+2025-09-12T09:17:26 WARNING api: connection reset by peer
+2025-09-12T00:17:06 INFO api: token expired
+2025-09-12T23:43:13 ERROR api: token expired
+2025-09-12T01:07:30 INFO api: cache miss
+2025-09-12T07:00:46 CRITICAL api: user login
+2025-09-12T18:30:49 INFO api: retrying job
+2025-09-12T16:02:22 INFO api: retrying job
+2025-09-12T08:57:40 ERROR api: cache miss
+2025-09-12T23:03:35 INFO api: user login
+2025-09-12T03:58:47 ERROR api: retrying job
+2025-09-12T05:45:28 INFO api: retrying job
+2025-09-12T01:25:05 CRITICAL api: token expired
+2025-09-12T17:18:45 INFO api: token expired
+2025-09-12T22:04:44 INFO api: cache miss
+2025-09-12T01:00:16 INFO api: connection reset by peer
+2025-09-12T11:28:39 INFO api: token expired
+2025-09-12T17:02:49 ERROR api: cache miss
+2025-09-12T19:32:36 INFO api: disk usage above threshold

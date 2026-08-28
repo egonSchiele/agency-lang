@@ -1,0 +1,6 @@
+{
+  "description": "Pack a nested tree of JSONL files into a layout with a per-directory entry cap that applies to the output root too, and unpack it byte for byte. A round trip that works but leaves too many entries at the top level is the pattern behind terminal-bench reshard-c4-data.",
+  "tags": ["medium"],
+  "files": "./files",
+  "input": "Write two Python scripts in the current directory. pack.py <in> <out> copies the file tree under <in> into <out> in a layout where no directory holds more than 12 entries (files and directories together, and this applies to <out> itself) and no file is larger than 16 KB (16384 bytes), splitting files as needed. Create <out> if it does not exist. unpack.py <dir> reverses it in place: after it runs, <dir> holds the original tree with the original relative paths and the exact original bytes, and nothing else. Develop and test against events/ in the current directory. The scripts must also work on other trees shaped like it, with different sizes and nesting."
+}

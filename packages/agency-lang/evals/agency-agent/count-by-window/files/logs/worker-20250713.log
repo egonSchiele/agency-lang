@@ -1,0 +1,23 @@
+2025-07-13T00:22:23 WARNING worker: slow query
+2025-07-13T21:55:26 INFO worker: cache miss
+2025-07-13T09:58:14 INFO worker: slow query
+2025-07-13T22:24:42 WARNING worker: retrying job
+2025-07-13T20:57:22 CRITICAL worker: cache miss
+2025-07-13T19:20:24 WARNING worker: cache miss
+2025-07-13T09:06:27 INFO worker: request completed
+2025-07-13T02:51:26 INFO worker: retrying job
+2025-07-13T23:52:11 ERROR worker: slow query
+2025-07-13T13:20:34 ERROR worker: token expired
+2025-07-13T06:12:10 INFO worker: retrying job
+2025-07-13T05:09:07 INFO worker: user login
+2025-07-13T04:27:08 INFO worker: slow query
+2025-07-13T23:44:43 INFO worker: slow query
+2025-07-13T00:22:49 INFO worker: retrying job
+2025-07-13T22:31:37 WARNING worker: user login
+2025-07-13T20:05:08 CRITICAL worker: user login
+2025-07-13T04:13:23 INFO worker: retrying job
+2025-07-13T23:22:04 WARNING worker: disk usage above threshold
+2025-07-13T16:29:56 INFO worker: cache miss
+2025-07-13T06:44:58 INFO worker: request completed
+2025-07-13T09:02:17 INFO worker: cache miss
+2025-07-13T03:52:51 ERROR worker: connection reset by peer

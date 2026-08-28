@@ -95,8 +95,8 @@ export def writingRewriteAgent(
   provider: string = "",
 ): Result<string> {
   """
-  Review prose and return it rewritten with the findings applied. Text that
-  the reviewer finds nothing wrong with comes back unchanged.
+  Review prose and return it rewritten with the findings applied. If
+  the reviewer finds nothing wrong with the text, send it back unchanged.
 
   @param text - The text to rewrite
   @param task - Who the text is for and what it must get across, or ""
@@ -162,17 +162,6 @@ export def writingRewriteAgent(
   `docsOnlyHandler`, so a budget trip comes back as text rather than an
   interrupt escaping the entry point. */
 node evalMain(input: WritingReviewEvalInput): string {
-  return rewriteForEval(input, 1)
-}
-
-/** The same eval with two review-and-rewrite rounds, for measuring whether
-  the second round earns its cost:
-  `agency eval run stdlib/agents/writing/rewrite.agency:evalMainTwoPasses --suite <dir>`. */
-node evalMainTwoPasses(input: WritingReviewEvalInput): string {
-  return rewriteForEval(input, 2)
-}
-
-def rewriteForEval(input: WritingReviewEvalInput, passes: number): string {
   evalValue(input)
   const source = read(input.sourceFile) with approve
   if (source is failure(readErr)) {
@@ -180,11 +169,7 @@ def rewriteForEval(input: WritingReviewEvalInput, passes: number): string {
   }
   let rewritten: Result<string> = failure("the rewriter never ran")
   handle {
-    rewritten = writingRewriteAgent(
-      text: source.value,
-      task: input.assignment,
-      passes: passes,
-    )
+    rewritten = writingRewriteAgent(text: source.value, task: input.assignment, passes: 1)
   } with docsOnlyHandler
   if (rewritten is failure(err)) {
     return "rewrite agent failed: ${err}"

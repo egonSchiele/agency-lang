@@ -1,0 +1,16 @@
+{
+  "description": "A question whose literal reading is wrong but whose reading in the conversation is right. Earlier turns fix the setting: a web app where each request is a separate process. The last message says Python cannot pause at a line and resume there. Literally, generators can; in that setting, they cannot, because a suspended generator does not survive a process boundary. A good answer holds to the setting.",
+  "input": {
+    "history": [
+      {
+        "role": "user",
+        "content": "I'm building a web app on top of LangGraph. The graph runs inside request handlers, and each request is handled by a separate worker process; nothing in memory survives from one request to the next. I want to use LangGraph's human-in-the-loop feature so the graph can stop, ask the user something, and continue once they answer in a later request."
+      },
+      {
+        "role": "assistant",
+        "content": "That fits LangGraph's interrupt() with a checkpointer: the graph state is saved when it stops, and a later request resumes it from the saved checkpoint. Since each request is its own process, the checkpointer has to be a persistent one (Postgres, Redis, or similar), not the in-memory saver."
+      }
+    ],
+    "task": "Right, and that's why the human-in-the-loop feature cannot pause at a specific line in my node and resume from that exact line. Python doesn't have the ability to do that. Correct?"
+  }
+}

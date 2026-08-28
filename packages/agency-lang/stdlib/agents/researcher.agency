@@ -15,7 +15,7 @@ import { reviewAgent } from "std::agents/review"
 import { now } from "std::date"
 import { agentSkill } from "std::skills"
 import { Critique, revise } from "std::strategy"
-import { systemMessage, threadIsNew } from "std::thread"
+import { ThreadMessage, assistantMessage, systemMessage, threadIsNew, userMessage } from "std::thread"
 
 import { communicationTools } from "./lib/toolkits.agency"
 
@@ -91,6 +91,7 @@ Retrieve more and fix them.
 def researchLoop(
   task: string,
   context: string,
+  history: ThreadMessage[],
   maxAttempts: number,
   model: string,
   provider: string,
@@ -99,6 +100,15 @@ def researchLoop(
   const researchTools = buildTools()
   if (threadIsNew()) {
     systemMessage(systemPrompt)
+    // The conversation so far, so the question is read in its context. A
+    // shared session already holds its history and is not seeded again.
+    for (message in history) {
+      if (message.role == "assistant") {
+        assistantMessage(message.content)
+      } else {
+        userMessage(message.content)
+      }
+    }
   }
   const question = withContext(task: task, context: context)
   const startedAt = now()
@@ -136,6 +146,7 @@ export def researcherAgent(
   provider: string = "",
   session: string = "",
   extraTools: any[] = [],
+  history: ThreadMessage[] = [],
 ): Result<string> {
   """
   Answer a research question from web and Wikipedia sources and return a
@@ -143,6 +154,8 @@ export def researcherAgent(
 
   @param task - The research question
   @param context - Extra material folded into the prompt, or ""
+  @param history - The conversation before the question, oldest first, so
+    the question is read in its context; [] for none
   @param maxAttempts - Answer-and-fix attempts before returning
   @param maxCost - Hard spend cap
   @param maxTime - Hard wall-clock cap
@@ -158,6 +171,7 @@ export def researcherAgent(
       answer = researchLoop(
         task: task,
         context: context,
+        history: history,
         maxAttempts: maxAttempts,
         model: model,
         provider: provider,
@@ -193,10 +207,12 @@ def researchOnlyHandler(intr) {
   }
 }
 
-/** What an eval hands the researcher: the question. The shape the
-  `evals/researcher` suite uses as its input. */
+/** What an eval hands the researcher: the question, and the conversation
+  before it when the test has one. The shape the `evals/researcher` suite
+  uses as its input. */
 export type ResearchEvalInput = {
-  task: string
+  task: string;
+  history?: ThreadMessage[]
 }
 
 /** Eval entry point: `agency eval run stdlib/agents/researcher.agency:evalMain
@@ -205,9 +221,13 @@ export type ResearchEvalInput = {
   there is none, so graders always get a string. */
 node evalMain(input: ResearchEvalInput): string {
   evalValue(input)
+  let history: ThreadMessage[] = []
+  if (input.history != null) {
+    history = input.history
+  }
   let answer: Result<string> = failure("the researcher never ran")
   handle {
-    answer = researcherAgent(task: input.task, maxCost: $3.00, maxTime: 6m)
+    answer = researcherAgent(task: input.task, history: history, maxCost: $3.00, maxTime: 6m)
   } with researchOnlyHandler
   if (answer is failure(err)) {
     return "research agent failed: ${err}"

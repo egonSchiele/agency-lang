@@ -3,7 +3,7 @@
 import { binary, grader, scalar, type Grader } from "agency-lang/eval";
 
 /** Mirrors `ResearchEvalInput` in stdlib/agents/researcher.agency. */
-type ResearchInput = { task: string };
+type ResearchInput = { task: string; history?: { role: string; content: string }[] };
 type ResearchGrader = Grader<ResearchInput>;
 
 const answerText = (output: unknown): string => (typeof output === "string" ? output : "");
@@ -21,6 +21,26 @@ export function noInventedFeature(args: { truth: string }): ResearchGrader {
         output: answerText(output),
       }),
     { name: "no-invented-feature" },
+  );
+}
+
+/** A question whose literal reading and its reading in the conversation
+ *  differ. The answer must use the conversation: a constraint fixed in an
+ *  earlier turn still holds in the last one. */
+export function readsInContext(args: { truth: string }): ResearchGrader {
+  return grader<ResearchInput>(
+    ({ output, test, judges }) => {
+      const history = (test.input?.history ?? [])
+        .map((message) => `${message.role}: ${message.content}`)
+        .join("\n\n");
+      return judges.rubric({
+        standard:
+          "The work is a research agent's answer to the last message of the conversation in the context. The context also states the truth about that question. The answer meets the standard when it reads the last message in the light of the earlier turns and gives the answer that is right for that setting, as the truth describes. An answer that is true of the literal last message but wrong for the setting the conversation fixed fails, even if every sentence in it is accurate. Score in proportion to how much of the truth the answer gets right and whether it holds to the setting.",
+        context: `The conversation before the last message:\n\n${history}\n\nThe last message, which the answer responds to:\n\n${test.input?.task ?? ""}\n\nThe truth:\n\n${args.truth}`,
+        output: answerText(output),
+      });
+    },
+    { name: "reads-in-context" },
   );
 }
 

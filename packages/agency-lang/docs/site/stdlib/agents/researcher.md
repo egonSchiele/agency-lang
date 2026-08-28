@@ -15,18 +15,21 @@ a cited answer, retrying until every claim is grounded.
 
 ### ResearchEvalInput
 
-What an eval hands the researcher: the question. The shape the
-  `evals/researcher` suite uses as its input.
+What an eval hands the researcher: the question, and the conversation
+  before it when the test has one. The shape the `evals/researcher` suite
+  uses as its input.
 
 ```ts
-/** What an eval hands the researcher: the question. The shape the
-  `evals/researcher` suite uses as its input. */
+/** What an eval hands the researcher: the question, and the conversation
+  before it when the test has one. The shape the `evals/researcher` suite
+  uses as its input. */
 export type ResearchEvalInput = {
-  task: string
+  task: string;
+  history?: ThreadMessage[]
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L198))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L213))
 
 ## Functions
 
@@ -57,6 +60,7 @@ researcherAgent(
   provider: string = "",
   session: string = "",
   extraTools: any[] = [],
+  history: ThreadMessage[] = [],
 ): Result<string>
 ```
 
@@ -65,6 +69,8 @@ Answer a research question from web and Wikipedia sources and return a
 
   @param task - The research question
   @param context - Extra material folded into the prompt, or ""
+  @param history - The conversation before the question, oldest first, so
+    the question is read in its context; [] for none
   @param maxAttempts - Answer-and-fix attempts before returning
   @param maxCost - Hard spend cap
   @param maxTime - Hard wall-clock cap
@@ -86,9 +92,10 @@ Answer a research question from web and Wikipedia sources and return a
 | provider | `string` | "" |
 | session | `string` | "" |
 | extraTools | `any[]` | [] |
+| history | `ThreadMessage[]` | [] |
 
 **Returns:** `Result<string>`
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L129))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L139))

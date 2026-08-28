@@ -1,0 +1,9 @@
+{
+  "description": "Ungrammatical shorthand: a verb used as a noun.",
+  "files": "./files",
+  "input": {
+    "assignment": "Write one sentence for the developer notes explaining why the compile cache skips unchanged files.",
+    "sourceFile": "text.md"
+  },
+  "graderFiles": "./graderFiles"
+}

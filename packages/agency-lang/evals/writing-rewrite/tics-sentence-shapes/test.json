@@ -1,0 +1,9 @@
+{
+  "description": "A doc section whose facts are right but whose sentences are shaped for effect: a negative list with a colon reveal, a stakes-raising sentence, mirrored clauses, a reframe, and flourishes that close paragraphs without a fact.",
+  "files": "./files",
+  "input": {
+    "assignment": "Write the section of a developer doc that explains how the optimizer reads a mutator model's reply for a text target, for a contributor about to change that code.",
+    "sourceFile": "reply-contract.md"
+  },
+  "graderFiles": "./graderFiles"
+}

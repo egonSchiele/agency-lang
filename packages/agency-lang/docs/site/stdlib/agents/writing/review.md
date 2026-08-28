@@ -34,7 +34,7 @@ export type WritingReviewEvalInput = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/review.agency#L510))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/review.agency#L517))
 
 ## Functions
 
@@ -66,6 +66,7 @@ writingReviewAgent(
   provider: string = "",
   session: string = "",
   extraTools: any[] = [],
+  failOpen: boolean = true,
 ): Result<Feedback[]>
 ```
 
@@ -87,6 +88,9 @@ Review prose for readability and return findings. error=true marks a
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  @param failOpen - When true, a review that could not run (budget, policy,
+    model error) returns no findings instead of a failure. Pass false to get
+    the failure, for callers that must not mistake a failed review for a clean one
 
 **Parameters:**
 
@@ -102,6 +106,7 @@ Review prose for readability and return findings. error=true marks a
 | provider | `string` | "" |
 | session | `string` | "" |
 | extraTools | `any[]` | [] |
+| failOpen | `boolean` | true |
 
 **Returns:** `Result<Feedback[]>`
 

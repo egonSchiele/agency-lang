@@ -1,0 +1,1 @@
+- "I said it before checking" is a phrase the author overuses, and it grates. Drop it; "that was wrong" is enough.

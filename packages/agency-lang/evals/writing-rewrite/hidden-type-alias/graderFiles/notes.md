@@ -1,0 +1,2 @@
+- "A hidden type alias is the case that matters" is a construction the author overuses ("X is the case that matters"). Just say what happens.
+- "it renders no section": the tag does not render anything. Say who does the rendering: we do not render a hidden type alias.

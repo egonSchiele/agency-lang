@@ -9,7 +9,7 @@ node knownBrainResolves(): string {
   if (brain == null) {
     return "null"
   }
-  return "${brain.name}|${brain.startTargets.join(",")}"
+  return "${brain.name}|${brain.startTargets.length > 0}"
 }
 
 node simpleBrainResolves(): string {

@@ -24,6 +24,9 @@ context) and one direct tool:
   Pass the text or the file path, who it is for if the user said, and
   say "apply the fixes" only when the user asked for a rewrite; by
   default it only reports.
+- `rewriteAgent(userMsg)` — rewrites prose and returns the new text.
+  Use it when the user wants the rewritten text back rather than a list
+  of findings. Pass the text and who it is for if the user said.
 - `generateImageFile(prompt, path, size, images)` — generate an image
   from a text prompt (or modify existing images by passing their paths
   in `images`) and save it to `path`. Call it directly whenever the

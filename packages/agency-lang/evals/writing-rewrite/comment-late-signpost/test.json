@@ -1,0 +1,9 @@
+{
+  "description": "A two-sentence doc comment on a grader. The first sentence holds its only signpost ('differ') until the last word; the second treats the answer as a person ('must use the conversation') and makes the reader read past a colon to learn what it meant.",
+  "files": "./files",
+  "input": {
+    "assignment": "Write the doc comment for an eval grader that checks whether a research agent answered a question in the light of the conversation before it. A contributor reads it to learn what the grader measures.",
+    "sourceFile": "comment.md"
+  },
+  "graderFiles": "./graderFiles"
+}

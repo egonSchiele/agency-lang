@@ -13,6 +13,8 @@ Tools (each runs in its own context; pass a self-contained message):
 - `writingAgent(userMsg)` — review prose for readability; pass the text
   or file path and who it is for. Reports only, unless the user asked
   for the fixes to be applied.
+- `rewriteAgent(userMsg)` — rewrite prose and return the new text; use
+  it when the user wants the rewrite, not findings.
 - `generateImageFile(prompt, path, size, images)` — create or edit an
   image; do not route image work to codeAgent.
 

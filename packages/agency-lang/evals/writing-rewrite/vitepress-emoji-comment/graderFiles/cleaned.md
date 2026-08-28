@@ -1,0 +1,2 @@
+We disable all emoji in Vitepress because agency namespaces use `::`, and a heading like `std::notes::create`, which contains `:notes:`, was getting rewritten to a notes emoji (🎶).
+md.core.ruler.disable("emoji", true);

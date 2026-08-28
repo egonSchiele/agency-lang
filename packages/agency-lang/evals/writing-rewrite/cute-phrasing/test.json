@@ -1,0 +1,9 @@
+{
+  "description": "Cute turns of phrase and code written about as if it were a person, where a plain directive to the reader was needed.",
+  "files": "./files",
+  "input": {
+    "assignment": "Write the standard for an LLM judge that scores an Agency solution. The judge reads the standard and the solution and returns a score from 0 to 1.",
+    "sourceFile": "standard.md"
+  },
+  "graderFiles": "./graderFiles"
+}

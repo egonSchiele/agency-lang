@@ -1,0 +1,8 @@
+{
+  "description": "Plain prose on the same kind of subject as the tic tests, written without any of the patterns. A reviewer that flags every colon, every 'only', or every short sentence as a tic fails here.",
+  "files": "./files",
+  "input": {
+    "assignment": "Explain to a contributor, in one short doc section, what the formatted grader in the coding eval suite checks.",
+    "sourceFile": "notes.md"
+  }
+}

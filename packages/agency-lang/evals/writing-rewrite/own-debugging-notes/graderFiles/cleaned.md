@@ -1,0 +1,1 @@
+**The stdlib entry nodes run their worker under `docsOnlyHandler`.** Each `evalMain` in `stdlib/agents/` wraps its worker in `handle { ... } with docsOnlyHandler` (`std::agents/lib/shared`), which approves `std::read` of the docs that ship in the package (`bundledDocsDir()` in `std::skills`) and rejects every other interrupt.

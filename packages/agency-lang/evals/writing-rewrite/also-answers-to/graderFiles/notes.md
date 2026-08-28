@@ -1,0 +1,2 @@
+- "also answers to" is odd phrasing for a command alias. Say "is an alias for".
+- "if you prefer to keep the whole family under one name" is not needed; the reader can decide that for themselves.

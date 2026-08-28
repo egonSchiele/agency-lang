@@ -1,0 +1,9 @@
+{
+  "description": "A judge rubric that announces its own structure, shouts rules in capitals, uses a negative list for rhythm, gives the rule a clever name, and writes about the code as if it were a person.",
+  "files": "./files",
+  "input": {
+    "assignment": "Write the standard for an LLM judge that scores a solution to the guards eval. The judge reads the standard and the solution and returns a score from 0 to 1.",
+    "sourceFile": "standard.md"
+  },
+  "graderFiles": "./graderFiles"
+}

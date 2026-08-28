@@ -345,6 +345,10 @@ export default defineConfig({
                   text: "agents/writing/review",
                   link: "/stdlib/agents/writing/review",
                 },
+                {
+                  text: "agents/writing/rewrite",
+                  link: "/stdlib/agents/writing/rewrite",
+                },
               ],
             },
             { text: "args", link: "/stdlib/args" },

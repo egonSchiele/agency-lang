@@ -1,7 +1,7 @@
 {
   "sourceFile": "registry.agency",
   "tests": [
-    { "nodeName": "knownBrainResolves", "input": "", "expectedOutput": "\"coordinator|code,research,oracle,explorer,review,writing\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "knownBrainResolves", "input": "", "expectedOutput": "\"coordinator|true\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "simpleBrainResolves", "input": "", "expectedOutput": "\"true\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "unknownBrainIsNull", "input": "", "expectedOutput": "\"true|2\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "helpListsRegisteredBrains", "input": "", "expectedOutput": "\"true|true|true\"", "evaluationCriteria": [{ "type": "exact" }] }

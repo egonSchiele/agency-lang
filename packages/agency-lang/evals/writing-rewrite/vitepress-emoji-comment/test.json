@@ -1,0 +1,9 @@
+{
+  "description": "A code comment that buries its reason under context",
+  "files": "./files",
+  "input": {
+    "assignment": "Write a code comment above the line in a VitePress config that disables the emoji plugin, to explain why it is disabled.",
+    "sourceFile": "comment.md"
+  },
+  "graderFiles": "./graderFiles"
+}

@@ -1,0 +1,9 @@
+{
+  "description": "An overused self-correction phrase in a chat message.",
+  "files": "./files",
+  "input": {
+    "assignment": "Write the opening of a chat message to a colleague correcting something you said earlier.",
+    "sourceFile": "text.md"
+  },
+  "graderFiles": "./graderFiles"
+}

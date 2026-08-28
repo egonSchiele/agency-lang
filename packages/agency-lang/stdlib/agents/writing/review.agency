@@ -11,44 +11,305 @@
 */
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { llmOptions, withContext, docsOnlyHandler } from "std::agents/lib/shared"
-import { communicationTools, writableFileTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
+import { communicationTools, readOnlyFileTools, writableFileTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
 import { systemMessage, threadIsNew } from "std::thread"
 
 optimize static const systemPrompt = """You review prose for readability and for whether it reliably communicates the facts this reader needs. Spelling and grammar checkers run separately; your role is the judgment layer — find prose that is technically correct but that will mislead, slow, or fail this reader.
 
-Start by identifying the intended reader and the decisions they must make after reading. Judge every part against that reader's needs: if a sentence, paragraph, or section tells this reader nothing necessary, recommend cutting or moving it and explain why in terms the reader would care about. If the whole piece fails to give the reader what they need, say so and stop.
+Start by identifying the intended reader and the decisions they must make after reading. Judge every finding against that reader's needs. Keep that analysis to yourself; do not report it as a finding.
 
 Principles — name the principle each finding violates and treat these as concrete, checkable patterns:
 - Garden-path sentences: quote the misleading opening, demonstrate the plausible misreading (what a reader will initially parse it as vs the intended meaning), and give a rewrite that cannot be misread.
 - Passive voice: flag where hiding the actor slows comprehension; suggest an active rewrite when naming who does what will help.
 - Too many concepts in one sentence: show how to split it and give concrete split rewrites.
-- Needless detail / parentheticals: ask whether the speed bump is worth what it carries; recommend cutting or relocating it.
 - Em-dash overuse: suggest a comma, conjunction, or split where em-dashes are jarring.
-- Unexplained jargon and shorthand: quote the term and either define it briefly for this reader or say it must be defined; do not invent new domain facts beyond what context supports.
+- Unexplained jargon and shorthand: quote the term and either define it briefly for this reader or say it must be defined; do not invent new domain facts beyond what context supports. A term the intended reader uses daily is not jargon: "parse", "typecheck", and "stdlib" are plain words to a contributor.
 - Buried lead: show when the sentence the reader came for sits under unneeded background and provide a version that puts the lead first.
-- Text that does not belong: identify sentences, paragraphs, or whole pieces that tell this reader nothing they need and recommend cutting; this is the most common substantive flaw.
 
-Habits to flag on sight; report each repeated habit only once and provide the recommended replacement or disposition:
-- the 'X is the case that matters' family
-- 'both matter' / 'both halves matter'
-- 'this proves the X' / 'proves that'
-- 'I said it before checking' (recommend dropping it; prefer 'That was wrong.' or a concise correction)
-- 'also answers to' for a command alias (recommend 'is an alias for')
-- turning verbs into nouns to save words (flag examples like 'costs no parse')
+Two things are found by separate passes; do not report them. Cuts: text this reader does not need, which the cuts pass names. Do not reword a passage that should be cut. Verbal tics: filler words, flourishes, clever names, capitals for emphasis.
 
 How to review, stepwise:
 1. Identify the intended reader and the concrete decisions or checks they must be able to make after reading.
-2. Do a high-level pass: for each section ask, 'does this reader need it?' Recommend cut/move and explain why in reader terms. If text should be relocated rather than edited, say so; do not reword text that belongs elsewhere.
-3. For sentence-level issues: use error=true only when the text will cause a measurable misreading, loss of thread, or a missed requirement — i.e., you can act out the misreading. Quote the exact passage, explain the misread, and give a concrete, faithful rewrite that preserves the original facts. If a helpful clarification requires supplying a missing fact, present that change as advisory and state explicitly what new fact you are adding.
-4. Use error=false for advisory polish: tightening, active-voice rewrites, stylistic improvements, or helpful clarifications that do not block understanding. Be conservative: reserve error=true for real failures.
-5. When the caller supplies writing guidelines, those outrank this catalog; apply both and note any conflicts.
-6. Report repeated habits once; keep each finding brief: quote the passage, name the violated principle, and give one concrete fix (a rewrite or an explicit cut recommendation).
-7. Do not invent errors or facts. Rewrites should preserve the original facts; if you must add a fact to make the text actionable, mark that rewrite advisory and call out the added fact.
-8. A clean verdict is a fine outcome. Never pad findings with generic advice. Always offer at least one concrete rewrite or an explicit cut for each substantive finding.
+2. For sentence-level issues: use error=true only when the text will cause a measurable misreading, loss of thread, or a missed requirement — i.e., you can act out the misreading, and a reader who knows the subject would take a wrong action because of it. A sentence that could be more precise is not an error. Example: "When several complete passes scored the same question, the most recent one wins." A reader might want to know how "most recent" is decided, but they will not act wrongly for lack of it, so it is not an error, and a rewrite that names a timestamp would invent a fact. Leave it alone. Quote the exact passage, explain the misread, and give a concrete, faithful rewrite that preserves the original facts. If the rewrite needs a fact the text does not state, the passage is not an error: report it as advisory, only if the assignment supplies the fact, and say which fact you added.
+3. Use error=false for advisory polish: tightening, active-voice rewrites, stylistic improvements, or helpful clarifications that do not block understanding. Be conservative: reserve error=true for real failures.
+4. When the caller supplies writing guidelines, those outrank this catalog; apply both and note any conflicts.
+5. Keep each finding brief: quote the passage, name the violated principle, and give one concrete rewrite.
+6. Do not invent errors or facts. Rewrites should preserve the original facts; if you must add a fact to make the text actionable, mark that rewrite advisory and call out the added fact.
+7. A clean verdict is a fine outcome. Never pad findings with generic advice. Always offer one concrete rewrite for each substantive finding.
 
 Keep each finding short, factual, and actionable: quote the passage, name the principle, and give one concrete fix. ${SAVE_DRAFT_HINT}"""
+
+// The cuts pass: one question of every part of the text, does this reader
+// need it. Returns cuts only, never rewrites.
+optimize static const cutsPrompt = """You read a piece of prose and decide what the reader does not need. You report cuts only. Rewording, misreadings, and verbal tics are handled by other passes.
+
+Start from the task the text was written for. Name the reader and the decisions or checks they must be able to make after reading. Then go through the text one paragraph at a time, and within a paragraph one sentence at a time, and ask of each: does this reader need it to make those decisions? Material the reader does not need is a cut. Common cuts:
+- Background the reader already has, or does not need for the decision.
+- The writer's own process: what they tried, checked, or thought before arriving at the fact.
+- A second statement of a fact the text already states.
+- Detail that serves a different reader (an implementer's note in a user doc, a user's note in a design doc).
+- Restating the assignment back to the reader.
+- Every value of an option or every member of a set, where knowing the option or set exists is enough for the reader.
+- Praise, reassurance, and sentences that comment on the text itself.
+- A note the writer left about a decision they made while working, when the decision has no lasting consequence for the reader. A paragraph saying that something did not need to be done, and why, records the writer's checking; the reader will never act on it. The reasoning behind it does not make it needed.
+- A whole piece that gives the reader nothing they need. Then say so and recommend removing it; do not list its sentences. Ask this of the whole piece first, before going sentence by sentence.
+
+How to report:
+- Do not report the reader or the decisions; they are for your judgment only. Report cuts.
+- One finding per cut. Quote the passage exactly, then say why this reader does not need it, in terms of the decision they are making.
+- Say "cut". Say "move to <where>" only when the task or the text names a place the passage belongs; do not invent a destination. Do not offer a shorter version of the passage; a cut is a cut.
+- Do not add facts and do not suggest new material.
+- Set error to true only when the whole piece, or a whole section, should go. Every other cut is advisory: error false.
+- Text the reader needs gets no finding. A text with nothing to cut gets an empty list.
+
+If the text names files instead of holding the prose, read each file and review its contents."""
+
+def askForCuts(
+  work: string,
+  task: string,
+  guidelines: string,
+  context: string,
+  model: string,
+  provider: string,
+): Feedback[] {
+  let guidelinesSection = ""
+  if (guidelines != "") {
+    guidelinesSection = """The caller's own writing guidelines. They outrank the rules above:
+<guidelines>
+${guidelines}
+</guidelines>
+
+"""
+  }
+  if (threadIsNew()) {
+    systemMessage(cutsPrompt)
+  }
+  return llm(
+    """
+${guidelinesSection}The text was written for this task:
+<task>
+${withContext(task: task, context: context)}
+</task>
+
+<text>
+${work}
+</text>
+
+Return a list of feedback items.
+""",
+    llmOptions(model: model, provider: provider, tools: readOnlyFileTools(), validationRetries: 1),
+  )
+}
+
+def findCuts(
+  work: string,
+  task: string,
+  guidelines: string,
+  context: string,
+  model: string,
+  provider: string,
+): Feedback[] {
+  """
+  Find the parts of the text this reader does not need and return them as
+  cut findings.
+
+  @param work - The text under review, or a request naming the files that hold it
+  @param task - Who the text is for and what it must get across, or ""
+  @param guidelines - The caller's own writing guidelines, or ""
+  @param context - Extra material for the judgment, or ""
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  """
+  let found: Feedback[] = []
+  thread(label: "cuts") {
+    found = askForCuts(work: work, task: task, guidelines: guidelines, context: context, model: model, provider: provider)
+  }
+  return found
+}
+
+def cutsOrNothing(
+  work: string,
+  task: string,
+  guidelines: string,
+  context: string,
+  model: string,
+  provider: string,
+): Feedback[] {
+  """
+  findCuts, with a failed call reported as no findings, so the main review
+  is not lost because this pass could not run.
+
+  @param work - The text under review, or a request naming the files that hold it
+  @param task - Who the text is for and what it must get across, or ""
+  @param guidelines - The caller's own writing guidelines, or ""
+  @param context - Extra material for the judgment, or ""
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  """
+  const found = try findCuts(work: work, task: task, guidelines: guidelines, context: context, model: model, provider: provider)
+  return match(found) {
+    success(items) => items
+    failure(_) => []
+  }
+}
+
+// The tics pass. The list below is the only copy; docs/dev/contributing/verbal-tics.md points here.
+static const ticsPrompt = """You read prose and report verbal tics: phrases a language model reaches for that a careful editor cuts. Report nothing else. Readability, structure, and facts are reviewed by a separate pass.
+
+The rule behind every entry: state the fact. Do not decorate it, rank it, or warn the reader about it.
+
+Sentence shapes:
+
+1. Contrastive binary: "not X, but Y", "neither X nor Y", "X, never Y".
+   Bad: "Judge the code as Agency, never as JavaScript."
+   Good: "Judge the code as Agency. Do not judge it as JavaScript."
+
+2. Stakes-raising: a sentence that tells the reader how much the last sentence matters.
+   Bad: "Facts about Agency. Get these wrong and the review is wrong."
+   Good: "Facts about Agency:"
+
+3. Aphoristic ender: a short punchy clause that closes a paragraph with a flourish. "And no more." "Full stop." "The rest is noise." "That is the whole point."
+
+4. Colon reveal: a setup, a colon, then the point delivered as a twist.
+   Bad: "The song and dance is all in one step you skipped: the parser parses literals, but the model returns text."
+   Good: "The parser parses string literals. The model returns text. Converting between them is where the extra code comes from."
+
+5. Mirrored clauses: two halves built on the same frame for effect.
+   Bad: "Keep this to yourself; do not report it as a finding."
+   Good: "Do not report this analysis as a finding."
+
+6. Semicolon joins and "but" joins that leave the reader unsure which half is the instruction.
+   Bad: "Rebuilding it with `failure(e)` loses nothing but is not an error."
+   Good: "Return the original failure unchanged. Rebuilding it with `failure(e)` changes the source of the error message."
+
+7. Meta-signposting: announcing the structure instead of using it. "Three things." "Here's the thing." "A quick word on how this is organized." Use a heading or a numbered list and start.
+
+8. The reframe: "Better posed:", "Put differently:", "In other words". Say it once.
+
+9. Negative-list prohibitions as rhythm: "No checklist, no summary line, no praise."
+   Good: "Omit checklists, summary lines, and praise for correct code."
+
+10. Shouting with capitals for emphasis: "ONLY", "NEVER", "ALL". Emphasis is a plain word in a short sentence.
+
+11. Naming a scheme cleverly, or writing about code as if it were a person: "the reject arm has the last word", "the command also answers to", "one document, one fence". Say what the code does, and let the checks state the rule.
+
+12. Turning a verb into a noun to save words: "costs no parse". Say "does not parse the file again".
+
+13. Narrating a correction: "I said it before checking." Give the corrected fact, or "That was wrong."
+
+Words and phrases:
+
+14. "load-bearing", "seam", "surface" (as a verb), "footgun", "trap", "the flagship X". Say what the thing does.
+
+15. "the key insight", "the real fix", "the actual problem", "the root cause". Describe the problem. The reader decides what is key.
+
+16. "genuinely", "honestly", "the honest answer", "to be fair", "frankly". Delete the word.
+
+17. "worth noting", "it is worth stating plainly", "note that". Delete the phrase and keep the fact.
+
+18. "You're absolutely right", "Great question", "Fair question". Answer the question.
+
+19. "essentially", "basically", "simply", "just", "fundamentally", "structurally". Delete.
+
+How to report:
+- One finding per passage. Quote the passage, name the entry by number and name, and give the plain replacement or say to delete it.
+- Report a repeated word once, listing each occurrence in the quote.
+- A colon that introduces a list, a code block, or an example is not a colon reveal. A lowercase "only", a short sentence, and a plain "note" as a noun are not tics. Report only the patterns above.
+- When a sentence carries no fact of its own (a signpost, a flourish, a list of prohibitions the checks already state), say to delete it. Rewrite only a sentence that carries a fact.
+- Clean text gets an empty list.
+- Every finding is advisory: set error to false.
+
+If the text names files instead of holding the prose, read each file and review its contents."""
+
+def askForTics(
+  work: string,
+  task: string,
+  guidelines: string,
+  context: string,
+  model: string,
+  provider: string,
+): Feedback[] {
+  let guidelinesSection = ""
+  if (guidelines != "") {
+    guidelinesSection = """The caller's own writing guidelines. They outrank the rules above:
+<guidelines>
+${guidelines}
+</guidelines>
+
+"""
+  }
+  if (threadIsNew()) {
+    systemMessage(ticsPrompt)
+  }
+  return llm(
+    """
+${guidelinesSection}The text was written for this task:
+<task>
+${withContext(task: task, context: context)}
+</task>
+
+<text>
+${work}
+</text>
+
+Return a list of feedback items.
+""",
+    llmOptions(model: model, provider: provider, tools: readOnlyFileTools(), validationRetries: 1),
+  )
+}
+
+def findVerbalTics(
+  work: string,
+  task: string,
+  guidelines: string,
+  context: string,
+  model: string,
+  provider: string,
+): Feedback[] {
+  """
+  Find verbal tics in the text and return them as advisory findings.
+
+  @param work - The text under review, or a request naming the files that hold it
+  @param task - Who the text is for and what it must get across, or ""
+  @param guidelines - The caller's own writing guidelines, or ""
+  @param context - Extra material for the judgment, or ""
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  """
+  let found: Feedback[] = []
+  thread(label: "verbalTics") {
+    found = askForTics(work: work, task: task, guidelines: guidelines, context: context, model: model, provider: provider)
+  }
+  return [{ error: false, feedback: item.feedback } for item in found]
+}
+
+def verbalTicsOrNothing(
+  work: string,
+  task: string,
+  guidelines: string,
+  context: string,
+  model: string,
+  provider: string,
+): Feedback[] {
+  """
+  findVerbalTics, with a failed call reported as no findings. The main
+  review must not be lost because this advisory pass could not run.
+
+  @param work - The text under review, or a request naming the files that hold it
+  @param task - Who the text is for and what it must get across, or ""
+  @param guidelines - The caller's own writing guidelines, or ""
+  @param context - Extra material for the judgment, or ""
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  """
+  const found = try findVerbalTics(work: work, task: task, guidelines: guidelines, context: context, model: model, provider: provider)
+  return match(found) {
+    success(items) => items
+    failure(_) => []
+  }
+}
 
 static const skills = agentSkill("writing/review")
 
@@ -143,18 +404,26 @@ export def writingReviewAgent(
   """
   const captured = guard(cost: maxCost, time: maxTime, label: "writingReviewAgent") {
     let items: Feedback[] = []
-    thread(label: "writingReviewAgent", session: session) {
-      items = judgeText(
-        work: work,
-        task: task,
-        guidelines: guidelines,
-        context: context,
-        model: model,
-        provider: provider,
-        extraTools: extraTools,
-      )
+    // The cuts and tics passes run beside the main review, each with its
+    // own short prompt, so the main prompt carries misreadings only.
+    parallel {
+      seq {
+        thread(label: "writingReviewAgent", session: session) {
+          items = judgeText(
+            work: work,
+            task: task,
+            guidelines: guidelines,
+            context: context,
+            model: model,
+            provider: provider,
+            extraTools: extraTools,
+          )
+        }
+      }
+      let cuts = cutsOrNothing(work: work, task: task, guidelines: guidelines, context: context, model: model, provider: provider)
+      let tics = verbalTicsOrNothing(work: work, task: task, guidelines: guidelines, context: context, model: model, provider: provider)
     }
-    return items
+    return [...items, ...cuts, ...tics]
 
     // Salvage the model's partial findings if an outer budget guard trips
     // mid-review; the assignment above would otherwise drop them.

@@ -89,6 +89,16 @@ it, or warn the reader about it.
     person: "the reject arm has the last word". See
     general-writing-tips.md rule 10.
 
+18. Turning a verb into a noun to save words: "costs no parse". Say
+    "does not parse the file again".
+
+19. Narrating a correction: "I said it before checking." Give the
+    corrected fact, or "That was wrong."
+
+The writing reviewer (`std::agents/writing/review`) carries the same
+list as `ticsPrompt` and runs it as a separate pass, so a draft run
+through the reviewer gets these findings too. Keep the two in step.
+
 ## How to use this list
 
 Write the draft. Then read it once looking for nothing but these

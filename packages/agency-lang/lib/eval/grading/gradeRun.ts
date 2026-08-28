@@ -21,7 +21,8 @@ import { LlmJudge } from "./graders/llmJudge.js";
 import { AgencyTestGrader } from "./agencyTestGrader.js";
 import { loadGradingModule, loadGradingSnapshot } from "./gradingModule.js";
 import { Scorecard, type GraderGrade, type InputGrades } from "./scorecard.js";
-import type { GraderInput, LoadedRun, JSON as Json } from "./types.js";
+import { binary } from "./grade.js";
+import type { Grade, GraderInput, LoadedRun, JSON as Json } from "./types.js";
 
 /** Where each test's graders come from. Graders are test-side, like goal and
  *  expected: a test's own `graders.ts` and its harness pairs. The question
@@ -409,7 +410,7 @@ async function gradeInput(
 
   const gateGrades: GraderGrade[] = [];
   for (const grader of gates) {
-    const grade = await grader.run(input);
+    const grade = await runGrader(grader, input, test);
     gateGrades.push({ grader, grade });
     if (!grader.passes(grade)) {
       return { test, run, grades: gateGrades, gatesPassed: false };
@@ -419,11 +420,25 @@ async function gradeInput(
   const advisoryGrades = await Promise.all(
     advisory.map(async (grader) => ({
       grader,
-      grade: await grader.run(input),
+      grade: await runGrader(grader, input, test),
     })),
   );
 
   return { test, run, grades: [...gateGrades, ...advisoryGrades], gatesPassed: true };
+}
+
+/** A grader that throws (a judge whose structured reply failed validation,
+ *  a missing file) fails with the error as feedback, so one bad grade does
+ *  not end the whole grading pass. A binary fail, not scalar 0: a gate with
+ *  no threshold passes a scalar 0, and a crashed gate must short-circuit. */
+async function runGrader(grader: BaseGrader, input: GraderInput, test: Test): Promise<Grade> {
+  try {
+    return await grader.run(input);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warn(`${test.id}: grader ${grader.name()} failed: ${message}`);
+    return binary(false, `grader failed: ${message}`);
+  }
 }
 
 function warn(message: string): void {

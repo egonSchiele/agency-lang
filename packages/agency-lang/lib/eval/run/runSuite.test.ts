@@ -106,6 +106,35 @@ describe("runSuite", () => {
     expect(fs.readdirSync(result.runDir).sort()).toEqual(["a", "b"]);
   });
 
+  it("a statelog holding two traces fails the fold and keeps the staging directory", async () => {
+    const runsDir = path.join(proj, "runs");
+    const runner = vi.fn(async (job: EvalRunnerJob) => {
+      const lines = [
+        ...traceFor(job, "done"),
+        ...finishedTraceLines("other-trace", { output: "x" }),
+      ];
+      fs.writeFileSync(job.statelogPath, lines.join("\n") + "\n");
+      return { ok: true as const };
+    });
+
+    await expect(
+      runSuite(
+        {
+          agent: path.join(proj, "agent.agency"),
+          inputs: [{ id: "a", goal: "g", input: "first" }],
+          out: path.join(runsDir, "r-two-traces"),
+          config: {},
+          suite: { source: "inputs.json" },
+          perRun: { pipeOutput: false },
+        },
+        { runner },
+      ),
+    ).rejects.toThrow(/two traces|2 traces.*kept at/s);
+
+    const staging = path.join(runsDir, "r-two-traces", ".staging", "a");
+    expect(fs.existsSync(path.join(staging, "agent", "statelog.jsonl"))).toBe(true);
+  });
+
   it("--trials k: each test runs k times under <out>/<test>/<trial>, sharing the batch id, each its own trace", async () => {
     const out = path.join(proj, "runs", "r-trials");
     const runner = traceWritingRunner("done");

@@ -178,6 +178,11 @@ export const NON_EXTRACTED_STATEMENT_KINDS = [
   // excluded there — see recurseSlots).
   "handleBlock",
   "finalizeBlock",
+  // parallel/seq are gone before this pass runs: desugarParallelBlocks
+  // turns a parallel block into a fork call (whose arms then hoist as
+  // block arguments) and inlines a seq block. Recorded so the corpus
+  // test, which reads the parsed AST, has a ruling for both.
+  "parallelBlock",
   "seqBlock",
   "skill",
   // Inert trivia (block comments reach rewriteStatement; line comments

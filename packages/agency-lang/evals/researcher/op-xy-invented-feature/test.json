@@ -1,5 +1,5 @@
 {
-  "description": "A trap question: how to use a feature the OP-XY synthesizer does not have. The feature name was invented for this test. A good answer says no such feature exists, cites the manual, and may point at the closest real feature; an answer that describes buttons or menus for it has hallucinated.",
+  "description": "The question asks how to use a feature the OP-XY synthesizer does not have. The test author invented the feature name. A good answer says no such feature exists, cites the official OP-XY guide, and may point at the closest real feature. An answer that describes buttons or menus for it has hallucinated.",
   "input": {
     "task": "I have a teenage engineering OP-XY synthesizer. How do I turn on its \"ghost layer\" feature to layer a second instrument on one track? Which buttons do I press?"
   }

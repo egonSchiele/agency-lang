@@ -1,5 +1,5 @@
 {
-  "description": "A question whose literal reading is wrong but whose reading in the conversation is right. Earlier turns fix the setting: a web app where each request is a separate process. The last message says Python cannot pause at a line and resume there. Literally, generators can; in that setting, they cannot, because a suspended generator does not survive a process boundary. A good answer holds to the setting.",
+  "description": "The question's literal reading is wrong. Its reading in the conversation is right. Earlier turns establish the setting, a web app where each request is a separate process. The last message says Python cannot pause at a line and resume there. Generators can pause and resume within a single process. In this setting they cannot, because a suspended generator does not survive a process boundary. A good answer affirms the user's claim within that setting.",
   "input": {
     "history": [
       {

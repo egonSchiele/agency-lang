@@ -8,7 +8,7 @@ type ResearchGrader = Grader<ResearchInput>;
 
 const answerText = (output: unknown): string => (typeof output === "string" ? output : "");
 
-/** Grader for a trap question, which asks about something that does not exist. */
+/** Grader for a question about something that does not exist. */
 export function noInventedFeature(args: { truth: string }): ResearchGrader {
   return grader<ResearchInput>(
     ({ output, test, judges }) =>
@@ -23,8 +23,8 @@ export function noInventedFeature(args: { truth: string }): ResearchGrader {
 }
 
 /** A question whose literal reading and its reading in the conversation
- *  differ. The answer must use the conversation: a constraint fixed in an
- *  earlier turn still holds in the last one. */
+ *  differ. The answer must follow the conversation. For example, a
+ *  constraint fixed in an earlier turn still holds in the last one. */
 export function readsInContext(args: { truth: string }): ResearchGrader {
   return grader<ResearchInput>(
     ({ output, test, judges }) => {
@@ -44,8 +44,7 @@ export function readsInContext(args: { truth: string }): ResearchGrader {
 
 const URL_PATTERN = /https?:\/\/[^\s)\]>"']+/g;
 
-/** Every URL the answer cites must resolve. An answer with no URL fails:
- *  the researcher's contract is a cited answer. */
+/** Every URL the answer cites must resolve. An answer with no URL fails. */
 export function citationsResolve(): ResearchGrader {
   return grader<ResearchInput>(
     async ({ output }) => {

@@ -1,0 +1,6 @@
+{
+  "description": "Count log lines per level over date windows with awkward edges (14 days including today, ISO week to date, quarter to date) and a file dated after today. Failures are off-by-one at a window edge, the pattern behind terminal-bench log-summary-date-ranges.",
+  "tags": ["medium"],
+  "files": "./files",
+  "input": "Write a Python script summarize.py that counts how many lines of each level CRITICAL, ERROR, WARNING, and INFO appear in the log files under logs/, for these windows, using 2025-09-12 as today: today; last_14_days (the 14 days ending today, today included); week_to_date (from the Monday of the current ISO week through today); quarter_to_date (from the first day of the current calendar quarter through today); total (every file). The date of a line is the date in its file name, which follows <source>-YYYYMMDD.log. Write summary.csv in the current directory with the header period,level,count and one row per period and level, periods in the order given above and levels in the order CRITICAL, ERROR, WARNING, INFO. Run the script so summary.csv exists when you finish."
+}

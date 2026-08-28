@@ -4,8 +4,8 @@ Phrases a language model reaches for that a careful human editor cuts.
 Check every piece of prose against the list before you show it to
 anyone: a commit message, a PR description, a doc, a prompt, a reply.
 
-The list lives in `stdlib/agents/writing/tics.agency`, as the prompt of
-the writing reviewer's tics pass. Read it there, and edit it there; this
+The list lives in `stdlib/agents/writing/review.agency`, as `ticsPrompt`,
+the prompt of the writing reviewer's tics pass. Read it there, and edit it there; this
 file is only the pointer, so there is one copy. Each entry has the tic,
 an example, and the plain replacement.
 

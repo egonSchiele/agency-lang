@@ -206,11 +206,20 @@ trace parser, and the annotation fold are not exported.
 `.github/workflows/agent-evals.yml` runs `evals/agency-agent` with three
 trials every Sunday (03:00 UTC), grades it, and uploads it to the linked
 statelog project. `workflow_dispatch` takes `trials` and `suite` overrides for
-a cheap dry run. It needs the `OPENAI_API_KEY` and `STATELOG_API_KEY` secrets
-and the `STATELOG_PROJECT_URL` repository variable (a serve URL, as `remote
-link --url` takes). The cost cap is `eval.limits.maxCostUsd` in `agency.json`,
-not a workflow flag, so a local run of the suite is capped the same way; raise
-it as tests are added. The run directory is kept as a workflow artifact for 14
-days, so a batch whose upload failed can be uploaded by hand.
-`lib/cli/eval/workflowFlags.test.ts` checks every flag the workflow passes
-against the CLI's registered options.
+a cheaper smoke run (it still calls the paid agent, grades, and uploads). It
+needs the `OPENAI_API_KEY`, `STATELOG_API_KEY`, and `STATELOG_PROJECT_URL`
+secrets (the last is a serve URL, as `remote link --url` takes).
+
+Cost: `eval.limits.maxBatchCostUsd` in `agency.json` caps the whole batch —
+once finished runs have spent that much, no further test starts — and
+`maxCostUsd` caps each run on its own, so the worst case is the batch cap plus
+`--parallel` per-run caps (see `docs/site/cli/eval.md`). Grading judges are
+outside both. The caps apply to local runs of the suite too; set them from the
+batch table's real costs. A batch cut short by the cap uploads as incomplete.
+
+Scores never fail the job: `eval grade` exits 2 when a must-pass gate failed,
+and the workflow treats that as a warning and uploads anyway; any other
+non-zero exit (grading broke) fails the job. The run directory is kept as a
+workflow artifact for 14 days, so a batch whose upload failed can be uploaded
+by hand. `lib/cli/eval/workflowFlags.test.ts` checks every flag the workflow
+passes against the CLI's registered options.

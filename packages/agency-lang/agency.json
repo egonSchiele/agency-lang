@@ -17,7 +17,7 @@
   "eval": {
     "limits": {
       "wallClockSec": 900,
-      "maxCostUsd": 25
+      "maxCostUsd": 5
     }
   },
   "doc": {

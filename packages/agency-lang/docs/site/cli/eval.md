@@ -74,10 +74,12 @@ grade it with: agency eval grade runs/smoke
 Each run's agent process gets a wall-clock limit of 60 seconds unless `eval.limits.wallClockSec` in `agency.json` raises it:
 
 ```json
-{ "eval": { "limits": { "wallClockSec": 900, "maxCostUsd": 50 } } }
+{ "eval": { "limits": { "wallClockSec": 900, "maxCostUsd": 50, "maxBatchCostUsd": 100 } } }
 ```
 
 `maxCostUsd` is a per-run LLM spend ceiling, $50 by default. The harness watches each run's cost as it happens and kills the run when it passes the cap. Enforcement lags by one LLM call, because a call's cost is known only when it returns, so treat it as an accident stopper rather than an exact budget.
+
+`maxBatchCostUsd` caps one `eval run` invocation as a whole — every test and every trial — and has no default. Spend is summed as runs finish; once it crosses the cap no further test starts, the ones already running finish under their own `maxCostUsd`, and the run reports `batch cost cap exceeded`. So the worst case is `maxBatchCostUsd` plus `--parallel` times `maxCostUsd`. The tests that never started have no run directory, which a grade or an upload shows as an incomplete batch.
 
 ## Command agents
 

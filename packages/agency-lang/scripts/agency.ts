@@ -905,6 +905,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
         if (costUsd !== undefined) {
           console.log(`total LLM cost: $${costUsd.toFixed(2)}`);
         }
+        if (result.batchCostCapExceeded) {
+          console.log(
+            ttyColor.red("batch cost cap exceeded") +
+              `: the remaining tests were not run (eval.limits.maxBatchCostUsd raises it)`,
+          );
+        }
         console.log(`runs written under ${result.runDir}`);
         console.log(`grade it with: agency eval grade ${result.runDir}`);
         // The run is complete and written; the exit code still reports that

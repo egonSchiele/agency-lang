@@ -101,6 +101,11 @@ export type SuiteRunResult = {
   tests: SuiteTestResult[];
   okCount: number;
   errorCount: number;
+  /** LLM spend summed from the finished runs' statelogs. */
+  costUsd: number;
+  /** True when `eval.limits.maxBatchCostUsd` was crossed: the tests after
+   *  the crossing never started, so `tests` is shorter than the suite. */
+  batchCostCapExceeded: boolean;
 };
 
 /** A run's score, as `eval grade` reports it. */

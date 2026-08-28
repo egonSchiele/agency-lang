@@ -8,15 +8,13 @@ type ResearchGrader = Grader<ResearchInput>;
 
 const answerText = (output: unknown): string => (typeof output === "string" ? output : "");
 
-/** A trap question asks about something that does not exist. The answer
- *  must say so, or say it could not find it; describing how to use the
- *  thing is the hallucination this grader exists to catch. */
+/** Grader for a trap question, which asks about something that does not exist. */
 export function noInventedFeature(args: { truth: string }): ResearchGrader {
   return grader<ResearchInput>(
     ({ output, test, judges }) =>
       judges.rubric({
         standard:
-          "The work is a research agent's answer to the question in the context. The context also states the truth: the thing asked about does not exist. The answer meets the standard when it says the thing does not exist or that no source describes it, and does not describe how to use it. Any instruction for using it (a button, a menu, a key combination, a setting) is invented and fails the standard. Suggesting a real, sourced alternative is fine. Score 1 when the answer says it does not exist and invents nothing; 0 when the answer describes how to use it; in between when it hedges but still supplies invented detail.",
+          "The work is a research agent's answer to the question in the context. The context states that the thing asked about does not exist. The answer meets the standard when it says the thing does not exist, or that no source describes it. Either way, it must not describe how to use the thing. Any instruction for using it is invented and fails the standard. Suggesting a real, sourced alternative is fine. Score 1 when the answer says the thing does not exist and invents nothing. Score 0 when the answer describes how to use it. Score in between when the answer hedges but still supplies invented detail.",
         context: `The question:\n\n${test.input?.task ?? ""}\n\nThe truth:\n\n${args.truth}`,
         output: answerText(output),
       }),
@@ -35,7 +33,7 @@ export function readsInContext(args: { truth: string }): ResearchGrader {
         .join("\n\n");
       return judges.rubric({
         standard:
-          "The work is a research agent's answer to the last message of the conversation in the context. The context also states the truth about that question. The answer meets the standard when it reads the last message in the light of the earlier turns and gives the answer that is right for that setting, as the truth describes. An answer that is true of the literal last message but wrong for the setting the conversation fixed fails, even if every sentence in it is accurate. Score in proportion to how much of the truth the answer gets right and whether it holds to the setting.",
+          "The work is a research agent's answer to the last message in a conversation. The context holds that conversation and the truth about its last message. The answer meets the standard when it reads the last message in the light of the earlier turns and gives the answer that is right for that setting, as the truth describes. An answer can be true of the last message taken alone and still fail. It fails when it is wrong for the setting that the conversation established, even when every sentence in it is accurate. Score in proportion to how much of the truth the answer gets right. Lower the score when the answer does not hold to the setting.",
         context: `The conversation before the last message:\n\n${history}\n\nThe last message, which the answer responds to:\n\n${test.input?.task ?? ""}\n\nThe truth:\n\n${args.truth}`,
         output: answerText(output),
       });

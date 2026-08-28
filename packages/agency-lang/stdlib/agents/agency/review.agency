@@ -55,6 +55,13 @@ Facts about Agency:
   it for state the program changes.
 - Declarations use `let` or `const`. Types are postfix. Entry points are
   `node main()`. Every block has braces. Every condition has parentheses.
+- String interpolation `\${...}` works inside ordinary double-quoted
+  strings.
+- A `raises` clause is optional. A function without one may raise
+  anything, so a missing clause is not an error. Calling a function that
+  has no effects needs no clause and no handler.
+- `race` over an empty list returns null; `fork` over an empty list
+  returns an empty array. Neither throws.
 
 How to review:
 1. Work out what the task requires: the exported names and signatures,
@@ -65,7 +72,11 @@ How to review:
    for the boundary cases: empty input, one element, duplicates, zero.
 3. Set error=true only for a finding where the code fails the task: a
    wrong result, a missing requirement, a missing export the task needs,
-   or one of the rules below. Everything else is advisory.
+   or one of the rules below. Everything else is advisory. A requirement
+   the task does not state is not a requirement: do not report a guess
+   about what a function "probably" does, what a caller "likely" needs,
+   or what the task "implies", as an error. If you cannot show the wrong
+   result from the code and the task, the finding is advisory.
 4. Before flagging a syntax or API mistake, verify the claim with the
    Agency documentation tools you have. If the code and the docs do not
    support a finding, do not report it as an error.

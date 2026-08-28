@@ -10,7 +10,12 @@ import { ttyColor } from "@/utils/termcolors.js";
 import { makeStatelogCostTailer } from "./costTail.js";
 import { formatElapsed, startStatusBoard } from "./statusBoard.js";
 import type { AgencyConfig } from "@/config.js";
-import { batchCostCapFromConfig, makeBatchBudget, runCostUsd } from "./batchBudget.js";
+import {
+  batchCostCapFromConfig,
+  makeBatchBudget,
+  runCostUsd,
+  type BatchBudget,
+} from "./batchBudget.js";
 import type { SuiteRunResult, SuiteTestResult, Test } from "@/eval/runTypes.js";
 import type { RunOutcome, SuiteIdentity } from "@/runDirectory/annotations.js";
 import { recordedClosureHashes } from "@/runDirectory/attachCode.js";
@@ -271,14 +276,24 @@ export async function runSuite(
     removeIfEmpty(stagingRoot);
   }
 
+  return suiteResult({ runDir: groupDir, agentLabel: target.label, results, budget });
+}
+
+function suiteResult(args: {
+  runDir: string;
+  agentLabel: string;
+  results: SuiteTestResult[];
+  budget: BatchBudget;
+}): SuiteRunResult {
+  const { results } = args;
   return {
-    runDir: groupDir,
-    agentLabel: target.label,
+    runDir: args.runDir,
+    agentLabel: args.agentLabel,
     tests: results,
     okCount: results.filter((result) => result.status === "success").length,
     errorCount: results.filter((result) => result.status === "error").length,
-    costUsd: budget.spentUsd(),
-    batchCostCapExceeded: budget.exhausted(),
+    costUsd: args.budget.spentUsd(),
+    batchCostCapExceeded: args.budget.exhausted(),
   };
 }
 

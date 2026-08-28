@@ -1,0 +1,54 @@
+2025-08-31T19:37:37 ERROR auth: request completed
+2025-08-31T16:09:32 INFO auth: request completed
+2025-08-31T05:27:24 INFO auth: user login
+2025-08-31T13:32:05 CRITICAL auth: connection reset by peer
+2025-08-31T10:32:24 CRITICAL auth: token expired
+2025-08-31T22:15:00 INFO auth: user login
+2025-08-31T06:49:14 CRITICAL auth: retrying job
+2025-08-31T01:05:38 INFO auth: token expired
+2025-08-31T09:06:52 WARNING auth: slow query
+2025-08-31T02:02:38 INFO auth: request completed
+2025-08-31T13:54:00 INFO auth: retrying job
+2025-08-31T17:35:55 INFO auth: connection reset by peer
+2025-08-31T12:09:10 INFO auth: token expired
+2025-08-31T05:08:18 INFO auth: slow query
+2025-08-31T12:48:39 INFO auth: user login
+2025-08-31T09:41:55 WARNING auth: user login
+2025-08-31T09:01:00 INFO auth: slow query
+2025-08-31T05:25:26 WARNING auth: disk usage above threshold
+2025-08-31T16:03:34 INFO auth: cache miss
+2025-08-31T14:15:03 INFO auth: connection reset by peer
+2025-08-31T18:52:26 INFO auth: disk usage above threshold
+2025-08-31T21:22:17 INFO auth: request completed
+2025-08-31T17:27:21 INFO auth: disk usage above threshold
+2025-08-31T12:00:36 INFO auth: user login
+2025-08-31T04:41:37 ERROR auth: slow query
+2025-08-31T00:45:25 INFO auth: connection reset by peer
+2025-08-31T16:58:24 WARNING auth: connection reset by peer
+2025-08-31T10:04:05 INFO auth: request completed
+2025-08-31T22:02:47 INFO auth: token expired
+2025-08-31T21:55:45 WARNING auth: token expired
+2025-08-31T02:07:40 INFO auth: request completed
+2025-08-31T17:38:53 ERROR auth: request completed
+2025-08-31T16:03:57 INFO auth: slow query
+2025-08-31T06:01:16 ERROR auth: disk usage above threshold
+2025-08-31T23:25:54 WARNING auth: disk usage above threshold
+2025-08-31T05:50:31 WARNING auth: retrying job
+2025-08-31T18:14:32 ERROR auth: request completed
+2025-08-31T06:14:57 INFO auth: user login
+2025-08-31T18:32:49 INFO auth: retrying job
+2025-08-31T07:35:32 INFO auth: user login
+2025-08-31T05:23:21 ERROR auth: user login
+2025-08-31T18:29:06 ERROR auth: request completed
+2025-08-31T19:02:49 INFO auth: slow query
+2025-08-31T04:21:23 ERROR auth: cache miss
+2025-08-31T03:05:21 ERROR auth: cache miss
+2025-08-31T04:23:10 ERROR auth: connection reset by peer
+2025-08-31T22:30:48 INFO auth: user login
+2025-08-31T05:30:40 INFO auth: connection reset by peer
+2025-08-31T03:33:42 ERROR auth: slow query
+2025-08-31T13:20:52 INFO auth: slow query
+2025-08-31T16:21:28 CRITICAL auth: request completed
+2025-08-31T05:08:06 INFO auth: retrying job
+2025-08-31T21:22:15 WARNING auth: cache miss
+2025-08-31T11:01:37 INFO auth: slow query

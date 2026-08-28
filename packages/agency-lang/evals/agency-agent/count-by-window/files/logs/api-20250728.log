@@ -1,0 +1,74 @@
+2025-07-28T23:02:24 INFO api: connection reset by peer
+2025-07-28T23:18:26 INFO api: user login
+2025-07-28T17:27:51 ERROR api: disk usage above threshold
+2025-07-28T08:38:03 CRITICAL api: token expired
+2025-07-28T16:01:08 WARNING api: request completed
+2025-07-28T23:06:10 WARNING api: token expired
+2025-07-28T16:49:09 INFO api: connection reset by peer
+2025-07-28T15:58:33 INFO api: connection reset by peer
+2025-07-28T20:53:09 WARNING api: user login
+2025-07-28T10:43:18 WARNING api: user login
+2025-07-28T02:33:08 INFO api: request completed
+2025-07-28T06:38:38 INFO api: slow query
+2025-07-28T04:49:54 INFO api: retrying job
+2025-07-28T04:27:48 INFO api: request completed
+2025-07-28T20:47:44 ERROR api: token expired
+2025-07-28T23:23:23 INFO api: token expired
+2025-07-28T15:28:23 WARNING api: slow query
+2025-07-28T19:44:26 INFO api: retrying job
+2025-07-28T22:30:16 INFO api: token expired
+2025-07-28T18:30:38 WARNING api: request completed
+2025-07-28T15:22:31 WARNING api: retrying job
+2025-07-28T20:44:30 INFO api: retrying job
+2025-07-28T07:21:49 INFO api: connection reset by peer
+2025-07-28T18:37:23 INFO api: retrying job
+2025-07-28T20:26:19 INFO api: token expired
+2025-07-28T00:54:41 WARNING api: user login
+2025-07-28T08:31:46 WARNING api: disk usage above threshold
+2025-07-28T01:27:16 INFO api: user login
+2025-07-28T10:09:13 INFO api: disk usage above threshold
+2025-07-28T10:09:30 ERROR api: user login
+2025-07-28T16:09:31 INFO api: retrying job
+2025-07-28T06:45:25 INFO api: slow query
+2025-07-28T08:31:18 INFO api: request completed
+2025-07-28T06:01:36 INFO api: slow query
+2025-07-28T09:15:19 WARNING api: disk usage above threshold
+2025-07-28T14:57:20 WARNING api: token expired
+2025-07-28T11:02:52 ERROR api: token expired
+2025-07-28T23:37:06 WARNING api: token expired
+2025-07-28T10:07:25 CRITICAL api: user login
+2025-07-28T08:23:09 WARNING api: user login
+2025-07-28T12:56:28 ERROR api: slow query
+2025-07-28T14:40:15 INFO api: retrying job
+2025-07-28T06:31:55 WARNING api: retrying job
+2025-07-28T11:14:41 INFO api: cache miss
+2025-07-28T01:38:29 INFO api: token expired
+2025-07-28T14:29:30 INFO api: slow query
+2025-07-28T02:14:22 WARNING api: request completed
+2025-07-28T21:24:34 WARNING api: user login
+2025-07-28T04:57:12 INFO api: connection reset by peer
+2025-07-28T15:56:31 INFO api: user login
+2025-07-28T17:05:31 WARNING api: token expired
+2025-07-28T20:07:45 INFO api: retrying job
+2025-07-28T02:47:09 INFO api: disk usage above threshold
+2025-07-28T23:35:13 ERROR api: retrying job
+2025-07-28T21:39:07 CRITICAL api: connection reset by peer
+2025-07-28T10:07:43 ERROR api: slow query
+2025-07-28T12:04:26 WARNING api: user login
+2025-07-28T13:59:28 WARNING api: disk usage above threshold
+2025-07-28T19:08:29 INFO api: user login
+2025-07-28T03:21:17 WARNING api: retrying job
+2025-07-28T21:02:06 WARNING api: retrying job
+2025-07-28T01:00:56 INFO api: slow query
+2025-07-28T05:26:28 WARNING api: request completed
+2025-07-28T18:25:07 INFO api: disk usage above threshold
+2025-07-28T04:15:55 ERROR api: user login
+2025-07-28T10:08:18 INFO api: retrying job
+2025-07-28T04:35:09 INFO api: retrying job
+2025-07-28T23:57:54 INFO api: cache miss
+2025-07-28T06:31:35 INFO api: user login
+2025-07-28T15:40:27 INFO api: request completed
+2025-07-28T07:45:24 INFO api: token expired
+2025-07-28T00:49:33 INFO api: slow query
+2025-07-28T16:54:52 ERROR api: cache miss
+2025-07-28T04:56:33 WARNING api: user login

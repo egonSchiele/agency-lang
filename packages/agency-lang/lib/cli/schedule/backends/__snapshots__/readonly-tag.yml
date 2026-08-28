@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4.1.7
-      - uses: egonSchiele/run-agency-action@v1.0.3
+      - uses: egonSchiele/run-agency-action@v1.1.0
         with:
           file: 'agents/foo.agency'
         env:

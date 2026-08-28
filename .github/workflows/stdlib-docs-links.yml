@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.7
-      - uses: egonSchiele/run-agency-action@4768784aa7611fafee0801e01cdaea9f06d08dfb  # v1.0.3
+      - uses: egonSchiele/run-agency-action@bdae9e6bd4ac9cddbbebcef877c7d35ffe3cfa8c  # v1.1.0
         with:
           file: 'packages/agency-lang/agents/scheduled/stdlib-docs-links.agency'
         env:

@@ -165,7 +165,7 @@ test-log:
 # this list and pinnedActions.ts in the same commit.
 refresh-action-pins:
 	@echo "Look up these SHAs and update lib/cli/schedule/backends/pinnedActions.ts by hand:"
-	@for spec in actions/checkout@v4.1.7 egonSchiele/run-agency-action@v1.0.3; do \
+	@for spec in actions/checkout@v4.1.7 egonSchiele/run-agency-action@v1.1.0; do \
 	  repo=$${spec%@*}; tag=$${spec#*@}; \
 	  ref_obj=$$(gh api repos/$$repo/git/ref/tags/$$tag --jq '.object'); \
 	  type=$$(echo "$$ref_obj" | jq -r '.type'); \

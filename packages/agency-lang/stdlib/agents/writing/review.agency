@@ -10,8 +10,17 @@
   the request asks for that; by default it reports and changes nothing.
 */
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
-import { llmOptions, withContext, docsOnlyHandler } from "std::agents/lib/shared"
-import { communicationTools, readOnlyFileTools, writableFileTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
+import {
+  llmOptions,
+  withContext,
+  docsOnlyHandler,
+ } from "std::agents/lib/shared"
+import {
+  communicationTools,
+  readOnlyFileTools,
+  writableFileTools,
+  SAVE_DRAFT_HINT,
+ } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
 import { systemMessage, threadIsNew } from "std::thread"
@@ -67,7 +76,7 @@ How to report:
 If the text names files instead of holding the prose, read each file and review its contents."""
 
 def askForCuts(
-  work: string,
+  text: string,
   task: string,
   guidelines: string,
   context: string,
@@ -94,17 +103,22 @@ ${withContext(task: task, context: context)}
 </task>
 
 <text>
-${work}
+${text}
 </text>
 
 Return a list of feedback items.
 """,
-    llmOptions(model: model, provider: provider, tools: readOnlyFileTools(), validationRetries: 1),
+    llmOptions(
+      model: model,
+      provider: provider,
+      tools: readOnlyFileTools(),
+      validationRetries: 1,
+    ),
   )
 }
 
 def findCuts(
-  work: string,
+  text: string,
   task: string,
   guidelines: string,
   context: string,
@@ -115,7 +129,7 @@ def findCuts(
   Find the parts of the text this reader does not need and return them as
   cut findings.
 
-  @param work - The text under review, or a request naming the files that hold it
+  @param text - The text under review, or a request naming the files that hold it
   @param task - Who the text is for and what it must get across, or ""
   @param guidelines - The caller's own writing guidelines, or ""
   @param context - Extra material for the judgment, or ""
@@ -124,13 +138,20 @@ def findCuts(
   """
   let found: Feedback[] = []
   thread(label: "cuts") {
-    found = askForCuts(work: work, task: task, guidelines: guidelines, context: context, model: model, provider: provider)
+    found = askForCuts(
+      text: text,
+      task: task,
+      guidelines: guidelines,
+      context: context,
+      model: model,
+      provider: provider,
+    )
   }
   return found
 }
 
 def cutsOrNothing(
-  work: string,
+  text: string,
   task: string,
   guidelines: string,
   context: string,
@@ -141,14 +162,21 @@ def cutsOrNothing(
   findCuts, with a failed call reported as no findings, so the main review
   is not lost because this pass could not run.
 
-  @param work - The text under review, or a request naming the files that hold it
+  @param text - The text under review, or a request naming the files that hold it
   @param task - Who the text is for and what it must get across, or ""
   @param guidelines - The caller's own writing guidelines, or ""
   @param context - Extra material for the judgment, or ""
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   """
-  const found = try findCuts(work: work, task: task, guidelines: guidelines, context: context, model: model, provider: provider)
+  const found = try findCuts(
+    text: text,
+    task: task,
+    guidelines: guidelines,
+    context: context,
+    model: model,
+    provider: provider,
+  )
   return match(found) {
     success(items) => items
     failure(_) => []
@@ -224,7 +252,7 @@ How to report:
 If the text names files instead of holding the prose, read each file and review its contents."""
 
 def askForTics(
-  work: string,
+  text: string,
   task: string,
   guidelines: string,
   context: string,
@@ -251,17 +279,22 @@ ${withContext(task: task, context: context)}
 </task>
 
 <text>
-${work}
+${text}
 </text>
 
 Return a list of feedback items.
 """,
-    llmOptions(model: model, provider: provider, tools: readOnlyFileTools(), validationRetries: 1),
+    llmOptions(
+      model: model,
+      provider: provider,
+      tools: readOnlyFileTools(),
+      validationRetries: 1,
+    ),
   )
 }
 
 def findVerbalTics(
-  work: string,
+  text: string,
   task: string,
   guidelines: string,
   context: string,
@@ -271,7 +304,7 @@ def findVerbalTics(
   """
   Find verbal tics in the text and return them as advisory findings.
 
-  @param work - The text under review, or a request naming the files that hold it
+  @param text - The text under review, or a request naming the files that hold it
   @param task - Who the text is for and what it must get across, or ""
   @param guidelines - The caller's own writing guidelines, or ""
   @param context - Extra material for the judgment, or ""
@@ -280,13 +313,23 @@ def findVerbalTics(
   """
   let found: Feedback[] = []
   thread(label: "verbalTics") {
-    found = askForTics(work: work, task: task, guidelines: guidelines, context: context, model: model, provider: provider)
+    found = askForTics(
+      text: text,
+      task: task,
+      guidelines: guidelines,
+      context: context,
+      model: model,
+      provider: provider,
+    )
   }
-  return [{ error: false, feedback: item.feedback } for item in found]
+  return [{
+    error: false,
+    feedback: item.feedback
+  } for item in found]
 }
 
 def verbalTicsOrNothing(
-  work: string,
+  text: string,
   task: string,
   guidelines: string,
   context: string,
@@ -297,14 +340,21 @@ def verbalTicsOrNothing(
   findVerbalTics, with a failed call reported as no findings. The main
   review must not be lost because this advisory pass could not run.
 
-  @param work - The text under review, or a request naming the files that hold it
+  @param text - The text under review, or a request naming the files that hold it
   @param task - Who the text is for and what it must get across, or ""
   @param guidelines - The caller's own writing guidelines, or ""
   @param context - Extra material for the judgment, or ""
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   """
-  const found = try findVerbalTics(work: work, task: task, guidelines: guidelines, context: context, model: model, provider: provider)
+  const found = try findVerbalTics(
+    text: text,
+    task: task,
+    guidelines: guidelines,
+    context: context,
+    model: model,
+    provider: provider,
+  )
   return match(found) {
     success(items) => items
     failure(_) => []
@@ -323,7 +373,7 @@ export def buildTools(): any[] {
 }
 
 def judgeText(
-  work: string,
+  text: string,
   task: string,
   guidelines: string,
   context: string,
@@ -350,7 +400,7 @@ ${withContext(task: task, context: context)}
 </task>
 
 <text>
-${work}
+${text}
 </text>
 
 If the text names files instead of holding the prose, read each file and
@@ -371,7 +421,7 @@ Return a list of feedback items.
 }
 
 export def writingReviewAgent(
-  work: string,
+  text: string,
   task: string = "",
   guidelines: string = "",
   context: string = "",
@@ -388,7 +438,7 @@ export def writingReviewAgent(
   Spelling and grammar are assumed checked separately: this agent reports
   only what needs judgment.
 
-  @param work - The text under review, or a request naming the files that
+  @param text - The text under review, or a request naming the files that
     hold it (and, if the caller wants the fixes applied, saying so)
   @param task - Who the text is for and what it must get across, or ""
   @param guidelines - The caller's own writing guidelines, as text (for
@@ -410,7 +460,7 @@ export def writingReviewAgent(
       seq {
         thread(label: "writingReviewAgent", session: session) {
           items = judgeText(
-            work: work,
+            text: text,
             task: task,
             guidelines: guidelines,
             context: context,
@@ -420,8 +470,22 @@ export def writingReviewAgent(
           )
         }
       }
-      let cuts = cutsOrNothing(work: work, task: task, guidelines: guidelines, context: context, model: model, provider: provider)
-      let tics = verbalTicsOrNothing(work: work, task: task, guidelines: guidelines, context: context, model: model, provider: provider)
+      let cuts = cutsOrNothing(
+        text: text,
+        task: task,
+        guidelines: guidelines,
+        context: context,
+        model: model,
+        provider: provider,
+      )
+      let tics = verbalTicsOrNothing(
+        text: text,
+        task: task,
+        guidelines: guidelines,
+        context: context,
+        model: model,
+        provider: provider,
+      )
     }
     return [...items, ...cuts, ...tics]
 
@@ -462,12 +526,12 @@ node evalMain(input: WritingReviewEvalInput): Feedback[] {
       {
         error: true,
         feedback: "could not read ${input.sourceFile}: ${readErr}"
-      }
+      },
     ]
   }
   let reviewed: Result<Feedback[]> = failure("the reviewer never ran")
   handle {
-    reviewed = writingReviewAgent(work: source.value, task: input.assignment)
+    reviewed = writingReviewAgent(text: source.value, task: input.assignment)
   } with docsOnlyHandler
   if (reviewed is failure(err)) {
     return [{

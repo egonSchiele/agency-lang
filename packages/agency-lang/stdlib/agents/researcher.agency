@@ -8,17 +8,22 @@
 */
 import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
-import { evalValue } from "std::statelog"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { webTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
 import { reviewAgent } from "std::agents/review"
 import { now } from "std::date"
 import { agentSkill } from "std::skills"
+import { evalValue } from "std::statelog"
 import { Critique, revise } from "std::strategy"
-import { ThreadMessage, assistantMessage, systemMessage, threadIsNew, userMessage } from "std::thread"
+import {
+  ThreadMessage,
+  assistantMessage,
+  systemMessage,
+  threadIsNew,
+  userMessage,
+ } from "std::thread"
 
 import { communicationTools } from "./lib/toolkits.agency"
-
 
 static const systemPrompt = """You are a research analyst. Answer the task using your source tools.
 
@@ -112,7 +117,10 @@ def researchLoop(
   }
   const question = withContext(task: task, context: context)
   const startedAt = now()
-  return revise(maxAttempts: maxAttempts, check: checkGrounding.partial(task: task, startedAt: startedAt)) as critique {
+  return revise(
+    maxAttempts: maxAttempts,
+    check: checkGrounding.partial(task: task, startedAt: startedAt),
+  ) as critique {
 
     let msg = critique
     if (critique == "") {
@@ -122,14 +130,14 @@ def researchLoop(
     const answer = llm(
       msg,
       llmOptions(
-      model: model,
-      provider: provider,
-      tools: [...researchTools, ...extraTools, saveDraft],
-      hostedTools: hostedSearchTools(model, provider),
-      // A research run is many searches and fetches; the default ten
-      // rounds end it before the sources are in.
-      maxToolCallRounds: 30,
-    ),
+        model: model,
+        provider: provider,
+        tools: [...researchTools, ...extraTools, saveDraft],
+        hostedTools: hostedSearchTools(model, provider),
+        // A research run is many searches and fetches; the default ten
+        // rounds end it before the sources are in.
+        maxToolCallRounds: 30
+      ),
     )
     saveDraft(answer)
     return answer
@@ -202,7 +210,6 @@ def researchOnlyHandler(intr) {
     "std::wikipedia::search" => approve()
     "std::wikipedia::summary" => approve()
     "std::wikipedia::article" => approve()
-    "std::env" => approve()
     _ => reject()
   }
 }
@@ -227,7 +234,12 @@ node evalMain(input: ResearchEvalInput): string {
   }
   let answer: Result<string> = failure("the researcher never ran")
   handle {
-    answer = researcherAgent(task: input.task, history: history, maxCost: $3.00, maxTime: 6m)
+    answer = researcherAgent(
+      task: input.task,
+      history: history,
+      maxCost: $3.00,
+      maxTime: 6m,
+    )
   } with researchOnlyHandler
   if (answer is failure(err)) {
     return "research agent failed: ${err}"

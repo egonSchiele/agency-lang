@@ -1,0 +1,106 @@
+# Weekly eval run of the agency agent, uploaded to statelog so its accuracy
+# can be tracked over time (see packages/agency-lang/docs/dev/evals/eval-tracking.md).
+#
+# This spends real money (about $21 at three tests x three trials; the cap is
+# eval.limits.maxCostUsd in packages/agency-lang/agency.json). It never fails on
+# scores — a bad week is information for the batch table, not an alarm. It
+# fails only when a step could not run or the upload was refused. The run
+# directory is always saved as a workflow artifact so a batch whose upload
+# failed can be uploaded by hand: download it, then
+# `agency eval upload <dir>` from a linked checkout.
+#
+# Trigger it manually (workflow_dispatch) to try a cheaper suite or fewer
+# trials without waiting for Sunday.
+name: Agent evals (weekly)
+
+on:
+  schedule:
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      trials:
+        description: "Times to run every test"
+        default: "3"
+      suite:
+        description: "Suite directory, relative to packages/agency-lang"
+        default: "evals/agency-agent"
+
+permissions:
+  contents: read
+
+jobs:
+  evals:
+    # Forks have neither the secrets nor a reason to spend the money.
+    if: github.repository == 'egonSchiele/agency-lang'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: ci-credentials
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      STATELOG_API_KEY: ${{ secrets.STATELOG_API_KEY }}
+      STATELOG_PROJECT_URL: ${{ vars.STATELOG_PROJECT_URL }}
+      TRIALS: ${{ inputs.trials || '3' }}
+      SUITE: ${{ inputs.suite || 'evals/agency-agent' }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install
+      - run: make
+        working-directory: packages/agency-lang
+
+      - name: Check configuration
+        run: |
+          missing=""
+          [ -n "$OPENAI_API_KEY" ] || missing="$missing OPENAI_API_KEY"
+          [ -n "$STATELOG_API_KEY" ] || missing="$missing STATELOG_API_KEY"
+          [ -n "$STATELOG_PROJECT_URL" ] || missing="$missing STATELOG_PROJECT_URL"
+          if [ -n "$missing" ]; then
+            echo "::error::not configured:$missing"
+            exit 1
+          fi
+
+      - name: Pick a run directory
+        working-directory: packages/agency-lang
+        run: echo "RUN_DIR=runs/weekly-$(date -u +%Y-%m-%d-%H%M%S)" >> "$GITHUB_ENV"
+
+      - name: Link the statelog project
+        working-directory: packages/agency-lang
+        run: node ./dist/scripts/agency.js remote link --url "$STATELOG_PROJECT_URL"
+
+      # Flags here are checked against the CLI's registered options by
+      # lib/cli/eval/workflowFlags.test.ts, so a rename fails `make test`
+      # instead of the Sunday run.
+      - name: Run the suite
+        working-directory: packages/agency-lang
+        run: |
+          node ./dist/scripts/agency.js eval run \
+            --agent-cmd "node $PWD/dist/scripts/agency.js agent --policy recommended -p -- {input}" \
+            --suite "$SUITE" \
+            --trials "$TRIALS" \
+            --parallel 2 \
+            --out "$RUN_DIR"
+
+      - name: Grade
+        working-directory: packages/agency-lang
+        run: node ./dist/scripts/agency.js eval grade "$RUN_DIR"
+
+      - name: Upload to statelog
+        working-directory: packages/agency-lang
+        run: node ./dist/scripts/agency.js eval upload "$RUN_DIR"
+
+      - name: Save the run directory
+        if: always() && env.RUN_DIR != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: eval-runs
+          path: packages/agency-lang/${{ env.RUN_DIR }}
+          retention-days: 14
+          if-no-files-found: ignore

@@ -200,3 +200,17 @@ trace parser, and the annotation fold are not exported.
   `status`, `endedAt`, `eventCount`, `suiteSource`/`suiteSha`, and `score`,
   and silent runs, because statelog needs those and must not derive them
   itself.
+
+## The weekly CI run
+
+`.github/workflows/agent-evals.yml` runs `evals/agency-agent` with three
+trials every Sunday (03:00 UTC), grades it, and uploads it to the linked
+statelog project. `workflow_dispatch` takes `trials` and `suite` overrides for
+a cheap dry run. It needs the `OPENAI_API_KEY` and `STATELOG_API_KEY` secrets
+and the `STATELOG_PROJECT_URL` repository variable (a serve URL, as `remote
+link --url` takes). The cost cap is `eval.limits.maxCostUsd` in `agency.json`,
+not a workflow flag, so a local run of the suite is capped the same way; raise
+it as tests are added. The run directory is kept as a workflow artifact for 14
+days, so a batch whose upload failed can be uploaded by hand.
+`lib/cli/eval/workflowFlags.test.ts` checks every flag the workflow passes
+against the CLI's registered options.

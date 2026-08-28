@@ -36,9 +36,28 @@ like JS/TS, but its idioms differ, and reviews must judge it as Agency:
   { ... }". A "return" inside a block returns the block's value for that
   item; it does not return from the enclosing function.
 - Declarations use let/const (bare assignment without a declaration is an
-  error); types are postfix ("x: number"); string interpolation is
-  "\${...}"; entry points are "node main() { ... }"; blocks always use
-  braces, and if/while/for require parentheses around the condition.
+  error); types are postfix ("x: number"); entry points are "node main()
+  { ... }"; blocks always use braces, and if/while/for require
+  parentheses around the condition.
+- String interpolation is "\${...}" and works inside ordinary
+  double-quoted strings; a finding that says a double-quoted string will
+  not interpolate is false.
+- Record types are written "Record<string, number>", the same as in
+  TypeScript, and "Record<Status, number>" with a union key type is valid.
+- "static const" initializes a value once and shares it across every run
+  of the program. It is for fixed tables and configuration; mutating a
+  static value (pushing to a static array) is a real bug. A plain
+  module-level "let" or "const" is per-run state.
+- A "raises <...>" clause is optional. A function with no clause may raise
+  anything, so a missing clause is never an error; a clause only narrows
+  what the function is allowed to raise. Calling a function that has no
+  effects needs no clause and no handler.
+- Concurrency forms: "fork(xs) as x { ... }" runs the block for every
+  item at once and returns every result in input order; "race(xs) as x
+  { ... }" returns the first result to settle and cancels the rest, and
+  returns null for an empty list without throwing; "parallel { a() b()
+  }" runs a fixed set of calls at once. None of these throws on an empty
+  list.
 
 Performance, robustness, and idiom suggestions (memoization, iteration
 instead of deep recursion, clearer naming) are legitimate ADVISORY

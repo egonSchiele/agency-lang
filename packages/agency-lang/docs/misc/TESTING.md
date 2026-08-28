@@ -281,6 +281,12 @@ Keys are matched against the module making the `llm()` call: the exact module id
 
 The post-merge workflow ([`.github/workflows/test-with-llm.yml`](../../.github/workflows/test-with-llm.yml)) re-runs the same suites against the real OpenAI provider after a PR lands on `main`.
 
+`llmMocks` only apply in deterministic mode. The post-merge run does not set that mode, so a
+real model chooses the tool calls there. A fixture whose `interruptHandlers` list has one entry
+per expected interrupt runs out of handlers when the model makes an extra tool call, and the
+case fails with `Unexpected interrupt #N`. Add `"useTestLLMProvider": true` to a case that must
+stay deterministic in both workflows.
+
 ### Deterministic fetch mode
 
 Independently of the LLM deterministic mode, you can mock HTTP responses. A `fetchMocks` array in a `.test.json` (file-level and/or per test case), or a `fetchMocks.json` file in an agency-js test directory, replaces **every** `fetch` in the agent subprocess — agency `fetch()`/`fetchJSON()`/`fetchMarkdown()`, internal stdlib TS, and interop TS — with canned responses. Any fetch that matches no entry throws and fails the test, so tests never hit the real network.

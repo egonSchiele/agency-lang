@@ -122,7 +122,7 @@ describe("restore()", () => {
 
   it("rejects an object that is not a checkpoint", () => {
     const ctx = makeMockCtx();
-    expect(() => wrap(ctx, () => restore({ nope: true } as any, {}))).toThrow(CheckpointError);
+    expect(() => wrap(ctx, () => restore({ nope: true }, {}))).toThrow(CheckpointError);
   });
 
   it("should throw RestoreSignal", async () => {

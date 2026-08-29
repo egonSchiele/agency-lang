@@ -2,8 +2,8 @@ import { z } from "zod";
 
 // MessageThreadJSON
 // Every field MessageThread.toJSON writes. zod strips keys a schema does
-// not name, so a field missing here is silently dropped when a checkpoint
-// is loaded from JSON (a saved session lost its thread labels this way).
+// not name, so a field missing here is dropped when a checkpoint is read
+// back from JSON.
 export const messageThreadJSONSchema = z.object({
   messages: z.array(z.any()),
   messageLabels: z.array(z.string().nullable()).optional(),
@@ -12,7 +12,7 @@ export const messageThreadJSONSchema = z.object({
   label: z.string().nullable().optional(),
   summary: z.string().nullable().optional(),
   queuedMessages: z.array(z.any()).optional(),
-  repairs: z.number().optional(),
+  repairs: z.number().int().nonnegative().optional(),
 });
 
 // ThreadStoreJSON

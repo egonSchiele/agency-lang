@@ -38,8 +38,11 @@ import { fetchJSON } from "std::http"
   `~/.agency/oauth/{name}.json`, encrypted at rest when a key is available.
 */
 
+@always(name)
 effect std::authorize { name: string, authUrl: string, scopes: string }
+@always(name)
 effect std::getAccessToken { name: string }
+@always(name)
 effect std::revokeAuth { name: string }
 
 export def authorize(name: string, authUrl: string, tokenUrl: string, clientId: string, clientSecret: string, scopes: string, port: number = 8914, extraAuthParams: string = ""): Result {

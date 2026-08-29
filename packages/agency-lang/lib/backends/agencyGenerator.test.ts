@@ -1534,3 +1534,12 @@ describe("AgencyGenerator - nested call rendering", () => {
     expect(generator.functionCallsProcessed).toBe(depth);
   });
 });
+
+describe("effect declaration tags", () => {
+  it("keeps @always and @alwaysUnder tags on an effect declaration", () => {
+    // `make` formats the stdlib; if the formatter ever dropped these tags,
+    // every stdlib scope would vanish silently on the next build.
+    const src = "@always(name)\n@alwaysUnder(dir)\neffect app::x {\n  name: string;\n  dir: string\n}\n";
+    expect(formatSource(src)).toBe(src);
+  });
+});

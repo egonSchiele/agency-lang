@@ -108,6 +108,7 @@ const META_FILE = "meta.json"
 
 // One approval covers the scan; the reads that fulfil it use the
 // non-interrupt primitive, as std::skills does.
+@alwaysUnder(dir)
 effect std::toolbox::scan {
   dir: string
 }

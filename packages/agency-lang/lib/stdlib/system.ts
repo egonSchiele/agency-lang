@@ -171,3 +171,10 @@ export async function _screenshot(
 export function _setTitle(title: string): void {
   process.title = title;
 }
+
+/** The hostname of a URL, or "" when the string is not a URL. Used as the
+ *  policy scope for std::openUrl. `URL.canParse` avoids a try/catch that
+ *  would swallow the error. */
+export function _urlHost(url: string): string {
+  return URL.canParse(url) ? new URL(url).hostname : "";
+}

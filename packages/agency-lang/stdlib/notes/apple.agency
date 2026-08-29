@@ -150,11 +150,17 @@ export type NoteContent = {
   modified: string
 }
 
+@always(folder)
 effect std::notes::create { account: string, folder: string, title: string, folderCreated: boolean }
+@always(folder)
 effect std::notes::append { account: string, folder: string, title: string, id: string }
+@always(folder)
 effect std::notes::read   { account: string, folder: string, title: string, id: string }
+@always(folder)
 effect std::notes::search { account: string, folder: string, query: string }
+@always(folder)
 effect std::notes::list   { account: string, folder: string }
+@always(folder)
 effect std::notes::delete { account: string, folder: string, title: string, id: string }
 
 /** Convert markdown to the HTML that Notes requires on write. */

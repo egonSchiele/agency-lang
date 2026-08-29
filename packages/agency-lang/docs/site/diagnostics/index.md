@@ -65,6 +65,11 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG3016](effects.md#ag3016) | '&#123;callee&#125;' can interrupt, and a finalize block cannot contain interrupts. A finalize runs while its scope shuts down, so there is nothing to resume. |
 | [AG3017](effects.md#ag3017) | Cannot use &#123;kind&#125; at the top level of a file. Top-level code runs at initialization, which cannot branch, loop, or wait — move it inside a node or a function. |
 | [AG3018](effects.md#ag3018) | A handler cannot be registered at the top level of a file. Handlers must be inside a node or a function, where there is execution for them to guard. |
+| [AG3019](effects.md#ag3019) | @&#123;tag&#125; names '&#123;field&#125;', which effect '&#123;effect&#125;' does not carry. |
+| [AG3020](effects.md#ag3020) | @&#123;tag&#125; arguments must be bare field names, each named once (effect '&#123;effect&#125;'). |
+| [AG3021](effects.md#ag3021) | @&#123;tag&#125; appears more than once on effect '&#123;effect&#125;'. |
+| [AG3022](effects.md#ag3022) | Conflicting @always scopes for effect '&#123;effect&#125;'. All tagged declarations of an effect must agree. |
+| [AG3023](effects.md#ag3023) | @&#123;tag&#125; is only valid on an effect declaration. |
 
 ## Names, scope, and reserved words
 

@@ -1,0 +1,15 @@
+import { openUrl } from "std::system"
+
+// Proves the raise carries `host` without ever opening a browser: the
+// handler rejects, so the open itself is never reached.
+node main(): string {
+  let host = "unset"
+  handle {
+    openUrl("https://example.com/a/b")
+  } with (intr) {
+    host = intr.data.host
+    return reject()
+  }
+  if (host != "example.com") { return "FAIL: host was ${host}" }
+  return "pass"
+}

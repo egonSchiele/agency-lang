@@ -391,6 +391,37 @@ describe("Checkpoint", () => {
       expect(cp!.label).toBeNull();
       expect(cp!.pinned).toBe(false);
     });
+
+    it("keeps every thread field and the sessions map through a JSON round trip", () => {
+      // A checkpoint written to disk with JSON.stringify(getCheckpoint(id))
+      // and read back must reopen `thread(session: "main")` on the same
+      // thread. Before the schema named these fields, zod stripped them.
+      const threads = {
+        threads: {
+          "1": {
+            messages: [{ role: "user" as const, content: "hi" }],
+            messageLabels: ["greeting"],
+            parentId: null,
+            hidden: false,
+            label: "main",
+            summary: "a chat",
+            queuedMessages: [],
+            repairs: 2,
+          },
+        },
+        counter: 2,
+        activeStack: ["1"],
+        sessions: { main: "1" },
+      };
+      const plain = {
+        id: 4,
+        stack: makeStackJSON([{ args: {}, threads }]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      };
+      const cp = Checkpoint.fromJSON(JSON.parse(JSON.stringify(plain)));
+      expect(cp!.stack.stack[0].threads).toEqual(threads);
+    });
   });
 });
 

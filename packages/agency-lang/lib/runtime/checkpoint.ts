@@ -1,7 +1,7 @@
 import { CheckpointError, RestoreSignal } from "./errors.js";
 import type { RestoreOptions } from "./errors.js";
 import { getRuntimeContext } from "./asyncContext.js";
-import type { Checkpoint } from "./state/checkpointStore.js";
+import { Checkpoint } from "./state/checkpointStore.js";
 
 /**
  * Capture a checkpoint of the current execution state. The source
@@ -43,7 +43,10 @@ export function restore(
       );
     cp = found;
   } else {
-    cp = checkpointIdOrCheckpoint;
+    // A checkpoint read back from disk is plain JSON, not an instance.
+    const revived = Checkpoint.fromJSON(checkpointIdOrCheckpoint);
+    if (!revived) throw new CheckpointError("Invalid checkpoint object passed to restore()");
+    cp = revived;
   }
 
   const location = cp.getLocation();

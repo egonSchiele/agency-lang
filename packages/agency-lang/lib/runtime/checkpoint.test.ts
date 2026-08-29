@@ -106,6 +106,25 @@ describe("getCheckpoint()", () => {
 });
 
 describe("restore()", () => {
+  it("accepts a checkpoint that was serialized to JSON and parsed back", async () => {
+    const ctx = makeMockCtx();
+    const id = await wrap(ctx, () => checkpoint());
+    const plain = JSON.parse(JSON.stringify(wrap(ctx, () => getCheckpoint(id))));
+
+    try {
+      wrap(ctx, () => restore(plain, {}));
+      expect.unreachable("restore() must throw RestoreSignal");
+    } catch (e) {
+      expect(e).toBeInstanceOf(RestoreSignal);
+      expect((e as RestoreSignal).checkpoint.id).toBe(id);
+    }
+  });
+
+  it("rejects an object that is not a checkpoint", () => {
+    const ctx = makeMockCtx();
+    expect(() => wrap(ctx, () => restore({ nope: true } as any, {}))).toThrow(CheckpointError);
+  });
+
   it("should throw RestoreSignal", async () => {
     const ctx = makeMockCtx();
     const id = await wrap(ctx, () => checkpoint());

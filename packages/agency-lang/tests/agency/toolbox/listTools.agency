@@ -1,0 +1,107 @@
+import { listTools, ToolEntry } from "std::toolbox"
+
+const FIXTURES = __dirname + "/fixtures/tools"
+
+def catalog() {
+  return listTools(FIXTURES) with approve
+}
+
+// Every fixture name is listed, so a missing entry is a test bug, not a
+// case to handle; the broken entry stands in and fails the assertions.
+def entryNamed(entries: ToolEntry[], name: string): ToolEntry {
+  return find(entries, \entry -> entry.name == name) ?? entries[0]
+}
+
+node listsEveryDirectory(): boolean {
+  const entries = catalog()
+  if (entries is failure) {
+    return false
+  }
+  const names = map(entries.value, \entry -> entry.name)
+  names.sort()
+  // `build` is on the walking glob's skip list; a plain listing still shows it.
+  return names.join(",") == "badMeta,broken,build,good,noMeta,partialMeta"
+}
+
+node readsSignatureDocstringAndEffects(): boolean {
+  const entries = catalog()
+  if (entries is failure) {
+    return false
+  }
+  const good = entryNamed(entries.value, "good")
+  const signatureOk = good.module.signature =~ re/run\(request: Request\)/
+  const docstringOk = good.module.docstring =~ re/Add one/
+  const effectsOk = good.module.effects.length == 0
+  return signatureOk && docstringOk && effectsOk && good.broken == null
+}
+
+node readsMeta(): boolean {
+  const entries = catalog()
+  if (entries is failure) {
+    return false
+  }
+  const good = entryNamed(entries.value, "good")
+  const meta = good.meta
+  return meta.uses == 3 && meta.version == 1 && meta.maxTime == 60000 && meta.purpose == "Add one to a number." && meta.request == "{ n: number }"
+}
+
+node defaultsMissingMeta(): boolean {
+  const entries = catalog()
+  if (entries is failure) {
+    return false
+  }
+  const noMeta = entryNamed(entries.value, "noMeta")
+  const meta = noMeta.meta
+  return meta.uses == 0 && meta.version == 1 && meta.lastUsedAt == null && noMeta.broken == null
+}
+
+// A field the file leaves out, or sets to null, takes the default; the
+// fields it has are kept.
+node fillsMissingMetaFields(): boolean {
+  const entries = catalog()
+  if (entries is failure) {
+    return false
+  }
+  const partial = entryNamed(entries.value, "partialMeta")
+  return partial.meta.uses == 7 && partial.meta.maxTime == 180000 && partial.meta.version == 1 && partial.broken == null
+}
+
+node reportsCorruptMeta(): boolean {
+  const entries = catalog()
+  if (entries is failure) {
+    return false
+  }
+  const badMeta = entryNamed(entries.value, "badMeta")
+  return badMeta.broken != null && badMeta.broken =~ re/meta\.json/ && badMeta.broken !~ re/impl/
+}
+
+node marksBroken(): boolean {
+  const entries = catalog()
+  if (entries is failure) {
+    return false
+  }
+  const broken = entryNamed(entries.value, "broken")
+  return broken.broken != null && broken.module.signature == ""
+}
+
+node rejectedScanReturnsFailure(): boolean {
+  handle {
+    const entries = listTools(FIXTURES)
+    return entries is failure
+  } with (intr) {
+    return reject()
+  }
+}
+
+node refusesAnEmptyDir(): boolean {
+  const entries = listTools("") with approve
+  return entries is failure && "${entries.error}" =~ re/dir/
+}
+
+node missingToolboxIsEmpty(): boolean {
+  const entries = listTools(__dirname + "/no-such-toolbox") with approve
+  if (entries is failure) {
+    return false
+  }
+  return entries.value.length == 0
+}

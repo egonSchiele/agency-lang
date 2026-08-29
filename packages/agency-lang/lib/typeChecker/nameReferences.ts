@@ -1,5 +1,5 @@
 import type { AgencyNode, FunctionCall, VariableNameLiteral } from "../types.js";
-import type { WalkAncestor } from "../utils/node.js";
+import { isNullLiteral, type WalkAncestor } from "../utils/node.js";
 
 /**
  * Which AST positions hold a lexical name that has to resolve.
@@ -27,7 +27,8 @@ export function hasFunctionOrNodeAncestor(ancestors: readonly unknown[]): boolea
 /**
  * Is this `variableName` a real read that has to resolve?
  *
- * Two positions look like reads and are not. A `for` binder is a
+ * The parser hands `null` over as a `variableName`, and it is a literal,
+ * not a read. Two positions look like reads and are not. A `for` binder is a
  * declaration. A block-call parameter, as in `xs.map(\(item) -> item)`,
  * is a binding the typechecker's `Scope` does not track at all, so
  * resolving it would always fail.
@@ -43,6 +44,9 @@ export function isResolvableVariableReference(
 ): boolean {
   const parent = ancestors[ancestors.length - 1] as AgencyNode | undefined;
   if (!parent) {
+    return false;
+  }
+  if (isNullLiteral(ref)) {
     return false;
   }
   for (const ancestor of ancestors) {

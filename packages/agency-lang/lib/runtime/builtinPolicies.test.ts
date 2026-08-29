@@ -22,6 +22,13 @@ describe("builtinPolicy", () => {
     expect(p!["std::write"]).toBeUndefined();
   });
 
+  it("scopes a toolbox scan like a read under 'recommended' and omits it under 'minimal'", () => {
+    expect(builtinPolicy("recommended", "/tmp/base")!["std::toolbox::scan"]).toEqual(
+      builtinPolicy("recommended", "/tmp/base")!["std::read"],
+    );
+    expect(builtinPolicy("minimal", "/tmp/base")!["std::toolbox::scan"]).toBeUndefined();
+  });
+
   it("resolves 'minimal' with memory approved but reads absent", () => {
     const p = builtinPolicy("minimal", "/tmp/base");
     expect(p!["std::memory::remember"]).toEqual([{ action: "approve" }]);

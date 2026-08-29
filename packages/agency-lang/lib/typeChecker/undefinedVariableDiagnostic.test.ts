@@ -101,6 +101,13 @@ describe("undefined variable diagnostic", () => {
     ).toHaveLength(0);
   });
 
+  it("does not report the literal null", () => {
+    const errors = errorsFrom(`node main() {\n const x = null\n return null\n }\n`, {
+      typechecker: { undefinedVariables: "error" },
+    });
+    expect(errors.filter((e) => e.message.includes("not defined"))).toHaveLength(0);
+  });
+
   it("respects undefinedVariables: error", () => {
     const errors = errorsFrom(`node main() {\n let x = doesNotExist\n print(x)\n }\n`, {
       typechecker: { undefinedVariables: "error" },

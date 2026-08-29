@@ -449,6 +449,7 @@ export default defineConfig({
             { text: "syntax", link: "/stdlib/syntax" },
             { text: "system", link: "/stdlib/system" },
             { text: "thread", link: "/stdlib/thread" },
+            { text: "toolbox", link: "/stdlib/toolbox" },
             {
               text: "ui",
               collapsed: true,

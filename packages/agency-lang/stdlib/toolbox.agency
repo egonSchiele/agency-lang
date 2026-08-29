@@ -1,0 +1,990 @@
+import {
+  describe,
+  parseAST,
+  fill,
+  toSource,
+  typecheckFile,
+  compile,
+  testFile,
+  runFile,
+  getNodesOfType,
+  ModuleInfo,
+  ExportInfo,
+  TestReport,
+ } from "std::agency"
+import { agencyCodingAgent } from "std::agents/agency/coding"
+import { agencyReviewAgent } from "std::agents/agency/review"
+import { llmOptions } from "std::agents/lib/shared"
+import { now, format } from "std::date"
+import { mkdir, remove, move } from "std::fs"
+import { ls, exists } from "std::shell"
+import { Json } from "std::validation"
+
+import { _read } from "agency-lang/stdlib-lib/builtins.js"
+import { expandPath } from "agency-lang/stdlib-lib/expandPath.js"
+
+/** @module
+  @summary Keep a directory of tools an agent wrote.
+  A tool is a directory holding two Agency files. `impl.agency` is the
+  part the coding agent writes: `export type Request` and
+  `export def run(request: Request): Json`. `tool.agency` is generated
+  from a fixed template and wraps `run` in a guard with time and cost
+  limits. It exports `tool` and `node main`, both taking a `Request`.
+
+  ## Useful exports
+  - `listTools` reads a toolbox directory into a catalog. It raises a
+    `std::toolbox::scan` interrupt, then `std::ls` for the listing.
+  - `writeTool` has the coding agent draft a new tool. `writeTool` then
+    reviews and tests the draft, shows it to the user through an
+    interrupt, and saves it.
+  - `runTool` runs a saved tool and records the use.
+
+  ```ts
+  import { writeTool, listTools, runTool } from "std::toolbox"
+
+  const REVISE_PREFIX = "revise "
+
+  node main() {
+    handle {
+      const written = writeTool(
+        name: "getNews",
+        purpose: "Summarize today's news for a list of topics as Markdown.",
+        request: "{ topics: string[]; maxItems: number }",
+      )
+      if (written is failure(err)) {
+        print("not written: ${err}")
+        return
+      }
+      printJSON(listTools())
+      const news = runTool("getNews", { topics: ["tech"], maxItems: 5 })
+      print(news)
+    } with (intr) {
+      return match (intr.effect) {
+        "std::toolbox::review" => {
+          print(intr.data.source)
+          print("effects: ${intr.data.effects.join(", ")}")
+          const answer = input("accept / revise <feedback> / reject: ")
+          if (answer == "accept") {
+            return approve({ verdict: "accept" })
+          }
+          if (answer.startsWith(REVISE_PREFIX)) {
+            return approve({ verdict: "revise", feedback: answer.slice(REVISE_PREFIX.length) })
+          }
+          return reject("cancelled by user")
+        }
+        _ => pass()
+      }
+    }
+  }
+  ```
+
+  A program can also import a saved tool directly:
+  `import { tool as getNews } from "~/.agency-agent/tools/getNews/tool.agency"`.
+*/
+
+// Upper bound on tools one scan reads; the same cap std::skills uses for a
+// skills directory.
+const MAX_TOOLS = 500
+
+// Providers cap tool names at 64 characters; std::skills truncates to the
+// same cap, this module refuses so a user-chosen name is never changed.
+const MAX_TOOL_NAME_LEN = 64
+
+// Added to a tool's own time limit for the subprocess that runs it, so
+// the guard trips before the process is killed. runFile clamps wallClock
+// to one hour, so a tool's limit stays below that minus the headroom.
+const WALL_CLOCK_HEADROOM = 30s
+const MAX_TOOL_TIME = 1h - WALL_CLOCK_HEADROOM
+
+// Drafts are built under <root>/staging/<name>-<random>, one directory
+// per writeTool call. Not a dot directory: the with-writes policy scopes
+// writes with `base/**`, and `**` does not match a dot-led segment.
+const STAGING_DIR = "staging"
+
+const IMPL_FILE = "impl.agency"
+const TOOL_FILE = "tool.agency"
+const TEST_FILE = "tool.test.json"
+const META_FILE = "meta.json"
+
+// One approval covers the scan; the reads that fulfil it use the
+// non-interrupt primitive, as std::skills does.
+effect std::toolbox::scan {
+  dir: string
+}
+
+effect std::toolbox::review {
+  name: string;
+  stagingDir: string;
+  source: string;
+  effects: string[];
+  tested: boolean
+}
+
+/** What `describe` says about a tool's `run` function. */
+export type ModuleFacts = {
+  signature: string;
+  docstring?: string;
+  effects: string[]
+}
+
+/** What meta.json holds: how the tool was made, and how often it ran. */
+export type ToolMeta = {
+  purpose: string;
+  request: string;
+  createdAt: string;
+  maxTime: number;
+  version: number;
+  uses: number;
+  lastUsedAt?: string
+}
+
+/** One tool in a toolbox. This is what `listTools` returns. If the tool
+  could not be read correctly, `broken` holds the reason. */
+export type ToolEntry = {
+  name: string;
+  dir: string;
+  module: ModuleFacts;
+  meta: ToolMeta;
+  broken?: string
+}
+
+/** The value a handler passes to approve() for std::toolbox::review. A
+  bare approve() counts as accept. */
+export type WriteToolReview =
+  | { verdict: "accept" }
+  | { verdict: "revise"; feedback: string }
+
+const DEFAULT_META: ToolMeta = {
+  purpose: "",
+  request: "",
+  createdAt: "",
+  maxTime: 3m,
+  version: 1,
+  uses: 0,
+  lastUsedAt: null
+}
+
+const EMPTY_MODULE: ModuleFacts = {
+  signature: "",
+  docstring: null,
+  effects: []
+}
+
+// ---- reading a toolbox ----
+
+// Every entry point takes the toolbox directory the same way. An empty
+// string is refused because the file primitives would resolve it to the
+// process cwd.
+def expandRoot(dir: string): Result<string> {
+  if (dir == "") {
+    return failure("dir must name the toolbox directory; got an empty string")
+  }
+  return success(expandPath(dir))
+}
+
+def runExport(info: ModuleInfo): ExportInfo | null {
+  return find(info.exports, \entry -> entry.name == "run" && entry.kind == "def")
+}
+
+def factsOf(exported: ExportInfo): ModuleFacts {
+  return {
+    signature: exported.signature,
+    docstring: exported.docstring,
+    effects: exported.effects
+  }
+}
+
+def moduleFacts(toolDir: string): Result<ModuleFacts> {
+  const source = try _read(toolDir, IMPL_FILE, 0, 0)
+  if (source is failure) {
+    return source
+  }
+  const info = describe(source.value)
+  if (info is failure) {
+    return info
+  }
+  const exported = runExport(info.value)
+  if (exported == null) {
+    return failure("no exported `def run` in ${IMPL_FILE}")
+  }
+  return success(factsOf(exported))
+}
+
+/** meta.json as written; every field may be missing. */
+type MetaFile = {
+  purpose?: string;
+  request?: string;
+  createdAt?: string;
+  maxTime?: number;
+  version?: number;
+  uses?: number;
+  lastUsedAt?: string
+}
+
+// A missing meta.json is the default record. A present one that cannot be
+// read, is not JSON, or has a field of the wrong type is a failure, so a
+// corrupt file never passes as a healthy tool.
+def metaFacts(toolDir: string): Result<ToolMeta> {
+  if (!exists(META_FILE, toolDir)) {
+    return success(DEFAULT_META)
+  }
+  const raw = try _read(toolDir, META_FILE, 0, 0)
+  if (raw is failure(readErr)) {
+    return failure("${META_FILE} could not be read: ${readErr}")
+  }
+  const parsed = try JSON.parse(raw.value)
+  if (parsed is failure(parseErr)) {
+    return failure("${META_FILE} is not valid JSON: ${parseErr}")
+  }
+  const file: MetaFile! = parsed.value
+  if (file is failure(shapeErr)) {
+    return failure("${META_FILE} has the wrong shape: ${shapeErr}")
+  }
+  return success({
+    ...DEFAULT_META,
+    ...presentFields(file.value)
+  })
+}
+
+// Validation fills a missing optional field with null, and a null would
+// win over the default in a spread. Only the fields the file has are kept.
+def presentFields(file: MetaFile): Record<string, Json> {
+  const fields: Record<string, Json> = file
+  const present: Record<string, Json> = {}
+  for (key, value in fields) {
+    if (value != null) {
+      present[key] = value
+    }
+  }
+  return present
+}
+
+def entryFor(root: string, name: string): ToolEntry {
+  const toolDir = "${root}/${name}"
+  const module = moduleFacts(toolDir)
+  const meta = metaFacts(toolDir)
+  const moduleFields: ModuleFacts = module catch EMPTY_MODULE
+  const metaFields: ToolMeta = meta catch DEFAULT_META
+  const problems: string[] = []
+  if (module is failure(moduleErr)) {
+    problems.push("${moduleErr}")
+  }
+  if (meta is failure(metaErr)) {
+    problems.push("${metaErr}")
+  }
+  let broken: string | null = null
+  if (problems.length > 0) {
+    broken = problems.join("; ")
+  }
+  return {
+    name: name,
+    dir: toolDir,
+    module: moduleFields,
+    meta: metaFields,
+    broken: broken
+  }
+}
+
+/** The fields of an `ls` entry this module reads. */
+type DirEntry = {
+  name: string;
+  type: string
+}
+
+def isToolDir(entry: DirEntry): boolean {
+  return entry.type == "dir" && entry.name != STAGING_DIR && !entry.name.startsWith(".")
+}
+
+// A toolbox directory that does not exist yet is an empty catalog, not an
+// error. `ls` counts every entry against its cap, files included, and
+// says nothing when it stops, so it is asked for one entry more than the
+// cap and a listing that long is refused.
+def toolNames(root: string): Result<string[]> {
+  if (!exists(root)) {
+    return success([])
+  }
+  const entries = ls(root, false, MAX_TOOLS + 1)
+  if (entries is failure) {
+    return entries
+  }
+  if (entries.value.length > MAX_TOOLS) {
+    return failure("${root} has more than ${MAX_TOOLS} entries; a toolbox holds fewer")
+  }
+  return success(map(filter(entries.value, isToolDir), \entry -> entry.name))
+}
+
+export idempotent def listTools(
+  dir: string = "~/.agency-agent/tools",
+): Result<ToolEntry[]> {
+  """
+  List the tools in a toolbox directory. Raises a `std::toolbox::scan`
+  interrupt before reading anything, then `std::ls` for the listing. Each entry has: the tool's name and
+  directory; what `describe` says about its `run` function (signature,
+  docstring, effects); and its meta.json record (purpose, request type,
+  creation time, time limit, version, run count, last-run time).
+
+  @param dir - The toolbox directory to scan
+  """
+  const root = expandRoot(dir)
+  if (root is failure) {
+    return root
+  }
+  return interrupt std::toolbox::scan("Are you sure you want to scan this directory for tools?", {
+    dir: root.value
+  })
+  const names = toolNames(root.value)
+  if (names is failure) {
+    return names
+  }
+  return success(map(names.value, \name -> entryFor(root.value, name)))
+}
+
+// ---- the tool template ----
+
+// Only the limits and the description vary. The guard, the exports, and
+// the signatures are fixed here, so no draft can leave them out. `main`
+// returns the guard's Result.
+static const toolTemplate = [|
+  import { Json } from "std::validation"
+
+  import { run, Request } from "./impl.agency"
+
+  def runGuarded(request: Request): Result<Json> {
+    """
+    Run this tool. The request type is in impl.agency.
+
+    @param request - The tool's input
+    """
+    return guard(time: #maxTime, cost: #maxCost) {
+      return run(request)
+    }
+  }
+
+  export static const tool = runGuarded.describe(#purpose)
+
+  export node main(request: Request): Result<Json> {
+    return tool(request)
+  }
+|]
+
+/** The settings one writeTool call hands every pipeline stage. */
+type DraftSettings = {
+  purpose: string;
+  request: string;
+  stagingDir: string;
+  maxTime: number;
+  maxCost: number;
+  model: string;
+  provider: string
+}
+
+/** A draft that typechecked, passed review, and (for a pure tool) its
+  own tests. `source` is impl.agency. `tested` is false when the tool
+  was not tested. */
+type Draft = {
+  source: string;
+  effects: string[];
+  tested: boolean
+}
+
+type GeneratedCase = {
+  args: Record<string, Json>;
+  expectedOutput: Json
+}
+
+type GeneratedCases = {
+  cases: GeneratedCase[]
+}
+
+def brief(settings: DraftSettings, feedback: string): string {
+  let feedbackBlock = ""
+  if (feedback != "") {
+    feedbackBlock = """
+## Feedback on the previous draft
+${feedback}
+Fix every point above in the new draft.
+"""
+  }
+  return """
+Write an Agency module that does this: ${settings.purpose}
+
+The module exports exactly two things:
+
+1. `export type Request = ${settings.request}` — copy this line as is. Every input the tool needs comes through it. Do not hardcode a topic, path, count, or date in the body. Call `today()` from std::date when a date is needed.
+2. `export def run(request: Request): Json` — the work. Import `Json` from std::validation. Give `run` a docstring that says what it returns and documents `@param request`.
+
+Rules:
+- Imports name std:: modules only.
+- Never write `with approve`.
+- Do not wrap the body in a guard; the caller adds one.
+${feedbackBlock}
+"""
+}
+
+def casesBrief(source: string, request: string): string {
+  return """
+Write two test cases for this Agency module as JSON. Reply with
+{ "cases": [ ... ] }. Each case: { "args": { "request": <a ${request} value> }, "expectedOutput": <the exact value run returns> }.
+The first case is the happy path; the second is an edge case (an empty list, zero items). The module is pure computation, so every expected value is exact.
+
+```agency
+${source}
+```
+"""
+}
+
+// main returns the guard's Result, so the expected value is wrapped in the
+// runtime's own Result envelope. The model supplies plain values.
+def expectedResult(value: Json): string {
+  return JSON.stringify(success(value))
+}
+
+def testFileJson(cases: GeneratedCase[]): string {
+  const tests = map(cases) as testCase {
+    return {
+      nodeName: "main",
+      args: testCase.args,
+      expectedOutput: expectedResult(testCase.expectedOutput),
+      evaluationCriteria: [{
+        type: "exact"
+      }]
+    }
+  }
+  return JSON.stringify({
+    sourceFile: TOOL_FILE,
+    tests: tests
+  }, null, 2)
+}
+
+// Calls whose result changes from run to run without raising an
+// interrupt, so they never show in the effect list. A tool that makes one
+// has no output an exact test can predict. `random` covers Math.random,
+// which parses as a call named random.
+const UNPREDICTABLE_CALLS = ["llm", "today", "now", "random"]
+
+/** The fields of an import statement this module reads. */
+type ImportFacts = {
+  importedNames: { aliases: Record<string, string> }[]
+}
+
+// `import { now as clock }` calls `clock()`, so the local names of the
+// unpredictable calls are collected from the import aliases too.
+def unpredictableNames(source: string): string[] {
+  const imports: ImportFacts[] = getNodesOfType(source, ["importStatement"]) catch []
+  const names = [...UNPREDICTABLE_CALLS]
+  for (statement in imports) {
+    for (group in statement.importedNames) {
+      for (original, local in group.aliases) {
+        if (UNPREDICTABLE_CALLS.includes(original)) {
+          names.push(local)
+        }
+      }
+    }
+  }
+  return names
+}
+
+def callsUnpredictable(source: string): boolean {
+  const names = unpredictableNames(source)
+  const calls = getNodesOfType(source, ["functionCall"]) catch []
+  return some(calls, \call -> names.includes(call.functionName))
+}
+
+// ---- the writeTool pipeline ----
+
+/** A failure the next draft can fix, as opposed to one it cannot (a
+  refused write, a review agent that did not run). Only these become
+  feedback for another round. */
+type DraftProblem = {
+  problem: string
+}
+
+def draftProblem(message: string): Result {
+  return failure({
+    problem: message
+  })
+}
+
+def draftSource(settings: DraftSettings, feedback: string): Result<string> {
+  const drafted = agencyCodingAgent(
+    task: brief(settings, feedback),
+    requireMain: false,
+    dir: settings.stagingDir,
+    model: settings.model,
+    provider: settings.provider,
+  )
+  if (drafted is failure(writeFailure)) {
+    return draftProblem(writeFailure.problems.join("\n"))
+  }
+  return drafted
+}
+
+def reviewSource(source: string, settings: DraftSettings): Result<string> {
+  const reviewed = agencyReviewAgent(
+    source,
+    task: brief(settings, ""),
+    dir: settings.stagingDir,
+    model: settings.model,
+    provider: settings.provider,
+  )
+  if (reviewed is failure(reviewErr)) {
+    return failure("review failed: ${reviewErr}")
+  }
+  const errors = filter(reviewed.value, \finding -> finding.error)
+  if (errors.length > 0) {
+    return draftProblem(map(errors, \finding -> finding.feedback).join("\n"))
+  }
+  return success(source)
+}
+
+// Write impl.agency and the filled template beside it, then typecheck the
+// pair. A draft that exports the wrong names fails here with the
+// compiler's message, which goes back to the coding agent as feedback.
+def assembleTool(source: string, settings: DraftSettings): Result<ModuleFacts> {
+  const wroteImpl = write(IMPL_FILE, source, settings.stagingDir)
+  if (wroteImpl is failure) {
+    return wroteImpl
+  }
+  const filled = fill(
+    toolTemplate,
+    {
+      maxTime: settings.maxTime,
+      maxCost: settings.maxCost,
+      purpose: settings.purpose
+    },
+  )
+  if (filled is failure) {
+    return filled
+  }
+  const wroteTool = write(TOOL_FILE, toSource(filled.value), settings.stagingDir)
+  if (wroteTool is failure) {
+    return wroteTool
+  }
+  // The sandboxed compile resolves the pair's imports and refuses
+  // TypeScript, Node, and pkg:: imports anywhere in the closure, so a
+  // draft cannot reach a raw primitive that raises no interrupt. It runs
+  // first because a draft that exports the wrong name fails here, and
+  // that is a problem the next draft can fix.
+  const compiled = compile(toSource(filled.value), settings.stagingDir)
+  if (compiled is failure(compileErr)) {
+    return draftProblem("${compileErr}")
+  }
+  // The compile does not report type errors; the typecheck does. After a
+  // successful compile, a typecheck failure is a read error, not a draft
+  // problem.
+  const report = typecheckFile(settings.stagingDir, TOOL_FILE)
+  if (report is failure) {
+    return report
+  }
+  if (report.value.errors.length > 0) {
+    const messages = map(report.value.errors, \diag -> diag.message)
+    return draftProblem("the tool does not typecheck:\n${messages.join("\n")}")
+  }
+  return moduleFacts(settings.stagingDir)
+}
+
+def failedCases(report: TestReport): string[] {
+  const failing = filter(report.cases, \caseReport -> !caseReport.pass)
+  return map(failing, \caseReport -> "${caseReport.node}: ${caseReport.feedback}")
+}
+
+def runGeneratedTests(source: string, settings: DraftSettings): Result {
+  const generated: GeneratedCases! = llm(
+    casesBrief(source, settings.request),
+    llmOptions(model: settings.model, provider: settings.provider),
+  )
+  if (generated is failure(caseErr)) {
+    return failure("the test cases had the wrong shape: ${caseErr}")
+  }
+  const wroteCases = write(TEST_FILE, testFileJson(generated.value.cases), settings.stagingDir)
+  if (wroteCases is failure) {
+    return wroteCases
+  }
+  const report = testFile(settings.stagingDir, TEST_FILE)
+  if (report is failure(testErr)) {
+    return failure("tests could not run: ${testErr}")
+  }
+  if (!report.value.pass) {
+    return draftProblem("tests failed:\n${failedCases(report.value).join("\n")}")
+  }
+  return success(null)
+}
+
+// Only a tool that does nothing but compute gets generated tests.
+def testSource(source: string, settings: DraftSettings): Result<Draft> {
+  const assembled = assembleTool(source, settings)
+  if (assembled is failure) {
+    return assembled
+  }
+  const effects = assembled.value.effects
+  const pure = effects.length == 0 && !callsUnpredictable(source)
+  if (!pure) {
+    // A previous round may have been pure and left a test file behind;
+    // it must not ship with this draft.
+    if (exists(TEST_FILE, settings.stagingDir)) {
+      const cleared = remove("${settings.stagingDir}/${TEST_FILE}")
+      if (cleared is failure) {
+        return cleared
+      }
+    }
+    return success(
+      {
+        source: source,
+        effects: effects,
+        tested: false
+      },
+    )
+  }
+  const tested = runGeneratedTests(source, settings)
+  if (tested is failure) {
+    return tested
+  }
+  return success({
+    source: source,
+    effects: effects,
+    tested: true
+  })
+}
+
+def prepareDraft(settings: DraftSettings, feedback: string): Result<Draft> {
+  const source = draftSource(settings, feedback)
+  if (source is failure) {
+    return source
+  }
+  const reviewed = reviewSource(source.value, settings)
+  if (reviewed is failure) {
+    return reviewed
+  }
+  return testSource(reviewed.value, settings)
+}
+
+// A rejected interrupt halts this function and returns the rejection to
+// the caller; nothing below the interrupt runs. A bare approve() carries
+// no value and counts as accept.
+def askUser(
+  name: string,
+  settings: DraftSettings,
+  draft: Draft,
+): Result<WriteToolReview> {
+  const answer = interrupt std::toolbox::review("Review this tool before it is saved", {
+    name: name,
+    stagingDir: settings.stagingDir,
+    source: draft.source,
+    effects: draft.effects,
+    tested: draft.tested
+  })
+  if (answer == null) {
+    return success({
+      verdict: "accept"
+    })
+  }
+  const review: WriteToolReview! = answer
+  if (review is failure(shapeErr)) {
+    return failure(
+      "unrecognized review answer ${JSON.stringify(answer)}: ${shapeErr}. Expected { verdict: \"accept\" } or { verdict: \"revise\", feedback: \"...\" }",
+    )
+  }
+  if (review.value.verdict == "revise" && review.value.feedback == "") {
+    return failure(
+      "a revise answer needs feedback; the next draft would get the same brief",
+    )
+  }
+  return review
+}
+
+// The staged directory already holds impl.agency, tool.agency, and (when
+// the tool was tested) tool.test.json. Add meta.json and publish the whole
+// directory with one rename, so a tool is either fully present or absent.
+// The existence check is repeated here because the one in checkName is
+// stale after the model calls.
+def saveTool(
+  root: string,
+  name: string,
+  settings: DraftSettings,
+): Result<ToolEntry> {
+  const meta: ToolMeta = {
+    ...DEFAULT_META,
+    purpose: settings.purpose,
+    request: settings.request,
+    createdAt: format(now()),
+    maxTime: settings.maxTime
+  }
+  const savedMeta = write(META_FILE, JSON.stringify(meta, null, 2), settings.stagingDir)
+  if (savedMeta is failure) {
+    return savedMeta
+  }
+  if (exists(name, root)) {
+    return failure(
+      "a tool named `${name}` appeared in ${root} while this one was being written",
+    )
+  }
+  const published = move(settings.stagingDir, "${root}/${name}")
+  if (published is failure) {
+    return published
+  }
+  return interrupt std::toolbox::scan("Are you sure you want to read the saved tool?", {
+    dir: "${root}/${name}"
+  })
+  return success(entryFor(root, name))
+}
+
+// `feedback` is the only state carried between rounds: the last problem,
+// or the user's revision request.
+def rounds(
+  root: string,
+  name: string,
+  settings: DraftSettings,
+  maxRounds: number,
+): Result<ToolEntry> {
+  let feedback = ""
+  for (round in range(maxRounds)) {
+    const outcome = oneRound(root, name, settings, feedback)
+    if (outcome.done != null) {
+      return outcome.done
+    }
+    feedback = outcome.feedback
+  }
+  return failure("gave up after ${maxRounds} rounds; last problem:\n${feedback}")
+}
+
+/** `done` ends the loop; otherwise `feedback` goes into the next round. */
+type RoundOutcome = {
+  done?: Result<ToolEntry>;
+  feedback: string
+}
+
+def oneRound(
+  root: string,
+  name: string,
+  settings: DraftSettings,
+  feedback: string,
+): RoundOutcome {
+  const prepared = prepareDraft(settings, feedback)
+  return match(prepared) {
+    failure(err) => match(err) {
+      { problem }: DraftProblem => ({
+        done: null,
+        feedback: problem
+      })
+      _ => ({
+        done: failure(err),
+        feedback: ""
+      })
+    }
+    success(draft) => {
+      const answer = askUser(name, settings, draft)
+      return match(answer) {
+        failure(rejected) => ({
+          done: failure(rejected),
+          feedback: ""
+        })
+        success(review) => match(review) {
+          { verdict: "accept" } => ({
+            done: saveTool(root, name, settings),
+            feedback: ""
+          })
+          { verdict: "revise", feedback as next } => ({
+            done: null,
+            feedback: next
+          })
+        }
+      }
+    }
+  }
+}
+
+// The name is a directory name under the toolbox, so anything but an
+// identifier (a path, `..`, a dot directory) is refused.
+def checkNameSyntax(name: string): Result {
+  if (!(name =~ re/^[a-z][A-Za-z0-9]*$/)) {
+    return failure("tool name must be a camelCase identifier, got `${name}`")
+  }
+  if (name.length > MAX_TOOL_NAME_LEN) {
+    return failure(
+      "tool name must be at most ${MAX_TOOL_NAME_LEN} characters, got ${name.length}",
+    )
+  }
+  if (name == STAGING_DIR) {
+    return failure(
+      "`${STAGING_DIR}` is the toolbox's staging directory and cannot be a tool name",
+    )
+  }
+  return success(null)
+}
+
+def checkName(name: string, root: string): Result {
+  const syntax = checkNameSyntax(name)
+  if (syntax is failure) {
+    return syntax
+  }
+  if (exists(name, root)) {
+    return failure("a tool named `${name}` already exists in ${root}")
+  }
+  return success(null)
+}
+
+// `request` is the caller's own type text, so parsing it is the right
+// check: it must read as exactly one type alias.
+def checkRequest(request: string): Result {
+  const parsed = parseAST("export type Request = ${request}")
+  if (parsed is failure(parseErr)) {
+    return failure(
+      "request must be Agency type text such as `{ n: number }`: ${parseErr}",
+    )
+  }
+  const aliases = filter(parsed.value.nodes, \astNode -> astNode.type == "typeAlias")
+  const others = filter(parsed.value.nodes, \astNode -> astNode.type != "typeAlias")
+  if (aliases.length != 1 || others.length != 0) {
+    return failure("request must be one Agency type, got `${request}`")
+  }
+  return success(null)
+}
+
+export def writeTool(
+  name: string,
+  purpose: string,
+  request: string,
+  dir: string = "~/.agency-agent/tools",
+  maxRounds: number = 3,
+  maxTime: number = 3m,
+  maxCost: number = $1.00,
+  model: string = "",
+  provider: string = "",
+): Result<ToolEntry> {
+  """
+  Write a reusable tool into a toolbox directory. The coding agent drafts
+  the tool's `run` function against the request type. writeTool reviews
+  the draft, wraps it in the guarded tool module and typechecks the pair,
+  tests it when it is pure computation, shows it to the user for
+  acceptance or revision, and saves it.
+
+  @param name - The tool's name; also its directory under dir
+  @param purpose - What the tool should do, in plain language
+  @param request - The tool's input type as Agency type text, such as `{ topics: string[]; maxItems: number }`
+  @param dir - The toolbox directory to write into
+  @param maxRounds - Draft-review rounds before giving up
+  @param maxTime - Time limit baked into the tool's guard, under one hour
+  @param maxCost - Cost limit baked into the tool's guard
+  @param model - Model override for the coding and review agents, or ""
+  @param provider - Provider for the model override
+  """
+  // Expanded once here: the sandboxed testFile resolves paths without
+  // expanding `~`, unlike the file primitives.
+  const expanded = expandRoot(dir)
+  if (expanded is failure) {
+    return expanded
+  }
+  const root = expanded.value
+  const nameOk = checkName(name, root)
+  if (nameOk is failure) {
+    return nameOk
+  }
+  if (maxTime > MAX_TOOL_TIME) {
+    return failure(
+      "maxTime must be at most ${MAX_TOOL_TIME} ms (an hour minus the subprocess headroom), got ${maxTime}",
+    )
+  }
+  const requestOk = checkRequest(request)
+  if (requestOk is failure) {
+    return requestOk
+  }
+  // Each call stages in its own directory, so two writes of the same
+  // name never share a draft; the publish rename decides which one wins.
+  const stagingDir = "${root}/${STAGING_DIR}/${name}-${Math.floor(Math.random() * 1000000000)}"
+  const made = mkdir(stagingDir)
+  if (made is failure) {
+    return made
+  }
+  const settings: DraftSettings = {
+    purpose: purpose,
+    request: request,
+    stagingDir: stagingDir,
+    maxTime: maxTime,
+    maxCost: maxCost,
+    model: model,
+    provider: provider
+  }
+  const outcome = rounds(root, name, settings, maxRounds)
+  if (outcome is success) {
+    // The publish renamed the staging directory away; nothing to clear.
+    return outcome
+  }
+  const removed = remove(stagingDir)
+  if (removed is failure(removeErr)) {
+    return failure(
+      "${outcome.error}\n(could not clear staging directory ${stagingDir}: ${removeErr})",
+    )
+  }
+  return outcome
+}
+
+// ---- running a tool ----
+
+def recordUse(toolDir: string, name: string, meta: ToolMeta): Result {
+  const used: ToolMeta = {
+    ...meta,
+    uses: meta.uses + 1,
+    lastUsedAt: format(now())
+  }
+  return write(META_FILE, JSON.stringify(used, null, 2), toolDir)
+}
+
+export def runTool(
+  name: string,
+  request: Json,
+  dir: string = "~/.agency-agent/tools",
+): Result<Json> {
+  """
+  Run a saved tool's `main` node in a subprocess and return what it
+  returned. The tool's meta.json records one more use and the time; it
+  does not record the result.
+
+  @param name - The tool's name under dir
+  @param request - The tool's input, a value of its Request type
+  @param dir - The toolbox directory holding the tool
+  """
+  const syntax = checkNameSyntax(name)
+  if (syntax is failure) {
+    return syntax
+  }
+  const root = expandRoot(dir)
+  if (root is failure) {
+    return root
+  }
+  const toolDir = "${root.value}/${name}"
+  if (!exists(TOOL_FILE, toolDir)) {
+    return failure("no tool named `${name}` in ${root.value}")
+  }
+  // The same approval listTools asks for, here for one tool's directory:
+  // meta.json is read before the run, so a corrupt record stops the tool
+  // before it has side effects rather than after.
+  return interrupt std::toolbox::scan("Are you sure you want to read this tool?", {
+    dir: toolDir
+  })
+  const meta = metaFacts(toolDir)
+  if (meta is failure) {
+    return meta
+  }
+  const ran = runFile(
+    toolDir,
+    TOOL_FILE,
+    "main",
+    {
+      request: request
+    },
+    wallClock: meta.value.maxTime + WALL_CLOCK_HEADROOM,
+  )
+  let result: Result<Json> = ran
+  if (ran is success(finished)) {
+    result = finished.data
+  }
+  // The tool has run and its effects have happened, so its result is
+  // never dropped: a failed record carries it in the message.
+  const recorded = recordUse(toolDir, name, meta.value)
+  if (recorded is failure(recordErr)) {
+    return failure(
+      "the tool ran and returned ${JSON.stringify(result)}, but ${META_FILE} could not be updated: ${recordErr}",
+    )
+  }
+  return result
+}

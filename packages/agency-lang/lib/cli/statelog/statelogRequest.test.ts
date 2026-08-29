@@ -206,9 +206,12 @@ describe("statelogRequest programmer-error boundary", () => {
         waits.push(ms);
         return Promise.resolve();
       };
+      const cancel = vi.fn().mockResolvedValue(undefined);
+      const shed = (): Response =>
+        ({ ...textResponse(429, "Rate exceeded"), body: { cancel } }) as unknown as Response;
       fetchMock
-        .mockResolvedValueOnce(textResponse(429, "Rate exceeded"))
-        .mockResolvedValueOnce(textResponse(429, "Rate exceeded"))
+        .mockResolvedValueOnce(shed())
+        .mockResolvedValueOnce(shed())
         .mockResolvedValueOnce(jsonResponse(200, { success: true, value: 7 }));
 
       const result = await request({ sleep });
@@ -216,6 +219,8 @@ describe("statelogRequest programmer-error boundary", () => {
       expect(result).toEqual({ ok: true, value: 7, status: 200 });
       expect(fetchMock).toHaveBeenCalledTimes(3);
       expect(waits).toEqual([RETRY_DELAYS_MS[0], RETRY_DELAYS_MS[1]]);
+      // Each shed response's unread body is cancelled before the retry.
+      expect(cancel).toHaveBeenCalledTimes(2);
     });
 
     it("gives up after the last delay and reports the 503 as an http failure", async () => {

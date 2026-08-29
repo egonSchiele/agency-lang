@@ -47,7 +47,9 @@ import { configureLocalModel, getResolvedSlots, currentProvider } from "../share
 //
 //import { clearMessages, pushMessage, repl } from "std::ui"
 
-import { recordTurn, sessionTitle } from "./resume.agency"
+import { _installSessionHooks, _sessionOnSubmit } from "agency-lang/stdlib-lib/agentSessions.js"
+
+import { markTurnDone, recordTurn, saveSeedTurn, sessionTitle } from "./resume.agency"
 import { runTurn } from "./turn.agency"
 import { parseModelSpec } from "./utils.agency"
 
@@ -266,7 +268,7 @@ def _runTurn(msg: string): boolean {
 def renderUserTurn(trimmed: string, msg: string): boolean {
   const result = try runTurn("", msg)
   renderAgentResponse(result)
-  recordTurn(msg)
+  markTurnDone()
   return true
 }
 
@@ -283,7 +285,8 @@ export def runSeedTurn(target: string, msg: string) {
   pushMessage(color.dim("> ${msg}"))
   const response = try runTurn(target, msg)
   renderAgentResponse(response)
-  recordTurn(msg)
+  markTurnDone()
+  saveSeedTurn(msg)
 }
 
 export def renderAgentResponse(
@@ -300,6 +303,12 @@ export def renderAgentResponse(
   }
 }
 
+/** Hand the REPL turn its Agency callbacks. Called from main() before any
+  restore, since a resumed process skips the rest of startup. */
+export def installSessionHooks() {
+  _installSessionHooks(_runTurn, recordTurn)
+}
+
 // Runs inside runSession's policy handler; the REPL installs none of its own.
 export def startInteractive(seedTarget: string, seedPrompt: string) {
   if (seedPrompt != "") {
@@ -307,13 +316,11 @@ export def startInteractive(seedTarget: string, seedPrompt: string) {
   }
   repl(
     status: buildStatus,
-    onSubmit: _runTurn,
+    onSubmit: _sessionOnSubmit,
     prompt: "> ",
     historyFile: HISTORY_PATH,
     historyMax: 1000,
     paletteCommands: mergedPalette(),
-    // Finishes a resumed session's saved turn before the first real line.
-    drainFirst: true,
   )
   print(color.cyan("\nGoodbye!"))
 }

@@ -1259,7 +1259,6 @@ export async function _runLineRepl(
   historyFile: string,
   historyMax: number,
   paletteCommands: unknown,
-  drainFirst = false,
 ): Promise<void> {
   const { entries: initialHistory, expansions } = loadHistory(historyFile, historyMax);
   const palette = paletteEntries(paletteCommands);
@@ -1345,11 +1344,6 @@ export async function _runLineRepl(
     slashHistoryMark = h ? h.length : 0;
   });
   try {
-    // See `drainFirst` on std::ui/cli.repl: finish a resumed turn's
-    // waiting frame before the first real line.
-    if (drainFirst) {
-      await callBridgeFn(onSubmit, "");
-    }
     while (true) {
       let line: string;
       try {

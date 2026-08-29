@@ -33,7 +33,7 @@ export def cwdSlug(dir: string): string {
   return dir.replace(re/[^a-zA-Z0-9]/g, "-")
 }
 
-def projectDir(): string {
+export def projectDir(): string {
   return path.join(SESSIONS_DIR, cwdSlug(cwd()))
 }
 

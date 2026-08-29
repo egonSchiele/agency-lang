@@ -3,8 +3,8 @@
 An interactive `agency agent` run is saved after every completed turn, and a
 later run can pick it up with `--continue` or `--resume`. The saved thing is
 a runtime checkpoint, not a transcript: restoring it brings back the
-conversation, every subagent's session thread, and the agent's `let`
-globals, and execution continues at the line after `checkpoint()`.
+conversation, every subagent's session thread, the agent's `let` globals,
+and the LLM options, and execution continues from the saved point.
 
 ## Files
 
@@ -16,9 +16,8 @@ is the working directory with every non-alphanumeric character replaced by
 `-`, so sessions are per project directory, as in Claude Code.
 
 The file I/O is TypeScript (`lib/stdlib/agentSessions.ts`), like the REPL
-history file: it is harness bookkeeping under the agent's own directory,
-never a tool, so it raises no interrupt and the user's policy is not asked
-about it.
+history file: harness bookkeeping under the agent's own directory, never a
+tool, so it raises no interrupt and the user's policy is not asked about it.
 
 ## Modules
 
@@ -28,42 +27,52 @@ about it.
   from the first prompt on turn 1, then from the tail of the `main` thread
   every `TITLE_EVERY` turns. One LLM call in its own thread; fails open to "".
 - `lib/agents/agency-agent/lib/resume.agency` — which session this run is
-  (`chooseSession`, `startSession`), the per-turn save (`recordTurn`), the
-  footer text (`sessionTitle`), and the checkpoint `runSession` restores.
+  (`chooseSession`, `startSession`), the restore, the per-turn record
+  (`recordTurn`), and the footer text (`sessionTitle`).
+- `lib/stdlib/agentSessions.ts` — the files, and `_sessionOnSubmit`, the
+  REPL callback that checkpoints between turns.
 
-## Where the checkpoint is taken
+## When the checkpoint is taken
 
-`recordTurn` runs in `repl.agency` after a turn's reply is rendered, both
-for typed turns and for the `-i` seed turn. That is outside the per-turn
-`guard` and the budget handler. The title is refreshed before
-`checkpoint()` so the saved globals carry it.
+Restoring a checkpoint resumes at the exact point it was taken, with the
+saved call stack. The REPL loop is TypeScript, so a checkpoint taken inside
+a turn (from the `onSubmit` callback) would carry the turn's own Agency
+frame under a REPL invocation that no longer exists; on resume the runtime
+would hand that frame to the next `onSubmit` call and the user's first line
+would go into it.
+
+So the checkpoint is taken between turns, from `_sessionOnSubmit`: after
+`onSubmit` and `recordTurn` have returned, the stack is "REPL waiting at the
+prompt", and that is what gets saved. On resume the replay reaches the
+`repl(...)` call, which never finished, and starts the REPL fresh; the first
+line is an ordinary new turn.
+
+The `-i` seed turn runs before the REPL, so `saveSeedTurn` checkpoints in
+Agency code there; on resume execution continues at the line after
+`checkpoint()` and then starts the REPL.
 
 ## How a resume works
 
-Restoring a checkpoint replaces the whole execution state with the saved
-one, so where `restore()` is called decides what survives from the current
-process. It is called inside `runSession`, after `main()` has run startup
-from today's flags (models, memory, MCP) and after the policy handler is
-installed:
+`startSession` restores the checkpoint in `main()`, after the process-level
+setup and before `runSession`. The order matters: a restore replaces the
+Agency execution state (the threads, every `let` global, the LLM options,
+which `setLlmOptions` writes to the state stack) and continues from the saved
+point, but it keeps TypeScript-side effects. The memory layer and the MCP
+connections are such effects, they depend on model resolution and on reads of
+`settings.json`, and those reads must happen before the policy handler exists
+or they prompt. So a resumed run does the same setup as a fresh one, then
+restores. On replay, `main`'s completed steps are skipped, the replayed
+`handle` block in `runSession` installs the policy handler again, and the
+REPL starts fresh.
 
-1. `startSession` reads the chosen checkpoint file and queues it.
-2. `runSession` installs the policy handler, runs `brain.init`, then
-   `restore(cp, {})`. The node runner replays `main` with the saved stack;
-   steps the checkpoint recorded as done are skipped, so startup does not
-   run twice, and the replayed `handle` block installs the policy handler
-   again.
-3. Replay reaches `startInteractive`, whose `repl(...)` step never finished,
-   so the REPL starts fresh. The saved turn's callback frame is still on the
-   stack, and the runtime hands it to the next `onSubmit` call. `repl` takes
-   `drainFirst: true` for this: it calls `onSubmit("")` once before reading
-   input, which finishes the saved turn instead of letting the user's first
-   line be consumed by it.
+The REPL's Agency callbacks are handed to `_sessionOnSubmit` through
+TypeScript module state (`installSessionHooks`, before the restore), not as
+an Agency value: a closure built by an Agency statement would be a completed
+step in the checkpoint and come back from a restore as nothing.
 
-From the checkpoint: the threads, every `let` global, and the resume point.
-From today's startup: state set through TypeScript side effects
-(`setLlmOptions`, `enableMemory`, MCP connections) and the handlers. The
-`let` globals include the model-slot cache and the policy module's state, so
-`/model` describes the saved run's choices until the user changes them.
+Because the `let` globals come back from the saved run, `--model`,
+`--policy`, and similar flags passed on a resume are ignored; the session
+continues as it was left.
 
 The zod schemas in `lib/runtime/state/schemas.ts` must name every field the
 thread store serializes; a field missing there is dropped when the checkpoint

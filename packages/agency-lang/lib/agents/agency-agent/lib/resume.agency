@@ -1,8 +1,8 @@
 /** @module
-  @summary The harness side of save and resume: which session this run
-  is (new, `--continue`, or `--resume`), the per-turn save, and the
-  checkpoint the session wrapper restores before the REPL starts. The
-  files live in sessions.agency and the title in sessionTitle.agency.
+  @summary The harness side of save and resume: which session this run is
+  (new, `--continue`, or `--resume`), the restore, and the per-turn
+  record. The files live in sessions.agency and the title in
+  sessionTitle.agency.
 */
 import { now } from "std::date"
 import { cwd } from "std::system"
@@ -12,24 +12,28 @@ import {
   SessionRecord,
   findSession,
   listSessions,
-  readCheckpointFile,
   mostRecentSession,
   newSessionId,
+  projectDir,
+  readCheckpointFile,
   saveSession,
   sessionLabel,
  } from "./sessions.agency"
 import { mainThreadText, shouldRefreshTitle, titleFor } from "./sessionTitle.agency"
 
 // The session this run writes to; null for one-shot runs, which are not
-// saved. A `let`, so a restored checkpoint brings back the resumed
-// session's own record, turn count and title included.
+// saved. A `let`, so a restore brings back the resumed session's own
+// record, turn count and title included.
 let _current: SessionRecord | null = null
 
-// The parsed checkpoint file, handed from main() to runSession().
-let _pendingResume: any = null
+// Set by the REPL when a turn ran to completion, so a slash command or an
+// empty line is not recorded as a turn.
+let _turnDone = false
 
-export def currentSession(): SessionRecord | null {
-  return _current
+/** Where to write after a turn: the session directory and its index row. */
+export type SaveTarget = {
+  dir: string;
+  record: SessionRecord
 }
 
 /** The footer text: the session title, or "" before the first turn. */
@@ -41,10 +45,8 @@ export def sessionTitle(): string {
   return record.title
 }
 
-export def takeResumeCheckpoint(): any {
-  const cp = _pendingResume
-  _pendingResume = null
-  return cp
+export def markTurnDone() {
+  _turnDone = true
 }
 
 /** Which saved session, if any, this run continues. `resumeArg` is the
@@ -107,8 +109,9 @@ def pickSession(): SessionRecord | null {
   return findSession(choice)
 }
 
-/** Start this run's session: a new record, or the chosen saved one with
-  its checkpoint file read and queued for runSession to restore. */
+/** Start this run's session. A new one gets a fresh record. A saved one
+  is restored right here: the Agency execution state becomes the saved
+  one and the program continues from the saved point. */
 export def startSession(chosen: SessionRecord | null, brain: string) {
   if (chosen == null) {
     const t = now()
@@ -128,19 +131,18 @@ export def startSession(chosen: SessionRecord | null, brain: string) {
     print(color.red("The checkpoint file for session ${chosen.id} is missing or malformed."))
     process.exit(1)
   }
-  _current = chosen
-  _pendingResume = cp
   print(color.dim("Resuming: ${chosen.title}"))
+  restore(cp, {})
 }
 
-/** Called by the REPL after every completed turn. Refreshes the title
-  when due, then checkpoints and writes the session. The title is set
-  before the checkpoint so the saved state carries it. */
-export def recordTurn(userMsg: string) {
+/** Record a completed turn: bump the count, refresh the title when due,
+  and say where the checkpoint should be written. Null when no turn ran. */
+export def recordTurn(userMsg: string): SaveTarget | null {
   const record = _current
-  if (record == null) {
-    return
+  if (record == null || !_turnDone) {
+    return null
   }
+  _turnDone = false
   record.turns = record.turns + 1
   record.lastActive = now()
   if (shouldRefreshTitle(record.turns)) {
@@ -153,8 +155,22 @@ export def recordTurn(userMsg: string) {
       record.title = title
     }
   }
+  return {
+    dir: projectDir(),
+    record: record
+  }
+}
+
+/** Save after the `-i` seed turn, which runs before the REPL. This is
+  Agency code with no REPL frame above it, so on resume execution
+  continues at the line after `checkpoint()` and then starts the REPL. */
+export def saveSeedTurn(userMsg: string) {
+  const target = recordTurn(userMsg)
+  if (target == null) {
+    return
+  }
   const id = checkpoint()
-  const saved = saveSession(record, getCheckpoint(id))
+  const saved = saveSession(target.record, getCheckpoint(id))
   if (isFailure(saved)) {
     print(color.red("Could not save this session: ${saved.error}"))
   }

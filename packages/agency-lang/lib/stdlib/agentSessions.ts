@@ -1,5 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
+import { __call } from "../runtime/call.js";
+import { checkpoint, getCheckpoint } from "../runtime/checkpoint.js";
 
 /**
  * File I/O for the agency agent's saved sessions
@@ -64,4 +66,40 @@ export function _readCheckpointFile(dir: string, id: string): unknown {
   } catch {
     return null;
   }
+}
+
+type SaveTarget = { dir: string; record: SessionRecord } | null;
+
+// The Agency callbacks the REPL turn wraps. Installed from `main()` before
+// any restore, and held here rather than passed through Agency code: a
+// closure built by an Agency statement would be in the checkpoint as a
+// completed step, and come back from a restore as nothing.
+let hooks: { onSubmit: unknown; afterTurn: unknown } | null = null;
+
+export function _installSessionHooks(onSubmit: unknown, afterTurn: unknown): void {
+  hooks = { onSubmit, afterTurn };
+}
+
+function call(fn: unknown, ...args: unknown[]): Promise<unknown> {
+  return __call(fn, { type: "positional", args });
+}
+
+/**
+ * The REPL's `onSubmit` for a saved session. After a turn, once its Agency
+ * frames have returned, the stack is "REPL waiting at the prompt"; that is
+ * the state checkpointed and written. (A checkpoint taken inside the turn
+ * would carry the turn's own frame, and on resume the runtime would hand
+ * that frame to the next `onSubmit` call.)
+ */
+export async function _sessionOnSubmit(line: string): Promise<unknown> {
+  if (!hooks) throw new Error("_installSessionHooks was not called");
+  const reply = await call(hooks.onSubmit, line);
+  if (reply === false) return reply;
+  const target = (await call(hooks.afterTurn, line)) as SaveTarget;
+  if (target) {
+    const cp = getCheckpoint(await checkpoint());
+    const error = _saveSession(target.dir, target.record, cp);
+    if (error) process.stdout.write(`Could not save this session: ${error}\n`);
+  }
+  return reply;
 }

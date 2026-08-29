@@ -33,7 +33,6 @@ repl(
   historyFile: string = "",
   historyMax: number = 1000,
   paletteCommands: any = null,
-  drainFirst: boolean = false,
 )
 ```
 
@@ -54,7 +53,6 @@ Line-mode REPL with the same call signature as the std::ui TUI repl,
   @param historyFile - Path to a JSON history file; loaded at start and saved on exit. Empty string disables persistence.
   @param historyMax - Trim history to this many most-recent entries
   @param paletteCommands - Map of /cmd -> description
-  @param drainFirst - Call `onSubmit("")` once before reading input. A program resumed from a checkpoint taken inside `onSubmit` has that call's frame waiting for the next `onSubmit`; the drain call finishes it, so the user's first real line is not consumed by it
 
 * Line-mode sibling of the std::ui TUI repl. Current limitations:
  * `status` is accepted for signature parity but not yet rendered;
@@ -71,7 +69,6 @@ Line-mode REPL with the same call signature as the std::ui TUI repl,
 | historyFile | `string` | "" |
 | historyMax | `number` | 1000 |
 | paletteCommands | `any` | null |
-| drainFirst | `boolean` | false |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L66))
 
@@ -83,7 +80,7 @@ clearScreen()
 
 Clear the terminal screen.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L109))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L106))
 
 ### clearHistory
 
@@ -95,7 +92,7 @@ Clear the input history of the currently running `repl()` session: both
   its in-session up-arrow recall and the `historyFile` that session was started
   with. A no-op when called outside an interactive `repl()`.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L114))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L111))
 
 ### hline
 
@@ -115,7 +112,7 @@ Return a horizontal rule: `char` repeated `width` times (terminal
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L122))
 
 ### interruptChoice
 
@@ -154,4 +151,4 @@ Approval prompt for line mode: renders a sticky footer pinned to the
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L129))

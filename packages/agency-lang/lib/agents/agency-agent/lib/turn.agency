@@ -25,7 +25,6 @@ import { projectCommands } from "./commandPalette.agency"
 import { ALWAYS_FIELDS } from "./config.agency"
 import { groundingText } from "./grounding.agency"
 import { getPolicyForAgent } from "./policy.agency"
-import { takeResumeCheckpoint } from "./resume.agency"
 import { Settings } from "./settings.agency"
 
 export static const DEFAULT_BRAIN = "coordinator"
@@ -123,14 +122,6 @@ export def runSession(interactive: boolean, body: () -> void raises <*>) {
   const handler = policyHandlerFor(interactive)
   handle {
     brain.init(context)
-    // Resume point. Restoring replaces the whole execution state with the
-    // saved one, so this runs after startup and under the policy handler,
-    // which the replayed `handle` block installs again. See
-    // docs/dev/agents/agent-sessions.md.
-    const resumeFrom = takeResumeCheckpoint()
-    if (resumeFrom != null) {
-      restore(resumeFrom, {})
-    }
     body()
   } with handler
 }

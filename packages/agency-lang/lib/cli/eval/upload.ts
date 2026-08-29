@@ -12,6 +12,7 @@ import { findRunDirectories, uniqueRunDirectories } from "@/runDirectory/findRun
 import { summarizeRunDirectory, type RunSummary } from "@/runDirectory/list.js";
 import { readRunDirectory } from "@/runDirectory/runDir.js";
 import { agentNameProblem } from "@/statelog/agentName.js";
+import { mapInParallel } from "@/utils/parallelMap.js";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
 /**
@@ -56,6 +57,8 @@ export type EvalUploadResult = {
   batchUrl: string | null;
 };
 
+const UPLOAD_PARALLELISM = 6;
+
 export async function evalUpload(
   targets: string[],
   target: EvalUploadTarget,
@@ -65,8 +68,12 @@ export async function evalUpload(
     dependencies.client ?? createEvalUploadClient(target.origin, target.projectSlug, target.apiKey);
   const reportWarning = dependencies.reportWarning ?? ((message) => console.warn(message));
   const dirs = uniqueRunDirectories(findRunDirectories(targets));
-  // Runs are independent traces, so they upload at once; results keep input order.
-  const records = await Promise.all(dirs.map((dir) => uploadRun(dir, client, reportWarning)));
+  // Runs are independent traces, so they upload through a bounded pool —
+  // unbounded, a 69-run group is hundreds of concurrent requests and the
+  // host sheds them with 429s. Results keep input order.
+  const records = await mapInParallel(dirs, UPLOAD_PARALLELISM, (dir) =>
+    uploadRun(dir, client, reportWarning),
+  );
   return { runs: records.map((record) => record.outcome), batchUrl: batchUrlFor(records, target) };
 }
 

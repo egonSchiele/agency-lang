@@ -278,3 +278,93 @@ describe("effect data checking — fallback paths", () => {
     ).toHaveLength(0);
   });
 });
+
+describe("@always scope checking", () => {
+  const messagesOf = (src: string) => typecheckSource(src).map((e) => e.message);
+
+  it("accepts fields that exist in the payload", () => {
+    const msgs = messagesOf(
+      "@always(name)\n@alwaysUnder(dir)\neffect app::x { name: string, dir: string }",
+    );
+    expect(msgs.filter((m) => /@always/.test(m))).toEqual([]);
+  });
+
+  it("errors on a field the payload does not have", () => {
+    const msgs = messagesOf("@always(nam)\neffect app::x { name: string }");
+    expect(
+      msgs.find((m) => /@always names 'nam', which effect 'app::x' does not carry/.test(m)),
+    ).toBeDefined();
+  });
+
+  it("errors on a non-identifier argument", () => {
+    const msgs = messagesOf('@always("name")\neffect app::x { name: string }');
+    expect(msgs.find((m) => /@always arguments must be bare field names/.test(m))).toBeDefined();
+  });
+
+  it("errors on a repeated tag", () => {
+    const msgs = messagesOf("@always(a)\n@always(b)\neffect app::x { a: string, b: string }");
+    expect(msgs.find((m) => /@always appears more than once/.test(m))).toBeDefined();
+  });
+
+  it("errors when two declarations of one effect disagree on scope", () => {
+    const msgs = messagesOf(
+      "@always(a)\neffect app::x { a: string, b: string }\n" +
+        "@always(b)\neffect app::x { a: string, b: string }",
+    );
+    expect(
+      msgs.find((m) => /Conflicting @always scopes for effect 'app::x'/.test(m)),
+    ).toBeDefined();
+  });
+
+  it("accepts two declarations that agree", () => {
+    const msgs = messagesOf(
+      "@always(a)\neffect app::x { a: string }\n@always(a)\neffect app::x { a: string }",
+    );
+    expect(msgs.filter((m) => /@always/.test(m))).toEqual([]);
+  });
+
+  it("errors on an @always tag that attached to a function", () => {
+    const msgs = messagesOf("@always(x)\ndef f(x: string): string { return x }");
+    expect(
+      msgs.find((m) => /@always is only valid on an effect declaration/.test(m)),
+    ).toBeDefined();
+  });
+
+  it("errors on an @always tag that attached to nothing", () => {
+    // A tag above an import has no attach target and stays a standalone
+    // `tag` node in the program.
+    const msgs = messagesOf(
+      '@always(x)\nimport { cwd } from "std::system"\neffect app::x { x: string }',
+    );
+    expect(
+      msgs.filter((m) => /@always is only valid on an effect declaration/.test(m)),
+    ).toHaveLength(1);
+  });
+
+  it("treats the same fields in a different order as the same scope", () => {
+    // Pins the order-insensitive compare. The runtime uses the same
+    // function, so codegen output order can never matter.
+    const msgs = messagesOf(
+      "@always(a, b)\neffect app::x { a: string, b: string }\n" +
+        "@always(b, a)\neffect app::x { a: string, b: string }",
+    );
+    expect(msgs.filter((m) => /Conflicting @always scopes/.test(m))).toEqual([]);
+  });
+
+  it("lets an untagged redeclaration inherit the tagged scope", () => {
+    // The guide (docs/site/guide/effects.md, Payload types) shows a user
+    // program declaring `effect std::read { dir: string, filename: string }`
+    // with no tag. The stdlib copy is tagged. That must stay legal.
+    const msgs = messagesOf("effect std::read { dir: string, filename: string }");
+    expect(msgs.filter((m) => /@always/.test(m))).toEqual([]);
+  });
+
+  it("still rejects a tagged redeclaration that disagrees", () => {
+    const msgs = messagesOf(
+      "@always(filename)\neffect std::read { dir: string, filename: string }",
+    );
+    expect(
+      msgs.find((m) => /Conflicting @always scopes for effect 'std::read'/.test(m)),
+    ).toBeDefined();
+  });
+});

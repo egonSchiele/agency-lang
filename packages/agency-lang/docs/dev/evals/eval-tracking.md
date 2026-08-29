@@ -206,10 +206,20 @@ trace parser, and the annotation fold are not exported.
 `.github/workflows/agent-evals.yml` runs `evals/agency-agent` with three
 trials every Sunday (03:00 UTC), grades it, and uploads it to the linked
 statelog project. `workflow_dispatch` takes `trials` and `suite` overrides for
-a cheaper smoke run (it still calls the paid agent, grades, and uploads). It
-needs three secrets: `OPENAI_API_KEY`, `STATELOG_API_KEY`, and
-`STATELOG_PROJECT_URL` (a serve URL, as `remote link --url` takes; kept as a
-secret beside the key by the owner's choice, though it is not sensitive).
+a cheaper smoke run (it still calls the paid agent, grades, and uploads).
+
+The agent runs the way the suite's README says: inside the eval Docker image
+via `run-in-docker.sh`, with `--policy approve-all`, because the tests write
+and run code. That gives the agent a shell and the network, so the workflow
+bounds what a misbehaving or prompt-injected run can reach: the container
+sees only the LLM key and the run directory; every secret is set on the one
+step that needs it, never job-wide; and the LLM key is a dedicated
+`AGENT_EVALS_OPENAI_API_KEY` with its own spend limit, so a leak costs at
+most that limit until it is rotated. Secrets: `AGENT_EVALS_OPENAI_API_KEY`,
+`STATELOG_API_KEY`, and `STATELOG_PROJECT_URL` (a serve URL, as `remote link
+--url` takes; kept as a secret beside the key by the owner's choice). The run
+directory becomes a workflow artifact only when the upload failed, because it
+holds every trace and artifacts on a public repo are public.
 
 Cost: `eval.limits.maxBatchCostUsd` in `agency.json` caps the whole batch —
 once finished runs have spent that much, no further test starts — and
@@ -223,7 +233,5 @@ statelog shows it as incomplete.
 Scores never fail the job: `eval run` exits 2 when some tests errored and
 `eval grade` exits 2 when a must-pass gate failed; the workflow treats both as
 warnings and carries on to the upload. Any other non-zero exit (could not run,
-grading broke) fails the job. The run directory is kept as a workflow artifact
-for 14 days, so a batch whose upload failed can be uploaded by hand.
-`lib/cli/eval/workflowFlags.test.ts` checks every flag the workflow passes
-against the CLI's registered options.
+grading broke) fails the job. `lib/cli/eval/workflowFlags.test.ts` checks
+every flag the workflow passes against the CLI's registered options.

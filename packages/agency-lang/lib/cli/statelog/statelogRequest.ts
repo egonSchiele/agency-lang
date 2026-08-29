@@ -39,7 +39,19 @@ export type StatelogRequestOptions = {
   contentType?: "when-body" | "always";
   /** Diagnostic-only redaction, forwarded to readJsonBody. */
   sanitizeDiagnostic?: (raw: string) => string;
+  /** Test seam for the retry backoff; default real timer. */
+  sleep?: (ms: number) => Promise<void>;
 };
+
+// A 429 or 503 means the server (or Cloud Run in front of it) shed the
+// request before handling it, so a retry cannot double-apply anything.
+// Waits are long enough that a burst of concurrent uploads spreads out.
+const RETRYABLE_STATUSES = new Set([429, 503]);
+export const RETRY_DELAYS_MS = [500, 2_000, 8_000];
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export type StatelogRequestResult =
   { ok: true; value: unknown; status: number } | { ok: false; failure: StatelogFailure };
@@ -62,13 +74,24 @@ export async function statelogRequest(
     headers["Content-Type"] = "application/json";
   }
 
+  const sleep = options.sleep ?? defaultSleep;
+  const fetchOnce = (): Promise<Response> =>
+    fetch(options.url, { method: options.method, headers, body: serializedBody });
+
+  // One retry per listed delay, then the last response stands.
   let response: Response;
   try {
-    response = await fetch(options.url, {
-      method: options.method,
-      headers,
-      body: serializedBody,
-    });
+    response = await fetchOnce();
+    for (const delayMs of RETRY_DELAYS_MS) {
+      if (!RETRYABLE_STATUSES.has(response.status)) {
+        break;
+      }
+      // A shed response's body is never read; cancel it (best-effort) so its
+      // socket is released before the retry rather than held until GC.
+      await response.body?.cancel().catch(() => {});
+      await sleep(delayMs);
+      response = await fetchOnce();
+    }
   } catch (error) {
     return { ok: false, failure: { kind: "unreachable", cause: message(error) } };
   }

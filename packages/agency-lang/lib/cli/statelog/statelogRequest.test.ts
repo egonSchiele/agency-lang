@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { statelogRequest } from "./statelogRequest.js";
+import { RETRY_DELAYS_MS, statelogRequest } from "./statelogRequest.js";
 import type { StatelogRequestOptions } from "./statelogRequest.js";
 
 function textResponse(status: number, rawBody: string): Response {
@@ -197,5 +197,46 @@ describe("statelogRequest programmer-error boundary", () => {
         },
       }),
     ).rejects.toThrow("sanitizer bug");
+  });
+
+  describe("retry on shed requests", () => {
+    it("retries a 429 with backoff and returns the eventual success", async () => {
+      const waits: number[] = [];
+      const sleep = (ms: number): Promise<void> => {
+        waits.push(ms);
+        return Promise.resolve();
+      };
+      const cancel = vi.fn().mockResolvedValue(undefined);
+      const shed = (): Response =>
+        ({ ...textResponse(429, "Rate exceeded"), body: { cancel } }) as unknown as Response;
+      fetchMock
+        .mockResolvedValueOnce(shed())
+        .mockResolvedValueOnce(shed())
+        .mockResolvedValueOnce(jsonResponse(200, { success: true, value: 7 }));
+
+      const result = await request({ sleep });
+
+      expect(result).toEqual({ ok: true, value: 7, status: 200 });
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(waits).toEqual([RETRY_DELAYS_MS[0], RETRY_DELAYS_MS[1]]);
+      // Each shed response's unread body is cancelled before the retry.
+      expect(cancel).toHaveBeenCalledTimes(2);
+    });
+
+    it("gives up after the last delay and reports the 503 as an http failure", async () => {
+      const sleep = (): Promise<void> => Promise.resolve();
+      fetchMock.mockResolvedValue(textResponse(503, "overloaded"));
+
+      const failure = await failureOf({ sleep });
+
+      expect(fetchMock).toHaveBeenCalledTimes(RETRY_DELAYS_MS.length + 1);
+      expect(failure).toMatchObject({ kind: "http", status: 503 });
+    });
+
+    it("never retries a non-retryable status", async () => {
+      fetchMock.mockResolvedValue(jsonResponse(500, { success: false, error: "boom" }));
+      await failureOf();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
   });
 });

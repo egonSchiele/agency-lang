@@ -51,6 +51,8 @@ export {
   __awaitStaticInit,
   __awaitGlobalsInit,
 } from "./crossModuleInitRegistry.js";
+export { __registerAlwaysScope, alwaysScopeFor, allAlwaysScopes, sameScopedFields } from "./alwaysScope.js";
+export type { ScopedField } from "./alwaysScope.js";
 
 export { functionRefReviver } from "./revivers/index.js";
 export { AgencyFunction, UNSET } from "./agencyFunction.js";

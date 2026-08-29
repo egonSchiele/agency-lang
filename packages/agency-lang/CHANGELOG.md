@@ -1,10 +1,50 @@
+## Aug 29 2026 — v0.17.0
+
+### Standard Library
+
+- **`std::toolbox`** to let an agent write its own tools.
+
+### Agents
+
+- **Writing agents** — `writingReviewAgent` reviews prose for readability.
+- **`typescriptReviewAgent`** — reviews TypeScript for readability and architecture.
+
+### Language
+
+- A match expression can now be the body of a match arm.
+- Unary minus works on any expression, not just number literals.
+- An abort that reaches a node boundary now surfaces as a value instead of crashing the program.
+- Reading an environment variable raises an interrupt.
+- **`--refuse-splices`** declines to run generators at typecheck or compile time.
+
+### Eval framework
+
+- **Six new eval suites** — the Agency writer, the Agency reviewer, the TypeScript reviewer, the writing reviewer, the writing rewriter, and the researcher.
+- **`agency eval grade -n`** — grade runs in parallel.
+
+### CLI / Hosting
+
+- **Breaking** — remote targets come from `agency.json`, and `agency remote link` is gone.
+
+### LLM
+
+- The default model is gpt-5-mini through the OpenAI responses API.
+- smoltalk upgraded to 0.12.0.
+
+### Docs
+
+- **`agency doc`** — a `@hidden` tag to leave a symbol out of the docs.
+- `docs/dev` is grouped into ten topic directories.
+
 ## Aug 23 2026 — v0.16.0
 
 ### Standard Library
+
 - **`std::agency test`** — run Agency tests from Agency code
 - **`std::agency cli`** — the Agency command line as function calls
 
 ### Eval framework
+
 - **Run directories are atomic** — every writer produces one run per directory, and one directory holds exactly one trace. `notes.md` replaces the old note annotation and `agency note`.
 - **`agency eval run --trials <k>`** — repeat each test k times + compute stats
 - **`agency eval upload`** — push eval runs to statelog
@@ -13,111 +53,133 @@
 - `agency label` and `agency runs list` walk a whole group of run directories
 
 ### Agents
+
 - **`--brain`** — the agent harness is split into pluggable brains
 - **`--workdir`** for `agency agent`
 - The recommended policy allows reads only inside the launch directory
 
 ### Logs
+
 - Statelog records the identity of the code that produced the logs
 - Log viewer: `Y` copies every event of the focused trace to the clipboard
 
 ### Build
+
 - Prettier for hand-written TypeScript, enforced in CI
 
 ## Aug 13 2026 — v0.15.1
 
 ### Local models
+
 - reject aborted text() calls
 - bail early on empty prompts, they cause local models to spiral
 - update local model catalog
 - Add `agency local list -l`
 - lib/config.ts now understands the model data produced by `agency local refresh`
 
-
 ## Aug 12 2026 — v0.15.0
 
 ### Standard Library
+
 - **`std::data/social/bluesky`** — search posts (`bskySearch`), read an account's posts (`bskyAuthorFeed`), and look up profiles (`bskyProfile`). No API key or account needed.
 - **Breaking** — GDELT moved from `std::data/finance/gdelt` to `std::data/news/gdelt`.
 
 ### CLI
+
 - **`agency run --local <model>`** — run a program with a local model.
 - **`agency local list`** — local model catalog.
 - **`agency local download`** now opens an interactive picker if no name was specified.
 
 ### Local models
+
 - The `llama-cpp` provider is now loaded by smoltalk itself, so Agency's wrapper is now gone.
 
 ## Aug 10 2026 — v0.14.0
 
 ### Standard Library
+
 - **`std::aws/s3`** — S3 object access (get, put, list, createBucket, binary upload/download). No AWS SDK dependency, requests are signed with SigV4.
 - **Speech** — `transcribe` (speech-to-text) and `speak` (text-to-speech) routed through the LLM client + audio attachments in chat.
 
 ### CLI / Hosting
+
 - **`agency schedule --backend remote`** — create, list, edit, and remove hosted schedules on statelog.
 
 ## Aug 6 2026 — v0.13.4
+
 - Per-invocation config overrides
 - Commander fork, fixes to command-line flags
 
 ## Aug 6 2026 — v0.13.3
 
 ### CLI
+
 - **`agency remote spend`** — view hosted spend from the CLI, with per-model breakdown.
 
 ### Build
+
 - Incremental per-page cache for `agency doc`, and for the stdlib too (it was previously excluded)
 
 ## Aug 4 2026 — v0.13.2
 
 ### CLI / Hosting
+
 - **`agency remote`** gains `inspect`, `pull`, and `logs` introspection commands.
 - **Serve cost seam** — every serve outcome carries a trusted per-invocation usage figure (priced cost, tokens, unknown-price count, completeness) so a project owner cannot under-report hosted spend.
 
 ### Eval framework
+
 - **`agency eval label`** can ingest data to label from sources beyond runs (files, JSON).
 
 ## Aug 3 2026 — v0.13.0
 
 ### CLI / Hosting
+
 - **`agency remote`** — CLI surface for a hosted agent.
 - `deploy` supports multi-file agents (flat same-dir siblings).
 
 ### Eval framework
+
 - **`agency eval label`** — a terminal checklist UI for labeling agent outputs by hand.
 - **`evals/smoke`** — four cheap, deterministic harness checks.
 
 ### Language / Templates
+
 - A template must import the types it names.
 - A template can only use names it declares itself (AG8015).
 
 ### Config
+
 - `agency.json` gains a top-level `budget` for per-run spend/time limits (`maxCost` / `maxTime`).
 
 ### Formatter
+
 - **Trailing comments** now work.
 
 ## Aug 1 2026 — v0.12.0
 
 ### Language / Parser
+
 - **Parser meets agents halfway** — accepts the syntax models actually write: `function` for `def`, `->` / `=>` arrows, arrow functions as block arguments, and common keyword/literal spellings (`interface`, `elif`, `undefined`, f-strings). `agency fmt` can be used to normalize the syntax.
 - Clearer errors where Agency differs from other languages — errors for ternaries, `switch`, and C-style `for` now show code examples for the Agency equivalent.
 - **Fix** — node parameter defaults now survive compilation
 - `compileSource` takes a `sourcePath`, so relative imports in compiled source resolve.
 
 ### CLI / Observability
+
 - **`agency logs` cross-run explorer** — point it at a directory of runs for a sortable, groupable table with one row per run, drill-down into each test, plus compare and trend views. A single statelog file still opens the log viewer.
 - **`agency deploy`** — upload an agent to a hosted statelog.
 - **`setAgentName`** (`std::statelog`) gives an agent a stable identity across runs, so every run groups under one name in the explorer.
 - Log viewer adds timeline views (flame / by-name / occurrences / detail) and a working follow mode.
 
 ### Runtime
+
 - `serve`'s `/list` manifest now lists each function's parameter names, excluding bound params.
 
 ## Jul 31 2026 — v0.11.0
 
 ### Eval framework
+
 - **Graders moved out of `optimize` and into eval** — `agency eval run --graders` now scores a run instead of only reporting that the process exited.
 - **Command agents** — `eval run --agent-cmd '<command with {task}>'` runs any Agency CLI command as the agent. Mostly useful for testing the Agency agent.
 - **Workdirs are seeded, not cloned** — Each test specifies the file set it needs, and only those files are cloned into the workdir. This is a massive improvement, and takes the working directory's size down from an average of 1gb to less than 1mb.
@@ -129,22 +191,26 @@
 - The pairwise optimize loop is removed, and eval output now defaults to the node's return value.
 
 ### Language / Typechecker
+
 - **Match arms narrow** — an early return inside an arm ends its branch, `===` and `!==` narrow like `==` and `!=`, and bare-variable, property-path and literal-index scrutinees narrow inside arm bodies.
 - **One rule for what may sit at the top level of a file** — an `if`, `while`, `for`, `match` or `handle` at file scope is a real diagnostic instead of a compiler crash, and a splice on its own line inside a node body can return statements.
 - **Breaking — validators are predicates.** Validators can no longer return a modified value.
 - `fill` checks a plain value against the hole's real type, including record types and aliases, instead of only literal `string`, `number` and `boolean`. This means more issues are caught at compile time.
 
 ### Runtime
+
 - `serve` exports `withRuntimeConfigOverrides`, so a host serving many compiled modules can route each one's logs to its own project.
 - `runCode` takes a `maxCost` cap.
 
 ### CLI
+
 - `agency run file.agency [args...]` passes trailing arguments to the entry node's parameters. Extra arguments are a loud error instead of a silent drop.
 - `fmt` only collapses a one-statement arm block when the arm grammar can re-parse it, so formatting no longer breaks a file with a raise statement in an arm.
 
 ## Jul 28 2026 — v0.10.0
 
 ### Language / Typechecker
+
 - **Template Agency** — a `.agency` file can now have typed holes (`#topic`) that a model fills in. Every hole is checked before the generated program runs.
 - **Breaking — in an object pattern, `:` tests the type and `as` renames.** `{ name: string }` now means "name is a string" (it used to bind a variable called `string`), and `{ name as n }` replaces `{ name: n }`.
 - **Breaking — an array pattern without `...rest` now requires an exact length in match statements.** `["a", "b"]` no longer matches `["a", "b", "c"]`; add `...rest` to get the old prefix behavior. Destructuring is unaffected.
@@ -157,9 +223,10 @@
 - Parser fixes — access chains parse on bracket literals, literal items require commas (with targeted errors for half-typed comprehensions), and an index or slice cannot start on a new line.
 
 ### Standard Library
+
 - **`std::safeBash`** — tries to parse and understand what the bash command is doing, and for a very narrow set of cases, raises a different type of interrupt instead of std::bash, to try to reduce interrupt fatigue from the agent constantly running bash commands.
 - **Breaking — relative paths resolve against the working directory.** Every path-taking function (`read`, `write`, `edit`, `ls`, `grep`, `glob`, `stat`, `exists`, `readSkill`, ...) now resolves against the directory the program was run from instead of the directory of the file they were called in. Use the new `__dirname` builtin to read relative to the current Agency file. `std::system::dirname()` is removed.
-- **Agents rework** — the worker agents moved onto the stdlib and were heavily refactored. 
+- **Agents rework** — the worker agents moved onto the stdlib and were heavily refactored.
 - **Supervision** — `std::supervise` - used to supervise agents that take longer to run, with periodic verifier check-ins, brainstorming before complex solves, and partial results saved.
 - **`std::date`** — `now()` returns epoch milliseconds, plus `elapsedTime` and `formatDuration`.
 - **`std::thread`** — `queueMessage` queues a message for the model's next turn, and `toolMessage` seeds a synthetic tool exchange.
@@ -168,6 +235,7 @@
 - AppleScript integrations pass data as argv instead of escaping it into the script source.
 
 ### Runtime
+
 - **Resume desync fixed** — helper calls are hoisted into their own skippable steps, so an in-process resume can no longer replay a completed call and corrupt saved frames.
 - **Abandoned tool calls are repaired** — reopening a thread with a dangling tool call inserts a synthetic result instead of failing the next request with a provider 400.
 - Renamed tools round-trip through checkpoints, and a registry miss no longer crashes checkpoint writes.
@@ -177,6 +245,7 @@
 - Cache reads and writes are counted in the token/cost breakdown.
 
 ### Agent
+
 - **Per-turn budgets** — a deadline or spend limit stated in your message ("no more than 30 seconds") becomes a real guard around the turn.
 - Compaction can run after an assistant message, so a long tool-call chain cannot overflow the context.
 - summarization extracts only the new messages.
@@ -187,36 +256,43 @@
 - The agent uses `whatIAmDoing` to tell the user what it is doing.
 
 ### CLI & Editor
+
 - **`agency lint`** — new command with unused-imports (AL0001), missing-docstring (AL0002), and redundant-prelude-import (AL0003). This now powers the VS Code plugin and shows the user unused imports.
 - **LSP semantic tokens** so function references get a real color, with tokens dropped when they do not match their source text.
 - LSP fixes — no more false import errors on unsaved edits.
 - `agency literate` weaves nested comments and takes `--base-url`.
 
 ### Testing
+
 - The test runner gained `expectedCompileError`, which asserts that a file fails to compile.
 
 ### Docs
+
 - Examples added to docs.
 
 ## Jul 17 2026 — v0.9.0
 
 ### Language / Typechecker
+
 - **`guard` is now a language construct** and raises `<std::guard>`.
 - functions and scopes can return a partial result using **`saveDraft` / `finalize` blocks**
 - **`destructive` marker** for retry-safety, with new `destructive { }` regions.
 - Stricter imports — unresolved Agency imports error and export-visibility is enforced.
 
 ### Standard Library
+
 - **`std::notes/apple`** — Apple Notes support.
 - **`std::agents` worker library** — `codingAgent`, `researchAgent`, `agencyCodingAgent`, and an `expert` agent, plus lifted `verify`.
 
 ### Runtime
+
 - **Resumable guards** — cost and time guard trips raise resumable interrupts you can approve, reject, or `pass()`, with approval merging, and a way to pass feedback back to the LLM.
 - **Per-branch time budgets** + waiting on an `input()` no longer counts against the time budget.
 - **Message debug labels** for `llm()` and the message builders.
 - Fixed block refs breaking across subprocess resume (#513).
 
 ### CLI
+
 - Control max time and cost on `agency run` and `agency agent` with `--max-cost` / `--max-time`.
 - Renamed `--log-file` to `--log`.
 - Agent fixes — one-shot policy handler routing, and the review agent now reviews the Agency files it changed instead of parsing chat.
@@ -224,6 +300,7 @@
 ## Jul 12 2026 — v0.8.0
 
 ### Language / Typechecker
+
 - **Intersection types** — `A & B` now works.
 - **`keyof` and indexed access** type operators (`keyof T`, `T[K]`).
 - **Built-in utility types** — `Partial`, `Required`, `Pick`, `Omit`, and `NonNullable`.
@@ -233,12 +310,14 @@
 - Fixed an early `return` skipping past a `for` loop and a `thread` with an eager iterable.
 
 ### Standard Library
+
 - **`std::agency`** — new `writeAgency`, `review`, `getEffects`, and `runCode` functions, plus the ability to set a cost limit in `run()`. Added a `docsSkill` function to `std::skills`.
 - **New `std::data` connectors** — `usaspending` and `wikidata`.
 - **`std::http`** — `POST` requests now support a request body.
 - **Cross-provider memory** — `enableMemory` accepts an assignable embedding slot with key validation, so memory can use a different provider for embeddings.
 
 ### Runtime
+
 - **Failure propagation is now on by default** (Stage 2). If a `Failure` is passed to a function that doesn't expect it, the call is skipped and the failure propagates, with a `skippedFunctions` array added to the failure object.
 - **Strict structured-output validation** with opt-in validation retries.
 - Tool-call `Result` values are now unwrapped before being handed back to the LLM.
@@ -249,14 +328,17 @@
 - New per-run and agent debug flags.
 
 ### CLI
+
 - **`agency run --interactive`** allows users to respond to interrupts on the command line.
 - **`agency run --policy`** — drive interrupt policies from the command line.
 - **`agency doc`** renders `raises` in signatures and wraps long signatures.
 
 ### Diagnostics
+
 - **Diagnostics overhaul** — stable error codes, required severity, source spans, and a template registry.
 
 ### Agency Agent
+
 - The agent can now **connect to MCP servers** and use their tools.
 - **`--policy` flag** plus more built-in policies.
 - **Per-model capability profiles** and a `/settings` command to change defaults.
@@ -266,12 +348,14 @@
 ## Jul 8 2026 — v0.7.0
 
 ### Language / Typechecker
+
 - Lots of narrowing everywhere, like discriminated-union narrowing: `if (v.kind == "answer")` (or `!=`) now narrows `v` to the matching union member(s) in the then-branch and the complement in the else-branch. Same for `match` arms.
 - Single-line `if` expressions — `if (cond) x else y`. Can be used in assignments and returns.
 - `for` over a record now iterates its key and value.
 - Definite-return checking.
 
 #### Lots of `match` improvements
+
 - `match` is now an expression, can be used in assignments and returns.
 - `match` arms support blocks now instead of just single-expression bodies.
 - **Breaking:** `return` inside a match arm now yields the arm's value **to the match**, not the enclosing function.
@@ -281,6 +365,7 @@
 - `match` expressions may appear inside a `with` handler body.
 
 ### Standard Library
+
 - **Image generation** — new `std::image` module with `generateImage(prompt, ...opts)` function. Supports edits too.
 - **`writeBinary(filename, base64, dir?, mode?, useAgentCwd?)`** — new auto-imported function that decodes base64 and writes raw bytes.
 - Tools can attach images to their reply via `attachToReply`.
@@ -294,10 +379,12 @@
 - **`std::index`** — `map` / `filter` / `reduce` are now auto-imported into all agency files.
 
 ### Testing
+
 - `fetch` mocks
 - `import test { … }` lets a test import non-exported functions for testing.
 
 ### Runtime
+
 - A default `maxCallDepth` guard to catch infinite recursion.
 - Subprocesses launched via `run()` now propagate interrupts to the user. They also work with guards and callbacks.
 - The `onStream` callback now fires for `llm()` calls made from Agency code (bug fix).
@@ -305,72 +392,88 @@
 - Bumped smoltalk to v0.8.1.
 
 ### Eval / Optimize
+
 - Users can constrain what mutations an optimizer can make by setting a type annotation on a variable marked `optimize`.
 
 ### Agency Agent
+
 - The agent uses the typed `std::git` tools instead of `bash` for git, so read-only git operations run without a permission prompt.
 - The agent can generate images, and users can attach images to send to the agent.
 
 ## Jun 24 2026 — v0.6.4
 
 ### Language / Typechecker
+
 - Fixed value-parameterized validation types (e.g. `NumberInRange(1, 10)!` from `std::types`); `@validate` factories now resolve instead of erroring on a missing function.
 - New `std::capabilities` — standard capability effect sets.
 
 ### Runtime
+
 - Unified abort taxonomy: aborts carry a typed cause (guard trip, user cancel, race loser) with `guardId` matching, so an outer guard no longer mis-attributes an inner trip. Thread cancellation is now non-destructive (preserves earlier rounds).
 - `agency serve` now works for functions, not just nodes.
 
 ### Eval / Optimize
+
 - Default judge now grades against `input.expected` even with no custom grader.
 - `gepa` and `example` optimizers now populate the champion grade breakdown and select the champion by validation, matching `greedy`.
 - Optimizer per-input working dir is seeded from the forked workspace, so agents that reference project files (e.g. `exec` on a repo path) find them instead of running in an empty dir.
 - Unified eval + optimize on a single per-input working directory: each input's workdir is seeded from the agent's project tree, candidate files (from the optimizer) are overlaid, and the entry agent is compiled in place — so module-dir, cwd, and workdir are the same directory for every run.
 
 #### Breaking
+
 - `agency eval run`: `working_dir`, when set, must now contain the agent file (was: any directory was copied as a separate fixture).
 - The agent is now compiled once per input (was: once up front). Workdirs are now isolated per input.
 - The optimizer no longer copies the project tree per candidate; per-candidate state lives as an overlay file map. `BaseOptimizerDeps.workspaceRoot` was removed and `Workspace` shrank to `{ key }` (cache-partition token only).
 
 ### Agency Agent
+
 - Can set the LLM provider used by the agency agent.
 
 ### Stdlib
+
 - Marked more stdlib functions read-safe (pre-approved).
 
 ## Jun 22 2026 — v0.6.1
 
 ### Agency Agent
+
 - Per-model cost attribution in the agency agent; tool-call branches now propagate their cost up to the main branch.
 - Unhandled interrupts from the command line print a clear error message instead of crashing silently.
 
 ### Logs Viewer
+
 - Grouped + flattened LLM call view; `e`/`E` expands/collapses the current node, `z`/`Z` expands/collapses the whole tree.
 - Statelog viewer fixes: short IDs, cross-process tail decoding, and `logs` now defaults to the `view` subcommand.
 
 ### Runtime
+
 - Structured abort causes — aborts now carry typed cause information instead of a bare string.
 
 ### CLI
+
 - `agency serve` prints the list of exposed endpoints on startup.
 
 ## Jun 20 2026 — v0.6
 
 ### Language / Typechecker
+
 - New effect sets and `raises` declarations; interrupt "kind" renamed to "effect".
 - Builds are cached correctly when compiling a whole dir, where files may be imported multiple times. Previously the files would get recompiled multiple times.
 - Fire-and-forget statelog events.
 
 ### Execution model
+
 - Memory functions are now branch-scoped, and the memory id is set correctly inside forks.
 
 ### Eval
+
 - New pluggable optimizer framework: bring your own optimizer (`--optimizer ./module.ts`), custom graders, validation sets, and a HumanGrader.
 - Added the GEPA optimizer.
 - `withCriteria` helper for declarative eval criteria (judge anchoring).
 - Renamed "tasks" to "inputs" everywhere across evals and optimizers.
 
 ### Stdlib
+
 - `std::chart` — new charting module.
 - `std::table` — new table module.
 - `std::syntax` — diff and patch functions, auto language detection, and themes (plus custom themes) for highlighting; removed `std::fs::printDiff`.
@@ -381,6 +484,7 @@
 - Fixed center alignment in `std::layout`.
 
 ### Agency Agent
+
 - Esc cancels the in-flight request.
 - Oneshot mode works.
 - `/paste` adds multi-line input to the line-mode REPL.
@@ -392,25 +496,30 @@
 - Fix bug where history file kept getting reset (was only saving the most recent session's history, now appends to it instead).
 
 ### Runtime / codegen / CLI
+
 - Upgraded smoltalk to v0.4.1.
 - Fixed duplicate tool names.
 
 ## Jun 12 2026 — v0.5
 
 ### Language / Typechecker
+
 - Block types take named params and the `->` arrow.
 - You can pass an array where a variadic is expected.
 - Strings keep their original quotes instead of getting forced to double quotes, single-quoted strings work, and escapes are supported.
 - Comments work inside records.
 
 ### Execution model
+
 - Fork/parallel/race branches each get their own isolated state now (you can still opt into sharing). This means that users can safely store state in globals without worrying about concurrent access from different threads.
 
 ### Eval
+
 - Big one: there's a whole new `agency eval` command — `extract`, `run`, `judge`, and `optimize` (this replaces the old `agency test eval`).
 - New `optimize` modifier on variables, and we now find every optimize-marked variable across the whole import tree.
 
 ### Stdlib
+
 - `withLock` — a mutex for threads.
 - `std::layout` got tables, plus you can set widths (a number, a percent, or "full") and text wraps to fit.
 - `std::args` for parsing command-line args.
@@ -418,6 +527,7 @@
 - Eval helpers (`evalJudge`, `evalExtract`), a `StatelogParser`, and `runAgencyAgent()` for running the built-in agents.
 
 ### Agency Agent
+
 - Re-architected from a handoff model to a coordinator pattern.
 - If you don't have a policy yet, it asks whether you want a minimal or recommended one and writes it out for you.
 - Picks up your commands from `.claude/commands/`.
@@ -425,6 +535,7 @@
 - When it hits the max tool-call rounds it now tells the LLM to wrap up instead of throwing.
 
 ### Runtime / codegen / CLI
+
 - Parsing got a lot faster — tarsec caches its line table and we memoize, taking ui.agency from 6s down to <1s.
 - Docs only list exported functions and types now.
 
@@ -433,6 +544,7 @@
 Breaking change: - **Disable per-function checkpoint** (perf). Was creating ~3 checkpoints per keystroke in the agent. Will return as opt-in eventually.
 
 ### Language / Typechecker
+
 - Initialize static and global variables in the right order by running a topological sort to compute dependencies.
 - `static` keyword now applies to bare top-level statements too.
 - All statics and globals now initialize before any user code runs
@@ -443,6 +555,7 @@ Breaking change: - **Disable per-function checkpoint** (perf). Was creating ~3 c
 - New `memory { ... }` blocks.
 
 ### Stdlib
+
 - `std::ui` redesigned around a declarative builder + `runLoop` API
 - `std::layout` — string layout utilities (boxes, rows, columns, padding, alignment).
 - `std::markdown` — new module with `walk()` (map over AST) and `renderForCli()` (CLI-friendly markdown)
@@ -456,6 +569,7 @@ Breaking change: - **Disable per-function checkpoint** (perf). Was creating ~3 c
 - Moved some policy and agent functionality from the agency agent into the stdlib.
 
 ### Agency Agent
+
 - Re-architected into a multi-agent architecture.
 - Switched to **line mode** (TUI code left in place for now)
 - Precompile bundled agents for faster startup.
@@ -465,12 +579,14 @@ Breaking change: - **Disable per-function checkpoint** (perf). Was creating ~3 c
 - Quadrant-art images at session start.
 
 Lots of improvements to the TUI version too, even though it is no longer the default:
+
 - Redesigned status line (user input above, status takes two rows).
 - Keyboard shortcuts (clear line, paste), multi-line input (shift+enter and multi-line paste).
 - Fast-typing fix: previously dropped keystrokes when multiple chars arrived in one data event.
 - Error handling inside the REPL: logger writes through `console` (not raw stderr) so the REPL's console capture isn't bypassed; error messages truncated to 5 lines.
 
 ### Runtime / codegen / CLI
+
 - **Disable per-function checkpoint** (perf). Was creating ~3 checkpoints per keystroke in the agent and never freeing them — 2.5GB after a few turns. Will return as opt-in.
 - `agency literate weave` command.
 - Bundle agency docs files so agents can read them; frontmatter added to all docs.
@@ -481,6 +597,7 @@ Lots of improvements to the TUI version too, even though it is no longer the def
 ## May 28 2026 — v0.3
 
 ### Language
+
 - Generics in Agency (`def foo<T>(x: T): T`, generic types)
 - Value-parameterized type aliases (`type Age(low) = number`)
 - Validation annotations: `@validate(...)` and `@jsonSchema(...)` on types, fields, and params
@@ -493,6 +610,7 @@ Lots of improvements to the TUI version too, even though it is no longer the def
 - Schema parameter injection for typed structured-output flows
 
 ### Stdlib
+
 - `std::system::dirname()` — absolute path of the directory containing the calling compiled `.js` module; relative `read`/`write`/`readImage`/`edit`/`multiedit` now resolve against this directory rather than `cwd` (BREAKING — pass `dir: cwd()` to restore the old behavior)
 - `std::skills::readSkill(filepath)` — `readSkill` moved out of the codegen magic into a regular stdlib module; import it explicitly
 - `std::thread` with per-branch cost/token tracking and cost guards (`guard(cost: $X) as { ... }`)
@@ -503,6 +621,7 @@ Lots of improvements to the TUI version too, even though it is no longer the def
 - `webfetch` renamed to `fetchMarkdown`
 
 ### TypeScript helpers (`agency.*` namespace)
+
 - `agency.ctx`, `agency.callsite`, `agency.global`, `agency.thread.*` — read context and push thread messages from TS
 - `agency.withHandler`, `agency.withCostGuard`, `agency.withTimeGuard`, `agency.addCost` — install handlers and guards from TS
 - `agency.checkpoint`, `agency.getCheckpoint`, `agency.restore`, `agency.withCallsite` — checkpoint primitives
@@ -513,6 +632,7 @@ Lots of improvements to the TUI version too, even though it is no longer the def
 - Docs: new [ts-helpers.md](docs/site/guide/ts-helpers.md), rewritten [ts-interop.md](docs/site/guide/ts-interop.md)
 
 ### Runtime / codegen
+
 - AsyncLocalStorage migration: `__ctx`, `__state`, `__threads` all flow through the `agencyStore` ALS frame; matching dead-local prune in codegen
 - The trailing `state` positional argument is gone from `AgencyFunction.invoke`, `__call`, `__callMethod`, and every generated `def` body (BREAKING; `getRuntimeContext` is no longer part of the public `agency-lang/runtime` surface — use `agency.ctx()` / `agency.ctxMaybe()`)
 - `runBatch` concurrent-interrupt primitive; `fork`, `race`, `runPrompt` migrated onto it (parallel-tool dispatch + per-branch isolation)
@@ -522,6 +642,7 @@ Lots of improvements to the TUI version too, even though it is no longer the def
 - TypeScript Builder split into focused emitters (`AssignmentEmitter`, `ClassEmitter`, `PipeChainEmitter`, `NameClassifier`, `ScopeManager`, `StepPathTracker`, `partitionProgram`/`assembleSections`); high-frequency TS IR builders (`methodCall`, `awaitCall`, `iife`)
 
 ### Breaking changes summary
+
 - Relative `dir` in `read`/`write`/`readImage`/`edit`/`multiedit` resolves against the module dir, not `cwd`
 - Trailing `state` arg removed from `invoke`/`__call`/generated `def` bodies; `getRuntimeContext` not public
 - `class` keyword removed
@@ -536,6 +657,7 @@ See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the new TS API, including
 ## May 18 2026 — v0.2
 
 ### Language
+
 - Destructuring and pattern matching (`match` blocks, destructuring in `let`/`const`/`for`)
 - Undefined function diagnostics — typechecker warns on undefined functions
 - Methods on primitives (e.g. `.length` on strings)
@@ -544,10 +666,12 @@ See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the new TS API, including
 - Fix string interpolation parser for concatenating function calls and strings
 
 ### New: Memory Layer
+
 - Built-in memory layer: temporal knowledge graph, hybrid retrieval, conversation compaction
 - Configured via `agency.json`, accessible via `std::memory` (`remember`, `recall`, `forget`, `setMemoryId`)
 
 ### CLI
+
 - `pack` command — creates standalone JS files with all dependencies inlined
 - Fix global install of agency (`agency run` now tells node where to find agency-lang)
 - `logs view` command — TUI for viewing statelog files with search, follow, clipboard, formatted LLM chat history
@@ -555,6 +679,7 @@ See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the new TS API, including
 - Integration tests for the CLI (run on push to main)
 
 ### Observability / Statelog
+
 - Lots of new statelog events, plus spans for more structured tracing
 - Per-branch span stacks via AsyncLocalStorage (concurrent fork/race branches get proper span attribution)
 - Statelog logging throughout the runtime and memory layer
@@ -562,12 +687,15 @@ See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the new TS API, including
 - Performance improvements for traces
 
 ### TUI
+
 - TUI abstractions extracted: line, scrollList, runLoop, key management
 
 ### Debugger
+
 - Fix ctrl-z handling, fix rewindFrom
 
 ### Other
+
 - Upgrade smoltalk to 0.3.0 (embed() and image() functions)
 - Move to MIT license
 - Typechecker now runs on all typescriptGenerator tests and stdlib code
@@ -576,6 +704,7 @@ See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the new TS API, including
 ## May 13 2026 — v0.1.3
 
 ### Language
+
 - `with approve` works on `return` statements
 - `.preapprove()` method on AgencyFunction — wraps function in implicit approve handler; works with PFAs, global functions, imports, and the interrupt/resume cycle
 - Parenthesized type expressions: `(name | serving_size)[]`, `(string | number)[]`
@@ -587,20 +716,25 @@ See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the new TS API, including
 - `as` not needed in blocks if no param
 
 ### TUI
+
 - Syntax highlighting in TUI
 - Remove `chalk` dependency (folded into termcolors)
 - Various TUI fixes
 
 ### New: whisper-local package
+
 - Add `@agency-lang/whisper-local` package (vendors whisper.cpp v1.7.6, pins SHA-256 hashes for all whisper models)
 
 ### Scheduling
+
 - `schedule` command supports GitHub Actions as a backend
 
 ### Docs
+
 - `doc` command lists interrupts thrown by a function
 
 ### Other
+
 - Don't format object type as `Record`
 - Coverage: thresholds, file exclusions, nicer PR comment
 - Fix tool-retry test (safe nested method)
@@ -608,6 +742,7 @@ See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the new TS API, including
 ## May 12 2026 — v0.1.2
 
 ### New: Serve Command
+
 - Add `agency serve` command — HTTP server for Agency programs
 - Standalone mode for serve
 - Expose nodes in MCP server
@@ -617,28 +752,33 @@ See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the new TS API, including
 - Harden HTTP serve and MCP stdio against security issues
 
 ### New: Subprocess Execution
+
 - Add `run()` function to execute Agency code in a subprocess
 - Per-call resource limits for `run()`
 - Timeouts for agency runner
 - Restrict subprocess imports to stdlib files only
 
 ### New: Standard Library
+
 - Add `@agency-lang/github` stdlib package
 - Add `std::agency` with a `compile()` function
 - Add `record()` function to speech stdlib
 - Re-export zod from agency
 
 ### New: Static Analysis
+
 - Add static interrupt analysis
 - Surface interrupt kinds in serve and LSP hover
 - Add trace mode to agency generator
 
 ### Language
+
 - Add `export { foo } from "bar"` syntax
 - Error on importing/exporting nodes with `safe` keyword
 - Fix parser for multi-line parameter lists in function definitions and calls
 
 ### CI & Testing
+
 - Add DeterministicClient for running agency/agency-js tests without OpenAI API key
 - Add sandboxed stdlib tests (CI only)
 - Add bundler and CLI integration tests
@@ -646,6 +786,7 @@ See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the new TS API, including
 - Add docs build to CI, re-enable lint, harden GitHub Actions
 
 ### Other
+
 - Fix phase ordering bug in TypeScript preprocessor (blocks not reading local variables)
 - Move stdlib backing TS into `lib/` for clean three-phase build
 - Function identity tracking
@@ -656,6 +797,7 @@ See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the new TS API, including
 ## May 7 2026 — v0.1.0
 
 ### New: Standard Library Modules
+
 - Add `std::browser` — Browser Use cloud API wrapper for web automation
 - Add `std::email` — Email sending via Resend, SendGrid, and Mailgun APIs
 - Add `std::sms` — Twilio SMS with E.164 validation
@@ -669,6 +811,7 @@ See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the new TS API, including
 - Add `review` agent to stdlib
 
 ### New: Schedule CLI
+
 - Add `agency schedule add/list/remove/edit` commands for running agents on a recurring schedule
 - Supports launchd (macOS), systemd (Linux), and crontab (Linux fallback)
 - Presets: `minute`, `hourly`, `daily`, `weekdays`, `weekends`, `weekly`, `monthly`
@@ -676,6 +819,7 @@ See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the new TS API, including
 - Per-run timestamped log files with automatic rotation
 
 ### New: Packages
+
 - Migrate to pnpm workspaces
 - Move MCP to its own package (`@agency-lang/mcp`)
 - Add `@agency-lang/brave-search` package
@@ -683,6 +827,7 @@ See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the new TS API, including
 - Add `@agency-lang/email` package (Nodemailer-based SMTP)
 
 ### New: Language Features
+
 - Add partial function application (PFAs/currying) with `.partial()` and `.description()` methods
 - Add time units to Agency (e.g. `5.seconds`, `2.hours`)
 - Add structured interrupts and policies
@@ -693,6 +838,7 @@ See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the new TS API, including
 - Replace `shared` keyword with `static`
 
 ### Type Checker
+
 - Typecheck block bodies: route returns and propagate slot types
 - Handle optionals, excess property checks, better typing for LLM config objects
 - Pipe slot validation, named-args by name, regex types
@@ -703,6 +849,7 @@ See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the new TS API, including
 - Condition and splat checks
 
 ### LSP
+
 - Syntax highlighting on hover
 - Show errors on the correct line
 - Highlight selected variable across the file, document links, folding blocks
@@ -713,20 +860,24 @@ See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the new TS API, including
 - Filename completions for imports
 
 ### Formatter
+
 - Preserve blank lines
 - Add line length wrapping
 - Sort imports
 
 ### Debugger
+
 - Rewrite debugger and tests using the new `@agency-lang/tui` library
 - Add `@agency-lang/tui` package (testable TUI with immediate-mode rendering and flexbox layout)
 
 ### Other
+
 - Add `agency review` command for code quality review
 - Various stdlib fixes for async, interrupts, module doc comments
 - Loc-line normalization and cleanup
 
 ## Apr 25 2026 — v0.0.107
+
 - Add inline blocks syntax
 - Add support for `arr[0]()` and `arr[0]?.()` call syntax
 - Add LSP implementation
@@ -743,17 +894,25 @@ See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the new TS API, including
 - New interrupt tests
 
 ## Apr 22 2026 — v0.0.104
+
 - First-class functions: `AgencyFunction` runtime class, better support
 - Remove `uses` statement, `tool()` function, and `import tool` syntax
 - Fix stdlib imports to not use relative paths
 
 ## Apr 21 2026 — v0.0.102
+
 - Add mcp support with auth, docs
+
 ## Apr 21 2026 — v0.0.101
+
 - Add mcp support
+
 ## Apr 20 2026 — v0.0.100
+
 - Fix various import-related issues
+
 ## Apr 19 2026 — v0.0.93
+
 - Added `schema()` function and made validation work with Result types
 - Added `__type: "resultType"` tag to result types to avoid misdetecting user return values
 - Added watch mode (`agency watch`)

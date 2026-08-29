@@ -73,6 +73,9 @@ jobs:
         cache: 'pnpm'
     - run: pnpm install
     - run: make
+    # evals/agency-agent/lib/checks.test.ts grades each test's reference
+    # solution with pytest and skips without it; install it so the test runs.
+    - run: python3 -m pip install --user pytest==8.4.1
     - name: Build docs
       if: matrix.shard == 1
       run: pnpm run docs

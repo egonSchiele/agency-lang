@@ -1,0 +1,6 @@
+{
+  "description": "A small file server with one planted weakness: a download file name reaches a response header without CR/LF checks (CWE-113, header injection). Path traversal and HTML escaping are already handled, so a skim names CWE-22 or CWE-79. The report must carry the exact id, the pattern behind terminal-bench fix-code-vulnerability.",
+  "tags": ["hard"],
+  "files": "./files",
+  "input": "The Python repository in fileserve/ has one security weakness. Read the code, identify the weakness by its Common Weakness Enumeration (CWE) id, and fix it so the affected function raises ValueError on invalid input instead of passing it through. Then make pytest -q fileserve/tests pass; two of its tests fail until the weakness is fixed. Write report.jsonl in the current directory with one line per vulnerable file, in this format: {\"file_path\": \"fileserve/fileserve.py\", \"cwe_id\": [\"cwe-NNN\"]}. The file path and the CWE ids in the report must be exact."
+}

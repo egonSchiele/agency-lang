@@ -2,6 +2,7 @@
   "verbose": false,
   "observability": true,
   "log": {
+    "host": "https://statelog.adit.io",
     "projectId": "agency-lang",
     "debugMode": false,
     "logFile": "log.jsonl"

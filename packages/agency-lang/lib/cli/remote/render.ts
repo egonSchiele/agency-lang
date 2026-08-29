@@ -1,11 +1,11 @@
-// Successful terminal output for the remote commands: the endpoint listing, a
-// call result, and the link status. Owns formatting so the command recipes
+// Successful terminal output for the remote commands: the endpoint listing and
+// a call result. Owns formatting so the command recipes
 // don't; all colour goes through termcolors.
 
 import { color } from "@/utils/termcolors.js";
 import type { ServeManifest } from "../statelog/serveClient.js";
 import type { TraceSummary, HostedAgentInfo } from "../statelog/projectClient.js";
-import type { RemoteBinding } from "./binding.js";
+import type { ServeAddress } from "../statelog/serveUrl.js";
 import type { ProjectSummary, KeySummary, CreatedKey } from "../statelog/accountClient.js";
 import type {
   ProjectSpend,
@@ -18,9 +18,9 @@ import type {
 
 const NONE = "—";
 
-export function renderManifest(manifest: ServeManifest, binding: RemoteBinding): string {
+export function renderManifest(manifest: ServeManifest, address: ServeAddress): string {
   const lines: string[] = [
-    color.bold(binding.filename) + color.dim(` — ${binding.serveUrl}`),
+    color.bold(address.filename) + color.dim(` — ${address.serveUrl}`),
     "",
     color.bold("Nodes"),
   ];
@@ -71,14 +71,6 @@ function indent(text: string, prefix: string): string {
 export function renderResult(value: unknown): string {
   const body = typeof value === "string" ? value : JSON.stringify(value, null, 2);
   return `${color.green("Result:")}\n${body}`;
-}
-
-export function renderLink(binding: RemoteBinding): string {
-  return [
-    `${color.bold("Agent:")}   ${binding.filename}`,
-    `${color.bold("Project:")} ${binding.projectId}`,
-    `${color.bold("Serve:")}   ${color.dim(binding.serveUrl)}`,
-  ].join("\n");
 }
 
 function effectsSuffix(interruptEffects: string[]): string {

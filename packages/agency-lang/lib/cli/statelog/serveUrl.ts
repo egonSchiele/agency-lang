@@ -95,8 +95,22 @@ export function serveRouteUrl(serveUrl: string, segments: string[]): string {
   return `${address.serveUrl}/${suffix}`;
 }
 
-/** The statelog web-app page for an agent's project. */
-export function projectPageUrl(address: ServeAddress): string {
+/** The inverse of `parseServeBaseUrl`. `filename` is the URL segment: the
+ *  agent file without its `.agency` suffix. */
+export function buildServeAddress(parts: {
+  origin: string;
+  userId: string;
+  projectId: string;
+  filename: string;
+}): ServeAddress {
+  const serveUrl = `${parts.origin}/serve/${encodeURIComponent(parts.userId)}/${encodeURIComponent(
+    parts.projectId,
+  )}/${encodeURIComponent(parts.filename)}`;
+  return { serveUrl, ...parts };
+}
+
+/** The statelog web-app page for a project. */
+export function projectPageUrl(address: { origin: string; projectId: string }): string {
   const url = new URL("/projects/show", address.origin);
   url.searchParams.set("id", address.projectId);
   return url.toString();

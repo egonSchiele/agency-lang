@@ -31,17 +31,14 @@ throw if any remote recipe ever constructs it.
   handlers validate the `--backend` string, await the remote recipe and
   return, or fall through to the unchanged local/github path.
 
-## Target resolution: the binding, not `log.projectId`
+## Target resolution
 
 Remote schedule commands resolve host/project/key with `resolveProjectTarget`
 (`lib/cli/remote/commands/util.ts`), the same seam every `agency remote`
-command uses: origin from `--host` → `log.host` → the `remote.serveUrl`
-binding that `agency remote deploy` writes; project from `--project` or the
-binding (guarded by an origin match); API key from the environment only,
-read last. Do not switch this to `resolveDeployTarget`
-(`lib/cli/deploy/target.ts`). That resolver predates the binding and requires
-`log.projectId`, which a directory linked by `agency remote deploy` does not
-have.
+command uses: origin from `--host` → `log.host`; project from `--project` →
+`log.projectId`; API key from the environment only, read last. Use this
+resolver, not `resolveDeployTarget` (`lib/cli/deploy/target.ts`), so every
+remote command reports missing input the same way.
 
 ## A failure can arrive inside an HTTP 200
 

@@ -1,12 +1,11 @@
 import { reportUnhandledInterrupts } from "@/runtime/interrupts.js";
 import { resolveInterrupts } from "@/runtime/interruptResolution.js";
-import { readBinding } from "../binding.js";
 import { buildArgs } from "../args.js";
 import type { RemoteArgsOptions } from "../args.js";
 import { resolveRemoteDecision } from "../decision.js";
 import { createServeClient } from "../../statelog/serveClient.js";
 import { renderResult } from "../render.js";
-import { fail, apiKeyOrExit } from "./util.js";
+import { fail, resolveServeTarget } from "./util.js";
 import type { RemoteCommandContext } from "./util.js";
 
 export type RemoteCallOptions = RemoteArgsOptions & {
@@ -15,6 +14,8 @@ export type RemoteCallOptions = RemoteArgsOptions & {
   policy?: string;
   approve?: string;
   reject?: string;
+  host?: string;
+  project?: string;
   apiKeyEnv?: string;
 };
 
@@ -23,17 +24,11 @@ export async function runCall(
   options: RemoteCallOptions,
   context: RemoteCommandContext,
 ): Promise<void> {
-  const binding = readBinding(context.configPath);
-  if (!binding) {
-    fail(
-      "Not linked. Run 'agency remote deploy <file>' first (or 'agency remote link --url <serveBase>').",
-    );
-  }
-  const apiKey = apiKeyOrExit(options);
+  const target = await resolveServeTarget(context, options);
   try {
     const args = buildArgs(options);
     const decide = resolveRemoteDecision(options);
-    const client = createServeClient(binding, apiKey);
+    const client = createServeClient(target.address, target.apiKey);
 
     // Functions are one-shot — no resume path. A surfaced function interrupt
     // (or any failed AgencyResult) is recognized at the serve-client boundary

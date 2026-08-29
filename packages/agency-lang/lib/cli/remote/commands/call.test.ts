@@ -14,6 +14,14 @@ vi.mock("../../statelog/serveClient.js", () => ({
   createServeClient: () => fakeClient,
   ServeRequestError: class ServeRequestError extends Error {},
 }));
+vi.mock("../../statelog/accountClient.js", () => ({
+  createAccountClient: () => ({ whoami: async () => ({ userId: "u" }) }),
+}));
+vi.mock("../../statelog/projectClient.js", () => ({
+  createProjectClient: () => ({
+    fetchAgentInfo: async () => ({ entryPoint: "agent.agency", lastUploadAt: null, files: [] }),
+  }),
+}));
 
 const { runCall } = await import("./call.js");
 
@@ -32,10 +40,6 @@ let exitSpy: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "remote-call-"));
   configPath = path.join(dir, "agency.json");
-  fs.writeFileSync(
-    configPath,
-    JSON.stringify({ remote: { serveUrl: "https://h/serve/u/p/agent.agency" } }),
-  );
   process.env.STATELOG_API_KEY = "key";
   logs = [];
   errs = [];
@@ -57,7 +61,7 @@ afterEach(() => {
   delete process.env.STATELOG_API_KEY;
 });
 
-const context = () => ({ config: {}, configPath });
+const context = () => ({ config: { log: { host: "https://h", projectId: "p" } }, configPath });
 function intr(effect: string): Interrupt {
   return {
     type: "interrupt",

@@ -17,7 +17,6 @@ import { pack } from "@/cli/pack.js";
 import { resolveModelFlag } from "@/cli/modelFlag.js";
 import { resolveLocalRunFlag } from "@/cli/localFlag.js";
 import { warnMisplacedAgencyFlags } from "@/cli/commandLine.js";
-import { runLink } from "@/cli/remote/commands/link.js";
 import { runDeploy } from "@/cli/remote/commands/deploy.js";
 import { runLs } from "@/cli/remote/commands/ls.js";
 import { runCall } from "@/cli/remote/commands/call.js";
@@ -522,14 +521,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Interact with a hosted statelog agent");
 
   remoteCmd
-    .command("link")
-    .description("Show, or set with --url, this directory's linked hosted agent")
-    .option("--url <serveBase>", "serve base URL to link (…/serve/:user/:project/:file)")
-    .action((opts: { url?: string }) => runLink(opts, getConfigContext()));
-
-  remoteCmd
     .command("deploy")
-    .description("Upload an agent and link this directory to it")
+    .description("Upload an agent to the project in agency.json (log.host, log.projectId)")
     .argument("<file>", "Agency entrypoint file to deploy")
     .option("--host <url>", "statelog host (overrides agency.json log.host)")
     .option("--project <slug>", "project slug (overrides agency.json log.projectId)")
@@ -546,9 +539,13 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   remoteCmd
     .command("ls")
-    .description("List the linked agent's callable nodes and functions, and its deployed files")
+    .description("List the deployed agent's callable nodes and functions, and its files")
+    .option("--host <url>", "statelog host (overrides agency.json log.host)")
+    .option("--project <slug>", "project slug (overrides agency.json log.projectId)")
     .option("--api-key-env <name>", "env var to read the API key from (default: STATELOG_API_KEY)")
-    .action((opts: { apiKeyEnv?: string }) => runLs(opts, getConfigContext()));
+    .action((opts: { host?: string; project?: string; apiKeyEnv?: string }) =>
+      runLs(opts, getConfigContext()),
+    );
 
   remoteCmd
     .command("call")
@@ -566,6 +563,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--policy <name|path>", "interrupt policy: a built-in or a policy JSON file")
     .option("--approve <effects>", "comma-separated interrupt effects to auto-approve")
     .option("--reject <effects>", "comma-separated interrupt effects to auto-reject")
+    .option("--host <url>", "statelog host (overrides agency.json log.host)")
+    .option("--project <slug>", "project slug (overrides agency.json log.projectId)")
     .option("--api-key-env <name>", "env var to read the API key from (default: STATELOG_API_KEY)")
     .action(
       (
@@ -578,6 +577,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
           policy?: string;
           approve?: string;
           reject?: string;
+          host?: string;
+          project?: string;
           apiKeyEnv?: string;
         },
       ) => runCall(name, opts, getConfigContext()),
@@ -585,8 +586,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   remoteCmd
     .command("open")
-    .description("Open the linked agent's project page in a browser")
-    .action(() => runOpen(getConfigContext()));
+    .description("Open the project page in a browser")
+    .option("--host <url>", "statelog host (overrides agency.json log.host)")
+    .option("--project <slug>", "project slug (overrides agency.json log.projectId)")
+    .action((opts: { host?: string; project?: string }) => runOpen(opts, getConfigContext()));
 
   const HOST_OPTION = "--host <origin>";
   const HOST_DESC = "statelog host (overrides agency.json log.host)";
@@ -656,7 +659,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     );
 
   const PROJECT_OPTION = "--project <slug>";
-  const PROJECT_DESC = "project slug (default: the linked project)";
+  const PROJECT_DESC = "project slug (default: agency.json log.projectId)";
 
   remoteCmd
     .command("pull")
@@ -1013,12 +1016,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
   evalCmd
     .command("upload")
     .description(
-      "Upload finished runs and their grades to the linked statelog project (agency remote link)",
+      "Upload finished runs and their grades to the statelog project in agency.json (log.host, log.projectId)",
     )
     .argument("<paths...>", "Run directories, or directories of run directories")
     .action(async (paths: string[]) => {
-      // The linked project is the only target: no host or key flags here,
-      // linking and $STATELOG_API_KEY own that.
+      // The project in agency.json is the only target: no host or key flags here,
+      // agency.json and $STATELOG_API_KEY own that.
       const target = resolveProjectTarget(getConfigContext(), {});
       const result = await evalUpload(paths, target).catch(failProjectCommand);
       for (const line of formatUploadResult(result)) console.log(line);
@@ -1919,7 +1922,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--redeploy", "remote backend: deploy the agent before scheduling, even if present")
     .option("--no-deploy", "remote backend: never deploy; fail if the agent is not on the server")
     .option("--host <url>", "remote backend: statelog host (default: agency.json log.host)")
-    .option("--project <slug>", "remote backend: statelog project (default: the linked project)")
+    .option(
+      "--project <slug>",
+      "remote backend: statelog project (default: agency.json log.projectId)",
+    )
     .option("--api-key-env <NAME>", "remote backend: env var holding the API key")
     .action(
       async (
@@ -2019,7 +2025,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("List all scheduled agents")
     .option("--backend <type>", "'remote' lists schedules on the hosted statelog server")
     .option("--host <url>", "remote backend: statelog host (default: agency.json log.host)")
-    .option("--project <slug>", "remote backend: statelog project (default: the linked project)")
+    .option(
+      "--project <slug>",
+      "remote backend: statelog project (default: agency.json log.projectId)",
+    )
     .option("--api-key-env <NAME>", "remote backend: env var holding the API key")
     .action(async (opts: RemoteTargetFlags & { backend?: string }) => {
       rejectUnknownScheduleBackend(opts.backend, ["remote"]);
@@ -2038,7 +2047,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("<name>", "Name of the schedule to remove (remote backend: the schedule id)")
     .option("--backend <type>", "'remote' removes a schedule on the hosted statelog server")
     .option("--host <url>", "remote backend: statelog host (default: agency.json log.host)")
-    .option("--project <slug>", "remote backend: statelog project (default: the linked project)")
+    .option(
+      "--project <slug>",
+      "remote backend: statelog project (default: agency.json log.projectId)",
+    )
     .option("--api-key-env <NAME>", "remote backend: env var holding the API key")
     .action(async (name: string, opts: RemoteTargetFlags & { backend?: string }) => {
       rejectUnknownScheduleBackend(opts.backend, ["remote"]);
@@ -2071,7 +2083,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--enabled", "remote backend: enable the schedule")
     .option("--disabled", "remote backend: disable the schedule")
     .option("--host <url>", "remote backend: statelog host (default: agency.json log.host)")
-    .option("--project <slug>", "remote backend: statelog project (default: the linked project)")
+    .option(
+      "--project <slug>",
+      "remote backend: statelog project (default: agency.json log.projectId)",
+    )
     .option("--api-key-env <NAME>", "remote backend: env var holding the API key")
     .action(
       async (

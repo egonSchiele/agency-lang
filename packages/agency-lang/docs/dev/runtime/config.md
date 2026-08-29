@@ -225,7 +225,6 @@ Type-checker settings live under `typechecker`, not at the top level.
 | `coverage` | object | `outDir`, `threshold`, `perFileThreshold`, `exclude` |
 | `pack` | object | `format` (`esm`/`cjs`), `target`, `external` |
 | `eval` | object | `runsDir`, `optimizeRunsDir`, `sourceCacheRoot`, `limits.wallClockSec`, `limits.maxCostUsd`, and the `optimize` block. See [`docs/dev/evals/eval-tracking.md`](../evals/eval-tracking.md) |
-| `remote.serveUrl` | `string` | The hosted agent this directory is linked to |
 
 ## Example
 

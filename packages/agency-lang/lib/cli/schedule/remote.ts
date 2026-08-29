@@ -131,8 +131,8 @@ export async function addRemote(
       }
     } else {
       // Point back at THIS command, not `agency remote deploy` — the standalone
-      // deploy resolves its target differently (no binding, no --host/--project
-      // carry-over) and could upload somewhere other than where this schedule
+      // deploy resolves its target from its own flags, with no --host/--project
+      // carry-over, and could upload somewhere other than where this schedule
       // request was aimed.
       failScheduleRequest(error, {
         missingAgent:

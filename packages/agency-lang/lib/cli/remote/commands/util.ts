@@ -4,13 +4,15 @@
 
 import { color } from "@/utils/termcolors.js";
 import type { AgencyConfig } from "@/config.js";
-import { readBinding } from "../binding.js";
-import type { RemoteBinding } from "../binding.js";
-import { canonicalOrigin } from "../../statelog/serveUrl.js";
+import { buildServeAddress, canonicalOrigin } from "../../statelog/serveUrl.js";
+import type { ServeAddress } from "../../statelog/serveUrl.js";
+import { createAccountClient } from "../../statelog/accountClient.js";
+import { createProjectClient } from "../../statelog/projectClient.js";
+import type { HostedAgentInfo } from "../../statelog/projectClient.js";
 import { AccountScopeError } from "../../statelog/accountClient.js";
 
-/** What every remote command needs: the resolved config and the exact path it
- *  came from (so a binding writes back to that file, not a re-derived one). */
+/** What every remote command needs: the resolved config and the path it came
+ *  from, for messages that point the user at the right file. */
 export type RemoteCommandContext = {
   config: AgencyConfig;
   configPath: string;
@@ -69,42 +71,25 @@ export function apiKeyOrExit(options: { apiKeyEnv?: string }): string {
   return resolveApiKey(options).apiKey;
 }
 
-/** Resolve where an account-management command talks to: a canonical origin (from
- *  `--host`, then `agency.json` `log.host`, then an existing binding's origin)
- *  and the resolved API key. Exits with a clear message on a missing or invalid
- *  origin, or a missing key. */
+/** Resolve where an account-management command talks to: a canonical origin
+ *  (from `--host`, then `agency.json` `log.host`) and the resolved API key.
+ *  Exits with a clear message on a missing or invalid origin, or a missing
+ *  key. */
 export function resolveAccountTarget(
   context: RemoteCommandContext,
   options: { host?: string; apiKeyEnv?: string },
 ): AccountTarget {
-  return resolveAccountTargetFromBinding(context, options, readBinding(context.configPath));
-}
-
-/** The origin+key resolution given an already-read binding snapshot, so a caller
- *  that also needs the binding's slug (resolveProjectTarget) derives both from
- *  the SAME snapshot rather than reading the file twice. */
-function resolveAccountTargetFromBinding(
-  context: RemoteCommandContext,
-  options: { host?: string; apiKeyEnv?: string },
-  binding: RemoteBinding | null,
-): AccountTarget {
-  const origin = resolveOrigin(context, options, binding);
+  const origin = resolveOrigin(context, options);
   return { origin, ...resolveApiKey(options) };
 }
 
-/** The canonical origin alone (from `--host`, then `agency.json` `log.host`, then
- *  the binding), with no credential access. Split out so a project-read command
- *  can validate its CLI input — origin and slug — BEFORE touching the key. */
-function resolveOrigin(
-  context: RemoteCommandContext,
-  options: { host?: string },
-  binding: RemoteBinding | null,
-): string {
-  const selected = options.host ?? context.config.log?.host ?? binding?.origin;
+/** The canonical origin alone (from `--host`, then `agency.json` `log.host`),
+ *  with no credential access. Split out so a project command can validate its
+ *  CLI input — origin and slug — BEFORE touching the key. */
+function resolveOrigin(context: RemoteCommandContext, options: { host?: string }): string {
+  const selected = options.host ?? context.config.log?.host;
   if (!selected) {
-    fail(
-      "No statelog host. Set log.host in agency.json, pass --host, or link this directory first.",
-    );
+    fail("No statelog host. Set log.host in agency.json, or pass --host.");
   }
   const origin = canonicalOrigin(selected);
   if (!origin) {
@@ -115,47 +100,85 @@ function resolveOrigin(
   return origin;
 }
 
-/** Resolve a project-read target — one coherent origin+slug+key from ONE binding
- *  snapshot. A binding slug is only used when the resolved origin matches the
- *  binding's origin, so a linked production project can't be spliced onto another
- *  host. The API key is read LAST, so a CLI-input error (missing host, empty or
- *  absent `--project`, host/binding mismatch) is reported even with the key
- *  unset — no credential access before the input is known good. */
+/** Origin plus slug, from flags or `agency.json`; no credential access. */
+export type ProjectLocation = { origin: string; projectSlug: string };
+
+export function resolveProjectLocation(
+  context: RemoteCommandContext,
+  options: { host?: string; project?: string },
+): ProjectLocation {
+  const origin = resolveOrigin(context, options);
+  const projectSlug = resolveProjectSlug(context, options);
+  return { origin, projectSlug };
+}
+
+/** Resolve a project target: origin, slug, and key. The API key is read LAST,
+ *  so a CLI-input error (missing host, empty or absent project) is reported
+ *  even with the key unset — no credential access before the input is known
+ *  good. */
 export function resolveProjectTarget(
   context: RemoteCommandContext,
   options: ProjectCommandOptions,
 ): ProjectTarget {
-  const binding = readBinding(context.configPath);
-  const origin = resolveOrigin(context, options, binding);
-  const projectSlug = resolveProjectSlug(origin, options, binding);
-  return { origin, projectSlug, ...resolveApiKey(options) };
+  const location = resolveProjectLocation(context, options);
+  return { ...location, ...resolveApiKey(options) };
 }
 
-function resolveProjectSlug(
-  resolvedOrigin: string,
-  options: ProjectCommandOptions,
-  binding: RemoteBinding | null,
-): string {
+function resolveProjectSlug(context: RemoteCommandContext, options: { project?: string }): string {
   if (options.project !== undefined) {
     if (options.project.length === 0) {
       fail("--project must not be empty.");
     }
     return options.project;
   }
-  if (binding !== null) {
-    if (canonicalOrigin(binding.origin) === resolvedOrigin) {
-      if (binding.projectId.length === 0) {
-        fail("The linked project has an empty slug; pass --project <slug>.");
-      }
-      return binding.projectId;
-    }
+  const configured = context.config.log?.projectId;
+  if (configured) {
+    return configured;
+  }
+  fail("No project. Set log.projectId in agency.json, or pass --project <slug>.");
+}
+
+/** A project target plus the deployed agent and its serve address. */
+export type ServeTarget = ProjectTarget & { address: ServeAddress; agent: HostedAgentInfo };
+
+const AGENCY_SUFFIX = ".agency";
+
+/** The serve address of the project's deployed agent: user id from `whoami`,
+ *  file from the project's entry point. Exits when nothing is deployed or a
+ *  lookup fails. */
+export async function resolveServeTarget(
+  context: RemoteCommandContext,
+  options: ProjectCommandOptions,
+): Promise<ServeTarget> {
+  const target = resolveProjectTarget(context, options);
+  let userId: string;
+  let agent: HostedAgentInfo;
+  try {
+    ({ userId } = await createAccountClient(target.origin, target.apiKey).whoami());
+    agent = await createProjectClient(
+      target.origin,
+      target.projectSlug,
+      target.apiKey,
+    ).fetchAgentInfo();
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
+  const { entryPoint } = agent;
+  if (entryPoint === null) {
     fail(
-      "The selected host differs from the linked project's host; pass --project <slug> to be explicit.",
+      `Nothing is deployed to project ${target.projectSlug} on ${target.origin}. Run 'agency remote deploy <file>' first.`,
     );
   }
-  fail(
-    "No project. Pass --project <slug>, or link this directory with 'agency remote deploy'/'link'.",
-  );
+  const filename = entryPoint.endsWith(AGENCY_SUFFIX)
+    ? entryPoint.slice(0, -AGENCY_SUFFIX.length)
+    : entryPoint;
+  const address = buildServeAddress({
+    origin: target.origin,
+    userId,
+    projectId: target.projectSlug,
+    filename,
+  });
+  return { ...target, address, agent };
 }
 
 /** Turn a project-read command error into a clean CLI exit. The client is

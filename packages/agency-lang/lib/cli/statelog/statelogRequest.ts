@@ -75,21 +75,25 @@ export async function statelogRequest(
   }
 
   const sleep = options.sleep ?? defaultSleep;
+  const fetchOnce = (): Promise<Response> =>
+    fetch(options.url, { method: options.method, headers, body: serializedBody });
+
+  // One retry per listed delay, then the last response stands.
   let response: Response;
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      response = await fetch(options.url, {
-        method: options.method,
-        headers,
-        body: serializedBody,
-      });
-    } catch (error) {
-      return { ok: false, failure: { kind: "unreachable", cause: message(error) } };
+  try {
+    response = await fetchOnce();
+    for (const delayMs of RETRY_DELAYS_MS) {
+      if (!RETRYABLE_STATUSES.has(response.status)) {
+        break;
+      }
+      // A shed response's body is never read; cancel it (best-effort) so its
+      // socket is released before the retry rather than held until GC.
+      await response.body?.cancel().catch(() => {});
+      await sleep(delayMs);
+      response = await fetchOnce();
     }
-    if (!RETRYABLE_STATUSES.has(response.status) || attempt >= RETRY_DELAYS_MS.length) {
-      break;
-    }
-    await sleep(RETRY_DELAYS_MS[attempt]);
+  } catch (error) {
+    return { ok: false, failure: { kind: "unreachable", cause: message(error) } };
   }
 
   const parsed = await readJsonBody(

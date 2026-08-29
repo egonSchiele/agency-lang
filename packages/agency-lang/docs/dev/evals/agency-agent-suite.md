@@ -1,21 +1,7 @@
 # The agency-agent eval suite
 
 `evals/agency-agent/` scores `agency agent` as a whole, one `--brain` at a
-time, on tasks shaped like the ones it fails on Terminal-Bench 2.0. Its
-README says how to run it and what each test measures. This note records
-the decisions behind it.
-
-## Why the tasks are ours
-
-Every terminal-bench task file carries a canary asking that the data not
-be used for training, and this repo is public. So no benchmark task is
-copied. Each test reproduces one failure pattern from the July 2026
-benchmark runs (`~/bench-agency/analysis/task-data.json` classifies all 89
-tasks by lever) with different code and data: a skimmed output constraint,
-a deliverable that depends on a package the agent installed, an exact id
-in a report, an off-by-one at a date-window edge. The spec that chose the
-first four is `2026-08-28-agency-agent-eval-suite-spec.md` at the package
-root while the branch is open.
+time, on tasks shaped like the ones it fails on Terminal-Bench 2.0.
 
 ## Why the agent runs in Docker
 

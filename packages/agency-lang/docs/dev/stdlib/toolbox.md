@@ -121,7 +121,9 @@ get the identical brief.
 `listTools` raises a `std::toolbox::scan` interrupt for the directory.
 It then lists the directory with `ls` from `std::shell` (which raises
 `std::ls`), and keeps the directories whose names are not `staging` and
-do not start with a dot. `listTools` refuses an empty `dir`, since the
+do not start with a dot. The recommended policy approves `std::toolbox::scan`; the `std::ls`
+behind it keeps that policy's read scope, so a toolbox outside the
+working directory still prompts for the listing. `listTools` refuses an empty `dir`, since the
 primitives would resolve it to the process cwd. `ls` counts every entry
 against its cap and does not say when it stopped, so a listing that
 reaches the cap is reported as a failure. It is not returned as a

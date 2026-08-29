@@ -234,13 +234,11 @@ node main() {
 
 ### External persistence via getCheckpoint
 
-`restore()` accepts the parsed JSON directly; it revives it with
+`restore()` accepts the parsed JSON directly and revives it with
 `Checkpoint.fromJSON`, which validates against the zod schemas in
-`lib/runtime/state/schemas.ts`. zod strips any key a schema does not name, so
-every field `MessageThread.toJSON` and `ThreadStore.toJSON` write must be
-listed there. When a field is missing, a checkpoint read back from disk
-silently loses it: thread labels and the `sessions` map were dropped this way,
-so a resumed `thread(session: "main")` opened a fresh thread.
+`lib/runtime/state/schemas.ts`. zod drops any key a schema does not name, so
+when adding a field to `MessageThread.toJSON` or `ThreadStore.toJSON`, add it
+to the schema too, or a checkpoint read back from a file will lose it.
 
 ```agency
 node main() {

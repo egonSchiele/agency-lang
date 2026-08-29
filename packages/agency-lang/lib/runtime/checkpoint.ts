@@ -30,7 +30,7 @@ export function getCheckpoint(checkpointId: number): Checkpoint {
 }
 
 export function restore(
-  checkpointIdOrCheckpoint: number | Checkpoint,
+  checkpointIdOrCheckpoint: number | Checkpoint | Record<string, unknown>,
   options: RestoreOptions,
 ): void {
   const { ctx } = getRuntimeContext();
@@ -43,7 +43,7 @@ export function restore(
       );
     cp = found;
   } else {
-    // A checkpoint read back from disk is plain JSON, not an instance.
+    // A checkpoint read back from a file is plain JSON, not an instance.
     const revived = Checkpoint.fromJSON(checkpointIdOrCheckpoint);
     if (!revived) throw new CheckpointError("Invalid checkpoint object passed to restore()");
     cp = revived;

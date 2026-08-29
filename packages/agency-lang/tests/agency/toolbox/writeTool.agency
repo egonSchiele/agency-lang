@@ -1,19 +1,31 @@
-import { writeTool, listTools } from "std::toolbox"
-import { exists } from "std::shell"
 import { remove } from "std::fs"
+import { exists } from "std::shell"
+import { writeTool, listTools, runTool } from "std::toolbox"
 
 const OUT = __dirname + "/test-output"
 const TOOLS = __dirname + "/fixtures/tools"
+const REQUEST = "{ n: number }"
 
 // Approve every non-review interrupt; answer the review with the scripted
 // verdicts in order. A null verdict rejects; the string "bare" answers with
 // a valueless approve(). Returns writeTool's result.
-def runWrite(name: string, dir: string, verdicts: any[]) {
+def runWrite(
+  name: string,
+  dir: string,
+  verdicts: any[],
+  request: string = "{ n: number }",
+) {
   let reviewCount = 0
   handle {
-    return writeTool(name: name, purpose: "Add one to a number.", dir: dir, maxRounds: 3)
+    return writeTool(
+      name: name,
+      purpose: "Add one to a number.",
+      request: request,
+      dir: dir,
+      maxRounds: 3,
+    )
   } with (intr) {
-    return match (intr.effect) {
+    return match(intr.effect) {
       "std::toolbox::review" => {
         const verdict = verdicts[reviewCount]
         reviewCount = reviewCount + 1
@@ -31,26 +43,32 @@ def runWrite(name: string, dir: string, verdicts: any[]) {
 }
 
 def cleanup(name: string) {
-  remove(OUT + "/" + name) with approve
+  remove(OUT + "/${name}") with approve
   remove(OUT + "/staging") with approve
 }
 
 def savedFiles(name: string): boolean {
-  const hasSource = exists("${name}/tool.agency", OUT)
+  const hasImpl = exists("${name}/impl.agency", OUT)
+  const hasTool = exists("${name}/tool.agency", OUT)
   const hasCases = exists("${name}/tool.test.json", OUT)
   const hasMeta = exists("${name}/meta.json", OUT)
   const stagingGone = !exists("staging/${name}", OUT)
-  return hasSource && hasCases && hasMeta && stagingGone
+  return hasImpl && hasTool && hasCases && hasMeta && stagingGone
 }
 
-node acceptSavesThreeFiles(): boolean {
+node acceptSavesTheTool(): boolean {
   cleanup("addOne")
-  const result = runWrite("addOne", OUT, [{ verdict: "accept" }])
+  const result = runWrite("addOne", OUT, [{
+    verdict: "accept"
+  }])
   const saved = savedFiles("addOne")
   const listed = listTools(OUT) with approve
   let inCatalog = false
   if (listed is success(entries)) {
-    inCatalog = some(entries, \entry -> entry.name == "addOne" && entry.broken == null)
+    inCatalog = some(
+      entries,
+      \entry -> entry.name == "addOne" && entry.broken == null && entry.meta.request == REQUEST,
+    )
   }
   cleanup("addOne")
   return result is success && saved && inCatalog
@@ -67,22 +85,33 @@ node rejectWritesNothing(): boolean {
 
 node reviseRunsASecondRound(): boolean {
   cleanup("addThree")
-  const verdicts = [{ verdict: "revise", feedback: "name the variable sum" }, { verdict: "accept" }]
+  const verdicts = [
+    {
+      verdict: "revise",
+      feedback: "name the variable sum"
+    },
+    {
+      verdict: "accept"
+    },
+  ]
   const result = runWrite("addThree", OUT, verdicts)
-  const ok = result is success && result.value.version == 1
+  const ok = result is success && result.value.meta.version == 1
   cleanup("addThree")
   return ok
 }
 
-// The first draft has an extra export. checkToolShape must send it back
-// so the second draft is the one saved: the saved source has no `helper`.
-node badShapeGoesBackToTheCodingAgent(): boolean {
+// The first draft exports `compute` instead of `run`, so the assembled
+// tool does not typecheck. That failure goes back to the coding agent and
+// the second draft is the one saved: the saved impl has no `compute`.
+node wrongExportGoesBackToTheCodingAgent(): boolean {
   cleanup("addFour")
-  const result = runWrite("addFour", OUT, [{ verdict: "accept" }])
-  const saved = read("addFour/tool.agency", OUT) with approve
+  const result = runWrite("addFour", OUT, [{
+    verdict: "accept"
+  }])
+  const saved = read("addFour/impl.agency", OUT) with approve
   let cleanSource = false
   if (saved is success(source)) {
-    cleanSource = !(source =~ re/helper/)
+    cleanSource = !(source =~ re/compute/)
   }
   cleanup("addFour")
   return result is success && cleanSource
@@ -91,20 +120,50 @@ node badShapeGoesBackToTheCodingAgent(): boolean {
 // No mocks: the name check runs before staging and before any model call.
 // This is the test that fails if the existence check moves later.
 node refusesAnExistingName(): boolean {
-  const result = runWrite("good", TOOLS, [{ verdict: "accept" }])
+  const result = runWrite("good", TOOLS, [{
+    verdict: "accept"
+  }])
   return result is failure && "${result.error}" =~ re/exists/
 }
 
 node refusesALongName(): boolean {
   // 65 characters, one over the cap.
   const name = "abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-  const result = runWrite(name, OUT, [{ verdict: "accept" }])
+  const result = runWrite(name, OUT, [{
+    verdict: "accept"
+  }])
   return result is failure && "${result.error}" =~ re/64/
 }
 
 node refusesAnEmptyDir(): boolean {
-  const result = runWrite("addFive", "", [{ verdict: "accept" }])
+  const result = runWrite("addFive", "", [{
+    verdict: "accept"
+  }])
   return result is failure && "${result.error}" =~ re/dir/
+}
+
+node refusesTheStagingName(): boolean {
+  const result = runWrite("staging", OUT, [{
+    verdict: "accept"
+  }])
+  return result is failure && "${result.error}" =~ re/staging/
+}
+
+// No mocks: the request text is checked before any model call.
+node refusesBadRequestText(): boolean {
+  const unclosed = runWrite("addNine", OUT, [{
+    verdict: "accept"
+  }], "{ n: ")
+  const twoTypes = runWrite(
+    "addTen",
+    OUT,
+    [{
+      verdict: "accept"
+    }],
+    "{ n: number }\nexport type Other = string",
+  )
+  const nothing = !exists("addNine", OUT) && !exists("addTen", OUT)
+  return unclosed is failure && "${unclosed.error}" =~ re/request/ && twoTypes is failure && "${twoTypes.error}" =~ re/request/ && nothing
 }
 
 node bareApproveAccepts(): boolean {
@@ -119,31 +178,36 @@ node bareApproveAccepts(): boolean {
 // tool.test.json.
 node modelToolSkipsTests(): boolean {
   cleanup("greet")
-  const result = runWrite("greet", OUT, [{ verdict: "accept" }])
-  const hasSource = exists("greet/tool.agency", OUT)
+  const result = runWrite("greet", OUT, [{
+    verdict: "accept"
+  }])
+  const hasImpl = exists("greet/impl.agency", OUT)
   const hasMeta = exists("greet/meta.json", OUT)
   const noCases = !exists("greet/tool.test.json", OUT)
   cleanup("greet")
-  return result is success && hasSource && hasMeta && noCases
+  return result is success && hasImpl && hasMeta && noCases
 }
 
-node refusesTheStagingName(): boolean {
-  const result = runWrite("staging", OUT, [{ verdict: "accept" }])
-  return result is failure && "${result.error}" =~ re/staging/
-}
-
-// std::shell is outside PURE_IMPORTS, so no cases call and no test file.
-node impureImportSkipsTests(): boolean {
-  cleanup("whichCmd")
-  const result = runWrite("whichCmd", OUT, [{ verdict: "accept" }])
-  const noCases = !exists("whichCmd/tool.test.json", OUT)
-  cleanup("whichCmd")
-  return result is success && noCases
+// `read` raises std::read, so `run` has an effect and no test file.
+node effectfulToolSkipsTests(): boolean {
+  cleanup("readIt")
+  const result = runWrite("readIt", OUT, [{
+    verdict: "accept"
+  }])
+  const noCases = !exists("readIt/tool.test.json", OUT)
+  let effectsOk = false
+  if (result is success(entry)) {
+    effectsOk = entry.module.effects.join(",") == "std::read"
+  }
+  cleanup("readIt")
+  return result is success && noCases && effectsOk
 }
 
 node reviseWithoutFeedbackFails(): boolean {
   cleanup("addSeven")
-  const result = runWrite("addSeven", OUT, [{ verdict: "revise" }])
+  const result = runWrite("addSeven", OUT, [{
+    verdict: "revise"
+  }])
   const nothing = !exists("addSeven", OUT)
   cleanup("addSeven")
   return result is failure && "${result.error}" =~ re/feedback/ && nothing
@@ -153,10 +217,48 @@ node reviseWithoutFeedbackFails(): boolean {
 // round 2 calls a model. The saved tool must not ship round 1's tests.
 node staleTestFileDoesNotShip(): boolean {
   cleanup("greetTwice")
-  const verdicts = [{ verdict: "revise", feedback: "use a model instead" }, { verdict: "accept" }]
+  const verdicts = [
+    {
+      verdict: "revise",
+      feedback: "use a model instead"
+    },
+    {
+      verdict: "accept"
+    },
+  ]
   const result = runWrite("greetTwice", OUT, verdicts)
   const noCases = !exists("greetTwice/tool.test.json", OUT)
-  const hasSource = exists("greetTwice/tool.agency", OUT)
+  const hasImpl = exists("greetTwice/impl.agency", OUT)
   cleanup("greetTwice")
-  return result is success && hasSource && noCases
+  return result is success && hasImpl && noCases
+}
+
+// Write a tool, run it twice (one bad request), and check the record.
+node runToolRunsAndRecords(): boolean {
+  cleanup("addEight")
+  const written = runWrite("addEight", OUT, [{
+    verdict: "accept"
+  }])
+  if (written is failure) {
+    cleanup("addEight")
+    return false
+  }
+  const answer = runTool("addEight", {
+    n: 41
+  }, OUT) with approve
+  const listed = listTools(OUT) with approve
+  let recorded = false
+  if (listed is success(entries)) {
+    const entry = find(entries, \candidate -> candidate.name == "addEight")
+    recorded = entry.meta.uses == 1 && entry.meta.lastUsedAt != null && entry.meta.recentOutcomes.join(",") == "ok"
+  }
+  cleanup("addEight")
+  return answer is success && answer.value == 42 && recorded
+}
+
+node runToolRefusesAMissingTool(): boolean {
+  const answer = runTool("noSuchTool", {
+    n: 1
+  }, OUT) with approve
+  return answer is failure && "${answer.error}" =~ re/noSuchTool/
 }

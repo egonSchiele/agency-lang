@@ -66,6 +66,11 @@ export function findUndefinedTemplateNames(
         continue;
       }
       if (node.type === "variableName") {
+        // `null` reaches the checker as a variableName in several positions
+        // (see isNullExpr in narrowing.ts); it is a literal, not a name.
+        if (node.value === "null" || node.value === "undefined") {
+          continue;
+        }
         if (!isResolvableVariableReference(node, ancestors)) {
           continue;
         }

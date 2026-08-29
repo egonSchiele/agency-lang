@@ -6,58 +6,62 @@ records the decisions behind `stdlib/toolbox.agency`.
 ## What a tool is
 
 One directory per tool under the toolbox (default `~/.agency-agent/tools`):
-`tool.agency`, `tool.test.json`, `meta.json`. The module exports exactly
-`type Request`, `def tool(request: Request)`, and `node main(request:
-Request)`. Fixed names mean one export to describe and exact static
-checks. A program imports a tool with an alias:
-`import { tool as getNews } from ".../getNews/tool.agency"`.
 
-`tool` returns the `Result` of the guard that wraps its work. A guard
-evaluates to a `Result` (see the guards guide), so a `tool` declared to
-return a plain value does not typecheck, and the coding agent's own
-check rejects it before `writeTool` ever sees it. `main` returns the
-same `Result`, which is why a conforming tool's effect list is never
-empty: it always carries `std::guard`.
+- `impl.agency` is what the coding agent writes. It exports
+  `type Request` and `def run(request: Request): Json`.
+- `toolbox.agency` generates `tool.agency` from a template. It imports
+  `run` and `Request` from `impl.agency` and wraps `run` in a guard with
+  time and cost limits (the wrapper is `runGuarded`). It exports `tool`,
+  which is `runGuarded` with the purpose set through `.describe()`, and
+  `node main`.
+- `tool.test.json` holds generated test cases, only for a tool that does
+  nothing but compute.
+- `meta.json` holds the purpose, the request type text, and the usage
+  record.
 
-## Why the coding agent writes the whole module
+A program runs a tool with `runTool(name, request)`, or imports it
+directly: `import { tool as getNews } from ".../getNews/tool.agency"`.
 
-The first design used a Template Agency skeleton so the coding agent
-would write only the body. A template's own `def tool(request: Request)`
-names the type `Request`. If `Request` were supplied through a hole, the
-rest of the template could not see that name, because a fragment that
-fills one hole cannot supply a name to another part of the template.
-Template Agency also has no hole in type position. So `writeTool` asks for the whole
-module and enforces the shape with `checkToolShape` plus the review
-agent. A type-position hole would let the skeleton own the guard and
-exports again; that is a follow-up.
+## Why a template
 
-## The shape checker is facts plus rules
+The first version had the coding agent write the whole module, and a
+200-line checker walked the AST to confirm the exports, the guard, its
+limits, that finalize runs, and the docstring. With a template, every one of
+those is fixed text, so there is nothing to check. What varies is filled
+through holes: the two limits and the purpose string.
 
-`shapeFacts` is the one def that knows AST field names. It reduces a
-module to a flat record: exported names (including `export const`); the
-guard `tool` returns; that guard's named arguments; the `tool` and
-`main` signatures; the docstring text from `describe`; and the
-`with approve` count. `shapeRules` turns that record into a list of
-`{ ok, message }`, and `checkToolShape` returns the messages of the
-rules that fail.
+`runFile` and `typecheckFile` resolve `.agency` imports inside the
+tool's directory, so `tool.agency` can import `impl.agency`. A code
+literal that imports a name declares it for the template check, so the
+template can use `run` and `Request` even though neither exists until
+fill time.
 
-The guard rules require three things. `tool`'s body must contain a
-top-level `return guard(...) { ... }`; a guard assigned to a variable,
-or nested inside another block, does not count, because work can happen
-outside it. That guard must name both `time:` and `cost:`. Its finalize
-must be its own child. The signature rules compare `describe`'s printed signatures against
-`tool(request: Request): Result<` and `main(request: Request): Result<`,
-so a `tool()` with no parameter is refused even though it typechecks.
+There is no hole in type position, so `tool` returns `Result<Json>` for
+every tool. There is no hole in docstring position either, so the
+purpose goes through `.describe()` on the exported `tool` and into
+`meta.json`. `runGuarded` keeps a fixed docstring.
+
+`writeTool` takes the request type as Agency type text, such as
+`"{ topics: string[]; maxItems: number }"`. It parses
+`export type Request = <text>` and requires exactly one type alias back.
+The brief tells the coding agent to copy that line as is; a draft that
+changes it fails the typecheck of `tool.agency`.
 
 ## `writeTool` is a pipeline
 
 `draftSource` → `reviewSource` → `testSource` (together `prepareDraft`)
 → `askUser` → `saveTool`, each a def with one job that returns a
 `Result`. `rounds` is the loop; `feedback` is its only state, holding
-the last problem or the user's revision request. `writeTool` validates, stages, calls `rounds`, and on failure clears
-staging once, folding a refused delete into the returned failure. On
-success the publish rename has already emptied staging, so no delete
-interrupt is raised.
+the last problem or the user's revision request. `writeTool` validates,
+stages, and calls `rounds`. On failure it clears staging once, and a
+refused delete is folded into the returned failure. On success the publish rename
+has already emptied staging, so no delete interrupt is raised.
+
+`testSource` starts with `assembleTool`: write `impl.agency`, fill the
+template, write `tool.agency`, and typecheck it. A draft that exports
+the wrong names fails there with the compiler's message, which becomes
+the next round's feedback. Compiling in the sandbox also refuses
+TypeScript and Node imports, so no import check lives in this module.
 
 `writeTool` and `listTools` expand `~` in `dir` once, up front, with the
 stdlib's `expandPath`. The file primitives expand it themselves, but the
@@ -66,114 +70,86 @@ unexpanded default would have made every generated test run fail.
 
 ### Publishing is one rename
 
-Every round writes into `<dir>/staging/<name>`: `tool.agency`, then
-`tool.test.json` when the tool was tested, then `meta.json` on accept.
-The staging directory is not a dot directory: the built-in with-writes
-policy scopes writes with `base/**`, and `**` does not match a dot-led
-segment, so a `.staging` directory would have prompted on every mkdir.
-`staging` is therefore a reserved tool name, and `listTools` skips it.
-An impure round removes a `tool.test.json` that an earlier pure round
-left behind, so a revision that starts calling a model does not ship
-the old tests.
-`saveTool` re-checks that `<dir>/<name>` is still free (the check in
-`checkName` is stale after several model calls) and then `move`s the
-staged directory into place. A tool is either fully present or absent;
-no failed write can leave an empty or partial directory that `checkName`
-would refuse to reuse.
+Every round writes into `<dir>/staging/<name>`. The staging directory is
+not a dot directory. The built-in with-writes policy (the approval
+policy that allows writes under a path glob) scopes writes with
+`base/**`, and `**` does not match a dot-led segment. A `.staging`
+directory would have prompted on every mkdir. `staging` is therefore a
+reserved tool name, and `listTools` skips it. A round whose tool has an
+effect removes a `tool.test.json` that an earlier pure round left
+behind, so a revision that starts calling a model does not ship the old
+tests. `saveTool` re-checks that `<dir>/<name>` is still free (the check
+in `checkName` is stale after several model calls) and then `move`s the
+staged directory into place. A tool is either fully present or absent.
 
 ### Only pure tools are tested
 
 `llm()` raises no interrupt, so it cannot be scripted in a sandbox test
-file. A scripted approval of a network effect lets the real call through
-anyway. So a generated exact-match test for a tool that calls a model or
-the network can never pass. `testSource` therefore generates and runs tests
-only for a pure tool (`isPure`): its effect list is exactly
-`["std::guard"]`, its source has no `llm` call, and it imports only
-modules on the `PURE_IMPORTS` list (the prelude, dates, math, arrays,
-objects, paths, validation). The import rule catches helpers that call
-a model internally without raising an interrupt, such as the agents
-under `std::agents`. Other tools skip the cases
-call; the review payload sets `tested: false`.
+file. A scripted approval of a network effect would let the real call
+through anyway. So `testSource` generates and runs tests only when
+`run` has an empty effect list and the source has no `llm` call.
 
 ### What the handler may return
 
-`askUser` returns a `Result<WriteToolReview>`. A rejected interrupt
-comes back as the failure it is, message intact, and `rounds` returns
-it. A bare `approve()` (what a catch-all policy sends) carries no value and
-counts as accept. A `revise` must carry a string `feedback`. Anything
-else is a failure naming the answer.
+A rejected interrupt halts `askUser` and returns the rejection to
+`rounds`, which returns it; nothing after the interrupt runs. A bare
+`approve()` arrives as `null` and counts as accept. `askUser` validates
+any other answer as a `WriteToolReview` with the bang syntax, so a
+`revise` without a string `feedback` fails, naming the answer.
 
 The typechecker does not carry a `Result` narrowing past a `continue`,
 so `rounds` branches on `is failure` / `is success` instead of
 narrowing and continuing.
 
-## The review interrupt
+## Reading a toolbox
 
-`askUser` raises `std::toolbox::review` after the draft passes the shape
-check, the review agent, and its own tests. The handler's `approve`
-value is a `WriteToolReview`: `{ verdict: "accept" }` saves,
-`{ verdict: "revise", feedback }` runs another round with the feedback
-in the brief, and `reject()` cancels. The loop
-lives in `rounds`, so a reject (which returns a failure from the
-function that raised the interrupt) still lets `writeTool` clear the
-staging directory. The payload's `stagingDir` is temporary; the saved
-tool's directory is the `dir` field of the returned `ToolEntry`.
+`listTools` raises one `std::toolbox::scan` interrupt for the directory,
+lists it with `ls` from `std::shell`, and keeps the directories whose
+names are not `staging` and do not start with a dot. The per-tool reads
+of `impl.agency` and `meta.json` use `_read`, covered by that one scan
+approval, as `std::skills` does. A toolbox directory that does not exist
+yet is an empty catalog.
 
-## Tests as JSON
+Each entry carries `module` (what `describe` says about `run`: signature,
+docstring, effects) and `meta`. `describe` cannot resolve a local import,
+so it reads `impl.agency`, not `tool.agency`. A missing `meta.json` means
+the default record. A present `meta.json` can fail three ways: it
+cannot be read, it is not JSON, or it fails validation as a `MetaFile`.
+Any of these marks the entry `broken`.
 
-The spec had `tool.test.agency` with an exported `cases` const. The
-module writes `tool.test.json` in the sandbox `.test.json` profile
-(`lib/testFormat/schema.ts`) and runs it with `testFile`, which exists
-already and does not load the tool module a second time. Two profile facts: scripted interrupt answers are
-`interruptHandlers: [{ action: "approve" | "reject" }]`, not
-`interrupts`; and because `main` returns a `Result`, `expectedOutput`
-must be the serialized `Result` envelope. `testFileJson` builds it with
-the runtime's own `success(value)` and `JSON.stringify`, so there is no
-second copy of the envelope format.
+## `runTool`
 
-## meta.json
-
-A missing `meta.json` (probed with `_exists`, so a read error is not
-mistaken for absence) means the default record (version 1, no uses). A
-present one that cannot be read, is not JSON, or has a field of the
-wrong type marks the entry `broken`, so a corrupt file never passes as
-a healthy tool.
-
-## Listing
-
-`listTools` lists the toolbox with `_ls`, a plain one-level directory
-read, and keeps the directories whose names are not `staging` and do
-not start with a dot. A toolbox directory that does not exist yet is an
-empty catalog, so an agent can list before the first `writeTool`.
-The recursive glob helper `_glob` skips `dist`, `build`, `.cache`, and
-friends at every level; using it for `listTools` instead of `_ls` would
-have hidden a tool with one of those names.
+`runTool` checks the tool exists, runs `main` through `runFile` (which
+raises its own read and run interrupts), and then rewrites `meta.json`
+with one more use, the time, and the outcome (`ok` or the failure
+message), keeping the last ten outcomes. It returns the node's own
+`Result`.
 
 ## Model calls and mocks
 
 Per round: one call in the coding agent (its internal review has no
-task and draws none), one in the review agent (it has a task), and, for
-a pure tool only, one for the test cases. A draft that fails the shape
-check draws only the first; a tool that calls a model draws two.
-`tests/agency/toolbox/writeTool.test.json` counts mocks this way; if the
-order ever gets awkward, scope the queues by module basename. The mocked drafts embed the `good` fixture as a string.
-`tests/agency/toolbox/generate-writeTool-mocks.mjs` regenerates
-`writeTool.test.json`; run it whenever that fixture changes. A stale
-copy fails the coding agent's own check and silently spends the round's
-mocks.
+task, so it draws no separate mock), one in the review agent (it has a task), and, for
+a pure tool only, one for the test cases. The review runs before the
+tool is assembled, so a draft with the wrong export still draws the
+review mock. `tests/agency/toolbox/generate-writeTool-mocks.mjs`
+regenerates `writeTool.test.json`; run it whenever
+`fixtures/tools/good/impl.agency` changes. A stale copy fails the coding
+agent's own check and silently spends the round's mocks.
 
 `writeTool.agency` writes under `tests/agency/toolbox/test-output/`
 (gitignored) and removes what it made. A `tool.test.json` left there is
 picked up by `agency test tests/agency/toolbox` and refused by the full
 profile (`args` is sandbox-only), so tests must clean up.
 
-The example module in the brief escapes its `${...}` as `\${...}`: the
-brief is a `static const` string, and an unescaped interpolation is
-evaluated when the module loads.
+## A checker fix this needed
+
+`null` reaches the type checker as a `variableName` node. The template
+name check (AG8015) reported it as undefined, so a template could not
+include `return null`. `templateNames.ts` now skips `null` and `undefined`,
+the way `isNullExpr` in `narrowing.ts` already did.
 
 ## Later pieces
 
-`runTool` with outcome recording (needs `cwd` on `runFile`), revision of
-an existing tool, retirement, the agency-agent integration, skills, the
-type-position hole, and one real-LLM end-to-end test once there is a
-place for real-LLM stdlib tests (today they run only from `lib/agents`).
+Revision of an existing tool, retirement, the agency-agent integration,
+skills, and one real-LLM end-to-end test once there is a place for
+real-LLM stdlib tests (today they run only from `lib/agents`).

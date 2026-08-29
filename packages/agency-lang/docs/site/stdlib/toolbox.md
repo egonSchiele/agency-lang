@@ -1,37 +1,42 @@
 ---
 name: "toolbox"
-description: "Keep a directory of tools an agent wrote, and write new ones."
+description: "Keep a directory of tools an agent wrote."
 ---
 
 # toolbox
 
-A tool is an Agency module that exports `type Request`,
-  `def tool(request: Request)`, and `node main(request: Request)`. `tool`
-  returns the `Result` of the guard that wraps its work. `listTools` reads
-  a toolbox directory into a catalog. `writeTool` has the coding agent
-  draft a new tool. It then checks and tests the draft, shows it to the
-  user through an interrupt, and saves it.
+A tool is a directory holding two Agency files. `impl.agency` is the
+  part the coding agent writes: `export type Request` and
+  `export def run(request: Request): Json`. `tool.agency` is generated
+  from a fixed template and wraps `run` in a guard with time and cost
+  limits. It exports `tool` and `node main`, both taking a `Request`.
 
-  A person reviews the generated code before it is saved. The handler
-  below prints the source and asks. A policy that always answers
-  `approve()` accepts every draft. A policy that answers `reject()`
-  cancels the write.
+  ## Useful exports
+  - `listTools` reads a toolbox directory into a catalog. It raises a
+    `std::toolbox::scan` interrupt first, so the caller must handle it.
+  - `writeTool` has the coding agent draft a new tool. `writeTool` then
+    reviews and tests the draft, shows it to the user through an
+    interrupt, and saves it.
+  - `runTool` runs a saved tool and records the outcome.
 
   ```ts
-  import { writeTool, listTools } from "std::toolbox"
-  import { runFile } from "std::agency"
+  import { writeTool, listTools, runTool } from "std::toolbox"
 
   const REVISE_PREFIX = "revise "
 
   node main() {
     handle {
-      const written = writeTool(name: "getNews", purpose: "Summarize today's news for a list of topics as Markdown.")
+      const written = writeTool(
+        name: "getNews",
+        purpose: "Summarize today's news for a list of topics as Markdown.",
+        request: "{ topics: string[]; maxItems: number }",
+      )
       if (written is failure(err)) {
         print("not written: ${err}")
         return
       }
       printJSON(listTools())
-      const news = runFile(written.value.dir, "tool.agency", "main", { request: { topics: ["tech"], maxItems: 5 } })
+      const news = runTool("getNews", { topics: ["tech"], maxItems: 5 })
       print(news)
     } with (intr) {
       return match (intr.effect) {
@@ -53,39 +58,62 @@ A tool is an Agency module that exports `type Request`,
   }
   ```
 
-  A program imports a saved tool directly:
+  A program can also import a saved tool directly:
   `import { tool as getNews } from "~/.agency-agent/tools/getNews/tool.agency"`.
 
 ## Types
 
-### ToolEntry
+### ModuleFacts
 
-One tool in a toolbox: what `describe` says about its module plus the
-  usage record from meta.json. `broken` carries the reason the directory
-  could not be read as a healthy tool: a parse failure, no `tool` export,
-  or a meta.json that is missing a field or has one of the wrong type.
+What `describe` says about a tool's `run` function.
 
 ```ts
-/** One tool in a toolbox: what `describe` says about its module plus the
-  usage record from meta.json. `broken` carries the reason the directory
-  could not be read as a healthy tool: a parse failure, no `tool` export,
-  or a meta.json that is missing a field or has one of the wrong type. */
-export type ToolEntry = {
-  name: string;
-  dir: string;
-  summary?: string;
+/** What `describe` says about a tool's `run` function. */
+export type ModuleFacts = {
   signature: string;
   docstring?: string;
-  effects: string[];
+  effects: string[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L120))
+
+### ToolMeta
+
+The usage record in meta.json.
+
+```ts
+/** The usage record in meta.json. */
+export type ToolMeta = {
+  purpose: string;
+  request: string;
   version: number;
   uses: number;
   lastUsedAt?: string;
-  recentOutcomes: string[];
+  recentOutcomes: string[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L127))
+
+### ToolEntry
+
+One tool in a toolbox. This is what `listTools` returns. If the tool
+  could not be read correctly, `broken` holds the reason.
+
+```ts
+/** One tool in a toolbox. This is what `listTools` returns. If the tool
+  could not be read correctly, `broken` holds the reason. */
+export type ToolEntry = {
+  name: string;
+  dir: string;
+  module: ModuleFacts;
+  meta: ToolMeta;
   broken?: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L117))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L138))
 
 ### WriteToolReview
 
@@ -100,7 +128,7 @@ export type WriteToolReview =
   | { verdict: "revise"; feedback: string }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L133))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L148))
 
 ## Effects
 
@@ -112,7 +140,7 @@ effect std::toolbox::scan {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L101))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L107))
 
 ### std::toolbox::review
 
@@ -126,7 +154,7 @@ effect std::toolbox::review {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L111))
 
 ## Functions
 
@@ -136,10 +164,11 @@ effect std::toolbox::review {
 listTools(dir: string = "~/.agency-agent/tools"): Result<ToolEntry[]>
 ```
 
-List the tools in a toolbox directory. Each entry has the tool's name,
-  signature, description, the interrupt effects it can raise, and its
-  usage record from meta.json: the version, how many times it ran, when
-  it last ran, and its recent outcomes.
+List the tools in a toolbox directory. Raises a `std::toolbox::scan`
+  interrupt before reading anything. Each entry has: the tool's name and
+  directory; what `describe` says about its `run` function (signature,
+  docstring, effects); and its meta.json record (purpose, request type,
+  version, run count, last-run time, recent outcomes).
 
   @param dir - The toolbox directory to scan
 
@@ -151,35 +180,9 @@ List the tools in a toolbox directory. Each entry has the tool's name,
 
 **Returns:** `Result<ToolEntry[]>`
 
-**Throws:** `std::toolbox::scan`
+**Throws:** `std::toolbox::scan`, `std::ls`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L303))
-
-### checkToolShape
-
-```ts
-checkToolShape(source: string): string[]
-```
-
-Check that Agency source has the shape of a toolbox tool. It must
-  export exactly `type Request`, `def tool(request: Request): Result<...>`,
-  and `node main(request: Request): Result<...>`. `tool` must return a
-  guard with time and cost limits and a finalize, and must not use
-  `with approve`. `tool` must have a docstring with `@param request` and
-  an example call. Returns one message per problem, empty when the
-  source conforms.
-
-  @param source - Agency source code of a tool module
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| source | `string` |  |
-
-**Returns:** `string[]`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L507))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L284))
 
 ### writeTool
 
@@ -187,7 +190,7 @@ Check that Agency source has the shape of a toolbox tool. It must
 writeTool(
   name: string,
   purpose: string,
-  exampleRequest: string = "",
+  request: string,
   dir: string = "~/.agency-agent/tools",
   maxRounds: number = 3,
   maxTime: number = 3m,
@@ -198,13 +201,14 @@ writeTool(
 ```
 
 Write a reusable tool into a toolbox directory. The coding agent drafts
-  the tool against a fixed contract. writeTool checks and reviews the
-  draft, tests it when it is pure computation, shows it to the user for
-  acceptance or revision, and saves it.
+  the tool's `run` function against the request type. writeTool wraps it
+  in the guarded tool module, typechecks and reviews the pair, tests it
+  when it is pure computation, shows it to the user for acceptance or
+  revision, and saves it.
 
   @param name - The tool's name; also its directory under dir
   @param purpose - What the tool should do, in plain language
-  @param exampleRequest - The user request that prompted this tool, or ""
+  @param request - The tool's input type as Agency type text, such as `{ topics: string[]; maxItems: number }`
   @param dir - The toolbox directory to write into
   @param maxRounds - Draft-review rounds before giving up
   @param maxTime - Time limit baked into the tool's guard
@@ -218,7 +222,7 @@ Write a reusable tool into a toolbox directory. The coding agent drafts
 |---|---|---|
 | name | `string` |  |
 | purpose | `string` |  |
-| exampleRequest | `string` | "" |
+| request | `string` |  |
 | dir | `string` | "~/.agency-agent/tools" |
 | maxRounds | `number` | 3 |
 | maxTime | `number` | 3m |
@@ -230,4 +234,36 @@ Write a reusable tool into a toolbox directory. The coding agent drafts
 
 **Throws:** `std::remove`, `std::mkdir`, `std::toolbox::review`, `std::write`, `std::move`, `std::read`, `std::guard`, `std::run`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L934))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L724))
+
+### runTool
+
+```ts
+runTool(
+  name: string,
+  request: Json,
+  dir: string = "~/.agency-agent/tools",
+): Result<Json>
+```
+
+Run a saved tool's `main` node in a subprocess and return what it
+  returned. The tool's meta.json records the run: one more use, the
+  time, and whether it succeeded.
+
+  @param name - The tool's name under dir
+  @param request - The tool's input, a value of its Request type
+  @param dir - The toolbox directory holding the tool
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| name | `string` |  |
+| request | [Json](validation.md#json) |  |
+| dir | `string` | "~/.agency-agent/tools" |
+
+**Returns:** `Result<Json>`
+
+**Throws:** `std::run`, `std::guard`, `std::write`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L819))

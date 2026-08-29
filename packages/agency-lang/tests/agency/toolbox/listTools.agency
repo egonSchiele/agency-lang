@@ -1,4 +1,4 @@
-import { listTools } from "std::toolbox"
+import { listTools, ToolEntry } from "std::toolbox"
 
 const FIXTURES = __dirname + "/fixtures/tools"
 
@@ -6,8 +6,10 @@ def catalog() {
   return listTools(FIXTURES) with approve
 }
 
-def entryNamed(entries: any[], name: string) {
-  return find(entries, \entry -> entry.name == name)
+// Every fixture name is listed, so a missing entry is a test bug, not a
+// case to handle; the broken entry stands in and fails the assertions.
+def entryNamed(entries: ToolEntry[], name: string): ToolEntry {
+  return find(entries, \entry -> entry.name == name) ?? entries[0]
 }
 
 node listsEveryDirectory(): boolean {
@@ -27,12 +29,10 @@ node readsSignatureDocstringAndEffects(): boolean {
     return false
   }
   const good = entryNamed(entries.value, "good")
-  const signatureOk = good.signature =~ re/tool\(request: Request\)/
-  const docstringOk = good.docstring =~ re/Add one/
-  const summaryOk = good.summary == "Add one to a number."
-  // The guard inside tool raises std::guard, so a conforming tool is never effect-free.
-  const effectsOk = good.effects.join(",") == "std::guard"
-  return signatureOk && docstringOk && summaryOk && effectsOk && good.broken == null
+  const signatureOk = good.module.signature =~ re/run\(request: Request\)/
+  const docstringOk = good.module.docstring =~ re/Add one/
+  const effectsOk = good.module.effects.length == 0
+  return signatureOk && docstringOk && effectsOk && good.broken == null
 }
 
 node readsMeta(): boolean {
@@ -41,7 +41,8 @@ node readsMeta(): boolean {
     return false
   }
   const good = entryNamed(entries.value, "good")
-  return good.uses == 3 && good.version == 1 && good.recentOutcomes.length == 3
+  const meta = good.meta
+  return meta.uses == 3 && meta.version == 1 && meta.recentOutcomes.length == 3 && meta.purpose == "Add one to a number." && meta.request == "{ n: number }"
 }
 
 node defaultsMissingMeta(): boolean {
@@ -50,7 +51,8 @@ node defaultsMissingMeta(): boolean {
     return false
   }
   const noMeta = entryNamed(entries.value, "noMeta")
-  return noMeta.uses == 0 && noMeta.version == 1 && noMeta.lastUsedAt == null && noMeta.broken == null
+  const meta = noMeta.meta
+  return meta.uses == 0 && meta.version == 1 && meta.lastUsedAt == null && noMeta.broken == null
 }
 
 node reportsCorruptMeta(): boolean {
@@ -68,7 +70,7 @@ node marksBroken(): boolean {
     return false
   }
   const broken = entryNamed(entries.value, "broken")
-  return broken.broken != null && broken.broken =~ re/tool/
+  return broken.broken != null && broken.module.signature == ""
 }
 
 node rejectedScanReturnsFailure(): boolean {

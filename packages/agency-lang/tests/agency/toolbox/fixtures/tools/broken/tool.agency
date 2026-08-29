@@ -1,7 +1,0 @@
-export type Request = {
-  n: number
-}
-
-export def helper(request: Request): number {
-  return request.n
-}

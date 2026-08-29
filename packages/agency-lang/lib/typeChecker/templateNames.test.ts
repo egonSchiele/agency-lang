@@ -33,6 +33,16 @@ describe("AG8015: names a template does not define", () => {
     expect(codesOf(source)).toContain("AG8015");
   });
 
+  it("does not report the literal null", () => {
+    const source = withLiteral([
+      "    node main() {",
+      "      const x = null",
+      "      return null",
+      "    }",
+    ]);
+    expect(codesOf(source)).not.toContain("AG8015");
+  });
+
   it("reports a call a declaration hole would supply", () => {
     // A FunctionCall's name is a plain string, not a variableName node, so
     // a variable-only walk would miss this entirely.

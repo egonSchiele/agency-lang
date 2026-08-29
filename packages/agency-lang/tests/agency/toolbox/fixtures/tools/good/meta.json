@@ -1,7 +1,8 @@
 {
   "name": "good",
   "createdAt": "2026-08-28T15:02:11.000+00:00",
-  "createdFrom": "add one to a number",
+  "purpose": "Add one to a number.",
+  "request": "{ n: number }",
   "version": 1,
   "uses": 3,
   "lastUsedAt": "2026-08-28T16:00:00.000+00:00",

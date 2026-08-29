@@ -1,7 +1,7 @@
 {
   "tests": [
     {
-      "nodeName": "acceptSavesThreeFiles",
+      "nodeName": "acceptSavesTheTool",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [
@@ -13,7 +13,7 @@
       "llmMocks": [
         {
           "return": {
-            "code": "/** @module\n  @summary Add one to a number.\n*/\n\nexport type Request = {\n  n: number\n}\n\nexport def tool(request: Request): Result<number> {\n  \"\"\"\n  Add one to the number in the request.\n\n  Example: tool({ n: 41 })\n\n  @param request - The number to add one to\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return request.n + 1\n\n    finalize {\n      return 0\n    }\n  }\n}\n\nexport node main(request: Request): Result<number> {\n  return tool(request)\n}\n"
+            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
           }
         },
         {
@@ -23,7 +23,6 @@
           "return": {
             "cases": [
               {
-                "nodeName": "main",
                 "args": {
                   "request": {
                     "n": 41
@@ -32,7 +31,6 @@
                 "expectedOutput": 42
               },
               {
-                "nodeName": "main",
                 "args": {
                   "request": {
                     "n": 0
@@ -58,7 +56,7 @@
       "llmMocks": [
         {
           "return": {
-            "code": "/** @module\n  @summary Add one to a number.\n*/\n\nexport type Request = {\n  n: number\n}\n\nexport def tool(request: Request): Result<number> {\n  \"\"\"\n  Add one to the number in the request.\n\n  Example: tool({ n: 41 })\n\n  @param request - The number to add one to\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return request.n + 1\n\n    finalize {\n      return 0\n    }\n  }\n}\n\nexport node main(request: Request): Result<number> {\n  return tool(request)\n}\n"
+            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
           }
         },
         {
@@ -68,7 +66,6 @@
           "return": {
             "cases": [
               {
-                "nodeName": "main",
                 "args": {
                   "request": {
                     "n": 41
@@ -77,7 +74,6 @@
                 "expectedOutput": 42
               },
               {
-                "nodeName": "main",
                 "args": {
                   "request": {
                     "n": 0
@@ -103,7 +99,7 @@
       "llmMocks": [
         {
           "return": {
-            "code": "/** @module\n  @summary Add one to a number.\n*/\n\nexport type Request = {\n  n: number\n}\n\nexport def tool(request: Request): Result<number> {\n  \"\"\"\n  Add one to the number in the request.\n\n  Example: tool({ n: 41 })\n\n  @param request - The number to add one to\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return request.n + 1\n\n    finalize {\n      return 0\n    }\n  }\n}\n\nexport node main(request: Request): Result<number> {\n  return tool(request)\n}\n"
+            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
           }
         },
         {
@@ -113,7 +109,6 @@
           "return": {
             "cases": [
               {
-                "nodeName": "main",
                 "args": {
                   "request": {
                     "n": 41
@@ -122,7 +117,6 @@
                 "expectedOutput": 42
               },
               {
-                "nodeName": "main",
                 "args": {
                   "request": {
                     "n": 0
@@ -135,7 +129,7 @@
         },
         {
           "return": {
-            "code": "/** @module\n  @summary Add one to a number.\n*/\n\nexport type Request = {\n  n: number\n}\n\nexport def tool(request: Request): Result<number> {\n  \"\"\"\n  Add one to the number in the request.\n\n  Example: tool({ n: 41 })\n\n  @param request - The number to add one to\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return request.n + 1\n\n    finalize {\n      return 0\n    }\n  }\n}\n\nexport node main(request: Request): Result<number> {\n  return tool(request)\n}\n"
+            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
           }
         },
         {
@@ -145,7 +139,6 @@
           "return": {
             "cases": [
               {
-                "nodeName": "main",
                 "args": {
                   "request": {
                     "n": 41
@@ -154,7 +147,6 @@
                 "expectedOutput": 42
               },
               {
-                "nodeName": "main",
                 "args": {
                   "request": {
                     "n": 0
@@ -168,7 +160,7 @@
       ]
     },
     {
-      "nodeName": "badShapeGoesBackToTheCodingAgent",
+      "nodeName": "wrongExportGoesBackToTheCodingAgent",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [
@@ -180,12 +172,15 @@
       "llmMocks": [
         {
           "return": {
-            "code": "/** @module\n  @summary Add one to a number.\n*/\n\nexport type Request = {\n  n: number\n}\n\nexport def tool(request: Request): Result<number> {\n  \"\"\"\n  Add one to the number in the request.\n\n  Example: tool({ n: 41 })\n\n  @param request - The number to add one to\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return request.n + 1\n\n    finalize {\n      return 0\n    }\n  }\n}\n\nexport node main(request: Request): Result<number> {\n  return tool(request)\n}\n\nexport def helper(): number {\n  return 1\n}\n"
+            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def compute(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
           }
         },
         {
+          "return": []
+        },
+        {
           "return": {
-            "code": "/** @module\n  @summary Add one to a number.\n*/\n\nexport type Request = {\n  n: number\n}\n\nexport def tool(request: Request): Result<number> {\n  \"\"\"\n  Add one to the number in the request.\n\n  Example: tool({ n: 41 })\n\n  @param request - The number to add one to\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return request.n + 1\n\n    finalize {\n      return 0\n    }\n  }\n}\n\nexport node main(request: Request): Result<number> {\n  return tool(request)\n}\n"
+            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
           }
         },
         {
@@ -195,7 +190,6 @@
           "return": {
             "cases": [
               {
-                "nodeName": "main",
                 "args": {
                   "request": {
                     "n": 41
@@ -204,7 +198,6 @@
                 "expectedOutput": 42
               },
               {
-                "nodeName": "main",
                 "args": {
                   "request": {
                     "n": 0
@@ -266,6 +259,18 @@
       "llmMocks": []
     },
     {
+      "nodeName": "refusesBadRequestText",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
       "nodeName": "bareApproveAccepts",
       "input": "",
       "expectedOutput": "true",
@@ -278,7 +283,7 @@
       "llmMocks": [
         {
           "return": {
-            "code": "/** @module\n  @summary Add one to a number.\n*/\n\nexport type Request = {\n  n: number\n}\n\nexport def tool(request: Request): Result<number> {\n  \"\"\"\n  Add one to the number in the request.\n\n  Example: tool({ n: 41 })\n\n  @param request - The number to add one to\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return request.n + 1\n\n    finalize {\n      return 0\n    }\n  }\n}\n\nexport node main(request: Request): Result<number> {\n  return tool(request)\n}\n"
+            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
           }
         },
         {
@@ -288,7 +293,6 @@
           "return": {
             "cases": [
               {
-                "nodeName": "main",
                 "args": {
                   "request": {
                     "n": 41
@@ -297,7 +301,6 @@
                 "expectedOutput": 42
               },
               {
-                "nodeName": "main",
                 "args": {
                   "request": {
                     "n": 0
@@ -323,7 +326,7 @@
       "llmMocks": [
         {
           "return": {
-            "code": "/** @module\n  @summary Greet a person by name using a model.\n*/\n\nexport type Request = {\n  name: string\n}\n\nexport def tool(request: Request): Result<string> {\n  \"\"\"\n  Greet the person by name using a model.\n\n  Example: tool({ name: \"Ada\" })\n\n  @param request - Who to greet\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return llm(\"Say hello to ${request.name}\")\n\n    finalize {\n      return \"\"\n    }\n  }\n}\n\nexport node main(request: Request): Result<string> {\n  return tool(request)\n}\n"
+            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Greet the number using a model.\n\n  @param request - The number to greet\n  \"\"\"\n  return llm(\"Say hello to number ${request.n}\")\n}\n"
           }
         },
         {
@@ -332,7 +335,7 @@
       ]
     },
     {
-      "nodeName": "impureImportSkipsTests",
+      "nodeName": "effectfulToolSkipsTests",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [
@@ -344,7 +347,7 @@
       "llmMocks": [
         {
           "return": {
-            "code": "import { which } from \"std::shell\"\n\n/** @module\n  @summary Find a command on PATH.\n*/\n\nexport type Request = {\n  name: string\n}\n\nexport def tool(request: Request): Result<string> {\n  \"\"\"\n  Find the command named in the request on PATH.\n\n  Example: tool({ name: \"Ada\" })\n\n  @param request - The command to find\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return which(request.name)\n\n    finalize {\n      return \"\"\n    }\n  }\n}\n\nexport node main(request: Request): Result<string> {\n  return tool(request)\n}\n"
+            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Read the file named after the number.\n\n  @param request - The number naming the file\n  \"\"\"\n  return read(\"${request.n}.txt\")\n}\n"
           }
         },
         {
@@ -365,7 +368,7 @@
       "llmMocks": [
         {
           "return": {
-            "code": "/** @module\n  @summary Add one to a number.\n*/\n\nexport type Request = {\n  n: number\n}\n\nexport def tool(request: Request): Result<number> {\n  \"\"\"\n  Add one to the number in the request.\n\n  Example: tool({ n: 41 })\n\n  @param request - The number to add one to\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return request.n + 1\n\n    finalize {\n      return 0\n    }\n  }\n}\n\nexport node main(request: Request): Result<number> {\n  return tool(request)\n}\n"
+            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
           }
         },
         {
@@ -375,7 +378,6 @@
           "return": {
             "cases": [
               {
-                "nodeName": "main",
                 "args": {
                   "request": {
                     "n": 41
@@ -384,7 +386,6 @@
                 "expectedOutput": 42
               },
               {
-                "nodeName": "main",
                 "args": {
                   "request": {
                     "n": 0
@@ -410,7 +411,7 @@
       "llmMocks": [
         {
           "return": {
-            "code": "/** @module\n  @summary Add one to a number.\n*/\n\nexport type Request = {\n  n: number\n}\n\nexport def tool(request: Request): Result<number> {\n  \"\"\"\n  Add one to the number in the request.\n\n  Example: tool({ n: 41 })\n\n  @param request - The number to add one to\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return request.n + 1\n\n    finalize {\n      return 0\n    }\n  }\n}\n\nexport node main(request: Request): Result<number> {\n  return tool(request)\n}\n"
+            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
           }
         },
         {
@@ -420,7 +421,6 @@
           "return": {
             "cases": [
               {
-                "nodeName": "main",
                 "args": {
                   "request": {
                     "n": 41
@@ -429,7 +429,6 @@
                 "expectedOutput": 42
               },
               {
-                "nodeName": "main",
                 "args": {
                   "request": {
                     "n": 0
@@ -442,13 +441,68 @@
         },
         {
           "return": {
-            "code": "/** @module\n  @summary Greet a person by name using a model.\n*/\n\nexport type Request = {\n  name: string\n}\n\nexport def tool(request: Request): Result<string> {\n  \"\"\"\n  Greet the person by name using a model.\n\n  Example: tool({ name: \"Ada\" })\n\n  @param request - Who to greet\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return llm(\"Say hello to ${request.name}\")\n\n    finalize {\n      return \"\"\n    }\n  }\n}\n\nexport node main(request: Request): Result<string> {\n  return tool(request)\n}\n"
+            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Greet the number using a model.\n\n  @param request - The number to greet\n  \"\"\"\n  return llm(\"Say hello to number ${request.n}\")\n}\n"
           }
         },
         {
           "return": []
         }
       ]
+    },
+    {
+      "nodeName": "runToolRunsAndRecords",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+          }
+        },
+        {
+          "return": []
+        },
+        {
+          "return": {
+            "cases": [
+              {
+                "args": {
+                  "request": {
+                    "n": 41
+                  }
+                },
+                "expectedOutput": 42
+              },
+              {
+                "args": {
+                  "request": {
+                    "n": 0
+                  }
+                },
+                "expectedOutput": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "runToolRefusesAMissingTool",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
     }
   ]
 }

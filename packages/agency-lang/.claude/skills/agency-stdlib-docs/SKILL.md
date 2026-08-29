@@ -11,4 +11,4 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/stdlib/data-connectors.md` — Writing a `std::data` connector that reads a public data source, and the conventions they all follow.
 - `docs/dev/stdlib/aws.md` — S3 support with no AWS SDK, including the request signer and the safety contracts around it.
 - `docs/dev/stdlib/std-agency-test.md` — `test()` and `testFile()` from `std::agency`, and the sandbox rules that are easy to get wrong.
-- `docs/dev/stdlib/toolbox.md` — `std::toolbox`: tools an agent writes and keeps; the fixed module shape, the facts-plus-rules checker, the writeTool pipeline, and the review interrupt.
+- `docs/dev/stdlib/toolbox.md` — `std::toolbox`: tools an agent writes and keeps; the tool template, the writeTool pipeline, the review interrupt, and runTool.

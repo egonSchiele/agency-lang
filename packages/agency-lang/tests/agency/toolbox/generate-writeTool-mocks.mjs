@@ -1,56 +1,41 @@
 // Regenerates writeTool.test.json. Run from packages/agency-lang:
 //   node tests/agency/toolbox/generate-writeTool-mocks.mjs
 // The mocked drafts embed the good fixture as a string, so run this
-// whenever fixtures/tools/good/tool.agency changes; a stale copy fails the
+// whenever fixtures/tools/good/impl.agency changes; a stale copy fails the
 // coding agent's own check and silently spends the round's mocks.
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const good = readFileSync(join(here, "fixtures/tools/good/tool.agency"), "utf8");
-// The coding agent accepts this; checkToolShape refuses the extra export.
-const bad = good + "\nexport def helper(): number {\n  return 1\n}\n";
-const modelTool = `/** @module
-  @summary Greet a person by name using a model.
-*/
+const good = readFileSync(join(here, "fixtures/tools/good/impl.agency"), "utf8");
+// The coding agent accepts this module; the assembled tool.agency does not
+// typecheck because nothing named `run` is exported.
+const wrongExport = good.replace("export def run(", "export def compute(");
+const modelImpl = `import { Json } from "std::validation"
 
 export type Request = {
-  name: string
+  n: number
 }
 
-export def tool(request: Request): Result<string> {
+export def run(request: Request): Json {
   """
-  Greet the person by name using a model.
+  Greet the number using a model.
 
-  Example: tool({ name: "Ada" })
-
-  @param request - Who to greet
+  @param request - The number to greet
   """
-  return guard(time: 1m, cost: $0.10) {
-    return llm("Say hello to \${request.name}")
-
-    finalize {
-      return ""
-    }
-  }
-}
-
-export node main(request: Request): Result<string> {
-  return tool(request)
+  return llm("Say hello to number \${request.n}")
 }
 `;
-// Imports a module outside PURE_IMPORTS, so it is impure without calling llm.
-const shellTool = modelTool
-  .replace("/** @module", 'import { which } from "std::shell"\n\n/** @module')
-  .replace("Greet a person by name using a model.", "Find a command on PATH.")
-  .replace("Greet the person by name using a model.", "Find the command named in the request on PATH.")
-  .replace("Who to greet", "The command to find")
-  .replace('return llm("Say hello to ${request.name}")', "return which(request.name)");
+// read raises std::read, so run has an effect without calling a model.
+const readImpl = modelImpl
+  .replace("Greet the number using a model.", "Read the file named after the number.")
+  .replace("The number to greet", "The number naming the file")
+  .replace('return llm("Say hello to number ${request.n}")', 'return read("${request.n}.txt")');
 const cases = {
   cases: [
-    { nodeName: "main", args: { request: { n: 41 } }, expectedOutput: 42 },
-    { nodeName: "main", args: { request: { n: 0 } }, expectedOutput: 1 },
+    { args: { request: { n: 41 } }, expectedOutput: 42 },
+    { args: { request: { n: 0 } }, expectedOutput: 1 },
   ],
 };
 const codeMock = (source) => ({ return: { code: source } });
@@ -65,22 +50,28 @@ const testCase = (nodeName, llmMocks) => ({
   llmMocks,
 });
 // Per round: coding agent, review agent, then (pure tools only) test cases.
+// The review runs before the tool is assembled, so a draft with the wrong
+// export still draws the review mock.
 const pureRound = [codeMock(good), reviewOk, casesMock];
-const modelRound = [codeMock(modelTool), reviewOk];
-const shellRound = [codeMock(shellTool), reviewOk];
+const modelRound = [codeMock(modelImpl), reviewOk];
+const readRound = [codeMock(readImpl), reviewOk];
+const wrongRound = [codeMock(wrongExport), reviewOk];
 const tests = [
-  testCase("acceptSavesThreeFiles", pureRound),
+  testCase("acceptSavesTheTool", pureRound),
   testCase("rejectWritesNothing", pureRound),
   testCase("reviseRunsASecondRound", [...pureRound, ...pureRound]),
-  testCase("badShapeGoesBackToTheCodingAgent", [codeMock(bad), ...pureRound]),
+  testCase("wrongExportGoesBackToTheCodingAgent", [...wrongRound, ...pureRound]),
   testCase("refusesAnExistingName", []),
   testCase("refusesALongName", []),
   testCase("refusesAnEmptyDir", []),
   testCase("refusesTheStagingName", []),
+  testCase("refusesBadRequestText", []),
   testCase("bareApproveAccepts", pureRound),
   testCase("modelToolSkipsTests", modelRound),
-  testCase("impureImportSkipsTests", shellRound),
+  testCase("effectfulToolSkipsTests", readRound),
   testCase("reviseWithoutFeedbackFails", pureRound),
   testCase("staleTestFileDoesNotShip", [...pureRound, ...modelRound]),
+  testCase("runToolRunsAndRecords", pureRound),
+  testCase("runToolRefusesAMissingTool", []),
 ];
 writeFileSync(join(here, "writeTool.test.json"), JSON.stringify({ tests }, null, 2) + "\n");

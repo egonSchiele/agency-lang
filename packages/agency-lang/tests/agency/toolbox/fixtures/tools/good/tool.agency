@@ -1,28 +1,24 @@
-/** @module
-  @summary Add one to a number.
-*/
+import { Json } from "std::validation"
 
-export type Request = {
-  n: number
-}
+import { run, Request } from "./impl.agency"
 
-export def tool(request: Request): Result<number> {
+def runGuarded(request: Request): Result<Json> {
   """
-  Add one to the number in the request.
+  Run this tool. The request type is in impl.agency.
 
-  Example: tool({ n: 41 })
-
-  @param request - The number to add one to
+  @param request - The tool's input
   """
-  return guard(time: 1m, cost: $0.10) {
-    return request.n + 1
+  return guard(time: 60000, cost: 0.1) {
+    return run(request)
 
     finalize {
-      return 0
+      return null
     }
   }
 }
 
-export node main(request: Request): Result<number> {
+export static const tool = runGuarded.describe("Add one to a number.")
+
+export node main(request: Request): Result<Json> {
   return tool(request)
 }

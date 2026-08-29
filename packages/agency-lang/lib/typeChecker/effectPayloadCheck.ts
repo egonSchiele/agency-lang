@@ -7,7 +7,11 @@ import type { ObjectType } from "../types/typeHints.js";
 import type { InterruptStatement } from "../types/interruptStatement.js";
 import { walkNodes } from "../utils/node.js";
 import type { Tag } from "../types/tag.js";
-import { tagsAbove, effectDeclarationsWithTags, type NodeWithTagsAbove } from "../utils/tagsAbove.js";
+import {
+  tagsAbove,
+  effectDeclarationsWithTags,
+  type NodeWithTagsAbove,
+} from "../utils/tagsAbove.js";
 import type { TypeCheckError } from "./types.js";
 import type { SourceLocation } from "../types/base.js";
 import {

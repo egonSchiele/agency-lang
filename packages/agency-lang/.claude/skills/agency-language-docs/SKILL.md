@@ -18,5 +18,6 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/language/splices.md` — Compile-time splices `$( ... )`, which run a generator during compilation and paste the code it returns into the file.
 - `docs/dev/language/template-agency.md` — How templates work under the hood: holes, `fill`, and hygiene.
 - `docs/dev/language/triple-quoted-string-escapes.md` — The two escapes a raw `"""` string honours, `\${` and `\"""`, and the three places (parser, generator, optimizer) that must agree on them.
+- `docs/dev/language/effect-always-tag.md` — How `@always` / `@alwaysUnder` on an effect declaration reach the policy prompt: tag reading, typechecking, codegen registration, the runtime registry, and the IPC hand-off.
 - `docs/dev/language/validation-annotations.md` — How `@validate` and `@jsonSchema` are compiled, and how the runtime walks a validated value.
 - `docs/dev/language/with-approve.md` — The `with approve/reject/propagate` shorthand for wrapping a single statement in a handler.

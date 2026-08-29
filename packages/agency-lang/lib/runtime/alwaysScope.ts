@@ -35,8 +35,8 @@ function copyOf(fields: ScopedField[]): ScopedField[] {
 }
 
 export function __registerAlwaysScope(effect: string, fields: ScopedField[]): void {
-  // An empty scope is "nothing to say", never a claim that contradicts a
-  // scope already registered. Codegen, IPC, and tests rely on this.
+  // An empty scope says nothing, so it cannot contradict a scope already
+  // registered. Codegen, IPC, and tests rely on this.
   if (fields.length === 0) {
     return;
   }

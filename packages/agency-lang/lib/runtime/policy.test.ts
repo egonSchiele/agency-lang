@@ -631,9 +631,7 @@ describe("escapeGlob", () => {
       "std::bash": [{ match: { command: escapeGlob("ls *.md") }, action: "approve" as const }],
     };
     expect(checkPolicy(policy, intr("std::bash", { command: "ls *.md" })).type).toBe("approve");
-    expect(checkPolicy(policy, intr("std::bash", { command: "ls a.md" })).type).not.toBe(
-      "approve",
-    );
+    expect(checkPolicy(policy, intr("std::bash", { command: "ls a.md" })).type).not.toBe("approve");
   });
 
   it("keeps a brace-expanded subpath scope working around an escaped base", () => {
@@ -642,8 +640,6 @@ describe("escapeGlob", () => {
       "std::read": [{ match: { dir: `{${base},${base}/**}` }, action: "approve" as const }],
     };
     expect(checkPolicy(policy, intr("std::read", { dir: "/tmp/[x]/sub" })).type).toBe("approve");
-    expect(checkPolicy(policy, intr("std::read", { dir: "/tmp/x/sub" })).type).not.toBe(
-      "approve",
-    );
+    expect(checkPolicy(policy, intr("std::read", { dir: "/tmp/x/sub" })).type).not.toBe("approve");
   });
 });

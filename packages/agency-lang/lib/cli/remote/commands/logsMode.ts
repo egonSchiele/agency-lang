@@ -1,5 +1,5 @@
 // Pure resolution of `remote logs` invocation intent, decided BEFORE any config,
-// credential, binding, network, or terminal effect. Registration alone calls
+// credential, network, or terminal effect. Registration alone calls
 // these; recipes receive the discriminated mode and never reinterpret booleans.
 
 export type RemoteLogsMode =

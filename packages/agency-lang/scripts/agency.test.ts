@@ -173,7 +173,7 @@ describe("agency CLI command tree", () => {
     ).rejects.toThrow(/positive integer/);
   });
 
-  it("`eval upload` targets the linked project only: no host, project, or key flags", () => {
+  it("`eval upload` targets the project in agency.json only: no host, project, or key flags", () => {
     const program = createProgram();
     const evalCommand = program.commands.find((command) => command.name() === "eval");
     const upload = evalCommand?.commands.find((command) => command.name() === "upload");
@@ -208,7 +208,6 @@ describe("agency CLI command tree", () => {
       "call",
       "deploy",
       "keys",
-      "link",
       "logs",
       "ls",
       "open",

@@ -44,11 +44,9 @@ describe("agent-evals.yml", () => {
   const program = createProgram();
   const found = invocations();
 
-  it("invokes eval run, eval grade, eval upload, and remote link", () => {
+  it("invokes eval run, eval grade, and eval upload", () => {
     const heads = found.map((words) => words.slice(0, 2).join(" "));
-    expect(heads).toEqual(
-      expect.arrayContaining(["remote link", "eval run", "eval grade", "eval upload"]),
-    );
+    expect(heads).toEqual(expect.arrayContaining(["eval run", "eval grade", "eval upload"]));
   });
 
   it("uses only flags the commands register", () => {

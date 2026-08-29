@@ -1,5 +1,5 @@
 // One vertical slice with nothing replaced but the network: real runSecretsSet,
-// real binding-based target resolution, real secretsClient, stubbed global
+// real config-based target resolution, real secretsClient, stubbed global
 // fetch. Proves the layers agree on the wire contract AND on the no-output
 // invariant: the sentinel value appears in the request body and nowhere else.
 
@@ -37,7 +37,10 @@ let logSpy: ReturnType<typeof vi.spyOn>;
 let errorSpy: ReturnType<typeof vi.spyOn>;
 
 function context(): RemoteCommandContext {
-  return { config: {}, configPath } as RemoteCommandContext;
+  return {
+    config: { log: { host: "https://h", projectId: "proj" } },
+    configPath,
+  } as RemoteCommandContext;
 }
 
 const io = {
@@ -56,11 +59,7 @@ function allOutput(): string {
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "secrets-vertical-"));
   configPath = path.join(dir, "agency.json");
-  configBytes = `${JSON.stringify(
-    { remote: { serveUrl: "https://h/serve/u/proj/daily.agency" } },
-    null,
-    2,
-  )}\n`;
+  configBytes = `${JSON.stringify({ log: { host: "https://h", projectId: "proj" } }, null, 2)}\n`;
   fs.writeFileSync(configPath, configBytes, "utf-8");
   process.env[KEY_ENV] = "vertical-api-key";
   process.env[VALUE_ENV] = SENTINEL;

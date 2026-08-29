@@ -40,9 +40,6 @@ afterEach(() => {
 });
 
 const context = () => ({ config: {}, configPath });
-const readRemote = () =>
-  (JSON.parse(fs.readFileSync(configPath, "utf-8")) as { remote?: { serveUrl?: string } }).remote;
-
 const deployedOutcome = {
   kind: "deployed",
   plan: {},
@@ -53,42 +50,16 @@ const deployedOutcome = {
   manifest: undefined,
 };
 
-describe("runDeploy binding contract", () => {
-  it("writes the binding to the context configPath on a deployed outcome", async () => {
+describe("runDeploy outcome contract", () => {
+  it("returns 'deployed' and writes nothing locally", async () => {
     deployFn.mockResolvedValue(deployedOutcome);
-    await runDeploy("agent.agency", {}, context());
-    expect(readRemote()).toEqual({ serveUrl: "https://h/serve/u/proj/agent.agency" });
-  });
-
-  it("does not write a binding for a preview (dry-run) outcome", async () => {
-    deployFn.mockResolvedValue({ kind: "preview", plan: {} });
-    await runDeploy("agent.agency", { dryRun: true }, context());
+    await expect(runDeploy("agent.agency", {}, context())).resolves.toBe("deployed");
     expect(fs.existsSync(configPath)).toBe(false);
   });
 
-  it("exits and writes no binding on an error outcome", async () => {
+  it("exits on an error outcome", async () => {
     deployFn.mockResolvedValue({ kind: "error", error: "compile failed" });
     await expect(runDeploy("agent.agency", {}, context())).rejects.toBeInstanceOf(ProcessExit);
-    expect(fs.existsSync(configPath)).toBe(false);
-  });
-});
-
-describe("runDeploy outcome contract", () => {
-  it("returns 'deployed' when the binding is written", async () => {
-    deployFn.mockResolvedValue(deployedOutcome);
-    await expect(runDeploy("agent.agency", {}, context())).resolves.toBe("deployed");
-    expect(readRemote()).toEqual({ serveUrl: "https://h/serve/u/proj/agent.agency" });
-  });
-
-  it("returns 'deployed' without a binding when no serve URL can be derived", async () => {
-    deployFn.mockResolvedValue({
-      kind: "deployed",
-      plan: {},
-      endpointUrls: ["not a serve url"],
-      manifest: undefined,
-    });
-    await expect(runDeploy("agent.agency", {}, context())).resolves.toBe("deployed");
-    expect(fs.existsSync(configPath)).toBe(false);
   });
 
   it("returns 'preview' for a dry-run outcome", async () => {

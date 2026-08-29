@@ -3,9 +3,6 @@ import { color } from "@/utils/termcolors.js";
 import type { AgencyConfig } from "@/config.js";
 import { deploy } from "../../deploy/deploy.js";
 import { renderOutcome } from "../../deploy/render.js";
-import { serveBaseUrl } from "../../statelog/uploadClient.js";
-import { parseServeBaseUrl } from "../../statelog/serveUrl.js";
-import { writeBinding } from "../binding.js";
 import { countExportedEndpoints } from "../exportedEndpoints.js";
 import type { ExportedEndpointCount } from "../exportedEndpoints.js";
 import { confirmDeployWithoutExports } from "../confirmation.js";
@@ -45,19 +42,7 @@ export async function runDeploy(
   if (outcome.kind === "error") {
     process.exit(1);
   }
-  if (outcome.kind !== "deployed") {
-    return "preview"; // a --dry-run preview never writes a binding
-  }
-
-  const base = serveBaseUrl(outcome.endpointUrls);
-  const address = base ? parseServeBaseUrl(base) : null;
-  if (!address) {
-    console.log(color.yellow("Deployed, but could not derive a serve URL to link."));
-    return "deployed";
-  }
-  writeBinding(context.configPath, address);
-  console.log(`\n${color.green("Linked")} this directory to ${color.bold(address.filename)}.`);
-  return "deployed";
+  return outcome.kind === "deployed" ? "deployed" : "preview";
 }
 
 /** The warning, plus a hint when the exports exist but live in imported files:

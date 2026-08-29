@@ -100,9 +100,9 @@ arithmetic; none of those internals are exported.
 ## `agency eval upload`
 
 `evalUpload(targets, target)` in `lib/cli/eval/upload.ts`, registered as
-`agency eval upload <paths…>`. It uploads to the linked project only
-(`agency remote link`, key from `$STATELOG_API_KEY`); there are no host,
-project, or key flags on purpose.
+`agency eval upload <paths…>`. It uploads to the project in `agency.json`
+only (`log.host`, `log.projectId`; key from `$STATELOG_API_KEY`); there are
+no host, project, or key flags on purpose.
 
 Runs upload concurrently (they are independent traces); within one run, in
 order:
@@ -215,9 +215,9 @@ bounds what a misbehaving or prompt-injected run can reach: the container
 sees only the LLM key and the run directory; every secret is set on the one
 step that needs it, never job-wide; and the LLM key is a dedicated
 `AGENT_EVALS_OPENAI_API_KEY` with its own spend limit, so a leak costs at
-most that limit until it is rotated. Secrets: `AGENT_EVALS_OPENAI_API_KEY`,
-`STATELOG_API_KEY`, and `STATELOG_PROJECT_URL` (a serve URL, as `remote link
---url` takes; kept as a secret beside the key by the owner's choice). The run
+most that limit until it is rotated. Secrets: `AGENT_EVALS_OPENAI_API_KEY`
+and `STATELOG_API_KEY`; the host and project come from `agency.json`
+(`log.host`, `log.projectId`), so nothing else is configured. The run
 directory becomes a workflow artifact only when the upload failed, because it
 holds every trace and artifacts on a public repo are public.
 

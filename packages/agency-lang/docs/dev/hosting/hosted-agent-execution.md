@@ -225,10 +225,11 @@ POST /serve/:userId/:projectId/:filename/resume
 
 `agency remote` is the CLI surface for a hosted agent — the ceremony a client would otherwise hand-write against the serve routes.
 
+Nothing is linked or stored locally. Every command resolves its target from `agency.json` — `log.host` and `log.projectId` (or `--host`/`--project`) — and the key from `$STATELOG_API_KEY`. The commands that talk to the serve routes (`ls`, `call`) derive the serve address at run time: the user id from `GET /api/whoami` and the file from the project's deployed entry point (`GET /api/projects/:slug/agent`), so the address is always the one the host would build (`resolveServeTarget` in `lib/cli/remote/commands/util.ts`).
+
 Agent commands:
 
-- **`remote link`** — show, or set with `--url`, the linked agent (stored as `remote.serveUrl` in `agency.json`).
-- **`remote deploy <file>`** — upload + link (reuses the `deploy()` engine). Warns, and on a TTY confirms, if the agent exports no nodes/functions.
+- **`remote deploy <file>`** — upload (reuses the `deploy()` engine). Warns, and on a TTY confirms, if the agent exports no nodes/functions.
 - **`remote ls`** — the callable nodes/functions (serve `GET /list`), then the deployed files (`GET /api/projects/:slug/agent`: name, exported nodes, last update, entry point marked). The file listing is best-effort: an older host without that route gets a one-line "Files: unavailable" note instead of a failed command, because the endpoints are what `ls` exists for.
 - **`remote call <name>`** — invoke a node (or `--function`) and drive the interrupt cycle.
 - **`remote open`** — the project page in a browser.
@@ -269,7 +270,7 @@ The project-read wire is sealed in `lib/cli/statelog/projectClient.ts` (slug-add
 
 Top-level `agency deploy` has been **removed** (a breaking change) in favor of `agency remote deploy`; the `deploy()` engine in `lib/cli/deploy/` stays and is what `remote deploy` calls.
 
-**Deferred:** a `remote link --project <slug>` convenience that builds the serve URL from `host + whoami.userId + project + file` (dropping the pasted URL). The once-deferred **`remote inspect`** view (entry point, last upload, per-file exported nodes) now lives inside `remote ls` as its Files section, so no separate command is planned. The management (`whoami`/`projects`/`keys`) and introspection (`pull`/`logs`) commands are shipped.
+The once-deferred **`remote inspect`** view (entry point, last upload, per-file exported nodes) now lives inside `remote ls` as its Files section, so no separate command is planned. The management (`whoami`/`projects`/`keys`) and introspection (`pull`/`logs`) commands are shipped.
 
 ---
 

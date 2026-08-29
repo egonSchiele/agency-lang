@@ -62,16 +62,15 @@ jobs:
       - run: make
         working-directory: packages/agency-lang
 
+      # The host and project come from agency.json (log.host, log.projectId).
       - name: Check configuration
         env:
           AGENT_EVALS_OPENAI_API_KEY: ${{ secrets.AGENT_EVALS_OPENAI_API_KEY }}
           STATELOG_API_KEY: ${{ secrets.STATELOG_API_KEY }}
-          STATELOG_PROJECT_URL: ${{ secrets.STATELOG_PROJECT_URL }}
         run: |
           missing=""
           [ -n "$AGENT_EVALS_OPENAI_API_KEY" ] || missing="$missing AGENT_EVALS_OPENAI_API_KEY"
           [ -n "$STATELOG_API_KEY" ] || missing="$missing STATELOG_API_KEY"
-          [ -n "$STATELOG_PROJECT_URL" ] || missing="$missing STATELOG_PROJECT_URL"
           if [ -n "$missing" ]; then
             echo "::error::not configured:$missing"
             exit 1
@@ -86,12 +85,6 @@ jobs:
       - name: Pick a run directory
         working-directory: packages/agency-lang
         run: echo "RUN_DIR=runs/weekly-$(date -u +%Y-%m-%d-%H%M%S)" >> "$GITHUB_ENV"
-
-      - name: Link the statelog project
-        working-directory: packages/agency-lang
-        env:
-          STATELOG_PROJECT_URL: ${{ secrets.STATELOG_PROJECT_URL }}
-        run: node ./dist/scripts/agency.js remote link --url "$STATELOG_PROJECT_URL"
 
       # Flags here are checked against the CLI's registered options by
       # lib/cli/eval/workflowFlags.test.ts, so a rename fails `make test`

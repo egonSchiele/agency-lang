@@ -1,16 +1,24 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-// Spread the real fs so behavior is unchanged but the namespace is spyable — the
-// single-read test spies on readFileSync.
-vi.mock("fs", async (importOriginal) => ({ ...(await importOriginal<typeof import("fs")>()) }));
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import type { AgencyConfig } from "@/config.js";
+const whoami = vi.fn();
+const fetchAgentInfo = vi.fn();
+vi.mock("../../statelog/accountClient.js", () => ({
+  createAccountClient: () => ({ whoami }),
+}));
+vi.mock("../../statelog/projectClient.js", () => ({
+  createProjectClient: () => ({ fetchAgentInfo }),
+}));
+
 import {
   apiKeyOrExit,
   resolveApiKey,
   resolveAccountTarget,
+  resolveProjectLocation,
   resolveProjectTarget,
+  resolveServeTarget,
   type RemoteCommandContext,
 } from "./util.js";
 
@@ -29,18 +37,13 @@ function context(config: AgencyConfig = {}): RemoteCommandContext {
   return { config, configPath };
 }
 
-function writeBinding(origin: string): void {
-  fs.writeFileSync(
-    configPath,
-    JSON.stringify({ remote: { serveUrl: `${origin}/serve/user/proj/agent.agency` } }),
-  );
-}
-
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "remote-util-"));
   configPath = path.join(dir, "agency.json");
   process.env.STATELOG_API_KEY = "default-secret";
   errors = [];
+  whoami.mockReset();
+  fetchAgentInfo.mockReset();
   vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
     errors.push(a.join(" "));
   });
@@ -57,8 +60,7 @@ afterEach(() => {
 });
 
 describe("resolveAccountTarget", () => {
-  it("selects a valid --host ahead of config and binding", () => {
-    writeBinding("https://binding.example");
+  it("selects a valid --host ahead of config", () => {
     const result = resolveAccountTarget(context({ log: { host: "https://config.example" } }), {
       host: "https://flag.example/",
     });
@@ -70,7 +72,6 @@ describe("resolveAccountTarget", () => {
   });
 
   it("rejects an invalid --host instead of falling through", () => {
-    writeBinding("https://binding.example");
     expect(() =>
       resolveAccountTarget(context({ log: { host: "https://config.example" } }), {
         host: "not-a-url",
@@ -79,17 +80,17 @@ describe("resolveAccountTarget", () => {
     expect(errors.join("\n")).toContain('Invalid statelog host "not-a-url"');
   });
 
-  it("rejects invalid log.host instead of falling through to binding", () => {
-    writeBinding("https://binding.example");
+  it("rejects invalid log.host", () => {
     expect(() => resolveAccountTarget(context({ log: { host: "ftp://bad" } }), {})).toThrow(
       ProcessExit,
     );
     expect(errors.join("\n")).toContain('Invalid statelog host "ftp://bad"');
   });
 
-  it("uses the already-canonical binding origin when flag and config are absent", () => {
-    writeBinding("https://binding.example");
-    expect(resolveAccountTarget(context(), {}).origin).toBe("https://binding.example");
+  it("canonicalizes log.host", () => {
+    expect(
+      resolveAccountTarget(context({ log: { host: "https://config.example/" } }), {}).origin,
+    ).toBe("https://config.example");
   });
 
   it("fails clearly when no host source is present", () => {
@@ -115,42 +116,31 @@ describe("resolveApiKey", () => {
 });
 
 describe("resolveProjectTarget", () => {
-  it("reads the binding exactly once", () => {
-    writeBinding("https://h"); // origin https://h, slug "proj"
-    const read = vi.spyOn(fs, "readFileSync");
-    resolveProjectTarget(context(), {});
-    expect(read.mock.calls.filter(([candidate]) => candidate === configPath)).toHaveLength(1);
-  });
-
-  it("uses the binding slug when the resolved origin equals the binding origin", () => {
-    writeBinding("https://h");
-    expect(resolveProjectTarget(context({ log: { host: "https://h" } }), {}).projectSlug).toBe(
-      "proj",
-    );
-  });
-
-  it("rejects a binding slug against a different resolved origin", () => {
-    writeBinding("https://prod");
-    expect(() => resolveProjectTarget(context({ log: { host: "https://staging" } }), {})).toThrow(
-      ProcessExit,
-    );
-    expect(errors.join("\n")).toContain("--project");
-  });
-
-  it("accepts an explicit non-empty --project against any origin and rejects empty", () => {
+  it("uses log.projectId when --project is absent", () => {
     expect(
-      resolveProjectTarget(context({ log: { host: "https://h" } }), { project: "foo" }).projectSlug,
-    ).toBe("foo");
-    expect(() =>
-      resolveProjectTarget(context({ log: { host: "https://h" } }), { project: "" }),
-    ).toThrow(ProcessExit);
+      resolveProjectTarget(context({ log: { host: "https://h", projectId: "proj" } }), {})
+        .projectSlug,
+    ).toBe("proj");
   });
 
-  it("fails with no binding and no --project", () => {
+  it("prefers --project over log.projectId and rejects an empty one", () => {
+    const config: AgencyConfig = { log: { host: "https://h", projectId: "proj" } };
+    expect(resolveProjectTarget(context(config), { project: "foo" }).projectSlug).toBe("foo");
+    expect(() => resolveProjectTarget(context(config), { project: "" })).toThrow(ProcessExit);
+  });
+
+  it("fails with no log.projectId and no --project", () => {
     expect(() => resolveProjectTarget(context({ log: { host: "https://h" } }), {})).toThrow(
       ProcessExit,
     );
-    expect(errors.join("\n")).toContain("Pass --project");
+    expect(errors.join("\n")).toContain("Set log.projectId in agency.json, or pass --project");
+  });
+
+  it("resolveProjectLocation never reads the key", () => {
+    delete process.env.STATELOG_API_KEY;
+    expect(
+      resolveProjectLocation(context({ log: { host: "https://h", projectId: "proj" } }), {}),
+    ).toEqual({ origin: "https://h", projectSlug: "proj" });
   });
 
   // Key resolution runs LAST: with STATELOG_API_KEY unset AND a bad input, the
@@ -181,12 +171,38 @@ describe("resolveProjectTarget", () => {
     });
 
     it("no project source at all", () => {
-      expectInputError({ log: { host: "https://h" } }, {}, "Pass --project");
+      expectInputError({ log: { host: "https://h" } }, {}, "pass --project");
     });
+  });
+});
 
-    it("a binding host that differs from the selected host", () => {
-      writeBinding("https://prod");
-      expectInputError({ log: { host: "https://staging" } }, {}, "--project");
+describe("resolveServeTarget", () => {
+  const config: AgencyConfig = { log: { host: "https://h", projectId: "proj" } };
+
+  it("derives the serve address from whoami and the deployed entry point", async () => {
+    whoami.mockResolvedValue({ userId: "u" });
+    fetchAgentInfo.mockResolvedValue({ entryPoint: "agent.agency", lastUploadAt: null, files: [] });
+    const target = await resolveServeTarget(context(config), {});
+    expect(target.address).toEqual({
+      serveUrl: "https://h/serve/u/proj/agent",
+      origin: "https://h",
+      userId: "u",
+      projectId: "proj",
+      filename: "agent",
     });
+    expect(target.apiKey).toBe("default-secret");
+  });
+
+  it("fails when nothing is deployed", async () => {
+    whoami.mockResolvedValue({ userId: "u" });
+    fetchAgentInfo.mockResolvedValue({ entryPoint: null, lastUploadAt: null, files: [] });
+    await expect(resolveServeTarget(context(config), {})).rejects.toThrow(ProcessExit);
+    expect(errors.join("\n")).toContain("Nothing is deployed to project proj");
+  });
+
+  it("reports a failed lookup and exits", async () => {
+    whoami.mockRejectedValue(new Error("401 from whoami"));
+    await expect(resolveServeTarget(context(config), {})).rejects.toThrow(ProcessExit);
+    expect(errors.join("\n")).toContain("401 from whoami");
   });
 });

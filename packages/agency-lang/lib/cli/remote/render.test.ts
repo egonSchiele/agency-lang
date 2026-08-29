@@ -3,7 +3,6 @@ import {
   renderManifest,
   renderHostedFiles,
   renderResult,
-  renderLink,
   renderWhoami,
   renderProjects,
   renderProjectCreated,
@@ -91,15 +90,6 @@ describe("renderResult", () => {
   it("prints a string value verbatim and pretty-prints objects", () => {
     expect(strip(renderResult("done"))).toContain("done");
     expect(strip(renderResult({ a: 1 }))).toContain(`"a": 1`);
-  });
-});
-
-describe("renderLink", () => {
-  it("shows the agent, project, and serve URL", () => {
-    const output = strip(renderLink(binding));
-    expect(output).toContain("agent.agency");
-    expect(output).toContain("proj");
-    expect(output).toContain("https://h/serve/u/proj/agent.agency");
   });
 });
 

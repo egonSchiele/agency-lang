@@ -1,10 +1,9 @@
 import { color } from "@/utils/termcolors.js";
-import { readBinding } from "../binding.js";
 import { createServeClient } from "../../statelog/serveClient.js";
 import { createProjectClient } from "../../statelog/projectClient.js";
 import type { HostedAgentInfo } from "../../statelog/projectClient.js";
 import { renderManifest, renderHostedFiles } from "../render.js";
-import { fail, apiKeyOrExit } from "./util.js";
+import { fail, resolveServeTarget } from "./util.js";
 import type { RemoteCommandContext } from "./util.js";
 
 /** `agency remote ls` — the callable endpoints (serve `/list`) and the files
@@ -12,24 +11,19 @@ import type { RemoteCommandContext } from "./util.js";
  *  reason to exist, so a failure there is fatal; the file listing is
  *  best-effort because an older host may not have the route yet. */
 export async function runLs(
-  options: { apiKeyEnv?: string },
+  options: { host?: string; project?: string; apiKeyEnv?: string },
   context: RemoteCommandContext,
 ): Promise<void> {
-  const binding = readBinding(context.configPath);
-  if (!binding) {
-    fail(
-      "Not linked. Run 'agency remote deploy <file>' first (or 'agency remote link --url <serveBase>').",
-    );
-  }
-  const apiKey = apiKeyOrExit(options);
+  const target = await resolveServeTarget(context, options);
+  const { address, apiKey } = target;
   try {
-    const manifest = await createServeClient(binding, apiKey).fetchManifest();
-    console.log(renderManifest(manifest, binding));
+    const manifest = await createServeClient(address, apiKey).fetchManifest();
+    console.log(renderManifest(manifest, address));
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error));
   }
 
-  const files = await tryFetchAgentInfo(binding.origin, binding.projectId, apiKey);
+  const files = await tryFetchAgentInfo(address.origin, address.projectId, apiKey);
   console.log("");
   if (files.ok) {
     console.log(renderHostedFiles(files.info));

@@ -25,6 +25,7 @@ import { projectCommands } from "./commandPalette.agency"
 import { ALWAYS_FIELDS } from "./config.agency"
 import { groundingText } from "./grounding.agency"
 import { getPolicyForAgent } from "./policy.agency"
+import { takeResumeCheckpoint } from "./resume.agency"
 import { Settings } from "./settings.agency"
 
 export static const DEFAULT_BRAIN = "coordinator"
@@ -122,6 +123,14 @@ export def runSession(interactive: boolean, body: () -> void raises <*>) {
   const handler = policyHandlerFor(interactive)
   handle {
     brain.init(context)
+    // A resumed run restores here, under the policy handler and after
+    // startup (models, memory, MCP) ran from today's flags. The restored
+    // stack replays down into the REPL's saved turn, finishes it, and
+    // the REPL then starts fresh. See docs/dev/agents/agent-sessions.md.
+    const resumeFrom = takeResumeCheckpoint()
+    if (resumeFrom != null) {
+      restore(resumeFrom, {})
+    }
     body()
   } with handler
 }

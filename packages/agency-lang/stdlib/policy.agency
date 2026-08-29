@@ -205,6 +205,21 @@ let _interactive: boolean = true
 // and every real interrupt would fall through to prompting.
 let _internalIo: boolean = false
 
+export def internalIo(body: () -> void raises <*>) {
+  """
+  Run `body` with the CLI policy handler's own-I/O flag set: file
+  operations inside it are approved outright instead of consulting the
+  policy or prompting. For a program's bookkeeping writes under its own
+  state directory, such as the agency agent saving its session file.
+  Never wrap model-driven code in it.
+
+  @param body - The bookkeeping work
+  """
+  _internalIo = true
+  body()
+  _internalIo = false
+}
+
 /**
  * Evaluate a policy against a single interrupt. Returns the result
  * of `approve()`, `reject()`, or `propagate()` corresponding to the

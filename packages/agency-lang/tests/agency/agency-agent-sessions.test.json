@@ -1,0 +1,70 @@
+{
+  "tests": [
+    {
+      "nodeName": "slug",
+      "description": "non-alphanumerics become dashes",
+      "input": "",
+      "expectedOutput": "\"-Users-me-my-proj-v2\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ages",
+      "description": "relative ages",
+      "input": "",
+      "expectedOutput": "[\"just now\",\"1m ago\",\"3h ago\",\"2d ago\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "label",
+      "description": "picker row",
+      "input": "",
+      "expectedOutput": "\"Fix the parser \\u00b7 1h ago \\u00b7 1 turn\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "untitledLabelShowsId",
+      "description": "an untitled session shows its id",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "refreshSchedule",
+      "description": "title refresh on turn 1 and every 5 turns",
+      "input": "",
+      "expectedOutput": "[true,false,true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "storeRoundTrip",
+      "description": "save, list newest first, find, load, upsert",
+      "input": "",
+      "expectedOutput": "{\"count\":2,\"order\":[\"s1\",\"s2\"],\"recentTitle\":\"first, renamed\",\"foundBrain\":\"simple\",\"checkpoint\":{\"fake\":\"checkpoint one, again\"},\"missing\":null}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

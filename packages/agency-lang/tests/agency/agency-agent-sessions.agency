@@ -1,0 +1,99 @@
+import test {
+  cwdSlug,
+  relativeAge,
+  sessionLabel,
+  saveSession,
+  listSessions,
+  findSession,
+  mostRecentSession,
+  loadCheckpoint,
+  SessionRecord,
+ } from "../../lib/agents/agency-agent/lib/sessions.agency"
+import test { shouldRefreshTitle } from "../../lib/agents/agency-agent/lib/sessionTitle.agency"
+
+node slug(): string {
+  return cwdSlug("/Users/me/my proj_v2")
+}
+
+node ages(): string[] {
+  const t = 1000000000
+  return [
+    relativeAge(t, t + 5000),
+    relativeAge(t, t + 90 * 1000),
+    relativeAge(t, t + 3 * 3600 * 1000),
+    relativeAge(t, t + 49 * 3600 * 1000),
+  ]
+}
+
+node label(): string {
+  const record: SessionRecord = {
+    id: "abc",
+    cwd: "/x",
+    brain: "coordinator",
+    created: 0,
+    lastActive: 0,
+    turns: 1,
+    title: "Fix the parser"
+  }
+  return sessionLabel(record, 3600 * 1000)
+}
+
+node untitledLabelShowsId(): boolean {
+  const record: SessionRecord = {
+    id: "abc",
+    cwd: "/x",
+    brain: "coordinator",
+    created: 0,
+    lastActive: 0,
+    turns: 0,
+    title: ""
+  }
+  return sessionLabel(record, 0).startsWith("abc ·")
+}
+
+node refreshSchedule(): boolean[] {
+  return [shouldRefreshTitle(1), shouldRefreshTitle(2), shouldRefreshTitle(5), shouldRefreshTitle(10)]
+}
+
+// The store round trip, in the per-test AGENCY_AGENT_HOME sandbox: two
+// sessions saved, listed newest first, found by id, and the checkpoint
+// read back unchanged. Saving a session again replaces its index row.
+node storeRoundTrip(): any {
+  const first: SessionRecord = {
+    id: "s1",
+    cwd: "/x",
+    brain: "coordinator",
+    created: 10,
+    lastActive: 10,
+    turns: 1,
+    title: "first"
+  }
+  const second: SessionRecord = {
+    id: "s2",
+    cwd: "/x",
+    brain: "simple",
+    created: 20,
+    lastActive: 20,
+    turns: 1,
+    title: "second"
+  }
+  saveSession(first, { fake: "checkpoint one" })
+  saveSession(second, { fake: "checkpoint two" })
+  first.turns = 2
+  first.lastActive = 30
+  first.title = "first, renamed"
+  saveSession(first, { fake: "checkpoint one, again" })
+  const order = [r.id for r in listSessions()]
+  const recent = mostRecentSession()
+  const found = findSession("s2")
+  const recentTitle = if recent == null then "" else recent.title
+  const foundBrain = if found == null then "" else found.brain
+  return {
+    count: listSessions().length,
+    order: order,
+    recentTitle: recentTitle,
+    foundBrain: foundBrain,
+    checkpoint: loadCheckpoint("s1"),
+    missing: loadCheckpoint("nope")
+  }
+}

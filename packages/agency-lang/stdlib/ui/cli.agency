@@ -70,6 +70,7 @@ export def repl(
   historyFile: string = "",
   historyMax: number = 1000,
   paletteCommands: any = null,
+  drainFirst: boolean = false,
 ) {
   """
   Line-mode REPL with the same call signature as the std::ui TUI repl,
@@ -89,6 +90,7 @@ export def repl(
   @param historyFile - Path to a JSON history file; loaded at start and saved on exit. Empty string disables persistence.
   @param historyMax - Trim history to this many most-recent entries
   @param paletteCommands - Map of /cmd -> description
+  @param drainFirst - Call `onSubmit("")` once before reading input. A program resumed from a checkpoint taken inside `onSubmit` has that call's frame waiting for the next `onSubmit`; the drain call finishes it, so the user's first real line is not consumed by it
   """
   // Publish the path to the execution-model global so `clearHistory()` can
   // resolve which file to clear from Agency state rather than a TS closure.
@@ -100,6 +102,7 @@ export def repl(
     historyFile,
     historyMax,
     paletteCommands,
+    drainFirst,
   )
 }
 

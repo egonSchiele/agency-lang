@@ -1,0 +1,161 @@
+/** @module
+  @summary Saved agent sessions on disk: one checkpoint file per session
+  plus an index the resume picker reads. Per project directory, like
+  Claude Code: `<agent home>/sessions/<cwd slug>/`.
+*/
+import { now } from "std::date"
+import { mkdir } from "std::fs"
+import { exists } from "std::shell"
+import { cwd } from "std::system"
+
+import { POLICY_DIR } from "./config.agency"
+
+/** One row of the index. `title` is the one-line summary the picker
+  shows; `turns` counts completed turns. */
+export type SessionRecord = {
+  id: string;
+  cwd: string;
+  brain: string;
+  created: number;
+  lastActive: number;
+  turns: number;
+  title: string
+}
+
+export static const SESSIONS_DIR = path.join(POLICY_DIR, "sessions")
+
+/** The working directory as a directory name: every character that is
+  not a letter or digit becomes "-". `/Users/me/proj` → `-Users-me-proj`. */
+export def cwdSlug(dir: string): string {
+  let out = ""
+  for (ch in dir.split("")) {
+    const code = ch.charCodeAt(0)
+    const digit = code >= 48 && code <= 57
+    const upper = code >= 65 && code <= 90
+    const lower = code >= 97 && code <= 122
+    if (digit || upper || lower) {
+      out = out + ch
+    } else {
+      out = out + "-"
+    }
+  }
+  return out
+}
+
+def projectDir(): string {
+  return path.join(SESSIONS_DIR, cwdSlug(cwd()))
+}
+
+// File names are relative to projectDir(), which every read and write
+// passes as `dir`: the stdlib refuses a path outside the cwd otherwise.
+static const INDEX_FILE = "index.json"
+
+def checkpointFile(id: string): string {
+  return "${id}.json"
+}
+
+/** A fresh session id: the start time in milliseconds plus six random
+  digits, so ids sort by creation and never collide in practice. */
+export def newSessionId(): string {
+  const random = "${Math.random()}"
+  return "${now()}-${random.slice(2, 8)}"
+}
+
+/** Every saved session for this directory, most recently active first:
+  saveSession puts the record it just wrote at the front, so the file is
+  already in that order. No index yet means no sessions. The reads are
+  the agent's own bookkeeping, so they are approved here like the memory
+  dir. */
+export def listSessions(): SessionRecord[] {
+  const dir = projectDir()
+  const present = exists(INDEX_FILE, dir) with approve
+  if (!present) {
+    return []
+  }
+  const raw = read(INDEX_FILE, dir) with approve
+  if (isFailure(raw)) {
+    return []
+  }
+  const records: SessionRecord[] = JSON.parse(raw.value)
+  return records
+}
+
+export def mostRecentSession(): SessionRecord | null {
+  const all = listSessions()
+  if (all.length == 0) {
+    return null
+  }
+  return all[0]
+}
+
+export def findSession(id: string): SessionRecord | null {
+  for (record in listSessions()) {
+    if (record.id == id) {
+      return record
+    }
+  }
+  return null
+}
+
+/** Write the checkpoint file and upsert the index row. Returns the first
+  failed step, so a caller can tell the user the session was not saved. */
+export def saveSession(record: SessionRecord, checkpoint: any): Result {
+  const dir = projectDir()
+  const made = mkdir(dir) with approve
+  if (isFailure(made)) {
+    return made
+  }
+  const wroteCheckpoint = write(checkpointFile(record.id), JSON.stringify(checkpoint), dir) with approve
+  if (isFailure(wroteCheckpoint)) {
+    return wroteCheckpoint
+  }
+  const others = [r for r in listSessions() if r.id != record.id]
+  return write(INDEX_FILE, JSON.stringify([record, ...others]), dir) with approve
+}
+
+/** The saved checkpoint, parsed, or null when the file is missing or
+  unreadable. */
+export def loadCheckpoint(id: string): any {
+  const dir = projectDir()
+  const file = checkpointFile(id)
+  const present = exists(file, dir) with approve
+  if (!present) {
+    return null
+  }
+  const raw = read(file, dir) with approve
+  if (isFailure(raw)) {
+    return null
+  }
+  return JSON.parse(raw.value)
+}
+
+/** "just now", "5m ago", "3h ago", "2d ago". */
+export def relativeAge(then: number, nowMs: number): string {
+  const seconds = Math.max(0, Math.floor((nowMs - then) / 1000))
+  if (seconds < 60) {
+    return "just now"
+  }
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) {
+    return "${minutes}m ago"
+  }
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) {
+    return "${hours}h ago"
+  }
+  return "${Math.floor(hours / 24)}d ago"
+}
+
+/** The picker row: `title · 3h ago · 12 turns`. An untitled session
+  shows its id so the row is never blank. */
+export def sessionLabel(record: SessionRecord, nowMs: number): string {
+  let title = record.title
+  if (title == "") {
+    title = record.id
+  }
+  let turns = "${record.turns} turns"
+  if (record.turns == 1) {
+    turns = "1 turn"
+  }
+  return "${title} · ${relativeAge(record.lastActive, nowMs)} · ${turns}"
+}

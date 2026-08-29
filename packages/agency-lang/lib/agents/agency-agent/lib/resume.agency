@@ -1,0 +1,163 @@
+/** @module
+  @summary The harness side of save and resume: which session this run
+  is (new, `--continue`, or `--resume`), the per-turn save, and the
+  checkpoint the session wrapper restores before the REPL starts. The
+  files live in sessions.agency and the title in sessionTitle.agency.
+*/
+import { now } from "std::date"
+import { internalIo } from "std::policy"
+import { cwd } from "std::system"
+import { chooseOption, ChoiceItem } from "std::ui"
+
+import {
+  SessionRecord,
+  findSession,
+  listSessions,
+  loadCheckpoint,
+  mostRecentSession,
+  newSessionId,
+  saveSession,
+  sessionLabel,
+ } from "./sessions.agency"
+import { mainThreadText, shouldRefreshTitle, titleFor } from "./sessionTitle.agency"
+
+// The session this run writes to. null for one-shot runs, which are not
+// saved. A `let`, so a restored checkpoint brings back the resumed
+// session's own record (its turn count and title included).
+let _current: SessionRecord | null = null
+
+// The checkpoint to restore, handed from main() to runSession(). Cleared
+// once taken, so the replay after restore sees nothing to do.
+let _pendingResume: any = null
+
+export def currentSession(): SessionRecord | null {
+  return _current
+}
+
+/** The footer text: the session title, or "" before the first turn. */
+export def sessionTitle(): string {
+  const record = _current
+  if (record == null) {
+    return ""
+  }
+  return record.title
+}
+
+export def takeResumeCheckpoint(): any {
+  const cp = _pendingResume
+  _pendingResume = null
+  return cp
+}
+
+/** Decide which saved session (if any) this run continues. `resumeArg`
+  is the `--resume` value: null when absent, "" for a bare `--resume`
+  (open the picker), else an id. Exits on an unknown id. */
+export def chooseSession(
+  continueFlag: boolean,
+  resumeArg: string | null,
+): SessionRecord | null {
+  if (resumeArg != null && resumeArg != "") {
+    const found = findSession(resumeArg)
+    if (found == null) {
+      print(color.red("No saved session with id ${resumeArg} in ${cwd()}."))
+      process.exit(1)
+    }
+    return found
+  }
+  if (resumeArg == "") {
+    return pickSession()
+  }
+  if (continueFlag) {
+    const recent = mostRecentSession()
+    if (recent == null) {
+      print(color.yellow("No saved session for this directory; starting a new one."))
+    }
+    return recent
+  }
+  return null
+}
+
+def pickSession(): SessionRecord | null {
+  const all = listSessions()
+  if (all.length == 0) {
+    print(color.yellow("No saved sessions for this directory; starting a new one."))
+    return null
+  }
+  const nowMs = now()
+  let items: ChoiceItem[] = []
+  for (record in all) {
+    items.push({
+      key: record.id,
+      label: sessionLabel(record, nowMs)
+    })
+  }
+  const choice = chooseOption(
+    "Resume a session",
+    "Pick a saved session from this directory. Escape starts a new one.",
+    items,
+    allowCancel: true,
+  )
+  if (choice == "" || choice == null) {
+    return null
+  }
+  return findSession(choice)
+}
+
+/** Start this run's session: a new record, or the chosen saved one with
+  its checkpoint queued for runSession to restore. */
+export def startSession(chosen: SessionRecord | null, brain: string) {
+  if (chosen == null) {
+    const t = now()
+    _current = {
+      id: newSessionId(),
+      cwd: cwd(),
+      brain: brain,
+      created: t,
+      lastActive: t,
+      turns: 0,
+      title: ""
+    }
+    return
+  }
+  const cp = loadCheckpoint(chosen.id)
+  if (cp == null) {
+    print(color.red("The checkpoint for session ${chosen.id} is missing or unreadable."))
+    process.exit(1)
+  }
+  _current = chosen
+  _pendingResume = cp
+  print(color.dim("Resuming: ${chosen.title}"))
+}
+
+/** Called by the REPL after every completed turn. Refreshes the title
+  when due, then checkpoints and writes the session. The title is set
+  BEFORE the checkpoint so the saved state carries it. */
+export def recordTurn(userMsg: string) {
+  const record = _current
+  if (record == null) {
+    return
+  }
+  record.turns = record.turns + 1
+  record.lastActive = now()
+  if (shouldRefreshTitle(record.turns)) {
+    let source = mainThreadText()
+    if (source == "") {
+      source = userMsg
+    }
+    const title = titleFor(source)
+    if (title != "") {
+      record.title = title
+    }
+  }
+  const id = checkpoint()
+  // The save is the agent's own bookkeeping under its state dir, so it
+  // must not go through the user's policy (which would prompt for the
+  // mkdir and writes on every turn).
+  let saved: Result = success(null)
+  internalIo() {
+    saved = saveSession(record, getCheckpoint(id))
+  }
+  if (isFailure(saved)) {
+    print(color.red("Could not save this session: ${saved.error}"))
+  }
+}

@@ -47,6 +47,7 @@ import { configureLocalModel, getResolvedSlots, currentProvider } from "../share
 //
 //import { clearMessages, pushMessage, repl } from "std::ui"
 
+import { recordTurn, sessionTitle } from "./resume.agency"
 import { runTurn } from "./turn.agency"
 import { parseModelSpec } from "./utils.agency"
 
@@ -265,13 +266,16 @@ def _runTurn(msg: string): boolean {
 def renderUserTurn(trimmed: string, msg: string): boolean {
   const result = try runTurn("", msg)
   renderAgentResponse(result)
+  // Save here, outside the turn's guard and budget handler: this is the
+  // one place that knows a turn fully completed.
+  recordTurn(msg)
   return true
 }
 
 export def buildStatus(): { left: string; right: string; context: string } {
   const roundedCost = "$${getCost().toFixed(4)}"
   return {
-    left: "",
+    left: sessionTitle(),
     right: roundedCost,
     context: ""
   }
@@ -309,6 +313,10 @@ export def startInteractive(seedTarget: string, seedPrompt: string) {
     historyFile: HISTORY_PATH,
     historyMax: 1000,
     paletteCommands: mergedPalette(),
+    // A resumed run has the saved turn's frame waiting for the next
+    // onSubmit call. The drain call takes it, so the user's first line
+    // is not swallowed. On a fresh run "" is a no-op turn.
+    drainFirst: true,
   )
   print(color.cyan("\nGoodbye!"))
 }

@@ -22,6 +22,7 @@ export type McpLoadResult = {
 ### mcp::call
 
 ```ts
+@always(server, tool)
 effect mcp::call {
   server: string;
   tool: string;
@@ -29,7 +30,7 @@ effect mcp::call {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L24))
 
 ## Functions
 
@@ -43,7 +44,7 @@ True when the @agency-lang/mcp package is installed and reachable.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L30))
 
 ### readProjectMcpConfig
 
@@ -61,7 +62,7 @@ Read the mcpServers block from the project agency.json under `dir`.
 
 **Returns:** `Record<string, any>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L35))
 
 ### mergeMcpServers
 
@@ -83,7 +84,7 @@ Merge global and project mcpServers configs (project wins on collision).
 
 **Returns:** `Record<string, any>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L40))
 
 ### loadMcpTools
 
@@ -103,7 +104,7 @@ Load gated MCP tools for every server in `merged`. Returns [] when the
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L44))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L45))
 
 ### loadMcpToolsWithStatus
 
@@ -125,4 +126,4 @@ Like loadMcpTools, but also returns a per-server status map for /mcp.
 
 **Returns:** [McpLoadResult](#mcploadresult)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L51))

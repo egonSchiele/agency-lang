@@ -76,7 +76,7 @@ export type ModuleFacts = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L124))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L125))
 
 ### ToolMeta
 
@@ -95,7 +95,7 @@ export type ToolMeta = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L131))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L132))
 
 ### ToolEntry
 
@@ -114,7 +114,7 @@ export type ToolEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L143))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L144))
 
 ### WriteToolReview
 
@@ -129,19 +129,20 @@ export type WriteToolReview =
   | { verdict: "revise"; feedback: string }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L153))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L154))
 
 ## Effects
 
 ### std::toolbox::scan
 
 ```ts
+@alwaysUnder(dir)
 effect std::toolbox::scan {
   dir: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L112))
 
 ### std::toolbox::review
 
@@ -155,7 +156,7 @@ effect std::toolbox::review {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L115))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L116))
 
 ## Functions
 
@@ -183,7 +184,7 @@ List the tools in a toolbox directory. Raises a `std::toolbox::scan`
 
 **Throws:** `std::toolbox::scan`, `std::ls`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L316))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L317))
 
 ### writeTool
 
@@ -235,7 +236,7 @@ Write a reusable tool into a toolbox directory. The coding agent drafts
 
 **Throws:** `std::mkdir`, `std::remove`, `std::toolbox::review`, `std::toolbox::scan`, `std::write`, `std::move`, `std::read`, `std::guard`, `std::run`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L843))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L844))
 
 ### runTool
 
@@ -267,4 +268,4 @@ Run a saved tool's `main` node in a subprocess and return what it
 
 **Throws:** `std::toolbox::scan`, `std::run`, `std::guard`, `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L932))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L933))

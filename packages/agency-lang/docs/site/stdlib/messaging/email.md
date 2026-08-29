@@ -38,6 +38,7 @@ Send email from Agency code through Resend, SendGrid, or Mailgun. Each
 ### std::sendEmail
 
 ```ts
+@always(to)
 effect std::sendEmail {
   from: string;
   to: string;
@@ -45,7 +46,7 @@ effect std::sendEmail {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L44))
 
 ## Functions
 
@@ -103,7 +104,7 @@ Send an email using the Resend API. Requires `RESEND_API_KEY` env var or pass ap
 
 **Throws:** `std::sendEmail`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L51))
 
 ### sendWithSendGrid
 
@@ -159,7 +160,7 @@ Send an email using the SendGrid API. Requires `SENDGRID_API_KEY` env var or pas
 
 **Throws:** `std::sendEmail`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L106))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L107))
 
 ### sendWithMailgun
 
@@ -221,4 +222,4 @@ Send an email using the Mailgun API. Requires `MAILGUN_API_KEY` and `MAILGUN_DOM
 
 **Throws:** `std::sendEmail`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L162))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/email.agency#L163))

@@ -9,6 +9,7 @@ import {
   _isTTY,
   _readStdin,
   _setTitle,
+  _urlHost,
  } from "agency-lang/stdlib-lib/system.js"
 import { _notify } from "agency-lang/stdlib-lib/builtins.js"
 
@@ -28,9 +29,12 @@ open URLs, and read from stdin.
 
 effect std::screenshot { filepath: string }
 effect std::exit { code: number }
+@always(name)
 effect std::env { name: string }
+@always(name)
 effect std::setEnv { name: string, value: string }
-effect std::openUrl { url: string }
+@always(host)
+effect std::openUrl { url: string, host: string }
 effect std::notify { title: string, body: string }
 
 export def notify(title: string, message: string): boolean {
@@ -154,6 +158,12 @@ export def readStdin(): string {
   return _readStdin()
 }
 
+// The policy scope for std::openUrl: the hostname, so "approve always
+// here" covers one site rather than one exact URL.
+def urlHost(url: string): string {
+  return _urlHost(url)
+}
+
 /** macOS-only. Ctrl-C, a race loss, or a time-guard abort kills the in-flight
 `open` subprocess. */
 export def openUrl(url: string): Result {
@@ -163,7 +173,8 @@ export def openUrl(url: string): Result {
   @param url - The URL to open
   """
   return interrupt std::openUrl("Are you sure you want to open this URL in the browser?", {
-    url: url
+    url: url,
+    host: urlHost(url)
   })
 
   return try _openUrl(url)

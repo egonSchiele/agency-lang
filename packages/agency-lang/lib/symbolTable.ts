@@ -20,6 +20,7 @@ import type { ImportNodeStatement, ImportStatement } from "./types/importStateme
 import type { ExportFromStatement } from "./types/exportFromStatement.js";
 import type { EffectDeclaration } from "./types/effectDeclaration.js";
 import { walkNodes } from "./utils/node.js";
+import { effectDeclarationsWithTags } from "./utils/tagsAbove.js";
 import { resolveAgencyImportPath, isAgencyImport, isNonTemplatedStdlib } from "./importPaths.js";
 
 export type InterruptEffect = {
@@ -222,10 +223,7 @@ export class SymbolTable {
     // registry — matches how `classifySymbols` collects type aliases.
     const effectDecls: Record<string, EffectDeclaration[]> = {};
     for (const [filePath, { program }] of Object.entries(parsed)) {
-      const decls: EffectDeclaration[] = [];
-      for (const { node } of walkNodes(program.nodes)) {
-        if (node.type === "effectDeclaration") decls.push(node);
-      }
+      const decls = effectDeclarationsWithTags(program.nodes);
       if (decls.length > 0) effectDecls[filePath] = decls;
     }
 

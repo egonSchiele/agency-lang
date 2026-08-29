@@ -35,26 +35,15 @@ export type HttpMethod =
   | "DELETE"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L32))
 
 ## Effects
 
 ### std::http::fetch
 
 ```ts
+@always(method, baseUrl)
 effect std::http::fetch {
-  baseUrl: string;
-  path: string;
-  method: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L24))
-
-### std::http::fetchJSON
-
-```ts
-effect std::http::fetchJSON {
   baseUrl: string;
   path: string;
   method: string
@@ -63,9 +52,23 @@ effect std::http::fetchJSON {
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L25))
 
+### std::http::fetchJSON
+
+```ts
+@always(method, baseUrl)
+effect std::http::fetchJSON {
+  baseUrl: string;
+  path: string;
+  method: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L27))
+
 ### std::http::fetchMarkdown
 
 ```ts
+@always(method, baseUrl)
 effect std::http::fetchMarkdown {
   baseUrl: string;
   path: string;
@@ -73,7 +76,7 @@ effect std::http::fetchMarkdown {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L29))
 
 ## Functions
 
@@ -118,7 +121,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 
 **Throws:** `std::http::fetch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L39))
 
 ### fetchJSON
 
@@ -161,7 +164,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 
 **Throws:** `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L67))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L70))
 
 ### fetchMarkdown
 
@@ -204,4 +207,4 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 
 **Throws:** `std::http::fetchMarkdown`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L98))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L101))

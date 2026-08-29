@@ -175,3 +175,69 @@ Code at the top level of a file runs when the module is initialized, not when a 
 A handler guards the code it wraps. At the top level of a file there is no execution to guard: the module is only being initialized, and a handler registered there would never see the interrupts it was written for.
 
 **How to fix:** move the `handle` block inside the node or function whose work it should guard.
+
+<a id="ag3019"></a>
+
+## AG3019 — @&#123;tag&#125; names '&#123;field&#125;', which effect '&#123;effect&#125;' does not carry.
+
+*Default severity: error.*
+
+An `@always` or `@alwaysUnder` tag names a field that the effect's payload does not declare. The tag can only pin fields the interrupt actually carries.
+
+```
+@always(nam)
+effect app::env { name: string }
+```
+
+**How to fix:** name a field from the payload type, or add the field to the payload.
+
+<a id="ag3020"></a>
+
+## AG3020 — @&#123;tag&#125; arguments must be bare field names, each named once (effect '&#123;effect&#125;').
+
+*Default severity: error.*
+
+Each argument to `@always` or `@alwaysUnder` must be a bare field name, and no field may be named twice across the two tags. Strings, calls, and other expressions are not field names.
+
+```
+@always("name")
+effect app::env { name: string }
+```
+
+**How to fix:** write `@always(name)`, and name each field in only one of the two tags.
+
+<a id="ag3021"></a>
+
+## AG3021 — @&#123;tag&#125; appears more than once on effect '&#123;effect&#125;'.
+
+*Default severity: error.*
+
+The same tag appears more than once on one effect declaration. Each of `@always` and `@alwaysUnder` may appear at most once; list every field in that one tag.
+
+```
+@always(a)
+@always(b)
+effect app::x { a: string, b: string }
+```
+
+**How to fix:** merge them into one tag, e.g. `@always(a, b)`.
+
+<a id="ag3022"></a>
+
+## AG3022 — Conflicting @always scopes for effect '&#123;effect&#125;'. All tagged declarations of an effect must agree.
+
+*Default severity: error.*
+
+Two tagged declarations of the same effect disagree about which fields an "approve always here" rule pins. Every tagged declaration must name the same fields with the same tag; an untagged declaration inherits the tagged scope and is fine.
+
+**How to fix:** make the tags match, or drop the tag from one declaration so it inherits the other.
+
+<a id="ag3023"></a>
+
+## AG3023 — @&#123;tag&#125; is only valid on an effect declaration.
+
+*Default severity: error.*
+
+An `@always` or `@alwaysUnder` tag ended up on something other than an effect declaration, such as a function, a type, or an import. These tags only describe an effect's approval scope.
+
+**How to fix:** move the tag so it sits directly above the `effect` line it describes.

@@ -6,6 +6,23 @@ import type { VariableType } from "../types.js";
 import type { ObjectType } from "../types/typeHints.js";
 import type { InterruptStatement } from "../types/interruptStatement.js";
 import { walkNodes } from "../utils/node.js";
+import type { Tag } from "../types/tag.js";
+import {
+  tagsAbove,
+  effectDeclarationsWithTags,
+  type NodeWithTagsAbove,
+} from "../utils/tagsAbove.js";
+import type { TypeCheckError } from "./types.js";
+import type { SourceLocation } from "../types/base.js";
+import {
+  readAlwaysScope,
+  hasAlwaysScope,
+  isAlwaysTag,
+  ALWAYS_TAG,
+  ALWAYS_UNDER_TAG,
+} from "../utils/alwaysTag.js";
+import type { AlwaysProblemKind, AlwaysTagProblem } from "../utils/alwaysTag.js";
+import { sameScopedFields, type ScopedField } from "../runtime/alwaysScope.js";
 import { synthType } from "./synthesizer.js";
 import { isAssignable } from "./assignability.js";
 
@@ -55,8 +72,10 @@ export function buildEffectRegistry(ctx: TypeCheckerContext): Record<string, Obj
   for (const [effect, entries] of Object.entries(grouped)) {
     reportSameFileDuplicates(effect, entries, ctx);
     const merged = mergePayload(effect, entries, ctx);
+    ctx.errors.push(...alwaysScopeDiagnostics(effect, entries, merged));
     if (merged) registry[effect] = merged;
   }
+  ctx.errors.push(...strayAlwaysTagDiagnostics(ctx));
   return registry;
 }
 
@@ -67,11 +86,7 @@ export function buildEffectRegistry(ctx: TypeCheckerContext): Record<string, Obj
 function collectDeclarations(ctx: TypeCheckerContext): DeclEntry[] {
   if (ctx.symbolTable) return ctx.symbolTable.allEffectDeclarations();
   const file = ctx.currentFile ?? "<program>";
-  const out: DeclEntry[] = [];
-  for (const { node } of walkNodes(ctx.programNodes)) {
-    if (node.type === "effectDeclaration") out.push({ decl: node, file });
-  }
-  return out;
+  return effectDeclarationsWithTags(ctx.programNodes).map((decl) => ({ decl, file }));
 }
 
 function groupBy<T, K extends string>(items: T[], key: (t: T) => K): Record<K, T[]> {
@@ -211,4 +226,102 @@ function checkRaiseSite(
 
 function formatObject(t: ObjectType): string {
   return `{ ${t.properties.map((p) => p.key).join(", ")} }`;
+}
+
+type TaggedDecl = { decl: EffectDeclaration; scope: ReturnType<typeof readAlwaysScope> };
+
+type ProblemParams = { tag: string; effect: string };
+type ProblemDiagnostic = (params: ProblemParams, loc: SourceLocation | null) => TypeCheckError;
+
+/** Which diagnostic each tag-reading problem becomes. One fact, one place. */
+const PROBLEM_DIAGNOSTIC: Record<AlwaysProblemKind, ProblemDiagnostic> = {
+  badArgument: (params, loc) => diagnostic("alwaysBadArgument", params, loc),
+  namedTwice: (params, loc) => diagnostic("alwaysBadArgument", params, loc),
+  repeatedTag: (params, loc) => diagnostic("alwaysRepeatedTag", params, loc),
+};
+
+function problemDiagnostic(
+  effect: string,
+  tagged: TaggedDecl,
+  problem: AlwaysTagProblem,
+): TypeCheckError {
+  const params = { tag: problem.tag, effect };
+  return PROBLEM_DIAGNOSTIC[problem.kind](params, problem.loc ?? tagged.decl.loc ?? null);
+}
+
+function unknownFieldDiagnostic(
+  effect: string,
+  tagged: TaggedDecl,
+  field: ScopedField,
+): TypeCheckError {
+  const tag = field.matchSubpaths ? ALWAYS_UNDER_TAG : ALWAYS_TAG;
+  return diagnostic(
+    "alwaysUnknownField",
+    { tag, field: field.field, effect },
+    tagged.decl.loc ?? null,
+  );
+}
+
+function isInPayload(payload: ObjectType, field: ScopedField): boolean {
+  return payload.properties.some((property) => property.key === field.field);
+}
+
+/**
+ * Diagnostics for the @always / @alwaysUnder tags across every declaration
+ * of one effect. Only TAGGED declarations take part: an untagged
+ * redeclaration (the guide shows users writing `effect std::read {...}`
+ * with no tag) inherits the tagged scope and raises nothing. Among the
+ * tagged ones: arguments are identifiers, each tag appears once, every
+ * field exists in the payload, and all of them agree.
+ */
+function alwaysScopeDiagnostics(
+  effect: string,
+  entries: DeclEntry[],
+  payload: ObjectType | null,
+): TypeCheckError[] {
+  const tagged: TaggedDecl[] = entries
+    .filter((entry) => hasAlwaysScope(entry.decl.tags))
+    .map((entry) => ({ decl: entry.decl, scope: readAlwaysScope(entry.decl.tags) }));
+
+  const problems = tagged.flatMap((one) =>
+    one.scope.problems.map((problem) => problemDiagnostic(effect, one, problem)),
+  );
+  const unknownFields =
+    payload === null
+      ? []
+      : tagged.flatMap((one) =>
+          one.scope.fields
+            .filter((field) => !isInPayload(payload, field))
+            .map((field) => unknownFieldDiagnostic(effect, one, field)),
+        );
+  const [first, ...rest] = tagged;
+  const conflicts =
+    first === undefined
+      ? []
+      : rest
+          .filter((one) => !sameScopedFields(first.scope.fields, one.scope.fields))
+          .map((one) => diagnostic("alwaysScopeConflict", { effect }, one.decl.loc ?? null));
+
+  return [...problems, ...unknownFields, ...conflicts];
+}
+
+/**
+ * An always-tag anywhere but directly above an effect declaration: above a
+ * def, type, node, or import, or trailing at the end of a list. The
+ * typechecker sees the raw program, so "above" is read with `tagsAbove`;
+ * a tag the preprocessor already attached shows up on `node.tags` instead,
+ * and both places are checked.
+ */
+function strayAlwaysTags(entry: NodeWithTagsAbove): Tag[] {
+  if (entry.node?.type === "effectDeclaration") {
+    return [];
+  }
+  const attached = (entry.node as { tags?: Tag[] } | null)?.tags ?? [];
+  return [...entry.tags, ...attached].filter(isAlwaysTag);
+}
+
+function strayAlwaysTagDiagnostics(ctx: TypeCheckerContext): TypeCheckError[] {
+  return tagsAbove(ctx.programNodes)
+    .flatMap(strayAlwaysTags)
+    .map((tag) => diagnostic("alwaysStrayTag", { tag: tag.name }, tag.loc ?? null));
 }

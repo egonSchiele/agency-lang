@@ -25,6 +25,7 @@ Tools for editing files and managing directories: apply text edits and
 ### std::edit
 
 ```ts
+@alwaysUnder(dir)
 effect std::edit {
   dir: string;
   filename: string;
@@ -34,7 +35,7 @@ effect std::edit {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L36))
 
 ### std::applyPatch
 
@@ -44,49 +45,53 @@ effect std::applyPatch {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L37))
 
 ### std::mkdir
 
 ```ts
+@alwaysUnder(dir)
 effect std::mkdir {
   dir: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L39))
 
 ### std::copy
 
 ```ts
+@alwaysUnder(src, dest)
 effect std::copy {
   src: string;
   dest: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L41))
 
 ### std::move
 
 ```ts
+@alwaysUnder(src, dest)
 effect std::move {
   src: string;
   dest: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L43))
 
 ### std::remove
 
 ```ts
+@alwaysUnder(target)
 effect std::remove {
   target: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L45))
 
 ## Functions
 
@@ -130,7 +135,7 @@ Edit a single file by applying one or more text replacements atomically. Each ed
 
 **Throws:** `std::edit`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L53))
 
 ### applyPatch
 
@@ -154,7 +159,7 @@ Apply a unified diff to the working tree. Supports file creation (--- /dev/null)
 
 **Throws:** `std::applyPatch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L89))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L94))
 
 ### mkdir
 
@@ -184,7 +189,7 @@ Create a directory, including any missing parent directories. Idempotent: succee
 
 **Throws:** `std::mkdir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L110))
 
 ### copy
 
@@ -217,7 +222,7 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
 
 **Throws:** `std::copy`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L130))
 
 ### move
 
@@ -250,7 +255,7 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
 
 **Throws:** `std::move`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L148))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L153))
 
 ### remove
 
@@ -280,4 +285,4 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 
 **Throws:** `std::remove`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L171))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L176))

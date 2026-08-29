@@ -21,8 +21,11 @@ import {
   _fetchMarkdown,
 } from "agency-lang/stdlib-lib/http.js"
 
+@always(method, baseUrl)
 effect std::http::fetch { baseUrl: string, path: string, method: string }
+@always(method, baseUrl)
 effect std::http::fetchJSON { baseUrl: string, path: string, method: string }
+@always(method, baseUrl)
 effect std::http::fetchMarkdown { baseUrl: string, path: string, method: string }
 
 /** An HTTP request method. POST/PUT/PATCH/DELETE may carry a body; GET/HEAD do not. */

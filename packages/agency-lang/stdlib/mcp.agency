@@ -20,6 +20,7 @@ export type McpLoadResult = {
 // The effect an MCP tool call raises before its JSON-RPC fires. Raised from TS
 // (lib/stdlib/mcpGate.ts) via agency.interrupt with this exact name; declared
 // here so policy authors can write `handle mcp::call` blocks inspecting e.args.
+@always(server, tool)
 effect mcp::call {
   server: string,
   tool: string,

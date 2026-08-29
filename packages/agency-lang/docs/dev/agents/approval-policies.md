@@ -21,6 +21,17 @@ In a non-interactive run (`-p`), an effect no rule decides is
 auto-rejected with an explanatory message (`stdlib/policy.agency`) — there
 is no one to ask.
 
+## What "approve always here" pins
+
+The prompt's "approve always here" answer saves a rule scoped to some of
+the interrupt's data fields. Which fields is declared on the effect with
+`@always` / `@alwaysUnder` (see
+[effect-always-tag.md](../language/effect-always-tag.md)); the agent
+passes no table of its own. `cliPolicyHandler`'s `fields:` argument is an
+override: an entry replaces the declared scope for that effect, and an
+empty list turns the option off. Interrupts that expect a value (a
+question, a review) get no "always" answers at all.
+
 ## What `recommended` lets the agent read
 
 The read-only file effects (`std::read`, `std::readBinary`, `std::ls`,

@@ -178,6 +178,42 @@ node main() {
 
 **How to fix:** pass the data positionally, e.g. \`raise MyEffect(payload)\`.`,
 
+  alwaysUnknownField: `An \`@always\` or \`@alwaysUnder\` tag names a field that the effect's payload does not declare. The tag can only pin fields the interrupt actually carries.
+
+\`\`\`
+@always(nam)
+effect app::env { name: string }
+\`\`\`
+
+**How to fix:** name a field from the payload type, or add the field to the payload.`,
+
+  alwaysBadArgument: `Each argument to \`@always\` or \`@alwaysUnder\` must be a bare field name, and no field may be named twice across the two tags. Strings, calls, and other expressions are not field names.
+
+\`\`\`
+@always("name")
+effect app::env { name: string }
+\`\`\`
+
+**How to fix:** write \`@always(name)\`, and name each field in only one of the two tags.`,
+
+  alwaysRepeatedTag: `The same tag appears more than once on one effect declaration. Each of \`@always\` and \`@alwaysUnder\` may appear at most once; list every field in that one tag.
+
+\`\`\`
+@always(a)
+@always(b)
+effect app::x { a: string, b: string }
+\`\`\`
+
+**How to fix:** merge them into one tag, e.g. \`@always(a, b)\`.`,
+
+  alwaysScopeConflict: `Two tagged declarations of the same effect disagree about which fields an "approve always here" rule pins. Every tagged declaration must name the same fields with the same tag; an untagged declaration inherits the tagged scope and is fine.
+
+**How to fix:** make the tags match, or drop the tag from one declaration so it inherits the other.`,
+
+  alwaysStrayTag: `An \`@always\` or \`@alwaysUnder\` tag ended up on something other than an effect declaration, such as a function, a type, or an import. These tags only describe an effect's approval scope.
+
+**How to fix:** move the tag so it sits directly above the \`effect\` line it describes.`,
+
   effectDataMissing: `The effect declares a payload, but this \`raise\`/\`interrupt\` supplied none. A declared payload is required at the raise site.
 
 **How to fix:** pass the data the effect expects.`,

@@ -22,7 +22,6 @@ import {
   clearTurnPartial,
  } from "./budget.agency"
 import { projectCommands } from "./commandPalette.agency"
-import { ALWAYS_FIELDS } from "./config.agency"
 import { groundingText } from "./grounding.agency"
 import { getPolicyForAgent } from "./policy.agency"
 import { Settings } from "./settings.agency"
@@ -99,7 +98,6 @@ def policyHandlerFor(interactive: boolean): any {
   const { policyFile, sessionPolicy } = getPolicyForAgent(_policyArg, interactive)
   return cliPolicyHandler(
     file: policyFile,
-    fields: ALWAYS_FIELDS,
     policy: sessionPolicy,
     // One-shot (-p) runs have no user at a terminal: an undecided effect
     // is rejected with a reason the model reads, never prompted.

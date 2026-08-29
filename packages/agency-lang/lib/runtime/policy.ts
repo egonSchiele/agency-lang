@@ -16,6 +16,13 @@ export type Policy = z.infer<typeof PolicySchema>;
 
 type PolicyResult = { type: "approve" } | { type: "reject" } | { type: "propagate" };
 
+/** Escape picomatch metacharacters so a literal value matches only itself
+ *  inside a pattern. Used for every value a generated rule pins, and for
+ *  the base directory of the built-in scoped policies. */
+export function escapeGlob(s: string): string {
+  return s.replace(/[\\*?{}()[\]!@+|,^$]/g, "\\$&");
+}
+
 export function checkPolicy(
   policy: Policy,
   interrupt: { effect: string; message: string; data: any; origin: string },

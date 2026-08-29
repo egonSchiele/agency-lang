@@ -39,6 +39,7 @@ export type ExecResult = {
   exitCode: number
 }
 
+@always(command, subcommand)
 effect std::exec {
   command: string;
   args: string[];
@@ -47,23 +48,27 @@ effect std::exec {
   timeout: number;
   stdin: string
 }
+@always(command, cwd)
 effect std::bash {
   command: string;
   cwd: string;
   timeout: number;
   stdin: string
 }
+@alwaysUnder(dir)
 effect std::ls {
   dir: string;
   recursive: boolean;
   maxResults: number
 }
+@alwaysUnder(dir)
 effect std::grep {
   pattern: string;
   dir: string;
   flags: string;
   maxResults: number
 }
+@alwaysUnder(dir)
 effect std::glob {
   pattern: string;
   dir: string;

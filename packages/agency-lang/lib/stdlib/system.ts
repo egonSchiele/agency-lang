@@ -171,3 +171,12 @@ export async function _screenshot(
 export function _setTitle(title: string): void {
   process.title = title;
 }
+
+/** The policy scope for std::openUrl: the hostname, so "approve always
+ *  here" covers one site. A URL with no hostname (`mailto:`, `file:`) and
+ *  a string that is not a URL both return the whole string, so each pins
+ *  only itself; a shared "" would let one approval cover them all. */
+export function _urlHost(url: string): string {
+  const hostname = URL.canParse(url) ? new URL(url).hostname : "";
+  return hostname === "" ? url : hostname;
+}

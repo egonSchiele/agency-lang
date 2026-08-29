@@ -2,6 +2,7 @@ import {
   AGENCY_INSTALL_DIR_PLACEHOLDER as INSTALL,
   type Policy,
   type PolicyRule,
+  escapeGlob,
 } from "./policy.js";
 
 // Read-only `agency` subcommands the code agent runs via its exec-based
@@ -86,14 +87,6 @@ export const recommendedAutoApprovePolicy: Policy = {
   "std::git::blame": approve,
   "std::git::stashList": approve,
 };
-
-// Escape picomatch metacharacters so a literal directory path is matched
-// verbatim inside the scope pattern. Without this, a baseDir containing `{`,
-// `}`, `,`, `*`, etc. could widen the glob and approve writes/git operations
-// outside the intended directory.
-function escapeGlob(s: string): string {
-  return s.replace(/[\\*?{}()[\]!@+|,^$]/g, "\\$&");
-}
 
 // Glob matching a directory and everything under it — same convention
 // std::policy's buildScopedMatch uses for "approve-always-here". `baseDir` is

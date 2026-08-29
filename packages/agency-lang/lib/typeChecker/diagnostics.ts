@@ -361,6 +361,32 @@ export const DIAGNOSTICS = {
     severity: "error",
     message: "Named arguments are not allowed on 'raise'/'interrupt'. Pass the data positionally.",
   },
+  alwaysUnknownField: {
+    code: "AG3019",
+    severity: "error",
+    message: "@{tag} names '{field}', which effect '{effect}' does not carry.",
+  },
+  alwaysBadArgument: {
+    code: "AG3020",
+    severity: "error",
+    message: "@{tag} arguments must be bare field names, each named once (effect '{effect}').",
+  },
+  alwaysRepeatedTag: {
+    code: "AG3021",
+    severity: "error",
+    message: "@{tag} appears more than once on effect '{effect}'.",
+  },
+  alwaysScopeConflict: {
+    code: "AG3022",
+    severity: "error",
+    message:
+      "Conflicting @always scopes for effect '{effect}'. All tagged declarations of an effect must agree.",
+  },
+  alwaysStrayTag: {
+    code: "AG3023",
+    severity: "error",
+    message: "@{tag} is only valid on an effect declaration.",
+  },
   effectDataMissing: {
     code: "AG3005",
     severity: "error",

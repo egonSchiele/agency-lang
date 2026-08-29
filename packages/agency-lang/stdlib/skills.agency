@@ -183,10 +183,12 @@ def standardEntry(skillPath: string, parsedFrontmatter: any): SkillEntry {
  * description lists every available skill so the LLM knows which
  * `location` to pass back as `filename`.
  */
+@alwaysUnder(dir)
 effect std::skills::skillsDir {
   dir: string;
   layout: "flat" | "standard"
 }
+@alwaysUnder(dir)
 effect std::skills::commandsDir {
   dir: string
 }

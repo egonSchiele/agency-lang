@@ -20,6 +20,7 @@ type SmsResult = {
   status: string
 }
 
+@always(to)
 effect std::sendSms { to: string }
 
 /** Requires `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` env vars, or pass them directly. */

@@ -94,23 +94,40 @@ export type GitStash = { ref: string; description: string }
 // explicit `cwd` as given, never joining it to the agent working directory.
 
 // Read effects
+@alwaysUnder(cwd)
 effect std::git::status     { cwd: string }
+@alwaysUnder(cwd)
 effect std::git::log        { cwd: string, ref: string, path: string }
+@alwaysUnder(cwd)
 effect std::git::diff       { cwd: string, ref: string, ref2: string, staged: boolean, path: string }
+@alwaysUnder(cwd)
 effect std::git::show       { cwd: string, ref: string }
+@alwaysUnder(cwd)
 effect std::git::branchList { cwd: string }
+@alwaysUnder(cwd)
 effect std::git::remoteList { cwd: string }
+@alwaysUnder(cwd)
 effect std::git::blame      { cwd: string, path: string }
+@alwaysUnder(cwd)
 effect std::git::stashList  { cwd: string }
 // Write effects
+@alwaysUnder(cwd)
 effect std::git::add          { cwd: string, paths: string[], all: boolean }
+@alwaysUnder(cwd)
 effect std::git::commit       { cwd: string, message: string }
+@alwaysUnder(cwd)
 effect std::git::checkout     { cwd: string, target: string, force: boolean }
+@alwaysUnder(cwd)
 effect std::git::switch       { cwd: string, branch: string, create: boolean }
+@alwaysUnder(cwd)
 effect std::git::branchCreate { cwd: string, branch: string }
+@alwaysUnder(cwd)
 effect std::git::branchDelete { cwd: string, branch: string, force: boolean }
+@alwaysUnder(cwd)
 effect std::git::stashPush    { cwd: string, message: string }
+@alwaysUnder(cwd)
 effect std::git::stashPop     { cwd: string }
+@alwaysUnder(cwd)
 effect std::git::restore      { cwd: string, paths: string[], staged: boolean }
 
 /** Read-only git effects, auto-approvable. */

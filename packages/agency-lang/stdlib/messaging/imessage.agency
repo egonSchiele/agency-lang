@@ -18,6 +18,7 @@ type IMessageResult = {
   sent: boolean
 }
 
+@always(to)
 effect std::sendIMessage { to: string }
 
 /** Only works on macOS with Messages.app signed in to iMessage. No API key required. */

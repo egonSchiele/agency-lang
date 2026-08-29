@@ -19,6 +19,9 @@ import {
   _recommendedAutoApprovePolicy,
   _withWritesPolicy,
   _approveAllPolicy,
+  _escapeGlob,
+  _alwaysScopeFor,
+  _allAlwaysScopes,
  } from "agency-lang/stdlib-lib/policy.js"
 
 
@@ -158,11 +161,12 @@ export type ScopedField = {
 }
 
 /**
- * Per-effect configuration consumed by `buildScopedMatch` and the
- * `cliPolicyHandler`. Maps each interrupt effect to the fields its
+ * Per-effect override consumed by `buildScopedMatch` and the
+ * `cliPolicyHandler`. Maps an interrupt effect to the fields its
  * "approve-always-here" rule should pin. Effects not present in this
- * map don't offer the (ap) prompt option. The user falls back to
- * (a) / (r) / (aa) / (rr).
+ * map fall back to the scope their `effect` declaration carries
+ * (`@always` / `@alwaysUnder`); an empty list turns the (ap) option
+ * off for that effect, so the user falls back to (a) / (r) / (aa) / (rr).
  *
  * Example:
  * ```ts
@@ -246,26 +250,55 @@ export def validatePolicy(policy: Record<string, any>): Result<void> {
   return _validatePolicy(policy)
 }
 
+export def alwaysScopeFor(effect: string): ScopedField[] {
+  """
+  The fields an "approve always here" rule pins for `effect`, from the effect's `@always` / `@alwaysUnder` declaration. Empty when the effect declares none.
+
+  @param effect - The interrupt effect name, e.g. "std::env".
+  """
+  return _alwaysScopeFor(effect)
+}
+
+export def defaultScopedFields(): ScopedRuleFields {
+  """Every declared always-scope, keyed by effect. What `cliPolicyHandler` uses when its caller passes no `fields`."""
+  return _allAlwaysScopes()
+}
+
+// The one resolution rule: an explicit entry wins (an empty list
+// suppresses the option); otherwise the effect's declared scope.
+def scopedFieldsFor(effect: string, fields: ScopedRuleFields): ScopedField[] {
+  // Own keys only: `effect` is a user-controlled string, and a plain `{}`
+  // override must not resolve `constructor` or `toString` from the prototype.
+  if (keys(fields).includes(effect)) {
+    return fields[effect]
+  }
+  return _alwaysScopeFor(effect)
+}
+
 /**
- * Build the `match` map for a scoped rule by reading the configured
+ * Build the `match` map for a scoped rule by reading the scoped
  * fields out of `intr.data`. The returned object is shaped to plug
  * straight into a `PolicyRule.match`:
  *
  * ```ts
- * const match = buildScopedMatch(intr, fields)
+ * const match = buildScopedMatch(intr)
  * const rule: PolicyRule = { match: match, action: "approve" }
  * ```
  *
- * For each `ScopedField` configured for `intr.effect`:
- * - The field's value is read from `intr.data`.
+ * Which fields: the `fields` entry for `intr.effect` when the caller
+ * passed one, otherwise the effect's declared `@always` scope.
+ * For each `ScopedField`:
+ * - The field's value is read from `intr.data` and escaped, so a value
+ *   like `ls *.md` matches only that exact command, never a glob.
  * - If `matchSubpaths: true`, the value is wrapped as
  *   `"{value,value/**}"` so the resulting glob matches both the
  *   exact value and any subpath under it.
- * - If `matchSubpaths: false`, the value is used as-is (literal
- *   match).
+ * - If `matchSubpaths: false`, the escaped value is used as-is.
  *
- * Fields that are absent from `intr.data` (`null` / `undefined`)
- * are skipped silently. Effects not present in `fields` return `{}`.
+ * If any scoped field is absent from `intr.data` (`null` / `undefined`)
+ * the result is `{}`: a rule missing one of its pins would be wider than
+ * the user was shown, and a rule with an empty match approves every
+ * future interrupt of the effect. An effect with no scope returns `{}`.
  *
  * Most callers should use `recordScopedRule` instead, which calls
  * this internally. `buildScopedMatch` is exposed for callers
@@ -274,28 +307,26 @@ export def validatePolicy(policy: Record<string, any>): Result<void> {
  */
 export def buildScopedMatch(
   intr: Record<string, any>,
-  fields: ScopedRuleFields,
+  fields: ScopedRuleFields = {},
 ): Record<string, string> {
   """
-  Build a match object for an interrupt, pinned to the configured fields. Returns {} when the effect has no configured fields.
+  Build a match object for an interrupt, pinned to its scoped fields. Values are escaped so they match literally. Returns {} when the effect has no scope or the interrupt data lacks a scoped field.
 
   @param intr - The interrupt whose data fields to pin.
-  @param fields - Per-effect config naming which data fields to pin.
+  @param fields - Per-effect override of which data fields to pin. Effects not listed use their declared `@always` scope.
   """
-  let specs: ScopedField[] = []
-  if (fields[intr.effect] != undefined) {
-    specs = fields[intr.effect]
-  }
+  const specs = scopedFieldsFor(intr.effect, fields)
   let match: Record<string, string> = {}
   for (spec in specs) {
     const value = intr.data[spec.field]
     if (value == null) {
-      continue
+      return {}
     }
+    const literal = _escapeGlob("${value}")
     if (spec.matchSubpaths) {
-      match[spec.field] = "{${value},${value}/**}"
+      match[spec.field] = "{${literal},${literal}/**}"
     } else {
-      match[spec.field] = value
+      match[spec.field] = literal
     }
   }
   return match
@@ -362,16 +393,19 @@ export def recordRule(
 export def recordScopedRule(
   policy: Policy,
   intr: Record<string, any>,
-  fields: ScopedRuleFields,
+  fields: ScopedRuleFields = {},
 ): Policy {
   """
-  Return a new policy with a scoped approve rule prepended for the interrupt's effect. The rule pins the configured fields, so it approves only future interrupts matching this one's field values.
+  Return a new policy with a scoped approve rule prepended for the interrupt's effect. The rule pins the scoped fields, so it approves only future interrupts matching this one's field values. Returns the policy unchanged when there is nothing to pin, because a rule with an empty match would approve every future interrupt of the effect.
 
   @param policy - The policy to extend (not mutated).
   @param intr - The interrupt whose field values to pin.
-  @param fields - Per-effect config naming which data fields to pin.
+  @param fields - Per-effect override of which data fields to pin. Effects not listed use their declared `@always` scope.
   """
   const match = buildScopedMatch(intr, fields)
+  if (keys(match).length == 0) {
+    return policy
+  }
   const existing = policy[intr.effect] || []
   const next: Policy = {
     ...policy,
@@ -670,27 +704,13 @@ def renderObjAsTable(
   return render(paramTable)
 }
 
-// Present the (a)/(r)/(aa)/(ap)/(rr) menu for one interrupt and
-// return the user's choice as an `AskUserResult`. `(ap)` is offered
-// only when `globalCliPolicyOpts.fields` has an entry for `intr.effect`.
-// Renders as a modal over the active repl(); falls back to plain print
-// + input when no REPL is running (e.g. headless agent runs).
-//
-// We pass `allowFreeText: true` to `interruptChoice` so the user can
-// type a rejection reason instead of picking a key. That single
-// keystroke flow replaces the old two-step "(r), then type reason".
-def askUser(intr: any): AskUserResult {
-  // `!= null` compiles to `!== null` (Agency strict equality), so an
-  // undefined entry would slip through. Use the explicit existence check.
-  let effectFields: ScopedField[] = []
-  if (globalCliPolicyOpts.fields[intr.effect] != undefined) {
-    effectFields = globalCliPolicyOpts.fields[intr.effect]
-  }
-  const scopedAvailable = effectFields.length > 0
+@hidden
+export def askUserChoices(intr: any): ChoiceItem[] {
+  """
+  The answers the approval prompt offers for one interrupt. An interrupt that expects a value (a question, a review) gets once-only answers: "always" has no meaning when each raise wants its own answer.
 
-  const title = intr.message
-  const body = prettyPrintInterruptData(intr.data, intr.effect)
-
+  @param intr - The interrupt being asked about.
+  """
   let items: ChoiceItem[] = [
     {
     key: "a",
@@ -700,23 +720,45 @@ def askUser(intr: any): AskUserResult {
     key: "r",
     label: "reject once"
   },
-    {
+  ]
+  if (intr.expectsValue == true) {
+    return items
+  }
+  items.push({
     key: "aa",
     label: "approve always (every future ${intr.effect})"
-  },
-  ]
-  if (scopedAvailable) {
-    items.push(
-      {
+  })
+  // Offered only when there is something to pin: an empty match would be
+  // a catch-all approve, never what "here" means.
+  if (keys(buildScopedMatch(intr, globalCliPolicyOpts.fields)).length > 0) {
+    items.push({
       key: "ap",
       label: "approve always here (${describeScopedMatch(intr)})"
-    },
-    )
+    })
   }
   items.push({
     key: "rr",
     label: "reject always"
   })
+  return items
+}
+
+// Present the (a)/(r)/(aa)/(ap)/(rr) menu for one interrupt and
+// return the user's choice as an `AskUserResult`. `(ap)` is offered
+// only when the effect has a scope (an override entry, or its declaration).
+// Renders as a modal over the active repl(); falls back to plain print
+// + input when no REPL is running (e.g. headless agent runs).
+//
+// We pass `allowFreeText: true` to `interruptChoice` so the user can
+// type a rejection reason instead of picking a key. That single
+// keystroke flow replaces the old two-step "(r), then type reason".
+def askUser(intr: any): AskUserResult {
+  // `!= null` compiles to `!== null` (Agency strict equality), so an
+  // undefined entry would slip through. Use the explicit existence check.
+  const title = intr.message
+  const body = prettyPrintInterruptData(intr.data, intr.effect)
+
+  const items = askUserChoices(intr)
 
   // `allowCancel: true` makes Escape cancel the whole request (raises a
   // cancellation that unwinds the turn back to the REPL prompt) instead of
@@ -902,8 +944,9 @@ def _handler(intr: any): any {
  *
  * @param file - Path to the on-disk policy file. Created on first
  *   save. The containing directory must already exist.
- * @param fields - Per-effect config controlling the (ap) prompt
- *   option. Effects not present here don't offer (ap).
+ * @param fields - Per-effect override of which data fields the (ap)
+ *   rule pins. Effects not listed use the scope their `effect`
+ *   declaration carries; an empty list turns (ap) off for that effect.
  * @param policy - Optional in-memory policy to start from. When
  *   provided, the handler uses it directly and does NOT read `file` on
  *   startup (so there is no load-time `std::read` and no dependency on
@@ -914,7 +957,7 @@ def _handler(intr: any): any {
  */
 export def cliPolicyHandler(
   file: string,
-  fields: ScopedRuleFields,
+  fields: ScopedRuleFields = {},
   policy: Policy | null = null,
   interactive: boolean = true,
 ): any {
@@ -922,7 +965,7 @@ export def cliPolicyHandler(
   CLI sugar for an interactive policy handler. Loads and saves the policy file, prompts the user on new interrupts, records "always" decisions, and returns approve/reject. Install on the outermost `handle`. Call exactly once per program — internal state is module-level.
 
   @param file - Path to the on-disk policy file.
-  @param fields - Per-effect config controlling the "approve-always-here" prompt option.
+  @param fields - Per-effect override of which data fields the approve-always-here rule pins. Effects not listed use the scope their `effect` declaration carries; an empty list turns the option off for that effect.
   @param policy - Optional in-memory policy to use directly instead of loading `file` on startup.
   @param interactive - Whether a user is at a terminal. When false, an interrupt the policy does not decide is rejected with a reason (surfaced to the raise site, and so to an LLM whose tool raised it) instead of prompting.
   """

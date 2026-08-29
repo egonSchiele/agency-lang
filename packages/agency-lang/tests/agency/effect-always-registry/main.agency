@@ -1,0 +1,30 @@
+import { alwaysScopeFor, ScopedField } from "std::policy"
+
+@always(name)
+effect app::env { name: string }
+
+@alwaysUnder(dir)
+effect app::read { dir: string }
+
+// Read at module init, before any node runs: proves the registration
+// happens at JS-load, not when a node first touches the registry.
+static const atLoad: ScopedField[] = alwaysScopeFor("app::env")
+
+node main(): string {
+  const env = alwaysScopeFor("app::env")
+  const rd = alwaysScopeFor("app::read")
+  const none = alwaysScopeFor("app::nothing")
+  if (atLoad.length != 1 || atLoad[0].field != "name") {
+    return "FAIL at load: ${JSON.stringify(atLoad)}"
+  }
+  if (env.length != 1 || env[0].field != "name" || env[0].matchSubpaths) {
+    return "FAIL env: ${JSON.stringify(env)}"
+  }
+  if (rd.length != 1 || rd[0].field != "dir" || !rd[0].matchSubpaths) {
+    return "FAIL read: ${JSON.stringify(rd)}"
+  }
+  if (none.length != 0) {
+    return "FAIL none"
+  }
+  return "pass"
+}

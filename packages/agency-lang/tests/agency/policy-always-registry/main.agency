@@ -1,0 +1,54 @@
+import { keys } from "std::object"
+import {
+  buildScopedMatch,
+  recordScopedRule,
+  checkPolicy,
+  defaultScopedFields,
+  alwaysScopeFor,
+  ScopedRuleFields,
+} from "std::policy"
+
+@always(name)
+effect app::env { name: string }
+
+@alwaysUnder(dir)
+effect app::read { dir: string, filename: string }
+
+node main(): string {
+  // No fields passed: the registry decides.
+  const envIntr = { effect: "app::env", data: { name: "BRAVE_API_KEY" } }
+  const m1 = buildScopedMatch(envIntr)
+  if (m1.name != "BRAVE_API_KEY") { return "FAIL: registry scope not used, got ${JSON.stringify(m1)}" }
+
+  const readIntr = { effect: "app::read", data: { dir: "/u/p", filename: "f" } }
+  const m2 = buildScopedMatch(readIntr)
+  if (m2.dir != "{/u/p,/u/p/**}") { return "FAIL: registry subpath scope, got ${JSON.stringify(m2)}" }
+
+  // An explicit entry overrides the registry.
+  const override: ScopedRuleFields = { "app::env": [] }
+  const m3 = buildScopedMatch(envIntr, override)
+  if (keys(m3).length != 0) { return "FAIL: empty override should suppress" }
+
+  // An entry for another effect leaves this one on the registry.
+  const other: ScopedRuleFields = { "app::read": [{ field: "filename", matchSubpaths: false }] }
+  const m4 = buildScopedMatch(envIntr, other)
+  if (m4.name != "BRAVE_API_KEY") { return "FAIL: unrelated override changed resolution" }
+
+  // defaultScopedFields exposes the registry.
+  const all = defaultScopedFields()
+  if (all["app::env"] == null || all["app::env"].length != 1) { return "FAIL: defaultScopedFields" }
+  if (alwaysScopeFor("app::env")[0].field != "name") { return "FAIL: alwaysScopeFor" }
+
+  // recordScopedRule falls back to the registry the same way.
+  const recorded = recordScopedRule({}, envIntr)
+  if (checkPolicy(recorded, envIntr).type != "approve") { return "FAIL: recordScopedRule without fields" }
+  const otherEnv = { effect: "app::env", data: { name: "OTHER" } }
+  if (checkPolicy(recorded, otherEnv).type == "approve") { return "FAIL: recorded rule too wide" }
+
+  // Nothing to pin: no rule is written, so nothing gets approved.
+  const nameless = { effect: "app::env", data: {} }
+  const unchanged = recordScopedRule({}, nameless)
+  if (keys(unchanged).length != 0) { return "FAIL: empty match must not become a rule" }
+  if (checkPolicy(unchanged, otherEnv).type == "approve") { return "FAIL: nameless approval leaked" }
+  return "pass"
+}

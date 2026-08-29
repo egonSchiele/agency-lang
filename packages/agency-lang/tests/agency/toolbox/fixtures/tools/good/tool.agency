@@ -6,7 +6,7 @@ export type Request = {
   n: number
 }
 
-export def tool(request: Request): number {
+export def tool(request: Request): Result<number> {
   """
   Add one to the number in the request.
 
@@ -14,16 +14,15 @@ export def tool(request: Request): number {
 
   @param request - The number to add one to
   """
-  const result = guard(time: 1m, cost: $0.10) {
+  return guard(time: 1m, cost: $0.10) {
     return request.n + 1
 
     finalize {
       return 0
     }
   }
-  return result
 }
 
-export node main(request: Request): number {
+export node main(request: Request): Result<number> {
   return tool(request)
 }

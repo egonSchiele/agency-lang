@@ -1,0 +1,96 @@
+import { writeTool, listTools } from "std::toolbox"
+import { exists } from "std::shell"
+import { remove } from "std::fs"
+
+const OUT = __dirname + "/test-output"
+const TOOLS = __dirname + "/fixtures/tools"
+
+// Approve every non-review interrupt; answer the review with the scripted
+// verdicts in order. A null verdict rejects. Returns writeTool's result.
+def runWrite(name: string, dir: string, verdicts: any[]) {
+  let reviewCount = 0
+  handle {
+    return writeTool(name: name, purpose: "Add one to a number.", dir: dir, maxRounds: 3)
+  } with (intr) {
+    return match (intr.effect) {
+      "std::toolbox::review" => {
+        const verdict = verdicts[reviewCount]
+        reviewCount = reviewCount + 1
+        if (verdict == null) {
+          return reject("cancelled")
+        }
+        return approve(verdict)
+      }
+      _ => approve()
+    }
+  }
+}
+
+def cleanup(name: string) {
+  remove(OUT + "/" + name) with approve
+  remove(OUT + "/.staging") with approve
+}
+
+def savedFiles(name: string): boolean {
+  const hasSource = exists("${name}/tool.agency", OUT)
+  const hasCases = exists("${name}/tool.test.json", OUT)
+  const hasMeta = exists("${name}/meta.json", OUT)
+  const stagingGone = !exists(".staging/${name}", OUT)
+  return hasSource && hasCases && hasMeta && stagingGone
+}
+
+node acceptSavesThreeFiles(): boolean {
+  cleanup("addOne")
+  const result = runWrite("addOne", OUT, [{ verdict: "accept" }])
+  const saved = savedFiles("addOne")
+  const listed = listTools(OUT) with approve
+  let inCatalog = false
+  if (listed is success(entries)) {
+    inCatalog = some(entries, \entry -> entry.name == "addOne" && entry.broken == null)
+  }
+  cleanup("addOne")
+  return result is success && saved && inCatalog
+}
+
+node rejectWritesNothing(): boolean {
+  cleanup("addTwo")
+  const result = runWrite("addTwo", OUT, [null])
+  const nothing = !exists("addTwo", OUT) && !exists(".staging/addTwo", OUT)
+  cleanup("addTwo")
+  return result is failure && nothing
+}
+
+node reviseRunsASecondRound(): boolean {
+  cleanup("addThree")
+  const verdicts = [{ verdict: "revise", feedback: "name the variable sum" }, { verdict: "accept" }]
+  const result = runWrite("addThree", OUT, verdicts)
+  const ok = result is success && result.value.version == 1
+  cleanup("addThree")
+  return ok
+}
+
+node badShapeGoesBackToTheCodingAgent(): boolean {
+  cleanup("addFour")
+  const result = runWrite("addFour", OUT, [{ verdict: "accept" }])
+  cleanup("addFour")
+  return result is success
+}
+
+// No mocks: the name check runs before staging and before any model call.
+// This is the test that fails if the existence check moves later.
+node refusesAnExistingName(): boolean {
+  const result = runWrite("good", TOOLS, [{ verdict: "accept" }])
+  return result is failure && "${result.error}" =~ re/exists/
+}
+
+node refusesALongName(): boolean {
+  // 65 characters, one over the cap.
+  const name = "abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  const result = runWrite(name, OUT, [{ verdict: "accept" }])
+  return result is failure && "${result.error}" =~ re/64/
+}
+
+node refusesAnEmptyDir(): boolean {
+  const result = runWrite("addFive", "", [{ verdict: "accept" }])
+  return result is failure && "${result.error}" =~ re/dir/
+}

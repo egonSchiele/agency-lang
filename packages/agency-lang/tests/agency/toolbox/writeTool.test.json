@@ -1,0 +1,257 @@
+{
+  "tests": [
+    {
+      "nodeName": "acceptSavesThreeFiles",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "code": "/** @module\n  @summary Add one to a number.\n*/\n\nexport type Request = {\n  n: number\n}\n\nexport def tool(request: Request): Result<number> {\n  \"\"\"\n  Add one to the number in the request.\n\n  Example: tool({ n: 41 })\n\n  @param request - The number to add one to\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return request.n + 1\n\n    finalize {\n      return 0\n    }\n  }\n}\n\nexport node main(request: Request): Result<number> {\n  return tool(request)\n}\n"
+          }
+        },
+        {
+          "return": []
+        },
+        {
+          "return": {
+            "cases": [
+              {
+                "nodeName": "main",
+                "args": {
+                  "request": {
+                    "n": 41
+                  }
+                },
+                "expectedOutput": 42
+              },
+              {
+                "nodeName": "main",
+                "args": {
+                  "request": {
+                    "n": 0
+                  }
+                },
+                "expectedOutput": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectWritesNothing",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "code": "/** @module\n  @summary Add one to a number.\n*/\n\nexport type Request = {\n  n: number\n}\n\nexport def tool(request: Request): Result<number> {\n  \"\"\"\n  Add one to the number in the request.\n\n  Example: tool({ n: 41 })\n\n  @param request - The number to add one to\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return request.n + 1\n\n    finalize {\n      return 0\n    }\n  }\n}\n\nexport node main(request: Request): Result<number> {\n  return tool(request)\n}\n"
+          }
+        },
+        {
+          "return": []
+        },
+        {
+          "return": {
+            "cases": [
+              {
+                "nodeName": "main",
+                "args": {
+                  "request": {
+                    "n": 41
+                  }
+                },
+                "expectedOutput": 42
+              },
+              {
+                "nodeName": "main",
+                "args": {
+                  "request": {
+                    "n": 0
+                  }
+                },
+                "expectedOutput": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "reviseRunsASecondRound",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "code": "/** @module\n  @summary Add one to a number.\n*/\n\nexport type Request = {\n  n: number\n}\n\nexport def tool(request: Request): Result<number> {\n  \"\"\"\n  Add one to the number in the request.\n\n  Example: tool({ n: 41 })\n\n  @param request - The number to add one to\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return request.n + 1\n\n    finalize {\n      return 0\n    }\n  }\n}\n\nexport node main(request: Request): Result<number> {\n  return tool(request)\n}\n"
+          }
+        },
+        {
+          "return": []
+        },
+        {
+          "return": {
+            "cases": [
+              {
+                "nodeName": "main",
+                "args": {
+                  "request": {
+                    "n": 41
+                  }
+                },
+                "expectedOutput": 42
+              },
+              {
+                "nodeName": "main",
+                "args": {
+                  "request": {
+                    "n": 0
+                  }
+                },
+                "expectedOutput": 1
+              }
+            ]
+          }
+        },
+        {
+          "return": {
+            "code": "/** @module\n  @summary Add one to a number.\n*/\n\nexport type Request = {\n  n: number\n}\n\nexport def tool(request: Request): Result<number> {\n  \"\"\"\n  Add one to the number in the request.\n\n  Example: tool({ n: 41 })\n\n  @param request - The number to add one to\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return request.n + 1\n\n    finalize {\n      return 0\n    }\n  }\n}\n\nexport node main(request: Request): Result<number> {\n  return tool(request)\n}\n"
+          }
+        },
+        {
+          "return": []
+        },
+        {
+          "return": {
+            "cases": [
+              {
+                "nodeName": "main",
+                "args": {
+                  "request": {
+                    "n": 41
+                  }
+                },
+                "expectedOutput": 42
+              },
+              {
+                "nodeName": "main",
+                "args": {
+                  "request": {
+                    "n": 0
+                  }
+                },
+                "expectedOutput": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "badShapeGoesBackToTheCodingAgent",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "code": "/** @module\n  @summary Add one to a number.\n*/\n\nexport type Request = {\n  n: number\n}\n\nexport def tool(request: Request): Result<number> {\n  \"\"\"\n  Add one to the number in the request.\n\n  Example: tool({ n: 41 })\n\n  @param request - The number to add one to\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return request.n + 1\n\n    finalize {\n      return 0\n    }\n  }\n}\n\nexport node main(request: Request): Result<number> {\n  return tool(request)\n}\n\nexport def helper(): number {\n  return 1\n}\n"
+          }
+        },
+        {
+          "return": {
+            "code": "/** @module\n  @summary Add one to a number.\n*/\n\nexport type Request = {\n  n: number\n}\n\nexport def tool(request: Request): Result<number> {\n  \"\"\"\n  Add one to the number in the request.\n\n  Example: tool({ n: 41 })\n\n  @param request - The number to add one to\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return request.n + 1\n\n    finalize {\n      return 0\n    }\n  }\n}\n\nexport node main(request: Request): Result<number> {\n  return tool(request)\n}\n"
+          }
+        },
+        {
+          "return": []
+        },
+        {
+          "return": {
+            "cases": [
+              {
+                "nodeName": "main",
+                "args": {
+                  "request": {
+                    "n": 41
+                  }
+                },
+                "expectedOutput": 42
+              },
+              {
+                "nodeName": "main",
+                "args": {
+                  "request": {
+                    "n": 0
+                  }
+                },
+                "expectedOutput": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "refusesAnExistingName",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "refusesALongName",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "refusesAnEmptyDir",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    }
+  ]
+}

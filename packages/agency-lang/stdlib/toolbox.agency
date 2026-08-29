@@ -1,4 +1,10 @@
-import { describe, parseAST, toSource, getNodesOfType, ModuleInfo, ExportInfo } from "std::agency"
+import { describe, parseAST, toSource, getNodesOfType, testFile, ModuleInfo, ExportInfo, TestReport } from "std::agency"
+import { agencyCodingAgent } from "std::agents/agency/coding"
+import { agencyReviewAgent } from "std::agents/agency/review"
+import { llmOptions } from "std::agents/lib/shared"
+import { now, format } from "std::date"
+import { mkdir, remove } from "std::fs"
+import { exists } from "std::shell"
 import { _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _glob } from "agency-lang/stdlib-lib/shell.js"
 
@@ -6,7 +12,8 @@ import { _glob } from "agency-lang/stdlib-lib/shell.js"
   @summary Keep a directory of tools an agent wrote, and write new ones.
   Keep a directory of tools an agent wrote, and write new ones. A tool is
   an Agency module that exports `type Request`, `def tool(request: Request)`,
-  and `node main(request: Request)`. `listTools` reads a toolbox directory
+  and `node main(request: Request)`. `tool` returns the `Result` of the
+  guard that wraps its work. `listTools` reads a toolbox directory
   into a catalog; `writeTool` has the coding agent write a new tool, checks
   and tests it, shows it to the user through an interrupt, and saves it.
 
@@ -298,4 +305,390 @@ export idempotent def checkToolShape(source: string): string[] {
   }
   const failing = filter(shapeRules(facts.value), \rule -> !rule.ok)
   return map(failing, \rule -> rule.message)
+}
+
+// Providers cap tool names at 64 characters; std::skills truncates to the
+// same cap, this module refuses so a user-chosen name is never changed.
+const MAX_TOOL_NAME_LEN = 64
+
+effect std::toolbox::review {
+  name: string;
+  stagingDir: string;
+  source: string;
+  effects: string[];
+  testFeedback: string[]
+}
+
+/** The value a handler passes to approve() for std::toolbox::review. */
+export type WriteToolReview =
+  | { verdict: "accept" }
+  | { verdict: "revise"; feedback: string }
+
+/** The settings one writeTool call hands every pipeline stage. */
+type DraftSettings = {
+  purpose: string;
+  exampleRequest: string;
+  stagingDir: string;
+  maxTime: number;
+  maxCost: number;
+  model: string;
+  provider: string
+}
+
+/** A draft that passed the shape check, the review, and its own tests. */
+type Draft = {
+  source: string;
+  casesJson: string;
+  testFeedback: string[]
+}
+
+type GeneratedCases = {
+  cases: any[]
+}
+
+static const exampleTool = """
+import { researcherAgent } from "std::agents/composable/researcher"
+
+/** @module
+  @summary Fetch and summarize today's news for a list of topics.
+*/
+
+export type Request = {
+  topics: string[];
+  maxItems: number
+}
+
+export def tool(request: Request): Result<string> {
+  \"\"\"
+  Summarize today's news for the given topics. Each topic is researched
+  separately, then the results are merged into one Markdown summary of
+  at most maxItems headlines.
+
+  Example: tool({ topics: ["tech", "science"], maxItems: 10 })
+
+  @param request - The topics to cover and the maximum number of headlines
+  \"\"\"
+  return guard(time: 180000, cost: 1) {
+    let collected = ""
+    const perTopic = fork(request.topics) as topic {
+      return researcherAgent("Today's top \${topic} news, \${request.maxItems} items, with sources.")
+    }
+    collected = perTopic.join("\\n\\n")
+    return llm("Merge these into one Markdown summary of at most \${request.maxItems} headlines:\\n\${collected}")
+
+    finalize {
+      return collected
+    }
+  }
+}
+
+export node main(request: Request): Result<string> {
+  return tool(request)
+}
+"""
+
+// maxTime and maxCost arrive as numbers (milliseconds and dollars), so the
+// generated guard reads `guard(time: 180000, cost: 1)`. The example above
+// uses the same numeric form so the model copies it.
+def brief(settings: DraftSettings, feedback: string): string {
+  let requestLine = ""
+  if (settings.exampleRequest != "") {
+    requestLine = "The user request that prompted this tool: \"${settings.exampleRequest}\"."
+  }
+  let feedbackBlock = ""
+  if (feedback != "") {
+    feedbackBlock = """
+## Feedback on the previous draft
+${feedback}
+Fix every point above in the new draft.
+"""
+  }
+  return """
+Write a reusable Agency tool module. Purpose: ${settings.purpose}
+${requestLine}
+
+The module must have exactly this shape, and nothing else exported:
+
+1. `export type Request = { ... }` — every input the tool needs. No hardcoded dates, topics, paths, or counts in the body; they come in through Request. Use `today()` from std::date for the date.
+2. `export def tool(request: Request): Result<ReturnType>` — the work. Its docstring says what the tool does, includes a line `Example: tool({ ... })` showing one call, and documents `@param request`. The body is `return guard(time: ${settings.maxTime}, cost: ${settings.maxCost}) { ... finalize { return <partial result> } }` (time in milliseconds, cost in dollars). A guard evaluates to a Result, so tool returns Result<ReturnType>.
+3. `export node main(request: Request): Result<ReturnType>` — one line: `return tool(request)`.
+
+Rules:
+- Imports name std:: modules only.
+- Never write `with approve`. The caller decides approvals.
+- A module doc comment at the top with an @summary line.
+
+Here is a complete example of the shape:
+
+```agency
+${exampleTool}
+```
+${feedbackBlock}
+"""
+}
+
+def casesBrief(source: string): string {
+  return """
+Write two test cases for this Agency tool module as JSON. Reply with
+{ "cases": [ ... ] }. Each case: { "nodeName": "main", "args": { "request": <a Request value> }, "expectedOutput": <the plain JSON value the guard returns, without the Result wrapper>, "interruptHandlers": [ ... ] }.
+The first case is the happy path; the second is an edge case (an empty list, zero items). If the tool makes LLM or network calls, script their approvals in "interruptHandlers" as [{ "action": "approve" }] so the case does not reach the network; when the exact output is not predictable, use the finalize fallback value as expectedOutput.
+
+```agency
+${source}
+```
+"""
+}
+
+// main returns the guard's Result, so the expected value is wrapped in the
+// Result envelope here; the model supplies plain values.
+def expectedResult(value: any): string {
+  return JSON.stringify({ __type: "resultType", success: true, value: value })
+}
+
+def testFileJson(cases: any[]): string {
+  const tests = map(cases, \testCase -> {
+    nodeName: testCase.nodeName ?? "main",
+    args: testCase.args ?? {},
+    expectedOutput: expectedResult(testCase.expectedOutput),
+    evaluationCriteria: [{ type: "exact" }],
+    interruptHandlers: testCase.interruptHandlers ?? []
+  })
+  return JSON.stringify({ sourceFile: "tool.agency", tests: tests }, null, 2)
+}
+
+def metaJson(name: string, exampleRequest: string): string {
+  return JSON.stringify({
+    name: name,
+    createdAt: format(now()),
+    createdFrom: exampleRequest,
+    version: 1,
+    uses: 0,
+    lastUsedAt: null,
+    recentOutcomes: []
+  }, null, 2)
+}
+
+def toolEffects(source: string): string[] {
+  const described = describe(source)
+  if (described is failure) {
+    return []
+  }
+  const exported = toolExport(described.value)
+  if (exported == null) {
+    return []
+  }
+  return exported.effects
+}
+
+// ---- the writeTool pipeline ----
+
+def draftSource(settings: DraftSettings, feedback: string): Result<string> {
+  const drafted = agencyCodingAgent(
+    task: brief(settings, feedback),
+    requireMain: true,
+    dir: settings.stagingDir,
+    model: settings.model,
+    provider: settings.provider,
+  )
+  if (drafted is failure(writeFailure)) {
+    return failure(writeFailure.problems.join("\n"))
+  }
+  return drafted
+}
+
+// Static checks first, so a draft with the wrong shape never costs a
+// review-agent call.
+def reviewSource(source: string, settings: DraftSettings): Result<string> {
+  const shapeProblems = checkToolShape(source)
+  if (shapeProblems.length > 0) {
+    return failure(shapeProblems.join("\n"))
+  }
+  const reviewed = agencyReviewAgent(
+    source,
+    task: brief(settings, ""),
+    dir: settings.stagingDir,
+    model: settings.model,
+    provider: settings.provider,
+  )
+  if (reviewed is failure(reviewErr)) {
+    return failure("review failed: ${reviewErr}")
+  }
+  const errors = filter(reviewed.value, \finding -> finding.error)
+  if (errors.length > 0) {
+    return failure(map(errors, \finding -> finding.feedback).join("\n"))
+  }
+  return success(source)
+}
+
+def failedCases(report: TestReport): string[] {
+  const failing = filter(report.cases, \caseReport -> !caseReport.pass)
+  return map(failing, \caseReport -> "${caseReport.node}: ${caseReport.feedback}")
+}
+
+def testSource(source: string, settings: DraftSettings): Result<Draft> {
+  const wroteSource = write("tool.agency", source, settings.stagingDir)
+  if (wroteSource is failure) {
+    return wroteSource
+  }
+  const generated: GeneratedCases = llm(casesBrief(source), llmOptions(model: settings.model, provider: settings.provider))
+  const casesJson = testFileJson(generated.cases)
+  const wroteCases = write("tool.test.json", casesJson, settings.stagingDir)
+  if (wroteCases is failure) {
+    return wroteCases
+  }
+  const report = testFile(settings.stagingDir, "tool.test.json")
+  if (report is failure(testErr)) {
+    return failure("tests could not run: ${testErr}")
+  }
+  const testFeedback = failedCases(report.value)
+  if (!report.value.pass) {
+    return failure("tests failed:\n" + testFeedback.join("\n"))
+  }
+  return success({ source: source, casesJson: casesJson, testFeedback: testFeedback })
+}
+
+def prepareDraft(settings: DraftSettings, feedback: string): Result<Draft> {
+  const source = draftSource(settings, feedback)
+  if (source is failure) {
+    return source
+  }
+  const reviewed = reviewSource(source.value, settings)
+  if (reviewed is failure) {
+    return reviewed
+  }
+  return testSource(reviewed.value, settings)
+}
+
+def askUser(name: string, settings: DraftSettings, draft: Draft): WriteToolReview {
+  const answer: WriteToolReview = interrupt std::toolbox::review("Review this tool before it is saved", {
+    name: name,
+    stagingDir: settings.stagingDir,
+    source: draft.source,
+    effects: toolEffects(draft.source),
+    testFeedback: draft.testFeedback
+  })
+  return answer
+}
+
+// Each write is checked before the next, so a failed tool.agency write
+// never leaves a meta.json that makes the tool look present.
+def saveTool(dir: string, name: string, draft: Draft, exampleRequest: string): Result<ToolEntry> {
+  const finalDir = "${dir}/${name}"
+  const made = mkdir(finalDir)
+  if (made is failure) {
+    return made
+  }
+  const savedSource = write("tool.agency", draft.source, finalDir)
+  if (savedSource is failure) {
+    return savedSource
+  }
+  const savedCases = write("tool.test.json", draft.casesJson, finalDir)
+  if (savedCases is failure) {
+    return savedCases
+  }
+  const savedMeta = write("meta.json", metaJson(name, exampleRequest), finalDir)
+  if (savedMeta is failure) {
+    return savedMeta
+  }
+  return success(entryFor(dir, name))
+}
+
+// Everything that can raise the review interrupt lives here, so a reject
+// (which returns a failure from this function) still lets writeTool clear
+// the staging directory afterwards. `feedback` is the only state carried
+// between rounds: the last problem, or the user's revision request.
+def rounds(dir: string, name: string, settings: DraftSettings, maxRounds: number): Result<ToolEntry> {
+  let feedback = ""
+  for (round in range(maxRounds)) {
+    const prepared = prepareDraft(settings, feedback)
+    if (prepared is failure(problem)) {
+      feedback = "${problem}"
+    } else if (prepared is success(draft)) {
+      const answer = askUser(name, settings, draft)
+      if (answer.verdict == "accept") {
+        return saveTool(dir, name, draft, settings.exampleRequest)
+      }
+      if (answer.verdict != "revise") {
+        return failure("unrecognized review answer: ${JSON.stringify(answer)}")
+      }
+      feedback = answer.feedback
+    }
+  }
+  return failure("gave up after ${maxRounds} rounds; last problem:\n${feedback}")
+}
+
+def checkName(name: string, dir: string): Result {
+  if (dir == "") {
+    return failure("dir must name the toolbox directory; got an empty string")
+  }
+  if (!(name =~ re/^[a-z][A-Za-z0-9]*$/)) {
+    return failure("tool name must be a camelCase identifier, got `${name}`")
+  }
+  if (name.length > MAX_TOOL_NAME_LEN) {
+    return failure("tool name must be at most ${MAX_TOOL_NAME_LEN} characters, got ${name.length}")
+  }
+  if (exists(name, dir)) {
+    return failure("a tool named `${name}` already exists in ${dir}")
+  }
+  return success(null)
+}
+
+export def writeTool(
+  name: string,
+  purpose: string,
+  exampleRequest: string = "",
+  dir: string = "~/.agency-agent/tools",
+  maxRounds: number = 3,
+  maxTime: number = 3m,
+  maxCost: number = $1.00,
+  model: string = "",
+  provider: string = "",
+): Result<ToolEntry> {
+  """
+  Write a reusable tool into a toolbox directory. The coding agent drafts
+  the tool against a fixed contract, the draft is checked, reviewed, and
+  tested, then shown to the user for acceptance or revision before it is
+  saved.
+
+  @param name - The tool's name; also its directory under dir
+  @param purpose - What the tool should do, in plain language
+  @param exampleRequest - The user request that prompted this tool, or ""
+  @param dir - The toolbox directory to write into
+  @param maxRounds - Draft-review rounds before giving up
+  @param maxTime - Time limit baked into the tool's guard
+  @param maxCost - Cost limit baked into the tool's guard
+  @param model - Model override for the coding and review agents, or ""
+  @param provider - Provider for the model override
+  """
+  const nameOk = checkName(name, dir)
+  if (nameOk is failure) {
+    return nameOk
+  }
+  const stagingDir = "${dir}/.staging/${name}"
+  const cleared = remove(stagingDir)
+  if (cleared is failure) {
+    return cleared
+  }
+  const made = mkdir(stagingDir)
+  if (made is failure) {
+    return made
+  }
+  const settings: DraftSettings = {
+    purpose: purpose,
+    exampleRequest: exampleRequest,
+    stagingDir: stagingDir,
+    maxTime: maxTime,
+    maxCost: maxCost,
+    model: model,
+    provider: provider
+  }
+  const outcome = rounds(dir, name, settings, maxRounds)
+  const removed = remove(stagingDir)
+  if (removed is failure(removeErr)) {
+    if (outcome is failure(outcomeErr)) {
+      return failure("${outcomeErr}\n(could not clear staging directory ${stagingDir}: ${removeErr})")
+    }
+    return failure("tool saved to ${dir}/${name}, but could not clear staging directory ${stagingDir}: ${removeErr}")
+  }
+  return outcome
 }

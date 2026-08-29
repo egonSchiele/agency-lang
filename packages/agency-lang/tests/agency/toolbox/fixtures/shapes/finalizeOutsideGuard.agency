@@ -2,7 +2,7 @@ export type Request = {
   n: number
 }
 
-export def tool(request: Request): number {
+export def tool(request: Request): Result<number> {
   """
   Add one.
 
@@ -23,6 +23,6 @@ export def tool(request: Request): number {
   return result
 }
 
-export node main(request: Request): number {
+export node main(request: Request): Result<number> {
   return tool(request)
 }

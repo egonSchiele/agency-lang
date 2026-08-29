@@ -217,7 +217,7 @@ step that needs it, never job-wide; and the LLM key is a dedicated
 `AGENT_EVALS_OPENAI_API_KEY` with its own spend limit, so a leak costs at
 most that limit until it is rotated. Secrets: `AGENT_EVALS_OPENAI_API_KEY`
 and `STATELOG_API_KEY`; the host and project come from `agency.json`
-(`log.host`, `log.projectId`), so nothing else is configured. The run
+(`log.host`, `log.projectId`). The run
 directory becomes a workflow artifact only when the upload failed, because it
 holds every trace and artifacts on a public repo are public.
 

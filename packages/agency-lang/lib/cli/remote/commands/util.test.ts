@@ -3,8 +3,10 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import type { AgencyConfig } from "@/config.js";
-const whoami = vi.fn();
-const fetchAgentInfo = vi.fn();
+const { whoami, fetchAgentInfo } = vi.hoisted(() => ({
+  whoami: vi.fn(),
+  fetchAgentInfo: vi.fn(),
+}));
 vi.mock("../../statelog/accountClient.js", () => ({
   createAccountClient: () => ({ whoami }),
 }));
@@ -191,6 +193,7 @@ describe("resolveServeTarget", () => {
       filename: "agent",
     });
     expect(target.apiKey).toBe("default-secret");
+    expect(target.agent.entryPoint).toBe("agent.agency");
   });
 
   it("fails when nothing is deployed", async () => {

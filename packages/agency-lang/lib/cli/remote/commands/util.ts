@@ -8,6 +8,7 @@ import { buildServeAddress, canonicalOrigin } from "../../statelog/serveUrl.js";
 import type { ServeAddress } from "../../statelog/serveUrl.js";
 import { createAccountClient } from "../../statelog/accountClient.js";
 import { createProjectClient } from "../../statelog/projectClient.js";
+import type { HostedAgentInfo } from "../../statelog/projectClient.js";
 import { AccountScopeError } from "../../statelog/accountClient.js";
 
 /** What every remote command needs: the resolved config and the path it came
@@ -99,9 +100,7 @@ function resolveOrigin(context: RemoteCommandContext, options: { host?: string }
   return origin;
 }
 
-/** Where a project lives: origin plus slug, both from flags or `agency.json`
- *  (`log.host`, `log.projectId`). No credential access, so a command that
- *  only builds a URL (`remote open`) never needs a key. */
+/** Origin plus slug, from flags or `agency.json`; no credential access. */
 export type ProjectLocation = { origin: string; projectSlug: string };
 
 export function resolveProjectLocation(
@@ -139,32 +138,32 @@ function resolveProjectSlug(context: RemoteCommandContext, options: { project?: 
   fail("No project. Set log.projectId in agency.json, or pass --project <slug>.");
 }
 
-/** A project target plus the serve address of the agent deployed to it. */
-export type ServeTarget = ProjectTarget & { address: ServeAddress };
+/** A project target plus the deployed agent and its serve address. */
+export type ServeTarget = ProjectTarget & { address: ServeAddress; agent: HostedAgentInfo };
 
 const AGENCY_SUFFIX = ".agency";
 
-/** Resolve the hosted agent to talk to. Nothing is stored locally: the user id
- *  comes from `whoami` and the file from what the project reports as its entry
- *  point, so the serve address is always the one the host would build. Exits
- *  when the project has nothing deployed or either lookup fails. */
+/** The serve address of the project's deployed agent: user id from `whoami`,
+ *  file from the project's entry point. Exits when nothing is deployed or a
+ *  lookup fails. */
 export async function resolveServeTarget(
   context: RemoteCommandContext,
   options: ProjectCommandOptions,
 ): Promise<ServeTarget> {
   const target = resolveProjectTarget(context, options);
   let userId: string;
-  let entryPoint: string | null;
+  let agent: HostedAgentInfo;
   try {
     ({ userId } = await createAccountClient(target.origin, target.apiKey).whoami());
-    ({ entryPoint } = await createProjectClient(
+    agent = await createProjectClient(
       target.origin,
       target.projectSlug,
       target.apiKey,
-    ).fetchAgentInfo());
+    ).fetchAgentInfo();
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error));
   }
+  const { entryPoint } = agent;
   if (entryPoint === null) {
     fail(
       `Nothing is deployed to project ${target.projectSlug} on ${target.origin}. Run 'agency remote deploy <file>' first.`,
@@ -179,7 +178,7 @@ export async function resolveServeTarget(
     projectId: target.projectSlug,
     filename,
   });
-  return { ...target, address };
+  return { ...target, address, agent };
 }
 
 /** Turn a project-read command error into a clean CLI exit. The client is

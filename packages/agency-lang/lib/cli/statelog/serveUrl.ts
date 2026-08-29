@@ -95,9 +95,8 @@ export function serveRouteUrl(serveUrl: string, segments: string[]): string {
   return `${address.serveUrl}/${suffix}`;
 }
 
-/** The serve base for a known user, project, and file — the inverse of
- *  `parseServeBaseUrl`. `filename` is the URL segment (the agent file without
- *  its `.agency` suffix, as the serve routes expect). */
+/** The inverse of `parseServeBaseUrl`. `filename` is the URL segment: the
+ *  agent file without its `.agency` suffix. */
 export function buildServeAddress(parts: {
   origin: string;
   userId: string;

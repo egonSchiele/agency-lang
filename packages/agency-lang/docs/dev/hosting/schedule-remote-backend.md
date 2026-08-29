@@ -36,10 +36,9 @@ throw if any remote recipe ever constructs it.
 Remote schedule commands resolve host/project/key with `resolveProjectTarget`
 (`lib/cli/remote/commands/util.ts`), the same seam every `agency remote`
 command uses: origin from `--host` → `log.host`; project from `--project` →
-`log.projectId`; API key from the environment only, read last. Nothing is
-stored locally by a deploy. Keep using this resolver rather than
-`resolveDeployTarget` (`lib/cli/deploy/target.ts`), so every remote command
-reports the same missing-input errors in the same order.
+`log.projectId`; API key from the environment only, read last. Use this
+resolver, not `resolveDeployTarget` (`lib/cli/deploy/target.ts`), so every
+remote command reports missing input the same way.
 
 ## A failure can arrive inside an HTTP 200
 

@@ -225,7 +225,7 @@ POST /serve/:userId/:projectId/:filename/resume
 
 `agency remote` is the CLI surface for a hosted agent — the ceremony a client would otherwise hand-write against the serve routes.
 
-Nothing is linked or stored locally. Every command resolves its target from `agency.json` — `log.host` and `log.projectId` (or `--host`/`--project`) — and the key from `$STATELOG_API_KEY`. The commands that talk to the serve routes (`ls`, `call`) derive the serve address at run time: the user id from `GET /api/whoami` and the file from the project's deployed entry point (`GET /api/projects/:slug/agent`), so the address is always the one the host would build (`resolveServeTarget` in `lib/cli/remote/commands/util.ts`).
+Every command resolves its target from `agency.json` (`log.host`, `log.projectId`, overridable with `--host`/`--project`) and the key from `$STATELOG_API_KEY`. `ls` and `call` derive the serve address at run time (`resolveServeTarget`): the user id from `GET /api/whoami`, the file from the project's entry point (`GET /api/projects/:slug/agent`).
 
 Agent commands:
 

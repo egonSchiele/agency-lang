@@ -4,8 +4,7 @@ import { openBrowser } from "../browser.js";
 import { resolveProjectLocation } from "./util.js";
 import type { RemoteCommandContext } from "./util.js";
 
-/** `agency remote open` — the project page in a browser. Needs only the host
- *  and slug, so no API key is read. */
+/** `agency remote open` — the project page in a browser. No key needed. */
 export async function runOpen(
   options: { host?: string; project?: string },
   context: RemoteCommandContext,

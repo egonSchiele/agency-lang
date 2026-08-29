@@ -1,0 +1,80 @@
+import { listTools } from "std::toolbox"
+
+const FIXTURES = __dirname + "/fixtures/tools"
+
+def catalog() {
+  return listTools(FIXTURES) with approve
+}
+
+def entryNamed(entries: any[], name: string) {
+  return find(entries, \entry -> entry.name == name)
+}
+
+node listsEveryDirectory(): boolean {
+  const entries = catalog()
+  if (entries is failure) {
+    return false
+  }
+  const names = map(entries.value, \entry -> entry.name)
+  names.sort()
+  return names.join(",") == "badMeta,broken,good,noMeta"
+}
+
+node readsSignatureDocstringAndEffects(): boolean {
+  const entries = catalog()
+  if (entries is failure) {
+    return false
+  }
+  const good = entryNamed(entries.value, "good")
+  const signatureOk = good.signature =~ re/tool\(request: Request\)/
+  const docstringOk = good.docstring =~ re/Add one/
+  const summaryOk = good.summary == "Add one to a number."
+  // The guard inside tool raises std::guard, so a conforming tool is never effect-free.
+  const effectsOk = good.effects.join(",") == "std::guard"
+  return signatureOk && docstringOk && summaryOk && effectsOk && good.broken == null
+}
+
+node readsMeta(): boolean {
+  const entries = catalog()
+  if (entries is failure) {
+    return false
+  }
+  const good = entryNamed(entries.value, "good")
+  return good.uses == 3 && good.version == 1 && good.recentOutcomes.length == 3
+}
+
+node defaultsMissingMeta(): boolean {
+  const entries = catalog()
+  if (entries is failure) {
+    return false
+  }
+  const noMeta = entryNamed(entries.value, "noMeta")
+  return noMeta.uses == 0 && noMeta.version == 1 && noMeta.lastUsedAt == null && noMeta.broken == null
+}
+
+node reportsCorruptMeta(): boolean {
+  const entries = catalog()
+  if (entries is failure) {
+    return false
+  }
+  const badMeta = entryNamed(entries.value, "badMeta")
+  return badMeta.broken != null && badMeta.broken =~ re/meta\.json/
+}
+
+node marksBroken(): boolean {
+  const entries = catalog()
+  if (entries is failure) {
+    return false
+  }
+  const broken = entryNamed(entries.value, "broken")
+  return broken.broken != null && broken.broken =~ re/tool/
+}
+
+node rejectedScanReturnsFailure(): boolean {
+  handle {
+    const entries = listTools(FIXTURES)
+    return entries is failure
+  } with (intr) {
+    return reject()
+  }
+}

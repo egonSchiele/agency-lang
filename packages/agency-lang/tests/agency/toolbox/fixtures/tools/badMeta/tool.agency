@@ -1,0 +1,29 @@
+/** @module
+  @summary Subtract one from a number.
+*/
+
+export type Request = {
+  n: number
+}
+
+export def tool(request: Request): number {
+  """
+  Add one to the number in the request.
+
+  Example: tool({ n: 41 })
+
+  @param request - The number to add one to
+  """
+  const result = guard(time: 1m, cost: $0.10) {
+    return request.n - 1
+
+    finalize {
+      return 0
+    }
+  }
+  return result
+}
+
+export node main(request: Request): number {
+  return tool(request)
+}

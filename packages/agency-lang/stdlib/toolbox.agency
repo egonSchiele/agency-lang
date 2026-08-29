@@ -1,0 +1,189 @@
+import { describe, ModuleInfo, ExportInfo } from "std::agency"
+import { _read } from "agency-lang/stdlib-lib/builtins.js"
+import { _glob } from "agency-lang/stdlib-lib/shell.js"
+
+/** @module
+  @summary Keep a directory of tools an agent wrote, and write new ones.
+  Keep a directory of tools an agent wrote, and write new ones. A tool is
+  an Agency module that exports `type Request`, `def tool(request: Request)`,
+  and `node main(request: Request)`. `listTools` reads a toolbox directory
+  into a catalog; `writeTool` has the coding agent write a new tool, checks
+  and tests it, shows it to the user through an interrupt, and saves it.
+
+  The review interrupt is the point of the design: a person reads the
+  generated code before it is saved. The handler below prints the source
+  and asks.
+
+  ```ts
+  import { writeTool, listTools } from "std::toolbox"
+  import { runFile } from "std::agency"
+
+  const REVISE_PREFIX = "revise "
+
+  node main() {
+    handle {
+      const written = writeTool(name: "getNews", purpose: "Summarize today's news for a list of topics as Markdown.")
+      if (written is failure(err)) {
+        print("not written: ${err}")
+        return
+      }
+      printJSON(listTools())
+      const news = runFile(written.value.dir, "tool.agency", "main", { request: { topics: ["tech"], maxItems: 5 } })
+      print(news)
+    } with (intr) {
+      return match (intr.effect) {
+        "std::toolbox::review" => {
+          print(intr.data.source)
+          print("effects: ${intr.data.effects.join(", ")}")
+          const answer = input("accept / revise <feedback> / reject: ")
+          if (answer == "accept") {
+            return approve({ verdict: "accept" })
+          }
+          if (answer.startsWith(REVISE_PREFIX)) {
+            return approve({ verdict: "revise", feedback: answer.slice(REVISE_PREFIX.length) })
+          }
+          return reject("cancelled by user")
+        }
+        _ => pass()
+      }
+    }
+  }
+  ```
+
+  A program imports a saved tool directly:
+  `import { tool as getNews } from "~/.agency-agent/tools/getNews/tool.agency"`.
+*/
+
+// Upper bound on tools one scan reads; the same cap std::skills uses for a
+// skills directory.
+const MAX_TOOLS = 500
+
+// One approval covers the scan; the reads that fulfil it use the
+// non-interrupt primitives, as std::skills does.
+effect std::toolbox::scan { dir: string }
+
+/** One tool in a toolbox: what `describe` says about its module plus the
+  usage record from meta.json. `broken` carries the reason the directory
+  could not be read as a healthy tool: a parse failure, no `tool` export,
+  or a meta.json that is not JSON. */
+export type ToolEntry = {
+  name: string;
+  dir: string;
+  summary: string | null;
+  signature: string;
+  docstring: string | null;
+  effects: string[];
+  version: number;
+  uses: number;
+  lastUsedAt: string | null;
+  recentOutcomes: string[];
+  broken: string | null
+}
+
+/** What describe() contributes to an entry. */
+type ModuleFacts = {
+  summary: string | null;
+  signature: string;
+  docstring: string | null;
+  effects: string[]
+}
+
+/** What meta.json contributes to an entry. */
+type MetaFacts = {
+  version: number;
+  uses: number;
+  lastUsedAt: string | null;
+  recentOutcomes: string[]
+}
+
+const DEFAULT_META: MetaFacts = {
+  version: 1,
+  uses: 0,
+  lastUsedAt: null,
+  recentOutcomes: []
+}
+
+const EMPTY_MODULE: ModuleFacts = {
+  summary: null,
+  signature: "",
+  docstring: null,
+  effects: []
+}
+
+def toolExport(info: ModuleInfo): ExportInfo | null {
+  return find(info.exports, \entry -> entry.name == "tool" && entry.kind == "def")
+}
+
+def moduleFacts(toolDir: string): Result<ModuleFacts> {
+  const source = try _read(toolDir, "tool.agency", 0, 0)
+  if (source is failure) {
+    return source
+  }
+  const info = describe(source.value)
+  if (info is failure) {
+    return info
+  }
+  const exported = toolExport(info.value)
+  if (exported == null) {
+    return failure("no exported `def tool` in tool.agency")
+  }
+  return success({
+    summary: info.value.description,
+    signature: exported.signature,
+    docstring: exported.docstring,
+    effects: exported.effects
+  })
+}
+
+// A missing meta.json is the default record; a present one that is not
+// JSON is a failure, so a corrupt file never passes as a healthy tool.
+def metaFacts(toolDir: string): Result<MetaFacts> {
+  const raw = try _read(toolDir, "meta.json", 0, 0)
+  if (raw is failure) {
+    return success(DEFAULT_META)
+  }
+  const parsed = try JSON.parse(raw.value)
+  if (parsed is failure(parseErr)) {
+    return failure("meta.json is not valid JSON: ${parseErr}")
+  }
+  return success({
+    version: parsed.value.version ?? DEFAULT_META.version,
+    uses: parsed.value.uses ?? DEFAULT_META.uses,
+    lastUsedAt: parsed.value.lastUsedAt ?? DEFAULT_META.lastUsedAt,
+    recentOutcomes: parsed.value.recentOutcomes ?? DEFAULT_META.recentOutcomes
+  })
+}
+
+def entryFor(dir: string, name: string): ToolEntry {
+  const toolDir = dir + "/" + name
+  const module = moduleFacts(toolDir)
+  const meta = metaFacts(toolDir)
+  const moduleFields: ModuleFacts = module catch EMPTY_MODULE
+  const metaFields: MetaFacts = meta catch DEFAULT_META
+  let broken: string | null = null
+  if (module is failure(moduleErr)) {
+    broken = "${moduleErr}"
+  } else if (meta is failure(metaErr)) {
+    broken = "${metaErr}"
+  }
+  return { name: name, dir: toolDir, broken: broken, ...moduleFields, ...metaFields }
+}
+
+export idempotent def listTools(dir: string = "~/.agency-agent/tools"): Result<ToolEntry[]> {
+  """
+  List the tools in a toolbox directory: each tool's name, signature,
+  description, the interrupt effects it can raise, and its usage record.
+
+  @param dir - The toolbox directory to scan
+  """
+  return interrupt std::toolbox::scan("Are you sure you want to scan this directory for tools?", {
+    dir: dir
+  })
+  const paths = try _glob("*/tool.agency", dir, MAX_TOOLS, [])
+  if (paths is failure) {
+    return paths
+  }
+  // Each path is "<name>/tool.agency", relative to dir.
+  const names = map(paths.value, \relPath -> relPath.split("/")[0])
+  return success(map(names, \name -> entryFor(dir, name)))
+}

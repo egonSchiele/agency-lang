@@ -1,0 +1,28 @@
+export type Request = {
+  n: number
+}
+
+export def tool(request: Request): number {
+  """
+  Add one.
+
+  Example: tool({ n: 1 })
+
+  @param request - The input
+  """
+  const result = guard(time: 1m, cost: $0.10) {
+    return request.n + 1
+  }
+  const other = guard(time: 1m, cost: $0.10) {
+    return 0
+
+    finalize {
+      return 0
+    }
+  }
+  return result
+}
+
+export node main(request: Request): number {
+  return tool(request)
+}

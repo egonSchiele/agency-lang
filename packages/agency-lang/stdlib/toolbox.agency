@@ -1,4 +1,4 @@
-import { describe, ModuleInfo, ExportInfo } from "std::agency"
+import { describe, parseAST, toSource, getNodesOfType, ModuleInfo, ExportInfo } from "std::agency"
 import { _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _glob } from "agency-lang/stdlib-lib/shell.js"
 
@@ -186,4 +186,116 @@ export idempotent def listTools(dir: string = "~/.agency-agent/tools"): Result<T
   // Each path is "<name>/tool.agency", relative to dir.
   const names = map(paths.value, \relPath -> relPath.split("/")[0])
   return success(map(names, \name -> entryFor(dir, name)))
+}
+
+/** Everything the shape rules look at, gathered once. `guardsInTool` is
+  the list of guardBlock nodes inside `tool` (empty when there is none);
+  `docstring` is the text of tool's docstring ("" when absent). */
+type ShapeFacts = {
+  exportedTypes: string[];
+  exportedDefs: string[];
+  exportedNodes: string[];
+  guardsInTool: any[];
+  approveCount: number;
+  docstring: string
+}
+
+def exportedNamesOf(nodes: any[], nodeType: string, nameOf: (any) -> string): string[] {
+  const exported = filter(nodes, \astNode -> astNode.type == nodeType && astNode.exported)
+  return map(exported, nameOf)
+}
+
+def toolDocstring(source: string): string {
+  const described = describe(source)
+  if (described is failure) {
+    return ""
+  }
+  const exported = toolExport(described.value)
+  if (exported == null) {
+    return ""
+  }
+  return exported.docstring ?? ""
+}
+
+// The only def that knows AST field names.
+def shapeFacts(source: string): Result<ShapeFacts> {
+  const ast = parseAST(source)
+  if (ast is failure) {
+    return ast
+  }
+  const nodes = ast.value.nodes
+  const toolNode = find(nodes, \astNode -> astNode.type == "function" && astNode.functionName == "tool")
+  let guardsInTool: any[] = []
+  if (toolNode != null) {
+    // Print the tool node alone so getNodesOfType (the existing walker) is
+    // scoped to it.
+    const toolSource = toSource({ type: "agencyProgram", nodes: [toolNode] })
+    guardsInTool = getNodesOfType(toolSource, ["guardBlock"]) catch []
+  }
+  const modifiers = getNodesOfType(source, ["withModifier"]) catch []
+  const approvals = filter(modifiers, \modifier -> modifier.handlerName == "approve")
+  return success({
+    exportedTypes: exportedNamesOf(nodes, "typeAlias", \astNode -> astNode.aliasName),
+    exportedDefs: exportedNamesOf(nodes, "function", \astNode -> astNode.functionName),
+    exportedNodes: exportedNamesOf(nodes, "graphNode", \astNode -> astNode.nodeName),
+    guardsInTool: guardsInTool,
+    approveCount: approvals.length,
+    docstring: toolDocstring(source)
+  })
+}
+
+def guardHasFinalize(guardNode: any): boolean {
+  return some(guardNode.body, \child -> child.type == "finalizeBlock")
+}
+
+type ShapeRule = {
+  ok: boolean;
+  message: string
+}
+
+def unexpectedExportRules(names: string[], expected: string, kind: string): ShapeRule[] {
+  const unexpected = filter(names, \name -> name != expected)
+  return map(unexpected, \name -> {
+    ok: false,
+    message: "unexpected export `${kind} ${name}`; a tool exports only Request, tool, and main"
+  })
+}
+
+// The contract as data: one entry per rule, in the order problems are reported.
+def shapeRules(facts: ShapeFacts): ShapeRule[] {
+  const hasTool = facts.exportedDefs.includes("tool")
+  const firstGuard = facts.guardsInTool[0] ?? null
+  const hasDocstring = facts.docstring != ""
+  return [
+    { ok: facts.exportedTypes.includes("Request"), message: "missing `export type Request`" },
+    { ok: hasTool, message: "missing `export def tool(request: Request)`" },
+    { ok: facts.exportedNodes.includes("main"), message: "missing `export node main(request: Request)`" },
+    ...unexpectedExportRules(facts.exportedTypes, "Request", "type"),
+    ...unexpectedExportRules(facts.exportedDefs, "tool", "def"),
+    ...unexpectedExportRules(facts.exportedNodes, "main", "node"),
+    { ok: !hasTool || firstGuard != null, message: "`tool` must wrap its work in a guard(time:, cost:) block" },
+    { ok: firstGuard == null || guardHasFinalize(firstGuard), message: "the guard in `tool` needs a finalize block that returns partial results" },
+    { ok: facts.approveCount == 0, message: "`with approve` is not allowed in a tool; the caller decides approvals" },
+    { ok: !hasTool || hasDocstring, message: "`tool` needs a docstring" },
+    { ok: !hasDocstring || facts.docstring =~ re/@param request/, message: "the docstring on `tool` must document `@param request`" },
+    { ok: !hasDocstring || facts.docstring =~ re/Example:/, message: "the docstring on `tool` must include an `Example:` call" },
+  ]
+}
+
+export idempotent def checkToolShape(source: string): string[] {
+  """
+  Check that Agency source has the shape of a toolbox tool: exactly the
+  exports type Request, def tool, and node main; a guard with finalize
+  inside tool; no `with approve`; a docstring on tool with @param request
+  and an example call. Returns one message per problem, empty when the
+  source conforms.
+
+  @param source - Agency source code of a tool module
+  """
+  const facts = shapeFacts(source)
+  if (facts is failure(parseErr)) {
+    return ["parse error: ${parseErr}"]
+  }
+  const failing = filter(shapeRules(facts.value), \rule -> !rule.ok)
+  return map(failing, \rule -> rule.message)
 }

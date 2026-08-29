@@ -1,0 +1,47 @@
+import { checkToolShape } from "std::toolbox"
+
+const SHAPES = __dirname + "/fixtures/shapes"
+const TOOLS = __dirname + "/fixtures/tools"
+
+def problemsFor(dir: string, filename: string): string {
+  const source = read(filename, dir) with approve
+  if (source is failure) {
+    return "could not read fixture"
+  }
+  return checkToolShape(source.value).join("\n")
+}
+
+node acceptsAConformingModule(): boolean {
+  return problemsFor(TOOLS, "good/tool.agency") == ""
+}
+
+node rejectsMissingExports(): boolean {
+  const problems = problemsFor(SHAPES, "missingExports.agency")
+  return problems =~ re/def tool/ && problems =~ re/node main/ && problems =~ re/helper/
+}
+
+node rejectsExtraExports(): boolean {
+  return problemsFor(SHAPES, "extraExport.agency") =~ re/extra/
+}
+
+node rejectsMissingGuard(): boolean {
+  return problemsFor(SHAPES, "noGuard.agency") =~ re/guard/
+}
+
+node rejectsFinalizeOutsideTheGuard(): boolean {
+  return problemsFor(SHAPES, "finalizeOutsideGuard.agency") =~ re/finalize/
+}
+
+node rejectsWithApprove(): boolean {
+  return problemsFor(SHAPES, "withApprove.agency") =~ re/with approve/
+}
+
+node rejectsMissingDocstringParts(): boolean {
+  const problems = problemsFor(SHAPES, "noDocstringParts.agency")
+  return problems =~ re/@param request/ && problems =~ re/Example:/
+}
+
+node reportsParseFailure(): boolean {
+  const problems = checkToolShape("export def tool(request: Request) {{{")
+  return problems.length == 1 && problems[0] =~ re/parse/i
+}

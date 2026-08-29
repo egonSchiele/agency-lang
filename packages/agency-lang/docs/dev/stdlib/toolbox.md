@@ -1,8 +1,7 @@
 # std::toolbox
 
 A toolbox is a directory of tools an agent wrote and keeps. This note
-records the decisions behind `stdlib/toolbox.agency`. The spec that led
-to it is `2026-08-28-self-written-tools-spec.md` at the package root.
+records the decisions behind `stdlib/toolbox.agency`.
 
 ## What a tool is
 
@@ -55,9 +54,10 @@ so a `tool()` with no parameter is refused even though it typechecks.
 `draftSource` → `reviewSource` → `testSource` (together `prepareDraft`)
 → `askUser` → `saveTool`, each a def with one job that returns a
 `Result`. `rounds` is the loop; `feedback` is its only state, holding
-the last problem or the user's revision request. `writeTool` validates,
-stages, calls `rounds`, and clears staging once, folding a refused
-delete into the returned failure.
+the last problem or the user's revision request. `writeTool` validates, stages, calls `rounds`, and on failure clears
+staging once, folding a refused delete into the returned failure. On
+success the publish rename has already emptied staging, so no delete
+interrupt is raised.
 
 `writeTool` and `listTools` expand `~` in `dir` once, up front, with the
 stdlib's `expandPath`. The file primitives expand it themselves, but the
@@ -66,8 +66,15 @@ unexpanded default would have made every generated test run fail.
 
 ### Publishing is one rename
 
-Every round writes into `<dir>/.staging/<name>`: `tool.agency`, then
+Every round writes into `<dir>/staging/<name>`: `tool.agency`, then
 `tool.test.json` when the tool was tested, then `meta.json` on accept.
+The staging directory is not a dot directory: the built-in with-writes
+policy scopes writes with `base/**`, and `**` does not match a dot-led
+segment, so a `.staging` directory would have prompted on every mkdir.
+`staging` is therefore a reserved tool name, and `listTools` skips it.
+An impure round removes a `tool.test.json` that an earlier pure round
+left behind, so a revision that starts calling a model does not ship
+the old tests.
 `saveTool` re-checks that `<dir>/<name>` is still free (the check in
 `checkName` is stale after several model calls) and then `move`s the
 staged directory into place. A tool is either fully present or absent;
@@ -80,17 +87,21 @@ would refuse to reuse.
 file. A scripted approval of a network effect lets the real call through
 anyway. So a generated exact-match test for a tool that calls a model or
 the network can never pass. `testSource` therefore generates and runs tests
-only for a pure tool: its effect list is exactly `["std::guard"]` and
-its source has no `llm` call (`isPure`). Other tools skip the cases
+only for a pure tool (`isPure`): its effect list is exactly
+`["std::guard"]`, its source has no `llm` call, and it imports only
+modules on the `PURE_IMPORTS` list (the prelude, dates, math, arrays,
+objects, paths, validation). The import rule catches helpers that call
+a model internally without raising an interrupt, such as the agents
+under `std::agents`. Other tools skip the cases
 call; the review payload sets `tested: false`.
 
 ### What the handler may return
 
 `askUser` returns a `Result<WriteToolReview>`. A rejected interrupt
 comes back as the failure it is, message intact, and `rounds` returns
-it. A bare `approve()` (what a catch-all policy sends) carries no value
-and counts as accept. Anything else without a `verdict` of `accept` or
-`revise` is a failure naming the answer.
+it. A bare `approve()` (what a catch-all policy sends) carries no value and
+counts as accept. A `revise` must carry a string `feedback`. Anything
+else is a failure naming the answer.
 
 The typechecker does not carry a `Result` narrowing past a `continue`,
 so `rounds` branches on `is failure` / `is success` instead of
@@ -131,7 +142,9 @@ a healthy tool.
 ## Listing
 
 `listTools` lists the toolbox with `_ls`, a plain one-level directory
-read, and keeps the directories whose names do not start with a dot.
+read, and keeps the directories whose names are not `staging` and do
+not start with a dot. A toolbox directory that does not exist yet is an
+empty catalog, so an agent can list before the first `writeTool`.
 The recursive glob helper `_glob` skips `dist`, `build`, `.cache`, and
 friends at every level; using it for `listTools` instead of `_ls` would
 have hidden a tool with one of those names.
@@ -143,11 +156,11 @@ task and draws none), one in the review agent (it has a task), and, for
 a pure tool only, one for the test cases. A draft that fails the shape
 check draws only the first; a tool that calls a model draws two.
 `tests/agency/toolbox/writeTool.test.json` counts mocks this way; if the
-order ever gets awkward, scope the queues by module basename. The
-mocked draft is the `good` fixture embedded as a string, so regenerate
-the JSON (the script is in the plan) whenever that fixture changes; a
-stale copy fails the coding agent's own check and silently spends the
-round's mocks.
+order ever gets awkward, scope the queues by module basename. The mocked drafts embed the `good` fixture as a string.
+`tests/agency/toolbox/generate-writeTool-mocks.mjs` regenerates
+`writeTool.test.json`; run it whenever that fixture changes. A stale
+copy fails the coding agent's own check and silently spends the round's
+mocks.
 
 `writeTool.agency` writes under `tests/agency/toolbox/test-output/`
 (gitignored) and removes what it made. A `tool.test.json` left there is

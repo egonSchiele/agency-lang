@@ -86,6 +86,16 @@ const MAX_TOOL_NAME_LEN = 64
 // predict.
 const PURE_EFFECTS = "std::guard"
 
+// Modules a pure tool may import. std::index is the implicit prelude.
+// Anything else (std::agents, std::http, std::shell, ...) can reach a
+// model or the network without an interrupt showing in the effect list.
+const PURE_IMPORTS = ["std::index", "std::date", "std::math", "std::array", "std::object", "std::path", "std::validation"]
+
+// Drafts are built under <root>/staging/<name>. Not a dot directory: the
+// with-writes policy scopes writes with `base/**`, and `**` does not match
+// a dot-led segment.
+const STAGING_DIR = "staging"
+
 // One approval covers the scan; the reads that fulfil it use the
 // non-interrupt primitives, as std::skills does.
 effect std::toolbox::scan {
@@ -268,19 +278,26 @@ def entryFor(root: string, name: string): ToolEntry {
   }
 }
 
+def isToolDir(entry: any): boolean {
+  return entry.type == "dir" && entry.name != STAGING_DIR && !entry.name.startsWith(".")
+}
+
 // A plain directory listing, so a tool named `dist` or `build` is not
-// hidden by the walking glob's skip list. Dot directories (the staging
-// area) are not tools.
+// hidden by the walking glob's skip list. A toolbox that does not exist
+// yet is an empty catalog, not an error.
 def toolNames(root: string): Result<string[]> {
+  const present = try _exists(root, "", [])
+  if (present is failure) {
+    return present
+  }
+  if (!present.value) {
+    return success([])
+  }
   const entries = try _ls(root, false, [], MAX_TOOLS)
   if (entries is failure) {
     return entries
   }
-  const dirs = filter(
-    entries.value,
-    \entry -> entry.type == "dir" && !entry.name.startsWith("."),
-  )
-  return success(map(dirs, \entry -> entry.name))
+  return success(map(filter(entries.value, isToolDir), \entry -> entry.name))
 }
 
 export idempotent def listTools(
@@ -675,14 +692,20 @@ def toolEffects(source: string): string[] {
 }
 
 // llm() raises no interrupt, so it never shows in the effect list; the call
-// itself is the signal.
+// itself is the signal. A helper that calls llm internally (a std::agents
+// agent, say) is caught by the import rule instead.
 def callsModel(source: string): boolean {
   const calls = getNodesOfType(source, ["functionCall"]) catch []
   return some(calls, \call -> call.functionName == "llm")
 }
 
+def importsOnlyPureModules(source: string): boolean {
+  const imports = getNodesOfType(source, ["importStatement"]) catch []
+  return every(imports, \statement -> PURE_IMPORTS.includes(statement.modulePath))
+}
+
 def isPure(source: string): boolean {
-  return toolEffects(source).join(",") == PURE_EFFECTS && !callsModel(source)
+  return toolEffects(source).join(",") == PURE_EFFECTS && !callsModel(source) && importsOnlyPureModules(source)
 }
 
 // ---- the writeTool pipeline ----
@@ -738,6 +761,15 @@ def testSource(source: string, settings: DraftSettings): Result<Draft> {
     return wroteSource
   }
   if (!isPure(source)) {
+    // A previous round may have been pure and left a test file behind;
+    // it must not ship with this draft.
+    const stale = try _exists("tool.test.json", settings.stagingDir, [])
+    if (stale is success && stale.value) {
+      const cleared = remove("${settings.stagingDir}/tool.test.json")
+      if (cleared is failure) {
+        return cleared
+      }
+    }
     return success({
       source: source,
       casesJson: null
@@ -799,10 +831,13 @@ def askUser(
       verdict: "accept"
     })
   }
-  if (answer.verdict == "accept" || answer.verdict == "revise") {
+  if (answer.verdict == "accept") {
     return success(answer)
   }
-  return failure("unrecognized review answer: ${JSON.stringify(answer)}")
+  if (answer.verdict == "revise" && typeof answer.feedback == "string") {
+    return success(answer)
+  }
+  return failure("unrecognized review answer: ${JSON.stringify(answer)}; expected { verdict: \"accept\" } or { verdict: \"revise\", feedback: \"...\" }")
 }
 
 // The staged directory already holds tool.agency (and tool.test.json when
@@ -883,6 +918,9 @@ def checkName(name: string, dir: string, root: string): Result {
       "tool name must be at most ${MAX_TOOL_NAME_LEN} characters, got ${name.length}",
     )
   }
+  if (name == STAGING_DIR) {
+    return failure("`${STAGING_DIR}` is the toolbox's staging directory and cannot be a tool name")
+  }
   const taken = try _exists(name, root, [])
   if (taken is failure) {
     return taken
@@ -927,7 +965,7 @@ export def writeTool(
   if (nameOk is failure) {
     return nameOk
   }
-  const stagingDir = "${root}/.staging/${name}"
+  const stagingDir = "${root}/${STAGING_DIR}/${name}"
   const cleared = remove(stagingDir)
   if (cleared is failure) {
     return cleared
@@ -946,17 +984,13 @@ export def writeTool(
     provider: provider
   }
   const outcome = rounds(root, name, settings, maxRounds)
-  // After a publish the staging directory is already gone; remove is a no-op.
+  if (outcome is success) {
+    // The publish renamed the staging directory away; nothing to clear.
+    return outcome
+  }
   const removed = remove(stagingDir)
   if (removed is failure(removeErr)) {
-    if (outcome is failure(outcomeErr)) {
-      return failure(
-        "${outcomeErr}\n(could not clear staging directory ${stagingDir}: ${removeErr})",
-      )
-    }
-    return failure(
-      "tool saved to ${root}/${name}, but could not clear staging directory ${stagingDir}: ${removeErr}",
-    )
+    return failure("${outcome.error}\n(could not clear staging directory ${stagingDir}: ${removeErr})")
   }
   return outcome
 }

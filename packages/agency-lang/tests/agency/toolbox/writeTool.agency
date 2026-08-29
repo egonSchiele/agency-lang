@@ -32,14 +32,14 @@ def runWrite(name: string, dir: string, verdicts: any[]) {
 
 def cleanup(name: string) {
   remove(OUT + "/" + name) with approve
-  remove(OUT + "/.staging") with approve
+  remove(OUT + "/staging") with approve
 }
 
 def savedFiles(name: string): boolean {
   const hasSource = exists("${name}/tool.agency", OUT)
   const hasCases = exists("${name}/tool.test.json", OUT)
   const hasMeta = exists("${name}/meta.json", OUT)
-  const stagingGone = !exists(".staging/${name}", OUT)
+  const stagingGone = !exists("staging/${name}", OUT)
   return hasSource && hasCases && hasMeta && stagingGone
 }
 
@@ -59,7 +59,7 @@ node acceptSavesThreeFiles(): boolean {
 node rejectWritesNothing(): boolean {
   cleanup("addTwo")
   const result = runWrite("addTwo", OUT, [null])
-  const nothing = !exists("addTwo", OUT) && !exists(".staging/addTwo", OUT)
+  const nothing = !exists("addTwo", OUT) && !exists("staging/addTwo", OUT)
   const keptMessage = result is failure && "${result.error}" =~ re/cancelled by the test/
   cleanup("addTwo")
   return keptMessage && nothing
@@ -74,11 +74,18 @@ node reviseRunsASecondRound(): boolean {
   return ok
 }
 
+// The first draft has an extra export. checkToolShape must send it back
+// so the second draft is the one saved: the saved source has no `helper`.
 node badShapeGoesBackToTheCodingAgent(): boolean {
   cleanup("addFour")
   const result = runWrite("addFour", OUT, [{ verdict: "accept" }])
+  const saved = read("addFour/tool.agency", OUT) with approve
+  let cleanSource = false
+  if (saved is success(source)) {
+    cleanSource = !(source =~ re/helper/)
+  }
   cleanup("addFour")
-  return result is success
+  return result is success && cleanSource
 }
 
 // No mocks: the name check runs before staging and before any model call.
@@ -118,4 +125,38 @@ node modelToolSkipsTests(): boolean {
   const noCases = !exists("greet/tool.test.json", OUT)
   cleanup("greet")
   return result is success && hasSource && hasMeta && noCases
+}
+
+node refusesTheStagingName(): boolean {
+  const result = runWrite("staging", OUT, [{ verdict: "accept" }])
+  return result is failure && "${result.error}" =~ re/staging/
+}
+
+// std::shell is outside PURE_IMPORTS, so no cases call and no test file.
+node impureImportSkipsTests(): boolean {
+  cleanup("whichCmd")
+  const result = runWrite("whichCmd", OUT, [{ verdict: "accept" }])
+  const noCases = !exists("whichCmd/tool.test.json", OUT)
+  cleanup("whichCmd")
+  return result is success && noCases
+}
+
+node reviseWithoutFeedbackFails(): boolean {
+  cleanup("addSeven")
+  const result = runWrite("addSeven", OUT, [{ verdict: "revise" }])
+  const nothing = !exists("addSeven", OUT)
+  cleanup("addSeven")
+  return result is failure && "${result.error}" =~ re/feedback/ && nothing
+}
+
+// Round 1 is pure and writes a test file; the user asks for a revision;
+// round 2 calls a model. The saved tool must not ship round 1's tests.
+node staleTestFileDoesNotShip(): boolean {
+  cleanup("greetTwice")
+  const verdicts = [{ verdict: "revise", feedback: "use a model instead" }, { verdict: "accept" }]
+  const result = runWrite("greetTwice", OUT, verdicts)
+  const noCases = !exists("greetTwice/tool.test.json", OUT)
+  const hasSource = exists("greetTwice/tool.agency", OUT)
+  cleanup("greetTwice")
+  return result is success && hasSource && noCases
 }

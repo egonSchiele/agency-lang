@@ -79,3 +79,11 @@ node rejectedScanReturnsFailure(): boolean {
     return reject()
   }
 }
+
+node missingToolboxIsEmpty(): boolean {
+  const entries = listTools(__dirname + "/no-such-toolbox") with approve
+  if (entries is failure) {
+    return false
+  }
+  return entries.value.length == 0
+}

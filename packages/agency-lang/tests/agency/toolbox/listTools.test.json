@@ -69,6 +69,16 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "missingToolboxIsEmpty",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

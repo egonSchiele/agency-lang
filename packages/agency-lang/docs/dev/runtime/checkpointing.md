@@ -234,6 +234,12 @@ node main() {
 
 ### External persistence via getCheckpoint
 
+`restore()` accepts the parsed JSON directly and revives it with
+`Checkpoint.fromJSON`, which validates against the zod schemas in
+`lib/runtime/state/schemas.ts`. zod drops any key a schema does not name, so
+when adding a field to `MessageThread.toJSON` or `ThreadStore.toJSON`, add it
+to the schema too, or a checkpoint read back from a file will lose it.
+
 ```agency
 node main() {
   const cp = checkpoint()

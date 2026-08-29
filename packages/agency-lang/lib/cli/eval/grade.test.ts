@@ -263,6 +263,30 @@ describe("evalGrade", () => {
     ]);
   });
 
+  it("an uneven trial grid (a batch cut short) still grades every run and names the batch as incomplete", async () => {
+    const group = fs.mkdtempSync(path.join(process.cwd(), ".test-batch-uneven-"));
+    dirs.push(group);
+    const batch = path.basename(group);
+    for (const trial of [1, 2]) {
+      writeRunDirectory(
+        { test: lenTest("a"), output: "hello", batch, trial },
+        path.join(group, "a", String(trial)),
+      );
+    }
+    writeRunDirectory(
+      { test: lenTest("b"), output: "hello", batch, trial: 1 },
+      path.join(group, "b", "1"),
+    );
+
+    const result = await evalGrade([group], { config: {} });
+
+    expect(result.runs).toHaveLength(3);
+    expect(result.batches).toEqual([]);
+    expect(result.incompleteBatches).toEqual([
+      { batch, reason: expect.stringMatching(/incomplete trial grid/) },
+    ]);
+  });
+
   it("two selected batches that reuse test and trial ids are reported separately, never merged", async () => {
     const groups = ["one", "two"].map((name) => {
       const group = fs.mkdtempSync(path.join(process.cwd(), `.test-batch-${name}-`));

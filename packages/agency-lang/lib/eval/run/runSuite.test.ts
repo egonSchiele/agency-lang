@@ -631,6 +631,95 @@ describe("runSuite", () => {
     expect(withGoal.objective()).toBe(1);
   });
 
+  it("sequential: once the batch cost cap is crossed, no further test starts", async () => {
+    const runner = vi.fn(async (job: EvalRunnerJob) => {
+      fs.writeFileSync(
+        job.statelogPath,
+        finishedTraceLines(job.traceId, { output: "done", costUsd: 3 }).join("\n") + "\n",
+      );
+      return { ok: true as const };
+    });
+    const result = await runSuite(
+      {
+        agent: path.join(proj, "agent.agency"),
+        inputs: [
+          { id: "a", goal: "g", input: "t" },
+          { id: "b", goal: "g", input: "t" },
+          { id: "c", goal: "g", input: "t" },
+        ],
+        out: path.join(proj, "runs", "r-budget"),
+        config: { eval: { limits: { maxBatchCostUsd: 5 } } },
+        perRun: { pipeOutput: false },
+        progress: false,
+      },
+      { runner },
+    );
+    expect(runner).toHaveBeenCalledTimes(2);
+    expect(result.tests.map((test) => test.testId)).toEqual(["a", "b"]);
+    expect(result.costUsd).toBe(6);
+    expect(result.batchCostCapExceeded).toBe(true);
+    expect(fs.readdirSync(result.runDir).sort()).toEqual(["a", "b"]);
+  });
+
+  it("parallel: an exhausted batch budget stops scheduling; in-flight runs still record", async () => {
+    const runner = vi.fn(async (job: EvalRunnerJob) => {
+      await new Promise((r) => setTimeout(r, 20));
+      fs.writeFileSync(
+        job.statelogPath,
+        finishedTraceLines(job.traceId, { output: "done", costUsd: 4 }).join("\n") + "\n",
+      );
+      return { ok: true as const };
+    });
+    const result = await runSuite(
+      {
+        agent: path.join(proj, "agent.agency"),
+        inputs: [
+          { id: "a", goal: "g", input: "t" },
+          { id: "b", goal: "g", input: "t" },
+          { id: "c", goal: "g", input: "t" },
+          { id: "d", goal: "g", input: "t" },
+        ],
+        out: path.join(proj, "runs", "r-par-budget"),
+        config: { eval: { limits: { maxBatchCostUsd: 3 } } },
+        parallel: 2,
+        progress: false,
+      },
+      { runner },
+    );
+    // a and b start together; the first to finish crosses the cap ($4 > $3),
+    // the other is already in flight and records; c and d never start.
+    expect(runner).toHaveBeenCalledTimes(2);
+    expect(result.tests.map((test) => test.testId)).toEqual(["a", "b"]);
+    expect(result.batchCostCapExceeded).toBe(true);
+  });
+
+  it("without a batch cap, spend is reported and never stops the suite", async () => {
+    const runner = vi.fn(async (job: EvalRunnerJob) => {
+      fs.writeFileSync(
+        job.statelogPath,
+        finishedTraceLines(job.traceId, { output: "done", costUsd: 100 }).join("\n") + "\n",
+      );
+      return { ok: true as const };
+    });
+    const result = await runSuite(
+      {
+        agent: path.join(proj, "agent.agency"),
+        inputs: [
+          { id: "a", goal: "g", input: "t" },
+          { id: "b", goal: "g", input: "t" },
+        ],
+        out: path.join(proj, "runs", "r-no-budget"),
+        config: {},
+        perRun: { pipeOutput: false },
+        progress: false,
+      },
+      { runner },
+    );
+    expect(runner).toHaveBeenCalledTimes(2);
+    expect(result.costUsd).toBe(200);
+    expect(result.batchCostCapExceeded).toBe(false);
+  });
+
   it("a broken grading module fails before any agent runs", async () => {
     const modulePath = path.join(proj, "graders.ts");
     fs.writeFileSync(modulePath, "export const notDefault = 1;");

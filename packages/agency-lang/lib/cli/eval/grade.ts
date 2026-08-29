@@ -1,7 +1,11 @@
 import * as fs from "fs";
 
 import type { AgencyConfig } from "@/config.js";
-import { batchStatisticsByBatch, type BatchStatistics } from "@/eval/batchStatistics.js";
+import {
+  batchStatisticsByBatchTolerant,
+  type BatchStatistics,
+  type IncompleteBatch,
+} from "@/eval/batchStatistics.js";
 import { gradeSuite } from "@/eval/grading/gradeSuite.js";
 import type { EvalRunGrading } from "@/eval/runTypes.js";
 import { findRunDirectories, uniqueRunDirectories } from "@/runDirectory/findRuns.js";
@@ -39,14 +43,18 @@ export type EvalGradeOptions = {
  *  after grading so the effective scores are the ones just written. A
  *  directory that is not a run (no trace, no run row) contributes nothing;
  *  batches of one trial are left out, the run blocks already say it all. */
-function trialBatches(runDirs: readonly string[]): BatchStatistics[] {
+function trialBatches(runDirs: readonly string[]): {
+  batches: BatchStatistics[];
+  incompleteBatches: IncompleteBatch[];
+} {
   const summaries = runDirs.flatMap((dir) => {
     const summary = summarizeRunDirectory(
       readRunDirectory(dir, { reportWarning: (message) => console.warn(message) }),
     );
     return summary === null ? [] : [summary];
   });
-  return batchStatisticsByBatch(summaries).filter((batch) => batch.trials > 1);
+  const { batches, incomplete } = batchStatisticsByBatchTolerant(summaries);
+  return { batches: batches.filter((batch) => batch.trials > 1), incompleteBatches: incomplete };
 }
 
 /** One graded run directory and the mean over them all. */
@@ -61,6 +69,9 @@ export type EvalGradeResult = {
   /** Trial statistics for each selected batch that ran more than one trial,
    *  in the order the batches were met. Unrelated batches never merge. */
   batches: BatchStatistics[];
+  /** Batches with no statistics — an uneven trial grid, say — and why. Their
+   *  runs are still graded above; only the batch-level numbers are missing. */
+  incompleteBatches: IncompleteBatch[];
 };
 
 /** The command's own preconditions, checked before anything loads: the two
@@ -127,7 +138,7 @@ export async function evalGrade(
     mean: runs.reduce((sum, run) => sum + run.grading.objective, 0) / runs.length,
     judgeCostUsd: graded.reduce((sum, entry) => sum + entry.judgeCostUsd, 0),
     gatesPassed: runs.every((run) => run.grading.gatesPassed),
-    batches: trialBatches(runDirs),
+    ...trialBatches(runDirs),
   };
 
   if (opts.out !== undefined) {

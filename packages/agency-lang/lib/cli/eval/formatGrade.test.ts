@@ -33,6 +33,7 @@ describe("formatGradeResult", () => {
       mean: 0.75,
       gatesPassed: true,
       batches: [],
+      incompleteBatches: [],
     };
     const lines = formatGradeResult(result).map(stripAnsi);
     expect(lines).toContain("mean 0.750 over 2 runs");
@@ -49,6 +50,7 @@ describe("formatGradeResult", () => {
       mean: 1,
       gatesPassed: true,
       batches: [],
+      incompleteBatches: [],
     };
     expect(formatGradeResult(result).map(stripAnsi)).toContain("grading cost: <$0.01");
   });
@@ -68,6 +70,7 @@ describe("formatGradeResult", () => {
       mean: 0.75,
       gatesPassed: true,
       batches: [],
+      incompleteBatches: [],
     };
     const lines = formatGradeResult(result).map(stripAnsi);
     expect(lines).toEqual([
@@ -87,6 +90,7 @@ describe("formatGradeResult", () => {
       mean: 1,
       gatesPassed: true,
       batches: [],
+      incompleteBatches: [],
     };
     const lines = formatGradeResult(result).map(stripAnsi);
     expect(lines).toEqual([
@@ -109,6 +113,7 @@ describe("formatGradeResult", () => {
       mean: 0.5,
       gatesPassed: false,
       batches: [],
+      incompleteBatches: [],
     };
     const lines = formatGradeResult(result).map(stripAnsi);
     expect(lines).toEqual([
@@ -130,6 +135,7 @@ describe("formatGradeResult with trial batches", () => {
       judgeCostUsd: 0,
       mean: 1,
       gatesPassed: true,
+      incompleteBatches: [],
       batches: [
         {
           batch: "b1",
@@ -194,6 +200,7 @@ describe("formatGradeResult with trial batches", () => {
       judgeCostUsd: 0,
       mean: 0,
       gatesPassed: true,
+      incompleteBatches: [],
       batches: [batch("b1", 1), batch("b2", 0)],
     };
     expect(formatGradeResult(result).map(stripAnsi)).toEqual([

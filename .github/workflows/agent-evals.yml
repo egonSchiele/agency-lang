@@ -1,0 +1,151 @@
+# Weekly eval run of the agency agent, uploaded to statelog so its accuracy
+# can be tracked over time (see packages/agency-lang/docs/dev/evals/eval-tracking.md).
+#
+# This spends real money. packages/agency-lang/agency.json caps it:
+# maxBatchCostUsd for the batch, maxCostUsd per run (worst case: batch cap +
+# parallel x per-run cap), plus the grading judges outside both. It never
+# fails on scores — a bad week is information for the batch table, not an
+# alarm. It fails only when a step could not run or the upload was refused.
+#
+# The agent runs with every interrupt approved, so it has a shell and the
+# network. Three things bound what that can reach:
+#   - it runs in the eval Docker image (evals/agency-agent/run-in-docker.sh),
+#     which passes in only the LLM key and mounts only the run directory;
+#   - each secret is set on the one step that needs it, never job-wide;
+#   - the LLM key is a dedicated one (AGENT_EVALS_OPENAI_API_KEY) with its own
+#     spend limit, so a leak costs at most that limit until it is rotated.
+# The run directory is saved as an artifact only when the upload failed (it
+# holds every trace, and artifacts on a public repo are public): download it,
+# then `agency eval upload <dir>` from a linked checkout.
+#
+# Trigger it manually (workflow_dispatch) to try a cheaper suite or fewer
+# trials without waiting for Sunday.
+name: Agent evals (weekly)
+
+on:
+  schedule:
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      trials:
+        description: "Times to run every test"
+        default: "3"
+      suite:
+        description: "Suite directory, relative to packages/agency-lang"
+        default: "evals/agency-agent"
+
+permissions:
+  contents: read
+
+jobs:
+  evals:
+    # Forks have neither the secrets nor a reason to spend the money.
+    if: github.repository == 'egonSchiele/agency-lang'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    environment: ci-credentials
+    env:
+      TRIALS: ${{ inputs.trials || '3' }}
+      SUITE: ${{ inputs.suite || 'evals/agency-agent' }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install
+      - run: make
+        working-directory: packages/agency-lang
+
+      - name: Check configuration
+        env:
+          AGENT_EVALS_OPENAI_API_KEY: ${{ secrets.AGENT_EVALS_OPENAI_API_KEY }}
+          STATELOG_API_KEY: ${{ secrets.STATELOG_API_KEY }}
+          STATELOG_PROJECT_URL: ${{ secrets.STATELOG_PROJECT_URL }}
+        run: |
+          missing=""
+          [ -n "$AGENT_EVALS_OPENAI_API_KEY" ] || missing="$missing AGENT_EVALS_OPENAI_API_KEY"
+          [ -n "$STATELOG_API_KEY" ] || missing="$missing STATELOG_API_KEY"
+          [ -n "$STATELOG_PROJECT_URL" ] || missing="$missing STATELOG_PROJECT_URL"
+          if [ -n "$missing" ]; then
+            echo "::error::not configured:$missing"
+            exit 1
+          fi
+
+      # The image the agent runs in, built from this checkout so it tests the
+      # code at HEAD, not a published release.
+      - name: Build the eval image
+        working-directory: packages/agency-lang
+        run: make eval-image
+
+      - name: Pick a run directory
+        working-directory: packages/agency-lang
+        run: echo "RUN_DIR=runs/weekly-$(date -u +%Y-%m-%d-%H%M%S)" >> "$GITHUB_ENV"
+
+      - name: Link the statelog project
+        working-directory: packages/agency-lang
+        env:
+          STATELOG_PROJECT_URL: ${{ secrets.STATELOG_PROJECT_URL }}
+        run: node ./dist/scripts/agency.js remote link --url "$STATELOG_PROJECT_URL"
+
+      # Flags here are checked against the CLI's registered options by
+      # lib/cli/eval/workflowFlags.test.ts, so a rename fails `make test`
+      # instead of the Sunday run. The agent command is the suite's own
+      # wrapper (see evals/agency-agent/README.md); the wrapper forwards
+      # OPENAI_API_KEY into the container, and only that.
+      # `eval run` exits 2 when some tests errored (they are run rows that
+      # grade 0) and 1 when it could not run at all.
+      - name: Run the suite
+        working-directory: packages/agency-lang
+        env:
+          OPENAI_API_KEY: ${{ secrets.AGENT_EVALS_OPENAI_API_KEY }}
+        run: |
+          status=0
+          node ./dist/scripts/agency.js eval run \
+            --agent-cmd "$PWD/evals/agency-agent/run-in-docker.sh --brain coordinator --policy approve-all --max-tool-call-rounds 100 -p -- {input}" \
+            --suite "$SUITE" \
+            --trials "$TRIALS" \
+            --parallel 2 \
+            --out "$RUN_DIR" || status=$?
+          if [ "$status" -eq 2 ]; then
+            echo "::warning::some tests errored; grading and uploading anyway"
+          elif [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
+
+      # The judge graders call the LLM; the key never reaches an agent here.
+      # `eval grade` exits 2 when a must-pass gate failed (a score, which this
+      # job records rather than fails on) and 1 when grading itself broke.
+      - name: Grade
+        working-directory: packages/agency-lang
+        env:
+          OPENAI_API_KEY: ${{ secrets.AGENT_EVALS_OPENAI_API_KEY }}
+        run: |
+          status=0
+          node ./dist/scripts/agency.js eval grade "$RUN_DIR" || status=$?
+          if [ "$status" -eq 2 ]; then
+            echo "::warning::some runs failed a must-pass gate; uploading anyway"
+          elif [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
+
+      - name: Upload to statelog
+        id: upload
+        working-directory: packages/agency-lang
+        env:
+          STATELOG_API_KEY: ${{ secrets.STATELOG_API_KEY }}
+        run: node ./dist/scripts/agency.js eval upload "$RUN_DIR"
+
+      - name: Save the run directory for a by-hand upload
+        if: failure() && steps.upload.outcome == 'failure'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: eval-runs
+          path: packages/agency-lang/${{ env.RUN_DIR }}
+          retention-days: 14
+          if-no-files-found: ignore

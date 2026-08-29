@@ -142,6 +142,7 @@ export interface AgencyConfig {
     limits?: {
       wallClockSec?: number; // max seconds per agent run (default 60)
       maxCostUsd?: number; // max LLM spend per agent run (default 50)
+      maxBatchCostUsd?: number; // max LLM spend per `eval run` invocation, all tests × trials (no default)
     };
 
     optimize?: {
@@ -513,6 +514,7 @@ export const AgencyConfigSchema = z
           .object({
             wallClockSec: z.number().int().positive(),
             maxCostUsd: z.number().positive(),
+            maxBatchCostUsd: z.number().positive(),
           })
           .partial()
           .optional(),

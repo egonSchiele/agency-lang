@@ -16,7 +16,7 @@ import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 import { finishedTraceLines } from "@/runDirectory/testFixtures.js";
 
 import { evalGrade } from "./grade.js";
-import { evalRun, totalRunCostUsd, validateInputSelection } from "./run.js";
+import { evalRun, validateInputSelection } from "./run.js";
 
 /** A runner that behaves like a real child: a finished trace under the
  *  harness-minted trace id, recording the seeded code for file jobs. */
@@ -384,27 +384,6 @@ describe("eval run CLI", () => {
         validateGraders([new ExactMatch({})], { id: "a", goal: "g", input: "t" }),
       ).toThrow(/matchOn/);
     });
-  });
-
-  it("totalRunCostUsd sums trace costs across the run directories of a group", () => {
-    const group = fs.mkdtempSync(path.join(tmpDir, "group-"));
-    writeRunDirectory(
-      { test: { id: "a", input: "t" }, output: "x", costUsd: 0.25 },
-      path.join(group, "a"),
-    );
-    writeRunDirectory(
-      { test: { id: "b", input: "t" }, output: "y", costUsd: 0.5 },
-      path.join(group, "b"),
-    );
-    writeRunDirectory(
-      { test: { id: "c", input: "t" }, wroteStatelog: false, ended: "error" },
-      path.join(group, "c"),
-    );
-    expect(totalRunCostUsd(group)).toBeCloseTo(0.75);
-    expect(totalRunCostUsd(path.join(group, "a"))).toBeCloseTo(0.25);
-    // A run that never wrote a trace, and a group with no runs at all.
-    expect(totalRunCostUsd(path.join(group, "c"))).toBeUndefined();
-    expect(totalRunCostUsd(fs.mkdtempSync(path.join(tmpDir, "empty-")))).toBeUndefined();
   });
 
   describe("per-test graders", () => {

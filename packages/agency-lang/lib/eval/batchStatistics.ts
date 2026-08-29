@@ -36,6 +36,35 @@ export type BatchStatistics = {
 /** Split runs into batches by their batch id (a run without one is a batch
  *  of its own), in first-seen order, and compute each batch's statistics. */
 export function batchStatisticsByBatch(runs: readonly RunSummary[]): BatchStatistics[] {
+  return groupByBatch(runs).map((group) => batchStatistics(group.runs));
+}
+
+/** A batch that could not be scored as a whole (an uneven trial grid — a run
+ *  cut short by the batch cost cap or an interrupt — or mixed ids), with the
+ *  reason `batchStatistics` gave. */
+export type IncompleteBatch = { batch: string | null; reason: string };
+
+/** Like `batchStatisticsByBatch`, but a batch that `batchStatistics` refuses
+ *  is reported rather than thrown, so one incomplete batch never hides the
+ *  others' statistics. */
+export function batchStatisticsByBatchTolerant(runs: readonly RunSummary[]): {
+  batches: BatchStatistics[];
+  incomplete: IncompleteBatch[];
+} {
+  const batches: BatchStatistics[] = [];
+  const incomplete: IncompleteBatch[] = [];
+  for (const group of groupByBatch(runs)) {
+    try {
+      batches.push(batchStatistics(group.runs));
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      incomplete.push({ batch: group.batch, reason });
+    }
+  }
+  return { batches, incomplete };
+}
+
+function groupByBatch(runs: readonly RunSummary[]): { batch: string | null; runs: RunSummary[] }[] {
   const groups: { batch: string | null; runs: RunSummary[] }[] = [];
   for (const run of runs) {
     const group =
@@ -46,7 +75,7 @@ export function batchStatisticsByBatch(runs: readonly RunSummary[]): BatchStatis
       group.runs.push(run);
     }
   }
-  return groups.map((group) => batchStatistics(group.runs));
+  return groups;
 }
 
 /** Statistics for exactly one complete batch. Refuses an empty input, runs

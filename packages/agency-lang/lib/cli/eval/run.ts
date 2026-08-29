@@ -124,27 +124,3 @@ export function loadSuite(args: {
   }
   return { tests: loadInputs(parsed.path, nanoid, loadOptions), identity: { source: parsed.path } };
 }
-
-/** Total LLM spend across the run directories under `groupDir`, summed from
- *  each trace's metrics. Traces of interrupted runs count too, so an
- *  interrupted run still reports what it cost. Undefined when no trace
- *  carried a cost (or the group holds no runs yet). */
-export function totalRunCostUsd(groupDir: string): number | undefined {
-  let total: number | undefined;
-  let runDirs: string[];
-  try {
-    runDirs = findRunDirectories([groupDir]);
-  } catch {
-    return undefined;
-  }
-  for (const dir of runDirs) {
-    const snapshot = readRunDirectory(dir, { reportWarning: () => {} });
-    for (const trace of snapshot.traces) {
-      const cost = evalRecordFor(trace, snapshot.dir).metrics.costUsdTotal;
-      if (typeof cost === "number" && Number.isFinite(cost)) {
-        total = (total ?? 0) + cost;
-      }
-    }
-  }
-  return total;
-}

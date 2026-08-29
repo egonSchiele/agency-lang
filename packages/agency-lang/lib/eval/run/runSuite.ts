@@ -10,6 +10,12 @@ import { ttyColor } from "@/utils/termcolors.js";
 import { makeStatelogCostTailer } from "./costTail.js";
 import { formatElapsed, startStatusBoard } from "./statusBoard.js";
 import type { AgencyConfig } from "@/config.js";
+import {
+  batchCostCapFromConfig,
+  makeBatchBudget,
+  runCostUsd,
+  type BatchBudget,
+} from "./batchBudget.js";
 import type { SuiteRunResult, SuiteTestResult, Test } from "@/eval/runTypes.js";
 import type { RunOutcome, SuiteIdentity } from "@/runDirectory/annotations.js";
 import { recordedClosureHashes } from "@/runDirectory/attachCode.js";
@@ -137,6 +143,9 @@ export async function runSuite(
   };
   process.once("SIGINT", onSigint);
 
+  const budget = makeBatchBudget(batchCostCapFromConfig(config));
+  const shouldStop = () => interrupted || budget.exhausted();
+
   const parallel = Math.max(1, Math.floor(opts.parallel ?? 1));
   // `agent` is the target's label (an agent file path or the command line),
   // so a listing can say which agent a directory's runs came from.
@@ -193,6 +202,9 @@ export async function runSuite(
         },
         { runner: deps.runner },
       );
+      if (budget.add(runCostUsd(run.statelogPath)) && progress) {
+        console.warn(budget.exceededMessage());
+      }
       const assembled = `${stagingDir}.rundir`;
       fs.rmSync(assembled, { recursive: true, force: true });
       try {
@@ -245,7 +257,7 @@ export async function runSuite(
         trials,
         progress,
         pipeOutput: perRun.pipeOutput ?? true,
-        isInterrupted: () => interrupted,
+        shouldStop,
         executeTest,
       });
     } else {
@@ -255,7 +267,7 @@ export async function runSuite(
         trials,
         parallel,
         progress,
-        isInterrupted: () => interrupted,
+        shouldStop,
         executeTest,
       });
     }
@@ -264,12 +276,24 @@ export async function runSuite(
     removeIfEmpty(stagingRoot);
   }
 
+  return suiteResult({ runDir: groupDir, agentLabel: target.label, results, budget });
+}
+
+function suiteResult(args: {
+  runDir: string;
+  agentLabel: string;
+  results: SuiteTestResult[];
+  budget: BatchBudget;
+}): SuiteRunResult {
+  const { results } = args;
   return {
-    runDir: groupDir,
-    agentLabel: target.label,
+    runDir: args.runDir,
+    agentLabel: args.agentLabel,
     tests: results,
     okCount: results.filter((result) => result.status === "success").length,
     errorCount: results.filter((result) => result.status === "error").length,
+    costUsd: args.budget.spentUsd(),
+    batchCostCapExceeded: args.budget.exhausted(),
   };
 }
 
@@ -444,17 +468,17 @@ function endedFrom(run: AgentRun): RunOutcome {
  * is never piped (n interleaved streams are noise — `eval logs <dir> -f` is
  * the drill-down); a status board shows each test's state, elapsed time, and
  * cost so far (tailed from its live statelog every second). An errored test
- * never stops the others (it is a `run` row that grades 0); an interrupt
- * stops SCHEDULING and in-flight runs settle normally (their forwarded
- * SIGINT kills their trees and they come back as error results). Results
- * keep input order.
+ * never stops the others (it is a `run` row that grades 0); an interrupt or
+ * an exhausted batch budget stops SCHEDULING and in-flight runs settle
+ * normally (on interrupt their forwarded SIGINT kills their trees and they
+ * come back as error results). Results keep input order.
  */
 async function runPool(args: {
   jobs: RunJob[];
   trials: number;
   parallel: number;
   progress: boolean;
-  isInterrupted: () => boolean;
+  shouldStop: () => boolean;
   executeTest: (
     job: RunJob,
     pipeOutput: boolean,
@@ -474,7 +498,7 @@ async function runPool(args: {
 
   const worker = async (): Promise<void> => {
     for (;;) {
-      if (args.isInterrupted()) return;
+      if (args.shouldStop()) return;
       const index = nextIndex++;
       if (index >= args.jobs.length) return;
       const job = args.jobs[index];
@@ -520,7 +544,7 @@ async function runSequential(args: {
   trials: number;
   progress: boolean;
   pipeOutput: boolean;
-  isInterrupted: () => boolean;
+  shouldStop: () => boolean;
   executeTest: (
     job: RunJob,
     pipeOutput: boolean,
@@ -551,7 +575,7 @@ async function runSequential(args: {
       console.error(`[${label}] ${status} in ${formatElapsed(Date.now() - startedAt)}`);
     }
     results.push(outcome);
-    if (args.isInterrupted()) break;
+    if (args.shouldStop()) break;
   }
   return results;
 }

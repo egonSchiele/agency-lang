@@ -286,7 +286,8 @@ node staleTestFileDoesNotShip(): boolean {
   return result is success && hasImpl && noCases
 }
 
-// Write a tool, run it twice (one bad request), and check the record.
+// Write a tool, run it, and check the record: one use, a last-used time,
+// and the createdAt from the write kept as it was.
 node runToolRunsAndRecords(): boolean {
   cleanup("addEight")
   const written = runWrite("addEight", OUT, [{
@@ -296,6 +297,7 @@ node runToolRunsAndRecords(): boolean {
     cleanup("addEight")
     return false
   }
+  const createdAt = written.value.meta.createdAt
   const answer = runTool("addEight", {
     n: 41
   }, OUT) with approve
@@ -303,7 +305,7 @@ node runToolRunsAndRecords(): boolean {
   let recorded = false
   if (listed is success(entries)) {
     const entry = find(entries, \candidate -> candidate.name == "addEight")
-    recorded = entry.meta.uses == 1 && entry.meta.lastUsedAt != null && entry.meta.recentOutcomes.join(",") == "ok"
+    recorded = entry.meta.uses == 1 && entry.meta.lastUsedAt != null && entry.meta.createdAt == createdAt && createdAt != ""
   }
   cleanup("addEight")
   return answer is success && answer.value == 42 && recorded
@@ -314,4 +316,20 @@ node runToolRefusesAMissingTool(): boolean {
     n: 1
   }, OUT) with approve
   return answer is failure && "${answer.error}" =~ re/noSuchTool/
+}
+
+// A path is not a tool name; runTool must not resolve outside the toolbox.
+node runToolRefusesAPath(): boolean {
+  const answer = runTool("../good", {
+    n: 1
+  }, TOOLS + "/good") with approve
+  return answer is failure && "${answer.error}" =~ re/identifier/
+}
+
+// A corrupt meta.json stops the run before the tool has side effects.
+node runToolRefusesCorruptMeta(): boolean {
+  const answer = runTool("badMeta", {
+    n: 1
+  }, TOOLS) with approve
+  return answer is failure && "${answer.error}" =~ re/meta\.json/
 }

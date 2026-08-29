@@ -42,7 +42,7 @@ node readsMeta(): boolean {
   }
   const good = entryNamed(entries.value, "good")
   const meta = good.meta
-  return meta.uses == 3 && meta.version == 1 && meta.recentOutcomes.length == 3 && meta.purpose == "Add one to a number." && meta.request == "{ n: number }"
+  return meta.uses == 3 && meta.version == 1 && meta.maxTime == 60000 && meta.purpose == "Add one to a number." && meta.request == "{ n: number }"
 }
 
 node defaultsMissingMeta(): boolean {
@@ -61,7 +61,7 @@ node reportsCorruptMeta(): boolean {
     return false
   }
   const badMeta = entryNamed(entries.value, "badMeta")
-  return badMeta.broken != null && badMeta.broken =~ re/meta\.json/
+  return badMeta.broken != null && badMeta.broken =~ re/meta\.json/ && badMeta.broken !~ re/impl/
 }
 
 node marksBroken(): boolean {

@@ -1,10 +1,10 @@
 {
   "name": "good",
-  "createdAt": "2026-08-28T15:02:11.000+00:00",
   "purpose": "Add one to a number.",
   "request": "{ n: number }",
+  "createdAt": "2026-08-28T15:02:11.000+00:00",
+  "maxTime": 60000,
   "version": 1,
   "uses": 3,
-  "lastUsedAt": "2026-08-28T16:00:00.000+00:00",
-  "recentOutcomes": ["ok", "ok", "ok"]
+  "lastUsedAt": "2026-08-28T16:00:00.000+00:00"
 }

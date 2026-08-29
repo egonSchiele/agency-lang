@@ -630,6 +630,30 @@
       ],
       "useTestLLMProvider": true,
       "llmMocks": []
+    },
+    {
+      "nodeName": "runToolRefusesAPath",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "runToolRefusesCorruptMeta",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
     }
   ]
 }

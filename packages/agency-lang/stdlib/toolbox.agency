@@ -33,7 +33,7 @@ import { expandPath } from "agency-lang/stdlib-lib/expandPath.js"
 
   ## Useful exports
   - `listTools` reads a toolbox directory into a catalog. It raises a
-    `std::toolbox::scan` interrupt first, so the caller must handle it.
+    `std::toolbox::scan` interrupt, then `std::ls` for the listing.
   - `writeTool` has the coding agent draft a new tool. `writeTool` then
     reviews and tests the draft, shows it to the user through an
     interrupt, and saves it.
@@ -90,8 +90,9 @@ const MAX_TOOLS = 500
 // same cap, this module refuses so a user-chosen name is never changed.
 const MAX_TOOL_NAME_LEN = 64
 
-// Outcomes kept in meta.json, newest last.
-const MAX_RECENT_OUTCOMES = 10
+// Added to a tool's own time limit for the subprocess that runs it, so
+// the guard trips before the process is killed.
+const WALL_CLOCK_HEADROOM = 30s
 
 // Drafts are built under <root>/staging/<name>. Not a dot directory: the
 // with-writes policy scopes writes with `base/**`, and `**` does not match
@@ -124,14 +125,15 @@ export type ModuleFacts = {
   effects: string[]
 }
 
-/** The usage record in meta.json. */
+/** What meta.json holds: how the tool was made, and how often it ran. */
 export type ToolMeta = {
   purpose: string;
   request: string;
+  createdAt: string;
+  maxTime: number;
   version: number;
   uses: number;
-  lastUsedAt?: string;
-  recentOutcomes: string[]
+  lastUsedAt?: string
 }
 
 /** One tool in a toolbox. This is what `listTools` returns. If the tool
@@ -153,10 +155,11 @@ export type WriteToolReview =
 const DEFAULT_META: ToolMeta = {
   purpose: "",
   request: "",
+  createdAt: "",
+  maxTime: 3m,
   version: 1,
   uses: 0,
-  lastUsedAt: null,
-  recentOutcomes: []
+  lastUsedAt: null
 }
 
 const EMPTY_MODULE: ModuleFacts = {
@@ -199,21 +202,11 @@ def moduleFacts(toolDir: string): Result<ModuleFacts> {
 type MetaFile = {
   purpose?: string;
   request?: string;
+  createdAt?: string;
+  maxTime?: number;
   version?: number;
   uses?: number;
-  lastUsedAt?: string;
-  recentOutcomes?: string[]
-}
-
-def withDefaults(file: MetaFile): ToolMeta {
-  return {
-    purpose: file.purpose ?? DEFAULT_META.purpose,
-    request: file.request ?? DEFAULT_META.request,
-    version: file.version ?? DEFAULT_META.version,
-    uses: file.uses ?? DEFAULT_META.uses,
-    lastUsedAt: file.lastUsedAt ?? DEFAULT_META.lastUsedAt,
-    recentOutcomes: file.recentOutcomes ?? DEFAULT_META.recentOutcomes
-  }
+  lastUsedAt?: string
 }
 
 // A missing meta.json is the default record. A present one that cannot be
@@ -235,7 +228,10 @@ def metaFacts(toolDir: string): Result<ToolMeta> {
   if (file is failure(shapeErr)) {
     return failure("${META_FILE} has the wrong shape: ${shapeErr}")
   }
-  return success(withDefaults(file.value))
+  return success({
+    ...DEFAULT_META,
+    ...file.value
+  })
 }
 
 def entryFor(root: string, name: string): ToolEntry {
@@ -244,11 +240,16 @@ def entryFor(root: string, name: string): ToolEntry {
   const meta = metaFacts(toolDir)
   const moduleFields: ModuleFacts = module catch EMPTY_MODULE
   const metaFields: ToolMeta = meta catch DEFAULT_META
-  let broken: string | null = null
+  const problems: string[] = []
   if (module is failure(moduleErr)) {
-    broken = "${moduleErr}"
-  } else if (meta is failure(metaErr)) {
-    broken = "${metaErr}"
+    problems.push("${moduleErr}")
+  }
+  if (meta is failure(metaErr)) {
+    problems.push("${metaErr}")
+  }
+  let broken: string | null = null
+  if (problems.length > 0) {
+    broken = problems.join("; ")
   }
   return {
     name: name,
@@ -291,7 +292,7 @@ export idempotent def listTools(
 ): Result<ToolEntry[]> {
   """
   List the tools in a toolbox directory. Raises a `std::toolbox::scan`
-  interrupt before reading anything. Each entry has: the tool's name and
+  interrupt before reading anything, then `std::ls` for the listing. Each entry has: the tool's name and
   directory; what `describe` says about its `run` function (signature,
   docstring, effects); and its meta.json record (purpose, request type,
   version, run count, last-run time, recent outcomes).
@@ -330,10 +331,6 @@ static const toolTemplate = [|
     """
     return guard(time: #maxTime, cost: #maxCost) {
       return run(request)
-
-      finalize {
-        return null
-      }
     }
   }
 
@@ -417,17 +414,16 @@ def expectedResult(value: Json): string {
 }
 
 def testFileJson(cases: GeneratedCase[]): string {
-  const tests = map(
-    cases,
-    \testCase -> {
+  const tests = map(cases) as testCase {
+    return {
       nodeName: "main",
       args: testCase.args,
       expectedOutput: expectedResult(testCase.expectedOutput),
       evaluationCriteria: [{
         type: "exact"
       }]
-    },
-  )
+    }
+  }
   return JSON.stringify({
     sourceFile: TOOL_FILE,
     tests: tests
@@ -435,15 +431,10 @@ def testFileJson(cases: GeneratedCase[]): string {
 }
 
 def metaJson(name: string, meta: ToolMeta): string {
-  return JSON.stringify(
-    {
-      name: name,
-      createdAt: format(now()),
-      ...meta
-    },
-    null,
-    2,
-  )
+  return JSON.stringify({
+    name: name,
+    ...meta
+  }, null, 2)
 }
 
 // Calls whose result changes from run to run without raising an
@@ -654,7 +645,9 @@ def saveTool(
   const meta: ToolMeta = {
     ...DEFAULT_META,
     purpose: settings.purpose,
-    request: settings.request
+    request: settings.request,
+    createdAt: format(now()),
+    maxTime: settings.maxTime
   }
   const savedMeta = write(META_FILE, metaJson(name, meta), settings.stagingDir)
   if (savedMeta is failure) {
@@ -682,28 +675,58 @@ def rounds(
 ): Result<ToolEntry> {
   let feedback = ""
   for (round in range(maxRounds)) {
-    const prepared = prepareDraft(settings, feedback)
-    if (prepared is failure(problem)) {
-      feedback = "${problem}"
-    } else if (prepared is success(draft)) {
-      const answer = askUser(name, settings, draft)
-      if (answer is failure) {
-        return answer
-      } else if (answer is success(review)) {
-        if (review.verdict == "accept") {
-          return saveTool(root, name, settings)
-        }
-        feedback = review.feedback
-      }
+    const outcome = oneRound(root, name, settings, feedback)
+    if (outcome.done != null) {
+      return outcome.done
     }
+    feedback = outcome.feedback
   }
   return failure("gave up after ${maxRounds} rounds; last problem:\n${feedback}")
 }
 
-def checkName(name: string, dir: string, root: string): Result {
-  if (dir == "") {
-    return failure("dir must name the toolbox directory; got an empty string")
+/** `done` ends the loop; otherwise `feedback` goes into the next round. */
+type RoundOutcome = {
+  done?: Result<ToolEntry>;
+  feedback: string
+}
+
+def oneRound(
+  root: string,
+  name: string,
+  settings: DraftSettings,
+  feedback: string,
+): RoundOutcome {
+  const prepared = prepareDraft(settings, feedback)
+  return match(prepared) {
+    failure(problem) => ({
+      done: null,
+      feedback: "${problem}"
+    })
+    success(draft) => {
+      const answer = askUser(name, settings, draft)
+      return match(answer) {
+        failure(rejected) => ({
+          done: failure(rejected),
+          feedback: ""
+        })
+        success(review) => match(review) {
+          { verdict: "accept" } => ({
+            done: saveTool(root, name, settings),
+            feedback: ""
+          })
+          { verdict: "revise", feedback as next } => ({
+            done: null,
+            feedback: next
+          })
+        }
+      }
+    }
   }
+}
+
+// The name is a directory name under the toolbox, so anything but an
+// identifier (a path, `..`, a dot directory) is refused.
+def checkNameSyntax(name: string): Result {
   if (!(name =~ re/^[a-z][A-Za-z0-9]*$/)) {
     return failure("tool name must be a camelCase identifier, got `${name}`")
   }
@@ -716,6 +739,17 @@ def checkName(name: string, dir: string, root: string): Result {
     return failure(
       "`${STAGING_DIR}` is the toolbox's staging directory and cannot be a tool name",
     )
+  }
+  return success(null)
+}
+
+def checkName(name: string, dir: string, root: string): Result {
+  if (dir == "") {
+    return failure("dir must name the toolbox directory; got an empty string")
+  }
+  const syntax = checkNameSyntax(name)
+  if (syntax is failure) {
+    return syntax
   }
   if (exists(name, root)) {
     return failure("a tool named `${name}` already exists in ${root}")
@@ -756,10 +790,10 @@ export def writeTool(
 ): Result<ToolEntry> {
   """
   Write a reusable tool into a toolbox directory. The coding agent drafts
-  the tool's `run` function against the request type. writeTool wraps it
-  in the guarded tool module, typechecks and reviews the pair, tests it
-  when it is pure computation, shows it to the user for acceptance or
-  revision, and saves it.
+  the tool's `run` function against the request type. writeTool reviews
+  the draft, wraps it in the guarded tool module and typechecks the pair,
+  tests it when it is pure computation, shows it to the user for
+  acceptance or revision, and saves it.
 
   @param name - The tool's name; also its directory under dir
   @param purpose - What the tool should do, in plain language
@@ -820,26 +854,13 @@ export def writeTool(
 
 // ---- running a tool ----
 
-def outcomeOf(ran: Result): string {
-  if (ran is failure(runErr)) {
-    return "failed: ${runErr}"
+def recordUse(toolDir: string, name: string, meta: ToolMeta): Result {
+  const used: ToolMeta = {
+    ...meta,
+    uses: meta.uses + 1,
+    lastUsedAt: format(now())
   }
-  return "ok"
-}
-
-def recordOutcome(toolDir: string, name: string, outcome: string): Result {
-  const before = metaFacts(toolDir)
-  if (before is failure) {
-    return before
-  }
-  const outcomes = before.value.recentOutcomes.concat([outcome])
-  const meta: ToolMeta = {
-    ...before.value,
-    uses: before.value.uses + 1,
-    lastUsedAt: format(now()),
-    recentOutcomes: outcomes.slice(-MAX_RECENT_OUTCOMES)
-  }
-  return write(META_FILE, metaJson(name, meta), toolDir)
+  return write(META_FILE, metaJson(name, used), toolDir)
 }
 
 export def runTool(
@@ -849,27 +870,46 @@ export def runTool(
 ): Result<Json> {
   """
   Run a saved tool's `main` node in a subprocess and return what it
-  returned. The tool's meta.json records the run: one more use, the
-  time, and whether it succeeded.
+  returned. The tool's meta.json records one more use and the time.
 
   @param name - The tool's name under dir
   @param request - The tool's input, a value of its Request type
   @param dir - The toolbox directory holding the tool
   """
+  const syntax = checkNameSyntax(name)
+  if (syntax is failure) {
+    return syntax
+  }
   const toolDir = "${expandPath(dir)}/${name}"
   if (!exists(TOOL_FILE, toolDir)) {
     return failure("no tool named `${name}` in ${expandPath(dir)}")
   }
-  const ran = runFile(toolDir, TOOL_FILE, "main", {
-    request: request
-  })
+  // meta.json is read before the run, so a corrupt record stops the tool
+  // before it has side effects rather than after.
+  const meta = metaFacts(toolDir)
+  if (meta is failure) {
+    return meta
+  }
+  const ran = runFile(
+    toolDir,
+    TOOL_FILE,
+    "main",
+    {
+      request: request
+    },
+    wallClock: meta.value.maxTime + WALL_CLOCK_HEADROOM,
+  )
   let result: Result<Json> = ran
   if (ran is success(finished)) {
     result = finished.data
   }
-  const recorded = recordOutcome(toolDir, name, outcomeOf(result))
-  if (recorded is failure) {
-    return recorded
+  // The tool has run and its effects have happened, so its result is
+  // never dropped: a failed record carries it in the message.
+  const recorded = recordUse(toolDir, name, meta.value)
+  if (recorded is failure(recordErr)) {
+    return failure(
+      "the tool ran and returned ${JSON.stringify(result)}, but ${META_FILE} could not be updated: ${recordErr}",
+    )
   }
   return result
 }

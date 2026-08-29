@@ -16,19 +16,22 @@ One directory per tool under the toolbox (default `~/.agency-agent/tools`):
   `node main`.
 - `tool.test.json` holds generated test cases, only for a tool that does
   nothing but compute.
-- `meta.json` holds the purpose, the request type text, and the usage
-  record.
+- `meta.json` holds the purpose, the request type text, the creation
+  time, the time limit, and a use count with the last-used time. It
+  records no outcomes or results, because a failure message can carry
+  the request's contents.
 
 A program runs a tool with `runTool(name, request)`, or imports it
 directly: `import { tool as getNews } from ".../getNews/tool.agency"`.
 
 ## Why a template
 
-The first version had the coding agent write the whole module, and a
-200-line checker walked the AST to confirm the exports, the guard, its
-limits, that finalize runs, and the docstring. With a template, every one of
-those is fixed text, so there is nothing to check. What varies is filled
-through holes: the two limits and the purpose string.
+Every fixed part of the contract (the exports, the guard and its limits,
+the signatures) is template text, so nothing checks a draft's shape.
+What varies is filled through holes: the two limits and the purpose
+string. The guard has no `finalize`. A tool that trips its limit fails, and
+`runTool` returns that failure instead of a partial value that looks
+like success.
 
 `runFile` and `typecheckFile` resolve `.agency` imports inside the
 tool's directory, so `tool.agency` can import `impl.agency`. A code
@@ -53,8 +56,8 @@ changes it fails the typecheck of `tool.agency`.
 → `askUser` → `saveTool`, each a def with one job that returns a
 `Result`. `rounds` is the loop; `feedback` is its only state, holding
 the last problem or the user's revision request. `writeTool` validates,
-stages, and calls `rounds`. On failure it clears staging once, and a
-refused delete is folded into the returned failure. On success the publish rename
+stages, and calls `rounds`. On failure, it clears staging once and
+folds a refused delete into the returned failure. On success the publish rename
 has already emptied staging, so no delete interrupt is raised.
 
 `testSource` starts with `assembleTool`: write `impl.agency`, fill the
@@ -81,7 +84,8 @@ policy that allows writes under a path glob) scopes writes with
 `base/**`, and `**` does not match a dot-led segment. A `.staging`
 directory would have prompted on every mkdir. `staging` is therefore a
 reserved tool name, and `listTools` skips it. `writeTool` refuses to
-start when `<dir>/staging/<name>` already exists, naming the directory.
+start when `<dir>/staging/<name>` already exists; the failure names the
+directory.
 Deleting it instead would let two concurrent writes of the same name
 destroy each other's drafts; a crashed write leaves a directory the
 user removes by hand. A round whose tool has an
@@ -106,26 +110,24 @@ wrong tomorrow.
 A rejected interrupt halts `askUser` and returns the rejection to
 `rounds`, which returns it; nothing after the interrupt runs. A bare
 `approve()` arrives as `null` and counts as accept. `askUser` validates
-any other answer as a `WriteToolReview` with the bang syntax, so a
-`revise` without a string `feedback` fails, naming the answer. A
+any other answer as a `WriteToolReview` with the bang syntax (the `!`
+runtime-validation operator), so a `revise` without a string `feedback`
+fails; the failure names the answer. A
 `revise` with empty feedback fails too, because the next round would
 get the identical brief.
 
-The typechecker does not carry a `Result` narrowing past a `continue`,
-so `rounds` branches on `is failure` / `is success` instead of
-narrowing and continuing.
-
 ## Reading a toolbox
 
-`listTools` raises one `std::toolbox::scan` interrupt for the directory,
-lists it with `ls` from `std::shell`, and keeps the directories whose
-names are not `staging` and do not start with a dot. An empty `dir` is
-refused, since the primitives would resolve it to the process cwd. `ls`
-counts every entry against its cap and does not say when it stopped,
-so a listing that reaches the cap is reported as a failure rather than
-a shortened catalog. The per-tool reads
+`listTools` raises a `std::toolbox::scan` interrupt for the directory.
+It then lists the directory with `ls` from `std::shell` (which raises
+`std::ls`), and keeps the directories whose names are not `staging` and
+do not start with a dot. `listTools` refuses an empty `dir`, since the
+primitives would resolve it to the process cwd. `ls` counts every entry
+against its cap and does not say when it stopped, so a listing that
+reaches the cap is reported as a failure. It is not returned as a
+shortened catalog. The per-tool reads
 of `impl.agency` and `meta.json` use `_read`, covered by that one scan
-approval, as `std::skills` does. A toolbox directory that does not exist
+approval. A toolbox directory that does not exist
 yet is an empty catalog.
 
 Each entry carries `module` (what `describe` says about `run`: signature,
@@ -137,11 +139,14 @@ Any of these marks the entry `broken`.
 
 ## `runTool`
 
-`runTool` checks the tool exists, runs `main` through `runFile` (which
-raises its own read and run interrupts), and then rewrites `meta.json`
-with one more use, the time, and the outcome (`ok` or the failure
-message), keeping the last ten outcomes. It returns the node's own
-`Result`.
+`runTool` checks that the name is an identifier, since it becomes a
+path segment. It reads `meta.json` before the run, so a corrupt record
+stops the tool before it has side effects. It then runs `main` through
+`runFile`, with `wallClock` set to the tool's own `maxTime` plus
+headroom, so the guard trips before the subprocess is killed. It then rewrites `meta.json` with
+one more use and the time. If that write fails, the returned failure
+carries the tool's result in its message, since the tool has already
+run. Otherwise it returns the node's own `Result`.
 
 ## Model calls and mocks
 
@@ -158,13 +163,6 @@ agent's own check and silently spends the round's mocks.
 (gitignored) and removes what it made. A `tool.test.json` left there is
 picked up by `agency test tests/agency/toolbox` and refused by the full
 profile (`args` is sandbox-only), so tests must clean up.
-
-## A checker fix this needed
-
-`null` reaches the type checker as a `variableName` node. The template
-name check (AG8015) reported it as undefined, so a template could not
-include `return null`. `templateNames.ts` now skips `null` and `undefined`,
-the way `isNullExpr` in `narrowing.ts` already did.
 
 ## Later pieces
 

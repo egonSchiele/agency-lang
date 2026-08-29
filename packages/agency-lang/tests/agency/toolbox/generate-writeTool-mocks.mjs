@@ -92,5 +92,7 @@ const tests = [
   testCase("staleTestFileDoesNotShip", [...pureRound, ...modelRound]),
   testCase("runToolRunsAndRecords", pureRound),
   testCase("runToolRefusesAMissingTool", []),
+  testCase("runToolRefusesAPath", []),
+  testCase("runToolRefusesCorruptMeta", []),
 ];
 writeFileSync(join(here, "writeTool.test.json"), JSON.stringify({ tests }, null, 2) + "\n");

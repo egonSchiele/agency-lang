@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { __registerAlwaysScope, alwaysScopeFor, allAlwaysScopes } from "./alwaysScope.js";
+import {
+  __registerAlwaysScope,
+  adoptAlwaysScope,
+  alwaysScopeFor,
+  allAlwaysScopes,
+} from "./alwaysScope.js";
 
 describe("always-scope registry", () => {
   it("returns [] for an unknown effect", () => {
@@ -43,6 +48,20 @@ describe("always-scope registry", () => {
     __registerAlwaysScope("test::f", [{ field: "x", matchSubpaths: false }]);
     expect(() => __registerAlwaysScope("test::f", [])).not.toThrow();
     expect(alwaysScopeFor("test::f")).toHaveLength(1);
+  });
+
+  it("adopts a child scope only for an effect it does not know", () => {
+    adoptAlwaysScope("test::h", [{ field: "name", matchSubpaths: false }]);
+    expect(alwaysScopeFor("test::h")).toEqual([{ field: "name", matchSubpaths: false }]);
+    adoptAlwaysScope("test::h", [{ field: "other", matchSubpaths: true }]);
+    expect(alwaysScopeFor("test::h")).toEqual([{ field: "name", matchSubpaths: false }]);
+  });
+
+  it("ignores a malformed child scope instead of throwing", () => {
+    expect(() => adoptAlwaysScope("test::i", "nope")).not.toThrow();
+    expect(() => adoptAlwaysScope("test::i", [{ field: 1 }])).not.toThrow();
+    expect(() => adoptAlwaysScope("test::i", undefined)).not.toThrow();
+    expect(alwaysScopeFor("test::i")).toEqual([]);
   });
 
   it("accepts the same fields in a different order", () => {

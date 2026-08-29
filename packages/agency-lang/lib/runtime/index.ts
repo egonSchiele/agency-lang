@@ -53,6 +53,7 @@ export {
 } from "./crossModuleInitRegistry.js";
 export {
   __registerAlwaysScope,
+  adoptAlwaysScope,
   alwaysScopeFor,
   allAlwaysScopes,
   sameScopedFields,

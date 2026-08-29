@@ -14,12 +14,6 @@ subpath under it (`{value,value/**}`). A declaration may carry both.
 Arguments are bare field names. The tag parser rejects function calls,
 which is why there is no `subpaths(dir)` form.
 
-Before this, the agency agent kept its own table (`ALWAYS_FIELDS`) of
-which fields to pin, and any effect missing from it silently offered no
-"approve always here". Now the effect's own declaration is the one place
-that decides, and every stdlib effect has decided (see the coverage test
-below).
-
 ## Pipeline
 
 1. The parser leaves tags as standalone nodes above the declaration.
@@ -57,12 +51,18 @@ below).
   to the parent's handlers, and the parent may never have imported the
   declaring module. So each forwarded interrupt carries its scope
   (`IpcInterruptMessage.interrupt.alwaysScope`, `lib/runtime/ipc.ts`) and
-  the parent registers it on receipt. `std::toolbox` depends on this;
-  `tests/agency/always-scope-over-ipc` is the test that fails without it.
-- Registering an empty scope is a no-op, so codegen, the IPC receiver, and
-  tests never need an "only if non-empty" guard. Registering a different
-  non-empty scope for an effect that already has one throws: the
-  typechecker forbids the only way to reach that state within one program.
+  the parent adopts it on receipt (`adoptAlwaysScope`). The child is
+  untrusted, so adoption fills a gap only: a scope the parent already holds
+  wins, a malformed value is ignored, and nothing throws.
+- A scope can only ever narrow a rule. `buildScopedMatch` returns `{}` when
+  any scoped field is missing from the interrupt data, the prompt offers
+  "approve always here" only when that match is non-empty, and
+  `recordScopedRule` writes nothing for an empty match. Without those
+  three, a scope naming a field the payload lacks would save a rule with
+  an empty match, which `matchesRule` treats as a catch-all approve.
+- Registering an empty scope is a no-op. Registering a different non-empty
+  scope for an effect that already has one throws: the typechecker forbids
+  the only way to reach that state within one program.
 - An untagged redeclaration of a tagged effect (the guide shows users
   writing `effect std::read { ... }` with no tag) inherits the tagged
   scope. Only tagged declarations take part in the conflict check.
@@ -73,9 +73,4 @@ below).
   generated stdlib reference shows what "approve always here" pins.
 - The stdlib coverage test `lib/utils/alwaysTag.stdlib.test.ts` holds the
   decision table, one row per effect. A new stdlib effect fails it until
-  a row is added. A tag missing from one of two copies of a declaration
-  (`std::read` lives in both `index.agency` and `agency.agency`) fails
-  it too.
-- Resume: a resumed program re-imports its modules, so the registry is
-  rebuilt from code and is never part of a checkpoint. No test covers
-  this, because the Agency test runner has no resume step.
+  a row is added.

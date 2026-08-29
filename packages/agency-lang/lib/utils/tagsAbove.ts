@@ -1,6 +1,7 @@
 import type { AgencyNode } from "../types.js";
 import type { Tag } from "../types/tag.js";
 import type { EffectDeclaration } from "../types/effectDeclaration.js";
+import { bodySlots } from "./bodySlots.js";
 
 /** One node and the `@tag(...)` nodes written directly above it. `node` is
  *  null for tags at the end of a list, which nothing can own. */
@@ -11,7 +12,8 @@ export type NodeWithTagsAbove = { node: AgencyNode | null; tags: Tag[] };
  * nesting level, without mutating anything. The preprocessor's `attachTags`
  * later moves those tags onto the node. The symbol table and the typechecker
  * run before that and see the raw list, so they use this to read tags the
- * same way codegen will. Mirrors `collectTypeAliasTags` in symbolTable.ts.
+ * same way codegen will. Recurses through every statement body (`if`
+ * branches, `match` arms, handlers) via `bodySlots`.
  */
 export function tagsAbove(nodes: AgencyNode[]): NodeWithTagsAbove[] {
   const out: NodeWithTagsAbove[] = [];
@@ -23,9 +25,8 @@ export function tagsAbove(nodes: AgencyNode[]): NodeWithTagsAbove[] {
     }
     out.push({ node, tags: pending });
     pending = [];
-    const body = (node as { body?: unknown }).body;
-    if (Array.isArray(body)) {
-      out.push(...tagsAbove(body as AgencyNode[]));
+    for (const slot of bodySlots(node)) {
+      out.push(...tagsAbove(slot.body));
     }
   }
   if (pending.length > 0) {

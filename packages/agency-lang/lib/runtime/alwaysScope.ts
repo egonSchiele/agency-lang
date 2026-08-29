@@ -34,9 +34,36 @@ function copyOf(fields: ScopedField[]): ScopedField[] {
   return fields.map((field) => ({ ...field }));
 }
 
+function isScopedField(value: unknown): value is ScopedField {
+  const candidate = value as { field?: unknown; matchSubpaths?: unknown } | null;
+  return (
+    typeof candidate === "object" &&
+    candidate !== null &&
+    typeof candidate.field === "string" &&
+    typeof candidate.matchSubpaths === "boolean"
+  );
+}
+
+/**
+ * Take a scope that arrived from a subprocess with one of its interrupts.
+ * The child is untrusted, so this never throws and never replaces a scope
+ * this process already holds from its own compiled declarations: it fills
+ * a gap only. A malformed value is ignored. The prompt still shows the
+ * exact fields any rule would pin, and a scope whose fields the payload
+ * lacks yields no rule at all (see `buildScopedMatch` in std::policy).
+ */
+export function adoptAlwaysScope(effect: string, fields: unknown): void {
+  const known = scopes[effect] !== undefined;
+  const wellFormed = Array.isArray(fields) && fields.every(isScopedField);
+  if (known || !wellFormed) {
+    return;
+  }
+  __registerAlwaysScope(effect, fields);
+}
+
 export function __registerAlwaysScope(effect: string, fields: ScopedField[]): void {
   // An empty scope says nothing, so it cannot contradict a scope already
-  // registered. Codegen, IPC, and tests rely on this.
+  // registered.
   if (fields.length === 0) {
     return;
   }

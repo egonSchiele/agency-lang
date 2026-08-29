@@ -44,5 +44,11 @@ node main(): string {
   if (checkPolicy(recorded, envIntr).type != "approve") { return "FAIL: recordScopedRule without fields" }
   const otherEnv = { effect: "app::env", data: { name: "OTHER" } }
   if (checkPolicy(recorded, otherEnv).type == "approve") { return "FAIL: recorded rule too wide" }
+
+  // Nothing to pin: no rule is written, so nothing gets approved.
+  const nameless = { effect: "app::env", data: {} }
+  const unchanged = recordScopedRule({}, nameless)
+  if (keys(unchanged).length != 0) { return "FAIL: empty match must not become a rule" }
+  if (checkPolicy(unchanged, otherEnv).type == "approve") { return "FAIL: nameless approval leaked" }
   return "pass"
 }

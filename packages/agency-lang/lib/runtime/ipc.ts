@@ -4,7 +4,7 @@
  * over Node's built-in IPC channel instead of being returned as Interrupt[].
  */
 
-import { __registerAlwaysScope, type ScopedField } from "./alwaysScope.js";
+import { adoptAlwaysScope, type ScopedField } from "./alwaysScope.js";
 import path from "path";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
@@ -212,8 +212,7 @@ export type IpcInterruptMessage = {
     expectsValue?: boolean;
     /** The fields an "approve always here" rule pins for this effect, from
      * its declaration. The child always sends it; the parent may never have
-     * imported that module. Optional only so hand-built messages in tests
-     * stay valid; the receiver treats a missing scope as empty. */
+     * imported that module. The receiver treats a missing scope as empty. */
     alwaysScope?: ScopedField[];
   };
 };
@@ -878,10 +877,12 @@ function attachStdoutForwarder(
 
 async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
   const { effect, message, data, origin, expectsValue } = msg.interrupt;
-  // The child carries the scope its effect declaration gave it; this process
-  // may never have imported that module. An empty scope registers nothing.
-  __registerAlwaysScope(effect, msg.interrupt.alwaysScope ?? []);
   try {
+    // The child carries the scope its effect declaration gave it; this
+    // process may never have imported that module. Adoption fills a gap
+    // only: a scope this process already holds wins, and a malformed one
+    // is ignored, so an untrusted child cannot widen a rule.
+    adoptAlwaysScope(effect, msg.interrupt.alwaysScope);
     // Report this process's chain OUTCOME; the child merges and decides.
     // The child's interruptId is relayed into the chain walk so this
     // process's statelog events correlate with the originating interrupt.

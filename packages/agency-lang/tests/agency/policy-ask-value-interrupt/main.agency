@@ -13,6 +13,11 @@ node main(): string {
   const keys2 = map(askUserChoices(question), \item -> item.key)
   if (keys2.join(",") != "a,r") { return "FAIL question: ${keys2.join(",")}" }
 
+  // A scope whose field the data lacks offers no "here" option.
+  const nameless = { effect: "app::env", data: {}, expectsValue: false }
+  const keys4 = map(askUserChoices(nameless), \item -> item.key)
+  if (keys4.join(",") != "a,r,aa,rr") { return "FAIL nameless: ${keys4.join(",")}" }
+
   const noScope = { effect: "app::plain", data: {}, expectsValue: false }
   const keys3 = map(askUserChoices(noScope), \item -> item.key)
   if (keys3.join(",") != "a,r,aa,rr") { return "FAIL no scope: ${keys3.join(",")}" }

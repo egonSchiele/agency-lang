@@ -341,6 +341,16 @@ describe("@always scope checking", () => {
     ).toHaveLength(1);
   });
 
+  it("checks a tagged declaration nested inside a branch", () => {
+    // tagsAbove recurses through every statement body, not only `body`.
+    const msgs = messagesOf(
+      "node main() {\n  if (true) {\n    @always(nam)\n    effect app::x { name: string }\n  }\n}",
+    );
+    expect(
+      msgs.find((m) => /@always names 'nam', which effect 'app::x' does not carry/.test(m)),
+    ).toBeDefined();
+  });
+
   it("treats the same fields in a different order as the same scope", () => {
     // Pins the order-insensitive compare. The runtime uses the same
     // function, so codegen output order can never matter.

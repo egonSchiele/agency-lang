@@ -241,7 +241,7 @@ export type ParsePolicyFailureStatus =
   | "policy-not-valid"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L413))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L420))
 
 ### ParsePolicyFailure
 
@@ -252,7 +252,7 @@ export type ParsePolicyFailure = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L419))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L426))
 
 ## Constants
 
@@ -437,7 +437,7 @@ buildScopedMatch(
 ): Record<string, string>
 ```
 
-Build a match object for an interrupt, pinned to its scoped fields. Values are escaped so they match literally. Returns {} when the effect has no scope.
+Build a match object for an interrupt, pinned to its scoped fields. Values are escaped so they match literally. Returns {} when the effect has no scope or the interrupt data lacks a scoped field.
 
   @param intr - The interrupt whose data fields to pin.
   @param fields - Per-effect override of which data fields to pin. Effects not listed use their declared `@always` scope.
@@ -461,8 +461,10 @@ Build a match object for an interrupt, pinned to its scoped fields. Values are e
  *   exact value and any subpath under it.
  * - If `matchSubpaths: false`, the escaped value is used as-is.
  *
- * Fields that are absent from `intr.data` (`null` / `undefined`)
- * are skipped silently. An effect with no scope returns `{}`.
+ * If any scoped field is absent from `intr.data` (`null` / `undefined`)
+ * the result is `{}`: a rule missing one of its pins would be wider than
+ * the user was shown, and a rule with an empty match approves every
+ * future interrupt of the effect. An effect with no scope returns `{}`.
  *
  * Most callers should use `recordScopedRule` instead, which calls
  * this internally. `buildScopedMatch` is exposed for callers
@@ -478,7 +480,7 @@ Build a match object for an interrupt, pinned to its scoped fields. Values are e
 
 **Returns:** `Record<string, string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L304))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L308))
 
 ### recordRule
 
@@ -526,7 +528,7 @@ Return a new policy with a catch-all rule for an effect appended. A single bare 
 
 **Returns:** [Policy](#policy)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L352))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L356))
 
 ### recordScopedRule
 
@@ -538,7 +540,7 @@ recordScopedRule(
 ): Policy
 ```
 
-Return a new policy with a scoped approve rule prepended for the interrupt's effect. The rule pins the scoped fields, so it approves only future interrupts matching this one's field values.
+Return a new policy with a scoped approve rule prepended for the interrupt's effect. The rule pins the scoped fields, so it approves only future interrupts matching this one's field values. Returns the policy unchanged when there is nothing to pin, because a rule with an empty match would approve every future interrupt of the effect.
 
   @param policy - The policy to extend (not mutated).
   @param intr - The interrupt whose field values to pin.
@@ -568,7 +570,7 @@ Return a new policy with a scoped approve rule prepended for the interrupt's eff
 
 **Returns:** [Policy](#policy)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L389))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L393))
 
 ### parsePolicyFile
 
@@ -602,7 +604,7 @@ Read + parse + validate a policy file from disk. Returns {} on any
 
 **Throws:** `std::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L435))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L442))
 
 ### setPolicy
 
@@ -625,7 +627,7 @@ Install `policy` as the active policy and persist it to `path`.
 | path | `string` |  |
 | policy | [Policy](#policy) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L480))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L487))
 
 ### writePolicyFile
 
@@ -656,7 +658,7 @@ Validate and write a policy to a JSON file. Throws if the policy is invalid.
 | policy | [Policy](#policy) |  |
 | allowedPaths | `string[]` | [] |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L497))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L504))
 
 ### flushPolicy
 
@@ -676,7 +678,7 @@ Write any pending always-rule additions to the policy file now.
  * `std::write` via `with approve` (you opted in by installing the
  * handler).
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L562))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L569))
 
 ### cliPolicyHandler
 
@@ -766,4 +768,4 @@ CLI sugar for an interactive policy handler. Loads and saves the policy file, pr
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L949))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L958))

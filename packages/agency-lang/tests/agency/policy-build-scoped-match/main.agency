@@ -61,6 +61,11 @@ node main() {
   if (m5.command != "ls \\*.md") { return "FAIL: command not escaped, got ${m5.command}" }
   if (m5.cwd != "/tmp/\\{a\\,b\\}") { return "FAIL: cwd not escaped, got ${m5.cwd}" }
 
+  // A scoped field missing from the data yields no match at all: a partial
+  // pin would be wider than shown, and an empty match is a catch-all.
+  const partial = { effect: "std::exec", data: { command: "git" } }
+  if (keys(buildScopedMatch(partial, fields)).length != 0) { return "FAIL: missing field should yield {}" }
+
   // Subpath values are escaped inside the brace expansion.
   const readIntr2 = { effect: "std::read", data: { dir: "/u/[x]", filename: "f" } }
   const m6 = buildScopedMatch(readIntr2, fields)

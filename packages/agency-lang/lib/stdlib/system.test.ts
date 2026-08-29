@@ -6,7 +6,8 @@ describe("_urlHost", () => {
     expect(_urlHost("https://example.com/a/b?c=d")).toBe("example.com");
   });
 
-  it("returns an empty string for a non-URL", () => {
-    expect(_urlHost("not a url")).toBe("");
+  it("returns the whole string when there is no hostname", () => {
+    expect(_urlHost("not a url")).toBe("not a url");
+    expect(_urlHost("mailto:user@example.com")).toBe("mailto:user@example.com");
   });
 });

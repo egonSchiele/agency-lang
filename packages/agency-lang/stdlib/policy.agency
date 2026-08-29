@@ -697,6 +697,43 @@ def renderObjAsTable(
   return render(paramTable)
 }
 
+@hidden
+export def askUserChoices(intr: any): ChoiceItem[] {
+  """
+  The answers the approval prompt offers for one interrupt. An interrupt that expects a value (a question, a review) gets once-only answers: "always" has no meaning when each raise wants its own answer.
+
+  @param intr - The interrupt being asked about.
+  """
+  let items: ChoiceItem[] = [
+    {
+    key: "a",
+    label: "approve once"
+  },
+    {
+    key: "r",
+    label: "reject once"
+  },
+  ]
+  if (intr.expectsValue == true) {
+    return items
+  }
+  items.push({
+    key: "aa",
+    label: "approve always (every future ${intr.effect})"
+  })
+  if (scopedFieldsFor(intr.effect, globalCliPolicyOpts.fields).length > 0) {
+    items.push({
+      key: "ap",
+      label: "approve always here (${describeScopedMatch(intr)})"
+    })
+  }
+  items.push({
+    key: "rr",
+    label: "reject always"
+  })
+  return items
+}
+
 // Present the (a)/(r)/(aa)/(ap)/(rr) menu for one interrupt and
 // return the user's choice as an `AskUserResult`. `(ap)` is offered
 // only when the effect has a scope (an override entry, or its declaration).
@@ -709,38 +746,10 @@ def renderObjAsTable(
 def askUser(intr: any): AskUserResult {
   // `!= null` compiles to `!== null` (Agency strict equality), so an
   // undefined entry would slip through. Use the explicit existence check.
-  const effectFields = scopedFieldsFor(intr.effect, globalCliPolicyOpts.fields)
-  const scopedAvailable = effectFields.length > 0
-
   const title = intr.message
   const body = prettyPrintInterruptData(intr.data, intr.effect)
 
-  let items: ChoiceItem[] = [
-    {
-    key: "a",
-    label: "approve once"
-  },
-    {
-    key: "r",
-    label: "reject once"
-  },
-    {
-    key: "aa",
-    label: "approve always (every future ${intr.effect})"
-  },
-  ]
-  if (scopedAvailable) {
-    items.push(
-      {
-      key: "ap",
-      label: "approve always here (${describeScopedMatch(intr)})"
-    },
-    )
-  }
-  items.push({
-    key: "rr",
-    label: "reject always"
-  })
+  const items = askUserChoices(intr)
 
   // `allowCancel: true` makes Escape cancel the whole request (raises a
   // cancellation that unwinds the turn back to the REPL prompt) instead of

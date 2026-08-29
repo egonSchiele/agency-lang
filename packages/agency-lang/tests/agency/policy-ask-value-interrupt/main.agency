@@ -1,0 +1,20 @@
+import { map } from "std::array"
+import { askUserChoices } from "std::policy"
+
+@always(name)
+effect app::env { name: string }
+
+node main(): string {
+  const permission = { effect: "app::env", data: { name: "X" }, expectsValue: false }
+  const keys1 = map(askUserChoices(permission), \item -> item.key)
+  if (keys1.join(",") != "a,r,aa,ap,rr") { return "FAIL permission: ${keys1.join(",")}" }
+
+  const question = { effect: "app::question", data: { prompt: "?" }, expectsValue: true }
+  const keys2 = map(askUserChoices(question), \item -> item.key)
+  if (keys2.join(",") != "a,r") { return "FAIL question: ${keys2.join(",")}" }
+
+  const noScope = { effect: "app::plain", data: {}, expectsValue: false }
+  const keys3 = map(askUserChoices(noScope), \item -> item.key)
+  if (keys3.join(",") != "a,r,aa,rr") { return "FAIL no scope: ${keys3.join(",")}" }
+  return "pass"
+}

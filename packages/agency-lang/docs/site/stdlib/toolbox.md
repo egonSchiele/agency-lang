@@ -14,7 +14,8 @@ Keep a directory of tools an agent wrote, and write new ones. A tool is
 
   The review interrupt is the point of the design: a person reads the
   generated code before it is saved. The handler below prints the source
-  and asks.
+  and asks. A policy that answers every interrupt with a bare `approve()`
+  accepts the draft; `reject()` cancels the write.
 
   ```ts
   import { writeTool, listTools } from "std::toolbox"
@@ -62,13 +63,13 @@ Keep a directory of tools an agent wrote, and write new ones. A tool is
 One tool in a toolbox: what `describe` says about its module plus the
   usage record from meta.json. `broken` carries the reason the directory
   could not be read as a healthy tool: a parse failure, no `tool` export,
-  or a meta.json that is not JSON.
+  or a meta.json that is missing a field or has one of the wrong type.
 
 ```ts
 /** One tool in a toolbox: what `describe` says about its module plus the
   usage record from meta.json. `broken` carries the reason the directory
   could not be read as a healthy tool: a parse failure, no `tool` export,
-  or a meta.json that is not JSON. */
+  or a meta.json that is missing a field or has one of the wrong type. */
 export type ToolEntry = {
   name: string;
   dir: string;
@@ -84,20 +85,22 @@ export type ToolEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L76))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L96))
 
 ### WriteToolReview
 
-The value a handler passes to approve() for std::toolbox::review.
+The value a handler passes to approve() for std::toolbox::review. A
+  bare approve() counts as accept.
 
 ```ts
-/** The value a handler passes to approve() for std::toolbox::review. */
+/** The value a handler passes to approve() for std::toolbox::review. A
+  bare approve() counts as accept. */
 export type WriteToolReview =
   | { verdict: "accept" }
   | { verdict: "revise"; feedback: string }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L323))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L112))
 
 ## Effects
 
@@ -109,7 +112,7 @@ effect std::toolbox::scan {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L82))
 
 ### std::toolbox::review
 
@@ -119,11 +122,11 @@ effect std::toolbox::review {
   stagingDir: string;
   source: string;
   effects: string[];
-  testFeedback: string[]
+  tested: boolean
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L314))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L84))
 
 ## Functions
 
@@ -148,7 +151,7 @@ List the tools in a toolbox directory: each tool's name, signature,
 
 **Throws:** `std::toolbox::scan`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L179))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L262))
 
 ### checkToolShape
 
@@ -157,10 +160,11 @@ checkToolShape(source: string): string[]
 ```
 
 Check that Agency source has the shape of a toolbox tool: exactly the
-  exports type Request, def tool, and node main; a guard with finalize
-  inside tool; no `with approve`; a docstring on tool with @param request
-  and an example call. Returns one message per problem, empty when the
-  source conforms.
+  exports type Request, def tool(request: Request): Result<...>, and node
+  main(request: Request): Result<...>; tool returns a guard with time and
+  cost limits and a finalize; no `with approve`; a docstring on tool with
+  @param request and an example call. Returns one message per problem,
+  empty when the source conforms.
 
   @param source - Agency source code of a tool module
 
@@ -172,7 +176,7 @@ Check that Agency source has the shape of a toolbox tool: exactly the
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L292))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L407))
 
 ### writeTool
 
@@ -192,8 +196,8 @@ writeTool(
 
 Write a reusable tool into a toolbox directory. The coding agent drafts
   the tool against a fixed contract, the draft is checked, reviewed, and
-  tested, then shown to the user for acceptance or revision before it is
-  saved.
+  (when it is pure computation) tested, then shown to the user for
+  acceptance or revision before it is saved.
 
   @param name - The tool's name; also its directory under dir
   @param purpose - What the tool should do, in plain language
@@ -221,6 +225,6 @@ Write a reusable tool into a toolbox directory. The coding agent drafts
 
 **Returns:** `Result<ToolEntry>`
 
-**Throws:** `std::remove`, `std::mkdir`, `std::toolbox::review`, `std::write`, `std::read`, `std::guard`, `std::run`
+**Throws:** `std::remove`, `std::mkdir`, `std::toolbox::review`, `std::write`, `std::move`, `std::read`, `std::guard`, `std::run`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L636))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L764))

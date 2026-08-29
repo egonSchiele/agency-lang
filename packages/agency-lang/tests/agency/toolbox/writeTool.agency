@@ -6,7 +6,8 @@ const OUT = __dirname + "/test-output"
 const TOOLS = __dirname + "/fixtures/tools"
 
 // Approve every non-review interrupt; answer the review with the scripted
-// verdicts in order. A null verdict rejects. Returns writeTool's result.
+// verdicts in order. A null verdict rejects; the string "bare" answers with
+// a valueless approve(). Returns writeTool's result.
 def runWrite(name: string, dir: string, verdicts: any[]) {
   let reviewCount = 0
   handle {
@@ -17,7 +18,10 @@ def runWrite(name: string, dir: string, verdicts: any[]) {
         const verdict = verdicts[reviewCount]
         reviewCount = reviewCount + 1
         if (verdict == null) {
-          return reject("cancelled")
+          return reject("cancelled by the test")
+        }
+        if (verdict == "bare") {
+          return approve()
         }
         return approve(verdict)
       }
@@ -56,8 +60,9 @@ node rejectWritesNothing(): boolean {
   cleanup("addTwo")
   const result = runWrite("addTwo", OUT, [null])
   const nothing = !exists("addTwo", OUT) && !exists(".staging/addTwo", OUT)
+  const keptMessage = result is failure && "${result.error}" =~ re/cancelled by the test/
   cleanup("addTwo")
-  return result is failure && nothing
+  return keptMessage && nothing
 }
 
 node reviseRunsASecondRound(): boolean {
@@ -93,4 +98,24 @@ node refusesALongName(): boolean {
 node refusesAnEmptyDir(): boolean {
   const result = runWrite("addFive", "", [{ verdict: "accept" }])
   return result is failure && "${result.error}" =~ re/dir/
+}
+
+node bareApproveAccepts(): boolean {
+  cleanup("addSix")
+  const result = runWrite("addSix", OUT, ["bare"])
+  const saved = savedFiles("addSix")
+  cleanup("addSix")
+  return result is success && saved
+}
+
+// A tool that calls a model draws no test-cases mock and saves without a
+// tool.test.json.
+node modelToolSkipsTests(): boolean {
+  cleanup("greet")
+  const result = runWrite("greet", OUT, [{ verdict: "accept" }])
+  const hasSource = exists("greet/tool.agency", OUT)
+  const hasMeta = exists("greet/meta.json", OUT)
+  const noCases = !exists("greet/tool.test.json", OUT)
+  cleanup("greet")
+  return result is success && hasSource && hasMeta && noCases
 }

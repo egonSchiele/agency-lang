@@ -180,7 +180,7 @@
       "llmMocks": [
         {
           "return": {
-            "code": "/** @module\n  @summary Add one to a number.\n*/\n\nexport type Request = {\n  n: number\n}\n\nexport def tool(request: Request): Result<number> {\n  \"\"\"\n  Add one to the number in the request.\n\n  Example: tool({ n: 41 })\n\n  @param request - The number to add one to\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return request.n + 1\n\n    finalize {\n      return 0\n    }\n  }\n}\n\nexport node main(request: Request): Result<number> {\n  return tool(request)\n}\n\nexport def helper(): number {\n  return 1\n}\n"
+            "code": "/** @module\n  @summary Add one to a number.\n*/\n\nexport type Request = {\n  n: number\n}\n\nexport def tool(request: Request): Result<number> {\n  \"\"\"\n  Add one to the number in the request.\n\n  Example: tool({ n: 41 })\n\n  @param request - The number to add one to\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return request.n + 1\n\n    finalize {\n      return 0\n    }\n  }\n}\n\nexport node main(request: Request): Result<number> {\n  return tool(request)\n}\n\\nexport def helper(): number {\\n  return 1\\n}\\n"
           }
         },
         {
@@ -252,6 +252,72 @@
       ],
       "useTestLLMProvider": true,
       "llmMocks": []
+    },
+    {
+      "nodeName": "bareApproveAccepts",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "code": "/** @module\n  @summary Add one to a number.\n*/\n\nexport type Request = {\n  n: number\n}\n\nexport def tool(request: Request): Result<number> {\n  \"\"\"\n  Add one to the number in the request.\n\n  Example: tool({ n: 41 })\n\n  @param request - The number to add one to\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return request.n + 1\n\n    finalize {\n      return 0\n    }\n  }\n}\n\nexport node main(request: Request): Result<number> {\n  return tool(request)\n}\n"
+          }
+        },
+        {
+          "return": []
+        },
+        {
+          "return": {
+            "cases": [
+              {
+                "nodeName": "main",
+                "args": {
+                  "request": {
+                    "n": 41
+                  }
+                },
+                "expectedOutput": 42
+              },
+              {
+                "nodeName": "main",
+                "args": {
+                  "request": {
+                    "n": 0
+                  }
+                },
+                "expectedOutput": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "modelToolSkipsTests",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "code": "/** @module\n  @summary Greet a person by name using a model.\n*/\n\nexport type Request = {\n  name: string\n}\n\nexport def tool(request: Request): Result<string> {\n  \"\"\"\n  Greet the person by name using a model.\n\n  Example: tool({ name: \"Ada\" })\n\n  @param request - Who to greet\n  \"\"\"\n  return guard(time: 1m, cost: $0.10) {\n    return llm(\"Say hello to ${request.name}\")\n\n    finalize {\n      return \"\"\n    }\n  }\n}\n\nexport node main(request: Request): Result<string> {\n  return tool(request)\n}\n"
+          }
+        },
+        {
+          "return": []
+        }
+      ]
     }
   ]
 }

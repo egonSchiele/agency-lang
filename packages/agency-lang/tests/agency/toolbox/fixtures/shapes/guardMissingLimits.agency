@@ -1,5 +1,5 @@
 /** @module
-  @summary Double a number.
+  @summary Add one to a number.
 */
 
 export type Request = {
@@ -8,14 +8,14 @@ export type Request = {
 
 export def tool(request: Request): Result<number> {
   """
-  Double the number in the request.
+  Add one to the number in the request.
 
   Example: tool({ n: 41 })
 
-  @param request - The number to double
+  @param request - The number to add one to
   """
-  return guard(time: 1m, cost: $0.10) {
-    return request.n * 2
+  return guard(time: 1m) {
+    return request.n + 1
 
     finalize {
       return 0

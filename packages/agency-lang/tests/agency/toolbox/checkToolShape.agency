@@ -45,3 +45,20 @@ node reportsParseFailure(): boolean {
   const problems = checkToolShape("export def tool(request: Request) {{{")
   return problems.length == 1 && problems[0] =~ re/parse/i
 }
+
+node rejectsGuardNotReturned(): boolean {
+  return problemsFor(SHAPES, "guardNotReturned.agency") =~ re/directly/
+}
+
+node rejectsGuardMissingLimits(): boolean {
+  return problemsFor(SHAPES, "guardMissingLimits.agency") =~ re/cost/
+}
+
+node rejectsExtraConstExport(): boolean {
+  return problemsFor(SHAPES, "extraConstExport.agency") =~ re/LIMIT/
+}
+
+node rejectsWrongSignature(): boolean {
+  const problems = problemsFor(SHAPES, "wrongSignature.agency")
+  return problems =~ re/tool\(request: Request\)/ && problems =~ re/main\(request: Request\)/
+}

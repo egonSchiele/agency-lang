@@ -17,7 +17,8 @@ node listsEveryDirectory(): boolean {
   }
   const names = map(entries.value, \entry -> entry.name)
   names.sort()
-  return names.join(",") == "badMeta,broken,good,noMeta"
+  // `dist` is on the walking glob's skip list; a plain listing still shows it.
+  return names.join(",") == "badMeta,broken,dist,good,noMeta"
 }
 
 node readsSignatureDocstringAndEffects(): boolean {

@@ -1,0 +1,28 @@
+/** @module
+  @summary Add one to a number.
+*/
+
+export type Request = {
+  n: number
+}
+
+export def tool(): Result<number> {
+  """
+  Add one to the number in the request.
+
+  Example: tool({ n: 41 })
+
+  @param request - The number to add one to
+  """
+  return guard(time: 1m, cost: $0.10) {
+    return 1
+
+    finalize {
+      return 0
+    }
+  }
+}
+
+export node main(): Result<number> {
+  return tool()
+}

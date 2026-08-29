@@ -10,16 +10,14 @@ export def tool(request: Request): Result<number> {
 
   @param request - The input
   """
-  return guard(time: 1m, cost: $0.10) {
-    const other = guard(time: 1m, cost: $0.10) {
-      return 0
-
-      finalize {
-        return 0
-      }
-    }
+  const result = guard(time: 1m, cost: $0.10) {
     return request.n + 1
+
+    finalize {
+      return 0
+    }
   }
+  return result
 }
 
 export node main(request: Request): Result<number> {

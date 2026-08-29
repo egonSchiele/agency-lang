@@ -8,10 +8,11 @@ and the LLM options, and execution continues from the saved point.
 
 ## Files
 
-`<agent home>/sessions/<cwd slug>/` holds one `<id>.json` per session (the
-value of `getCheckpoint`) and `index.json`, a list of session records
-(`id, cwd, brain, created, lastActive, turns, title`), most recently saved
-first. The agent home is `~/.agency-agent` or `AGENCY_AGENT_HOME`. The slug
+`<agent home>/sessions/<cwd slug>/` holds two files per session: `<id>.json`
+(the value of `getCheckpoint`) and `<id>.meta.json` (the record: `id, cwd,
+brain, created, lastActive, turns, title`). There is no shared index, so two
+agents in one directory cannot race on it; the picker's list is derived from
+the record files. Writes go through a temp file and a rename. The agent home is `~/.agency-agent` or `AGENCY_AGENT_HOME`. The slug
 is the working directory with every non-alphanumeric character replaced by
 `-`, so sessions are per project directory, as in Claude Code.
 

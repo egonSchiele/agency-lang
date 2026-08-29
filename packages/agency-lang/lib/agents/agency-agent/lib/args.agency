@@ -56,7 +56,6 @@ export def parseAgentArgs(brainHelp: string) {
       },
       continue: {
         type: "boolean",
-        short: "c",
         description: "Resume the most recent saved session for this directory"
       },
       resume: {

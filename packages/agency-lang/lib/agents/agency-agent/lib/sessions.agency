@@ -1,7 +1,7 @@
 /** @module
-  @summary Saved agent sessions on disk: one checkpoint file per session
-  plus an index the resume picker reads. Per project directory, like
-  Claude Code: `<agent home>/sessions/<cwd slug>/`.
+  @summary Saved agent sessions on disk: a checkpoint file and a record
+  file per session, per project directory (like Claude Code):
+  `<agent home>/sessions/<cwd slug>/`.
 */
 import {
   _listSessions,
@@ -13,8 +13,8 @@ import { cwd } from "std::system"
 
 import { POLICY_DIR } from "./config.agency"
 
-/** One row of the index. `title` is the one-line summary the picker
-  shows; `turns` counts completed turns. */
+/** What the picker shows for a session. `title` is the one-line summary;
+  `turns` counts completed turns. */
 export type SessionRecord = {
   id: string;
   cwd: string;
@@ -61,7 +61,7 @@ export def findSession(id: string): SessionRecord | null {
   return find(listSessions(), \record -> record.id == id)
 }
 
-/** Write the checkpoint file and put `record` first in the index. */
+/** Write the session's checkpoint and record files. */
 export def saveSession(record: SessionRecord, checkpoint: any): Result {
   const error = _saveSession(projectDir(), record, checkpoint)
   if (error != "") {

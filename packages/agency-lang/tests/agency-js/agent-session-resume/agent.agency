@@ -1,0 +1,60 @@
+import {
+  _installSessionHooks,
+  _sessionOnSubmit,
+  _readCheckpointFile,
+ } from "agency-lang/stdlib-lib/agentSessions.js"
+import { getThread, listThreads, userMessage } from "std::thread"
+import { env } from "std::system"
+
+import { fakeRepl } from "./loop.js"
+
+// The agency agent's save-and-resume mechanics, without the agent: a
+// TypeScript REPL loop, a turn that grows a session thread, a record per
+// turn, and a fresh process that restores the checkpoint file. Stage one
+// (test.js) runs two lines; stage two (resume-stage.js) restores and runs
+// one more, and must see all three in the thread and turns == 3.
+
+let turns = 0
+
+def turn(line: string): boolean {
+  turns = turns + 1
+  thread(label: "main", session: "main") {
+    userMessage("u${turns}: ${line}")
+  }
+  return true
+}
+
+def recordTurn(line: string): any {
+  return {
+    dir: "./sessions",
+    record: {
+      id: "s1",
+      cwd: ".",
+      brain: "test",
+      created: 1,
+      lastActive: turns,
+      turns: turns,
+      title: "t"
+    }
+  }
+}
+
+def messages(): string[] {
+  const threads = listThreads(false)
+  const mainThread = find(threads.value, \t -> t.label == "main")
+  const all = getThread(mainThread.id, 0, 100)
+  return [m.content for m in all.value]
+}
+
+node main() {
+  _installSessionHooks(turn, recordTurn)
+  const resume = env("RESUME") with approve
+  if (resume == "1") {
+    restore(_readCheckpointFile("./sessions", "s1"), {})
+  }
+  fakeRepl(_sessionOnSubmit)
+  return {
+    turns: turns,
+    messages: messages()
+  }
+}

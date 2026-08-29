@@ -159,7 +159,7 @@ Other process docs:
 ### Agents (`agency agent`, the stdlib agents)
 
 - `docs/dev/agents/agent-brains.md` — How `agency agent` splits into a harness and pluggable brains, and what each half owns.
-- `docs/dev/agents/agent-sessions.md` — Save and resume for `agency agent`: a checkpoint per turn, where it is taken, how the REPL drains the saved turn on resume, and what comes from the checkpoint versus today's startup.
+- `docs/dev/agents/agent-sessions.md` — Save and resume for `agency agent`: a checkpoint between turns, why it is taken from TypeScript after the turn's frames return, where the restore runs, and what a restore does not bring back.
 - `docs/dev/agents/approval-policies.md` — How approval policy rules match, and the matching rules that have caused surprises.
 - `docs/dev/agents/promptRunner.md` — The small control-flow helper behind `runPrompt`.
 - `docs/dev/agents/reply-attachments.md` — How a tool hands images back to the model, given that most providers reject image parts in tool results.

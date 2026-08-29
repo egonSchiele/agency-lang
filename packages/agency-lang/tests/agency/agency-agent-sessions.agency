@@ -56,8 +56,9 @@ node refreshSchedule(): boolean[] {
 }
 
 // The store round trip, in the per-test AGENCY_AGENT_HOME sandbox: two
-// sessions saved, listed newest first, found by id, and the checkpoint
-// read back unchanged. Saving a session again replaces its index row.
+// sessions saved, listed most recently active first, found by id, and
+// the checkpoint read back unchanged. Saving a session again replaces
+// its record.
 node storeRoundTrip(): any {
   const first: SessionRecord = {
     id: "s1",

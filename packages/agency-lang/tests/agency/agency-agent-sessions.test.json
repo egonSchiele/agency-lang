@@ -57,7 +57,7 @@
     },
     {
       "nodeName": "storeRoundTrip",
-      "description": "save, list newest first, find, load, upsert",
+      "description": "save, list most recently active first, find, load, replace",
       "input": "",
       "expectedOutput": "{\"count\":2,\"order\":[\"s1\",\"s2\"],\"recentTitle\":\"first, renamed\",\"foundBrain\":\"simple\",\"checkpoint\":{\"fake\":\"checkpoint one, again\"},\"missing\":null}",
       "evaluationCriteria": [

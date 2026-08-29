@@ -9,6 +9,10 @@ import { checkpoint, getCheckpoint } from "../runtime/checkpoint.js";
  * under the agent's own state directory, like the REPL history file in
  * `cli.ts`: it is harness bookkeeping, not a tool, so it raises no
  * interrupt and is never handed to a model.
+ *
+ * Each session is two files, `<id>.json` (the checkpoint) and
+ * `<id>.meta.json` (the record). There is no shared index: two agents in
+ * the same directory would race on one, and a listing is cheap to derive.
  */
 
 export type SessionRecord = {
@@ -21,36 +25,63 @@ export type SessionRecord = {
   title: string;
 };
 
-const INDEX_FILE = "index.json";
+const META_SUFFIX = ".meta.json";
 
 function checkpointFile(dir: string, id: string): string {
   return path.join(dir, `${id}.json`);
 }
 
-/** The index rows, most recently saved first. An unreadable or malformed
- *  index reads as empty. */
-export function _listSessions(dir: string): SessionRecord[] {
-  const file = path.join(dir, INDEX_FILE);
-  if (!fs.existsSync(file)) return [];
+function metaFile(dir: string, id: string): string {
+  return path.join(dir, `${id}${META_SUFFIX}`);
+}
+
+/** Write via a sibling temp file and rename, so a crash mid-write never
+ *  leaves a half-written file (the same pattern as the REPL history). */
+function writeAtomic(file: string, data: string): void {
+  const tmp = `${file}.tmp-${process.pid}`;
+  fs.writeFileSync(tmp, data, "utf8");
+  fs.renameSync(tmp, file);
+}
+
+function readJson(file: string): unknown {
+  if (!fs.existsSync(file)) return null;
   try {
-    const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf-8"));
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (r): r is SessionRecord => typeof r === "object" && r !== null && typeof r.id === "string",
-    );
+    return JSON.parse(fs.readFileSync(file, "utf-8"));
   } catch {
-    return [];
+    return null;
   }
 }
 
-/** Write the checkpoint file, then the index with `record` first. Returns
- *  "" on success, else the error message. */
+function isRecord(value: unknown): value is SessionRecord {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as SessionRecord).id === "string" &&
+    typeof (value as SessionRecord).lastActive === "number"
+  );
+}
+
+/** Every session in `dir`, most recently active first. A malformed
+ *  record file is skipped. */
+export function _listSessions(dir: string): SessionRecord[] {
+  if (!fs.existsSync(dir)) return [];
+  const records: SessionRecord[] = [];
+  for (const name of fs.readdirSync(dir)) {
+    if (!name.endsWith(META_SUFFIX)) continue;
+    const parsed = readJson(path.join(dir, name));
+    if (isRecord(parsed)) records.push(parsed);
+  }
+  records.sort((a, b) => b.lastActive - a.lastActive);
+  return records;
+}
+
+/** Write the checkpoint, then the record. Returns "" on success, else the
+ *  error message. */
 export function _saveSession(dir: string, record: SessionRecord, checkpoint: unknown): string {
   try {
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(checkpointFile(dir, record.id), JSON.stringify(checkpoint));
-    const others = _listSessions(dir).filter((r) => r.id !== record.id);
-    fs.writeFileSync(path.join(dir, INDEX_FILE), JSON.stringify([record, ...others]));
+    writeAtomic(checkpointFile(dir, record.id), JSON.stringify(checkpoint));
+    writeAtomic(metaFile(dir, record.id), JSON.stringify(record));
     return "";
   } catch (err) {
     return err instanceof Error ? err.message : String(err);
@@ -59,13 +90,7 @@ export function _saveSession(dir: string, record: SessionRecord, checkpoint: unk
 
 /** The parsed checkpoint, or null when the file is missing or malformed. */
 export function _readCheckpointFile(dir: string, id: string): unknown {
-  const file = checkpointFile(dir, id);
-  if (!fs.existsSync(file)) return null;
-  try {
-    return JSON.parse(fs.readFileSync(file, "utf-8"));
-  } catch {
-    return null;
-  }
+  return readJson(checkpointFile(dir, id));
 }
 
 type SaveTarget = { dir: string; record: SessionRecord } | null;

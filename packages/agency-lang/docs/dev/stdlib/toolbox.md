@@ -24,29 +24,29 @@ empty: it always carries `std::guard`.
 
 The first design used a Template Agency skeleton so the coding agent
 would write only the body. A template's own `def tool(request: Request)`
-cannot mention a `Request` that arrives through a hole (a fragment that
-fills a hole cannot supply a name another part of the template uses),
-and there is no hole in type position. So `writeTool` asks for the whole
+names the type `Request`. If `Request` were supplied through a hole, the
+rest of the template could not see that name, because a fragment that
+fills one hole cannot supply a name to another part of the template.
+Template Agency also has no hole in type position. So `writeTool` asks for the whole
 module and enforces the shape with `checkToolShape` plus the review
 agent. A type-position hole would let the skeleton own the guard and
 exports again; that is a follow-up.
 
 ## The shape checker is facts plus rules
 
-`shapeFacts` is the one def that knows AST field names; it reduces a
-module to a flat record (exported names including `export const`, the
-guard `tool` returns, that guard's named arguments, the `tool` and
-`main` signatures and the docstring text from `describe`, the
-`with approve` count). `shapeRules` turns that record into a list of
+`shapeFacts` is the one def that knows AST field names. It reduces a
+module to a flat record: exported names (including `export const`); the
+guard `tool` returns; that guard's named arguments; the `tool` and
+`main` signatures; the docstring text from `describe`; and the
+`with approve` count. `shapeRules` turns that record into a list of
 `{ ok, message }`, and `checkToolShape` returns the messages of the
-rules that fail. Adding a rule is one line.
+rules that fail.
 
-The guard rules are exact about what the contract promises: `tool`'s
-body must contain a top-level `return guard(...) { ... }` (a guard
-assigned to a variable, or nested inside another block, does not count,
-because work can happen outside it), that guard must name both `time:`
-and `cost:`, and its finalize must be its own child. The signature
-rules compare `describe`'s printed signatures against
+The guard rules require three things. `tool`'s body must contain a
+top-level `return guard(...) { ... }`; a guard assigned to a variable,
+or nested inside another block, does not count, because work can happen
+outside it. That guard must name both `time:` and `cost:`. Its finalize
+must be its own child. The signature rules compare `describe`'s printed signatures against
 `tool(request: Request): Result<` and `main(request: Request): Result<`,
 so a `tool()` with no parameter is refused even though it typechecks.
 
@@ -76,15 +76,15 @@ would refuse to reuse.
 
 ### Only pure tools are tested
 
-`llm()` raises no interrupt and cannot be scripted in a sandbox test
-file, and a scripted approval of a network effect lets the call through,
-so a generated exact-match test for a tool that calls a model or the
-network can never pass. `testSource` therefore generates and runs tests
+`llm()` raises no interrupt, so it cannot be scripted in a sandbox test
+file. A scripted approval of a network effect lets the real call through
+anyway. So a generated exact-match test for a tool that calls a model or
+the network can never pass. `testSource` therefore generates and runs tests
 only for a pure tool: its effect list is exactly `["std::guard"]` and
 its source has no `llm` call (`isPure`). Other tools skip the cases
-call; the review payload says so with `tested: false`.
+call; the review payload sets `tested: false`.
 
-### What the handler may answer
+### What the handler may return
 
 `askUser` returns a `Result<WriteToolReview>`. A rejected interrupt
 comes back as the failure it is, message intact, and `rounds` returns
@@ -98,12 +98,11 @@ narrowing and continuing.
 
 ## The review interrupt
 
-`std::toolbox::review` is raised after the draft passes the shape check,
-the review agent, and its own tests. The handler's `approve` value is a
-`WriteToolReview`: `{ verdict: "accept" }` saves, `{ verdict: "revise",
-feedback }` runs another round with the feedback in the brief, and
-`reject()` cancels. `std::question` in `stdlib/agent.agency` is the
-precedent for an interrupt whose approval carries a value. The loop
+`askUser` raises `std::toolbox::review` after the draft passes the shape
+check, the review agent, and its own tests. The handler's `approve`
+value is a `WriteToolReview`: `{ verdict: "accept" }` saves,
+`{ verdict: "revise", feedback }` runs another round with the feedback
+in the brief, and `reject()` cancels. The loop
 lives in `rounds`, so a reject (which returns a failure from the
 function that raised the interrupt) still lets `writeTool` clear the
 staging directory. The payload's `stagingDir` is temporary; the saved
@@ -114,8 +113,7 @@ tool's directory is the `dir` field of the returned `ToolEntry`.
 The spec had `tool.test.agency` with an exported `cases` const. The
 module writes `tool.test.json` in the sandbox `.test.json` profile
 (`lib/testFormat/schema.ts`) and runs it with `testFile`, which exists
-already and does not load the tool module a second time. Two profile
-facts that cost a round of debugging: scripted interrupt answers are
+already and does not load the tool module a second time. Two profile facts: scripted interrupt answers are
 `interruptHandlers: [{ action: "approve" | "reject" }]`, not
 `interrupts`; and because `main` returns a `Result`, `expectedOutput`
 must be the serialized `Result` envelope. `testFileJson` builds it with
@@ -134,8 +132,9 @@ a healthy tool.
 
 `listTools` lists the toolbox with `_ls`, a plain one-level directory
 read, and keeps the directories whose names do not start with a dot.
-The walking glob skips `dist`, `build`, `.cache` and friends at every
-level, which would have hidden a tool with one of those names.
+The recursive glob helper `_glob` skips `dist`, `build`, `.cache`, and
+friends at every level; using it for `listTools` instead of `_ls` would
+have hidden a tool with one of those names.
 
 ## Model calls and mocks
 

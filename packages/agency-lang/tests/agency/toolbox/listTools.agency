@@ -20,7 +20,7 @@ node listsEveryDirectory(): boolean {
   const names = map(entries.value, \entry -> entry.name)
   names.sort()
   // `build` is on the walking glob's skip list; a plain listing still shows it.
-  return names.join(",") == "badMeta,broken,build,good,noMeta"
+  return names.join(",") == "badMeta,broken,build,good,noMeta,partialMeta"
 }
 
 node readsSignatureDocstringAndEffects(): boolean {
@@ -53,6 +53,17 @@ node defaultsMissingMeta(): boolean {
   const noMeta = entryNamed(entries.value, "noMeta")
   const meta = noMeta.meta
   return meta.uses == 0 && meta.version == 1 && meta.lastUsedAt == null && noMeta.broken == null
+}
+
+// A field the file leaves out, or sets to null, takes the default; the
+// fields it has are kept.
+node fillsMissingMetaFields(): boolean {
+  const entries = catalog()
+  if (entries is failure) {
+    return false
+  }
+  const partial = entryNamed(entries.value, "partialMeta")
+  return partial.meta.uses == 7 && partial.meta.maxTime == 180000 && partial.meta.version == 1 && partial.broken == null
 }
 
 node reportsCorruptMeta(): boolean {

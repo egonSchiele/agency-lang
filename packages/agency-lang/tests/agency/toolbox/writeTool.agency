@@ -1,5 +1,5 @@
 import { remove, mkdir } from "std::fs"
-import { exists } from "std::shell"
+import { exists, ls } from "std::shell"
 import { writeTool, listTools, runTool } from "std::toolbox"
 
 const OUT = __dirname + "/test-output"
@@ -52,7 +52,8 @@ def savedFiles(name: string): boolean {
   const hasTool = exists("${name}/tool.agency", OUT)
   const hasCases = exists("${name}/tool.test.json", OUT)
   const hasMeta = exists("${name}/meta.json", OUT)
-  const stagingGone = !exists("staging/${name}", OUT)
+  const staged = ls("${OUT}/staging") with approve
+  const stagingGone = (staged catch []).length == 0
   return hasImpl && hasTool && hasCases && hasMeta && stagingGone
 }
 
@@ -214,17 +215,17 @@ node reviseWithEmptyFeedbackFails(): boolean {
   return result is failure && "${result.error}" =~ re/feedback/ && nothing
 }
 
-// No mocks: a staged draft with this name already exists, so the write
-// refuses before any model call and leaves that directory alone.
-node refusesAnInProgressDraft(): boolean {
+// Each call stages in its own directory, so a draft another call left
+// behind does not block this one and is not touched by it.
+node leftoverStagingDoesNotBlock(): boolean {
   cleanup("addEleven")
-  mkdir("${OUT}/staging/addEleven") with approve
+  mkdir("${OUT}/staging/addEleven-old") with approve
   const result = runWrite("addEleven", OUT, [{
     verdict: "accept"
   }])
-  const untouched = exists("staging/addEleven", OUT)
+  const untouched = exists("staging/addEleven-old", OUT)
   cleanup("addEleven")
-  return result is failure && "${result.error}" =~ re/staged/ && untouched
+  return result is success && untouched
 }
 
 // The first draft imports a TypeScript primitive that raises no interrupt.

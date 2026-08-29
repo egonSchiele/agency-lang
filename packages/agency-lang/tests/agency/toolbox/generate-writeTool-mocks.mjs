@@ -91,7 +91,7 @@ const tests = [
   testCase("effectfulToolSkipsTests", readRound),
   testCase("reviseWithoutFeedbackFails", pureRound),
   testCase("reviseWithEmptyFeedbackFails", pureRound),
-  testCase("refusesAnInProgressDraft", []),
+  testCase("leftoverStagingDoesNotBlock", pureRound),
   testCase("nodeImportGoesBackToTheCodingAgent", [...nodeImportRound, ...pureRound]),
   testCase("dateToolSkipsTests", dateRound),
   testCase("staleTestFileDoesNotShip", [...pureRound, ...modelRound]),

@@ -41,6 +41,16 @@
       ]
     },
     {
+      "nodeName": "fillsMissingMetaFields",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "reportsCorruptMeta",
       "input": "",
       "expectedOutput": "true",

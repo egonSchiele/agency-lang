@@ -19,7 +19,8 @@ One directory per tool under the toolbox (default `~/.agency-agent/tools`):
 - `meta.json` holds the purpose, the request type text, the creation
   time, the time limit, and a use count with the last-used time. It
   records no outcomes or results, because a failure message can carry
-  the request's contents.
+  the request's contents. It does not hold the tool's name either; the
+  directory name is the only name.
 
 A program runs a tool with `runTool(name, request)`, or imports it
 directly: `import { tool as getNews } from ".../getNews/tool.agency"`.
@@ -83,17 +84,16 @@ unexpanded default would have made every generated test run fail.
 
 ### Publishing is one rename
 
-Every round writes into `<dir>/staging/<name>`. The staging directory is
+Every round writes into the call's own `<dir>/staging/<name>-<random>`. The staging directory is
 not a dot directory. The built-in with-writes policy (the approval
 policy that allows writes under a path glob) scopes writes with
 `base/**`, and `**` does not match a dot-led segment. A `.staging`
 directory would have prompted on every mkdir. `staging` is therefore a
-reserved tool name, and `listTools` skips it. `writeTool` refuses to
-start when `<dir>/staging/<name>` already exists; the failure names the
-directory.
-Deleting it instead would let two concurrent writes of the same name
-destroy each other's drafts; a crashed write leaves a directory the
-user removes by hand. A round whose tool has an
+reserved tool name, and `listTools` skips it. Each call stages under
+`staging/<name>-<random>`, so two concurrent writes of one name never
+share a draft; the publish rename is the only point of contention, and
+the second one fails because the target exists. A crashed write leaves
+its directory behind for the user to remove. A round whose tool has an
 effect removes a `tool.test.json` that an earlier pure round left
 behind, so a revision that starts calling a model does not ship the old
 tests. `saveTool` re-checks that `<dir>/<name>` is still free (the check
@@ -129,15 +129,16 @@ get the identical brief.
 `listTools` raises a `std::toolbox::scan` interrupt for the directory.
 It then lists the directory with `ls` from `std::shell` (which raises
 `std::ls`), and keeps the directories whose names are not `staging` and
-do not start with a dot. The recommended policy approves `std::toolbox::scan`; the `std::ls`
-behind it keeps that policy's read scope, so a toolbox outside the
-working directory still prompts for the listing. `listTools` refuses an empty `dir`, since the
+do not start with a dot. The recommended policy gives `std::toolbox::scan` the same `dir` scope
+as `std::read`, so a toolbox outside the working directory prompts. `listTools` refuses an empty `dir`, since the
 primitives would resolve it to the process cwd. `ls` counts every entry
 against its cap and does not say when it stopped, so a listing that
 reaches the cap is reported as a failure. It is not returned as a
 shortened catalog. The per-tool reads
 of `impl.agency` and `meta.json` use `_read`, covered by that one scan
-approval. A toolbox directory that does not exist
+approval. `runTool` and the post-publish read in `saveTool` raise the
+same scan for the one tool directory they read, so no `_read` runs
+without an approval that names its directory. A toolbox directory that does not exist
 yet is an empty catalog.
 
 Each entry carries `module` (what `describe` says about `run`: signature,

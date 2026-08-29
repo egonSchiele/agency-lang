@@ -183,7 +183,7 @@ List the tools in a toolbox directory. Raises a `std::toolbox::scan`
 
 **Throws:** `std::toolbox::scan`, `std::ls`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L303))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L316))
 
 ### writeTool
 
@@ -233,9 +233,9 @@ Write a reusable tool into a toolbox directory. The coding agent drafts
 
 **Returns:** `Result<ToolEntry>`
 
-**Throws:** `std::mkdir`, `std::remove`, `std::toolbox::review`, `std::write`, `std::move`, `std::read`, `std::guard`, `std::run`
+**Throws:** `std::mkdir`, `std::remove`, `std::toolbox::review`, `std::toolbox::scan`, `std::write`, `std::move`, `std::read`, `std::guard`, `std::run`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L839))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L843))
 
 ### runTool
 
@@ -265,6 +265,6 @@ Run a saved tool's `main` node in a subprocess and return what it
 
 **Returns:** `Result<Json>`
 
-**Throws:** `std::run`, `std::guard`, `std::write`
+**Throws:** `std::toolbox::scan`, `std::run`, `std::guard`, `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L934))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L932))

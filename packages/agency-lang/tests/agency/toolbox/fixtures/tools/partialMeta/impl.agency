@@ -1,0 +1,14 @@
+import { Json } from "std::validation"
+
+export type Request = {
+  n: number
+}
+
+export def run(request: Request): Json {
+  """
+  Add one to the number in the request.
+
+  @param request - The number to add one to
+  """
+  return request.n + 1
+}

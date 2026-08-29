@@ -1,5 +1,4 @@
 {
-  "name": "good",
   "purpose": "Add one to a number.",
   "request": "{ n: number }",
   "createdAt": "2026-08-28T15:02:11.000+00:00",

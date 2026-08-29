@@ -96,9 +96,9 @@ const MAX_TOOL_NAME_LEN = 64
 const WALL_CLOCK_HEADROOM = 30s
 const MAX_TOOL_TIME = 1h - WALL_CLOCK_HEADROOM
 
-// Drafts are built under <root>/staging/<name>. Not a dot directory: the
-// with-writes policy scopes writes with `base/**`, and `**` does not match
-// a dot-led segment.
+// Drafts are built under <root>/staging/<name>-<random>, one directory
+// per writeTool call. Not a dot directory: the with-writes policy scopes
+// writes with `base/**`, and `**` does not match a dot-led segment.
 const STAGING_DIR = "staging"
 
 const IMPL_FILE = "impl.agency"
@@ -242,8 +242,21 @@ def metaFacts(toolDir: string): Result<ToolMeta> {
   }
   return success({
     ...DEFAULT_META,
-    ...file.value
+    ...presentFields(file.value)
   })
+}
+
+// Validation fills a missing optional field with null, and a null would
+// win over the default in a spread. Only the fields the file has are kept.
+def presentFields(file: MetaFile): Record<string, Json> {
+  const fields: Record<string, Json> = file
+  const present: Record<string, Json> = {}
+  for (key, value in fields) {
+    if (value != null) {
+      present[key] = value
+    }
+  }
+  return present
 }
 
 def entryFor(root: string, name: string): ToolEntry {
@@ -440,13 +453,6 @@ def testFileJson(cases: GeneratedCase[]): string {
   return JSON.stringify({
     sourceFile: TOOL_FILE,
     tests: tests
-  }, null, 2)
-}
-
-def metaJson(name: string, meta: ToolMeta): string {
-  return JSON.stringify({
-    name: name,
-    ...meta
   }, null, 2)
 }
 
@@ -703,7 +709,7 @@ def saveTool(
     createdAt: format(now()),
     maxTime: settings.maxTime
   }
-  const savedMeta = write(META_FILE, metaJson(name, meta), settings.stagingDir)
+  const savedMeta = write(META_FILE, JSON.stringify(meta, null, 2), settings.stagingDir)
   if (savedMeta is failure) {
     return savedMeta
   }
@@ -716,6 +722,9 @@ def saveTool(
   if (published is failure) {
     return published
   }
+  return interrupt std::toolbox::scan("Are you sure you want to read the saved tool?", {
+    dir: "${root}/${name}"
+  })
   return success(entryFor(root, name))
 }
 
@@ -823,13 +832,8 @@ def checkRequest(request: string): Result {
       "request must be Agency type text such as `{ n: number }`: ${parseErr}",
     )
   }
-  // parseAST adds the prelude import itself; anything else the text
-  // brings in, an import included, is refused.
   const aliases = filter(parsed.value.nodes, \astNode -> astNode.type == "typeAlias")
-  const others = filter(
-    parsed.value.nodes,
-    \astNode -> astNode.type != "typeAlias" && astNode.modulePath != "std::index",
-  )
+  const others = filter(parsed.value.nodes, \astNode -> astNode.type != "typeAlias")
   if (aliases.length != 1 || others.length != 0) {
     return failure("request must be one Agency type, got `${request}`")
   }
@@ -884,15 +888,9 @@ export def writeTool(
   if (requestOk is failure) {
     return requestOk
   }
-  // A staged draft that already exists belongs to another writeTool call
-  // in flight, or to one that crashed. Either way this call must not
-  // delete it under the other, so it refuses and names the directory.
-  const stagingDir = "${root}/${STAGING_DIR}/${name}"
-  if (exists(stagingDir)) {
-    return failure(
-      "a draft of `${name}` is already staged at ${stagingDir}; wait for it, or remove that directory if the write that made it is gone",
-    )
-  }
+  // Each call stages in its own directory, so two writes of the same
+  // name never share a draft; the publish rename decides which one wins.
+  const stagingDir = "${root}/${STAGING_DIR}/${name}-${Math.random().toString(36).slice(2)}"
   const made = mkdir(stagingDir)
   if (made is failure) {
     return made
@@ -928,7 +926,7 @@ def recordUse(toolDir: string, name: string, meta: ToolMeta): Result {
     uses: meta.uses + 1,
     lastUsedAt: format(now())
   }
-  return write(META_FILE, metaJson(name, used), toolDir)
+  return write(META_FILE, JSON.stringify(used, null, 2), toolDir)
 }
 
 export def runTool(
@@ -957,8 +955,12 @@ export def runTool(
   if (!exists(TOOL_FILE, toolDir)) {
     return failure("no tool named `${name}` in ${root.value}")
   }
+  // The same approval listTools asks for, here for one tool's directory:
   // meta.json is read before the run, so a corrupt record stops the tool
   // before it has side effects rather than after.
+  return interrupt std::toolbox::scan("Are you sure you want to read this tool?", {
+    dir: toolDir
+  })
   const meta = metaFacts(toolDir)
   if (meta is failure) {
     return meta

@@ -72,9 +72,9 @@ export const recommendedAutoApprovePolicy: Policy = {
   "std::tavilySearch": approve,
   "std::skills::skillsDir": approve,
   "std::skills::commandsDir": approve,
-  // A scan reads tool sources and meta.json under the toolbox; the listing
-  // itself still goes through std::ls and its read scope.
-  "std::toolbox::scan": approve,
+  // A scan reads tool sources and meta.json under a directory, so it
+  // takes the read scope.
+  "std::toolbox::scan": readScopeRules(),
   "std::notify": approve,
   "std::clipboardCopy": approve,
   "std::git::status": approve,

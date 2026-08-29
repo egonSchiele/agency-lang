@@ -22,10 +22,10 @@ describe("builtinPolicy", () => {
     expect(p!["std::write"]).toBeUndefined();
   });
 
-  it("approves a toolbox scan under 'recommended' but not 'minimal'", () => {
-    expect(builtinPolicy("recommended", "/tmp/base")!["std::toolbox::scan"]).toEqual([
-      { action: "approve" },
-    ]);
+  it("scopes a toolbox scan like a read under 'recommended' and omits it under 'minimal'", () => {
+    expect(builtinPolicy("recommended", "/tmp/base")!["std::toolbox::scan"]).toEqual(
+      builtinPolicy("recommended", "/tmp/base")!["std::read"],
+    );
     expect(builtinPolicy("minimal", "/tmp/base")!["std::toolbox::scan"]).toBeUndefined();
   });
 

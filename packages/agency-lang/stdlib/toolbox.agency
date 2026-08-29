@@ -890,7 +890,7 @@ export def writeTool(
   }
   // Each call stages in its own directory, so two writes of the same
   // name never share a draft; the publish rename decides which one wins.
-  const stagingDir = "${root}/${STAGING_DIR}/${name}-${Math.random().toString(36).slice(2)}"
+  const stagingDir = "${root}/${STAGING_DIR}/${name}-${Math.floor(Math.random() * 1000000000)}"
   const made = mkdir(stagingDir)
   if (made is failure) {
     return made

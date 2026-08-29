@@ -4,6 +4,7 @@ import {
   resolveDotDirPattern,
   expandAgencyInstallDir,
   validatePolicy,
+  escapeGlob,
 } from "./policy.js";
 import { getStdlibDir } from "../importPaths.js";
 import path from "path";
@@ -614,5 +615,35 @@ describe("dot expansion canonicalizes the launch directory", () => {
     const resolved = resolveDotDirPattern("./**", "/nonexistent-policy-cwd*");
     expect(picomatch.isMatch("/nonexistent-policy-cwd*/x", resolved)).toBe(true);
     expect(picomatch.isMatch("/nonexistent-policy-cwdX/x", resolved)).toBe(false);
+  });
+});
+
+describe("escapeGlob", () => {
+  const intr = (effect: string, data: Record<string, string>) => ({
+    effect,
+    message: "",
+    data,
+    origin: "test",
+  });
+
+  it("makes a literal value match only itself", () => {
+    const policy = {
+      "std::bash": [{ match: { command: escapeGlob("ls *.md") }, action: "approve" as const }],
+    };
+    expect(checkPolicy(policy, intr("std::bash", { command: "ls *.md" })).type).toBe("approve");
+    expect(checkPolicy(policy, intr("std::bash", { command: "ls a.md" })).type).not.toBe(
+      "approve",
+    );
+  });
+
+  it("keeps a brace-expanded subpath scope working around an escaped base", () => {
+    const base = escapeGlob("/tmp/[x]");
+    const policy = {
+      "std::read": [{ match: { dir: `{${base},${base}/**}` }, action: "approve" as const }],
+    };
+    expect(checkPolicy(policy, intr("std::read", { dir: "/tmp/[x]/sub" })).type).toBe("approve");
+    expect(checkPolicy(policy, intr("std::read", { dir: "/tmp/x/sub" })).type).not.toBe(
+      "approve",
+    );
   });
 });

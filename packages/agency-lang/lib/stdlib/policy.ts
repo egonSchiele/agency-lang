@@ -4,7 +4,12 @@ import { resolveDir } from "./resolveDir.js";
 export {
   checkPolicy as _checkPolicy,
   validatePolicy as _validatePolicy,
+  escapeGlob as _escapeGlob,
 } from "@/runtime/policy.js";
+export {
+  alwaysScopeFor as _alwaysScopeFor,
+  allAlwaysScopes as _allAlwaysScopes,
+} from "@/runtime/alwaysScope.js";
 import type { Policy } from "@/runtime/policy.js";
 
 // Built-in policies live in the runtime (single source of truth, shared with

@@ -1,0 +1,31 @@
+import { runCode } from "std::agency"
+import { alwaysScopeFor, ScopedField } from "std::policy"
+
+// The parent never declares child::ping. The only way its registry can
+// know the scope is from the interrupt the child sends over IPC.
+const CHILD = """
+@always(name)
+effect child::ping { name: string }
+
+node main(): string {
+  return interrupt child::ping("ping", { name: "x" })
+  return "ran"
+}
+"""
+
+node main(): string {
+  let seen: ScopedField[] = []
+  handle {
+    runCode(CHILD)
+  } with (intr) {
+    if (intr.effect == "child::ping") {
+      seen = alwaysScopeFor(intr.effect)
+      return reject()
+    }
+    return approve()
+  }
+  if (seen.length != 1 || seen[0].field != "name" || seen[0].matchSubpaths) {
+    return "FAIL: parent saw ${JSON.stringify(seen)}"
+  }
+  return "pass"
+}

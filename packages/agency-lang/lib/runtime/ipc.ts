@@ -4,6 +4,7 @@
  * over Node's built-in IPC channel instead of being returned as Interrupt[].
  */
 
+import { __registerAlwaysScope, type ScopedField } from "./alwaysScope.js";
 import path from "path";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
@@ -209,6 +210,9 @@ export type IpcInterruptMessage = {
     data: any;
     origin: string;
     expectsValue?: boolean;
+    /** The fields an "approve always here" rule pins for this effect, from
+     * its declaration. The parent may never have imported that module. */
+    alwaysScope: ScopedField[];
   };
 };
 
@@ -357,13 +361,7 @@ export function cleanupSessionLocks(
  * message id so decision routing and statelog correlation share one key.
  */
 export async function sendInterruptToParent(
-  interruptData: {
-    effect: string;
-    message: string;
-    data: any;
-    origin: string;
-    expectsValue?: boolean;
-  },
+  interruptData: IpcInterruptMessage["interrupt"],
   interruptId: string,
 ): Promise<HandlerChainOutcome> {
   if (typeof process.send !== "function") {
@@ -878,6 +876,9 @@ function attachStdoutForwarder(
 
 async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
   const { effect, message, data, origin, expectsValue } = msg.interrupt;
+  // The child carries the scope its effect declaration gave it; this process
+  // may never have imported that module. An empty scope registers nothing.
+  __registerAlwaysScope(effect, msg.interrupt.alwaysScope ?? []);
   try {
     // Report this process's chain OUTCOME; the child merges and decides.
     // The child's interruptId is relayed into the chain walk so this

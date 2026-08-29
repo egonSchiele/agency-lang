@@ -49,5 +49,22 @@ node main() {
   if (m4.tool != "read_file") { return "FAIL: mcp tool not pinned" }
   if (keys(m4).length != 2) { return "FAIL: mcp match should be server+tool only, not args" }
 
+  // Values are escaped: a rule generated from "ls *.md" must not be a glob.
+  const bashFields: ScopedRuleFields = {
+    "std::bash": [
+      { field: "command", matchSubpaths: false },
+      { field: "cwd", matchSubpaths: false },
+    ],
+  }
+  const bashIntr = { effect: "std::bash", data: { command: "ls *.md", cwd: "/tmp/{a,b}" } }
+  const m5 = buildScopedMatch(bashIntr, bashFields)
+  if (m5.command != "ls \\*.md") { return "FAIL: command not escaped, got ${m5.command}" }
+  if (m5.cwd != "/tmp/\\{a\\,b\\}") { return "FAIL: cwd not escaped, got ${m5.cwd}" }
+
+  // Subpath values are escaped inside the brace expansion.
+  const readIntr2 = { effect: "std::read", data: { dir: "/u/[x]", filename: "f" } }
+  const m6 = buildScopedMatch(readIntr2, fields)
+  if (m6.dir != "{/u/\\[x\\],/u/\\[x\\]/**}") { return "FAIL: subpath not escaped, got ${m6.dir}" }
+
   return "pass"
 }

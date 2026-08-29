@@ -26,6 +26,7 @@ import { unwrapServedInvocationOutcome, type ServedInvocationOutcome } from "./i
 import { finishServedInvocation, type RawOutcome } from "./servedInvocationLifecycle.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { isIpcMode, sendInterruptToParent } from "./ipc.js";
+import { alwaysScopeFor } from "./alwaysScope.js";
 import { runAsHandler, executingHandlers, insideHandlerFunction } from "./executingHandlers.js";
 
 // The response API lives in the cycle-free `interruptResponse.ts` leaf (imported
@@ -468,7 +469,10 @@ export async function gatherChainOutcome(
     return { outcome: local, parentDecided: false };
   }
   if (isIpcMode()) {
-    const parentOutcome = await sendInterruptToParent(interruptObj, interruptId);
+    const parentOutcome = await sendInterruptToParent(
+      { ...interruptObj, alwaysScope: alwaysScopeFor(interruptObj.effect) },
+      interruptId,
+    );
     return {
       outcome: mergeChainOutcomes(interruptObj.effect, local, parentOutcome),
       parentDecided: parentOutcome.kind !== "noResponse",

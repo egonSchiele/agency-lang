@@ -9,7 +9,7 @@ import { walkNodes } from "../utils/node.js";
 import type { Tag } from "../types/tag.js";
 import { tagsAbove, effectDeclarationsWithTags, type NodeWithTagsAbove } from "../utils/tagsAbove.js";
 import type { TypeCheckError } from "./types.js";
-import type { DiagnosticName } from "./diagnostics.js";
+import type { SourceLocation } from "../types/base.js";
 import {
   readAlwaysScope,
   hasAlwaysScope,
@@ -226,11 +226,14 @@ function formatObject(t: ObjectType): string {
 
 type TaggedDecl = { decl: EffectDeclaration; scope: ReturnType<typeof readAlwaysScope> };
 
+type ProblemParams = { tag: string; effect: string };
+type ProblemDiagnostic = (params: ProblemParams, loc: SourceLocation | null) => TypeCheckError;
+
 /** Which diagnostic each tag-reading problem becomes. One fact, one place. */
-const PROBLEM_DIAGNOSTIC: Record<AlwaysProblemKind, DiagnosticName> = {
-  badArgument: "alwaysBadArgument",
-  namedTwice: "alwaysBadArgument",
-  repeatedTag: "alwaysRepeatedTag",
+const PROBLEM_DIAGNOSTIC: Record<AlwaysProblemKind, ProblemDiagnostic> = {
+  badArgument: (params, loc) => diagnostic("alwaysBadArgument", params, loc),
+  namedTwice: (params, loc) => diagnostic("alwaysBadArgument", params, loc),
+  repeatedTag: (params, loc) => diagnostic("alwaysRepeatedTag", params, loc),
 };
 
 function problemDiagnostic(
@@ -239,7 +242,7 @@ function problemDiagnostic(
   problem: AlwaysTagProblem,
 ): TypeCheckError {
   const params = { tag: problem.tag, effect };
-  return diagnostic(PROBLEM_DIAGNOSTIC[problem.kind], params, problem.loc ?? tagged.decl.loc ?? null);
+  return PROBLEM_DIAGNOSTIC[problem.kind](params, problem.loc ?? tagged.decl.loc ?? null);
 }
 
 function unknownFieldDiagnostic(

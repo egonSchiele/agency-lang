@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- legacy file slated for incremental refactor */
+import { readAlwaysScope } from "../utils/alwaysTag.js";
 import { declaredName } from "../types/hole.js";
 import { printCodeLiteralBody } from "./agencyGenerator.js";
 import { walkNodesArray } from "../utils/node.js";
@@ -210,6 +211,8 @@ function walkMarkTopLevel(value: unknown): unknown {
 export class TypeScriptBuilder {
   // Output assembly
   private generatedStatements: TsNode[] = [];
+  /** One `__registerAlwaysScope(...)` per tagged effect declaration. */
+  private alwaysScopeRegistrations: TsNode[] = [];
   private generatedTypeAliases: TsNode[] = [];
   /**
    * TypeAlias AST nodes whose declaration has been hoisted to the
@@ -567,6 +570,7 @@ export class TypeScriptBuilder {
       globalInitStatements: partition.globalInitStatements,
       topLevelCallbackStatements: partition.topLevelCallbackStatements,
       generatedStatements: this.generatedStatements,
+      alwaysScopeRegistrations: this.alwaysScopeRegistrations,
       postprocess: this.postprocess(),
       sourceMapJson: JSON.stringify(this._sourceMapBuilder.build()),
       staticAwaitModules: this.initPlan?.staticAwaitModules,
@@ -633,9 +637,20 @@ export class TypeScriptBuilder {
       case "typeAlias":
         if (this.hoistedTypeAliasNodes.has(node)) return ts.empty();
         return this.processTypeAlias(node);
-      case "effectDeclaration":
-        // Compile-time only: declarations erase like type aliases.
+      case "effectDeclaration": {
+        // The payload type is compile-time only. An @always scope is the
+        // one thing a declaration contributes at runtime: one registration
+        // at module JS-load. The typechecker already validated the tags.
+        const { fields } = readAlwaysScope(node.tags);
+        if (fields.length > 0) {
+          this.alwaysScopeRegistrations.push(
+            ts.raw(
+              `__registerAlwaysScope(${JSON.stringify(node.effect)}, ${JSON.stringify(fields)});`,
+            ),
+          );
+        }
         return ts.empty();
+      }
       case "assignment":
         return this.processAssignment(node);
       case "function":

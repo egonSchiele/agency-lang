@@ -1,0 +1,11 @@
+@always(name)
+effect app::env { name: string }
+
+@alwaysUnder(dir)
+effect app::read { dir: string, filename: string }
+
+effect app::plain { x: string }
+
+node main() {
+  return "ok"
+}

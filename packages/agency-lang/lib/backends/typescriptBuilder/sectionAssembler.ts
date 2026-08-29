@@ -351,6 +351,8 @@ export type AssembleSectionsOpts = {
   globalInitStatements: TsNode[];
   topLevelCallbackStatements: TsNode[];
   generatedStatements: TsNode[];
+  /** `__registerAlwaysScope(...)` calls, one per tagged effect declaration. */
+  alwaysScopeRegistrations: TsNode[];
   postprocess: TsNode[];
   /** JSON-stringified source map, embedded into the generated module. */
   sourceMapJson: string;
@@ -439,6 +441,9 @@ export function assembleSections(opts: AssembleSectionsOpts): TsNode {
   // other modules whose globals depend on this module's statics still
   // need an `__awaitStaticInit(...)` entry to wait on — even if the
   // dependency is only a side effect, not a value.
+  // Effect scopes register at JS-load, before any handler can exist and
+  // with no runtime context needed.
+  sections.push(...opts.alwaysScopeRegistrations);
   if (opts.staticVarNames.size > 0 || opts.staticInitStatements.length > 0) {
     sections.push(...buildStaticVarSetup(opts));
     sections.push(

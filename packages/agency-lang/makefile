@@ -1,4 +1,4 @@
-.PHONY: all test stdlib agents doc diagnostics-docs packages-doc refresh-action-pins build clean publish compile-agency examples
+.PHONY: all test stdlib agents doc diagnostics-docs packages-doc refresh-action-pins build clean publish compile-agency examples eval-image
 
 # Resolve tsc/tsc-alias from the workspace, not from whatever happens to
 # be global. Historically `make build` was only ever reached via
@@ -175,3 +175,14 @@ refresh-action-pins:
 	  fi; \
 	  printf "  %-40s %s  # %s\n" "$$repo" "$$sha" "$$tag"; \
 	done
+
+# The Docker image the agency-agent eval suite runs the agent in
+# (evals/agency-agent/docker/Dockerfile). Packs the working tree so the
+# image carries the code you have. Rerun after changing lib/ or stdlib/.
+eval-image:
+	$(MAKE) all
+	rm -rf .agency-build/eval-image && mkdir -p .agency-build/eval-image
+	cp evals/agency-agent/docker/Dockerfile .agency-build/eval-image/
+	npm pack --pack-destination .agency-build/eval-image >/dev/null
+	mv .agency-build/eval-image/agency-lang-*.tgz .agency-build/eval-image/agency-lang.tgz
+	docker build -t agency-eval .agency-build/eval-image

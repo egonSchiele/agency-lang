@@ -14,4 +14,5 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/evals/eval-command-agents.md` — Running an arbitrary CLI as the eval agent instead of an `.agency` file.
 - `docs/dev/evals/writing-optimizers.md` — Adding a new `optimize` strategy alongside `greedy` and `gepa`.
 - `docs/dev/evals/optimize-text-targets.md` — How a prompt travels between the source file and the mutator model, and why every `${...}` in a reply is an interpolation.
+- `docs/dev/evals/agency-agent-suite.md` — The in-repo suite that reproduces terminal-bench failure patterns with our own Python tasks, run in Docker and checked by pytest files.
 - `docs/dev/evals/terminal-bench.md` — Benchmarking the coding agent against Terminal-Bench, and the results so far.

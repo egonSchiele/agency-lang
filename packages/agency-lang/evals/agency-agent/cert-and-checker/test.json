@@ -1,0 +1,5 @@
+{
+  "description": "Generate a self-signed ECDSA certificate with stated fields and a Python checker that must run on a clean machine. A checker that imports a package the agent pip-installed passes for the agent and fails the verifier, the pattern behind terminal-bench openssl-selfsigned-cert.",
+  "tags": ["medium"],
+  "input": "Create a directory ssl/ in the current directory holding: server.key, an ECDSA P-256 private key with file mode 600; server.crt, a self-signed certificate valid for 90 days with Organization Name \"Northwind Internal\" and Common Name \"build.northwind.internal\"; server.pem, the private key followed by the certificate; and verification.txt, containing the certificate subject, its notBefore and notAfter dates, and its SHA-256 fingerprint. Use OpenSSL. Also write a Python script check_cert.py in the current directory that loads ssl/server.crt, prints the Common Name and the expiry date as YYYY-MM-DD, and prints \"Certificate verification successful\" when the certificate loads. check_cert.py will be run on a clean machine that has only Python 3 and the openssl command installed, with no third-party packages."
+}

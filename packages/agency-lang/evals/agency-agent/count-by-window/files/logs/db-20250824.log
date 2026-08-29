@@ -1,0 +1,51 @@
+2025-08-24T21:26:17 ERROR db: connection reset by peer
+2025-08-24T11:31:23 INFO db: token expired
+2025-08-24T23:24:10 WARNING db: slow query
+2025-08-24T14:18:30 ERROR db: slow query
+2025-08-24T12:52:49 WARNING db: slow query
+2025-08-24T14:23:16 ERROR db: retrying job
+2025-08-24T05:21:42 WARNING db: request completed
+2025-08-24T06:08:35 ERROR db: request completed
+2025-08-24T04:08:21 WARNING db: user login
+2025-08-24T00:24:09 INFO db: disk usage above threshold
+2025-08-24T19:56:08 ERROR db: connection reset by peer
+2025-08-24T09:09:36 INFO db: slow query
+2025-08-24T21:45:06 INFO db: user login
+2025-08-24T20:00:58 ERROR db: cache miss
+2025-08-24T11:44:28 INFO db: connection reset by peer
+2025-08-24T00:37:51 INFO db: request completed
+2025-08-24T17:53:55 INFO db: connection reset by peer
+2025-08-24T21:01:26 WARNING db: retrying job
+2025-08-24T19:38:16 INFO db: retrying job
+2025-08-24T00:36:12 INFO db: cache miss
+2025-08-24T22:07:40 ERROR db: slow query
+2025-08-24T22:42:42 ERROR db: token expired
+2025-08-24T05:13:00 ERROR db: request completed
+2025-08-24T05:26:36 INFO db: cache miss
+2025-08-24T00:32:29 INFO db: user login
+2025-08-24T04:31:56 CRITICAL db: token expired
+2025-08-24T22:22:37 INFO db: slow query
+2025-08-24T21:29:26 INFO db: cache miss
+2025-08-24T23:55:23 INFO db: user login
+2025-08-24T00:12:21 INFO db: cache miss
+2025-08-24T10:29:02 ERROR db: retrying job
+2025-08-24T17:15:28 WARNING db: disk usage above threshold
+2025-08-24T05:37:51 ERROR db: request completed
+2025-08-24T10:52:30 INFO db: token expired
+2025-08-24T08:33:32 INFO db: disk usage above threshold
+2025-08-24T16:53:14 INFO db: slow query
+2025-08-24T08:36:20 INFO db: disk usage above threshold
+2025-08-24T19:39:05 WARNING db: user login
+2025-08-24T11:35:42 ERROR db: retrying job
+2025-08-24T19:05:59 INFO db: user login
+2025-08-24T11:20:04 INFO db: cache miss
+2025-08-24T22:58:09 WARNING db: slow query
+2025-08-24T16:32:34 WARNING db: retrying job
+2025-08-24T05:40:56 INFO db: cache miss
+2025-08-24T06:34:02 INFO db: disk usage above threshold
+2025-08-24T14:26:21 ERROR db: request completed
+2025-08-24T05:08:14 WARNING db: disk usage above threshold
+2025-08-24T05:32:07 INFO db: connection reset by peer
+2025-08-24T03:01:39 INFO db: user login
+2025-08-24T02:34:05 ERROR db: retrying job
+2025-08-24T13:51:52 INFO db: token expired

@@ -1,4 +1,4 @@
-import { remove } from "std::fs"
+import { remove, mkdir } from "std::fs"
 import { exists } from "std::shell"
 import { writeTool, listTools, runTool } from "std::toolbox"
 
@@ -201,6 +201,59 @@ node effectfulToolSkipsTests(): boolean {
   }
   cleanup("readIt")
   return result is success && noCases && effectsOk
+}
+
+node reviseWithEmptyFeedbackFails(): boolean {
+  cleanup("addTwelve")
+  const result = runWrite("addTwelve", OUT, [{
+    verdict: "revise",
+    feedback: ""
+  }])
+  const nothing = !exists("addTwelve", OUT)
+  cleanup("addTwelve")
+  return result is failure && "${result.error}" =~ re/feedback/ && nothing
+}
+
+// No mocks: a staged draft with this name already exists, so the write
+// refuses before any model call and leaves that directory alone.
+node refusesAnInProgressDraft(): boolean {
+  cleanup("addEleven")
+  mkdir("${OUT}/staging/addEleven") with approve
+  const result = runWrite("addEleven", OUT, [{
+    verdict: "accept"
+  }])
+  const untouched = exists("staging/addEleven", OUT)
+  cleanup("addEleven")
+  return result is failure && "${result.error}" =~ re/staged/ && untouched
+}
+
+// The first draft imports a TypeScript primitive that raises no interrupt.
+// The coding agent's own typecheck accepts it; the sandboxed compile in
+// assembleTool refuses it, and the second draft is the one saved.
+node nodeImportGoesBackToTheCodingAgent(): boolean {
+  cleanup("addThirteen")
+  const result = runWrite("addThirteen", OUT, [{
+    verdict: "accept"
+  }])
+  const saved = read("addThirteen/impl.agency", OUT) with approve
+  let cleanSource = false
+  if (saved is success(source)) {
+    cleanSource = !(source =~ re/stdlib-lib/)
+  }
+  cleanup("addThirteen")
+  return result is success && cleanSource
+}
+
+// A tool that calls today() computes without effects, but its output
+// changes daily, so it gets no generated tests.
+node dateToolSkipsTests(): boolean {
+  cleanup("stamp")
+  const result = runWrite("stamp", OUT, [{
+    verdict: "accept"
+  }])
+  const noCases = !exists("stamp/tool.test.json", OUT)
+  cleanup("stamp")
+  return result is success && noCases
 }
 
 node reviseWithoutFeedbackFails(): boolean {

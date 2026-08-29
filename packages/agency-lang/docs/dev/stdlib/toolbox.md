@@ -60,8 +60,13 @@ has already emptied staging, so no delete interrupt is raised.
 `testSource` starts with `assembleTool`: write `impl.agency`, fill the
 template, write `tool.agency`, and typecheck it. A draft that exports
 the wrong names fails there with the compiler's message, which becomes
-the next round's feedback. Compiling in the sandbox also refuses
-TypeScript and Node imports, so no import check lives in this module.
+the next round's feedback. `typecheckFile` resolves imports but does
+not police them, so `assembleTool` then runs the sandboxed `compile`,
+which refuses TypeScript, Node, and `pkg::` imports anywhere in the
+closure. That is the only import check in this module. Without it a
+draft could import a raw primitive such as `_which` from
+`agency-lang/stdlib-lib/shell.js`, which raises no interrupt and so
+never shows in the effect list.
 
 `writeTool` and `listTools` expand `~` in `dir` once, up front, with the
 stdlib's `expandPath`. The file primitives expand it themselves, but the
@@ -75,7 +80,11 @@ not a dot directory. The built-in with-writes policy (the approval
 policy that allows writes under a path glob) scopes writes with
 `base/**`, and `**` does not match a dot-led segment. A `.staging`
 directory would have prompted on every mkdir. `staging` is therefore a
-reserved tool name, and `listTools` skips it. A round whose tool has an
+reserved tool name, and `listTools` skips it. `writeTool` refuses to
+start when `<dir>/staging/<name>` already exists, naming the directory.
+Deleting it instead would let two concurrent writes of the same name
+destroy each other's drafts; a crashed write leaves a directory the
+user removes by hand. A round whose tool has an
 effect removes a `tool.test.json` that an earlier pure round left
 behind, so a revision that starts calling a model does not ship the old
 tests. `saveTool` re-checks that `<dir>/<name>` is still free (the check
@@ -87,7 +96,10 @@ staged directory into place. A tool is either fully present or absent.
 `llm()` raises no interrupt, so it cannot be scripted in a sandbox test
 file. A scripted approval of a network effect would let the real call
 through anyway. So `testSource` generates and runs tests only when
-`run` has an empty effect list and the source has no `llm` call.
+`run` has an empty effect list and the source calls none of `llm`,
+`today`, or `now` (`UNPREDICTABLE_CALLS`). A tool that stamps a date
+computes without effects, but exact expected values for it would be
+wrong tomorrow.
 
 ### What the handler may return
 
@@ -95,7 +107,9 @@ A rejected interrupt halts `askUser` and returns the rejection to
 `rounds`, which returns it; nothing after the interrupt runs. A bare
 `approve()` arrives as `null` and counts as accept. `askUser` validates
 any other answer as a `WriteToolReview` with the bang syntax, so a
-`revise` without a string `feedback` fails, naming the answer.
+`revise` without a string `feedback` fails, naming the answer. A
+`revise` with empty feedback fails too, because the next round would
+get the identical brief.
 
 The typechecker does not carry a `Result` narrowing past a `continue`,
 so `rounds` branches on `is failure` / `is success` instead of
@@ -105,7 +119,11 @@ narrowing and continuing.
 
 `listTools` raises one `std::toolbox::scan` interrupt for the directory,
 lists it with `ls` from `std::shell`, and keeps the directories whose
-names are not `staging` and do not start with a dot. The per-tool reads
+names are not `staging` and do not start with a dot. An empty `dir` is
+refused, since the primitives would resolve it to the process cwd. `ls`
+counts every entry against its cap and does not say when it stopped,
+so a listing that reaches the cap is reported as a failure rather than
+a shortened catalog. The per-tool reads
 of `impl.agency` and `meta.json` use `_read`, covered by that one scan
 approval, as `std::skills` does. A toolbox directory that does not exist
 yet is an empty catalog.

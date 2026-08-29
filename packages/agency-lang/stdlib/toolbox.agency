@@ -4,6 +4,7 @@ import {
   fill,
   toSource,
   typecheckFile,
+  compile,
   testFile,
   runFile,
   getNodesOfType,
@@ -269,7 +270,8 @@ def isToolDir(entry: DirEntry): boolean {
 }
 
 // A toolbox directory that does not exist yet is an empty catalog, not an
-// error.
+// error. `ls` counts every entry against its cap, files included, and
+// says nothing when it stops, so a full listing is treated as truncated.
 def toolNames(root: string): Result<string[]> {
   if (!exists(root)) {
     return success([])
@@ -277,6 +279,9 @@ def toolNames(root: string): Result<string[]> {
   const entries = ls(root, false, MAX_TOOLS)
   if (entries is failure) {
     return entries
+  }
+  if (entries.value.length >= MAX_TOOLS) {
+    return failure("${root} has ${MAX_TOOLS} or more entries; a toolbox holds fewer")
   }
   return success(map(filter(entries.value, isToolDir), \entry -> entry.name))
 }
@@ -293,6 +298,9 @@ export idempotent def listTools(
 
   @param dir - The toolbox directory to scan
   """
+  if (dir == "") {
+    return failure("dir must name the toolbox directory; got an empty string")
+  }
   const root = expandPath(dir)
   return interrupt std::toolbox::scan("Are you sure you want to scan this directory for tools?", {
     dir: root
@@ -438,11 +446,14 @@ def metaJson(name: string, meta: ToolMeta): string {
   )
 }
 
-// llm() raises no interrupt, so it never shows in the effect list; the call
-// itself is the signal.
-def callsModel(source: string): boolean {
+// Calls whose result changes from run to run without raising an
+// interrupt, so they never show in the effect list. A tool that makes one
+// has no output an exact test can predict.
+const UNPREDICTABLE_CALLS = ["llm", "today", "now"]
+
+def callsUnpredictable(source: string): boolean {
   const calls = getNodesOfType(source, ["functionCall"]) catch []
-  return some(calls, \call -> call.functionName == "llm")
+  return some(calls, \call -> UNPREDICTABLE_CALLS.includes(call.functionName))
 }
 
 // ---- the writeTool pipeline ----
@@ -510,6 +521,14 @@ def assembleTool(source: string, settings: DraftSettings): Result<ModuleFacts> {
     const messages = map(report.value.errors, \diag -> diag.message)
     return failure("the tool does not typecheck:\n${messages.join("\n")}")
   }
+  // The typecheck resolves imports but does not police them. The sandboxed
+  // compile refuses TypeScript, Node, and pkg:: imports anywhere in the
+  // closure, so a draft cannot reach a raw primitive that raises no
+  // interrupt.
+  const compiled = compile(toSource(filled.value), settings.stagingDir)
+  if (compiled is failure) {
+    return compiled
+  }
   return moduleFacts(settings.stagingDir)
 }
 
@@ -540,16 +559,14 @@ def runGeneratedTests(source: string, settings: DraftSettings): Result {
   return success(null)
 }
 
-// Only a tool that does nothing but compute gets generated tests: one that
-// calls a model or raises an interrupt has no output an exact test can
-// predict.
+// Only a tool that does nothing but compute gets generated tests.
 def testSource(source: string, settings: DraftSettings): Result<Draft> {
   const assembled = assembleTool(source, settings)
   if (assembled is failure) {
     return assembled
   }
   const effects = assembled.value.effects
-  const pure = effects.length == 0 && !callsModel(source)
+  const pure = effects.length == 0 && !callsUnpredictable(source)
   if (!pure) {
     // A previous round may have been pure and left a test file behind;
     // it must not ship with this draft.
@@ -614,6 +631,11 @@ def askUser(
   if (review is failure(shapeErr)) {
     return failure(
       "unrecognized review answer ${JSON.stringify(answer)}: ${shapeErr}. Expected { verdict: \"accept\" } or { verdict: \"revise\", feedback: \"...\" }",
+    )
+  }
+  if (review.value.verdict == "revise" && review.value.feedback == "") {
+    return failure(
+      "a revise answer needs feedback; the next draft would get the same brief",
     )
   }
   return review
@@ -760,10 +782,14 @@ export def writeTool(
   if (requestOk is failure) {
     return requestOk
   }
+  // A staged draft that already exists belongs to another writeTool call
+  // in flight, or to one that crashed. Either way this call must not
+  // delete it under the other, so it refuses and names the directory.
   const stagingDir = "${root}/${STAGING_DIR}/${name}"
-  const cleared = remove(stagingDir)
-  if (cleared is failure) {
-    return cleared
+  if (exists(stagingDir)) {
+    return failure(
+      "a draft of `${name}` is already staged at ${stagingDir}; wait for it, or remove that directory if the write that made it is gone",
+    )
   }
   const made = mkdir(stagingDir)
   if (made is failure) {

@@ -82,6 +82,11 @@ node rejectedScanReturnsFailure(): boolean {
   }
 }
 
+node refusesAnEmptyDir(): boolean {
+  const entries = listTools("") with approve
+  return entries is failure && "${entries.error}" =~ re/dir/
+}
+
 node missingToolboxIsEmpty(): boolean {
   const entries = listTools(__dirname + "/no-such-toolbox") with approve
   if (entries is failure) {

@@ -32,6 +32,19 @@ const readImpl = modelImpl
   .replace("Greet the number using a model.", "Read the file named after the number.")
   .replace("The number to greet", "The number naming the file")
   .replace('return llm("Say hello to number ${request.n}")', 'return read("${request.n}.txt")');
+// Imports a raw primitive that raises no interrupt. The sandboxed compile
+// refuses the import; nothing else in the pipeline would.
+const nodeImportImpl = modelImpl
+  .replace('import { Json } from "std::validation"', 'import { Json } from "std::validation"\nimport { _which } from "agency-lang/stdlib-lib/shell.js"')
+  .replace("Greet the number using a model.", "Find a command on PATH.")
+  .replace("The number to greet", "The command to find")
+  .replace('return llm("Say hello to number ${request.n}")', 'return _which("${request.n}")');
+// Calls today(), so its output is not testable even though it has no effects.
+const dateImpl = modelImpl
+  .replace('import { Json } from "std::validation"', 'import { Json } from "std::validation"\nimport { today } from "std::date"')
+  .replace("Greet the number using a model.", "Stamp the number with the date.")
+  .replace("The number to greet", "The number to stamp")
+  .replace('return llm("Say hello to number ${request.n}")', 'return "${request.n} on ${today()}"');
 const cases = {
   cases: [
     { args: { request: { n: 41 } }, expectedOutput: 42 },
@@ -56,6 +69,8 @@ const pureRound = [codeMock(good), reviewOk, casesMock];
 const modelRound = [codeMock(modelImpl), reviewOk];
 const readRound = [codeMock(readImpl), reviewOk];
 const wrongRound = [codeMock(wrongExport), reviewOk];
+const nodeImportRound = [codeMock(nodeImportImpl), reviewOk];
+const dateRound = [codeMock(dateImpl), reviewOk];
 const tests = [
   testCase("acceptSavesTheTool", pureRound),
   testCase("rejectWritesNothing", pureRound),
@@ -70,6 +85,10 @@ const tests = [
   testCase("modelToolSkipsTests", modelRound),
   testCase("effectfulToolSkipsTests", readRound),
   testCase("reviseWithoutFeedbackFails", pureRound),
+  testCase("reviseWithEmptyFeedbackFails", pureRound),
+  testCase("refusesAnInProgressDraft", []),
+  testCase("nodeImportGoesBackToTheCodingAgent", [...nodeImportRound, ...pureRound]),
+  testCase("dateToolSkipsTests", dateRound),
   testCase("staleTestFileDoesNotShip", [...pureRound, ...modelRound]),
   testCase("runToolRunsAndRecords", pureRound),
   testCase("runToolRefusesAMissingTool", []),

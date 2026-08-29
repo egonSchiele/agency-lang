@@ -37,7 +37,7 @@ import { expandPath } from "agency-lang/stdlib-lib/expandPath.js"
   - `writeTool` has the coding agent draft a new tool. `writeTool` then
     reviews and tests the draft, shows it to the user through an
     interrupt, and saves it.
-  - `runTool` runs a saved tool and records the outcome.
+  - `runTool` runs a saved tool and records the use.
 
   ```ts
   import { writeTool, listTools, runTool } from "std::toolbox"
@@ -91,8 +91,10 @@ const MAX_TOOLS = 500
 const MAX_TOOL_NAME_LEN = 64
 
 // Added to a tool's own time limit for the subprocess that runs it, so
-// the guard trips before the process is killed.
+// the guard trips before the process is killed. runFile clamps wallClock
+// to one hour, so a tool's limit stays below that minus the headroom.
 const WALL_CLOCK_HEADROOM = 30s
+const MAX_TOOL_TIME = 1h - WALL_CLOCK_HEADROOM
 
 // Drafts are built under <root>/staging/<name>. Not a dot directory: the
 // with-writes policy scopes writes with `base/**`, and `**` does not match
@@ -169,6 +171,16 @@ const EMPTY_MODULE: ModuleFacts = {
 }
 
 // ---- reading a toolbox ----
+
+// Every entry point takes the toolbox directory the same way. An empty
+// string is refused because the file primitives would resolve it to the
+// process cwd.
+def expandRoot(dir: string): Result<string> {
+  if (dir == "") {
+    return failure("dir must name the toolbox directory; got an empty string")
+  }
+  return success(expandPath(dir))
+}
 
 def runExport(info: ModuleInfo): ExportInfo | null {
   return find(info.exports, \entry -> entry.name == "run" && entry.kind == "def")
@@ -272,17 +284,18 @@ def isToolDir(entry: DirEntry): boolean {
 
 // A toolbox directory that does not exist yet is an empty catalog, not an
 // error. `ls` counts every entry against its cap, files included, and
-// says nothing when it stops, so a full listing is treated as truncated.
+// says nothing when it stops, so it is asked for one entry more than the
+// cap and a listing that long is refused.
 def toolNames(root: string): Result<string[]> {
   if (!exists(root)) {
     return success([])
   }
-  const entries = ls(root, false, MAX_TOOLS)
+  const entries = ls(root, false, MAX_TOOLS + 1)
   if (entries is failure) {
     return entries
   }
-  if (entries.value.length >= MAX_TOOLS) {
-    return failure("${root} has ${MAX_TOOLS} or more entries; a toolbox holds fewer")
+  if (entries.value.length > MAX_TOOLS) {
+    return failure("${root} has more than ${MAX_TOOLS} entries; a toolbox holds fewer")
   }
   return success(map(filter(entries.value, isToolDir), \entry -> entry.name))
 }
@@ -295,22 +308,22 @@ export idempotent def listTools(
   interrupt before reading anything, then `std::ls` for the listing. Each entry has: the tool's name and
   directory; what `describe` says about its `run` function (signature,
   docstring, effects); and its meta.json record (purpose, request type,
-  version, run count, last-run time, recent outcomes).
+  creation time, time limit, version, run count, last-run time).
 
   @param dir - The toolbox directory to scan
   """
-  if (dir == "") {
-    return failure("dir must name the toolbox directory; got an empty string")
+  const root = expandRoot(dir)
+  if (root is failure) {
+    return root
   }
-  const root = expandPath(dir)
   return interrupt std::toolbox::scan("Are you sure you want to scan this directory for tools?", {
-    dir: root
+    dir: root.value
   })
-  const names = toolNames(root)
+  const names = toolNames(root.value)
   if (names is failure) {
     return names
   }
-  return success(map(names.value, \name -> entryFor(root, name)))
+  return success(map(names.value, \name -> entryFor(root.value, name)))
 }
 
 // ---- the tool template ----
@@ -439,15 +452,52 @@ def metaJson(name: string, meta: ToolMeta): string {
 
 // Calls whose result changes from run to run without raising an
 // interrupt, so they never show in the effect list. A tool that makes one
-// has no output an exact test can predict.
-const UNPREDICTABLE_CALLS = ["llm", "today", "now"]
+// has no output an exact test can predict. `random` covers Math.random,
+// which parses as a call named random.
+const UNPREDICTABLE_CALLS = ["llm", "today", "now", "random"]
+
+/** The fields of an import statement this module reads. */
+type ImportFacts = {
+  importedNames: { aliases: Record<string, string> }[]
+}
+
+// `import { now as clock }` calls `clock()`, so the local names of the
+// unpredictable calls are collected from the import aliases too.
+def unpredictableNames(source: string): string[] {
+  const imports: ImportFacts[] = getNodesOfType(source, ["importStatement"]) catch []
+  const names = [...UNPREDICTABLE_CALLS]
+  for (statement in imports) {
+    for (group in statement.importedNames) {
+      for (original, local in group.aliases) {
+        if (UNPREDICTABLE_CALLS.includes(original)) {
+          names.push(local)
+        }
+      }
+    }
+  }
+  return names
+}
 
 def callsUnpredictable(source: string): boolean {
+  const names = unpredictableNames(source)
   const calls = getNodesOfType(source, ["functionCall"]) catch []
-  return some(calls, \call -> UNPREDICTABLE_CALLS.includes(call.functionName))
+  return some(calls, \call -> names.includes(call.functionName))
 }
 
 // ---- the writeTool pipeline ----
+
+/** A failure the next draft can fix, as opposed to one it cannot (a
+  refused write, a review agent that did not run). Only these become
+  feedback for another round. */
+type DraftProblem = {
+  problem: string
+}
+
+def draftProblem(message: string): Result {
+  return failure({
+    problem: message
+  })
+}
 
 def draftSource(settings: DraftSettings, feedback: string): Result<string> {
   const drafted = agencyCodingAgent(
@@ -458,7 +508,7 @@ def draftSource(settings: DraftSettings, feedback: string): Result<string> {
     provider: settings.provider,
   )
   if (drafted is failure(writeFailure)) {
-    return failure(writeFailure.problems.join("\n"))
+    return draftProblem(writeFailure.problems.join("\n"))
   }
   return drafted
 }
@@ -476,7 +526,7 @@ def reviewSource(source: string, settings: DraftSettings): Result<string> {
   }
   const errors = filter(reviewed.value, \finding -> finding.error)
   if (errors.length > 0) {
-    return failure(map(errors, \finding -> finding.feedback).join("\n"))
+    return draftProblem(map(errors, \finding -> finding.feedback).join("\n"))
   }
   return success(source)
 }
@@ -504,21 +554,25 @@ def assembleTool(source: string, settings: DraftSettings): Result<ModuleFacts> {
   if (wroteTool is failure) {
     return wroteTool
   }
+  // The sandboxed compile resolves the pair's imports and refuses
+  // TypeScript, Node, and pkg:: imports anywhere in the closure, so a
+  // draft cannot reach a raw primitive that raises no interrupt. It runs
+  // first because a draft that exports the wrong name fails here, and
+  // that is a problem the next draft can fix.
+  const compiled = compile(toSource(filled.value), settings.stagingDir)
+  if (compiled is failure(compileErr)) {
+    return draftProblem("${compileErr}")
+  }
+  // The compile does not report type errors; the typecheck does. After a
+  // successful compile, a typecheck failure is a read error, not a draft
+  // problem.
   const report = typecheckFile(settings.stagingDir, TOOL_FILE)
   if (report is failure) {
     return report
   }
   if (report.value.errors.length > 0) {
     const messages = map(report.value.errors, \diag -> diag.message)
-    return failure("the tool does not typecheck:\n${messages.join("\n")}")
-  }
-  // The typecheck resolves imports but does not police them. The sandboxed
-  // compile refuses TypeScript, Node, and pkg:: imports anywhere in the
-  // closure, so a draft cannot reach a raw primitive that raises no
-  // interrupt.
-  const compiled = compile(toSource(filled.value), settings.stagingDir)
-  if (compiled is failure) {
-    return compiled
+    return draftProblem("the tool does not typecheck:\n${messages.join("\n")}")
   }
   return moduleFacts(settings.stagingDir)
 }
@@ -545,7 +599,7 @@ def runGeneratedTests(source: string, settings: DraftSettings): Result {
     return failure("tests could not run: ${testErr}")
   }
   if (!report.value.pass) {
-    return failure("tests failed:\n${failedCases(report.value).join("\n")}")
+    return draftProblem("tests failed:\n${failedCases(report.value).join("\n")}")
   }
   return success(null)
 }
@@ -698,10 +752,16 @@ def oneRound(
 ): RoundOutcome {
   const prepared = prepareDraft(settings, feedback)
   return match(prepared) {
-    failure(problem) => ({
-      done: null,
-      feedback: "${problem}"
-    })
+    failure(err) => match(err) {
+      { problem }: DraftProblem => ({
+        done: null,
+        feedback: problem
+      })
+      _ => ({
+        done: failure(err),
+        feedback: ""
+      })
+    }
     success(draft) => {
       const answer = askUser(name, settings, draft)
       return match(answer) {
@@ -743,10 +803,7 @@ def checkNameSyntax(name: string): Result {
   return success(null)
 }
 
-def checkName(name: string, dir: string, root: string): Result {
-  if (dir == "") {
-    return failure("dir must name the toolbox directory; got an empty string")
-  }
+def checkName(name: string, root: string): Result {
   const syntax = checkNameSyntax(name)
   if (syntax is failure) {
     return syntax
@@ -766,10 +823,12 @@ def checkRequest(request: string): Result {
       "request must be Agency type text such as `{ n: number }`: ${parseErr}",
     )
   }
+  // parseAST adds the prelude import itself; anything else the text
+  // brings in, an import included, is refused.
   const aliases = filter(parsed.value.nodes, \astNode -> astNode.type == "typeAlias")
   const others = filter(
     parsed.value.nodes,
-    \astNode -> astNode.type != "typeAlias" && astNode.type != "importStatement",
+    \astNode -> astNode.type != "typeAlias" && astNode.modulePath != "std::index",
   )
   if (aliases.length != 1 || others.length != 0) {
     return failure("request must be one Agency type, got `${request}`")
@@ -800,17 +859,26 @@ export def writeTool(
   @param request - The tool's input type as Agency type text, such as `{ topics: string[]; maxItems: number }`
   @param dir - The toolbox directory to write into
   @param maxRounds - Draft-review rounds before giving up
-  @param maxTime - Time limit baked into the tool's guard
+  @param maxTime - Time limit baked into the tool's guard, under one hour
   @param maxCost - Cost limit baked into the tool's guard
   @param model - Model override for the coding and review agents, or ""
   @param provider - Provider for the model override
   """
   // Expanded once here: the sandboxed testFile resolves paths without
   // expanding `~`, unlike the file primitives.
-  const root = expandPath(dir)
-  const nameOk = checkName(name, dir, root)
+  const expanded = expandRoot(dir)
+  if (expanded is failure) {
+    return expanded
+  }
+  const root = expanded.value
+  const nameOk = checkName(name, root)
   if (nameOk is failure) {
     return nameOk
+  }
+  if (maxTime > MAX_TOOL_TIME) {
+    return failure(
+      "maxTime must be at most ${MAX_TOOL_TIME} ms (an hour minus the subprocess headroom), got ${maxTime}",
+    )
   }
   const requestOk = checkRequest(request)
   if (requestOk is failure) {
@@ -870,7 +938,8 @@ export def runTool(
 ): Result<Json> {
   """
   Run a saved tool's `main` node in a subprocess and return what it
-  returned. The tool's meta.json records one more use and the time.
+  returned. The tool's meta.json records one more use and the time; it
+  does not record the result.
 
   @param name - The tool's name under dir
   @param request - The tool's input, a value of its Request type
@@ -880,9 +949,13 @@ export def runTool(
   if (syntax is failure) {
     return syntax
   }
-  const toolDir = "${expandPath(dir)}/${name}"
+  const root = expandRoot(dir)
+  if (root is failure) {
+    return root
+  }
+  const toolDir = "${root.value}/${name}"
   if (!exists(TOOL_FILE, toolDir)) {
-    return failure("no tool named `${name}` in ${expandPath(dir)}")
+    return failure("no tool named `${name}` in ${root.value}")
   }
   // meta.json is read before the run, so a corrupt record stops the tool
   // before it has side effects rather than after.

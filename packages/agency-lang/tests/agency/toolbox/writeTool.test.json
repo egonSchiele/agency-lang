@@ -620,6 +620,106 @@
       ]
     },
     {
+      "nodeName": "refusedWriteStopsTheRounds",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+          }
+        },
+        {
+          "return": []
+        },
+        {
+          "return": {
+            "cases": [
+              {
+                "args": {
+                  "request": {
+                    "n": 41
+                  }
+                },
+                "expectedOutput": 42
+              },
+              {
+                "args": {
+                  "request": {
+                    "n": 0
+                  }
+                },
+                "expectedOutput": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "aliasedDateCallSkipsTests",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "code": "import { Json } from \"std::validation\"\nimport { now as clock } from \"std::date\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Stamp the number with the date.\n\n  @param request - The number to stamp\n  \"\"\"\n  return \"${request.n} at ${clock()}\"\n}\n"
+          }
+        },
+        {
+          "return": []
+        }
+      ]
+    },
+    {
+      "nodeName": "refusesATimeLimitOverAnHour",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "refusesAnImportInTheRequestText",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "runToolRefusesAnEmptyDir",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
       "nodeName": "runToolRefusesAMissingTool",
       "input": "",
       "expectedOutput": "true",

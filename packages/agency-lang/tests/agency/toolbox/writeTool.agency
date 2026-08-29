@@ -311,6 +311,78 @@ node runToolRunsAndRecords(): boolean {
   return answer is success && answer.value == 42 && recorded
 }
 
+// A refused write is not something a new draft can fix, so writeTool
+// stops after the first round instead of drafting maxRounds times. If it
+// looped, the error would read "gave up after".
+node refusedWriteStopsTheRounds(): boolean {
+  cleanup("addFourteen")
+  let result: Result = success(null)
+  handle {
+    result = writeTool(
+      name: "addFourteen",
+      purpose: "Add one.",
+      request: "{ n: number }",
+      dir: OUT,
+      maxRounds: 3,
+    )
+  } with (intr) {
+    return match(intr.effect) {
+      "std::write" => {
+        if (intr.data.filename == "impl.agency") {
+          return reject("no writes today")
+        }
+        return approve()
+      }
+      _ => approve()
+    }
+  }
+  cleanup("addFourteen")
+  return result is failure && "${result.error}" =~ re/no writes today/ && "${result.error}" !~ re/gave up/
+}
+
+// `import { now as clock }` then `clock()` is still a call to now.
+node aliasedDateCallSkipsTests(): boolean {
+  cleanup("clocked")
+  const result = runWrite("clocked", OUT, [{
+    verdict: "accept"
+  }])
+  const noCases = !exists("clocked/tool.test.json", OUT)
+  cleanup("clocked")
+  return result is success && noCases
+}
+
+// No mocks: refused before any model call.
+node refusesATimeLimitOverAnHour(): boolean {
+  const result = writeTool(
+    name: "slow",
+    purpose: "Wait.",
+    request: "{ n: number }",
+    dir: OUT,
+    maxTime: 2h,
+  ) with approve
+  return result is failure && "${result.error}" =~ re/maxTime/
+}
+
+// No mocks: an import smuggled into the request text is refused.
+node refusesAnImportInTheRequestText(): boolean {
+  const result = runWrite(
+    "smuggled",
+    OUT,
+    [{
+      verdict: "accept"
+    }],
+    "{ n: number }\nimport { bash } from \"std::shell\"",
+  )
+  return result is failure && "${result.error}" =~ re/request/ && !exists("smuggled", OUT)
+}
+
+node runToolRefusesAnEmptyDir(): boolean {
+  const answer = runTool("good", {
+    n: 1
+  }, "") with approve
+  return answer is failure && "${answer.error}" =~ re/dir/
+}
+
 node runToolRefusesAMissingTool(): boolean {
   const answer = runTool("noSuchTool", {
     n: 1

@@ -55,18 +55,23 @@ changes it fails the typecheck of `tool.agency`.
 `draftSource` → `reviewSource` → `testSource` (together `prepareDraft`)
 → `askUser` → `saveTool`, each a def with one job that returns a
 `Result`. `rounds` is the loop; `feedback` is its only state, holding
-the last problem or the user's revision request. `writeTool` validates,
+the last problem or the user's revision request. Only a `DraftProblem`
+(a coding-agent failure, review findings, a typecheck or compile error,
+a failed test) becomes feedback. Any other failure, such as a refused
+write or a review agent that did not run, ends the loop at once, since
+another draft cannot fix it. `writeTool` validates,
 stages, and calls `rounds`. On failure, it clears staging once and
 folds a refused delete into the returned failure. On success the publish rename
 has already emptied staging, so no delete interrupt is raised.
 
 `testSource` starts with `assembleTool`: write `impl.agency`, fill the
-template, write `tool.agency`, and typecheck it. A draft that exports
-the wrong names fails there with the compiler's message, which becomes
-the next round's feedback. `typecheckFile` resolves imports but does
-not police them, so `assembleTool` then runs the sandboxed `compile`,
-which refuses TypeScript, Node, and `pkg::` imports anywhere in the
-closure. That is the only import check in this module. Without it a
+template, write `tool.agency`, compile the pair in the sandbox, and
+typecheck it. The compile resolves the imports and refuses TypeScript,
+Node, and `pkg::` imports anywhere in the closure; a draft that exports
+the wrong names fails there, and the message becomes the next round's
+feedback. The typecheck runs second because it does not police imports,
+and a typecheck that fails after a clean compile is a read error, which
+ends the loop. That is the only import check in this module. Without it a
 draft could import a raw primitive such as `_which` from
 `agency-lang/stdlib-lib/shell.js`, which raises no interrupt and so
 never shows in the effect list.
@@ -101,7 +106,10 @@ staged directory into place. A tool is either fully present or absent.
 file. A scripted approval of a network effect would let the real call
 through anyway. So `testSource` generates and runs tests only when
 `run` has an empty effect list and the source calls none of `llm`,
-`today`, or `now` (`UNPREDICTABLE_CALLS`). A tool that stamps a date
+`today`, `now`, or `random` (`UNPREDICTABLE_CALLS`), under their own
+names or an import alias. A call reached some other way, such as a
+helper module that calls `now()`, is not seen; that tool gets tests
+that fail, and the round's feedback says so. A tool that stamps a date
 computes without effects, but exact expected values for it would be
 wrong tomorrow.
 
@@ -145,7 +153,9 @@ Any of these marks the entry `broken`.
 path segment. It reads `meta.json` before the run, so a corrupt record
 stops the tool before it has side effects. It then runs `main` through
 `runFile`, with `wallClock` set to the tool's own `maxTime` plus
-headroom, so the guard trips before the subprocess is killed. It then rewrites `meta.json` with
+headroom, so the guard trips before the subprocess is killed. `runFile`
+clamps `wallClock` to an hour, so `writeTool` refuses a `maxTime` above
+an hour minus that headroom. It then rewrites `meta.json` with
 one more use and the time. If that write fails, the returned failure
 carries the tool's result in its message, since the tool has already
 run. Otherwise it returns the node's own `Result`.

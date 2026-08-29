@@ -2,7 +2,7 @@ import { buildCompilationUnit, GLOBAL_SCOPE_KEY } from "../compilationUnit.js";
 import { PRELUDE_NAMES } from "../prelude.js";
 import { declaredName } from "../types/hole.js";
 import { holeNames } from "../utils/holes.js";
-import { isNullLiteral, walkNodes, walkNodesArray } from "../utils/node.js";
+import { walkNodes, walkNodesArray } from "../utils/node.js";
 import { diagnostic } from "./diagnostics.js";
 import {
   hasFunctionOrNodeAncestor,
@@ -66,9 +66,6 @@ export function findUndefinedTemplateNames(
         continue;
       }
       if (node.type === "variableName") {
-        if (isNullLiteral(node)) {
-          continue;
-        }
         if (!isResolvableVariableReference(node, ancestors)) {
           continue;
         }

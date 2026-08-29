@@ -45,6 +45,10 @@ const dateImpl = modelImpl
   .replace("Greet the number using a model.", "Stamp the number with the date.")
   .replace("The number to greet", "The number to stamp")
   .replace('return llm("Say hello to number ${request.n}")', 'return "${request.n} on ${today()}"');
+// Reaches now() through an import alias.
+const aliasImpl = dateImpl
+  .replace('import { today } from "std::date"', 'import { now as clock } from "std::date"')
+  .replace('return "${request.n} on ${today()}"', 'return "${request.n} at ${clock()}"');
 const cases = {
   cases: [
     { args: { request: { n: 41 } }, expectedOutput: 42 },
@@ -71,6 +75,7 @@ const readRound = [codeMock(readImpl), reviewOk];
 const wrongRound = [codeMock(wrongExport), reviewOk];
 const nodeImportRound = [codeMock(nodeImportImpl), reviewOk];
 const dateRound = [codeMock(dateImpl), reviewOk];
+const aliasRound = [codeMock(aliasImpl), reviewOk];
 const tests = [
   testCase("acceptSavesTheTool", pureRound),
   testCase("rejectWritesNothing", pureRound),
@@ -91,6 +96,11 @@ const tests = [
   testCase("dateToolSkipsTests", dateRound),
   testCase("staleTestFileDoesNotShip", [...pureRound, ...modelRound]),
   testCase("runToolRunsAndRecords", pureRound),
+  testCase("refusedWriteStopsTheRounds", pureRound),
+  testCase("aliasedDateCallSkipsTests", aliasRound),
+  testCase("refusesATimeLimitOverAnHour", []),
+  testCase("refusesAnImportInTheRequestText", []),
+  testCase("runToolRefusesAnEmptyDir", []),
   testCase("runToolRefusesAMissingTool", []),
   testCase("runToolRefusesAPath", []),
   testCase("runToolRefusesCorruptMeta", []),

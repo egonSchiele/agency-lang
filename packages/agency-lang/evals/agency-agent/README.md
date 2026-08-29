@@ -7,15 +7,13 @@ pattern from the July benchmark runs with different code and data.
 
 ## Run it
 
-The agent writes and runs Python, so it runs in a container. Build the image
-once per change to `lib/` or `stdlib/` (it packs the working tree):
-
-```bash
-make eval-image
-```
-
-Then run the suite with the wrapper as the agent command. `{input}` is the
-task text; everything after the script name goes to `agency agent`:
+The agent writes and runs Python, so run it somewhere disposable. The
+suite ships one way to do that: a Docker image (`make eval-image`, built
+from a tarball of the working tree; rebuild after changing `lib/` or
+`stdlib/`) and `run-in-docker.sh`, a wrapper that runs `agency agent`
+inside it. The wrapper is an ordinary agent command; any other sandbox
+that can run `agency agent` works in its place. `{input}` is the task text;
+everything after the script name goes to `agency agent`:
 
 ```bash
 node dist/scripts/agency.js eval run \
@@ -24,10 +22,9 @@ node dist/scripts/agency.js eval run \
 node dist/scripts/agency.js eval grade runs/agency-agent-coordinator
 ```
 
-Grading also runs inside the image (`docker run ... pytest`), so Docker
-must be up for `eval grade` too. `--policy approve-all` is right here for
-the reason it is right on the benchmark: the container is disposable. The
-wrapper mounts the run directory at its own absolute path inside the
+Grading runs on the host and needs `python3 -m pytest` and `openssl`.
+`--policy approve-all` is right here for the reason it is right on the
+benchmark: the container is disposable. The wrapper mounts the run directory at its own absolute path inside the
 container so the framework's statelog handoff keeps working; see the
 comment at the top of `run-in-docker.sh`.
 
@@ -36,10 +33,11 @@ To compare brains, run twice with different `--brain` values and
 
 ## The tests
 
-Two older tests, `fib` and `news`, predate the Docker setup: `fib` is an
-Agency coding task graded by its own harness and `news` a goal-judged
-question. They run under the wrapper too. To run only the terminal-bench
-shaped tests, pass `--test` for each of the four below.
+Three older tests predate this setup and run under the wrapper too: `fib`
+is an Agency coding task graded by its own harness, and `news` and
+`hollow-creek` are goal-judged questions. An unfiltered run covers all
+seven; to run only the terminal-bench-shaped tests, pass `--test` for
+each of the four below.
 
 | test                | pattern from the benchmark                                                                    | must pass                                    |
 | ------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------- |
@@ -51,19 +49,20 @@ shaped tests, pass `--test` for each of the four below.
 ## Grading
 
 Each test's checks are a pytest file, `graderFiles/test_outputs.py`, the
-shape the benchmark's own verifiers have. `lib/checks.ts` runs it inside
-the image with the workdir mounted and turns each pytest function into one
-grader score, named by dropping `test_` and swapping underscores for dashes.
+shape the benchmark's own verifiers have. `lib/checks.ts` runs it on the
+host over the run's workdir and turns each pytest function into one grader
+score, named by dropping `test_` and swapping underscores for dashes.
 The agent never sees `graderFiles/`. Where a check needs data the agent must
 not have seen, the check generates it at grade time (`gen.py` with another
 seed).
 
-Two harness graders run on every test at low weight: `rounds-used` and
-`wall-seconds`, so a brain that reaches the same score with more turns or
-more time shows it.
+The four tests below also carry two harness graders at low weight,
+`rounds-used` and `wall-seconds`, so a brain that reaches the same score
+with more turns or more time shows it. They record only when every
+must-pass check passed, because grading stops at the first failed gate.
 
 Every test keeps a reference solution under `graderFiles/solution/`
 (`solve.sh` applies it to a workdir). `lib/checks.test.ts` grades each
-solution and each untouched starting tree in local mode, so a check that
+solution and each untouched starting tree, so a check that
 passes an empty workdir cannot land. That test needs `python3 -m pytest` on
 the host and skips, saying so, when it is missing.

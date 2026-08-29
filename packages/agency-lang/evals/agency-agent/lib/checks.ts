@@ -19,24 +19,10 @@ export type CheckSpec = { name: string; mustPass?: boolean; weight?: number };
 
 type CheckResult = { name: string; passed: boolean; message: string };
 
-/** Where pytest runs. `docker` is the real thing: the eval image with the
- *  workdir and the checks mounted. `local` runs the host's python3 and is
- *  for the unit tests, which grade known solutions. */
-export type PytestMode = "docker" | "local";
-
-export function pytestMode(): PytestMode {
-  return process.env.AGENCY_EVAL_PYTEST === "local" ? "local" : "docker";
-}
-
-const IMAGE = process.env.AGENCY_EVAL_IMAGE ?? "agency-eval";
-
-/** Run a test's checks over a workdir and report each pytest function. The
- *  checks see the workdir as their cwd and `WORKDIR` in the environment. */
-export function runPytest(args: {
-  workdir: string;
-  graderFiles: string;
-  mode: PytestMode;
-}): CheckResult[] {
+/** Run a test's checks over a workdir with the host's python3 and report
+ *  each pytest function. The checks see the workdir as their cwd and
+ *  `WORKDIR` in the environment. */
+export function runPytest(args: { workdir: string; graderFiles: string }): CheckResult[] {
   const reportDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-eval-junit-"));
   const reportFile = path.join(reportDir, "report.xml");
   const pytest = [
@@ -50,35 +36,10 @@ export function runPytest(args: {
     args.graderFiles,
     args.graderFiles,
   ];
-  const command =
-    args.mode === "local"
-      ? { file: "python3", argv: pytest }
-      : {
-          file: "docker",
-          argv: [
-            "run",
-            "--rm",
-            "-v",
-            `${args.workdir}:${args.workdir}`,
-            "-v",
-            `${args.graderFiles}:${args.graderFiles}:ro`,
-            "-v",
-            `${reportDir}:${reportDir}`,
-            "-w",
-            args.workdir,
-            "-e",
-            `WORKDIR=${args.workdir}`,
-            "--network",
-            "none",
-            IMAGE,
-            "python3",
-            ...pytest,
-          ],
-        };
   try {
-    execFileSync(command.file, command.argv, {
+    execFileSync("python3", pytest, {
       cwd: args.workdir,
-      env: { ...process.env, WORKDIR: args.workdir },
+      env: { ...process.env, WORKDIR: args.workdir, PYTHONDONTWRITEBYTECODE: "1" },
       stdio: "pipe",
       timeout: 10 * 60 * 1000,
     });
@@ -137,7 +98,7 @@ export function pytestChecks(checks: CheckSpec[]): AgentGrader[] {
   const runs: Record<string, CheckResult[]> = {};
   const resultsFor = (workdir: string, graderFiles: string): CheckResult[] => {
     if (runs[workdir] === undefined) {
-      runs[workdir] = runPytest({ workdir, graderFiles, mode: pytestMode() });
+      runs[workdir] = runPytest({ workdir, graderFiles });
     }
     return runs[workdir];
   };
@@ -182,8 +143,9 @@ export function wallSeconds(): AgentGrader {
   );
 }
 
-/** The graders every test uses: its pytest checks and the two harness
- *  measures. */
+/** The graders the terminal-bench-shaped tests use: the pytest checks, then
+ *  the two harness measures. The measures only record when every must-pass
+ *  check passed, because grading stops at the first failed gate. */
 export function agentGraders(checks: CheckSpec[]): AgentGrader[] {
   return [...pytestChecks(checks), roundsUsed(), wallSeconds()];
 }

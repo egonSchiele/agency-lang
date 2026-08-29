@@ -45,9 +45,14 @@ def cap_violations(root):
 
 
 def pack_and_check(source, packed):
+    """Pack a copy of the source that is deleted before unpacking, so the
+    archive has to be self-contained rather than point back at the source."""
     before = tree_hashes(source)
     assert before, f"{source} is empty"
-    run("pack.py", source, packed)
+    staged = packed + "-source"
+    shutil.copytree(source, staged)
+    run("pack.py", staged, packed)
+    shutil.rmtree(staged)
     violations = cap_violations(packed)
     run("unpack.py", packed)
     after = tree_hashes(packed)

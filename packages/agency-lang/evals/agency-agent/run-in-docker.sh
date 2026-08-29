@@ -17,7 +17,11 @@ NETWORK="${AGENCY_EVAL_NETWORK:-bridge}"
 workdir="$(pwd -P)"
 rundir="$(dirname "$workdir")"
 
+# The container runs as the invoking user so what the agent writes into the
+# mounted run directory is owned by the host user, not root.
 exec docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp \
   -v "$rundir:$rundir" \
   -w "$workdir" \
   -e AGENCY_CONFIG_OVERRIDES \

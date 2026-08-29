@@ -39,6 +39,10 @@ def test_key_and_cert():
     issuer = openssl("x509", "-in", "ssl/server.crt", "-noout", "-issuer")
     assert ORG in subject and CN in subject, f"subject is {subject.strip()}"
     assert subject.split("=", 1)[1] == issuer.split("=", 1)[1], "certificate is not self-signed"
+    openssl("verify", "-CAfile", "ssl/server.crt", "ssl/server.crt")
+    key_pub = openssl("pkey", "-in", "ssl/server.key", "-pubout")
+    cert_pub = openssl("x509", "-in", "ssl/server.crt", "-noout", "-pubkey")
+    assert key_pub.strip() == cert_pub.strip(), "server.crt was not issued for server.key"
     before, after = cert_dates()
     days = (after - before).days
     assert 89 <= days <= 91, f"certificate is valid for {days} days, want 90"

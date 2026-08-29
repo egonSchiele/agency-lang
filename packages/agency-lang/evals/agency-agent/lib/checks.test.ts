@@ -44,7 +44,9 @@ function workdirFor(test: string, mode: "untouched" | "solved"): string {
   const workdir = path.join(scratch, `${test}-${mode}`);
   fs.mkdirSync(workdir);
   const files = path.join(SUITE, test, "files");
-  if (fs.existsSync(files)) fs.cpSync(files, workdir, { recursive: true });
+  if (fs.existsSync(files)) {
+    fs.cpSync(files, workdir, { recursive: true });
+  }
   if (mode === "solved") {
     execFileSync("bash", [path.join(SUITE, test, "graderFiles", "solution", "solve.sh")], {
       cwd: workdir,
@@ -61,14 +63,13 @@ function mustPassNames(test: string): string[] {
 
 // Each check must pass on the reference solution and its must-pass checks
 // must fail on the untouched starting tree; a check that passes an empty
-// workdir would let every brain score. Needs python3 with pytest on the host.
+// workdir would let every brain score.
 describe.skipIf(!hasPytest)("the checks discriminate", () => {
   for (const test of TESTS) {
     it(`${test}: solution passes every check`, () => {
       const results = runPytest({
         workdir: workdirFor(test, "solved"),
         graderFiles: path.join(SUITE, test, "graderFiles"),
-        mode: "local",
       });
       expect(results.length).toBeGreaterThan(0);
       expect(results.filter((r) => !r.passed).map((r) => `${r.name}: ${r.message}`)).toEqual([]);
@@ -78,7 +79,6 @@ describe.skipIf(!hasPytest)("the checks discriminate", () => {
       const results = runPytest({
         workdir: workdirFor(test, "untouched"),
         graderFiles: path.join(SUITE, test, "graderFiles"),
-        mode: "local",
       });
       const required = mustPassNames(test);
       expect(required.length).toBeGreaterThan(0);

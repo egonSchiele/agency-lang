@@ -1,44 +1,50 @@
 import json
 import os
-import shutil
 import sys
 
 MAX_ENTRIES = 12
 MAX_BYTES = 16 * 1024
 
 
+def split(data):
+    return [data[i:i + MAX_BYTES] for i in range(0, len(data), MAX_BYTES)] or [b""]
+
+
+def lay_out(blobs, root):
+    """Write blobs under root in a tree of fixed depth: leaf directories hold
+    up to MAX_ENTRIES chunk files, branch directories up to MAX_ENTRIES
+    subdirectories, and no data sits beside a subdirectory. File names carry
+    the blob index, so a sorted walk reads them back in order."""
+    depth = 0
+    capacity = MAX_ENTRIES
+    while capacity < len(blobs):
+        capacity *= MAX_ENTRIES
+        depth += 1
+    for index, blob in enumerate(blobs):
+        parts = []
+        leaf = index // MAX_ENTRIES
+        for _ in range(depth):
+            parts.append(f"d{leaf % MAX_ENTRIES:02d}")
+            leaf //= MAX_ENTRIES
+        directory = os.path.join(root, *reversed(parts))
+        os.makedirs(directory, exist_ok=True)
+        with open(os.path.join(directory, f"c{index:07d}.bin"), "wb") as f:
+            f.write(blob)
+
+
 def pack(src, dst):
-    os.makedirs(dst, exist_ok=True)
-    chunks = []  # (original relative path, chunk index, bytes)
+    manifest = []
+    chunks = []
     for dirpath, _dirs, files in os.walk(src):
         for name in sorted(files):
             full = os.path.join(dirpath, name)
-            rel = os.path.relpath(full, src)
             with open(full, "rb") as f:
-                data = f.read()
-            for i in range(0, max(len(data), 1), MAX_BYTES):
-                chunks.append((rel, i // MAX_BYTES, data[i:i + MAX_BYTES]))
-    manifest = []
-    # Place chunks in numbered subdirectories, each holding at most
-    # MAX_ENTRIES - 1 files, nested so no directory exceeds the cap.
-    per_dir = MAX_ENTRIES - 1
-    for index, (rel, part, data) in enumerate(chunks):
-        leaf = index // per_dir
-        path_parts = []
-        n = leaf
-        while True:
-            path_parts.append(f"d{n % per_dir:02d}")
-            n //= per_dir
-            if n == 0:
-                break
-        directory = os.path.join(dst, *reversed(path_parts))
-        os.makedirs(directory, exist_ok=True)
-        chunk_name = f"c{index % per_dir:02d}.bin"
-        with open(os.path.join(directory, chunk_name), "wb") as f:
-            f.write(data)
-        manifest.append({"path": rel, "part": part, "chunk": os.path.relpath(os.path.join(directory, chunk_name), dst)})
-    with open(os.path.join(dst, "manifest.json"), "w") as f:
-        json.dump(manifest, f)
+                parts = split(f.read())
+            manifest.append({"path": os.path.relpath(full, src), "parts": len(parts)})
+            chunks.extend(parts)
+    os.makedirs(dst, exist_ok=True)
+    lay_out(split(json.dumps(manifest).encode()), os.path.join(dst, "manifest"))
+    lay_out(chunks, os.path.join(dst, "data"))
 
 
 if __name__ == "__main__":

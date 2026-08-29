@@ -266,8 +266,6 @@ def _runTurn(msg: string): boolean {
 def renderUserTurn(trimmed: string, msg: string): boolean {
   const result = try runTurn("", msg)
   renderAgentResponse(result)
-  // Save here, outside the turn's guard and budget handler: this is the
-  // one place that knows a turn fully completed.
   recordTurn(msg)
   return true
 }
@@ -285,6 +283,7 @@ export def runSeedTurn(target: string, msg: string) {
   pushMessage(color.dim("> ${msg}"))
   const response = try runTurn(target, msg)
   renderAgentResponse(response)
+  recordTurn(msg)
 }
 
 export def renderAgentResponse(
@@ -313,9 +312,7 @@ export def startInteractive(seedTarget: string, seedPrompt: string) {
     historyFile: HISTORY_PATH,
     historyMax: 1000,
     paletteCommands: mergedPalette(),
-    // A resumed run has the saved turn's frame waiting for the next
-    // onSubmit call. The drain call takes it, so the user's first line
-    // is not swallowed. On a fresh run "" is a no-op turn.
+    // Finishes a resumed session's saved turn before the first real line.
     drainFirst: true,
   )
   print(color.cyan("\nGoodbye!"))

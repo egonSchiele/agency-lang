@@ -6,7 +6,7 @@ import test {
   listSessions,
   findSession,
   mostRecentSession,
-  loadCheckpoint,
+  readCheckpointFile,
   SessionRecord,
  } from "../../lib/agents/agency-agent/lib/sessions.agency"
 import test { shouldRefreshTitle } from "../../lib/agents/agency-agent/lib/sessionTitle.agency"
@@ -93,7 +93,7 @@ node storeRoundTrip(): any {
     order: order,
     recentTitle: recentTitle,
     foundBrain: foundBrain,
-    checkpoint: loadCheckpoint("s1"),
-    missing: loadCheckpoint("nope")
+    checkpoint: readCheckpointFile("s1"),
+    missing: readCheckpointFile("nope")
   }
 }

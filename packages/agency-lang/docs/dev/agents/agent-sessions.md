@@ -2,79 +2,72 @@
 
 An interactive `agency agent` run is saved after every completed turn, and a
 later run can pick it up with `--continue` or `--resume`. The saved thing is
-a runtime checkpoint, not a transcript: the conversation, every subagent's
-session thread, and the agent's `let` globals come back exactly as they were,
-and execution resumes at the line after `checkpoint()`.
+a runtime checkpoint, not a transcript: restoring it brings back the
+conversation, every subagent's session thread, and the agent's `let`
+globals, and execution continues at the line after `checkpoint()`.
 
 ## Files
 
 `<agent home>/sessions/<cwd slug>/` holds one `<id>.json` per session (the
-checkpoint from `getCheckpoint`) and `index.json`, a list of session records
-(`id, cwd, brain, created, lastActive, turns, title`) with the most recently
-saved first. The agent home is `~/.agency-agent` or `AGENCY_AGENT_HOME`. The
-slug is the working directory with every non-alphanumeric character replaced
-by `-`, so sessions are per project directory, as in Claude Code.
+value of `getCheckpoint`) and `index.json`, a list of session records
+(`id, cwd, brain, created, lastActive, turns, title`), most recently saved
+first. The agent home is `~/.agency-agent` or `AGENCY_AGENT_HOME`. The slug
+is the working directory with every non-alphanumeric character replaced by
+`-`, so sessions are per project directory, as in Claude Code.
 
-## The three modules
+The file I/O is TypeScript (`lib/stdlib/agentSessions.ts`), like the REPL
+history file: it is harness bookkeeping under the agent's own directory,
+never a tool, so it raises no interrupt and the user's policy is not asked
+about it.
 
-- `lib/agents/agency-agent/lib/sessions.agency` — the files: list, find,
-  save, load, and the picker label.
+## Modules
+
+- `lib/agents/agency-agent/lib/sessions.agency` — the index, save, read,
+  and the picker label.
 - `lib/agents/agency-agent/lib/sessionTitle.agency` — the one-line title:
-  written from the first prompt on turn 1, rewritten from the `main`
-  thread's text every `TITLE_EVERY` turns. One small LLM call in its own
-  thread; fails open to "".
-- `lib/agents/agency-agent/lib/resume.agency` — the glue: which session this
-  run is (`chooseSession`, `startSession`), the per-turn save (`recordTurn`),
-  the footer text (`sessionTitle`), and the checkpoint `runSession` restores
-  (`takeResumeCheckpoint`).
+  from the first prompt on turn 1, then from the tail of the `main` thread
+  every `TITLE_EVERY` turns. One LLM call in its own thread; fails open to "".
+- `lib/agents/agency-agent/lib/resume.agency` — which session this run is
+  (`chooseSession`, `startSession`), the per-turn save (`recordTurn`), the
+  footer text (`sessionTitle`), and the checkpoint `runSession` restores.
 
-## Where the checkpoint is taken, and why there
+## Where the checkpoint is taken
 
-`recordTurn` runs in `repl.agency`'s `renderUserTurn`, after `runTurn`
-returns. That is outside the per-turn `guard` and the budget handler, and it
-is the one place that knows a turn fully completed. The title is refreshed
-before `checkpoint()` so the saved globals carry it.
+`recordTurn` runs in `repl.agency` after a turn's reply is rendered, both
+for typed turns and for the `-i` seed turn. That is outside the per-turn
+`guard` and the budget handler. The title is refreshed before
+`checkpoint()` so the saved globals carry it.
 
 ## How a resume works
 
-1. `main()` runs its normal startup from today's flags: models, memory, MCP.
-   `chooseSession` picks the record, `startSession` loads its checkpoint and
-   queues it.
-2. `runSession` installs the policy handler, runs `brain.init`, then calls
-   `restore(cp, {})`. That throws `RestoreSignal`; the node runner replays
-   `main` with the saved stack. Completed steps are skipped, so startup does
-   not run twice, and the replayed `handle` block pushes the policy handler
+Restoring a checkpoint replaces the whole execution state with the saved
+one, so where `restore()` is called decides what survives from the current
+process. It is called inside `runSession`, after `main()` has run startup
+from today's flags (models, memory, MCP) and after the policy handler is
+installed:
+
+1. `startSession` reads the chosen checkpoint file and queues it.
+2. `runSession` installs the policy handler, runs `brain.init`, then
+   `restore(cp, {})`. The node runner replays `main` with the saved stack;
+   steps the checkpoint recorded as done are skipped, so startup does not
+   run twice, and the replayed `handle` block installs the policy handler
    again.
 3. Replay reaches `startInteractive`, whose `repl(...)` step never finished,
-   so the TS REPL is called again fresh. The saved turn's `_runTurn` frame is
-   still waiting below it: the runtime hands it to the next `onSubmit` call.
-   That is why `repl` takes `drainFirst: true`: it calls `onSubmit("")` once
-   before reading input. On a resume that call finishes the saved turn (which
-   re-runs `saveSession`, harmlessly); on a fresh run "" is a no-op turn.
-   Without the drain the user's first typed line would be swallowed.
+   so the REPL starts fresh. The saved turn's callback frame is still on the
+   stack, and the runtime hands it to the next `onSubmit` call. `repl` takes
+   `drainFirst: true` for this: it calls `onSubmit("")` once before reading
+   input, which finishes the saved turn instead of letting the user's first
+   line be consumed by it.
 
-What comes from the checkpoint: the threads (so `thread(session: "main")`
-continues the saved conversation), every `let` global, and the resume point.
-What comes from today's startup: anything set through TS side effects
-(`setLlmOptions`, `enableMemory`, MCP connections) and the handlers. Note
-that `let` globals include the model-slot cache and the policy module's
-state, so `/model` and the explain view describe the saved run's choices
-until the user changes them.
+From the checkpoint: the threads, every `let` global, and the resume point.
+From today's startup: state set through TypeScript side effects
+(`setLlmOptions`, `enableMemory`, MCP connections) and the handlers. The
+`let` globals include the model-slot cache and the policy module's state, so
+`/model` describes the saved run's choices until the user changes them.
 
-## Things that bit
-
-- The zod schemas in `lib/runtime/state/schemas.ts` must name every field the
-  thread store serializes, or a disk checkpoint silently loses them (PR #961).
-- A `with approve` inside the session's policy handler does not stop that
-  handler from prompting (every handler in the chain runs). The save runs
-  inside `std::policy`'s `internalIo { }`, the flag the handler already uses
-  for its own policy-file I/O.
-- `read`/`write`/`exists` refuse an absolute path outside the cwd; pass the
-  session directory as `dir` and keep file names relative.
-- A `def` cannot be passed to a JS method such as `Array.sort`; keep the
-  index ordered on write instead.
-- `n.toString(36)` on a number crashes the typechecker
-  (`validatePrimitiveMethodCall`, `sig.params` undefined); ids use decimal.
+The zod schemas in `lib/runtime/state/schemas.ts` must name every field the
+thread store serializes; a field missing there is dropped when the checkpoint
+file is read back (see `docs/dev/runtime/checkpointing.md`).
 
 ## Not in v1
 

@@ -10,6 +10,7 @@ export static const TITLE_EVERY = 5
 
 // The summary call reads the tail of the conversation, not all of it.
 static const MAX_CONVERSATION_CHARS = 6000
+static const MAX_MESSAGES = 1000
 
 export def shouldRefreshTitle(turns: number): boolean {
   return turns == 1 || turns % TITLE_EVERY == 0
@@ -26,16 +27,12 @@ export def mainThreadText(): string {
   if (isFailure(threads)) {
     return ""
   }
-  let mainId = ""
-  for (t in threads.value) {
-    if (t.label == "main") {
-      mainId = t.id
-    }
-  }
-  if (mainId == "") {
+  const mainThread = find(threads.value, \t -> t.label == "main")
+  if (mainThread == null) {
     return ""
   }
-  const messages = getThread(mainId, 0, 1000)
+  const offset = Math.max(0, mainThread.messageCount - MAX_MESSAGES)
+  const messages = getThread(mainThread.id, offset, MAX_MESSAGES)
   if (isFailure(messages)) {
     return ""
   }

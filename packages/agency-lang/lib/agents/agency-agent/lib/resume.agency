@@ -5,7 +5,6 @@
   files live in sessions.agency and the title in sessionTitle.agency.
 */
 import { now } from "std::date"
-import { internalIo } from "std::policy"
 import { cwd } from "std::system"
 import { chooseOption, ChoiceItem } from "std::ui"
 
@@ -13,7 +12,7 @@ import {
   SessionRecord,
   findSession,
   listSessions,
-  loadCheckpoint,
+  readCheckpointFile,
   mostRecentSession,
   newSessionId,
   saveSession,
@@ -21,13 +20,12 @@ import {
  } from "./sessions.agency"
 import { mainThreadText, shouldRefreshTitle, titleFor } from "./sessionTitle.agency"
 
-// The session this run writes to. null for one-shot runs, which are not
+// The session this run writes to; null for one-shot runs, which are not
 // saved. A `let`, so a restored checkpoint brings back the resumed
-// session's own record (its turn count and title included).
+// session's own record, turn count and title included.
 let _current: SessionRecord | null = null
 
-// The checkpoint to restore, handed from main() to runSession(). Cleared
-// once taken, so the replay after restore sees nothing to do.
+// The parsed checkpoint file, handed from main() to runSession().
 let _pendingResume: any = null
 
 export def currentSession(): SessionRecord | null {
@@ -49,9 +47,9 @@ export def takeResumeCheckpoint(): any {
   return cp
 }
 
-/** Decide which saved session (if any) this run continues. `resumeArg`
-  is the `--resume` value: null when absent, "" for a bare `--resume`
-  (open the picker), else an id. Exits on an unknown id. */
+/** Which saved session, if any, this run continues. `resumeArg` is the
+  `--resume` value: null when absent, "" for a bare `--resume` (open the
+  picker), else an id. Exits on an unknown id. */
 export def chooseSession(
   continueFlag: boolean,
   resumeArg: string | null,
@@ -84,7 +82,14 @@ def pickSession(): SessionRecord | null {
     return null
   }
   const nowMs = now()
-  let items: ChoiceItem[] = []
+  // A "new session" row rather than allowCancel: before the REPL exists,
+  // Escape raises a cancellation instead of returning "".
+  let items: ChoiceItem[] = [
+    {
+    key: "new",
+    label: "Start a new session"
+  },
+  ]
   for (record in all) {
     items.push({
       key: record.id,
@@ -93,18 +98,17 @@ def pickSession(): SessionRecord | null {
   }
   const choice = chooseOption(
     "Resume a session",
-    "Pick a saved session from this directory. Escape starts a new one.",
+    "Pick a saved session from this directory.",
     items,
-    allowCancel: true,
   )
-  if (choice == "" || choice == null) {
+  if (choice == "new") {
     return null
   }
   return findSession(choice)
 }
 
 /** Start this run's session: a new record, or the chosen saved one with
-  its checkpoint queued for runSession to restore. */
+  its checkpoint file read and queued for runSession to restore. */
 export def startSession(chosen: SessionRecord | null, brain: string) {
   if (chosen == null) {
     const t = now()
@@ -119,9 +123,9 @@ export def startSession(chosen: SessionRecord | null, brain: string) {
     }
     return
   }
-  const cp = loadCheckpoint(chosen.id)
+  const cp = readCheckpointFile(chosen.id)
   if (cp == null) {
-    print(color.red("The checkpoint for session ${chosen.id} is missing or unreadable."))
+    print(color.red("The checkpoint file for session ${chosen.id} is missing or malformed."))
     process.exit(1)
   }
   _current = chosen
@@ -131,7 +135,7 @@ export def startSession(chosen: SessionRecord | null, brain: string) {
 
 /** Called by the REPL after every completed turn. Refreshes the title
   when due, then checkpoints and writes the session. The title is set
-  BEFORE the checkpoint so the saved state carries it. */
+  before the checkpoint so the saved state carries it. */
 export def recordTurn(userMsg: string) {
   const record = _current
   if (record == null) {
@@ -150,13 +154,7 @@ export def recordTurn(userMsg: string) {
     }
   }
   const id = checkpoint()
-  // The save is the agent's own bookkeeping under its state dir, so it
-  // must not go through the user's policy (which would prompt for the
-  // mkdir and writes on every turn).
-  let saved: Result = success(null)
-  internalIo() {
-    saved = saveSession(record, getCheckpoint(id))
-  }
+  const saved = saveSession(record, getCheckpoint(id))
   if (isFailure(saved)) {
     print(color.red("Could not save this session: ${saved.error}"))
   }

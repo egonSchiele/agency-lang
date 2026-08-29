@@ -123,10 +123,10 @@ export def runSession(interactive: boolean, body: () -> void raises <*>) {
   const handler = policyHandlerFor(interactive)
   handle {
     brain.init(context)
-    // A resumed run restores here, under the policy handler and after
-    // startup (models, memory, MCP) ran from today's flags. The restored
-    // stack replays down into the REPL's saved turn, finishes it, and
-    // the REPL then starts fresh. See docs/dev/agents/agent-sessions.md.
+    // Resume point. Restoring replaces the whole execution state with the
+    // saved one, so this runs after startup and under the policy handler,
+    // which the replayed `handle` block installs again. See
+    // docs/dev/agents/agent-sessions.md.
     const resumeFrom = takeResumeCheckpoint()
     if (resumeFrom != null) {
       restore(resumeFrom, {})

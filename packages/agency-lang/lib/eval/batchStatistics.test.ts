@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import type { RunSummary } from "@/runDirectory/list.js";
 
-import { batchStatistics, batchStatisticsByBatch } from "./batchStatistics.js";
+import {
+  batchStatistics,
+  batchStatisticsByBatch,
+  batchStatisticsByBatchTolerant,
+} from "./batchStatistics.js";
 
 type Overrides = Partial<RunSummary>;
 
@@ -191,6 +195,23 @@ describe("batchStatisticsByBatch", () => {
     expect(groups.map((group) => [group.batch, group.accuracy])).toEqual([
       [null, 1],
       [null, 0],
+    ]);
+  });
+
+  it("tolerant variant reports an incomplete batch beside the others' statistics", () => {
+    const complete = [run({ batch: "x", testId: "a", trial: 1, score: 1 })];
+    const uneven = [
+      run({ batch: "y", testId: "a", trial: 1, score: 1 }),
+      run({ batch: "y", testId: "a", trial: 2, score: 0 }),
+      run({ batch: "y", testId: "b", trial: 1, score: 1 }),
+    ];
+    const { batches, incomplete } = batchStatisticsByBatchTolerant([...complete, ...uneven]);
+    expect(batches.map((batch) => batch.batch)).toEqual(["x"]);
+    expect(incomplete).toEqual([
+      {
+        batch: "y",
+        reason: expect.stringMatching(/incomplete trial grid: a has 2 trials, b has 1/),
+      },
     ]);
   });
 });

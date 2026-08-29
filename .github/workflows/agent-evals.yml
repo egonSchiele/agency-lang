@@ -2,13 +2,12 @@
 # can be tracked over time (see packages/agency-lang/docs/dev/evals/eval-tracking.md).
 #
 # This spends real money: about $21 at three tests x three trials, plus the
-# grading judges. eval.limits.maxCostUsd in packages/agency-lang/agency.json
-# caps each agent run separately (there is no batch-wide budget), so the worst
-# case is tests x trials x that cap. It never fails on scores — a bad week is
-# information for the batch table, not an alarm. It fails only when a step
-# could not run or the upload was refused. The run
-# directory is always saved as a workflow artifact so a batch whose upload
-# failed can be uploaded by hand: download it, then
+# grading judges. packages/agency-lang/agency.json caps it: maxBatchCostUsd
+# for the batch, maxCostUsd per run (worst case: batch cap + parallel x
+# per-run cap). It never fails on scores — a bad week is information for the
+# batch table, not an alarm. It fails only when a step could not run or the
+# upload was refused. The run directory is always saved as a workflow artifact
+# so a batch whose upload failed can be uploaded by hand: download it, then
 # `agency eval upload <dir>` from a linked checkout.
 #
 # Trigger it manually (workflow_dispatch) to try a cheaper suite or fewer
@@ -80,15 +79,23 @@ jobs:
       # Flags here are checked against the CLI's registered options by
       # lib/cli/eval/workflowFlags.test.ts, so a rename fails `make test`
       # instead of the Sunday run.
+      # `eval run` exits 2 when some tests errored (they are run rows that
+      # grade 0) and 1 when it could not run at all.
       - name: Run the suite
         working-directory: packages/agency-lang
         run: |
+          status=0
           node ./dist/scripts/agency.js eval run \
             --agent-cmd "node $PWD/dist/scripts/agency.js agent --policy recommended -p -- {input}" \
             --suite "$SUITE" \
             --trials "$TRIALS" \
             --parallel 2 \
-            --out "$RUN_DIR"
+            --out "$RUN_DIR" || status=$?
+          if [ "$status" -eq 2 ]; then
+            echo "::warning::some tests errored; grading and uploading anyway"
+          elif [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
 
       # `eval grade` exits 2 when a must-pass gate failed (a score, which this
       # job records rather than fails on) and 1 when grading itself broke.

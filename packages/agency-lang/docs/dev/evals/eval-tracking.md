@@ -207,19 +207,23 @@ trace parser, and the annotation fold are not exported.
 trials every Sunday (03:00 UTC), grades it, and uploads it to the linked
 statelog project. `workflow_dispatch` takes `trials` and `suite` overrides for
 a cheaper smoke run (it still calls the paid agent, grades, and uploads). It
-needs the `OPENAI_API_KEY`, `STATELOG_API_KEY`, and `STATELOG_PROJECT_URL`
-secrets (the last is a serve URL, as `remote link --url` takes).
+needs three secrets: `OPENAI_API_KEY`, `STATELOG_API_KEY`, and
+`STATELOG_PROJECT_URL` (a serve URL, as `remote link --url` takes; kept as a
+secret beside the key by the owner's choice, though it is not sensitive).
 
 Cost: `eval.limits.maxBatchCostUsd` in `agency.json` caps the whole batch —
 once finished runs have spent that much, no further test starts — and
 `maxCostUsd` caps each run on its own, so the worst case is the batch cap plus
 `--parallel` per-run caps (see `docs/site/cli/eval.md`). Grading judges are
 outside both. The caps apply to local runs of the suite too; set them from the
-batch table's real costs. A batch cut short by the cap uploads as incomplete.
+batch table's real costs. A batch cut short by the cap has an uneven trial
+grid: `eval grade` reports it as having no statistics (never throws), and
+statelog shows it as incomplete.
 
-Scores never fail the job: `eval grade` exits 2 when a must-pass gate failed,
-and the workflow treats that as a warning and uploads anyway; any other
-non-zero exit (grading broke) fails the job. The run directory is kept as a
-workflow artifact for 14 days, so a batch whose upload failed can be uploaded
-by hand. `lib/cli/eval/workflowFlags.test.ts` checks every flag the workflow
-passes against the CLI's registered options.
+Scores never fail the job: `eval run` exits 2 when some tests errored and
+`eval grade` exits 2 when a must-pass gate failed; the workflow treats both as
+warnings and carries on to the upload. Any other non-zero exit (could not run,
+grading broke) fails the job. The run directory is kept as a workflow artifact
+for 14 days, so a batch whose upload failed can be uploaded by hand.
+`lib/cli/eval/workflowFlags.test.ts` checks every flag the workflow passes
+against the CLI's registered options.

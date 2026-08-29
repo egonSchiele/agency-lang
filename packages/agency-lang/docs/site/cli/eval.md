@@ -62,7 +62,7 @@ Options:
 
 Agent configuration (strict types, tool-loop caps) comes from the `agency.json` beside the agent, not from eval flags.
 
-Every test runs whatever the others did: a test whose agent errored is a `run` row that grades 0, not a reason to stop. Running never grades. When the run finishes it prints the run directory and the grade command, and exits 1 if any test errored (the run directory is complete either way):
+Every test runs whatever the others did: a test whose agent errored is a `run` row that grades 0, not a reason to stop. Running never grades. When the run finishes it prints the run directory and the grade command, and exits 2 if any test errored (the run directory is complete either way; 1 means it could not run at all):
 
 ```
 Run completed: 3/3 tests ok
@@ -79,7 +79,7 @@ Each run's agent process gets a wall-clock limit of 60 seconds unless `eval.limi
 
 `maxCostUsd` is a per-run LLM spend ceiling, $50 by default. The harness watches each run's cost as it happens and kills the run when it passes the cap. Enforcement lags by one LLM call, because a call's cost is known only when it returns, so treat it as an accident stopper rather than an exact budget.
 
-`maxBatchCostUsd` caps one `eval run` invocation as a whole — every test and every trial — and has no default. Spend is summed as runs finish; once it crosses the cap no further test starts, the ones already running finish under their own `maxCostUsd`, and the run reports `batch cost cap exceeded`. So the worst case is `maxBatchCostUsd` plus `--parallel` times `maxCostUsd`. The tests that never started have no run directory, which a grade or an upload shows as an incomplete batch.
+`maxBatchCostUsd` caps one `eval run` invocation as a whole — every test and every trial — and has no default. Spend is summed as runs finish; once it crosses the cap no further test starts, the ones already running finish under their own `maxCostUsd`, and the run reports `batch cost cap exceeded`. So the worst case is `maxBatchCostUsd` plus `--parallel` times `maxCostUsd`. The tests that never started have no run directory, so the batch's trial grid is uneven: `eval grade` still grades every run that exists and reports the batch as having no statistics, and statelog shows it as incomplete.
 
 ## Command agents
 

@@ -23,6 +23,10 @@ export function formatGradeResult(result: EvalGradeResult): string[] {
     ...result.runs.flatMap(formatRun),
     ...formatGroupSummary(result),
     ...result.batches.flatMap((batch) => formatBatch(batch, result.batches.length > 1)),
+    ...result.incompleteBatches.map(
+      (entry) =>
+        `${ttyColor.bold(`batch ${entry.batch ?? "(none)"}`)} has no statistics: ${entry.reason}`,
+    ),
   ];
 }
 

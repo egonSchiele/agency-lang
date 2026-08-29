@@ -67,7 +67,7 @@ import {
 import { runGradeCommand } from "@/cli/eval/grade.js";
 import { resolveRunStatelog } from "@/cli/eval/logs.js";
 import { evalLs } from "@/cli/eval/ls.js";
-import { evalRun, totalRunCostUsd } from "@/cli/eval/run.js";
+import { evalRun } from "@/cli/eval/run.js";
 import { evalUpload, formatUploadResult } from "@/cli/eval/upload.js";
 import { ttyColor } from "@/utils/termcolors.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
@@ -901,10 +901,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
             console.log(`  ${ttyColor.red(`${test.testId} error:`)} ${test.errorMessage ?? ""}`);
           }
         }
-        const costUsd = totalRunCostUsd(result.runDir);
-        if (costUsd !== undefined) {
-          console.log(`total LLM cost: $${costUsd.toFixed(2)}`);
-        }
+        console.log(`total LLM cost: $${result.costUsd.toFixed(2)}`);
         if (result.batchCostCapExceeded) {
           console.log(
             ttyColor.red("batch cost cap exceeded") +
@@ -913,10 +910,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
         }
         console.log(`runs written under ${result.runDir}`);
         console.log(`grade it with: agency eval grade ${result.runDir}`);
-        // The run is complete and written; the exit code still reports that
-        // not every test ran to an end (a harness refusal or an agent crash).
+        // The run is complete and written; exit 2 still reports that not
+        // every test ran to an end (a harness refusal or an agent crash) —
+        // distinct from 1, which is "could not run at all", so a caller can
+        // grade and upload the directory anyway.
         if (result.errorCount > 0) {
-          process.exit(1);
+          process.exit(2);
         }
       },
     );

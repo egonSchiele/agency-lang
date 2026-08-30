@@ -332,6 +332,7 @@ export const SANDBOX_JS_GLOBALS: Record<string, JsRegistryEntry> = {
     fromEntries: callable({ params: [anyArray], returnType: ANY_T }),
     assign: callable(),
     freeze: callable({ params: [ANY_T], returnType: ANY_T }),
+    hasOwn: callable({ params: [ANY_T, STRING_T], returnType: BOOLEAN_T }),
   }),
   // Constructors reached via `new X()`; also valid as value references.
   Set: callable(),

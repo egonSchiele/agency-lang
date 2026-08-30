@@ -350,6 +350,8 @@ describe("bound names under --agency-only", () => {
       'type Foo = {\n  @jsonSchema({ x: process })\n  value: number,\n}\nnode main() { print("hi") }',
     );
     refused('node main(xs = [process]) { print("hi") }');
+    // Interpolated string default: the interpolation reaches a host global.
+    refused('node main(x = "${process.env.HOME}") { print(x) }');
   });
 
   test("allows pure values, methods, and safe constructors", () => {
@@ -366,5 +368,13 @@ describe("bound names under --agency-only", () => {
       'def isPositive(n: number): Result<number> {\n  if (n > 0) { return success(n) }\n  return failure("no")\n}\n@validate(isPositive)\ntype Pos = number\nnode main() { let x: Pos = 5 }',
     );
     allowed("node main(xs = [1, 2]) { print(xs) }");
+    // A top-level const resolves inside a tag argument (module scope).
+    allowed(
+      'const MAXLEN = 5\n@jsonSchema({ maxLength: MAXLEN })\ndef f(x: string): string { return x }\nnode main() { print("hi") }',
+    );
+    // A type alias's value parameter resolves inside its own tag argument.
+    allowed(
+      '@jsonSchema({ minimum: low, maximum: high })\ntype Bounded(low: number, high: number) = number\nnode main() { print("hi") }',
+    );
   });
 });

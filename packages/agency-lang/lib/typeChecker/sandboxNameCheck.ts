@@ -5,6 +5,7 @@ import type { ValueAccess } from "../types/access.js";
 import type { NewExpression } from "../types/newExpression.js";
 import type { StringLiteral } from "../types/literals.js";
 import { walkNodes } from "../utils/node.js";
+import { tagsAbove } from "../utils/tagsAbove.js";
 import { collectProgramShadowing } from "./shadowing.js";
 import { resolveCall, SANDBOX_JS_GLOBALS } from "./resolveCall.js";
 import { resolveVariable } from "./resolveVariable.js";
@@ -55,14 +56,31 @@ export function checkSandboxNames(ctx: TypeCheckerContext): void {
 
   // Positions the general passes do NOT reach (declaration-hanging
   // expressions): every name-bearing node is checked here, including bare
-  // names and calls, since nothing else looks at them.
-  for (const expr of collectDeclHangingExpressions(ctx.programNodes)) {
+  // names and calls, since nothing else looks at them. Each carries the
+  // names in scope where it hangs (module-level bindings plus the owning
+  // declaration's value parameters / function parameters), so a legitimate
+  // reference to a top-level `const` or a type alias's value parameter is not
+  // reported as undefined.
+  const moduleScope = moduleScopeNames(ctx.programNodes);
+  for (const { expr, scopeNames } of collectDeclHangingExpressions(ctx.programNodes, moduleScope)) {
     for (const { node } of walkNodes([expr])) {
       checkNewCallee(node, ctx);
       checkForbiddenProperty(node, ctx);
-      checkDeclExpressionName(node, ctx, importedNodeNames);
+      checkDeclExpressionName(node, ctx, importedNodeNames, scopeNames);
     }
   }
+}
+
+/** Names of top-level `const`/`let` declarations — the module scope a
+ *  declaration-hanging expression can reference. */
+function moduleScopeNames(nodes: AgencyNode[]): string[] {
+  const names: string[] = [];
+  for (const node of nodes) {
+    if (node.type === "assignment" && node.declKind && typeof node.variableName === "string") {
+      names.push(node.variableName);
+    }
+  }
+  return names;
 }
 
 /** Refuse `new X()` whose class name is not an allowlisted global. The class
@@ -118,6 +136,7 @@ function checkDeclExpressionName(
   node: AgencyNode,
   ctx: TypeCheckerContext,
   importedNodeNames: readonly string[],
+  scopeNames: readonly string[],
 ): void {
   if (node.type === "variableName") {
     const resolution = resolveVariable(node.value, {
@@ -126,7 +145,7 @@ function checkDeclExpressionName(
       importedFunctions: ctx.importedFunctions,
       importedNodeNames,
       jsImportedNames: ctx.jsImportedNames,
-      scopeHas: () => false,
+      scopeHas: (name) => scopeNames.includes(name),
       registry: SANDBOX_JS_GLOBALS,
     });
     if (resolution.kind === "unresolved") {
@@ -143,7 +162,7 @@ function checkDeclExpressionName(
       importedFunctions: ctx.importedFunctions,
       importedNodeNames,
       jsImportedNames: ctx.jsImportedNames,
-      scopeHas: () => false,
+      scopeHas: (name) => scopeNames.includes(name),
       registry: SANDBOX_JS_GLOBALS,
     });
     if (resolution.kind === "unresolved") {
@@ -164,37 +183,94 @@ function checkDeclExpressionName(
  * found. Each returned expression is then descended with `walkNodes`, so the
  * traversal of the expression itself is shared, not reimplemented.
  */
-function collectDeclHangingExpressions(nodes: AgencyNode[]): AgencyNode[] {
-  const found: AgencyNode[] = [];
-  const visit = (value: unknown): void => {
+type DeclHangingExpression = { expr: AgencyNode; scopeNames: string[] };
+
+function collectDeclHangingExpressions(
+  nodes: AgencyNode[],
+  moduleScope: string[],
+): DeclHangingExpression[] {
+  const found: DeclHangingExpression[] = [];
+
+  // (1) Statement-level tags. At type-check time the preprocessor has not
+  // attached them yet, so a `@tag(...)` is a standalone node before the
+  // declaration it annotates. `tagsAbove` pairs each with its owner at every
+  // body level, so a tag argument sees the owner's value parameters / params.
+  const handled = new Set<AgencyNode>();
+  for (const { node, tags } of tagsAbove(nodes)) {
+    const scopeNames =
+      (node ? ownerScope(node as unknown as Record<string, unknown>, moduleScope) : null) ??
+      moduleScope;
+    for (const tag of tags) {
+      handled.add(tag as unknown as AgencyNode);
+      for (const arg of tag.arguments) found.push({ expr: arg as AgencyNode, scopeNames });
+    }
+  }
+
+  // (2) Tags the pairing above cannot reach (attached to a type property,
+  // inside a type structure) and every non-scalar default parameter value.
+  // A structural walk finds them wherever they hang; the enclosing
+  // declaration's scope is threaded down so a value parameter still resolves.
+  const visit = (value: unknown, scopeNames: string[]): void => {
     if (Array.isArray(value)) {
-      for (const item of value) visit(item);
+      for (const item of value) visit(item, scopeNames);
       return;
     }
     if (value === null || typeof value !== "object") return;
     const record = value as Record<string, unknown>;
+    const childScope = ownerScope(record, moduleScope) ?? scopeNames;
 
-    if (record.type === "tag" && Array.isArray(record.arguments)) {
-      for (const arg of record.arguments) found.push(arg as AgencyNode);
-    }
-    // A parameter's array/object default holds arbitrary sub-expressions;
-    // a bare Literal default cannot.
     if (
-      record.defaultValue !== undefined &&
-      record.defaultValue !== null &&
-      typeof record.defaultValue === "object"
+      record.type === "tag" &&
+      !handled.has(record as unknown as AgencyNode) &&
+      Array.isArray(record.arguments)
     ) {
-      const dv = record.defaultValue as Record<string, unknown>;
-      if (dv.type === "agencyArray" || dv.type === "agencyObject") {
-        found.push(record.defaultValue as AgencyNode);
-      }
+      for (const arg of record.arguments)
+        found.push({ expr: arg as AgencyNode, scopeNames: childScope });
+    }
+    // Any non-scalar default holds sub-expressions — an array/object, or a
+    // string with an interpolation like `"${process.env.HOME}"`. A scalar
+    // literal has nothing to walk, so collecting it is harmless.
+    const dv = record.defaultValue;
+    if (dv !== undefined && dv !== null && typeof dv === "object" && "type" in dv) {
+      found.push({ expr: dv as AgencyNode, scopeNames: childScope });
     }
 
     for (const key of Object.keys(record)) {
       if (key === "loc") continue;
-      visit(record[key]);
+      visit(record[key], childScope);
     }
   };
-  visit(nodes);
+  visit(nodes, moduleScope);
   return found;
+}
+
+/** The names a declaration adds to the module scope for expressions that
+ *  hang off it: a type alias's value parameters, or a function / node's
+ *  parameters. `null` when the record introduces none (keep the inherited
+ *  scope); a concrete list becomes the scope for tags and defaults on it. */
+function ownerScope(record: Record<string, unknown>, moduleScope: string[]): string[] | null {
+  if (record.type === "typeAlias" && Array.isArray(record.valueParams)) {
+    return [...moduleScope, ...paramNames(record.valueParams)];
+  }
+  if (
+    (record.type === "function" || record.type === "graphNode") &&
+    Array.isArray(record.parameters)
+  ) {
+    return [...moduleScope, ...paramNames(record.parameters)];
+  }
+  return null;
+}
+
+function paramNames(params: unknown[]): string[] {
+  const names: string[] = [];
+  for (const param of params) {
+    if (
+      param !== null &&
+      typeof param === "object" &&
+      typeof (param as { name?: unknown }).name === "string"
+    ) {
+      names.push((param as { name: string }).name);
+    }
+  }
+  return names;
 }

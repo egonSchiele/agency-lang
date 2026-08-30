@@ -17,6 +17,13 @@ under each name it is given.
 
 ## Why the two flags together are the safety argument
 
+> These flags reduce attack surface; they are **not yet a complete sandbox**.
+> The bind-check is defense in depth (a runtime-computed property key slips
+> past it), and the containment layers that close the remaining gaps are
+> tracked in `docs/dev/security/roadmap.md` (A1). Do not treat `--agency-only`
+> as sufficient to run fully untrusted code on its own yet.
+
+
 - With `--agency-only`, every effect the code can perform is an interrupt,
   and the JS-globals bind-check refuses the compiled-to-JavaScript escapes
   that would otherwise bypass interrupts entirely (`process`, `fetch`,

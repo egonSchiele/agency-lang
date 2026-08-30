@@ -1,3 +1,6 @@
+const MAXLEN = 10
+
+@jsonSchema({ maxLength: MAXLEN })
 def isPositive(n: number): Result<number> {
   if (n > 0) { return success(n) }
   return failure("no")

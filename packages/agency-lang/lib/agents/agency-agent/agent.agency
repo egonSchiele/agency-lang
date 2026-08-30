@@ -17,7 +17,8 @@ import { parseAgentArgs } from "./lib/args.agency"
 import { getHeader } from "./lib/header.agency"
 import { maybeLoadMcp } from "./lib/mcp.agency"
 import { printPolicyHelp } from "./lib/policy.agency"
-import { startInteractive } from "./lib/repl.agency"
+import { chooseSession, startSession } from "./lib/resume.agency"
+import { installSessionHooks, startInteractive } from "./lib/repl.agency"
 import { pickModelsForAgent, maybeEnableMemory } from "./lib/session.agency"
 import { loadSettings } from "./lib/settings.agency"
 import { setDebug, setVerbose, setInteractive } from "./lib/trace.agency"
@@ -102,6 +103,19 @@ node main() {
     return
   }
   setBrain(brain)
+
+  // Positional args (everything after flags) are joined with spaces to
+  // form the starting prompt. `--` ends flag parsing if a positional
+  // would otherwise look like a flag.
+  const positionalQuery = args.positionals.join(" ")
+  const hasQuery = positionalQuery != ""
+  const wantInteractive = args.flags.interactive
+
+  // Seeded interactive: run the prompt as the first turn, then hand over the
+  // REPL (needs a TTY + query, and not --print). Everything else is one-shot.
+  const seededInteractive = wantInteractive && hasQuery && isTTY() && !args.flags.print
+  const isOneShot = !seededInteractive && (args.flags.print || hasQuery || !isTTY())
+
   // Group this trace under its brain wherever runs are compared.
   setAgentName(agentNameFor(brain))
 
@@ -128,19 +142,6 @@ node main() {
   // coordinator. Must run before the first turn (mcpTools ordering contract).
   maybeLoadMcp(loadSettings())
 
-  // Positional args (everything after flags) are joined with spaces to
-  // form the starting prompt. `--` ends flag parsing if a positional
-  // would otherwise look like a flag.
-  const positionalQuery = args.positionals.join(" ")
-  const hasQuery = positionalQuery != ""
-
-  const wantInteractive = args.flags.interactive
-
-  // Seeded interactive: run the prompt as the first turn, then hand over the
-  // REPL (needs a TTY + query, and not --print). Everything else is one-shot.
-  const seededInteractive = wantInteractive && hasQuery && isTTY() && !args.flags.print
-  const isOneShot = !seededInteractive && (args.flags.print || hasQuery || !isTTY())
-
   const maxRounds = resolveMaxToolCallRounds(
     args.flags["max-tool-call-rounds"] ?? null,
     isOneShot,
@@ -165,6 +166,23 @@ node main() {
   }
 
   setAgentCwd(cwd())
+
+  // Interactive runs are saved per turn, and a resumed one restores its
+  // checkpoint here, after the setup above and before the session starts.
+  // One-shot runs are not saved, so a resume flag on one is a mistake
+  // rather than something to ignore.
+  if (isOneShot && (args.flags.continue || args.flags.resume != null)) {
+    print(color.red("--continue and --resume need an interactive session; one-shot runs are not saved."))
+    process.exit(1)
+  }
+  // Everything above is process-level: model resolution feeds the memory
+  // layer, and memory, MCP, and the settings reads behind them must run
+  // before the policy handler exists or they prompt. A restore keeps
+  // those TypeScript-side effects and replaces only the Agency state.
+  if (!isOneShot) {
+    installSessionHooks()
+    startSession(chooseSession(args.flags.continue, args.flags.resume ?? null), brain.name)
+  }
 
   if (isOneShot) {
     let prompt = positionalQuery

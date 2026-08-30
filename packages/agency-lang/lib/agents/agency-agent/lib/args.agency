@@ -54,6 +54,15 @@ export def parseAgentArgs(brainHelp: string) {
         optional: true,
         description: "Approval policy for this run: a built-in name (minimal, recommended, with-writes, approve-all) or a path to a policy JSON file. with-writes auto-approves file writes and git changes scoped to the current directory and its children; approve-all approves EVERY interrupt with no scoping (sandbox use only). Overrides the saved policy without persisting it. Pass --policy with no value to list the built-in policies."
       },
+      continue: {
+        type: "boolean",
+        description: "Resume the most recent saved session for this directory"
+      },
+      resume: {
+        type: "string",
+        optional: true,
+        description: "Resume a saved session by id, or pass --resume alone to pick one from a list"
+      },
       "agent-home": {
         type: "string",
         description: "Directory to use instead of ~/.agency-agent for settings, policy, and history (equivalent to the AGENCY_AGENT_HOME env var; the flag wins when both are set)"

@@ -1,0 +1,179 @@
+/** @module
+  @summary The harness side of save and resume: which session this run is
+  (new, `--continue`, or `--resume`), the restore, and the per-turn
+  record. The files live in sessions.agency and the title in
+  sessionTitle.agency.
+*/
+import { now } from "std::date"
+import { cwd } from "std::system"
+import { chooseOption, ChoiceItem } from "std::ui"
+
+import {
+  SessionRecord,
+  findSession,
+  listSessions,
+  mostRecentSession,
+  newSessionId,
+  projectDir,
+  readCheckpointFile,
+  saveSession,
+  sessionLabel,
+ } from "./sessions.agency"
+import { mainThreadText, shouldRefreshTitle, titleFor } from "./sessionTitle.agency"
+
+// The session this run writes to; null for one-shot runs, which are not
+// saved. A `let`, so a restore brings back the resumed session's own
+// record, turn count and title included.
+let _current: SessionRecord | null = null
+
+// Set by the REPL when a turn ran to completion, so a slash command or an
+// empty line is not recorded as a turn.
+let _turnDone = false
+
+/** Where to write after a turn: the session directory and its index row. */
+export type SaveTarget = {
+  dir: string;
+  record: SessionRecord
+}
+
+/** The footer text: the session title, or "" before the first turn. */
+export def sessionTitle(): string {
+  const record = _current
+  if (record == null) {
+    return ""
+  }
+  return record.title
+}
+
+export def markTurnDone() {
+  _turnDone = true
+}
+
+/** Which saved session, if any, this run continues. `resumeArg` is the
+  `--resume` value: null when absent, "" for a bare `--resume` (open the
+  picker), else an id. Exits on an unknown id. */
+export def chooseSession(
+  continueFlag: boolean,
+  resumeArg: string | null,
+): SessionRecord | null {
+  if (resumeArg != null && resumeArg != "") {
+    const found = findSession(resumeArg)
+    if (found == null) {
+      print(color.red("No saved session with id ${resumeArg} in ${cwd()}."))
+      process.exit(1)
+    }
+    return found
+  }
+  if (resumeArg == "") {
+    return pickSession()
+  }
+  if (continueFlag) {
+    const recent = mostRecentSession()
+    if (recent == null) {
+      print(color.yellow("No saved session for this directory; starting a new one."))
+    }
+    return recent
+  }
+  return null
+}
+
+def pickSession(): SessionRecord | null {
+  const all = listSessions()
+  if (all.length == 0) {
+    print(color.yellow("No saved sessions for this directory; starting a new one."))
+    return null
+  }
+  const nowMs = now()
+  // A "new session" row rather than allowCancel: before the REPL exists,
+  // Escape raises a cancellation instead of returning "".
+  let items: ChoiceItem[] = [
+    {
+    key: "new",
+    label: "Start a new session"
+  },
+  ]
+  for (record in all) {
+    items.push({
+      key: record.id,
+      label: sessionLabel(record, nowMs)
+    })
+  }
+  const choice = chooseOption(
+    "Resume a session",
+    "Pick a saved session from this directory.",
+    items,
+  )
+  if (choice == "new") {
+    return null
+  }
+  return findSession(choice)
+}
+
+/** Start this run's session. A new one gets a fresh record. A saved one
+  is restored right here: the Agency execution state becomes the saved
+  one and the program continues from the saved point. */
+export def startSession(chosen: SessionRecord | null, brain: string) {
+  if (chosen == null) {
+    const t = now()
+    _current = {
+      id: newSessionId(),
+      cwd: cwd(),
+      brain: brain,
+      created: t,
+      lastActive: t,
+      turns: 0,
+      title: ""
+    }
+    return
+  }
+  const cp = readCheckpointFile(chosen.id)
+  if (cp == null) {
+    print(color.red("The checkpoint file for session ${chosen.id} is missing or malformed."))
+    process.exit(1)
+  }
+  print(color.dim("Resuming: ${chosen.title}"))
+  restore(cp, {})
+}
+
+/** Record a completed turn: bump the count, refresh the title when due,
+  and say where the checkpoint should be written. Null when no turn ran. */
+export def recordTurn(userMsg: string): SaveTarget | null {
+  const record = _current
+  if (record == null || !_turnDone) {
+    return null
+  }
+  _turnDone = false
+  record.turns = record.turns + 1
+  record.lastActive = now()
+  if (shouldRefreshTitle(record.turns)) {
+    // Turn 1 titles the first prompt; later refreshes summarize the
+    // conversation so far.
+    let source = userMsg
+    if (record.turns > 1) {
+      source = mainThreadText()
+    }
+    const title = titleFor(source)
+    if (title != "") {
+      record.title = title
+    }
+  }
+  return {
+    dir: projectDir(),
+    record: record
+  }
+}
+
+/** Save after the `-i` seed turn, which runs before the REPL. This is
+  Agency code with no REPL frame above it, so on resume execution
+  continues at the line after `checkpoint()` and then starts the REPL. */
+export def saveSeedTurn(userMsg: string) {
+  const target = recordTurn(userMsg)
+  if (target == null) {
+    return
+  }
+  const id = checkpoint()
+  const saved = saveSession(target.record, getCheckpoint(id))
+  if (isFailure(saved)) {
+    print(color.red("Could not save this session: ${saved.error}"))
+  }
+}

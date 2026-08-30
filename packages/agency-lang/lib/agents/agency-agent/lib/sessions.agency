@@ -1,0 +1,108 @@
+/** @module
+  @summary Saved agent sessions on disk: a checkpoint file and a record
+  file per session, per project directory (like Claude Code):
+  `<agent home>/sessions/<cwd slug>/`.
+*/
+import {
+  _listSessions,
+  _saveSession,
+  _readCheckpointFile,
+ } from "agency-lang/stdlib-lib/agentSessions.js"
+import { now } from "std::date"
+import { cwd } from "std::system"
+
+import { POLICY_DIR } from "./config.agency"
+
+/** What the picker shows for a session. `title` is the one-line summary;
+  `turns` counts completed turns. */
+export type SessionRecord = {
+  id: string;
+  cwd: string;
+  brain: string;
+  created: number;
+  lastActive: number;
+  turns: number;
+  title: string
+}
+
+export static const SESSIONS_DIR = path.join(POLICY_DIR, "sessions")
+
+/** The working directory as a directory name: `/Users/me/proj` becomes
+  `-Users-me-proj`. */
+export def cwdSlug(dir: string): string {
+  return dir.replace(re/[^a-zA-Z0-9]/g, "-")
+}
+
+export def projectDir(): string {
+  return path.join(SESSIONS_DIR, cwdSlug(cwd()))
+}
+
+/** A fresh session id: the start time in milliseconds plus six random
+  digits. */
+export def newSessionId(): string {
+  const random = "${Math.random()}"
+  return "${now()}-${random.slice(2, 8)}"
+}
+
+/** Every saved session for this directory, most recently saved first. */
+export def listSessions(): SessionRecord[] {
+  return _listSessions(projectDir())
+}
+
+export def mostRecentSession(): SessionRecord | null {
+  const all = listSessions()
+  if (all.length == 0) {
+    return null
+  }
+  return all[0]
+}
+
+export def findSession(id: string): SessionRecord | null {
+  return find(listSessions(), \record -> record.id == id)
+}
+
+/** Write the session's checkpoint and record files. */
+export def saveSession(record: SessionRecord, checkpoint: any): Result {
+  const error = _saveSession(projectDir(), record, checkpoint)
+  if (error != "") {
+    return failure(error)
+  }
+  return success(null)
+}
+
+/** The saved checkpoint, parsed, or null when the file is missing or
+  malformed. */
+export def readCheckpointFile(id: string): any {
+  return _readCheckpointFile(projectDir(), id)
+}
+
+/** "just now", "5m ago", "3h ago", "2d ago". */
+export def relativeAge(then: number, nowMs: number): string {
+  const seconds = Math.max(0, Math.floor((nowMs - then) / 1000))
+  if (seconds < 60) {
+    return "just now"
+  }
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) {
+    return "${minutes}m ago"
+  }
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) {
+    return "${hours}h ago"
+  }
+  return "${Math.floor(hours / 24)}d ago"
+}
+
+/** The picker row: `title · 3h ago · 12 turns`. An untitled session
+  shows its id instead. */
+export def sessionLabel(record: SessionRecord, nowMs: number): string {
+  let title = record.title
+  if (title == "") {
+    title = record.id
+  }
+  let turns = "${record.turns} turns"
+  if (record.turns == 1) {
+    turns = "1 turn"
+  }
+  return "${title} · ${relativeAge(record.lastActive, nowMs)} · ${turns}"
+}

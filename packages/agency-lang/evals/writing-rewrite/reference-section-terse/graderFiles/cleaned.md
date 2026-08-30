@@ -65,7 +65,7 @@ agency run --approve std::read --reject std::write <script.agency>
 #### 3.c Serving agents interactively
 
 Finally, another way users can respond to interrupts interactively is when your agent is being served. Agency has a serve feature that lets you serve your agent as an HTTP or MCP server. In that case, all of your exported nodes and functions become endpoints that can be hit on the server.
-In that case, if something raises an interrupt, and it is not handled programmatically, it gets returned to the user along with a checkpoint for interactive response, and then the user needs to hit a specific `/resume` endpoint with the interrupt and the checkpoint in order to resume from there.
+In that case, if something raises an interrupt, and it is not handled programmatically, it gets returned to the user along with a checkpoint for interactive response, and then the user needs to hit a specific `/resume` endpoint with the interrupts (each carries its checkpoint) and one approve or reject response per interrupt in order to resume from there.
 
 #### 3.d When interrupts go to a human
 
@@ -77,7 +77,7 @@ Note that the interrupt only goes to a human for interactive approval in two cas
 #### 4. Resume
 
 When we resume from an interrupt, what happens depends on the response to the interrupt. If the interrupt was rejected, the function that the interrupt was raised in exits immediately with the failure. If the function was called as a tool by an LLM, we return a clear message to the LLM saying that the call was rejected.
-If the interrupt was approved, then the function resumes from the after the exact line where the interrupt was raised. Note it's important to understand that none of the data tied with the interrupt is used for anything except giving users information about the interrupt. For example, let's go back to the interrupt that was raised for reading an environment variable. You can see the data contains the name of the variable being read:
+If the interrupt was approved, then the function resumes from after the exact line where the interrupt was raised. Note it's important to understand that none of the data tied with the interrupt is used for anything except giving users information about the interrupt. For example, let's go back to the interrupt that was raised for reading an environment variable. You can see the data contains the name of the variable being read:
 
 ```
 return interrupt std::env("Are you sure…?", { name: name })

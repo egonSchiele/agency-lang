@@ -51,6 +51,7 @@ const PATTERN_KINDS = [
   "wildcardPattern",
   "variableName",
   "resultPattern",
+  "effectPattern",
   "typePattern",
   "number",
   "unitLiteral",
@@ -75,6 +76,9 @@ void _kindListIsExhaustive;
 const KNOWN_UNCOVERED_KINDS: Record<string, string> = {
   unitLiteral: "no stdlib/fixture match arm matches on a unit literal (30s, $5)",
   multiLineString: 'no match arm matches on a """..."""  literal',
+  // Removed in the effect-pattern execution-test task, which adds a corpus
+  // program that matches on one (the staleness guard forces the deletion).
+  effectPattern: "no corpus match arm matches on an effect pattern yet",
 };
 
 // ---------------------------------------------------------------------------
@@ -346,6 +350,7 @@ const MUST_NOT_SURVIVE = [
   "objectPatternProperty",
   "objectPatternShorthand",
   "resultPattern",
+  "effectPattern",
   "typePattern",
   "isExpression",
 ];

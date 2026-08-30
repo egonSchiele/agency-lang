@@ -102,6 +102,7 @@ const LEGAL_AT_TOP_LEVEL: Record<AgencyNode["type"], boolean> = {
   restPattern: false,
   wildcardPattern: false,
   resultPattern: false,
+  effectPattern: false,
   typePattern: false,
 
   // Templates. Both ARE legal top-level Agency, and both are handled by a

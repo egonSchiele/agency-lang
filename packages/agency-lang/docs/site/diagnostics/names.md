@@ -111,3 +111,11 @@ An import points at a module that does not resolve to any file. The path — a r
 An import names a symbol that its target module defines but does not `export`. A plain `import { ... }` can only see `export`ed functions, types, and constants — a bare `def`/`type` without `export` is module-private. (Nodes are the exception: they are importable without `export`.) The compile path already rejects this; the type checker reports it too.
 
 **How to fix:** add the `export` keyword to the definition in the target file, or import a symbol that is exported.
+
+<a id="ag4011"></a>
+
+## AG4011 — '&#123;name&#125;' is not accessible under --agency-only. It reaches JavaScript's Function or prototype chain, which pure Agency code may not use.
+
+*Default severity: error.*
+
+Under `--agency-only` (`typechecker.jsGlobals: "sandbox"`), a program may not read `constructor`, `prototype`, or `__proto__` from a value, spelled or as a string-literal key. Those property names walk from any value to JavaScript's `Function` and the prototype chain, which is a way for pure Agency code to reach the host with no interrupt. This is a best-effort compile-time catch; the runtime backstop is code-generation-from-strings being disabled.

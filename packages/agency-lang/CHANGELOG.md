@@ -1,3 +1,29 @@
+## Aug 30 2026 — v0.17.1
+
+### Hosting
+
+- **Host-supplied interrupt policy** — a serve host can pass `policy` in the invocation options, and it installs as the outermost handler for that invocation.
+
+### Agents
+
+- **Agent sessions persist** — `agency agent` saves the session after every turn. You can continue the most recent one with `--continue` or pick one with `--resume`.
+
+### Language
+
+- **`@always` and `@alwaysUnder` on effect declarations** let you give hints for which data fields an "approve always here" decision should pin.
+
+### Untrusted code (`--agency-only`)
+
+A few security fixes added:
+
+- Compiling refuses JS capability names — free identifiers like `process` and `fetch`, `new` callees, and constructor/prototype walks.
+- The program runs with code generation from strings disabled, so `eval` and the `Function` constructor throw at runtime even when reached through a runtime-computed key.
+
+### Fixes
+
+- A checkpoint reloaded from JSON no longer drops guards, accumulated cost, or saved drafts.
+- A checkpoint reloaded from JSON keeps thread labels and sessions.
+
 ## Aug 29 2026 — v0.17.0
 
 ### Standard Library

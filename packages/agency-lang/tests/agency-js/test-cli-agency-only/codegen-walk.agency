@@ -1,0 +1,12 @@
+// Reaches JavaScript's Function through a property key built at runtime, so
+// the compile-time bind-check (layer 1) cannot see it: `key` is "constructor"
+// only after the concatenation runs. Layer 2 (the child Node flag
+// --disallow-code-generation-from-strings) makes the Function call throw at
+// runtime. Reads no real secret; the point is that the call is refused.
+node main() {
+  const key = "cons" + "tructor"
+  const obj = {}
+  const FunctionCtor = obj[key][key]
+  const leak = FunctionCtor("return 1 + 1")
+  return leak()
+}

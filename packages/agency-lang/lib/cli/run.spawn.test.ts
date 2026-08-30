@@ -6,7 +6,6 @@ import { fileURLToPath } from "url";
 import {
   compileWarning,
   compiledOutputNodeArgs,
-  sandboxRuntimeNodeArgs,
   compiledOutputRegisterUrl,
   runChildOverrides,
 } from "./commands.js";
@@ -100,14 +99,5 @@ describe("runChildOverrides", () => {
     expect(merged.log?.logFile).toBe("harness.jsonl");
     expect(merged.observability).toBeUndefined();
     expect(merged.log?.code?.entry).toBe("main.agency");
-  });
-});
-
-describe("sandboxRuntimeNodeArgs", () => {
-  it("disables code-generation-from-strings for --agency-only (untrusted) runs", () => {
-    expect(sandboxRuntimeNodeArgs(true)).toEqual(["--disallow-code-generation-from-strings"]);
-  });
-  it("adds no runtime flags for a trusted run", () => {
-    expect(sandboxRuntimeNodeArgs(false)).toEqual([]);
   });
 });

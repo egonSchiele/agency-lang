@@ -51,10 +51,10 @@ export function compiledOutputNodeArgs(): string[] {
 
 /** Extra V8 flags for running UNTRUSTED compiled output (`--agency-only`).
  *  `--disallow-code-generation-from-strings` makes `eval` and the `Function`
- *  constructor throw at runtime, closing the one route the compile-time
- *  bind-check cannot see: a runtime-computed property key that reaches
- *  `Function` (`m[a + b]["constructor"](...)`). Layer 2 of the JS-globals
- *  containment; see docs/dev/security/roadmap.md A1. Empty for trusted runs. */
+ *  constructor throw, closing the route the compile-time bind-check cannot
+ *  see: a property key built at runtime that reaches `Function`, as in
+ *  `m[a + b]` where `a + b` is `"constructor"`. Layer 2; see
+ *  docs/dev/security/roadmap.md A1. Empty for trusted runs. */
 export function sandboxRuntimeNodeArgs(agencyOnly: boolean): string[] {
   return agencyOnly ? ["--disallow-code-generation-from-strings"] : [];
 }

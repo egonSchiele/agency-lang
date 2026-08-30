@@ -17,15 +17,20 @@ and `checkSandboxNames` refuse free identifiers, `new` callees, the
 constructor/prototype walk (best-effort), tag arguments, and default values;
 see `docs/dev/compiler/agency-only-bound-names.md`.
 
-**Layer 2 (disable code-generation-from-strings) DONE** — `agency run
---agency-only` spawns the child Node process with
+**Layer 2 (disable code-generation-from-strings) — shipped for `agency run`.**
+`agency run --agency-only` spawns the child Node process with
 `--disallow-code-generation-from-strings` (`sandboxRuntimeNodeArgs` in
-`lib/cli/commands.ts`). This is the runtime backstop for the constructor walk
-layer 1 catches only best-effort: a runtime-computed key that reaches
-`Function` (`m[a + b]["constructor"](...)`) now throws `EvalError`. Verified a
-benign agency-only program still runs under the flag. Not yet applied across
-forks (`std::agency.run` children) or to the `agency test --agency-only`
-grader path — those ride with #974 (make enforcement transitive across forks).
+`lib/cli/commands.ts`), so `eval`, the `Function` constructor, and a
+constructor walk through a runtime-computed key (`m[a + b]` where `a + b` is
+`"constructor"`, which layer 1's syntactic check cannot see) all throw
+`EvalError`. Forks (`std::agency.run` children, whose `execArgv` is set
+explicitly in `buildForkOptions`, `lib/runtime/ipc.ts`) and the `agency test
+--agency-only` grader path do not carry the flag yet; both follow in #974.
+
+The flag is not a full ban on generating code: `vm.runInThisContext` and
+`vm.Script` still run under it. Reaching `vm` needs `require` or
+`getBuiltinModule`, which layer 1 refuses by name, so there is no path today —
+but layer 3 should not assume the flag alone closes every route to new code.
 
 Layer 3 (freeze intrinsics) still open.
 
@@ -60,8 +65,9 @@ Fix, in three layers, cheapest first:
    `docs/superpowers/specs/2026-08-29-agency-only-bound-names-design.md`
    (revised after review).
 2. **`--disallow-code-generation-from-strings`** on the child Node process
-   for `--agency-only` runs (shipped — `sandboxRuntimeNodeArgs` in
-   `lib/cli/commands.ts`). This is the REAL boundary for reaching `Function`
+   for `--agency-only` runs (shipped for `agency run`; forks and `agency test`
+   in #974 — `sandboxRuntimeNodeArgs` in `lib/cli/commands.ts`). This is the
+   REAL boundary for reaching `Function`
    and calling it with a string — via `eval`, `new Function`, or any
    constructor walk including `m[a + b]["constructor"]…` with a runtime-
    computed key, which layer 1's syntactic property check cannot catch

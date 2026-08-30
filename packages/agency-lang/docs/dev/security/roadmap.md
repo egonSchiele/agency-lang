@@ -42,9 +42,15 @@ Fix, in three layers, cheapest first:
    (revised after review).
 2. **`--disallow-code-generation-from-strings`** on the child Node process
    for `--agency-only` runs (`compiledOutputNodeArgs` in
-   `lib/cli/commands.ts`). Closes `eval`, `new Function`, and the
-   `"".constructor.constructor("return process")()` trick, which needs no
-   free identifier. Grep the runtime for `eval`/`new Function` first.
+   `lib/cli/commands.ts`). This is the REAL boundary for reaching `Function`
+   and calling it with a string — via `eval`, `new Function`, or any
+   constructor walk including `m[a + b]["constructor"]…` with a runtime-
+   computed key, which layer 1's syntactic property check cannot catch
+   (verified). So layer 2 ships WITH or immediately after layer 1; layer 1
+   alone must not be described as closing code-from-strings. Layer 1 still
+   carries what layer 2 cannot see: `new Proxy`/`new WebSocket` (not
+   code-from-strings; `className` is a literal, so soundly refused). Grep the
+   runtime for `eval`/`new Function` first.
 3. **Confinement of the object graph.** After 1 and 2, the remaining
    question is whether an Agency value can be walked to a capability:
    `.constructor`, `__proto__`, `Object.getPrototypeOf`, or a runtime object

@@ -494,6 +494,12 @@ export const DIAGNOSTICS = {
     message:
       "`{keyword}` is a reserved block keyword. Write `{keyword} {{ ... }}` or `{keyword}(args) {{ ... }}` directly — the `as` keyword is not supported on {keyword} blocks (there's nothing to bind).",
   },
+  sandboxForbiddenProperty: {
+    code: "AG4011",
+    severity: "error",
+    message:
+      "'{name}' is not accessible under --agency-only. It reaches JavaScript's Function or prototype chain, which pure Agency code may not use.",
+  },
   undefinedVariable: {
     code: "AG4007",
     severity: "error",

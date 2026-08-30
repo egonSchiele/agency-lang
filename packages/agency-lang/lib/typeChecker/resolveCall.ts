@@ -284,18 +284,92 @@ export const JS_GLOBALS: Record<string, JsRegistryEntry> = {
 };
 
 /**
- * Walk a namespace path through `JS_GLOBALS`. Returns the leaf entry if
- * the full chain resolves, otherwise null.
+ * Allowlist of JavaScript globals a program may reference under
+ * `--agency-only` (`typechecker.jsGlobals: "sandbox"`). An entry here is a
+ * PROMISE that the name cannot reach the host. Review every addition against
+ * that promise — this list is a reviewed security boundary, not a
+ * convenience registry like `JS_GLOBALS`.
+ *
+ * It is written out in full rather than filtered from `JS_GLOBALS`, so a
+ * name added to `JS_GLOBALS` for interop never silently becomes allowed
+ * here. It is NOT a subset of `JS_GLOBALS`: it adds constructor names
+ * (`Set`, `Map`, `RegExp`, `Intl`) that `new X()` resolves against but that
+ * `JS_GLOBALS` never listed.
+ *
+ * Deliberately EXCLUDED (each reaches or names the host): `process`,
+ * `console`, `Buffer`, `globalThis`, `eval`, `Function`, `fetch`, `Reflect`,
+ * `Proxy`, `Symbol`, `require`, `import`, `setTimeout`/`setInterval` (run
+ * code after the frame returns, outside the runtime's bookkeeping), and
+ * `Object.create`/`getPrototypeOf`/`setPrototypeOf`/`getOwnPropertyNames`
+ * (prototype and descriptor access).
+ */
+export const SANDBOX_JS_GLOBALS: Record<string, JsRegistryEntry> = {
+  // Pure conversions.
+  parseInt: JS_GLOBALS.parseInt,
+  parseFloat: JS_GLOBALS.parseFloat,
+  isNaN: JS_GLOBALS.isNaN,
+  isFinite: JS_GLOBALS.isFinite,
+  encodeURIComponent: JS_GLOBALS.encodeURIComponent,
+  decodeURIComponent: JS_GLOBALS.decodeURIComponent,
+  encodeURI: JS_GLOBALS.encodeURI,
+  decodeURI: JS_GLOBALS.decodeURI,
+  // Deep-copies plain data; throws on functions, so it yields no capability.
+  structuredClone: JS_GLOBALS.structuredClone,
+  Boolean: JS_GLOBALS.Boolean,
+  // Pure namespaces reused verbatim from JS_GLOBALS.
+  JSON: JS_GLOBALS.JSON,
+  Math: JS_GLOBALS.Math,
+  String: JS_GLOBALS.String,
+  Number: JS_GLOBALS.Number,
+  Promise: JS_GLOBALS.Promise,
+  Array: JS_GLOBALS.Array,
+  // Object minus the prototype/descriptor members (create, getPrototypeOf,
+  // setPrototypeOf, getOwnPropertyNames stay out).
+  Object: namespace({
+    keys: callable({ params: [ANY_T], returnType: stringArray }),
+    values: callable({ params: [ANY_T], returnType: anyArray }),
+    entries: callable({ params: [ANY_T], returnType: anyArray }),
+    fromEntries: callable({ params: [anyArray], returnType: ANY_T }),
+    assign: callable(),
+    freeze: callable({ params: [ANY_T], returnType: ANY_T }),
+  }),
+  // Constructors reached via `new X()`; also valid as value references.
+  Set: callable(),
+  Map: callable(),
+  RegExp: callable(),
+  Date: JS_GLOBALS.Date,
+  Error: JS_GLOBALS.Error,
+  TypeError: JS_GLOBALS.TypeError,
+  RangeError: JS_GLOBALS.RangeError,
+  // Formatting and collation only.
+  Intl: namespace({
+    NumberFormat: callable(),
+    DateTimeFormat: callable(),
+    Collator: callable(),
+    PluralRules: callable(),
+    RelativeTimeFormat: callable(),
+    ListFormat: callable(),
+    Segmenter: callable(),
+  }),
+};
+
+/**
+ * Walk a namespace path through a registry. Returns the leaf entry if
+ * the full chain resolves, otherwise null. Defaults to `JS_GLOBALS`;
+ * pass `SANDBOX_JS_GLOBALS` for the `--agency-only` allowlist.
  *
  * Examples:
  *   lookupJsMember(["JSON", "parse"])     → { kind: "callable", sig: undefined }
  *   lookupJsMember(["JSON", "banana"])    → null
  *   lookupJsMember(["NotAGlobal", "x"])   → null
  */
-export function lookupJsMember(path: string[]): JsRegistryEntry | null {
+export function lookupJsMember(
+  path: string[],
+  registry: Record<string, JsRegistryEntry> = JS_GLOBALS,
+): JsRegistryEntry | null {
   if (path.length === 0) return null;
-  if (!Object.prototype.hasOwnProperty.call(JS_GLOBALS, path[0])) return null;
-  let current: JsRegistryEntry | undefined = JS_GLOBALS[path[0]];
+  if (!Object.prototype.hasOwnProperty.call(registry, path[0])) return null;
+  let current: JsRegistryEntry | undefined = registry[path[0]];
   for (let i = 1; i < path.length; i++) {
     if (!current || current.kind !== "namespace") return null;
     if (!Object.prototype.hasOwnProperty.call(current.members, path[i])) {
@@ -315,6 +389,9 @@ type ResolveCallInput = {
   /** Names imported via `import { foo } from "./helpers.js"` (non-Agency). */
   jsImportedNames?: object;
   scopeHas: (name: string) => boolean;
+  /** JS-global registry to resolve against. Defaults to `JS_GLOBALS`; the
+   *  `--agency-only` sandbox passes `SANDBOX_JS_GLOBALS`. */
+  registry?: Record<string, JsRegistryEntry>;
 };
 
 /**
@@ -397,8 +474,12 @@ export type ShadowingInput = {
  * `JSON.parse(...)`) and avoid checking against `JS_GLOBALS` when the user
  * has their own `node JSON()` / `let JSON = …`.
  */
-export function isJsGlobalBase(name: string, input: ShadowingInput): boolean {
-  if (!has(JS_GLOBALS, name)) return false;
+export function isJsGlobalBase(
+  name: string,
+  input: ShadowingInput,
+  registry: Record<string, JsRegistryEntry> = JS_GLOBALS,
+): boolean {
+  if (!has(registry, name)) return false;
   if (input.scope.has(name)) return false;
   if (has(input.functionDefs, name)) return false;
   if (has(input.nodeDefs, name)) return false;
@@ -415,8 +496,9 @@ export function resolveCall(name: string, input: ResolveCallInput): CallResoluti
   if (input.jsImportedNames && has(input.jsImportedNames, name)) return { kind: "jsImported" };
   if (has(BUILTIN_FUNCTION_TYPES, name)) return { kind: "builtin" };
   if (input.scopeHas(name)) return { kind: "scopeBinding" };
-  if (has(JS_GLOBALS, name)) {
-    const jsEntry = JS_GLOBALS[name];
+  const registry = input.registry ?? JS_GLOBALS;
+  if (has(registry, name)) {
+    const jsEntry = registry[name];
     if (jsEntry.kind === "callable") return { kind: "jsGlobal" };
     // Some namespaces are also directly callable (e.g. `String(x)`).
     if (jsEntry.kind === "namespace" && jsEntry.callableSig) return { kind: "jsGlobal" };

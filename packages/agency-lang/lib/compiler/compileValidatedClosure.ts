@@ -44,7 +44,17 @@ export function compileValidatedClosure(closure: ValidatedClosure): CompileResul
       return { success: false, errors: ["internal: validated closure has no entry module"] };
     }
     const sandboxOptions = {
-      typechecker: { enabled: true },
+      // jsGlobals:"sandbox" restricts unqualified names to the reviewed
+      // SANDBOX_JS_GLOBALS allowlist and turns every unresolved name into a
+      // hard error, so pure Agency code cannot reach a host global
+      // (process, fetch, eval, ...) with no interrupt. Defense in depth for
+      // running untrusted code; see docs/dev/security/goal.md.
+      typechecker: {
+        enabled: true,
+        jsGlobals: "sandbox" as const,
+        undefinedFunctions: "error" as const,
+        undefinedVariables: "error" as const,
+      },
       // Belt on top of validation: the mirror contains only validated
       // content, but keep the policy on so a regression fails closed.
       imports: { allowKinds: ["stdlib", "local"] as ImportKind[] },

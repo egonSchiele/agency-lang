@@ -71,6 +71,11 @@ TypeScript module state (`installSessionHooks`, before the restore), not as
 an Agency value: a closure built by an Agency statement would be a completed
 step in the checkpoint and come back from a restore as nothing.
 
+The slash palette is registered the same way (`setSlashPalette` from
+`std::ui/cli`, next to `installSessionHooks`): an argument to `repl(...)`
+is saved in that call's frame and replayed on resume, so a palette passed
+as one would be the session's first.
+
 ### The transcript on resume
 
 A resumed run prints the saved conversation before it restores. It is

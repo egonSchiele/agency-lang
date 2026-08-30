@@ -831,6 +831,20 @@ function startSpinner(useTTY: boolean): () => void {
   };
 }
 
+// The palette from `setSlashPalette`. Module state, so a checkpoint restore
+// leaves it alone.
+let registeredPalette: unknown = null;
+
+export function _setSlashPalette(paletteCommands: unknown): void {
+  registeredPalette = paletteCommands;
+}
+
+/** The palette a REPL uses: the one passed to `repl(...)`, else the
+ *  registered one. */
+export function _slashPalette(paletteCommands: unknown): [string, string][] {
+  return paletteEntries(paletteCommands ?? registeredPalette);
+}
+
 /**
  * After each successful turn, project the agent's `status` callback
  * into a single-line dim footer:
@@ -851,7 +865,9 @@ function startSpinner(useTTY: boolean): () => void {
  * inputs so callers don't have to null-check.
  */
 function paletteEntries(paletteCommands: unknown): [string, string][] {
-  if (!paletteCommands || typeof paletteCommands !== "object") return [];
+  if (!paletteCommands || typeof paletteCommands !== "object") {
+    return [];
+  }
   const out: [string, string][] = [];
   for (const [k, v] of Object.entries(paletteCommands as Record<string, unknown>)) {
     if (typeof k !== "string" || !k.startsWith("/")) continue;
@@ -1261,7 +1277,7 @@ export async function _runLineRepl(
   paletteCommands: unknown,
 ): Promise<void> {
   const { entries: initialHistory, expansions } = loadHistory(historyFile, historyMax);
-  const palette = paletteEntries(paletteCommands);
+  const palette = _slashPalette(paletteCommands);
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,

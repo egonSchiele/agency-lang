@@ -15,8 +15,19 @@ break. Within a group they are in the order to do them.
 **Layer 1 (the bind-check) DONE** — `jsGlobals: "sandbox"`, `SANDBOX_JS_GLOBALS`,
 and `checkSandboxNames` refuse free identifiers, `new` callees, the
 constructor/prototype walk (best-effort), tag arguments, and default values;
-see `docs/dev/compiler/agency-only-bound-names.md`. Layers 2 (disable
-code-generation-from-strings) and 3 (freeze intrinsics) still open.
+see `docs/dev/compiler/agency-only-bound-names.md`.
+
+**Layer 2 (disable code-generation-from-strings) DONE** — `agency run
+--agency-only` spawns the child Node process with
+`--disallow-code-generation-from-strings` (`sandboxRuntimeNodeArgs` in
+`lib/cli/commands.ts`). This is the runtime backstop for the constructor walk
+layer 1 catches only best-effort: a runtime-computed key that reaches
+`Function` (`m[a + b]["constructor"](...)`) now throws `EvalError`. Verified a
+benign agency-only program still runs under the flag. Not yet applied across
+forks (`std::agency.run` children) or to the `agency test --agency-only`
+grader path — those ride with #974 (make enforcement transitive across forks).
+
+Layer 3 (freeze intrinsics) still open.
 
 <https://github.com/egonSchiele/agency-lang/issues/971>. An identifier the compiler does not know is emitted verbatim, so
 `process.env.HOME`, `process.getBuiltinModule("fs")`, `fetch(...)`,
@@ -49,7 +60,7 @@ Fix, in three layers, cheapest first:
    `docs/superpowers/specs/2026-08-29-agency-only-bound-names-design.md`
    (revised after review).
 2. **`--disallow-code-generation-from-strings`** on the child Node process
-   for `--agency-only` runs (`compiledOutputNodeArgs` in
+   for `--agency-only` runs (shipped — `sandboxRuntimeNodeArgs` in
    `lib/cli/commands.ts`). This is the REAL boundary for reaching `Function`
    and calling it with a string — via `eval`, `new Function`, or any
    constructor walk including `m[a + b]["constructor"]…` with a runtime-

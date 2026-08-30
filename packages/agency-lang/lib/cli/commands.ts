@@ -49,6 +49,16 @@ export function compiledOutputNodeArgs(): string[] {
   return [`--import=${compiledOutputRegisterUrl()}`];
 }
 
+/** Extra V8 flags for running UNTRUSTED compiled output (`--agency-only`).
+ *  `--disallow-code-generation-from-strings` makes `eval` and the `Function`
+ *  constructor throw at runtime, closing the one route the compile-time
+ *  bind-check cannot see: a runtime-computed property key that reaches
+ *  `Function` (`m[a + b]["constructor"](...)`). Layer 2 of the JS-globals
+ *  containment; see docs/dev/security/roadmap.md A1. Empty for trusted runs. */
+export function sandboxRuntimeNodeArgs(agencyOnly: boolean): string[] {
+  return agencyOnly ? ["--disallow-code-generation-from-strings"] : [];
+}
+
 // Returns true if `agency-lang` resolves from a file inside the given
 // directory using Node's standard CommonJS resolver. If true, the user
 // can run `node compiled.js` from that location and it will succeed —
@@ -314,11 +324,20 @@ export function run(
   // Use process.execPath so the child runs under the same Node as the CLI,
   // and pass our resolver shim so the compiled output's `import "agency-lang"`
   // succeeds even when the CLI is installed globally.
-  const nodeProcess = spawn(process.execPath, [...compiledOutputNodeArgs(), output, ...nodeArgs], {
-    stdio: "inherit",
-    shell: false,
-    env,
-  });
+  const nodeProcess = spawn(
+    process.execPath,
+    [
+      ...compiledOutputNodeArgs(),
+      ...sandboxRuntimeNodeArgs(compileMode.agencyOnly),
+      output,
+      ...nodeArgs,
+    ],
+    {
+      stdio: "inherit",
+      shell: false,
+      env,
+    },
+  );
 
   nodeProcess.on("error", (error) => {
     console.error(`Failed to run ${output}:`, error);

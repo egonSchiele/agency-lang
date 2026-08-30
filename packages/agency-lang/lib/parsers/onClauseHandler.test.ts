@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { liftTailVerdicts } from "./onClauseHandler.js";
+import { liftTailVerdicts, completeClause } from "./onClauseHandler.js";
 import type { AgencyNode } from "@/types.js";
 
 const call = (name: string): AgencyNode =>
@@ -53,5 +53,41 @@ describe("liftTailVerdicts", () => {
       { type: "matchBlock", expression: call("x"), cases: [] } as AgencyNode,
     ];
     expect(liftTailVerdicts(body)).toEqual(body);
+  });
+});
+
+const retPass: AgencyNode = { type: "returnStatement", value: call("pass") } as AgencyNode;
+
+describe("completeClause", () => {
+  it("appends return pass() to a side-effect-only clause", () => {
+    const body = [call("log")];
+    expect(completeClause(body)).toEqual([call("log"), retPass]);
+  });
+
+  it("appends return pass() to an if with no else", () => {
+    const body: AgencyNode[] = [
+      {
+        type: "ifElse",
+        condition: { type: "boolean", value: true },
+        thenBody: [ret("approve")],
+      } as AgencyNode,
+    ];
+    expect(completeClause(body)).toEqual([...body, retPass]);
+  });
+
+  it("leaves a clause that already returns on every path unchanged", () => {
+    expect(completeClause([ret("approve")])).toEqual([ret("approve")]);
+  });
+
+  it("leaves an if/else that returns on both branches unchanged", () => {
+    const body: AgencyNode[] = [
+      {
+        type: "ifElse",
+        condition: { type: "boolean", value: true },
+        thenBody: [ret("approve")],
+        elseBody: [ret("reject")],
+      } as AgencyNode,
+    ];
+    expect(completeClause(body)).toEqual(body);
   });
 });

@@ -40,3 +40,47 @@ export function liftTailVerdicts(body: AgencyNode[]): AgencyNode[] {
   }
   return out;
 }
+
+/** Does this statement list return a verdict on every path? A local walk, not a
+ *  reuse: the typechecker's definite-return pass (`checkDefiniteReturns`,
+ *  lib/typeChecker/definiteReturns.ts) needs scopes and a checker context and
+ *  cannot run on a bare statement list at parse time. Mirrors the structure of
+ *  `alwaysYields` (lib/lowering/patternLowering.ts:781) — keep the two aligned
+ *  so they cannot drift — but keyed on `returnStatement`. Only a return and a
+ *  both-branch if/else count, the same shapes lifting produces. Loops never
+ *  count (syntactic all-paths rule). */
+function definitelyReturns(body: AgencyNode[]): boolean {
+  for (const stmt of body) {
+    if (stmt.type === "returnStatement") {
+      return true;
+    }
+    if (stmt.type === "ifElse") {
+      const ifNode = stmt as IfElse;
+      if (
+        ifNode.elseBody &&
+        definitelyReturns(ifNode.thenBody) &&
+        definitelyReturns(ifNode.elseBody)
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** After lifting, guarantee the clause returns a verdict on every path. A clause
+ *  that produces no verdict means pass — the canonical handler default — so an
+ *  unfinished clause gets `return pass()` appended. Without this, a
+ *  side-effect-only or else-less conditional clause would trip the
+ *  all-paths-return LoweringError (lib/lowering/patternLowering.ts:703) on the
+ *  generated `match` the author never wrote. */
+export function completeClause(body: AgencyNode[]): AgencyNode[] {
+  if (definitelyReturns(body)) {
+    return body;
+  }
+  const retPass: AgencyNode = {
+    type: "returnStatement",
+    value: { type: "functionCall", functionName: "pass", arguments: [] } as Expression,
+  } as AgencyNode;
+  return [...body, retPass];
+}

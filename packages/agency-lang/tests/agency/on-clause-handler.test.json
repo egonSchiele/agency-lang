@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "onClause",
+      "description": "The on-clause alias approves \".\", rejects \"/etc\", and approves \".\" through the else-less clause",
+      "input": "",
+      "expectedOutput": "\"ok no ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "canonical",
+      "description": "The canonical handler, including the c completion form, reaches the same verdicts the alias does",
+      "input": "",
+      "expectedOutput": "\"ok no ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -104,6 +104,51 @@ export const HANDLER_BODY_MESSAGE = `expected \`{\` to open handler body:
 
 The handler takes the interrupt and returns \`approve()\`, \`reject()\`, \`propagate()\` or \`pass()\`. \`with approve\` is shorthand for a handler that approves everything.`;
 
+export const EMPTY_HANDLER_BLOCK = `a handler needs at least one \`on\` clause:
+
+  handle {
+    read("./notes.md")
+  } with {
+    on std::read(data) { approve() }
+    on _ { reject() }
+  }
+
+Each clause names an effect and returns \`approve()\`, \`reject()\`, \`propagate()\` or \`pass()\`.`;
+
+export const MALFORMED_ON_CLAUSE = `a handler clause must look like \`on <effect>(param) { ... }\`:
+
+  handle {
+    read("./notes.md")
+  } with {
+    on std::read(data) { approve() }
+    on _ { reject() }
+  }
+
+Each clause opens with \`on\`, names an effect, and has a \`{ ... }\` body.`;
+
+export const CATCH_ALL_NOT_LAST = `\`on _\` matches every effect, so it must be the last clause:
+
+  handle {
+    read("./notes.md")
+  } with {
+    on std::read(data) { approve() }
+    on _ { reject() }
+  }
+
+Any clause after \`on _\` can never run.`;
+
+export const DUPLICATE_ON_CLAUSE = (effect: string): string =>
+  `each effect may appear once in a handler — \`on ${effect}\` is repeated:
+
+  handle {
+    read("./notes.md")
+  } with {
+    on std::read(data) { approve() }
+    on std::write(data) { reject() }
+  }
+
+Give each clause a different effect, or merge the two into one.`;
+
 export const BLOCK_AS_VALUE_MESSAGE = `Agency blocks are arguments, not values, so a block cannot be assigned to a variable:
 
   const double = (n) => n * 2      // not allowed

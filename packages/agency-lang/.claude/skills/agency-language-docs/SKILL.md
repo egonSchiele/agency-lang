@@ -12,6 +12,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/language/lambda-sketch.md` — A design sketch for lambdas. Nothing here is implemented.
 - `docs/dev/language/match-expression-positions.md` — Where a `match` may appear as a value, and why each such position has to be wired up by hand.
 - `docs/dev/language/null-and-undefined.md` — Why Agency has exactly one nothing-value, `null`, and treats `undefined` as another spelling of it.
+- `docs/dev/language/on-clause-handlers.md` — The `on`-clause handler alias (`with { on <effect>(param) { ... } }`) and expression-position `handle`, which desugar at parse time to the canonical handler so `agency fmt` normalizes them away.
 - `docs/dev/language/parallel-blocks.md` — The shipped design for `parallel` and `seq` blocks: what they lower to and what they refuse.
 - `docs/dev/language/parallel-blocks-v2-dataflow.md` — A spec for grouping parallel statements automatically by dataflow. Not implemented.
 - `docs/dev/language/pkg-imports.md` — Importing Agency code from npm packages with the `pkg::` prefix.

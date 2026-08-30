@@ -11,6 +11,10 @@ import {
   BODY_DECLARATION_MESSAGE,
   BODY_RESERVED_MODIFIER_MESSAGE,
   C_STYLE_FOR_MESSAGE,
+  CATCH_ALL_NOT_LAST,
+  DUPLICATE_ON_CLAUSE,
+  EMPTY_HANDLER_BLOCK,
+  MALFORMED_ON_CLAUSE,
   HANDLER_BODY_MESSAGE,
   IF_EXPRESSION_MESSAGE,
   INTERFACE_EXTENDS_MESSAGE,
@@ -22,6 +26,11 @@ import {
   SWITCH_MESSAGE,
   TERNARY_MESSAGE,
 } from "./messages.js";
+import {
+  buildOnClauseHandler,
+  findDuplicateEffect,
+  type ParsedOnClause,
+} from "./onClauseHandler.js";
 import {
   anyChar,
   between,
@@ -5706,6 +5715,10 @@ const _bodyNodeParser: Parser<AgencyNode> = memo(
     switchStatementParser,
     cStyleForParser,
     blockAsValueParser,
+    // `let res = handle (expr) with H` — expression-position handle (#926).
+    // Ahead of withModifierParser/assignmentParser: `handle (…)` is not a valid
+    // RHS expression, so those would fail partway and leave `with H` dangling.
+    lazy(() => handleExprAssignmentParser),
     // withModifierParser must be tried before returnStatementParser/
     // assignmentParser so that `return foo() with approve` and
     // `const x = foo() with approve` don't get partially consumed by
@@ -5959,6 +5972,153 @@ const functionRefHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
 };
 
 // =============================================================================
+// on-clause handler — `with { on <effect>(param) { ... } ... }`
+// The syntax models reach for by default (#926). Parses directly into the
+// canonical inline handler AST (see lib/parsers/onClauseHandler.ts), so codegen
+// and the formatter are unchanged and `agency fmt` normalizes it away.
+// =============================================================================
+
+// A quoted effect name, `"std::read"`. effectIdentifier parses only
+// namespaced/bare identifiers and never a quoted token, so the quoted spelling
+// needs its own alternative. The inner text IS the normalized name.
+const quotedEffectName: Parser<string> = map(
+  seqC(char('"'), capture(many1WithJoin(noneOf('"\n')), "name"), char('"')),
+  (captures: { name: string }) => captures.name,
+);
+
+// The binding after `on eff(...)`. `variableNameParser` (not raw varNameChar) so
+// the name is a valid identifier — it rejects a leading digit, which would
+// otherwise desugar to `const 1data = intr.data`, code the canonical grammar
+// cannot re-parse.
+const paramNameParser: Parser<string> = map(variableNameParser, (name) => name.value);
+
+// `on <effect|_> (<param|_>)? { body }` — one clause. The effect name may be
+// bare (`std::read`, `deploy`), quoted (`"std::read"`), or `_` for the
+// catch-all — all handled by `effectIdentifier`, whose bare path matches `_`
+// and underscore-led names like `_foo`; the `=== "_"` normalization below turns
+// a lone `_` into the catch-all.
+const onClauseParser: Parser<ParsedOnClause> = (input) => {
+  const parsed = seqC(
+    str("on"),
+    spaces,
+    capture(or(quotedEffectName, effectIdentifier), "effectName"),
+    optionalSpaces,
+    optional(
+      captureCaptures(
+        seqC(
+          char("("),
+          optionalSpaces,
+          capture(paramNameParser, "paramName"),
+          optionalSpaces,
+          char(")"),
+        ),
+      ),
+    ),
+    optionalSpaces,
+    char("{"),
+    optionalSpacesOrNewline,
+    capture(bodyParser, "body"),
+    optionalSpacesOrNewline,
+    char("}"),
+    optionalSpacesOrNewline,
+  )(input);
+  if (!parsed.success) {
+    return parsed as ParserResult<ParsedOnClause>;
+  }
+  const captures = parsed.result as {
+    effectName: string;
+    paramName?: string;
+    body: AgencyNode[];
+  };
+  const clause: ParsedOnClause = {
+    effect: captures.effectName === "_" ? null : captures.effectName,
+    binding: !captures.paramName || captures.paramName === "_" ? null : captures.paramName,
+    body: captures.body,
+  };
+  return success(clause, parsed.rest);
+};
+
+// Record a committed failure so its message surfaces instead of a generic
+// backtracked one. Once `{` opens the block, no other handler form can match
+// (inline needs `(`, functionRef an identifier), so failures here are the real
+// error. Mirrors the probe pattern at parsers.ts:2563 / :5446.
+function commitHandlerFailure(message: string, pos: string): ParserResult<HandleBlock["handler"]> {
+  const declined = committedFailure(message, pos);
+  getParseState().committedFailure = declined;
+  return declined as ParserResult<HandleBlock["handler"]>;
+}
+
+// `{ on ... on ... }` → the built inline handler.
+const onClauseHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
+  const open = seqC(char("{"), optionalSpacesOrNewline)(input);
+  if (!open.success) {
+    // Not a `{`-block at all — fail without committing so the enclosing `or`
+    // reports its own error (this branch never claimed the input).
+    return open as ParserResult<HandleBlock["handler"]>;
+  }
+
+  // A `}` right after `{` is the only true empty case; that is the one place
+  // EMPTY_HANDLER_BLOCK belongs. Anchored at the brace, where the block is.
+  const emptyProbe = char("}")(open.rest);
+  if (emptyProbe.success) {
+    return commitHandlerFailure(EMPTY_HANDLER_BLOCK, open.rest);
+  }
+
+  const clausesResult = many1(onClauseParser)(open.rest);
+  if (!clausesResult.success) {
+    // Not empty (we just ruled that out), so the first `on` clause is
+    // malformed. If parsing its body already committed a more specific failure
+    // (a ternary or if-expression message from inside), let that stand rather
+    // than clobbering it with a coarser one.
+    if (getParseState().committedFailure) {
+      return clausesResult as ParserResult<HandleBlock["handler"]>;
+    }
+    return commitHandlerFailure(MALFORMED_ON_CLAUSE, open.rest);
+  }
+  const clauses = clausesResult.result as ParsedOnClause[];
+
+  const close = seqC(
+    optionalSpacesOrNewline,
+    char("}"),
+    optionalSpacesOrNewline,
+  )(clausesResult.rest);
+  if (!close.success) {
+    // A later clause is malformed, or there is trailing garbage before `}`.
+    // Same rule: keep a committed inner failure; otherwise say what was
+    // expected here.
+    if (getParseState().committedFailure) {
+      return close as ParserResult<HandleBlock["handler"]>;
+    }
+    return commitHandlerFailure(MALFORMED_ON_CLAUSE, clausesResult.rest);
+  }
+
+  // The duplicate and catch-all-last checks are over the parsed clause list, so
+  // they anchor at the handler's opening brace rather than the offending clause
+  // (a `ParsedOnClause` carries no location). Deliberately coarse.
+  const duplicate = findDuplicateEffect(clauses);
+  if (duplicate !== null) {
+    return commitHandlerFailure(DUPLICATE_ON_CLAUSE(duplicate), input);
+  }
+
+  const catchAllIndex = clauses.findIndex((clause) => clause.effect === null);
+  if (catchAllIndex !== -1 && catchAllIndex !== clauses.length - 1) {
+    return commitHandlerFailure(CATCH_ALL_NOT_LAST, input);
+  }
+
+  return success(buildOnClauseHandler(clauses), close.rest);
+};
+
+// The three things that can follow `with`: an inline handler `(intr) { ... }`,
+// a function name, or an `on`-clause block. Shared by `handleBlockParser` and
+// the expression-position `handleExprAssignmentParser` below. on-clause is last
+// so the older forms win first.
+const handlerAfterWithParser: Parser<HandleBlock["handler"]> = or(
+  inlineHandlerParser,
+  functionRefHandlerParser,
+  onClauseHandlerParser,
+);
+
+// =============================================================================
 // guardBlock — the `guard(head) { body }` construct
 // (spec: docs/superpowers/specs/2026-07-17-guard-keyword-design.md)
 // =============================================================================
@@ -6045,10 +6205,73 @@ export const handleBlockParser: Parser<HandleBlock> = withLoc(
       optionalSpacesOrNewline,
       str("with"),
       optionalSpaces,
-      capture(or(inlineHandlerParser, functionRefHandlerParser), "handler"),
+      capture(handlerAfterWithParser, "handler"),
     ),
   ),
 );
+
+/** Expression-position `handle` at an assignment RHS (#926):
+ *  `let res = handle (expr) with <handler>`. Desugars to
+ *  `handle { let res = expr } with H` (the same shape as `let res = expr with
+ *  approve`; see with-approve.md). Tried before the assignment/withModifier
+ *  path, since `handle (…)` is not a valid RHS expression on its own. */
+export const handleExprAssignmentParser: Parser<HandleBlock> = withLoc((input) => {
+  const parsed = seqC(
+    capture(or(str("let"), str("const")), "declKind"),
+    spaces,
+    // `variableNameParser` (not raw varNameChar) so the declared name is a valid
+    // identifier — a leading digit like `let 1res = ...` is rejected here as it
+    // is in the ordinary assignment grammar.
+    capture(
+      map(variableNameParser, (name) => name.value),
+      "name",
+    ),
+    optionalSpaces,
+    optional(
+      captureCaptures(seqC(char(":"), optionalSpaces, capture(variableTypeParser, "typeHint"))),
+    ),
+    optionalSpaces,
+    char("="),
+    optionalSpaces,
+    str("handle"),
+    not(varNameChar),
+    optionalSpaces,
+    char("("),
+    optionalSpaces,
+    capture(exprParser, "expr"),
+    optionalSpaces,
+    char(")"),
+    optionalSpacesOrNewline,
+    str("with"),
+    optionalSpaces,
+    capture(handlerAfterWithParser, "handler"),
+  )(input);
+  if (!parsed.success) {
+    return parsed as ParserResult<HandleBlock>;
+  }
+  const captures = parsed.result as {
+    declKind: "let" | "const";
+    name: string;
+    typeHint?: VariableType;
+    expr: Expression;
+    handler: HandleBlock["handler"];
+  };
+  const assignment: Assignment = {
+    type: "assignment",
+    declKind: captures.declKind,
+    variableName: captures.name,
+    value: captures.expr,
+  };
+  if (captures.typeHint) {
+    assignment.typeHint = captures.typeHint;
+  }
+  const handleBlock: HandleBlock = {
+    type: "handleBlock",
+    body: [assignment],
+    handler: captures.handler,
+  };
+  return success(handleBlock, parsed.rest);
+});
 
 /** `finalize { ... }` — keyword block. Four head forms parse:
  *  `finalize {`, `finalize() {`, `finalize as name {`,

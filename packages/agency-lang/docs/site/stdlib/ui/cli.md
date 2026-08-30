@@ -78,11 +78,11 @@ Line-mode REPL with the same call signature as the std::ui TUI repl,
 setSlashPalette(paletteCommands: Record<string, string>)
 ```
 
-Register the slash-command palette for `repl()` calls that pass none:
-  a map of `/cmd` -> description. Call it before any checkpoint restore.
-  The map is kept outside the execution model, so a resumed session
-  shows the commands of the running code, not the ones a `repl()`
-  argument would have saved in the checkpoint.
+Register the slash-command palette (`/cmd` -> description) for `repl()` calls that pass none.
+
+The map is kept outside the execution model, so call this before any
+  checkpoint restore and a resumed session shows the running code's
+  commands.
 
 **Parameters:**
 
@@ -90,7 +90,7 @@ Register the slash-command palette for `repl()` calls that pass none:
 |---|---|---|
 | paletteCommands | `Record<string, string>` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L107))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L110))
 
 ### clearScreen
 
@@ -100,7 +100,7 @@ clearScreen()
 
 Clear the terminal screen.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L118))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L115))
 
 ### clearHistory
 
@@ -112,7 +112,7 @@ Clear the input history of the currently running `repl()` session: both
   its in-session up-arrow recall and the `historyFile` that session was started
   with. A no-op when called outside an interactive `repl()`.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L123))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L120))
 
 ### hline
 
@@ -132,7 +132,7 @@ Return a horizontal rule: `char` repeated `width` times (terminal
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L134))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L131))
 
 ### interruptChoice
 
@@ -171,4 +171,4 @@ Approval prompt for line mode: renders a sticky footer pinned to the
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L141))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L138))

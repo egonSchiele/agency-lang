@@ -831,23 +831,8 @@ function startSpinner(useTTY: boolean): () => void {
   };
 }
 
-/**
- * After each successful turn, project the agent's `status` callback
- * into a single-line dim footer:
- *
- *     ─── agency-agent · $0.0143 · /help for commands ───
- *
- * The callback returns `{left, right, context}` (same shape the TUI
- * uses for its status bar). Non-empty parts are joined with `·`.
- * No-op on non-TTY so piped logs stay free of decoration. A failure
- * inside the callback is swallowed — the footer is informational and
- * must never break a successful turn.
- */
-// The slash palette registered with `setSlashPalette`. Plain module state,
-// like the session hooks in agentSessions.ts: an Agency program registers it
-// before any checkpoint restore, so a resumed session shows the commands of
-// the code it is running rather than a map its checkpoint saved as a
-// `repl(...)` argument.
+// The palette from `setSlashPalette`. Module state, so a checkpoint restore
+// leaves it alone.
 let registeredPalette: unknown = null;
 
 export function _setSlashPalette(paletteCommands: unknown): void {
@@ -860,6 +845,18 @@ export function _slashPalette(paletteCommands: unknown): [string, string][] {
   return paletteEntries(paletteCommands ?? registeredPalette);
 }
 
+/**
+ * After each successful turn, project the agent's `status` callback
+ * into a single-line dim footer:
+ *
+ *     ─── agency-agent · $0.0143 · /help for commands ───
+ *
+ * The callback returns `{left, right, context}` (same shape the TUI
+ * uses for its status bar). Non-empty parts are joined with `·`.
+ * No-op on non-TTY so piped logs stay free of decoration. A failure
+ * inside the callback is swallowed — the footer is informational and
+ * must never break a successful turn.
+ */
 /**
  * Convert the `paletteCommands` map the agent passes (e.g.
  * `{"/exit": "Exit", "/clear": "Clear", ...}`) into a stable

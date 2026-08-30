@@ -104,14 +104,11 @@ export def repl(
   )
 }
 
+/** The map is kept outside the execution model, so call this before any
+  checkpoint restore and a resumed session shows the running code's
+  commands. */
 export def setSlashPalette(paletteCommands: Record<string, string>) {
-  """
-  Register the slash-command palette for `repl()` calls that pass none:
-  a map of `/cmd` -> description. Call it before any checkpoint restore.
-  The map is kept outside the execution model, so a resumed session
-  shows the commands of the running code, not the ones a `repl()`
-  argument would have saved in the checkpoint.
-  """
+  """Register the slash-command palette (`/cmd` -> description) for `repl()` calls that pass none."""
   _setSlashPalette(paletteCommands)
 }
 

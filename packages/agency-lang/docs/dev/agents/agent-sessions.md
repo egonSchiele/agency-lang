@@ -72,10 +72,9 @@ an Agency value: a closure built by an Agency statement would be a completed
 step in the checkpoint and come back from a restore as nothing.
 
 The slash palette is registered the same way (`setSlashPalette` from
-`std::ui/cli`, next to `installSessionHooks`). Anything passed to
-`repl(...)` as an argument is saved in that call's frame and replayed on
-resume, so a palette passed that way would be the one from the session's
-first run, missing any command added since.
+`std::ui/cli`, next to `installSessionHooks`): an argument to `repl(...)`
+is saved in that call's frame and replayed on resume, so a palette passed
+as one would be the session's first.
 
 ### The transcript on resume
 

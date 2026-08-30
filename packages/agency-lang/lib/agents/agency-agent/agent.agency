@@ -181,8 +181,6 @@ node main() {
   // layer, and memory, MCP, and the settings reads behind them must run
   // before the policy handler exists or they prompt. A restore keeps
   // those TypeScript-side effects and replaces only the Agency state.
-  // The hooks and the palette are registered here, above the restore, so a
-  // resumed run gets the current ones and never the checkpoint's.
   if (!isOneShot) {
     installSessionHooks()
     setSlashPalette(mergedPalette())

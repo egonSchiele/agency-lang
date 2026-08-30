@@ -1,0 +1,40 @@
+import { _setSlashPalette, _slashPalette } from "agency-lang/stdlib-lib/cli.js"
+import { _readCheckpointFile, _saveSession } from "agency-lang/stdlib-lib/agentSessions.js"
+import { env } from "std::system"
+
+// The palette is registered before the restore, the way main() in the
+// agent does it. Stage one (test.js) registers A and saves a checkpoint.
+// Stage two (resume-stage.js) registers B, restores, and must read B:
+// the registration is module state a restore does not replace.
+
+def register(name: string) {
+  if (name == "A") {
+    _setSlashPalette({ "/a": "A" })
+  } else {
+    _setSlashPalette({ "/b": "B" })
+  }
+}
+
+node main() {
+  const palette = env("PALETTE") with approve
+  register(palette)
+  const resume = env("RESUME") with approve
+  if (resume == "1") {
+    restore(_readCheckpointFile("./sessions", "p"), {})
+  }
+  const id = checkpoint()
+  _saveSession(
+    "./sessions",
+    {
+      id: "p",
+      cwd: ".",
+      brain: "test",
+      created: 1,
+      lastActive: 1,
+      turns: 1,
+      title: "t"
+    },
+    getCheckpoint(id),
+  )
+  return _slashPalette(null)
+}

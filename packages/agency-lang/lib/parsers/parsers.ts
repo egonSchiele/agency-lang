@@ -14,6 +14,7 @@ import {
   CATCH_ALL_NOT_LAST,
   DUPLICATE_ON_CLAUSE,
   EMPTY_HANDLER_BLOCK,
+  MALFORMED_ON_CLAUSE,
   HANDLER_BODY_MESSAGE,
   IF_EXPRESSION_MESSAGE,
   INTERFACE_EXTENDS_MESSAGE,
@@ -5985,21 +5986,29 @@ const quotedEffectName: Parser<string> = map(
   (captures: { name: string }) => captures.name,
 );
 
-const underscoreToken: Parser<string> = map(char("_"), () => "_");
+// The binding after `on eff(...)`. `variableNameParser` (not raw varNameChar) so
+// the name is a valid identifier — it rejects a leading digit, which would
+// otherwise desugar to `const 1data = intr.data`, code the canonical grammar
+// cannot re-parse.
+const paramNameParser: Parser<string> = map(variableNameParser, (name) => name.value);
 
-// `on <effect|_> (<param|_>)? { body }` — one clause.
+// `on <effect|_> (<param|_>)? { body }` — one clause. The effect name may be
+// bare (`std::read`, `deploy`), quoted (`"std::read"`), or `_` for the
+// catch-all — all handled by `effectIdentifier`, whose bare path matches `_`
+// and underscore-led names like `_foo`; the `=== "_"` normalization below turns
+// a lone `_` into the catch-all.
 const onClauseParser: Parser<ParsedOnClause> = (input) => {
   const parsed = seqC(
     str("on"),
     spaces,
-    capture(or(underscoreToken, quotedEffectName, effectIdentifier), "effectName"),
+    capture(or(quotedEffectName, effectIdentifier), "effectName"),
     optionalSpaces,
     optional(
       captureCaptures(
         seqC(
           char("("),
           optionalSpaces,
-          capture(or(underscoreToken, many1WithJoin(varNameChar)), "paramName"),
+          capture(paramNameParser, "paramName"),
           optionalSpaces,
           char(")"),
         ),
@@ -6047,22 +6056,45 @@ const onClauseHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
     // reports its own error (this branch never claimed the input).
     return open as ParserResult<HandleBlock["handler"]>;
   }
+
+  // A `}` right after `{` is the only true empty case; that is the one place
+  // EMPTY_HANDLER_BLOCK belongs. Anchored at the brace, where the block is.
+  const emptyProbe = char("}")(open.rest);
+  if (emptyProbe.success) {
+    return commitHandlerFailure(EMPTY_HANDLER_BLOCK, open.rest);
+  }
+
   const clausesResult = many1(onClauseParser)(open.rest);
   if (!clausesResult.success) {
-    // `{` opened but yielded no clause: empty `with { }`, or a first token that
-    // is not `on`. Either way, the handler has no clauses.
-    return commitHandlerFailure(EMPTY_HANDLER_BLOCK, input);
+    // Not empty (we just ruled that out), so the first `on` clause is
+    // malformed. If parsing its body already committed a more specific failure
+    // (a ternary or if-expression message from inside), let that stand rather
+    // than clobbering it with a coarser one.
+    if (getParseState().committedFailure) {
+      return clausesResult as ParserResult<HandleBlock["handler"]>;
+    }
+    return commitHandlerFailure(MALFORMED_ON_CLAUSE, open.rest);
   }
   const clauses = clausesResult.result as ParsedOnClause[];
+
   const close = seqC(
     optionalSpacesOrNewline,
     char("}"),
     optionalSpacesOrNewline,
   )(clausesResult.rest);
   if (!close.success) {
-    return close as ParserResult<HandleBlock["handler"]>;
+    // A later clause is malformed, or there is trailing garbage before `}`.
+    // Same rule: keep a committed inner failure; otherwise say what was
+    // expected here.
+    if (getParseState().committedFailure) {
+      return close as ParserResult<HandleBlock["handler"]>;
+    }
+    return commitHandlerFailure(MALFORMED_ON_CLAUSE, clausesResult.rest);
   }
 
+  // The duplicate and catch-all-last checks are over the parsed clause list, so
+  // they anchor at the handler's opening brace rather than the offending clause
+  // (a `ParsedOnClause` carries no location). Deliberately coarse.
   const duplicate = findDuplicateEffect(clauses);
   if (duplicate !== null) {
     return commitHandlerFailure(DUPLICATE_ON_CLAUSE(duplicate), input);
@@ -6178,20 +6210,22 @@ export const handleBlockParser: Parser<HandleBlock> = withLoc(
   ),
 );
 
-/** Expression-position `handle` at an assignment right-hand side (#926):
- *  `let res = handle (expr) with <handler>`. `handle` is a statement everywhere
- *  else; here it wraps a single call and yields its result. Desugars by pulling
- *  the assignment INSIDE the handle body — `handle { let res = expr } with H` —
- *  the same shape `let res = expr with approve` produces (see with-approve.md).
- *  The bound name escapes the handler body because locals live on
- *  `__stack.locals`, not a JS `const`. Must be tried before the generic
- *  assignment/withModifier path, since `handle (…)` is not a valid RHS
- *  expression on its own. */
+/** Expression-position `handle` at an assignment RHS (#926):
+ *  `let res = handle (expr) with <handler>`. Desugars to
+ *  `handle { let res = expr } with H` (the same shape as `let res = expr with
+ *  approve`; see with-approve.md). Tried before the assignment/withModifier
+ *  path, since `handle (…)` is not a valid RHS expression on its own. */
 export const handleExprAssignmentParser: Parser<HandleBlock> = withLoc((input) => {
   const parsed = seqC(
     capture(or(str("let"), str("const")), "declKind"),
     spaces,
-    capture(many1WithJoin(varNameChar), "name"),
+    // `variableNameParser` (not raw varNameChar) so the declared name is a valid
+    // identifier — a leading digit like `let 1res = ...` is rejected here as it
+    // is in the ordinary assignment grammar.
+    capture(
+      map(variableNameParser, (name) => name.value),
+      "name",
+    ),
     optionalSpaces,
     optional(
       captureCaptures(seqC(char(":"), optionalSpaces, capture(variableTypeParser, "typeHint"))),

@@ -9,9 +9,9 @@
     },
     {
       "nodeName": "canonical",
-      "description": "The canonical handler reaches the same verdicts the alias does",
+      "description": "The canonical handler, including the c completion form, reaches the same verdicts the alias does",
       "input": "",
-      "expectedOutput": "\"ok no\"",
+      "expectedOutput": "\"ok no ok\"",
       "evaluationCriteria": [{ "type": "exact" }]
     }
   ]

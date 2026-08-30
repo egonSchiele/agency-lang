@@ -1,7 +1,13 @@
 // The on-clause handler alias (#926) must reach the SAME verdicts as the
 // canonical `handle {} with (intr) { match ... }` form — no shape may turn a
-// reject into an approve. Both nodes below run the same program under the two
-// spellings and must agree.
+// reject into an approve. The `onClause` and `canonical` nodes below run the
+// same three programs under the two spellings and must agree.
+//
+// Note on the `c` case: its clause has no `else` and no `on _`, so completion
+// appends `return pass()`. We only exercise the dir == "." path, where the
+// clause approves. The pass path (guard false, no catch-all) is deliberately not
+// run here: pass propagates to interactive approval, which a no-LLM test cannot
+// answer.
 
 effect app::write { dir: string }
 
@@ -37,7 +43,9 @@ node onClause(): string {
   return "${tag(a)} ${tag(b)} ${tag(c)}"
 }
 
-// The canonical hand-written form of the same three handlers.
+// The canonical hand-written form of the same three handlers. The `c` handler is
+// the exact shape completion produces for the else-less clause above, so this
+// node pins that the desugared and hand-written forms reach the same verdict.
 node canonical(): string {
   let a: Result<string> = handle (act(dir: ".")) with (intr) {
     return match (intr.effect) {
@@ -57,5 +65,15 @@ node canonical(): string {
       _ => return reject()
     }
   }
-  return "${tag(a)} ${tag(b)}"
+  let c: Result<string> = handle (act(dir: ".")) with (intr) {
+    return match (intr.effect) {
+      "app::write" => {
+        const data = intr.data
+        if (data.dir == ".") { return approve() }
+        return pass()
+      }
+      _ => return pass()
+    }
+  }
+  return "${tag(a)} ${tag(b)} ${tag(c)}"
 }

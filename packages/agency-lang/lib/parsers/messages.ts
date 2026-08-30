@@ -115,6 +115,17 @@ export const EMPTY_HANDLER_BLOCK = `a handler needs at least one \`on\` clause:
 
 Each clause names an effect and returns \`approve()\`, \`reject()\`, \`propagate()\` or \`pass()\`.`;
 
+export const MALFORMED_ON_CLAUSE = `a handler clause must look like \`on <effect>(param) { ... }\`:
+
+  handle {
+    read("./notes.md")
+  } with {
+    on std::read(data) { approve() }
+    on _ { reject() }
+  }
+
+Each clause opens with \`on\`, names an effect, and has a \`{ ... }\` body.`;
+
 export const CATCH_ALL_NOT_LAST = `\`on _\` matches every effect, so it must be the last clause:
 
   handle {

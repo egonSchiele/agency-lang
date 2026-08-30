@@ -56,14 +56,10 @@ export function liftTailVerdicts(body: AgencyNode[]): AgencyNode[] {
   return out;
 }
 
-/** Does this statement list return a verdict on every path? A local walk, not a
- *  reuse: the typechecker's definite-return pass (`checkDefiniteReturns`,
- *  lib/typeChecker/definiteReturns.ts) needs scopes and a checker context and
- *  cannot run on a bare statement list at parse time. Mirrors the structure of
- *  `alwaysYields` (lib/lowering/patternLowering.ts:781) — keep the two aligned
- *  so they cannot drift — but keyed on `returnStatement`. Only a return and a
- *  both-branch if/else count, the same shapes lifting produces. Loops never
- *  count (syntactic all-paths rule). */
+/** Does this statement list return on every path? A local walk: the
+ *  typechecker's definite-return pass needs scopes and a checker context and
+ *  cannot run at parse time. Only a `return` and a both-branch if/else count —
+ *  the same shapes lifting produces; loops never count. */
 function definitelyReturns(body: AgencyNode[]): boolean {
   for (const stmt of body) {
     if (stmt.type === "returnStatement") {

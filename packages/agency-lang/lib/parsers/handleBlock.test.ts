@@ -152,6 +152,49 @@ describe("on-clause handler", () => {
     expect(quoted.success).toBe(true);
   });
 
+  it("accepts an underscore-led effect name (`on _foo`), not just the `_` catch-all", () => {
+    const parsed = handleBlockParser(
+      normalizeCode(
+        "handle {\n  foo()\n} with {\n  on _foo(data) { approve() }\n  on _ { reject() }\n}",
+      ),
+    );
+    expect(parsed.success).toBe(true);
+    if (!parsed.success || parsed.result.handler.kind !== "inline") return;
+    const match = (parsed.result.handler.body[0] as { value: { cases: { caseValue: unknown }[] } })
+      .value;
+    // First arm matches the string "_foo", not the wildcard.
+    expect(match.cases[0].caseValue).toEqual({
+      type: "string",
+      segments: [{ type: "text", value: "_foo" }],
+    });
+  });
+
+  it("accepts an underscore-led binding name (`on eff(_tmp)`)", () => {
+    const parsed = handleBlockParser(
+      normalizeCode(
+        "handle {\n  foo()\n} with {\n  on std::read(_tmp) { approve() }\n  on _ { reject() }\n}",
+      ),
+    );
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects a binding name that starts with a digit", () => {
+    const parsed = handleBlockParser(
+      normalizeCode(
+        "handle {\n  foo()\n} with {\n  on std::read(1data) { approve() }\n  on _ { reject() }\n}",
+      ),
+    );
+    expect(parsed.success).toBe(false);
+  });
+
+  it("reports a malformed first clause as malformed, not as an empty block", () => {
+    const message = parseFailureMessage(
+      "node main() {\n  handle {\n    foo()\n  } with {\n    on\n  }\n}",
+    );
+    expect(message).not.toContain("at least one");
+    expect(message).toContain("on <effect>");
+  });
+
   it("rejects a duplicate effect (normalized) with its own message", () => {
     const message = parseFailureMessage(
       "node main() {\n  handle {\n    foo()\n  } with {\n" +
@@ -196,5 +239,17 @@ describe("on-clause handler", () => {
     expect(handleBlock.body[0].declKind).toBe("let");
     expect(handleBlock.body[0].value.type).toBe("functionCall");
     expect(handleBlock.handler.kind).toBe("inline");
+  });
+
+  it("rejects an expression-handle whose declared name starts with a digit", () => {
+    const parsed = bodyParser(
+      normalizeCode("let 1res = handle (foo()) with {\n  on _ { reject() }\n}\n"),
+    );
+    // Either fails outright, or does not parse as an expression-handle wrapping
+    // an invalid name.
+    if (parsed.success) {
+      const first = parsed.result[0] as { type: string };
+      expect(first.type).not.toBe("handleBlock");
+    }
   });
 });

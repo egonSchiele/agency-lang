@@ -300,3 +300,83 @@ describe("compileAgencyOnly", () => {
     }
   });
 });
+
+// --- Bound-names under --agency-only (SANDBOX_JS_GLOBALS). See
+// docs/dev/security/roadmap.md A1. Each refused fixture names a capability;
+// none performs a side effect, so a regression that lets one compile still
+// cannot do harm when the test asserts only the compile result. ---
+describe("bound names under --agency-only", () => {
+  function compileOne(source: string) {
+    // No local imports, so dir "" is fine; the closure is a single source.
+    // enforceJsGlobals is what `--agency-only` sets; the bound-names check is
+    // off for the trusted runtime fork path that shares compileSandboxed.
+    return compileSandboxed({ entry: { source }, dir: "", enforceJsGlobals: true });
+  }
+  function refused(source: string): string[] {
+    const r = compileOne(source);
+    expect(r.success, `expected refusal for: ${source}`).toBe(false);
+    return r.success ? [] : r.errors;
+  }
+  function allowed(source: string): void {
+    const r = compileOne(source);
+    expect(
+      r.success,
+      `expected to compile: ${source}\n${r.success ? "" : r.errors.join("\n")}`,
+    ).toBe(true);
+  }
+
+  test("refuses host globals and code-from-strings", () => {
+    refused("node main() { print(process.env.HOME) }");
+    refused('node main() { let m = process.getBuiltinModule("fs") }');
+    refused('node main() { eval("print(1)") }');
+    refused('node main() { fetch("http://x") }');
+    refused("node main() { print(globalThis) }");
+  });
+
+  test("refuses new-expression capability constructors", () => {
+    refused('node main() { let f = new Function("return 1") }');
+    refused("node main() { let p = new Proxy({}, {}) }");
+    refused('node main() { let w = new WebSocket("ws://x") }');
+    refused("node main() { let x = new XMLHttpRequest() }");
+  });
+
+  test("refuses the constructor / prototype walk (literal spellings)", () => {
+    refused(
+      'def id(x) { return x }\nnode main() { let k = id("a")\n let f = k.constructor.constructor }',
+    );
+    refused('def id(x) { return x }\nnode main() { let k = id("a")\n let f = k["constructor"] }');
+  });
+
+  test("refuses capability names in tag arguments and default values", () => {
+    refused(
+      'type Foo = {\n  @jsonSchema({ x: process })\n  value: number,\n}\nnode main() { print("hi") }',
+    );
+    refused('node main(xs = [process]) { print("hi") }');
+    // Interpolated string default: the interpolation reaches a host global.
+    refused('node main(x = "${process.env.HOME}") { print(x) }');
+  });
+
+  test("allows pure values, methods, and safe constructors", () => {
+    allowed(
+      "node main() {\n  let xs = [3, 1, 2]\n  print(Math.floor(2.5))\n  print(JSON.stringify(xs))\n  print(xs.length)\n}",
+    );
+    allowed(
+      'node main() {\n  let s = new Set()\n  let m = new Map()\n  let d = new Date()\n  let r = new RegExp("a")\n  print("ok")\n}',
+    );
+    allowed(
+      'node main() {\n  let o = { a: 1 }\n  print(Object.keys(o))\n  let ks = "abc"\n  print(o[ks])\n}',
+    );
+    allowed(
+      'def isPositive(n: number): Result<number> {\n  if (n > 0) { return success(n) }\n  return failure("no")\n}\n@validate(isPositive)\ntype Pos = number\nnode main() { let x: Pos = 5 }',
+    );
+    allowed("node main(xs = [1, 2]) { print(xs) }");
+    // A top-level const resolves inside a tag argument (module scope).
+    allowed(
+      'const MAXLEN = 5\n@jsonSchema({ maxLength: MAXLEN })\ndef f(x: string): string { return x }\nnode main() { print("hi") }',
+    );
+    // A type alias's value parameter resolves inside its own tag argument.
+    allowed(
+      '@jsonSchema({ minimum: low, maximum: high })\ntype Bounded(low: number, high: number) = number\nnode main() { print("hi") }',
+    );
+  });
+});

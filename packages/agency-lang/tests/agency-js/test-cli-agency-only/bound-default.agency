@@ -1,0 +1,1 @@
+node main(xs = [process]) { print("hi") }

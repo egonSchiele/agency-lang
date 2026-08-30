@@ -52,6 +52,7 @@ import * as path from "node:path";
 import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
 import { checkMissingImports } from "./missingImportDiagnostic.js";
 import { checkUndefinedVariables } from "./undefinedVariableDiagnostic.js";
+import { checkSandboxNames } from "./sandboxNameCheck.js";
 import { checkToolBlockBindings } from "./toolBlockBinding.js";
 import { RESERVED_FUNCTION_NAMES } from "./resolveCall.js";
 import { RESERVED_GENERIC_NAMES } from "./builtinGenerics.js";
@@ -364,6 +365,11 @@ export class TypeChecker {
 
     // Check for undefined variable references (config-controlled severity).
     checkUndefinedVariables(scopes, ctx);
+
+    // --agency-only: refuse the capability positions the two general passes
+    // do not reach (new-expression callees, the constructor/prototype walk,
+    // and names in tag arguments / default parameter values).
+    checkSandboxNames(ctx);
 
     // Tool-position binding validator: at every llm(...) call site
     // with a statically-known tools array, require every function-typed

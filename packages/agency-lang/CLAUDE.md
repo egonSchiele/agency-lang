@@ -138,6 +138,7 @@ Other process docs:
 
 ### Compiler and type checker
 
+- `docs/dev/compiler/agency-only-bound-names.md` — The `--agency-only` JS-globals bind-check: the sandbox allowlist, the four capability positions it refuses, and why it is defense in depth rather than the boundary.
 - `docs/dev/compiler/binop-parser.md` — How binary expressions parse, including the operator precedence and associativity table.
 - `docs/dev/compiler/codegen-als-accessors.md` — How generated code reads runtime values out of the active async-context frame.
 - `docs/dev/compiler/effect-propagation.md` — How the interrupt effects a function carries are computed and propagated through calls.
@@ -167,6 +168,11 @@ Other process docs:
 - `docs/dev/agents/tool-loop-guards.md` — The two refusals that stop a model wasting rounds: a repeated call, and an argument that is really tool-call markup.
 - `docs/dev/agents/why-agents-write-code.md` — The argument for letting an agent write and run programs instead of giving it more tools.
 - `docs/dev/agents/writing-rewrite-agent.md` — The rewrite agent over the writing reviewer: the passes loop, why a reviewer failure is not a clean pass, and how its eval suite shares the reviewer suite's files.
+
+### Security
+
+- `docs/dev/security/goal.md` — The goal of running untrusted Agency code with no operating-system sandbox, why the language design makes that possible, and what it demands of the compiler.
+- `docs/dev/security/roadmap.md` — Every gap between today's code and that goal, grouped by which part of the argument it breaks, with the GitHub issue for each.
 
 ### Standard library
 
@@ -220,6 +226,7 @@ Other process docs:
 ### Hosting and statelog
 
 - `docs/dev/hosting/hosted-agent-execution.md` — Deploying an agent to a hosted statelog instance and running it over HTTP.
+- `docs/dev/hosting/how-hosted-serving-works.md` — The plain walkthrough of serving: deploy, compile, the four routes, and how an interrupt becomes an HTTP round trip. Read before `hosted-agent-execution.md`.
 - `docs/dev/hosting/invocation-usage-accounting.md` — How a hosted invocation reports its full cost and token breakdown, including across a subprocess.
 - `docs/dev/hosting/per-invocation-config.md` — Letting one invocation carry its own config override and trace id.
 - `docs/dev/hosting/remote-secrets.md` — Managing a hosted project's secrets against a write-only store, and the rules that keep values out of argv and output.

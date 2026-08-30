@@ -19,7 +19,18 @@ import { safeDeleteDirectoryWithin } from "../utils.js";
 
 const PRIVATE_DIRECTORY_MODE = 0o700;
 
-export function compileValidatedClosure(closure: ValidatedClosure): CompileResult {
+export type CompileValidatedClosureOptions = {
+  /** Enforce the reviewed JS-globals allowlist (jsGlobals:"sandbox"). Only the
+   *  `--agency-only` entry point sets this. The runtime fork path
+   *  (`std::agency.run`) shares this compile but is trusted-context code that
+   *  may name JS globals, so it leaves this off. */
+  enforceJsGlobals?: boolean;
+};
+
+export function compileValidatedClosure(
+  closure: ValidatedClosure,
+  options: CompileValidatedClosureOptions = {},
+): CompileResult {
   const data = openValidatedClosure(closure);
   const mirrorRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agency-sandbox-"));
   fs.chmodSync(mirrorRoot, PRIVATE_DIRECTORY_MODE);
@@ -43,8 +54,23 @@ export function compileValidatedClosure(closure: ValidatedClosure): CompileResul
     if (entryMirrorPath === "") {
       return { success: false, errors: ["internal: validated closure has no entry module"] };
     }
+    // Under `--agency-only`, jsGlobals:"sandbox" restricts unqualified names to
+    // the reviewed SANDBOX_JS_GLOBALS allowlist and every unresolved name
+    // becomes a hard error, so pure Agency code cannot reach a host global
+    // (process, fetch, eval, ...) with no interrupt. Defense in depth for
+    // running untrusted code; see docs/dev/security/goal.md. The trusted
+    // runtime fork path (`std::agency.run`) shares this compile but may name JS
+    // globals and relies on scope-visibility cases the undefined-name passes do
+    // not fully cover, so it leaves all of this off (matching prior behavior).
+    const jsGlobalsCheck = options.enforceJsGlobals
+      ? {
+          jsGlobals: "sandbox" as const,
+          undefinedFunctions: "error" as const,
+          undefinedVariables: "error" as const,
+        }
+      : {};
     const sandboxOptions = {
-      typechecker: { enabled: true },
+      typechecker: { enabled: true, ...jsGlobalsCheck },
       // Belt on top of validation: the mirror contains only validated
       // content, but keep the policy on so a regression fails closed.
       imports: { allowKinds: ["stdlib", "local"] as ImportKind[] },

@@ -303,6 +303,7 @@ node main() {
 
 **How to fix:** write the block without \`as\`, e.g. the keyword followed immediately by its \`{ ... }\` body.`,
 
+  sandboxForbiddenProperty: `Under \`--agency-only\` (\`typechecker.jsGlobals: "sandbox"\`), a program may not read \`constructor\`, \`prototype\`, or \`__proto__\` from a value, spelled or as a string-literal key. Those property names walk from any value to JavaScript's \`Function\` and the prototype chain, which is a way for pure Agency code to reach the host with no interrupt. This is a best-effort compile-time catch; the runtime backstop is code-generation-from-strings being disabled.`,
   undefinedVariable: `The type checker walks every scope — nodes, function bodies, blocks — and resolves each name to a declaration. This error means a name was used with no \`let\`, \`const\`, parameter, or import that introduces it in reach.
 
 **How to fix:** declare it before use (\`let x = …\` / \`const x = …\`), fix a typo in the name, or import it if it lives in another module. Agency has no implicit variables: a bare assignment like \`x = 5\` without a prior \`let\`/\`const\` is not a declaration.`,

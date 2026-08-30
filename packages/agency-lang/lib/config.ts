@@ -236,6 +236,15 @@ export interface AgencyConfig {
      */
     undefinedVariables?: "silent" | "warn" | "error";
     /**
+     * Which JavaScript globals an unqualified name may refer to.
+     * - "all" (default): the interop registry (JS_GLOBALS), so `process`,
+     *   `console`, etc. resolve — ordinary compilation.
+     * - "sandbox": the reviewed allowlist (SANDBOX_JS_GLOBALS) of globals
+     *   that cannot reach the host. Set by `--agency-only`; a name outside
+     *   the allowlist becomes an error.
+     */
+    jsGlobals?: "all" | "sandbox";
+    /**
      * Strictness of union member access. When a property exists on some but
      * not all members of an un-narrowed union (e.g. `r.value` on an
      * un-guarded `Result`), this governs the diagnostic:
@@ -570,6 +579,7 @@ export const AgencyConfigSchema = z
         strictTypes: z.boolean(),
         undefinedFunctions: z.enum(["silent", "warn", "error"]),
         undefinedVariables: z.enum(["silent", "warn", "error"]),
+        jsGlobals: z.enum(["all", "sandbox"]),
         strictMemberAccess: z.enum(["silent", "warn", "error"]),
         matchExhaustiveness: z.enum(["silent", "warn", "error"]),
         definiteReturns: z.enum(["silent", "warn", "error"]),

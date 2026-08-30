@@ -10,6 +10,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/hosting/statelog.md` — The observability system: what events are captured and where they are sent.
 - `docs/dev/hosting/statelog-clients.md` — The sealed per-route clients the CLI uses to talk to statelog, over one shared transport.
 - `docs/dev/hosting/hosted-agent-execution.md` — Deploying an agent to a hosted statelog instance and running it over HTTP.
+- `docs/dev/hosting/how-hosted-serving-works.md` — The plain walkthrough of serving: deploy, compile, the four routes, and how an interrupt becomes an HTTP round trip. Read before `hosted-agent-execution.md`.
 - `docs/dev/hosting/per-invocation-config.md` — Letting one invocation carry its own config override and trace id.
 - `docs/dev/hosting/invocation-usage-accounting.md` — How a hosted invocation reports its full cost and token breakdown, including across a subprocess.
 - `docs/dev/hosting/remote-secrets.md` — Managing a hosted project's secrets against a write-only store, and the rules that keep values out of argv and output.

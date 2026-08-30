@@ -6,7 +6,14 @@ import type { ValueAccess, AccessChainElement } from "../types/access.js";
 import { walkNodes } from "../utils/node.js";
 import { holeNames } from "../utils/holes.js";
 import { hasFunctionOrNodeAncestor, isResolvableBareCall } from "./nameReferences.js";
-import { resolveCall, lookupJsMember, isJsGlobalBase } from "./resolveCall.js";
+import {
+  resolveCall,
+  lookupJsMember,
+  isJsGlobalBase,
+  JS_GLOBALS,
+  SANDBOX_JS_GLOBALS,
+  type JsRegistryEntry,
+} from "./resolveCall.js";
 import { collectProgramShadowing } from "./shadowing.js";
 
 /**
@@ -27,14 +34,21 @@ export function checkUndefinedFunctions(scopes: ScopeInfo[], ctx: TypeCheckerCon
   // importedFunctions via SymbolTable, JS_GLOBALS) are now accurate enough
   // that false positives are rare. Users can opt back into silence with
   // `{ typechecker: { undefinedFunctions: "silent" } }` in agency.json.
-  const mode = ctx.config.typechecker?.undefinedFunctions ?? "warn";
+  // --agency-only sets jsGlobals:"sandbox": resolve against the reviewed
+  // allowlist and make every unresolved name a hard error, whatever the
+  // undefinedFunctions setting says.
+  const sandbox = ctx.config.typechecker?.jsGlobals === "sandbox";
+  const registry = sandbox ? SANDBOX_JS_GLOBALS : JS_GLOBALS;
+  const mode = sandbox ? "error" : (ctx.config.typechecker?.undefinedFunctions ?? "warn");
   if (mode === "silent") return;
 
   // A file with holes is a template. AG8015 owns bare call names in it, so
-  // reporting them here too would double up. It does not look at JS
-  // namespace members — `nosuch` in `Math.nosuch()` is a method to it, not
-  // a lexical name — so the chain check below keeps running.
-  const isTemplateFile = holeNames(ctx.programNodes).length > 0;
+  // reporting them here too would double up (its own hole names must never
+  // be reported). Under the sandbox we still check non-hole names — a
+  // template compiled under --agency-only can name `process` too — so we
+  // skip only the hole names, not the whole file.
+  const holeNameSet = holeNames(ctx.programNodes);
+  const isTemplateFile = holeNameSet.length > 0;
 
   const shadowing = collectProgramShadowing(ctx.programNodes);
 
@@ -49,11 +63,13 @@ export function checkUndefinedFunctions(scopes: ScopeInfo[], ctx: TypeCheckerCon
         if (isTopLevel && hasFunctionOrNodeAncestor(ancestors)) continue;
 
         if (node.type === "functionCall") {
-          if (isTemplateFile) continue;
+          if (isTemplateFile && !sandbox) continue;
+          if (typeof node.functionName === "string" && holeNameSet.includes(node.functionName))
+            continue;
           if (!isResolvableBareCall(node, ancestors)) continue;
-          checkBareCall(node, info.scope, ctx, mode, shadowing.importedNodeNames);
+          checkBareCall(node, info.scope, ctx, mode, shadowing.importedNodeNames, registry);
         } else if (node.type === "valueAccess") {
-          checkAccessChain(node, info.scope, ctx, mode, shadowing);
+          checkAccessChain(node, info.scope, ctx, mode, shadowing, registry);
         }
       }
     });
@@ -80,6 +96,7 @@ function checkBareCall(
   ctx: TypeCheckerContext,
   mode: "warn" | "error",
   importedNodeNames: readonly string[],
+  registry: Record<string, JsRegistryEntry>,
 ): void {
   const resolution = resolveCall(call.functionName, {
     functionDefs: ctx.functionDefs,
@@ -88,6 +105,7 @@ function checkBareCall(
     importedNodeNames,
     jsImportedNames: ctx.jsImportedNames,
     scopeHas: (name) => scope.has(name),
+    registry,
   });
   if (resolution.kind !== "unresolved") return;
   const severity = mode === "warn" ? ("warning" as const) : ("error" as const);
@@ -110,6 +128,7 @@ function checkAccessChain(
   ctx: TypeCheckerContext,
   mode: "warn" | "error",
   shadowing: { importedNodeNames: readonly string[] },
+  registry: Record<string, JsRegistryEntry>,
 ): void {
   // Only handle <variableName>.<member>... chains where the base is a JS
   // namespace global. Everything else (objects in scope, computed lookups,
@@ -117,14 +136,18 @@ function checkAccessChain(
   if (expr.base.type !== "variableName") return;
   const baseName = expr.base.value;
   if (
-    !isJsGlobalBase(baseName, {
-      scope,
-      functionDefs: ctx.functionDefs,
-      nodeDefs: ctx.nodeDefs,
-      importedFunctions: ctx.importedFunctions,
-      importedNodeNames: shadowing.importedNodeNames,
-      jsImportedNames: ctx.jsImportedNames,
-    })
+    !isJsGlobalBase(
+      baseName,
+      {
+        scope,
+        functionDefs: ctx.functionDefs,
+        nodeDefs: ctx.nodeDefs,
+        importedFunctions: ctx.importedFunctions,
+        importedNodeNames: shadowing.importedNodeNames,
+        jsImportedNames: ctx.jsImportedNames,
+      },
+      registry,
+    )
   )
     return;
 
@@ -136,7 +159,7 @@ function checkAccessChain(
   const path = collectNamePath(expr.chain, baseName);
   if (path === null) return; // Computed/optional access — bail.
 
-  if (lookupJsMember(path) === null) {
+  if (lookupJsMember(path, registry) === null) {
     ctx.errors.push(
       diagnostic("undefinedFunction", { name: path.join(".") }, expr.loc ?? null, {
         severity: mode === "warn" ? "warning" : "error",

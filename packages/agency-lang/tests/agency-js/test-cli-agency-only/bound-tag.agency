@@ -1,0 +1,5 @@
+type Foo = {
+  @jsonSchema({ x: process })
+  value: number,
+}
+node main() { print("hi") }

@@ -6,6 +6,7 @@ import type { WalkAncestor } from "../utils/node.js";
 import { walkNodes } from "../utils/node.js";
 import { holeNames } from "../utils/holes.js";
 import { resolveVariable } from "./resolveVariable.js";
+import { JS_GLOBALS, SANDBOX_JS_GLOBALS, type JsRegistryEntry } from "./resolveCall.js";
 import { hasFunctionOrNodeAncestor, isResolvableVariableReference } from "./nameReferences.js";
 import { collectProgramShadowing } from "./shadowing.js";
 
@@ -37,12 +38,19 @@ import { collectProgramShadowing } from "./shadowing.js";
  *     variable refs.
  */
 export function checkUndefinedVariables(scopes: ScopeInfo[], ctx: TypeCheckerContext): void {
-  const mode = ctx.config.typechecker?.undefinedVariables ?? "silent";
+  // --agency-only sets jsGlobals:"sandbox": resolve against the reviewed
+  // allowlist and force every unresolved name to a hard error.
+  const sandbox = ctx.config.typechecker?.jsGlobals === "sandbox";
+  const registry = sandbox ? SANDBOX_JS_GLOBALS : JS_GLOBALS;
+  const mode = sandbox ? "error" : (ctx.config.typechecker?.undefinedVariables ?? "silent");
   if (mode === "silent") return;
 
-  // A file with holes is a template. AG8015 owns every name in it, and
-  // reports what this pass would, so reporting here too would double up.
-  if (holeNames(ctx.programNodes).length > 0) return;
+  // A file with holes is a template. AG8015 owns every name in it, so outside
+  // the sandbox we defer to it entirely. Under the sandbox we still check
+  // non-hole names (a template compiled under --agency-only can name
+  // `process`), skipping only the hole names themselves.
+  const holeNameSet = holeNames(ctx.programNodes);
+  if (holeNameSet.length > 0 && !sandbox) return;
 
   const { importedNodeNames } = collectProgramShadowing(ctx.programNodes);
 
@@ -55,8 +63,9 @@ export function checkUndefinedVariables(scopes: ScopeInfo[], ctx: TypeCheckerCon
         // function/graphNode bodies during the top-level pass.
         if (isTopLevel && hasFunctionOrNodeAncestor(ancestors)) continue;
         if (node.type !== "variableName") continue;
+        if (holeNameSet.includes(node.value)) continue;
         if (isResolvableVariableReference(node, ancestors)) {
-          checkVariableRef(node, ancestors, info.scope, ctx, mode, importedNodeNames);
+          checkVariableRef(node, ancestors, info.scope, ctx, mode, importedNodeNames, registry);
         }
       }
     });
@@ -70,6 +79,7 @@ function checkVariableRef(
   ctx: TypeCheckerContext,
   mode: "warn" | "error",
   importedNodeNames: readonly string[],
+  registry: Record<string, JsRegistryEntry>,
 ): void {
   const resolution = resolveVariable(ref.value, {
     functionDefs: ctx.functionDefs,
@@ -78,6 +88,7 @@ function checkVariableRef(
     importedNodeNames,
     jsImportedNames: ctx.jsImportedNames,
     scopeHas: (name) => scope.has(name),
+    registry,
   });
   if (resolution.kind !== "unresolved") return;
   ctx.errors.push(

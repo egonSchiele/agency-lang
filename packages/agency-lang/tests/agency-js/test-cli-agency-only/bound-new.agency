@@ -1,0 +1,1 @@
+node main() { let f = new Function("return 1") }

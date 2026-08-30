@@ -2,7 +2,7 @@ import type { FunctionDefinition, GraphNodeDefinition } from "../types.js";
 import type { ImportedFunctionSignature } from "../compilationUnit.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
 import { BUILTIN_VARIABLES } from "../config.js";
-import { JS_GLOBALS } from "./resolveCall.js";
+import { JS_GLOBALS, type JsRegistryEntry } from "./resolveCall.js";
 
 /**
  * Inputs for variable name resolution. Mirrors `ResolveCallInput` in
@@ -17,6 +17,9 @@ type ResolveVariableInput = {
   /** Names imported via `import { foo } from "./helpers.js"` (non-Agency). */
   jsImportedNames?: Record<string, true>;
   scopeHas: (name: string) => boolean;
+  /** JS-global registry to resolve against. Defaults to `JS_GLOBALS`; the
+   *  `--agency-only` sandbox passes `SANDBOX_JS_GLOBALS`. */
+  registry?: Record<string, JsRegistryEntry>;
 };
 
 /**
@@ -76,6 +79,6 @@ export function resolveVariable(name: string, input: ResolveVariableInput): Vari
   if (input.jsImportedNames && has(input.jsImportedNames, name)) return { kind: "jsImported" };
   if (has(BUILTIN_FUNCTION_TYPES, name)) return { kind: "builtin" };
   if (BUILTIN_VARIABLES.includes(name)) return { kind: "builtin" };
-  if (has(JS_GLOBALS, name)) return { kind: "jsGlobal" };
+  if (has(input.registry ?? JS_GLOBALS, name)) return { kind: "jsGlobal" };
   return { kind: "unresolved" };
 }

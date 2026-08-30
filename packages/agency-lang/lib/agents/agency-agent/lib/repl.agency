@@ -6,7 +6,6 @@
 import { localModelsSupported, listModelNames } from "std::agency/local"
 import { listHostedModels } from "std::llm"
 import { expandSlash } from "std::skills"
-import { highlight } from "std::syntax"
 import { getCost, getModelCosts } from "std::thread"
 import { chooseOption, ChoiceItem } from "std::ui"
 import {
@@ -56,6 +55,7 @@ import {
   saveSeedTurn,
   sessionTitle,
  } from "./resume.agency"
+import { renderReply, renderUserLine } from "./transcript.agency"
 import { runTurn } from "./turn.agency"
 import { parseModelSpec } from "./utils.agency"
 
@@ -280,18 +280,6 @@ def renameSlashCommand(title: string): boolean {
   return true
 }
 
-/** The saved conversation, drawn the way the turns were when they ran:
-  the user's lines dimmed after a `>`, the replies as markdown. */
-export def showTranscript(messages: any[]) {
-  for (m in messages) {
-    if (m.role == "user") {
-      pushMessage(color.dim("> ${m.content}"))
-    } else {
-      renderAgentResponse(success(m.content))
-    }
-  }
-}
-
 def renderUserTurn(trimmed: string, msg: string): boolean {
   const result = try runTurn("", msg)
   renderAgentResponse(result)
@@ -309,7 +297,7 @@ export def buildStatus(): { left: string; right: string; context: string } {
 }
 
 export def runSeedTurn(target: string, msg: string) {
-  pushMessage(color.dim("> ${msg}"))
+  renderUserLine(msg)
   const response = try runTurn(target, msg)
   renderAgentResponse(response)
   markTurnDone()
@@ -321,7 +309,7 @@ export def renderAgentResponse(
 ): void {
   if (response is success(reply)) {
     if (reply != "" && reply != null) {
-      pushMessage(highlight("${reply}\n", language: "markdown"))
+      renderReply(reply)
     } else {
       pushMessage(color.red("No reply generated."))
     }

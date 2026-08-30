@@ -4,7 +4,7 @@ import {
   _readCheckpointFile,
   _readTranscript,
  } from "agency-lang/stdlib-lib/agentSessions.js"
-import { getThread, listThreads, userMessage } from "std::thread"
+import { assistantMessage, getThread, listThreads, userMessage } from "std::thread"
 import { env } from "std::system"
 
 import { fakeRepl } from "./loop.js"
@@ -20,7 +20,14 @@ let turns = 0
 def turn(line: string): boolean {
   turns = turns + 1
   thread(label: "main", session: "main") {
-    userMessage("u${turns}: ${line}")
+    // The third line goes in as a content array, the way a prompt with
+    // attachments does.
+    if (turns == 3) {
+      userMessage(["u${turns}: ", line])
+    } else {
+      userMessage("u${turns}: ${line}")
+    }
+    assistantMessage("a${turns}")
   }
   return true
 }
@@ -56,7 +63,7 @@ node main() {
   fakeRepl(_sessionOnSubmit)
   // The transcript is read from the file, the way a resume prints it
   // before restoring.
-  const saved = _readTranscript(_readCheckpointFile("./sessions", "s1"))
+  const saved = _readTranscript(_readCheckpointFile("./sessions", "s1"), "main")
   return {
     turns: turns,
     messages: messages(),

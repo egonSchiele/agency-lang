@@ -122,6 +122,7 @@ def coordinatorRunTurn(
 export def coordinatorBrain(): AgentBrain {
   return {
     name: "coordinator",
+    session: "main",
     description: "One coordinator LLM that routes to code, research, oracle, explorer, review, writing, and rewrite subagents",
     startTargets: ["code", "research", "oracle", "explorer", "review", "writing", "rewrite"],
     init: coordinatorInit,

@@ -3,13 +3,19 @@
     "turns": 3,
     "messages": [
       "u1: hello",
+      "a1",
       "u2: world",
-      "u3: third"
+      "a2",
+      "u3:  third",
+      "a3"
     ],
     "transcript": [
       "user: u1: hello",
+      "assistant: a1",
       "user: u2: world",
-      "user: u3: third"
+      "assistant: a2",
+      "user: u3:  third",
+      "assistant: a3"
     ]
   }
 }

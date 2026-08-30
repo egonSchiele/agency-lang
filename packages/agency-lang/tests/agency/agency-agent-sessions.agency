@@ -11,34 +11,45 @@ import test {
  } from "../../lib/agents/agency-agent/lib/sessions.agency"
 import test { shouldRefreshTitle } from "../../lib/agents/agency-agent/lib/sessionTitle.agency"
 import test {
+  markTurnDone,
   recordTurn,
   renameSession,
   startSession,
  } from "../../lib/agents/agency-agent/lib/resume.agency"
-
-def noTranscript(messages: any[]) {
-}
+import { simpleBrain } from "../../lib/agents/agency-agent/brains/simple/simple.agency"
 
 // A rename with no turn still produces a save (the record carries the new
 // title, and the turn count is untouched); the save after it is a no-op.
+// Turn 1 would normally title the session with an LLM call; a renamed
+// session keeps its title instead.
 node renameFlow(): any {
-  startSession(null, "test", noTranscript)
+  startSession(null, simpleBrain())
   const empty = renameSession("   ")
   const renamed = renameSession("minnesota   news 8/29")
   const target = recordTurn("")
-  const again = recordTurn("")
   let title = ""
   let turns = -1
   if (target != null) {
     title = target.record.title
     turns = target.record.turns
   }
+  const again = recordTurn("")
+  markTurnDone()
+  const afterTurn = recordTurn("first prompt")
+  let titleAfterTurn = ""
+  let turnsAfterTurn = -1
+  if (afterTurn != null) {
+    titleAfterTurn = afterTurn.record.title
+    turnsAfterTurn = afterTurn.record.turns
+  }
   return {
     empty: empty,
     renamed: renamed,
     title: title,
     turns: turns,
-    again: again
+    again: again,
+    titleAfterTurn: titleAfterTurn,
+    turnsAfterTurn: turnsAfterTurn
   }
 }
 

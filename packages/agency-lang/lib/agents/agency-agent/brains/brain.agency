@@ -17,6 +17,9 @@ export type AgentBrain = {
   name: string;
   // One line, shown by --help next to the name.
   description: string;
+  // The `thread(session: ...)` name of the conversation with the user. The
+  // saved-session title and the transcript printed on resume read it.
+  session: string;
   // Valid --agent values. "" (the main entry) is always valid and not listed.
   startTargets: string[];
   // Called once, inside the policy handler, before any turn. Validate the

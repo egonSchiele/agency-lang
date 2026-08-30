@@ -3,6 +3,7 @@ import process from "process";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from "fs";
 import { dirname } from "path";
 import { __call } from "../runtime/call.js";
+import { AgencyFunction } from "../runtime/agencyFunction.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { modifiers, RESET, styles } from "@/utils/termcolors.js";
 import { color, colors, bgColors } from "../utils/termcolors.js";
@@ -843,6 +844,17 @@ function startSpinner(useTTY: boolean): () => void {
  * inside the callback is swallowed — the footer is informational and
  * must never break a successful turn.
  */
+/** `paletteCommands` may be the map itself or a function that builds it.
+ *  A function is called when the REPL starts, so a resumed session shows
+ *  the commands of the code it is running rather than the map its
+ *  checkpoint saved. */
+export async function resolvePalette(paletteCommands: unknown): Promise<unknown> {
+  if (typeof paletteCommands === "function" || AgencyFunction.isAgencyFunction(paletteCommands)) {
+    return callBridgeFn(paletteCommands);
+  }
+  return paletteCommands;
+}
+
 /**
  * Convert the `paletteCommands` map the agent passes (e.g.
  * `{"/exit": "Exit", "/clear": "Clear", ...}`) into a stable
@@ -851,7 +863,9 @@ function startSpinner(useTTY: boolean): () => void {
  * inputs so callers don't have to null-check.
  */
 function paletteEntries(paletteCommands: unknown): [string, string][] {
-  if (!paletteCommands || typeof paletteCommands !== "object") return [];
+  if (!paletteCommands || typeof paletteCommands !== "object") {
+    return [];
+  }
   const out: [string, string][] = [];
   for (const [k, v] of Object.entries(paletteCommands as Record<string, unknown>)) {
     if (typeof k !== "string" || !k.startsWith("/")) continue;
@@ -1261,7 +1275,7 @@ export async function _runLineRepl(
   paletteCommands: unknown,
 ): Promise<void> {
   const { entries: initialHistory, expansions } = loadHistory(historyFile, historyMax);
-  const palette = paletteEntries(paletteCommands);
+  const palette = paletteEntries(await resolvePalette(paletteCommands));
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,

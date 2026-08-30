@@ -52,7 +52,7 @@ Line-mode REPL with the same call signature as the std::ui TUI repl,
   @param prompt - String shown before the input buffer (default "> ")
   @param historyFile - Path to a JSON history file; loaded at start and saved on exit. Empty string disables persistence.
   @param historyMax - Trim history to this many most-recent entries
-  @param paletteCommands - Map of /cmd -> description
+  @param paletteCommands - Map of /cmd -> description, or a function returning one (called when the REPL starts)
 
 * Line-mode sibling of the std::ui TUI repl. Current limitations:
  * `status` is accepted for signature parity but not yet rendered;

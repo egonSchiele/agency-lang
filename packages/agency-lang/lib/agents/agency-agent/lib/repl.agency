@@ -335,7 +335,9 @@ export def startInteractive(seedTarget: string, seedPrompt: string) {
     prompt: "> ",
     historyFile: HISTORY_PATH,
     historyMax: 1000,
-    paletteCommands: mergedPalette(),
+    // The function, not its result: a resumed session replays this call
+    // with its saved arguments, and the palette must be the current one.
+    paletteCommands: mergedPalette,
   )
   print(color.cyan("\nGoodbye!"))
 }

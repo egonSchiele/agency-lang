@@ -65,6 +65,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "renameFlow",
+      "description": "/rename sets the title and forces a save",
+      "input": "",
+      "expectedOutput": "{\"empty\": \"Usage: /rename <title>\", \"renamed\": \"Session renamed: minnesota news 8/29\", \"title\": \"minnesota news 8/29\", \"turns\": 0, \"again\": null}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

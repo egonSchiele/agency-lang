@@ -1,6 +1,15 @@
 {
   "finalData": {
     "turns": 3,
-    "messages": ["u1: hello", "u2: world", "u3: third"]
+    "messages": [
+      "u1: hello",
+      "u2: world",
+      "u3: third"
+    ],
+    "transcript": [
+      "user: u1: hello",
+      "user: u2: world",
+      "user: u3: third"
+    ]
   }
 }

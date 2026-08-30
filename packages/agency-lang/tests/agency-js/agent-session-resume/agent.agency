@@ -2,6 +2,7 @@ import {
   _installSessionHooks,
   _sessionOnSubmit,
   _readCheckpointFile,
+  _readTranscript,
  } from "agency-lang/stdlib-lib/agentSessions.js"
 import { getThread, listThreads, userMessage } from "std::thread"
 import { env } from "std::system"
@@ -53,8 +54,12 @@ node main() {
     restore(_readCheckpointFile("./sessions", "s1"), {})
   }
   fakeRepl(_sessionOnSubmit)
+  // The transcript is read from the file, the way a resume prints it
+  // before restoring.
+  const saved = _readTranscript(_readCheckpointFile("./sessions", "s1"))
   return {
     turns: turns,
-    messages: messages()
+    messages: messages(),
+    transcript: ["${m.role}: ${m.content}" for m in saved]
   }
 }

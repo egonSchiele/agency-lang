@@ -18,7 +18,7 @@ import { getHeader } from "./lib/header.agency"
 import { maybeLoadMcp } from "./lib/mcp.agency"
 import { printPolicyHelp } from "./lib/policy.agency"
 import { chooseSession, startSession } from "./lib/resume.agency"
-import { installSessionHooks, startInteractive } from "./lib/repl.agency"
+import { installSessionHooks, showTranscript, startInteractive } from "./lib/repl.agency"
 import { pickModelsForAgent, maybeEnableMemory } from "./lib/session.agency"
 import { loadSettings } from "./lib/settings.agency"
 import { setDebug, setVerbose, setInteractive } from "./lib/trace.agency"
@@ -181,7 +181,11 @@ node main() {
   // those TypeScript-side effects and replaces only the Agency state.
   if (!isOneShot) {
     installSessionHooks()
-    startSession(chooseSession(args.flags.continue, args.flags.resume ?? null), brain.name)
+    startSession(
+      chooseSession(args.flags.continue, args.flags.resume ?? null),
+      brain.name,
+      showTranscript,
+    )
   }
 
   if (isOneShot) {

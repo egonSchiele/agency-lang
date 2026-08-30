@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { __call } from "../runtime/call.js";
 import { checkpoint, getCheckpoint } from "../runtime/checkpoint.js";
+import { Checkpoint } from "../runtime/state/checkpointStore.js";
 
 /**
  * File I/O for the agency agent's saved sessions
@@ -98,6 +99,62 @@ export function _saveSession(dir: string, record: SessionRecord, checkpoint: unk
 /** The parsed checkpoint, or null when the file is missing or malformed. */
 export function _readCheckpointFile(dir: string, id: string): unknown {
   return readJson(checkpointFile(dir, id));
+}
+
+export type TranscriptMessage = { role: "user" | "assistant"; content: string };
+
+type ThreadJSON = {
+  messages: { role?: string; content?: unknown }[];
+  parentId?: string | null;
+  label?: string | null;
+};
+
+/**
+ * The conversation of a saved session, as the user and the model said it:
+ * the user and assistant messages of the `main` thread (or, for a brain
+ * that labels none, the top-level thread with the most messages). Tool
+ * calls and results are left out. Read from the checkpoint file before it
+ * is restored, because a restore replays to the saved point and runs no
+ * code of its own afterwards.
+ */
+export function _readTranscript(checkpointJson: unknown): TranscriptMessage[] {
+  const cp = Checkpoint.fromJSON(checkpointJson);
+  if (!cp) return [];
+  const thread = mainThread(cp);
+  if (!thread) return [];
+  const out: TranscriptMessage[] = [];
+  for (const m of thread.messages) {
+    if (m.role !== "user" && m.role !== "assistant") continue;
+    const text = messageText(m.content);
+    if (text !== "") out.push({ role: m.role, content: text });
+  }
+  return out;
+}
+
+// Every frame on the saved stack carries a thread store; the same thread
+// can appear in several, so take the fullest copy.
+function mainThread(cp: Checkpoint): ThreadJSON | null {
+  let labeled: ThreadJSON | null = null;
+  let largest: ThreadJSON | null = null;
+  for (const frame of cp.stack.stack ?? []) {
+    const threads = (frame.threads?.threads ?? {}) as Record<string, ThreadJSON>;
+    for (const t of Object.values(threads)) {
+      if (t.label === "main") {
+        if (!labeled || t.messages.length > labeled.messages.length) labeled = t;
+      } else if (t.parentId == null) {
+        if (!largest || t.messages.length > largest.messages.length) largest = t;
+      }
+    }
+  }
+  return labeled ?? largest;
+}
+
+function messageText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map((part) => (typeof part?.text === "string" ? part.text : "")).join("");
+  }
+  return "";
 }
 
 type SaveTarget = { dir: string; record: SessionRecord } | null;

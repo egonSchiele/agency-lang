@@ -10,6 +10,37 @@ import test {
   SessionRecord,
  } from "../../lib/agents/agency-agent/lib/sessions.agency"
 import test { shouldRefreshTitle } from "../../lib/agents/agency-agent/lib/sessionTitle.agency"
+import test {
+  recordTurn,
+  renameSession,
+  startSession,
+ } from "../../lib/agents/agency-agent/lib/resume.agency"
+
+def noTranscript(messages: any[]) {
+}
+
+// A rename with no turn still produces a save (the record carries the new
+// title, and the turn count is untouched); the save after it is a no-op.
+node renameFlow(): any {
+  startSession(null, "test", noTranscript)
+  const empty = renameSession("   ")
+  const renamed = renameSession("minnesota   news 8/29")
+  const target = recordTurn("")
+  const again = recordTurn("")
+  let title = ""
+  let turns = -1
+  if (target != null) {
+    title = target.record.title
+    turns = target.record.turns
+  }
+  return {
+    empty: empty,
+    renamed: renamed,
+    title: title,
+    turns: turns,
+    again: again
+  }
+}
 
 node slug(): string {
   return cwdSlug("/Users/me/my proj_v2")

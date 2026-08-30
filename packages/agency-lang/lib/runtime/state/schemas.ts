@@ -23,12 +23,35 @@ export const threadStoreJSONSchema = z.object({
   sessions: z.record(z.string(), z.string()).optional(),
 });
 
+// GuardJSON — every field CostGuard.toJSON / TimeGuard.toJSON write.
+// Discriminated on `kind`; the base fields are shared by both kinds.
+const guardJSONBase = {
+  guardId: z.string().optional(),
+  label: z.string().optional(),
+  scopeIds: z.array(z.string()).optional(),
+  disarmed: z.boolean().optional(),
+  isRootBudget: z.boolean().optional(),
+};
+export const guardJSONSchema = z.discriminatedUnion("kind", [
+  z.object({ ...guardJSONBase, kind: z.literal("cost"), costLimit: z.number(), spent: z.number() }),
+  z.object({
+    ...guardJSONBase,
+    kind: z.literal("time"),
+    timeLimit: z.number(),
+    elapsedMs: z.number(),
+    grantedMs: z.number().optional(),
+  }),
+]);
+
 // BranchStateJSON (forward-declared due to mutual recursion with StateStackJSON)
 export const branchStateJSONSchema: z.ZodType<any> = z.lazy(() =>
   z.object({
     stack: stateStackJSONSchema,
     interruptId: z.string().optional(),
     interruptData: z.any().optional(),
+    result: z.object({ result: z.any() }).optional(),
+    globalsJSON: globalStoreJSONSchema.optional(),
+    activeStack: z.array(z.string()).optional(),
   }),
 );
 
@@ -42,6 +65,8 @@ export const stateJSONSchema = z.object({
   // normalizes to null so the parsed shape satisfies StateJSON.
   scopeName: z.string().nullable().optional().default(null),
   branches: z.record(z.string(), branchStateJSONSchema).optional(),
+  scopedCallbacks: z.array(z.object({ name: z.string(), fn: z.any() })).optional(),
+  savedDraft: z.object({ value: z.any() }).optional(),
 });
 
 // StateStackJSON
@@ -51,6 +76,13 @@ export const stateStackJSONSchema = z.object({
   other: z.record(z.string(), z.any()),
   deserializeStackLength: z.number(),
   nodesTraversed: z.array(z.string()),
+  localCost: z.number().optional(),
+  localTokens: z.number().optional(),
+  seedCost: z.number().optional(),
+  seedTokens: z.number().optional(),
+  guards: z.array(guardJSONSchema).optional(),
+  inheritedGuardCount: z.number().optional(),
+  inheritedTimeGuards: z.array(guardJSONSchema).optional(),
 });
 
 // GlobalStoreJSON

@@ -237,8 +237,18 @@ node main() {
 `restore()` accepts the parsed JSON directly and revives it with
 `Checkpoint.fromJSON`, which validates against the zod schemas in
 `lib/runtime/state/schemas.ts`. zod drops any key a schema does not name, so
-when adding a field to `MessageThread.toJSON` or `ThreadStore.toJSON`, add it
-to the schema too, or a checkpoint read back from a file will lose it.
+every field written by a `toJSON` in the checkpoint tree must be named in the
+matching schema, or a checkpoint read back from a file will silently lose it.
+This applies to `StateStack.toJSON` (`localCost`, `guards`,
+`inheritedTimeGuards`, and so on), `State.toJSON` (`scopedCallbacks`,
+`savedDraft`), `BranchState` (`result`, `globalsJSON`, `activeStack`), the guard
+`toJSON` shapes, and `MessageThread.toJSON` / `ThreadStore.toJSON`. When you add
+a field to any of these, add it to its schema in the same change.
+`schemas.test.ts` pins this: it fails if a schema strips a field the
+deserializer reads back. Note this only bites the external path — the in-process
+resume deep-clones the live `Checkpoint` object, so it never loses these fields;
+only a checkpoint that is stringified and reparsed (HTTP `/resume`, a checkpoint
+loaded from disk) goes through the schema.
 
 ```agency
 node main() {

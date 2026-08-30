@@ -1,0 +1,26 @@
+{
+  "approved": "value-a",
+  "rejected": null,
+  "rejectedOverApprove": null,
+  "propagatedSurfaced": true,
+  "fnApproved": {
+    "status": "returned",
+    "value": "value-a"
+  },
+  "fnRejected": {
+    "status": "returned",
+    "value": null
+  },
+  "resumeLeg": {
+    "status": "returned",
+    "value": {
+      "first": "value-a",
+      "second": null
+    }
+  },
+  "controlSecondSurfaced": true,
+  "subprocessRead": {
+    "success": true,
+    "data": null
+  }
+}

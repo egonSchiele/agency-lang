@@ -17,6 +17,7 @@ import { getSubprocessRunInfo } from "./subprocessRunInfo.js";
 import { TRACE_ID_ENV } from "../config.js";
 import { resolveInvocation, type InvocationOptions } from "./invocationOptions.js";
 import { installRunPolicyHandler } from "./runPolicyHandler.js";
+import type { Policy } from "./policy.js";
 import { installRootBudget } from "./rootBudget.js";
 import { GraphState, RunNodeResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
@@ -127,6 +128,8 @@ async function initFreshExecCtx(
   execCtx: RuntimeContext<GraphState>,
   opts: {
     initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
+    // The invocation's root policy (ResolvedInvocation.policy).
+    policy?: Policy;
   },
 ): Promise<void> {
   const { initializeGlobals } = opts;
@@ -199,7 +202,7 @@ async function initFreshExecCtx(
   // functions) inherit them. (Global-init and top-level-callback code above
   // runs before these exist; that's unchanged — runNode installed them here
   // too, just after initFreshExecCtx returned.)
-  installRunPolicyHandler(execCtx);
+  installRunPolicyHandler(execCtx, opts.policy);
   installRootBudget(execCtx.stateStack, execCtx.budget);
 }
 
@@ -295,7 +298,7 @@ async function runExportedFunctionCore({
   const execCtx = await ctx.createExecutionContext(resolved);
   let outcome: RawOutcome<unknown>;
   try {
-    await initFreshExecCtx(execCtx, { initializeGlobals });
+    await initFreshExecCtx(execCtx, { initializeGlobals, policy: resolved.policy });
     const threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
     const value = await agencyStore.run(
       {
@@ -410,7 +413,7 @@ async function runNodeCore({
     // initFreshExecCtx (see there for the full ordering rationale, e.g. the
     // `node main() { route({ systemPrompt: foreignStatic }) }` foreign-static
     // case), so nodes and served functions are bootstrapped and capped identically.
-    await initFreshExecCtx(execCtx, { initializeGlobals });
+    await initFreshExecCtx(execCtx, { initializeGlobals, policy: resolved.policy });
     // Externally-passed callbacks are stored on ctx; hook execution merges them
     // with scoped/top-level callbacks at call time.
     if (callbacks) {

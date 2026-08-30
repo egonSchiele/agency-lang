@@ -242,6 +242,14 @@ The override is applied to the checkpoint state before execution resumes, so the
 
 ## Handler verdicts, merge, and registration-site scoping
 
+A serve host can put a policy at the root of this chain per invocation
+(`InvocationOptions.policy`); see the "Root interrupt policy" section of
+`docs/dev/hosting/how-hosted-serving-works.md`. It decides interrupts on the
+raise — including raises made during a resume leg, because the resume path
+re-installs it on the fresh execution context. Nothing about resume changes:
+the caller's answers to already-surfaced interrupts still resolve by id, as
+described above.
+
 Three pieces of the handler chain live in the runtime (added for the
 resumable-guards work; see `docs/superpowers/plans/2026-07-16-resumable-guards.md`):
 

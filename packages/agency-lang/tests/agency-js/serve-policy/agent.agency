@@ -1,0 +1,50 @@
+// Fixtures for the serve-host root policy (InvocationOptions.policy). Each
+// node reads environment variables the test sets; a policy decides the
+// std::env raises at the raise. Note env() absorbs a denial: a rejected read
+// returns null, it does not fail the run.
+import { env } from "std::system"
+import { runFile } from "std::agency"
+
+// Bare read: nothing here settles the std::env raise, so without a policy it
+// surfaces; with one, the policy decides it.
+export node readVar(name: string) {
+  return env(name)
+}
+
+// The program tries to auto-approve its own env read. A host policy reject
+// must win anyway (chain precedence: reject > propagate > approve), and a
+// host policy propagate must surface the interrupt anyway.
+export node readVarApproved(name: string) {
+  handle {
+    return env(name)
+  } with approve
+}
+
+// Two reads in sequence. The first surfaces (the test's policy has no rule
+// for it); the second is raised DURING the resume leg, so it is decided by
+// the root policy re-installed on the resumed execution context.
+export node twoReads() {
+  const first = env("SERVE_POLICY_A")
+  const second = env("SERVE_POLICY_B")
+  return { first: first, second: second }
+}
+
+// A subprocess read: the std::agency.run child has no policy of its own
+// (IPC mode); its std::env raise forwards to this process's handler chain,
+// where the host policy decides it. A regression in that forwarding would
+// let hosted code read the host's env through a subprocess.
+export node subprocessRead() {
+  const r = runFile(".", "child.agency", "main", {})
+  if (r is failure(err)) {
+    return "run failed: ${err}"
+  }
+  return r
+}
+
+export def readVarFn(name: string): string | null {
+  """
+  Read one environment variable. Exists to prove served functions get the
+  root policy from the same bootstrap served nodes use.
+  """
+  return env(name)
+}

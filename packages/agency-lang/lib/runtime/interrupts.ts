@@ -798,11 +798,12 @@ async function respondToInterruptsCore(
   let agentRunSpanId: ReturnType<typeof execCtx.statelogClient.startSpan> | undefined;
   let outcome: RawOutcome<RunNodeResult<any>>;
   try {
-    // Re-install the CLI-driven root policy handler on the resumed exec context
-    // (handlers are never checkpointed). Guarded no-op unless AGENCY_RUN_POLICY
-    // is set and this is the root process. Mirrors the runNode install so the
-    // policy survives a resumed leg.
-    installRunPolicyHandler(execCtx);
+    // Re-install the root policy handler on the resumed exec context
+    // (handlers are never checkpointed): the invocation's policy when one
+    // was resolved, else the AGENCY_RUN_POLICY environment policy. Mirrors
+    // the runNode install, so a raise made DURING this resume leg is decided
+    // by the same root policy as on a fresh run.
+    installRunPolicyHandler(execCtx, resolved.policy);
     // A cross-process resume starts with an empty provider registry (registration
     // is process-global, not part of serialized checkpoint state), so re-register
     // before resuming. Idempotent in-process via loadProviderModules' guard.

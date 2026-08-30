@@ -217,7 +217,8 @@ is why the same statelog server can answer the next request from any
 machine, any time later.
 
 The client answers by sending the interrupt objects back, unchanged, with
-one decision per interrupt:
+one decision per interrupt. (Nothing verifies the echo — see "What a
+checkpoint contains, and who can change it" below for what that means.)
 
 ```
 POST /serve/u_123/my-project/greeter.agency/resume
@@ -264,6 +265,57 @@ the developer's program:
 Until checkpoints are signed with a server key (or stored server-side and
 referred to by id), the interrupt loop should stay between statelog and a
 client the developer trusts.
+
+## Root interrupt policy
+
+A host can attach a policy to any invocation — the same JSON rule format
+`agency run --policy` takes (`lib/runtime/policy.ts`) — as a fourth argument
+to the serve handler:
+
+```ts
+handler("POST", "/node/main", body, {
+  policy: { "std::env": [{ match: { name: "MY_SECRET" }, action: "approve" }, { action: "reject" }] },
+});
+```
+
+The runtime installs it as the **outermost handler** for that invocation, in
+the same bootstrap that serves nodes and functions (`initFreshExecCtx`,
+`lib/runtime/node.ts`), and installs it again on every `/resume`
+(`respondToInterruptsCore`, `lib/runtime/interrupts.ts`), because handlers
+are never part of a checkpoint. Per invocation on purpose: a host like
+statelog serves many projects through one handler, and the rule for
+"which env reads are fine" differs per project.
+
+What that buys, in chain terms (`docs/dev/runtime/interrupts.md`, "Handler
+verdicts"):
+
+- A policy `reject` settles the interrupt **at the raise**, before it ever
+  becomes an HTTP response — and it wins over the program's own
+  `handle { … } with approve`, because a reject beats any approve in the
+  chain merge. The program sees an ordinary denial: `env()` reads the
+  variable as unset, a `read()` gets a failure.
+- A policy `approve` settles the raise silently; the caller never sees it.
+- A policy `propagate` forces the interrupt out to the caller even when the
+  program would have approved it itself — "always ask", per effect.
+- Effects the policy does not mention behave exactly as with no policy.
+- An interrupt raised **during** a resume leg goes through the re-installed
+  policy the same way. The caller's answers to already-surfaced interrupts
+  are not policy-checked: they resolve by interrupt id, the decision for
+  them was made at their raise, and the echoed interrupt data is display
+  information the resumed program never reads.
+
+An invalid policy shape throws before any execution context exists; the
+adapter logs the message and returns its generic error, so a host bug is
+loud in the host's log and opaque to the caller. An explicit policy replaces
+the `AGENCY_RUN_POLICY` environment policy for that run; it does not merge
+with it, and an empty `{}` is a no-op that still disables the environment
+policy. End-to-end behaviour is pinned by `tests/agency-js/serve-policy`.
+
+One known gap: the module's top-level initialization code runs before the
+handler is installed, so a raise inside a top-level initializer is not yet
+governed by the policy. That ordering problem predates this feature (it
+applies to `agency run --policy` too) and is tracked as B1 on
+`docs/dev/security/roadmap.md` (#966).
 
 ## Where the trace goes
 

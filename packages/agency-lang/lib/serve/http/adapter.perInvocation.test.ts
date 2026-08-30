@@ -86,6 +86,18 @@ describe("serve adapter forwards InvocationOptions unchanged", () => {
     await handler("POST", "/resume", validResumeBody(), invocation);
     expect((resumeSpy.mock.calls[0] as unknown[])[2]).toBe(invocation);
   });
+
+  it("a policy rides along untouched next to traceId/config", async () => {
+    // The adapter never reads or rewrites the policy; enforcement lives in
+    // the runtime (tests/agency-js/serve-policy covers it end to end).
+    const { handler, nodeSpy } = makeHandler();
+    const invocation: InvocationOptions = {
+      traceId: "abc",
+      policy: { "std::env": [{ action: "reject" }] },
+    };
+    await handler("POST", "/node/main", {}, invocation);
+    expect((nodeSpy.mock.calls[0] as unknown[])[1]).toBe(invocation);
+  });
 });
 
 describe("RouteResult.traceId presence", () => {

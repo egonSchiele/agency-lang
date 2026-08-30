@@ -51,9 +51,16 @@ are covered by two walks that share that one rule:
    runtime-computed key gets through and is layer 2's job. The three names
    are in a named constant `SANDBOX_FORBIDDEN_PROPERTIES`.
 4. **Declaration-hanging expressions** — `@validate`/`@jsonSchema` tag
-   arguments and array/object default parameter values. These sit outside
-   the scope bodies the general passes walk, so `checkSandboxNames` finds
-   them with `collectDeclHangingExpressions` and checks every name inside.
+   arguments and non-scalar default parameter values (arrays, objects, and
+   interpolated strings like `"${process.env.HOME}"`). These sit outside the
+   scope bodies the general passes walk, so `checkSandboxNames` finds them
+   with `collectDeclHangingExpressions` and checks every name inside. Each
+   carries the scope where it hangs: module-level bindings plus the owning
+   declaration's value parameters (type alias) or parameters (function/node),
+   so a top-level `const` or a value parameter used in a tag argument
+   resolves rather than being falsely refused. Tags are paired with their
+   owner via `tagsAbove`, because at type-check time the preprocessor has not
+   attached them yet (they are standalone nodes before the declaration).
 
 ## Coverage equals the traversal's reach
 

@@ -129,9 +129,10 @@ function stringLiteralValue(node: AgencyNode): string | null {
 }
 
 /** A bare name or call inside a declaration-hanging expression. Resolved
- *  against SANDBOX_JS_GLOBALS with the program's defs/imports and no local
- *  scope (these expressions bind no locals of their own). A local `def`
- *  named in a `@validate(...)` still resolves via functionDefs. */
+ *  against SANDBOX_JS_GLOBALS with the program's defs/imports and `scopeNames`
+ *  — the module-level bindings plus the owning declaration's value parameters
+ *  / parameters — so a top-level `const`, a value parameter, or a local `def`
+ *  named in a tag argument all resolve. */
 function checkDeclExpressionName(
   node: AgencyNode,
   ctx: TypeCheckerContext,

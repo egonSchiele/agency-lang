@@ -88,10 +88,13 @@ export type InvocationOptions = {
   config?: Partial<AgencyConfig>;
   traceId?: string;
   /** Root interrupt policy for this invocation, installed as the outermost
-   *  handler on the fresh run and on every resume leg. A `reject` here
-   *  beats any approval from the agent's own handlers or from the
-   *  resuming caller. Replaces (does not merge with) an AGENCY_RUN_POLICY
-   *  environment policy for this run. */
+   *  handler on the fresh run and re-installed on every resume leg. A
+   *  `reject` here beats any approval from the agent's own handlers, at the
+   *  raise. It does not re-judge the caller's answers to interrupts that
+   *  already surfaced (see §3 — there is nothing there to re-judge).
+   *  Replaces (does not merge with) an AGENCY_RUN_POLICY environment
+   *  policy for this run; note `{}` counts as a policy that abstains on
+   *  everything. */
   policy?: Policy;
 };
 ```
@@ -225,9 +228,12 @@ gap so the roadmap is not read as closing it.
 
 ### 4. What the host sees
 
-Nothing new in the response shape. A policy-rejected interrupt produces the
-same failed-run result an agent-handler rejection does today, with the
-existing "interrupt rejected" message (the policy does not attach a reason; a
+Nothing new in the response shape. A policy-rejected raise looks to the
+program exactly like an agent-handler rejection today: an ordinary denial at
+the raise site. Whether the run fails depends on the callsite — `env()`
+absorbs the denial and reads as unset; a callsite that propagates the
+failure fails the run with the existing "interrupt rejected" message (the
+policy does not attach a reason; a
 host that wants a per-effect explanation wraps it on its side, where it knows
 the project). An interrupt the policy settles on the raise never appears in
 the `interrupts` batch; interrupts it `propagate`s or does not mention behave

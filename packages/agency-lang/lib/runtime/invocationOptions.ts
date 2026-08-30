@@ -19,7 +19,11 @@ export type InvocationOptions = {
    *  handler on the fresh run and re-installed on every resume leg. A
    *  `reject` here beats any approval from the program's own handlers
    *  (chain precedence: reject > propagate > approve). Replaces — does not
-   *  merge with — an `AGENCY_RUN_POLICY` environment policy for this run. */
+   *  merge with — an `AGENCY_RUN_POLICY` environment policy for this run.
+   *  That makes an explicit empty policy `{}` a no-op that still disables
+   *  the environment policy: it has no rules, so the installed handler
+   *  abstains on every effect. To restrict everything, say so:
+   *  `{ "*": [{ action: "reject" }] }`. */
   policy?: Policy;
 };
 
@@ -191,11 +195,9 @@ export function resolveInvocation(request: InvocationRequest): ResolvedInvocatio
 }
 
 /**
- * Validate a caller-supplied root policy. An invalid one is a host bug, so it
- * throws — before any execution context exists. The serve adapter logs the
- * message host-side and returns its generic error to the caller. A plain
- * `Error` with a fixed prefix, matching the env channel's identical failure
- * (`loadEnvPolicy`); nothing catches this by type.
+ * Validate a caller-supplied root policy. An invalid one is a host bug, so
+ * it throws before any execution context exists; the serve adapter logs the
+ * message and returns its generic error to the caller.
  */
 function validateInvocationPolicy(policy: Policy | undefined): Policy | undefined {
   if (policy === undefined) {

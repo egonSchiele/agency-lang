@@ -1,0 +1,7 @@
+// Run by subprocessRead in agent.agency via runFile. The child installs no
+// policy (IPC mode); its std::env raise forwards to the parent's chain.
+import { env } from "std::system"
+
+export node main() {
+  return env("SERVE_POLICY_SECRET")
+}

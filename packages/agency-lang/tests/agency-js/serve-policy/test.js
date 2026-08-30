@@ -96,6 +96,22 @@ if (!hasInterrupts(controlPaused)) {
 const controlResumed = await __respondToInterruptsForServe(controlPaused, [approve()], {});
 const controlSecondSurfaced = hasInterrupts(controlResumed.value.data);
 
+// 7. A subprocess read is governed by the same policy: the child's raise
+// forwards over IPC to this process's chain, where the host reject beats the
+// child-side silence. std::run must be approved so runFile itself proceeds.
+const subprocessPolicy = {
+  "std::run": [{ action: "approve" }],
+  "std::env": [{ action: "reject" }],
+};
+const subprocessResult = nodeData(
+  await __invokeNodeForServe("subprocessRead", {}, { policy: subprocessPolicy }),
+);
+// The Result carries token/message bookkeeping; only the read matters here.
+const subprocessRead = {
+  success: subprocessResult.success === true,
+  data: subprocessResult.value ? subprocessResult.value.data : subprocessResult,
+};
+
 writeFileSync(
   "__result.json",
   JSON.stringify(
@@ -111,6 +127,7 @@ writeFileSync(
         value: nodeData(resumed),
       },
       controlSecondSurfaced,
+      subprocessRead,
     },
     null,
     2,

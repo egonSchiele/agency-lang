@@ -63,10 +63,10 @@ export function hasRunPolicyMechanism(): boolean {
 }
 
 // Install the root policy handler on `execCtx` when the run carries a
-// policy: an explicit one (a serve host's `InvocationOptions.policy`,
+// policy: the explicit one (a serve host's `InvocationOptions.policy`,
 // validated by resolveInvocation) or, when none was passed, the
 // AGENCY_RUN_POLICY environment policy the CLI flags set. An explicit
-// policy replaces the env policy for the run; it never merges with it.
+// policy replaces the env policy for the run.
 // Skipped in IPC subprocesses: a std::agency::run child forwards its
 // interrupts up to the root process's handler chain, so the policy must
 // live at the root only. Called from BOTH the fresh-run entry (runNode)

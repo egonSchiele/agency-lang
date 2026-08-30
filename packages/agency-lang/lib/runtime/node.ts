@@ -128,9 +128,7 @@ async function initFreshExecCtx(
   execCtx: RuntimeContext<GraphState>,
   opts: {
     initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
-    // The invocation's root policy (ResolvedInvocation.policy). A narrow
-    // field on purpose: the bootstrap needs exactly this one value, not the
-    // rest of the resolved invocation.
+    // The invocation's root policy (ResolvedInvocation.policy).
     policy?: Policy;
   },
 ): Promise<void> {

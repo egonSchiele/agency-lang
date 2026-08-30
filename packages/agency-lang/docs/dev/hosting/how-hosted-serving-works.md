@@ -308,7 +308,14 @@ An invalid policy shape throws before any execution context exists; the
 adapter logs the message and returns its generic error, so a host bug is
 loud in the host's log and opaque to the caller. An explicit policy replaces
 the `AGENCY_RUN_POLICY` environment policy for that run; it does not merge
-with it. End-to-end behaviour is pinned by `tests/agency-js/serve-policy`.
+with it, and an empty `{}` is a no-op that still disables the environment
+policy. End-to-end behaviour is pinned by `tests/agency-js/serve-policy`.
+
+One known gap: the module's top-level initialization code runs before the
+handler is installed, so a raise inside a top-level initializer is not yet
+governed by the policy. That ordering problem predates this feature (it
+applies to `agency run --policy` too) and is tracked as B1 on
+`docs/dev/security/roadmap.md` (#966).
 
 ## Where the trace goes
 

@@ -118,6 +118,9 @@ No issue yet.
 runs global init and imported modules' top-level code, then installs the
 policy handler. A top-level `const x = read(...) with approve` therefore has
 only the author's approve in the chain and succeeds under `--reject '*'`.
+The per-invocation host policy (`InvocationOptions.policy`, B2) installs at
+the same bootstrap site, so it shares this gap: a hosted module's top-level
+initializer runs before the host policy exists.
 Fix: install the root policy handler and root budget before any user code,
 including `__initAllRegistered`; check the resume path in `interrupts.ts`
 for the same ordering; add an agency-js test that a top-level read is
@@ -132,13 +135,12 @@ fresh run and again on every resume leg, so every **raise** — including one
 made during a resume — is decided by the host, over the program's own
 approving handlers (`tests/agency-js/serve-policy`).
 
-An earlier version of this item said a caller could "approve their own
-`std::read`" and asked for a policy re-check of the caller's responses on
-resume. That framing was wrong: the echoed interrupt data is display-only
-(the resumed program resolves responses by id and re-reads nothing from the
-interrupt object), and anything a policy would reject was already rejected
-at the raise. What actually remains open on the resume leg is **checkpoint
-integrity**: a stateless resume restores whatever checkpoint the caller
+A policy re-check of the caller's responses on resume would add nothing:
+the echoed interrupt data is display-only (the resumed program resolves
+responses by id and re-reads nothing from the interrupt object), and
+anything a policy would reject was already rejected at the raise. What
+remains open on the resume leg is **checkpoint integrity**: a stateless
+resume restores whatever checkpoint the caller
 sends, so the caller controls every local the resumed code runs with (the
 budget ceiling is already re-asserted by hand; nothing else is). The fixes
 are checkpoint signing with a server key, or host-side checkpoint storage

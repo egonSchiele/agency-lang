@@ -308,7 +308,9 @@ describe("compileAgencyOnly", () => {
 describe("bound names under --agency-only", () => {
   function compileOne(source: string) {
     // No local imports, so dir "" is fine; the closure is a single source.
-    return compileSandboxed({ entry: { source }, dir: "" });
+    // enforceJsGlobals is what `--agency-only` sets; the bound-names check is
+    // off for the trusted runtime fork path that shares compileSandboxed.
+    return compileSandboxed({ entry: { source }, dir: "", enforceJsGlobals: true });
   }
   function refused(source: string): string[] {
     const r = compileOne(source);

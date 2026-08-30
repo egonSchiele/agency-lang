@@ -16,12 +16,15 @@ export type CompileSandboxedArgs = {
   entry: ClosureEntry;
   /** Confinement boundary for local imports. "" = no local imports possible. */
   dir: string;
+  /** Enforce the reviewed JS-globals allowlist. Only `--agency-only` sets this;
+   *  the trusted runtime fork path leaves it off. See compileValidatedClosure. */
+  enforceJsGlobals?: boolean;
 };
 
 export function compileSandboxed(args: CompileSandboxedArgs): CompileResult {
   try {
     const closure = validateClosure({ entry: args.entry, dir: args.dir });
-    return compileValidatedClosure(closure);
+    return compileValidatedClosure(closure, { enforceJsGlobals: args.enforceJsGlobals });
   } catch (e) {
     if (e instanceof ClosureValidationError) {
       return { success: false, errors: e.violations };
@@ -38,7 +41,11 @@ export type AgencyOnlyCompile = { ok: true; scriptPath: string } | { ok: false; 
 export function compileAgencyOnly(sourceFile: string): AgencyOnlyCompile {
   const absolute = path.resolve(sourceFile);
   const dir = path.dirname(absolute);
-  const result = compileSandboxed({ entry: { file: path.basename(absolute) }, dir });
+  const result = compileSandboxed({
+    entry: { file: path.basename(absolute) },
+    dir,
+    enforceJsGlobals: true,
+  });
   if (!result.success) return { ok: false, errors: result.errors };
   for (const [relPath, code] of Object.entries(result.modules ?? {})) {
     fs.writeFileSync(path.join(dir, relPath), code);

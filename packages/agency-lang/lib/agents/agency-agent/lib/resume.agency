@@ -8,6 +8,8 @@ import { now } from "std::date"
 import { cwd } from "std::system"
 import { chooseOption, ChoiceItem } from "std::ui"
 
+import { _readTranscript } from "agency-lang/stdlib-lib/agentSessions.js"
+
 import {
   SessionRecord,
   findSession,
@@ -19,7 +21,9 @@ import {
   saveSession,
   sessionLabel,
  } from "./sessions.agency"
-import { mainThreadText, shouldRefreshTitle, titleFor } from "./sessionTitle.agency"
+import { cleanTitle, conversationText, shouldRefreshTitle, titleFor } from "./sessionTitle.agency"
+import { showTranscript } from "./transcript.agency"
+import { AgentBrain } from "../brains/brain.agency"
 
 // The session this run writes to; null for one-shot runs, which are not
 // saved. A `let`, so a restore brings back the resumed session's own
@@ -29,6 +33,14 @@ let _current: SessionRecord | null = null
 // Set by the REPL when a turn ran to completion, so a slash command or an
 // empty line is not recorded as a turn.
 let _turnDone = false
+
+// Set by `/rename`: the record changed without a turn, and the title is
+// the user's now.
+let _renamed = false
+let _titlePinned = false
+
+// The brain's conversation session, for the title and the transcript.
+let _conversation = ""
 
 /** Where to write after a turn: the session directory and its index row. */
 export type SaveTarget = {
@@ -47,6 +59,23 @@ export def sessionTitle(): string {
 
 export def markTurnDone() {
   _turnDone = true
+}
+
+/** `/rename <title>`: give the session a title of the user's choosing.
+  Returns the line to show. The REPL saves after this line. */
+export def renameSession(title: string): string {
+  const record = _current
+  if (record == null) {
+    return "No session to rename."
+  }
+  const clean = cleanTitle(title)
+  if (clean == "") {
+    return "Usage: /rename <title>"
+  }
+  record.title = clean
+  _renamed = true
+  _titlePinned = true
+  return "Session renamed: ${clean}"
 }
 
 /** Which saved session, if any, this run continues. `resumeArg` is the
@@ -111,14 +140,17 @@ def pickSession(): SessionRecord | null {
 
 /** Start this run's session. A new one gets a fresh record. A saved one
   is restored right here: the Agency execution state becomes the saved
-  one and the program continues from the saved point. */
-export def startSession(chosen: SessionRecord | null, brain: string) {
+  one and the program continues from the saved point. The saved
+  conversation is printed before the restore, since nothing after
+  `restore` runs. */
+export def startSession(chosen: SessionRecord | null, brain: AgentBrain) {
+  _conversation = brain.session
   if (chosen == null) {
     const t = now()
     _current = {
       id: newSessionId(),
       cwd: cwd(),
-      brain: brain,
+      brain: brain.name,
       created: t,
       lastActive: t,
       turns: 0,
@@ -132,25 +164,34 @@ export def startSession(chosen: SessionRecord | null, brain: string) {
     process.exit(1)
   }
   print(color.dim("Resuming: ${chosen.title}"))
+  showTranscript(_readTranscript(cp, brain.session))
   restore(cp, {})
 }
 
 /** Record a completed turn: bump the count, refresh the title when due,
-  and say where the checkpoint should be written. Null when no turn ran. */
+  and say where the checkpoint should be written. Null when there is
+  nothing to save: no turn ran and no rename happened. */
 export def recordTurn(userMsg: string): SaveTarget | null {
   const record = _current
-  if (record == null || !_turnDone) {
+  if (record == null || (!_turnDone && !_renamed)) {
     return null
+  }
+  _renamed = false
+  if (!_turnDone) {
+    return {
+      dir: projectDir(),
+      record: record
+    }
   }
   _turnDone = false
   record.turns = record.turns + 1
   record.lastActive = now()
-  if (shouldRefreshTitle(record.turns)) {
+  if (!_titlePinned && shouldRefreshTitle(record.turns)) {
     // Turn 1 titles the first prompt; later refreshes summarize the
     // conversation so far.
     let source = userMsg
     if (record.turns > 1) {
-      source = mainThreadText()
+      source = conversationText(_conversation)
     }
     const title = titleFor(source)
     if (title != "") {

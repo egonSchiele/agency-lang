@@ -45,6 +45,7 @@ import {
   _getThread,
   _setThreadSummary,
   _currentThreadId,
+  _sessionThreadId,
 } from "agency-lang/stdlib-lib/threads.js"
 
 // The single source of truth for the attachment shape. `llm()`'s first-param
@@ -402,6 +403,14 @@ export def listThreads(lazySummarize: boolean = true): Result {
     })
   }
   return success(out)
+}
+
+export def sessionThreadId(name: string): string {
+  """
+  Slug-form id of the thread that `thread(session: name)` resumes (e.g.
+  "t3"), or `""` when nothing has been opened under that name yet.
+  """
+  return _sessionThreadId(name)
 }
 
 export def currentThreadId(): string {

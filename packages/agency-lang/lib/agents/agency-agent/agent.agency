@@ -181,7 +181,7 @@ node main() {
   // those TypeScript-side effects and replaces only the Agency state.
   if (!isOneShot) {
     installSessionHooks()
-    startSession(chooseSession(args.flags.continue, args.flags.resume ?? null), brain.name)
+    startSession(chooseSession(args.flags.continue, args.flags.resume ?? null), brain)
   }
 
   if (isOneShot) {

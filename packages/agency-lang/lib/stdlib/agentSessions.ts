@@ -1,7 +1,10 @@
+import type { MessageJSON } from "smoltalk";
 import * as fs from "fs";
 import * as path from "path";
 import { __call } from "../runtime/call.js";
 import { checkpoint, getCheckpoint } from "../runtime/checkpoint.js";
+import { Checkpoint } from "../runtime/state/checkpointStore.js";
+import { _contentToString } from "./threads.js";
 
 /**
  * File I/O for the agency agent's saved sessions
@@ -98,6 +101,52 @@ export function _saveSession(dir: string, record: SessionRecord, checkpoint: unk
 /** The parsed checkpoint, or null when the file is missing or malformed. */
 export function _readCheckpointFile(dir: string, id: string): unknown {
   return readJson(checkpointFile(dir, id));
+}
+
+export type TranscriptMessage = { role: "user" | "assistant"; content: string };
+
+type ThreadJSON = {
+  messages: { role?: string; content?: unknown }[];
+};
+
+/**
+ * The user and assistant messages of a saved session's conversation
+ * thread: the thread the brain opens with `thread(session: name)`. Tool
+ * calls and results are left out.
+ */
+export function _readTranscript(checkpointJson: unknown, session: string): TranscriptMessage[] {
+  const cp = Checkpoint.fromJSON(checkpointJson);
+  if (!cp) {
+    return [];
+  }
+  const thread = sessionThread(cp, session);
+  if (!thread) {
+    return [];
+  }
+  const out: TranscriptMessage[] = [];
+  for (const m of thread.messages) {
+    if (m.role !== "user" && m.role !== "assistant") {
+      continue;
+    }
+    const text = _contentToString(m.content as MessageJSON["content"]);
+    if (text !== "") {
+      out.push({ role: m.role, content: text });
+    }
+  }
+  return out;
+}
+
+// Every frame on the saved stack carries the thread store; the outermost
+// frame's copy is the one the REPL was waiting in.
+function sessionThread(cp: Checkpoint, session: string): ThreadJSON | null {
+  for (const frame of cp.stack.stack ?? []) {
+    const id = frame.threads?.sessions?.[session];
+    const thread = id == null ? null : frame.threads?.threads[id];
+    if (thread) {
+      return thread as ThreadJSON;
+    }
+  }
+  return null;
 }
 
 type SaveTarget = { dir: string; record: SessionRecord } | null;

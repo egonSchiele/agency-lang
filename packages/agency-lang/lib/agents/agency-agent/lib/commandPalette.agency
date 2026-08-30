@@ -8,6 +8,7 @@ export def builtinPalette(): Record<string, string> {
     "/clear": "Clear the conversation transcript",
     "/clear-history": "Clear the input history (recall + saved file)",
     "/cost": "Show cumulative LLM cost and tokens",
+    "/rename": "Give this session a title: /rename <title>",
     "/model": "Switch the model (bare to pick, or slot=model)",
     "/models": "List / filter the hosted model catalog",
     "/local": "Switch to a local model",

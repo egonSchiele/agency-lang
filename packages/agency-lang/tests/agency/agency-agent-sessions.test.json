@@ -65,6 +65,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "renameFlow",
+      "description": "/rename sets the title, forces a save, and survives the turn-1 refresh",
+      "input": "",
+      "expectedOutput": "{\"empty\": \"Usage: /rename <title>\", \"renamed\": \"Session renamed: minnesota news 8/29\", \"title\": \"minnesota news 8/29\", \"turns\": 0, \"again\": null, \"titleAfterTurn\": \"minnesota news 8/29\", \"turnsAfterTurn\": 1}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

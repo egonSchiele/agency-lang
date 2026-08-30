@@ -6,7 +6,6 @@
 import { localModelsSupported, listModelNames } from "std::agency/local"
 import { listHostedModels } from "std::llm"
 import { expandSlash } from "std::skills"
-import { highlight } from "std::syntax"
 import { getCost, getModelCosts } from "std::thread"
 import { chooseOption, ChoiceItem } from "std::ui"
 import {
@@ -49,7 +48,14 @@ import { configureLocalModel, getResolvedSlots, currentProvider } from "../share
 
 import { _installSessionHooks, _sessionOnSubmit } from "agency-lang/stdlib-lib/agentSessions.js"
 
-import { markTurnDone, recordTurn, saveSeedTurn, sessionTitle } from "./resume.agency"
+import {
+  markTurnDone,
+  recordTurn,
+  renameSession,
+  saveSeedTurn,
+  sessionTitle,
+ } from "./resume.agency"
+import { renderReply, renderUserLine } from "./transcript.agency"
 import { runTurn } from "./turn.agency"
 import { parseModelSpec } from "./utils.agency"
 
@@ -237,7 +243,7 @@ def _runTurn(msg: string): boolean {
     }
     "/help" => {
       pushMessage(
-        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /search, /settings, /mcp, /paste, /help",
+        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /search, /settings, /mcp, /rename, /paste, /help",
       )
       return true
     }
@@ -252,7 +258,11 @@ def _runTurn(msg: string): boolean {
     "/model" => modelSlashCommand(trimmed)
     "/models" => modelsSlashCommand(trimmed)
     "/local" => localSlashCommand()
+    "/rename" => renameSlashCommand("")
     _ => {
+      if (trimmed.startsWith("/rename ")) {
+        return renameSlashCommand(trimmed.slice(8))
+      }
       if (trimmed.startsWith("/model ")) {
         return modelSlashCommand(trimmed)
       }
@@ -264,6 +274,11 @@ def _runTurn(msg: string): boolean {
   }
 }
 
+
+def renameSlashCommand(title: string): boolean {
+  pushMessage(renameSession(title))
+  return true
+}
 
 def renderUserTurn(trimmed: string, msg: string): boolean {
   const result = try runTurn("", msg)
@@ -282,7 +297,7 @@ export def buildStatus(): { left: string; right: string; context: string } {
 }
 
 export def runSeedTurn(target: string, msg: string) {
-  pushMessage(color.dim("> ${msg}"))
+  renderUserLine(msg)
   const response = try runTurn(target, msg)
   renderAgentResponse(response)
   markTurnDone()
@@ -294,7 +309,7 @@ export def renderAgentResponse(
 ): void {
   if (response is success(reply)) {
     if (reply != "" && reply != null) {
-      pushMessage(highlight("${reply}\n", language: "markdown"))
+      renderReply(reply)
     } else {
       pushMessage(color.red("No reply generated."))
     }

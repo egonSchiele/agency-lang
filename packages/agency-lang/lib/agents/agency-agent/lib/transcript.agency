@@ -1,0 +1,25 @@
+/** @module
+  @summary How a user line and a reply are drawn in the terminal, shared
+  by the live turns and the transcript a resumed session prints.
+*/
+import { highlight } from "std::syntax"
+import { pushMessage } from "std::ui/cli"
+
+export def renderUserLine(msg: string) {
+  pushMessage(color.dim("> ${msg}"))
+}
+
+export def renderReply(reply: string) {
+  pushMessage(highlight("${reply}\n", language: "markdown"))
+}
+
+/** The saved conversation, drawn the way the turns were when they ran. */
+export def showTranscript(messages: any[]) {
+  for (m in messages) {
+    if (m.role == "user") {
+      renderUserLine(m.content)
+    } else {
+      renderReply(m.content)
+    }
+  }
+}

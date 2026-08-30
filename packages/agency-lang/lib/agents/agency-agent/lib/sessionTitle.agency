@@ -1,9 +1,10 @@
 /** @module
   @summary The one-line title a saved session shows in the resume picker
   and the REPL footer. Written from the first prompt, then rewritten
-  every few turns as a summary of the conversation so far.
+  every few turns as a summary of the conversation so far, unless the
+  user set one with `/rename`.
 */
-import { getThread, listThreads } from "std::thread"
+import { getThread, listThreads, sessionThreadId } from "std::thread"
 
 // Rewrite the title on turn 1 and every TITLE_EVERY turns after that.
 export static const TITLE_EVERY = 5
@@ -20,24 +21,20 @@ type Titled = {
   title: string
 }
 
-/** The conversation thread as plain text, newest last, cut to the last
-  MAX_CONVERSATION_CHARS. The coordinator labels it `main`; any other
-  brain's is the top-level thread with the most messages. "" when there
-  is none. */
-export def mainThreadText(): string {
-  const threads = listThreads(false)
-  if (isFailure(threads)) {
+/** The conversation thread (the brain's `session`) as plain text,
+  newest last, cut to the last MAX_CONVERSATION_CHARS. "" when there is
+  none. */
+export def conversationText(session: string): string {
+  const id = sessionThreadId(session)
+  if (id == "") {
     return ""
   }
-  let mainThread = find(threads.value, \t -> t.label == "main")
-  if (mainThread == null) {
-    mainThread = largestThread(threads.value)
-  }
-  if (mainThread == null) {
+  const info = find(listThreads(false) catch [], \t -> t.id == id)
+  if (info == null) {
     return ""
   }
-  const offset = Math.max(0, mainThread.messageCount - MAX_MESSAGES)
-  const messages = getThread(mainThread.id, offset, MAX_MESSAGES)
+  const offset = Math.max(0, info.messageCount - MAX_MESSAGES)
+  const messages = getThread(id, offset, MAX_MESSAGES)
   if (isFailure(messages)) {
     return ""
   }
@@ -52,16 +49,6 @@ export def mainThreadText(): string {
     return text
   }
   return text.slice(text.length - MAX_CONVERSATION_CHARS)
-}
-
-def largestThread(threads: any[]): any {
-  let best: any = null
-  for (t in threads) {
-    if (t.parentId == null && t.messageCount > 0 && (best == null || t.messageCount > best.messageCount)) {
-      best = t
-    }
-  }
-  return best
 }
 
 static const MAX_TITLE_CHARS = 80

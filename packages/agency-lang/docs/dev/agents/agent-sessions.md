@@ -71,6 +71,24 @@ TypeScript module state (`installSessionHooks`, before the restore), not as
 an Agency value: a closure built by an Agency statement would be a completed
 step in the checkpoint and come back from a restore as nothing.
 
+### The transcript on resume
+
+A resumed run prints the saved conversation before it restores. It is
+read from the checkpoint file (`_readTranscript` in `agentSessions.ts`),
+not from the restored threads, because `restore()` replays to the saved
+point and runs nothing placed after it. The thread is the one the brain
+opens with `thread(session: ...)`; each brain names it in its
+`AgentBrain.session` field, and the title refresh reads the same thread.
+`showTranscript` in `transcript.agency` draws the messages with the same
+renderers the live turns use.
+
+### `/rename`
+
+`/rename <title>` sets the record's title, pins it so the periodic title
+refresh leaves it alone, and marks the record dirty. `recordTurn` returns
+a save target for a dirty record even when no turn ran, so the save that
+follows every REPL line writes it.
+
 Because the `let` globals come back from the saved run, `--model`,
 `--policy`, and similar flags passed on a resume are ignored; the session
 continues as it was left.
@@ -81,5 +99,5 @@ file is read back (see `docs/dev/runtime/checkpointing.md`).
 
 ## Not in v1
 
-Naming and renaming, forking, `/resume` inside a session, saving one-shot
+Forking, `/resume` inside a session, saving one-shot
 (`-p`) runs, mid-turn crash recovery, and cleanup of old sessions.

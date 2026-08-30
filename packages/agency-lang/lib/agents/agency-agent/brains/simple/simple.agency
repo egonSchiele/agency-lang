@@ -35,6 +35,7 @@ def simpleRunTurn(
 export def simpleBrain(): AgentBrain {
   return {
     name: "simple",
+    session: "simple",
     description: "One tool-less LLM call per turn, in a single thread",
     startTargets: [],
     init: simpleInit,

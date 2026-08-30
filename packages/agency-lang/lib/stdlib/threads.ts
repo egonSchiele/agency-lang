@@ -104,6 +104,17 @@ export function _getThread(
   }));
 }
 
+/** Slug form of the thread a session name maps to, or `""` when no
+ *  thread has been opened under that name. */
+export function _sessionThreadId(name: string): string {
+  const store = agency.thread.storeMaybe();
+  const rawId = store?.sessions[name];
+  if (rawId == null) {
+    return "";
+  }
+  return `t${rawId}`;
+}
+
 /** Slug form of the active thread, or `""` (Agency has no undefined). */
 export function _currentThreadId(): string {
   return agency.threads.current() ?? "";

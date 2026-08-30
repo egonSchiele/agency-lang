@@ -439,6 +439,7 @@ class PatternLowerer {
           (c.caseValue.type === "objectPattern" ||
             c.caseValue.type === "arrayPattern" ||
             c.caseValue.type === "resultPattern" ||
+            c.caseValue.type === "effectPattern" ||
             c.caseValue.type === "typePattern")) ||
           c.guard !== undefined),
     );
@@ -1177,6 +1178,12 @@ class PatternLowerer {
         const field = pattern.kind === "success" ? "value" : "error";
         return [makeAssign(pattern.binding, fieldAccess(source, field, loc), declKind, loc)];
       }
+      case "effectPattern":
+        // The binding is an object pattern over the SAME source — the whole
+        // interrupt — so `std::read({ data })` binds `data = intr.data`.
+        return pattern.binding === null
+          ? []
+          : this.extractBindings(pattern.binding, source, declKind, loc);
       case "typePattern":
         // The type test contributes no bindings of its own; the inner
         // pattern binds from the SAME source — the original value, never a
@@ -1319,6 +1326,28 @@ function collectChecks(pattern: MatchPattern, source: Expression, checks: Expres
     case "resultPattern":
       checks.push(resultCheckCall(pattern.kind, source, pattern.loc));
       break;
+    case "effectPattern": {
+      // Shape check FIRST, then `source.effect == "<effect>"`. The scrutinee is
+      // the whole interrupt; the shape check guards the `.effect` read the same
+      // way an object pattern guards its field reads (a null or non-object
+      // scrutinee fails the arm rather than throwing on `.effect`).
+      checks.push(...shapeCheck(source, OBJECT_HINT, pattern.loc));
+      checks.push(
+        makeBinOp(
+          fieldAccess(source, "effect", pattern.loc),
+          "==",
+          stringLit(pattern.effect, pattern.loc),
+          pattern.loc,
+        ),
+      );
+      // The binding is an object pattern over the SAME source, so any value
+      // matchers inside it (`std::read({ data: "x" })`) run under the effect
+      // gate, and its own shape check keeps its field reads safe.
+      if (pattern.binding !== null) {
+        collectChecks(pattern.binding, source, checks);
+      }
+      break;
+    }
     case "typePattern": {
       // The runtime type test itself, compiled away by the builder (coarse
       // check or schema validation). Inner-pattern checks run after it.
@@ -1422,6 +1451,11 @@ function walkPattern(
       walkPattern(pattern.value as MatchPattern, visit);
     } else if (pattern.type === "typePattern" && pattern.pattern !== null) {
       walkPattern(pattern.pattern, visit);
+    } else if (pattern.type === "effectPattern" && pattern.binding !== null) {
+      // Descend into the object binding so its binders are seen by
+      // assertNoBindersInBoolIs (a pure-boolean `is std::read({ data })` has
+      // nowhere to bind `data`) and by binder collection.
+      walkPattern(pattern.binding, visit);
     }
   }
 }

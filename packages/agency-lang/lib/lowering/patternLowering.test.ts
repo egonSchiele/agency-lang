@@ -730,6 +730,78 @@ describe("result patterns", () => {
   });
 });
 
+describe("effect patterns", () => {
+  /** Every binOp in an expression tree, so a test can find the effect-equality
+   *  conjunct without depending on where it sits in the `&&` chain. */
+  function binOps(expr: unknown): BinOpExpression[] {
+    const out: BinOpExpression[] = [];
+    const visit = (v: unknown): void => {
+      if (!v || typeof v !== "object") return;
+      if (Array.isArray(v)) {
+        v.forEach(visit);
+        return;
+      }
+      const rec = v as Record<string, unknown>;
+      if (rec.type === "binOpExpression") out.push(rec as unknown as BinOpExpression);
+      for (const key of Object.keys(rec)) if (key !== "loc") visit(rec[key]);
+    };
+    visit(expr);
+    return out;
+  }
+
+  /** The `source.effect == "<effect>"` conjunct a lowered effect pattern emits. */
+  function effectEqualityFor(condition: unknown): BinOpExpression | undefined {
+    return binOps(condition).find((b) => {
+      if (b.operator !== "==") return false;
+      const left = b.left as ValueAccess;
+      return (
+        left.type === "valueAccess" &&
+        left.chain.length === 1 &&
+        left.chain[0].kind === "property" &&
+        left.chain[0].name === "effect"
+      );
+    });
+  }
+
+  it("lowers a bare `std::read` arm to an `intr.effect == \"std::read\"` check", () => {
+    const lowered = lower(
+      `let intr = { effect: "std::read" }\nmatch (intr) {\n  std::read => print("r")\n  _ => print("none")\n}`,
+    );
+    // [intr assignment, scrutinee assignment, ifElse]
+    expect(lowered).toHaveLength(3);
+    const ifNode = lowered[2] as IfElse;
+    expect(ifNode.type).toBe("ifElse");
+    const eq = effectEqualityFor(ifNode.condition);
+    expect(eq).toBeDefined();
+    expect(eq!.right).toMatchObject({
+      type: "string",
+      segments: [{ type: "text", value: "std::read" }],
+    });
+    // The bare effect arm binds nothing.
+    expect(ifNode.thenBody[0]?.type).not.toBe("assignment");
+  });
+
+  it("lowers `std::read({ data })` to the effect check plus `const data = intr.data`", () => {
+    const lowered = lower(
+      `let intr = { effect: "std::read", data: 1 }\nmatch (intr) {\n  std::read({ data }) => print(data)\n  _ => print("none")\n}`,
+    );
+    expect(lowered).toHaveLength(3);
+    const ifNode = lowered[2] as IfElse;
+    // The effect gate is present.
+    expect(effectEqualityFor(ifNode.condition)).toBeDefined();
+    // The object binding reads `.data` off the SAME scrutinee (the interrupt).
+    const dataBind = ifNode.thenBody[0] as Assignment;
+    expect(dataBind.variableName).toBe("data");
+    expect(dataBind.declKind).toBe("const");
+    const access = dataBind.value as ValueAccess;
+    expect(access.chain).toEqual([{ kind: "property", name: "data" }]);
+  });
+
+  // `is`-position effect patterns (`intr is std::read({ data })`, and the
+  // pure-boolean rejection) are tested in the parser suite once `_isRhsParser`
+  // is wired — see lib/parsers/effectPattern.test.ts.
+});
+
 describe("match metadata preservation (matchSource)", () => {
   function findTaggedAssignment(nodes: AgencyNode[]): Assignment | undefined {
     const hit = walkNodesArray(nodes).find(

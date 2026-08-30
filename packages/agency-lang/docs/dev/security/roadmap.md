@@ -28,7 +28,15 @@ Fix, in three layers, cheapest first:
    Anything else is a compile error, for value accesses as well as calls.
    This also covers every name the import template puts in scope
    (`readFileSync`, `writeFileSync`, `__process`, `path`, `os`, `z`,
-   `smoltalk`), since none of them is Agency-bound.
+   `smoltalk`), since none of them is Agency-bound. Two positions a plain
+   bind-check misses, both found by review and both in scope for this layer:
+   the callee of a `new` expression (`new Function(...)`, `new Proxy(...)`,
+   `new WebSocket(...)` — the last two are not code-from-strings, so layer 2
+   never covers them), and the property names `constructor`, `prototype`,
+   `__proto__` reached from a value (`x.constructor.constructor`), spelled or
+   as a string-literal computed key. Design:
+   `docs/superpowers/specs/2026-08-29-agency-only-bound-names-design.md`
+   (revised after review).
 2. **`--disallow-code-generation-from-strings`** on the child Node process
    for `--agency-only` runs (`compiledOutputNodeArgs` in
    `lib/cli/commands.ts`). Closes `eval`, `new Function`, and the

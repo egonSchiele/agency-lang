@@ -62,23 +62,30 @@ export function hasRunPolicyMechanism(): boolean {
   return loadEnvPolicy() !== null;
 }
 
-// Install the root policy handler on `execCtx` when the run was launched
-// with a policy. Skipped in IPC subprocesses: a std::agency::run child
-// forwards its interrupts up to the root process's handler chain, so the
-// policy must live at the root only. Called from BOTH the fresh-run entry
-// (runNode) and the resume entry (respondToInterrupts) so the never-
-// serialized root handler is re-installed on a resumed leg too.
-export function installRunPolicyHandler(execCtx: {
-  pushHandler: (h: HandlerFn, liveGuardIds: string[]) => void;
-}): void {
+// Install the root policy handler on `execCtx` when the run carries a
+// policy: an explicit one (a serve host's `InvocationOptions.policy`,
+// validated by resolveInvocation) or, when none was passed, the
+// AGENCY_RUN_POLICY environment policy the CLI flags set. An explicit
+// policy replaces the env policy for the run; it never merges with it.
+// Skipped in IPC subprocesses: a std::agency::run child forwards its
+// interrupts up to the root process's handler chain, so the policy must
+// live at the root only. Called from BOTH the fresh-run entry (runNode)
+// and the resume entry (respondToInterrupts) so the never-serialized root
+// handler is re-installed on a resumed leg too.
+export function installRunPolicyHandler(
+  execCtx: {
+    pushHandler: (h: HandlerFn, liveGuardIds: string[]) => void;
+  },
+  policy?: Policy,
+): void {
   if (isIpcMode()) return;
-  const policy = loadEnvPolicy();
-  if (!policy) return;
+  const effective = policy ?? loadEnvPolicy();
+  if (!effective) return;
   // liveGuardIds: [] — explicit: the --policy handler registers at run
   // start, before any guard exists, and it is the outermost supervisory
   // layer; a policy answering an interrupt is never metered or gated by
   // user guards.
-  execCtx.pushHandler(makeRunPolicyHandler(policy), []);
+  execCtx.pushHandler(makeRunPolicyHandler(effective), []);
 }
 
 // The CLI-driven run's user endpoint (`resolveCliInterrupts`) lives in

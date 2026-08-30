@@ -1,5 +1,7 @@
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config.js";
+import { validatePolicy } from "./policy.js";
+import type { Policy } from "./policy.js";
 
 /**
  * Per-invocation overrides a caller may attach to a single node, served
@@ -13,6 +15,12 @@ import type { AgencyConfig } from "../config.js";
 export type InvocationOptions = {
   config?: Partial<AgencyConfig>;
   traceId?: string;
+  /** Root interrupt policy for this invocation, installed as the outermost
+   *  handler on the fresh run and re-installed on every resume leg. A
+   *  `reject` here beats any approval from the program's own handlers
+   *  (chain precedence: reject > propagate > approve). Replaces — does not
+   *  merge with — an `AGENCY_RUN_POLICY` environment policy for this run. */
+  policy?: Policy;
 };
 
 /**
@@ -67,6 +75,8 @@ export type PerInvocationContextOverride = {
 export type ResolvedInvocation = {
   runId: string;
   contextOverride?: PerInvocationContextOverride;
+  /** The validated root policy for this invocation, when the caller sent one. */
+  policy?: Policy;
 };
 
 /**
@@ -163,9 +173,10 @@ function selectLogConfig(log: AgencyConfig["log"] | undefined): PerInvocationLog
  */
 export function resolveInvocation(request: InvocationRequest): ResolvedInvocation {
   const contextOverride = selectContextOverride(request.options?.config);
+  const policy = validateInvocationPolicy(request.options?.policy);
 
   if (request.kind === "resume") {
-    return { runId: request.runId, contextOverride };
+    return { runId: request.runId, contextOverride, policy };
   }
 
   const runId =
@@ -176,7 +187,25 @@ export function resolveInvocation(request: InvocationRequest): ResolvedInvocatio
   if (runId.length === 0) {
     throw new Error("traceId must not be empty");
   }
-  return { runId, contextOverride };
+  return { runId, contextOverride, policy };
+}
+
+/**
+ * Validate a caller-supplied root policy. An invalid one is a host bug, so it
+ * throws — before any execution context exists. The serve adapter logs the
+ * message host-side and returns its generic error to the caller. A plain
+ * `Error` with a fixed prefix, matching the env channel's identical failure
+ * (`loadEnvPolicy`); nothing catches this by type.
+ */
+function validateInvocationPolicy(policy: Policy | undefined): Policy | undefined {
+  if (policy === undefined) {
+    return undefined;
+  }
+  const valid = validatePolicy(policy);
+  if (!valid.success) {
+    throw new Error(`invalid invocation policy: ${valid.error}`);
+  }
+  return policy;
 }
 
 function emptyToUndefined(value: string | undefined): string | undefined {

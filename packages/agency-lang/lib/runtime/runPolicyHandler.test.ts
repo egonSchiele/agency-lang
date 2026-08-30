@@ -222,3 +222,61 @@ describe("installRunPolicyHandler", () => {
     });
   });
 });
+
+describe("installRunPolicyHandler with an explicit policy", () => {
+  const grab = () => {
+    const pushed: unknown[] = [];
+    return { pushed, execCtx: { pushHandler: (h: unknown) => pushed.push(h) } };
+  };
+
+  it("installs the explicit policy with no env policy set", async () => {
+    await withEnv({ [AGENCY_RUN_POLICY]: undefined, AGENCY_IPC: undefined }, () => {
+      const { pushed, execCtx } = grab();
+      installRunPolicyHandler(execCtx, { "std::read": [{ action: "approve" }] });
+      expect(pushed).toHaveLength(1);
+    });
+  });
+
+  it("an explicit policy replaces a DISAGREEING env policy (env is not merged in)", async () => {
+    // The env policy rejects std::read; the explicit policy approves it. The
+    // installed handler must approve — this fails if the env policy leaks
+    // through. (Two agreeing policies would pass either way.)
+    const envRejectsRead = JSON.stringify({ "std::read": [{ action: "reject" }] });
+    await withEnv({ [AGENCY_RUN_POLICY]: envRejectsRead, AGENCY_IPC: undefined }, async () => {
+      const { pushed, execCtx } = grab();
+      installRunPolicyHandler(execCtx, { "std::read": [{ action: "approve" }] });
+      expect(pushed).toHaveLength(1);
+      const handler = pushed[0] as (i: unknown) => Promise<{ type: string } | undefined>;
+      const verdict = await handler(intr("std::read"));
+      expect(verdict?.type).toBe("approve");
+    });
+  });
+
+  it("falls back to the env policy when no explicit policy is passed", async () => {
+    const envRejectsRead = JSON.stringify({ "std::read": [{ action: "reject" }] });
+    await withEnv({ [AGENCY_RUN_POLICY]: envRejectsRead, AGENCY_IPC: undefined }, async () => {
+      const { pushed, execCtx } = grab();
+      installRunPolicyHandler(execCtx, undefined);
+      expect(pushed).toHaveLength(1);
+      const handler = pushed[0] as (i: unknown) => Promise<{ type: string } | undefined>;
+      const verdict = await handler(intr("std::read"));
+      expect(verdict?.type).toBe("reject");
+    });
+  });
+
+  it("is still a no-op in an IPC subprocess, explicit policy or not", async () => {
+    await withEnv({ [AGENCY_RUN_POLICY]: undefined, AGENCY_IPC: "1" }, () => {
+      const { pushed, execCtx } = grab();
+      installRunPolicyHandler(execCtx, { "std::read": [{ action: "approve" }] });
+      expect(pushed).toHaveLength(0);
+    });
+  });
+
+  it("stays a no-op with no explicit policy and no env policy (the pin)", async () => {
+    await withEnv({ [AGENCY_RUN_POLICY]: undefined, AGENCY_IPC: undefined }, () => {
+      const { pushed, execCtx } = grab();
+      installRunPolicyHandler(execCtx, undefined);
+      expect(pushed).toHaveLength(0);
+    });
+  });
+});

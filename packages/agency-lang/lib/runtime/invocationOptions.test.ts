@@ -127,3 +127,34 @@ describe("resolveInvocation — config projection", () => {
     expect(resolved.contextOverride).toBeUndefined();
   });
 });
+
+describe("resolveInvocation — policy", () => {
+  const policy = { "std::env": [{ match: { name: "A" }, action: "approve" as const }] };
+
+  it("puts a valid policy on the resolved invocation for a fresh run", () => {
+    const resolved = resolveInvocation({ kind: "fresh", options: { policy } });
+    expect(resolved.policy).toBe(policy);
+  });
+
+  it("puts a valid policy on the resolved invocation for a resume", () => {
+    const resolved = resolveInvocation({ kind: "resume", runId: "run", options: { policy } });
+    expect(resolved.policy).toBe(policy);
+  });
+
+  it("resolves to no policy when none was supplied", () => {
+    expect(resolveInvocation({ kind: "fresh" }).policy).toBeUndefined();
+    expect(resolveInvocation({ kind: "resume", runId: "run" }).policy).toBeUndefined();
+  });
+
+  it("throws a prefixed error naming the schema problem on an invalid policy", () => {
+    const invalid = { "std::env": [{ action: "allow" }] } as never;
+    for (const request of [
+      { kind: "fresh" as const, options: { policy: invalid } },
+      { kind: "resume" as const, runId: "run", options: { policy: invalid } },
+    ]) {
+      expect(() => resolveInvocation(request)).toThrow(/^invalid invocation policy: /);
+      // The message names the schema problem, so a host log is actionable.
+      expect(() => resolveInvocation(request)).toThrow(/action/);
+    }
+  });
+});

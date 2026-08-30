@@ -123,16 +123,28 @@ including `__initAllRegistered`; check the resume path in `interrupts.ts`
 for the same ordering; add an agency-js test that a top-level read is
 rejected.
 
-### B2. Resumed interrupts bypass the handler chain
+### B2. The resume leg: raise-time policy shipped; checkpoint integrity open
 
-Designed, not yet built:
-`docs/superpowers/specs/2026-08-29-serve-host-interrupt-policy-design.md`,
-section 3. A resume answers interrupts from `getInterruptResponse(id)`
-before the chain runs, so a root policy never sees them and a caller can
-approve their own `std::read`. The spec applies the policy to the response
-map before `setInterruptResponses`; a policy reject overrides a caller
-approve, a caller reject is always honoured. Build it as specified, and emit
-`resolvedBy: "policy"` on the lifecycle event.
+The host-supplied root policy
+(`docs/superpowers/specs/2026-08-29-serve-host-interrupt-policy-design.md`)
+is built: `InvocationOptions.policy` installs the outermost handler on the
+fresh run and again on every resume leg, so every **raise** — including one
+made during a resume — is decided by the host, over the program's own
+approving handlers (`tests/agency-js/serve-policy`).
+
+An earlier version of this item said a caller could "approve their own
+`std::read`" and asked for a policy re-check of the caller's responses on
+resume. That framing was wrong: the echoed interrupt data is display-only
+(the resumed program resolves responses by id and re-reads nothing from the
+interrupt object), and anything a policy would reject was already rejected
+at the raise. What actually remains open on the resume leg is **checkpoint
+integrity**: a stateless resume restores whatever checkpoint the caller
+sends, so the caller controls every local the resumed code runs with (the
+budget ceiling is already re-asserted by hand; nothing else is). The fixes
+are checkpoint signing with a server key, or host-side checkpoint storage
+with the caller holding only an id plus replay protection on that id — see
+"who can change it" in `docs/dev/hosting/how-hosted-serving-works.md`. Not
+filed yet.
 
 ### B3. The sandbox flags do not imply a policy (#970)
 
@@ -206,10 +218,11 @@ In order:
    an allowlisted environment carrying only that project's secrets, and the
    interrupt forwarding the child already does. Secrets then never touch
    the server's `process.env`, which ends the cross-tenant window.
-4. **Host-owned root policy** per invocation, from the serve-host policy
-   spec (B2): reject `std::write`, `std::rm`, `std::shell`, `std::run`, and
-   anything not on a short hosted allowlist; `std::env` approved only for
-   that project's secret names. Reject beats the deployer's `/resume`.
+4. **Host-owned root policy** per invocation (shipped in agency-lang, B2):
+   reject `std::write`, `std::rm`, `std::shell`, `std::run`, and anything
+   not on a short hosted allowlist; `std::env` approved only for that
+   project's secret names. The reject lands at the raise, so a refused
+   effect never reaches `/resume` at all.
 5. **Network.** Block link-local addresses (the metadata server) and
    internal services at the network layer, or route `std::http` through a
    broker with an egress allowlist.
@@ -236,7 +249,7 @@ is the place to start. No statelog issues are filed yet.
 | A2 review `JS_GLOBALS` | — | not filed |
 | A3 splice execution in non-build commands | — | not filed, known |
 | B1 top-level `with approve` before policy | #966 | open |
-| B2 resume bypasses chain | spec | designed |
+| B2 raise-time host policy / checkpoint integrity | spec | policy shipped; integrity open |
 | B3 sandbox flags imply no policy | #970 | open |
 | C1 `node_modules` shadowing | #967 | open |
 | C2 provider modules from tree config | #968 | open |

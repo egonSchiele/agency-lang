@@ -11,6 +11,9 @@ import {
   BODY_DECLARATION_MESSAGE,
   BODY_RESERVED_MODIFIER_MESSAGE,
   C_STYLE_FOR_MESSAGE,
+  CATCH_ALL_NOT_LAST,
+  DUPLICATE_ON_CLAUSE,
+  EMPTY_HANDLER_BLOCK,
   HANDLER_BODY_MESSAGE,
   IF_EXPRESSION_MESSAGE,
   INTERFACE_EXTENDS_MESSAGE,
@@ -22,6 +25,11 @@ import {
   SWITCH_MESSAGE,
   TERNARY_MESSAGE,
 } from "./messages.js";
+import {
+  buildOnClauseHandler,
+  findDuplicateEffect,
+  type ParsedOnClause,
+} from "./onClauseHandler.js";
 import {
   anyChar,
   between,
@@ -5959,6 +5967,110 @@ const functionRefHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
 };
 
 // =============================================================================
+// on-clause handler — `with { on <effect>(param) { ... } ... }`
+// The syntax models reach for by default (#926). Parses directly into the
+// canonical inline handler AST (see lib/parsers/onClauseHandler.ts), so codegen
+// and the formatter are unchanged and `agency fmt` normalizes it away.
+// =============================================================================
+
+// A quoted effect name, `"std::read"`. effectIdentifier parses only
+// namespaced/bare identifiers and never a quoted token, so the quoted spelling
+// needs its own alternative. The inner text IS the normalized name.
+const quotedEffectName: Parser<string> = map(
+  seqC(char('"'), capture(many1WithJoin(noneOf('"\n')), "name"), char('"')),
+  (captures: { name: string }) => captures.name,
+);
+
+const underscoreToken: Parser<string> = map(char("_"), () => "_");
+
+// `on <effect|_> (<param|_>)? { body }` — one clause.
+const onClauseParser: Parser<ParsedOnClause> = (input) => {
+  const parsed = seqC(
+    str("on"),
+    spaces,
+    capture(or(underscoreToken, quotedEffectName, effectIdentifier), "effectName"),
+    optionalSpaces,
+    optional(
+      captureCaptures(
+        seqC(
+          char("("),
+          optionalSpaces,
+          capture(or(underscoreToken, many1WithJoin(varNameChar)), "paramName"),
+          optionalSpaces,
+          char(")"),
+        ),
+      ),
+    ),
+    optionalSpaces,
+    char("{"),
+    optionalSpacesOrNewline,
+    capture(bodyParser, "body"),
+    optionalSpacesOrNewline,
+    char("}"),
+    optionalSpacesOrNewline,
+  )(input);
+  if (!parsed.success) {
+    return parsed as ParserResult<ParsedOnClause>;
+  }
+  const captures = parsed.result as {
+    effectName: string;
+    paramName?: string;
+    body: AgencyNode[];
+  };
+  const clause: ParsedOnClause = {
+    effect: captures.effectName === "_" ? null : captures.effectName,
+    binding: !captures.paramName || captures.paramName === "_" ? null : captures.paramName,
+    body: captures.body,
+  };
+  return success(clause, parsed.rest);
+};
+
+// Record a committed failure so its message surfaces instead of a generic
+// backtracked one. Once `{` opens the block, no other handler form can match
+// (inline needs `(`, functionRef an identifier), so failures here are the real
+// error. Mirrors the probe pattern at parsers.ts:2563 / :5446.
+function commitHandlerFailure(message: string, pos: string): ParserResult<HandleBlock["handler"]> {
+  const declined = committedFailure(message, pos);
+  getParseState().committedFailure = declined;
+  return declined as ParserResult<HandleBlock["handler"]>;
+}
+
+// `{ on ... on ... }` → the built inline handler.
+const onClauseHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
+  const open = seqC(char("{"), optionalSpacesOrNewline)(input);
+  if (!open.success) {
+    // Not a `{`-block at all — fail without committing so the enclosing `or`
+    // reports its own error (this branch never claimed the input).
+    return open as ParserResult<HandleBlock["handler"]>;
+  }
+  const clausesResult = many1(onClauseParser)(open.rest);
+  if (!clausesResult.success) {
+    // `{` opened but yielded no clause: empty `with { }`, or a first token that
+    // is not `on`. Either way, the handler has no clauses.
+    return commitHandlerFailure(EMPTY_HANDLER_BLOCK, input);
+  }
+  const clauses = clausesResult.result as ParsedOnClause[];
+  const close = seqC(optionalSpacesOrNewline, char("}"), optionalSpacesOrNewline)(
+    clausesResult.rest,
+  );
+  if (!close.success) {
+    return close as ParserResult<HandleBlock["handler"]>;
+  }
+
+  const duplicate = findDuplicateEffect(clauses);
+  if (duplicate !== null) {
+    return commitHandlerFailure(DUPLICATE_ON_CLAUSE(duplicate), input);
+  }
+
+  const catchAllIndex = clauses.findIndex((clause) => clause.effect === null);
+  if (catchAllIndex !== -1 && catchAllIndex !== clauses.length - 1) {
+    return commitHandlerFailure(CATCH_ALL_NOT_LAST, input);
+  }
+
+  return success(buildOnClauseHandler(clauses), close.rest);
+};
+
+// =============================================================================
 // guardBlock — the `guard(head) { body }` construct
 // (spec: docs/superpowers/specs/2026-07-17-guard-keyword-design.md)
 // =============================================================================
@@ -6045,7 +6157,10 @@ export const handleBlockParser: Parser<HandleBlock> = withLoc(
       optionalSpacesOrNewline,
       str("with"),
       optionalSpaces,
-      capture(or(inlineHandlerParser, functionRefHandlerParser), "handler"),
+      capture(
+        or(inlineHandlerParser, functionRefHandlerParser, onClauseHandlerParser),
+        "handler",
+      ),
     ),
   ),
 );

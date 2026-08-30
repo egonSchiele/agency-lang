@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { parseAgency } from "@/parser.js";
 import {
+  CATCH_ALL_NOT_LAST,
   C_STYLE_FOR_MESSAGE,
+  DUPLICATE_ON_CLAUSE,
+  EMPTY_HANDLER_BLOCK,
   HANDLER_BODY_MESSAGE,
   IF_EXPRESSION_MESSAGE,
   MATCH_CASES_MESSAGE,
@@ -143,6 +146,9 @@ node main(shape: Shape) {
     ["if-then-else", IF_EXPRESSION_MESSAGE, `node main(isProd: boolean) {\n  %s\n}`],
     ["ternary replacement", TERNARY_MESSAGE, `node main(isProd: boolean) {\n  %s\n}`],
     ["handler", HANDLER_BODY_MESSAGE, `node main() {\n  %s\n}`],
+    ["empty handler block", EMPTY_HANDLER_BLOCK, `node main() {\n  %s\n}`],
+    ["on _ not last", CATCH_ALL_NOT_LAST, `node main() {\n  %s\n}`],
+    ["duplicate on clause", DUPLICATE_ON_CLAUSE("std::read"), `node main() {\n  %s\n}`],
     ["switch replacement", SWITCH_MESSAGE, `node main(x: string) {\n  %s\n}`],
     [
       "C-style-for alternatives",

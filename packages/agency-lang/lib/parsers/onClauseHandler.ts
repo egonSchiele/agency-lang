@@ -152,6 +152,14 @@ export function buildClauseArm(clause: ParsedOnClause): MatchBlockCase {
   return arm;
 }
 
+/** The first effect name that appears twice (normalized), or null if none does.
+ *  `on _` duplicates count too, under the key "_". */
+export function findDuplicateEffect(clauses: ParsedOnClause[]): string | null {
+  const keys = clauses.map((clause) => clause.effect ?? "_");
+  const firstRepeat = keys.find((key, index) => keys.indexOf(key) !== index);
+  return firstRepeat ?? null;
+}
+
 /** Build the canonical inline handler `(intr) { return match (intr.effect) {
  *  ... } }` from a list of parsed clauses. If no clause is the `on _` catch-all,
  *  a `_ => pass()` arm is appended so unmatched effects fall through to the safe

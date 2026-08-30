@@ -6054,9 +6054,11 @@ const onClauseHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
     return commitHandlerFailure(EMPTY_HANDLER_BLOCK, input);
   }
   const clauses = clausesResult.result as ParsedOnClause[];
-  const close = seqC(optionalSpacesOrNewline, char("}"), optionalSpacesOrNewline)(
-    clausesResult.rest,
-  );
+  const close = seqC(
+    optionalSpacesOrNewline,
+    char("}"),
+    optionalSpacesOrNewline,
+  )(clausesResult.rest);
   if (!close.success) {
     return close as ParserResult<HandleBlock["handler"]>;
   }
@@ -6192,9 +6194,7 @@ export const handleExprAssignmentParser: Parser<HandleBlock> = withLoc((input) =
     capture(many1WithJoin(varNameChar), "name"),
     optionalSpaces,
     optional(
-      captureCaptures(
-        seqC(char(":"), optionalSpaces, capture(variableTypeParser, "typeHint")),
-      ),
+      captureCaptures(seqC(char(":"), optionalSpaces, capture(variableTypeParser, "typeHint"))),
     ),
     optionalSpaces,
     char("="),

@@ -40,9 +40,10 @@ describe("liftTailVerdicts", () => {
         elseBody: [call("reject")],
       } as AgencyNode,
     ];
-    const out = liftTailVerdicts(body) as [{ thenBody: AgencyNode[]; elseBody: AgencyNode[] }];
-    expect(out[0].thenBody).toEqual([ret("approve")]);
-    expect(out[0].elseBody).toEqual([ret("reject")]);
+    const out = liftTailVerdicts(body);
+    const first = out[0] as { thenBody: AgencyNode[]; elseBody: AgencyNode[] };
+    expect(first.thenBody).toEqual([ret("approve")]);
+    expect(first.elseBody).toEqual([ret("reject")]);
   });
 
   it("descends into an else-less trailing if — the spec's clause-completion shape", () => {
@@ -53,9 +54,10 @@ describe("liftTailVerdicts", () => {
         thenBody: [call("approve")],
       } as AgencyNode,
     ];
-    const out = liftTailVerdicts(body) as [{ thenBody: AgencyNode[]; elseBody?: AgencyNode[] }];
-    expect(out[0].thenBody).toEqual([ret("approve")]);
-    expect(out[0].elseBody).toBeUndefined();
+    const out = liftTailVerdicts(body);
+    const first = out[0] as { thenBody: AgencyNode[]; elseBody?: AgencyNode[] };
+    expect(first.thenBody).toEqual([ret("approve")]);
+    expect(first.elseBody).toBeUndefined();
   });
 
   it("does NOT descend into a trailing match", () => {

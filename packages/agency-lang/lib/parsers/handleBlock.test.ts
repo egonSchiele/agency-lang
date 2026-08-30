@@ -134,7 +134,10 @@ describe("on-clause handler", () => {
     const handler = alias.result.handler;
     if (handler.kind !== "inline") return;
     expect(handler.param.name).toBe("intr");
-    const returnStmt = handler.body[0] as { type: string; value: { type: string; expression: { chain: { name: string }[] } } };
+    const returnStmt = handler.body[0] as {
+      type: string;
+      value: { type: string; expression: { chain: { name: string }[] } };
+    };
     expect(returnStmt.type).toBe("returnStatement");
     expect(returnStmt.value.type).toBe("matchBlock");
     expect(returnStmt.value.expression.chain[0].name).toBe("effect");

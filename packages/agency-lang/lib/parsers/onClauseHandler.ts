@@ -24,8 +24,7 @@ const VERDICT_NAMES = ["approve", "reject", "pass", "propagate"] as const;
 
 function isBareVerdictCall(node: AgencyNode): boolean {
   return (
-    node.type === "functionCall" &&
-    (VERDICT_NAMES as readonly string[]).includes(node.functionName)
+    node.type === "functionCall" && (VERDICT_NAMES as readonly string[]).includes(node.functionName)
   );
 }
 

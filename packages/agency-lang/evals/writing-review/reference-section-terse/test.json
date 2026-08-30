@@ -1,0 +1,8 @@
+{
+  "description": "A reference section for AI agents that names mechanisms and line numbers instead of explaining, drops its own example, states rules as formulas, and never says why.",
+  "files": "./files",
+  "input": {
+    "assignment": "Write a must-read section for the repository's CLAUDE.md explaining how interrupts, handlers, policies, and effects work in Agency. The reader is an AI agent that has never seen the language and is about to change, review, or write a spec for code in this area.",
+    "sourceFile": "section.md"
+  }
+}

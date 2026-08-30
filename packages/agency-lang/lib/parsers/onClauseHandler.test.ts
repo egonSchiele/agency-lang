@@ -1,6 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { liftTailVerdicts, completeClause } from "./onClauseHandler.js";
+import {
+  liftTailVerdicts,
+  completeClause,
+  buildOnClauseHandler,
+  type ParsedOnClause,
+} from "./onClauseHandler.js";
+import { handleBlockParser } from "./parsers.js";
+import { normalizeCode } from "@/index.js";
 import type { AgencyNode } from "@/types.js";
+import type { MatchBlock, MatchBlockCase } from "@/types/matchBlock.js";
+// `toEqualWithoutLoc` is a custom matcher registered by
+// lib/parsers/vitest.setup.ts — available for free in any lib/parsers/*.test.ts.
 
 const call = (name: string): AgencyNode =>
   ({ type: "functionCall", functionName: name, arguments: [] }) as AgencyNode;
@@ -89,5 +99,64 @@ describe("completeClause", () => {
       } as AgencyNode,
     ];
     expect(completeClause(body)).toEqual(body);
+  });
+});
+
+describe("buildOnClauseHandler", () => {
+  it("builds the same handler as the canonical hand-written form", () => {
+    // on std::read(data) { approve() }   on _ { reject() }
+    const clauses: ParsedOnClause[] = [
+      {
+        effect: "std::read",
+        binding: "data",
+        body: [{ type: "functionCall", functionName: "approve", arguments: [] } as AgencyNode],
+      },
+      {
+        effect: null,
+        binding: null,
+        body: [{ type: "functionCall", functionName: "reject", arguments: [] } as AgencyNode],
+      },
+    ];
+    const built = buildOnClauseHandler(clauses);
+
+    const canonical = handleBlockParser(
+      normalizeCode(
+        "handle {\n  foo()\n} with (intr) {\n" +
+          "  return match (intr.effect) {\n" +
+          '    "std::read" => {\n      const data = intr.data\n      return approve()\n    }\n' +
+          "    _ => return reject()\n" +
+          "  }\n}",
+      ),
+    );
+    expect(canonical.success).toBe(true);
+    if (!canonical.success) return;
+    expect(built).toEqualWithoutLoc(canonical.result.handler);
+  });
+
+  it("appends _ => pass() when no on _ is given", () => {
+    const clauses: ParsedOnClause[] = [
+      {
+        effect: "std::read",
+        binding: null,
+        body: [
+          {
+            type: "returnStatement",
+            value: { type: "functionCall", functionName: "approve", arguments: [] },
+          } as AgencyNode,
+        ],
+      },
+    ];
+    const built = buildOnClauseHandler(clauses);
+    if (built.kind !== "inline") throw new Error("expected inline handler");
+    const returnStmt = built.body[0] as { value: MatchBlock };
+    const match = returnStmt.value;
+    const lastArm = match.cases[match.cases.length - 1] as MatchBlockCase;
+    expect(lastArm.caseValue).toBe("_");
+    expect(lastArm.body).toEqual([
+      {
+        type: "returnStatement",
+        value: { type: "functionCall", functionName: "pass", arguments: [] },
+      },
+    ]);
   });
 });

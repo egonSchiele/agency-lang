@@ -17,7 +17,7 @@ def register(name: string) {
 
 node main() {
   const palette = env("PALETTE") with approve
-  register(palette)
+  register(palette ?? "")
   const resume = env("RESUME") with approve
   if (resume == "1") {
     restore(_readCheckpointFile("./sessions", "p"), {})

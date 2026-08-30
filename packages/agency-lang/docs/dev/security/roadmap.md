@@ -32,9 +32,12 @@ Fix, in three layers, cheapest first:
    bind-check misses, both found by review and both in scope for this layer:
    the callee of a `new` expression (`new Function(...)`, `new Proxy(...)`,
    `new WebSocket(...)` — the last two are not code-from-strings, so layer 2
-   never covers them), and the property names `constructor`, `prototype`,
+   never covers them); the property names `constructor`, `prototype`,
    `__proto__` reached from a value (`x.constructor.constructor`), spelled or
-   as a string-literal computed key. Design:
+   as a string-literal computed key; and tag arguments (`@validate(...)`,
+   `@jsonSchema({ ... })`), whose expressions are emitted verbatim and
+   executed at module load — reproduced writing a file under
+   `--agency-only --reject '*'`. Design:
    `docs/superpowers/specs/2026-08-29-agency-only-bound-names-design.md`
    (revised after review).
 2. **`--disallow-code-generation-from-strings`** on the child Node process

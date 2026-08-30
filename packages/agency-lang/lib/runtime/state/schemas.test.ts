@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import {
-  checkpointSchema,
   stateStackJSONSchema,
   stateJSONSchema,
   branchStateJSONSchema,
@@ -10,13 +9,11 @@ import { Checkpoint } from "./checkpointStore.js";
 import { StateStack, State } from "./stateStack.js";
 import { CostGuard } from "../guard.js";
 
-// These tests pin the fields the checkpoint schemas must NOT strip. zod
-// drops any key a schema does not name, so `Checkpoint.fromJSON` (the
-// external-resume entry point: HTTP /resume, checkpoints read off disk)
-// would silently lose guards, cost accounting, saved drafts, scoped
-// callbacks, and per-branch state if the schema fell out of sync with
-// `toJSON`. A plain `StateStack.fromJSON(toJSON())` never touches zod, so
-// every test here deliberately goes through the schema path.
+// Only `Checkpoint.fromJSON` (the external-resume path) runs a checkpoint
+// through zod, and zod strips any key a schema does not name. A plain
+// `StateStack.fromJSON(toJSON())` skips zod entirely, so every test here goes
+// through the schema on purpose — that is the only path where a stripped field
+// shows up.
 
 describe("guardJSONSchema", () => {
   it("keeps every field of a cost guard", () => {
@@ -184,7 +181,6 @@ describe("Checkpoint.fromJSON round trip", () => {
       nodeId: "start",
     });
 
-    // The external path: stringify, parse, and re-validate through zod.
     const revived = Checkpoint.fromJSON(JSON.parse(JSON.stringify(cp.toJSON())));
     expect(revived).not.toBeNull();
 

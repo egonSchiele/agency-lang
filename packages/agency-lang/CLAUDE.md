@@ -168,6 +168,11 @@ Other process docs:
 - `docs/dev/agents/why-agents-write-code.md` — The argument for letting an agent write and run programs instead of giving it more tools.
 - `docs/dev/agents/writing-rewrite-agent.md` — The rewrite agent over the writing reviewer: the passes loop, why a reviewer failure is not a clean pass, and how its eval suite shares the reviewer suite's files.
 
+### Security
+
+- `docs/dev/security/goal.md` — The goal of running untrusted Agency code with no operating-system sandbox, why the language design makes that possible, and what it demands of the compiler.
+- `docs/dev/security/roadmap.md` — Every gap between today's code and that goal, grouped by which part of the argument it breaks, with the GitHub issue for each.
+
 ### Standard library
 
 - `docs/dev/stdlib/adding-a-module-to-the-agency-stdlib.md` — The pattern for adding a stdlib module, including where files go and how docs are generated.
@@ -220,6 +225,7 @@ Other process docs:
 ### Hosting and statelog
 
 - `docs/dev/hosting/hosted-agent-execution.md` — Deploying an agent to a hosted statelog instance and running it over HTTP.
+- `docs/dev/hosting/how-hosted-serving-works.md` — The plain walkthrough of serving: deploy, compile, the four routes, and how an interrupt becomes an HTTP round trip. Read before `hosted-agent-execution.md`.
 - `docs/dev/hosting/invocation-usage-accounting.md` — How a hosted invocation reports its full cost and token breakdown, including across a subprocess.
 - `docs/dev/hosting/per-invocation-config.md` — Letting one invocation carry its own config override and trace id.
 - `docs/dev/hosting/remote-secrets.md` — Managing a hosted project's secrets against a write-only store, and the rules that keep values out of argv and output.

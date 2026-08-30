@@ -34,10 +34,12 @@ Fix, in three layers, cheapest first:
    `new WebSocket(...)` — the last two are not code-from-strings, so layer 2
    never covers them); the property names `constructor`, `prototype`,
    `__proto__` reached from a value (`x.constructor.constructor`), spelled or
-   as a string-literal computed key; and tag arguments (`@validate(...)`,
+   as a string-literal computed key; tag arguments (`@validate(...)`,
    `@jsonSchema({ ... })`), whose expressions are emitted verbatim and
-   executed at module load — reproduced writing a file under
-   `--agency-only --reject '*'`. Design:
+   executed at module load; and array/object default parameter values
+   (`def f(xs = [process.env.HOME])`) — all reproduced leaking under
+   `--agency-only --reject '*'`. The position list is by-hand and not proven
+   complete; the plan's final phase audits the generator. Design:
    `docs/superpowers/specs/2026-08-29-agency-only-bound-names-design.md`
    (revised after review).
 2. **`--disallow-code-generation-from-strings`** on the child Node process

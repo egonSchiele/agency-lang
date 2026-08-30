@@ -1,7 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  resolveCall,
-} from "./resolveCall.js";
+import { resolveCall } from "./resolveCall.js";
 import { SANDBOX_JS_GLOBALS, JS_GLOBALS, lookupJsMember } from "./resolveCall.js";
 import { resolveVariable } from "./resolveVariable.js";
 
@@ -24,13 +22,39 @@ describe("SANDBOX_JS_GLOBALS as a resolver registry", () => {
   const sandbox = SANDBOX_JS_GLOBALS;
 
   it("refuses host-reaching globals under the sandbox registry", () => {
-    for (const name of ["process", "fetch", "eval", "Function", "Reflect", "Symbol", "setTimeout", "console", "globalThis", "Buffer"]) {
-      expect(resolveVariable(name, { ...emptyVarInput, registry: sandbox }).kind).toBe("unresolved");
+    for (const name of [
+      "process",
+      "fetch",
+      "eval",
+      "Function",
+      "Reflect",
+      "Symbol",
+      "setTimeout",
+      "console",
+      "globalThis",
+      "Buffer",
+    ]) {
+      expect(resolveVariable(name, { ...emptyVarInput, registry: sandbox }).kind).toBe(
+        "unresolved",
+      );
     }
   });
 
   it("allows pure globals under the sandbox registry", () => {
-    for (const name of ["Math", "JSON", "Object", "Set", "Map", "Date", "RegExp", "Intl", "structuredClone", "parseInt", "Boolean", "Promise"]) {
+    for (const name of [
+      "Math",
+      "JSON",
+      "Object",
+      "Set",
+      "Map",
+      "Date",
+      "RegExp",
+      "Intl",
+      "structuredClone",
+      "parseInt",
+      "Boolean",
+      "Promise",
+    ]) {
       expect(resolveVariable(name, { ...emptyVarInput, registry: sandbox }).kind).toBe("jsGlobal");
     }
   });

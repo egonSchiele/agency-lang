@@ -17,8 +17,15 @@ under each name it is given.
 
 ## Why the two flags together are the safety argument
 
-- With `--agency-only`, every effect the code can perform is an interrupt.
-  There is no other way to touch the world from pure Agency.
+- With `--agency-only`, every effect the code can perform is an interrupt,
+  and the JS-globals bind-check refuses the compiled-to-JavaScript escapes
+  that would otherwise bypass interrupts entirely (`process`, `fetch`,
+  `eval`, `new Function`, the `.constructor` walk, tag arguments, default
+  values). See `docs/dev/compiler/agency-only-bound-names.md`. That check is
+  defense in depth, not the whole boundary: a runtime-computed property key
+  gets through it, so the backstop for code-from-strings is layer 2 in
+  `docs/dev/security/roadmap.md` (A1). There is no other way to touch the
+  world from pure Agency once those hold.
 - With `--reject '*'`, the root handler rejects each of those interrupts.
   The handler chain resolves reject over approve (`lib/runtime/interrupts.ts`,
   "reject > propagate > approve > noResponse"; pinned by

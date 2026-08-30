@@ -1,0 +1,6 @@
+def id(x) { return x }
+node main() {
+  let k = id("a")
+  let f = k.constructor
+  print("x")
+}

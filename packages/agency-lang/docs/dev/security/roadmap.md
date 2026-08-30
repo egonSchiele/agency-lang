@@ -12,6 +12,12 @@ break. Within a group they are in the order to do them.
 
 ### A1. Pure Agency code can reach any JavaScript global (#971)
 
+**Layer 1 (the bind-check) DONE** — `jsGlobals: "sandbox"`, `SANDBOX_JS_GLOBALS`,
+and `checkSandboxNames` refuse free identifiers, `new` callees, the
+constructor/prototype walk (best-effort), tag arguments, and default values;
+see `docs/dev/compiler/agency-only-bound-names.md`. Layers 2 (disable
+code-generation-from-strings) and 3 (freeze intrinsics) still open.
+
 <https://github.com/egonSchiele/agency-lang/issues/971>. An identifier the compiler does not know is emitted verbatim, so
 `process.env.HOME`, `process.getBuiltinModule("fs")`, `fetch(...)`,
 `eval("...")`, and `globalThis` all work from pure Agency, with no interrupt,

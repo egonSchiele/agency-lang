@@ -138,6 +138,7 @@ Other process docs:
 
 ### Compiler and type checker
 
+- `docs/dev/compiler/agency-only-bound-names.md` — The `--agency-only` JS-globals bind-check: the sandbox allowlist, the four capability positions it refuses, and why it is defense in depth rather than the boundary.
 - `docs/dev/compiler/binop-parser.md` — How binary expressions parse, including the operator precedence and associativity table.
 - `docs/dev/compiler/codegen-als-accessors.md` — How generated code reads runtime values out of the active async-context frame.
 - `docs/dev/compiler/effect-propagation.md` — How the interrupt effects a function carries are computed and propagated through calls.

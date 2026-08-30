@@ -1,0 +1,17 @@
+def isPositive(n: number): Result<number> {
+  if (n > 0) { return success(n) }
+  return failure("no")
+}
+@validate(isPositive)
+type Pos = number
+
+node main() {
+  let xs = [3, 1, 2]
+  let s = new Set()
+  print(Math.floor(2.5))
+  print(JSON.stringify(xs))
+  let x: Pos = 5
+  let o = { a: 1 }
+  let key = "a"
+  print(o[key])
+}

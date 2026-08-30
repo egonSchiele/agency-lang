@@ -1,8 +1,55 @@
 {
-  "testControl": { "exitCode": 0 },
-  "testRestricted": { "exitCode": 1, "refused": true, "goodReported": true },
-  "runControl": { "exitCode": 0 },
-  "runRestricted": { "exitCode": 1, "refused": true },
-  "writeControl": { "exitCode": 0, "fileWritten": true },
-  "writeRestricted": { "exitCode": 0, "fileWritten": false }
+  "testControl": {
+    "exitCode": 0
+  },
+  "testRestricted": {
+    "exitCode": 1,
+    "refused": true,
+    "goodReported": true
+  },
+  "runControl": {
+    "exitCode": 0
+  },
+  "runRestricted": {
+    "exitCode": 1,
+    "refused": true
+  },
+  "writeControl": {
+    "exitCode": 0,
+    "fileWritten": true
+  },
+  "writeRestricted": {
+    "exitCode": 0,
+    "fileWritten": false
+  },
+  "boundRefused": [
+    {
+      "name": "bound-globals",
+      "exitCode": 1,
+      "refused": true
+    },
+    {
+      "name": "bound-new",
+      "exitCode": 1,
+      "refused": true
+    },
+    {
+      "name": "bound-ctor",
+      "exitCode": 1,
+      "refused": true
+    },
+    {
+      "name": "bound-tag",
+      "exitCode": 1,
+      "refused": true
+    },
+    {
+      "name": "bound-default",
+      "exitCode": 1,
+      "refused": true
+    }
+  ],
+  "boundGood": {
+    "exitCode": 0
+  }
 }

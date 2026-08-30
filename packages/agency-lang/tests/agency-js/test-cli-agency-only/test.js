@@ -34,6 +34,18 @@ const writeRestricted = agency(["run", "--agency-only", "--reject", "*", "writes
 const writeRestrictedFile = existsSync(resolve(here, "y.txt"));
 rmSync(resolve(here, "y.txt"), { force: true });
 
+// Bound names under --agency-only (SANDBOX_JS_GLOBALS). Each refused fixture
+// references a capability but performs no destructive action, so a regression
+// that let one compile still could not do harm when only the exit code is
+// asserted (anti-patterns.md: no catastrophic-on-failure tests).
+const boundRefused = ["bound-globals", "bound-new", "bound-ctor", "bound-tag", "bound-default"].map(
+  (name) => {
+    const r = agency(["run", "--agency-only", "--reject", "*", `${name}.agency`]);
+    return { name, exitCode: r.exitCode, refused: r.output.includes("compile refused") };
+  },
+);
+const boundGood = agency(["run", "--agency-only", "bound-good.agency"]);
+
 writeFileSync(
   "__result.json",
   JSON.stringify(
@@ -52,6 +64,8 @@ writeFileSync(
       },
       writeControl: { exitCode: writeControl.exitCode, fileWritten: writeControlFile },
       writeRestricted: { exitCode: writeRestricted.exitCode, fileWritten: writeRestrictedFile },
+      boundRefused,
+      boundGood: { exitCode: boundGood.exitCode },
     },
     null,
     2,

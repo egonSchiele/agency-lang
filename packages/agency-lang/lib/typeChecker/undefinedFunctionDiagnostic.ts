@@ -6,7 +6,14 @@ import type { ValueAccess, AccessChainElement } from "../types/access.js";
 import { walkNodes } from "../utils/node.js";
 import { holeNames } from "../utils/holes.js";
 import { hasFunctionOrNodeAncestor, isResolvableBareCall } from "./nameReferences.js";
-import { resolveCall, lookupJsMember, isJsGlobalBase, JS_GLOBALS, SANDBOX_JS_GLOBALS, type JsRegistryEntry } from "./resolveCall.js";
+import {
+  resolveCall,
+  lookupJsMember,
+  isJsGlobalBase,
+  JS_GLOBALS,
+  SANDBOX_JS_GLOBALS,
+  type JsRegistryEntry,
+} from "./resolveCall.js";
 import { collectProgramShadowing } from "./shadowing.js";
 
 /**
@@ -129,14 +136,18 @@ function checkAccessChain(
   if (expr.base.type !== "variableName") return;
   const baseName = expr.base.value;
   if (
-    !isJsGlobalBase(baseName, {
-      scope,
-      functionDefs: ctx.functionDefs,
-      nodeDefs: ctx.nodeDefs,
-      importedFunctions: ctx.importedFunctions,
-      importedNodeNames: shadowing.importedNodeNames,
-      jsImportedNames: ctx.jsImportedNames,
-    }, registry)
+    !isJsGlobalBase(
+      baseName,
+      {
+        scope,
+        functionDefs: ctx.functionDefs,
+        nodeDefs: ctx.nodeDefs,
+        importedFunctions: ctx.importedFunctions,
+        importedNodeNames: shadowing.importedNodeNames,
+        jsImportedNames: ctx.jsImportedNames,
+      },
+      registry,
+    )
   )
     return;
 

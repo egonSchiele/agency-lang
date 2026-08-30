@@ -5714,6 +5714,10 @@ const _bodyNodeParser: Parser<AgencyNode> = memo(
     switchStatementParser,
     cStyleForParser,
     blockAsValueParser,
+    // `let res = handle (expr) with H` — expression-position handle (#926).
+    // Ahead of withModifierParser/assignmentParser: `handle (…)` is not a valid
+    // RHS expression, so those would fail partway and leave `with H` dangling.
+    lazy(() => handleExprAssignmentParser),
     // withModifierParser must be tried before returnStatementParser/
     // assignmentParser so that `return foo() with approve` and
     // `const x = foo() with approve` don't get partially consumed by
@@ -6070,6 +6074,16 @@ const onClauseHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
   return success(buildOnClauseHandler(clauses), close.rest);
 };
 
+// The three things that can follow `with`: an inline handler `(intr) { ... }`,
+// a function name, or an `on`-clause block. Shared by `handleBlockParser` and
+// the expression-position `handleExprAssignmentParser` below. on-clause is last
+// so the older forms win first.
+const handlerAfterWithParser: Parser<HandleBlock["handler"]> = or(
+  inlineHandlerParser,
+  functionRefHandlerParser,
+  onClauseHandlerParser,
+);
+
 // =============================================================================
 // guardBlock — the `guard(head) { body }` construct
 // (spec: docs/superpowers/specs/2026-07-17-guard-keyword-design.md)
@@ -6157,13 +6171,73 @@ export const handleBlockParser: Parser<HandleBlock> = withLoc(
       optionalSpacesOrNewline,
       str("with"),
       optionalSpaces,
-      capture(
-        or(inlineHandlerParser, functionRefHandlerParser, onClauseHandlerParser),
-        "handler",
-      ),
+      capture(handlerAfterWithParser, "handler"),
     ),
   ),
 );
+
+/** Expression-position `handle` at an assignment right-hand side (#926):
+ *  `let res = handle (expr) with <handler>`. `handle` is a statement everywhere
+ *  else; here it wraps a single call and yields its result. Desugars by pulling
+ *  the assignment INSIDE the handle body — `handle { let res = expr } with H` —
+ *  the same shape `let res = expr with approve` produces (see with-approve.md).
+ *  The bound name escapes the handler body because locals live on
+ *  `__stack.locals`, not a JS `const`. Must be tried before the generic
+ *  assignment/withModifier path, since `handle (…)` is not a valid RHS
+ *  expression on its own. */
+export const handleExprAssignmentParser: Parser<HandleBlock> = withLoc((input) => {
+  const parsed = seqC(
+    capture(or(str("let"), str("const")), "declKind"),
+    spaces,
+    capture(many1WithJoin(varNameChar), "name"),
+    optionalSpaces,
+    optional(
+      captureCaptures(
+        seqC(char(":"), optionalSpaces, capture(variableTypeParser, "typeHint")),
+      ),
+    ),
+    optionalSpaces,
+    char("="),
+    optionalSpaces,
+    str("handle"),
+    not(varNameChar),
+    optionalSpaces,
+    char("("),
+    optionalSpaces,
+    capture(exprParser, "expr"),
+    optionalSpaces,
+    char(")"),
+    optionalSpacesOrNewline,
+    str("with"),
+    optionalSpaces,
+    capture(handlerAfterWithParser, "handler"),
+  )(input);
+  if (!parsed.success) {
+    return parsed as ParserResult<HandleBlock>;
+  }
+  const captures = parsed.result as {
+    declKind: "let" | "const";
+    name: string;
+    typeHint?: VariableType;
+    expr: Expression;
+    handler: HandleBlock["handler"];
+  };
+  const assignment: Assignment = {
+    type: "assignment",
+    declKind: captures.declKind,
+    variableName: captures.name,
+    value: captures.expr,
+  };
+  if (captures.typeHint) {
+    assignment.typeHint = captures.typeHint;
+  }
+  const handleBlock: HandleBlock = {
+    type: "handleBlock",
+    body: [assignment],
+    handler: captures.handler,
+  };
+  return success(handleBlock, parsed.rest);
+});
 
 /** `finalize { ... }` — keyword block. Four head forms parse:
  *  `finalize {`, `finalize() {`, `finalize as name {`,

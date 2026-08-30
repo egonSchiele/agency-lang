@@ -174,4 +174,24 @@ describe("on-clause handler", () => {
     );
     expect(message).toContain("must be the last clause");
   });
+
+  it("parses expression-position handle at an assignment RHS", () => {
+    const src =
+      "let res: Result<string> = handle (foo(dir: dir)) with {\n" +
+      "  on std::read(data) { approve() }\n  on _ { reject() }\n}\n";
+    const parsed = bodyParser(normalizeCode(src));
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const handleBlock = parsed.result[0] as {
+      type: string;
+      body: { type: string; variableName: string; declKind: string; value: { type: string } }[];
+      handler: { kind: string };
+    };
+    expect(handleBlock.type).toBe("handleBlock");
+    expect(handleBlock.body[0].type).toBe("assignment");
+    expect(handleBlock.body[0].variableName).toBe("res");
+    expect(handleBlock.body[0].declKind).toBe("let");
+    expect(handleBlock.body[0].value.type).toBe("functionCall");
+    expect(handleBlock.handler.kind).toBe("inline");
+  });
 });

@@ -1,7 +1,7 @@
 // --agency-only on `agency test` and `agency run`: a closure that is not pure
 // Agency is refused, as a file failure in the test runner (the suite goes on
 // and the exit code is 1) and as exit 1 in run. Positive controls first.
-import { execFileSync } from "child_process";
+import { spawnSync } from "child_process";
 import { existsSync, rmSync, writeFileSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -11,13 +11,12 @@ const cli = resolve(here, "../../../dist/scripts/agency.js");
 // eslint-disable-next-line no-control-regex
 const stripAnsi = (text) => text.replace(/\x1b\[[0-9;]*m/g, "");
 
+// spawnSync (not execFileSync) so both streams and the exit code come back
+// even when the child exits 0: codegen-walk.agency logs its EvalError to
+// stderr and exits 0, so a stdout-only capture would miss it.
 function agency(args) {
-  try {
-    const out = execFileSync(process.execPath, [cli, ...args], { cwd: here, stdio: "pipe" });
-    return { exitCode: 0, output: stripAnsi(out.toString()) };
-  } catch (e) {
-    return { exitCode: e.status ?? 1, output: stripAnsi(`${e.stdout ?? ""}${e.stderr ?? ""}`) };
-  }
+  const r = spawnSync(process.execPath, [cli, ...args], { cwd: here, encoding: "utf8" });
+  return { exitCode: r.status ?? 1, output: stripAnsi(`${r.stdout ?? ""}${r.stderr ?? ""}`) };
 }
 
 const testControl = agency(["test", "run", "bad.test.json"]);
@@ -46,6 +45,14 @@ const boundRefused = ["bound-globals", "bound-new", "bound-ctor", "bound-tag", "
 );
 const boundGood = agency(["run", "--agency-only", "bound-good.agency"]);
 
+// Layer 2: --agency-only runs the child Node process with
+// --disallow-code-generation-from-strings. codegen-walk.agency reaches
+// Function through a runtime-computed key, which layer 1 cannot see, so it
+// COMPILES; the flag makes the call throw EvalError at runtime. This is the
+// one check that fails if the flag falls off the spawn args: without it the
+// Function call succeeds and no EvalError is printed.
+const codegenWalk = agency(["run", "--agency-only", "--reject", "*", "codegen-walk.agency"]);
+
 writeFileSync(
   "__result.json",
   JSON.stringify(
@@ -66,6 +73,10 @@ writeFileSync(
       writeRestricted: { exitCode: writeRestricted.exitCode, fileWritten: writeRestrictedFile },
       boundRefused,
       boundGood: { exitCode: boundGood.exitCode },
+      codegenWalk: {
+        compiled: !codegenWalk.output.includes("compile refused"),
+        blocked: codegenWalk.output.includes("EvalError"),
+      },
     },
     null,
     2,

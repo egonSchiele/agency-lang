@@ -843,6 +843,23 @@ function startSpinner(useTTY: boolean): () => void {
  * inside the callback is swallowed — the footer is informational and
  * must never break a successful turn.
  */
+// The slash palette registered with `setSlashPalette`. Plain module state,
+// like the session hooks in agentSessions.ts: an Agency program registers it
+// before any checkpoint restore, so a resumed session shows the commands of
+// the code it is running rather than a map its checkpoint saved as a
+// `repl(...)` argument.
+let registeredPalette: unknown = null;
+
+export function _setSlashPalette(paletteCommands: unknown): void {
+  registeredPalette = paletteCommands;
+}
+
+/** The palette a REPL uses: the one passed to `repl(...)`, else the
+ *  registered one. */
+export function _slashPalette(paletteCommands: unknown): [string, string][] {
+  return paletteEntries(paletteCommands ?? registeredPalette);
+}
+
 /**
  * Convert the `paletteCommands` map the agent passes (e.g.
  * `{"/exit": "Exit", "/clear": "Clear", ...}`) into a stable
@@ -851,7 +868,9 @@ function startSpinner(useTTY: boolean): () => void {
  * inputs so callers don't have to null-check.
  */
 function paletteEntries(paletteCommands: unknown): [string, string][] {
-  if (!paletteCommands || typeof paletteCommands !== "object") return [];
+  if (!paletteCommands || typeof paletteCommands !== "object") {
+    return [];
+  }
   const out: [string, string][] = [];
   for (const [k, v] of Object.entries(paletteCommands as Record<string, unknown>)) {
     if (typeof k !== "string" || !k.startsWith("/")) continue;
@@ -1261,7 +1280,7 @@ export async function _runLineRepl(
   paletteCommands: unknown,
 ): Promise<void> {
   const { entries: initialHistory, expansions } = loadHistory(historyFile, historyMax);
-  const palette = paletteEntries(paletteCommands);
+  const palette = _slashPalette(paletteCommands);
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,

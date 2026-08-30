@@ -1,5 +1,6 @@
 import {
   _runLineRepl,
+  _setSlashPalette,
   _clearScreen,
   _termWidth,
   _clearHistory,
@@ -88,7 +89,7 @@ export def repl(
   @param prompt - String shown before the input buffer (default "> ")
   @param historyFile - Path to a JSON history file; loaded at start and saved on exit. Empty string disables persistence.
   @param historyMax - Trim history to this many most-recent entries
-  @param paletteCommands - Map of /cmd -> description
+  @param paletteCommands - Map of /cmd -> description; null uses the palette from `setSlashPalette`
   """
   // Publish the path to the execution-model global so `clearHistory()` can
   // resolve which file to clear from Agency state rather than a TS closure.
@@ -101,6 +102,17 @@ export def repl(
     historyMax,
     paletteCommands,
   )
+}
+
+export def setSlashPalette(paletteCommands: Record<string, string>) {
+  """
+  Register the slash-command palette for `repl()` calls that pass none:
+  a map of `/cmd` -> description. Call it before any checkpoint restore.
+  The map is kept outside the execution model, so a resumed session
+  shows the commands of the running code, not the ones a `repl()`
+  argument would have saved in the checkpoint.
+  """
+  _setSlashPalette(paletteCommands)
 }
 
 export def clearScreen() {

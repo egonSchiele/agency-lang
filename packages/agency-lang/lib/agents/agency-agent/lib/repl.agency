@@ -16,7 +16,6 @@ import {
  } from "std::ui/cli"
 
 import { showCapabilities, editCapabilities } from "./capabilitiesUi.agency"
-import { mergedPalette } from "./commandPalette.agency"
 import { HISTORY_PATH } from "./config.agency"
 import { mcpSlashCommand } from "./mcp.agency"
 import { filterHostedModels } from "./modelFilters.agency"
@@ -335,7 +334,6 @@ export def startInteractive(seedTarget: string, seedPrompt: string) {
     prompt: "> ",
     historyFile: HISTORY_PATH,
     historyMax: 1000,
-    paletteCommands: mergedPalette(),
   )
   print(color.cyan("\nGoodbye!"))
 }

@@ -4,6 +4,7 @@ import { setLlmOptions } from "std::llm"
 import { evalOutput, evalValue, setAgentName } from "std::statelog"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
 import { getCost } from "std::thread"
+import { setSlashPalette } from "std::ui/cli"
 import {
   clearMessages,
   pushMessage,
@@ -13,6 +14,7 @@ import {
 
 import { brainByName, allBrains, brainFlagHelp } from "./brains/registry.agency"
 import { agentNameFor } from "./lib/agentName.agency"
+import { mergedPalette } from "./lib/commandPalette.agency"
 import { parseAgentArgs } from "./lib/args.agency"
 import { getHeader } from "./lib/header.agency"
 import { maybeLoadMcp } from "./lib/mcp.agency"
@@ -179,8 +181,11 @@ node main() {
   // layer, and memory, MCP, and the settings reads behind them must run
   // before the policy handler exists or they prompt. A restore keeps
   // those TypeScript-side effects and replaces only the Agency state.
+  // The hooks and the palette are registered here, above the restore, so a
+  // resumed run gets the current ones and never the checkpoint's.
   if (!isOneShot) {
     installSessionHooks()
+    setSlashPalette(mergedPalette())
     startSession(chooseSession(args.flags.continue, args.flags.resume ?? null), brain)
   }
 

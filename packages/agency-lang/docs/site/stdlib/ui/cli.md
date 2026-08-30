@@ -52,7 +52,7 @@ Line-mode REPL with the same call signature as the std::ui TUI repl,
   @param prompt - String shown before the input buffer (default "> ")
   @param historyFile - Path to a JSON history file; loaded at start and saved on exit. Empty string disables persistence.
   @param historyMax - Trim history to this many most-recent entries
-  @param paletteCommands - Map of /cmd -> description
+  @param paletteCommands - Map of /cmd -> description; null uses the palette from `setSlashPalette`
 
 * Line-mode sibling of the std::ui TUI repl. Current limitations:
  * `status` is accepted for signature parity but not yet rendered;
@@ -70,7 +70,27 @@ Line-mode REPL with the same call signature as the std::ui TUI repl,
 | historyMax | `number` | 1000 |
 | paletteCommands | `any` | null |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L67))
+
+### setSlashPalette
+
+```ts
+setSlashPalette(paletteCommands: Record<string, string>)
+```
+
+Register the slash-command palette for `repl()` calls that pass none:
+  a map of `/cmd` -> description. Call it before any checkpoint restore.
+  The map is kept outside the execution model, so a resumed session
+  shows the commands of the running code, not the ones a `repl()`
+  argument would have saved in the checkpoint.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| paletteCommands | `Record<string, string>` |  |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L107))
 
 ### clearScreen
 
@@ -80,7 +100,7 @@ clearScreen()
 
 Clear the terminal screen.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L106))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L118))
 
 ### clearHistory
 
@@ -92,7 +112,7 @@ Clear the input history of the currently running `repl()` session: both
   its in-session up-arrow recall and the `historyFile` that session was started
   with. A no-op when called outside an interactive `repl()`.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L123))
 
 ### hline
 
@@ -112,7 +132,7 @@ Return a horizontal rule: `char` repeated `width` times (terminal
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L122))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L134))
 
 ### interruptChoice
 
@@ -151,4 +171,4 @@ Approval prompt for line mode: renders a sticky footer pinned to the
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L129))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L141))

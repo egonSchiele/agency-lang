@@ -187,6 +187,7 @@ import { StaticStatement } from "@/types/staticStatement.js";
 import {
   ArrayPattern,
   BindingPattern,
+  EffectPattern,
   IsExpression,
   MatchPattern,
   ObjectPattern,
@@ -7261,6 +7262,52 @@ export const resultPatternParser: Parser<ResultPattern> = withLoc(
   },
 );
 
+// Effect patterns: `std::read`, `std::read({ data })`. Mirrors
+// resultPatternParser, but the constructor is a namespaced effect name and the
+// optional binding is an object pattern over the whole interrupt (the
+// scrutinee), not a single identifier. Must be placed in `_matchPatternBase`
+// and `_isRhsParser` BEFORE `variableNameParser` / `typePatternParser`. Only a
+// `::`-containing name is intercepted here; a bare `foo` stays a binder / type
+// reference because `namespaceIdentifier` soft-fails on it.
+export const effectPatternParser: Parser<EffectPattern> = withLoc(
+  (input: string): ParserResult<EffectPattern> => {
+    // Namespaced name only. A soft failure here lets the outer `or` fall
+    // through to variableNameParser (a bare identifier is a binder).
+    const name = namespaceIdentifier(input);
+    if (!name.success) return name as ParserResult<EffectPattern>;
+    const effect = name.result;
+
+    // Bare form: no `(` after the name.
+    if (name.rest[0] !== "(") {
+      return success({ type: "effectPattern", effect, binding: null }, name.rest);
+    }
+
+    // Committed to the effect-pattern form: once we see `<effect>(`, the
+    // binding MUST be an object pattern. `parseError` bypasses the surrounding
+    // `or` — without it, `std::read(data)` (a positional binding, the mistake
+    // this alias exists to catch) would soft-fail, fall through to
+    // variableNameParser, and die later with an error naming nothing the
+    // author wrote. Mirrors resultPatternParser's commit above.
+    const bindingResult = parseError(
+      `an effect pattern binding must be an object pattern, e.g. \`${effect}({ data })\``,
+      char("("),
+      optionalSpacesOrNewline,
+      capture(lazy(() => objectMatchPatternParser), "binding"),
+      optionalSpacesOrNewline,
+      char(")"),
+    )(name.rest);
+    if (!bindingResult.success) return bindingResult as ParserResult<EffectPattern>;
+    return success(
+      {
+        type: "effectPattern",
+        effect,
+        binding: (bindingResult.result.binding as ObjectPattern) ?? null,
+      },
+      bindingResult.rest,
+    );
+  },
+) as Parser<EffectPattern>;
+
 // A type in pattern position: `is string`, `is Person`, `is number[]`, and
 // the match-arm suffix `pattern: Type`. Parses one non-union,
 // non-intersection type — bare inline unions and intersections are
@@ -7318,6 +7365,10 @@ const _matchPatternBase = (input: string): ParserResult<MatchPattern> => {
     // resultPatternParser MUST come before variableNameParser so `success` /
     // `failure` are intercepted before they'd parse as bare identifiers.
     resultPatternParser,
+    // effectPatternParser matches a `::`-containing name (`std::read`), which a
+    // bare identifier can never be, so it must run before variableNameParser
+    // to intercept the effect name before it'd parse as a binder.
+    effectPatternParser,
     variableNameParser,
     numberParser,
     _stringParser,

@@ -169,6 +169,12 @@ node main() {
 
   // Interactive runs are saved per turn, and a resumed one restores its
   // checkpoint here, after the setup above and before the session starts.
+  // One-shot runs are not saved, so a resume flag on one is a mistake
+  // rather than something to ignore.
+  if (isOneShot && (args.flags.continue || args.flags.resume != null)) {
+    print(color.red("--continue and --resume need an interactive session; one-shot runs are not saved."))
+    process.exit(1)
+  }
   // Everything above is process-level: model resolution feeds the memory
   // layer, and memory, MCP, and the settings reads behind them must run
   // before the policy handler exists or they prompt. A restore keeps

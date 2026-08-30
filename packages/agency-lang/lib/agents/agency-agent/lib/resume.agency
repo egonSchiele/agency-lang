@@ -146,9 +146,11 @@ export def recordTurn(userMsg: string): SaveTarget | null {
   record.turns = record.turns + 1
   record.lastActive = now()
   if (shouldRefreshTitle(record.turns)) {
-    let source = mainThreadText()
-    if (source == "") {
-      source = userMsg
+    // Turn 1 titles the first prompt; later refreshes summarize the
+    // conversation so far.
+    let source = userMsg
+    if (record.turns > 1) {
+      source = mainThreadText()
     }
     const title = titleFor(source)
     if (title != "") {

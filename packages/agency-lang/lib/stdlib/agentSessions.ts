@@ -53,11 +53,18 @@ function readJson(file: string): unknown {
 }
 
 function isRecord(value: unknown): value is SessionRecord {
+  if (typeof value !== "object" || value === null) return false;
+  const r = value as Record<string, unknown>;
+  const isText = (k: string) => typeof r[k] === "string";
+  const isCount = (k: string) => typeof r[k] === "number" && Number.isFinite(r[k]) && r[k] >= 0;
   return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as SessionRecord).id === "string" &&
-    typeof (value as SessionRecord).lastActive === "number"
+    isText("id") &&
+    isText("cwd") &&
+    isText("brain") &&
+    isText("title") &&
+    isCount("created") &&
+    isCount("lastActive") &&
+    isCount("turns")
   );
 }
 

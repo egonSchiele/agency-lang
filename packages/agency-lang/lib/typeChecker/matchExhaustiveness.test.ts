@@ -269,6 +269,40 @@ def f(x: boolean): number {
     );
     expect(errs.some((e) => /not exhaustive/i.test(e) && /false/.test(e))).toBe(true);
   });
+
+  // Effect names are an open set — an effect pattern can never make a match
+  // exhaustive. The scrutinee (an interrupt) is open/unsupported territory, so
+  // the checker stays silent rather than guessing a missing case. No code was
+  // added for this in matchExhaustiveness.ts; these pin the fall-through.
+  it("error config: match over effect patterns is open — never reported, never crashes", () => {
+    const errs = check(
+      `
+def f(intr: any): number {
+  return match (intr) {
+    std::read => 1
+    std::write => 2
+  }
+}`,
+      ERROR,
+    );
+    expect(errs.some((e) => /not exhaustive/i.test(e))).toBe(false);
+  });
+
+  it("error config: an effect-pattern arm is not a catch-all (missing case still reported)", () => {
+    // On a boolean scrutinee, `true` plus an effect-pattern arm must still
+    // leave `false` missing — the effect arm covers nothing and clears nothing.
+    const errs = check(
+      `
+def f(x: boolean): number {
+  return match (x) {
+    std::read => 1
+    true => 2
+  }
+}`,
+      ERROR,
+    );
+    expect(errs.some((e) => /not exhaustive/i.test(e) && /false/.test(e))).toBe(true);
+  });
 });
 
 describe("match exhaustiveness — coverage edge cases & structural", () => {

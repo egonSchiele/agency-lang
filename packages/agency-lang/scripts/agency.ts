@@ -1023,8 +1023,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
       // The project in agency.json is the only target: no host or key flags here,
       // agency.json and $STATELOG_API_KEY own that.
       const target = resolveProjectTarget(getConfigContext(), {});
-      // Each run prints as it finishes; a 69-run upload takes minutes and
-      // must not sit silent until the end.
       const result = await evalUpload(paths, target, {
         reportProgress: (line) => console.log(line),
       }).catch(failProjectCommand);

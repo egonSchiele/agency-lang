@@ -27,8 +27,7 @@ export type EvalUploadTarget = { origin: string; projectSlug: string; apiKey: st
 export type EvalUploadDependencies = {
   client?: EvalUploadClient;
   reportWarning?: (message: string) => void;
-  /** Called with one formatted line as each run finishes, so a long upload
-   *  shows progress instead of staying silent until the end. */
+  /** Called with one formatted line as each run finishes. */
   reportProgress?: (line: string) => void;
 };
 
@@ -249,8 +248,7 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** One run's outcome as the line the CLI prints, both as progress while
- *  uploads run and in tests over the collected result. */
+/** One run's outcome as the line the CLI prints. */
 export function formatRunLine(run: UploadRunOutcome, cwd: string = process.cwd()): string {
   return `${shownDir(run.dir, cwd)}: ${describeOutcome(run)}`;
 }

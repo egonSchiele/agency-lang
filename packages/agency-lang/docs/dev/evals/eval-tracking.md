@@ -143,11 +143,10 @@ next one still uploads. Running the command twice is safe: events skip,
 annotations upsert.
 
 Runs upload through a bounded pool, and each one prints its line as it
-finishes (`reportProgress` in `EvalUploadDependencies`), so a long upload
-shows progress instead of staying silent until the end. The result names
+finishes (`reportProgress` in `EvalUploadDependencies`). The result names
 the statelog batch page (`/projects/evals/batch?id=<slug>&batch=<batch>`)
 only when every uploaded run shares one batch id; statelog keys the page
-by project and batch alone, so no agent name is needed.
+by project and batch alone.
 
 The client, `lib/cli/statelog/evalUploadClient.ts`, is the seventh sealed
 statelog client (`docs/dev/hosting/statelog-clients.md`).
@@ -157,12 +156,11 @@ statelog client (`docs/dev/hosting/statelog-clients.md`).
 `setAgentName` (`std::statelog`) names the agent a trace belongs to.
 Statelog treats the name as a filterable label on a batch, not a URL key:
 its evals pages are keyed by project and batch, and a batch whose runs
-carry no name simply shows no agent. The name is still validated
-(`lib/statelog/agentName.ts`: letters, digits, `.`, `_`, `-`, and `/`
-between segments; at most 200 characters; no empty, `.`, or `..` segment)
-because it appears in the `?agent=` filter and must stay a single clean
-token. An invalid name throws at the call site, inside or outside an
-Agency frame. The agency agent names itself `agency-agent/<brain>`
+carry no name shows no agent. The rule in `lib/statelog/agentName.ts` —
+letters, digits, `.`, `_`, `-`, and `/` between segments; at most 200
+characters; no empty, `.`, or `..` segment — keeps a name one clean token
+that stays intact wherever a URL carries it. An invalid name throws at
+the call site, inside or outside an Agency frame. The agency agent names itself `agency-agent/<brain>`
 (`lib/agents/agency-agent/lib/agentName.agency`) right after it picks its
 brain, so runs group per brain.
 

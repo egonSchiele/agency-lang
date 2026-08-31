@@ -112,19 +112,23 @@ No issue yet.
 
 ## B. The runner's handler is outermost and always present
 
-### B1. Top-level `with approve` runs before the root policy exists (#966)
+### B1. Top-level `with approve` runs before the root policy exists (#966) — FIXED
 
 <https://github.com/egonSchiele/agency-lang/issues/966>. `lib/runtime/node.ts`
-runs global init and imported modules' top-level code, then installs the
-policy handler. A top-level `const x = read(...) with approve` therefore has
-only the author's approve in the chain and succeeds under `--reject '*'`.
-The per-invocation host policy (`InvocationOptions.policy`, B2) installs at
-the same bootstrap site, so it shares this gap: a hosted module's top-level
-initializer runs before the host policy exists.
-Fix: install the root policy handler and root budget before any user code,
-including `__initAllRegistered`; check the resume path in `interrupts.ts`
-for the same ordering; add an agency-js test that a top-level read is
-rejected.
+used to run global init and imported modules' top-level code, then install
+the policy handler. A top-level `const x = read(...) with approve` therefore
+had only the author's approve in the chain and succeeded under `--reject '*'`.
+The per-invocation host policy (`InvocationOptions.policy`, B2) installed at
+the same bootstrap site, so it shared the gap.
+Fixed: `initFreshExecCtx` installs the root policy handler and root budget
+first, before any user code, including `__initAllRegistered`. The resume path
+(`respondToInterrupts` in `interrupts.ts`) already installed the policy before
+top-level callback re-registration. A `std::agency` subprocess never had the
+gap: child global init consults the parent's chain over IPC like any other
+raise, so the parent's policy or handlers decide it
+(`tests/agency/subprocess/handler-reject-child-top-level.agency`).
+Test: `tests/agency-js/policy-top-level` pins both policy sources against a
+top-level `with approve`.
 
 ### B2. The resume leg: raise-time policy shipped; checkpoint integrity open
 
@@ -236,10 +240,11 @@ is the place to start. No statelog issues are filed yet.
 
 - Every codegen, import-template, and effectful-stdlib change gets a test
   that would fail if the boundary broke.
-- `docs/dev/cli/test-cli-sandbox.md` currently claims code before the
-  handler "cannot raise an interrupt at all" and that under `--agency-only`
-  "every effect the code can perform is an interrupt". Both are false until
-  A1 and B1 land; correct the doc when they do, and not before.
+- `docs/dev/cli/test-cli-sandbox.md` currently claims that under
+  `--agency-only` "every effect the code can perform is an interrupt". That
+  is false until A1 lands; correct the doc when it does, and not before.
+  (Its claim about code running before the root handler was corrected when
+  B1 was fixed.)
 - Before hosting strangers' code on the strength of the language, someone
   spends a day trying to break it with this list in hand.
 
@@ -250,7 +255,7 @@ is the place to start. No statelog issues are filed yet.
 | A1 JS globals reachable | #971 | open |
 | A2 review `JS_GLOBALS` | — | not filed |
 | A3 splice execution in non-build commands | — | not filed, known |
-| B1 top-level `with approve` before policy | #966 | open |
+| B1 top-level `with approve` before policy | #966 | fixed |
 | B2 raise-time host policy / checkpoint integrity | spec | policy shipped; integrity open |
 | B3 sandbox flags imply no policy | #970 | open |
 | C1 `node_modules` shadowing | #967 | open |

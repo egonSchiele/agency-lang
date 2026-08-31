@@ -1,0 +1,12 @@
+// Fixture for issue #966: top-level code must run under the root policy
+// handler. The program auto-approves its own top-level env read with
+// `with approve`; a root policy reject must win anyway, exactly as it
+// does for the same read inside a node. env() absorbs a denial, so a
+// rejected read shows up as null, never as a failed run.
+import { env } from "std::system"
+
+const topSecret = env("POLICY_TOP_LEVEL_SECRET") with approve
+
+export node readTop() {
+  return topSecret
+}

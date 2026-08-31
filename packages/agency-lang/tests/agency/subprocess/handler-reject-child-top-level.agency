@@ -1,0 +1,36 @@
+import { compile, run } from "std::agency"
+
+// The child auto-approves a TOP-LEVEL bash call. Child global init still
+// consults the parent's chain over IPC, so the parent's reject must win —
+// the subprocess counterpart of the #966 root-policy ordering fix.
+node main() {
+  const source = """
+import { bash } from "std::shell"
+
+const r = bash("echo child-top-level") with approve
+
+node main() {
+  if (isFailure(r)) {
+    return "top-level bash was rejected"
+  }
+  return "top-level bash succeeded"
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed: " + compileResult.error
+  }
+
+  handle {
+    const result = run(compiled: compileResult.value, node: "main", args: {})
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed: " + result.error
+  } with (data) {
+    if (data.effect == "std::run") {
+      return approve()
+    }
+    return reject()
+  }
+}

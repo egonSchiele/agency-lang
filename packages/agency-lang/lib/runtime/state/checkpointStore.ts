@@ -36,6 +36,20 @@ export type CheckpointArgs = {
   stepPath?: string;
   label?: string | null;
   pinned?: boolean;
+  signature?: string;
+};
+
+export type CheckpointJSON = {
+  id: number;
+  stack: StateStackJSON;
+  globals: GlobalStoreJSON;
+  nodeId: string;
+  moduleId: string;
+  scopeName: string;
+  stepPath: string;
+  label: string | null;
+  pinned: boolean;
+  signature?: string;
 };
 
 export class Checkpoint implements SourceLocation {
@@ -48,6 +62,9 @@ export class Checkpoint implements SourceLocation {
   public stepPath: string;
   public label: string | null;
   public pinned: boolean;
+  /** HMAC checksum embedded at creation when a signing key is configured.
+   *  Absent on unsigned checkpoints. See lib/runtime/checkpointChecksum.ts. */
+  public signature?: string;
 
   constructor(args: CheckpointArgs) {
     this.id = args.id ?? globalCheckpointCounter++;
@@ -59,6 +76,7 @@ export class Checkpoint implements SourceLocation {
     this.stepPath = args.stepPath ?? "";
     this.label = args.label ?? null;
     this.pinned = args.pinned ?? false;
+    this.signature = args.signature;
   }
 
   getScopeKey(): string {
@@ -151,8 +169,8 @@ export class Checkpoint implements SourceLocation {
     return JSON.stringify(this.toJSON()) === JSON.stringify(other.toJSON());
   }
 
-  toJSON() {
-    return {
+  toJSON(): CheckpointJSON {
+    const json: CheckpointJSON = {
       id: this.id,
       stack: this.stack,
       globals: this.globals,
@@ -163,6 +181,10 @@ export class Checkpoint implements SourceLocation {
       label: this.label,
       pinned: this.pinned,
     };
+    if (this.signature !== undefined) {
+      json.signature = this.signature;
+    }
+    return json;
   }
 
   clone(opts: Partial<CheckpointArgs> = {}): Checkpoint {

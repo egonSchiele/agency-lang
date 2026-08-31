@@ -83,6 +83,7 @@ import { NewExpression } from "@/types/newExpression.js";
 import {
   ArrayPattern,
   BindingPattern,
+  EffectPattern,
   MatchPattern,
   ObjectPattern,
   ObjectPatternProperty,
@@ -589,6 +590,7 @@ export class AgencyGenerator {
       case "restPattern":
       case "wildcardPattern":
       case "resultPattern":
+      case "effectPattern":
         return this.formatPattern(node);
       case "isExpression":
         return `${this.processNode(node.expression).trim()} is ${this.formatIsRhs(node.pattern)}`;
@@ -1008,6 +1010,10 @@ export class AgencyGenerator {
       case "resultPattern": {
         const rp = pattern as ResultPattern;
         return rp.binding === null ? rp.kind : `${rp.kind}(${rp.binding})`;
+      }
+      case "effectPattern": {
+        const ep = pattern as EffectPattern;
+        return ep.binding === null ? ep.effect : `${ep.effect}(${this.formatPattern(ep.binding)})`;
       }
       case "typePattern": {
         // A test-only type pattern (no binder) has THREE spellings, one per

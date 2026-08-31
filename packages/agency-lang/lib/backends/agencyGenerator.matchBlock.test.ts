@@ -194,3 +194,22 @@ def describe(value: any): string {
     expect(formatSource(src)).toContain("is string =>");
   });
 });
+
+describe("effect pattern formatting", () => {
+  it("round-trips bare and bound effect patterns", () => {
+    const src = `node main() {
+  match(intr) {
+    std::read => 1
+    std::write({ data }) => 2
+    _ => 0
+  }
+}
+`;
+    const first = formatSource(src)!;
+    // Idempotent: formatting the formatted output changes nothing.
+    expect(formatSource(first)).toBe(first);
+    // Both spellings survive: bare name and name with an object binding.
+    expect(first).toContain("std::read => 1");
+    expect(first).toContain("std::write({ data }) => 2");
+  });
+});

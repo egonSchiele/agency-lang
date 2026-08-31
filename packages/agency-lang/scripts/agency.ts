@@ -1829,7 +1829,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
   const configCmd = program.command("config").description("Inspect Agency configuration");
 
   configCmd
-    .command("show")
+    .command("show", { isDefault: true })
     .description("Print the resolved, merged agency.json config as JSON")
     .option(
       "--show-secrets",

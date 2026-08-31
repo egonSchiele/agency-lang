@@ -1,0 +1,53 @@
+// A tool that raises an interrupt before doing its work. The interrupt
+// message carries the id so a handler can approve some calls and reject
+// others.
+def guardedTool(id: string): string {
+  const _ok = interrupt("run ${id}")
+  return "ran ${id}"
+}
+
+// Every interrupt is rejected with a reason. The reason must reach the
+// model as the tool result, and an identical retry must be refused
+// without raising another interrupt.
+node handlerRejects() {
+  let out = ""
+  handle {
+    out = llm("Use guardedTool.", { tools: [guardedTool] })
+  } with (intr) {
+    return reject("no tools for you")
+  }
+  return out
+}
+
+// No handler: the interrupt pauses the run, and the test rejects it
+// interactively with a reason that must reach the model after resume.
+node interactiveReject() {
+  return llm("Use guardedTool.", { tools: [guardedTool] })
+}
+
+// Five consecutive rejections (different args each time, so the
+// identical-call gate never fires) remove the tool.
+node fiveRejectionsRemove() {
+  let out = ""
+  handle {
+    out = llm("Use guardedTool.", { tools: [guardedTool] })
+  } with (intr) {
+    return reject("denied")
+  }
+  return out
+}
+
+// An approved call resets the consecutive-rejection count: four
+// rejections, an approval, then more calls — the tool must survive.
+node approvalResets() {
+  let out = ""
+  handle {
+    out = llm("Use guardedTool.", { tools: [guardedTool] })
+  } with (intr) {
+    if (intr.message == "run ok" || intr.message == "run ok2") {
+      return approve()
+    }
+    return reject("denied ${intr.message}")
+  }
+  return out
+}

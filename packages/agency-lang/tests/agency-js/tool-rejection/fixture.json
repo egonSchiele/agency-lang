@@ -1,0 +1,25 @@
+{
+  "handlerRejects": {
+    "result": "s1 done",
+    "toolStarts": 1,
+    "reasonSeen": true,
+    "noRetrySuffixSeen": true,
+    "identicalRetryRefused": true,
+    "framedAsError": false
+  },
+  "interactiveReject": {
+    "pausedWithInterrupt": true,
+    "result": "s2 done",
+    "reasonSeen": true
+  },
+  "fiveRejectionsRemove": {
+    "result": "s3 done",
+    "toolStarts": 5,
+    "removalSeen": true
+  },
+  "approvalResets": {
+    "result": "s4 done",
+    "toolStarts": 7,
+    "removalSeen": false
+  }
+}

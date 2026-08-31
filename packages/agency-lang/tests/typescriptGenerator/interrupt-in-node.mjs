@@ -267,7 +267,7 @@ if (__response) {
     // rejected, halt
     
     
-    runner.halt(failure("interrupt rejected", { checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
+    runner.halt(failure(__response.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
     
     return;
   }
@@ -277,7 +277,7 @@ if (__response) {
   if (isRejected(__handlerResult)) {
     
     
-    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
+    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
     
     return;
   }

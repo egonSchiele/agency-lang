@@ -1,8 +1,9 @@
-# Tool-loop guards: repeated calls and markup arguments
+# Tool-loop guards: repeated calls, markup arguments, and rejected calls
 
-Two refusals in `runPrompt`'s tool loop that stop a model from wasting
-rounds. The helpers live in `lib/runtime/toolLoopGuards.ts`; `prompt.ts`
-only calls them. Both happen before the tool's
+Three refusals in `runPrompt`'s tool loop that stop a model from wasting
+rounds. The repeat and markup helpers live in
+`lib/runtime/toolLoopGuards.ts`; the rejection bookkeeping lives in
+`prompt.ts` itself. All three happen before the tool's
 `onToolCallStart` hook, so a refused call never runs, never fires hooks,
 and never counts toward `MAX_TOOL_FAILURES`. The model sees the refusal as
 an ordinary tool message, which is where it reads results.
@@ -73,10 +74,47 @@ the middle of a document, is left alone. (One of the twelve,
 is not matched and fails the old way.) The refused call gets a message
 naming the argument and asking for the call again without it.
 
+## Rejected calls
+
+A rejected interrupt means a handler, policy, or user said no to a tool
+call. The tool loop tells rejections apart from failures by the
+`rejected` flag the interrupt codegen stamps on the halt failure
+(`lib/templates/backends/typescriptGenerator/interruptReturn.mustache`,
+`interruptAssignment.mustache` — both the handler-reject and the
+resume-reject branches, so an interactive `reject("reason")` carries its
+reason too). A TS tool that returns the raw `InterruptResponse` from
+`agency.interrupt` takes the same path.
+
+A rejection is not a failure, so it gets its own treatment in
+`runInvokeStep` (`recordRejection` in `prompt.ts`):
+
+- The model sees `Tool call rejected: <reason>. Do not call this tool
+  with the same arguments again; the call will not be executed.` — the
+  rejecter's reason, not an error message. No `toolErrorCounts`
+  increment, no `toolError` statelog event (the handler chain already
+  emitted `interruptResolved`).
+- The call's `repeatKey` lands in `self.rejectedCalls`. An identical
+  retry is refused by the `priorRejected` gate before the start hook —
+  no invoke, no re-raised interrupt, no counter movement. Checked before
+  the repeat guard so the model hears "rejected", not "repeated".
+- `self.rejectionCounts[tool]` counts CONSECUTIVE rejections. At
+  `MAX_TOOL_REJECTIONS` (5) the tool joins `removedTools`. A successful
+  call of the tool resets its count to zero: a narrow policy reject rule
+  brushed against during otherwise-approved work never removes the tool,
+  while a model rephrasing a refused call with nothing approved in
+  between loses it quickly.
+
+Both records live on the runPrompt frame, so they survive checkpoint and
+resume within one `llm()` call and reset when the next one starts.
+
 ## Tests
 
 - Pure helpers: `lib/runtime/toolLoopGuards.test.ts` (`markupArgument`,
   `repeatKey`, `noteRepeat`).
+- Rejections: `tests/agency-js/tool-rejection` scripts a handler reject
+  (reason + identical-retry gate), an interactive reject with a reason,
+  five consecutive rejections removing the tool, and an approval
+  resetting the count.
 - Real wiring: `tests/agency-js/repeated-tool-calls` scripts five
   identical calls and one garbled one through a fake client and checks
   the tool ran four times (the fourth call was refused and the count

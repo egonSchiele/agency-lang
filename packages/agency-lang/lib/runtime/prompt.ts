@@ -186,6 +186,20 @@ function toolErrorMessage(error: any): string {
  *  breaker against retry spirals), or immediately on the destructive tier. */
 const MAX_TOOL_FAILURES = 5;
 
+/** A rejected tool call is not a failure: a handler, policy, or user said
+ *  no. Rejections get their own counter with the same limit — but only
+ *  CONSECUTIVE rejections count. An approved (successful) call of the tool
+ *  resets its count, so a narrow reject rule brushed against during
+ *  otherwise-approved work never removes the tool, while a model that
+ *  keeps rephrasing a refused call (nothing approved in between) loses the
+ *  tool quickly. */
+const MAX_TOOL_REJECTIONS = 5;
+
+const REJECTION_SUFFIX =
+  "Do not call this tool with the same arguments again; the call will not be executed.";
+const REJECTION_REMOVAL_SUFFIX =
+  "This tool has been rejected too many times and can no longer be called.";
+
 type FailureTier = "destructive" | "neverStarted" | "idempotent" | "neutral";
 
 /** Classify a tool failure. Most-specific fact wins: a started destructive
@@ -260,6 +274,9 @@ export const _internal = {
   failureTier,
   TIER_SUFFIX,
   MAX_TOOL_FAILURES,
+  MAX_TOOL_REJECTIONS,
+  REJECTION_SUFFIX,
+  REJECTION_REMOVAL_SUFFIX,
   armCallTimeout,
   runWithRetry,
   dropNullDefaultedArgs,
@@ -650,6 +667,8 @@ export async function runPrompt(args: {
     self.__initialized = true;
     self.removedTools = args.removedTools || [];
     self.toolErrorCounts = {};
+    self.rejectedCalls = [];
+    self.rejectionCounts = {};
     self.repeatStreak = freshRepeatStreak();
     self.toolCallRound = 0;
     self.validationAttempt = 0;
@@ -659,6 +678,17 @@ export async function runPrompt(args: {
 
   const removedTools: string[] = self.removedTools;
   const toolErrorCounts: Record<string, number> = self.toolErrorCounts;
+  // Back-compat for checkpoints taken before the rejection counters
+  // existed: a resumed frame passes the __initialized guard above with
+  // these slots absent.
+  self.rejectedCalls ??= [];
+  self.rejectionCounts ??= {};
+  /** repeatKeys of calls rejected in THIS llm() call. An identical retry
+   *  is refused before it can re-raise the interrupt. */
+  const rejectedCalls: string[] = self.rejectedCalls;
+  /** Consecutive rejections per tool (reset by an approved call). At
+   *  MAX_TOOL_REJECTIONS the tool joins removedTools. */
+  const rejectionCounts: Record<string, number> = self.rejectionCounts;
   const repeatStreak: RepeatStreak = self.repeatStreak;
   // The calling function's locals, for decision 8. Read from `args` (not the
   // frame) because it belongs to the CALLER, not to runPrompt's own frame.
@@ -1117,6 +1147,37 @@ export async function runPrompt(args: {
         markDestructiveWork({ locals: destructiveSink });
       }
 
+      // A rejection — a handler, policy, or user said no — arrives either
+      // as a Failure the interrupt codegen marked `rejected` (compiled
+      // Agency tools) or as a raw InterruptResponse a TS tool returned
+      // (agency.interrupt). Both take this path: push the rejecter's
+      // reason, remember the exact call so an identical retry is refused
+      // (see the priorRejected gate), and count toward the consecutive-
+      // rejection removal. Deliberately no toolErrorCounts increment and
+      // no toolError statelog event — the chain already emitted
+      // interruptResolved, and a rejection does not mean the tool is
+      // broken.
+      const recordRejection = (reason: string): { toolResult: any; invokeOutcome: "rejected" } => {
+        const capped = String(capToolResultForLlm(reason, toolResultCap));
+        const callKey = repeatKey(handler.name, namedArgs);
+        if (!rejectedCalls.includes(callKey)) rejectedCalls.push(callKey);
+        rejectionCounts[handler.name] = (rejectionCounts[handler.name] || 0) + 1;
+        const removed = rejectionCounts[handler.name] >= MAX_TOOL_REJECTIONS;
+        if (removed) removedTools.push(handler.name);
+        messages.push(
+          smoltalk.toolMessage(
+            `Tool call rejected: ${capped}. ${removed ? REJECTION_REMOVAL_SUFFIX : REJECTION_SUFFIX}`,
+            { tool_call_id: toolCall.id, name: toolCall.name },
+          ),
+        );
+        stack.deleteBranch(branchKey);
+        return { toolResult, invokeOutcome: "rejected" };
+      };
+
+      if (isFailure(toolResult) && toolResult.rejected) {
+        return recordRejection(toolErrorMessage(toolResult.error));
+      }
+
       if (isFailure(toolResult)) {
         const errorMessage = toolErrorMessage(toolResult.error);
         // Cap only what the LLM sees; statelog keeps the full message.
@@ -1152,16 +1213,9 @@ export async function runPrompt(args: {
       }
 
       if (isRejected(toolResult)) {
-        const message =
-          typeof toolResult.value === "string" ? toolResult.value : "Tool call rejected by policy";
-        messages.push(
-          smoltalk.toolMessage(capToolResultForLlm(message, toolResultCap), {
-            tool_call_id: toolCall.id,
-            name: toolCall.name,
-          }),
+        return recordRejection(
+          typeof toolResult.value === "string" ? toolResult.value : "Tool call rejected by policy",
         );
-        stack.deleteBranch(branchKey);
-        return { toolResult, invokeOutcome: "rejected" };
       }
 
       if (hasInterrupts(toolResult)) {
@@ -1186,9 +1240,19 @@ export async function runPrompt(args: {
       // Nullish, NOT ||: legitimate falsy returns (false, 0, "") must
       // reach the model and the branch cache as-is.
       toolResult = toolResult ?? `${handler.name} ran successfully but did not return a value`;
+      // An approved call is evidence the tool is not blanket-refused:
+      // only CONSECUTIVE rejections remove it.
+      rejectionCounts[handler.name] = 0;
       stack.setResultOnBranch(branchKey, toolResult);
       pushSuccessToolMessage({ toolResult, toolCall, handler, branchStack });
       return { toolResult, invokeOutcome: "success" };
+    };
+
+    // Push a plain notice ToolMessage for one call — the refusal gates
+    // (unhandled, round cap, removed, markup, repeat, prior rejection) all
+    // answer the model this way.
+    const pushToolNotice = (text: string, toolCall: smoltalk.ToolCallJSON): void => {
+      messages.push(smoltalk.toolMessage(text, { tool_call_id: toolCall.id, name: toolCall.name }));
     };
 
     // Push the success ToolMessage for one invocation, with any reply-
@@ -1333,25 +1397,21 @@ export async function runPrompt(args: {
                   console.error(
                     `No handler found for tool call: ${toolCall.name}. This error will be sent back to the LLM.`,
                   );
-                  messages.push(
-                    smoltalk.toolMessage(`Error: No handler found for tool call ${toolCall.name}`, {
-                      tool_call_id: toolCall.id,
-                      name: toolCall.name,
-                    }),
+                  pushToolNotice(
+                    `Error: No handler found for tool call ${toolCall.name}`,
+                    toolCall,
                   );
                 });
                 return;
               }
 
               if (self.toolCallRound >= effectiveMaxToolCallRounds) {
-                await b.step(`round.${round}.tool.${callSlug}.tooManyRounds`, async () => {
-                  messages.push(
-                    smoltalk.toolMessage(
-                      `Error: Maximum number of tool call rounds (${effectiveMaxToolCallRounds}) exceeded. This tool call will not be executed.`,
-                      { tool_call_id: toolCall.id, name: toolCall.name },
-                    ),
-                  );
-                });
+                await b.step(`round.${round}.tool.${callSlug}.tooManyRounds`, async () =>
+                  pushToolNotice(
+                    `Error: Maximum number of tool call rounds (${effectiveMaxToolCallRounds}) exceeded. This tool call will not be executed.`,
+                    toolCall,
+                  ),
+                );
                 return;
               }
 
@@ -1360,14 +1420,12 @@ export async function runPrompt(args: {
               // sibling in this round that pushed first), skip with a
               // notice toolMessage.
               if (removedTools.includes(handler.name)) {
-                await b.step(`round.${round}.tool.${callSlug}.removed`, async () => {
-                  messages.push(
-                    smoltalk.toolMessage(
-                      `Error: Handler for tool call ${handler.name} has been removed already due to previous errors, and will not be executed.`,
-                      { tool_call_id: toolCall.id, name: toolCall.name },
-                    ),
-                  );
-                });
+                await b.step(`round.${round}.tool.${callSlug}.removed`, async () =>
+                  pushToolNotice(
+                    `Error: Handler for tool call ${handler.name} has been removed already due to previous errors, and will not be executed.`,
+                    toolCall,
+                  ),
+                );
                 return;
               }
 
@@ -1384,27 +1442,30 @@ export async function runPrompt(args: {
               // markup, and a call the model keeps making with nothing changing.
               const markupArg = markupArgument(namedArgs, handler.params);
               if (markupArg !== null) {
-                await b.step(`round.${round}.tool.${callSlug}.markup`, async () => {
-                  messages.push(
-                    smoltalk.toolMessage(markupArgumentMessage(handler.name, markupArg), {
-                      tool_call_id: toolCall.id,
-                      name: toolCall.name,
-                    }),
-                  );
-                });
+                await b.step(`round.${round}.tool.${callSlug}.markup`, async () =>
+                  pushToolNotice(markupArgumentMessage(handler.name, markupArg), toolCall),
+                );
                 return;
               }
               const callKey = repeatKey(handler.name, namedArgs);
+              // A call identical to one already rejected in this llm() call
+              // is refused outright: no invoke, no re-raised interrupt, no
+              // counter movement. Before the repeat guard so the model hears
+              // "rejected", not "repeated".
+              if (rejectedCalls.includes(callKey)) {
+                await b.step(`round.${round}.tool.${callSlug}.priorRejected`, async () =>
+                  pushToolNotice(
+                    `This exact call to ${handler.name} was already rejected and will not be executed. Do not retry it.`,
+                    toolCall,
+                  ),
+                );
+                return;
+              }
               const priorRuns = repeatsBefore(repeatStreak, callKey);
               if (maxRepeatedToolCalls > 0 && priorRuns >= maxRepeatedToolCalls) {
                 await b.step(`round.${round}.tool.${callSlug}.repeated`, async () => {
                   resetRepeat(repeatStreak);
-                  messages.push(
-                    smoltalk.toolMessage(repeatedCallMessage(handler.name, priorRuns), {
-                      tool_call_id: toolCall.id,
-                      name: toolCall.name,
-                    }),
-                  );
+                  pushToolNotice(repeatedCallMessage(handler.name, priorRuns), toolCall);
                 });
                 return;
               }

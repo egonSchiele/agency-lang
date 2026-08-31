@@ -3,10 +3,18 @@ import { realpathSync } from "fs";
 import { z } from "zod";
 import { getPackageRoot } from "../importPaths.js";
 
-export const PolicyRuleSchema = z.object({
-  match: z.record(z.string(), z.string()).optional(),
-  action: z.enum(["approve", "reject", "propagate"]),
-});
+export const PolicyRuleSchema = z
+  .object({
+    match: z.record(z.string(), z.string()).optional(),
+    action: z.enum(["approve", "reject", "propagate"]),
+    /** Message the rejection carries back to whoever raised the interrupt —
+     *  for a rejected tool call, what the model reads (e.g. "Use safeBash
+     *  instead of bash"). Only valid on a reject rule. */
+    rejectMessage: z.string().optional(),
+  })
+  .refine((rule) => rule.rejectMessage === undefined || rule.action === "reject", {
+    message: 'rejectMessage is only valid on a rule whose action is "reject"',
+  });
 
 export type PolicyRule = z.infer<typeof PolicyRuleSchema>;
 
@@ -14,7 +22,22 @@ export const PolicySchema = z.record(z.string(), z.array(PolicyRuleSchema));
 
 export type Policy = z.infer<typeof PolicySchema>;
 
-type PolicyResult = { type: "approve" } | { type: "reject" } | { type: "propagate" };
+type PolicyResult =
+  | { type: "approve" }
+  | { type: "reject"; message?: string; value?: string }
+  | { type: "propagate" };
+
+/** The result for one matched rule. A reject rule's `rejectMessage` rides
+ *  along as `message` — the documented field — and again as `value`,
+ *  because a handler may return this result directly as its response
+ *  (`return checkPolicy(policy, intr)` is a supported idiom) and the
+ *  handler chain reads a rejection's reason from `value`. */
+function ruleResult(rule: PolicyRule): PolicyResult {
+  if (rule.action === "reject" && rule.rejectMessage !== undefined) {
+    return { type: "reject", message: rule.rejectMessage, value: rule.rejectMessage };
+  }
+  return { type: rule.action };
+}
 
 /** Escape picomatch metacharacters so a literal value matches only itself
  *  inside a pattern. Used for every value a generated rule pins, and for
@@ -44,7 +67,7 @@ export function checkPolicyExplicit(
   if (rules) {
     for (const rule of rules) {
       if (matchesRule(rule, interrupt)) {
-        return { type: rule.action };
+        return ruleResult(rule);
       }
     }
   }
@@ -57,7 +80,7 @@ export function checkPolicyExplicit(
   if (wildcard) {
     for (const rule of wildcard) {
       if (matchesRule(rule, interrupt)) {
-        return { type: rule.action };
+        return ruleResult(rule);
       }
     }
   }

@@ -80,7 +80,7 @@ export function buildDecider(options: BuildDeciderOptions): DecideFn {
       return approve();
     }
     if (decision?.type === "reject") {
-      return reject();
+      return reject(decision.message);
     }
     if (interrupt.expectsValue) {
       if (options.interactive) {

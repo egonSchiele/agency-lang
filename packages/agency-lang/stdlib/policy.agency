@@ -79,10 +79,17 @@ export type InterruptEffect = string
  * present in the interrupt's `data` and its value matches the glob
  * pattern. Omit `match` (or set it to `{}`) for a catch-all that
  * applies to every interrupt of the parent effect.
+ *
+ * A reject rule may carry a `rejectMessage`: the message the rejection
+ * hands back to whoever raised the interrupt. For a rejected tool call
+ * this is what the model reads, so it can steer the next attempt — for
+ * example, a rule rejecting `std::bash` with
+ * `rejectMessage: "Use safeBash instead"`.
  */
 export type PolicyRule = {
   match?: Record<InterruptDataKey, InterruptDataVal>;
-  action: "approve" | "reject" | "propagate"
+  action: "approve" | "reject" | "propagate";
+  rejectMessage?: string
 }
 
 /**
@@ -216,6 +223,11 @@ let _internalIo: boolean = false
  * (no rules for the effect, or every rule's `match` failed), returns
  * `propagate()` so the next handler in the chain runs.
  *
+ * A reject result carries the matched rule's `rejectMessage` (when the
+ * rule set one) as `.message`, so a handler can pass it on with
+ * `reject(decision.message)`. Returning the result directly from a
+ * handler (`return checkPolicy(policy, intr)`) also carries the message.
+ *
  * Designed for use inside a custom handler. The CLI sugar
  * (`cliPolicyHandler`) calls this for you.
  */
@@ -224,9 +236,9 @@ export def checkPolicy(
   interrupt: Record<string, any>,
 ) {
   """
-  Evaluate a policy against an interrupt. Returns approve(), reject(), or propagate() based on the first matching rule.
+  Evaluate a policy against an interrupt. Returns approve(), reject(), or propagate() based on the first matching rule. A reject carries the rule's rejectMessage as .message when one was set.
 
-  @param policy - Ordered rules keyed by interrupt effect; each rule has optional glob-pattern match fields and an action.
+  @param policy - Ordered rules keyed by interrupt effect; each rule has optional glob-pattern match fields, an action, and (on reject rules) an optional rejectMessage.
   @param interrupt - The interrupt to evaluate.
   """
   return _checkPolicy(policy, interrupt)
@@ -845,7 +857,9 @@ def _handler(intr: any): any {
     return approve()
   }
   if (decision.type == "reject") {
-    return reject()
+    // The rule's rejectMessage, when set: the model reads it as the
+    // rejection reason and can steer its next attempt.
+    return reject(decision.message)
   }
 
   // No rule decided, and no user is at a terminal to ask: reject with a

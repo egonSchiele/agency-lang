@@ -13,7 +13,10 @@ function applyPolicy(
 ) {
   return interrupts.map((interrupt) => {
     const decision = checkPolicy(policy, interrupt);
-    return decision.type === "approve" ? approve() : reject();
+    if (decision.type === "approve") {
+      return approve();
+    }
+    return reject(decision.type === "reject" ? decision.message : undefined);
   });
 }
 

@@ -1,0 +1,44 @@
+import { checkPolicy } from "std::policy"
+
+// A reject rule's rejectMessage becomes the rejection's reason: the
+// failing call's error carries it, so a model (or code) reads WHY.
+def run(command: string): string {
+  return interrupt mytest::exec("May I run this?", { command: command })
+  return "ran ${command}"
+}
+
+const policy = {
+  "mytest::exec": [
+    { "action": "reject", "rejectMessage": "Use safeBash instead" }
+  ]
+}
+
+// The handler returns checkPolicy's result directly — the message rides.
+node direct() {
+  handle {
+    const r = try run("ls")
+    if (isFailure(r)) {
+      return "rejected with: ${r.error}"
+    }
+    return r
+  } with (interrupt) {
+    return checkPolicy(policy, interrupt)
+  }
+}
+
+// The handler passes the message explicitly via reject(decision.message).
+node explicit() {
+  handle {
+    const r = try run("ls")
+    if (isFailure(r)) {
+      return "rejected with: ${r.error}"
+    }
+    return r
+  } with (interrupt) {
+    const decision = checkPolicy(policy, interrupt)
+    if (decision.type == "reject") {
+      return reject(decision.message)
+    }
+    return decision
+  }
+}

@@ -72,10 +72,21 @@ under eval used that to list the home directory and read the repo's
 
 ## Rule matching
 
-A rule is `{ match?: Record<string, string>, action }`. Each match value is
-a picomatch glob tested against the interrupt's data field of the same name
-(`origin` and `message` come from the interrupt itself). All entries must
-match; a rule with no `match` is a catch-all.
+A rule is `{ match?: Record<string, string>, action, rejectMessage? }`.
+Each match value is a picomatch glob tested against the interrupt's data
+field of the same name (`origin` and `message` come from the interrupt
+itself). All entries must match; a rule with no `match` is a catch-all.
+
+A reject rule may carry a `rejectMessage`: the rejection's reason,
+handed back to whoever raised the interrupt. For a rejected tool call it
+is what the model reads, so it can steer the next attempt — e.g. a rule
+rejecting `std::bash` with `"rejectMessage": "Use safeBash instead"`.
+`validatePolicy` refuses a `rejectMessage` on an approve or propagate
+rule. Every policy consumer forwards it: the run policy handler
+(`--policy`, `AGENCY_RUN_POLICY`, a served invocation's policy), the CLI
+decider, the MCP interrupt loop, and the agent's `cliPolicyHandler`; a
+handler calling `checkPolicy` itself gets it as `.message` on the reject
+result (returning the result directly also carries it).
 
 Three semantics to keep straight:
 

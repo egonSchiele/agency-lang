@@ -1403,12 +1403,34 @@ export async function runPrompt(args: {
               // byte-for-byte unchanged.
               const callSlug = `${index}_${toolCall.id}`;
 
+              // Replay safety for the mutable refusal gates below (removed,
+              // priorRejected, repeated): their conditions read frame state
+              // that THIS invocation may have written before a sibling's
+              // interrupt was checkpointed (its own rejection recorded in
+              // rejectedCalls, its own fifth rejection in removedTools). An
+              // invocation that already ran must replay down its ORIGINAL
+              // path — a gate whose step never completed would push a second
+              // tool message for the same tool_call_id. `invokeOutcomes` is
+              // written inside the idempotent invoke step, never for the
+              // interrupted outcome (that step re-runs on resume by design).
+              self.runnerState.invokeOutcomes ??= {};
+              const priorOutcome: string | undefined = self.runnerState.invokeOutcomes[callSlug];
+              // A non-success invocation returned right after its invoke
+              // step, with its answer already in the thread — nothing left
+              // to do. A success falls through: its own steps no-op via
+              // completedSteps, and it must skip the gates (a same-round
+              // sibling's removal must not refuse a call that already ran).
+              if (priorOutcome !== undefined && priorOutcome !== "success") {
+                return;
+              }
+              const replayed = priorOutcome !== undefined;
+
               // Gated start (strategy B): a removed tool is refused by NAME,
               // before the handler lookup — the round-end filter drops
               // removed tools from toolFunctions, so a lookup-first path
               // would misreport a later call as "No handler found". Also
               // catches a removal by an earlier sibling in this round.
-              if (removedTools.includes(toolCall.name)) {
+              if (!replayed && removedTools.includes(toolCall.name)) {
                 await b.step(`round.${round}.tool.${callSlug}.removed`, async () =>
                   pushToolNotice(
                     `Error: Tool ${toolCall.name} has been removed from this conversation after repeated failures or rejections, and will not be executed.`,
@@ -1465,7 +1487,7 @@ export async function runPrompt(args: {
               // is refused outright: no invoke, no re-raised interrupt, no
               // counter movement. Before the repeat guard so the model hears
               // "rejected", not "repeated".
-              if (rejectedCalls.includes(callKey)) {
+              if (!replayed && rejectedCalls.includes(callKey)) {
                 await b.step(`round.${round}.tool.${callSlug}.priorRejected`, async () =>
                   pushToolNotice(
                     `This exact call to ${handler.name} was already rejected and will not be executed. Do not retry it.`,
@@ -1475,7 +1497,7 @@ export async function runPrompt(args: {
                 return;
               }
               const priorRuns = repeatsBefore(repeatStreak, callKey);
-              if (maxRepeatedToolCalls > 0 && priorRuns >= maxRepeatedToolCalls) {
+              if (!replayed && maxRepeatedToolCalls > 0 && priorRuns >= maxRepeatedToolCalls) {
                 await b.step(`round.${round}.tool.${callSlug}.repeated`, async () => {
                   resetRepeat(repeatStreak);
                   pushToolNotice(repeatedCallMessage(handler.name, priorRuns), toolCall);
@@ -1551,9 +1573,12 @@ export async function runPrompt(args: {
                     self.runnerState.toolTimings[callSlug] = performance.now() - toolCallStartTime;
                   }
                   // Inside the idempotent invoke step, so a resume does not
-                  // count the same run twice.
+                  // count the same run twice. The interrupted outcome is
+                  // never recorded: its invoke step re-runs on resume, and a
+                  // recorded outcome would short-circuit that re-run.
                   if (outcome.invokeOutcome !== "interrupted") {
                     noteRepeat(repeatStreak, callKey, stringifyToolResult(toolResult));
+                    self.runnerState.invokeOutcomes[callSlug] = outcome.invokeOutcome;
                   }
                   return outcome.interrupts;
                 });

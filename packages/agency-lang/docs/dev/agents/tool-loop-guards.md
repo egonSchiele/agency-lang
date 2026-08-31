@@ -1,12 +1,15 @@
 # Tool-loop guards: repeated calls, markup arguments, and rejected calls
 
 Three refusals in `runPrompt`'s tool loop that stop a model from wasting
-rounds. The repeat and markup helpers live in
-`lib/runtime/toolLoopGuards.ts`; the rejection bookkeeping lives in
-`prompt.ts` itself. All three happen before the tool's
-`onToolCallStart` hook, so a refused call never runs, never fires hooks,
-and never counts toward `MAX_TOOL_FAILURES`. The model sees the refusal as
-an ordinary tool message, which is where it reads results.
+rounds: a repeated call, a markup argument, and a RETRY of an
+already-rejected call (the first rejected call runs normally up to its
+interrupt; only the identical retry is refused). The repeat and markup
+helpers live in `lib/runtime/toolLoopGuards.ts`; the rejection
+bookkeeping lives in `prompt.ts` itself. All three refusals happen
+before the tool's `onToolCallStart` hook, so a refused call never runs,
+never fires hooks, and never counts toward `MAX_TOOL_FAILURES`. The
+model sees the refusal as an ordinary tool message, which is where it
+reads results.
 
 ## Repeated calls
 

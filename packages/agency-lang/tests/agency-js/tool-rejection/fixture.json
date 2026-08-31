@@ -27,5 +27,11 @@
     "result": "s5 done",
     "toolStarts": 7,
     "removalSeen": false
+  },
+  "parallelRejectAndPause": {
+    "pausedWithInterrupt": true,
+    "result": "s6 done",
+    "toolMessagesInFinalRequest": 2,
+    "rejectionMessages": 1
   }
 }

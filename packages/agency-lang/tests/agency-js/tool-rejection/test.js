@@ -4,7 +4,9 @@ import {
   fiveRejectionsRemove,
   destructiveReject,
   approvalResets,
+  parallelRejectAndPause,
   respondToInterrupts,
+  approve,
   reject,
 } from "./agent.js";
 import { writeFileSync } from "fs";
@@ -12,9 +14,10 @@ import { writeFileSync } from "fs";
 // Capture every tool-role message the model sees, via onLLMCallStart:
 // each round's request carries the tool results of the previous round.
 const makeCapture = () => {
-  const state = { toolMessages: [], toolStarts: 0 };
+  const state = { toolMessages: [], toolStarts: 0, lastMessages: [] };
   const callbacks = {
     onLLMCallStart: ({ messages }) => {
+      state.lastMessages = messages;
       for (const m of messages) {
         if (m.role === "tool") {
           const text = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
@@ -106,6 +109,31 @@ const results = {};
     result: result.data,
     toolStarts: state.toolStarts,
     removalSeen: seen(state, "rejected too many times"),
+  };
+}
+
+// Replay safety: guardedTool is rejected while its parallel sibling
+// pauses. On resume, the rejected branch's message is already in the
+// checkpointed thread — the replay must not push a second one. The
+// final request must hold exactly TWO tool messages (one rejection,
+// one success), counted WITH duplicates via lastMessages.
+{
+  const { state, callbacks } = makeCapture();
+  const paused = await parallelRejectAndPause({ callbacks });
+  const pausedWithInterrupt =
+    Array.isArray(paused.data) && paused.data[0]?.type === "interrupt";
+  const resumed = await respondToInterrupts(paused.data, [approve()], {
+    metadata: { callbacks },
+  });
+  const toolContents = state.lastMessages
+    .filter((m) => m.role === "tool")
+    .map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content)));
+  results.parallelRejectAndPause = {
+    pausedWithInterrupt,
+    result: resumed.data,
+    toolMessagesInFinalRequest: toolContents.length,
+    rejectionMessages: toolContents.filter((c) => c.includes("Tool call rejected: no guardedTool"))
+      .length,
   };
 }
 

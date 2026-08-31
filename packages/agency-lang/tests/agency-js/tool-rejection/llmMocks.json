@@ -25,5 +25,12 @@
   { "toolCall": { "name": "guardedTool", "args": { "id": "ok" } } },
   { "toolCall": { "name": "guardedTool", "args": { "id": "x5" } } },
   { "toolCall": { "name": "guardedTool", "args": { "id": "ok2" } } },
-  { "return": "s5 done" }
+  { "return": "s5 done" },
+  {
+    "toolCalls": [
+      { "name": "guardedTool", "args": { "id": "pr1" } },
+      { "name": "pauseMe", "args": { "id": "pp1" } }
+    ]
+  },
+  { "return": "s6 done" }
 ]

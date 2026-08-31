@@ -37,6 +37,28 @@ node fiveRejectionsRemove() {
   return out
 }
 
+// Replay safety: one tool of a parallel round is rejected while its
+// sibling pauses on an interrupt. The rejected branch's message and
+// bookkeeping are in the checkpoint; the resume replay must not push a
+// second tool message for it.
+def pauseMe(id: string): string {
+  const _ok = interrupt("pause ${id}")
+  return "ran ${id}"
+}
+
+node parallelRejectAndPause() {
+  let out = ""
+  handle {
+    out = llm("Use both tools.", { tools: [guardedTool, pauseMe] })
+  } with (intr) {
+    if (intr.message == "run pr1") {
+      return reject("no guardedTool")
+    }
+    return pass()
+  }
+  return out
+}
+
 // A destructive def commits destructiveRan at body entry, so a rejection
 // of its gate is NOT a clean rejection: it takes the destructive failure
 // tier (immediate removal), not the rejection path.

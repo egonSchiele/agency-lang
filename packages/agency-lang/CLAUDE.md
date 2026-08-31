@@ -286,8 +286,9 @@ Other process docs:
 
 ### Security
 
-- `docs/dev/security/goal.md` — The goal of running untrusted Agency code with no operating-system sandbox, why the language design makes that possible, and what it demands of the compiler.
+- `docs/dev/security/goal.md` — The goal: the language decides what runs (fine-grained interrupt policy) and a cheap capability-restricted process contains what slips past. The two motivations (agent code on my machine vs hosting strangers), and what the compiler-as-boundary demands.
 - `docs/dev/security/roadmap.md` — Every gap between today's code and that goal, grouped by which part of the argument it breaks, with the GitHub issue for each.
+- `docs/dev/security/hardening/README.md` — The done list: what hardening has shipped, grouped by whether it reinforces the policy (front door) or containment (back door), each linking its depth doc.
 
 ### Standard library
 

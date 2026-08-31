@@ -1,5 +1,8 @@
 {
   "cliRejected": true,
+  "bareApprovedByPolicy": true,
+  "propagateFailsClosed": true,
   "hostRejected": true,
-  "approvedWithoutPolicy": true
+  "approvedWithoutPolicy": true,
+  "bareFailsClosedWithoutPolicy": true
 }

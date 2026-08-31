@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { Checkpoint, CheckpointStore } from "./checkpointStore.js";
+import { verifyCheckpointChecksum } from "../checkpointChecksum.js";
 import { type StateStackJSON, type StateJSON } from "./stateStack.js";
 import { type GlobalStoreJSON } from "./globalStore.js";
 import { CheckpointError } from "../errors.js";
@@ -718,5 +719,33 @@ describe("CheckpointStore", () => {
       // The JSON should only have 1 checkpoint
       expect(Object.keys(json.checkpoints)).toHaveLength(1);
     });
+  });
+});
+
+describe("checkpoint signing at creation", () => {
+  afterEach(() => {
+    delete process.env.AGENCY_CHECKPOINT_KEY;
+  });
+
+  it("signs a created checkpoint when a key is configured", () => {
+    process.env.AGENCY_CHECKPOINT_KEY = "0123456789abcdef0123456789abcdef";
+    const ctx = makeMockCtx();
+    const cp = Checkpoint.fromStateStack(ctx.stateStack, ctx, {
+      moduleId: "m",
+      scopeName: "main",
+      stepPath: "0",
+    });
+    expect(cp.signature).toBeDefined();
+    expect(verifyCheckpointChecksum(cp)).toBe(true);
+  });
+
+  it("does not sign when no key is configured", () => {
+    const ctx = makeMockCtx();
+    const cp = Checkpoint.fromStateStack(ctx.stateStack, ctx, {
+      moduleId: "m",
+      scopeName: "main",
+      stepPath: "0",
+    });
+    expect(cp.signature).toBeUndefined();
   });
 });

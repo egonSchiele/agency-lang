@@ -1,4 +1,5 @@
 import { MessageJSON } from "smoltalk";
+import { signCheckpoint } from "../checkpointChecksum.js";
 import { CheckpointError } from "../errors.js";
 import { deepClone } from "../utils.js";
 import type { RuntimeContext } from "./context.js";
@@ -206,12 +207,17 @@ export class Checkpoint implements SourceLocation {
         "Cannot create checkpoint: no current node id in state stack. This error can happen if you call a function that throws an interrupt from the global namespace. Please use `const foo = funcName() with approve` syntax.",
       );
     }
-    return new Checkpoint({
+    const checkpoint = new Checkpoint({
       stack: stateStack.toJSON(),
       globals: ctx.globals.toJSON(),
       nodeId,
       ...opts,
     });
+    // This is the single chokepoint every checkpoint (interrupt, guard,
+    // trace) is created through, so signing here covers them all. Keep this
+    // the last statement: the signature must cover every field set above.
+    signCheckpoint(checkpoint);
+    return checkpoint;
   }
 
   static fromContext(

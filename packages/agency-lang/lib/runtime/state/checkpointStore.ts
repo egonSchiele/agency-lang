@@ -189,7 +189,13 @@ export class Checkpoint implements SourceLocation {
   }
 
   clone(opts: Partial<CheckpointArgs> = {}): Checkpoint {
-    return Checkpoint.fromJSON({ ...this.toJSON(), ...opts })!;
+    const copy = Checkpoint.fromJSON({ ...this.toJSON(), ...opts })!;
+    // The copy carries the original signature but `opts` may have changed
+    // signed fields (typically `id`); re-sign so the copy verifies.
+    if (copy.signature !== undefined) {
+      signCheckpoint(copy);
+    }
+    return copy;
   }
 
   getLocation(): string {
@@ -370,6 +376,11 @@ export class CheckpointStore {
     if (!cp) return;
     cp.pinned = true;
     if (label !== undefined) cp.label = label;
+    // pinned/label are covered by the signature; re-sign the edited checkpoint
+    // so it stays self-consistent.
+    if (cp.signature !== undefined) {
+      signCheckpoint(cp);
+    }
   }
 
   get(id: number): Checkpoint | undefined {

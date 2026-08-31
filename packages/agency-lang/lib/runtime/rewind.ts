@@ -1,4 +1,5 @@
 import type { Checkpoint } from "./state/checkpointStore.js";
+import { signCheckpoint } from "./checkpointChecksum.js";
 import { throwIfNodeResultAborted } from "./abortBoundary.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
 import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
@@ -14,6 +15,13 @@ export function applyOverrides(checkpoint: Checkpoint, overrides: Record<string,
   const frame = StateStack.lastFrameJSON(checkpoint.stack);
   for (const [key, value] of Object.entries(overrides)) {
     frame.locals[key] = value;
+  }
+  // A legitimate edit invalidates the embedded checksum, so re-sign. This also
+  // runs on the served resume path with caller-supplied overrides — fine,
+  // because a host verifies BEFORE responding, and the re-signed object is
+  // never returned to the caller.
+  if (checkpoint.signature !== undefined) {
+    signCheckpoint(checkpoint);
   }
 }
 

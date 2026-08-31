@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { Checkpoint } from "./state/checkpointStore.js";
+import { Checkpoint, CheckpointStore } from "./state/checkpointStore.js";
 import {
   signCheckpoint,
   verifyCheckpointChecksum,
@@ -155,6 +155,20 @@ describe("checkpoint checksum", () => {
     expect(verifyCheckpointChecksum(checkpoint)).toBe(false);
   });
 
+  it("signs and verifies a PLAIN JSON checkpoint (the external resume shape)", () => {
+    // interrupt.checkpoint after an HTTP round trip is parsed JSON, not a
+    // Checkpoint instance; sign/verify must accept it (applyOverrides re-signs
+    // exactly this shape on the resume path).
+    process.env.AGENCY_CHECKPOINT_KEY = KEY;
+    const instance = makeCheckpoint();
+    signCheckpoint(instance);
+    const plain = JSON.parse(JSON.stringify(instance.toJSON()));
+    expect(verifyCheckpointChecksum(plain)).toBe(true);
+    plain.stack.stack[0].locals.x = 7;
+    signCheckpoint(plain);
+    expect(verifyCheckpointChecksum(plain)).toBe(true);
+  });
+
   it("an edited-then-resigned checkpoint verifies true", () => {
     process.env.AGENCY_CHECKPOINT_KEY = KEY;
     const checkpoint = makeCheckpoint();
@@ -162,5 +176,31 @@ describe("checkpoint checksum", () => {
     checkpoint.stack.stack[0].locals.x = 42; // simulate an override edit
     signCheckpoint(checkpoint); // re-sign
     expect(verifyCheckpointChecksum(checkpoint)).toBe(true);
+  });
+});
+
+describe("re-signing on the post-creation edit paths", () => {
+  afterEach(() => {
+    delete process.env.AGENCY_CHECKPOINT_KEY;
+  });
+
+  it("a pinned checkpoint still verifies (pin re-signs)", () => {
+    process.env.AGENCY_CHECKPOINT_KEY = KEY;
+    const store = new CheckpointStore();
+    const checkpoint = makeCheckpoint();
+    signCheckpoint(checkpoint);
+    store.add(checkpoint);
+    store.pin(checkpoint.id, "pinned-label");
+    expect(store.get(checkpoint.id)!.pinned).toBe(true);
+    expect(verifyCheckpointChecksum(store.get(checkpoint.id)!)).toBe(true);
+  });
+
+  it("a clone with a new id still verifies (clone re-signs)", () => {
+    process.env.AGENCY_CHECKPOINT_KEY = KEY;
+    const checkpoint = makeCheckpoint();
+    signCheckpoint(checkpoint);
+    const copy = checkpoint.clone({ id: 999 });
+    expect(copy.id).toBe(999);
+    expect(verifyCheckpointChecksum(copy)).toBe(true);
   });
 });

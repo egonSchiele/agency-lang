@@ -6,6 +6,7 @@ import {
   approvalResets,
   parallelRejectAndPause,
   emptyIdRounds,
+  removalRace,
   respondToInterrupts,
   approve,
   reject,
@@ -153,6 +154,27 @@ const results = {};
     toolMessagesInFinalRequest: toolContents.length,
     rejectionMessages: toolContents.filter((c) => c.startsWith("Tool call rejected: denied"))
       .length,
+  };
+}
+
+// The removal race: the fifth consecutive rejection lands in the same
+// parallel round as a sibling call that pauses for the user. The
+// sibling started before the removal, so the approval must be honored
+// on resume — the call runs and "ran keep" reaches the model, instead
+// of a removal refusal that silently ignores the approval.
+{
+  const { state, callbacks } = makeCapture();
+  const paused = await removalRace({ callbacks });
+  const pausedWithInterrupt =
+    Array.isArray(paused.data) && paused.data[0]?.type === "interrupt";
+  const resumed = await respondToInterrupts(paused.data, [approve()], {
+    metadata: { callbacks },
+  });
+  results.removalRace = {
+    pausedWithInterrupt,
+    result: resumed.data,
+    approvedCallRan: seen(state, "ran keep"),
+    removalSeen: seen(state, "rejected too many times"),
   };
 }
 

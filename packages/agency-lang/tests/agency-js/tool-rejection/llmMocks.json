@@ -35,5 +35,17 @@
   { "return": "s6 done" },
   { "toolCalls": [{ "name": "guardedTool", "args": { "id": "e1" }, "id": "" }] },
   { "toolCalls": [{ "name": "guardedTool", "args": { "id": "e2" }, "id": "" }] },
-  { "return": "s7 done" }
+  { "return": "s7 done" },
+
+  { "toolCall": { "name": "guardedTool", "args": { "id": "m1" } } },
+  { "toolCall": { "name": "guardedTool", "args": { "id": "m2" } } },
+  { "toolCall": { "name": "guardedTool", "args": { "id": "m3" } } },
+  { "toolCall": { "name": "guardedTool", "args": { "id": "m4" } } },
+  {
+    "toolCalls": [
+      { "name": "guardedTool", "args": { "id": "m5" } },
+      { "name": "guardedTool", "args": { "id": "keep" } }
+    ]
+  },
+  { "return": "s8 done" }
 ]

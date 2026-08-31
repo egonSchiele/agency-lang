@@ -39,5 +39,11 @@
     "toolStarts": 2,
     "toolMessagesInFinalRequest": 2,
     "rejectionMessages": 2
+  },
+  "removalRace": {
+    "pausedWithInterrupt": true,
+    "result": "s8 done",
+    "approvedCallRan": true,
+    "removalSeen": true
   }
 }

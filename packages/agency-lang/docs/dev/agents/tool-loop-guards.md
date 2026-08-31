@@ -104,14 +104,23 @@ A rejection is not a tool error (`recordRejection` in `prompt.ts`):
 Both records live on the runPrompt frame, so they survive checkpoint and
 resume within one `llm()` call and reset when the next one starts.
 
+The refusal gates decide from state that mutates as parallel siblings
+complete, so each call's verdict is computed exactly once, inside its
+own step, and persisted in `runnerState`. See "Resume re-runs the code
+between steps" in [`promptRunner.md`](promptRunner.md) for the rule and
+the incident behind it.
+
 ## Tests
 
 - Pure helpers: `lib/runtime/toolLoopGuards.test.ts` (`markupArgument`,
   `repeatKey`, `noteRepeat`).
 - Rejections: `tests/agency-js/tool-rejection` scripts a handler reject
   (reason + identical-retry gate), an interactive reject with a reason,
-  five consecutive rejections removing the tool, and an approval
-  resetting the count.
+  five consecutive rejections removing the tool, an approval resetting
+  the count, and the parallel replay scenarios: a rejection beside a
+  pausing sibling, empty-id providers across rounds, and a fifth
+  rejection landing beside a paused call whose approval must still be
+  honored (`removalRace`).
 - Real wiring: `tests/agency-js/repeated-tool-calls` scripts five
   identical calls and one garbled one through a fake client and checks
   the tool ran four times (the fourth call was refused and the count

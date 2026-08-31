@@ -91,6 +91,25 @@ node destructiveReject() {
   return out
 }
 
+// The removal race: guardedTool has four consecutive rejections when a
+// parallel round makes two more calls. The handler rejects one (the
+// fifth strike, which removes the tool) and passes the other to the
+// user, pausing the run. The paused call started before the removal,
+// and removal takes effect only from the next round — so the user's
+// approval must still be honored on resume.
+node removalRace() {
+  let out = ""
+  handle {
+    out = llm("Use guardedTool.", { tools: [guardedTool] })
+  } with (intr) {
+    if (intr.message == "run keep") {
+      return pass()
+    }
+    return reject("denied ${intr.message}")
+  }
+  return out
+}
+
 // An approved call resets the consecutive-rejection count: four
 // rejections, an approval, then more calls — the tool must survive.
 node approvalResets() {

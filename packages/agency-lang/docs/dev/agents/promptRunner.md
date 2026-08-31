@@ -18,6 +18,58 @@ A `step()` body returns either `void` (happy path) or `Interrupt[]`. The body re
 
 The completed-keys list (`self.runnerState.completedSteps`) is **not** updated on bailout. On resume, the step body re-runs. If the user has responded to the interrupt, the tool's saved `__interruptId_N` matches the response and proceeds normally; the step then runs to completion and gets marked done.
 
+## Resume re-runs the code between steps
+
+`runPrompt` does not resume by jumping to the paused step. On resume it
+runs again from the top, and every completed step skips its body via
+`completedSteps`. The plain code BETWEEN the steps runs again for real:
+the round loop, the walk over the round's tool calls, and every inline
+`if`. That code must be deterministic. If it reads state that changed
+since the first pass, a replayed call can take a path it never took, and
+a step that never ran the first time will happily run now.
+
+This has bitten us. The tool loop once refused a call the user had just
+approved. Two calls to one tool ran in parallel; one was rejected for
+the fifth time, which pushed the tool into `removedTools`; the sibling
+paused on its interrupt, and the checkpoint carried the mutation. On
+resume, an inline `removedTools.includes(...)` check in front of the
+sibling was now true, so the sibling was refused and the approval
+discarded. The `removalRace` scenario in `tests/agency-js/tool-rejection`
+pins this.
+
+The rule for anything added to `runPrompt`:
+
+1. **Side effects go inside a step.** Anything that must happen exactly
+   once — pushing a tool message, firing a hook, bumping a counter —
+   belongs in a `step()` body, so a resume skips it.
+2. **Decisions that read mutable state also go inside a step, and the
+   answer goes into `self.runnerState`.** A step body's return value
+   does not survive a skip, so compute the decision once inside a step,
+   write it to `runnerState`, and have the code after the step read it
+   from there. `runnerState` lives on the frame and is serialized into
+   the checkpoint, so a resumed pass reads back exactly the answer the
+   first pass recorded.
+
+The tool loop keeps two records of this kind. Both are keyed by
+`round.<round>.tool.<slug>`, never by the slug alone: providers like
+Gemini return empty tool-call ids, so the same slug repeats across
+rounds.
+
+- `runnerState.gateVerdicts` — the refusal-gate verdict for each call
+  (removed, unhandled, tooManyRounds, markup, priorRejected, repeated,
+  or proceed), computed once in the call's `.gate` step. The gates read
+  `removedTools`, `rejectedCalls`, and `repeatStreak`, all of which
+  mutate as sibling branches complete.
+- `runnerState.invokeOutcomes` — how each invocation ended, recorded
+  inside the `.invoke` step. A completed non-success invocation already
+  answered the model, so a later pass returns instead of re-entering the
+  end and log steps. An interrupted invocation records nothing: its
+  invoke step must re-run on resume to consume the user's response.
+
+Deterministic reads need no record. Deriving `namedArgs` from
+`toolCall.arguments` inline is fine, because the checkpoint restores the
+same tool calls.
+
 ## `parallel` and merged interrupts
 
 ```ts
@@ -43,7 +95,7 @@ Inside a `branchFn`, use `b.step(...)`, which collects. Do not use `pr.step(...)
 
 ## `removedTools` / `toolErrorCounts` semantics
 
-`runPrompt`'s tool loop mutates two shared structures from inside concurrent branches: `removedTools` and `toolErrorCounts`. Both live on the frame (`self.removedTools`, `self.toolErrorCounts`) so they survive checkpoint and restore. The design accepts **eventual consistency**. A removal takes effect from the next LLM round, when the `.filter()` after the `pr.parallel` call drops the tool, never within the round where it happened. Within the round, a "gated start" check in each branch's first step still skips a tool already in `removedTools`. That check is best-effort, because the ordering between sibling pushes is undefined.
+`runPrompt`'s tool loop mutates two shared structures from inside concurrent branches: `removedTools` and `toolErrorCounts`. Both live on the frame (`self.removedTools`, `self.toolErrorCounts`) so they survive checkpoint and restore. The design accepts **eventual consistency**. A removal takes effect from the next LLM round, when the `.filter()` after the `pr.parallel` call drops the tool, never within the round where it happened. Within the round, the refusal-gate verdict (see "Resume re-runs the code between steps" above) still refuses a tool already in `removedTools`, but only when that call's `.gate` step runs after the sibling's push. That is best-effort, because the ordering between sibling branches is undefined.
 
 ## What `PromptRunner` deliberately is not
 

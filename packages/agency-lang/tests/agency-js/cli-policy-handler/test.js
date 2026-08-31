@@ -1,4 +1,4 @@
-import { main } from "./agent.js";
+import { main, rejectMessageCase } from "./agent.js";
 import { writeFileSync, mkdtempSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -18,9 +18,20 @@ globalThis.__agencyInputOverride = async () => {
 
 try {
   const result = await main({ policyFile });
+
+  // A pre-seeded reject rule with a rejectMessage: the failing call's
+  // error must carry the rule's message, with no prompt consumed (the
+  // scripted answers are already exhausted, so any prompt would throw).
+  const rejectPolicyFile = join(dir, "reject-policy.json");
+  writeFileSync(rejectPolicyFile, JSON.stringify({
+    "myapp::exec": [{ action: "reject", rejectMessage: "Use safeBash instead" }],
+  }));
+  const rejected = await rejectMessageCase({ policyFile: rejectPolicyFile });
+
   writeFileSync("__result.json", JSON.stringify({
     result: result.data,
     remainingAnswers: answers.length,  // 0 = all consumed correctly
+    rejectMessage: rejected.data,
   }, null, 2));
 } finally {
   rmSync(dir, { recursive: true, force: true });

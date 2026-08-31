@@ -59,9 +59,11 @@ export type BuildDeciderOptions = {
 
 /**
  * Build the per-interrupt decision function. Policy runs first for every
- * interrupt: an explicit approve/reject settles immediately (a value-expecting
- * interrupt settled this way gets a valueless approve/reject — the runtime
- * resolves the assignment to its default). Only when the policy leaves an
+ * interrupt: an explicit approve/reject settles immediately. A policy approve
+ * carries no value (a value-expecting interrupt settled this way resolves its
+ * assignment to the default); a policy reject carries the matched rule's
+ * `rejectMessage`, when one was set, as the rejection's reason. Only when the
+ * policy leaves an
  * interrupt "unsettled" (`propagate` or no-match) does interactivity apply: a
  * value-expecting interrupt uses the value prompt, a statement interrupt the
  * ordinary prompt, and a non-interactive run rejects (fail-closed). "Always"

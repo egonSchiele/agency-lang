@@ -66,6 +66,24 @@ describe("runWithPolicy", () => {
     }
   });
 
+  it("a matched reject rule's rejectMessage becomes the rejection value", async () => {
+    const { store, cleanup } = makeTmpStore({
+      "test::exec": [{ action: "reject", rejectMessage: "Use safeBash instead" }],
+    });
+    try {
+      const result = await runWithPolicy(async () => [makeInterrupt("test::exec")], store, {
+        hasInterrupts: isInterrupts,
+        respondToInterrupts: async (_interrupts, responses) => {
+          expect(responses).toEqual([{ type: "reject", value: "Use safeBash instead" }]);
+          return "rejected-result";
+        },
+      });
+      expect(result).toBe("rejected-result");
+    } finally {
+      cleanup();
+    }
+  });
+
   it("rejects interrupts not covered by policy (default reject)", async () => {
     const { store, cleanup } = makeTmpStore(); // empty policy
     try {

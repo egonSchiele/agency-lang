@@ -64,6 +64,11 @@ export type FailureOpts = {
   /** Execution entered a destructive region — a `destructive def` body (which
    *  commits at entry) or a `destructive { }` region. */
   destructiveRan?: boolean;
+  /** This failure is a rejected interrupt: a handler, policy, or user
+   *  said no. Its only producers are the interrupt codegen templates
+   *  (interruptReturn/interruptAssignment). The tool loop reads it to
+   *  tell "you may not do this" apart from "the tool broke". */
+  rejected?: boolean;
   functionName?: string;
   args?: Record<string, any>;
   /** The guard ids this `try` boundary OWNS. A `guardTrip` cause is
@@ -93,6 +98,9 @@ export type ResultFailure = {
    *  region entry) — when this failure was produced. Birth default false;
    *  boundaries OR the activation's flag in via stampFailureBoundary. */
   destructiveRan: boolean;
+  /** This failure is a rejected interrupt (see FailureOpts.rejected).
+   *  Birth default false; set only by the interrupt codegen templates. */
+  rejected: boolean;
   functionName: string | null;
   args: Record<string, any> | null;
   skippedFunctions: SkippedFunction[];
@@ -114,6 +122,7 @@ export function failure(error: any, opts?: FailureOpts): ResultFailure {
     // sole producer sets it explicitly.
     neverStarted: opts?.neverStarted ?? false,
     destructiveRan: opts?.destructiveRan ?? false,
+    rejected: opts?.rejected ?? false,
     functionName: opts?.functionName ?? null,
     args: opts?.args ?? null,
     skippedFunctions: [],

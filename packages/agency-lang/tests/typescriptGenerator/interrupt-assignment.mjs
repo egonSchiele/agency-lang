@@ -232,9 +232,9 @@ if (__response) {
       __stack.locals.name = true;;
     }
   } else if (__response.type === "reject") {
-    // reject for tool calls handled separately
+    // rejected, halt
     
-    runner.halt({ messages: __threads(), data: failure("interrupt rejected") });
+    runner.halt({ messages: __threads(), data: failure(__response.value ?? "interrupt rejected", { rejected: true }) });
     
     
     return;
@@ -244,7 +244,7 @@ if (__response) {
   const __handlerResult = await interruptWithHandlers("unknown", `What is your name?`, {}, "./interrupt-assignment.agency", __ctx, __stateStack(), { expectsValue: true });
   if (isRejected(__handlerResult)) {
     
-    runner.halt({ messages: __threads(), data: failure(__handlerResult.value ?? "interrupt rejected") });
+    runner.halt({ messages: __threads(), data: failure(__handlerResult.value ?? "interrupt rejected", { rejected: true }) });
     
     
     return;

@@ -1,0 +1,49 @@
+{
+  "handlerRejects": {
+    "result": "s1 done",
+    "toolStarts": 1,
+    "reasonSeen": true,
+    "noRetrySuffixSeen": true,
+    "identicalRetryRefused": true,
+    "framedAsError": false
+  },
+  "interactiveReject": {
+    "pausedWithInterrupt": true,
+    "result": "s2 done",
+    "reasonSeen": true
+  },
+  "fiveRejectionsRemove": {
+    "result": "s3 done",
+    "toolStarts": 5,
+    "removalSeen": true
+  },
+  "destructiveReject": {
+    "result": "s4 done",
+    "toolStarts": 1,
+    "destructiveTierSeen": true,
+    "rejectionPathSeen": false
+  },
+  "approvalResets": {
+    "result": "s5 done",
+    "toolStarts": 7,
+    "removalSeen": false
+  },
+  "parallelRejectAndPause": {
+    "pausedWithInterrupt": true,
+    "result": "s6 done",
+    "toolMessagesInFinalRequest": 2,
+    "rejectionMessages": 1
+  },
+  "emptyIdRounds": {
+    "result": "s7 done",
+    "toolStarts": 2,
+    "toolMessagesInFinalRequest": 2,
+    "rejectionMessages": 2
+  },
+  "removalRace": {
+    "pausedWithInterrupt": true,
+    "result": "s8 done",
+    "approvedCallRan": true,
+    "removalSeen": true
+  }
+}

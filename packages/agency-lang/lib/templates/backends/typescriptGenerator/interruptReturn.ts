@@ -11,10 +11,10 @@ if (__response) {
   } else if (__response.type === "reject") {
     // rejected, halt
     {{#nodeContext}}
-    runner.halt({ messages: __threads(), data: failure("interrupt rejected") });
+    runner.halt({ messages: __threads(), data: failure(__response.value ?? "interrupt rejected", { rejected: true }) });
     {{/nodeContext}}
     {{^nodeContext}}
-    runner.halt(failure("interrupt rejected", { checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
+    runner.halt(failure(__response.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
     {{/nodeContext}}
     return;
   }
@@ -23,10 +23,10 @@ if (__response) {
   const __handlerResult = await interruptWithHandlers({{{effect}}}, {{{message}}}, {{{data}}}, {{{origin}}}, __ctx, __stateStack());
   if (isRejected(__handlerResult)) {
     {{#nodeContext}}
-    runner.halt({ messages: __threads(), data: failure(__handlerResult.value ?? "interrupt rejected") });
+    runner.halt({ messages: __threads(), data: failure(__handlerResult.value ?? "interrupt rejected", { rejected: true }) });
     {{/nodeContext}}
     {{^nodeContext}}
-    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
+    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
     {{/nodeContext}}
     return;
   }

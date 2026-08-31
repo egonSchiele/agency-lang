@@ -146,6 +146,15 @@ describe("stringifyToolResult", () => {
     // Does not throw; returns some string representation.
     expect(typeof stringifyToolResult(a)).toBe("string");
   });
+
+  it("falls back to String() on values JSON.stringify turns into undefined", () => {
+    // JSON.stringify returns undefined (without throwing) for these; a
+    // raw TS interrupt can reject with any value, and the capped
+    // rejection path reads .length off this result.
+    expect(typeof stringifyToolResult(Symbol("denied"))).toBe("string");
+    expect(typeof stringifyToolResult(() => {})).toBe("string");
+    expect(typeof stringifyToolResult(undefined)).toBe("string");
+  });
 });
 
 describe("capToolResultForLlm", () => {

@@ -1,0 +1,51 @@
+[
+  { "toolCall": { "name": "guardedTool", "args": { "id": "a" } } },
+  { "toolCall": { "name": "guardedTool", "args": { "id": "a" } } },
+  { "return": "s1 done" },
+
+  { "toolCall": { "name": "guardedTool", "args": { "id": "b" } } },
+  { "return": "s2 done" },
+
+  { "toolCall": { "name": "guardedTool", "args": { "id": "r1" } } },
+  { "toolCall": { "name": "guardedTool", "args": { "id": "r2" } } },
+  { "toolCall": { "name": "guardedTool", "args": { "id": "r3" } } },
+  { "toolCall": { "name": "guardedTool", "args": { "id": "r4" } } },
+  { "toolCall": { "name": "guardedTool", "args": { "id": "r5" } } },
+  { "toolCall": { "name": "guardedTool", "args": { "id": "r6" } } },
+  { "return": "s3 done" },
+
+  { "toolCall": { "name": "destructiveGated", "args": { "id": "d1" } } },
+  { "toolCall": { "name": "destructiveGated", "args": { "id": "d2" } } },
+  { "return": "s4 done" },
+
+  { "toolCall": { "name": "guardedTool", "args": { "id": "x1" } } },
+  { "toolCall": { "name": "guardedTool", "args": { "id": "x2" } } },
+  { "toolCall": { "name": "guardedTool", "args": { "id": "x3" } } },
+  { "toolCall": { "name": "guardedTool", "args": { "id": "x4" } } },
+  { "toolCall": { "name": "guardedTool", "args": { "id": "ok" } } },
+  { "toolCall": { "name": "guardedTool", "args": { "id": "x5" } } },
+  { "toolCall": { "name": "guardedTool", "args": { "id": "ok2" } } },
+  { "return": "s5 done" },
+  {
+    "toolCalls": [
+      { "name": "guardedTool", "args": { "id": "pr1" } },
+      { "name": "pauseMe", "args": { "id": "pp1" } }
+    ]
+  },
+  { "return": "s6 done" },
+  { "toolCalls": [{ "name": "guardedTool", "args": { "id": "e1" }, "id": "" }] },
+  { "toolCalls": [{ "name": "guardedTool", "args": { "id": "e2" }, "id": "" }] },
+  { "return": "s7 done" },
+
+  { "toolCall": { "name": "guardedTool", "args": { "id": "m1" } } },
+  { "toolCall": { "name": "guardedTool", "args": { "id": "m2" } } },
+  { "toolCall": { "name": "guardedTool", "args": { "id": "m3" } } },
+  { "toolCall": { "name": "guardedTool", "args": { "id": "m4" } } },
+  {
+    "toolCalls": [
+      { "name": "guardedTool", "args": { "id": "m5" } },
+      { "name": "guardedTool", "args": { "id": "keep" } }
+    ]
+  },
+  { "return": "s8 done" }
+]

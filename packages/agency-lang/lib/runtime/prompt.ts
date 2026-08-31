@@ -154,7 +154,10 @@ const DEFAULT_TOOL_RESULT_CHARS = 100_000;
 function stringifyToolResult(result: any): string {
   if (typeof result === "string") return result;
   try {
-    return JSON.stringify(result);
+    const json = JSON.stringify(result);
+    // JSON.stringify returns undefined WITHOUT throwing for symbols,
+    // functions, and undefined itself; callers read .length off this.
+    return json === undefined ? String(result) : json;
   } catch {
     return String(result);
   }
@@ -185,6 +188,26 @@ function toolErrorMessage(error: any): string {
 /** A failed tool is removed only after this many failures (the circuit
  *  breaker against retry spirals), or immediately on the destructive tier. */
 const MAX_TOOL_FAILURES = 5;
+
+/** Consecutive rejections that remove a tool. Only consecutive: a
+ *  successful call resets the count, so a narrow reject rule brushed
+ *  against during otherwise-approved work never removes the tool, while
+ *  a model rephrasing a refused call with nothing approved in between
+ *  loses it quickly. */
+const MAX_TOOL_REJECTIONS = 5;
+
+const REJECTION_SUFFIX =
+  "Do not call this tool with the same arguments again; the call will not be executed.";
+const REJECTION_REMOVAL_SUFFIX =
+  "This tool has been rejected too many times and can no longer be called.";
+
+/** The refusal-gate verdict for one tool invocation. Computed exactly
+ *  once, inside its own step, and persisted in runnerState: most gates
+ *  read frame state that mutates as sibling branches complete, so a
+ *  verdict recomputed on resume could differ from the one the call
+ *  originally acted on. */
+type GateVerdict =
+  "removed" | "unhandled" | "tooManyRounds" | "markup" | "priorRejected" | "repeated" | "proceed";
 
 type FailureTier = "destructive" | "neverStarted" | "idempotent" | "neutral";
 
@@ -260,6 +283,9 @@ export const _internal = {
   failureTier,
   TIER_SUFFIX,
   MAX_TOOL_FAILURES,
+  MAX_TOOL_REJECTIONS,
+  REJECTION_SUFFIX,
+  REJECTION_REMOVAL_SUFFIX,
   armCallTimeout,
   runWithRetry,
   dropNullDefaultedArgs,
@@ -650,6 +676,8 @@ export async function runPrompt(args: {
     self.__initialized = true;
     self.removedTools = args.removedTools || [];
     self.toolErrorCounts = {};
+    self.rejectedCalls = [];
+    self.rejectionCounts = {};
     self.repeatStreak = freshRepeatStreak();
     self.toolCallRound = 0;
     self.validationAttempt = 0;
@@ -659,6 +687,18 @@ export async function runPrompt(args: {
 
   const removedTools: string[] = self.removedTools;
   const toolErrorCounts: Record<string, number> = self.toolErrorCounts;
+  // Rebuilt on every entry: a checkpoint taken before these slots existed
+  // restores without them, and a restore revives plain-prototype objects.
+  // Null-prototype because tool names are author-chosen and may collide
+  // with Object.prototype keys (a def named `constructor`).
+  self.rejectedCalls ??= [];
+  self.rejectionCounts = Object.assign(Object.create(null), self.rejectionCounts);
+  /** repeatKeys of calls rejected in THIS llm() call. An identical retry
+   *  is refused before it can re-raise the interrupt. */
+  const rejectedCalls: string[] = self.rejectedCalls;
+  /** Consecutive rejections per tool (reset by an approved call). At
+   *  MAX_TOOL_REJECTIONS the tool joins removedTools. */
+  const rejectionCounts: Record<string, number> = self.rejectionCounts;
   const repeatStreak: RepeatStreak = self.repeatStreak;
   // The calling function's locals, for decision 8. Read from `args` (not the
   // frame) because it belongs to the CALLER, not to runPrompt's own frame.
@@ -1021,6 +1061,11 @@ export async function runPrompt(args: {
       handler: AgencyFunction;
       toolCall: smoltalk.ToolCallJSON;
       namedArgs: Record<string, any>;
+      /** repeatKey of this call, computed BEFORE invocation: the tool may
+       *  mutate nested argument objects (namedArgs is a shallow copy), and
+       *  a key digested after the fact would not match the model's retry
+       *  of the same call. */
+      callKey: string;
       branchKey: string;
       branchStack: StateStack;
     }): Promise<{
@@ -1028,7 +1073,7 @@ export async function runPrompt(args: {
       invokeOutcome: "success" | "failed" | "rejected" | "interrupted" | "crashed";
       interrupts?: any[];
     }> => {
-      const { handler, toolCall, namedArgs, branchKey, branchStack } = args;
+      const { handler, toolCall, namedArgs, callKey, branchKey, branchStack } = args;
       let toolResult: any;
       ctx.enterToolCall();
       try {
@@ -1117,6 +1162,42 @@ export async function runPrompt(args: {
         markDestructiveWork({ locals: destructiveSink });
       }
 
+      // A rejection — a handler, policy, or user said no — arrives either
+      // as a Failure the interrupt codegen marked `rejected` (compiled
+      // Agency tools) or as a raw InterruptResponse returned by a TS tool
+      // (agency.interrupt). It is not a tool error: no toolErrorCounts
+      // increment, no toolError statelog event (the handler chain already
+      // emitted interruptResolved).
+      const recordRejection = (reason: string): { toolResult: any; invokeOutcome: "rejected" } => {
+        const capped = String(capToolResultForLlm(reason, toolResultCap));
+        if (!rejectedCalls.includes(callKey)) {
+          rejectedCalls.push(callKey);
+        }
+        rejectionCounts[handler.name] = (rejectionCounts[handler.name] || 0) + 1;
+        const removed = rejectionCounts[handler.name] >= MAX_TOOL_REJECTIONS;
+        if (removed) {
+          removedTools.push(handler.name);
+        }
+        messages.push(
+          smoltalk.toolMessage(
+            `Tool call rejected: ${capped}. ${removed ? REJECTION_REMOVAL_SUFFIX : REJECTION_SUFFIX}`,
+            { tool_call_id: toolCall.id, name: toolCall.name },
+          ),
+        );
+        stack.deleteBranch(branchKey);
+        return { toolResult, invokeOutcome: "rejected" };
+      };
+
+      // Only a CLEAN rejection takes the rejection path. One stamped
+      // destructiveRan means the tool entered a destructive region before
+      // its gate — partial work may exist — so it falls through to the
+      // failure tiers, where the destructive tier removes the tool
+      // immediately. (Stdlib tools gate BEFORE their destructive regions,
+      // so their rejections are always clean.)
+      if (isFailure(toolResult) && toolResult.rejected && !toolResult.destructiveRan) {
+        return recordRejection(toolErrorMessage(toolResult.error));
+      }
+
       if (isFailure(toolResult)) {
         const errorMessage = toolErrorMessage(toolResult.error);
         // Cap only what the LLM sees; statelog keeps the full message.
@@ -1152,16 +1233,14 @@ export async function runPrompt(args: {
       }
 
       if (isRejected(toolResult)) {
-        const message =
-          typeof toolResult.value === "string" ? toolResult.value : "Tool call rejected by policy";
-        messages.push(
-          smoltalk.toolMessage(capToolResultForLlm(message, toolResultCap), {
-            tool_call_id: toolCall.id,
-            name: toolCall.name,
-          }),
+        // A structured reject value (e.g. reject({ code: "blocked" }))
+        // renders the same way a structured failure error does; only a
+        // reasonless rejection gets the generic message.
+        return recordRejection(
+          toolResult.value == null
+            ? "Tool call rejected by policy"
+            : toolErrorMessage(toolResult.value),
         );
-        stack.deleteBranch(branchKey);
-        return { toolResult, invokeOutcome: "rejected" };
       }
 
       if (hasInterrupts(toolResult)) {
@@ -1186,9 +1265,84 @@ export async function runPrompt(args: {
       // Nullish, NOT ||: legitimate falsy returns (false, 0, "") must
       // reach the model and the branch cache as-is.
       toolResult = toolResult ?? `${handler.name} ran successfully but did not return a value`;
+      // An approved call is evidence the tool is not blanket-refused:
+      // only CONSECUTIVE rejections remove it.
+      rejectionCounts[handler.name] = 0;
       stack.setResultOnBranch(branchKey, toolResult);
       pushSuccessToolMessage({ toolResult, toolCall, handler, branchStack });
       return { toolResult, invokeOutcome: "success" };
+    };
+
+    // Push a plain notice ToolMessage for one call — the refusal gates
+    // (unhandled, round cap, removed, markup, repeat, prior rejection) all
+    // answer the model this way.
+    const pushToolNotice = (text: string, toolCall: smoltalk.ToolCallJSON): void => {
+      messages.push(smoltalk.toolMessage(text, { tool_call_id: toolCall.id, name: toolCall.name }));
+    };
+
+    // The refusal-gate decision for one call, in refusal-priority order.
+    // Reads MUTABLE frame state (removedTools, rejectedCalls,
+    // repeatStreak), so callers must run it exactly once, inside the
+    // call's `.gate` step, and persist the verdict in runnerState.
+    const computeGateVerdict = (args: {
+      toolCall: smoltalk.ToolCallJSON;
+      handler: AgencyFunction | null;
+      markupArg: string | null;
+      callKey: string;
+    }): GateVerdict => {
+      const { toolCall, handler, markupArg, callKey } = args;
+      if (removedTools.includes(toolCall.name)) {
+        return "removed";
+      }
+      if (handler === null) {
+        return "unhandled";
+      }
+      if (self.toolCallRound >= effectiveMaxToolCallRounds) {
+        return "tooManyRounds";
+      }
+      if (markupArg !== null) {
+        return "markup";
+      }
+      if (rejectedCalls.includes(callKey)) {
+        // A call identical to one already rejected in this llm() call: no
+        // invoke, no re-raised interrupt, no counter movement. Checked
+        // before the repeat guard so the model hears "rejected", not
+        // "repeated".
+        return "priorRejected";
+      }
+      if (
+        maxRepeatedToolCalls > 0 &&
+        repeatsBefore(repeatStreak, callKey) >= maxRepeatedToolCalls
+      ) {
+        return "repeated";
+      }
+      return "proceed";
+    };
+
+    // The model-facing text for a refusal verdict.
+    const refusalMessage = (args: {
+      verdict: Exclude<GateVerdict, "proceed">;
+      toolCall: smoltalk.ToolCallJSON;
+      markupArg: string | null;
+      callKey: string;
+    }): string => {
+      const name = args.toolCall.name;
+      switch (args.verdict) {
+        case "removed":
+          return `Error: Tool ${name} has been removed from this conversation after repeated failures or rejections, and will not be executed.`;
+        case "unhandled":
+          return `Error: No handler found for tool call ${name}`;
+        case "tooManyRounds":
+          return `Error: Maximum number of tool call rounds (${effectiveMaxToolCallRounds}) exceeded. This tool call will not be executed.`;
+        case "markup":
+          // markupArg is non-null whenever the verdict says markup: both
+          // derive from the same replay-stable inputs.
+          return markupArgumentMessage(name, args.markupArg ?? "");
+        case "priorRejected":
+          return `This exact call to ${name} was already rejected and will not be executed. Do not retry it.`;
+        case "repeated":
+          return repeatedCallMessage(name, repeatsBefore(repeatStreak, args.callKey));
+      }
     };
 
     // Push the success ToolMessage for one invocation, with any reply-
@@ -1293,7 +1447,10 @@ export async function runPrompt(args: {
         // `removedTools` and `toolErrorCounts` use eventually-consistent
         // semantics across branches (strategy B in the plan): same-round
         // removal is best-effort and removals always take effect from the
-        // NEXT round (the .filter() after this parallel call).
+        // NEXT round (the .filter() after this parallel call). The
+        // rejection counters share these semantics: outcomes apply in
+        // branch-completion order, so a same-round mix of rejections and
+        // approvals of ONE tool near the removal limit is best-effort too.
         // An all-intrinsic round has nothing to dispatch: keep the
         // empty values result instead of running runBatch over zero
         // children.
@@ -1327,47 +1484,82 @@ export async function runPrompt(args: {
               // byte-for-byte unchanged.
               const callSlug = `${index}_${toolCall.id}`;
 
-              const handler = toolFunctions.find((fn) => fn.name === toolCall.name);
-              if (!handler) {
-                await b.step(`round.${round}.tool.${callSlug}.unhandled`, async () => {
-                  console.error(
-                    `No handler found for tool call: ${toolCall.name}. This error will be sent back to the LLM.`,
-                  );
-                  messages.push(
-                    smoltalk.toolMessage(`Error: No handler found for tool call ${toolCall.name}`, {
-                      tool_call_id: toolCall.id,
-                      name: toolCall.name,
-                    }),
-                  );
+              // The refusal gates below (removed, priorRejected, repeated)
+              // decide from MUTABLE frame state: removedTools,
+              // rejectedCalls, and repeatStreak change as sibling branches
+              // and later rounds complete. Plain code between steps re-runs
+              // on resume, so an inline `if` on that state could steer a
+              // replayed call down a path it never took: a gate firing late
+              // would push a second tool message for the same tool_call_id,
+              // and a sibling's fifth rejection would refuse a paused call
+              // the user just approved. So the verdict is durable: computed
+              // once inside its own step, persisted in runnerState, and
+              // read back on every later pass. See
+              // docs/dev/agents/promptRunner.md.
+              self.runnerState.gateVerdicts ??= {};
+              self.runnerState.invokeOutcomes ??= {};
+              // Keyed by round + slug, NOT slug alone: the slug is unique
+              // only within a round (providers like Gemini return empty
+              // tool-call ids, so index-0 calls in every round share "0_"),
+              // and a cross-round collision would hand a fresh call a
+              // stale verdict.
+              const invocationKey = `round.${round}.tool.${callSlug}`;
+
+              // Resolved from the STABLE full list, not toolFunctions: on
+              // resume, runPrompt entry rebuilds toolFunctions without the
+              // names in removedTools, and a call that legitimately started
+              // before its tool was removed must still find its handler.
+              // Fresh calls to a removed tool never get here — the removed
+              // verdict refuses them first.
+              const handler = agencyFunctions.find((fn) => fn.name === toolCall.name) ?? null;
+              const namedArgs = handler
+                ? dropNullDefaultedArgs(toolCall.arguments, handler.params)
+                : {};
+              const markupArg = handler ? markupArgument(namedArgs, handler.params) : null;
+              const callKey = handler ? repeatKey(handler.name, namedArgs) : "";
+
+              await b.step(`${invocationKey}.gate`, async () => {
+                self.runnerState.gateVerdicts[invocationKey] = computeGateVerdict({
+                  toolCall,
+                  handler,
+                  markupArg,
+                  callKey,
                 });
+              });
+              const verdict: GateVerdict = self.runnerState.gateVerdicts[invocationKey];
+
+              // Recorded inside the invoke step. A completed non-success
+              // invocation (failed, rejected, crashed) already answered the
+              // model, so on replay there is nothing left to run. A success
+              // falls through: its remaining steps no-op via completedSteps.
+              // An interrupted invocation records nothing — its invoke step
+              // re-runs on resume to consume the user's response.
+              const priorOutcome: string | undefined =
+                self.runnerState.invokeOutcomes[invocationKey];
+              if (priorOutcome !== undefined && priorOutcome !== "success") {
                 return;
               }
 
-              if (self.toolCallRound >= effectiveMaxToolCallRounds) {
-                await b.step(`round.${round}.tool.${callSlug}.tooManyRounds`, async () => {
-                  messages.push(
-                    smoltalk.toolMessage(
-                      `Error: Maximum number of tool call rounds (${effectiveMaxToolCallRounds}) exceeded. This tool call will not be executed.`,
-                      { tool_call_id: toolCall.id, name: toolCall.name },
-                    ),
-                  );
+              // A refused call never reaches the tool: no start/end hooks,
+              // no failure count, one notice message in its own step (the
+              // step key matches the verdict, e.g. `.removed`).
+              if (verdict !== "proceed") {
+                await b.step(`${invocationKey}.${verdict}`, async () => {
+                  const notice = refusalMessage({ verdict, toolCall, markupArg, callKey });
+                  if (verdict === "unhandled") {
+                    console.error(
+                      `No handler found for tool call: ${toolCall.name}. This error will be sent back to the LLM.`,
+                    );
+                  }
+                  if (verdict === "repeated") {
+                    resetRepeat(repeatStreak);
+                  }
+                  pushToolNotice(notice, toolCall);
                 });
                 return;
               }
-
-              // Gated start (strategy B): if the tool is already in
-              // removedTools (either from a prior round or from an earlier
-              // sibling in this round that pushed first), skip with a
-              // notice toolMessage.
-              if (removedTools.includes(handler.name)) {
-                await b.step(`round.${round}.tool.${callSlug}.removed`, async () => {
-                  messages.push(
-                    smoltalk.toolMessage(
-                      `Error: Handler for tool call ${handler.name} has been removed already due to previous errors, and will not be executed.`,
-                      { tool_call_id: toolCall.id, name: toolCall.name },
-                    ),
-                  );
-                });
+              if (handler === null) {
+                // Unreachable: a missing handler yields the "unhandled" verdict.
                 return;
               }
 
@@ -1377,37 +1569,6 @@ export async function runPrompt(args: {
               // uniformly by completedSteps inside b.step (start/invoke/end
               // each get marked done on success and skipped on resume).
               const branchStack = stack.getOrCreateBranch(branchKey).stack;
-              const namedArgs = dropNullDefaultedArgs(toolCall.arguments, handler.params);
-
-              // Two refusals that never reach the tool (so no start/end hooks
-              // and no failure count): an argument that is really tool-call
-              // markup, and a call the model keeps making with nothing changing.
-              const markupArg = markupArgument(namedArgs, handler.params);
-              if (markupArg !== null) {
-                await b.step(`round.${round}.tool.${callSlug}.markup`, async () => {
-                  messages.push(
-                    smoltalk.toolMessage(markupArgumentMessage(handler.name, markupArg), {
-                      tool_call_id: toolCall.id,
-                      name: toolCall.name,
-                    }),
-                  );
-                });
-                return;
-              }
-              const callKey = repeatKey(handler.name, namedArgs);
-              const priorRuns = repeatsBefore(repeatStreak, callKey);
-              if (maxRepeatedToolCalls > 0 && priorRuns >= maxRepeatedToolCalls) {
-                await b.step(`round.${round}.tool.${callSlug}.repeated`, async () => {
-                  resetRepeat(repeatStreak);
-                  messages.push(
-                    smoltalk.toolMessage(repeatedCallMessage(handler.name, priorRuns), {
-                      tool_call_id: toolCall.id,
-                      name: toolCall.name,
-                    }),
-                  );
-                });
-                return;
-              }
 
               await b.step(`round.${round}.tool.${callSlug}.start`, async () => {
                 // Pass `branchStack` so scoped callbacks registered inside
@@ -1467,6 +1628,7 @@ export async function runPrompt(args: {
                     handler,
                     toolCall,
                     namedArgs,
+                    callKey,
                     branchKey,
                     branchStack,
                   });
@@ -1476,9 +1638,12 @@ export async function runPrompt(args: {
                     self.runnerState.toolTimings[callSlug] = performance.now() - toolCallStartTime;
                   }
                   // Inside the idempotent invoke step, so a resume does not
-                  // count the same run twice.
+                  // count the same run twice. The interrupted outcome is
+                  // never recorded: its invoke step re-runs on resume, and a
+                  // recorded outcome would short-circuit that re-run.
                   if (outcome.invokeOutcome !== "interrupted") {
                     noteRepeat(repeatStreak, callKey, stringifyToolResult(toolResult));
+                    self.runnerState.invokeOutcomes[invocationKey] = outcome.invokeOutcome;
                   }
                   return outcome.interrupts;
                 });

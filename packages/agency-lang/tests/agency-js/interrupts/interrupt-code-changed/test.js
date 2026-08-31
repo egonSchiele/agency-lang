@@ -1,12 +1,7 @@
-// A resume must be refused when the source of a module the checkpoint has a
-// live frame in has changed, and succeed when only unreferenced code changed.
-//
-// The "redeploy" is simulated at the registry seam: a real redeploy loads a
-// recompiled module whose init registers a different source hash, and the
-// compiler side of that (emitted hash == sha256 of the source, different
-// source -> different hash) is pinned by lib/backends/moduleSourceHash.test.ts.
-// Re-registering here reproduces exactly what the new module's init would do,
-// without fighting the ESM module cache to load two versions in one process.
+// A resume is refused when a module the checkpoint has a live frame in has
+// changed, and succeeds when only unreferenced code changed. The redeploy is
+// simulated at the registry seam (what a recompiled module's init would run);
+// the compiler leg is pinned by lib/backends/moduleSourceHash.test.ts.
 import { main, hasInterrupts, approve, respondToInterrupts } from "./agent.js";
 import { registerModuleSourceHash } from "agency-lang/runtime";
 import { writeFileSync } from "fs";
@@ -32,10 +27,10 @@ if (!(checkpoint.moduleId in hashes)) {
 }
 
 const moduleId = checkpoint.moduleId;
-const originalHash = hashes[moduleId];
+const originalEntry = hashes[moduleId];
 
 // Case 1: the paused module changed -> the resume must be refused.
-registerModuleSourceHash(moduleId, "0".repeat(64));
+registerModuleSourceHash(moduleId, "0".repeat(64), new Date().toISOString());
 let refusal = null;
 try {
   await respondToInterrupts(result.data, [approve()]);
@@ -47,8 +42,8 @@ if (refusal === null || refusal.name !== "CheckpointCodeChangedError") {
 }
 
 // Case 2: only an UNREFERENCED module changed -> the resume succeeds.
-registerModuleSourceHash(moduleId, originalHash);
-registerModuleSourceHash("some-unreferenced-module.agency", "1".repeat(64));
+registerModuleSourceHash(moduleId, originalEntry.hash, originalEntry.compiledAt);
+registerModuleSourceHash("some-unreferenced-module.agency", "1".repeat(64), new Date().toISOString());
 const finalResult = await respondToInterrupts(result.data, [approve()]);
 
 writeFileSync("__result.json", JSON.stringify(finalResult.data, null, 2));

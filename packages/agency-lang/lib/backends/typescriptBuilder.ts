@@ -546,13 +546,14 @@ export class TypeScriptBuilder {
     // Generate tool registry (empty — AgencyFunction.create() populates it)
     this.generatedStatements.push(this.generateToolRegistry());
 
-    // Register this module's source hash so the runtime can refuse to resume
-    // a checkpoint whose referenced modules have changed. See
+    // Source fingerprint: lets the runtime refuse to resume a checkpoint
+    // whose referenced modules have changed. See
     // docs/dev/runtime/checkpoint-code-fingerprints.md.
     if (this.sourceHash !== undefined) {
+      const compiledAt = new Date().toISOString();
       this.generatedStatements.push(
         ts.raw(
-          `registerModuleSourceHash(${JSON.stringify(this.moduleId)}, ${JSON.stringify(this.sourceHash)});`,
+          `__registerModuleSourceHash(${JSON.stringify(this.moduleId)}, ${JSON.stringify(this.sourceHash)}, ${JSON.stringify(compiledAt)});`,
         ),
       );
     }

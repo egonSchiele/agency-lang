@@ -1,13 +1,14 @@
 import type { StateJSON, StateStackJSON } from "./state/stateStack.js";
-import { getModuleSourceHash } from "./moduleSourceHashRegistry.js";
+import { getModuleSourceHash, type ModuleSourceEntry } from "./moduleSourceHashRegistry.js";
 import { CheckpointCodeChangedError } from "./errors.js";
 
-/** Walk every frame in the stack (and nested branch stacks) and collect the
- *  source hash of each frame's module that has one registered. Frames with no
- *  claimed module (bootstrap frames, runtime builtins like runPrompt) are
- *  skipped. */
-export function collectModuleSourceHashes(stackJson: StateStackJSON): Record<string, string> {
-  const hashes: Record<string, string> = {};
+/** Collect the source entry of every module that has a live frame on the
+ *  stack (nested branch stacks included). Frames with no claimed module
+ *  (bootstrap frames, runtime builtins like runPrompt) are skipped. */
+export function collectModuleSourceHashes(
+  stackJson: StateStackJSON,
+): Record<string, ModuleSourceEntry> {
+  const entries: Record<string, ModuleSourceEntry> = Object.create(null);
   const visitStack = (stack: StateStackJSON | undefined): void => {
     if (!stack) {
       return;
@@ -18,9 +19,9 @@ export function collectModuleSourceHashes(stackJson: StateStackJSON): Record<str
   };
   const visitFrame = (frame: StateJSON): void => {
     if (frame.moduleId) {
-      const hash = getModuleSourceHash(frame.moduleId);
-      if (hash !== undefined) {
-        hashes[frame.moduleId] = hash;
+      const entry = getModuleSourceHash(frame.moduleId);
+      if (entry !== undefined) {
+        entries[frame.moduleId] = entry;
       }
     }
     for (const branch of Object.values(frame.branches ?? {})) {
@@ -28,20 +29,22 @@ export function collectModuleSourceHashes(stackJson: StateStackJSON): Record<str
     }
   };
   visitStack(stackJson);
-  return hashes;
+  return entries;
 }
 
 /** Throw if any stored module hash no longer matches the loaded code. Runs on
- *  resume BEFORE any state is restored, so an out-of-date checkpoint is never
- *  partially executed. A module missing from the registry counts as changed
- *  (deleted, renamed, or compiled from a different directory). */
-export function assertCodeUnchanged(moduleSourceHashes: Record<string, string> | undefined): void {
+ *  resume BEFORE any state is restored. A module missing from the registry
+ *  counts as changed. */
+export function assertCodeUnchanged(
+  moduleSourceHashes: Record<string, ModuleSourceEntry> | undefined,
+): void {
   if (!moduleSourceHashes) {
     return;
   }
-  for (const [moduleId, storedHash] of Object.entries(moduleSourceHashes)) {
-    if (getModuleSourceHash(moduleId) !== storedHash) {
-      throw new CheckpointCodeChangedError(moduleId);
+  for (const [moduleId, stored] of Object.entries(moduleSourceHashes)) {
+    const current = getModuleSourceHash(moduleId);
+    if (current?.hash !== stored.hash) {
+      throw new CheckpointCodeChangedError(moduleId, stored.compiledAt, current?.compiledAt);
     }
   }
 }

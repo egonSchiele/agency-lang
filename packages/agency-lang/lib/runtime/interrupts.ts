@@ -782,10 +782,8 @@ async function respondToInterruptsCore(
     );
   }
   if (args.overrides) applyOverrides(checkpoint, args.overrides);
-  // Refuse before any state is restored: if the source of a module this
-  // checkpoint has a live frame in no longer matches the loaded code, resuming
-  // would replay against different statement numbering. The registry was
-  // populated when the (current) compiled modules were imported.
+  // A changed module would be replayed against different statement numbering;
+  // refuse before any state is restored.
   assertCodeUnchanged(checkpoint.moduleSourceHashes);
 
   // Resume always keeps interrupt.runId; the resolver ignores any supplied

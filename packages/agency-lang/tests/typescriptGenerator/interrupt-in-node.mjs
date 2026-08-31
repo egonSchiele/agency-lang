@@ -27,6 +27,7 @@ import {
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope,
+  registerModuleSourceHash as __registerModuleSourceHash,
   head, tail, empty,
   success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __validateChain, __validateChainRecursive, __coarseTypeTest,
@@ -201,7 +202,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "greet");
+  claimFrameForScope(__stack, "greet", "interrupt-in-node.agency");
   if (!__globals()!.isInitialized("interrupt-in-node.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -406,7 +407,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "foo2");
+  claimFrameForScope(__stack, "foo2", "interrupt-in-node.agency");
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "foo2", threads: __setupData.threads });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
@@ -528,7 +529,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "sayHi");
+  claimFrameForScope(__stack, "sayHi", "interrupt-in-node.agency");
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "sayHi", threads: __setupData.threads });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;

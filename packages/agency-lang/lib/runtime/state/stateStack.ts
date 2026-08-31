@@ -351,6 +351,27 @@ export function claimFrameForScope(frame: State, scopeName: string, moduleId: st
     frame.moduleId = moduleId;
     return;
   }
+  if (frame.scopeName === scopeName) {
+    if (frame.moduleId === null || frame.moduleId === undefined) {
+      // A frame from a checkpoint written before moduleId existed: backfill on
+      // the matching re-claim so the next checkpoint covers this module again.
+      frame.moduleId = moduleId;
+      return;
+    }
+    if (moduleId && frame.moduleId && frame.moduleId !== moduleId) {
+      const msg =
+        `Resume desync: "${scopeName}" in module "${moduleId}" tried to claim ` +
+        `the saved state of "${scopeName}" in module "${frame.moduleId}". This ` +
+        `is a compiler/runtime bug — please report it with the program that produced it.`;
+      agencyStore.getStore()?.ctx?.statelogClient?.error?.({
+        errorType: "runtimeError",
+        message: msg,
+        functionName: scopeName,
+      });
+      throw new Error(msg);
+    }
+    return;
+  }
   if (frame.scopeName !== scopeName) {
     const msg =
       `Resume desync: function "${scopeName}" tried to claim the saved ` +

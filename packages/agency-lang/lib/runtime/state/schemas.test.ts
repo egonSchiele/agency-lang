@@ -239,7 +239,9 @@ describe("moduleSourceHashes round trip", () => {
       stepPath: "0",
       label: null,
       pinned: false,
-      moduleSourceHashes: { "mod.agency": "abc123" },
+      moduleSourceHashes: {
+        "mod.agency": { hash: "abc123", compiledAt: "2026-08-30T00:00:00.000Z" },
+      },
       globals: { store: {}, initializedModules: [] },
       stack: {
         stack: [],
@@ -251,6 +253,8 @@ describe("moduleSourceHashes round trip", () => {
     };
     const revived = Checkpoint.fromJSON(JSON.parse(JSON.stringify(original)));
     expect(revived).not.toBeNull();
-    expect(revived!.moduleSourceHashes).toEqual({ "mod.agency": "abc123" });
+    expect(revived!.moduleSourceHashes).toEqual({
+      "mod.agency": { hash: "abc123", compiledAt: "2026-08-30T00:00:00.000Z" },
+    });
   });
 });

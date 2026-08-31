@@ -27,6 +27,7 @@ import {
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope,
+  registerModuleSourceHash as __registerModuleSourceHash,
   head, tail, empty,
   success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __validateChain, __validateChainRecursive, __coarseTypeTest,
@@ -201,7 +202,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "test");
+  claimFrameForScope(__stack, "test", "function.agency");
   if (!__globals()!.isInitialized("function.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -334,7 +335,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "add");
+  claimFrameForScope(__stack, "add", "function.agency");
   if (!__globals()!.isInitialized("function.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -496,7 +497,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "main");
+  claimFrameForScope(__stack, "main", "function.agency");
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await agencyStore.run({

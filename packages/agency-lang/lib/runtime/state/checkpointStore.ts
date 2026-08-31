@@ -1,6 +1,7 @@
 import { MessageJSON } from "smoltalk";
 import { CheckpointError } from "../errors.js";
 import { collectModuleSourceHashes } from "../referencedModules.js";
+import type { ModuleSourceEntry } from "../moduleSourceHashRegistry.js";
 import { deepClone } from "../utils.js";
 import type { RuntimeContext } from "./context.js";
 import type { GlobalStoreJSON } from "./globalStore.js";
@@ -37,7 +38,7 @@ export type CheckpointArgs = {
   stepPath?: string;
   label?: string | null;
   pinned?: boolean;
-  moduleSourceHashes?: Record<string, string>;
+  moduleSourceHashes?: Record<string, ModuleSourceEntry>;
 };
 
 export type CheckpointJSON = {
@@ -50,7 +51,7 @@ export type CheckpointJSON = {
   stepPath: string;
   label: string | null;
   pinned: boolean;
-  moduleSourceHashes?: Record<string, string>;
+  moduleSourceHashes?: Record<string, ModuleSourceEntry>;
 };
 
 export class Checkpoint implements SourceLocation {
@@ -63,10 +64,9 @@ export class Checkpoint implements SourceLocation {
   public stepPath: string;
   public label: string | null;
   public pinned: boolean;
-  /** sha256 of each referenced module's source (moduleId -> hash), captured at
-   *  creation so a resume can refuse when the code has changed. Absent when no
-   *  frame maps to a registered module. See referencedModules.ts. */
-  public moduleSourceHashes?: Record<string, string>;
+  /** Source hash + compile time of each module with a live frame, captured at
+   *  creation so a resume can refuse when the code changed. */
+  public moduleSourceHashes?: Record<string, ModuleSourceEntry>;
 
   constructor(args: CheckpointArgs) {
     this.id = args.id ?? globalCheckpointCounter++;

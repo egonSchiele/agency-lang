@@ -10,6 +10,7 @@ import { returnedOutcome, threwOutcome, unusedPublicInvoke } from "../testOutcom
 import { createLogger } from "../../logger.js";
 import type { Logger } from "../../logger.js";
 import { GuardExceededError } from "../../runtime/guard.js";
+import { CheckpointCodeChangedError } from "../../runtime/errors.js";
 
 // A fully-formed interrupt, as the runtime produces one — every identity field
 // present. Resume validation now requires these, so tests build real interrupts
@@ -665,5 +666,20 @@ describe("root-budget trips surface as a typed budgetExceeded", () => {
     const result = await handler("POST", "/node/run", {});
     expect(result.status).toBe(200);
     expect(result.body).toEqual({ success: false, error: "Tool execution failed" });
+  });
+
+  it("maps a code-changed refusal to 409 with the module named", async () => {
+    const handler = handlerFor(async () => {
+      throw new CheckpointCodeChangedError(
+        "mod.agency",
+        "2026-08-30T00:00:00.000Z",
+        "2026-08-31T00:00:00.000Z",
+      );
+    });
+    const result = await handler("POST", "/node/run", {});
+    expect(result.status).toBe(409);
+    expect(result.body).toMatchObject({ success: false });
+    expect((result.body as { error: string }).error).toContain("mod.agency");
+    expect((result.body as { error: string }).error).toContain("2026-08-30T00:00:00.000Z");
   });
 });

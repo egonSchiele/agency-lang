@@ -1,15 +1,20 @@
-// A process-global map of moduleId -> sha256 of that module's source, populated
-// at module init by generated code (like __toolRegistry). NOT serialized: it is
-// derived from the loaded code and rebuilt whenever code loads. This is
-// per-loaded-code state, not per-run state, so a module-level map is the
-// correct owner (the GlobalStore rule is about per-run state).
-const registry: Record<string, string> = {};
+export type ModuleSourceEntry = {
+  /** sha256 of the module's source text. */
+  hash: string;
+  /** ISO timestamp of when that source was compiled. */
+  compiledAt: string;
+};
 
-export function registerModuleSourceHash(moduleId: string, hash: string): void {
-  registry[moduleId] = hash;
+// moduleId -> source entry for every loaded module. Populated by generated
+// code at module init (like __toolRegistry); derived from loaded code, never
+// serialized. Null-prototype: moduleIds are arbitrary strings.
+const registry: Record<string, ModuleSourceEntry> = Object.create(null);
+
+export function registerModuleSourceHash(moduleId: string, hash: string, compiledAt: string): void {
+  registry[moduleId] = { hash, compiledAt };
 }
 
-export function getModuleSourceHash(moduleId: string): string | undefined {
+export function getModuleSourceHash(moduleId: string): ModuleSourceEntry | undefined {
   return registry[moduleId];
 }
 

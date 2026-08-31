@@ -106,7 +106,12 @@ export { typeCheckSource, getEffectsFromSource } from "./typecheck.js";
 export type { TypeCheckDiagnostic, TypeCheckReport } from "./typecheck.js";
 
 export function compileSource(source: string, config: CompileSourceOptions): CompileResult {
-  const moduleId = `agency_${nanoid()}`;
+  // A caller-supplied sourcePath gives the module a stable identity (the
+  // cwd-relative path, matching buildSession) so a checkpoint can be resumed
+  // in a later process. An anonymous string compile has no stable identity.
+  const moduleId = config.sourcePath
+    ? path.relative(process.cwd(), path.resolve(config.sourcePath))
+    : `agency_${nanoid()}`;
   // SymbolTable.build() walks the file system from the source's path to resolve
   // imports. With a caller-supplied sourcePath (the file is already on disk
   // beside its siblings), compile at that path so relative `.agency` imports
@@ -223,7 +228,7 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
     }
 
     // 7. Generate TypeScript
-    const outputPath = path.join(os.tmpdir(), `${moduleId}.js`);
+    const outputPath = path.join(os.tmpdir(), `${moduleId.replace(/[\\/]/g, "_")}.js`);
     const initPlan = initPlanForModule(closure, syntheticPath);
     const generatedCode = generateTypeScript(
       liftedProgram,
@@ -232,7 +237,7 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
       moduleId,
       outputPath,
       initPlan,
-      sha256Text(compiledSource),
+      config.sourcePath ? sha256Text(compiledSource) : undefined,
     );
 
     // 8. Transpile TS → JS

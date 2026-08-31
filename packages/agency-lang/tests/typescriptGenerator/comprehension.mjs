@@ -27,6 +27,7 @@ import {
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope,
+  registerModuleSourceHash as __registerModuleSourceHash,
   head, tail, empty,
   success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __validateChain, __validateChainRecursive, __coarseTypeTest,
@@ -203,7 +204,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "main");
+  claimFrameForScope(__stack, "main", "comprehension.agency");
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "comprehension.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await agencyStore.run({
@@ -235,7 +236,7 @@ const __self = __bstack.locals;
 const __bframe___block_0 = __bstack;
 // Claim site: this block just pulled its frame via setupFunction. A
 // mismatched claim on resume replay is a frame desync and throws.
-claimFrameForScope(__bstack, "__block_0");
+claimFrameForScope(__bstack, "__block_0", "comprehension.agency");
 
 __bstack.args["n"] = n;
 
@@ -293,7 +294,7 @@ const __self = __bstack.locals;
 const __bframe___block_1 = __bstack;
 // Claim site: this block just pulled its frame via setupFunction. A
 // mismatched claim on resume replay is a frame desync and throws.
-claimFrameForScope(__bstack, "__block_1");
+claimFrameForScope(__bstack, "__block_1", "comprehension.agency");
 
 __bstack.args["n"] = n;
 
@@ -351,7 +352,7 @@ const __self = __bstack.locals;
 const __bframe___block_2 = __bstack;
 // Claim site: this block just pulled its frame via setupFunction. A
 // mismatched claim on resume replay is a frame desync and throws.
-claimFrameForScope(__bstack, "__block_2");
+claimFrameForScope(__bstack, "__block_2", "comprehension.agency");
 
 __bstack.args["n"] = n;
 

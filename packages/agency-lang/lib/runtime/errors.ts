@@ -26,10 +26,18 @@ export class CheckpointError extends Error {
  *  live frame in no longer matches the loaded code. Terminal: there is no
  *  override; the caller starts a fresh run. */
 export class CheckpointCodeChangedError extends Error {
-  constructor(public readonly moduleId: string) {
+  constructor(
+    public readonly moduleId: string,
+    checkpointCompiledAt: string,
+    currentCompiledAt: string | undefined,
+  ) {
+    const current =
+      currentCompiledAt === undefined
+        ? `the module is not loaded now (deleted, renamed, or compiled from a different directory)`
+        : `the current code was compiled ${currentCompiledAt}`;
     super(
-      `Cannot resume: the source of "${moduleId}" has changed since this checkpoint was created ` +
-        `(or the program is being resumed from a different directory, which changes module identity).`,
+      `Cannot resume: the source of "${moduleId}" has changed since this checkpoint was created. ` +
+        `The checkpoint ran code compiled ${checkpointCompiledAt}; ${current}.`,
     );
     this.name = "CheckpointCodeChangedError";
   }

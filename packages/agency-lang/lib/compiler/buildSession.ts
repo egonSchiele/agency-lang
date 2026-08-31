@@ -448,11 +448,8 @@ export class BuildSession {
 
     const contents = readFile(inputFile);
     const applyTemplate = !isNonTemplatedStdlib(absoluteInputFile);
-    const parsedProgram = expandSplicesOrExit(
-      parseFileOrExit(absoluteInputFile, config, applyTemplate, contents),
-      absoluteInputFile,
-      config,
-    );
+    const parsed = parseFileOrExit(absoluteInputFile, config, applyTemplate, contents);
+    const parsedProgram = expandSplicesOrExit(parsed.program, absoluteInputFile, config);
 
     const symbolTable = timed(
       `Built symbol table for ${absoluteInputFile}`,
@@ -527,7 +524,7 @@ export class BuildSession {
         moduleId,
         absoluteOutputFile,
         initPlan,
-        sha256Text(contents),
+        parsed.sourceHash,
       ),
     );
     if (options?.ts) {
@@ -619,7 +616,7 @@ function parseFileOrExit(
   config: AgencyConfig,
   applyTemplate: boolean,
   contents: string,
-): AgencyProgram {
+): { program: AgencyProgram; sourceHash: string } {
   const parseResult = parseAgencyFileCached(absPath, config, applyTemplate);
   if (!parseResult.success) {
     if (parseResult.message) {
@@ -629,7 +626,12 @@ function parseFileOrExit(
     }
     process.exit(1);
   }
-  return parseResult.result;
+  // Hash from the cache's own read: `contents` is a separate read of the same
+  // file and can diverge from the bytes the cached program was parsed from.
+  return {
+    program: parseResult.result,
+    sourceHash: parseResult.sourceHash ?? sha256Text(contents),
+  };
 }
 
 /** Expand compile-time splices, or stop the build. A splice that cannot

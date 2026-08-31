@@ -27,6 +27,7 @@ import {
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope,
+  registerModuleSourceHash as __registerModuleSourceHash,
   head, tail, empty,
   success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __validateChain, __validateChainRecursive, __coarseTypeTest,
@@ -201,7 +202,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "foo");
+  claimFrameForScope(__stack, "foo", "threadsAndSubthreads.agency");
   if (!__globals()!.isInitialized("threadsAndSubthreads.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -523,7 +524,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "main");
+  claimFrameForScope(__stack, "main", "threadsAndSubthreads.agency");
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await agencyStore.run({

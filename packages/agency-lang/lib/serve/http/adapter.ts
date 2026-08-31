@@ -136,9 +136,8 @@ function errorResult(err: unknown, logger: Logger, what: string): RouteResult {
     logger.error(`${what}: ${formatBudgetExceeded(cause)}`);
     return budgetExceeded(cause);
   }
-  // A code-changed refusal is a conflict with the deployed code, not a server
-  // fault; its message is fixed and names only the module (which the caller
-  // already holds in the checkpoint), so it is safe to surface.
+  // A conflict with the deployed code, not a server fault; the fixed message
+  // is safe to surface.
   if (err instanceof CheckpointCodeChangedError) {
     logger.error(`${what}: ${err.message}`);
     return { status: 409, body: { success: false, error: err.message } };

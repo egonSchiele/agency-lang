@@ -27,6 +27,7 @@ import {
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope,
+  registerModuleSourceHash as __registerModuleSourceHash,
   head, tail, empty,
   success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __validateChain, __validateChainRecursive, __coarseTypeTest,
@@ -201,7 +202,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "prep");
+  claimFrameForScope(__stack, "prep", "destructiveBlock.agency");
   if (!__globals()!.isInitialized("destructiveBlock.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -350,7 +351,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "_doWrite");
+  claimFrameForScope(__stack, "_doWrite", "destructiveBlock.agency");
   if (!__globals()!.isInitialized("destructiveBlock.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -499,7 +500,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "writeThing");
+  claimFrameForScope(__stack, "writeThing", "destructiveBlock.agency");
   if (!__globals()!.isInitialized("destructiveBlock.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -674,7 +675,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "main");
+  claimFrameForScope(__stack, "main", "destructiveBlock.agency");
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "destructiveBlock.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await agencyStore.run({

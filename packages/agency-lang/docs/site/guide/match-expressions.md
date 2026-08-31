@@ -134,6 +134,44 @@ match (event) {
 }
 ```
 
+## Matching on interrupt effects
+
+Inside a handler, you can match an interrupt by its effect name:
+
+```ts
+handle {
+    writeReport()
+} with (intr) {
+    return match (intr) {
+        std::write => approve()
+        std::read  => approve()
+        _          => reject()
+    }
+}
+```
+
+The handler receives the interrupt as `intr`. Here you match on `intr` itself, the whole interrupt.
+
+An arm like `std::write` matches any interrupt whose effect is `std::write`. To also read the interrupt's payload, write the effect name with an object pattern:
+
+```ts
+match (intr) {
+    std::write({ data }) => inspect(data)
+    _                    => reject()
+}
+```
+
+The `{ data }` binds `data` to `intr.data`, which holds the interrupt's payload. You can destructure deeper. `std::write({ data: { dir } })` binds `dir` to `intr.data.dir`.
+
+An effect name always contains `::`. A bare name like `write` is a variable binding, not an effect. To match on a bare effect name, match on `intr.effect` against a string instead:
+
+```ts
+match (intr.effect) {
+    "write" => approve()
+    _       => reject()
+}
+```
+
 ## Guard clauses
 
 You can add a guard clause `if (…)` to any arm:

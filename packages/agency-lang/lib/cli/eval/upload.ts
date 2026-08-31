@@ -11,7 +11,6 @@ import type { Annotation } from "@/runDirectory/annotations.js";
 import { findRunDirectories, uniqueRunDirectories } from "@/runDirectory/findRuns.js";
 import { summarizeRunDirectory, type RunSummary } from "@/runDirectory/list.js";
 import { readRunDirectory } from "@/runDirectory/runDir.js";
-import { agentNameProblem } from "@/statelog/agentName.js";
 import { mapInParallel } from "@/utils/parallelMap.js";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
@@ -28,6 +27,9 @@ export type EvalUploadTarget = { origin: string; projectSlug: string; apiKey: st
 export type EvalUploadDependencies = {
   client?: EvalUploadClient;
   reportWarning?: (message: string) => void;
+  /** Called with one formatted line as each run finishes, so a long upload
+   *  shows progress instead of staying silent until the end. */
+  reportProgress?: (line: string) => void;
 };
 
 export type UploadRunOutcome =
@@ -53,7 +55,7 @@ export type UploadRunOutcome =
 export type EvalUploadResult = {
   runs: UploadRunOutcome[];
   /** The batch page on statelog, when every uploaded run belongs to one
-   *  batch of one (valid) agent name; null otherwise. */
+   *  batch; null otherwise. */
   batchUrl: string | null;
 };
 
@@ -71,9 +73,11 @@ export async function evalUpload(
   // Runs are independent traces, so they upload through a bounded pool —
   // unbounded, a 69-run group is hundreds of concurrent requests and the
   // host sheds them with 429s. Results keep input order.
-  const records = await mapInParallel(dirs, UPLOAD_PARALLELISM, (dir) =>
-    uploadRun(dir, client, reportWarning),
-  );
+  const records = await mapInParallel(dirs, UPLOAD_PARALLELISM, async (dir) => {
+    const record = await uploadRun(dir, client, reportWarning);
+    dependencies.reportProgress?.(formatRunLine(record.outcome));
+    return record;
+  });
   return { runs: records.map((record) => record.outcome), batchUrl: batchUrlFor(records, target) };
 }
 
@@ -222,9 +226,8 @@ function chunked<T>(items: readonly T[], size: number): T[][] {
 }
 
 /** The batch page, only when it would show exactly these runs: every run
- *  that made it shares one batch id and one agent name, and that name is
- *  valid (an older trace may predate validation; a `..` would not survive
- *  the URL unchanged, so no URL is better than a misleading one). */
+ *  that made it shares one batch id. Statelog keys the page by project and
+ *  batch alone; agent names are labels there, not part of the URL. */
 function batchUrlFor(records: readonly RunRecord[], target: EvalUploadTarget): string | null {
   const summaries = records.flatMap((record) =>
     record.outcome.status === "failed" || record.summary === null ? [] : [record.summary],
@@ -232,43 +235,45 @@ function batchUrlFor(records: readonly RunRecord[], target: EvalUploadTarget): s
   if (summaries.length === 0) {
     return null;
   }
-  const [first] = summaries;
-  const batch = first.batch;
-  const agent = first.agentName;
-  if (batch === null || agent === null || agentNameProblem(agent) !== null) {
+  const batch = summaries[0].batch;
+  if (batch === null || summaries.some((summary) => summary.batch !== batch)) {
     return null;
   }
-  const shared = summaries.every(
-    (summary) => summary.batch === batch && summary.agentName === agent,
-  );
-  if (!shared) {
-    return null;
-  }
-  const route = ["projects", target.projectSlug, "evals", "agents", agent, "batches", batch]
-    .map(encodeURIComponent)
-    .join("/");
-  return new URL(`/${route}`, target.origin).toString();
+  const url = new URL("/projects/evals/batch", target.origin);
+  url.searchParams.set("id", target.projectSlug);
+  url.searchParams.set("batch", batch);
+  return url.toString();
 }
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** One line per run, a count line, and the batch page when there is one. */
-export function formatUploadResult(
-  result: EvalUploadResult,
-  cwd: string = process.cwd(),
-): string[] {
-  const lines = result.runs.map((run) => `${shownDir(run.dir, cwd)}: ${describeOutcome(run)}`);
+/** One run's outcome as the line the CLI prints, both as progress while
+ *  uploads run and in tests over the collected result. */
+export function formatRunLine(run: UploadRunOutcome, cwd: string = process.cwd()): string {
+  return `${shownDir(run.dir, cwd)}: ${describeOutcome(run)}`;
+}
+
+/** The closing lines: a count line, and the batch page when there is one. */
+export function formatUploadSummary(result: EvalUploadResult): string[] {
   const counts = ["uploaded", "present", "resumed", "failed"].flatMap((status) => {
     const count = result.runs.filter((run) => run.status === status).length;
     return count === 0 ? [] : [`${count} ${status}`];
   });
-  lines.push(counts.join(" · "));
+  const lines = [counts.join(" · ")];
   if (result.batchUrl !== null) {
     lines.push(`batch: ${result.batchUrl}`);
   }
   return lines;
+}
+
+/** Every output line at once: per-run lines, then the summary. */
+export function formatUploadResult(
+  result: EvalUploadResult,
+  cwd: string = process.cwd(),
+): string[] {
+  return [...result.runs.map((run) => formatRunLine(run, cwd)), ...formatUploadSummary(result)];
 }
 
 function describeOutcome(run: UploadRunOutcome): string {

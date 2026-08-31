@@ -1,11 +1,11 @@
 /**
  * The rule for an agent's statelog name (`std::statelog` `setAgentName`).
- * The name becomes one path segment of a statelog URL
- * (`/evals/agents/<name>/batches/<batch>`), so it has to survive that trip
- * unchanged: no whitespace, no characters a URL would encode, and no `.` or
- * `..` segment, which a URL parser folds away (`agents/../batches` loses the
- * `agents` segment even after `encodeURIComponent`). Slashes are allowed so a
- * family can nest its variants, as in `agency-agent/coordinator`.
+ * Statelog uses the name as a filterable label on eval batches and in a
+ * `?agent=` query parameter, so it has to stay one clean token: no
+ * whitespace, no characters a URL would encode, and no `.` or `..` segment,
+ * which a URL parser folds away even after `encodeURIComponent`. Slashes are
+ * allowed so a family can nest its variants, as in
+ * `agency-agent/coordinator`.
  */
 export const AGENT_NAME_MAX_LENGTH = 200;
 

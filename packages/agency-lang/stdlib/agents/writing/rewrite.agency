@@ -19,7 +19,7 @@ import {
   writingReviewAgent,
   WritingReviewEvalInput,
  } from "std::agents/writing/review"
-import { evalValue } from "std::statelog"
+import { evalValue, setAgentName } from "std::statelog"
 
 static const rewritePrompt = """You rewrite prose to apply a reviewer's findings. You get the text, the task it was written for, and the findings. Return the rewritten text and nothing else: no preamble, no notes, no list of what you changed.
 
@@ -161,6 +161,7 @@ export def writingRewriteAgent(
   `docsOnlyHandler`, so a budget trip comes back as text rather than an
   interrupt escaping the entry point. */
 node evalMain(input: WritingReviewEvalInput): string {
+  setAgentName("writing-rewrite")
   evalValue(input)
   const source = read(input.sourceFile) with approve
   if (source is failure(readErr)) {

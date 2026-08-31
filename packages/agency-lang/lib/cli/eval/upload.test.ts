@@ -211,7 +211,7 @@ describe("evalUpload", () => {
     expect(annotations[0].map((row) => row.kind).sort()).toEqual(["run", "score"]);
   });
 
-  it("names the batch page only when every uploaded run shares one batch and one valid agent name", async () => {
+  it("names the batch page only when every uploaded run shares one batch", async () => {
     const group = tempDir("group-");
     for (const [testId, traceId] of [
       ["a", "ta"],
@@ -225,9 +225,7 @@ describe("evalUpload", () => {
       );
     }
     const shared = await evalUpload([group], target, { client: fakeClient({}).client });
-    expect(shared.batchUrl).toBe(
-      "https://h/projects/proj/evals/agents/agency-agent%2Fcoordinator/batches/b%201",
-    );
+    expect(shared.batchUrl).toBe("https://h/projects/evals/batch?id=proj&batch=b+1");
 
     // Different batches: no page shows exactly these runs.
     const other = writeRunDirectory({
@@ -240,20 +238,37 @@ describe("evalUpload", () => {
     expect(mixed.batchUrl).toBeNull();
   });
 
-  it("an agent name that would not survive a URL gets no batch page", async () => {
+  it("names the batch page for runs with no agent name at all", async () => {
     const dir = writeRunDirectory({
-      traceId: "dots",
+      traceId: "unnamed",
       test: { id: "a", input: "t" },
       batch: "b1",
       trial: 1,
     });
-    fs.appendFileSync(
-      path.join(dir, "statelog.jsonl"),
-      statelogLine("dots", "agentName", { name: ".." }) + "\n",
-    );
     const result = await evalUpload([dir], target, { client: fakeClient({}).client });
     expect(result.runs[0].status).toBe("uploaded");
-    expect(result.batchUrl).toBeNull();
+    expect(result.batchUrl).toBe("https://h/projects/evals/batch?id=proj&batch=b1");
+  });
+
+  it("reports one progress line as each run finishes", async () => {
+    const group = tempDir("group-");
+    writeRunDirectory(
+      { traceId: "pa", test: { id: "a", input: "t" }, output: "x" },
+      path.join(group, "a"),
+    );
+    writeRunDirectory(
+      { traceId: "pb", test: { id: "b", input: "t" }, output: "x" },
+      path.join(group, "b"),
+    );
+    const lines: string[] = [];
+    const result = await evalUpload([group], target, {
+      client: fakeClient({}).client,
+      reportProgress: (line) => lines.push(line),
+    });
+    expect(lines.length).toBe(2);
+    expect(lines.toSorted()).toEqual(
+      result.runs.map((run) => `${run.dir}: uploaded 3 events, 1 annotations`).toSorted(),
+    );
   });
 });
 
@@ -281,7 +296,7 @@ describe("formatUploadResult", () => {
           },
           { dir: "/runs/b1/d", traceId: null, status: "failed", error: "could not reach h" },
         ],
-        batchUrl: "https://h/projects/p/evals/agents/x/batches/b1",
+        batchUrl: "https://h/projects/evals/batch?id=p&batch=b1",
       },
       "/elsewhere",
     );
@@ -291,7 +306,7 @@ describe("formatUploadResult", () => {
       "/runs/b1/c: resumed at event 500: 3 events, 1 annotations",
       "/runs/b1/d: failed: could not reach h",
       "1 uploaded · 1 present · 1 resumed · 1 failed",
-      "batch: https://h/projects/p/evals/agents/x/batches/b1",
+      "batch: https://h/projects/evals/batch?id=p&batch=b1",
     ]);
   });
 });

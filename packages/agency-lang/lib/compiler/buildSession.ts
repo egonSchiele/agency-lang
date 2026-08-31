@@ -53,6 +53,7 @@ import {
 } from "@/importPaths.js";
 import { CompileStrategy, type ImportStrategy } from "@/importStrategy.js";
 import { parseAgencyFileCached } from "@/parseCache.js";
+import { sha256Text } from "@/utils/hash.js";
 import { getImports } from "@/analysis/imports.js";
 import { findRecursively } from "@/utils/findRecursively.js";
 
@@ -519,7 +520,15 @@ export class BuildSession {
       ? initPlanForModule(this.currentClosure, absoluteInputFile)
       : undefined;
     const generatedCode = timed(`Generated code for ${absoluteInputFile}`, verbose, () =>
-      generateTypeScript(liftedProgram, config, info, moduleId, absoluteOutputFile, initPlan),
+      generateTypeScript(
+        liftedProgram,
+        config,
+        info,
+        moduleId,
+        absoluteOutputFile,
+        initPlan,
+        sha256Text(contents),
+      ),
     );
     if (options?.ts) {
       fs.writeFileSync(outputFile, "// @ts-nocheck\n" + generatedCode, "utf-8");

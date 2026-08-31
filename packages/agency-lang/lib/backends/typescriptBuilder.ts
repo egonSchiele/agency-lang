@@ -293,6 +293,9 @@ export class TypeScriptBuilder {
 
   private compilationUnit: CompilationUnit;
   private moduleId: string;
+  /** sha256 of this module's source text; emitted as a registerModuleSourceHash
+   *  call at init when present. */
+  private sourceHash?: string;
   private outputFile: string | undefined;
   /**
    * Optional per-module init plan + cross-module alias resolver produced
@@ -340,6 +343,7 @@ export class TypeScriptBuilder {
     moduleId: string,
     outputFile?: string,
     initPlan?: TypeScriptBuilder["initPlan"],
+    sourceHash?: string,
   ) {
     this.agencyConfig = mergeDeep(this.configDefaults(), config || {});
     this.compilationUnit = info;
@@ -366,6 +370,7 @@ export class TypeScriptBuilder {
       this.processBodyAsParts(body, stepBase),
     );
     this.moduleId = moduleId;
+    this.sourceHash = sourceHash;
     this.outputFile = outputFile;
     this.initPlan = initPlan;
   }
@@ -540,6 +545,17 @@ export class TypeScriptBuilder {
 
     // Generate tool registry (empty — AgencyFunction.create() populates it)
     this.generatedStatements.push(this.generateToolRegistry());
+
+    // Register this module's source hash so the runtime can refuse to resume
+    // a checkpoint whose referenced modules have changed. See
+    // docs/dev/runtime/checkpoint-code-fingerprints.md.
+    if (this.sourceHash !== undefined) {
+      this.generatedStatements.push(
+        ts.raw(
+          `registerModuleSourceHash(${JSON.stringify(this.moduleId)}, ${JSON.stringify(this.sourceHash)});`,
+        ),
+      );
+    }
 
     // Sort program nodes into static-init / global-init / top-level buckets.
     // When an InitPlan is available, partition emits local assignments in

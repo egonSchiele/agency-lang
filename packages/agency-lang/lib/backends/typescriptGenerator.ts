@@ -61,6 +61,7 @@ export function generateTypeScript(
   moduleId?: string,
   outputFile?: string,
   initPlan?: InitPlanForModule,
+  sourceHash?: string,
 ): string {
   if (!moduleId) {
     throw new Error("moduleId is required for generateTypeScript");
@@ -68,7 +69,14 @@ export function generateTypeScript(
   const compilationUnit = info ?? buildCompilationUnit(program);
   const preprocessor = new TypescriptPreprocessor(program, config, compilationUnit);
   const preprocessedProgram = preprocessor.preprocess();
-  const builder = new TypeScriptBuilder(config, compilationUnit, moduleId, outputFile, initPlan);
+  const builder = new TypeScriptBuilder(
+    config,
+    compilationUnit,
+    moduleId,
+    outputFile,
+    initPlan,
+    sourceHash,
+  );
   const ir = builder.build(preprocessedProgram);
   return printTs(ir);
 }

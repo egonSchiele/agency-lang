@@ -16,6 +16,7 @@ import { formatErrors, typeCheck } from "@/typeChecker/index.js";
 import { buildCompiledClosure, CompileClosureError } from "./compileClosure.js";
 import { transformSync } from "esbuild";
 import { nanoid } from "nanoid";
+import { sha256Text } from "@/utils/hash.js";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
@@ -231,6 +232,7 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
       moduleId,
       outputPath,
       initPlan,
+      sha256Text(compiledSource),
     );
 
     // 8. Transpile TS → JS

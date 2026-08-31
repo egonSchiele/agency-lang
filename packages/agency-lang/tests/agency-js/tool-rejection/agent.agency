@@ -37,6 +37,24 @@ node fiveRejectionsRemove() {
   return out
 }
 
+// A destructive def commits destructiveRan at body entry, so a rejection
+// of its gate is NOT a clean rejection: it takes the destructive failure
+// tier (immediate removal), not the rejection path.
+destructive def destructiveGated(id: string): string {
+  const _ok = interrupt("run ${id}")
+  return "ran ${id}"
+}
+
+node destructiveReject() {
+  let out = ""
+  handle {
+    out = llm("Use destructiveGated.", { tools: [destructiveGated] })
+  } with (intr) {
+    return reject("stop")
+  }
+  return out
+}
+
 // An approved call resets the consecutive-rejection count: four
 // rejections, an approval, then more calls — the tool must survive.
 node approvalResets() {

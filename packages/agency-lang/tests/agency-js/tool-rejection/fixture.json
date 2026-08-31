@@ -17,8 +17,14 @@
     "toolStarts": 5,
     "removalSeen": true
   },
-  "approvalResets": {
+  "destructiveReject": {
     "result": "s4 done",
+    "toolStarts": 1,
+    "destructiveTierSeen": true,
+    "rejectionPathSeen": false
+  },
+  "approvalResets": {
+    "result": "s5 done",
     "toolStarts": 7,
     "removalSeen": false
   }

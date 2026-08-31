@@ -2,6 +2,7 @@ import {
   handlerRejects,
   interactiveReject,
   fiveRejectionsRemove,
+  destructiveReject,
   approvalResets,
   respondToInterrupts,
   reject,
@@ -77,6 +78,20 @@ const results = {};
     result: result.data,
     toolStarts: state.toolStarts,
     removalSeen: seen(state, "rejected too many times"),
+  };
+}
+
+// A destructive def commits destructiveRan at entry, so its rejected gate
+// is not a clean rejection: the destructive failure tier removes the tool
+// immediately, and the second scripted call never starts.
+{
+  const { state, callbacks } = makeCapture();
+  const result = await destructiveReject({ callbacks });
+  results.destructiveReject = {
+    result: result.data,
+    toolStarts: state.toolStarts,
+    destructiveTierSeen: seen(state, "Verify state manually"),
+    rejectionPathSeen: seen(state, "Tool call rejected:"),
   };
 }
 

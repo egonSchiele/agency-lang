@@ -1050,6 +1050,11 @@ export async function runPrompt(args: {
       handler: AgencyFunction;
       toolCall: smoltalk.ToolCallJSON;
       namedArgs: Record<string, any>;
+      /** repeatKey of this call, computed BEFORE invocation: the tool may
+       *  mutate nested argument objects (namedArgs is a shallow copy), and
+       *  a key digested after the fact would not match the model's retry
+       *  of the same call. */
+      callKey: string;
       branchKey: string;
       branchStack: StateStack;
     }): Promise<{
@@ -1057,7 +1062,7 @@ export async function runPrompt(args: {
       invokeOutcome: "success" | "failed" | "rejected" | "interrupted" | "crashed";
       interrupts?: any[];
     }> => {
-      const { handler, toolCall, namedArgs, branchKey, branchStack } = args;
+      const { handler, toolCall, namedArgs, callKey, branchKey, branchStack } = args;
       let toolResult: any;
       ctx.enterToolCall();
       try {
@@ -1154,7 +1159,6 @@ export async function runPrompt(args: {
       // emitted interruptResolved).
       const recordRejection = (reason: string): { toolResult: any; invokeOutcome: "rejected" } => {
         const capped = String(capToolResultForLlm(reason, toolResultCap));
-        const callKey = repeatKey(handler.name, namedArgs);
         if (!rejectedCalls.includes(callKey)) {
           rejectedCalls.push(callKey);
         }
@@ -1173,7 +1177,13 @@ export async function runPrompt(args: {
         return { toolResult, invokeOutcome: "rejected" };
       };
 
-      if (isFailure(toolResult) && toolResult.rejected) {
+      // Only a CLEAN rejection takes the rejection path. One stamped
+      // destructiveRan means the tool entered a destructive region before
+      // its gate — partial work may exist — so it falls through to the
+      // failure tiers, where the destructive tier removes the tool
+      // immediately. (Stdlib tools gate BEFORE their destructive regions,
+      // so their rejections are always clean.)
+      if (isFailure(toolResult) && toolResult.rejected && !toolResult.destructiveRan) {
         return recordRejection(toolErrorMessage(toolResult.error));
       }
 
@@ -1531,6 +1541,7 @@ export async function runPrompt(args: {
                     handler,
                     toolCall,
                     namedArgs,
+                    callKey,
                     branchKey,
                     branchStack,
                   });

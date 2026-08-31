@@ -228,3 +228,29 @@ describe("frame moduleId round trip", () => {
     expect(revived!.stack.stack[0].moduleId).toBe("mod.agency");
   });
 });
+
+describe("moduleSourceHashes round trip", () => {
+  it("keeps moduleSourceHashes through Checkpoint.fromJSON", () => {
+    const original = {
+      id: 4,
+      nodeId: "start",
+      moduleId: "mod.agency",
+      scopeName: "main",
+      stepPath: "0",
+      label: null,
+      pinned: false,
+      moduleSourceHashes: { "mod.agency": "abc123" },
+      globals: { store: {}, initializedModules: [] },
+      stack: {
+        stack: [],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: [],
+      },
+    };
+    const revived = Checkpoint.fromJSON(JSON.parse(JSON.stringify(original)));
+    expect(revived).not.toBeNull();
+    expect(revived!.moduleSourceHashes).toEqual({ "mod.agency": "abc123" });
+  });
+});

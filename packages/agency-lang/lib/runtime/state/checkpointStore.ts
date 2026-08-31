@@ -1,5 +1,6 @@
 import { MessageJSON } from "smoltalk";
 import { CheckpointError } from "../errors.js";
+import { collectModuleSourceHashes } from "../referencedModules.js";
 import { deepClone } from "../utils.js";
 import type { RuntimeContext } from "./context.js";
 import type { GlobalStoreJSON } from "./globalStore.js";
@@ -36,6 +37,20 @@ export type CheckpointArgs = {
   stepPath?: string;
   label?: string | null;
   pinned?: boolean;
+  moduleSourceHashes?: Record<string, string>;
+};
+
+export type CheckpointJSON = {
+  id: number;
+  stack: StateStackJSON;
+  globals: GlobalStoreJSON;
+  nodeId: string;
+  moduleId: string;
+  scopeName: string;
+  stepPath: string;
+  label: string | null;
+  pinned: boolean;
+  moduleSourceHashes?: Record<string, string>;
 };
 
 export class Checkpoint implements SourceLocation {
@@ -48,6 +63,10 @@ export class Checkpoint implements SourceLocation {
   public stepPath: string;
   public label: string | null;
   public pinned: boolean;
+  /** sha256 of each referenced module's source (moduleId -> hash), captured at
+   *  creation so a resume can refuse when the code has changed. Absent when no
+   *  frame maps to a registered module. See referencedModules.ts. */
+  public moduleSourceHashes?: Record<string, string>;
 
   constructor(args: CheckpointArgs) {
     this.id = args.id ?? globalCheckpointCounter++;
@@ -59,6 +78,7 @@ export class Checkpoint implements SourceLocation {
     this.stepPath = args.stepPath ?? "";
     this.label = args.label ?? null;
     this.pinned = args.pinned ?? false;
+    this.moduleSourceHashes = args.moduleSourceHashes;
   }
 
   getScopeKey(): string {
@@ -151,8 +171,8 @@ export class Checkpoint implements SourceLocation {
     return JSON.stringify(this.toJSON()) === JSON.stringify(other.toJSON());
   }
 
-  toJSON() {
-    return {
+  toJSON(): CheckpointJSON {
+    const json: CheckpointJSON = {
       id: this.id,
       stack: this.stack,
       globals: this.globals,
@@ -163,6 +183,10 @@ export class Checkpoint implements SourceLocation {
       label: this.label,
       pinned: this.pinned,
     };
+    if (this.moduleSourceHashes !== undefined) {
+      json.moduleSourceHashes = this.moduleSourceHashes;
+    }
+    return json;
   }
 
   clone(opts: Partial<CheckpointArgs> = {}): Checkpoint {
@@ -184,12 +208,18 @@ export class Checkpoint implements SourceLocation {
         "Cannot create checkpoint: no current node id in state stack. This error can happen if you call a function that throws an interrupt from the global namespace. Please use `const foo = funcName() with approve` syntax.",
       );
     }
-    return new Checkpoint({
-      stack: stateStack.toJSON(),
+    const stackJson = stateStack.toJSON();
+    const moduleSourceHashes = collectModuleSourceHashes(stackJson);
+    const args: CheckpointArgs = {
+      stack: stackJson,
       globals: ctx.globals.toJSON(),
       nodeId,
       ...opts,
-    });
+    };
+    if (Object.keys(moduleSourceHashes).length > 0) {
+      args.moduleSourceHashes = moduleSourceHashes;
+    }
+    return new Checkpoint(args);
   }
 
   static fromContext(

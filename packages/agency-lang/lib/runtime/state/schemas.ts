@@ -103,4 +103,5 @@ export const checkpointSchema = z.object({
   stepPath: z.string().optional().default(""),
   label: z.string().nullable().optional().default(null),
   pinned: z.boolean().optional().default(false),
+  moduleSourceHashes: z.record(z.string(), z.string()).optional(),
 });

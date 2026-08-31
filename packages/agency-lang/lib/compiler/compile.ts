@@ -16,7 +16,6 @@ import { formatErrors, typeCheck } from "@/typeChecker/index.js";
 import { buildCompiledClosure, CompileClosureError } from "./compileClosure.js";
 import { transformSync } from "esbuild";
 import { nanoid } from "nanoid";
-import { sha256Text } from "@/utils/hash.js";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
@@ -106,12 +105,7 @@ export { typeCheckSource, getEffectsFromSource } from "./typecheck.js";
 export type { TypeCheckDiagnostic, TypeCheckReport } from "./typecheck.js";
 
 export function compileSource(source: string, config: CompileSourceOptions): CompileResult {
-  // A caller-supplied sourcePath gives the module a stable identity (the
-  // cwd-relative path, matching buildSession) so a checkpoint can be resumed
-  // in a later process. An anonymous string compile has no stable identity.
-  const moduleId = config.sourcePath
-    ? path.relative(process.cwd(), path.resolve(config.sourcePath))
-    : `agency_${nanoid()}`;
+  const moduleId = `agency_${nanoid()}`;
   // SymbolTable.build() walks the file system from the source's path to resolve
   // imports. With a caller-supplied sourcePath (the file is already on disk
   // beside its siblings), compile at that path so relative `.agency` imports
@@ -228,7 +222,7 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
     }
 
     // 7. Generate TypeScript
-    const outputPath = path.join(os.tmpdir(), `${moduleId.replace(/[\\/]/g, "_")}.js`);
+    const outputPath = path.join(os.tmpdir(), `${moduleId}.js`);
     const initPlan = initPlanForModule(closure, syntheticPath);
     const generatedCode = generateTypeScript(
       liftedProgram,
@@ -237,7 +231,6 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
       moduleId,
       outputPath,
       initPlan,
-      config.sourcePath ? sha256Text(compiledSource) : undefined,
     );
 
     // 8. Transpile TS → JS

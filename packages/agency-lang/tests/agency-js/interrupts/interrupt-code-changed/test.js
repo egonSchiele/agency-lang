@@ -1,9 +1,9 @@
 // A resume is refused when a module the checkpoint has a live frame in has
 // changed, and succeeds when only unreferenced code changed. The redeploy is
 // simulated at the registry seam (what a recompiled module's init would run);
-// the compiler leg is pinned by lib/backends/moduleSourceHash.test.ts.
+// the compiler leg is pinned by lib/backends/moduleFingerprint.test.ts.
 import { main, hasInterrupts, approve, respondToInterrupts } from "./agent.js";
-import { registerModuleSourceHash } from "agency-lang/runtime";
+import { registerModuleFingerprint } from "agency-lang/runtime";
 import { writeFileSync } from "fs";
 
 const result = await main();
@@ -13,9 +13,9 @@ if (!hasInterrupts(result.data)) {
 }
 
 const checkpoint = result.data[0].checkpoint;
-const hashes = checkpoint.moduleSourceHashes;
+const hashes = checkpoint.moduleFingerprints;
 if (!hashes || Object.keys(hashes).length === 0) {
-  throw new Error("Expected the checkpoint to carry moduleSourceHashes");
+  throw new Error("Expected the checkpoint to carry moduleFingerprints");
 }
 
 // Pin the assumption the collection walk relies on: the paused module always
@@ -30,7 +30,7 @@ const moduleId = checkpoint.moduleId;
 const originalEntry = hashes[moduleId];
 
 // Case 1: the paused module changed -> the resume must be refused.
-registerModuleSourceHash(moduleId, "0".repeat(64), new Date().toISOString());
+registerModuleFingerprint(moduleId, "0".repeat(64), "not-a-url");
 let refusal = null;
 try {
   await respondToInterrupts(result.data, [approve()]);
@@ -42,8 +42,8 @@ if (refusal === null || refusal.name !== "CheckpointCodeChangedError") {
 }
 
 // Case 2: only an UNREFERENCED module changed -> the resume succeeds.
-registerModuleSourceHash(moduleId, originalEntry.hash, originalEntry.compiledAt);
-registerModuleSourceHash("some-unreferenced-module.agency", "1".repeat(64), new Date().toISOString());
+registerModuleFingerprint(moduleId, originalEntry.hash, "not-a-url");
+registerModuleFingerprint("some-unreferenced-module.agency", "1".repeat(64), "not-a-url");
 const finalResult = await respondToInterrupts(result.data, [approve()]);
 
 writeFileSync("__result.json", JSON.stringify(finalResult.data, null, 2));

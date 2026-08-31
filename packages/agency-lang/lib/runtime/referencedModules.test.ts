@@ -1,12 +1,16 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { collectModuleSourceHashes, assertCodeUnchanged } from "./referencedModules.js";
+import { collectModuleFingerprints, assertCodeUnchanged } from "./referencedModules.js";
 import {
-  registerModuleSourceHash,
-  __resetModuleSourceHashRegistry,
-} from "./moduleSourceHashRegistry.js";
+  registerModuleFingerprint,
+  __resetModuleFingerprintRegistry,
+} from "./moduleFingerprintRegistry.js";
 import { CheckpointCodeChangedError } from "./errors.js";
 
-afterEach(__resetModuleSourceHashRegistry);
+afterEach(__resetModuleFingerprintRegistry);
+
+// Fake artifact URLs: compiledAt degrades to "unknown", which is all these
+// tests need — the check compares hashes.
+const UNKNOWN = "unknown";
 
 const frame = (moduleId: string | null, scopeName: string | null, branches?: any) => {
   const frameJson: any = { args: {}, locals: {}, threads: null, step: 0, moduleId, scopeName };
@@ -23,56 +27,62 @@ const stack = (frames: any[]) => ({
   nodesTraversed: [],
 });
 
-describe("collectModuleSourceHashes", () => {
-  it("collects hashes for modules that have a frame and a registered hash", () => {
-    registerModuleSourceHash("a.agency", "aaa", "T1");
-    registerModuleSourceHash("b.agency", "bbb", "T1");
-    const out = collectModuleSourceHashes(
+describe("collectModuleFingerprints", () => {
+  it("collects fingerprints for modules that have a frame and a registered entry", () => {
+    registerModuleFingerprint("a.agency", "aaa", "not-a-url");
+    registerModuleFingerprint("b.agency", "bbb", "not-a-url");
+    const out = collectModuleFingerprints(
       stack([frame("a.agency", "main"), frame("b.agency", "double")]) as any,
     );
     expect(out).toEqual({
-      "a.agency": { hash: "aaa", compiledAt: "T1" },
-      "b.agency": { hash: "bbb", compiledAt: "T1" },
+      "a.agency": { hash: "aaa", compiledAt: UNKNOWN },
+      "b.agency": { hash: "bbb", compiledAt: UNKNOWN },
     });
   });
 
-  it("skips unnamed/bootstrap frames and modules with no registered hash", () => {
-    registerModuleSourceHash("a.agency", "aaa", "T1");
-    const out = collectModuleSourceHashes(
+  it("skips unnamed/bootstrap frames and modules with no registered entry", () => {
+    registerModuleFingerprint("a.agency", "aaa", "not-a-url");
+    const out = collectModuleFingerprints(
       stack([frame("a.agency", "main"), frame("", ""), frame(null, "runPrompt")]) as any,
     );
-    expect(out).toEqual({ "a.agency": { hash: "aaa", compiledAt: "T1" } });
+    expect(out).toEqual({ "a.agency": { hash: "aaa", compiledAt: UNKNOWN } });
   });
 
   it("recurses into fork/parallel branch stacks", () => {
-    registerModuleSourceHash("a.agency", "aaa", "T1");
-    registerModuleSourceHash("w.agency", "ccc", "T1");
+    registerModuleFingerprint("a.agency", "aaa", "not-a-url");
+    registerModuleFingerprint("w.agency", "ccc", "not-a-url");
     const branchy = frame("a.agency", "main", {
       fork_1_0: { stack: stack([frame("w.agency", "worker")]) },
     });
-    const out = collectModuleSourceHashes(stack([branchy]) as any);
+    const out = collectModuleFingerprints(stack([branchy]) as any);
     expect(out).toEqual({
-      "a.agency": { hash: "aaa", compiledAt: "T1" },
-      "w.agency": { hash: "ccc", compiledAt: "T1" },
+      "a.agency": { hash: "aaa", compiledAt: UNKNOWN },
+      "w.agency": { hash: "ccc", compiledAt: UNKNOWN },
     });
   });
 });
 
 describe("assertCodeUnchanged", () => {
-  it("throws when a referenced module changed or is missing", () => {
-    registerModuleSourceHash("a.agency", "NEW", "T2");
-    expect(() => assertCodeUnchanged({ "a.agency": { hash: "OLD", compiledAt: "T1" } })).toThrow(
-      CheckpointCodeChangedError,
-    );
-    expect(() => assertCodeUnchanged({ "gone.agency": { hash: "OLD", compiledAt: "T1" } })).toThrow(
-      CheckpointCodeChangedError,
-    );
+  it("throws when a referenced module changed or is missing, naming both code versions", () => {
+    registerModuleFingerprint("a.agency", "NEW", "not-a-url");
+    expect(() =>
+      assertCodeUnchanged({ "a.agency": { hash: "OLD", compiledAt: "2026-08-30T00:00:00.000Z" } }),
+    ).toThrow(CheckpointCodeChangedError);
+    try {
+      assertCodeUnchanged({ "a.agency": { hash: "OLD", compiledAt: "2026-08-30T00:00:00.000Z" } });
+    } catch (err) {
+      expect((err as Error).message).toContain("a.agency");
+      expect((err as Error).message).toContain("2026-08-30T00:00:00.000Z");
+    }
+    expect(() =>
+      assertCodeUnchanged({ "gone.agency": { hash: "OLD", compiledAt: UNKNOWN } }),
+    ).toThrow(CheckpointCodeChangedError);
   });
 
   it("passes when all match, and on an undefined field", () => {
-    registerModuleSourceHash("a.agency", "SAME", "T1");
+    registerModuleFingerprint("a.agency", "SAME", "not-a-url");
     expect(() =>
-      assertCodeUnchanged({ "a.agency": { hash: "SAME", compiledAt: "T1" } }),
+      assertCodeUnchanged({ "a.agency": { hash: "SAME", compiledAt: UNKNOWN } }),
     ).not.toThrow();
     expect(() => assertCodeUnchanged(undefined)).not.toThrow();
   });

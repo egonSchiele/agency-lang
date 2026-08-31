@@ -123,9 +123,10 @@ export type { RestoreOptions } from "./errors.js";
 export { checkpoint, getCheckpoint, restore } from "./checkpoint.js";
 export { _run } from "./ipc.js";
 
-export { registerModuleSourceHash, getModuleSourceHash } from "./moduleSourceHashRegistry.js";
+export { registerModuleFingerprint, getModuleFingerprint } from "./moduleFingerprintRegistry.js";
 export { CheckpointStore, RESULT_ENTRY_LABEL } from "./state/checkpointStore.js";
 export { Checkpoint } from "./state/checkpointStore.js";
+export { verifyCheckpointChecksum, CheckpointKeyTooShortError } from "./checkpointChecksum.js";
 
 export {
   setupNode,

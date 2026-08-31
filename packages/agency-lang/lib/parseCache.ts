@@ -2,7 +2,6 @@ import fs from "fs";
 import { parseAgency, ParseAgencyResult } from "./parser.js";
 import { AgencyConfig } from "./config.js";
 import { isNonTemplatedStdlib } from "./importPaths.js";
-import { sha256Text } from "./utils/hash.js";
 import { AgencyProgram } from "./types.js";
 
 /**
@@ -38,8 +37,6 @@ type ParseCacheEntry = {
   mtimeMs: number;
   size: number;
   program: AgencyProgram;
-  /** sha256 of the exact bytes this program was parsed from. */
-  sourceHash: string;
 };
 
 // Null-prototype: keyed by (prefixed) file paths, matching the repo's other
@@ -73,17 +70,11 @@ export function evictParseCache(absPath: string): void {
   delete cache[`r:${absPath}`];
 }
 
-export type ParsedFileResult = ParseAgencyResult & {
-  /** On success: sha256 of the exact bytes the returned program was parsed
-   *  from (the cached read, not a caller's separate read of the file). */
-  sourceHash?: string;
-};
-
 export function parseAgencyFileCached(
   absPath: string,
   config: AgencyConfig = {},
   applyTemplate: boolean = !isNonTemplatedStdlib(absPath),
-): ParsedFileResult {
+): ParseAgencyResult {
   let stat: fs.Stats;
   try {
     stat = fs.statSync(absPath);
@@ -104,7 +95,6 @@ export function parseAgencyFileCached(
       success: true,
       result: structuredClone(entry.program),
       rest: "",
-      sourceHash: entry.sourceHash,
     };
   }
 
@@ -113,16 +103,13 @@ export function parseAgencyFileCached(
 
   stats.misses++;
   if (result.success) {
-    const sourceHash = sha256Text(contents);
     cache[key] = {
       mtimeMs: stat.mtimeMs,
       size: stat.size,
       // Clone on store as well as on read: the caller receives `result`
       // and may mutate it, which must not poison the cached copy.
       program: structuredClone(result.result),
-      sourceHash,
     };
-    return { ...result, sourceHash };
   }
   return result;
 }

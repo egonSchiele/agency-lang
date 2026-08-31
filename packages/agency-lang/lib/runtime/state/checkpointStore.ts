@@ -1,7 +1,8 @@
 import { MessageJSON } from "smoltalk";
+import { signCheckpoint } from "../checkpointChecksum.js";
 import { CheckpointError } from "../errors.js";
-import { collectModuleSourceHashes } from "../referencedModules.js";
-import type { ModuleSourceEntry } from "../moduleSourceHashRegistry.js";
+import { collectModuleFingerprints } from "../referencedModules.js";
+import type { ModuleFingerprint } from "../moduleFingerprintRegistry.js";
 import { deepClone } from "../utils.js";
 import type { RuntimeContext } from "./context.js";
 import type { GlobalStoreJSON } from "./globalStore.js";
@@ -38,7 +39,8 @@ export type CheckpointArgs = {
   stepPath?: string;
   label?: string | null;
   pinned?: boolean;
-  moduleSourceHashes?: Record<string, ModuleSourceEntry>;
+  moduleFingerprints?: Record<string, ModuleFingerprint>;
+  signature?: string;
 };
 
 export type CheckpointJSON = {
@@ -51,7 +53,8 @@ export type CheckpointJSON = {
   stepPath: string;
   label: string | null;
   pinned: boolean;
-  moduleSourceHashes?: Record<string, ModuleSourceEntry>;
+  moduleFingerprints?: Record<string, ModuleFingerprint>;
+  signature?: string;
 };
 
 export class Checkpoint implements SourceLocation {
@@ -64,9 +67,12 @@ export class Checkpoint implements SourceLocation {
   public stepPath: string;
   public label: string | null;
   public pinned: boolean;
-  /** Source hash + compile time of each module with a live frame, captured at
+  /** Fingerprint + compile time of each module with a live frame, captured at
    *  creation so a resume can refuse when the code changed. */
-  public moduleSourceHashes?: Record<string, ModuleSourceEntry>;
+  public moduleFingerprints?: Record<string, ModuleFingerprint>;
+  /** HMAC checksum embedded at creation when a signing key is configured.
+   *  Absent on unsigned checkpoints. See lib/runtime/checkpointChecksum.ts. */
+  public signature?: string;
 
   constructor(args: CheckpointArgs) {
     this.id = args.id ?? globalCheckpointCounter++;
@@ -78,7 +84,8 @@ export class Checkpoint implements SourceLocation {
     this.stepPath = args.stepPath ?? "";
     this.label = args.label ?? null;
     this.pinned = args.pinned ?? false;
-    this.moduleSourceHashes = args.moduleSourceHashes;
+    this.moduleFingerprints = args.moduleFingerprints;
+    this.signature = args.signature;
   }
 
   getScopeKey(): string {
@@ -183,14 +190,22 @@ export class Checkpoint implements SourceLocation {
       label: this.label,
       pinned: this.pinned,
     };
-    if (this.moduleSourceHashes !== undefined) {
-      json.moduleSourceHashes = this.moduleSourceHashes;
+    if (this.moduleFingerprints !== undefined) {
+      json.moduleFingerprints = this.moduleFingerprints;
+    }
+    if (this.signature !== undefined) {
+      json.signature = this.signature;
     }
     return json;
   }
 
   clone(opts: Partial<CheckpointArgs> = {}): Checkpoint {
-    return Checkpoint.fromJSON({ ...this.toJSON(), ...opts })!;
+    const copy = Checkpoint.fromJSON({ ...this.toJSON(), ...opts })!;
+    // `opts` may have changed signed fields (typically `id`); re-sign.
+    if (copy.signature !== undefined) {
+      signCheckpoint(copy);
+    }
+    return copy;
   }
 
   getLocation(): string {
@@ -209,17 +224,21 @@ export class Checkpoint implements SourceLocation {
       );
     }
     const stackJson = stateStack.toJSON();
-    const moduleSourceHashes = collectModuleSourceHashes(stackJson);
+    const moduleFingerprints = collectModuleFingerprints(stackJson);
     const args: CheckpointArgs = {
       stack: stackJson,
       globals: ctx.globals.toJSON(),
       nodeId,
       ...opts,
     };
-    if (Object.keys(moduleSourceHashes).length > 0) {
-      args.moduleSourceHashes = moduleSourceHashes;
+    if (Object.keys(moduleFingerprints).length > 0) {
+      args.moduleFingerprints = moduleFingerprints;
     }
-    return new Checkpoint(args);
+    const checkpoint = new Checkpoint(args);
+    // Keep this the last statement: the signature must cover every field,
+    // moduleFingerprints included.
+    signCheckpoint(checkpoint);
+    return checkpoint;
   }
 
   static fromContext(
@@ -372,6 +391,10 @@ export class CheckpointStore {
     if (!cp) return;
     cp.pinned = true;
     if (label !== undefined) cp.label = label;
+    // pinned/label are signed fields; re-sign after the edit.
+    if (cp.signature !== undefined) {
+      signCheckpoint(cp);
+    }
   }
 
   get(id: number): Checkpoint | undefined {

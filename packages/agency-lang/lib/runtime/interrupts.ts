@@ -784,7 +784,7 @@ async function respondToInterruptsCore(
   if (args.overrides) applyOverrides(checkpoint, args.overrides);
   // A changed module would be replayed against different statement numbering;
   // refuse before any state is restored.
-  assertCodeUnchanged(checkpoint.moduleSourceHashes);
+  assertCodeUnchanged(checkpoint.moduleFingerprints);
 
   // Resume always keeps interrupt.runId; the resolver ignores any supplied
   // traceId and applies only the per-invocation config projection.

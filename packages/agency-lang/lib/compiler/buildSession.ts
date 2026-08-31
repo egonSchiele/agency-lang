@@ -53,7 +53,6 @@ import {
 } from "@/importPaths.js";
 import { CompileStrategy, type ImportStrategy } from "@/importStrategy.js";
 import { parseAgencyFileCached } from "@/parseCache.js";
-import { sha256Text } from "@/utils/hash.js";
 import { getImports } from "@/analysis/imports.js";
 import { findRecursively } from "@/utils/findRecursively.js";
 
@@ -448,8 +447,11 @@ export class BuildSession {
 
     const contents = readFile(inputFile);
     const applyTemplate = !isNonTemplatedStdlib(absoluteInputFile);
-    const parsed = parseFileOrExit(absoluteInputFile, config, applyTemplate, contents);
-    const parsedProgram = expandSplicesOrExit(parsed.program, absoluteInputFile, config);
+    const parsedProgram = expandSplicesOrExit(
+      parseFileOrExit(absoluteInputFile, config, applyTemplate, contents),
+      absoluteInputFile,
+      config,
+    );
 
     const symbolTable = timed(
       `Built symbol table for ${absoluteInputFile}`,
@@ -517,15 +519,7 @@ export class BuildSession {
       ? initPlanForModule(this.currentClosure, absoluteInputFile)
       : undefined;
     const generatedCode = timed(`Generated code for ${absoluteInputFile}`, verbose, () =>
-      generateTypeScript(
-        liftedProgram,
-        config,
-        info,
-        moduleId,
-        absoluteOutputFile,
-        initPlan,
-        parsed.sourceHash,
-      ),
+      generateTypeScript(liftedProgram, config, info, moduleId, absoluteOutputFile, initPlan, true),
     );
     if (options?.ts) {
       fs.writeFileSync(outputFile, "// @ts-nocheck\n" + generatedCode, "utf-8");
@@ -616,7 +610,7 @@ function parseFileOrExit(
   config: AgencyConfig,
   applyTemplate: boolean,
   contents: string,
-): { program: AgencyProgram; sourceHash: string } {
+): AgencyProgram {
   const parseResult = parseAgencyFileCached(absPath, config, applyTemplate);
   if (!parseResult.success) {
     if (parseResult.message) {
@@ -626,12 +620,7 @@ function parseFileOrExit(
     }
     process.exit(1);
   }
-  // Hash from the cache's own read: `contents` is a separate read of the same
-  // file and can diverge from the bytes the cached program was parsed from.
-  return {
-    program: parseResult.result,
-    sourceHash: parseResult.sourceHash ?? sha256Text(contents),
-  };
+  return parseResult.result;
 }
 
 /** Expand compile-time splices, or stop the build. A splice that cannot

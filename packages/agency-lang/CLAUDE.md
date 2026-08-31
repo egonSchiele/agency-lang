@@ -235,7 +235,8 @@ Other process docs:
 - `docs/dev/runtime/async-context.md` — The async-context frame that carries runtime state, and how stdlib TypeScript helpers read it.
 - `docs/dev/runtime/async.md` — How async function calls work, and the problems the design solves.
 - `docs/dev/runtime/callback-hooks.md` — Registering callbacks for runtime events such as node, function, and tool lifecycle.
-- `docs/dev/runtime/checkpoint-code-fingerprints.md` — Refusing to resume a checkpoint when the source of a module it is paused inside has changed.
+- `docs/dev/runtime/checkpoint-code-fingerprints.md` — Refusing to resume a checkpoint when the code of a module it is paused inside has changed.
+- `docs/dev/runtime/checkpoint-integrity.md` — The optional HMAC checksum embedded in a checkpoint, and how a host verifies it.
 - `docs/dev/runtime/checkpointing.md` — Snapshotting execution state so a program can restore back to it later.
 - `docs/dev/runtime/concurrent-interrupts.md` — What happens when several concurrent execution paths interrupt at the same time.
 - `docs/dev/runtime/config.md` — Every `AgencyConfig` option, with types and defaults, and how config is resolved.

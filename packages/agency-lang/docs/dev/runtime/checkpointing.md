@@ -282,8 +282,14 @@ branch stacks, and is deliberately never serialized: since no pause can
 exist while it is non-empty, a deserialized stack correctly starts with
 it empty.
 
+## Integrity checksums
+
+When a signing key is configured, every checkpoint carries an embedded HMAC
+checksum a host can verify before resuming; the runtime itself never enforces
+it. See `docs/dev/runtime/checkpoint-integrity.md`.
+
 ## Code fingerprints
 
-Every checkpoint records a source hash for each module it has a live frame
-in; a resume is refused when any of those modules has changed. See
+Every checkpoint records a fingerprint of each module it has a live frame in;
+a resume is refused when any of those modules has changed. See
 `docs/dev/runtime/checkpoint-code-fingerprints.md`.

@@ -36,7 +36,7 @@ export class CheckpointCodeChangedError extends Error {
         ? `the module is not loaded now (deleted, renamed, or compiled from a different directory)`
         : `the current code was compiled ${currentCompiledAt}`;
     super(
-      `Cannot resume: the source of "${moduleId}" has changed since this checkpoint was created. ` +
+      `Cannot resume: the code of "${moduleId}" has changed since this checkpoint was created. ` +
         `The checkpoint ran code compiled ${checkpointCompiledAt}; ${current}.`,
     );
     this.name = "CheckpointCodeChangedError";

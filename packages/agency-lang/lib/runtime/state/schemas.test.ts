@@ -193,6 +193,30 @@ describe("Checkpoint.fromJSON round trip", () => {
     expect(costGuards[0].toJSON()).toMatchObject({ kind: "cost", spent: 4, costLimit: 10 });
     expect(restored.stack[0].savedDraft).toEqual({ value: "best-so-far" });
   });
+
+  it("keeps the signature field through Checkpoint.fromJSON", () => {
+    const original = {
+      id: 1,
+      nodeId: "start",
+      moduleId: "mod.agency",
+      scopeName: "main",
+      stepPath: "0",
+      label: null,
+      pinned: false,
+      signature: "deadbeef",
+      globals: { store: {}, initializedModules: [] },
+      stack: {
+        stack: [],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: [],
+      },
+    };
+    const revived = Checkpoint.fromJSON(JSON.parse(JSON.stringify(original)));
+    expect(revived).not.toBeNull();
+    expect(revived!.signature).toBe("deadbeef");
+  });
 });
 
 describe("frame moduleId round trip", () => {
@@ -229,8 +253,8 @@ describe("frame moduleId round trip", () => {
   });
 });
 
-describe("moduleSourceHashes round trip", () => {
-  it("keeps moduleSourceHashes through Checkpoint.fromJSON", () => {
+describe("moduleFingerprints round trip", () => {
+  it("keeps moduleFingerprints through Checkpoint.fromJSON", () => {
     const original = {
       id: 4,
       nodeId: "start",
@@ -239,7 +263,7 @@ describe("moduleSourceHashes round trip", () => {
       stepPath: "0",
       label: null,
       pinned: false,
-      moduleSourceHashes: {
+      moduleFingerprints: {
         "mod.agency": { hash: "abc123", compiledAt: "2026-08-30T00:00:00.000Z" },
       },
       globals: { store: {}, initializedModules: [] },
@@ -253,7 +277,7 @@ describe("moduleSourceHashes round trip", () => {
     };
     const revived = Checkpoint.fromJSON(JSON.parse(JSON.stringify(original)));
     expect(revived).not.toBeNull();
-    expect(revived!.moduleSourceHashes).toEqual({
+    expect(revived!.moduleFingerprints).toEqual({
       "mod.agency": { hash: "abc123", compiledAt: "2026-08-30T00:00:00.000Z" },
     });
   });

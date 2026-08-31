@@ -223,6 +223,7 @@ const REGISTRY: { [K in AgencyNode["type"]]: SlotExtractor<K> } = {
   restPattern: none,
   wildcardPattern: none,
   resultPattern: none,
+  effectPattern: none,
   typePattern: none,
 };
 

@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "effectPattern",
+      "description": "The effect-pattern handler approves \".\" and rejects \"/etc\"",
+      "input": "",
+      "expectedOutput": "\"ok no\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "canonical",
+      "description": "The string-compare handler reaches the same verdicts the effect-pattern form does",
+      "input": "",
+      "expectedOutput": "\"ok no\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -37,6 +37,7 @@ import type {
   BindingPattern,
   IsExpression,
   MatchPattern,
+  ObjectPattern,
   ObjectPatternProperty,
   ObjectPatternShorthand,
   ResultPattern,
@@ -439,6 +440,7 @@ class PatternLowerer {
           (c.caseValue.type === "objectPattern" ||
             c.caseValue.type === "arrayPattern" ||
             c.caseValue.type === "resultPattern" ||
+            c.caseValue.type === "effectPattern" ||
             c.caseValue.type === "typePattern")) ||
           c.guard !== undefined),
     );
@@ -1177,6 +1179,12 @@ class PatternLowerer {
         const field = pattern.kind === "success" ? "value" : "error";
         return [makeAssign(pattern.binding, fieldAccess(source, field, loc), declKind, loc)];
       }
+      case "effectPattern":
+        // The binding is an object pattern over the SAME source — the whole
+        // interrupt — so `std::read({ data })` binds `data = intr.data`.
+        return pattern.binding === null
+          ? []
+          : this.extractBindings(pattern.binding, source, declKind, loc);
       case "typePattern":
         // The type test contributes no bindings of its own; the inner
         // pattern binds from the SAME source — the original value, never a
@@ -1255,16 +1263,7 @@ function collectChecks(pattern: MatchPattern, source: Expression, checks: Expres
       // `{ length: 2 }` no longer matches an array — `[a, b]` is the spelling
       // for that. One definition of `object`, not two.
       checks.push(...shapeCheck(source, OBJECT_HINT, pattern.loc));
-      for (const prop of pattern.properties) {
-        if (prop.type === "objectPatternProperty") {
-          collectChecks(
-            prop.value as MatchPattern,
-            fieldAccess(source, prop.key, pattern.loc),
-            checks,
-          );
-        }
-        // shorthand and rest do not produce checks (binders only)
-      }
+      collectObjectPropertyChecks(pattern, source, checks);
       break;
     case "arrayPattern": {
       // Shape check FIRST, for the same reason — and because `.length` alone
@@ -1319,6 +1318,30 @@ function collectChecks(pattern: MatchPattern, source: Expression, checks: Expres
     case "resultPattern":
       checks.push(resultCheckCall(pattern.kind, source, pattern.loc));
       break;
+    case "effectPattern": {
+      // Shape check FIRST, then `source.effect == "<effect>"`. The scrutinee is
+      // the whole interrupt; the shape check guards the `.effect` read the same
+      // way an object pattern guards its field reads (a null or non-object
+      // scrutinee fails the arm rather than throwing on `.effect`).
+      checks.push(...shapeCheck(source, OBJECT_HINT, pattern.loc));
+      checks.push(
+        makeBinOp(
+          fieldAccess(source, "effect", pattern.loc),
+          "==",
+          stringLit(pattern.effect, pattern.loc),
+          pattern.loc,
+        ),
+      );
+      // The binding is an object pattern over the SAME source, so any value
+      // matchers inside it (`std::read({ data: "x" })`) run under the effect
+      // gate. Only its property checks are collected — the shape check on
+      // `source` was already emitted above, so going through the objectPattern
+      // case would duplicate it in every bound arm's condition.
+      if (pattern.binding !== null) {
+        collectObjectPropertyChecks(pattern.binding, source, checks);
+      }
+      break;
+    }
     case "typePattern": {
       // The runtime type test itself, compiled away by the builder (coarse
       // check or schema validation). Inner-pattern checks run after it.
@@ -1337,6 +1360,21 @@ function collectChecks(pattern: MatchPattern, source: Expression, checks: Expres
       // Literal — equality check
       checks.push(makeBinOp(cloneExpr(source), "==", pattern as Expression, pattern.loc));
       break;
+    }
+  }
+}
+
+/** The per-property checks of an object pattern, WITHOUT the shape check on
+ *  `source` itself — the caller has already emitted it. Shorthand and rest
+ *  properties are binders and produce no checks. */
+function collectObjectPropertyChecks(
+  pattern: ObjectPattern,
+  source: Expression,
+  checks: Expression[],
+): void {
+  for (const prop of pattern.properties) {
+    if (prop.type === "objectPatternProperty") {
+      collectChecks(prop.value as MatchPattern, fieldAccess(source, prop.key, pattern.loc), checks);
     }
   }
 }
@@ -1422,6 +1460,11 @@ function walkPattern(
       walkPattern(pattern.value as MatchPattern, visit);
     } else if (pattern.type === "typePattern" && pattern.pattern !== null) {
       walkPattern(pattern.pattern, visit);
+    } else if (pattern.type === "effectPattern" && pattern.binding !== null) {
+      // Descend into the object binding so its binders are seen by
+      // assertNoBindersInBoolIs (a pure-boolean `is std::read({ data })` has
+      // nowhere to bind `data`) and by binder collection.
+      walkPattern(pattern.binding, visit);
     }
   }
 }

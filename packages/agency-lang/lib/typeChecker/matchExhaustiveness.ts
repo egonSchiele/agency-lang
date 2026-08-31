@@ -60,6 +60,71 @@ function objectPatternDiscriminantValue(
 }
 
 /**
+ * True when an object-pattern property adds no refutable check: a binder
+ * (shorthand, rename, rest, wildcard). Everything else can fail at runtime on a
+ * value whose discriminant matched — a value matcher (`{ data: "p" }`), an
+ * array pattern (a length check), a result pattern, a nested type test, and
+ * also a nested object destructure (`{ data: { dir } }`): the lowering emits a
+ * shape check on the field (`x.data != null && x.data is object`), which a null
+ * or missing payload fails even when every nested property is a binder.
+ */
+function isIrrefutableProperty(p: ObjectPattern["properties"][number]): boolean {
+  if (p.type === "objectPatternShorthand" || p.type === "restPattern") return true;
+  const v = p.value; // objectPatternProperty
+  return v.type === "variableName" || v.type === "wildcardPattern" || v.type === "restPattern";
+}
+
+/**
+ * True when an effect-pattern object binding adds no refutable check, so the arm
+ * matches EVERY interrupt of its effect and can stand in for the whole union
+ * member. A refutable property makes the arm match only SOME interrupts of that
+ * effect, so it cannot cover the member. (Nested type tests also mark the whole
+ * arm guarded via hasNestedTypeTest, which drops it from coverage
+ * independently.)
+ */
+function isIrrefutableEffectBinding(binding: ObjectPattern | null): boolean {
+  if (binding === null) return true;
+  return binding.properties.every(isIrrefutableProperty);
+}
+
+/**
+ * True when an objectPattern arm's checks beyond the discriminant pin are all
+ * binders, so matching the member's tag guarantees the arm matches. A sibling
+ * value matcher (`{ effect: "app::read", data: { path: "p" } }`) matches only
+ * some values of the member, so the arm cannot stand in for it — the same rule
+ * isIrrefutableEffectBinding applies to the sugar spelling.
+ */
+function objectPatternCoversMember(cv: ObjectPattern, prop: string): boolean {
+  return cv.properties.every(
+    (p) => (p.type === "objectPatternProperty" && p.key === prop) || isIrrefutableProperty(p),
+  );
+}
+
+/**
+ * The discriminant value an un-guarded arm pins, whether it is written as an
+ * object pattern (`{ effect: "app::read" }`) or an effect pattern
+ * (`app::read` / `app::read({ data })`). An effect pattern is sugar for the
+ * object pattern that pins `effect` to the name, so it pins the `effect`
+ * discriminant and no other. A handler param is a discriminated union keyed on
+ * `effect` (handlerParamTyping.ts), so this is what lets effect-pattern arms
+ * count toward covering that union — without it every effect reads as missing.
+ * Either spelling only counts when the rest of the pattern is irrefutable: a
+ * value-matching binding (or a sibling value matcher next to the pin) matches
+ * some values of the member, not all, so it cannot stand in for the member (an
+ * expression match over it would fall through to `undefined`).
+ */
+function armDiscriminantValue(cv: CaseValue, prop: string): string | number | boolean | null {
+  if (cv === "_") return null;
+  if (cv.type === "effectPattern") {
+    if (prop !== "effect") return null;
+    return isIrrefutableEffectBinding(cv.binding) ? cv.effect : null;
+  }
+  const pinned = objectPatternDiscriminantValue(cv, prop);
+  if (pinned === null) return null;
+  return objectPatternCoversMember(cv as ObjectPattern, prop) ? pinned : null;
+}
+
+/**
  * True when a pattern contains a type test somewhere INSIDE it — an element or
  * property carrying a `: Type` suffix.
  *
@@ -192,7 +257,7 @@ function coveredMemberKeys(arms: NormalizedArm[], prop: string): Set<string> {
   const covered = new Set<string>();
   for (const arm of arms) {
     if (arm.guarded) continue;
-    const pinnedValue = objectPatternDiscriminantValue(arm.caseValue, prop);
+    const pinnedValue = armDiscriminantValue(arm.caseValue, prop);
     if (pinnedValue !== null) covered.add(discriminatedMemberKey(prop, pinnedValue));
   }
   return covered;

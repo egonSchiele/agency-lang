@@ -730,6 +730,117 @@ describe("result patterns", () => {
   });
 });
 
+describe("effect patterns", () => {
+  /** Every binOp in an expression tree, so a test can find the effect-equality
+   *  conjunct without depending on where it sits in the `&&` chain. */
+  function binOps(expr: unknown): BinOpExpression[] {
+    return walkNodesArray([expr as AgencyNode])
+      .filter(({ node }) => node.type === "binOpExpression")
+      .map(({ node }) => node as unknown as BinOpExpression);
+  }
+
+  /** The `source.effect == "<effect>"` conjunct a lowered effect pattern emits. */
+  function effectEqualityFor(condition: unknown): BinOpExpression | undefined {
+    return binOps(condition).find((b) => {
+      if (b.operator !== "==") return false;
+      const left = b.left as ValueAccess;
+      return (
+        left.type === "valueAccess" &&
+        left.chain.length === 1 &&
+        left.chain[0].kind === "property" &&
+        left.chain[0].name === "effect"
+      );
+    });
+  }
+
+  it('lowers a bare `std::read` arm to an `intr.effect == "std::read"` check', () => {
+    const lowered = lower(
+      `let intr = { effect: "std::read" }\nmatch (intr) {\n  std::read => print("r")\n  _ => print("none")\n}`,
+    );
+    // [intr assignment, scrutinee assignment, ifElse]
+    expect(lowered).toHaveLength(3);
+    const ifNode = lowered[2] as IfElse;
+    expect(ifNode.type).toBe("ifElse");
+    const eq = effectEqualityFor(ifNode.condition);
+    expect(eq).toBeDefined();
+    expect(eq!.right).toMatchObject({
+      type: "string",
+      segments: [{ type: "text", value: "std::read" }],
+    });
+    // The bare effect arm binds nothing.
+    expect(ifNode.thenBody[0]?.type).not.toBe("assignment");
+  });
+
+  it("lowers `std::read({ data })` to the effect check plus `const data = intr.data`", () => {
+    const lowered = lower(
+      `let intr = { effect: "std::read", data: 1 }\nmatch (intr) {\n  std::read({ data }) => print(data)\n  _ => print("none")\n}`,
+    );
+    expect(lowered).toHaveLength(3);
+    const ifNode = lowered[2] as IfElse;
+    // The effect gate is present.
+    expect(effectEqualityFor(ifNode.condition)).toBeDefined();
+    // The object binding reads `.data` off the SAME scrutinee (the interrupt).
+    const dataBind = ifNode.thenBody[0] as Assignment;
+    expect(dataBind.variableName).toBe("data");
+    expect(dataBind.declKind).toBe("const");
+    const access = dataBind.value as ValueAccess;
+    expect(access.chain).toEqual([{ kind: "property", name: "data" }]);
+  });
+
+  it("emits the scrutinee shape check once, not again for the binding", () => {
+    // The effectPattern case emits `scrutinee != null && scrutinee is object`
+    // before the effect gate; the binding's checks are collected per property
+    // so that check is not duplicated. One `!=` conjunct means one shape check.
+    const lowered = lower(
+      `let intr = { effect: "std::read", data: 1 }\nmatch (intr) {\n  std::read({ data }) => print(data)\n  _ => print("none")\n}`,
+    );
+    const ifNode = lowered[2] as IfElse;
+    const nullChecks = binOps(ifNode.condition).filter((b) => b.operator === "!=");
+    expect(nullChecks).toHaveLength(1);
+  });
+
+  it("binds through `if (intr is std::read({ data }))`", () => {
+    const lowered = lower(
+      `let intr = { effect: "std::read", data: 1 }\nif (intr is std::read({ data })) {\n  print(data)\n}`,
+    );
+    expect(lowered).toHaveLength(2);
+    const ifNode = lowered[1] as IfElse;
+    expect(ifNode.type).toBe("ifElse");
+    expect(effectEqualityFor(ifNode.condition)).toBeDefined();
+    const dataBind = ifNode.thenBody[0] as Assignment;
+    expect(dataBind.variableName).toBe("data");
+    expect((dataBind.value as ValueAccess).chain).toEqual([{ kind: "property", name: "data" }]);
+  });
+
+  it("lowers a bare `is` effect pattern as a pure boolean without throwing", () => {
+    // Positive control for the rejection below: the bare form binds nothing, so
+    // a pure-boolean `is` is legal and must lower cleanly. If the binder walk
+    // ever over-rejected, this would go red.
+    const lowered = lower(`let intr = { effect: "std::read" }\nlet x = intr is std::read`);
+    expect(lowered).toHaveLength(2);
+    const xAssign = lowered[1] as Assignment;
+    expect(xAssign.variableName).toBe("x");
+    expect(effectEqualityFor(xAssign.value)).toBeDefined();
+  });
+
+  it("rejects a binding in a pure-boolean `is` context", () => {
+    expect(() =>
+      lower(`let intr = { effect: "std::read" }\nlet x = intr is std::read({ data })`),
+    ).toThrow(PatternLoweringError);
+  });
+
+  it("rejects a binding effect pattern in a match-arm guard (a pure-boolean context)", () => {
+    // A match-arm guard is pure-boolean even though it is spelled with `if`, so
+    // a binding effect pattern inside it has nowhere to bind. Top-level match
+    // avoids a pre-existing parser bug with guards nested in a node body.
+    expect(() =>
+      lowerProgram(
+        `let intr = { effect: "std::write" }\nmatch (intr) {\n  x if (x is std::write({ data })) => "yes"\n  _ => "no"\n}`,
+      ),
+    ).toThrow(PatternLoweringError);
+  });
+});
+
 describe("match metadata preservation (matchSource)", () => {
   function findTaggedAssignment(nodes: AgencyNode[]): Assignment | undefined {
     const hit = walkNodesArray(nodes).find(

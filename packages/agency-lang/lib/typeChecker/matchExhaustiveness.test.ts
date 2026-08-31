@@ -269,6 +269,209 @@ def f(x: boolean): number {
     );
     expect(errs.some((e) => /not exhaustive/i.test(e) && /false/.test(e))).toBe(true);
   });
+
+  it("error config: match over effect patterns on an open (any) scrutinee is not reported", () => {
+    // An `any` scrutinee is open/unsupported territory, so the checker stays
+    // silent whether or not `_` is present.
+    const errs = check(
+      `
+def f(intr: any): number {
+  return match (intr) {
+    std::read => 1
+    std::write => 2
+  }
+}`,
+      ERROR,
+    );
+    expect(errs.some((e) => /not exhaustive/i.test(e))).toBe(false);
+  });
+
+  it("error config: an effect-pattern arm is not a catch-all (missing case still reported)", () => {
+    // On a boolean scrutinee, `true` plus an effect-pattern arm must still
+    // leave `false` missing — the effect arm covers nothing and clears nothing.
+    const errs = check(
+      `
+def f(x: boolean): number {
+  return match (x) {
+    std::read => 1
+    true => 2
+  }
+}`,
+      ERROR,
+    );
+    expect(errs.some((e) => /not exhaustive/i.test(e) && /false/.test(e))).toBe(true);
+  });
+});
+
+// A real inline handler param is re-typed to a discriminated union keyed on
+// `effect` (handlerParamTyping.ts), so effect-pattern arms discriminate it just
+// like `{ effect: "app::read" }` object arms would. These pin that: covering
+// every effect makes the match exhaustive with no `_`, and a missing effect is
+// reported by name.
+describe("match exhaustiveness — effect patterns over a handler union", () => {
+  const HANDLER_PRELUDE = `
+effect app::read { path: string }
+effect app::write { dir: string }
+def rd(): string raises <app::read> {
+  raise app::read("r", { path: "p" })
+  return "r"
+}
+def wr(): string raises <app::write> {
+  raise app::write("w", { dir: "d" })
+  return "w"
+}
+`;
+
+  it("error: covering every effect is exhaustive with no `_`", () => {
+    const errs = check(
+      `${HANDLER_PRELUDE}
+node h(): string {
+  handle {
+    let a: string = rd()
+    let b: string = wr()
+  } with (intr) {
+    return match (intr) {
+      app::read => reject()
+      app::write => reject()
+    }
+  }
+  return "done"
+}`,
+      ERROR,
+    );
+    expect(errs.some((e) => /not exhaustive/i.test(e))).toBe(false);
+  });
+
+  it("error: a missing effect is reported by name", () => {
+    const errs = check(
+      `${HANDLER_PRELUDE}
+node h(): string {
+  handle {
+    let a: string = rd()
+    let b: string = wr()
+  } with (intr) {
+    return match (intr) {
+      app::read => reject()
+    }
+  }
+  return "done"
+}`,
+      ERROR,
+    );
+    expect(errs.some((e) => /not exhaustive/i.test(e) && /app::write/.test(e))).toBe(true);
+  });
+
+  it("error: a `_` catch-all clears it (open-set style)", () => {
+    const errs = check(
+      `${HANDLER_PRELUDE}
+node h(): string {
+  handle {
+    let a: string = rd()
+    let b: string = wr()
+  } with (intr) {
+    return match (intr) {
+      app::read => reject()
+      _ => reject()
+    }
+  }
+  return "done"
+}`,
+      ERROR,
+    );
+    expect(errs.some((e) => /not exhaustive/i.test(e))).toBe(false);
+  });
+
+  it("error: pure-binder bindings still cover their member (exhaustive, no `_`)", () => {
+    const errs = check(
+      `${HANDLER_PRELUDE}
+node h(): string {
+  handle {
+    let a: string = rd()
+    let b: string = wr()
+  } with (intr) {
+    return match (intr) {
+      app::read({ data }) => reject()
+      app::write({ data }) => reject()
+    }
+  }
+  return "done"
+}`,
+      ERROR,
+    );
+    expect(errs.some((e) => /not exhaustive/i.test(e))).toBe(false);
+  });
+
+  it("error: a refutable value-matcher binding does NOT cover its member", () => {
+    // `app::read({ data: { path: "p" } })` matches only one payload, so it
+    // cannot stand in for the whole app::read member. Without a `_`, an
+    // app::read with another path falls through — the checker must still report
+    // app::read missing.
+    const errs = check(
+      `${HANDLER_PRELUDE}
+node h(): string {
+  handle {
+    let a: string = rd()
+    let b: string = wr()
+  } with (intr) {
+    return match (intr) {
+      app::read({ data: { path: "p" } }) => reject()
+      app::write => reject()
+    }
+  }
+  return "done"
+}`,
+      ERROR,
+    );
+    expect(errs.some((e) => /not exhaustive/i.test(e) && /app::read/.test(e))).toBe(true);
+  });
+
+  it("error: a nested all-binder destructure does NOT cover its member", () => {
+    // `app::read({ data: { path } })` has only binders inside, but the nested
+    // destructure lowers to a shape check on `intr.data` — a null or missing
+    // payload fails it at runtime, so the arm matches only SOME app::read
+    // interrupts. Counting it as coverage would let an expression match fall
+    // through to `undefined` in a handler.
+    const errs = check(
+      `${HANDLER_PRELUDE}
+node h(): string {
+  handle {
+    let a: string = rd()
+    let b: string = wr()
+  } with (intr) {
+    return match (intr) {
+      app::read({ data: { path } }) => reject()
+      app::write => reject()
+    }
+  }
+  return "done"
+}`,
+      ERROR,
+    );
+    expect(errs.some((e) => /not exhaustive/i.test(e) && /app::read/.test(e))).toBe(true);
+  });
+
+  it("error: the object-pattern spelling with a refutable sibling does NOT cover its member", () => {
+    // `{ effect: "app::read", data: { path: "p" } }` pins the discriminant but
+    // also value-matches the payload, so it matches only some app::read
+    // interrupts — the same refutability rule as the effect-pattern spelling.
+    const errs = check(
+      `${HANDLER_PRELUDE}
+node h(): string {
+  handle {
+    let a: string = rd()
+    let b: string = wr()
+  } with (intr) {
+    return match (intr) {
+      { effect: "app::read", data: { path: "p" } } => reject()
+      app::write => reject()
+    }
+  }
+  return "done"
+}`,
+      ERROR,
+    );
+    expect(errs.some((e) => /not exhaustive/i.test(e) && /app::read/.test(e))).toBe(true);
+  });
 });
 
 describe("match exhaustiveness — coverage edge cases & structural", () => {

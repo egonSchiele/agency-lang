@@ -51,6 +51,7 @@ const PATTERN_KINDS = [
   "wildcardPattern",
   "variableName",
   "resultPattern",
+  "effectPattern",
   "typePattern",
   "number",
   "unitLiteral",
@@ -346,6 +347,7 @@ const MUST_NOT_SURVIVE = [
   "objectPatternProperty",
   "objectPatternShorthand",
   "resultPattern",
+  "effectPattern",
   "typePattern",
   "isExpression",
 ];

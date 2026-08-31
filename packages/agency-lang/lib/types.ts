@@ -41,6 +41,7 @@ import { Splice } from "./types/splice.js";
 import {
   ArrayPattern,
   BindingPattern,
+  EffectPattern,
   IsExpression,
   ObjectPattern,
   RestPattern,
@@ -374,6 +375,7 @@ export type AgencyNode =
   | RestPattern
   | WildcardPattern
   | ResultPattern
+  | EffectPattern
   | TypePattern
   | Hole
   | CodeLiteral

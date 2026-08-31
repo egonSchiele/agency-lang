@@ -1,0 +1,76 @@
+// Effect patterns in `match` (#926) must reach the SAME verdicts as the
+// string-compare `match(intr.effect) { "app::write" => ... }` form: naming the
+// effect and destructuring its data may not turn a reject into an approve.
+// Both nodes run the same program under the two spellings and must agree.
+
+effect app::write { dir: string }
+
+// Raises app::write, then (only if approved) returns success. A rejected
+// interrupt makes this function return a failure instead.
+def act(dir: string): Result<string> raises <app::write> {
+  raise app::write("writing", { dir: dir })
+  return success(dir)
+}
+
+def tag(r: Result<string>): string {
+  return match (r) {
+    success(s) => "ok"
+    failure(e) => "no"
+  }
+}
+
+// The effect-pattern form: match the whole interrupt, bind `data = intr.data`.
+node effectPattern(): string {
+  let a: Result<string> = failure("unset")
+  handle {
+    a = act(dir: ".")
+  } with (intr) {
+    return match (intr) {
+      app::write({ data }) => {
+        if (data.dir == ".") { return approve() } else { return reject() }
+      }
+      _ => return reject()
+    }
+  }
+  let b: Result<string> = failure("unset")
+  handle {
+    b = act(dir: "/etc")
+  } with (intr) {
+    return match (intr) {
+      app::write({ data }) => {
+        if (data.dir == ".") { return approve() } else { return reject() }
+      }
+      _ => return reject()
+    }
+  }
+  return "${tag(a)} ${tag(b)}"
+}
+
+// The string-compare form of the same two handlers — must agree.
+node canonical(): string {
+  let a: Result<string> = failure("unset")
+  handle {
+    a = act(dir: ".")
+  } with (intr) {
+    return match (intr.effect) {
+      "app::write" => {
+        const data = intr.data
+        if (data.dir == ".") { return approve() } else { return reject() }
+      }
+      _ => return reject()
+    }
+  }
+  let b: Result<string> = failure("unset")
+  handle {
+    b = act(dir: "/etc")
+  } with (intr) {
+    return match (intr.effect) {
+      "app::write" => {
+        const data = intr.data
+        if (data.dir == ".") { return approve() } else { return reject() }
+      }
+      _ => return reject()
+    }
+  }
+  return "${tag(a)} ${tag(b)}"
+}

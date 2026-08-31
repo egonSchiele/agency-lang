@@ -71,6 +71,7 @@ describe("stateJSONSchema", () => {
       threads: null,
       step: 0,
       scopeName: "main",
+      moduleId: "mod.agency",
       scopedCallbacks: [{ name: "cb", fn: null }],
       savedDraft: { value: { best: "so far" } },
     };
@@ -191,5 +192,39 @@ describe("Checkpoint.fromJSON round trip", () => {
     // spent is private; read it back through the guard's own JSON shape.
     expect(costGuards[0].toJSON()).toMatchObject({ kind: "cost", spent: 4, costLimit: 10 });
     expect(restored.stack[0].savedDraft).toEqual({ value: "best-so-far" });
+  });
+});
+
+describe("frame moduleId round trip", () => {
+  it("keeps a frame moduleId through Checkpoint.fromJSON", () => {
+    const original = {
+      id: 3,
+      nodeId: "start",
+      moduleId: "mod.agency",
+      scopeName: "main",
+      stepPath: "0",
+      label: null,
+      pinned: false,
+      globals: { store: {}, initializedModules: [] },
+      stack: {
+        stack: [
+          {
+            args: {},
+            locals: {},
+            threads: null,
+            step: 0,
+            scopeName: "main",
+            moduleId: "mod.agency",
+          },
+        ],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: [],
+      },
+    };
+    const revived = Checkpoint.fromJSON(JSON.parse(JSON.stringify(original)));
+    expect(revived).not.toBeNull();
+    expect(revived!.stack.stack[0].moduleId).toBe("mod.agency");
   });
 });

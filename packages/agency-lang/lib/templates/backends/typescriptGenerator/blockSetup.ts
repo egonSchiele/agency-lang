@@ -9,7 +9,7 @@ const __self = __bstack.locals;
 const {{{frameVar}}} = __bstack;
 // Claim site: this block just pulled its frame via setupFunction. A
 // mismatched claim on resume replay is a frame desync and throws.
-claimFrameForScope(__bstack, {{{scopeName}}});
+claimFrameForScope(__bstack, {{{scopeName}}}, {{{moduleId}}});
 {{#params}}
 __bstack.args[{{{this.paramNameQuoted}}}] = {{{this.paramName}}};
 {{/params}}
@@ -42,11 +42,11 @@ __bsetup.stateStack.pop();
 export type TemplateType = {
   frameVar: string | boolean | number;
   scopeName: string | boolean | number;
+  moduleId: string | boolean | number;
   params: {
     paramNameQuoted: string | boolean | number;
     paramName: string | boolean | number;
   }[];
-  moduleId: string | boolean | number;
   finalizeDecl: string | boolean | number;
   body: string | boolean | number;
   abortReturn: string | boolean | number;

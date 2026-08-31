@@ -2209,7 +2209,9 @@ export class TypeScriptBuilder {
       // Claim site: this function just pulled its frame via
       // setupFunction. A mismatched claim on resume replay is a frame
       // desync and throws (see claimFrameForScope).
-      ts.raw(`claimFrameForScope(__stack, ${JSON.stringify(functionName)});`),
+      ts.raw(
+        `claimFrameForScope(__stack, ${JSON.stringify(functionName)}, ${JSON.stringify(this.moduleId)});`,
+      ),
 
       // Ensure this module's globals are initialized on the
       // current per-scope view. Runs BEFORE this function's own
@@ -3013,7 +3015,9 @@ export class TypeScriptBuilder {
       // same store via `Runner.runInScope`.
       // Claim site: this node just pulled its frame via setupNode. A
       // mismatched claim on resume replay is a frame desync and throws.
-      ts.raw(`claimFrameForScope(__stack, ${JSON.stringify(nodeName)});`),
+      ts.raw(
+        `claimFrameForScope(__stack, ${JSON.stringify(nodeName)}, ${JSON.stringify(this.moduleId)});`,
+      ),
 
       ts.raw(
         `const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(nodeName)}, threads: __setupData.threads });`,

@@ -642,7 +642,7 @@ export async function runPrompt(args: {
   // Hand-written claim (generated code claims in its preambles; runPrompt
   // is TypeScript). runPrompt's frame was the victim in the motivating
   // desync: a replayed helper stole it and runPrompt restarted blank.
-  claimFrameForScope(stack, "runPrompt");
+  claimFrameForScope(stack, "runPrompt", "");
   const self = stack.locals;
 
   // Frame-backed locals (survive checkpoint/restore)

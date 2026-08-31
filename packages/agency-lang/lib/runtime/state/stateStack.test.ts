@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { StateStack, State, BranchState } from "./stateStack.js";
+import { StateStack, State, BranchState, claimFrameForScope } from "./stateStack.js";
 import { _callbackImpl } from "../../stdlib/agency.js";
 import { CostGuard, GuardExceededError, TimeGuard } from "../guard.js";
 import { runInTestContext } from "../asyncContext.js";
@@ -839,5 +839,21 @@ describe("StateStack.setSavedDraft", () => {
     const stack = new StateStack();
     stack.stack.push(makeFrame());
     expect(() => stack.setSavedDraft("x")).toThrow(/module top level/);
+  });
+});
+
+describe("claimFrameForScope moduleId stamping", () => {
+  it("stamps moduleId alongside scopeName", () => {
+    const frame = new State({});
+    claimFrameForScope(frame, "main", "mod.agency");
+    expect(frame.scopeName).toBe("main");
+    expect(frame.moduleId).toBe("mod.agency");
+  });
+
+  it("moduleId survives the State JSON round trip", () => {
+    const frame = new State({});
+    claimFrameForScope(frame, "main", "mod.agency");
+    const revived = State.fromJSON(JSON.parse(JSON.stringify(frame.toJSON())));
+    expect(revived.moduleId).toBe("mod.agency");
   });
 });

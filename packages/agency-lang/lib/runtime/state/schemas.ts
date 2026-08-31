@@ -64,6 +64,7 @@ export const stateJSONSchema = z.object({
   // Accepts absent (external payloads validated pre-tripwire) and
   // normalizes to null so the parsed shape satisfies StateJSON.
   scopeName: z.string().nullable().optional().default(null),
+  moduleId: z.string().nullable().optional().default(null),
   branches: z.record(z.string(), branchStateJSONSchema).optional(),
   scopedCallbacks: z.array(z.object({ name: z.string(), fn: z.any() })).optional(),
   savedDraft: z.object({ value: z.any() }).optional(),

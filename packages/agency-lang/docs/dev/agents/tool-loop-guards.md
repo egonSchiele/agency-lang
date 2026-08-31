@@ -78,31 +78,25 @@ naming the argument and asking for the call again without it.
 
 A rejected interrupt means a handler, policy, or user said no to a tool
 call. The tool loop tells rejections apart from failures by the
-`rejected` flag the interrupt codegen stamps on the halt failure
-(`lib/templates/backends/typescriptGenerator/interruptReturn.mustache`,
-`interruptAssignment.mustache` — both the handler-reject and the
-resume-reject branches, so an interactive `reject("reason")` carries its
-reason too). A TS tool that returns the raw `InterruptResponse` from
-`agency.interrupt` takes the same path.
+`rejected` flag the interrupt codegen stamps on the halt failure — both
+the handler-reject and the resume-reject template branches set it, so an
+interactive `reject("reason")` carries its reason too. A TS tool that
+returns the raw `InterruptResponse` from `agency.interrupt` takes the
+same path.
 
-A rejection is not a failure, so it gets its own treatment in
-`runInvokeStep` (`recordRejection` in `prompt.ts`):
+A rejection is not a tool error (`recordRejection` in `prompt.ts`):
 
-- The model sees `Tool call rejected: <reason>. Do not call this tool
-  with the same arguments again; the call will not be executed.` — the
-  rejecter's reason, not an error message. No `toolErrorCounts`
-  increment, no `toolError` statelog event (the handler chain already
-  emitted `interruptResolved`).
-- The call's `repeatKey` lands in `self.rejectedCalls`. An identical
-  retry is refused by the `priorRejected` gate before the start hook —
-  no invoke, no re-raised interrupt, no counter movement. Checked before
-  the repeat guard so the model hears "rejected", not "repeated".
-- `self.rejectionCounts[tool]` counts CONSECUTIVE rejections. At
-  `MAX_TOOL_REJECTIONS` (5) the tool joins `removedTools`. A successful
-  call of the tool resets its count to zero: a narrow policy reject rule
-  brushed against during otherwise-approved work never removes the tool,
-  while a model rephrasing a refused call with nothing approved in
-  between loses it quickly.
+- The model sees `Tool call rejected: <reason>` with a do-not-retry
+  instruction — the rejecter's reason, not an error message. No
+  `toolErrorCounts` increment, no `toolError` statelog event.
+- An identical retry (same `repeatKey`) is refused before the start
+  hook: no invoke, no re-raised interrupt. Checked before the repeat
+  guard so the model hears "rejected", not "repeated".
+- CONSECUTIVE rejections are counted per tool; at `MAX_TOOL_REJECTIONS`
+  (5) the tool joins `removedTools`. A successful call resets the count:
+  a narrow policy reject rule brushed against during otherwise-approved
+  work never removes the tool, while a model rephrasing a refused call
+  with nothing approved in between loses it quickly.
 
 Both records live on the runPrompt frame, so they survive checkpoint and
 resume within one `llm()` call and reset when the next one starts.

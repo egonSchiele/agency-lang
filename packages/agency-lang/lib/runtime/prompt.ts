@@ -186,13 +186,11 @@ function toolErrorMessage(error: any): string {
  *  breaker against retry spirals), or immediately on the destructive tier. */
 const MAX_TOOL_FAILURES = 5;
 
-/** A rejected tool call is not a failure: a handler, policy, or user said
- *  no. Rejections get their own counter with the same limit — but only
- *  CONSECUTIVE rejections count. An approved (successful) call of the tool
- *  resets its count, so a narrow reject rule brushed against during
- *  otherwise-approved work never removes the tool, while a model that
- *  keeps rephrasing a refused call (nothing approved in between) loses the
- *  tool quickly. */
+/** Consecutive rejections that remove a tool. Only consecutive: a
+ *  successful call resets the count, so a narrow reject rule brushed
+ *  against during otherwise-approved work never removes the tool, while
+ *  a model rephrasing a refused call with nothing approved in between
+ *  loses it quickly. */
 const MAX_TOOL_REJECTIONS = 5;
 
 const REJECTION_SUFFIX =
@@ -678,11 +676,12 @@ export async function runPrompt(args: {
 
   const removedTools: string[] = self.removedTools;
   const toolErrorCounts: Record<string, number> = self.toolErrorCounts;
-  // Back-compat for checkpoints taken before the rejection counters
-  // existed: a resumed frame passes the __initialized guard above with
-  // these slots absent.
+  // Rebuilt on every entry: a checkpoint taken before these slots existed
+  // restores without them, and a restore revives plain-prototype objects.
+  // Null-prototype because tool names are author-chosen and may collide
+  // with Object.prototype keys (a def named `constructor`).
   self.rejectedCalls ??= [];
-  self.rejectionCounts ??= {};
+  self.rejectionCounts = Object.assign(Object.create(null), self.rejectionCounts);
   /** repeatKeys of calls rejected in THIS llm() call. An identical retry
    *  is refused before it can re-raise the interrupt. */
   const rejectedCalls: string[] = self.rejectedCalls;
@@ -1149,21 +1148,21 @@ export async function runPrompt(args: {
 
       // A rejection — a handler, policy, or user said no — arrives either
       // as a Failure the interrupt codegen marked `rejected` (compiled
-      // Agency tools) or as a raw InterruptResponse a TS tool returned
-      // (agency.interrupt). Both take this path: push the rejecter's
-      // reason, remember the exact call so an identical retry is refused
-      // (see the priorRejected gate), and count toward the consecutive-
-      // rejection removal. Deliberately no toolErrorCounts increment and
-      // no toolError statelog event — the chain already emitted
-      // interruptResolved, and a rejection does not mean the tool is
-      // broken.
+      // Agency tools) or as a raw InterruptResponse returned by a TS tool
+      // (agency.interrupt). It is not a tool error: no toolErrorCounts
+      // increment, no toolError statelog event (the handler chain already
+      // emitted interruptResolved).
       const recordRejection = (reason: string): { toolResult: any; invokeOutcome: "rejected" } => {
         const capped = String(capToolResultForLlm(reason, toolResultCap));
         const callKey = repeatKey(handler.name, namedArgs);
-        if (!rejectedCalls.includes(callKey)) rejectedCalls.push(callKey);
+        if (!rejectedCalls.includes(callKey)) {
+          rejectedCalls.push(callKey);
+        }
         rejectionCounts[handler.name] = (rejectionCounts[handler.name] || 0) + 1;
         const removed = rejectionCounts[handler.name] >= MAX_TOOL_REJECTIONS;
-        if (removed) removedTools.push(handler.name);
+        if (removed) {
+          removedTools.push(handler.name);
+        }
         messages.push(
           smoltalk.toolMessage(
             `Tool call rejected: ${capped}. ${removed ? REJECTION_REMOVAL_SUFFIX : REJECTION_SUFFIX}`,
@@ -1357,7 +1356,10 @@ export async function runPrompt(args: {
         // `removedTools` and `toolErrorCounts` use eventually-consistent
         // semantics across branches (strategy B in the plan): same-round
         // removal is best-effort and removals always take effect from the
-        // NEXT round (the .filter() after this parallel call).
+        // NEXT round (the .filter() after this parallel call). The
+        // rejection counters share these semantics: outcomes apply in
+        // branch-completion order, so a same-round mix of rejections and
+        // approvals of ONE tool near the removal limit is best-effort too.
         // An all-intrinsic round has nothing to dispatch: keep the
         // empty values result instead of running runBatch over zero
         // children.
@@ -1391,6 +1393,21 @@ export async function runPrompt(args: {
               // byte-for-byte unchanged.
               const callSlug = `${index}_${toolCall.id}`;
 
+              // Gated start (strategy B): a removed tool is refused by NAME,
+              // before the handler lookup — the round-end filter drops
+              // removed tools from toolFunctions, so a lookup-first path
+              // would misreport a later call as "No handler found". Also
+              // catches a removal by an earlier sibling in this round.
+              if (removedTools.includes(toolCall.name)) {
+                await b.step(`round.${round}.tool.${callSlug}.removed`, async () =>
+                  pushToolNotice(
+                    `Error: Tool ${toolCall.name} has been removed from this conversation after repeated failures or rejections, and will not be executed.`,
+                    toolCall,
+                  ),
+                );
+                return;
+              }
+
               const handler = toolFunctions.find((fn) => fn.name === toolCall.name);
               if (!handler) {
                 await b.step(`round.${round}.tool.${callSlug}.unhandled`, async () => {
@@ -1409,20 +1426,6 @@ export async function runPrompt(args: {
                 await b.step(`round.${round}.tool.${callSlug}.tooManyRounds`, async () =>
                   pushToolNotice(
                     `Error: Maximum number of tool call rounds (${effectiveMaxToolCallRounds}) exceeded. This tool call will not be executed.`,
-                    toolCall,
-                  ),
-                );
-                return;
-              }
-
-              // Gated start (strategy B): if the tool is already in
-              // removedTools (either from a prior round or from an earlier
-              // sibling in this round that pushed first), skip with a
-              // notice toolMessage.
-              if (removedTools.includes(handler.name)) {
-                await b.step(`round.${round}.tool.${callSlug}.removed`, async () =>
-                  pushToolNotice(
-                    `Error: Handler for tool call ${handler.name} has been removed already due to previous errors, and will not be executed.`,
                     toolCall,
                   ),
                 );

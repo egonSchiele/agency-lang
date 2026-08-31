@@ -810,9 +810,31 @@ describe("effect patterns", () => {
     expect((dataBind.value as ValueAccess).chain).toEqual([{ kind: "property", name: "data" }]);
   });
 
+  it("lowers a bare `is` effect pattern as a pure boolean without throwing", () => {
+    // Positive control for the rejection below: the bare form binds nothing, so
+    // a pure-boolean `is` is legal and must lower cleanly. If the binder walk
+    // ever over-rejected, this would go red.
+    const lowered = lower(`let intr = { effect: "std::read" }\nlet x = intr is std::read`);
+    expect(lowered).toHaveLength(2);
+    const xAssign = lowered[1] as Assignment;
+    expect(xAssign.variableName).toBe("x");
+    expect(effectEqualityFor(xAssign.value)).toBeDefined();
+  });
+
   it("rejects a binding in a pure-boolean `is` context", () => {
     expect(() =>
       lower(`let intr = { effect: "std::read" }\nlet x = intr is std::read({ data })`),
+    ).toThrow(PatternLoweringError);
+  });
+
+  it("rejects a binding effect pattern in a match-arm guard (a pure-boolean context)", () => {
+    // A match-arm guard is pure-boolean even though it is spelled with `if`, so
+    // a binding effect pattern inside it has nowhere to bind. Top-level match
+    // avoids a pre-existing parser bug with guards nested in a node body.
+    expect(() =>
+      lowerProgram(
+        `let intr = { effect: "std::write" }\nmatch (intr) {\n  x if (x is std::write({ data })) => "yes"\n  _ => "no"\n}`,
+      ),
     ).toThrow(PatternLoweringError);
   });
 });

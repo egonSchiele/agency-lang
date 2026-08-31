@@ -7300,11 +7300,14 @@ export const effectPatternParser: Parser<EffectPattern> = withLoc(
       char(")"),
     )(name.rest);
     if (!bindingResult.success) return bindingResult as ParserResult<EffectPattern>;
+    // The capture is present whenever parseError returned success — a missing
+    // one would be a loud crash here, not a silent downgrade to the bare
+    // pattern (which would drop the binding and its value-matcher checks).
     return success(
       {
         type: "effectPattern",
         effect,
-        binding: (bindingResult.result.binding as ObjectPattern) ?? null,
+        binding: bindingResult.result.binding as ObjectPattern,
       },
       bindingResult.rest,
     );

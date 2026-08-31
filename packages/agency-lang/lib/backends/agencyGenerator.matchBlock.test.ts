@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatSource } from "../formatter.js";
+import { parseAgency } from "../parser.js";
 
 describe("agencyGenerator - match block arm printing", () => {
   it.each([
@@ -211,5 +212,12 @@ describe("effect pattern formatting", () => {
     // Both spellings survive: bare name and name with an object binding.
     expect(first).toContain("std::read => 1");
     expect(first).toContain("std::write({ data }) => 2");
+    // Print -> reparse identity: the formatted output parses to the same AST as
+    // the source, so no arm silently changed shape on the way through.
+    const original = parseAgency(src, {}, false);
+    const reparsed = parseAgency(first, {}, false);
+    expect(original.success && reparsed.success).toBe(true);
+    if (!original.success || !reparsed.success) return;
+    expect(reparsed.result.nodes).toEqualWithoutLoc(original.result.nodes);
   });
 });

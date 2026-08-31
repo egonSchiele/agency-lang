@@ -35,6 +35,18 @@ describe("effectPatternParser (via matchPatternParser)", () => {
     expect(pattern.binding?.type).toBe("objectPattern");
   });
 
+  it("parses the binding form with a space before the parens", () => {
+    // `std::read ({ data })` must be the binding form, not a bare pattern with
+    // ` ({ data })` left unconsumed to die downstream with a generic error.
+    const result = matchPatternParser(normalizeCode("std::read ({ data })"));
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    const pattern = result.result as EffectPattern;
+    expect(pattern.type).toBe("effectPattern");
+    expect(pattern.effect).toBe("std::read");
+    expect(pattern.binding?.type).toBe("objectPattern");
+  });
+
   it("leaves a bare identifier as a variableName binder, not an effect pattern", () => {
     const result = matchPatternParser(normalizeCode("foo"));
     expect(result.success).toBe(true);

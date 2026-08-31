@@ -4279,11 +4279,15 @@ export const gotoStatementParser: Parser<GotoStatement> = label(
 
 // Namespace identifier: two or more segments separated by "::"
 // e.g. "std::read", "myapp::deploy", "std::http::fetch"
+// The combinator is hoisted rather than rebuilt per call: effectPatternParser
+// puts this on the match-pattern and `is` hot paths, where a per-call build
+// would be paid on every bare-binder arm.
+const _namespaceIdentifierParser: Parser<string> = map(
+  sepBy1(str("::"), many1WithJoin(varNameChar)),
+  (segments) => segments.join("::"),
+);
 const namespaceIdentifier: Parser<string> = (input: string) => {
-  const parser = map(sepBy1(str("::"), many1WithJoin(varNameChar)), (segments) =>
-    segments.join("::"),
-  );
-  const result = parser(input);
+  const result = _namespaceIdentifierParser(input);
   if (!result.success) return result;
   if (!result.result.includes("::")) {
     return failure("expected interrupt effect with ::, e.g. std::read or myapp::deploy", input);
@@ -7269,16 +7273,39 @@ export const resultPatternParser: Parser<ResultPattern> = withLoc(
 // and `_isRhsParser` BEFORE `variableNameParser` / `typePatternParser`. Only a
 // `::`-containing name is intercepted here; a bare `foo` stays a binder / type
 // reference because `namespaceIdentifier` soft-fails on it.
+// The character set of varNameChar as a regex, for cheap lookahead scans that
+// must not pay for a combinator run.
+const VAR_NAME_CHAR_RE = /[A-Za-z0-9_]/;
+
 export const effectPatternParser: Parser<EffectPattern> = withLoc(
   (input: string): ParserResult<EffectPattern> => {
     // Namespaced name only. A soft failure here lets the outer `or` fall
-    // through to variableNameParser (a bare identifier is a binder).
+    // through to variableNameParser (a bare identifier is a binder). Gated by
+    // a raw character scan for `<ident>::` first: this parser sits ahead of
+    // the bare-binder path in two hot or-chains (match patterns and `is`
+    // right-hand sides), so the common no-`::` case must cost a scan, not a
+    // namespaceIdentifier run.
+    let gate = 0;
+    while (gate < input.length && VAR_NAME_CHAR_RE.test(input[gate])) gate++;
+    if (gate === 0 || input[gate] !== ":" || input[gate + 1] !== ":") {
+      return failure(
+        "expected interrupt effect with ::, e.g. std::read or myapp::deploy",
+        input,
+      ) as ParserResult<EffectPattern>;
+    }
     const name = namespaceIdentifier(input);
     if (!name.success) return name as ParserResult<EffectPattern>;
     const effect = name.result;
 
-    // Bare form: no `(` after the name.
-    if (name.rest[0] !== "(") {
+    // Bare form: no `(` after the name. Spaces before a `(` still mean the
+    // binding form — `std::read ({ data })` must not silently take the bare
+    // branch, leave ` ({ data })` unconsumed, and die downstream with a
+    // generic error instead of the committed diagnostic below. Newlines are
+    // not skipped: arms are newline-separated, so a `(` on the next line is
+    // the next arm's problem, not this pattern's.
+    let afterName = 0;
+    while (name.rest[afterName] === " " || name.rest[afterName] === "\t") afterName++;
+    if (name.rest[afterName] !== "(") {
       return success({ type: "effectPattern", effect, binding: null }, name.rest);
     }
 
@@ -7298,7 +7325,7 @@ export const effectPatternParser: Parser<EffectPattern> = withLoc(
       ),
       optionalSpacesOrNewline,
       char(")"),
-    )(name.rest);
+    )(name.rest.slice(afterName));
     if (!bindingResult.success) return bindingResult as ParserResult<EffectPattern>;
     // The capture is present whenever parseError returned success — a missing
     // one would be a loud crash here, not a silent downgrade to the bare

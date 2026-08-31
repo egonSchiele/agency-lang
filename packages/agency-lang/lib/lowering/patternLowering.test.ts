@@ -734,19 +734,9 @@ describe("effect patterns", () => {
   /** Every binOp in an expression tree, so a test can find the effect-equality
    *  conjunct without depending on where it sits in the `&&` chain. */
   function binOps(expr: unknown): BinOpExpression[] {
-    const out: BinOpExpression[] = [];
-    const visit = (v: unknown): void => {
-      if (!v || typeof v !== "object") return;
-      if (Array.isArray(v)) {
-        v.forEach(visit);
-        return;
-      }
-      const rec = v as Record<string, unknown>;
-      if (rec.type === "binOpExpression") out.push(rec as unknown as BinOpExpression);
-      for (const key of Object.keys(rec)) if (key !== "loc") visit(rec[key]);
-    };
-    visit(expr);
-    return out;
+    return walkNodesArray([expr as AgencyNode])
+      .filter(({ node }) => node.type === "binOpExpression")
+      .map(({ node }) => node as unknown as BinOpExpression);
   }
 
   /** The `source.effect == "<effect>"` conjunct a lowered effect pattern emits. */
@@ -795,6 +785,18 @@ describe("effect patterns", () => {
     expect(dataBind.declKind).toBe("const");
     const access = dataBind.value as ValueAccess;
     expect(access.chain).toEqual([{ kind: "property", name: "data" }]);
+  });
+
+  it("emits the scrutinee shape check once, not again for the binding", () => {
+    // The effectPattern case emits `scrutinee != null && scrutinee is object`
+    // before the effect gate; the binding's checks are collected per property
+    // so that check is not duplicated. One `!=` conjunct means one shape check.
+    const lowered = lower(
+      `let intr = { effect: "std::read", data: 1 }\nmatch (intr) {\n  std::read({ data }) => print(data)\n  _ => print("none")\n}`,
+    );
+    const ifNode = lowered[2] as IfElse;
+    const nullChecks = binOps(ifNode.condition).filter((b) => b.operator === "!=");
+    expect(nullChecks).toHaveLength(1);
   });
 
   it("binds through `if (intr is std::read({ data }))`", () => {

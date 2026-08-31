@@ -6,10 +6,10 @@ a string by hand. Inside a handler:
 
 ```
 handle {
-  a = act(dir: ".")
+  let a = act(dir: ".")
 } with (intr) {
   return match (intr) {
-    app::write({ data }) if data.dir == "/tmp" => return approve()
+    app::write({ data }) if (data.dir == "/tmp") => return approve()
     app::write => return reject()
     _ => return reject()
   }
@@ -47,7 +47,9 @@ new runtime helper. `app::write({ data })` becomes:
 
 1. a shape check on the scrutinee (`intr != null && intr is object`),
 2. an equality `intr.effect == "app::write"`, and
-3. the object binding's own checks and bindings against the same source.
+3. the object binding's per-property checks and bindings against the same
+   source (the shape check on the source is not repeated for the binding —
+   step 1 already emitted it).
 
 The shape check goes first so the `.effect` read is guarded: a null or
 non-object scrutinee fails the arm rather than throwing. This keeps the lowered
@@ -103,10 +105,15 @@ the scrutinee's type:
   keyed on `effect` (`handlerParamTyping.ts`), effect-pattern arms discriminate
   the union: covering every effect makes the match exhaustive with no `_`, and
   a missing effect is reported by name. A bound arm only covers its member when
-  the binding is irrefutable — bare (`app::read`) or pure binders
+  the binding is irrefutable — bare (`app::read`) or top-level pure binders
   (`app::read({ data })`). A value-matching binding
   (`app::read({ data: { path: "p" } })`) matches only some interrupts of that
-  effect, so it does not cover the member and a `_` is still required.
+  effect, so it does not cover the member and a `_` is still required. So does
+  a nested destructure (`app::read({ data: { dir } })`), even with only binders
+  inside: it lowers to a shape check on `intr.data` that a null or missing
+  payload fails at runtime. The object-pattern spelling follows the same rule —
+  `{ effect: "app::read", data: { path: "p" } }` pins the discriminant but does
+  not cover the member either.
 - Over an open scrutinee (an `intr: any`, or a param the handler-typing pass
   did not narrow), the match is open/unsupported territory — the checker stays
   silent and requires nothing. Include a `_` there so an expression match does

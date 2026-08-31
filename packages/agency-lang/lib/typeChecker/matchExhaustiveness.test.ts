@@ -424,6 +424,54 @@ node h(): string {
     );
     expect(errs.some((e) => /not exhaustive/i.test(e) && /app::read/.test(e))).toBe(true);
   });
+
+  it("error: a nested all-binder destructure does NOT cover its member", () => {
+    // `app::read({ data: { path } })` has only binders inside, but the nested
+    // destructure lowers to a shape check on `intr.data` — a null or missing
+    // payload fails it at runtime, so the arm matches only SOME app::read
+    // interrupts. Counting it as coverage would let an expression match fall
+    // through to `undefined` in a handler.
+    const errs = check(
+      `${HANDLER_PRELUDE}
+node h(): string {
+  handle {
+    let a: string = rd()
+    let b: string = wr()
+  } with (intr) {
+    return match (intr) {
+      app::read({ data: { path } }) => reject()
+      app::write => reject()
+    }
+  }
+  return "done"
+}`,
+      ERROR,
+    );
+    expect(errs.some((e) => /not exhaustive/i.test(e) && /app::read/.test(e))).toBe(true);
+  });
+
+  it("error: the object-pattern spelling with a refutable sibling does NOT cover its member", () => {
+    // `{ effect: "app::read", data: { path: "p" } }` pins the discriminant but
+    // also value-matches the payload, so it matches only some app::read
+    // interrupts — the same refutability rule as the effect-pattern spelling.
+    const errs = check(
+      `${HANDLER_PRELUDE}
+node h(): string {
+  handle {
+    let a: string = rd()
+    let b: string = wr()
+  } with (intr) {
+    return match (intr) {
+      { effect: "app::read", data: { path: "p" } } => reject()
+      app::write => reject()
+    }
+  }
+  return "done"
+}`,
+      ERROR,
+    );
+    expect(errs.some((e) => /not exhaustive/i.test(e) && /app::read/.test(e))).toBe(true);
+  });
 });
 
 describe("match exhaustiveness — coverage edge cases & structural", () => {

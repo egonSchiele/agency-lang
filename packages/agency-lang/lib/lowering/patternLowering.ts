@@ -37,6 +37,7 @@ import type {
   BindingPattern,
   IsExpression,
   MatchPattern,
+  ObjectPattern,
   ObjectPatternProperty,
   ObjectPatternShorthand,
   ResultPattern,
@@ -1262,16 +1263,7 @@ function collectChecks(pattern: MatchPattern, source: Expression, checks: Expres
       // `{ length: 2 }` no longer matches an array — `[a, b]` is the spelling
       // for that. One definition of `object`, not two.
       checks.push(...shapeCheck(source, OBJECT_HINT, pattern.loc));
-      for (const prop of pattern.properties) {
-        if (prop.type === "objectPatternProperty") {
-          collectChecks(
-            prop.value as MatchPattern,
-            fieldAccess(source, prop.key, pattern.loc),
-            checks,
-          );
-        }
-        // shorthand and rest do not produce checks (binders only)
-      }
+      collectObjectPropertyChecks(pattern, source, checks);
       break;
     case "arrayPattern": {
       // Shape check FIRST, for the same reason — and because `.length` alone
@@ -1342,9 +1334,11 @@ function collectChecks(pattern: MatchPattern, source: Expression, checks: Expres
       );
       // The binding is an object pattern over the SAME source, so any value
       // matchers inside it (`std::read({ data: "x" })`) run under the effect
-      // gate, and its own shape check keeps its field reads safe.
+      // gate. Only its property checks are collected — the shape check on
+      // `source` was already emitted above, so going through the objectPattern
+      // case would duplicate it in every bound arm's condition.
       if (pattern.binding !== null) {
-        collectChecks(pattern.binding, source, checks);
+        collectObjectPropertyChecks(pattern.binding, source, checks);
       }
       break;
     }
@@ -1366,6 +1360,21 @@ function collectChecks(pattern: MatchPattern, source: Expression, checks: Expres
       // Literal — equality check
       checks.push(makeBinOp(cloneExpr(source), "==", pattern as Expression, pattern.loc));
       break;
+    }
+  }
+}
+
+/** The per-property checks of an object pattern, WITHOUT the shape check on
+ *  `source` itself — the caller has already emitted it. Shorthand and rest
+ *  properties are binders and produce no checks. */
+function collectObjectPropertyChecks(
+  pattern: ObjectPattern,
+  source: Expression,
+  checks: Expression[],
+): void {
+  for (const prop of pattern.properties) {
+    if (prop.type === "objectPatternProperty") {
+      collectChecks(prop.value as MatchPattern, fieldAccess(source, prop.key, pattern.loc), checks);
     }
   }
 }

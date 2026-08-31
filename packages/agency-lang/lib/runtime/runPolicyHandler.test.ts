@@ -32,6 +32,16 @@ describe("makeRunPolicyHandler", () => {
     expect((await h(intr("std::write")))!.type).toBe("reject");
   });
 
+  it("a reject rule's rejectMessage becomes the rejection value", async () => {
+    const h = makeRunPolicyHandler({
+      "std::bash": [{ action: "reject", rejectMessage: "Use safeBash instead" }],
+    });
+    expect(await h(intr("std::bash"))).toEqual({
+      type: "reject",
+      value: "Use safeBash instead",
+    });
+  });
+
   it("stays silent on an unmatched effect (the chain decides)", async () => {
     const h = makeRunPolicyHandler({ "std::read": [{ action: "approve" }] });
     expect(await h(intr("myapp::foo"))).toBeUndefined();

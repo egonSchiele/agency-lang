@@ -29,7 +29,7 @@ export function makeRunPolicyHandler(policy: Policy): HandlerFn {
     const decision = checkPolicyExplicit(policy, intr);
     if (decision === null) return undefined;
     if (decision.type === "approve") return approve();
-    if (decision.type === "reject") return reject();
+    if (decision.type === "reject") return reject(decision.message);
     // An explicit `propagate` rule: force the interrupt to the user.
     return { type: "propagate" };
   };

@@ -218,6 +218,55 @@ describe("checkPolicy", () => {
     expect(result).toEqual({ type: "reject" });
   });
 
+  it("a reject rule's rejectMessage rides on the result", () => {
+    const policy = {
+      "std::bash": [{ action: "reject" as const, rejectMessage: "Use safeBash instead" }],
+    };
+    const result = checkPolicy(policy, { effect: "std::bash", message: "", data: {}, origin: "" });
+    expect(result).toEqual({
+      type: "reject",
+      message: "Use safeBash instead",
+      value: "Use safeBash instead",
+    });
+  });
+
+  it("only the MATCHED rule's rejectMessage applies (first-match-wins)", () => {
+    const policy = {
+      "std::bash": [
+        { match: { command: "rm *" }, action: "reject" as const, rejectMessage: "no deletes" },
+        { action: "reject" as const, rejectMessage: "Use safeBash instead" },
+      ],
+    };
+    const forRm = checkPolicy(policy, {
+      effect: "std::bash",
+      message: "",
+      data: { command: "rm -rf foo" },
+      origin: "",
+    });
+    expect(forRm).toEqual({ type: "reject", message: "no deletes", value: "no deletes" });
+    const forLs = checkPolicy(policy, {
+      effect: "std::bash",
+      message: "",
+      data: { command: "ls" },
+      origin: "",
+    });
+    expect(forLs).toEqual({
+      type: "reject",
+      message: "Use safeBash instead",
+      value: "Use safeBash instead",
+    });
+  });
+
+  it("a wildcard reject rule's rejectMessage rides too", () => {
+    const policy = { "*": [{ action: "reject" as const, rejectMessage: "nothing allowed" }] };
+    const result = checkPolicy(policy, { effect: "any::thing", message: "", data: {}, origin: "" });
+    expect(result).toEqual({
+      type: "reject",
+      message: "nothing allowed",
+      value: "nothing allowed",
+    });
+  });
+
   describe('"*" wildcard catch-all', () => {
     it("approve-all: applies to every effect, including unlisted ones", () => {
       const policy = { "*": [{ action: "approve" as const }] };
@@ -417,6 +466,31 @@ describe("validatePolicy", () => {
       "std::read": "allow",
     });
     expect(result.success).toBe(false);
+  });
+
+  it("accepts rejectMessage on a reject rule", () => {
+    const result = validatePolicy({
+      "std::bash": [{ action: "reject", rejectMessage: "Use safeBash instead" }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("refuses rejectMessage on a non-reject rule (dead config)", () => {
+    for (const action of ["approve", "propagate"]) {
+      const result = validatePolicy({
+        "std::read": [{ action, rejectMessage: "unused" }],
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("rejectMessage");
+    }
+  });
+
+  it("refuses an empty rejectMessage (a blank reason would replace the defaults)", () => {
+    const result = validatePolicy({
+      "std::bash": [{ action: "reject", rejectMessage: "" }],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("rejectMessage");
   });
 });
 

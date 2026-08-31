@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import path from "path";
 import os from "os";
-import { validatePolicy } from "../runtime/policy.js";
+import { validatePolicy, PolicyRuleSchema } from "../runtime/policy.js";
 import type { Policy, PolicyRule } from "../runtime/policy.js";
 
 export type { Policy, PolicyRule } from "../runtime/policy.js";
@@ -9,6 +9,11 @@ export type { Policy, PolicyRule } from "../runtime/policy.js";
 export class PolicyStore {
   private policy: Policy = {};
   private filePath: string;
+  // True when the on-disk file exists but failed to parse or validate.
+  // While set, incremental mutations refuse to save: the in-memory
+  // policy is empty, and persisting it would overwrite the user's
+  // (broken but recoverable) rules with nothing.
+  private loadFailed = false;
 
   constructor(serverName: string, baseDir?: string) {
     const dir = path.join(baseDir ?? path.join(os.homedir(), ".agency", "serve"), serverName);
@@ -24,29 +29,42 @@ export class PolicyStore {
     const result = validatePolicy(policy);
     if (!result.success) throw new Error(result.error);
     this.policy = policy;
+    // A wholesale, validated replacement is an explicit overwrite of
+    // whatever is on disk, broken or not.
+    this.loadFailed = false;
     this.save();
   }
 
   addRule(kind: string, rule: PolicyRule): void {
+    this.refuseIfLoadFailed("addRule");
     if (!kind || typeof kind !== "string") throw new Error("kind must be a non-empty string");
     if (kind === "__proto__" || kind === "constructor") throw new Error(`Invalid kind: '${kind}'`);
-    if (!rule || typeof rule !== "object") throw new Error("rule must be an object");
-    if (rule.action !== "approve" && rule.action !== "reject") {
-      throw new Error(`Invalid action: '${rule.action}'. Must be 'approve' or 'reject'.`);
+    // Serve surfaces may not author propagate rules; these checks run
+    // before the schema so the messages name the narrower contract.
+    if (rule?.action !== "approve" && rule?.action !== "reject") {
+      throw new Error(`Invalid action: '${rule?.action}'. Must be 'approve' or 'reject'.`);
     }
     if (rule.match !== undefined) {
-      if (typeof rule.match !== "object" || rule.match === null)
+      if (typeof rule.match !== "object" || rule.match === null) {
         throw new Error("match must be an object");
+      }
       for (const v of Object.values(rule.match)) {
-        if (typeof v !== "string") throw new Error("match values must be strings (glob patterns)");
+        if (typeof v !== "string") {
+          throw new Error("match values must be strings (glob patterns)");
+        }
       }
     }
+    // Same contract as set()/load(): one rule shape, including the
+    // rejectMessage-only-on-reject invariant.
+    const parsed = PolicyRuleSchema.safeParse(rule);
+    if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "invalid rule");
     if (!this.policy[kind]) this.policy[kind] = [];
-    this.policy[kind].push(rule);
+    this.policy[kind].push(parsed.data);
     this.save();
   }
 
   removeRule(kind: string, index: number): void {
+    this.refuseIfLoadFailed("removeRule");
     if (!Number.isFinite(index) || !Number.isInteger(index) || index < 0) {
       throw new Error(`Invalid index: ${index}. Must be a non-negative integer.`);
     }
@@ -65,7 +83,20 @@ export class PolicyStore {
 
   clear(): void {
     this.policy = {};
+    // Clearing is an explicit request to empty the store, so a broken
+    // on-disk file no longer blocks saving.
+    this.loadFailed = false;
     this.save();
+  }
+
+  private refuseIfLoadFailed(op: string): void {
+    if (this.loadFailed) {
+      throw new Error(
+        `Cannot ${op}: the policy file at ${this.filePath} exists but failed to load, ` +
+          `and saving would overwrite it with an empty policy. ` +
+          `Fix or remove the file (or clear() to discard it) first.`,
+      );
+    }
   }
 
   private load(): void {
@@ -76,11 +107,13 @@ export class PolicyStore {
       if (result.success) {
         this.policy = parsed;
       } else {
+        this.loadFailed = true;
         console.error(
           `Invalid policy file at ${this.filePath}: ${result.error}. Using empty policy.`,
         );
       }
     } catch {
+      this.loadFailed = true;
       console.error(`Failed to parse policy file at ${this.filePath}. Using empty policy.`);
     }
   }

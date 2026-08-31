@@ -132,7 +132,11 @@ arm when the decision depends on the data, and return the verdict:
         _ => reject()
       }
     }
-Every handler in a chain runs, and any reject wins. reject() takes no message.
+Every handler in a chain runs, and any reject wins. reject("reason") carries
+the reason to whoever raised the interrupt (for a rejected tool call, the
+model reads it); a bare reject() gives a generic reason. In a policy file, a
+reject rule carries the reason as rejectMessage:
+    { "action": "reject", "rejectMessage": "Use safeBash instead" }
 
 Results:
 - Read a Result with is success(v) / is failure(e), or with

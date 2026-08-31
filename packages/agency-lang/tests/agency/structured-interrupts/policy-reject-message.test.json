@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "direct",
+      "description": "A handler returning checkPolicy's result directly carries the rule's rejectMessage into the failure",
+      "input": "",
+      "expectedOutput": "\"rejected with: Use safeBash instead\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "explicit",
+      "description": "A handler passing decision.message to reject() carries the rule's rejectMessage into the failure",
+      "input": "",
+      "expectedOutput": "\"rejected with: Use safeBash instead\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

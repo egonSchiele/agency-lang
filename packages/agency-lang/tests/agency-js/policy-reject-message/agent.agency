@@ -1,0 +1,24 @@
+import { cliPolicyHandler } from "std::policy"
+
+def doExec(): string {
+  return interrupt myapp::exec("run it", { command: "rm" })
+  return "ran"
+}
+
+// A pre-seeded reject rule with a rejectMessage: the failing call's
+// error must carry the rule's message, with no prompt. Lives in its
+// own fixture because cliPolicyHandler's state is module-level and it
+// is documented as call-once-per-program.
+node main(args: { policyFile: string }): string {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  let out = ""
+  handle {
+    const r = try doExec()
+    if (isFailure(r)) {
+      out = "${r.error}"
+    } else {
+      out = "unexpected approve"
+    }
+  } with handler
+  return out
+}

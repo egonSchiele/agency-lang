@@ -18,6 +18,7 @@ globalThis.__agencyInputOverride = async () => {
 
 try {
   const result = await main({ policyFile });
+
   writeFileSync("__result.json", JSON.stringify({
     result: result.data,
     remainingAnswers: answers.length,  // 0 = all consumed correctly

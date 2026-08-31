@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Parent handler rejects a subprocess interrupt raised by top-level `with approve` in the child's global init",
+      "input": "",
+      "expectedOutput": "\"top-level bash failed: interrupt rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

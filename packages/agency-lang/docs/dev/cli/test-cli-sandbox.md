@@ -38,10 +38,12 @@ under each name it is given.
   "reject > propagate > approve > noResponse"; pinned by
   `tests/agency/connector-core.agency`), so an inline `with approve` in the
   tested code is a vote that loses.
-- Code that runs before the handler exists (static initializers, top-level
-  callbacks) cannot raise an interrupt at all: there is no node frame to
+- Top-level code (static initializers, top-level callbacks) runs under the
+  same root handler, which installs before any user code (#966,
+  `initFreshExecCtx` in `lib/runtime/node.ts`). A top-level raise the chain
+  does not settle fails instead of pausing: there is no node frame to
   checkpoint, and the runtime throws "Cannot create checkpoint: no current
-  node id". An effectful initializer fails rather than runs.
+  node id".
 - A `std::run` subprocess the tested code launches forwards its interrupts
   to this root chain and installs no policy of its own.
 - What is not covered: CPU inside the time limit, and reads of files the

@@ -49,7 +49,7 @@ async function __initializeGlobals(__ctx) {
 }
 ```
 
-The second `pushHandler` argument is the handler's live guard ids, and it is deliberately empty. These wrappers register during top-level init, before any guard can exist, so "hide every guard" is vacuously correct.
+The second `pushHandler` argument is the handler's live guard ids, and it is deliberately empty. The only guards that can exist during top-level init are the root budget guards, which install before any user code (`initFreshExecCtx`, `lib/runtime/node.ts`). Those guards never raise an interrupt, so hiding them from the wrapper handler has no effect.
 
 `withHandler` deliberately needs no step id, which is why it works where `runner.handle()` cannot. The handler stack lives on the context, not on the runner. When the called function raises an interrupt through `interruptWithHandlers()`, the runtime walks `ctx.handlers`, finds the `approve` handler, and resolves the interrupt immediately. No state serialization, step counters, or runner machinery are involved.
 

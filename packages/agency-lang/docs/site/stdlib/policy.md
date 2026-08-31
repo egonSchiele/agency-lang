@@ -602,11 +602,10 @@ Read + parse + validate a policy file from disk. Returns {} on any
 
   @param path - The policy file path
 
-* Read + JSON-parse + validate a policy file from disk. Returns `{}`
- * (an empty policy) on any failure: a missing file, unreadable
- * permissions, malformed JSON, or a schema-validation error. It also
- * prints a warning so the user knows their saved decisions did not
- * carry over.
+* Read + JSON-parse + validate a policy file from disk. Returns a
+ * `Failure` naming the exact problem: a missing file, unreadable
+ * permissions, malformed JSON, or a schema-validation error. It prints
+ * nothing — callers decide how loudly to surface the failure.
  *
  * Raises `std::read` (so the caller's handler chain controls
  * whether the read is approved). The CLI handler auto-approves
@@ -622,7 +621,7 @@ Read + parse + validate a policy file from disk. Returns {} on any
 
 **Throws:** `std::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L454))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L453))
 
 ### setPolicy
 
@@ -645,7 +644,7 @@ Install `policy` as the active policy and persist it to `path`.
 | path | `string` |  |
 | policy | [Policy](#policy) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L499))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L498))
 
 ### writePolicyFile
 
@@ -676,7 +675,7 @@ Validate and write a policy to a JSON file. Throws if the policy is invalid.
 | policy | [Policy](#policy) |  |
 | allowedPaths | `string[]` | [] |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L516))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L515))
 
 ### flushPolicy
 
@@ -696,7 +695,7 @@ Write any pending always-rule additions to the policy file now.
  * `std::write` via `with approve` (you opted in by installing the
  * handler).
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L581))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L592))
 
 ### cliPolicyHandler
 
@@ -786,4 +785,4 @@ CLI sugar for an interactive policy handler. Loads and saves the policy file, pr
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L972))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L983))

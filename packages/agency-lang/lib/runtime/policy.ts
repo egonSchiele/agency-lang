@@ -10,7 +10,7 @@ export const PolicyRuleSchema = z
     /** Message the rejection carries back to whoever raised the interrupt —
      *  for a rejected tool call, what the model reads (e.g. "Use safeBash
      *  instead of bash"). Only valid on a reject rule. */
-    rejectMessage: z.string().optional(),
+    rejectMessage: z.string().min(1, "rejectMessage must not be empty").optional(),
   })
   .refine((rule) => rule.rejectMessage === undefined || rule.action === "reject", {
     message: 'rejectMessage is only valid on a rule whose action is "reject"',

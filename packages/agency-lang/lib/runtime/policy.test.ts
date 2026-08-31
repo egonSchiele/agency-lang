@@ -484,6 +484,14 @@ describe("validatePolicy", () => {
       expect(result.error).toContain("rejectMessage");
     }
   });
+
+  it("refuses an empty rejectMessage (a blank reason would replace the defaults)", () => {
+    const result = validatePolicy({
+      "std::bash": [{ action: "reject", rejectMessage: "" }],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("rejectMessage");
+  });
 });
 
 describe("checkPolicy for mcp::call", () => {

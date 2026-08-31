@@ -441,11 +441,10 @@ export type ParsePolicyFailure = {
 }
 
 /**
- * Read + JSON-parse + validate a policy file from disk. Returns `{}`
- * (an empty policy) on any failure: a missing file, unreadable
- * permissions, malformed JSON, or a schema-validation error. It also
- * prints a warning so the user knows their saved decisions did not
- * carry over.
+ * Read + JSON-parse + validate a policy file from disk. Returns a
+ * `Failure` naming the exact problem: a missing file, unreadable
+ * permissions, malformed JSON, or a schema-validation error. It prints
+ * nothing — callers decide how loudly to surface the failure.
  *
  * Raises `std::read` (so the caller's handler chain controls
  * whether the read is approved). The CLI handler auto-approves
@@ -540,6 +539,18 @@ def maybeLoadPolicy() {
     const loaded = parsePolicyFile(globalCliPolicyOpts.file) with approve
     _internalIo = false
     if (isFailure(loaded)) {
+      // A missing file is a normal first run. Anything else means the
+      // user's saved decisions are NOT in effect — say so, or a
+      // non-interactive run rejects everything with no visible cause.
+      if (loaded.error.status != "doesnt-exist") {
+        let detail = ""
+        if (loaded.error.error != null) {
+          detail = ": ${loaded.error.error}"
+        }
+        print(
+          "Warning: could not load policy file ${globalCliPolicyOpts.file} (${loaded.error.status}${detail}). Starting from an empty policy.",
+        )
+      }
       _policy = {}
     } else {
       _policy = loaded.value

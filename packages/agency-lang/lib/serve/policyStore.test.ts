@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { PolicyStore } from "./policyStore.js";
-import { mkdtempSync, rmSync, readFileSync } from "fs";
+import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import os from "os";
 
@@ -147,5 +147,58 @@ describe("PolicyStore", () => {
     expect(() => store.addRule("x::y", { action: "approve", match: { foo: 123 as any } })).toThrow(
       "match values must be strings",
     );
+  });
+
+  it("addRule enforces the rejectMessage-only-on-reject invariant", () => {
+    const store = new PolicyStore("test-server", tmpDir);
+    expect(() => store.addRule("x::y", { action: "approve", rejectMessage: "why" } as any)).toThrow(
+      "rejectMessage",
+    );
+    store.addRule("x::y", { action: "reject", rejectMessage: "Use safeBash instead" });
+    const reloaded = new PolicyStore("test-server", tmpDir);
+    expect(reloaded.get()).toEqual({
+      "x::y": [{ action: "reject", rejectMessage: "Use safeBash instead" }],
+    });
+  });
+});
+
+describe("PolicyStore with a broken on-disk file", () => {
+  let tmpDir: string;
+  let file: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(path.join(os.tmpdir(), "policy-broken-"));
+    const dir = path.join(tmpDir, "test-server");
+    mkdirSync(dir, { recursive: true });
+    file = path.join(dir, "policy.json");
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("serves an empty policy but refuses to overwrite the broken file on addRule/removeRule", () => {
+    const original = JSON.stringify({
+      "x::y": [{ action: "approve", rejectMessage: "stray key" }],
+    });
+    writeFileSync(file, original);
+    const store = new PolicyStore("test-server", tmpDir);
+    expect(store.get()).toEqual({});
+    expect(() => store.addRule("a::b", { action: "approve" })).toThrow("failed to load");
+    expect(() => store.removeRule("x::y", 0)).toThrow("failed to load");
+    // The broken file is still intact for the user to fix.
+    expect(readFileSync(file, "utf-8")).toBe(original);
+  });
+
+  it("set() and clear() are explicit overwrites and un-wedge the store", () => {
+    writeFileSync(file, "not json at all");
+    const store = new PolicyStore("test-server", tmpDir);
+    store.set({ "a::b": [{ action: "approve" as const }] });
+    store.addRule("c::d", { action: "reject", rejectMessage: "no" });
+    const reloaded = new PolicyStore("test-server", tmpDir);
+    expect(reloaded.get()).toEqual({
+      "a::b": [{ action: "approve" }],
+      "c::d": [{ action: "reject", rejectMessage: "no" }],
+    });
   });
 });

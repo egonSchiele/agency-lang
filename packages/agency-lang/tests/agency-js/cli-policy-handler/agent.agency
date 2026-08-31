@@ -4,27 +4,6 @@ const FIELDS: ScopedRuleFields = {
   "std::read": [{ field: "dir", matchSubpaths: true }],
 }
 
-def doExec(): string {
-  return interrupt myapp::exec("run it", { command: "rm" })
-  return "ran"
-}
-
-// A loaded reject rule with a rejectMessage: the failing call's error
-// must carry the rule's message, with no prompt.
-node rejectMessageCase(args: { policyFile: string }): string {
-  const handler = cliPolicyHandler(file: args.policyFile)
-  let out = ""
-  handle {
-    const r = try doExec()
-    if (isFailure(r)) {
-      out = "${r.error}"
-    } else {
-      out = "unexpected approve"
-    }
-  } with handler
-  return out
-}
-
 node main(args: { policyFile: string }): string {
   const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
   handle {

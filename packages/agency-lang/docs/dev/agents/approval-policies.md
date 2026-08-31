@@ -82,9 +82,18 @@ handed back to whoever raised the interrupt. For a rejected tool call it
 is what the model reads, so it can steer the next attempt — e.g. a rule
 rejecting `std::bash` with `"rejectMessage": "Use safeBash instead"`.
 `validatePolicy` refuses a `rejectMessage` on an approve or propagate
-rule. A handler calling `checkPolicy` itself gets the message as
+rule, and refuses an empty one (a blank reason would replace the default
+messages). A handler calling `checkPolicy` itself gets the message as
 `.message` on the reject result; returning the result directly from the
 handler also carries it.
+
+A failed validation fails the whole policy file, so the loaders are
+deliberate about what happens next. The CLI handler warns and continues
+with an empty policy (which fails closed in a non-interactive run). The
+serve-side `PolicyStore` also continues with an empty policy, but
+refuses `addRule`/`removeRule` until the file is fixed — saving from the
+empty in-memory policy would overwrite the user's rules on disk. `set()`
+and `clear()` stay allowed as explicit overwrites.
 
 Three semantics to keep straight:
 

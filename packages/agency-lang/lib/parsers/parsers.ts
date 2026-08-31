@@ -7292,7 +7292,10 @@ export const effectPatternParser: Parser<EffectPattern> = withLoc(
       `an effect pattern binding must be an object pattern, e.g. \`${effect}({ data })\``,
       char("("),
       optionalSpacesOrNewline,
-      capture(lazy(() => objectMatchPatternParser), "binding"),
+      capture(
+        lazy(() => objectMatchPatternParser),
+        "binding",
+      ),
       optionalSpacesOrNewline,
       char(")"),
     )(name.rest);

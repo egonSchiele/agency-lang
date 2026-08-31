@@ -763,7 +763,7 @@ describe("effect patterns", () => {
     });
   }
 
-  it("lowers a bare `std::read` arm to an `intr.effect == \"std::read\"` check", () => {
+  it('lowers a bare `std::read` arm to an `intr.effect == "std::read"` check', () => {
     const lowered = lower(
       `let intr = { effect: "std::read" }\nmatch (intr) {\n  std::read => print("r")\n  _ => print("none")\n}`,
     );

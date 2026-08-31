@@ -60,6 +60,26 @@ function objectPatternDiscriminantValue(
 }
 
 /**
+ * True when an effect-pattern object binding adds no refutable check, so the arm
+ * matches EVERY interrupt of its effect and can stand in for the whole union
+ * member. Every property must be a binder (shorthand, rename, rest, wildcard) or
+ * a nested all-binder object pattern. A value matcher (`{ data: "p" }`), an
+ * array pattern (a length check), a result pattern, or a nested type test all
+ * make the arm match only SOME interrupts of that effect, so it cannot cover the
+ * member. (Nested type tests also mark the whole arm guarded via
+ * hasNestedTypeTest, which drops it from coverage independently.)
+ */
+function isIrrefutableEffectBinding(binding: ObjectPattern | null): boolean {
+  if (binding === null) return true;
+  return binding.properties.every((p) => {
+    if (p.type === "objectPatternShorthand" || p.type === "restPattern") return true;
+    const v = p.value; // objectPatternProperty
+    if (v.type === "objectPattern") return isIrrefutableEffectBinding(v);
+    return v.type === "variableName" || v.type === "wildcardPattern" || v.type === "restPattern";
+  });
+}
+
+/**
  * The discriminant value an un-guarded arm pins, whether it is written as an
  * object pattern (`{ effect: "app::read" }`) or an effect pattern
  * (`app::read` / `app::read({ data })`). An effect pattern is sugar for the
@@ -67,10 +87,15 @@ function objectPatternDiscriminantValue(
  * discriminant and no other. A handler param is a discriminated union keyed on
  * `effect` (handlerParamTyping.ts), so this is what lets effect-pattern arms
  * count toward covering that union — without it every effect reads as missing.
+ * A bound effect pattern only counts when its binding is irrefutable: a
+ * value-matching binding matches some interrupts of the effect, not all, so it
+ * cannot stand in for the member (an expression match over it would fall through
+ * to `undefined`).
  */
 function armDiscriminantValue(cv: CaseValue, prop: string): string | number | boolean | null {
   if (cv !== "_" && cv.type === "effectPattern") {
-    return prop === "effect" ? cv.effect : null;
+    if (prop !== "effect") return null;
+    return isIrrefutableEffectBinding(cv.binding) ? cv.effect : null;
   }
   return objectPatternDiscriminantValue(cv, prop);
 }

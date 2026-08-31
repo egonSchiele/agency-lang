@@ -380,6 +380,50 @@ node h(): string {
     );
     expect(errs.some((e) => /not exhaustive/i.test(e))).toBe(false);
   });
+
+  it("error: pure-binder bindings still cover their member (exhaustive, no `_`)", () => {
+    const errs = check(
+      `${HANDLER_PRELUDE}
+node h(): string {
+  handle {
+    let a: string = rd()
+    let b: string = wr()
+  } with (intr) {
+    return match (intr) {
+      app::read({ data }) => reject()
+      app::write({ data }) => reject()
+    }
+  }
+  return "done"
+}`,
+      ERROR,
+    );
+    expect(errs.some((e) => /not exhaustive/i.test(e))).toBe(false);
+  });
+
+  it("error: a refutable value-matcher binding does NOT cover its member", () => {
+    // `app::read({ data: { path: "p" } })` matches only one payload, so it
+    // cannot stand in for the whole app::read member. Without a `_`, an
+    // app::read with another path falls through — the checker must still report
+    // app::read missing.
+    const errs = check(
+      `${HANDLER_PRELUDE}
+node h(): string {
+  handle {
+    let a: string = rd()
+    let b: string = wr()
+  } with (intr) {
+    return match (intr) {
+      app::read({ data: { path: "p" } }) => reject()
+      app::write => reject()
+    }
+  }
+  return "done"
+}`,
+      ERROR,
+    );
+    expect(errs.some((e) => /not exhaustive/i.test(e) && /app::read/.test(e))).toBe(true);
+  });
 });
 
 describe("match exhaustiveness — coverage edge cases & structural", () => {

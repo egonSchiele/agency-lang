@@ -102,7 +102,11 @@ the scrutinee's type:
 - Over a real inline handler param, which is re-typed to a discriminated union
   keyed on `effect` (`handlerParamTyping.ts`), effect-pattern arms discriminate
   the union: covering every effect makes the match exhaustive with no `_`, and
-  a missing effect is reported by name.
+  a missing effect is reported by name. A bound arm only covers its member when
+  the binding is irrefutable — bare (`app::read`) or pure binders
+  (`app::read({ data })`). A value-matching binding
+  (`app::read({ data: { path: "p" } })`) matches only some interrupts of that
+  effect, so it does not cover the member and a `_` is still required.
 - Over an open scrutinee (an `intr: any`, or a param the handler-typing pass
   did not narrow), the match is open/unsupported territory — the checker stays
   silent and requires nothing. Include a `_` there so an expression match does

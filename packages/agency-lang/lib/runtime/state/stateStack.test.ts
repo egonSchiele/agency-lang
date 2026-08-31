@@ -856,4 +856,28 @@ describe("claimFrameForScope moduleId stamping", () => {
     const revived = State.fromJSON(JSON.parse(JSON.stringify(frame.toJSON())));
     expect(revived.moduleId).toBe("mod.agency");
   });
+
+  it("backfills moduleId on a matching re-claim of a legacy frame", () => {
+    // A frame from a checkpoint written before moduleId existed: scopeName
+    // set, moduleId null.
+    const frame = new State({});
+    frame.scopeName = "main";
+    claimFrameForScope(frame, "main", "mod.agency");
+    expect(frame.moduleId).toBe("mod.agency");
+  });
+
+  it("throws the module-aware desync error on a same-scope, different-module re-claim", () => {
+    const frame = new State({});
+    claimFrameForScope(frame, "main", "a.agency");
+    expect(() => claimFrameForScope(frame, "main", "b.agency")).toThrow(
+      /Resume desync: "main" in module "b.agency".*"main" in module "a.agency"/,
+    );
+  });
+
+  it("a matching same-module re-claim is a no-op", () => {
+    const frame = new State({});
+    claimFrameForScope(frame, "main", "mod.agency");
+    expect(() => claimFrameForScope(frame, "main", "mod.agency")).not.toThrow();
+    expect(frame.moduleId).toBe("mod.agency");
+  });
 });

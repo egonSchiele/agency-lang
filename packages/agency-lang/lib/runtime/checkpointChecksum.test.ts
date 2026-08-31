@@ -27,10 +27,9 @@ function makeCheckpoint(): Checkpoint {
   });
 }
 
-/** A checkpoint carrying the fields PR #977 added to the schemas (guards,
- *  cost, savedDraft, branches). The verify side goes through the zod schemas,
- *  so any toJSON field missing from its schema would turn into a false
- *  "tampered" verdict — this fixture pins the round trip. */
+/** Carries guards, cost, savedDraft, and branches: the verify side goes
+ *  through the zod schemas, so a toJSON field missing from its schema would
+ *  read as tampered. */
 function makeRichCheckpoint(): Checkpoint {
   return new Checkpoint({
     id: 2,
@@ -156,9 +155,7 @@ describe("checkpoint checksum", () => {
   });
 
   it("signs and verifies a PLAIN JSON checkpoint (the external resume shape)", () => {
-    // interrupt.checkpoint after an HTTP round trip is parsed JSON, not a
-    // Checkpoint instance; sign/verify must accept it (applyOverrides re-signs
-    // exactly this shape on the resume path).
+    // The external resume path carries parsed JSON, not a Checkpoint instance.
     process.env.AGENCY_CHECKPOINT_KEY = KEY;
     const instance = makeCheckpoint();
     signCheckpoint(instance);

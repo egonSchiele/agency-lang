@@ -16,10 +16,9 @@ export function applyOverrides(checkpoint: Checkpoint, overrides: Record<string,
   for (const [key, value] of Object.entries(overrides)) {
     frame.locals[key] = value;
   }
-  // A legitimate edit invalidates the embedded checksum, so re-sign. This also
-  // runs on the served resume path with caller-supplied overrides — fine,
-  // because a host verifies BEFORE responding, and the re-signed object is
-  // never returned to the caller.
+  // Re-sign after the edit. Also runs on the served resume path with caller
+  // overrides — safe: a host verifies before responding, and the re-signed
+  // object is never returned to the caller.
   if (checkpoint.signature !== undefined) {
     signCheckpoint(checkpoint);
   }

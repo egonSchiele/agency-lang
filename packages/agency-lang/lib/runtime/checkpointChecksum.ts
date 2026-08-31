@@ -3,8 +3,7 @@ import { canonicalize } from "@/utils/canonicalize.js";
 import type { Checkpoint, CheckpointJSON } from "./state/checkpointStore.js";
 
 /** Both shapes a checkpoint travels as: the live class instance, and the
- *  plain parsed JSON the external resume path carries (`interrupt.checkpoint`
- *  after a round trip is not a Checkpoint instance). */
+ *  plain parsed JSON the external resume path carries. */
 export type SignableCheckpoint = Checkpoint | CheckpointJSON;
 
 const DOMAIN = "agency.checkpoint.v1";
@@ -49,9 +48,9 @@ function resolveOldKeys(): string[] {
   });
 }
 
-/** The plain-object form of a checkpoint, whichever shape it arrived in.
- *  Duck-typed on `toJSON` rather than `instanceof Checkpoint` so this module
- *  never imports the class value (checkpointStore imports this module). */
+/** The plain-object form, whichever shape it arrived in. Duck-typed on
+ *  `toJSON` so this module never imports the class value (checkpointStore
+ *  imports this module). */
 function checkpointJson(cp: SignableCheckpoint): Record<string, unknown> {
   const maybeInstance = cp as { toJSON?: () => CheckpointJSON };
   const json = typeof maybeInstance.toJSON === "function" ? maybeInstance.toJSON() : cp;

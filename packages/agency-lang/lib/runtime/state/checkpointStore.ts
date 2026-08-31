@@ -190,8 +190,7 @@ export class Checkpoint implements SourceLocation {
 
   clone(opts: Partial<CheckpointArgs> = {}): Checkpoint {
     const copy = Checkpoint.fromJSON({ ...this.toJSON(), ...opts })!;
-    // The copy carries the original signature but `opts` may have changed
-    // signed fields (typically `id`); re-sign so the copy verifies.
+    // `opts` may have changed signed fields (typically `id`); re-sign.
     if (copy.signature !== undefined) {
       signCheckpoint(copy);
     }
@@ -219,9 +218,7 @@ export class Checkpoint implements SourceLocation {
       nodeId,
       ...opts,
     });
-    // This is the single chokepoint every checkpoint (interrupt, guard,
-    // trace) is created through, so signing here covers them all. Keep this
-    // the last statement: the signature must cover every field set above.
+    // Keep this the last statement: the signature must cover every field.
     signCheckpoint(checkpoint);
     return checkpoint;
   }
@@ -376,8 +373,7 @@ export class CheckpointStore {
     if (!cp) return;
     cp.pinned = true;
     if (label !== undefined) cp.label = label;
-    // pinned/label are covered by the signature; re-sign the edited checkpoint
-    // so it stays self-consistent.
+    // pinned/label are signed fields; re-sign after the edit.
     if (cp.signature !== undefined) {
       signCheckpoint(cp);
     }
